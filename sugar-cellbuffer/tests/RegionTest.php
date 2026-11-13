@@ -219,4 +219,82 @@ final class RegionTest extends TestCase
         $this->expectExceptionMessage('Region dimensions must not be negative: -1x2');
         $fresh->__unserialize(['origin' => ['col' => 0, 'row' => 0], 'width' => -1, 'height' => 2]);
     }
+
+    // ─── intersect (sugar-cellbuffer-043) ──────────────────────────────
+
+    public function testIntersectOfDisjointRectanglesYieldsNull(): void
+    {
+        $a = Region::new(Position::new(0, 0), 3, 3);
+        $b = Region::new(Position::new(5, 0), 2, 2);
+
+        $this->assertNull($a->intersect($b));
+        $this->assertNull($b->intersect($a));
+        // Touching edges share no cell: [0..2] vs [3..5] is empty, not a 0-wide region.
+        $this->assertNull($a->intersect(Region::new(Position::new(3, 0), 2, 2)));
+    }
+
+    public function testIntersectReturnsExactClippedCorners(): void
+    {
+        $grid = Region::new(Position::new(0, 0), 10, 4);
+        $oversize = Region::new(Position::new(7, 2), 6, 6);
+
+        $clip = $grid->intersect($oversize);
+        $this->assertNotNull($clip);
+        $this->assertSame(7, $clip->origin->col);
+        $this->assertSame(2, $clip->origin->row);
+        $this->assertSame(3, $clip->width());   // cols 7,8,9
+        $this->assertSame(2, $clip->height());  // rows 2,3
+        // Intersection is commutative by value (equals() itself rides CB-33).
+        $flip = $oversize->intersect($grid);
+        $this->assertNotNull($flip);
+        $this->assertSame(
+            [$clip->origin->col, $clip->origin->row, $clip->width, $clip->height],
+            [$flip->origin->col, $flip->origin->row, $flip->width, $flip->height],
+        );
+    }
+
+    public function testIntersectWithSelfIsIdentity(): void
+    {
+        $a = Region::new(Position::new(-4, 2), 5, 6);
+
+        $self = $a->intersect($a);
+        $this->assertNotNull($self);
+        $this->assertSame(-4, $self->origin->col);
+        $this->assertSame(2, $self->origin->row);
+        $this->assertSame(5, $self->width());
+        $this->assertSame(6, $self->height());
+    }
+
+    public function testIntersectWithZeroAreaSideYieldsNull(): void
+    {
+        $a = Region::new(Position::new(0, 0), 4, 4);
+
+        $this->assertNull($a->intersect(Region::new(Position::new(1, 1), 0, 3)));
+        $this->assertNull($a->intersect(Region::new(Position::new(1, 1), 3, 0)));
+    }
+
+    public function testIntersectMatchesCornerMathOverSeededRectangles(): void
+    {
+        mt_srand(0x17E9C11B); // failure is reproducible: the seed is a constant
+        for ($t = 0; $t < 200; $t++) {
+            $a = Region::new(Position::new(mt_rand(-12, 12), mt_rand(-12, 12)), mt_rand(0, 14), mt_rand(0, 14));
+            $b = Region::new(Position::new(mt_rand(-12, 12), mt_rand(-12, 12)), mt_rand(0, 14), mt_rand(0, 14));
+
+            $col = max($a->origin->col, $b->origin->col);
+            $row = max($a->origin->row, $b->origin->row);
+            $right = min($a->right(), $b->right());
+            $bottom = min($a->bottom(), $b->bottom());
+
+            $got = $a->intersect($b);
+            if ($right < $col || $bottom < $row) {
+                $this->assertNull($got, "seed 0x17E9C11B iteration {$t} expected empty");
+                continue;
+            }
+            $this->assertNotNull($got, "seed 0x17E9C11B iteration {$t} expected non-empty");
+            $this->assertSame($col, $got->origin->col);
+            $this->assertSame($row, $got->origin->row);
+            $this->assertSame($right - $col + 1, $got->width());
+            $this->assertSame($bottom - $row + 1, $got->height());
+        }
+    }
 }

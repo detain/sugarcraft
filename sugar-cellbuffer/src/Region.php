@@ -81,6 +81,30 @@ final class Region implements \JsonSerializable
     }
 
     /**
+     * The rectangle common to this region and $other — the clip math
+     * {@see Buffer::withRegion()}/{@see Buffer::fill()} use against the
+     * grid, exposed for overlay compositors.
+     *
+     * Returns null when the intersection is EMPTY (disjoint rectangles, or
+     * either side zero-area — a zero-area region contains nothing to
+     * intersect): "clip yields nothing" is the caller's branch, not a
+     * degenerate region it must re-test.
+     */
+    public function intersect(self $other): ?self
+    {
+        $col = max($this->origin->col, $other->origin->col);
+        $row = max($this->origin->row, $other->origin->row);
+        $right = min($this->right(), $other->right());
+        $bottom = min($this->bottom(), $other->bottom());
+
+        if ($right < $col || $bottom < $row) {
+            return null;
+        }
+
+        return new self(Position::new($col, $row), $right - $col + 1, $bottom - $row + 1);
+    }
+
+    /**
      * Serialization hook for caching/IPC use cases.
      *
      * @return array{origin: array{col: int, row: int}, width: int, height: int}

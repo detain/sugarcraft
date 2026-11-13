@@ -376,22 +376,27 @@ final class Buffer implements \JsonSerializable
         $srcW = $source->width;
         $srcH = $source->height;
 
-        // Loop bounds are clipped to the region ∩ source ∩ buffer
-        // intersection BEFORE iterating: a data-driven region far larger
-        // than the grid costs the intersection, never the full area.
-        $dxStart = max(0, -$region->origin->col);
-        $dyStart = max(0, -$region->origin->row);
-        $dxEnd = min($region->width, $srcW, $this->width - $region->origin->col);
-        $dyEnd = min($region->height, $srcH, $this->height - $region->origin->row);
+        // The swept destination is the region ∩ source ∩ buffer
+        // intersection (Region::intersect once per pair, before iterating):
+        // a data-driven region far larger than the grid costs the
+        // intersection, never the full area. Source cells sit at their
+        // offsets from the region origin inside that destination.
+        $clip = $region
+            ->intersect(Region::new($region->origin, $srcW, $srcH))
+            ?->intersect($this->region());
 
-        for ($dy = $dyStart; $dy < $dyEnd; $dy++) {
-            for ($dx = $dxStart; $dx < $dxEnd; $dx++) {
-                $this->placeWithPair(
-                    $grid,
-                    $region->origin->col + $dx,
-                    $region->origin->row + $dy,
-                    $source->grid[$dy * $srcW + $dx],
-                );
+        if ($clip !== null) {
+            $colEnd = $clip->right();
+            $rowEnd = $clip->bottom();
+            for ($row = $clip->origin->row; $row <= $rowEnd; $row++) {
+                for ($col = $clip->origin->col; $col <= $colEnd; $col++) {
+                    $this->placeWithPair(
+                        $grid,
+                        $col,
+                        $row,
+                        $source->grid[($row - $region->origin->row) * $srcW + ($col - $region->origin->col)],
+                    );
+                }
             }
         }
 
@@ -415,17 +420,18 @@ final class Buffer implements \JsonSerializable
     {
         $grid = $this->grid;
 
-        // Loop bounds clipped to the region ∩ buffer intersection: a
-        // data-driven region far larger than the grid costs the
-        // intersection, never the full area.
-        $dxStart = max(0, -$region->origin->col);
-        $dyStart = max(0, -$region->origin->row);
-        $dxEnd = min($region->width, $this->width - $region->origin->col);
-        $dyEnd = min($region->height, $this->height - $region->origin->row);
+        // Sweep the region ∩ buffer intersection (Region::intersect before
+        // iterating): a data-driven region far larger than the grid costs
+        // the intersection, never the full area.
+        $clip = $region->intersect($this->region());
 
-        for ($dy = $dyStart; $dy < $dyEnd; $dy++) {
-            for ($dx = $dxStart; $dx < $dxEnd; $dx++) {
-                $this->placeWithPair($grid, $region->origin->col + $dx, $region->origin->row + $dy, $cell);
+        if ($clip !== null) {
+            $colEnd = $clip->right();
+            $rowEnd = $clip->bottom();
+            for ($row = $clip->origin->row; $row <= $rowEnd; $row++) {
+                for ($col = $clip->origin->col; $col <= $colEnd; $col++) {
+                    $this->placeWithPair($grid, $col, $row, $cell);
+                }
             }
         }
 
