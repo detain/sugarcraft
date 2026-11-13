@@ -104,6 +104,14 @@ final class Model
     private int $lineOffset = 5;    // how many lines before cursor to show
     private int $wrap = 0;          // max lines per item (0 = unlimited)
 
+    /**
+     * @var array{0:string,1:string}|null splice-point validation memo: the
+     *      last (raw style, codes) pair that passed sgrCodes' gate, keyed by
+     *      exact value (sugar-treelist-058). A bent or different style
+     *      string misses it and re-pays the full check.
+     */
+    private static ?array $sgrSpliceMemo = null;
+
     /** Slot optional; once installed the comparison itself must return int. */
     private ?\Closure $lessFunc = null;
 
@@ -2008,17 +2016,26 @@ final class Model
     // Style helpers
     // -------------------------------------------------------------------------
 
-    /** Apply ANSI SGR style codes to a string. */
+    /**
+     * Re-validate at the splice point (defense in depth): setters already
+     * reject non-SGR styles, but reflection into the now-private fields must
+     * still not smuggle an OSC/APC/other escape into the output stream.
+     * The per-frame tuple memo (sugar-treelist-058) is keyed on the RAW
+     * style string — any mutated or reflection-bent value misses the memo
+     * and pays the full sgrCodes gate again.
+     */
     private function applyStyle(string $s, string $style): string
     {
         // Simple ANSI SGR: \e[Xm or \e[X;Y;Zm
         if ($style === '') {
             return $s;
         }
-        // Re-validate at the splice point (defense in depth): setters already
-        // reject non-SGR styles, but reflection into the now-private fields must
-        // still not smuggle an OSC/APC/other escape into the output stream.
-        $codes = self::sgrCodes($style);
+        if (self::$sgrSpliceMemo !== null && self::$sgrSpliceMemo[0] === $style) {
+            $codes = self::$sgrSpliceMemo[1];
+        } else {
+            $codes = self::sgrCodes($style);
+            self::$sgrSpliceMemo = [$style, $codes];
+        }
         if ($codes === '') {
             return $s;
         }

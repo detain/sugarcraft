@@ -345,4 +345,22 @@ final class DefaultPrefixerTest extends TestCase
             }
         }
     }
+
+    /**
+     * sugar-treelist-058: the per-frame validation fast path is keyed on the
+     * field TUPLE, not on "have I ever validated". A frame of unchanged
+     * values rides the memo; a parity-field write that bends the tuple is
+     * refused at the very next init — dropping the tuple comparison (once-
+     * only flag) reddens this pin.
+     */
+    public function testGlyphValidationIsPerTupleFresh(): void
+    {
+        $p = new DefaultPrefixer();
+        $p->initPrefixer(new StringItem('i'), 0, 0, 5, 80, 24, 3); // validates + caches stock tuple
+        $this->assertSame(6, $p->initPrefixer(new StringItem('i'), 1, 0, 5, 80, 24, 3)); // fast-path frame
+
+        $p->separator = "\x1b[1m"; // bends the tuple through the parity field door
+        $this->expectException(\InvalidArgumentException::class);
+        $p->initPrefixer(new StringItem('i'), 2, 0, 5, 80, 24, 3);
+    }
 }

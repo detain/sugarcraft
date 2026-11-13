@@ -57,6 +57,16 @@ final class DefaultPrefixer implements Prefixer
     private int $prefixWidth   = 0;       // total prefix width (set by initPrefixer)
 
     /**
+     * @var list<string>|null the six glyph field values accepted by the last
+     *      validation pass — the sugar-treelist-058 fast path: re-validating
+     *      a constant tuple item after item is 6 regex scans × every row for
+     *      bytes the renderer already refused once. ANY field write (with*()
+     *      clone or the parity field door) changes the tuple and re-pays the
+     *      full gate, so an unvalidated glyph can never reach a frame.
+     */
+    private ?array $validatedGlyphs = null;
+
+    /**
      * House factory (sugar-treelist-027): stock knobs, mirroring the Go
      * NewPrefixer() constructor the field set parallels.
      */
@@ -77,13 +87,26 @@ final class DefaultPrefixer implements Prefixer
         // Fail fast BEFORE emitting anything: a glyph field carrying control
         // bytes would reach the terminal verbatim (the old path never checked).
         // Validation lives in the shared Support\AssertGlyph owner so the
-        // Default prefixer/suffixer can never drift apart.
-        AssertGlyph::field(self::class, 'firstSep', $this->firstSep);
-        AssertGlyph::field(self::class, 'separator', $this->separator);
-        AssertGlyph::field(self::class, 'lastSep', $this->lastSep);
-        AssertGlyph::field(self::class, 'separatorWrap', $this->separatorWrap);
-        AssertGlyph::field(self::class, 'currentMarker', $this->currentMarker);
-        AssertGlyph::field(self::class, 'emptyMarker', $this->emptyMarker);
+        // Default prefixer/suffixer can never drift apart. The tuple memo
+        // (sugar-treelist-058) keeps that from becoming 6 regex scans per
+        // item per frame for values this instance already accepted.
+        $glyphs = [
+            $this->firstSep,
+            $this->separator,
+            $this->lastSep,
+            $this->separatorWrap,
+            $this->currentMarker,
+            $this->emptyMarker,
+        ];
+        if ($glyphs !== $this->validatedGlyphs) {
+            AssertGlyph::field(self::class, 'firstSep', $this->firstSep);
+            AssertGlyph::field(self::class, 'separator', $this->separator);
+            AssertGlyph::field(self::class, 'lastSep', $this->lastSep);
+            AssertGlyph::field(self::class, 'separatorWrap', $this->separatorWrap);
+            AssertGlyph::field(self::class, 'currentMarker', $this->currentMarker);
+            AssertGlyph::field(self::class, 'emptyMarker', $this->emptyMarker);
+            $this->validatedGlyphs = $glyphs;
+        }
 
         $this->currentIndex = $currentIndex;
         $this->cursorIndex  = $cursorIndex;
