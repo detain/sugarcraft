@@ -8,6 +8,8 @@
         "terminal",
         "testing",
         "golden-file",
+        "golden",
+        "teatest",
         "elm-architecture",
         "bubbletea",
         "sugarcraft"
