@@ -16,7 +16,10 @@ return [
     'config.yaml_continuation' => "wishlist yaml: Continuation voor elk '- name:'-blok",
     'config.yaml_unparseable'  => 'wishlist yaml: onleesbare regel: {line}',
     'config.yaml_block_mapping' => 'wishlist yaml: blokindeling onder `{field}:` op regel {line} — dit veld moet een lijst van `- value` items zijn',
-    'config.entry_missing_field' => 'wishlist-entry met ontbrekend verplicht veld: name of host',
+    'config.entry_missing_field' => 'wishlist-item #{index}: verplicht veld ontbreekt: {field}',
+    'config.unknown_key' => 'onbekend veld `{key}` genegeerd — niet gedocumenteerd',
+    'config.unknown_key_nearmiss' => 'onbekend veld `{key}` genegeerd — bedoelde je `{field}`?',
+    'config.duplicate_name' => 'dubbele endpointnaam `{name}` — alle regels laden; namen zijn identificatoren',
     'config.field_not_scalar'  => 'wishlist-invoer: veld [{field}] moet een scalair zijn, ontvangen {type}',
     'config.unreadable'       => 'wishlist-configuratie kon niet worden gelezen: {path}',
     'config.home_unset'       => 'kan ~ niet uitvouwen zonder $HOME: {path}',
@@ -25,6 +28,7 @@ return [
     // endpoint security
     'endpoint.option_injection' => 'wishlist-endpoint: veld [{field}] heeft een onveilige waarde met een koppelteken aan het begin [{value}]',
     'endpoint.host_empty' => 'endpoint `{name}` heeft een lege host — een selecteerbare rij heeft een hostnaam nodig',
+    'endpoint.name_empty' => 'endpoint heeft een lege naam — een selecteerbare regel heeft een naam nodig',
     'endpoint.option_empty' => 'endpoint `{name}` heeft een lege optie-ingang — een lege -o-waarde wordt geweigerd',
     'endpoint.port_invalid'     => 'wishlist-endpoint [{host}]: ongeldige poort [{port}] — moet een geheel getal zijn van 1 tot 65535',
 

@@ -16,7 +16,10 @@ return [
     'config.yaml_continuation' => "wishlist yaml: continuazione prima di qualsiasi blocco '- name:'",
     'config.yaml_unparseable'  => 'wishlist yaml: riga non analizzabile: {line}',
     'config.yaml_block_mapping' => 'wishlist yaml: mappatura a blocchi sotto `{field}:` alla riga {line} — questo campo deve essere un elenco di voci `- value`',
-    'config.entry_missing_field' => 'voce wishlist con campo obbligatorio mancante: name o host',
+    'config.entry_missing_field' => 'voce wishlist #{index}: campo obbligatorio mancante: {field}',
+    'config.unknown_key' => 'voce wishlist: campo sconosciuto `{key}` ignorato — chiave non documentata',
+    'config.unknown_key_nearmiss' => 'campo sconosciuto `{key}` ignorato — intendevi `{field}`?',
+    'config.duplicate_name' => 'wishlist: nome endpoint duplicato `{name}` — tutte le righe vengono caricate; i nomi sono identificatori',
     'config.field_not_scalar'  => 'voce wishlist: il campo [{field}] deve essere uno scalare, ottenuto {type}',
     'config.unreadable'       => 'impossibile leggere la configurazione wishlist: {path}',
     'config.home_unset'       => 'impossibile espandere ~ senza $HOME: {path}',
@@ -25,6 +28,7 @@ return [
     // endpoint security
     'endpoint.option_injection' => 'endpoint wishlist: il campo [{field}] ha un valore non sicuro con trattino iniziale [{value}]',
     'endpoint.host_empty' => "l'endpoint `{name}` ha un host vuoto — una riga selezionabile ha bisogno di un hostname",
+    'endpoint.name_empty' => "l'endpoint ha un nome vuoto — una riga selezionabile richiede un nome",
     'endpoint.option_empty' => "l'endpoint `{name}` ha una voce options vuota — un valore -o vuoto è rifiutato",
     'endpoint.port_invalid'     => 'endpoint wishlist [{host}]: porta non valida [{port}] — deve essere un intero da 1 a 65535',
 

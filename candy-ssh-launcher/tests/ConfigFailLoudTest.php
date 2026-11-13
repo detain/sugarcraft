@@ -183,4 +183,109 @@ final class ConfigFailLoudTest extends TestCase
             self::assertStringContainsString('Command: "echo hi"', $e->getMessage());
         }
     }
+
+    /**
+     * Run a callable with Config's load warnings captured.
+     *
+     * @return array{0:mixed,1:string} the return value and the warning text
+     */
+    private function withWarningCapture(callable $fn): array
+    {
+        $stream = fopen('php://memory', 'r+');
+        Config::setWarningStream($stream);
+        try {
+            $result = $fn();
+        } finally {
+            Config::setWarningStream(null);
+            rewind($stream);
+            $text = (string) stream_get_contents($stream);
+            fclose($stream);
+        }
+
+        return [$result, $text];
+    }
+
+    public function testTypoEntryFieldWarnsInsteadOfVanishingSilently(): void
+    {
+        // -004: `prot: 2222` used to connect on 22 with zero signal.
+        $raw = "- name: prod\n  host: p.test\n  prot: 2222\n";
+        [$endpoints, $warnings] = $this->withWarningCapture(
+            static fn () => Config::parse($raw, 'wishlist.yml')
+        );
+        self::assertSame(22, $endpoints[0]->port, 'an unknown key must still not bind');
+        self::assertStringContainsString('prot', $warnings);
+        self::assertStringContainsString('unknown field', $warnings);
+    }
+
+    public function testEntryMissingFieldNamesTheEntryPosition(): void
+    {
+        // -052: hand-bisecting a multi-entry file is the failure being closed.
+        $json = '[{"name":"a","host":"b"},{"name":"x"}]';
+        try {
+            Config::parse($json, 'wishlist.json');
+            self::fail('expected a named refusal');
+        } catch (\RuntimeException $e) {
+            self::assertStringContainsString('entry #2', $e->getMessage());
+            self::assertStringContainsString('host', $e->getMessage());
+        }
+    }
+
+    public function testFoldedNearMissKeyNamesTheCanonicalField(): void
+    {
+        // -004: `proxyjump` case-folds onto proxyJump — it must be REPORTED
+        // as a likely typo, not silently accepted (documented spellings only).
+        $raw = "- name: prod\n  host: p.test\n  proxyjump: jump.test\n";
+        [$endpoints, $warnings] = $this->withWarningCapture(
+            static fn () => Config::parse($raw, 'wishlist.yml')
+        );
+        self::assertNull($endpoints[0]->proxyJump);
+        self::assertStringContainsString('proxyJump', $warnings, 'the near-miss must name the canonical field');
+    }
+
+    public function testUpstreamArraySpellingsResolveAsAliases(): void
+    {
+        // -004 (CSL-PARITY-01): proxy_jump/identity_files are the upstream
+        // spellings; they used to no-op in silence — now they bind.
+        $raw = "- name: prod\n  host: p.test\n  proxy_jump: jump.test\n  identity_files: /x/id_ed25519\n";
+        [$endpoints, $warnings] = $this->withWarningCapture(
+            static fn () => Config::parse($raw, 'wishlist.yml')
+        );
+        self::assertSame('jump.test', $endpoints[0]->proxyJump);
+        self::assertSame(['/x/id_ed25519'], $endpoints[0]->identityFiles);
+        self::assertSame('', $warnings, 'documented aliases must not warn');
+    }
+
+    public function testCanonicalKeyWinsOverItsAlias(): void
+    {
+        // Documented precedence (FIELD_ALIASES): canonical first, alias fills.
+        $json = '[{"name":"prod","host":"p.test","proxyJump":"a.test","proxy_jump":"b.test",'
+            . '"identityFiles":["/a"],"identity_files":["/b"]}]';
+        [$endpoints, $warnings] = $this->withWarningCapture(
+            static fn () => Config::parse($json, 'wishlist.json')
+        );
+        self::assertSame('a.test', $endpoints[0]->proxyJump);
+        self::assertSame(['/a'], $endpoints[0]->identityFiles);
+        self::assertSame('', $warnings);
+    }
+
+    public function testDuplicateEndpointNamesWarnAndBothLoad(): void
+    {
+        // -100 (QA-005): names are identifiers; the silence violated fail-loud.
+        $raw = "- name: dup\n  host: one.test\n- name: dup\n  host: two.test\n";
+        [$endpoints, $warnings] = $this->withWarningCapture(
+            static fn () => Config::parse($raw, 'wishlist.yml')
+        );
+        self::assertCount(2, $endpoints, 'the warning arm keeps both rows selectable');
+        self::assertStringContainsString('dup', $warnings);
+        self::assertStringContainsString('duplicate', $warnings);
+    }
+
+    public function testEmptyNameIsRefusedNotRenderedBlank(): void
+    {
+        // -023: README documents name as required (non-empty); the F-22
+        // host_empty guard now has its name-side twin.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('empty name');
+        Config::parse('[{"name":"","host":"h.test"}]', 'wishlist.json');
+    }
 }

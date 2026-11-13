@@ -16,7 +16,10 @@ return [
     'config.yaml_continuation' => "wishlist yaml: продолжение перед любым блоком '- name:'",
     'config.yaml_unparseable'  => 'wishlist yaml: неразбираемая строка: {line}',
     'config.yaml_block_mapping' => 'wishlist yaml: блочное отображение под `{field}:` в строке {line} — это поле должно быть списком элементов `- value`',
-    'config.entry_missing_field' => 'запись wishlist с отсутствующим обязательным полем: name или host',
+    'config.entry_missing_field' => 'запись wishlist #{index}: не хватает обязательного поля: {field}',
+    'config.unknown_key' => 'неизвестное поле `{key}` проигнорировано — такого ключа нет в документации',
+    'config.unknown_key_nearmiss' => 'неизвестное поле `{key}` проигнорировано — вы имели в виду `{field}`?',
+    'config.duplicate_name' => 'повтор имени endpoint `{name}` — все строки загружаются; имена — идентификаторы',
     'config.field_not_scalar'  => 'запись wishlist: поле [{field}] должно быть скаляром, получено {type}',
     'config.unreadable'       => 'не удалось прочитать конфигурацию wishlist: {path}',
     'config.home_unset'       => 'невозможно раскрыть ~ без $HOME: {path}',
@@ -25,6 +28,7 @@ return [
     // endpoint security
     'endpoint.option_injection' => 'эндпоинт wishlist: поле [{field}] содержит небезопасное значение с ведущим дефисом [{value}]',
     'endpoint.host_empty' => 'эндпоинт `{name}` содержит пустой host — выбираемой строке нужно имя хоста',
+    'endpoint.name_empty' => 'у endpoint пустое имя — выбираемой строке нужно имя',
     'endpoint.option_empty' => 'эндпоинт `{name}` содержит пустую запись options — пустое значение -o отклоняется',
     'endpoint.port_invalid'     => 'эндпоинт wishlist [{host}]: недопустимый порт [{port}] — должно быть целое число от 1 до 65535',
 

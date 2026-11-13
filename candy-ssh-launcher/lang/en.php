@@ -16,7 +16,10 @@ return [
     'config.yaml_continuation' => "wishlist yaml: continuation before any '- name:' block",
     'config.yaml_unparseable'  => 'wishlist yaml: unparseable line: {line}',
     'config.yaml_block_mapping' => 'wishlist yaml: block mapping under `{field}:` on line {line} — this field must be a list of `- value` items',
-    'config.entry_missing_field' => 'wishlist entry missing required field: name or host',
+    'config.entry_missing_field' => 'wishlist entry #{index} is missing a required field: {field}',
+    'config.unknown_key' => 'wishlist entry: unknown field `{key}` ignored — not a documented key',
+    'config.unknown_key_nearmiss' => 'wishlist entry: unknown field `{key}` ignored — did you mean `{field}`?',
+    'config.duplicate_name' => 'wishlist: duplicate endpoint name `{name}` — all rows load; names are identifiers',
     'config.field_not_scalar'  => 'wishlist entry: field [{field}] must be a scalar, got {type}',
     'config.unreadable'       => 'wishlist config could not be read: {path}',
     'config.home_unset'       => 'cannot expand ~ without $HOME: {path}',
@@ -25,6 +28,7 @@ return [
     // endpoint security
     'endpoint.option_injection' => 'wishlist endpoint: field [{field}] has unsafe leading-dash value [{value}]',
     'endpoint.host_empty' => 'endpoint `{name}` has an empty host — a selectable row needs a hostname',
+    'endpoint.name_empty' => 'endpoint has an empty name — a selectable row needs a name',
     'endpoint.option_empty' => 'endpoint `{name}` has an empty option entry — a blank -o value is refused',
     'endpoint.port_invalid'     => 'wishlist endpoint [{host}]: invalid port [{port}] — must be an integer from 1 to 65535',
 

@@ -16,7 +16,10 @@ return [
     'config.yaml_continuation' => "wishlist yaml：在任何 '- name:' 块之前不能有续行",
     'config.yaml_unparseable'  => 'wishlist yaml：无法解析的行：{line}',
     'config.yaml_block_mapping' => 'wishlist yaml：第 {line} 行在 `{field}:` 下的块映射——该字段必须是 `- value` 条目列表',
-    'config.entry_missing_field' => 'wishlist 条目缺少必需字段：name 或 host',
+    'config.entry_missing_field' => 'wishlist 第 {index} 项缺少必填字段：{field}',
+    'config.unknown_key' => '未知字段 `{key}` 已忽略 — 并非文档化的键',
+    'config.unknown_key_nearmiss' => '未知字段 `{key}` 已忽略 — 是否指 `{field}`？',
+    'config.duplicate_name' => '端点名称 `{name}` 重复 — 所有行仍会加载；名称是标识符',
     'config.field_not_scalar'  => 'wishlist 条目：字段 [{field}] 必须是标量，实际为 {type}',
     'config.unreadable'       => '无法读取 wishlist 配置：{path}',
     'config.home_unset'       => '没有 HOME 无法展开 ~：{path}',
@@ -25,6 +28,7 @@ return [
     // endpoint security
     'endpoint.option_injection' => 'wishlist 端点：字段 [{field}] 含有以短横线开头的不安全值 [{value}]',
     'endpoint.host_empty' => '端点 `{name}` 的 host 为空——可选行需要主机名',
+    'endpoint.name_empty' => '端点名称为空 — 可选择的一行需要名称',
     'endpoint.option_empty' => '端点 `{name}` 含空选项条目——空的 -o 值会被拒绝',
     'endpoint.port_invalid'     => 'wishlist 端点 [{host}]：无效端口 [{port}] — 必须是 1 到 65535 之间的整数',
 

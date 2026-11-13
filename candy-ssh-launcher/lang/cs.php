@@ -16,7 +16,10 @@ return [
     'config.yaml_continuation' => "wishlist yaml: pokračování před jakýmkoliv blokem '- name:'",
     'config.yaml_unparseable'  => 'wishlist yaml: neparsovatelný řádek: {line}',
     'config.yaml_block_mapping' => 'wishlist yaml: blokové mapování pod `{field}:` na řádku {line} — toto pole musí být seznam položek `- value`',
-    'config.entry_missing_field' => 'wishlist položka s chybějícím povinným polem: name nebo host',
+    'config.entry_missing_field' => 'položka wishlist #{index} postrádá povinný údaj: {field}',
+    'config.unknown_key' => 'neznámé pole `{key}` ignorováno — není dokumentovaný klíč',
+    'config.unknown_key_nearmiss' => 'neznámé pole `{key}` ignorováno — mysleli jste `{field}`?',
+    'config.duplicate_name' => 'duplicitní název endpointu `{name}` — všechny řádky se načtou; názvy jsou identifikátory',
     'config.field_not_scalar'  => 'položka wishlist: pole [{field}] musí být skalár, získáno {type}',
     'config.unreadable'       => 'konfiguraci wishlist nelze načíst: {path}',
     'config.home_unset'       => 'nelze rozbalit ~ bez $HOME: {path}',
@@ -25,6 +28,7 @@ return [
     // endpoint security
     'endpoint.option_injection' => 'endpoint wishlist: pole [{field}] má nebezpečnou hodnotu začínající pomlčkou [{value}]',
     'endpoint.host_empty' => 'koncový bod `{name}` má prázdného hostitele — vybraný řádek potřebuje hostname',
+    'endpoint.name_empty' => 'endpoint má prázdný název — vyhledávaný řádek potřebuje název',
     'endpoint.option_empty' => 'koncový bod `{name}` má prázdnou položku options — prázdná hodnota -o je odmítnuta',
     'endpoint.port_invalid'     => 'endpoint wishlist [{host}]: neplatný port [{port}] — musí to být celé číslo od 1 do 65535',
 

@@ -16,7 +16,10 @@ return [
     'config.yaml_continuation' => "wishlist yaml：'- name:' ブロックの前には Continuation を設定できません",
     'config.yaml_unparseable'  => 'wishlist yaml：解析できない行：{line}',
     'config.yaml_block_mapping' => 'wishlist yaml：`{field}:` の下のブロックマッピング（行 {line}）— このフィールドは `- value` アイテムのリストである必要があります',
-    'config.entry_missing_field' => 'wishlist エントリに必要なフィールドが不足しています：name または host',
+    'config.entry_missing_field' => 'wishlist エントリ #{index}: 必須フィールドがありません: {field}',
+    'config.unknown_key' => '不明なフィールド `{key}` を無視しました — 文書化されたキーではありません',
+    'config.unknown_key_nearmiss' => '不明なフィールド `{key}` を無視しました — `{field}` のことですか?',
+    'config.duplicate_name' => 'エンドポイント名 `{name}` が重複 — 全行を読み込みます; 名前は識別子です',
     'config.field_not_scalar'  => 'wishlist エントリー: フィールド [{field}] はスカラーである必要があります。取得型: {type}',
     'config.unreadable'       => 'wishlist 設定を読み込めません：{path}',
     'config.home_unset'       => 'HOME がないため ~ を展開できません：{path}',
@@ -25,6 +28,7 @@ return [
     // endpoint security
     'endpoint.option_injection' => 'wishlist エンドポイント: フィールド [{field}] に先頭がダッシュの安全でない値 [{value}] があります',
     'endpoint.host_empty' => 'エンドポイント `{name}` のホストが空です — 選択可能な行にはホスト名が必要です',
+    'endpoint.name_empty' => 'エンドポイント名が空です — 選択可能な行には名前が必要です',
     'endpoint.option_empty' => 'エンドポイント `{name}` に空の options エントリがあります — 空の -o 値は拒否されます',
     'endpoint.port_invalid'     => 'wishlist エンドポイント [{host}]: 無効なポート [{port}] — 1 から 65535 の整数である必要があります',
 

@@ -16,7 +16,10 @@ return [
     'config.yaml_continuation' => "wishlist yaml: '- name:' 블록 앞에는 Continuation을 설정할 수 없습니다",
     'config.yaml_unparseable'  => 'wishlist yaml: 구문 분석할 수 없는 줄: {line}',
     'config.yaml_block_mapping' => 'wishlist yaml: `{field}:` 아래 블록 매핑(줄 {line}) — 이 필드는 `- value` 항목 목록이어야 합니다',
-    'config.entry_missing_field' => '필수 필드가 누락된 wishlist 항목: name 또는 host',
+    'config.entry_missing_field' => '위시리스트 항목 #{index}: 필수 필드 누락: {field}',
+    'config.unknown_key' => '알 수 없는 필드 `{key}` 무시 — 문서화된 키가 아닙니다',
+    'config.unknown_key_nearmiss' => '알 수 없는 필드 `{key}` 무시 — `{field}`을(를) 의도했나요?',
+    'config.duplicate_name' => '중복 엔드포인트 이름 `{name}` — 모든 행이 로드됩니다; 이름은 식별자입니다',
     'config.field_not_scalar'  => 'wishlist 항목: 필드 [{field}]는 스칼라여야 하며, {type}를 받음',
     'config.unreadable'       => 'wishlist 구성을 읽을 수 없음: {path}',
     'config.home_unset'       => 'HOME 없이 ~ 확장 불가: {path}',
@@ -25,6 +28,7 @@ return [
     // endpoint security
     'endpoint.option_injection' => 'wishlist 엔드포인트: 필드 [{field}]에 대시로 시작하는 안전하지 않은 값 [{value}]이(가) 있습니다',
     'endpoint.host_empty' => '엔드포인트 `{name}`의 호스트가 비어 있습니다 — 선택 가능한 행에는 호스트 이름이 필요합니다',
+    'endpoint.name_empty' => '엔드포인트 이름이 비어 있습니다 — 선택 가능한 행에는 이름이 필요합니다',
     'endpoint.option_empty' => '엔드포인트 `{name}`에 빈 옵션 항목이 있습니다 — 빈 -o 값은 거부됩니다',
     'endpoint.port_invalid'     => 'wishlist 엔드포인트 [{host}]: 잘못된 포트 [{port}] — 1에서 65535 사이의 정수여야 합니다',
 

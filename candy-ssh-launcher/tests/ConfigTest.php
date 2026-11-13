@@ -257,7 +257,7 @@ final class ConfigTest extends TestCase
     public function testRejectsMissingRequiredField(): void
     {
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('missing required field');
+        $this->expectExceptionMessage('is missing a required field: host');
         Config::parse('[{"name": "incomplete"}]', 'wishlist.json');
     }
 

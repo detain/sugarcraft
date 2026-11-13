@@ -16,7 +16,10 @@ return [
     'config.yaml_continuation' => "Wishlist-YAML: Fortsetzung vor jedem '- name:'-Block",
     'config.yaml_unparseable'  => 'Wishlist-YAML: nicht analysierbare Zeile: {line}',
     'config.yaml_block_mapping' => 'Wishlist-YAML: Block-Mapping unter `{field}:` in Zeile {line} — dieses Feld muss eine Liste von `- value`-Einträgen sein',
-    'config.entry_missing_field' => 'Wishlist-Eintrag mit fehlendem Pflichtfeld: name oder host',
+    'config.entry_missing_field' => 'Wishlist-Eintrag #{index} fehlt ein Pflichtfeld: {field}',
+    'config.unknown_key' => 'Wishlist-Eintrag: unbekanntes Feld `{key}` ignoriert — kein dokumentierter Schlüssel',
+    'config.unknown_key_nearmiss' => 'Wishlist-Eintrag: unbekanntes Feld `{key}` ignoriert — meinten Sie `{field}`?',
+    'config.duplicate_name' => 'Wishlist: doppelter Endpoint-Name `{name}` — alle Zeilen werden geladen; Namen sind Identifikatoren',
     'config.field_not_scalar'  => 'wishlist-Eintrag: Feld [{field}] muss ein Skalar sein, erhalten {type}',
     'config.unreadable'       => 'Wishlist-Konfiguration konnte nicht gelesen werden: {path}',
     'config.home_unset'       => '~ kann ohne $HOME nicht expandiert werden: {path}',
@@ -25,6 +28,7 @@ return [
     // endpoint security
     'endpoint.option_injection' => 'wishlist-Endpunkt: Feld [{field}] enthält unsicheren Wert mit führendem Bindestrich [{value}]',
     'endpoint.host_empty' => 'Endpoint `{name}` hat einen leeren Host — eine wählbare Zeile braucht einen Hostnamen',
+    'endpoint.name_empty' => 'Endpoint hat einen leeren Namen — eine auswählbare Zeile braucht einen Namen',
     'endpoint.option_empty' => 'Endpoint `{name}` hat einen leeren Options-Eintrag — ein leerer -o-Wert wird abgelehnt',
     'endpoint.port_invalid'     => 'wishlist-Endpunkt [{host}]: ungültiger Port [{port}] — muss eine Ganzzahl von 1 bis 65535 sein',
 

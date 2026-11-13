@@ -16,7 +16,10 @@ return [
     'config.yaml_continuation' => "wishlist yaml: herhangi bir '- name:' bloğundan önce Devamlılık ayarlanamaz",
     'config.yaml_unparseable'  => 'wishlist yaml: ayrıştırılamayan satır: {line}',
     'config.yaml_block_mapping' => 'wishlist yaml: {line}. satırda `{field}:` altında blok eşlemesi — bu alan bir `- value` öğeleri listesi olmalıdır',
-    'config.entry_missing_field' => 'eksik zorunlu alana sahip wishlist girişi: name veya host',
+    'config.entry_missing_field' => 'wishlist girdisi #{index}: gerekli alan eksik: {field}',
+    'config.unknown_key' => 'bilinmeyen alan `{key}` yoksayıldı — belgelenmiş anahtar değil',
+    'config.unknown_key_nearmiss' => 'bilinmeyen alan `{key}` yoksayıldı — `{field}` mi demek istediniz?',
+    'config.duplicate_name' => 'yinelenen endpoint adı `{name}` — tüm satırlar yüklenir; adlar tanımlayıcıdır',
     'config.field_not_scalar'  => 'wishlist girdisi: [{field}] alanı skaler olmalı, alınan tür: {type}',
     'config.unreadable'       => 'wishlist yapılandırması okunamadı: {path}',
     'config.home_unset'       => '~ $HOME olmadan genişletilemiyor: {path}',
@@ -25,6 +28,7 @@ return [
     // endpoint security
     'endpoint.option_injection' => 'wishlist uç noktası: [{field}] alanı başında tire olan güvensiz bir değer içeriyor [{value}]',
     'endpoint.host_empty' => '`{name}` uç noktasının ana makinesi boş — seçilebilir bir satır bir ana makine adına ihtiyaç duyar',
+    'endpoint.name_empty' => 'endpoint adı boş — seçilebilir bir satır bir ad gerektirir',
     'endpoint.option_empty' => '`{name}` uç noktasında boş bir seçenek girdisi var — boş bir -o değeri reddedilir',
     'endpoint.port_invalid'     => 'wishlist uç noktası [{host}]: geçersiz bağlantı noktası [{port}] — 1 ile 65535 arasında bir tam sayı olmalı',
 

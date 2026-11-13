@@ -16,7 +16,10 @@ return [
     'config.yaml_continuation' => "wishlist yaml: continuación antes de cualquier bloque '- name:'",
     'config.yaml_unparseable'  => 'wishlist yaml: línea no analizable: {line}',
     'config.yaml_block_mapping' => 'wishlist yaml: mapeo de bloque bajo `{field}:` en la línea {line}; este campo debe ser una lista de elementos `- value`',
-    'config.entry_missing_field' => 'entrada wishlist sin campo requerido: name o host',
+    'config.entry_missing_field' => 'entrada de la wishlist #{index}: falta un campo obligatorio: {field}',
+    'config.unknown_key' => 'campo desconocido `{key}` ignorado — no es una clave documentada',
+    'config.unknown_key_nearmiss' => 'campo desconocido `{key}` ignorado — ¿quisiste decir `{field}`?',
+    'config.duplicate_name' => 'nombre de endpoint duplicado `{name}` — todas las filas se cargan; los nombres son identificadores',
     'config.field_not_scalar'  => 'entrada de wishlist: el campo [{field}] debe ser un escalar, se obtuvo {type}',
     'config.unreadable'       => 'no se pudo leer la configuración de wishlist: {path}',
     'config.home_unset'       => 'no se puede expandir ~ sin $HOME: {path}',
@@ -25,6 +28,7 @@ return [
     // endpoint security
     'endpoint.option_injection' => 'endpoint de wishlist: el campo [{field}] tiene un valor no seguro con guion inicial [{value}]',
     'endpoint.host_empty' => 'el endpoint `{name}` tiene un host vacío — una fila seleccionable necesita un nombre de host',
+    'endpoint.name_empty' => 'el endpoint tiene un nombre vacío — una fila seleccionable necesita un nombre',
     'endpoint.option_empty' => 'el endpoint `{name}` tiene una entrada de opción vacía — un valor -o en blanco se rechaza',
     'endpoint.port_invalid'     => 'endpoint de wishlist [{host}]: puerto no válido [{port}] — debe ser un entero de 1 a 65535',
 

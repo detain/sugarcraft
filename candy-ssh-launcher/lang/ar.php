@@ -16,7 +16,10 @@ return [
     'config.yaml_continuation' => "wishlist yaml: لا يمكن تعيين المتابعة قبل أي كتلة '- name:'",
     'config.yaml_unparseable'  => 'wishlist yaml: سطر غير قابل للتحليل: {line}',
     'config.yaml_block_mapping' => 'wishlist yaml: تعيين كتلة تحت `{field}:` في السطر {line} — يجب أن يكون هذا الحقل قائمة عناصر `- value`',
-    'config.entry_missing_field' => 'إدخال wishlist بحقل مطلوب مفقود: name أو host',
+    'config.entry_missing_field' => 'عنصر wishlist رقم {index}: يفتقد حقلاً إلزامياً: {field}',
+    'config.unknown_key' => 'تم تجاهل الحقل غير المعروف `{key}` — ليس مفتاحاً موثقاً',
+    'config.unknown_key_nearmiss' => 'تم تجاهل الحقل غير المعروف `{key}` — هل قصدت `{field}`؟',
+    'config.duplicate_name' => 'اسم نقطة اتصال مكرر `{name}` — تُحمَّل كل الصفوف؛ الأسماء معرِّفات',
     'config.field_not_scalar'  => 'إدخال wishlist: الحقل [{field}] يجب أن يكون قياسياً، والنوع {type}',
     'config.unreadable'       => 'تعذر قراءة تكوين wishlist: {path}',
     'config.home_unset'       => 'لا يمكن توسيع ~ بدون HOME: {path}',
@@ -25,6 +28,7 @@ return [
     // endpoint security
     'endpoint.option_injection' => 'نقطة نهاية wishlist: الحقل [{field}] يحتوي قيمة غير آمنة تبدأ بشرطة [{value}]',
     'endpoint.host_empty' => 'النقطة `{name}` تحتوي مضيفًا فارغًا — يحتاج الصف القابل للاختيار إلى اسم مضيف',
+    'endpoint.name_empty' => 'اسم نقطة الاتصال فارغ — الصف القابل للتحديد يحتاج اسماً',
     'endpoint.option_empty' => 'النقطة `{name}` تحتوي مدخل خيار فارغًا — قيمة `-o` الفارغة مرفوضة',
     'endpoint.port_invalid'     => 'نقطة نهاية wishlist [{host}]: منفذ غير صالح [{port}] — يجب أن يكون عدداً صحيحاً من 1 إلى 65535',
 

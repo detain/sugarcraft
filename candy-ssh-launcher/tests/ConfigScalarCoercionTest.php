@@ -236,14 +236,15 @@ YAML;
     public function testBuildEndpointRejectsMissingHost(): void
     {
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('missing required field');
+        // -052: the refusal names the position and the missing field.
+        $this->expectExceptionMessage('wishlist entry #1 is missing a required field: host');
         Config::parse('[{"name":"onlyname"}]', 'wishlist.json');
     }
 
     public function testBuildEndpointRejectsMissingName(): void
     {
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('missing required field');
+        $this->expectExceptionMessage('wishlist entry #1 is missing a required field: name');
         Config::parse('[{"host":"example.com"}]', 'wishlist.json');
     }
 

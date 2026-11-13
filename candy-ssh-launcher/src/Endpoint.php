@@ -39,6 +39,13 @@ final class Endpoint
         public readonly array         $options = [],
     ) {
         self::assertPort($name, $port);
+        // -023: README documents `name` as required (non-empty) — mirror the
+        // F-22 host_empty shape and refuse a blank identifier by name. A
+        // blank-label row rendered `  ─  h` and dispatched normally: names
+        // are how endpoints are addressed (-100), so an empty one is invalid.
+        if ($name === '') {
+            throw new \InvalidArgumentException(Lang::t('endpoint.name_empty'));
+        }
         // F-22: an empty host used to mint a selectable picker row that
         // dispatched a blank destination — refuse construction by name.
         if ($host === '') {

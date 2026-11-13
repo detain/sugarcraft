@@ -16,7 +16,10 @@ return [
     'config.yaml_continuation' => "wishlist yaml: Continuation przed dowolnym blokiem '- name:'",
     'config.yaml_unparseable'  => 'wishlist yaml: nierozpoznawalna linia: {line}',
     'config.yaml_block_mapping' => 'wishlist yaml: mapowanie bloku pod `{field}:` w linii {line} — to pole musi być listą elementów `- value`',
-    'config.entry_missing_field' => 'wpis wishlist z brakującym wymaganym polem: name lub host',
+    'config.entry_missing_field' => 'wpis wishlist #{index}: brakuje wymaganego pola: {field}',
+    'config.unknown_key' => 'nieznane pole `{key}` zignorowane — nieudokumentowany klucz',
+    'config.unknown_key_nearmiss' => 'nieznane pole `{key}` zignorowane — chodziło o `{field}`?',
+    'config.duplicate_name' => 'zdublowana nazwa endpointu `{name}` — wszystkie wiersze się ładują; nazwy są identyfikatorami',
     'config.field_not_scalar'  => 'wpis wishlist: pole [{field}] musi być skalarem, otrzymano {type}',
     'config.unreadable'       => 'nie można odczytać konfiguracji wishlist: {path}',
     'config.home_unset'       => 'nie można rozwinąć ~ bez $HOME: {path}',
@@ -25,6 +28,7 @@ return [
     // endpoint security
     'endpoint.option_injection' => 'punkt końcowy wishlist: pole [{field}] zawiera niebezpieczną wartość zaczynającą się od myślnika [{value}]',
     'endpoint.host_empty' => 'punkt `{name}` ma pusty host — wiersz do wyboru wymaga nazwy hosta',
+    'endpoint.name_empty' => 'endpoint ma pustą nazwę — wybieralny wiersz wymaga nazwy',
     'endpoint.option_empty' => 'punkt `{name}` ma pustą pozycję options — pusta wartość -o jest odrzucana',
     'endpoint.port_invalid'     => 'punkt końcowy wishlist [{host}]: nieprawidłowy port [{port}] — musi to być liczba całkowita od 1 do 65535',
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\SshLauncher;
 
 use SugarCraft\Core\Util\Json;
+use SugarCraft\Core\Util\Sanitize;
 
 /**
  * Loads a wishlist directory from disk.
@@ -31,12 +32,98 @@ use SugarCraft\Core\Util\Json;
  *       host: stage.example.com
  *     ```
  *
- * Unknown keys are ignored so the format can grow without breaking
- * older configs; a block mapping indented under a list field is refused
- * by name (field and line) — it used to flatten silently (F-19).
+ * Entry keys are checked against a versioned allowlist ({@see self::KNOWN_FIELDS}):
+ * an unknown key is warned by name on stderr and ignored (it used to vanish
+ * without a word — a dropped `proxy_jump:` silently removed the bastion,
+ * -004); spellings that case-fold onto a documented field after `_`-removal
+ * get a louder near-miss warning naming the field. Documented aliases
+ * ({@see self::FIELD_ALIASES}: `proxy_jump`, plural/snake identity spellings)
+ * resolve behind their canonical key — canonical wins when both appear.
+ * A block mapping indented under a list field is refused by name (field and
+ * line) — it used to flatten silently (F-19).
  */
 final class Config
 {
+    /**
+     * Versioned entry-key allowlist (v1 = every field buildEndpoint reads).
+     * Keys outside this set — and outside the alias table — warn by name and
+     * are ignored (-004: silence turned a typo into a wrong connection).
+     * New fields land here in the same commit that implements them.
+     *
+     * @var list<string>
+     */
+    private const KNOWN_FIELDS = [
+        'name', 'host', 'port', 'user', 'description', 'options',
+        'identityFiles', 'proxyJump',
+    ];
+
+    /**
+     * Documented alternative spellings, resolved BEHIND their canonical key
+     * (canonical wins when both are present): `proxy_jump`/`identity_files`
+     * are the upstream array spellings (-004's migration footgun),
+     * `identity_file`/`identityFile` the historically accepted singulars.
+     *
+     * @var array<string,string>
+     */
+    private const FIELD_ALIASES = [
+        'identity_files' => 'identityFiles',
+        'identity_file'  => 'identityFiles',
+        'identityFile'   => 'identityFiles',
+        'proxy_jump'     => 'proxyJump',
+    ];
+
+    /**
+     * Load-time diagnostics stream (duplicate names, unknown keys). STDERR
+     * unless a test swaps in a capture handle — warnings must not need an
+     * opt-in at the call site or they degrade to silence, the very failure
+     * -004/-100 close.
+     *
+     * @var resource|null
+     */
+    private static $warningStream = null;
+
+    /** Test seam: route load warnings to $stream (null restores STDERR). */
+    public static function setWarningStream($stream): void
+    {
+        self::$warningStream = $stream;
+    }
+
+    private static function warn(string $message): void
+    {
+        fwrite(self::$warningStream ?? STDERR, $message . "\n");
+    }
+
+    /**
+     * Report every per-entry key outside the allowlist before the row is
+     * built (-004). The key is sanitized as untrusted config bytes: it
+     * reaches the terminal verbatim, not only through bin's boundary.
+     *
+     * @param array<string,mixed> $row
+     */
+    private static function auditRowKeys(array $row): void
+    {
+        foreach (array_keys($row) as $key) {
+            $key = (string) $key;
+            if (in_array($key, self::KNOWN_FIELDS, true) || isset(self::FIELD_ALIASES[$key])) {
+                continue;
+            }
+            $fold = strtolower(str_replace('_', '', $key));
+            $nearmiss = null;
+            foreach (self::KNOWN_FIELDS as $field) {
+                if (strtolower($field) === $fold) {
+                    $nearmiss = $field;
+                    break;
+                }
+            }
+            self::warn($nearmiss === null
+                ? Lang::t('config.unknown_key', ['key' => Sanitize::untrusted($key)])
+                : Lang::t('config.unknown_key_nearmiss', [
+                    'key'   => Sanitize::untrusted($key),
+                    'field' => $nearmiss,
+                ]));
+        }
+    }
+
     /**
      * @return list<Endpoint>
      */
@@ -82,7 +169,27 @@ final class Config
                 ? self::parseJson($raw)
                 : self::parseYaml($raw),
         };
-        return array_values(array_map(self::buildEndpoint(...), $rows));
+        $endpoints = [];
+        $names = [];
+        foreach ($rows as $index => $row) {
+            // -052: the throw names the position and the missing field —
+            // the only config error that used to point at nothing.
+            if (!isset($row['name'], $row['host'])) {
+                throw new \RuntimeException(Lang::t('config.entry_missing_field', [
+                    'index' => (string) ($index + 1),
+                    'field' => isset($row['name']) ? 'host' : 'name',
+                ]));
+            }
+            $endpoint = self::buildEndpoint($row);
+            // -100: names are identifiers (upstream); duplicate rows still
+            // load — the picker cannot tell them apart, so the file must.
+            if (isset($names[$endpoint->name])) {
+                self::warn(Lang::t('config.duplicate_name', ['name' => Sanitize::untrusted($endpoint->name)]));
+            }
+            $names[$endpoint->name] = true;
+            $endpoints[] = $endpoint;
+        }
+        return $endpoints;
     }
 
     /**
@@ -298,9 +405,10 @@ final class Config
      */
     private static function buildEndpoint(array $row): Endpoint
     {
-        if (!isset($row['name'], $row['host'])) {
-            throw new \RuntimeException(Lang::t('config.entry_missing_field'));
-        }
+        // -004: keys outside the allowlist (and the documented aliases) are
+        // named on stderr before the row is built — an ignored typo must be
+        // visible, not silently wrong.
+        self::auditRowKeys($row);
         // Reject non-scalar field shapes BEFORE the (string)/(int) casts below.
         // Without these guards a nested array (e.g. `name: [foo]`) would silently
         // cast to the literal "Array", smuggling `ssh user@Array` into the argv —
@@ -318,8 +426,13 @@ final class Config
         if (isset($row['description'])) {
             self::assertScalar('description', $row['description']);
         }
-        if (isset($row['proxyJump'])) {
-            self::assertScalar('proxyJump', $row['proxyJump']);
+        // proxyJump resolves through the alias chain: canonical first, the
+        // upstream `proxy_jump` spelling behind it (FIELD_ALIASES precedence).
+        $proxyJump = isset($row['proxyJump']) && $row['proxyJump'] !== null
+            ? $row['proxyJump']
+            : ($row['proxy_jump'] ?? null);
+        if ($proxyJump !== null) {
+            self::assertScalar('proxyJump', $proxyJump);
         }
         $opts = [];
         foreach (self::normalizeList($row['options'] ?? null) as $o) {
@@ -331,9 +444,14 @@ final class Config
         // (passwd fallback, loud refusal) — the same semantics the ssh_config
         // importer applies, now shared via IdentityPath. Everything else,
         // including every other field, passes verbatim to the argv.
-        if (isset($row['identityFiles'])) {
+        if (isset($row['identityFiles']) && $row['identityFiles'] !== null) {
             foreach (self::normalizeList($row['identityFiles']) as $f) {
                 self::assertScalar('identityFiles', $f);
+                $identityFiles[] = IdentityPath::expand((string) $f);
+            }
+        } elseif (isset($row['identity_files']) && $row['identity_files'] !== null) {
+            foreach (self::normalizeList($row['identity_files']) as $f) {
+                self::assertScalar('identity_files', $f);
                 $identityFiles[] = IdentityPath::expand((string) $f);
             }
         } elseif (isset($row['identity_file']) && $row['identity_file'] !== null) {
@@ -352,7 +470,7 @@ final class Config
             user:         isset($row['user']) ? (string) $row['user'] : null,
             identityFiles: $identityFiles,
             description:  isset($row['description']) ? (string) $row['description'] : null,
-            proxyJump:     isset($row['proxyJump']) && $row['proxyJump'] !== null ? (string) $row['proxyJump'] : null,
+            proxyJump:     $proxyJump !== null ? (string) $proxyJump : null,
             options:      $opts,
         );
     }
