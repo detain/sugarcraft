@@ -159,6 +159,10 @@ $col = Column::new('desc', 'Description', 20)
 
 ## Rows
 
+Load rows in bulk — `withRows()` (replace) or `addRows()` (append) copy the
+whole set once. `addRow()` appends a single row and is fine occasionally, but
+building N rows by looping it is O(N²) immutable copies.
+
 ```php
 $row = Row::new($rowData)
     ->withStyle('1')                    // bold entire row

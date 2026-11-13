@@ -313,6 +313,8 @@ final class Table
     }
 
     /**
+     * Replace the whole row set in ONE bulk copy.
+     *
      * @param array<array-key, Row|array<array-key, mixed>> $rows Row objects,
      *     or plain data arrays coerced to rows at the boundary.
      */
@@ -956,6 +958,11 @@ final class Table
     // Row data helpers
     // -------------------------------------------------------------------------
 
+    /**
+     * Append ONE row (audit ST-65, finding 081): each call is an immutable
+     * copy of the row set, so building N rows by looping this method is
+     * O(N²) copies — load bulk with withRows() or addRows().
+     */
     public function addRow(Row $row): self
     {
         $clone = clone $this;
@@ -964,6 +971,10 @@ final class Table
         return $clone;
     }
 
+    /**
+     * Append rows in ONE bulk copy (the counterpart to the single-add
+     * quadratic above; see withRows() for the replace-all form).
+     */
     public function addRows(array $rows): self
     {
         $rows  = self::normalizeRows($rows, 'addRows()');
