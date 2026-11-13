@@ -11,6 +11,14 @@ use SugarCraft\Core\Concerns\Mutable;
  */
 final class Email
 {
+    /**
+     * Whole-document attachment ceiling (CM-49): Attachment::MAX_BYTES caps
+     * one part, but relays and providers bill the SUM — base64 inflates the
+     * document by 4/3 (64 MiB raw becomes ~89 MiB on the wire) and the Resend
+     * JSON payload doubles it again. Refusing at construction beats learning
+     * the ceiling from a 552 after a full conversation (or an API bill).
+     */
+    public const MAX_TOTAL_BYTES = 67_108_864;
     use Mutable;
 
     /** @var list<string> Sender addresses (usually one). */
@@ -69,6 +77,18 @@ final class Email
         $this->bcc          = $this->sanitizeAddressList($bcc);
         $this->htmlBody     = self::stripStrayControl($htmlBody);
         $this->replyTo      = $replyTo !== null ? $this->sanitizeAddr($replyTo) : null;
+        // The document ceiling is a sum, not a per-part verdict, so it is
+        // checked here — where the whole list is in hand.
+        $totalBytes = 0;
+        foreach ($attachments as $attachment) {
+            $totalBytes += \strlen($attachment->content());
+            if ($totalBytes > self::MAX_TOTAL_BYTES) {
+                throw new \InvalidArgumentException(Lang::t('email.too_many_bytes', [
+                    'bytes' => (string) $totalBytes,
+                    'limit' => (string) self::MAX_TOTAL_BYTES,
+                ]));
+            }
+        }
         $this->attachments  = $attachments;
         $this->signature    = self::stripStrayControl($signature);
         $this->headers      = self::sanitizeHeaderList($headers);

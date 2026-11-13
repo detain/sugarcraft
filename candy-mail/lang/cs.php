@@ -78,4 +78,6 @@ return [
     'email.non_ascii_address' => 'E-mailová adresa {addr} obsahuje ne-ASCII znaky: SMTPUTF8 není podporován — použijte ASCII obálkovou adresu',
     'smtp.openssl_missing' => 'ext-openssl je vyžadován k zabezpečení SMTP spojení (STARTTLS/SMTPS) - nainstalujte rozšíření; nic se neodesílá, dokud nelze kanál šifrovat',
     'cli.render_8bit_divergence' => 'Poznámka: --render zobrazuje náhled 8bitového těla tak, jak jej uvidí relé podporující 8BITMIME; relé bez této rozšíření dostane tyto části na drátě překódované do quoted-printable (RFC 6152). Následující bajty se mohou lišit od toho, co bude odesláno.',
+    'email.too_many_bytes' => 'Přílohy celkem {bytes} B překročují strop {limit} B pro celý dokument - rozdělte odeslání nebo přiložte méně bajtů',
+    'smtp.size_exceeded' => 'Složená zpráva má {bytes} B; relé inzerovalo strop SIZE {limit} B - zamítnuto před DATA',
 ];

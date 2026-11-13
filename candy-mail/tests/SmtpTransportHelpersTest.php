@@ -280,6 +280,43 @@ final class SmtpTransportHelpersTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // CM-49: ehloSizeLimit — the RFC 1870 snapshot parser
+    // -------------------------------------------------------------------------
+
+    public function testEhloSizeLimitParsesTheAdvertisedCeiling(): void
+    {
+        $this->setLastResponse("250-fake greets you\r\n250-SIZE 10485760\r\n250 8BITMIME\r\n250 HELP\r\n");
+        $this->assertSame(10485760, $this->invokePrivate($this->transport, 'ehloSizeLimit'));
+
+        // Some daemons print the keyword= shape; both are the same promise.
+        $this->setLastResponse("250-fake\r\n250-SIZE=522547200\r\n250 HELP\r\n");
+        $this->assertSame(522547200, $this->invokePrivate($this->transport, 'ehloSizeLimit'));
+    }
+
+    public function testEhloSizeLimitTreatsUnadvertisedZeroAndOverflowAsUnlimited(): void
+    {
+        // No SIZE line means no ceiling.
+        $this->setLastResponse("250-fake\r\n250-STARTTLS\r\n250 HELP\r\n");
+        $this->assertNull($this->invokePrivate($this->transport, 'ehloSizeLimit'));
+
+        // RFC 1870: SIZE 0 explicitly means "no limit announced".
+        $this->setLastResponse("250-fake\r\n250-SIZE 0\r\n250 HELP\r\n");
+        $this->assertNull($this->invokePrivate($this->transport, 'ehloSizeLimit'));
+
+        // A digit run past int range is treated as unlimited, never wrapped
+        // into a tiny (and wrong) refusal.
+        $this->setLastResponse("250-fake\r\n250-SIZE 99999999999999999999999\r\n250 HELP\r\n");
+        $this->assertNull($this->invokePrivate($this->transport, 'ehloSizeLimit'));
+    }
+
+    public function testSizeSnapshotReadsTheFinalLineFormToo(): void
+    {
+        // The SIZE keyword can ride the terminating `250 ` line as well.
+        $this->setLastResponse("250-fake\r\n250 HELP\r\n250 SIZE 44096\r\n");
+        $this->assertSame(44096, $this->invokePrivate($this->transport, 'ehloSizeLimit'));
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 

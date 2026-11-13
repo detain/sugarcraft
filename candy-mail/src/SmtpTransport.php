@@ -71,6 +71,12 @@ final class SmtpTransport implements Transport
     private bool $sessionEncrypted = false;
     /** EHLO capability snapshot — lastResponse is clobbered by later replies. */
     private bool $serverSupports8Bit = false;
+    /**
+     * EHLO SIZE (RFC 1870) ceiling snapshot, same lifetime as the 8BITMIME
+     * flag: null = not advertised (or SIZE 0 = unlimited). Checked against
+     * the composed document BEFORE claiming DATA (CM-49).
+     */
+    private ?int $serverSizeLimit = null;
 
     /**
      * Protocol floor for every encrypted channel: TLS 1.2, with 1.3 eligible.
@@ -424,6 +430,7 @@ final class SmtpTransport implements Transport
         // inspect the wrong server text. (A HELO session has no extension
         // list; the snapshot just stays false.)
         $this->serverSupports8Bit = $this->hasExtension('8BITMIME');
+        $this->serverSizeLimit    = $this->ehloSizeLimit();
     }
 
     /**
@@ -433,6 +440,25 @@ final class SmtpTransport implements Transport
     private function lastResponseIsPermanentRejection(): bool
     {
         return \preg_match('/^5[0-9][0-9]([ -])/', $this->lastResponse) === 1;
+    }
+
+    /**
+     * Parse the RFC 1870 SIZE extension from the EHLO reply captured in
+     * lastResponse: `250-SIZE 10485760` (the `SIZE=` shape too). Absent, or
+     * the unlimited `SIZE 0` answer, yields null. A digit run too wide for
+     * int is treated as unlimited, never wrapped.
+     */
+    private function ehloSizeLimit(): ?int
+    {
+        if (\preg_match('/^250[- ]SIZE[ =](\d+)/mi', $this->lastResponse, $m) !== 1) {
+            return null;
+        }
+        if (\strlen($m[1]) > 18) {
+            return null;
+        }
+        $limit = (int) $m[1];
+
+        return $limit > 0 ? $limit : null;
     }
 
     /**
@@ -569,6 +595,7 @@ final class SmtpTransport implements Transport
         // re-snapshot from the post-upgrade EHLO (servers may advertise MORE
         // inside TLS, never assume the pre-TLS answer carries over).
         $this->serverSupports8Bit = $this->hasExtension('8BITMIME');
+        $this->serverSizeLimit    = $this->ehloSizeLimit();
     }
 
     private function authenticateIfNeeded(): void
@@ -688,13 +715,24 @@ final class SmtpTransport implements Transport
 
     private function sendData(Email $email, bool $allow8Bit = true): void
     {
+        // CM-49: compose the document BEFORE claiming DATA. A relay that
+        // advertised an RFC 1870 SIZE ceiling used to learn the document
+        // overshoots it only after paying the full 354 and streaming every
+        // byte — refusal now happens while nothing oversized is on the wire.
+        $mime = $this->dotStuff($this->buildMimeMessage($email, $allow8Bit));
+        if ($this->serverSizeLimit !== null && \strlen($mime) > $this->serverSizeLimit) {
+            throw new \RuntimeException(Lang::t('smtp.size_exceeded', [
+                'bytes' => (string) \strlen($mime),
+                'limit' => (string) $this->serverSizeLimit,
+            ]));
+        }
+
         $this->sendRaw("DATA\r\n");
         $this->readResponse(354);
 
         // buildMimeMessage() now terminates with the closing CRLF of the last
         // boundary line, so the dot-stuffer output goes straight out followed
         // only by the <CRLF>.<CRLF> terminator (RFC 5321 §4.1.1.4).
-        $mime = $this->dotStuff($this->buildMimeMessage($email, $allow8Bit));
         $this->sendRaw($mime . ".\r\n");
         $this->readResponse(250);
     }

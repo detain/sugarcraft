@@ -78,4 +78,6 @@ return [
     'email.non_ascii_address' => 'メール アドレス {addr} に非 ASCII 文字が含まれています: SMTPUTF8 は未対応です — ASCII のエンベロープ アドレスを使用してください',
     'smtp.openssl_missing' => 'SMTP 接続 (STARTTLS/SMTPS) を保護するには ext-openssl が必要です — 拡張機能をインストールしてください。チャネルを暗号化できるまで何も送信されません',
     'cli.render_8bit_divergence' => '注: --render は 8 ビット本文を 8BITMIME 対応リレーが見るままにプレビューします。拡張を持たないリレーにはこれらの部分が回線上で quoted-printable に再エンコードされて届きます (RFC 6152)。以下は実際に送信されるバイトと異なる可能性があります。',
+    'email.too_many_bytes' => '添付合計 {bytes} バイトは文書全体の上限 {limit} バイトを超えています — 送信を分割するか、添付バイトを減らしてください',
+    'smtp.size_exceeded' => '合成されたメッセージは {bytes} バイトです。リレーは SIZE 上限 {limit} バイトを通告しています — DATA 前に拒否されました',
 ];

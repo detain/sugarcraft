@@ -144,6 +144,42 @@ final class SmtpSecurityTest extends TestCase
         }
     }
 
+    public function testOversizedDocumentIsRefusedBeforeDataOnASizeCeilingedRelay(): void
+    {
+        // CM-49: the relay advertises SIZE 1000. The composed document is
+        // larger, so the transport must refuse while RCPT is the last verb
+        // it sent — a 354-then-abandon pattern used to stream the whole
+        // oversized body only to eat a 552 (or worse, succeed).
+        $this->requireFork();
+
+        [$port, $pid, $log] = $this->forkFakeServer(advertiseStartTls: false, sizeAd: 1000);
+
+        try {
+            $transport = (new SmtpTransport('127.0.0.1', $port, '', '', 2))->withRequireTls(false);
+
+            try {
+                $transport->send(new Email(
+                    from:    ['from@example.com'],
+                    to:      ['to@example.com'],
+                    subject: 'cm49',
+                    body:    \str_repeat('x', 2000),
+                ));
+                $this->fail('the SIZE ceiling must refuse the oversized document');
+            } catch (\RuntimeException $e) {
+                $this->assertStringContainsString('SIZE', $e->getMessage());
+            }
+
+            $this->reap($pid);
+            $dialogue = (string) \file_get_contents($log);
+
+            $this->assertStringContainsString('RCPT TO', $dialogue, 'the conversation reached recipients');
+            $this->assertStringNotContainsString('DATA', $dialogue, 'nothing oversized was ever claimed');
+        } finally {
+            $this->reap($pid);
+            @\unlink($log);
+        }
+    }
+
     // -------------------------------------------------------------------------
     // Fix 2b — TLS required by default + AUTH never rides plaintext (S-1)
     // -------------------------------------------------------------------------
@@ -869,10 +905,11 @@ final class SmtpSecurityTest extends TestCase
      *
      * @param bool $advertiseStartTls include 250-STARTTLS in the EHLO list
      * @param bool $advertiseAuth     include 250-AUTH LOGIN PLAIN in the list
+     * @param int|null $sizeAd        include 250-SIZE <n> (RFC 1870) in the list (CM-49)
      *
      * @return array{0:int,1:int,2:string} [port, childPid, dialogueLogPath]
      */
-    private function forkFakeServer(bool $advertiseStartTls, bool $advertiseAuth = false, int $rcptCode = 250): array
+    private function forkFakeServer(bool $advertiseStartTls, bool $advertiseAuth = false, int $rcptCode = 250, ?int $sizeAd = null): array
     {
         $errno  = 0;
         $errstr = '';
@@ -906,6 +943,9 @@ final class SmtpSecurityTest extends TestCase
                     $cmd = \strtoupper(\substr(\ltrim($line), 0, 4));
                     if ($cmd === 'EHLO' || $cmd === 'HELO') {
                         $resp = "250-fake greets you\r\n";
+                        if ($sizeAd !== null) {
+                            $resp .= "250-SIZE {$sizeAd}\r\n";
+                        }
                         if ($advertiseStartTls) {
                             $resp .= "250-STARTTLS\r\n";
                         }

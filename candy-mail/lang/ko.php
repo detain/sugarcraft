@@ -78,4 +78,6 @@ return [
     'email.non_ascii_address' => '전자 메일 주소 {addr}에 비 ASCII 문자가 있습니다: SMTPUTF8는 지원되지 않습니다 — ASCII 봉투 주소를 사용하십시오',
     'smtp.openssl_missing' => 'SMTP 연결(STARTTLS/SMTPS)을 보호하려면 ext-openssl이 필요합니다 - 확장 기능을 설치하십시오. 채널이 암호화되기 전에는 아무것도 전송되지 않습니다',
     'cli.render_8bit_divergence' => '참고: --render는 8BITMIME을 지원하는 중계기가 보는 대로 8비트 본문을 미리 봅니다. 확장 기능이 없는 중계기에는 이 부분들이 회선에서 quoted-printable로 재인코딩되어 전달됩니다(RFC 6152). 아래 바이트는 실제로 전송되는 내용과 다를 수 있습니다.',
+    'email.too_many_bytes' => '첨부 합계 {bytes}바이트가 문서 전체 상한 {limit}바이트를 초과했습니다 — 전송을 분할하거나 첨부 바이트를 줄이십시오',
+    'smtp.size_exceeded' => '작성된 메시지는 {bytes}바이트입니다. 중계기가 SIZE 상한 {limit}바이트를 공지했습니다 — DATA前に 거부됨',
 ];

@@ -13,6 +13,34 @@ use SugarCraft\Mail\Email;
  */
 final class EmailAttachmentTest extends TestCase
 {
+    public function testWholeDocumentCeilingRefusesBeforeTheSend(): void
+    {
+        // CM-49: Attachment::MAX_BYTES caps one part; Email's own ceiling
+        // caps the SUM, because base64 (x4/3) and the Resend JSON payload
+        // (x2) turn a list of individually-legal attachments into a document
+        // no relay bills for. 3x25MiB is the first shape over the line.
+        $big = str_repeat('A', Attachment::MAX_BYTES);
+        $three = [
+            Attachment::fromContent($big, 'a.bin'),
+            Attachment::fromContent($big, 'b.bin'),
+            Attachment::fromContent($big, 'c.bin'),
+        ];
+        try {
+            new Email(from: ['from@example.com'], to: ['to@example.com'], attachments: $three);
+            $this->fail('the sum ceiling must refuse 3 x MAX_BYTES at construction');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString((string) Email::MAX_TOTAL_BYTES, $e->getMessage());
+        }
+
+        // Two fit (50 MiB < 64 MiB): the guard is a sum, not a count.
+        $two = [
+            Attachment::fromContent($big, 'a.bin'),
+            Attachment::fromContent($big, 'b.bin'),
+        ];
+        $email = new Email(from: ['from@example.com'], to: ['to@example.com'], attachments: $two);
+        $this->assertCount(2, $email->attachments);
+    }
+
     public function testWithAttachmentThrowsWhenPathIsNull(): void
     {
         $email = new Email(['me@example.com'], ['you@example.com']);

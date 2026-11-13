@@ -78,4 +78,6 @@ return [
     'email.non_ascii_address' => '邮件地址 {addr} 包含非 ASCII 字符：不支持 SMTPUTF8 — 请使用 ASCII 信封地址',
     'smtp.openssl_missing' => '保护 SMTP 连接（STARTTLS/SMTPS）需要 ext-openssl — 请安装该扩展；在信道可加密之前不会发送任何内容',
     'cli.render_8bit_divergence' => '注：--render 按支持 8BITMIME 的中继所见预览 8 位正文；没有该扩展的中继会在线路上把这些部分重新编码为 quoted-printable（RFC 6152）。以下内容可能与实际发送的字节不同。',
+    'email.too_many_bytes' => '附件总计 {bytes} 字节，超过整个文档 {limit} 字节的上限 — 请拆分发送或减少附件字节',
+    'smtp.size_exceeded' => '组装后的消息为 {bytes} 字节；中继通告的 SIZE 上限为 {limit} 字节 — 在 DATA 前拒绝',
 ];

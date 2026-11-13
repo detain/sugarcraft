@@ -85,4 +85,6 @@ return [
     'email.non_ascii_address' => 'E-Mail-Adresse {addr} enthält Nicht-ASCII-Zeichen: SMTPUTF8 wird nicht unterstützt — bitte ASCII-Kuvertadresse verwenden',
     'smtp.openssl_missing' => 'ext-openssl ist erforderlich, um die SMTP-Verbindung abzusichern (STARTTLS/SMTPS) - Erweiterung installieren; es wird nichts gesendet, bevor der Kanal verschlüsselt werden kann',
     'cli.render_8bit_divergence' => 'Hinweis: --render zeigt den 8-Bit-Textkörper so an, wie ihn ein 8BITMIME-fähiger Relay sähe; ein Relay ohne die Erweiterung erhält diese Teile auf dem Draht als quoted-printable neu kodiert (RFC 6152). Die folgenden Bytes können von dem abweichen, was tatsächlich gesendet wird.',
+    'email.too_many_bytes' => 'Anhänge insgesamt {bytes} Bytes überschreiten die Dokumentgrenze von {limit} Bytes - bitte den Versand aufteilen oder weniger Bytes anhängen',
+    'smtp.size_exceeded' => 'Die zusammengesetzte Nachricht ist {bytes} Bytes groß; der Relay bewirbt eine SIZE-Grenze von {limit} Bytes - vor DATA abgelehnt',
 ];

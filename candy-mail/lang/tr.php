@@ -78,4 +78,6 @@ return [
     'email.non_ascii_address' => 'E-posta adresi {addr} ASCII dışı karakter içeriyor: SMTPUTF8 desteklenmiyor — ASCII zarf adresi kullanın',
     'smtp.openssl_missing' => 'SMTP bağlantısını güvenceye almak için ext-openssl gereklidir (STARTTLS/SMTPS) — eklentiyi kurun; kanal şifrelenemeden hiçbir şey gönderilmez',
     'cli.render_8bit_divergence' => 'Not: --render, 8 bit gövdeyi 8BITMIME destekleyen bir aktaricinin gördügü sekliyle önizler; söz konusu uzantisi olmayan bir aktarici bu kisimlari hat üzerinde quoted-printable olarak yeniden kodlanmis sekilde alir (RFC 6152). Asagidaki baytlar gercek gonderimden farkli olabilir.',
+    'email.too_many_bytes' => 'Ekler toplamasi {bytes} bayt, tum belge tavani olan {limit} bayti asiyor — gonderimi bolun veya daha az bayt ekleyin',
+    'smtp.size_exceeded' => 'Olusturulan mesaj {bytes} bayt; aktarici {limit} baytluk SIZE tavani ilan etti — DATA oncesinde reddedildi',
 ];
