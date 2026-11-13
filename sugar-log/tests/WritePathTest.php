@@ -136,4 +136,49 @@ final class WritePathTest extends TestCase
         $this->assertStringContainsString('buffered-now', (string) \file_get_contents($path));
         \fclose($stream);
     }
+
+    public function testShortWriteThatTheRetryCompletesLandsOneLineWithNoAnnounce(): void
+    {
+        $result = StderrNoticeCapture::run(<<<'PHP'
+            SugarCraft\Log\Tests\Support\ShortWriteStream::$modes = [];
+            \stream_wrapper_register('sugarlog-sw', SugarCraft\Log\Tests\Support\ShortWriteStream::class);
+            $stream = \fopen('sugarlog-sw://retry', 'w');
+            $logger = SugarCraft\Log\Logger::new(stream: $stream, reportTimestamp: false);
+            $logger->info('cap');
+            $logger->flush();
+            echo '[' . SugarCraft\Log\Tests\Support\ShortWriteStream::$buffers['retry'] . ']';
+            \fclose($stream);
+            \stream_wrapper_unregister('sugarlog-sw');
+            PHP);
+
+        $this->assertSame(0, $result['exitCode']);
+        // The record is ONE whole line in the stream: five bytes from the
+        // short first call plus the three the retry completed.
+        $this->assertSame("[INF cap\n]", $result['stdout']);
+        // A retry that succeeds must not announce anything.
+        $this->assertSame('', $result['stderr']);
+    }
+
+    public function testWriteThatStaysShortEvenAfterRetryAnnouncesPartialWrite(): void
+    {
+        $result = StderrNoticeCapture::run(<<<'PHP'
+            SugarCraft\Log\Tests\Support\ShortWriteStream::$modes = ['short' => 'always-fail'];
+            \stream_wrapper_register('sugarlog-sw', SugarCraft\Log\Tests\Support\ShortWriteStream::class);
+            $stream = \fopen('sugarlog-sw://short', 'w');
+            $logger = SugarCraft\Log\Logger::new(stream: $stream, reportTimestamp: false);
+            $logger->info('cap');
+            $logger->flush();
+            echo '[' . SugarCraft\Log\Tests\Support\ShortWriteStream::$buffers['short'] . ']';
+            \fclose($stream);
+            \stream_wrapper_unregister('sugarlog-sw');
+            PHP);
+
+        $this->assertSame(0, $result['exitCode']);
+        // Two landed bytes: the first write and the retry each gave one.
+        $this->assertSame('[IN]', $result['stdout']);
+        $this->assertStringStartsWith(
+            '[sugar-log] log write failed: partial write only: INF cap ',
+            $result['stderr'],
+        );
+    }
 }
