@@ -353,12 +353,12 @@ final class SessionPermissionMemo
         foreach ($candidates as $patterns) {
             $granted = [];
             foreach ($patterns as $pattern) {
-                $rule = new PermissionRule($pattern, PermissionAction::Allow);
+                $rule = new PermissionRule($pattern, PermissionAction::Allow, RuleSource::Session);
                 if ($rule->toolNamePattern() !== $tool) {
                     continue 2;
                 }
                 $bare = self::bareSibling($rule);
-                $own = $bare === null ? [$rule] : [$rule, new PermissionRule($bare, PermissionAction::Allow)];
+                $own = $bare === null ? [$rule] : [$rule, new PermissionRule($bare, PermissionAction::Allow, RuleSource::Session)];
                 $useful = false;
                 foreach ($own as $candidate) {
                     foreach ($readings as $reading) {
@@ -374,7 +374,7 @@ final class SessionPermissionMemo
                 $granted[] = $pattern;
             }
             $granted = array_values(array_unique($granted));
-            $rules = array_map(static fn (string $p): PermissionRule => new PermissionRule($p, PermissionAction::Allow), $granted);
+            $rules = array_map(static fn (string $p): PermissionRule => new PermissionRule($p, PermissionAction::Allow, RuleSource::Session), $granted);
             foreach ($rules as $rule) {
                 if ($rule->matches($call, true, $projectRoot)) {
                     return $granted;
@@ -503,7 +503,7 @@ final class SessionPermissionMemo
         if ($patterns !== []) {
             $shown = self::shownPatterns($patterns);
             $halves = array_map(
-                static fn (string $p): ?string => (new PermissionRule($p, PermissionAction::Allow))->argumentPattern(),
+                static fn (string $p): ?string => (new PermissionRule($p, PermissionAction::Allow, RuleSource::Session))->argumentPattern(),
                 $shown,
             );
 
@@ -615,7 +615,7 @@ final class SessionPermissionMemo
     public function rules(): array
     {
         return array_map(
-            static fn (string $pattern): PermissionRule => new PermissionRule($pattern, PermissionAction::Allow),
+            static fn (string $pattern): PermissionRule => new PermissionRule($pattern, PermissionAction::Allow, RuleSource::Session),
             $this->patterns,
         );
     }
@@ -1070,7 +1070,7 @@ final class SessionPermissionMemo
         }
         $patterns = array_values(array_unique($patterns));
 
-        $rules = array_map(static fn (string $p): PermissionRule => new PermissionRule($p, PermissionAction::Allow), $patterns);
+        $rules = array_map(static fn (string $p): PermissionRule => new PermissionRule($p, PermissionAction::Allow, RuleSource::Session), $patterns);
 
         return self::coversBySegments($rules, new ToolCall('Bash', ['command' => $command]), $projectRoot, false)
             ? $patterns
@@ -1147,7 +1147,7 @@ final class SessionPermissionMemo
             return null;
         }
 
-        $rules = array_map(static fn (string $p): PermissionRule => new PermissionRule($p, PermissionAction::Allow), $patterns);
+        $rules = array_map(static fn (string $p): PermissionRule => new PermissionRule($p, PermissionAction::Allow, RuleSource::Session), $patterns);
 
         return self::coversBySegments($rules, new ToolCall('Bash', ['command' => $command]), $projectRoot, false)
             ? $patterns

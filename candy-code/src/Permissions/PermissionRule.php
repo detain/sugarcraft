@@ -282,9 +282,16 @@ final class PermissionRule
      */
     private const MAX_SYMLINK_HOPS = 40;
 
+    /**
+     * `$source` and `$file` say where the rule was written, for the prompt and
+     * `/permissions explain`. They never affect matching: two rules that differ
+     * only here decide a call identically.
+     */
     public function __construct(
         public readonly string $pattern,
         public readonly PermissionAction $action,
+        public readonly RuleSource $source = RuleSource::Unknown,
+        public readonly ?string $file = null,
     ) {}
 
     /**

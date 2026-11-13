@@ -162,4 +162,15 @@ final class BootstrapTerminalGuidanceNoticeTest extends TestCase
             $property->setValue(null, $value);
         }
     }
+
+    public function testAWindowsConsoleWithVtEnabledGetsNothingEvenWithAnEmptyTerm(): void
+    {
+        $this->assertNull(Bootstrap::terminalGuidanceNotice('', true, true));
+        $this->assertNull(Bootstrap::terminalGuidanceNotice('dumb', true, true));
+    }
+
+    public function testAWindowsConsoleWithVtDisabledStillGetsTheAdvice(): void
+    {
+        $this->assertSame(Bootstrap::TERMINAL_GUIDANCE_NOTICE_TEXT, Bootstrap::terminalGuidanceNotice('', true, false));
+    }
 }

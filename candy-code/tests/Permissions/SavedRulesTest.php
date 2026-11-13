@@ -51,7 +51,7 @@ final class SavedRulesTest extends TestCase
             $rules->list(),
         );
         $stored = (array) json_decode((string) file_get_contents($this->config), true);
-        self::assertSame([['pattern' => 'Bash(git status *)', 'action' => 'allow']], $stored['permissionRules']);
+        self::assertSame([['pattern' => 'Bash(git status *)', 'action' => 'allow', 'saved' => true]], $stored['permissionRules'], 'the marker is what lets the launch say a rule came from `p`');
     }
 
     public function testAppendNeverWritesTheSameAllowPatternTwice(): void

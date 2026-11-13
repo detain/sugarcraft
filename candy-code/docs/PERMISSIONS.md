@@ -1670,7 +1670,33 @@ registers it by hand.
 
 ```sh
 candy-code doctor          # 'permission policy' line reports the resolved mode
+candy-code permissions list          # the rules, first match first, with source and file
+candy-code permissions list --json   # the same as one contract document
+candy-code config show --sources     # every setting, with the layer each value came from
 ```
+
+`permissions list` reads the gate the launch would build and evaluates no
+call. Each row is `index  action  source  pattern  (file)`. The source is one
+of `user` (a `permissionRules` entry in your config or settings file),
+`project` (a deny or ask from the trusted repository), `saved` (an answer `p`
+wrote to your config), `session` or `skill`. `/permissions` shows the same
+column for the live gate.
+
+### Which rule decided a call
+
+`/permissions explain <Tool(subject)>` names the rule that answers a call and
+the file it came from, without evaluating the call. `/permissions explain
+Bash(git push origin main)` answers with the deny, its source and its file; a
+call no rule matches says so and names the mode that decides it. The subject
+is the argument the rule grammar matches on (`command` for `Bash`, the path
+for the file tools). Configured rules are consulted first, then the turn's
+skill grants, then this session's remembered grants, in the order the gate
+does.
+
+A rule the `p` key saved carries `"saved": true` in the config file. That
+marker is how a saved rule is told from one you wrote by hand; the launch
+ignores it for every other purpose.
+
 
 `doctor` reports `FAIL` with the parser's own message when the config is
 unusable — which is precisely the diagnosis you ran it for.

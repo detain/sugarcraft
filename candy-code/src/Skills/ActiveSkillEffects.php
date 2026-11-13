@@ -14,6 +14,7 @@ use SugarCraft\Code\Messages\ToolResultMessage;
 use SugarCraft\Code\Messages\UserMessage;
 use SugarCraft\Code\Permissions\PermissionAction;
 use SugarCraft\Code\Permissions\PermissionRule;
+use SugarCraft\Code\Permissions\RuleSource;
 use SugarCraft\Code\Context\TurnContextBlock;
 use SugarCraft\Code\Role;
 use SugarCraft\Code\ToolCall;
@@ -381,7 +382,7 @@ final readonly class ActiveSkillEffects
             if (PermissionRule::patternRejectionReason($pattern) !== null) {
                 continue;
             }
-            $rules[] = new PermissionRule($pattern, $action);
+            $rules[] = new PermissionRule($pattern, $action, RuleSource::Skill);
         }
 
         return $rules;

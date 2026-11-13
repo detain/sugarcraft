@@ -57,6 +57,7 @@ use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Permissions\PermissionRule;
 use SugarCraft\Code\Permissions\ProjectNarrowingRules;
+use SugarCraft\Code\Permissions\RuleSource;
 use SugarCraft\Code\Permissions\SafetyClassifier;
 use SugarCraft\Code\Permissions\ShellSubjectTools;
 use SugarCraft\Code\Providers\EchoProvider;
@@ -2865,7 +2866,7 @@ final class Bootstrap
         // direction the deny/ask-only tier exists to forbid. The notice the
         // load raises is signature-deduped per process, so a launch that
         // builds both gates still says it once.
-        $subAgentUserRules = self::permissionRules(self::permissionConfig());
+        $subAgentUserRules = self::userPermissionRules(self::permissionConfig());
         $permissionRules = [...self::projectNarrowingRules(), ...$subAgentUserRules];
 
         // ONE skill registry for the manager AND the tool set: the SkillTool in
@@ -7692,7 +7693,7 @@ public static function useMaxCost(?string $maxCost): void
         // `deny` — and it is why the project tier may contribute deny/ask
         // entries at all: prepended, they can only narrow what the session
         // does, never widen it.
-        $userRules = self::permissionRules($config);
+        $userRules = self::userPermissionRules($config);
 
         return new PermissionGate($mode, [...self::projectNarrowingRules(), ...$userRules], new SafetyClassifier(), $modeSource, $reviewer);
     }
@@ -7777,7 +7778,7 @@ public static function useMaxCost(?string $maxCost): void
         // The user tier's OWN strict item-wise parser — same complaints, same
         // Claude-dialect translation, same skip-with-a-named-index tolerance,
         // so one grammar is enforced from both tiers.
-        $narrowing = new ProjectNarrowingRules(self::permissionRules($decoded));
+        $narrowing = new ProjectNarrowingRules(self::permissionRules($decoded, null, RuleSource::Project, $shared));
         if ($narrowing->kept === [] && $narrowing->allowsDropped() === 0) {
             return [];
         }
@@ -7842,6 +7843,27 @@ public static function useMaxCost(?string $maxCost): void
         throw new PermissionConfigException(
             Lang::t('cli.refuse.bad_mode', ['source' => $source, 'value' => $raw, 'valid' => $valid]),
         );
+    }
+
+    /**
+     * The user tier's rules, each tagged with the file that won the
+     * `permissionRules` key. {@see permissionConfig()} merges the layers with
+     * `array_merge`, so the key comes from the LAST layer that carries it; the
+     * same layer is named here so `/permissions` can point at the right file.
+     *
+     * @param array<string, mixed> $config the merged user config
+     * @return list<PermissionRule>
+     */
+    private static function userPermissionRules(array $config): array
+    {
+        $file = null;
+        foreach (self::permissionConfigLayers() as $path => $layer) {
+            if (\array_key_exists(self::PERMISSION_RULES_CONFIG_KEY, $layer)) {
+                $file = (string) $path;
+            }
+        }
+
+        return self::permissionRules($config, null, RuleSource::User, $file);
     }
 
     /**
@@ -8295,7 +8317,7 @@ public static function useMaxCost(?string $maxCost): void
      * @param ?\Closure(string): void $report where each complaint goes; null = both channels
      * @return list<PermissionRule>
      */
-    public static function permissionRules(array $config, ?\Closure $report = null): array
+    public static function permissionRules(array $config, ?\Closure $report = null, RuleSource $source = RuleSource::User, ?string $file = null): array
     {
         // ABSENT AND EXPLICITLY NULL ARE DIFFERENT THINGS HERE, and they were
         // not before: `?? null` collapsed them, so `"permissionRules": null`
@@ -8401,7 +8423,13 @@ public static function useMaxCost(?string $maxCost): void
                 continue;
             }
 
-            $rules[] = new PermissionRule($pattern, $action);
+            // `saved: true` is written by SavedRules::append() for an answer `p`
+            // gave; it is the only way a saved rule can be told from a hand-written
+            // one, and the loader ignores every other key it does not read.
+            $ruleSource = $source === RuleSource::User && ($entry['saved'] ?? false) === true
+                ? RuleSource::Saved
+                : $source;
+            $rules[] = new PermissionRule($pattern, $action, $ruleSource, $file);
         }
 
         return $rules;
@@ -11323,9 +11351,17 @@ public static function useMaxCost(?string $maxCost): void
      * byte-unchanged, which is the polarity the existing transcript pins
      * keep asserting.
      */
-    public static function terminalGuidanceNotice(string $term, bool $tty): ?string
+    public static function terminalGuidanceNotice(string $term, bool $tty, bool $consoleVtEnabled = false): ?string
     {
         if (!$tty) {
+            return null;
+        }
+
+        // A native Windows console that has VT processing on renders the TUI
+        // whatever TERM says, and Windows never sets TERM, so the family test
+        // alone fires on every such launch. Only the VT answer clears it: a
+        // console without VT still gets the advice.
+        if ($consoleVtEnabled) {
             return null;
         }
 
@@ -11339,6 +11375,18 @@ public static function useMaxCost(?string $maxCost): void
     }
 
     /**
+     * Whether the Windows console on STDOUT has virtual-terminal processing on.
+     * Only ever true on native Windows; `sapi_windows_vt100_support()` with no
+     * second argument only asks, it does not switch the mode on.
+     */
+    public static function consoleVtEnabled(): bool
+    {
+        return \PHP_OS_FAMILY === 'Windows'
+            && \function_exists('sapi_windows_vt100_support')
+            && \sapi_windows_vt100_support(STDOUT);
+    }
+
+    /**
      * v2:a11y-F3: guide a launch on a TTY that can NOT speak TUI — before,
      * `TERM=dumb` users met a wall of bytes with no pointer at the paths
      * that work for them. Gated on the tty as well as the family: the
@@ -11347,11 +11395,12 @@ public static function useMaxCost(?string $maxCost): void
      * q3 idleSleeper pattern — an injectable observation point so the
      * positive half is pinned without minting a pty in the suite).
      */
-    public static function reportTerminalGuidance(?bool $tty = null): void
+    public static function reportTerminalGuidance(?bool $tty = null, ?bool $consoleVtEnabled = null): void
     {
         $notice = self::terminalGuidanceNotice(
             (string) (getenv('TERM') ?: ''),
             $tty ?? \stream_isatty(STDOUT),
+            $consoleVtEnabled ?? self::consoleVtEnabled(),
         );
 
         if ($notice === null) {

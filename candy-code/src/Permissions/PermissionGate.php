@@ -1136,11 +1136,46 @@ final class PermissionGate
      */
     private function evaluateRules(ToolCall $call, bool $argumentsKnown, ?string $projectRoot): ?PermissionDecision
     {
+        $rule = $this->matchingRule($call, $argumentsKnown, $projectRoot);
+
+        return $rule === null ? null : $this->actionToDecision($rule->action);
+    }
+
+    /**
+     * The configured rule that decides this call, first match wins, or null.
+     * Shared by {@see evaluateRules()} and {@see explainRule()} so the rule an
+     * explanation names is the rule the gate actually applies.
+     */
+    private function matchingRule(ToolCall $call, bool $argumentsKnown, ?string $projectRoot): ?PermissionRule
+    {
         foreach ($this->rules as $rule) {
             if ($rule->matches($call, $argumentsKnown, $projectRoot)) {
-                return $this->actionToDecision($rule->action);
+                return $rule;
             }
         }
+
+        return null;
+    }
+
+    /**
+     * The rule that answers a call if one does, read-only: the configured rules
+     * first, then the turn's skill grants and this session's remembered grants,
+     * in the order the gate consults them. Null means no rule speaks and the
+     * mode decides. Like {@see rules()}, it never touches the circuit-breaker
+     * state, so an explanation cannot reset a strike run.
+     */
+    public function explainRule(ToolCall $call, ?string $projectRoot = null): ?PermissionRule
+    {
+        $configured = $this->matchingRule($call, true, $projectRoot);
+        if ($configured !== null) {
+            return $configured;
+        }
+        foreach ([...$this->turnDenyRules, ...$this->turnAllowRules, ...$this->sessionRules] as $rule) {
+            if ($rule->matches($call, true, $projectRoot)) {
+                return $rule;
+            }
+        }
+
         return null;
     }
 

@@ -9,7 +9,9 @@ use SugarCraft\Code\Config\Settings\SettingsWriter;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
+use SugarCraft\Code\Permissions\PermissionRule;
 use SugarCraft\Code\Permissions\SavedRules;
+use SugarCraft\Code\ToolCall;
 
 /**
  * `/permissions` — what this session is actually gated by (roadmap O-2h moved
@@ -56,6 +58,9 @@ final class PermissionsCommand implements HostCommand
         }
         if (strtolower($words[0] ?? '') === 'saved') {
             return self::savedRules($context, $text);
+        }
+        if (strtolower($words[0] ?? '') === 'explain') {
+            return self::explain($context, $text, trim(substr($arg, 7)));
         }
         if (strtolower($words[0] ?? '') === 'forget') {
             // Rest-of-argument, not words[1]: a rule pattern carries spaces
@@ -213,6 +218,65 @@ final class PermissionsCommand implements HostCommand
         }
 
         return CommandResult::reply($text, $body);
+    }
+
+    /**
+     * `/permissions explain <Tool(subject)>` — which rule decides a call, and
+     * where that rule was written. Read-only: it asks the gate for the matching
+     * rule and never evaluates the call, so no circuit-breaker state moves.
+     */
+    private static function explain(CommandContext $context, string $text, string $call): CommandResult
+    {
+        $gate = $context->permissionGate;
+        if ($gate === null) {
+            return CommandResult::reply($text, Lang::t('host.permissions.no_gate'));
+        }
+
+        $parsed = self::parseCall($call);
+        if ($parsed === null) {
+            return CommandResult::errorReply($text, Lang::t('host.permissions.explain.usage'));
+        }
+        [$name, $subject] = $parsed;
+
+        $arguments = [];
+        $argument = PermissionRule::subjectArgumentName($name);
+        if ($subject !== null && $argument !== null) {
+            $arguments[$argument] = $subject;
+        }
+        $shown = $subject === null ? $name : $name . '(' . $subject . ')';
+        $rule = $gate->explainRule(new ToolCall($name, $arguments), $context->root);
+
+        if ($rule === null) {
+            return CommandResult::reply($text, Lang::t('host.permissions.explain.no_rule', [
+                'call' => self::reportField($shown),
+                'mode' => $gate->mode()->value,
+            ]));
+        }
+
+        return CommandResult::reply($text, Lang::t('host.permissions.explain.rule', [
+            'call' => self::reportField($shown),
+            'action' => $rule->action->value,
+            'pattern' => self::reportField($rule->pattern),
+            'source' => $rule->source->value,
+            'file' => $rule->file === null ? Lang::t('host.permissions.explain.no_file') : self::reportField($rule->file),
+        ]));
+    }
+
+    /**
+     * `Tool` or `Tool(subject)` split into its name and subject, or null when
+     * the text is empty or has no tool name.
+     *
+     * @return array{0: string, 1: ?string}|null
+     */
+    public static function parseCall(string $call): ?array
+    {
+        $call = trim($call);
+        if (preg_match('/^([A-Za-z_][A-Za-z0-9_]*)(?:\((.*)\))?$/s', $call, $m) !== 1) {
+            return null;
+        }
+        $subject = $m[2] ?? null;
+
+        return [$m[1], $subject === null || $subject === '' ? null : $subject];
     }
 
     /**
@@ -420,21 +484,17 @@ final class PermissionsCommand implements HostCommand
             $lines[] = Lang::t('host.permissions.no_rules');
         } else {
             $lines[] = Lang::t('host.permissions.rules', ['count' => count($rules)]);
-            $projectSignatures = \SugarCraft\Code\Cli\Bootstrap::projectNarrowingRuleSignatures();
             foreach ($rules as $index => $rule) {
-                // C-SEC-6.b tier column: which file a row rode in on decides
-                // which file a `forget`-less removal has to be edited in, and
-                // the gate's rules carry no provenance of their own — the
-                // launch records the project's signatures as it loads them.
-                $tier = in_array($rule->action->value . ' ' . $rule->pattern, $projectSignatures, true)
-                    ? Lang::t('host.permissions.tier.project')
-                    : Lang::t('host.permissions.tier.user');
+                // The rule carries its own origin (RuleSource) and the file it
+                // was read from, so the row says which file to edit to change
+                // it. A row with no file is a session or skill grant.
                 $lines[] = sprintf(
-                    '  %d. %-5s %-7s %s',
+                    '  %d. %-5s %-8s %s%s',
                     $index + 1,
                     $rule->action->value,
-                    $tier,
+                    $rule->source->value,
                     self::reportField($rule->pattern),
+                    $rule->file === null ? '' : '  (' . self::reportField($rule->file) . ')',
                 );
             }
         }

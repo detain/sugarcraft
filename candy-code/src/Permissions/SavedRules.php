@@ -140,7 +140,7 @@ final class SavedRules
             $next = $existing;
             foreach ($patterns as $pattern) {
                 if (!isset($have[$pattern])) {
-                    $next[] = ['pattern' => $pattern, 'action' => 'allow'];
+                    $next[] = ['pattern' => $pattern, 'action' => 'allow', 'saved' => true];
                 }
             }
             $path = $next === $existing
