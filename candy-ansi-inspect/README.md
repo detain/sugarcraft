@@ -74,17 +74,24 @@ source ends; the flag works before or after the file operand, and `--` ends
 flag parsing — the exec report stays line-mode.
 
 An empty source is a valid report of nothing: an empty file, or a command that
-printed nothing, yields an empty report and exit status **0**, so
-`cmd | candy-ansi-inspect` stays chainable when `cmd` has no output. Usage is printed on
-stderr with exit status **1** when no source was named at all (no file
-argument and no piped stdin); asked explicitly — `--help` or `-h` — the same
-usage prints on **stdout** with exit status **0** before the path gate ever
-sees the flag. A path argument that is not a local file —
-including a stream wrapper such as `php://` or `data://` — is refused with the
-same exit status rather than being read or fetched. An existing file that
-cannot be read is refused the same way (the gate is "is this a readable regular
-file", not "can we fake an empty report"): exit status **1** with the refusal
-on stderr, never a PHP warning followed by a misleading zero. The refusal
+printed nothing, yields an empty report, so `cmd | candy-ansi-inspect` stays
+chainable when `cmd` has no output. The exit-status contract, arm by arm, for
+scripters:
+
+| Situation                                            | Prints   | Stream | Exit status             |
+|------------------------------------------------------|----------|--------|-------------------------|
+| Readable file argument or piped stdin                | report   | stdout | **0**                   |
+| `--help` or `-h` (an explicit request)               | usage    | stdout | **0**                   |
+| Exec mode (`-- cmd [args…]`)                         | report   | stdout | the child's exit status |
+| No source named: no operand *and* stdin is a terminal | usage   | stderr | **1**                   |
+| Operand is not a readable regular file               | refusal  | stderr | **1**                   |
+
+"`-h`/`--help` prints on stdout" is checked before any path is considered, so
+the flag can never be swallowed by the file gate. Only a terminal stdin counts
+as "no source" — a pipe is always a source, empty or not. The file gate asks
+"is this a readable regular file", not "can we fake an empty report": bad paths
+exit **1** with the refusal on stderr, never a PHP warning followed by a
+misleading zero. The refusal
 string's wording is
 `cannot read: {path}`, and it fires for every path that cannot be read as a
 regular file — not-a-file, a directory, and not-readable alike. Names that
@@ -170,8 +177,11 @@ foreach ($streaming->finish() as $segment) {
   next line (NEL) / reset, plus the 7-bit spellings of the SOS / PM / ST
   controls (`ESC X`, `ESC ^`, `ESC \`).
 
-Anything unrecognised falls back to a generic `CSI/OSC/...` descriptor — an
-unrecognised sequence is never silently swallowed.
+Anything unrecognised falls back to a generic `CSI/OSC/...` descriptor: no
+sequence that reaches the segmenter is dropped without a report. Bytes can
+still vanish further upstream, inside the parser's state table — the
+byte-fidelity notes below enumerate exactly that territory, deviation by
+deviation.
 
 Reported bytes are the bytes that were sent: parameters keep the separator the
 sender used (`ESC[4;3m` never comes back as `ESC[4:3m`, and an omitted
