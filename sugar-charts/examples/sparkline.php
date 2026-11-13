@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * Sparkline — compact visualisation of a 1D series.
+ * Sparkline — compact visualization of a 1D series.
  *
  *   php examples/sparkline.php
  */

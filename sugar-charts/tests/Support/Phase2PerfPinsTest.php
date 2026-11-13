@@ -19,7 +19,7 @@ use SugarCraft\Core\Util\Width;
  * cache, the Sixel palette memo, the shared zero-width glyph set, and
  * the BrailleGrid bounds guard.
  *
- * The refactors are behaviour-preserving — proven by a byte-identical
+ * The refactors are behavior-preserving — proven by a byte-identical
  * render-dump sweep over the whole touched surface — so each pin locks a
  * structural property the NEW implementation relies on: keyed-set
  * membership completeness and boundaries, Sixel memo determinism and
@@ -80,7 +80,7 @@ final class Phase2PerfPinsTest extends TestCase
     }
 
     /**
-     * Sixel palette memo: a repeated color must quantise to exactly the same
+     * Sixel palette memo: a repeated color must quantize to exactly the same
      * palette index as the single-pixel encode (memo answers == scan
      * answers) and every stripe of an all-same-color grid references it
      * once per color pass — no phantom second index appears.
@@ -101,7 +101,7 @@ final class Phase2PerfPinsTest extends TestCase
             'all-same-color grid uses one distinct palette index',
         );
         // Key-collision guard: two colors sharing only the red channel
-        // must quantise independently — a memo keyed below full RGB would
+        // must quantize independently — a memo keyed below full RGB would
         // force the second onto the first's index.
         $a = Color::rgb(17, 200, 5);
         $b = Color::rgb(17, 0, 220);
@@ -117,7 +117,7 @@ final class Phase2PerfPinsTest extends TestCase
         );
         $idxA = self::firstDataColor(Sixel::encode([[$a]], 64));
         $idxB = self::firstDataColor(Sixel::encode([[$b]], 64));
-        $this->assertNotSame($idxA, $idxB, 'the two colors must quantise to different indices');
+        $this->assertNotSame($idxA, $idxB, 'the two colors must quantize to different indices');
         $this->assertArrayHasKey($idxA, $refs);
         $this->assertArrayHasKey($idxB, $refs);
     }
@@ -127,7 +127,7 @@ final class Phase2PerfPinsTest extends TestCase
      * pair alone let a memo key that DROPS exactly one of g/b survive — the
      * pair differs in both channels, so any two-channel key still separates
      * it. Each leg here differs from its twin in exactly ONE channel and the
-     * two quantise apart, pinning all three key channels individually:
+     * two quantize apart, pinning all three key channels individually:
      * a blue-only pair reddens a key missing blue, a green-only pair reddens
      * a key missing green.
      */
@@ -139,7 +139,7 @@ final class Phase2PerfPinsTest extends TestCase
             $label = $i === 0 ? 'blue-only' : 'green-only';
             $idxA = self::firstDataColor(Sixel::encode([[$a]], 64));
             $idxB = self::firstDataColor(Sixel::encode([[$b]], 64));
-            $this->assertNotSame($idxA, $idxB, "the $label pair must quantise to different indices");
+            $this->assertNotSame($idxA, $idxB, "the $label pair must quantize to different indices");
             $refs = [];
             foreach (self::dataColors(Sixel::encode([[$a, $b]], 64)) as $ref) {
                 $refs[$ref] = true;

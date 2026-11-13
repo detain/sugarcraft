@@ -30,7 +30,7 @@ final class Bar
         Finite::assert($low);
         Finite::assert($close);
         // a wick whose high sits below its low cannot be drawn —
-        // the former behaviour was a silently blank bar. Throwing matches the
+        // the former behavior was a silently blank bar. Throwing matches the
         // sibling ingestion-door style (BarChart\Bar, HeatPoint). Body
         // containment (low<=min(o,c)<=max(o,c)<=high) is deliberately NOT
         // enforced: coarse real-world feeds legitimately emit bodies poking

@@ -27,7 +27,7 @@ use SugarCraft\Charts\Support\UntrustedText;
  * and an unknown style would otherwise surface as a throw buried inside
  * somebody else's `view()` call. The canonical style vocabulary is the
  * {@see LineStyle} enum; the deprecated `STYLE_*` string constants are
- * still accepted and normalise to their case.
+ * still accepted and normalize to their case.
  */
 final class MarkLine
 {
@@ -62,7 +62,7 @@ final class MarkLine
      *
      * @param string|LineStyle $style canonical enum case, or a legacy
      *                                STYLE_* spelling (deprecated alias,
-     *                                normalised here)
+     *                                normalized here)
      * @throws \InvalidArgumentException when $value is NaN/±INF or $style
      *                                  is not a LineStyle case/spelling
      */
@@ -131,10 +131,10 @@ final class MarkLine
     }
 
     /**
-     * Reject style values the render pass could not rasterise, naming the
+     * Reject style values the render pass could not rasterize, naming the
      * accepted set so the caller can fix it without opening this file.
      * Enum cases pass through; legacy string spellings are the deprecated
-     * alias form and normalise to their case.
+     * alias form and normalize to their case.
      */
     private static function validatedStyle(string|LineStyle $style): LineStyle
     {

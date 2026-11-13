@@ -71,7 +71,7 @@ final class Streamline
         Finite::assert($value);
 
         // Degenerate width: preserve the historical unbounded-append
-        // behaviour (the modulo below would divide by zero at width 0).
+        // behavior (the modulo below would divide by zero at width 0).
         if ($this->width <= 0) {
             $buffer = $this->buffer;
             $buffer[] = $value;

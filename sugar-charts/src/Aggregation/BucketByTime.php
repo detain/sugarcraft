@@ -141,7 +141,7 @@ final class BucketByTime
 
     /**
      * Row-shape door (sugar-charts-028): see Resample::normalized for the
-     * contract — shape validated once here, [ts,value] tuples canonicalised,
+     * contract — shape validated once here, [ts,value] tuples canonicalized,
      * malformed rows throw a domain error naming the position.
      *
      * @param array<array-key, mixed> $rows

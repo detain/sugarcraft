@@ -14,10 +14,10 @@ use SugarCraft\Core\Util\Color;
  *
  * The annotation sized the win as "320×200@16 multi-second → <200ms"; that
  * premise overestimates the small-K case (measured: the legacy scan at the
- * default 16-colour palette is ~60ms for this grid — CH-14 class annotation
+ * default 16-color palette is ~60ms for this grid — CH-14 class annotation
  * correction, disclosed). The multi-second regime the finding actually
- * describes is the many-active-colours case, so the budget pins a
- * memoised-quant, 180-colour-active 256-palette grid: quant stays cheap,
+ * describes is the many-active-colors case, so the budget pins a
+ * memorized-quant, 180-color-active 256-palette grid: quant stays cheap,
  * the walk is everything. Measured here: new ≈198ms, legacy ≈680ms —
  * a 450ms budget fails the legacy shape by a safe margin.
  */
@@ -46,6 +46,6 @@ final class SixelPerfTest extends TestCase
             $best    = min($best, $elapsed);
             $this->assertNotSame('', $out);
         }
-        $this->assertLessThan(450.0, $best, sprintf('per-colour stripe re-walk is back: %.0f ms', $best));
+        $this->assertLessThan(450.0, $best, sprintf('per-color stripe re-walk is back: %.0f ms', $best));
     }
 }

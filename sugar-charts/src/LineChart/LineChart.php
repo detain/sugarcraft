@@ -31,7 +31,7 @@ use SugarCraft\Style\Theme;
  * becomes one column; the series is scaled into the canvas height and
  * a `*` (configurable) is plotted at the rounded row. Adjacent points
  * are connected with `|`, `/`, or `\` strokes when their rows differ,
- * giving an at-a-glance trend without requiring sub-cell rasterisation.
+ * giving an at-a-glance trend without requiring sub-cell rasterization.
  * The unnamed `$data` series renders first; {@see withDataset()} adds
  * named series on the same Y scale with automatic legend entries and a
  * cycling per-series color. {@see withTheme()} recolors every series and
@@ -41,7 +41,7 @@ use SugarCraft\Style\Theme;
  *
  * Color resolution order: a `withSeriesColorFn()` resolver wins per
  * point; otherwise the theme palette slot (per series); the built-in
- * dataset palette colours only the legend in unthemed cell mode, where
+ * dataset palette colors only the legend in unthemed cell mode, where
  * series separate by glyph instead.
  * The frame policy is deliberate: LineChart draws its own `│`/`└` axis
  * frame with scaled auto ticks (sugar-charts-033), so unlike Scatter and
@@ -680,7 +680,7 @@ final class LineChart extends Chart
     /**
      * Append a single value using a sliding window sized to the chart width.
      * When the window is full, the oldest point is dropped before the new
-     * one is added — giving live streaming behaviour.
+     * one is added — giving live streaming behavior.
      */
     public function push(float $value): self
     {
@@ -994,7 +994,7 @@ final class LineChart extends Chart
     }
 
     /**
-     * Map a Y value to its plot row: normalise into the resolved
+     * Map a Y value to its plot row: normalize into the resolved
      * `[min, max]` range (clamped to it), topmost row = 0. Shared by the
      * series loop and the MarkLine overlay so the two mappings can never
      * drift apart. Callers guarantee `$max > $min` (degenerate ranges are
@@ -1109,7 +1109,7 @@ final class LineChart extends Chart
 
         // Single batched paint: only cells touched by some series are set;
         // untouched cells keep the (blank) canvas underneath, matching
-        // BrailleGrid::paint's skip-empty behaviour.
+        // BrailleGrid::paint's skip-empty behavior.
         foreach ($cellStyles as $cy => $row) {
             foreach ($row as $cx => $style) {
                 $canvas->setCell($gutterLeft + $cx, (int) $cy, $grid->rune($cx, (int) $cy), $style);

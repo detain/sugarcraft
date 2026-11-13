@@ -16,7 +16,7 @@ use SugarCraft\Charts\Support\UntrustedText;
  * QA probes (lib-reviews era) saw renders drop everything AFTER a stray
  * control byte even though the guard kept it — the contradiction this
  * suite retires: the guard drops the control bytes themselves but the
- * tail must always reach the screen. Pre-CH-01 behaviour is dead and
+ * tail must always reach the screen. Pre-CH-01 behavior is dead and
  * these pins keep it dead: every named surface (bar labels, line-chart
  * tick labels, axis titles, legend entries, dataset names) renders the
  * full survivor text.
@@ -93,7 +93,7 @@ final class ControlTailTest extends TestCase
         // about survival, not injection — but the pair must not regress
         // each other): a smuggled red must not emit SGR bytes.
         $view = BarChart::new([["r\e[31med", 5.0], ['c', 3.0]], width: 20, height: 3)->view();
-        self::assertStringNotContainsString("\x1b[31m", $view, 'the smuggled red SGR leaked through sanitisation');
+        self::assertStringNotContainsString("\x1b[31m", $view, 'the smuggled red SGR leaked through sanitization');
         self::assertStringContainsString('red', $view, 'the label text itself must survive');
     }
 }

@@ -125,7 +125,7 @@ final class RenderMemoTest extends TestCase
         $this->assertSame($first, $a->view(), 'the original object keeps its own render');
 
         // A re-run of the same mutation lands on identical bytes (memo is
-        // an optimisation, never a different code path).
+        // an optimization, never a different code path).
         $this->assertSame($b->view(), $a->withYRange(0.0, 100.0)->view());
     }
 

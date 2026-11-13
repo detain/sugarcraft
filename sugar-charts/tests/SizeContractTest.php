@@ -213,12 +213,12 @@ final class SizeContractTest extends TestCase
     {
         // sugar-charts-030: the axis name is a label, not wallpaper.
         $rows = explode("\n", LineChart::new([1.0, 2.0, 3.0, 4.0, 5.0], 20, 5)->withYLabel('YY')->view());
-        $labelled = 0;
+        $labeled = 0;
         foreach ($rows as $row) {
             if (str_starts_with($row, 'YY ')) {
-                $labelled++;
+                $labeled++;
             }
         }
-        $this->assertSame(1, $labelled);
+        $this->assertSame(1, $labeled);
     }
 }

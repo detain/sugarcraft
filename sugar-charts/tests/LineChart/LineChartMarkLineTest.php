@@ -145,7 +145,7 @@ final class LineChartMarkLineTest extends TestCase
         }
 
         // Style is validated at construction, not buried in the render pass:
-        // a MarkLine that cannot be rasterised must never exist, and the
+        // a MarkLine that cannot be rasterized must never exist, and the
         // message names the accepted spellings so callers fix it blind.
         try {
             MarkLine::at(5.0, '', 'wavy');

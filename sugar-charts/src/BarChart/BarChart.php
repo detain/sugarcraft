@@ -224,7 +224,7 @@ final class BarChart implements ChromeAccessors
 
     /**
      * Pin every bar to a fixed cell width. Default null means
-     * "distribute available width across bars" (the prior behaviour).
+     * "distribute available width across bars" (the prior behavior).
      * Mirrors ntcharts' `WithBarWidth`. `null` re-enables auto.
      */
     public function withBarWidth(?int $width): self

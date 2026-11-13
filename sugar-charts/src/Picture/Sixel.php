@@ -40,7 +40,7 @@ final class Sixel
      * escape sequence.
      *
      * @param list<list<Color>> $pixels  rows top→bottom, cols left→right
-     * @param int               $paletteSize  cap on the quantised palette
+     * @param int               $paletteSize  cap on the quantized palette
      */
     public static function encode(array $pixels, int $paletteSize = 16): string
     {
@@ -55,7 +55,7 @@ final class Sixel
 
         // Build the palette by sampling a uniform RGB cube. Larger
         // palettes don't necessarily look better — most images map
-        // to a handful of dominant colors and the quantisation is
+        // to a handful of dominant colors and the quantization is
         // nearest-neighbour on the cube.
         [$palette, $paletteCount] = self::buildPalette($paletteSize);
 
@@ -157,7 +157,7 @@ final class Sixel
         ];
         if ($paletteSize <= 16) {
             // Luminance-spread subset of ANSI-16 (sugar-charts-117): the old
-            // prefix slice handed small caps black→dark colours only —
+            // prefix slice handed small caps black→dark colors only —
             // every bright and white collapsed. Evenly spaced rungs keep
             // both ends (black, bright white) at any size.
             $spread = [];

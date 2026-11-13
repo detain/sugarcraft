@@ -42,7 +42,7 @@ final class FillHoistTest extends TestCase
 
     public function testFillRectDelegatesByteIdenticallyIncludingClamping(): void
     {
-        // Old behaviour = per-cell setCell, out-of-range writes silently
+        // Old behavior = per-cell setCell, out-of-range writes silently
         // ignored; new = Canvas::fill clamps the same rect. Both must
         // paint the identical pixels for rects crossing every edge.
         foreach ([[0, 0, 4, 4], [-3, -2, 10, 12], [6, 6, 20, 20], [9, 9, 0, 0]] as [$x0, $y0, $x1, $y1]) {

@@ -366,7 +366,7 @@ spellings), C0 controls except TAB/LF/CR, DEL, 8-bit C1, and forged
 U+E000/U+E001 mouse-zone sentinels; repairs malformed UTF-8 to U+FFFD
 before the Unicode-aware passes; converts bidi overrides and zero-width
 characters into printable markers; and flattens TAB/LF/CR to spaces, so a
-single surviving newline can never desynchronise the fixed-width frame.
+single surviving newline can never desynchronize the fixed-width frame.
 Ordinary printable input comes back byte-identical, and the guard is
 idempotent.
 

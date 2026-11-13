@@ -1,4 +1,4 @@
-# Render a coloured heatmap with legend strip.
+# Render a colored heatmap with legend strip.
 Output .vhs/heatmap.gif
 
 Set FontSize 14

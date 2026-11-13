@@ -161,7 +161,7 @@ final class NoColorParityTest extends TestCase
     public function testClicolorForceReigns(callable $render, bool $emitsByDefault): void
     {
         if (!$emitsByDefault) {
-            $this->markTestSkipped('colourless surface cannot demonstrate the force arm');
+            $this->markTestSkipped('colorless surface cannot demonstrate the force arm');
         }
         $this->withEnv(['FORCE_COLOR' => '1', 'NO_COLOR' => '1'], function () use ($render): void {
             $this->assertTrue(ColorLadder::carriesSgr($render()), 'FORCE_COLOR outranks NO_COLOR');

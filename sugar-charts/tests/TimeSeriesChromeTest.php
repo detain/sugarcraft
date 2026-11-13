@@ -100,8 +100,8 @@ final class TimeSeriesChromeTest extends TestCase
         $grown = $ts->withSize(60, 12)->view();
         $this->assertGreaterThan(substr_count($ts->view(), "\n"), substr_count($grown, "\n"));
 
-        $labelled = $ts->withYLabels(['aaa', 'bbb', 'ccc'])->view();
-        $this->assertStringContainsString('aaa', $labelled);
+        $labeled = $ts->withYLabels(['aaa', 'bbb', 'ccc'])->view();
+        $this->assertStringContainsString('aaa', $labeled);
     }
 
     public function testPointRuneAndLineStyleAndColorFnForward(): void

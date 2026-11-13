@@ -94,20 +94,20 @@ final class ScatterTest extends TestCase
     public function testWithYLabelEmitsOnceOnCenteredRow(): void
     {
         // CH-03: the y-label is a gutter title, printed once at the vertical
-        // centre (was stamped on every row).
+        // center (was stamped on every row).
         $out = Scatter::new([[1, 4], [2, 7]], 28, 3) // lib-reviews-1103 M5: y-label budget is a quarter of the width
             ->withYLabel('Y Value')
             ->view();
         $lines = explode("\n", $out);
-        $labelled = 0;
+        $labeled = 0;
         foreach ($lines as $line) {
             if (str_starts_with($line, 'Y Value ')) {
-                $labelled++;
+                $labeled++;
             } elseif ($line !== '') {
                 $this->assertStringStartsWith(str_repeat(' ', 8), $line);
             }
         }
-        $this->assertSame(1, $labelled);
+        $this->assertSame(1, $labeled);
     }
 
     // ─── Legend Tests ────────────────────────────────────────────────────

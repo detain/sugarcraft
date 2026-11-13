@@ -77,7 +77,7 @@ final class LineChartApiHygieneTest extends TestCase
         // sugar-charts-058: \Error/\TypeError from a broken style stack must
         // surface as bugs, not collapse into unstyled points. No legitimate
         // input can raise those, so the pin is structural (source shape)
-        // plus the behavioural edges the narrowed arms still swallow.
+        // plus the behavioral edges the narrowed arms still swallow.
         $src = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/LineChart/LineChart.php');
         $start = strpos($src, 'private static function styleForColor');
         $this->assertNotFalse($start, 'styleForColor must exist to be pinned');

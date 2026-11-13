@@ -61,16 +61,16 @@ final class ChartLayoutBudgetsTest extends TestCase
         // other rows carry the same-width blank gutter. Budget cap holds.
         $budget = intdiv(self::WIDTH, 4);
         $rows   = self::rows($view);
-        $labelled = 0;
+        $labeled = 0;
         foreach ($rows as $row) {
             self::assertStringNotContainsString(str_repeat('y', $budget + 1), $row);
             if (str_starts_with($row, str_repeat('y', $budget) . ' ')) {
-                $labelled++;
+                $labeled++;
                 continue;
             }
             self::assertStringStartsWith(str_repeat(' ', $budget) . ' ', $row);
         }
-        self::assertSame(1, $labelled);
+        self::assertSame(1, $labeled);
     }
 
     public function testXLabelIsClippedToCanvasWidth(): void

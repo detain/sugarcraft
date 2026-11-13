@@ -262,7 +262,7 @@ final class Heatmap
      * without color and color-blind viewers; the cold-end block of the
      * colored mode, which is nearly indistinguishable from a dark
      * background, has no equivalent here. Default off — the colored
-     * gradient stays the out-of-box behaviour.
+     * gradient stays the out-of-box behavior.
      */
     public function withMonoRamp(bool $on = true): self
     {
@@ -432,7 +432,7 @@ final class Heatmap
     }
 
     /**
-     * Sample the palette at the normalised position of `$v` between
+     * Sample the palette at the normalized position of `$v` between
      * `$min` and `$max`. Honors a multi-stop palette when supplied;
      * otherwise blends cold↔hot linearly.
      */
@@ -477,7 +477,7 @@ final class Heatmap
 
         $stripWidth = max(0, $this->width - $minLen - $maxLen - 2);
         $strip = '';
-        // Per-color style memo for the strip: adjacent stops quantise to
+        // Per-color style memo for the strip: adjacent stops quantize to
         // the same color constantly, so one Style allocation per distinct
         // color is enough (mirrors the grid cache in view()).
         $legendStyles = [];

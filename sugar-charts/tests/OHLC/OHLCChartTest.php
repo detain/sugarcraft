@@ -76,21 +76,21 @@ final class OHLCChartTest extends TestCase
     public function testWithYLabelEmitsOnceOnCenteredRow(): void
     {
         // CH-03: the y-label is a gutter title, printed once at the vertical
-        // centre (was stamped on every row).
+        // center (was stamped on every row).
         $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
         $out = OHLCChart::new([$bar], 28, 3) // lib-reviews-1103 M5: y-label budget is a quarter of the width
             ->withYLabel('Price $')
             ->view();
         $lines = explode("\n", $out);
-        $labelled = 0;
+        $labeled = 0;
         foreach ($lines as $line) {
             if (str_starts_with($line, 'Price $ ')) {
-                $labelled++;
+                $labeled++;
             } elseif ($line !== '') {
                 $this->assertStringStartsWith(str_repeat(' ', 8), $line);
             }
         }
-        $this->assertSame(1, $labelled);
+        $this->assertSame(1, $labeled);
     }
 
     // ─── Legend Tests ────────────────────────────────────────────────────

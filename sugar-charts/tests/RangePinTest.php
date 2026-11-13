@@ -128,7 +128,7 @@ final class RangePinTest extends TestCase
 
     public function testValidLoneEndsStillRender(): void
     {
-        // widening lone ends keep their old (correct) behaviour untouched
+        // widening lone ends keep their old (correct) behavior untouched
         $this->assertNotSame('', BarChart::new([['a', 1.0], ['b', 2.0]], 20, 5)->withMax(10.0)->view());
         $this->assertNotSame('', Sparkline::new([1.0, 2.0, 3.0])->withMin(0.0)->view());
         $this->assertNotSame('', LineChart::new([1.0, 2.0, 3.0], 20, 5)->withMin(-5.0)->withMax(50.0)->view());

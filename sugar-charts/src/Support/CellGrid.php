@@ -27,7 +27,7 @@ use SugarCraft\Style\Style;
  *
  * Writes outside the grid's own bounds are the canvas's business: this
  * contract guarantees nothing about off-grid cells, mirroring Canvas's
- * clamp-and-drop behaviour.
+ * clamp-and-drop behavior.
  */
 interface CellGrid
 {

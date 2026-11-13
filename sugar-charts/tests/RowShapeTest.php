@@ -34,7 +34,7 @@ final class RowShapeTest extends TestCase
         $this->assertSame(
             Resample::new(10)->resample(self::CANON),
             Resample::new(10)->resample($tuples),
-            'tuple rows must canonicalise to the assoc form before the maths paths read them'
+            'tuple rows must canonicalize to the assoc form before the maths paths read them'
         );
     }
 

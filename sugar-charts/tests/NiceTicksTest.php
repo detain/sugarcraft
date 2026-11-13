@@ -12,7 +12,7 @@ use SugarCraft\Charts\LineChart\LineChart;
  * Default-axis nice ticks (sugar-charts-026 / CH-22): formatter-less axes
  * label the Y scale through the NiceScale ladder — round 1/2/5 × 10^e rungs
  * placed at their true plot rows — while explicit formatter or manual label
- * lists keep their pre-ladder slot behaviour.
+ * lists keep their pre-ladder slot behavior.
  */
 final class NiceTicksTest extends TestCase
 {
@@ -21,7 +21,7 @@ final class NiceTicksTest extends TestCase
         $this->assertSame([0.0, 2.0, 4.0, 6.0, 8.0], NiceScale::ticks(0.0, 8.0, 4));
         // niceMin grid point 0 sits below the domain 1..8 and is dropped.
         $this->assertSame([2.0, 4.0, 6.0, 8.0], NiceScale::ticks(1.0, 8.0, 4));
-        // Inverted bounds normalise instead of throwing.
+        // Inverted bounds normalize instead of throwing.
         $this->assertSame([0.0, 2.0, 4.0, 6.0, 8.0], NiceScale::ticks(8.0, 0.0, 4));
     }
 

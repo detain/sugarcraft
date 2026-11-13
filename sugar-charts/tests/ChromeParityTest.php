@@ -94,15 +94,15 @@ final class ChromeParityTest extends TestCase
     public function testYLabelEmitsOnceWithAlignedGutterInEveryFamily(object $renderer): void
     {
         $rows = explode("\n", $renderer->withYLabel('YY')->view());
-        $labelled = 0;
+        $labeled = 0;
         foreach ($rows as $row) {
             if (str_starts_with($row, 'YY ')) {
-                $labelled++;
+                $labeled++;
                 continue;
             }
             $this->assertStringStartsWith('   ', $row, 'gutter rows must stay column-aligned');
         }
-        $this->assertSame(1, $labelled, 'the axis name is a label, not wallpaper');
+        $this->assertSame(1, $labeled, 'the axis name is a label, not wallpaper');
     }
 
     /**

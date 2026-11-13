@@ -179,7 +179,7 @@ final class Resample
 
     /**
      * Row-shape door (sugar-charts-028): validate the shape once, at
-     * ingestion, and normalise [ts,value] tuples to the canonical
+     * ingestion, and normalize [ts,value] tuples to the canonical
      * ['ts'=>..,'value'=>..] form the maths paths read. A malformed row
      * becomes a domain error naming its position instead of an
      * undefined-array-key warning that leaks into the suite (failOnWarning)

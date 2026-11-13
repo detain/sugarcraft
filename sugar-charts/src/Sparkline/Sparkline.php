@@ -166,7 +166,7 @@ final class Sparkline
      *
      * WHY THIS COSTS O(n): the instance is immutable and `data` is a
      * public property holding the FULL recorded history (pinned by
-     * SparklineTest), so every push materialises a fresh history copy.
+     * SparklineTest), so every push materializes a fresh history copy.
      * Stream long sequences with {@see pushAll()} instead — one batched
      * append costs a single copy regardless of batch length — or keep a
      * plain PHP buffer and call withData() at render time.

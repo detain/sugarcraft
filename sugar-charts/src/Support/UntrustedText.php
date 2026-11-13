@@ -18,7 +18,7 @@ use SugarCraft\Core\Util\Width;
  * payloads, 7- and 8-bit C1, NUL/BEL, forged U+E000/U+E001 mouse-zone
  * sentinels, bidi-override characters such as U+202E, or undecodable
  * UTF-8. Because chart frames are line-composed grids, a surviving
- * newline or tab desynchronises the layout even when it is "benign"
+ * newline or tab desynchronizes the layout even when it is "benign"
  * input from the host itself. Left raw, one such string reaching a real
  * terminal is an escape-injection primitive.
  *

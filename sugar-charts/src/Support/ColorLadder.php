@@ -19,7 +19,7 @@ namespace SugarCraft\Charts\Support;
  *  - otherwise color is emitted.
  *
  * {@see self::guard()} is the emission-side half: it removes CSI SGR
- * sequences (colour + attribute codes) from a finished render. It is
+ * sequences (color + attribute codes) from a finished render. It is
  * deliberately NOT a general escape stripper — picture payloads
  * (DCS/Sixel, OSC/iTerm2, APC/Kitty) survive it intact, which is why
  * Picture routes the ladder through its text placeholder only.
@@ -70,7 +70,7 @@ final class ColorLadder
 
     /**
      * True when $output carries any SGR sequence — the matrix test's
-     * discriminator (colour emitted at all).
+     * discriminator (color emitted at all).
      */
     public static function carriesSgr(string $output): bool
     {
