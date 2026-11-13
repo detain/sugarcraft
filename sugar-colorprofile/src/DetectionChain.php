@@ -346,6 +346,13 @@ final class DetectionChain
     private const FORCE_SOURCES = ['env:CLICOLOR_FORCE', 'env:FORCE_COLOR'];
 
     /**
+     * The ladder's suppression legs (steps 3-5), identified by their tagged
+     * sources — the rungs a USER chose, as distinct from the hardware-absence
+     * floor the step-0 stream gate enforces (CP-20, sugar-colorprofile-023).
+     */
+    private const SUPPRESSION_SOURCES = ['env:NO_COLOR', 'env:CLICOLOR=0', 'env:TERM=dumb'];
+
+    /**
      * True when the answer came from an explicit force leg rather than a
      * capability read or a suppression. Callers gating on TTY presence use
      * this to yield: upstream parity is `Detect() = isatty() || forced()`
@@ -357,6 +364,25 @@ final class DetectionChain
     public function isForced(): bool
     {
         return \in_array($this->source, self::FORCE_SOURCES, true);
+    }
+
+    /**
+     * Did the OPERATOR opt out of color, as opposed to the hardware lacking
+     * a TTY? True iff a suppression leg (NO_COLOR, CLICOLOR=0, TERM=dumb)
+     * actually FIRED the answer. A force leg outranking a suppression reads
+     * FALSE here — the rung in force is not a suppression, whoever asked.
+     * This is the discriminator the profile enums deliberately do not carry:
+     * since CP-05 both stories answer colorless rungs (Ascii for the opt-out,
+     * NoTTY for absent hardware) and a name cannot hold two truths, while a
+     * CLI repairing its own defaults (`--color=always`) or drawing a doctor
+     * panel needs the WHY (CP-20, sugar-colorprofile-023; the full enum
+     * split is reserved for 2.0 — decision candidate #4).
+     *
+     * @param array<array-key, string|null> $env Hermetic override map; [] = ambient.
+     */
+    public static function userOptedOut(array $env = []): bool
+    {
+        return \in_array(self::detect($env)->source, self::SUPPRESSION_SOURCES, true);
     }
 
     /**

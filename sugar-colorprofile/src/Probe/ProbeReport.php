@@ -167,8 +167,12 @@ final readonly class ProbeReport
      * The probe reports speak capabilities; renderers speak ColorProfile.
      * This is the canonical translation so consumers never re-derive the
      * ladder by hand. Precedence follows the color rungs; NoColor and a
-     * bare BasicAscii floor map to their suppression/minimum arms; an
-     * empty report means nothing was observed at all, which is the chain
+     * bare BasicAscii floor map onto the colorless Ascii rung — since CP-05
+     * suppression is an opt-out from COLOR, not from ANSI, and routing the
+     * NoColor capability back onto NoTTY erased the one vocabulary
+     * distinction renderers still had (CP-20; the NoTTY name is hardware
+     * absence only, and DetectionChain::userOptedOut() carries the WHY).
+     * An empty report means nothing was observed at all, which is the chain
      * fallback's answer (Ansi) — not a claim of monochrome.
      */
     public function toColorProfile(): ColorProfile
@@ -177,7 +181,7 @@ final readonly class ProbeReport
             $this->has(Capability::TrueColor) => ColorProfile::TrueColor,
             $this->has(Capability::Color256) => ColorProfile::Ansi256,
             $this->has(Capability::Color16) => ColorProfile::Ansi,
-            $this->has(Capability::NoColor) => ColorProfile::NoTTY,
+            $this->has(Capability::NoColor) => ColorProfile::Ascii,
             $this->capabilities === [] => ColorProfile::Ansi,
             default => ColorProfile::Ascii,
         };

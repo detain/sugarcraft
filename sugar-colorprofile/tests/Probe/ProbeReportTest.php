@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\ColorProfile\Tests\Probe;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\ColorProfile\ColorProfile;
 use SugarCraft\ColorProfile\Probe\Capability;
 use SugarCraft\ColorProfile\Probe\ProbeReport;
 use SugarCraft\ColorProfile\Probe\TerminalProbe;
@@ -115,6 +116,20 @@ final class ProbeReportTest extends TestCase
         ]);
 
         $this->assertTrue($report->hasNoColor());
+    }
+
+    public function testNoColorCapabilityBridgesToTheColorlessRungNotNoTTY(): void
+    {
+        // CP-20 (sugar-colorprofile-023): the bridge used to fold the
+        // operator's opt-out back onto the hardware-absence name — the one
+        // vocabulary distinction renderers had left. NoColor now lands on
+        // the Ascii rung CP-05 built for it: decoration survives, and the
+        // WHY stays reachable through DetectionChain::userOptedOut().
+        $report = new ProbeReport([
+            Capability::NoColor->value => 'env:NO_COLOR',
+        ]);
+
+        $this->assertSame(ColorProfile::Ascii, $report->toColorProfile());
     }
 
     public function testHasNoColorFalse(): void

@@ -274,7 +274,12 @@ stream gate). The two names that surface suppression are not synonyms:
 the `NO_COLOR` leg only, while the `NoColor` capability is broader — it covers
 all three suppression vars (`NO_COLOR`, `CLICOLOR=0`, `TERM=dumb`).
 `ProbeReport::colorDescription()` is report prose; the enum's `label()` and
-`description()` are the canonical vocabulary.
+`description()` are the canonical vocabulary. The provenance door is
+`DetectionChain::userOptedOut()` (CP-20): it reports whether one of the
+suppression legs actually FIRED the answer, so a CLI can tell an operator
+opt-out — repairable with `--color=always` — from a stream that simply has
+no TTY in front of it. A force leg outranking a suppression reads false:
+the rung in force is not a suppression.
 
 ## Color Degradation
 
@@ -495,10 +500,10 @@ SugarCraft\ColorProfile\
 ├── Color          — RGBA color value object with conversion methods (Color::namedColors() lists standard names)
 ├── ColorProfile    — THE color-depth enum (8 levels, richest→simplest)
 ├── Profile         — deprecated class_alias façade over ColorProfile
-├── DetectionChain  — shared env ladder (the one precedence core; see the ladder above)
+├── DetectionChain  — shared env ladder (the one precedence core; see the ladder above) + userOptedOut() provenance door
 ├── Env             — env resolution (hermetic-replace rule), value read, source sanitize
 ├── Palette         — instance detection over the chain + degrade/strip; adds the stream TTY gate and the describe()/comment() plain-language capability announcements
-├── Probe           — static env-probe layer (colorProfile/isNoColor/isForceColor/reducedMotion)
+├── Probe           — static env-probe layer (colorProfile/isNoColor/isForceColor/reducedMotion/resetForTesting)
 ├── AsyncProbe      — ReactPHP child-process infocmp probe (bounded children, settles from the chain)
 ├── Probe\TerminalProbe — phased capability report (env chain → terminfo → escape queries → fallbacks)
 ├── Probe\Capability / Probe\ProbeReport / Probe\InfocmpBinary / Probe\TerminfoParser — capability enum, sourced report, resolved infocmp path, name-position terminfo parser
@@ -539,7 +544,8 @@ Beyond the env ladder above, the library exposes a richer capability surface:
   `allWithSource()`/`has()`/`source()` plus the `colorDescription()` prose, and
   bridge into the shared vocabulary via `toColorProfile()`
   (TrueColor→`TrueColor`, Color256→`Ansi256`, Color16→`Ansi`,
-  NoColor→`NoTTY`, empty report→`Ansi` ladder-default parity,
+  NoColor→`Ascii` — CP-20 moved it off `NoTTY`, the opt-out is not hardware
+  absence, empty report→`Ansi` ladder-default parity,
   BasicAscii-only report→`Ascii`).
 - **`AsyncProbe::colorProfile(?LoopInterface $loop = null)`** — the same infocmp
   check in a ReactPHP child process; returns a promise. The child spawns ONLY

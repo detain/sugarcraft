@@ -456,4 +456,70 @@ final class DetectionChainTest extends TestCase
         $this->assertFalse(DetectionChain::detect(['COLORTERM' => 'truecolor'])->isForced(), 'capability read is not force');
         $this->assertFalse(DetectionChain::detect([])->isForced(), 'the floor is not force');
     }
+
+    public function testUserOptedOutNamesTheSuppressionLegsAndNothingElse(): void
+    {
+        // CP-20 (sugar-colorprofile-023): opt-out vs hardware absence is
+        // PROVENANCE, not level — post-CP-05 both colorless stories answer
+        // a colorless rung, so only the ladder's tagged source can tell
+        // them apart. The door reads that source; a leg that never FIRED
+        // (outranked, or not a suppression at all) reads false.
+        $this->assertTrue(DetectionChain::userOptedOut(['NO_COLOR' => '1']));
+        $this->assertTrue(DetectionChain::userOptedOut(['NO_COLOR' => ' ']), 'presence-and-not-empty is the NO_COLOR standard reading');
+        $this->assertTrue(DetectionChain::userOptedOut(['CLICOLOR' => '0']));
+        $this->assertTrue(DetectionChain::userOptedOut(['TERM' => 'dumb']));
+        $this->assertTrue(DetectionChain::userOptedOut(['TERM' => 'DUMB']), 'the term leg is case-insensitive and the source tag is the normalized spelling');
+
+        $this->assertFalse(DetectionChain::userOptedOut(['TERM' => 'xterm']), 'a capability read is not an opt-out');
+        $this->assertFalse(DetectionChain::userOptedOut(['TERM' => '']), 'the unknown-TERM floor (fallback:default) is not a suppression leg');
+        $this->assertFalse(DetectionChain::userOptedOut(['CLICOLOR' => '1']), 'CLICOLOR=1 is a deliberate no-op (CP-09e), not a leg');
+        $this->assertFalse(
+            DetectionChain::userOptedOut(['NO_COLOR' => '1', 'CLICOLOR_FORCE' => '1']),
+            'the force leg outranks: the suppression never fired the answer',
+        );
+        $this->assertFalse(
+            DetectionChain::userOptedOut(['NO_COLOR' => '1', 'FORCE_COLOR' => '0']),
+            'a pinned floor is the operator choosing the floor, not the NO_COLOR leg firing',
+        );
+    }
+
+    public function testUserOptedOutReadsTheAmbientLayerWhenTheMapIsEmpty(): void
+    {
+        // The [] = ambient half of the resolve rule (CP-20): the door parses
+        // through Env, so the same putenv-visible suppression the ladder
+        // sees is what userOptedOut() names. The force legs are neutralized
+        // first — on a hermetic map they cannot interfere, on the ambient
+        // one a stray CI FORCE_COLOR would outrank the leg under test.
+        $controlled = ['NO_COLOR', 'TERM', 'CLICOLOR_FORCE', 'FORCE_COLOR'];
+        $saved = [];
+        foreach ($controlled as $key) {
+            $saved[$key] = getenv($key);
+        }
+        try {
+            putenv('CLICOLOR_FORCE');
+            unset($_ENV['CLICOLOR_FORCE']);
+            putenv('FORCE_COLOR');
+            unset($_ENV['FORCE_COLOR']);
+            putenv('TERM=xterm');
+            $_ENV['TERM'] = 'xterm';
+
+            putenv('NO_COLOR=1');
+            $_ENV['NO_COLOR'] = '1';
+            $this->assertTrue(DetectionChain::userOptedOut(), 'ambient NO_COLOR fires the leg');
+
+            putenv('NO_COLOR');
+            unset($_ENV['NO_COLOR']);
+            $this->assertFalse(DetectionChain::userOptedOut(), 'without a suppression leg the same TERM answers a capability read');
+        } finally {
+            foreach ($controlled as $key) {
+                if ($saved[$key] === false) {
+                    putenv($key);
+                    unset($_ENV[$key]);
+                } else {
+                    putenv("{$key}={$saved[$key]}");
+                    $_ENV[$key] = $saved[$key];
+                }
+            }
+        }
+    }
 }

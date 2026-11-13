@@ -72,7 +72,11 @@ enum ColorProfile: string
      *  other sequence pass through (the color-only strip rung, CP-05). */
     case Ascii = 'ascii';
 
-    /** No TTY connected — all ANSI sequences must be stripped. */
+    /** Hardware absence — no TTY in front of the writer, so every ANSI
+     *  sequence must be stripped, decoration included. User suppression
+     *  (NO_COLOR, CLICOLOR=0, TERM=dumb) does NOT land here: since CP-05 it
+     *  answers the colorless Ascii rung, and DetectionChain::userOptedOut()
+     *  carries the WHY a caller needs (CP-20, sugar-colorprofile-023). */
     case NoTTY = 'notty';
 
     /**
@@ -152,7 +156,10 @@ enum ColorProfile: string
 
     /**
      * Walk the profile downgrade chain to the next simpler profile.
-     * Returns null when already at the simplest (NoTTY).
+     * Returns null when already at the simplest (NoTTY). The walk is about
+     * emission richness, not provenance: standing on either colorless rung
+     * it cannot tell an operator opt-out from absent hardware —
+     * DetectionChain::userOptedOut() answers that (CP-20).
      */
     public function degradedTo(): ?self
     {
