@@ -68,6 +68,7 @@ final class McpTrustPins
         private readonly array $roots,
         private readonly array $replaced = [],
         private readonly bool $damaged = false,
+        private readonly ?string $readFailure = null,
     ) {}
 
     /** The record at $path, or an empty one when it is absent or unusable. */
@@ -76,6 +77,20 @@ final class McpTrustPins
         $raw = is_file($path) ? @file_get_contents($path) : false;
         $data = is_string($raw) ? json_decode($raw, true) : null;
         $roots = [];
+        $failure = null;
+        if ($raw === false && is_file($path)) {
+            $failure = 'file exists but could not be read';
+        } elseif (is_string($raw) && trim($raw) !== '') {
+            if (!is_array($data)) {
+                $failure = 'file is not valid JSON';
+            } elseif (($data['version'] ?? null) !== self::VERSION) {
+                $failure = 'unsupported or missing version';
+            } elseif (!is_array($data['roots'] ?? null)) {
+                $failure = '"roots" is missing or not an object';
+            }
+        } elseif (is_string($raw)) {
+            $failure = 'file is empty';
+        }
 
         if (is_array($data) && ($data['version'] ?? null) === self::VERSION && is_array($data['roots'] ?? null)) {
             foreach ($data['roots'] as $root => $servers) {
@@ -96,13 +111,24 @@ final class McpTrustPins
         // first-launch case, so callers must not treat it as "no record".
         $damaged = $raw === '' || (is_string($raw) && trim($raw) === '');
 
-        return new self($path, $roots, [], $damaged);
+        return new self($path, $roots, [], $damaged, $failure);
     }
 
     /** True when the file exists but is empty — refuse rather than re-trust. */
     public function damaged(): bool
     {
         return $this->damaged;
+    }
+
+    /**
+     * Why a PRESENT pin file yielded no usable record (unreadable, not JSON,
+     * wrong version, bad roots, empty), or null for an absent file (a normal
+     * first launch) or a clean read. Diagnosis only: callers' behaviour is
+     * unchanged.
+     */
+    public function readFailure(): ?string
+    {
+        return $this->readFailure;
     }
 
     /** Where this record is read from and written to. */
@@ -134,7 +160,7 @@ final class McpTrustPins
         $roots[$root] = $servers;
         ksort($roots, \SORT_STRING);
 
-        return new self($this->path, $roots, [...$this->replaced, $root => true], $this->damaged);
+        return new self($this->path, $roots, [...$this->replaced, $root => true], $this->damaged, $this->readFailure);
     }
 
     /**

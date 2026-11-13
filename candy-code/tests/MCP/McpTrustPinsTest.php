@@ -106,4 +106,22 @@ final class McpTrustPinsTest extends TestCase
         @unlink($path . '.lock');
         @rmdir($dir);
     }
+
+    public function testReadFailureNamesPresentButUnusableFiles(): void
+    {
+        $dir = sys_get_temp_dir() . '/mcp_pins_' . bin2hex(random_bytes(4));
+        mkdir($dir, 0700, true);
+        $path = $dir . '/mcp-trust.json';
+
+        self::assertNull(McpTrustPins::load($path)->readFailure(), 'absent file is silent');
+        foreach (['{nope' => 'not valid JSON', '{"version":9,"roots":{}}' => 'version', '{"version":1,"roots":5}' => 'roots', '' => 'empty'] as $body => $needle) {
+            file_put_contents($path, (string) $body);
+            self::assertStringContainsString($needle, (string) McpTrustPins::load($path)->readFailure());
+        }
+        file_put_contents($path, '{"version":1,"roots":{}}');
+        self::assertNull(McpTrustPins::load($path)->readFailure());
+
+        @unlink($path);
+        @rmdir($dir);
+    }
 }

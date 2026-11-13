@@ -9186,6 +9186,12 @@ public static function useMaxCost(?string $maxCost): void
         // refused until `candy-code mcp trust` approves it.
         $trustRoot = (string) $decision['canonicalRoot'];
         $pins = McpTrustPins::load(self::trustedConfigDirPath() . '/' . McpTrustPins::FILENAME);
+        if (($failure = $pins->readFailure()) !== null) {
+            try {
+                Log::channel(Log::APP, 'MCP trust pins ' . $pins->path() . ' unusable (' . $failure . '); treated as no record');
+            } catch (\Throwable) {
+            }
+        }
         if ($pins->damaged()) {
             // An empty pin file is a torn write, and defaulting it to "first
             // launch" would re-trust every server unseen (TOFU reset).
