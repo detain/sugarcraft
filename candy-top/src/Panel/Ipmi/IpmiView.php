@@ -1079,7 +1079,7 @@ final class IpmiView
             $r->put($bx, $in->y + $gh, $big, Symbols::BOLD . $ink->gradient('cpu', $pct));
             $r->put($bx + mb_strwidth($big) + 1, $in->y + $gh, $pct . '%', $ink->fg('graph_text'));
             if ($win !== null && $in->y + $gh + 1 < $chipsY) {
-                $mm = Lang::t('ipmi.min') . ' ' . IpmiPaint::watts($win[0], false) . ' ' . Lang::t('ipmi.max') . ' ' . IpmiPaint::watts($win[2], false);
+                $mm = Lang::t('ipmi.min') . ' ' . IpmiPaint::watts($win[0]) . ' ' . Lang::t('ipmi.max') . ' ' . IpmiPaint::watts($win[2]);
                 if (mb_strwidth($mm) > $gw) {
                     $mm = IpmiPaint::watts($win[0], false) . '–' . IpmiPaint::watts($win[2]);
                 }

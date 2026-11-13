@@ -163,16 +163,21 @@ final class IpmiPaint
         return mb_strwidth($text) <= $width ? $text : Just::left($text, $width);
     }
 
-    /** Watts as the box prints them: "880 W", "2.06 kW", "10.4 kW". */
+    /**
+     * Watts as the box prints them: "880 W", "2.06 kW", "10.4 kW". With
+     * `$unit = false` the value carries the kilo prefix but no space and
+     * no W ("880", "2.06k") — that form is for lists that append one
+     * shared " W" to the line (windowLine), never for a standalone
+     * label: a bare "1.0k" with nothing appended reads as unit-less.
+     */
     public static function watts(float $w, bool $unit = true): string
     {
-        $s = match (true) {
-            $w >= 10000 => sprintf('%.1f k', $w / 1000),
-            $w >= 1000 => sprintf('%.2f k', $w / 1000),
-            default => sprintf('%d ', (int) round($w)),
-        };
+        $kilos = $w >= 1000;
+        $num = $kilos
+            ? sprintf($w >= 10000 ? '%.1f' : '%.2f', $w / 1000)
+            : sprintf('%d', (int) round($w));
 
-        return $unit ? $s . 'W' : rtrim($s);
+        return $unit ? $num . ($kilos ? ' kW' : ' W') : $num . ($kilos ? 'k' : '');
     }
 
     /** RPM compactly: "980", "16.5k". */

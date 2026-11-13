@@ -11,6 +11,7 @@ use SugarCraft\Core\Util\Width;
 use SugarCraft\Top\Collect\Ipmi\IpmiReader;
 use SugarCraft\Top\Collect\Ipmi\IpmiState;
 use SugarCraft\Top\Config\Config;
+use SugarCraft\Top\Panel\Ipmi\IpmiPaint;
 use SugarCraft\Top\Panel\Ipmi\PowerGauge;
 use SugarCraft\Top\Panel\Ipmi\PowerHistory;
 use SugarCraft\Top\Panel\IpmiPanel;
@@ -259,5 +260,24 @@ final class IpmiPaintTest extends TestCase
         $spark = (string) preg_replace('/\x1b\[[0-9;]*m/', '', PowerHistory::spark($ink, 4, [1.0, 2.0, 3.0], 0.0, 3.0, 'temp'));
         $this->assertSame(4, mb_strlen($spark));
         $this->assertSame('', PowerHistory::spark($ink, 0, [], 0.0, 1.0, 'temp'));
+    }
+
+    /**
+     * The watts spacing law (candy-top-100): one space between the figure
+     * and the unit, k glued to W; the unit-less form is a bare figure with
+     * a glued k, made for a line that appends one shared " W" - never a
+     * standalone label, which would read unit-less.
+     */
+    public function testWattsSpacingLawIsUniformInBothForms(): void
+    {
+        $this->assertSame('0 W', IpmiPaint::watts(0));
+        $this->assertSame('880 W', IpmiPaint::watts(880));
+        $this->assertSame('1.00 kW', IpmiPaint::watts(1000), 'the kilo branch starts at 1000');
+        $this->assertSame('2.06 kW', IpmiPaint::watts(2060));
+        $this->assertSame('10.4 kW', IpmiPaint::watts(10400));
+        $this->assertSame('0', IpmiPaint::watts(0, false));
+        $this->assertSame('880', IpmiPaint::watts(880, false));
+        $this->assertSame('2.06k', IpmiPaint::watts(2060, false), 'no stray space before the appended unit');
+        $this->assertSame('10.4k', IpmiPaint::watts(10400, false));
     }
 }
