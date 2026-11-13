@@ -14,6 +14,8 @@ use SugarCraft\Mouse\Zones\Msg\ZoneExitMsg;
  * Tracks which zone the cursor is in across mouse-move events and
  * emits enter/exit messages on boundary crossings.
  *
+ * Fork-returning layer — see README §Choosing your tracker idiom.
+ *
  * Wraps a {@see Manager}. The manager must have already run {@see Manager::scan()}
  * to populate its zone registry before the tracker can detect hovers.
  *

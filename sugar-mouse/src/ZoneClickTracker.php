@@ -9,6 +9,8 @@ namespace SugarCraft\Mouse;
  * per logical click — suppressing spurious extra Press events fired during
  * drag and discarding mismatched Press+Release on different zones.
  *
+ * Mutable layer — see README §Choosing your tracker idiom.
+ *
  * State machine per button:
  *   idle       → Press  → waiting (store zone+button)
  *   waiting    → Press  → waiting (replace pending with new zone — last press wins)

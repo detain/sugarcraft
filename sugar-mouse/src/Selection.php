@@ -8,6 +8,8 @@ namespace SugarCraft\Mouse;
  * The press → drag → release state machine of a mouse text-selection
  * gesture, clamped to a selectable region of the painted frame.
  *
+ * Mutable layer — see README §Choosing your tracker idiom.
+ *
  * Ported upstream from candy-code's `Tui\TextSelection`.
  * With mouse motion tracking on (modes 1002/1003, with or without the
  * SGR coordinate companion 1006), the terminal hands every press/drag/release to

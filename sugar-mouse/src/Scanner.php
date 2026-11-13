@@ -7,6 +7,8 @@ namespace SugarCraft\Mouse;
 /**
  * Stateful scan-then-get fluent API for mouse hit-testing.
  *
+ * Mutable layer — see README §Choosing your tracker idiom.
+ *
  * Own your own Scanner instance — no global Manager wiring required.
  *
  * Usage:

@@ -82,6 +82,23 @@ if ($click !== null) {
 | `Lang` | Refusal-message lookup for this package's catalogue (`lang/`, five bare keys under Lang namespace `mouse`; the `sugar-mouse:` label rides inside each message) |
 | `Zones\MsgZoneInBounds` | Zone-bound Msg emitted by `Manager::anyInBoundsAndUpdate()` into a Model's `update()` — the only Zones-layer message that lives outside the `Msg\` namespace |
 
+### Choosing your tracker idiom
+
+Two state idioms share this package, split by layer:
+
+| Layer | Classes | Contract |
+|---|---|---|
+| Primitive | `Selection`, `ZoneClickTracker`, `Scanner` | Mutates in place; `begin()` / `dragTo()` / `track()` update the receiver and return a plain value (`bool` / `?ClickResult` / chainable `$this`) |
+| Zones trackers | `DragTracker`, `ZoneHoverTracker`, `ClickCounter` | Fork-returning; `update()` yields a `[tracker, ?Msg]` pair and the caller rebinds the returned tracker after every event |
+
+The split is deliberate — a live gesture is sequential state, and the
+primitive machines are ports of in-place codebases — but the ecosystem
+cost is real: candy-code hand-wrote an immutable adapter over `Selection`
+(its `Tui\TextSelection` works on a clone per step) and declined the
+Zones `DragTracker` in favour of its own `PaneDragController`. Pick one
+idiom per UI and bridge at the boundary; converging the primitives onto
+fork-returning is a family-wide BC break and an open owner decision.
+
 `Selection` / `SelectionRange` were ported from candy-code's
 `Tui\TextSelection`, and candy-code now runs on them: `Tui\TextSelection` is
 an immutable adapter over a cloned `Selection` machine, reads its geometry and

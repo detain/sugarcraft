@@ -16,6 +16,8 @@ use SugarCraft\Mouse\Zones\Msg\ZoneDragStartMsg;
 /**
  * Tracks press → move → release drag sequences within and across zones.
  *
+ * Fork-returning layer — see README §Choosing your tracker idiom.
+ *
  * Wraps a {@see Manager}. The manager must have already run {@see Manager::scan()}
  * to populate its zone registry before the tracker can detect drags.
  *
