@@ -57,6 +57,46 @@ the CLI runs from a standalone clone, a composer install, or a built phar (which
 its own bundled vendor). In the monorepo checkout, `php candy-mail/bin/candy-mail`
 works after `scripts/refresh-deps.php`.
 
+### Standalone phar
+
+Run the single-file phar — no Composer, no `vendor/`: download `candy-mail.phar`
+and its `candy-mail.phar.sha256` sidecar from the `candy-mail/dev` release,
+verify, and run:
+
+```bash
+curl -LO https://github.com/detain/sugarcraft/releases/download/candy-mail/dev/candy-mail.phar
+curl -LO https://github.com/detain/sugarcraft/releases/download/candy-mail/dev/candy-mail.phar.sha256
+sha256sum -c candy-mail.phar.sha256
+php candy-mail.phar --version
+```
+
+`dev` is a rolling prerelease channel: the archive is rebuilt and re-stamped on
+every `master` push that touches this app, so the phar there carries the newest
+such commit — the `dev-<shortsha>` `--version` prints is the commit it was
+packed from.
+
+Or build the phar from a checkout:
+
+```bash
+php -d phar.readonly=0 tools/build-phar.php [--out=dist/candy-mail.phar]
+```
+
+Three prerequisites: `-d phar.readonly=0` is build-only, never a runtime
+requirement; the tree must be clean, committed, and non-detached (the integrity
+preflight refuses anything else); and the packaged vendor must be the published,
+`--no-dev` one — a linked-mode (symlinked-sibling) vendor would freeze
+working-tree bytes into the artifact.
+
+### Command-line consumers
+
+After `composer require sugarcraft/candy-mail` in your project the bin lands at
+`vendor/bin/candy-mail` next to your autoloader; the candidate ladder above
+resolves it. For a PATH-visible copy, install it globally:
+
+```bash
+composer global require sugarcraft/candy-mail
+```
+
 ## Quick Start
 
 ### Resend API
@@ -154,8 +194,9 @@ $email2 = new Email(
 ## CLI
 
 ```bash
-# The examples below invoke the bare `candy-mail` (composer-global or phar bin);
-# in a monorepo checkout run them as `php candy-mail/bin/candy-mail`.
+# The examples below invoke the bare `candy-mail` (a `vendor/bin/candy-mail` from
+# your project install, the composer-global bin, or the phar renamed onto your
+# PATH); in a monorepo checkout run them as `php candy-mail/bin/candy-mail`.
 candy-mail --from "me@example.com" --to "you@example.com" --subject "Hello"
 # Body read from STDIN. Both --flag value and --flag=value work.
 
