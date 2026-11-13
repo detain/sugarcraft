@@ -11,6 +11,7 @@ use SugarCraft\ScriptUi\Attribute\Command;
 use SugarCraft\ScriptUi\Attribute\Example;
 use SugarCraft\ScriptUi\Attribute\Flag;
 use SugarCraft\ScriptUi\Attribute\ValueEnum;
+use SugarCraft\ScriptUi\Runtime\Diagnostics;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command as SymfonyCommand;
 use Symfony\Component\Console\Input\InputOption;
@@ -55,7 +56,7 @@ final class CommandScanner
             // 2026-11-02 CC5). The prefix is normalised now, so the remaining
             // ways to land here are a typo'd or empty namespace — all of them
             // deserve a loud word rather than a vacuum.
-            fwrite(STDERR, sprintf(
+            Diagnostics::emit(sprintf(
                 "candy-scriptui: no classes found under namespace '%s'; nothing registered (check the spelling, or autoload the classes before scan()).\n",
                 $namespace
             ));
@@ -106,7 +107,7 @@ final class CommandScanner
                 // Fail loud: a #[Command] class we silently dropped is the
                 // difference between a working tool and a confusing one.
                 $this->skipped[] = $class;
-                fwrite(STDERR, sprintf(
+                Diagnostics::emit(sprintf(
                     "candy-scriptui: skipping command %s: not constructible as a Symfony Command (constructor dependency the scanner cannot inject, or missing Command base class).\n",
                     $class
                 ));
@@ -137,7 +138,7 @@ final class CommandScanner
         }
 
         if (!enum_exists($flag->enum)) {
-            fwrite(STDERR, sprintf(
+            Diagnostics::emit(sprintf(
                 "candy-scriptui: --%s declares enum '%s' but no such enum exists; values are not enforced.\n",
                 $flag->name,
                 $flag->enum

@@ -13,6 +13,7 @@ use SugarCraft\ScriptUi\Lang;
 use SugarCraft\ScriptUi\Model\SpinModel;
 use SugarCraft\ScriptUi\Process\Process;
 use SugarCraft\ScriptUi\Process\RealProcess;
+use SugarCraft\ScriptUi\Runtime\Diagnostics;
 use SugarCraft\ScriptUi\Runtime\InteractiveRuntime;
 use SugarCraft\ScriptUi\Runtime\SignalExit;
 use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
@@ -122,7 +123,7 @@ final class SpinCommand extends Command
         $timeoutSeconds = 0.0;
         if (!TimeoutGuard::tryParseSeconds($input->getOption('timeout'), $timeoutSeconds)) {
             // A typo'd deadline must not silently disable itself (fail-open).
-            fwrite(STDERR, Lang::t('runtime.bad_timeout', ['value' => (string) $input->getOption('timeout')]) . "\n");
+            Diagnostics::emit(Lang::t('runtime.bad_timeout', ['value' => (string) $input->getOption('timeout')]) . "\n");
             return Command::FAILURE;
         }
 
@@ -135,7 +136,7 @@ final class SpinCommand extends Command
         // library contract, but CLI users never see an exception frame.
         $styleKey = strtolower((string) $styleName);
         if (!in_array($styleKey, self::STYLE_SPELLINGS, true)) {
-            fwrite(STDERR, Lang::t('runtime.unknown_choice', [
+            Diagnostics::emit(Lang::t('runtime.unknown_choice', [
                 'option' => '--style',
                 'value' => (string) $styleName,
                 'allowed' => 'line|dot|mini-dot|points|pulse|globe|meter|jump|moon|monkey|hamburger|ellipsis',
@@ -155,7 +156,7 @@ final class SpinCommand extends Command
         }
         if (!in_array($align, ['left', 'right'], true)) {
             // Anything else would silently render left-aligned; refuse loudly.
-            fwrite(STDERR, Lang::t('runtime.unknown_choice', [
+            Diagnostics::emit(Lang::t('runtime.unknown_choice', [
                 'option'  => '--align',
                 'value'   => $align,
                 'allowed' => 'left|right',
@@ -183,7 +184,7 @@ final class SpinCommand extends Command
             // unsupported, or a plain spawn failure) reaches the user as
             // a clean sentence + exit code — the matrix must never lie
             // with a raw exception frame.
-            fwrite(STDERR, $e->getMessage() . "\n");
+            Diagnostics::emit($e->getMessage() . "\n");
             return Command::FAILURE;
         }
 
@@ -207,14 +208,14 @@ final class SpinCommand extends Command
             $output->write($process->stdout(), false, OutputInterface::OUTPUT_RAW);
         }
         if ($showError) {
-            fwrite(STDERR, $process->stderr());
+            Diagnostics::emit($process->stderr());
         }
         // scriptui-03: a capped capture shows the head and says so — one
         // notice line on the diagnostics stream, the child's exit code
         // untouched (truncation is a capture limit, not the child failing).
         if (($showOutput && $process->stdoutDropped() > 0)
             || ($showError && $process->stderrDropped() > 0)) {
-            fwrite(STDERR, Lang::t('spinner.output_truncated') . "\n");
+            Diagnostics::emit(Lang::t('spinner.output_truncated') . "\n");
         }
         $process->close();
         return $code;

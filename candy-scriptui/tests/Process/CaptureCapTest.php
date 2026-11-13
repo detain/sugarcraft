@@ -104,7 +104,7 @@ final class CaptureCapTest extends TestCase
         $this->assertStringContainsString('spinner.output_truncated', $src);
         $this->assertSame(
             1,
-            \preg_match_all('/fwrite\(STDERR, Lang::t\(\'spinner\.output_truncated\'\)/', $src),
+            \preg_match_all('/Diagnostics::emit\(Lang::t\(\'spinner\.output_truncated\'\)/', $src),
             'exactly one notice site — not one per slot (the line must appear once)'
         );
     }
