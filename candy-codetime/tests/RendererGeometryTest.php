@@ -707,4 +707,18 @@ final class RendererGeometryTest extends TestCase
         self::assertStringContainsString('Top projects', implode("\n", self::plain($quiet)));
         self::assertStringNotContainsString('Nothing recorded yet', implode("\n", self::plain($quiet)));
     }
+
+    public function testAYearCrossingWindowSpellsTheYearOnBothEnds(): void
+    {
+        $end = new \DateTimeImmutable('2026-01-05');
+        $stats = Stats::compute([], $end->modify('-6 days'), $end);
+        $crossed = Ansi::strip(Renderer::render(new Dashboard(new NullReader(), $end, 7, $stats, 80)));
+        self::assertStringContainsString('[Dec 30 2025 – Jan 5 2026]', $crossed);
+
+        // A window inside one year keeps the terse shape byte-unchanged.
+        $same = new \DateTimeImmutable(self::END);
+        $quiet = Stats::compute([], $same->modify('-6 days'), $same);
+        $plain = Ansi::strip(Renderer::render(new Dashboard(new NullReader(), $same, 7, $quiet, 80)));
+        self::assertStringContainsString('[Jun 1 – Jun 7]', $plain);
+    }
 }

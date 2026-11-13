@@ -73,6 +73,7 @@ return [
     'ui.help_row_compact' => '  ← prev  ·  → next  ·  r  reload  ·  q/Esc  quit',
     'ui.total' => 'totaal:',
     'ui.range_format' => 'M j',
+    'ui.range_format_year' => 'M j Y',
     'ui.weekday_format' => 'D',
     'ui.no_activity' => '(geen activiteit)',
     'ui.more_suffix' => '+{count} meer',

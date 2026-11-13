@@ -266,8 +266,17 @@ final class Renderer
 
     private static function header(Dashboard $d): string
     {
-        $end = $d->endDay->format(Lang::t('ui.range_format'));
-        $start = $d->endDay->modify('-' . ($d->days - 1) . ' days')->format(Lang::t('ui.range_format'));
+        // CT-S47 (finding 055): ← walks across year borders one press at a
+        // time and 90/365-day windows straddle two years routinely, so a
+        // year-crossing window spells the year on BOTH ends. A window inside
+        // one year keeps the terse 'Mar 3 – Mar 9' shape byte-unchanged.
+        $startDay = $d->endDay->modify('-' . ($d->days - 1) . ' days');
+        $format = Lang::t('ui.range_format');
+        if ($startDay->format('Y') !== $d->endDay->format('Y')) {
+            $format = Lang::t('ui.range_format_year');
+        }
+        $end = $d->endDay->format($format);
+        $start = $startDay->format($format);
         $total = Stats::formatHours($d->stats->totalSeconds());
         $title = self::tint(Style::new()->bold(), self::palette($d)->title, $d->colorProfile)
             ->render(' CandyCodetime ');

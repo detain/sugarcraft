@@ -73,6 +73,7 @@ return [
     'ui.help_row_compact' => '  ← prev  ·  → next  ·  r  reload  ·  q/Esc  quit',
     'ui.total' => '合計:',
     'ui.range_format' => 'M j',
+    'ui.range_format_year' => 'M j Y',
     'ui.weekday_format' => 'D',
     'ui.no_activity' => '(活動なし)',
     'ui.more_suffix' => 'ほか +{count}',
