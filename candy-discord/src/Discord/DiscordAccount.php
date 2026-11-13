@@ -51,6 +51,14 @@ final class DiscordAccount implements PlatformFace
     /** @var array<string, int> thread-ish channel id → last activity stamp (idle sweep, §7.5) */
     private array $threadSeen = [];
 
+    /**
+     * Declared bytes promised by media downloads still outstanding on this
+     * account (§7.8 batch budget). Concurrent messages each reserve here at
+     * down-select and release once their batch settles, so simultaneous
+     * attachments stack BOUNDED by the shared budget, not multiplicatively.
+     */
+    private int $mediaInFlightBytes = 0;
+
     public function __construct(
         private readonly string $account,
         private readonly Rest $rest,
@@ -501,10 +509,13 @@ final class DiscordAccount implements PlatformFace
 
     /**
      * §7.8 down-select: ≤4 images + ≤2 PDFs, each declared AND actually
-     * within `media.maxMb`; anything else is skipped with a disclosed,
-     * names-only notice. Fetches run concurrently; the settled batch
-     * becomes ONE prompt. Wire shape per entry:
-     * {name, mime, data: strict-base64} (§9 media contract).
+     * within `media.maxMb`, and the whole batch inside `media.maxTotalMb`
+     * (default 50) — reserved against a shared per-account in-flight
+     * budget at down-select, then re-checked on settled bytes BEFORE the
+     * base64 doubling. Anything else is skipped with a disclosed,
+     * names-only notice. Fetches run concurrently (each streamed under
+     * the per-file cap); the settled batch becomes ONE prompt. Wire shape
+     * per entry: {name, mime, data: strict-base64} (§9 media contract).
      *
      * @param list<mixed> $raw
      */
@@ -512,6 +523,8 @@ final class DiscordAccount implements PlatformFace
     {
         $maxMb = (int) $this->nested('media', 'maxMb', 100);
         $maxBytes = \max(1, $maxMb) * 1048576;
+        $maxTotalMb = (int) $this->nested('media', 'maxTotalMb', 50);
+        $totalCapBytes = \max(1, $maxTotalMb) * 1048576;
         $caps = [
             'images' => (int) $this->nested('media', 'images', 4),
             'documents' => (int) $this->nested('media', 'documents', 2),
@@ -541,15 +554,22 @@ final class DiscordAccount implements PlatformFace
 
                 continue;
             }
-            if ((int) ($attachment['size'] ?? 0) > $maxBytes) {
+            $declared = (int) ($attachment['size'] ?? 0);
+            if ($declared > $maxBytes) {
                 $notes[] = "{$name} (over the {$maxMb} MB cap)";
+
+                continue;
+            }
+            if ($this->mediaInFlightBytes + $declared > $totalCapBytes) {
+                $notes[] = "{$name} (past the {$maxTotalMb} MB batch budget)";
 
                 continue;
             }
             // Declared size gets a second chance after the download: the
             // ACTUAL bytes are the truth (§7.8 caps bind the payload).
             ++$accepted[$slot];
-            $jobs[] = ['slot' => $slot, 'name' => $name, 'mime' => $mime, 'url' => $url];
+            $this->mediaInFlightBytes += $declared;
+            $jobs[] = ['slot' => $slot, 'name' => $name, 'mime' => $mime, 'url' => $url, 'declared' => $declared];
         }
 
         if ($jobs === []) {
@@ -559,14 +579,20 @@ final class DiscordAccount implements PlatformFace
         }
         $promises = [];
         foreach ($jobs as $job) {
-            $promises[] = $this->rest->fetchBinary($job['url'])->then(
+            $promises[] = $this->rest->fetchBinary($job['url'], $maxBytes)->then(
                 static fn (string $bytes): array => ['bytes' => $bytes],
                 static fn (\Throwable $e): array => ['error' => $e->getMessage()],
             );
         }
-        \React\Promise\all($promises)->then(function (array $settled) use ($key, $ref, $text, $isMention, $inboundId, $jobs, $notes, $maxBytes): void {
+        \React\Promise\all($promises)->then(function (array $settled) use ($key, $ref, $text, $isMention, $inboundId, $jobs, $notes, $maxBytes, $maxTotalMb, $totalCapBytes): void {
+            // The batch settled — release every reservation FIRST, so a
+            // throwing row below can never strand the shared budget.
+            foreach ($jobs as $job) {
+                $this->mediaInFlightBytes = \max(0, $this->mediaInFlightBytes - (int) $job['declared']);
+            }
             $images = [];
             $documents = [];
+            $batchTotal = 0;
             foreach ($settled as $i => $result) {
                 $job = $jobs[(int) $i];
                 if (!\is_array($result) || isset($result['error'])) {
@@ -580,6 +606,12 @@ final class DiscordAccount implements PlatformFace
 
                     continue;
                 }
+                if ($batchTotal + \strlen($bytes) > $totalCapBytes) {
+                    $notes[] = "{$job['name']} (past the {$maxTotalMb} MB batch budget)";
+
+                    continue;
+                }
+                $batchTotal += \strlen($bytes);
                 $entry = ['name' => $job['name'], 'mime' => $job['mime'], 'data' => \base64_encode($bytes)];
                 if ($job['slot'] === 'images') {
                     $images[] = $entry;

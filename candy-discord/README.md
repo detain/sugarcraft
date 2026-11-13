@@ -277,7 +277,7 @@ when a key is absent.
 | `threads.enabled` / `threads.idleHours` | `false` / `24` | Threaded sessions and idle timeout. |
 | `queue.debounceMs` / `queue.maxPending` | `500` / `20` | Queue timing and depth. |
 | `outbound.typing` / `outbound.suppressEmbeds` | `true` / `true` | Typing indicator and link embeds. |
-| `media.*` | see `DiscordChannel` | Attachment caps. |
+| `media.*` | `maxMb` 100, `maxTotalMb` 50 | Attachment caps: per file, and per batch (shared across concurrent messages; rows past it are skipped with a disclosed note). |
 | `approvals.enabled` | `true` | Buttons on; `false` uses the text fallback. |
 | `approvals.approvers` | `[]` | Approver user ids (empty roster: no `always`, no pairing approvals). |
 | `approvals.ttlMinutes` | `30` | How long a presented ask waits. |

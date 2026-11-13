@@ -8,8 +8,10 @@ use CandyCode\Bundles\Discord\Discord\Rest;
 use CandyCode\Bundles\Discord\Discord\RestException;
 use CandyCode\Bundles\Discord\Support\Log;
 use CandyCode\Bundles\Discord\Tests\Fixture\FakeDiscordApi;
+use CandyCode\Bundles\Discord\Tests\Fixture\FakeMediaCdn;
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
+use React\EventLoop\LoopInterface;
 
 /**
  * The media-fetch trust boundary (§7.8): fetchBinary refuses anything
@@ -24,7 +26,7 @@ final class RestGuardsTest extends TestCase
     {
         $rest = new Rest('tok', Log::silent(), 'http://127.0.0.1:1');
         $error = null;
-        $rest->fetchBinary('http://media.discordapp.net/attachments/1/2.bin')
+        $rest->fetchBinary('http://media.discordapp.net/attachments/1/2.bin', 1048576)
             ->then(null, static function (\Throwable $e) use (&$error): void {
                 $error = $e;
             });
@@ -36,7 +38,7 @@ final class RestGuardsTest extends TestCase
     {
         $rest = new Rest('tok', Log::silent(), 'http://127.0.0.1:1');
         $error = null;
-        $rest->fetchBinary('https://evil.example/p?token=s3cret')
+        $rest->fetchBinary('https://evil.example/p?token=s3cret', 1048576)
             ->then(null, static function (\Throwable $e) use (&$error): void {
                 $error = $e;
             });
@@ -72,5 +74,81 @@ final class RestGuardsTest extends TestCase
         // final unless extension is a contract, and nothing in the bundle
         // (or its tests) extends RestException — the finding's grep.
         self::assertTrue((new \ReflectionClass(RestException::class))->isFinal());
+    }
+
+    public function testADeclaredLengthOverBudgetRejectsWithZeroBodyReads(): void
+    {
+        $loop = Loop::get();
+        $cdn = new FakeMediaCdn($loop);
+        $cdn->declaredLength = 50 * 1048576;
+        $cdn->streamBytes = 50 * 1048576;
+        $cdn->streamChunkBytes = 8192;
+        $cdn->streamDelayMs = 150;
+        $rest = new Rest('tok', Log::silent(), 'http://127.0.0.1:1', $cdn->connector());
+        $error = null;
+        $rest->fetchBinary('https://media.discordapp.net/attachments/1/2.bin?signed=s3cretq', 1048576)
+            ->then(null, static function (\Throwable $e) use (&$error): void {
+                $error = $e;
+            });
+        self::runUntil(static fn (): bool => $error !== null, 1500, $loop);
+        $cdn->stop();
+        self::assertInstanceOf(RestException::class, $error);
+        self::assertStringContainsString('exceeds maximum', (string) $error->getMessage());
+        self::assertStringNotContainsString('s3cretq', (string) $error->getMessage(), 'signed query stays unechoed');
+        self::assertSame(0, $cdn->bodyBytesSent, 'a declared oversize must reject before consuming any body');
+    }
+
+    public function testALyingStreamWithoutContentLengthAbortsJustPastTheCap(): void
+    {
+        $loop = Loop::get();
+        $cdn = new FakeMediaCdn($loop);
+        $cdn->declaredLength = null;
+        $cdn->streamBytes = 8 * 1048576;
+        $cdn->streamChunkBytes = 8192;
+        $cap = 1048576;
+        $rest = new Rest('tok', Log::silent(), 'http://127.0.0.1:1', $cdn->connector());
+        $error = null;
+        $rest->fetchBinary('https://media.discordapp.net/attachments/1/2.bin', $cap)
+            ->then(null, static function (\Throwable $e) use (&$error): void {
+                $error = $e;
+            });
+        self::runUntil(static fn (): bool => $error !== null, 3000, $loop);
+        $cdn->stop();
+        self::assertInstanceOf(RestException::class, $error);
+        self::assertStringContainsString('exceeds maximum', (string) $error->getMessage());
+        self::assertLessThanOrEqual($cap + 2 * $cdn->streamChunkBytes, $cdn->bodyBytesSent,
+            'the abort must be bounded: cap plus at most a chunk in flight, not the whole ocean');
+    }
+
+    public function testAStreamedBodyWithinBudgetResolvesWithItsExactBytes(): void
+    {
+        $loop = Loop::get();
+        $cdn = new FakeMediaCdn($loop);
+        $cdn->declaredLength = 4096;
+        $cdn->streamBytes = 4096;
+        $cdn->streamChunkBytes = 1024;
+        $rest = new Rest('tok', Log::silent(), 'http://127.0.0.1:1', $cdn->connector());
+        $bytes = null;
+        $rest->fetchBinary('https://media.discordapp.net/attachments/1/2.bin', 1048576)
+            ->then(static function (string $body) use (&$bytes): void {
+                $bytes = $body;
+            });
+        self::runUntil(static fn (): bool => $bytes !== null, 1500, $loop);
+        $cdn->stop();
+        self::assertSame(\str_repeat('x', 4096), $bytes);
+    }
+
+    /** Pump the loop until $done or the millisecond deadline; false = timed out. */
+    private static function runUntil(callable $done, int $ms, LoopInterface $loop): bool
+    {
+        $deadline = \microtime(true) + $ms / 1000.0;
+        while (!$done() && \microtime(true) < $deadline) {
+            $loop->addTimer(0.01, static function () use ($loop): void {
+                $loop->stop();
+            });
+            $loop->run();
+        }
+
+        return $done();
     }
 }

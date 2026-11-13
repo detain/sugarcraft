@@ -8,6 +8,7 @@ use CandyCode\Bundles\Discord\Support\Log;
 use Psr\Http\Message\ResponseInterface;
 use React\Http\Browser;
 use React\Http\Message\Response;
+use React\Socket\ConnectorInterface;
 use SugarCraft\Code\Protocol\JsonRpc;
 
 /**
@@ -27,8 +28,13 @@ final class Rest
         private readonly string $token,
         private readonly Log $log,
         private readonly string $base = 'https://discord.com/api/v10',
+        // Test seam only: media-fetch conformance needs a loopback stand-in
+        // for the Discord CDN, and the https + media-host gate in
+        // fetchBinary() must stay live while doing it — so the seam sits
+        // BELOW the gate, at the dial, never beside it. Null = real world.
+        ?ConnectorInterface $connector = null,
     ) {
-        $this->http = (new Browser())
+        $this->http = (new Browser($connector))
             ->withBase(null)
             ->withTimeout(20.0)
             ->withFollowRedirects(false)
@@ -102,12 +108,16 @@ final class Rest
      * arrive from the GATEWAY message, carry a pre-signed query, and need
      * no bot header — but they must live on a Discord media host: a
      * non-Discord host here would mean a doctored payload, and dialing it
-     * would hand our User-Agent to a stranger. https only; the size cap is
-     * the caller's (§7.8 mediaMaxMb) — this method never loops or retries.
+     * would hand our User-Agent to a stranger. https only; the transport is
+     * capped HERE — `$maxBytes` rides into react/http's response buffer, so
+     * a declared Content-Length over budget rejects with zero body reads
+     * and a lying/absent header aborts at cap+1 consumed (never a full
+     * materialization of a hostile stream). This method never loops or
+     * retries; the caller's post-download strlen stays as belt.
      *
      * @return \React\Promise\PromiseInterface<string> raw bytes
      */
-    public function fetchBinary(string $url): \React\Promise\PromiseInterface
+    public function fetchBinary(string $url, int $maxBytes): \React\Promise\PromiseInterface
     {
         $host = \strtolower((string) (\parse_url($url, \PHP_URL_HOST) ?: ''));
         if (\strtolower((string) (\parse_url($url, \PHP_URL_SCHEME) ?: '')) !== 'https'
@@ -118,7 +128,7 @@ final class Rest
         // Error prose carries the PATH only — the signed query is a bearer secret.
         $safeLabel = (string) (\parse_url($url, \PHP_URL_PATH) ?: '/');
 
-        return $this->http->get($url)->then(
+        return $this->http->withResponseBuffer(\max(1, $maxBytes))->get($url)->then(
             function (ResponseInterface $response) use ($safeLabel): string {
                 $status = $response->getStatusCode();
                 if ($status >= 400) {

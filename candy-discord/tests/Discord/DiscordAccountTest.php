@@ -16,6 +16,7 @@ use CandyCode\Bundles\Discord\Support\PairingCodes;
 use CandyCode\Bundles\Discord\Support\SessionMap;
 use CandyCode\Bundles\Discord\Support\TextSafety;
 use CandyCode\Bundles\Discord\Tests\Fixture\FakeDiscordApi;
+use CandyCode\Bundles\Discord\Tests\Fixture\FakeMediaCdn;
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
@@ -345,6 +346,110 @@ final class DiscordAccountTest extends TestCase
         self::assertStringContainsString('big.bin', (string) $notice['body']['content']);
     }
 
+    public function testTheBatchBudgetRefusesPastTheReservationAndTheSecondMessageStillStacksAfterRelease(): void
+    {
+        // §7.8 batch budget: two 900 KiB reservations fit the 2 MB total,
+        // the third is refused BEFORE dialing; once the batch settles the
+        // reservations are released, so the next message gets the SAME
+        // bounded share — concurrent messages stack bounded, not on top of
+        // leftovers from batches that already finished.
+        $cdn = new FakeMediaCdn($this->loop);
+        $cdn->declaredLength = 943718;
+        $cdn->streamBytes = 943718;
+        $cdn->streamChunkBytes = 65536;
+        $this->store->writeDiscordPairing('default', [], ['u1']);
+        $this->buildFace(['media' => ['maxMb' => 100, 'maxTotalMb' => 2, 'images' => 4, 'documents' => 2]], null, $cdn->connector());
+        $gather = new \ReflectionMethod(DiscordAccount::class, 'collectMediaAndDispatch');
+        $gather->setAccessible(true);
+        $gather->invoke($this->face, $this->threeImages('one'), 'discord:default:dm:u1', ['channelId' => 'c1', 'messageId' => 'm1'], 'look one', false, 'm1');
+        $this->settle(1200);
+        $gather->invoke($this->face, $this->threeImages('two'), 'discord:default:dm:u1', ['channelId' => 'c1', 'messageId' => 'm2'], 'look two', false, 'm2');
+        $this->settle(1200);
+        $cdn->stop();
+        self::assertSame(4, $cdn->requests, 'exactly two dials per message may fit the 2 MB budget');
+        $skips = \array_values(\array_filter($this->api->calls, static fn (array $c): bool => \str_contains((string) ($c['body']['content'] ?? ''), 'Skipped 1 attachment(s)')));
+        self::assertCount(2, $skips, 'each message must disclose exactly one budget skip');
+        self::assertStringContainsString('three-one.png (past the 2 MB batch budget)', (string) $skips[0]['body']['content']);
+        self::assertStringContainsString('three-two.png (past the 2 MB batch budget)', (string) $skips[1]['body']['content'],
+            'a stranded in-flight reservation would skip ALL of message two, not just its third row');
+    }
+
+    public function testAMediaBatchOutstandingConcurrentlyBlocksTheNextMessageDownToBudget(): void
+    {
+        // Both messages down-select while the first batch is still in
+        // flight: the shared reservation lets message one take the budget
+        // and message two must be refused on ALL rows, loudly, before dial.
+        $cdn = new FakeMediaCdn($this->loop);
+        $cdn->declaredLength = 943718;
+        $cdn->streamBytes = 943718;
+        $cdn->streamChunkBytes = 65536;
+        $this->store->writeDiscordPairing('default', [], ['u1']);
+        $this->buildFace(['media' => ['maxMb' => 100, 'maxTotalMb' => 2, 'images' => 4, 'documents' => 2]], null, $cdn->connector());
+        $gather = new \ReflectionMethod(DiscordAccount::class, 'collectMediaAndDispatch');
+        $gather->setAccessible(true);
+        $gather->invoke($this->face, $this->threeImages('one'), 'discord:default:dm:u1', ['channelId' => 'c1', 'messageId' => 'm1'], 'look one', false, 'm1');
+        $gather->invoke($this->face, $this->threeImages('two'), 'discord:default:dm:u1', ['channelId' => 'c1', 'messageId' => 'm2'], 'look two', false, 'm2');
+        $this->settle(1200);
+        $cdn->stop();
+        self::assertSame(2, $cdn->requests, 'the second concurrent message must not dial past the shared budget');
+        $notice = null;
+        foreach ($this->api->calls as $call) {
+            if (\str_contains((string) ($call['body']['content'] ?? ''), 'Skipped 3 attachment(s)')) {
+                $notice = $call;
+            }
+        }
+        self::assertNotNull($notice, 'message two must disclose its three budget skips');
+    }
+
+    public function testTheSettledBytesRecheckRefusesALyingDeclaredSizeBeforeBase64(): void
+    {
+        // The declarations all fit (100 KiB each under the 2 MB total) so
+        // three jobs dial — but the ACTUAL bytes are the truth: the first
+        // 1.9 MB stream fills the budget and the two settled rows past it
+        // are dropped with notes BEFORE any base64 doubling happens.
+        $cdn = new FakeMediaCdn($this->loop);
+        $cdn->declaredLength = 1939866;
+        $cdn->streamBytes = 1939866;
+        $cdn->streamChunkBytes = 65536;
+        $this->store->writeDiscordPairing('default', [], ['u1']);
+        $this->buildFace(['media' => ['maxMb' => 100, 'maxTotalMb' => 2, 'images' => 4, 'documents' => 2]], null, $cdn->connector());
+        $gather = new \ReflectionMethod(DiscordAccount::class, 'collectMediaAndDispatch');
+        $gather->setAccessible(true);
+        $smallDeclared = static function (string $tag): array {
+            return [
+                ['id' => 'a1', 'filename' => "one-{$tag}.png", 'content_type' => 'image/png', 'url' => "https://media.discordapp.net/attachments/1/2/one-{$tag}.png", 'size' => 102400],
+                ['id' => 'a2', 'filename' => "two-{$tag}.png", 'content_type' => 'image/png', 'url' => "https://media.discordapp.net/attachments/1/2/two-{$tag}.png", 'size' => 102400],
+                ['id' => 'a3', 'filename' => "three-{$tag}.png", 'content_type' => 'image/png', 'url' => "https://media.discordapp.net/attachments/1/2/three-{$tag}.png", 'size' => 102400],
+            ];
+        };
+        $gather->invoke($this->face, $smallDeclared('lied'), 'discord:default:dm:u1', ['channelId' => 'c1', 'messageId' => 'm1'], 'look', false, 'm1');
+        $this->settle(2000);
+        $cdn->stop();
+        self::assertSame(3, $cdn->requests, 'all three declared-small rows may dial');
+        $notice = null;
+        foreach ($this->api->calls as $call) {
+            if (\str_contains((string) ($call['body']['content'] ?? ''), 'Skipped 2 attachment(s)')) {
+                $notice = $call;
+            }
+        }
+        self::assertNotNull($notice, 'the two settled rows past the budget must be skipped with notes');
+        self::assertStringContainsString('past the 2 MB batch budget', (string) $notice['body']['content']);
+    }
+
+    /** @return list<array<string,mixed>> three 900 KiB image rows under $tag */
+    private function threeImages(string $tag): array
+    {
+        $row = static fn (string $name): array => [
+            'id' => 'a-' . $name,
+            'filename' => "{$name}-{$tag}.png",
+            'content_type' => 'image/png',
+            'url' => "https://media.discordapp.net/attachments/1/2/{$name}-{$tag}.png",
+            'size' => 943718,
+        ];
+
+        return [$row('one'), $row('two'), $row('three')];
+    }
+
     /**
      * N5: a face that deployed globally retracts exactly its global roster
      * when the channel tears it down — the deploy path scoped it global, so
@@ -511,9 +616,9 @@ final class DiscordAccountTest extends TestCase
         self::assertTrue($g2, 'the second guild leg was attempted before the single notice');
     }
 
-    private function buildFace(array $cfg, ?Log $faceLog = null): void
+    private function buildFace(array $cfg, ?Log $faceLog = null, ?\React\Socket\ConnectorInterface $mediaConnector = null): void
     {
-        $rest = new Rest('tok', Log::silent(), 'http://127.0.0.1:' . $this->apiPort());
+        $rest = new Rest('tok', Log::silent(), 'http://127.0.0.1:' . $this->apiPort(), $mediaConnector);
         $this->faceGateway = new Gateway('tok', Log::silent(), $this->loop, 'ws://127.0.0.1:1/never');
         $router = new ConversationRouter(
             new ServeBridge('ws://127.0.0.1:1/never', '', 'subprotocol', Log::silent(), $this->loop),
