@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Pty\Tests\Integration;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Pty\Contract\MasterPty;
+use SugarCraft\Pty\Contract\Child;
 use SugarCraft\Pty\PtySystemFactory;
 
 /**
@@ -135,7 +135,7 @@ final class SIGHUPForwardingTest extends TestCase
             // ourselves so we don't leak a 30 s ghost into the suite.
             if ($child !== null && !$child->exited()) {
                 try {
-                    $child->kill(MasterPty::SIGKILL);
+                    $child->kill(Child::SIGKILL);
                 } catch (\Throwable) {
                     // Process may have raced to exit; ignore.
                 }

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Pty\Tests\Integration;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Pty\Contract\MasterPty;
+use SugarCraft\Pty\Contract\Child;
 use SugarCraft\Pty\PtySystemFactory;
 
 /**
@@ -112,7 +112,7 @@ final class ResizeRaceTest extends TestCase
         } finally {
             if ($child !== null && !$child->exited()) {
                 try {
-                    $child->kill(MasterPty::SIGKILL);
+                    $child->kill(Child::SIGKILL);
                 } catch (\Throwable) {
                     // Ignore — process may have raced to exit.
                 }

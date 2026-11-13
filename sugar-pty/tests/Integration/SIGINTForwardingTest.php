@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Pty\Tests\Integration;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Pty\Contract\MasterPty;
+use SugarCraft\Pty\Contract\Child;
 use SugarCraft\Pty\PtySystemFactory;
 
 /**
@@ -120,7 +120,7 @@ final class SIGINTForwardingTest extends TestCase
                 // Failure path: SIGINT didn't take. SIGKILL the sleep
                 // ourselves so we don't leak a 30 s ghost into the suite.
                 try {
-                    $child->kill(MasterPty::SIGKILL);
+                    $child->kill(Child::SIGKILL);
                 } catch (\Throwable) {
                     // Ignore — process may have raced to exit.
                 }

@@ -7,49 +7,19 @@ namespace SugarCraft\Pty\Contract;
 /**
  * Handle to a non-PTY child process (for candy-scriptui migration).
  *
+ * Extends {@see Child}: a non-PTY child IS a child — the lifecycle five
+ * (pid/exited/wait/exitCode/kill) and the signal constants live there once.
+ * This contract only adds the captured-output pair. (Before that, every
+ * member and constant was re-declared here byte-for-byte, so a `Child|Process`
+ * type-hint dance and downstream instanceof-reflection — the pid probe in
+ * sugar-dashboard's ExternalModule is the exhibit — existed only to bridge a
+ * duplication the type system never needed.)
+ *
  * @see creack/pty.Cmd
  * @see portable-pty.Process
  */
-interface Process
+interface Process extends Child
 {
-    public const SIGTERM = 15;
-    public const SIGKILL = 9;
-    public const SIGINT = 2;
-
-    /**
-     * @see creack/pty.Cmd.Pid()
-     */
-    public function pid(): int;
-
-    /**
-     * Non-blocking exit probe.
-     *
-     * @see creack/pty.Cmd.Running()
-     */
-    public function exited(): bool;
-
-    /**
-     * Block until the process exits and return its exit code.
-     *
-     * @see creack/pty.Cmd.Wait()
-     */
-    public function wait(): int;
-
-    /**
-     * Cached exit code, or null if the process is still running.
-     *
-     * @see creack/pty.Cmd.ExitCode()
-     */
-    public function exitCode(): ?int;
-
-    /**
-     * Send a signal to the process.
-     *
-     * @param int $signal one of SIGTERM, SIGKILL, SIGINT
-     * @see creack/pty.Cmd.Signal()
-     */
-    public function kill(int $signal): void;
-
     /**
      * Bytes captured from stdout.
      */

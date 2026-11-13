@@ -13,10 +13,6 @@ namespace SugarCraft\Pty\Contract;
  */
 interface MasterPty
 {
-    public const SIGTERM = 15;
-    public const SIGKILL = 9;
-    public const SIGINT = 2;
-
     /**
      * Read up to $len bytes from the master.
      *

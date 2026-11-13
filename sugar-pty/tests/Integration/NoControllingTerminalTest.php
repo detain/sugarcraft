@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Pty\Tests\Integration;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Pty\Contract\MasterPty;
+use SugarCraft\Pty\Contract\Child;
 use SugarCraft\Pty\PtySystemFactory;
 
 /**
@@ -103,7 +103,7 @@ final class NoControllingTerminalTest extends TestCase
 
             // Now clean up explicitly with SIGTERM so the assertion
             // window doesn't roll into the wallclock budget.
-            $child->kill(MasterPty::SIGTERM);
+            $child->kill(Child::SIGTERM);
             $waitDeadline = \microtime(true) + 1.0;
             while (\microtime(true) < $waitDeadline && !$child->exited()) {
                 \usleep(10_000);
@@ -125,7 +125,7 @@ final class NoControllingTerminalTest extends TestCase
         } finally {
             if ($child !== null && !$child->exited()) {
                 try {
-                    $child->kill(MasterPty::SIGKILL);
+                    $child->kill(Child::SIGKILL);
                 } catch (\Throwable) {
                     // Ignore — process may have raced to exit.
                 }

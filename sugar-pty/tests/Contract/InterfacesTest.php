@@ -135,11 +135,36 @@ final class InterfacesTest extends TestCase
         $this->assertContains('close', $methods);
     }
 
-    public function testMasterPtyHasSignalConstants(): void
+    /**
+     * MasterPty never had kill() — its three signal constants were a dead
+     * third copy of the Child/Process family, declaring a relationship to
+     * signalling that the contract cannot act on. They are gone; pin the
+     * absence (and that the widening did not accidentally re-declare them
+     * anywhere on the master side).
+     */
+    public function testMasterPtyCarriesNoSignalSurface(): void
     {
-        $this->assertSame(15, MasterPty::SIGTERM);
-        $this->assertSame(9, MasterPty::SIGKILL);
-        $this->assertSame(2, MasterPty::SIGINT);
+        $consts = \array_map(
+            static fn (\ReflectionClassConstant $c): string => $c->getName(),
+            (new \ReflectionClass(MasterPty::class))->getReflectionConstants(),
+        );
+        $this->assertSame([], $consts, 'MasterPty must declare no constants: ' . \implode(',', $consts));
+    }
+
+    /**
+     * PTY-11: Process extends Child — a Process IS-A Child, constants and
+     * lifecycle included, so `instanceof Child` finally answers true for
+     * non-PTY children and callers stop needing the union dance.
+     */
+    public function testProcessExtendsChild(): void
+    {
+        $this->assertTrue(
+            (new \ReflectionClass(Process::class))->implementsInterface(Child::class),
+            'Process must extend Child so instanceof Child answers true',
+        );
+        $this->assertSame(15, Process::SIGTERM, 'the shared constants are inherited, not redeclared');
+        $this->assertSame(2, Process::SIGINT);
+        $this->assertSame(9, Process::SIGKILL);
     }
 
     public function testSlavePtyHasExpectedMethods(): void
