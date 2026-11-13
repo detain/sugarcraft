@@ -93,6 +93,7 @@ Claude Code, OpenCode and OpenClaw.
 | [`docs/CONTEXT.md`](docs/CONTEXT.md) | The context engine: pruning, `Prune`/`Compress`/`Recall`, compaction tiers, background summaries, re-injection, overflow recovery |
 | [`docs/AGENTS.md`](docs/AGENTS.md) | Sub-agents: `Task`, background and nested runs, worktree isolation, teams, messaging between agents, the shared board, the live agent lines, the agents strip and the Agent View |
 | [`docs/AGENTS_AUTHORING.md`](docs/AGENTS_AUTHORING.md) | Writing an agent preset: where it goes, its frontmatter, how grants are enforced, the shared board and the messaging tools in detail |
+| [`docs/FLEET-DRIVING.md`](docs/FLEET-DRIVING.md) | Driving `-p` headlessly from scripts and orchestrators: the JSON envelopes, exit codes as gate signals, `--resume`/`--continue` across one-shot runs, the known honesty gaps |
 | [`docs/COMMANDS.md`](docs/COMMANDS.md) | Every built-in slash command (`/handoff`, `/newrule` among them), and writing your own |
 | [`docs/HOOKS.md`](docs/HOOKS.md) | `hooks.yaml`, every hook event, the exit-code and JSON stdout contract, post-edit lint, diagnostics, auto-commit and auto-test |
 | [`docs/MEMORY.md`](docs/MEMORY.md) | Memory notes, the `Memory` tool, recall, auto-consolidation, the dream pass, instruction files |
@@ -576,7 +577,7 @@ value, source and apply mode; theme and model still change through `/theme`,
 the list its `Todo` tool last wrote for this session (☑ done, ▸ in progress,
 ☐ pending, ☒ cancelled, the done count in the title), updated live as the
 turn runs. The list is kept in the session's metadata, so it survives
-compaction and `/resume`; once the model has gone six steps without seeing it
+compaction and reopening the session (`--continue`, `/sessions`); once the model has gone six steps without seeing it
 — or compaction took the call that wrote it — the next turn re-shows it to the
 model as a hidden reminder ending "Never redo or re-verify completed work
 because of these notes." A list with nothing left open is never re-shown.
@@ -1240,7 +1241,14 @@ the first time a prompt goes out (`/branch` and `/fork` mint it first when they
 need it), so quitting an empty launch leaves nothing behind. A tool call that was still
 running when its session was last saved comes back marked interrupted.
 `--continue` only considers your own conversations: it skips sub-agent
-sessions and sessions you have archived. The picker and the tab strip leave
+sessions and sessions you have archived. Among those it picks by a ladder:
+the newest session **with a conversation** recorded under the current
+directory (a launch quit without typing is newer than the work you want
+back, so empty rows never win); failing that, the newest such session from any
+other project, with a one-line stderr notice naming that project and pointing
+at `--resume` for a deliberate pick; and only when no session anywhere has a
+conversation, a fresh one. Scripts that drive `--continue` headlessly should
+read [`docs/FLEET-DRIVING.md`](docs/FLEET-DRIVING.md). The picker and the tab strip leave
 them out too.
 
 A session is named after its first reply by a cheap title model, and a name
