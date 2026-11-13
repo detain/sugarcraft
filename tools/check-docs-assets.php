@@ -221,17 +221,29 @@ final class CheckDocsAssets
     }
 
     /**
-     * (e) every demo-GIF <img> on a generated detail page carries exactly one
-     * onerror fallback crutch. Qualification mirrors the generator exactly: a
-     * tag is a demo GIF when its src path (query/fragment stripped, lowercase)
-     * ends in .gif — so chrome near-misses (icon PNGs, Codecov SVGs, a slug
-     * NAMED gifview) can never false-fire, and non-gif imgs are nobody's
-     * business. "Exactly one" covers both directions: the 122 crutches the
-     * generator injects AND sugar-dashboard's 140 hand-authored ones must not
-     * be doubled, and an injected one must not go missing.
+     * (e) every demo-GIF <img> carries exactly one onerror fallback crutch,
+     * in the shape that belongs to its surface:
+     *  - generated detail pages (docs/lib/*.html): qualification mirrors the
+     *    generator exactly — a tag is a demo GIF when its src path
+     *    (query/fragment stripped, lowercase) ends in .gif — so chrome
+     *    near-misses (icon PNGs, Codecov SVGs, a slug NAMED gifview) can
+     *    never false-fire, and non-gif imgs are nobody's business.
+     *    "Exactly one" covers both directions: the crutches the generator
+     *    injects and sugar-dashboard's hand-authored ones must not be
+     *    doubled, and an injected one must not go missing.
+     *  - the hand-maintained catalogue pages (docs/index.html,
+     *    docs/libraries.html, docs/apps.html — SD-S14): each hotlinked
+     *    demo GIF must carry the hide-the-img crutch (pin below) — the
+     *    generator's parent-hide literal is deliberately NOT used there
+     *    because on a catalogue card it would delete the whole card, and
+     *    must carry real width/height attributes (layout-stable even when
+     *    the swap or hide fires).
      *
-     * @return list<string>
+     * The pinned root literal; keep docs/*.{html hand copies} in sync with it.
      */
+    private const ROOT_GIF_ONERROR = 'onerror="this.style.display=\'none\'"';
+
+    /** @return list<string> */
     public static function demoGifCrutches(string $root): array
     {
         $findings = [];
@@ -250,6 +262,28 @@ final class CheckDocsAssets
                 if ($n !== 1) {
                     $findings[] = 'chrome: ' . self::relative($root, $file)
                         . ' gif img src="' . $src[1] . '" carries ' . $n . ' onerror attribute(s) (expected exactly 1)';
+                }
+            }
+        }
+
+        foreach (['docs/index.html', 'docs/libraries.html', 'docs/apps.html'] as $page) {
+            $html = (string) self::readCached("$root/$page");
+            preg_match_all('~<img\b[^>]*>~i', $html, $tags);
+            foreach ($tags[0] as $tag) {
+                if (preg_match('~\bsrc="([^"]*)"~i', $tag, $src) !== 1) {
+                    continue;
+                }
+                $path = strtolower((string) (preg_split('/[?#]/', $src[1], 2)[0] ?? ''));
+                if (!str_ends_with($path, '.gif') || !str_contains($src[1], 'raw.githubusercontent.com')) {
+                    continue;
+                }
+                if (strpos($tag, self::ROOT_GIF_ONERROR) === false || preg_match_all('~\bonerror\s*=~i', $tag) !== 1) {
+                    $findings[] = 'chrome: ' . $page . ' gif img src="' . $src[1]
+                        . '" lacks the pinned hide-the-img crutch (exactly one ' . self::ROOT_GIF_ONERROR . ')';
+                }
+                if (preg_match('~\bwidth="\d+"~i', $tag) !== 1 || preg_match('~\bheight="\d+"~i', $tag) !== 1) {
+                    $findings[] = 'chrome: ' . $page . ' gif img src="' . $src[1]
+                        . '" lacks width/height attributes (layout shift on load failure)';
                 }
             }
         }
