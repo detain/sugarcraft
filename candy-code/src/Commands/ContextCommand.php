@@ -113,6 +113,14 @@ final class ContextCommand
         ]);
         array_push($lines, ...self::pruningLines($b));
         $lines[] = Lang::t('cmd.context.free', ['tokens' => TokenCount::compact(max(0, $b->window - $b->totalTokens()))]);
+        // The status bar's meter is the history alone; say so beside the
+        // figure that includes the prompt and tools, so the two never read as
+        // one quantity (G-08: distinct labels per meter).
+        $lines[] = Lang::t('cmd.context.footnote', [
+            'history' => TokenCount::compact($b->historyTokens),
+            'window' => TokenCount::compact($b->window),
+            'percent' => $b->window > 0 ? (int) round($b->historyTokens * 100 / $b->window) : 0,
+        ]);
 
         $lines[] = '';
         $lines[] = Lang::t('cmd.context.largest');

@@ -118,6 +118,17 @@ final class ContextCommandTest extends TestCase
         self::assertMatchesRegularExpression('/^  Free space\s+~\S+\s+█+$/mu', $report, 'the measured remainder carries the bar');
     }
 
+    public function testTheTwoFreeFiguresAndTheHistoryOnlyMeterAreLabelledApart(): void
+    {
+        $sections = [['label' => 'base', 'stability' => 'static', 'sections' => 1, 'bytes' => 4000, 'tokens' => 1000]];
+        $report = ContextCommand::compose(ContextBreakdown::measure([Message::user('hi')], $sections, [], 200_000, 20));
+
+        self::assertStringContainsString('Room left: ~', $report, 'the bottom figure is not called Free');
+        self::assertStringNotContainsString("\nFree: ~", $report);
+        self::assertMatchesRegularExpression('/^  Free space\s/mu', $report, 'the category row keeps its own label');
+        self::assertStringContainsString('counts the history only', $report, 'the footnote names the status-bar meter');
+    }
+
     public function testTheReportListsEveryLayerToolsAndLargestMessages(): void
     {
         $sections = [
