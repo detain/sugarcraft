@@ -221,20 +221,27 @@ public function setMatchStyle(string $ansiStyle): self
 // more row when the overflow marker is needed. Two chrome states live in
 // the item area and consume an item row: the marker `  ↕ showing %d-%d of
 // %d` (1-based visible window, on overflow) and, when a non-empty filter
-// matches nothing, `  no matches`. Both are pad-only — never truncated to
-// width — so on a frame narrower than the text they spill past the right
-// border instead of clipping (cosmetic; clipping them would be a behavior
-// change, owner call). HelpBar and StatusBar rows append BELOW this height.
+// matches nothing, `  no matches`. Both are pad-only — never intentionally
+// truncated — so on a frame narrower than the text they keep their full
+// length: over an empty background they spill past where the right border
+// would sit, and over a background-backed row the spill pushes that row's
+// surviving tail rightward instead of overwriting it. Truncating them to
+// the frame width would be a behavior change and is deliberately not done.
+// HelpBar and StatusBar rows append BELOW this height.
 public function setWindowHeight(int $h): self
 
 // Set overlay width. 0 (default) = auto: the computed prompt+items width is
 // clamped to min(computed, cols) — an auto frame never exceeds the live
 // terminal (-059: the old max(20, cols) ceiling wrapped real sub-20-column
 // screens; a degenerate zero-width probe is absorbed by the 80-column
-// fallback instead). Every width-cache miss on the auto path PROBED the
-// terminal: sugar-core Tty on STDIN (FFI ioctl TIOCSWINSZ, stty shell-out
-// fallback), and a non-interactive STDIN answers the 80×24 default, so a
-// piped run renders at phantom width. The cache invalidates on every
+// leg of the throw-net instead). Every width-cache miss on the auto path
+// PROBES the terminal through sugar-core's Tty ladder: ioctl(TIOCSWINSZ)
+// on STDIN, then the COLUMNS/LINES environment, then /dev/tty, then a
+// stty shell-out — and the ladder's LAST answer is Backend::LAST_RESORT_SIZE,
+// 200×60. A piped run therefore renders at whatever that ladder reports
+// (commonly the 200×60 last resort on a headless runner), NOT at a phantom
+// 80×24: QuickPick's own 80×24 is the throw-only net, reached when the
+// ladder raises or answers a zero dimension. The cache invalidates on every
 // mutation that can change the width (filter edits, item/prompt swaps), so
 // chained auto-mode builders re-probe per affected operation. A positive
 // value is the OUTER width, negative inputs clamp to 0/auto, and it is

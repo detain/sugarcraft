@@ -171,6 +171,16 @@ final class QuickPick
     /** Top-left Y offset for the overlay. */
     private int $yOffset = 0;
 
+    /**
+     * Optional size-provider seam for {@see ttySize()}. Null runs the sugar-core
+     * Tty ladder. Hosts that already track their geometry (a TEA loop watching
+     * its own resize events) can inject a zero-probe answer; tests inject
+     * throwing and zero-answering doubles to pin the net (-014).
+     *
+     * @var \Closure(): array{cols: int, rows: int}|null
+     */
+    private ?\Closure $ttySizeProvider = null;
+
     /** Border rune set for the overlay window (composed from sugar-style). */
     private ?Border $border = null;
 
@@ -284,9 +294,12 @@ final class QuickPick
      * '  ↕ showing %d-%d of %d', '  no matches' when a non-empty filter
      * matches nothing, and '  no items' when the corpus itself is empty
      * (-028). Item and header rows are truncateAnsi-clipped to the frame;
-     * these chrome rows are pad-only, so on a frame narrower than the
-     * text they spill past the right border rather than clipping (cosmetic
-     * overflow; clipping would change behavior — owner call).
+     * these chrome rows are pad-only — never intentionally truncated — so
+     * on a frame narrower than the text they keep their full length: the
+     * spill passes the border column over an empty background, and over a
+     * background-backed row it pushes the surviving tail rightward instead
+     * of overwriting it (clipping them to the frame would be a deliberate
+     * behavior change and is not done).
      *
      * Clamped to a minimum of 2: below that no item row can ever exist,
      * and at exactly 2 the frame is header + separator only — no chrome
@@ -478,9 +491,11 @@ final class QuickPick
      * ## What fires the callback, precisely
      *
      * On each SIGWINCH the installed handler reads the geometry through
-     * {@see ttySize()} — `Tty::size()` on the `STDIN` resource, falling back to
-     * 80x24 when the query fails (non-interactive context) — then pushes it to
-     * the terminal with `ioctl(STDIN_DESCRIPTOR, TIOCSWINSZ)`. `SignalForwarder`
+     * {@see ttySize()} — `Tty::size()` on the `STDIN` resource, sugar-core's
+     * full ladder (ioctl → COLUMNS/LINES env → /dev/tty → stty, last resort
+     * 200×60; the 80×24 inside ttySize() is only the throw/zero net) — then
+     * pushes it to the terminal with `ioctl(STDIN_DESCRIPTOR, TIOCSWINSZ)`.
+     * `SignalForwarder`
      * invokes `$onResize` only when that ioctl returns 0, so a failed resize is
      * silent by design. That coupling is why the descriptor must be genuine:
      * pointing it at a non-terminal makes every resize a no-op and the callback
@@ -535,15 +550,29 @@ final class QuickPick
     }
 
     /**
-     * Query the TTY geometry via SugarCraft\Core\Util\Tty.
-     * Falls back to 80×24 if the query fails (non-interactive context).
+     * Query the TTY geometry through the provider seam (default: sugar-core's
+     * {@see Tty} on `STDIN`).
+     *
+     * The ladder this answers for is sugar-core's, and it does NOT end at
+     * 80×24: `Tty::size()` walks ioctl → `COLUMNS`/`LINES` env → `/dev/tty`
+     * → `stty`, and its LAST step is `Backend::LAST_RESORT_SIZE` — **200×60**
+     * (`sugar-core/src/Util/Tty/Backend.php:57`). A piped or otherwise
+     * non-interactive STDIN therefore renders at the geometry that ladder
+     * reports (commonly 200×60), not at a phantom 80×24.
+     *
+     * QuickPick's own `80×24` is only the THROW-ONLY net: it is reached when
+     * the ladder raises (a closed/dead descriptor a probe cannot survive) or
+     * when the provider answers a zero for a dimension. The `?: 80`/`?: 24`
+     * legs absorb exactly that degenerate zero answer.
      *
      * @return array{cols: int, rows: int}
      */
     private function ttySize(): array
     {
         try {
-            $size = (new Tty(\STDIN))->size();
+            $size = $this->ttySizeProvider !== null
+                ? ($this->ttySizeProvider)()
+                : (new Tty(\STDIN))->size();
             return [
                 'cols' => $size['cols'] ?: 80,
                 'rows' => $size['rows'] ?: 24,
@@ -551,6 +580,20 @@ final class QuickPick
         } catch (\Throwable) {
             return ['cols' => 80, 'rows' => 24];
         }
+    }
+
+    /**
+     * Install a geometry provider for {@see ttySize()} (see the property for
+     * the semantics). Clone-returning like every other builder; the provider
+     * is shared state for the clone family only in the sense that every
+     * fluent clone carries the same closure handle.
+     */
+    public function withTtySizeProvider(?\Closure $provider): self
+    {
+        $clone = clone $this;
+        $clone->widthMemo->invalidate();
+        $clone->ttySizeProvider = $provider;
+        return $clone;
     }
 
     // -------------------------------------------------------------------------

@@ -1078,29 +1078,53 @@ final class QuickPickTest extends TestCase
         $this->assertSame($frame2, $h2->view($bg2), 'frame 2 view() output must be byte-identical');
     }
 
-    public function testTtySizeReturnsFallbackOnException(): void
+    /** Reflection access to the private geometry read. */
+    private function invokeTtySize(QuickPick $pick): array
     {
-        // ttySize() is a private method that catches exceptions from Tty::size()
-        // and returns a fallback [80, 24]. This tests that the method exists
-        // and has proper fallback logic by verifying its behavior when Tty fails.
-        $h = $this->makeQuickPick()->show();
-
-        $reflection = new \ReflectionClass($h);
-        $method = $reflection->getMethod('ttySize');
+        $method = new \ReflectionMethod($pick, 'ttySize');
         $method->setAccessible(true);
+        return $method->invoke($pick);
+    }
 
-        // Invoke ttySize directly — if TTY works, we get real values.
-        // The exception path is covered by this test existing (20 branches in coverage).
-        $result = $method->invoke($h);
+    public function testTtySizeThrowNetAnswersExactly80x24(): void
+    {
+        // -014/-017: the dead-terminal net was claimed but never forced —
+        // the old arm only checked that SOME size came back through the
+        // real ladder. The provider seam now makes the query RAISE, and
+        // 80×24 must be the answer.
+        $pick = $this->makeQuickPick()->show()
+            ->withTtySizeProvider(static function (): array {
+                throw new \RuntimeException('simulated dead descriptor');
+            });
 
-        $this->assertIsArray($result);
-        $this->assertArrayHasKey('cols', $result);
-        $this->assertArrayHasKey('rows', $result);
-        $this->assertIsInt($result['cols']);
-        $this->assertIsInt($result['rows']);
-        // Either real TTY values or fallback [80, 24]
-        $this->assertGreaterThan(0, $result['cols']);
-        $this->assertGreaterThan(0, $result['rows']);
+        $this->assertSame(['cols' => 80, 'rows' => 24], $this->invokeTtySize($pick));
+    }
+
+    public function testTtySizeAbsorbsZeroDimensionsOnEachLeg(): void
+    {
+        // The `?: 80` / `?: 24` legs handle a provider that answers ZERO
+        // for a dimension without raising; pin both independently.
+        $zero = $this->makeQuickPick()->show()
+            ->withTtySizeProvider(static fn(): array => ['cols' => 0, 'rows' => 0]);
+        $this->assertSame(['cols' => 80, 'rows' => 24], $this->invokeTtySize($zero));
+
+        $half = $this->makeQuickPick()->show()
+            ->withTtySizeProvider(static fn(): array => ['cols' => 0, 'rows' => 40]);
+        $this->assertSame(['cols' => 80, 'rows' => 40], $this->invokeTtySize($half));
+    }
+
+    public function testTtySizeProviderFeedsTheFrameGeometry(): void
+    {
+        // The seam is not a test-only read: the auto-width clamp composes
+        // through it, so a provider answering 13 cols caps the frame at 13.
+        $pick = QuickPick::new(['a-fairly-long-item-value'])
+            ->withTtySizeProvider(static fn(): array => ['cols' => 13, 'rows' => 8])
+            ->show();
+        $frame = $pick->view('');
+
+        $widths = \array_map([Width::class, 'string'], \explode("\n", $frame));
+        $this->assertLessThanOrEqual(13, \max($widths));
+        $this->assertSame(13, \substr_count(\explode("\n", $frame)[1], '─'));
     }
 
     public function testUnsupportedBatchFallsBackPerItemAndIsProbedOnce(): void
