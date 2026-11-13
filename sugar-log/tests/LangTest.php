@@ -146,4 +146,35 @@ final class LangTest extends TestCase
             Lang::t('psrbridge.not_string', ['got' => 'int']),
         );
     }
+    /**
+     * Fleet lang-parity law (all-or-none): every locale must carry EXACTLY
+     * the English key set. Without this guard a dropped key in, say, de.php
+     * degrades silently (T resolves locale -> base -> en -> raw), so the
+     * missing translation is invisible until a German user sees English.
+     */
+    public function testEveryLocaleCarriesExactlyTheEnglishKeySet(): void
+    {
+        $dir = \dirname(__DIR__) . '/lang';
+        $en = require $dir . '/en.php';
+        self::assertIsArray($en);
+        $expected = \array_keys($en);
+        \sort($expected);
+
+        foreach (\glob($dir . '/*.php') as $file) {
+            $locale = \basename($file, '.php');
+            if ($locale === 'en') {
+                continue;
+            }
+            $keys = \array_keys(require $file);
+            \sort($keys);
+            $missing = \array_diff($expected, $keys);
+            $extra = \array_diff($keys, $expected);
+            self::assertSame(
+                [],
+                $missing + $extra,
+                \sprintf('locale %s diverges from en: missing [%s], extra [%s]', $locale, \implode(',', $missing), \implode(',', $extra))
+            );
+        }
+    }
+
 }
