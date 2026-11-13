@@ -20,7 +20,7 @@ candy-codetime — a privacy-first coding-time tracker. Requires PHP 8.3+.
 
 It does not watch you. A **heartbeat** is one activity sample — *I was working
 on this file, in this language, for this many seconds* — and candy-codetime
-records only what it is explicitly told: a hand-typed `push`, a save hook, a
+records only what it is explicitly told (a *beat* is the same heartbeat, shortened): a hand-typed `push`, a save hook, a
 cron entry, or an editor keybinding calling the CLI. No editor plugins ship;
 the binding is one command line. Storage is local by default: one append-only
 JSONL file per day, with an optional embedded-SQLite backend
@@ -65,11 +65,27 @@ candy-codetime push myproj php src/Main.php 120
 #                 │      └ its language
 #                 └ project to report under
 candy-codetime                                    # open the dashboard
-candy-codetime export csv 30                      # headless dump of 30 days
+candy-codetime export csv 30                      # headless (plain text, no TUI) dump of 30 days
 ```
 
 Project and language may be omitted when the file argument makes them
 inferable (see `push` below).
+
+Three replies are worth knowing by heart, because they answer the first
+hour of questions:
+
+```text
+$ candy-codetime gaps                # before anything was recorded
+gaps: no tracked data for that period
+$ candy-codetime gaps                # once there is time, and no untracked stretch
+No gaps found.
+$ candy-codetime dashboard < /dev/null   # the dashboard, without a terminal
+candy-codetime: the dashboard needs an interactive terminal (stdin and stdout are not both TTYs). For headless output use: candy-codetime export <csv|json|ics>
+```
+
+(The first line answers “did I record anything today?”, the second “is my
+tracking honest?”, the third points a non-terminal session at the headless
+commands.)
 
 `php examples/dashboard.php` seeds a throwaway data directory with a pretend
 week and opens the dashboard, so you can see the TUI before recording
@@ -109,6 +125,56 @@ inline — see the contract in *Data layout*):
 
 (`%` is escaped for cron; the day file is named with the machine's local
 calendar date, matching the store layout.)
+
+## Keys (dashboard)
+
+| Key            | Action                       |
+|----------------|------------------------------|
+| `←` / `h`      | Move the window back one day |
+| `→` / `l`      | Move it forward one day      |
+| `g`            | Jump the window end back to today |
+| `+`            | Widen the window (7/14/30/90 days) |
+| `-`            | Narrow the window back down  |
+| `t`            | Toggle the lower pane between languages and tags |
+| `r`            | Reload from disk             |
+| `q` / `Esc`    | Quit                         |
+| `Ctrl+C`       | Quit                         |
+
+Letter commands answer unmodified keys only: Ctrl+q does not quit and
+Ctrl+r does not reload (the two bare-metal exits, `Esc` and `Ctrl+C`, stay
+guarded by their own shapes). `h`/`l` exist because arrow keys are the only
+other way to walk the window, and not every keyboard has them.
+
+The two ranking panes render side by side from 62 columns up (two 30-cell
+frames plus a gap) and stack vertically below that. Every dashboard line is
+clipped to the terminal width and never wraps: the timeline frame fills the
+width, while the ranking panes keep their budgeted 62-cell band, and days
+that cannot be drawn are counted
+("+N earlier") rather than silently dropped. When `CANDY_CODETIME_GOAL` is set the header gains a `today 2h01 / 1h00` cell and days that reach the goal render as shaded blocks in the band.
+
+## Accessibility
+
+The dashboard is a deliberately visual artifact; the supported assistive
+path is the plain-text commands: `export csv|json` and `gaps` write their
+whole answer to stdout as ordinary lines, so a screen reader gets the same
+data as the terminal does. The TUI adds nothing that those commands lack.
+
+Font requirement: the frame draws rounded box glyphs, the timeline draws
+block-character bars, and the help row uses arrow glyphs. There is no ASCII
+fallback, so on a terminal whose font lacks those characters they degrade to
+replacement symbols — labels and numbers stay legible, borders get ugly.
+
+Colour is decorative only. The palette ships dark-terminal hexes, applied
+solely when the terminal declares 256-colour or TrueColor capability (and
+never under `NO_COLOR`); the information survives without it — bars are
+height-encoded (minutes, not hue), every coloured value carries its word
+label (`total:`, spelled-out project and language names), and the milestone
+mark is `*` text rather than a colour change.
+
+The interface is static by design: the dashboard subscribes to nothing — no
+timers, no animation, no moving cells. Each screen is a snapshot that
+redraws only when a key changes it, which is also the reduced-motion answer:
+nothing ever moves on its own.
 
 ## Commands
 
@@ -353,56 +419,6 @@ on) renders the dashboard without any tints. Detection runs once at startup
 (and without a detected profile the fallback honours a set, non-empty
 `NO_COLOR`, treating `0` and `false` as not suppressing); a resize relayouts
 the frame under the stored profile.
-
-## Keys (dashboard)
-
-| Key            | Action                       |
-|----------------|------------------------------|
-| `←` / `h`      | Move the window back one day |
-| `→` / `l`      | Move it forward one day      |
-| `g`            | Jump the window end back to today |
-| `+`            | Widen the window (7/14/30/90 days) |
-| `-`            | Narrow the window back down  |
-| `t`            | Toggle the lower pane between languages and tags |
-| `r`            | Reload from disk             |
-| `q` / `Esc`    | Quit                         |
-| `Ctrl+C`       | Quit                         |
-
-Letter commands answer unmodified keys only: Ctrl+q does not quit and
-Ctrl+r does not reload (the two bare-metal exits, `Esc` and `Ctrl+C`, stay
-guarded by their own shapes). `h`/`l` exist because arrow keys are the only
-other way to walk the window, and not every keyboard has them.
-
-The two ranking panes render side by side from 62 columns up (two 30-cell
-frames plus a gap) and stack vertically below that. Every dashboard line is
-clipped to the terminal width and never wraps: the timeline frame fills the
-width, while the ranking panes keep their budgeted 62-cell band, and days
-that cannot be drawn are counted
-("+N earlier") rather than silently dropped. When `CANDY_CODETIME_GOAL` is set the header gains a `today 2h01 / 1h00` cell and days that reach the goal render as shaded blocks in the band.
-
-## Accessibility
-
-The dashboard is a deliberately visual artifact; the supported assistive
-path is the plain-text commands: `export csv|json` and `gaps` write their
-whole answer to stdout as ordinary lines, so a screen reader gets the same
-data as the terminal does. The TUI adds nothing that those commands lack.
-
-Font requirement: the frame draws rounded box glyphs, the timeline draws
-block-character bars, and the help row uses arrow glyphs. There is no ASCII
-fallback, so on a terminal whose font lacks those characters they degrade to
-replacement symbols — labels and numbers stay legible, borders get ugly.
-
-Colour is decorative only. The palette ships dark-terminal hexes, applied
-solely when the terminal declares 256-colour or TrueColor capability (and
-never under `NO_COLOR`); the information survives without it — bars are
-height-encoded (minutes, not hue), every coloured value carries its word
-label (`total:`, spelled-out project and language names), and the milestone
-mark is `*` text rather than a colour change.
-
-The interface is static by design: the dashboard subscribes to nothing — no
-timers, no animation, no moving cells. Each screen is a snapshot that
-redraws only when a key changes it, which is also the reduced-motion answer:
-nothing ever moves on its own.
 
 ## Architecture
 
