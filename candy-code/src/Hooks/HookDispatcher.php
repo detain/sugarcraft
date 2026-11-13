@@ -389,6 +389,21 @@ final class HookDispatcher
 
         // Validate the pattern compiles before use
         if (@preg_match($compiled, '') === false) {
+            // A matcher that does not COMPILE cannot be fail-closed into
+            // "matching" the way a runtime limit is (there is no pattern to
+            // trust), so the hook is skipped — but a skip nobody hears about
+            // is a guard that silently never fires. Record it in the same
+            // log as the runtime arm and warn once per pattern, so the skip
+            // is named.
+            if (!isset($this->matcherFailures[$pattern])) {
+                RuntimeNoticeSink::warn(sprintf(
+                    'A hook matcher is not a valid pattern: %s (%s). The hook was skipped and will never fire — fix the matcher.',
+                    $pattern,
+                    preg_last_error_msg(),
+                ));
+            }
+            $this->matcherFailures[$pattern] = preg_last_error_msg();
+
             return false;
         }
 

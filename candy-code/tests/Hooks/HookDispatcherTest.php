@@ -449,6 +449,28 @@ final class HookDispatcherTest extends TestCase
         $this->assertNotSame('No error', $this->dispatcher->matcherFailures()['(a+)+$']);
     }
 
+    /** A matcher that does not compile is skipped, but recorded and warned once rather than silently. */
+    public function testUncompilableMatcherIsRecordedNotWhispered(): void
+    {
+        $this->registry->register(
+            $this->createHardBlockHook('BadPattern', HookEvent::PreToolUse, 'Read', '(unclosed'),
+        );
+        \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::reset();
+        \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::arm(crossFork: false);
+
+        try {
+            $first = $this->dispatcher->dispatch(HookEvent::PreToolUse, $this->createContext('Read'));
+            $this->dispatcher->dispatch(HookEvent::PreToolUse, $this->createContext('Read'));
+            $notices = \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::drain();
+        } finally {
+            \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::reset();
+        }
+
+        $this->assertFalse($first->isBlock(), 'an uncompilable matcher still skips the hook');
+        $this->assertArrayHasKey('(unclosed', $this->dispatcher->matcherFailures());
+        $this->assertCount(1, $notices, 'one notice per pattern, not per call');
+    }
+
     /** The failure log stays empty when every matcher evaluates normally. */
     public function testMatcherFailuresIsEmptyWhenNothingFails(): void
     {
