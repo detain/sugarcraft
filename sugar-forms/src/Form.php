@@ -1423,6 +1423,18 @@ final class Form implements Model
      * A rejected field promise rejects the aggregate map: "could not
      * answer" never masquerades as "valid" or "invalid".
      *
+     * CONCURRENCY SHAPE (sugar-forms-083): dispatch is UNBOUNDED. Every
+     * field promise is created in the synchronous loop above, so one
+     * validateAsync() call fires every async validator of the form AT
+     * ONCE — a 20-field form issues 20 simultaneous requests. Chunking or
+     * a concurrency ceiling lives in the HOST: wrap the per-field call in
+     * a sugar-async throttle before handing it here. And the drain is
+     * silent: React's aggregate rejects on the FIRST rejection, but the
+     * outstanding promises are not cancellable — they all run to
+     * completion and their verdicts are dropped. The submit-gate path
+     * ({@see asyncValidationCmd}) sidesteps both by absorbing rejections
+     * per field into a typed verdict, so that batch always settles whole.
+     *
      * Mirrors no upstream symbol: charmbracelet/huh validates synchronously
      * only; this is the SugarCraft async extension of `ValidateAll()`.
      *

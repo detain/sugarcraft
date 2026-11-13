@@ -163,4 +163,63 @@ final class FormAsyncValidateTest extends TestCase
         $this->assertSame(['name' => 'boom'], $async);
         $this->assertSame(0, $calls);
     }
+
+    public function testFanOutDispatchesEveryValidatorInOneSynchronousSweep(): void
+    {
+        // SF-53 (sugar-forms-083): the docblock promises UNBOUNDED,
+        // immediate dispatch — a twenty-field form issues twenty
+        // simultaneous requests. Pin the shape: every armed async
+        // validator has been invoked by the time validateAsync()
+        // RETURNS, before the loop ever runs (no queue, no chunking).
+        $dispatched = [];
+        $fire = static function (string $key) use (&$dispatched): \Closure {
+            return static function (mixed $v) use (&$dispatched, $key): PromiseInterface {
+                $dispatched[$key] = true;
+                return self::settled(null);
+            };
+        };
+        $form = Form::new(
+            Input::new('a')->withAsyncValidator($fire('a')),
+            Input::new('b')->withAsyncValidator($fire('b')),
+            Input::new('c')->withAsyncValidator($fire('c')),
+            Input::new('d')->withAsyncValidator($fire('d')),
+        );
+
+        $form->validateAsync();
+
+        $this->assertSame(['a' => true, 'b' => true, 'c' => true, 'd' => true], $dispatched);
+    }
+
+    public function testPostRejectionDrainLateVerdictsAreDroppedSilently(): void
+    {
+        // SF-53: the aggregate rejects at the first failure, but the
+        // outstanding promises are not cancellable — they run to
+        // completion and their verdicts are DROPPED. Pin that a drained
+        // late verdict flips nothing: still rejected, never resolved.
+        $late = new Deferred();
+        $form = Form::new(
+            Input::new('fast')->withAsyncValidator(
+                static fn (mixed $v): PromiseInterface => self::rejected(new \RuntimeException('down'))
+            ),
+            Input::new('late')->withAsyncValidator(
+                static fn (mixed $v): PromiseInterface => $late->promise()
+            ),
+        );
+        $error = null;
+        $value = 'unsettled';
+        $form->validateAsync()->then(
+            static function (array $errors) use (&$value): void {
+                $value = $errors;
+            },
+            static function (\Throwable $e) use (&$error): void {
+                $error = $e;
+            },
+        );
+
+        $this->assertInstanceOf(\RuntimeException::class, $error, 'the first rejection rejects the aggregate');
+        $late->resolve('now what');
+
+        $this->assertInstanceOf(\RuntimeException::class, $error, 'a drained verdict cannot un-reject the aggregate');
+        $this->assertSame('unsettled', $value, 'a drained verdict never resolves the aggregate either');
+    }
 }

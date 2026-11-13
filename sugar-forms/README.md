@@ -387,7 +387,13 @@ and move focus to the first failing field; a clean round fires the deferred
 submit. Any value edit clears the overlay — verdicts judged pre-edit bytes.
 A validator that fails to answer BLOCKS with a typed verdict (an unanswered
 check never waves data through), and a seq generation guard drops late
-verdicts aimed at superseded or resolved forms.
+verdicts aimed at superseded or resolved forms. The public
+`Form::validateAsync()` dispatches UNBOUNDED: every async validator of the
+form fires simultaneously (a 20-field form issues 20 requests at once), and
+after the first rejection the remaining promises drain — they run to
+completion and their verdicts are dropped, uncancellable (both shapes
+pinned in `tests/FormAsyncValidateTest.php`). Throttle in your fetcher if
+that fan-out is too hot for the endpoint.
 
 ### ActionSpinner
 
