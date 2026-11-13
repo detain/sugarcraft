@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Components\Tree;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
@@ -323,7 +324,17 @@ final class PERT implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Calculate spacing
         $taskCount = count($order);
-        $nodeWidth = 10;
+        // The node box is 10 cells by default (fits ids up to 8); a longer id
+        // WIDENS the box when the horizontal budget affords it, instead of
+        // driving the padding math negative — the hardcoded 10 crashed render()
+        // on any realistic id (finding: 'deploy-api' at default width). Below
+        // the budget floor the box stays 10 and the id row truncates to cells.
+        $longestId = 0;
+        foreach ($order as $task) {
+            $longestId = max($longestId, Width::string($task->id));
+        }
+        $budgetWidth = intval(($chartWidth - 3 * ($taskCount + 1)) / max(1, $taskCount));
+        $nodeWidth = max(10, min($longestId + 2, $budgetWidth));
         $nodeHeight = 5;
         $horizontalSpacing = max(3, intval(($chartWidth - $taskCount * $nodeWidth) / max(1, $taskCount + 1)));
         $verticalSpacing = max(2, intval(($chartHeight - $nodeHeight) / 2));
@@ -380,7 +391,10 @@ final class PERT implements \SugarCraft\Dashboard\Foundation\SizedItem
             if ($this->criticalColor !== null) {
                 $legendLine .= Ansi::reset();
             }
-            $result .= str_repeat(' ', $useWidth - mb_strlen($legendLine, 'UTF-8') - 2) . $v . "\n";
+            // Pad by DISPLAY CELLS (SGR bytes must not count) and never go
+            // negative: a critical path longer than the box degrades to a zero
+            // pad instead of throwing ValueError out of render().
+            $result .= str_repeat(' ', max(0, $useWidth - 2 - Width::string($legendLine))) . $v . "\n";
         }
 
         // Bottom border
@@ -428,16 +442,23 @@ final class PERT implements \SugarCraft\Dashboard\Foundation\SizedItem
         }
         $result .= $tl . str_repeat('─', $width - 2) . $tr . "\n";
 
-        // Task ID row
+        // Task ID row — padded by DISPLAY CELLS (Core\Util\Width) and truncated
+        // to the box interior: byte/codepoint math on an over-long id drove
+        // str_repeat negative (the finding's crash); a wide glyph is dropped
+        // whole at the cut, never split. For ASCII ids that fit this is the
+        // old render byte-for-byte.
         $result .= str_repeat(' ', $x) . $v;
-        $idPadding = intval(($width - 2 - strlen($task->id)) / 2);
-        $result .= str_repeat(' ', $idPadding) . $task->id . str_repeat(' ', $width - 2 - $idPadding - strlen($task->id)) . $v . "\n";
+        $id = Width::truncateAnsi($task->id, $width - 2);
+        $idCells = Width::string($id);
+        $idPadding = intval(($width - 2 - $idCells) / 2);
+        $result .= str_repeat(' ', $idPadding) . $id . str_repeat(' ', $width - 2 - $idPadding - $idCells) . $v . "\n";
 
-        // Task name row
+        // Task name row (cells budget, same discipline as the id row).
         $result .= str_repeat(' ', $x) . $v;
-        $name = mb_substr($task->name, 0, $width - 2, 'UTF-8');
-        $namePadding = intval(($width - 2 - mb_strlen($name, 'UTF-8')) / 2);
-        $result .= str_repeat(' ', $namePadding) . $name . str_repeat(' ', $width - 2 - $namePadding - mb_strlen($name, 'UTF-8')) . $v . "\n";
+        $name = Width::truncateAnsi($task->name, $width - 2);
+        $nameCells = Width::string($name);
+        $namePadding = intval(($width - 2 - $nameCells) / 2);
+        $result .= str_repeat(' ', $namePadding) . $name . str_repeat(' ', $width - 2 - $namePadding - $nameCells) . $v . "\n";
 
         // Duration row
         if ($this->showDuration) {
@@ -445,10 +466,11 @@ final class PERT implements \SugarCraft\Dashboard\Foundation\SizedItem
             $duration = $this->showStatus
                 ? $task->duration . 'd ' . $this->getStatusIndicator($task->status)
                 : $task->duration . 'd';
-            $duration = mb_substr($duration, 0, $width - 2, 'UTF-8');
-            $durationPadding = intval(($width - 2 - mb_strlen($duration, 'UTF-8')) / 2);
+            $duration = Width::truncateAnsi($duration, $width - 2);
+            $durationCells = Width::string($duration);
+            $durationPadding = intval(($width - 2 - $durationCells) / 2);
             $result .= str_repeat(' ', $durationPadding) . $duration;
-            $result .= str_repeat(' ', $width - 2 - $durationPadding - mb_strlen($duration, 'UTF-8')) . $v . "\n";
+            $result .= str_repeat(' ', $width - 2 - $durationPadding - $durationCells) . $v . "\n";
         }
 
         // Bottom border

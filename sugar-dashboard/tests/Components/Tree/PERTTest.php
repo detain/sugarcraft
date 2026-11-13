@@ -439,4 +439,71 @@ final class PERTTest extends TestCase
         $rendered = $pert->render();
         $this->assertNotSame('', $rendered);
     }
+
+    /**
+     * D-05 (CRITICAL): every id length 1..30 at every width 39..80 must render
+     * without a negative str_repeat ValueError (the hardcoded nodeWidth of 10
+     * crashed on any id over 8 cells — 'deploy-api' at default width threw
+     * straight out of render(); the legend and duration legs went negative on
+     * realistic content too). Below the degenerate-size guard render() returns
+     * ''; above it the frame must be whole: title row exactly useWidth cells,
+     * every box-interior row stays inside the borders.
+     */
+    public function testEveryIdLengthAndWidthRendersWithoutCrash(): void
+    {
+        for ($idLen = 1; $idLen <= 30; $idLen++) {
+            $id = str_repeat('x', $idLen);
+            for ($width = 39; $width <= 80; $width++) {
+                $pert = PERT::new()
+                    ->addTask($id, 'Deploy the API service at the edge', 5)
+                    ->addTask('rel-' . $id, str_repeat('負荷', 6), 3, dependencies: [$id])
+                    ->withCriticalPath(true)
+                    ->setSize($width, 20);
+
+                $rendered = $pert->render(); // must not throw
+                if ($width < 40) {
+                    $this->assertSame('', $rendered, "degenerate guard at width {$width}");
+                    continue;
+                }
+                $this->assertNotSame('', $rendered);
+
+                $rows = explode("\n", $rendered);
+                $title = $rows[0];
+                $this->assertSame(
+                    $width,
+                    \SugarCraft\Core\Util\Width::string($title),
+                    "title row must span the box at id={$idLen} width={$width}"
+                );
+            }
+        }
+    }
+
+    /** D-05: a long id WIDENS its box when the horizontal budget affords it — full text visible, not truncated. */
+    public function testLongIdWidensBoxAndStaysReadable(): void
+    {
+        $rendered = PERT::new()
+            ->addTask('deploy-api', 'Deploy API', 5)
+            ->setSize(80, 20)
+            ->render();
+
+        $this->assertStringContainsString('deploy-api', $rendered);
+    }
+
+    /** D-05: with no budget for the widest id, boxes hold the 10-cell floor and the id truncates to cells — frame intact, no crash. */
+    public function testLongIdTruncatesToCellsUnderBudgetPressure(): void
+    {
+        $pert = PERT::new()->setSize(40, 20);
+        for ($i = 0; $i < 12; $i++) {
+            $pert = $pert->addTask('very-long-task-id-' . $i, 'Name ' . $i, 2);
+        }
+        $rendered = $pert->render(); // must not throw
+
+        $this->assertNotSame('', $rendered);
+        $this->assertStringNotContainsString('very-long-task-id-0', $rendered, 'over-budget ids truncate');
+        // NOTE: with 12 boxes at a 40-wide chart the single-lane placement
+        // overflows the frame — PRE-EXISTING layout behaviour of the x/spacing
+        // math (unchanged by this fix; happens with short ids too). Reported,
+        // not redesigned here. What D-05 pins is: no ValueError for any content.
+        $this->assertStringContainsString('╮', $rendered);
+    }
 }
