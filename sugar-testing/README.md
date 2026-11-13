@@ -149,8 +149,10 @@ $finalModel = $result->model;                      // the model object — inspe
 **Fake-runner caveat.** `withFakeCmdRunner()` substitutes the message a Cmd
 *resolves to* — it is not a suppression switch. The simulator defaults to
 execute mode, so the real Cmd still runs for its side effects before the fake
-message is injected. Pair it with `withRealCmdRunner(false)` (one line above)
-when the original execution must not happen.
+message is injected. Pair it with `withRealCmdRunner(false)` when the original
+execution must not happen — or reach for the direct capture arms:
+`captureCmds()` (collect cmds, never execute) and `withCmdCapture($onCmd)`
+(never execute, inject `$onCmd`'s message instead, both in one clone).
 
 **Queue and clone discipline (enforced).** `addMsgs()` mutates the handle you
 call it on and marks it sent; the `with*()` configuration setters return a

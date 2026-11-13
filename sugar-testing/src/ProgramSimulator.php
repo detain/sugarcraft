@@ -220,7 +220,7 @@ final class ProgramSimulator
      * (addMsgs): configure first, then queue.
      *
      * @param \Closure(\Closure): ?Msg $runner
-     * @return $this
+     * @return self
      */
     public function withFakeCmdRunner(\Closure $runner): self
     {
@@ -238,11 +238,12 @@ final class ProgramSimulator
      * returned messages are threaded through update(). When called with
      * false, cmds are captured but NOT executed — this is the safe,
      * deterministic mode that avoids side effects from sync cmds.
+     * {@see captureCmds()} is the direct spelling of the false arm.
      *
      * Clones — throws RuntimeException on an already-sent handle; configure first.
      *
      * @param bool $execute Pass false to capture without executing
-     * @return $this
+     * @return self
      */
     public function withRealCmdRunner(bool $execute): self
     {
@@ -250,6 +251,46 @@ final class ProgramSimulator
 
         $sim = clone $this;
         $sim->executeCmds = $execute;
+        return $sim;
+    }
+
+    /**
+     * Capture-only arm in one call: every cmd emitted during the run lands
+     * in the result's cmds list but nothing executes — the direct spelling
+     * of withRealCmdRunner(false), side-effect-free by construction.
+     *
+     * Clones — throws RuntimeException on an already-sent handle; configure first.
+     *
+     * @return self
+     */
+    public function captureCmds(): self
+    {
+        $this->assertConfigureBeforeSend();
+
+        $sim = clone $this;
+        $sim->executeCmds = false;
+        return $sim;
+    }
+
+    /**
+     * Capture without executing AND substitute each cmd's result, in one
+     * clone: the pair withFakeCmdRunner($onCmd) + withRealCmdRunner(false).
+     * The closure receives the cmd — and only the cmd; it must not invoke
+     * it, since nothing here executes — and returns the message to inject
+     * in place of whatever the real cmd would have produced.
+     *
+     * Clones — throws RuntimeException on an already-sent handle; configure first.
+     *
+     * @param \Closure(\Closure): ?Msg $onCmd
+     * @return self
+     */
+    public function withCmdCapture(\Closure $onCmd): self
+    {
+        $this->assertConfigureBeforeSend();
+
+        $sim = clone $this;
+        $sim->fakeCmdRunner = $onCmd;
+        $sim->executeCmds   = false;
         return $sim;
     }
 

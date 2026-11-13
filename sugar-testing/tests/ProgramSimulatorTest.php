@@ -259,6 +259,81 @@ final class ProgramSimulatorTest extends TestCase
         $this->assertCount(1, $result->cmds);
     }
 
+    public function testCaptureCmdsIsTheDirectSpellingOfTheBoolFalseArm(): void
+    {
+        // captureCmds() must be behaviourally identical to
+        // withRealCmdRunner(false): the side-effecting init cmd is captured,
+        // never executed, and both spellings produce the same run.
+        $boolArm = ProgramSimulator::for(new CmdProducingCounterModel(0))
+            ->withRealCmdRunner(false)
+            ->run();
+
+        $direct = ProgramSimulator::for(new CmdProducingCounterModel(0))
+            ->captureCmds()
+            ->run();
+
+        $this->assertSame(0, $direct->model->count());
+        $this->assertCount(1, $direct->cmds);
+        $this->assertSame($boolArm->view, $direct->view);
+    }
+
+    public function testWithCmdCaptureSubstitutesWithoutExecutingTheOriginalCmd(): void
+    {
+        // One-clone spelling of fake-runner + no-execute: the injected '+'
+        // reaches update() (count 0 → 1) while the side-effecting init cmd
+        // never runs. The execute-mode pair beside it shows the difference:
+        // the real cmd runs first (0 → 1) and the same injected '+' then
+        // takes it to 2.
+        $inject = static fn (): ?Msg => new KeyMsg(
+            type: KeyType::Char,
+            rune: '+',
+            alt: false,
+            ctrl: false,
+            shift: false,
+        );
+
+        $capture = ProgramSimulator::for(new CmdProducingCounterModel(0))
+            ->withCmdCapture($inject)
+            ->run();
+
+        $this->assertSame(1, $capture->model->count());
+        $this->assertCount(1, $capture->cmds);
+
+        $executeArm = ProgramSimulator::for(new CmdProducingCounterModel(0))
+            ->withRealCmdRunner(true)
+            ->withFakeCmdRunner($inject)
+            ->run();
+
+        $this->assertSame(2, $executeArm->model->count());
+    }
+
+    public function testCaptureArmSettersRefuseAnAlreadySentHandle(): void
+    {
+        // captureCmds()/withCmdCapture() clone too — the configure-before-
+        // send contract (testing-02) binds them as well.
+        $sent = ProgramSimulator::for(new CounterModel())->addMsgs(new KeyMsg(
+            type: KeyType::Char,
+            rune: '+',
+            alt: false,
+            ctrl: false,
+            shift: false,
+        ));
+
+        $calls = [
+            'captureCmds' => static fn () => $sent->captureCmds(),
+            'withCmdCapture' => static fn () => $sent->withCmdCapture(static fn (): ?Msg => null),
+        ];
+
+        foreach ($calls as $name => $call) {
+            try {
+                $call();
+                $this->fail($name . ' must honour configure-before-send');
+            } catch (\RuntimeException $e) {
+                $this->assertStringContainsString('before the first addMsgs()', $e->getMessage());
+            }
+        }
+    }
+
     public function testEmptyQueueRunReturnsResultWithInitialModel(): void
     {
         $model = new CounterModel(99);
