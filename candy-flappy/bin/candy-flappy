@@ -69,6 +69,7 @@ declare(strict_types=1);
     exit(1);
 })();
 
+use SugarCraft\Core\MouseMode;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Core\Util\ColorProfile;
@@ -198,6 +199,10 @@ $program = new Program(
         useAltScreen: $profile !== ColorProfile::NoTty,
         hideCursor: $profile !== ColorProfile::NoTty,
         colorProfile: $profile,
+        // flappy-09 (finding -008): click/tap flaps — a no-tap flappy-bird
+        // is unplayable on touch terminals (Termux, ttyd). minesweeper
+        // precedent: CellMotion press-only, gated off for a refusal frame.
+        mouseMode: $profile !== ColorProfile::NoTty ? MouseMode::CellMotion : MouseMode::Off,
     ),
 );
 $final = $program->run();

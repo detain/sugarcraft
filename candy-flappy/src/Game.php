@@ -10,6 +10,7 @@ use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\ColorProfileMsg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\MouseClickMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Subscriptions;
 use SugarCraft\Core\Util\AtomicJsonFile;
@@ -401,6 +402,17 @@ final class Game implements Model
             }
 
             return [$this->withColorProfile($msg->profile), null];
+        }
+        // flappy-09 (finding -008): click/tap flaps. MouseClickMsg is the
+        // press-only type (sugar-core splits press from move/release), so
+        // this is a tap, never drag noise — minesweeper precedent. Same
+        // posture law as the keyboard flap: a dead board or a notice screen
+        // swallows the press, anywhere else the first click starts the run.
+        if ($msg instanceof MouseClickMsg) {
+            if ($this->crashed === true || $this->tooSmall() === true) {
+                return [$this, null];
+            }
+            return [$this->withBird($this->bird->flap())->withStarted(), null];
         }
         if ($msg instanceof KeyMsg) {
             // m4: a Shift-ed letter arrives as the uppercase rune; the game must not

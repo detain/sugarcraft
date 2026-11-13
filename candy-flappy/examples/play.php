@@ -18,6 +18,7 @@ foreach ($candidates as $path) {
     }
 }
 
+use SugarCraft\Core\MouseMode;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Core\Util\ColorProfile;
@@ -32,6 +33,8 @@ $program = new Program(
         useAltScreen: $profile !== ColorProfile::NoTty,
         hideCursor: $profile !== ColorProfile::NoTty,
         colorProfile: $profile,
+        // flappy-09: tap-to-flap, mirroring the bin (minesweeper CellMotion).
+        mouseMode: $profile !== ColorProfile::NoTty ? MouseMode::CellMotion : MouseMode::Off,
     ),
 );
 $final = $program->run();

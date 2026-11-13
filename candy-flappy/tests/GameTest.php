@@ -9,7 +9,10 @@ use SugarCraft\Core\InputReader;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\ColorProfileMsg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\MouseClickMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
+use SugarCraft\Core\MouseAction;
+use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Flappy\Bird;
 use SugarCraft\Flappy\Game;
@@ -784,6 +787,38 @@ final class GameTest extends TestCase
         // q/r stay live on any posture: quitting a notice screen works.
         [, $cmd] = $grown->update(new KeyMsg(KeyType::Char, 'q'));
         $this->assertNotNull($cmd);
+    }
+
+    /**
+     * flappy-09 (finding -008): click/tap flaps and the first click starts
+     * the run — the bin arms MouseMode::CellMotion so real presses arrive
+     * (MouseClickMsg is the press-only type; release/motion noise never
+     * reaches it). The posture guards match the keyboard flap law: a dead
+     * board or a notice screen swallows taps.
+     */
+    public function testClickPressFlapsAndFirstClickStartsTheRun(): void
+    {
+        $g = Game::start(static fn(int $_max): int => 0, $this->hermeticConfigDir());
+        $click = new MouseClickMsg(10, 10, MouseButton::Left, MouseAction::Press);
+
+        [$live, $cmd] = $g->update($click);
+        $this->assertNull($cmd);
+        $this->assertTrue($live->started, 'the first click must start the run');
+        $this->assertNotSame($g->bird, $live->bird, 'the click must bank a flap kick');
+
+        [$again, ] = $live->update($click);
+        $this->assertNotSame($live->bird, $again->bird, 'every click flaps');
+
+        // A dead board swallows taps (no flap resurrection).
+        $dead = $again->tickN(80);
+        $this->assertTrue($dead->crashed, 'probe board must be dead for this leg');
+        [$still, ] = $dead->update($click);
+        $this->assertSame($dead, $still);
+
+        // Taps behind the too-small notice are inert (flappy-69 law).
+        [$small, ] = $g->update(new WindowSizeMsg(40, 10));
+        [$tapSmall, ] = $small->update($click);
+        $this->assertFalse($tapSmall->started, 'a tap behind the notice must not start the run');
     }
 
     public function testRestartWhileAliveEmitsNoFreshTimerChain(): void

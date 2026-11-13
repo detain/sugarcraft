@@ -91,6 +91,7 @@ deliberately ignores all flags (no `--version`/`--help`/refusal handling).
 | Key                  | Action                                                |
 |----------------------|-------------------------------------------------------|
 | `Space` / `Enter` / `↑` / `w` (either case) | Flap (the first flap also starts the run)  |
+| Mouse click / touch tap | Flap (the first click also starts the run)      |
 | `r`                  | Restart — after a crash or mid-flight; a qualifying mid-flight score settles first, landing on the ready card |
 | `q` / `Esc` / `Ctrl+C` | Quit                                              |
 
