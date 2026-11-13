@@ -951,6 +951,34 @@ echo $grid->render();
 cd sugar-dashboard && composer install && vendor/bin/phpunit
 ```
 
+## Key Bindings and Interactive Flow
+
+The library deliberately ships **no hard-wired keystrokes**: widgets expose
+programmatic behavior and the host wires keys to them. `Keys\KeyMap`
+registers bindings (`on()`/`onAny()`; the FIRST registration per
+combination wins, later duplicates warn and are shadowed) and dispatches
+decoded input through `handle()`; `Keys\KeyRegistry` is the semantic-ID
+roster for status-bar and help rendering. `Layout\FocusManager` carries the
+focus ring. `examples/dashboard-live.php` is the worked end-to-end wiring:
+
+| Component | Behavior (public API) | Demo keys (`dashboard-live`) |
+|---|---|---|
+| `Layout\FocusManager` | `focusNext()`, `focusPrevious()`, `focus(id)` | `Tab` / `Shift+Tab`, arrow keys rotate panel focus |
+| `GridTable\GridTable` | `sort(Column)`, `filter(string)`, `page(int)` | host-bound — the grid exposes state, not keystrokes |
+| `Form\CommandPalette` | `withQuery()` feeds `filteredCommands()`; `withSelectedIndex()` moves the cursor | host-bound — invocation is the app's chosen key (commonly `Ctrl+P`) |
+| `Modal` family | `withShowClose()` / close-label controls; dismissal is host dispatch | host-bound — the `Esc` convention belongs to the app |
+| whole app | quit, theme flip | `q` or `Ctrl+C`; `Ctrl+T` swaps the live demo between `Theme::dark()` and `Theme::light()` |
+
+The palette/theme key flow: themes are slot palettes (`Theme::dark()`,
+`dracula()`, `oneDark()`, `githubDark()`, `light()`, …) applied through the
+`withTheme()`/`withPalette()` builders named in the component tables, while
+color *capability* is negotiated by the `Foundation\ColorMode` chain (see
+Color Environment above, including its three documented divergences from
+`ColorProfile::detect()`). `examples/comboBox.php` and
+`examples/dashboard-form.php` are render demos: caret, highlight and value
+movement on `Input`/`Select`/`Toggle`/`Slider` are model methods the host
+drives from its own key map.
+
 ## GIF Demos
 
 | Demo | Description |
