@@ -156,9 +156,11 @@ final class PlayerIdleTrimTest extends TestCase
     }
 
     /**
-     * INSTANT mode ignores the trim entirely: the interval armed
-     * between events is the fixed yield, never the threshold and never
-     * the recorded delta.
+     * INSTANT mode ignores the trim entirely. Since VCR-S27 the fixed
+     * yield is armed per BATCH, not per event: a two-event tape fits in
+     * one batch of 64, both dispatch inline and no yield timer is armed
+     * at all — neither the threshold nor the recorded 10 s delta ever
+     * reaches the scheduler.
      */
     public function testInstantSpeedIgnoresWithIdleTrim(): void
     {
@@ -173,7 +175,7 @@ final class PlayerIdleTrimTest extends TestCase
                 loop: $loop,
             );
 
-        $this->assertSame([0.0, 2.0, Player::INSTANT_YIELD_SECONDS], $loop->oneShotIntervals());
+        $this->assertSame([0.0, 2.0], $loop->oneShotIntervals());
         $this->assertTrue($result->programQuitCleanly);
         $this->assertSame(1, $result->quitCount);
     }

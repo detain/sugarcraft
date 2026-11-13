@@ -61,13 +61,24 @@ final class Player
 
     /**
      * In SPEED_INSTANT mode the loop yields this many seconds between
-     * consecutive events. Without a non-zero gap, the framerate-based
+     * dispatch batches. Without a non-zero gap, the framerate-based
      * render tick never fires — every event would be processed in the
      * same loop iteration. 5 ms is enough for a 1 kHz tickInterval to
      * produce a frame; programs with a slower framerate will still
      * eventually render.
      */
     public const INSTANT_YIELD_SECONDS = 0.005;
+
+    /**
+     * How many INSTANT events are dispatched inline per loop visit
+     * (finding 054). The old shape armed one 5 ms timer per event, so an
+     * INSTANT replay cost event-count x yield of pure scheduler round
+     * trips — a 2000-event tape burned 10 s of pacing for zero content.
+     * A batch keeps the same render-tick opportunity (one yield per
+     * batch still clears a 1 kHz tickInterval fifteen times over) while
+     * the replay advances in line with the work, not the timer floor.
+     */
+    public const INSTANT_BATCH = 64;
 
     /**
      * DEC mouse reporting modes observed in recorded output during the
@@ -272,6 +283,33 @@ final class Player
                 if ($i >= $eventCount) {
                     return;
                 }
+
+                if ($speed !== self::SPEED_REALTIME) {
+                    // Inline fast path (finding 054): dispatch a batch of
+                    // INSTANT events within this callback and arm a single
+                    // yield per batch — the old per-event 5 ms timer made
+                    // replay cost scale with the timer floor instead of
+                    // the work. Realtime keeps one delta timer per event.
+                    $batchEnd = min($eventCount, $i + self::INSTANT_BATCH);
+                    do {
+                        $this->dispatchInline(
+                            $events[$i],
+                            $program,
+                            $registry,
+                            $tally,
+                            $expectedOutput,
+                            $programQuitCleanly,
+                            $firstResizeSkipped,
+                        );
+                        $i++;
+                    } while ($i < $batchEnd);
+                    if ($i >= $eventCount) {
+                        return;
+                    }
+                    $loop->addTimer(self::INSTANT_YIELD_SECONDS, $step);
+                    return;
+                }
+
                 $event = $events[$i];
                 $i++;
                 ($this->dispatchEvent(
@@ -287,20 +325,15 @@ final class Player
                 if ($i >= $eventCount) {
                     return;
                 }
-                // Schedule the next step. INSTANT mode uses a tiny yield to
-                // let the program's render tick fire between events;
-                // REALTIME mode uses the recorded delta between consecutive
-                // event timestamps, clamped to >= 0. If idleThreshold
-                // is set, long pauses are clamped to that value for faster CI.
-                if ($speed === self::SPEED_REALTIME) {
-                    $thisT = self::eventTimestamp($events[$i], $useRawTimestamps);
-                    $prevT = self::eventTimestamp($event, $useRawTimestamps);
-                    $delta = max(0.0, $thisT - $prevT);
-                    if ($idleThreshold !== null && $delta > $idleThreshold) {
-                        $delta = $idleThreshold;
-                    }
-                } else {
-                    $delta = self::INSTANT_YIELD_SECONDS;
+                // Schedule the next step: REALTIME uses the recorded delta
+                // between consecutive event timestamps, clamped to >= 0.
+                // If idleThreshold is set, long pauses are clamped to that
+                // value for faster CI.
+                $thisT = self::eventTimestamp($events[$i], $useRawTimestamps);
+                $prevT = self::eventTimestamp($event, $useRawTimestamps);
+                $delta = max(0.0, $thisT - $prevT);
+                if ($idleThreshold !== null && $delta > $idleThreshold) {
+                    $delta = $idleThreshold;
                 }
                 $loop->addTimer($delta, $step);
             };
@@ -375,11 +408,37 @@ final class Player
     }
 
     /**
+     * Inline INSTANT dispatch: run this event's closure without going
+     * through a timer arm, sharing dispatchEvent's tally/expected wiring.
+     *
+     * @param array{input:int,resize:int,output:int,quit:int,undecoded:int} $tally
+     */
+    private function dispatchInline(
+        Event $event,
+        Program $program,
+        Registry $registry,
+        array &$tally,
+        string &$expectedOutput,
+        bool &$programQuitCleanly,
+        bool &$firstResizeSkipped,
+    ): void {
+        ($this->dispatchEvent(
+            $event,
+            $program,
+            $registry,
+            $tally,
+            $expectedOutput,
+            $programQuitCleanly,
+            $firstResizeSkipped,
+        ))();
+    }
+
+    /**
      * Build the closure that runs when the loop fires this event's
      * scheduled timer. Tally counters and `expectedOutput` are passed
      * by reference so the closure mutates the outer aggregate state.
      *
-     * @param array{input:int,resize:int,output:int,quit:int} $tally
+     * @param array{input:int,resize:int,output:int,quit:int,undecoded:int} $tally
      */
     private function dispatchEvent(
         Event $event,
