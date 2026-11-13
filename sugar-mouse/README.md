@@ -390,7 +390,8 @@ MERGES into its registry: ids re-recorded in a new frame are replaced, ids
 not present are kept — a zone whose widget stopped rendering STAYS
 clickable until something replaces it under the same id, `clear($id)`
 removes it, or `close()` wipes the registry — so re-scan every frame you
-want authoritative, and clear ids you retire. Manager hit-testing resolves
+want authoritative, and clear ids you retire — `idsAbsentFromFrame($seen)`
+turns a frame's painted-id list into exactly the ids to drop. Manager hit-testing resolves
 the SMALLEST covering area first (nested components: innermost wins), ties
 between equal areas go to the first-recorded zone — the one point where it
 agrees with the primitive's registration-order rule. Use `allInBounds($msg)`
@@ -711,6 +712,7 @@ so construction from a `range()` result is unambiguous.
 | `Manager` | `motionTrackingAnsi(bool)` | Return paired CSI 1003+1006 enable / LIFO disable sequence (bytes only, emits nothing; formerly the `setMotionTracking` setter) |
 | `Manager` | `allInBounds(mouseMsg)` | Every covering zone, smallest area first |
 | `Manager` | `zoneAt(col, row)` | Cell hit-test without a mouse message |
+| `Manager` | `idsAbsentFromFrame(ids)` | Registered ids missing from the ids a frame painted — the prune seam |
 | `Manager` | `anyInBoundsAndUpdate(model, msg)` | Dispatch `MsgZoneInBounds` into a Model |
 | `Manager` | `clear(?id)` / `close()` | Drop one zone (id or wire id) / wipe registry + disable |
 | `Zone` | `toMouseEvent(mouseMsg)` | Core→primitive action/button bridge |

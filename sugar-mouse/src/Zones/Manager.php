@@ -238,6 +238,9 @@ final class Manager
      * tried first) as well as the WIRE id stored in a hit result
      * (`$zone->id`, already prefixed) — the trackers hand back wire ids, so
      * both spellings must round-trip on a prefixed manager.
+     *      *
+     *      * Staleness: an id from a frame that scrolled off resolves until it is
+     *      * re-scanned or cleared (see class docs; {@see idsAbsentFromFrame()}).
      */
     public function get(string $id): ?Zone
     {
@@ -248,6 +251,34 @@ final class Manager
     public function all(): array
     {
         return $this->zones;
+    }
+
+    /**
+     * Generation-diff prune helper: the registered ids that did NOT appear
+     * among `$scannedIds`, in insertion order.
+     *
+     * Feed it the ids the current frame actually painted (ids as registered
+     * on this manager — full spellings, prefix included) and `clear()` the
+     * result to drop zones whose content scrolled off without ever being
+     * re-marked. The registry never forgets on its own (see class docs);
+     * this is the seam that lets a consumer notice.
+     *
+     * @param iterable<string> $scannedIds
+     * @return list<string>
+     */
+    public function idsAbsentFromFrame(iterable $scannedIds): array
+    {
+        $seen = [];
+        foreach ($scannedIds as $id) {
+            $seen[$id] = true;
+        }
+        $absent = [];
+        foreach (array_keys($this->zones) as $id) {
+            if (!isset($seen[$id])) {
+                $absent[] = $id;
+            }
+        }
+        return $absent;
     }
 
     /**
@@ -292,6 +323,10 @@ final class Manager
      * full-screen modal over a live registry. Returns null if no zone
      * matches (or if the Msg isn't a {@see MouseMsg} to begin with — handy
      * when models blanket-route every Msg through this helper).
+     *      *
+     *      * Staleness: reflects the last scan() — zones from frames that scrolled
+     *      * off stay hit-eligible until their id is re-scanned or cleared; prune
+     *      * with {@see idsAbsentFromFrame()}.
      *
      * Mirrors bubblezone's `Manager::AnyInBounds()`.
      */
@@ -320,6 +355,8 @@ final class Manager
      * {@see anyInBounds()}). Lets a consumer route a click to ALL owners
      * of a cell — e.g. a container and the button inside it — instead of
      * only the smallest.
+     *      *
+     *      * Staleness: same last-scan() contract as {@see anyInBounds()}.
      *
      * @return list<Zone>
      */
@@ -344,6 +381,8 @@ final class Manager
      * ($col, $row), 1-based — same area/tie rule as {@see anyInBounds()}.
      * Lets consumers resolve what is under the wheel, the caret, or an
      * arbitrary position without fabricating a MouseMsg.
+     *      *
+     *      * Staleness: same last-scan() contract as {@see anyInBounds()}.
      */
     public function zoneAt(int $col, int $row): ?Zone
     {

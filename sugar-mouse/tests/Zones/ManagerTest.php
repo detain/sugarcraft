@@ -658,4 +658,26 @@ final class ZoneRoutingModel implements \SugarCraft\Core\Model
     {
         return null;
     }
+
+    /**
+     * The prune seam: scan() MERGES, so ids from frames that stopped being
+     * marked stay registered — idsAbsentFromFrame is what lets a consumer
+     * notice them, in insertion order, and clear() retires them.
+     */
+    public function testIdsAbsentFromFrameListsVanishedIdsInInsertionOrder(): void
+    {
+        $m = Manager::newGlobal();
+        $m->scan($m->mark('a', 'AAA') . '|' . $m->mark('b', 'BBB') . '|' . $m->mark('c', 'CCC'));
+
+        $this->assertSame(['a', 'b', 'c'], $m->idsAbsentFromFrame([]));
+        $this->assertSame(['b', 'c'], $m->idsAbsentFromFrame(['a']));
+        $this->assertSame(['a', 'c'], $m->idsAbsentFromFrame(['b']));
+        $this->assertSame([], $m->idsAbsentFromFrame(['a', 'b', 'c']));
+        $this->assertSame(['a', 'b', 'c'], $m->idsAbsentFromFrame(['zz']), 'unknown feed ids are ignored');
+
+        foreach ($m->idsAbsentFromFrame(['b']) as $stale) {
+            $m->clear($stale);
+        }
+        $this->assertSame(['b'], array_keys($m->all()));
+    }
 }
