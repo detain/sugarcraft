@@ -364,9 +364,9 @@ It **also** covers recognized-but-filtered frames — a Kitty event frame when t
 progressive protocol is disabled, a disabled family's mouse report, or a stray
 `CSI 201~` paste-end marker with no paste open. What never lands in this counter
 is a complete `?`- or `>`-prefixed private report: those drain as
-`TerminalReplyEvent`s. So a non-zero count is not necessarily a terminal this
-decoder fails to model. `reset()` zeroes all counters along with
-the buffers.
+`TerminalReplyEvent`s. So a non-zero count does not necessarily mean this
+terminal sends frames the decoder fails to model. `reset()` zeroes all
+counters along with the buffers.
 
 ### Deferred trailing escape (opt-in)
 
