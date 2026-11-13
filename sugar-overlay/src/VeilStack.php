@@ -144,17 +144,25 @@ final class VeilStack implements \Countable
      * vPosition()/hPosition() anchor (CENTER when unset) with
      * positionX()/positionY() offsets, painting its own
      * {@see Veil::content()}, so higher z-index veils appear on top of
-     * lower ones. Like composite(), this pass emits only FULL frames and
-     * reads content() verbatim — sweep untrusted layers with
+     * lower ones. The uniform $xOffset/$yOffset shift EVERY veil on top of
+     * each veil's own positionX()/positionY() — the anchor stays per-veil,
+     * the nudge is stack-wide (sugar-overlay-062). Like composite(), this
+     * pass emits only FULL frames and reads content() verbatim — sweep
+     * untrusted layers with
      * {@see Veil::withUntrustedContent()} before stacking (see composite()).
      * The throwaway-clone clauses of composite() (NULL lastFullFrame on
      * members, inert per-layer animation) apply here too.
      *
      * @param string $background The base content (trust boundary — see composite())
+     * @param int $xOffset Additional columns rightward (+) / leftward (-) for every veil
+     * @param int $yOffset Additional lines downward (+) / upward (-) for every veil
      * @return string The composited output
      */
-    public function compositeAll(string $background): string
-    {
+    public function compositeAll(
+        string $background,
+        int $xOffset = 0,
+        int $yOffset = 0,
+    ): string {
         $sorted = $this->sorted();
         $result = $background;
         foreach ($sorted as $veil) {
@@ -167,8 +175,8 @@ final class VeilStack implements \Countable
                 $result,
                 $veil->vPosition() ?? Position::CENTER,
                 $veil->hPosition() ?? Position::CENTER,
-                $veil->positionX(),
-                $veil->positionY(),
+                $veil->positionX() + $xOffset,
+                $veil->positionY() + $yOffset,
             );
         }
         return $result;

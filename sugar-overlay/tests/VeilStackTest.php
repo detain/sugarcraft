@@ -248,6 +248,51 @@ final class VeilStackTest extends TestCase
         $this->assertNotEmpty($result);
     }
 
+    public function testCompositeAllOffsetsDefaultIsByteIdentical(): void
+    {
+        // SO-32 additive leg: the new uniform-offset params must not move a
+        // byte when they stay at zero — every existing call site keeps the
+        // exact frames it got before.
+        $bg = str_repeat('.', 30) . "\n" . str_repeat('.', 30);
+
+        $stack = VeilStack::new()
+            ->add(Veil::new()->withContent('[AAA]')->withZIndex(1))
+            ->add(Veil::new()->withContent('[BBB]')->withZIndex(2));
+
+        $this->assertSame($stack->compositeAll($bg), $stack->compositeAll($bg, 0, 0));
+    }
+
+    public function testCompositeAllUniformXOffsetShiftsEveryVeilFrame(): void
+    {
+        $bg = str_repeat('.', 30) . "\n" . str_repeat('.', 30);
+
+        // TOP and BOTTOM anchors, one glyph each; +2 columns must move BOTH.
+        $stack = VeilStack::new()
+            ->add(Veil::new()->withContent('T')->withZIndex(1)
+                ->withPosition(Position::TOP, Position::LEFT))
+            ->add(Veil::new()->withContent('B')->withZIndex(2)
+                ->withPosition(Position::BOTTOM, Position::LEFT));
+
+        $lines = Veil::new()->splitLines($stack->compositeAll($bg, 2, 0));
+
+        $this->assertSame('..' . 'T' . str_repeat('.', 27), $lines[0], 'top layer shifted two columns right');
+        $this->assertSame('..' . 'B' . str_repeat('.', 27), $lines[1], 'bottom layer took the SAME uniform shift');
+    }
+
+    public function testCompositeAllUniformYOffsetShiftsEveryVeilFrame(): void
+    {
+        $bg = str_repeat('.', 30) . "\n" . str_repeat('.', 30);
+
+        $stack = VeilStack::new()
+            ->add(Veil::new()->withContent('T')->withZIndex(1)
+                ->withPosition(Position::TOP, Position::LEFT));
+
+        $lines = Veil::new()->splitLines($stack->compositeAll($bg, 0, 1));
+
+        $this->assertSame(str_repeat('.', 30), $lines[0], 'a one-row nudge leaves row 0 as plain backdrop');
+        $this->assertSame('T' . str_repeat('.', 29), $lines[1], 'the glyph painted the next row down');
+    }
+
     public function testRemoveWhereWithNoMatchReturnsSameCount(): void
     {
         $v1 = Veil::new()->withZIndex(1);
