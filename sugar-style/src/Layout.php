@@ -107,13 +107,12 @@ final class Layout
             return '';
         }
         $pos = max(0.0, min(1.0, $pos));
-        $cols = [];
+        // Finding 031: measure every line exactly once up front. Before
+        // this the equalise pass re-walked each line inside padRight()
+        // after self::width() had already measured it.
+        [$cols, $lineW, $widths] = self::scan($blocks);
         $maxRows = 0;
-        $widths = [];
-        foreach ($blocks as $b) {
-            $lines = explode("\n", $b);
-            $widths[] = self::width($b);
-            $cols[] = $lines;
+        foreach ($cols as $lines) {
             if (count($lines) > $maxRows) {
                 $maxRows = count($lines);
             }
@@ -130,10 +129,23 @@ final class Layout
                     $lines,
                     array_fill(0, $bottom, ''),
                 );
+                $lineWidths = array_merge(
+                    array_fill(0, $top, 0),
+                    $lineW[$i],
+                    array_fill(0, $bottom, 0),
+                );
+            } else {
+                $lineWidths = $lineW[$i];
             }
-            // Pad each line to its column's width with spaces.
+            // Pad each line to its column's width with spaces. Identical
+            // to Width::padRight() (which pads `$s . str_repeat(' ',
+            // $width - string($s))`) but reads the memoised width.
+            $colWidth = $widths[$i];
             foreach ($lines as $j => $line) {
-                $lines[$j] = WidthUtil::padRight($line, $widths[$i]);
+                $gap = $colWidth - $lineWidths[$j];
+                if ($gap > 0) {
+                    $lines[$j] = $line . str_repeat(' ', $gap);
+                }
             }
             $cols[$i] = $lines;
         }
@@ -183,19 +195,25 @@ final class Layout
         if ($blocks === []) {
             return '';
         }
+        // Finding 031: one measurement sweep shared by the merge loop.
+        [$blockLines, $blockLineW, $blockW] = self::scan($blocks);
+        return self::joinVerticalMeasured($pos, $spacing, $blockLines, $blockLineW, max($blockW));
+    }
+
+    /**
+     * Spacing rows are $width blanks; content lines are padded to the
+     * shared widest-line width using the memoised per-line table.
+     *
+     * @param list<list<string>> $blockLines
+     * @param list<list<int>>    $blockLineW
+     */
+    private static function joinVerticalMeasured(float $pos, ?int $spacing, array $blockLines, array $blockLineW, int $width): string
+    {
         $pos = max(0.0, min(1.0, $pos));
-        $width = 0;
-        foreach ($blocks as $b) {
-            $w = self::width($b);
-            if ($w > $width) {
-                $width = $w;
-            }
-        }
         $rows = [];
-        foreach ($blocks as $blockIdx => $b) {
-            foreach (explode("\n", $b) as $line) {
-                $w = WidthUtil::string($line);
-                $extra = $width - $w;
+        foreach ($blockLines as $blockIdx => $lines) {
+            foreach ($lines as $j => $line) {
+                $extra = $width - $blockLineW[$blockIdx][$j];
                 if ($extra <= 0) {
                     $rows[] = $line;
                     continue;
@@ -205,13 +223,46 @@ final class Layout
                 $rows[] = str_repeat(' ', $left) . $line . str_repeat(' ', $right);
             }
             // Insert spacing rows after each block except the last
-            if ($spacing !== null && $blockIdx < count($blocks) - 1) {
+            if ($spacing !== null && $blockIdx < count($blockLines) - 1) {
                 for ($s = 0; $s < $spacing; $s++) {
                     $rows[] = str_repeat(' ', $width);
                 }
             }
         }
         return implode("\n", $rows);
+    }
+
+    /**
+     * Split every block into lines and measure each line exactly once
+     * (finding 031). Returns [lines, per-line widths, per-block widths]
+     * as parallel lists; the block width is the widest line, matching
+     * {@see width()} — including the 0-width single empty line an
+     * empty string yields.
+     *
+     * @param list<string> $blocks
+     * @return array{list<list<string>>, list<list<int>>, list<int>}
+     */
+    private static function scan(array $blocks): array
+    {
+        $lines = [];
+        $lineW = [];
+        $blockW = [];
+        foreach ($blocks as $b) {
+            $bl = explode("\n", $b);
+            $width = 0;
+            $ws = [];
+            foreach ($bl as $line) {
+                $w = WidthUtil::string($line);
+                $ws[] = $w;
+                if ($w > $width) {
+                    $width = $w;
+                }
+            }
+            $lines[] = $bl;
+            $lineW[] = $ws;
+            $blockW[] = $width;
+        }
+        return [$lines, $lineW, $blockW];
     }
 
     /**
@@ -261,19 +312,33 @@ final class Layout
         if ($blocks === [] || count($blocks) === 1 || $divider === '') {
             return self::joinVertical($pos, ...$blocks);
         }
-        $width = 0;
-        foreach ($blocks as $b) {
-            $width = max($width, self::width($b));
-        }
+        // Finding 031: the rule tile needs the widest block width, and the
+        // join needs per-line widths — share one scan instead of measuring
+        // every block twice (tile pass, then the delegated join re-walk).
+        [$blockLines, $blockLineW, $blockW] = self::scan($blocks);
+        $width = max($blockW);
         $rule = self::tile($divider, $width);
-        $parts = [];
-        foreach ($blocks as $i => $b) {
-            if ($i > 0) {
-                $parts[] = $rule;
+        $ruleLines = explode("\n", $rule);
+        $ruleW = [];
+        $ruleWidth = 0;
+        foreach ($ruleLines as $rl) {
+            $w = WidthUtil::string($rl);
+            $ruleW[] = $w;
+            if ($w > $ruleWidth) {
+                $ruleWidth = $w;
             }
-            $parts[] = $b;
         }
-        return self::joinVertical($pos, ...$parts);
+        $partLines = [];
+        $partLineW = [];
+        foreach ($blockLines as $i => $lines) {
+            if ($i > 0) {
+                $partLines[] = $ruleLines;
+                $partLineW[] = $ruleW;
+            }
+            $partLines[] = $lines;
+            $partLineW[] = $blockLineW[$i];
+        }
+        return self::joinVerticalMeasured($pos, null, $partLines, $partLineW, max($width, $ruleWidth));
     }
 
     /** Repeat `$unit` until it covers `$width` cells, then cut to exactly that. */
