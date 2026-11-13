@@ -526,31 +526,39 @@ rows from the file permanently.
 ```php
 use SugarCraft\QuickPick\HelpBar;
 
-// Create with optional shortcuts
+// Create with optional shortcuts — word-form labels are the
+// screen-reader-safe choice (see the note below the fence)
 $bar = new HelpBar([
-    '↑↓' => 'navigate',
-    'Enter' => 'select',
-    'Esc' => 'close',
+    'Up/Down' => 'navigate',
+    'Enter'   => 'select',
+    'PgUp'    => 'page back',   // redundant next to Up/Down...
 ]);
 
-// HelpBar::new($shortcuts, $visible) is the house factory — same seeds.
+// ...so drop it again: withoutShortcut() removes an entry by key
+$bar = $bar->withoutShortcut('PgUp')
+           ->withShortcut('Ctrl+R', 'reload');
 
-// Add or remove shortcuts (fluent)
-$bar = $bar->withShortcut('Ctrl+R', 'reload')
-           ->withoutShortcut('↑↓');
+// HelpBar::new($shortcuts, $visible) is the house factory — same seeds. The
+// optional bool starts the bar hidden: new HelpBar([], visible: false)
+// renders '' until show().
 
 // Read back the entries (key → description)
 $shortcuts = $bar->shortcuts();
 
-// Render: "Enter: select │ Esc: close │ Ctrl+R: reload"
+// Render: "Up/Down: navigate │ Enter: select │ Ctrl+R: reload"
 echo $bar->render();
 
-// Show or hide (fluent). A hidden bar renders the empty string — that is
-// how the overlay omits the line entirely:
-$bar->hide()->render(); // ''
+// Visibility lives on both bars (Visible trait): show() / hide() /
+// isVisible(), all fluent except the query. A hidden bar renders the empty
+// string — that is how the overlay omits the line entirely:
+$bar->hide()->render();       // ''
+$bar->hide()->isVisible();    // false
+$bar->show()->isVisible();    // true
 ```
 
-Shortcut labels are free-form strings rendered verbatim, so prefer word-form entries like 'Up/Down' (the 'Enter' row above already is one) over glyphs like '↑↓' for screen-reader listeners — the example removes the glyph entry with `withoutShortcut()` for exactly this reason.
+Shortcut labels are free-form strings rendered verbatim, so prefer word-form
+entries like 'Up/Down' over glyphs like '↑↓' for screen-reader listeners —
+the frame interprets neither, the difference is purely what a reader hears.
 
 ## API — StatusBar
 
@@ -560,7 +568,8 @@ use SugarCraft\QuickPick\StatusBar;
 // Create with optional message
 $bar = new StatusBar('3 of 12 items');
 
-// StatusBar::new($message, $visible) is the house factory — same seeds.
+// StatusBar::new($message, $visible) is the house factory — same seeds; the
+// second constructor parameter is the optional visibility flag (default true).
 
 // Fluent setters
 $bar = $bar->withMessage('Searching...')   // replaces the constructor message
@@ -579,6 +588,8 @@ echo $bar->render();
 $bar->withoutSegment('count')->render(); // 'Searching...'
 $bar->withNoMessage()->render();         // '[count: 7]'
 $bar->hide()->render();                  // '' — a hidden bar renders empty
+$bar->hide()->isVisible();               // false — the query completes the
+$bar->show()->isVisible();               // true  — show()/hide()/isVisible() trio
 ```
 
 ## Wiring keyboard input
