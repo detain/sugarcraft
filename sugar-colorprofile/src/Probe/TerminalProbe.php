@@ -287,8 +287,10 @@ class TerminalProbe
      * xterm). The legacy `Ss1`/`Ss2` user caps are NOT sixel markers — they
      * initialize X3.64 status lines — so they sit outside the accepted set
      * ({@see TerminfoParser::SIXEL_NAMES}).
-     * Names are matched after lowercasing and stripping underscores, so
-     * `SixelScreenMode` and `sixel_screen_mode` collapse to one token
+     * Names are matched exact after lowercasing — the roster lists each
+     * accepted spelling (`SixelScreenMode` and the snake-cased
+     * `sixel_screen_mode` both stand on the list; there is no underscore
+     * folding, CP-27)
      * ({@see TerminfoParser::hasCapName()}).
      *
      * @see terminfo(5) user-defined capabilities

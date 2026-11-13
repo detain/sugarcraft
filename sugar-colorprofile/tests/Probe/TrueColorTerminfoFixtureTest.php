@@ -130,7 +130,25 @@ final class TrueColorTerminfoFixtureTest extends TestCase
             'RGB inside an alt name value' => ['	AX, des=wide RGB,'],
             'Tc inside a comment' => ['#	Tc,\n\tdes=plain,'],
             'letters tc glued in another cap name' => ['	ntc,'],
+            // CP-27: the retired underscore-fold made these two mint TrueColor.
+            'underscore-spliced t_c is not Tc' => ['	t_c,'],
+            'underscore-spliced r_gb is not RGB' => ['	r_gb,'],
         ];
+    }
+
+    public function testUnderscoreFoldDoesNotMintTrueColor(): void
+    {
+        // Named pin for the retired behavior (finding -069): hasCapName used
+        // to str_replace('_','') the name-position token, so `t_c,` and
+        // `r_gb,` — glued-letter fakes that are NOT any terminfo(5) capability
+        // name — upgraded the rung to truecolor. A capability must be its
+        // OWN name-position token; the roster lists real snake spellings
+        // (sixel_screen_mode) by name instead of folding the world.
+        $spliced = $this->probeWithInfocmp($this->dump("\tt_c,"))->runProbe();
+        $this->assertFalse($spliced->hasTrueColor(), 't_c must not forge Tc');
+
+        $splicedRgb = $this->probeWithInfocmp($this->dump("\tr_gb,"))->runProbe();
+        $this->assertFalse($splicedRgb->hasTrueColor(), 'r_gb must not forge RGB');
     }
 
     /**

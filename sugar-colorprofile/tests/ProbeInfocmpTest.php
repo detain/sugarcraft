@@ -112,6 +112,18 @@ final class ProbeInfocmpTest extends TestCase
             TerminfoParser::hasCapName("xterm|X11 terminal emulator,\n\tdes=xterm with Tc support,\n", TerminfoParser::TRUECOLOR_NAMES),
             'Tc inside a description is not a capability name',
         );
+        // CP-27 roster truth: matching is EXACT on the lowercased token —
+        // the retired underscore fold minted TrueColor from a spliced name,
+        // and the legitimate snake spelling (sixel_screen_mode) now rides
+        // the roster by name instead of relying on the fold.
+        self::assertFalse(
+            TerminfoParser::hasCapName("forged|spliced name,\n\tt_c,\n", TerminfoParser::TRUECOLOR_NAMES),
+            't_c is not the Tc capability',
+        );
+        self::assertTrue(
+            TerminfoParser::hasCapName("foot|sixel,\n\tsixel_screen_mode#1,\n", TerminfoParser::SIXEL_NAMES),
+            'the rostered snake spelling still declares sixel',
+        );
 
         // Probe leg — the upgrade this test is named for: TERM=xterm answers
         // Ansi on the ladder, and a fake infocmp declaring Tc promotes it to

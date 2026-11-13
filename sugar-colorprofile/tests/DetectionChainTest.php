@@ -30,6 +30,29 @@ final class DetectionChainTest extends TestCase
                 DetectionChain::LEVEL_TRUECOLOR,
                 'env:CLICOLOR_FORCE',
             ],
+            // CP-27: the FORCE_COLOR numeric ladder the pins never carried —
+            // level floors answered straight from step 2, outranking TERM
+            // rungs on both sides (the roster's documented order).
+            'force_color_1 returns ansi' => [
+                ['FORCE_COLOR' => '1'],
+                DetectionChain::LEVEL_ANSI,
+                'env:FORCE_COLOR',
+            ],
+            'force_color_2 returns ansi256' => [
+                ['FORCE_COLOR' => '2', 'TERM' => 'dumb'],
+                DetectionChain::LEVEL_ANSI256,
+                'env:FORCE_COLOR',
+            ],
+            'force_color_3 returns truecolor' => [
+                ['FORCE_COLOR' => '3', 'TERM' => 'unknownterm'],
+                DetectionChain::LEVEL_TRUECOLOR,
+                'env:FORCE_COLOR',
+            ],
+            'force_color_word_true returns truecolor' => [
+                ['FORCE_COLOR' => 'true', 'TERM' => 'unknownterm'],
+                DetectionChain::LEVEL_TRUECOLOR,
+                'env:FORCE_COLOR',
+            ],
             // NO_COLOR set → none
             'no_color returns none' => [
                 ['NO_COLOR' => '1'],
