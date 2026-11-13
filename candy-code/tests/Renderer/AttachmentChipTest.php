@@ -68,7 +68,7 @@ final class AttachmentChipTest extends TestCase
     private static function chip(Message $message, int $width): string
     {
         return (string) (new \ReflectionMethod(Renderer::class, 'attachmentChip'))
-            ->invoke(null, $message, Theme::default(), $width);
+            ->invoke(null, $message, Theme::dark(), $width);
     }
 
     private static function plain(string $frame): string

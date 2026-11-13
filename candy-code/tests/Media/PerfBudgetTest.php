@@ -202,7 +202,7 @@ final class PerfBudgetTest extends TestCase
         $a = new PerfCountingSection('a', 'Alpha');
         $b = new PerfCountingSection('b', 'Beta');
         $form = MediaForm::fromSections([$a, $b]);
-        $theme = Theme::default();
+        $theme = Theme::dark();
 
         $a->visibleCalls = 0;
         $b->visibleCalls = 0;
@@ -290,7 +290,7 @@ final class PerfBudgetTest extends TestCase
         $form = MediaForm::open(MediaRequest::new()->fromArray([
             'prompt' => 'a lighthouse at dawn', 'steps' => 25, 'cfg_scale' => 7, 'seed' => 42,
         ]));
-        $theme = Theme::default();
+        $theme = Theme::dark();
         if ($bench) {
             $perOp = self::perfMicrosecondsPerOp(static fn () => $form->view($theme, 60, 24), 20);
             $this->assertLessThan(30000.0, $perOp, "MediaForm::view costs {$perOp} µs/op");

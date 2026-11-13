@@ -112,7 +112,7 @@ final class SettingsEditorKeysTest extends TestCase
         // The first Esc clears the search the view was opened with.
         $app = $this->press($this->staged(), new KeyMsg(KeyType::Escape), new KeyMsg(KeyType::Escape));
         $this->assertSame(SettingsEditor::CONFIRM_DISCARD, $app->settingsEditor?->confirm, 'it asks rather than closing');
-        $this->assertStringContainsString('Close with 1 unsaved change?', Ansi::strip($app->settingsEditor->view(Theme::default(), 100, 30)));
+        $this->assertStringContainsString('Close with 1 unsaved change?', Ansi::strip($app->settingsEditor->view(Theme::dark(), 100, 30)));
 
         $kept = $this->press($app, new KeyMsg(KeyType::Char, 'k'));
         $this->assertNull($kept->settingsEditor?->confirm);
@@ -156,9 +156,9 @@ final class SettingsEditorKeysTest extends TestCase
         $app = $this->press($this->app('trustedProjectSettings'), new KeyMsg(KeyType::Enter));
         $this->assertSame(SettingsEditor::CONFIRM_TRUST, $app->settingsEditor?->confirm);
         $this->assertSame('trustedProjectSettings', $app->settingsEditor?->pendingTrustKey());
-        $view = Ansi::strip($app->settingsEditor->view(Theme::default(), 100, 30));
+        $view = Ansi::strip($app->settingsEditor->view(Theme::dark(), 100, 30));
         $this->assertStringContainsString('Trust this project: trustedProjectSettings', $view);
-        foreach (explode("\n", $app->settingsEditor->view(Theme::default(), 40, 20)) as $line) {
+        foreach (explode("\n", $app->settingsEditor->view(Theme::dark(), 40, 20)) as $line) {
             $this->assertLessThanOrEqual(40, Width::string(Ansi::strip($line)));
         }
 

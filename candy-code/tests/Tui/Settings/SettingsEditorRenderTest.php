@@ -82,7 +82,7 @@ final class SettingsEditorRenderTest extends TestCase
 
         foreach ($editors as $editor) {
             foreach ([[160, 50], [120, 30], [89, 24], [80, 24], [60, 20], [40, 12], [20, 8], [10, 3], [1, 1]] as [$cols, $rows]) {
-                $lines = explode("\n", $editor->view(Theme::default(), $cols, $rows));
+                $lines = explode("\n", $editor->view(Theme::dark(), $cols, $rows));
 
                 self::assertCount($rows, $lines, "{$cols}x{$rows}");
                 foreach ($lines as $i => $line) {
@@ -95,7 +95,7 @@ final class SettingsEditorRenderTest extends TestCase
     public function testTheDetailNamesTheLockingVariableBesideOrBelowTheList(): void
     {
         foreach ([[140, 30], [80, 30]] as [$cols, $rows]) {
-            $plain = Ansi::strip(SettingsEditor::open(self::sources())->view(Theme::default(), $cols, $rows));
+            $plain = Ansi::strip(SettingsEditor::open(self::sources())->view(Theme::dark(), $cols, $rows));
 
             self::assertStringContainsString('env (locked)', $plain, "{$cols}x{$rows}");
             self::assertStringContainsString('locked   set by CANDY_CODE_PROVIDER', $plain, "{$cols}x{$rows}");
@@ -120,10 +120,10 @@ final class SettingsEditorRenderTest extends TestCase
     public function testEveryZoneSitsOnWhatItNames(): void
     {
         $editor = SettingsEditor::open(self::sources());
-        $lines = explode("\n", Ansi::strip($editor->view(Theme::default(), 120, 30)));
+        $lines = explode("\n", Ansi::strip($editor->view(Theme::dark(), 120, 30)));
 
         $tabs = 0;
-        foreach ($editor->zones(Theme::default(), 120, 30) as [$row, $from, $to, $id]) {
+        foreach ($editor->zones(Theme::dark(), 120, 30) as [$row, $from, $to, $id]) {
             self::assertStringStartsWith(SettingsEditor::ZONE_PREFIX, $id);
             $cells = trim(mb_substr($lines[$row], $from, $to - $from));
 

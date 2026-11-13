@@ -137,7 +137,7 @@ final class MessagePickerTest extends TestCase
     public function testHostilePromptIsInertEvenWithoutUpstreamSanitising(): void
     {
         $hostile = "ok\e]0;pwn\x07\e[31mred\x00\x7f\u{E000}zone\u{E001}tail";
-        $rendered = MessagePicker::open([$hostile])->view(80, 24, Theme::default());
+        $rendered = MessagePicker::open([$hostile])->view(80, 24, Theme::dark());
 
         $this->assertStringNotContainsString("\e]0;", $rendered);
         $this->assertStringNotContainsString("\e[31m", $rendered);
@@ -150,7 +150,7 @@ final class MessagePickerTest extends TestCase
     public function testViewNamesTheRowsTheirStepsAndTheEmptyState(): void
     {
         $picker = MessagePicker::open(['ship the release', 'retry the flaky test']);
-        $rendered = $picker->view(80, 24, Theme::default());
+        $rendered = $picker->view(80, 24, Theme::dark());
 
         $this->assertStringContainsString('Rewind to a message', $rendered);
         $this->assertStringContainsString('ship the release', $rendered);
@@ -158,7 +158,7 @@ final class MessagePickerTest extends TestCase
         $this->assertStringContainsString('1', $rendered);
         $this->assertStringContainsString('2', $rendered);
 
-        $empty = MessagePicker::open([])->view(80, 24, Theme::default());
+        $empty = MessagePicker::open([])->view(80, 24, Theme::dark());
         $this->assertStringContainsString('(no checkpoints yet)', $empty);
     }
 
@@ -167,7 +167,7 @@ final class MessagePickerTest extends TestCase
         $picker = MessagePicker::open(['a prompt long enough to need clipping at the narrow end of the sweep ' . \str_repeat('x', 80)]);
 
         foreach ([40, 60, 80, 120] as $cols) {
-            $rendered = $picker->view($cols, 24, Theme::default());
+            $rendered = $picker->view($cols, 24, Theme::dark());
             foreach (\explode("\n", $rendered) as $line) {
                 $plain = (string) \preg_replace('/\x1b\[[0-9;]*m/', '', $line);
                 $this->assertLessThanOrEqual($cols, Width::string($plain), 'no line may exceed its terminal at ' . $cols . ' columns');

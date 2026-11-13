@@ -36,7 +36,7 @@ final class SessionsPaneTest extends TestCase
 {
     public function testPlusRowIsBodyRowZeroAcrossEveryShape(): void
     {
-        $theme = Theme::default();
+        $theme = Theme::dark();
         $plus = Lang::t('tui.sessions.new');
 
         $shapes = [
@@ -56,7 +56,7 @@ final class SessionsPaneTest extends TestCase
 
     public function testRowKeysAlignOneForOneWithThePaintedRows(): void
     {
-        $theme = Theme::default();
+        $theme = Theme::dark();
         $list = $this->stackedList(3, 'w2')
             ->update('w2', WindowEntry::session(
                 WindowRef::session('w2', 'second window'),
@@ -87,7 +87,7 @@ final class SessionsPaneTest extends TestCase
 
     public function testHostileKeysPaintTheirRowWithoutAZoneKey(): void
     {
-        $theme = Theme::default();
+        $theme = Theme::dark();
         $list = WindowList::empty()->add(WindowEntry::session(
             WindowRef::session('bad~key', 'hostile identity'),
             WindowAttention::Idle
@@ -103,7 +103,7 @@ final class SessionsPaneTest extends TestCase
 
     public function testNoRowOverPaysTheBoxAtAnySize(): void
     {
-        $theme = Theme::default();
+        $theme = Theme::dark();
         $list = $this->stackedList(6, 'w4')
             ->update('w4', WindowEntry::session(
                 WindowRef::session('w4', 'a window with an absurdly long label for a sidebar'),
@@ -131,7 +131,7 @@ final class SessionsPaneTest extends TestCase
 
     public function testAgentRowsNestDirectlyUnderTheirSession(): void
     {
-        $theme = Theme::default();
+        $theme = Theme::dark();
         $list = WindowList::empty()->add(WindowEntry::session(
             WindowRef::session('host', 'the host'),
             WindowAttention::Idle,
@@ -152,7 +152,7 @@ final class SessionsPaneTest extends TestCase
 
     public function testLongListKeepsTheFocusedRowInView(): void
     {
-        $theme = Theme::default();
+        $theme = Theme::dark();
         $list = $this->stackedList(12, 'w12');
 
         // 6 rows leaves a window of 3 for sessions (2 chrome, 1 pinned `＋`).
@@ -170,7 +170,7 @@ final class SessionsPaneTest extends TestCase
 
     public function testFocusHighlightRidesTheFocusedRowOnly(): void
     {
-        $theme = Theme::default();
+        $theme = Theme::dark();
         $list = $this->stackedList(2, 'w1');
         $needle = static fn (string $name): string => Style::new()
             ->foreground($theme->shellPrimary)->bold()->underline()->render(' ' . $name);
@@ -186,7 +186,7 @@ final class SessionsPaneTest extends TestCase
 
     public function testAgentNamesPaintInTheirPresetColour(): void
     {
-        $theme = Theme::default();
+        $theme = Theme::dark();
         $list = WindowList::empty()->add(WindowEntry::session(
             WindowRef::session('host', 'the host'),
             WindowAttention::Idle,
@@ -220,7 +220,7 @@ final class SessionsPaneTest extends TestCase
 
     public function testBadgeAndSummaryTailPaintOnTheirSessionRow(): void
     {
-        $theme = Theme::default();
+        $theme = Theme::dark();
         $list = WindowList::empty()->add(WindowEntry::session(
             WindowRef::session('w2', 'step 4'),
             WindowAttention::Working,
@@ -240,7 +240,7 @@ final class SessionsPaneTest extends TestCase
 
     public function testEmptyListStillOffersTheNewSessionRow(): void
     {
-        $theme = Theme::default();
+        $theme = Theme::dark();
         [$block, $keys, $maxOffset] = SessionsPane::layout(WindowList::empty(), $theme, 40, 6);
 
         self::assertSame([SessionsPane::KEY_NEW], $keys);

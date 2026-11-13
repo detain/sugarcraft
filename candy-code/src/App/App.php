@@ -3101,14 +3101,14 @@ final class App implements Model
      * not update — the shell would keep painting the old palette around a
      * re-themed transcript.
      *
-     * {@see Theme::default()} covers the chat-less App: the shell is
+     * {@see Theme::dark()} covers the chat-less App: the shell is
      * constructible without a hosted chat (every `App::new()` in the suite, and
      * the split/agent-pane paths), and in that shape nothing has recorded a
      * theme preference at all.
      */
     public function theme(): Theme
     {
-        return $this->chat?->theme() ?? Theme::default();
+        return $this->chat?->theme() ?? Theme::dark();
     }
 
     /**

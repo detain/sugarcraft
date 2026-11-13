@@ -28,7 +28,7 @@ final class SettingsEditorNarrowTest extends TestCase
 
     private static function plain(SettingsEditor $editor, int $cols = 120, int $rows = 30): string
     {
-        return Ansi::strip($editor->view(Theme::default(), $cols, $rows));
+        return Ansi::strip($editor->view(Theme::dark(), $cols, $rows));
     }
 
     /** @return list<array{0: int, 1: int}> sizes on both sides of each threshold */
@@ -101,7 +101,7 @@ final class SettingsEditorNarrowTest extends TestCase
         foreach ($states as $name => $editor) {
             self::assertNotNull($editor, $name);
             foreach ([...self::singleColumnSizes(), [20, 8], [21, 8], [69, 17]] as [$cols, $rows]) {
-                $lines = explode("\n", $editor->view(Theme::default(), $cols, $rows));
+                $lines = explode("\n", $editor->view(Theme::dark(), $cols, $rows));
 
                 self::assertCount($rows, $lines, "{$name} at {$cols}x{$rows}");
                 foreach ($lines as $i => $line) {
@@ -127,7 +127,7 @@ final class SettingsEditorNarrowTest extends TestCase
     {
         $editor = SettingsEditor::open(self::sources());
         $rowZones = static fn (SettingsEditor $e, int $cols, int $rows): array => array_filter(
-            $e->zones(Theme::default(), $cols, $rows),
+            $e->zones(Theme::dark(), $cols, $rows),
             static fn (array $z): bool => str_starts_with($z[3], SettingsEditor::ROW_ZONE),
         );
 
@@ -141,7 +141,7 @@ final class SettingsEditorNarrowTest extends TestCase
     public function testTheFooterKeepsCloseWhenItCannotFitEveryHint(): void
     {
         $footer = static function (SettingsEditor $e, int $cols, int $rows): string {
-            $lines = explode("\n", Ansi::strip($e->view(Theme::default(), $cols, $rows)));
+            $lines = explode("\n", Ansi::strip($e->view(Theme::dark(), $cols, $rows)));
 
             return trim($lines[$rows - 2], " │");
         };

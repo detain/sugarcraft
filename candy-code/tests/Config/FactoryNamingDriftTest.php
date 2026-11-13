@@ -12,14 +12,12 @@ use PHPUnit\Framework\TestCase;
  *
  * The census is roster-driven in both directions: an allowlisted seat that no
  * longer exists is a stale row, and a banned seat that is not allowlisted is a
- * new violation. STILL_BANNED lists the seats whose own steps (S-L08 Theme,
- * S-P05 providers, ...) have not landed; delete a row when its rename ships.
+ * new violation. STILL_BANNED lists the seats whose own steps (S-P05 providers, ...) have not landed; delete a row when its rename ships.
  */
 final class FactoryNamingDriftTest extends TestCase
 {
     /** Seats still carrying a banned name, pending their own rename steps. */
     private const STILL_BANNED = [
-        'Theme.php::default',
         'MCP/McpAuthStore.php::create',
         'LSP/LspExchangeLock.php::create',
     ];

@@ -283,7 +283,7 @@ final class CompactionHidesNotDeletesTest extends TestCase
     {
         [$next] = self::chat(null, self::history())->update(new KeyMsg(KeyType::Enter, ''));
 
-        $theme = Theme::default();
+        $theme = Theme::dark();
         $painted = $this->renderHistory($next->history, $theme, 60);
         $plain = Ansi::strip($painted);
 
@@ -311,7 +311,7 @@ final class CompactionHidesNotDeletesTest extends TestCase
 
     public function testATranscriptWithNoCompactionPaintsNoBoundaryAndNoDimLabels(): void
     {
-        $theme = Theme::default();
+        $theme = Theme::dark();
         $painted = $this->renderHistory(self::history(), $theme, 60);
 
         $this->assertStringNotContainsString('context compacted', Ansi::strip($painted));

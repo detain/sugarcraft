@@ -19,7 +19,7 @@ final class AgentColorTest extends TestCase
 {
     public function testWordNamesResolveToThemeTokens(): void
     {
-        $theme = Theme::default();
+        $theme = Theme::dark();
         $expected = [
             'red' => $theme->shellError,
             'blue' => $theme->shellInfo,
@@ -37,7 +37,7 @@ final class AgentColorTest extends TestCase
 
     public function testResolutionIsCaseInsensitiveAndVocabularyIsWhatItClaims(): void
     {
-        $theme = Theme::default();
+        $theme = Theme::dark();
         self::assertSame(AgentColor::resolve('red', $theme)?->toHex(), AgentColor::resolve('RED', $theme)?->toHex());
         self::assertSame(AgentColor::resolve('red', $theme)?->toHex(), AgentColor::resolve(' Red ', $theme)?->toHex());
 
@@ -50,7 +50,7 @@ final class AgentColorTest extends TestCase
 
     public function testGarbageAnswersNull(): void
     {
-        $theme = Theme::default();
+        $theme = Theme::dark();
         foreach ([null, '', '   ', 'mauve', 'red;', '#ff00f', '#gg0000', '#ff00', 'rgb(1,2,3)', 'red red'] as $hostile) {
             self::assertNull(AgentColor::resolve($hostile, $theme), 'untrusted colour text must never paint: ' . var_export($hostile, true));
         }
@@ -58,7 +58,7 @@ final class AgentColorTest extends TestCase
 
     public function testLegibleHexPassesAndLowContrastHexIsRefused(): void
     {
-        $theme = Theme::default();
+        $theme = Theme::dark();
 
         // Deterministic from the shipped theme: near-black clears the floor
         // against the foreground the chip name competes with...
@@ -77,7 +77,7 @@ final class AgentColorTest extends TestCase
 
     public function testAcceptedHexIsNormalizedToLowercase(): void
     {
-        $theme = Theme::default();
+        $theme = Theme::dark();
         self::assertSame('#000000', AgentColor::resolve('#000000', $theme)?->toHex());
 
         // 3-digit shorthand is NOT accepted: the kit's contract is the full

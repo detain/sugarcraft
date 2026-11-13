@@ -86,7 +86,7 @@ final class EllipsisPolicyTest extends TestCase
 
         $render = new \ReflectionMethod(Renderer::class, 'compressedSectionRow');
 
-        return (string) preg_replace('/(?:\e\[[0-9;]*m)/', '', (string) $render->invoke(null, $block, Theme::default(), $width));
+        return (string) preg_replace('/(?:\e\[[0-9;]*m)/', '', (string) $render->invoke(null, $block, Theme::dark(), $width));
     }
 
     // ---- the live image preview caption ------------------------------------
@@ -130,7 +130,7 @@ final class EllipsisPolicyTest extends TestCase
         return rtrim((string) preg_replace('/(?:\e\[[0-9;]*m)/', '', (string) $render->invoke(
             null,
             'call_prev',
-            Theme::default(),
+            Theme::dark(),
             $width,
             new ImageLayer(),
             Mosaic::sixel(),

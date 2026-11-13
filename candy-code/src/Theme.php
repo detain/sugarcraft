@@ -224,7 +224,7 @@ final class Theme
                 );
             }
 
-            return self::default();
+            return self::dark();
         }
 
         $file = ThemeFile::load($stem);
@@ -243,7 +243,7 @@ final class Theme
                 ]));
             }
 
-            return self::default();
+            return self::dark();
         }
 
         if (!isset(self::$warned['file|' . $file->name])) {
@@ -763,7 +763,13 @@ final class Theme
         return self::extreme($colour, self::towardsWhite($background));
     }
 
-    public static function default(): self
+    /**
+     * The house default palette: the shipped `dark` theme. Named for the
+     * palette rather than `default()` because `::new()` is the factory root
+     * and `::default()` is a banned name; mirrors the descriptive-name spelling
+     * of sugar-style's `Theme::ansi()`.
+     */
+    public static function dark(): self
     {
         return self::byName('dark');
     }

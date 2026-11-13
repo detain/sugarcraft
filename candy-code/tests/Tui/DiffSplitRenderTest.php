@@ -147,7 +147,7 @@ final class DiffSplitRenderTest extends TestCase
 
     public function testDiffBodiesCarryTokenSpansWhileTheMarkerColumnKeepsItsColor(): void
     {
-        $theme = Theme::default();
+        $theme = Theme::dark();
         $painted = self::paint(self::phpFixture(), 130);
 
         self::assertTrue(self::tokenPainted($theme, 'keyword', self::rawRow($painted, 'function greet')), 'the php keyword tints inside the split half');
@@ -162,7 +162,7 @@ final class DiffSplitRenderTest extends TestCase
     public function testTheTintRidesTheSingleColumnToo(): void
     {
         self::writeStyle('unified');
-        $theme = Theme::default();
+        $theme = Theme::dark();
         $painted = self::paint(self::phpFixture(), 100);
 
         self::assertTrue(self::tokenPainted($theme, 'keyword', self::rawRow($painted, 'function greet')));
@@ -170,7 +170,7 @@ final class DiffSplitRenderTest extends TestCase
 
     public function testLanguagelessFilesPaintExactlyTheRowStyle(): void
     {
-        $theme = Theme::default();
+        $theme = Theme::dark();
         $painted = self::paint(self::textFixture(), 130);
 
         // .txt has no highlighter language; bodies stay plain row colour even
@@ -205,7 +205,7 @@ final class DiffSplitRenderTest extends TestCase
         $method = new ReflectionMethod(Renderer::class, 'renderDiff');
         $method->setAccessible(true);
 
-        return (string) $method->invoke(null, $diff, Theme::default(), $width);
+        return (string) $method->invoke(null, $diff, Theme::dark(), $width);
     }
 
     /**

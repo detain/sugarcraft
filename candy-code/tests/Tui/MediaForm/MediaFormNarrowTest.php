@@ -42,7 +42,7 @@ final class MediaFormNarrowTest extends TestCase
         $form = $this->wideForm();
 
         for ($tab = 0; $tab < self::TAB_COUNT; $tab++) {
-            $lines = explode("\n", Ansi::strip($form->click(MediaForm::TAB_ZONE . $tab)->view(Theme::default(), 60, 24)));
+            $lines = explode("\n", Ansi::strip($form->click(MediaForm::TAB_ZONE . $tab)->view(Theme::dark(), 60, 24)));
             $this->assertCount(24, $lines, "frame height at tab {$tab}");
 
             foreach ($lines as $i => $line) {
@@ -59,7 +59,7 @@ final class MediaFormNarrowTest extends TestCase
     {
         $this->assertNarrowGolden(
             'extra-60x24.txt',
-            Ansi::strip($this->wideForm()->click(MediaForm::TAB_ZONE . '2')->view(Theme::default(), 60, 24)),
+            Ansi::strip($this->wideForm()->click(MediaForm::TAB_ZONE . '2')->view(Theme::dark(), 60, 24)),
         );
     }
 
@@ -71,7 +71,7 @@ final class MediaFormNarrowTest extends TestCase
         $frame = Ansi::strip(
             MediaForm::fromSections($sections, MediaRequest::new())
                 ->click(MediaForm::TAB_ZONE . '3')
-                ->view(Theme::default(), 60, 24),
+                ->view(Theme::dark(), 60, 24),
         );
 
         $this->assertNarrowGolden('hires-open-60x24.txt', $frame);
@@ -85,7 +85,7 @@ final class MediaFormNarrowTest extends TestCase
         // one quiet note row — the attach row leads and the §2.6 lattice rows
         // follow; W4.3 added the mask attach row behind the sources. The gate
         // sentence must NOT appear here anymore — nowhere in production.
-        $frame = Ansi::strip($this->wideForm()->click(MediaForm::TAB_ZONE . '5')->view(Theme::default(), 60, 24));
+        $frame = Ansi::strip($this->wideForm()->click(MediaForm::TAB_ZONE . '5')->view(Theme::dark(), 60, 24));
 
         $this->assertNarrowGolden('image-open-60x24.txt', $frame);
         $this->assertStringContainsString(Lang::t(GenFormKeys::IMAGE_SOURCE), $frame);

@@ -175,6 +175,6 @@ final class RunningToolTailTest extends TestCase
     {
         $method = new \ReflectionMethod(Renderer::class, 'tailLines');
 
-        return (string) $method->invoke(null, $callId, Theme::default(), $width);
+        return (string) $method->invoke(null, $callId, Theme::dark(), $width);
     }
 }

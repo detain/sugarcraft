@@ -166,13 +166,13 @@ final class ImageSectionGateTest extends TestCase
         $this->assertStringNotContainsString('arrive in a later build', $frame, 'the gate sentence left the default pane with W4.3');
 
         $inpaintTab = Ansi::strip(
-            MediaForm::open()->click(MediaForm::TAB_ZONE . '6')->view(Theme::default(), 100, 40),
+            MediaForm::open()->click(MediaForm::TAB_ZONE . '6')->view(Theme::dark(), 100, 40),
         );
         $this->assertStringContainsString('Mask blur', $inpaintTab, 'the inpaint tab is its row lattice, not the note row');
         $this->assertStringNotContainsString('arrive in a later build', $inpaintTab);
 
         $imageTab = Ansi::strip(
-            MediaForm::open()->click(MediaForm::TAB_ZONE . '5')->view(Theme::default(), 100, 40),
+            MediaForm::open()->click(MediaForm::TAB_ZONE . '5')->view(Theme::dark(), 100, 40),
         );
         $this->assertStringContainsString('Attach mask', $imageTab, 'the W4.3 mask ingress row leads behind the source rows');
         $this->assertStringNotContainsString('arrive in a later build', $imageTab);
@@ -309,6 +309,6 @@ final class ImageSectionGateTest extends TestCase
 
     private function strippedFrame(MediaForm $form): string
     {
-        return Ansi::strip($form->view(Theme::default(), 100, 40));
+        return Ansi::strip($form->view(Theme::dark(), 100, 40));
     }
 }

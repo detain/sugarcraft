@@ -331,7 +331,7 @@ final class MediaFormFieldsTest extends TestCase
     {
         [$form] = MediaForm::open(MediaRequest::new())->update(new KeyMsg(KeyType::Right));
 
-        $this->assertGolden('params-100x40.txt', self::plain($form->view(Theme::default(), 100, 40)));
+        $this->assertGolden('params-100x40.txt', self::plain($form->view(Theme::dark(), 100, 40)));
     }
 
     // ---- helpers ----------------------------------------------------------------------

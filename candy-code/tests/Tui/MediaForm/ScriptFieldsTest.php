@@ -307,7 +307,7 @@ final class ScriptFieldsTest extends TestCase
 
     public function testTheScriptsTabRidesTheOpenFormStrip(): void
     {
-        $frame = Ansi::strip(MediaForm::open()->view(Theme::default(), 100, 40));
+        $frame = Ansi::strip(MediaForm::open()->view(Theme::dark(), 100, 40));
 
         $this->assertStringContainsString(Lang::t(GenFormKeys::SECTION_SCRIPTS), $frame);
     }
@@ -320,7 +320,7 @@ final class ScriptFieldsTest extends TestCase
         $frame = Ansi::strip(
             MediaForm::fromSections([$section], MediaRequest::new())
                 ->click(MediaForm::TAB_ZONE . '0')
-                ->view(Theme::default(), 80, 24),
+                ->view(Theme::dark(), 80, 24),
         );
 
         $this->assertScriptsGolden('scripts-alwayson-open-80x24.txt', $frame);

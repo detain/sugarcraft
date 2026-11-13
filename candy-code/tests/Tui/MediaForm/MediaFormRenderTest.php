@@ -27,7 +27,7 @@ final class MediaFormRenderTest extends TestCase
 
     public function testTheInitialFrameAt100x40MatchesTheGolden(): void
     {
-        $this->assertGolden('form-100x40.txt', self::plain($this->form()->view(Theme::default(), 100, 40)));
+        $this->assertGolden('form-100x40.txt', self::plain($this->form()->view(Theme::dark(), 100, 40)));
     }
 
     public function testNoRawLangKeyLeaksIntoAFrame(): void
@@ -38,10 +38,10 @@ final class MediaFormRenderTest extends TestCase
         // this reddens on the spot instead of shipping a frame of dotted
         // breadcrumbs. Covers the initial frame and a seeded one.
         $frames = [
-            self::plain($this->form()->view(Theme::default(), 100, 40)),
+            self::plain($this->form()->view(Theme::dark(), 100, 40)),
             self::plain(MediaForm::open(
                 MediaRequest::new()->fromArray(['prompt' => 'a cat', 'steps' => 21]),
-            )->view(Theme::default(), 100, 40)),
+            )->view(Theme::dark(), 100, 40)),
         ];
 
         foreach ($frames as $frame) {
@@ -54,7 +54,7 @@ final class MediaFormRenderTest extends TestCase
         // W3.4 moved the dials onto their own tab: the Prompt frame stays
         // text-only, and stepping right reveals the seeded numbers.
         $frame = self::plain($this->form()->view(
-            Theme::default(),
+            Theme::dark(),
             100,
             40,
         ));
@@ -63,11 +63,11 @@ final class MediaFormRenderTest extends TestCase
         [$seeded] = MediaForm::open(
             MediaRequest::new()->fromArray(['prompt' => 'a cat', 'steps' => 21]),
         )->update(new KeyMsg(KeyType::Right));
-        $params = self::plain($seeded->view(Theme::default(), 100, 40));
+        $params = self::plain($seeded->view(Theme::dark(), 100, 40));
         $this->assertStringContainsString('21', $params);
 
         [$promptTab] = $seeded->update(new KeyMsg(KeyType::Left));
-        $this->assertStringContainsString('a cat', self::plain($promptTab->view(Theme::default(), 100, 40)));
+        $this->assertStringContainsString('a cat', self::plain($promptTab->view(Theme::dark(), 100, 40)));
     }
 
     public function testNarrowFramesKeepEveryRowWithinTheColumnBudget(): void
@@ -76,7 +76,7 @@ final class MediaFormRenderTest extends TestCase
         // already load-bearing: no row ever overflows the band, and the
         // frame is exactly `rows` tall.
         foreach ([60, 80] as $cols) {
-            $lines = explode("\n", Ansi::strip($this->form()->view(Theme::default(), $cols, 20)));
+            $lines = explode("\n", Ansi::strip($this->form()->view(Theme::dark(), $cols, 20)));
             $this->assertCount(20, $lines, "frame at {$cols} columns");
 
             foreach ($lines as $i => $line) {

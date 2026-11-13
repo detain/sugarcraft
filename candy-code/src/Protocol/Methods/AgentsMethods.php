@@ -102,7 +102,7 @@ final class AgentsMethods
     private static function list(CallContext $call, Params $params): array
     {
         $agents = $call->server->hub()->workspace()->agentManager?->all() ?? [];
-        $theme = Theme::default();
+        $theme = Theme::dark();
 
         return ['items' => \array_values(\array_map(static function (Agent $agent) use ($theme): array {
             $item = [

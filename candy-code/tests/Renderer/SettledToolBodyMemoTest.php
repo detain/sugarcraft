@@ -75,14 +75,14 @@ final class SettledToolBodyMemoTest extends TestCase
 
     public function testTheFirstPaintFillsTheMemoExactlyOneEntry(): void
     {
-        self::paint(self::BODY_A, true, true, Theme::default());
+        self::paint(self::BODY_A, true, true, Theme::dark());
 
         self::assertCount(1, self::bodyMemo(), 'the settled body render is stored once under its ambient key');
     }
 
     public function testTheSecondPaintOfTheSameSettledBodyIsServedFromTheMemo(): void
     {
-        self::paint(self::BODY_A, true, true, Theme::default());
+        self::paint(self::BODY_A, true, true, Theme::dark());
 
         // Poison the one entry. If the repaint re-scrubbed and re-collapsed
         // the body it would paint fresh bytes and this assert would fail;
@@ -90,21 +90,21 @@ final class SettledToolBodyMemoTest extends TestCase
         $keys = array_keys(self::bodyMemo());
         self::storeBodyMemo([$keys[0] => self::SENTINEL]);
 
-        self::assertSame(self::SENTINEL, self::paint(self::BODY_A, true, true, Theme::default()));
+        self::assertSame(self::SENTINEL, self::paint(self::BODY_A, true, true, Theme::dark()));
     }
 
     public function testTheWarmRenderIsByteIdenticalToTheColdOne(): void
     {
-        $cold = self::paint(self::BODY_A, true, true, Theme::default());
+        $cold = self::paint(self::BODY_A, true, true, Theme::dark());
         self::resetBodyMemo();
-        $warm = self::paint(self::BODY_A, true, true, Theme::default());
+        $warm = self::paint(self::BODY_A, true, true, Theme::dark());
 
         self::assertSame($cold, $warm, 'the memo must serve the very bytes the walk paints');
     }
 
     public function testAnEmptyBodyIsStoredEmptyInsteadOfSkipped(): void
     {
-        self::paint('', true, true, Theme::default());
+        self::paint('', true, true, Theme::dark());
 
         // The call site's "if ($body !== '')" skip stays byte-exact: the memo
         // stores the empty answer, so the scrub of an empty settled body is
@@ -112,72 +112,72 @@ final class SettledToolBodyMemoTest extends TestCase
         $entries = self::bodyMemo();
         self::assertCount(1, $entries);
         self::assertSame('', (string) reset($entries), 'the empty body is memoized as empty');
-        self::assertSame('', self::paint('', true, true, Theme::default()));
+        self::assertSame('', self::paint('', true, true, Theme::dark()));
     }
 
     public function testABodyContentChangeStartsANewEntry(): void
     {
-        self::paint(self::BODY_A, true, true, Theme::default());
-        self::paint(self::BODY_B, true, true, Theme::default());
+        self::paint(self::BODY_A, true, true, Theme::dark());
+        self::paint(self::BODY_B, true, true, Theme::dark());
 
         self::assertCount(2, self::bodyMemo(), 'a different settled body is a different key');
     }
 
     public function testTheExpandedFlagStartsANewEntry(): void
     {
-        self::paint(self::BODY_A, true, true, Theme::default());
-        self::paint(self::BODY_A, true, false, Theme::default());
+        self::paint(self::BODY_A, true, true, Theme::dark());
+        self::paint(self::BODY_A, true, false, Theme::dark());
 
         self::assertCount(2, self::bodyMemo(), 'expanded and collapsed answers differ — the flag must bust the key');
     }
 
     public function testTheKeepCollapsedFlagStartsANewEntry(): void
     {
-        self::paint(self::BODY_A, true, false, Theme::default());
-        self::paint(self::BODY_A, false, false, Theme::default());
+        self::paint(self::BODY_A, true, false, Theme::dark());
+        self::paint(self::BODY_A, false, false, Theme::dark());
 
         self::assertCount(2, self::bodyMemo(), 'keep-whole and hidden-count arms differ — the flag must bust the key');
     }
 
     public function testAPreviewLineSettingChangeStartsANewEntry(): void
     {
-        self::paint(self::BODY_A, true, false, Theme::default());
+        self::paint(self::BODY_A, true, false, Theme::dark());
         self::writeSettings(['toolOutputPreviewLines' => 3]);
-        self::paint(self::BODY_A, true, false, Theme::default());
+        self::paint(self::BODY_A, true, false, Theme::dark());
 
         self::assertCount(2, self::bodyMemo(), 'the preview line budget is ambient state — it must bust the key');
     }
 
     public function testALocaleChangeStartsANewEntry(): void
     {
-        self::paint(self::BODY_A, true, true, Theme::default());
+        self::paint(self::BODY_A, true, true, Theme::dark());
         T::setLocale('de');
-        self::paint(self::BODY_A, true, true, Theme::default());
+        self::paint(self::BODY_A, true, true, Theme::dark());
 
         self::assertCount(2, self::bodyMemo(), 'the truncated trailer is translated — locale is ambient state');
     }
 
     public function testAThemeSwapEmptiesTheMemoAndStillPaintsIdenticalBytes(): void
     {
-        $dark = self::paint(self::overflowBody(), true, false, Theme::default());
-        self::paint(self::BODY_A, true, true, Theme::default());
+        $dark = self::paint(self::overflowBody(), true, false, Theme::dark());
+        self::paint(self::BODY_A, true, true, Theme::dark());
         self::assertCount(2, self::bodyMemo());
 
         $light = self::paint(self::overflowBody(), true, false, Theme::byName('light'));
         self::assertCount(1, self::bodyMemo(), 'a theme switch costs one cold frame: the whole memo drops');
 
-        self::assertSame($dark, self::paint(self::overflowBody(), true, false, Theme::default()), 'the dark bytes are unchanged after the reset round-trip');
+        self::assertSame($dark, self::paint(self::overflowBody(), true, false, Theme::dark()), 'the dark bytes are unchanged after the reset round-trip');
         self::assertNotSame($dark, $light, 'the overflow trailer carries theme bytes, so the light era is its own render');
     }
 
     public function testAHitMovesTheEntryToTheYoungestEndOfTheMemo(): void
     {
-        self::paint(self::BODY_A, true, true, Theme::default());
-        self::paint(self::BODY_B, true, true, Theme::default());
+        self::paint(self::BODY_A, true, true, Theme::dark());
+        self::paint(self::BODY_B, true, true, Theme::dark());
         $aKey = self::bodyMemoKeys()[0];
         $bKey = self::bodyMemoKeys()[1];
 
-        self::paint(self::BODY_A, true, true, Theme::default());
+        self::paint(self::BODY_A, true, true, Theme::dark());
         $order = array_keys(self::bodyMemo());
         self::assertSame([$bKey, $aKey], $order, 'a hit re-inserts at the youngest end');
     }
@@ -190,11 +190,11 @@ final class SettledToolBodyMemoTest extends TestCase
         // memoKeys() window the hit-order test reads. A literal label can
         // never appear among the strlen:xxh128:... keys, so only the
         // captured key makes the eviction an identity claim.
-        self::paint("settled body zero\nsecond line\n", true, true, Theme::default());
+        self::paint("settled body zero\nsecond line\n", true, true, Theme::dark());
         $f0Key = self::bodyMemoKeys()[0];
 
         for ($i = 1; $i <= $cap; $i++) {
-            self::paint("settled body {$i}\nsecond line\n", true, true, Theme::default());
+            self::paint("settled body {$i}\nsecond line\n", true, true, Theme::dark());
         }
 
         self::assertCount($cap, self::bodyMemo(), 'one store past the cap drops exactly one entry');
@@ -202,7 +202,7 @@ final class SettledToolBodyMemoTest extends TestCase
 
         // The evicted entry is cold again: repainting f0 must land it back
         // under the very same key (and push the next-oldest out in exchange).
-        self::paint("settled body zero\nsecond line\n", true, true, Theme::default());
+        self::paint("settled body zero\nsecond line\n", true, true, Theme::dark());
         self::assertCount($cap, self::bodyMemo());
         self::assertContains($f0Key, self::bodyMemoKeys(), 'the repaint of f0 re-enters the memo under its original key');
     }
@@ -250,7 +250,7 @@ final class SettledToolBodyMemoTest extends TestCase
     public function testUntrustedContentIsStoredRenderedNotRaw(): void
     {
         $hostile = "\e[31mevil\e[0m\nsafe line\n";
-        $paint = self::paint($hostile, true, true, Theme::default());
+        $paint = self::paint($hostile, true, true, Theme::dark());
 
         // The scrub runs before any memo store: neither the raw payload nor
         // an unscrubbed repeat may persist in the entry.

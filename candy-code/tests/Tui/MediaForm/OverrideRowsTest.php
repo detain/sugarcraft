@@ -340,7 +340,7 @@ final class OverrideRowsTest extends TestCase
     {
         // Nine tabs overflow a 100-column strip (it clips to 'Scripts ›'),
         // so the strip probe widens until every label fits.
-        $frame = Ansi::strip(MediaForm::open()->view(Theme::default(), 140, 40));
+        $frame = Ansi::strip(MediaForm::open()->view(Theme::dark(), 140, 40));
 
         $this->assertStringContainsString(Lang::t(GenFormKeys::SECTION_ADVANCED), $frame);
     }
@@ -351,7 +351,7 @@ final class OverrideRowsTest extends TestCase
         $frame = Ansi::strip(
             MediaForm::fromSections([$section], MediaRequest::new())
                 ->click(MediaForm::TAB_ZONE . '0')
-                ->view(Theme::default(), 80, 24),
+                ->view(Theme::dark(), 80, 24),
         );
 
         $this->assertAdvancedGolden('advanced-rows-80x24.txt', $frame);

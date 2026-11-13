@@ -62,7 +62,7 @@ final class WindowAttentionTest extends TestCase
 
     public function testColorRidesTheThemeAndNeverTheGlyph(): void
     {
-        $theme = Theme::default();
+        $theme = Theme::dark();
         self::assertSame($theme->shellError->toHex(), WindowAttention::Failed->color($theme)->toHex());
         self::assertSame($theme->shellWarning->toHex(), WindowAttention::Waiting->color($theme)->toHex());
         self::assertSame($theme->shellInfo->toHex(), WindowAttention::Unseen->color($theme)->toHex());

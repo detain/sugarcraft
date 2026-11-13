@@ -31,7 +31,7 @@ final class AgentActivityLineTest extends TestCase
             ActivityItem::toolStarted('c1', 'Grep', '"LoginController" routes/'),
         ], ['tools' => 7, 'tokensIn' => 3100, 'tokensOut' => 1000, 'costUsd' => 0.0021, 'startedAt' => self::NOW - 12]);
 
-        $line = self::plain(AgentActivityLine::render($state, 120, Theme::default(), 0, self::NOW));
+        $line = self::plain(AgentActivityLine::render($state, 120, Theme::dark(), 0, self::NOW));
 
         self::assertSame('  └ ⠋ Grep "LoginController" routes/ · 7 tools · 0:12 · 4.1K tok · $0.0021', $line);
     }
@@ -40,8 +40,8 @@ final class AgentActivityLineTest extends TestCase
     {
         $state = self::running([ActivityItem::thinking()]);
 
-        self::assertStringStartsWith('  └ ⠙ thinking…', self::plain(AgentActivityLine::render($state, 80, Theme::default(), 1, self::NOW)));
-        self::assertStringStartsWith('  └ ⠏ thinking…', self::plain(AgentActivityLine::render($state, 80, Theme::default(), 9, self::NOW)));
+        self::assertStringStartsWith('  └ ⠙ thinking…', self::plain(AgentActivityLine::render($state, 80, Theme::dark(), 1, self::NOW)));
+        self::assertStringStartsWith('  └ ⠏ thinking…', self::plain(AgentActivityLine::render($state, 80, Theme::dark(), 9, self::NOW)));
     }
 
     /**
@@ -63,7 +63,7 @@ final class AgentActivityLineTest extends TestCase
     #[DataProvider('latestItems')]
     public function testTheLatestItemIsWhatTheRunDidLast(array $items, string $expected): void
     {
-        $line = self::plain(AgentActivityLine::render(self::running($items), 120, Theme::default(), 0, self::NOW));
+        $line = self::plain(AgentActivityLine::render(self::running($items), 120, Theme::dark(), 0, self::NOW));
 
         self::assertStringStartsWith('  └ ⠋ ' . $expected, $line);
     }
@@ -84,14 +84,14 @@ final class AgentActivityLineTest extends TestCase
     {
         $state = self::finished($outcome, $error);
 
-        self::assertSame($expected, self::plain(AgentActivityLine::render($state, 120, Theme::default(), 3, self::NOW + 31)));
+        self::assertSame($expected, self::plain(AgentActivityLine::render($state, 120, Theme::dark(), 3, self::NOW + 31)));
     }
 
     public function testAKnownDurationOutranksTheFramesClock(): void
     {
         $state = self::finished(SubAgentActivity::OUTCOME_COMPLETE, null);
 
-        self::assertStringContainsString('· 1:05 ·', self::plain(AgentActivityLine::render($state, 120, Theme::default(), 0, self::NOW + 999, 65.4)));
+        self::assertStringContainsString('· 1:05 ·', self::plain(AgentActivityLine::render($state, 120, Theme::dark(), 0, self::NOW + 999, 65.4)));
     }
 
     public function testFiguresDropCostThenTokensThenToolsAsThePaneNarrows(): void
@@ -100,7 +100,7 @@ final class AgentActivityLineTest extends TestCase
             'tools' => 7, 'tokensIn' => 3100, 'tokensOut' => 1000, 'costUsd' => 0.0021, 'startedAt' => self::NOW - 12,
         ]);
 
-        $at = static fn (int $width): string => self::plain(AgentActivityLine::render($state, $width, Theme::default(), 0, self::NOW));
+        $at = static fn (int $width): string => self::plain(AgentActivityLine::render($state, $width, Theme::dark(), 0, self::NOW));
 
         self::assertStringContainsString('$0.0021', $at(120));
         self::assertStringNotContainsString('$', $at(48));
@@ -136,7 +136,7 @@ final class AgentActivityLineTest extends TestCase
         ];
 
         foreach ($states as $state) {
-            $line = AgentActivityLine::render($state, $width, Theme::default(), 4, self::NOW);
+            $line = AgentActivityLine::render($state, $width, Theme::dark(), 4, self::NOW);
             self::assertStringNotContainsString("\n", $line);
             self::assertLessThanOrEqual($width, Width::string(self::plain($line)), "at {$width} columns: " . self::plain($line));
         }
@@ -147,7 +147,7 @@ final class AgentActivityLineTest extends TestCase
         $hostile = "Read \u{E000}toolcall:x\u{E001}evil\t\x1b[31mred\x1b[0m\nsecond line\u{E002}";
         $state = self::running([ActivityItem::toolStarted('c1', "Gr\u{E000}ep", $hostile)]);
 
-        $line = AgentActivityLine::render($state, 200, Theme::default(), 0, self::NOW);
+        $line = AgentActivityLine::render($state, 200, Theme::dark(), 0, self::NOW);
         $plain = self::plain($line);
 
         self::assertSame(0, preg_match('/[\x{E000}-\x{F8FF}]/u', $line), 'no Private-Use code point (zone or image marker) survives');
@@ -159,7 +159,7 @@ final class AgentActivityLineTest extends TestCase
 
     public function testAZeroWidthPaneGetsNothing(): void
     {
-        self::assertSame('', AgentActivityLine::render(self::running([]), 0, Theme::default(), 0, self::NOW));
+        self::assertSame('', AgentActivityLine::render(self::running([]), 0, Theme::dark(), 0, self::NOW));
     }
 
     /**

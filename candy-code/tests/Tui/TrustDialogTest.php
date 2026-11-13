@@ -149,7 +149,7 @@ final class TrustDialogTest extends TestCase
 
     public function testNoFrameLineEverExceedsTheTerminalWidth(): void
     {
-        $themes = [Theme::default()];
+        $themes = [Theme::dark()];
         $dialogs = [
             TrustDialog::new('/work/acme/some/fairly/long/path/to/a/project/root', self::threeTargets(), 1234),
             TrustDialog::new('/r', TrustTarget::cases(), 9)->update(self::key('n'))->update(self::key('y')),
@@ -180,7 +180,7 @@ final class TrustDialogTest extends TestCase
     public function testTheViewCarriesTheEnabledProseAndTheFrozenRosterLine(): void
     {
         $plain = Ansi::strip(
-            TrustDialog::new('/work/app', self::threeTargets(), 7)->view(64, 12, Theme::default()),
+            TrustDialog::new('/work/app', self::threeTargets(), 7)->view(64, 12, Theme::dark()),
         );
 
         $this->assertStringContainsString('hooks run programs', $plain);
@@ -192,7 +192,7 @@ final class TrustDialogTest extends TestCase
 
     public function testTheGrantAllKeyNamesEveryLetterTheModalAnswers(): void
     {
-        $plain = Ansi::strip(TrustDialog::new('/work/app', self::threeTargets())->view(72, 10, Theme::default()));
+        $plain = Ansi::strip(TrustDialog::new('/work/app', self::threeTargets())->view(72, 10, Theme::dark()));
 
         $this->assertMatchesRegularExpression('/y grant.*a grant all.*n skip.*Esc dismiss/s', $plain);
     }
@@ -223,6 +223,6 @@ final class TrustDialogTest extends TestCase
 
 TXT);
 
-        $this->assertSame($expected, $dialog->view(64, 12, Theme::default()));
+        $this->assertSame($expected, $dialog->view(64, 12, Theme::dark()));
     }
 }

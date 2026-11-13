@@ -41,7 +41,7 @@ final class AgentColorPaintTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->theme = Theme::default();
+        $this->theme = Theme::dark();
         ShellRenderer::resetSizeCache();
     }
 

@@ -144,7 +144,7 @@ final class HistorySearchTest extends TestCase
     public function testTheOverlayRendersInsideItsGeometryAndCarriesTheRows(): void
     {
         $search = HistorySearch::open(['newest entry', 'older entry'], '', 0);
-        $rendered = $search->render(60, 16, Theme::default());
+        $rendered = $search->render(60, 16, Theme::dark());
 
         $this->assertStringContainsString('newest entry', $rendered);
         $this->assertStringContainsString('History search', $rendered);

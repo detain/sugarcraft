@@ -57,10 +57,10 @@ final class AgentStripTest extends TestCase
         $live->apply(self::started('r2', 'reviewer', 'call_2'));
         $live->apply(self::finished('r2', 'reviewer', 'call_2', SubAgentActivity::OUTCOME_FAILED));
 
-        $row = self::plain(AgentStrip::render(AgentStrip::items($live), 80, Theme::default(), 0));
+        $row = self::plain(AgentStrip::render(AgentStrip::items($live), 80, Theme::dark(), 0));
 
         $this->assertSame('agents: ⠋ explore · ✗ reviewer   (alt+↓)', $row);
-        $this->assertSame('', AgentStrip::render([], 80, Theme::default(), 0), 'no runs, no row');
+        $this->assertSame('', AgentStrip::render([], 80, Theme::dark(), 0), 'no runs, no row');
     }
 
     public function testTheRowNeverOutgrowsItsWidthAndCountsWhatItHid(): void
@@ -72,12 +72,12 @@ final class AgentStripTest extends TestCase
         $items = AgentStrip::items($live);
 
         foreach ([1, 5, 12, 20, 30, 45, 60, 80, 120, 200] as $width) {
-            $row = AgentStrip::render($items, $width, Theme::default(), 3, 'r1', true);
+            $row = AgentStrip::render($items, $width, Theme::dark(), 3, 'r1', true);
             $this->assertLessThanOrEqual($width, Width::string(self::plain($row)), "width {$width}");
         }
 
         // 55 cells hold two runs without the hint and only one with it.
-        $narrow = self::plain(AgentStrip::render($items, 55, Theme::default(), 0));
+        $narrow = self::plain(AgentStrip::render($items, 55, Theme::dark(), 0));
         $this->assertMatchesRegularExpression('/\+\d+ more$/', $narrow, 'the hint is dropped before items are');
         $this->assertStringNotContainsString('alt+↓', $narrow);
     }
@@ -90,11 +90,11 @@ final class AgentStripTest extends TestCase
         }
         $items = AgentStrip::items($live);
 
-        $row = AgentStrip::render($items, 60, Theme::default(), 0, 'r7');
+        $row = AgentStrip::render($items, 60, Theme::dark(), 0, 'r7');
 
         $this->assertStringContainsString('agent-number-7', self::plain($row), 'the focused run is on screen');
         $this->assertMatchesRegularExpression('/\e\[(?:\d+;)*7m/', $row, 'and painted reversed');
-        $this->assertStringContainsString('(←/→ · enter · c · x · esc)', self::plain(AgentStrip::render($items, 200, Theme::default(), 0, 'r1')));
+        $this->assertStringContainsString('(←/→ · enter · c · x · esc)', self::plain(AgentStrip::render($items, 200, Theme::dark(), 0, 'r1')));
     }
 
     public function testEachVisibleRunIsAClickZoneAndANameCannotForgeOne(): void
@@ -102,12 +102,12 @@ final class AgentStripTest extends TestCase
         $live = $this->registry();
         $live->apply(self::started('r1', "evil\u{E000}name", 'call_1'));
 
-        $row = AgentStrip::render(AgentStrip::items($live), 80, Theme::default(), 0, null, true);
+        $row = AgentStrip::render(AgentStrip::items($live), 80, Theme::dark(), 0, null, true);
 
         $this->assertStringContainsString('agent:r1', $row, 'the item carries its zone');
         $this->assertSame(2, substr_count($row, "\u{E000}"), 'only the zone\'s own open and close sentinels; the name\'s was stripped');
         $this->assertStringContainsString('evilname', self::plain($row));
-        $this->assertStringNotContainsString('agent:r1', AgentStrip::render(AgentStrip::items($live), 80, Theme::default(), 0), 'no zones when clicks are off');
+        $this->assertStringNotContainsString('agent:r1', AgentStrip::render(AgentStrip::items($live), 80, Theme::dark(), 0), 'no zones when clicks are off');
     }
 
     public function testTheChatPaintsTheStripAboveTheInputInsteadOfTheBlockBelowIt(): void

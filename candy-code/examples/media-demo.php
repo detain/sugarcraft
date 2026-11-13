@@ -67,7 +67,7 @@ function demoKey(\SugarCraft\Core\KeyType $type, string $rune = ''): \SugarCraft
  */
 function demoShow(string $caption, MediaForm $form): void
 {
-    demoPaint($caption . "\n" . $form->view(Theme::default(), DEMO_COLS, DEMO_FORM_ROWS));
+    demoPaint($caption . "\n" . $form->view(Theme::dark(), DEMO_COLS, DEMO_FORM_ROWS));
 }
 
 /**

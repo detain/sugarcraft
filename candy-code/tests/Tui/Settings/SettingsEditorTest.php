@@ -255,7 +255,7 @@ final class SettingsEditorTest extends TestCase
         $this->write('home/' . LayeredSettings::dir() . '/config.json', ['claudeMcpEnv' => ['TOKEN' => 'sk-very-secret']]);
 
         $editor = SettingsEditor::open($this->sources(), 'environment');
-        $frame = $editor->view(\SugarCraft\Code\Theme::default(), 140, 40);
+        $frame = $editor->view(\SugarCraft\Code\Theme::dark(), 140, 40);
 
         self::assertStringNotContainsString('sk-very-secret', $frame);
         self::assertStringContainsString('1 variable, hidden', \SugarCraft\Core\Util\Ansi::strip($frame));

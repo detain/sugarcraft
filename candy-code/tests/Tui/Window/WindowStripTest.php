@@ -30,13 +30,13 @@ final class WindowStripTest extends TestCase
 
     public function testEmptyListStillAnswersPlus(): void
     {
-        $row = $this->cells(WindowStrip::render(WindowList::empty(), Theme::default(), 80, false));
+        $row = $this->cells(WindowStrip::render(WindowList::empty(), Theme::dark(), 80, false));
         self::assertSame(WindowStrip::PLUS_PLAIN, $row);
     }
 
     public function testFullDensityPaintsNamesBadgesChipsAndCloses(): void
     {
-        $row = $this->cells(WindowStrip::render($this->crowded(5), Theme::default(), 240, false));
+        $row = $this->cells(WindowStrip::render($this->crowded(5), Theme::dark(), 240, false));
 
         self::assertStringContainsString('sess-1', $row);
         self::assertStringContainsString('@explore', $row, 'the focused session chips ride right after its tab');
@@ -48,7 +48,7 @@ final class WindowStripTest extends TestCase
     public function testWidthAndPlusAndMarkedTwinHoldAcrossTheSweep(): void
     {
         $list = $this->crowded(5);
-        $theme = Theme::default();
+        $theme = Theme::dark();
 
         for ($cols = 20; $cols <= 240; $cols += 10) {
             $plain = WindowStrip::render($list, $theme, $cols, false);
@@ -62,7 +62,7 @@ final class WindowStripTest extends TestCase
 
     public function testPlusSurvivesEvenWhenTheWholeCrowdIsRefused(): void
     {
-        $theme = Theme::default();
+        $theme = Theme::dark();
         $list = WindowList::empty();
         for ($i = 1; $i <= 30; $i++) {
             $list = $list->add(WindowEntry::session(
@@ -80,7 +80,7 @@ final class WindowStripTest extends TestCase
 
     public function testOverflowCountsTheSessionsThatDidNotFit(): void
     {
-        $theme = Theme::default();
+        $theme = Theme::dark();
         $list = $this->crowded(5);
 
         // A width tight enough to drop at least one session: placed sessions
@@ -107,7 +107,7 @@ final class WindowStripTest extends TestCase
 
     public function testIconDensityDropsNamesButKeepsGlyphsAndCloses(): void
     {
-        $theme = Theme::default();
+        $theme = Theme::dark();
         // Three long-named sessions at 20 cols: full cannot fit (names cost
         // 17 each), icon can (3 + 3*(1+1+2) = 15).
         $list = WindowList::empty()
@@ -123,7 +123,7 @@ final class WindowStripTest extends TestCase
 
     public function testTerseDensityDropsCloseMarksAndChips(): void
     {
-        $theme = Theme::default();
+        $theme = Theme::dark();
         $list = $this->crowded(6);
 
         // 20 cols with six sessions and two chips: even icon needs
@@ -137,7 +137,7 @@ final class WindowStripTest extends TestCase
 
     public function testZonesLandOnThePaintedCellsAtEveryDensity(): void
     {
-        $theme = Theme::default();
+        $theme = Theme::dark();
         $list = $this->crowded(4);
 
         foreach ([20, 24, 32, 48, 80, 160, 240] as $cols) {
@@ -165,7 +165,7 @@ final class WindowStripTest extends TestCase
 
     public function testZoneBodiesCoverTheCellsTheyName(): void
     {
-        $theme = Theme::default();
+        $theme = Theme::dark();
         $list = $this->crowded(2);
         $plain = $this->cells(WindowStrip::render($list, $theme, 240, false));
 
@@ -187,7 +187,7 @@ final class WindowStripTest extends TestCase
 
     public function testHostileKeysPaintUnmarkedAndNeverThrow(): void
     {
-        $theme = Theme::default();
+        $theme = Theme::dark();
         // A key outside sugar-mouse's zone-id charset (a space) must paint
         // its tab without a zone rather than throwing mid-frame.
         $list = WindowList::empty()
@@ -220,7 +220,7 @@ final class WindowStripTest extends TestCase
             ));
         }
 
-        $row = $this->cells(WindowStrip::render($list, Theme::default(), 240, false));
+        $row = $this->cells(WindowStrip::render($list, Theme::dark(), 240, false));
         $seen = [];
         foreach ($states as $state) {
             $glyph = $state->glyph();
@@ -232,7 +232,7 @@ final class WindowStripTest extends TestCase
 
     public function testStripSurvivesUnicodeAndWideNames(): void
     {
-        $theme = Theme::default();
+        $theme = Theme::dark();
         $list = WindowList::empty()
             ->add(WindowEntry::session(WindowRef::session('s1', "\x{4f60}\x{597d} \x{1f600} world"), WindowAttention::Waiting, 1));
 

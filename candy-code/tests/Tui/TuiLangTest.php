@@ -124,11 +124,11 @@ final class TuiLangTest extends TestCase
 
     public function testAFailedSaveIsPaintedInTheErrorColourInEveryLocale(): void
     {
-        $errorOpen = self::sgrOpen(Style::new()->foreground(Theme::default()->shellError));
+        $errorOpen = self::sgrOpen(Style::new()->foreground(Theme::dark()->shellError));
         $failed = SettingsEditor::open(self::sources())
             ->withSaved(SettingsSavedMsg::failed(SettingsTier::You, ['maxToolSteps'], 'BOOM'));
 
-        $english = $failed->view(Theme::default(), 140, 30);
+        $english = $failed->view(Theme::dark(), 140, 30);
         self::assertStringContainsString($errorOpen . 'Not saved: BOOM', $english, 'the English status line is the one it always was');
 
         $this->usePseudoLocale();
@@ -138,7 +138,7 @@ final class TuiLangTest extends TestCase
         self::assertNotSame('Not saved', $head, 'the pseudo-locale is live');
         self::assertStringContainsString(
             $errorOpen . $head . ': BOOM',
-            $failed->view(Theme::default(), 140, 30),
+            $failed->view(Theme::dark(), 140, 30),
             'the error colour hung on the English word "Not"',
         );
     }
@@ -152,7 +152,7 @@ final class TuiLangTest extends TestCase
 
         foreach ([[40, 12], [69, 20], [90, 24], [140, 30]] as [$cols, $rows]) {
             foreach ([$editor, $editor->stage('maxToolSteps', 40), $editor->withConfirm(SettingsEditor::CONFIRM_DISCARD)] as $view) {
-                $lines = explode("\n", Ansi::strip($view->view(Theme::default(), $cols, $rows)));
+                $lines = explode("\n", Ansi::strip($view->view(Theme::dark(), $cols, $rows)));
                 self::assertCount($rows, $lines, "{$cols}x{$rows}");
                 foreach ($lines as $line) {
                     self::assertSame($cols, Width::string($line), "{$cols}x{$rows}: {$line}");
@@ -180,10 +180,10 @@ final class TuiLangTest extends TestCase
         }
 
         foreach ([40, 60, 100] as $width) {
-            $english = self::widest(SessionPicker::new($rows, now: 1_704_067_200)->render($width, 12, Theme::default()));
+            $english = self::widest(SessionPicker::new($rows, now: 1_704_067_200)->render($width, 12, Theme::dark()));
 
             $this->usePseudoLocale();
-            $translated = self::widest(SessionPicker::new($rows, now: 1_704_067_200)->render($width, 12, Theme::default()));
+            $translated = self::widest(SessionPicker::new($rows, now: 1_704_067_200)->render($width, 12, Theme::dark()));
             $this->useEnglish();
 
             self::assertLessThanOrEqual($english, $translated, "picker at {$width} columns");

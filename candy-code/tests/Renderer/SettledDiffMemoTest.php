@@ -91,14 +91,14 @@ final class SettledDiffMemoTest extends TestCase
 
     public function testTheFirstPaintFillsTheMemoExactlyOneEntry(): void
     {
-        self::paint(self::DIFF_A, Theme::default(), 40);
+        self::paint(self::DIFF_A, Theme::dark(), 40);
 
         self::assertCount(1, self::memo(), 'the settled render is stored once under its ambient key');
     }
 
     public function testTheSecondPaintOfTheSameSettledDiffIsServedFromTheMemo(): void
     {
-        self::paint(self::DIFF_A, Theme::default(), 40);
+        self::paint(self::DIFF_A, Theme::dark(), 40);
 
         // Poison the one entry. If the repaint re-walked the diff it would
         // paint fresh bytes and this assert would fail; only a cache hit
@@ -106,91 +106,91 @@ final class SettledDiffMemoTest extends TestCase
         $keys = array_keys(self::memo());
         self::setMemo([$keys[0] => self::SENTINEL]);
 
-        self::assertSame(self::SENTINEL, self::paint(self::DIFF_A, Theme::default(), 40));
+        self::assertSame(self::SENTINEL, self::paint(self::DIFF_A, Theme::dark(), 40));
     }
 
     public function testTheWarmRenderIsByteIdenticalToTheColdOne(): void
     {
-        $cold = self::paint(self::DIFF_A, Theme::default(), 40);
+        $cold = self::paint(self::DIFF_A, Theme::dark(), 40);
         self::clearMemo();
-        $warm = self::paint(self::DIFF_A, Theme::default(), 40);
+        $warm = self::paint(self::DIFF_A, Theme::dark(), 40);
 
         self::assertSame($cold, $warm, 'the memo must serve the very bytes the walk paints');
     }
 
     public function testADiffContentChangeStartsANewEntry(): void
     {
-        self::paint(self::DIFF_A, Theme::default(), 40);
-        self::paint(self::DIFF_B, Theme::default(), 40);
+        self::paint(self::DIFF_A, Theme::dark(), 40);
+        self::paint(self::DIFF_B, Theme::dark(), 40);
 
         self::assertCount(2, self::memo(), 'a different settled diff is a different key');
     }
 
     public function testAWidthChangeStartsANewEntry(): void
     {
-        self::paint(self::DIFF_A, Theme::default(), 40);
-        self::paint(self::DIFF_A, Theme::default(), 62);
+        self::paint(self::DIFF_A, Theme::dark(), 40);
+        self::paint(self::DIFF_A, Theme::dark(), 62);
 
         self::assertCount(2, self::memo(), 'width is folded into the key — a resize must not serve stale rows');
     }
 
     public function testAStyleSettingChangeStartsANewEntry(): void
     {
-        self::paint(self::DIFF_A, Theme::default(), 40);
+        self::paint(self::DIFF_A, Theme::dark(), 40);
         self::writeSettings(['diffStyle' => 'split']);
-        self::paint(self::DIFF_A, Theme::default(), 40);
+        self::paint(self::DIFF_A, Theme::dark(), 40);
 
         self::assertCount(2, self::memo(), 'the split/unified setting is ambient state — it must bust the key');
     }
 
     public function testARowCapSettingChangeStartsANewEntry(): void
     {
-        self::paint(self::DIFF_A, Theme::default(), 40);
+        self::paint(self::DIFF_A, Theme::dark(), 40);
         self::writeSettings(['diffPreviewRows' => 4]);
-        self::paint(self::DIFF_A, Theme::default(), 40);
+        self::paint(self::DIFF_A, Theme::dark(), 40);
 
         self::assertCount(2, self::memo(), 'the preview row cap changes the trailer row — it must bust the key');
     }
 
     public function testAScreenReaderModeChangeStartsANewEntry(): void
     {
-        self::paint(self::DIFF_A, Theme::default(), 40);
+        self::paint(self::DIFF_A, Theme::dark(), 40);
         self::writeSettings(['screenReader' => true]);
-        self::paint(self::DIFF_A, Theme::default(), 40);
+        self::paint(self::DIFF_A, Theme::dark(), 40);
 
         self::assertCount(2, self::memo(), 'the screen-reader border glyph is ambient state — it must bust the key');
     }
 
     public function testALocaleChangeStartsANewEntry(): void
     {
-        self::paint(self::DIFF_A, Theme::default(), 40);
+        self::paint(self::DIFF_A, Theme::dark(), 40);
         T::setLocale('de');
-        self::paint(self::DIFF_A, Theme::default(), 40);
+        self::paint(self::DIFF_A, Theme::dark(), 40);
 
         self::assertCount(2, self::memo(), 'the overflow trailer is translated — locale is ambient state');
     }
 
     public function testAThemeSwapEmptiesTheMemoAndStillPaintsIdenticalBytes(): void
     {
-        $dark = self::paint(self::DIFF_A, Theme::default(), 40);
-        self::paint(self::DIFF_B, Theme::default(), 40);
+        $dark = self::paint(self::DIFF_A, Theme::dark(), 40);
+        self::paint(self::DIFF_B, Theme::dark(), 40);
         self::assertCount(2, self::memo());
 
         $light = self::paint(self::DIFF_A, Theme::byName('light'), 40);
         self::assertCount(1, self::memo(), 'a theme switch costs one cold frame: the whole memo drops');
 
-        self::assertSame($dark, self::paint(self::DIFF_A, Theme::default(), 40), 'the dark bytes are unchanged after the reset round-trip');
+        self::assertSame($dark, self::paint(self::DIFF_A, Theme::dark(), 40), 'the dark bytes are unchanged after the reset round-trip');
         self::assertNotSame($dark, $light, 'the light frame is its own render (and its own memo era)');
     }
 
     public function testAHitMovesTheEntryToTheYoungestEndOfTheMemo(): void
     {
-        self::paint(self::DIFF_A, Theme::default(), 40);
-        self::paint(self::DIFF_B, Theme::default(), 40);
+        self::paint(self::DIFF_A, Theme::dark(), 40);
+        self::paint(self::DIFF_B, Theme::dark(), 40);
         $aKey = self::memoKeys()[0];
         $bKey = self::memoKeys()[1];
 
-        self::paint(self::DIFF_A, Theme::default(), 40);
+        self::paint(self::DIFF_A, Theme::dark(), 40);
         $order = array_keys(self::memo());
         self::assertSame([$bKey, $aKey], $order, 'a hit re-inserts at the youngest end');
     }
@@ -203,11 +203,11 @@ final class SettledDiffMemoTest extends TestCase
         // memoKeys() window the hit-order test reads. A literal label can
         // never appear among the width:strlen:xxh128:... keys, so only the
         // captured key makes the eviction an identity claim.
-        self::paint("--- a/f0\n+++ b/f0\n@@ -1 +1 @@\n-x\n+y\n", Theme::default(), 40);
+        self::paint("--- a/f0\n+++ b/f0\n@@ -1 +1 @@\n-x\n+y\n", Theme::dark(), 40);
         $f0Key = self::memoKeys()[0];
 
         for ($i = 1; $i <= $cap; $i++) {
-            self::paint("--- a/f{$i}\n+++ b/f{$i}\n@@ -1 +1 @@\n-x\n+y\n", Theme::default(), 40);
+            self::paint("--- a/f{$i}\n+++ b/f{$i}\n@@ -1 +1 @@\n-x\n+y\n", Theme::dark(), 40);
         }
 
         self::assertCount($cap, self::memo(), 'one store past the cap drops exactly one entry');
@@ -215,7 +215,7 @@ final class SettledDiffMemoTest extends TestCase
 
         // The evicted entry is cold again: repainting f0 must land it back
         // under the very same key (and push the next-oldest out in exchange).
-        self::paint("--- a/f0\n+++ b/f0\n@@ -1 +1 @@\n-x\n+y\n", Theme::default(), 40);
+        self::paint("--- a/f0\n+++ b/f0\n@@ -1 +1 @@\n-x\n+y\n", Theme::dark(), 40);
         self::assertCount($cap, self::memo());
         self::assertContains($f0Key, self::memoKeys(), 'the repaint of f0 re-enters the memo under its original key');
     }
@@ -261,7 +261,7 @@ final class SettledDiffMemoTest extends TestCase
     public function testUntrustedContentIsStoredRenderedNotRaw(): void
     {
         $hostile = "--- a/x\n+++ b/x\n@@ -1 +1 @@\n-\e[31mevil\e[0m\n+safe\n";
-        $paint = self::paint($hostile, Theme::default(), 40);
+        $paint = self::paint($hostile, Theme::dark(), 40);
 
         // The per-row scrub strips the raw SGR before any memo store: neither
         // the raw payload nor an unscrubbed repeat may persist in the entry.

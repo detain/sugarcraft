@@ -212,7 +212,7 @@ final class ToolsPane
      */
     public static function hasCalls(App $a): bool
     {
-        return self::recentCalls($a, 1, Theme::default()) !== [];
+        return self::recentCalls($a, 1, Theme::dark()) !== [];
     }
 
     /**

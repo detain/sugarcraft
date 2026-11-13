@@ -195,7 +195,7 @@ final class SettingsFieldFactoryTest extends TestCase
             $editor = $editor->editKey(new KeyMsg(KeyType::Char, $char));
         }
 
-        self::assertStringContainsString('12', $editor->view(Theme::default(), 100, 20));
+        self::assertStringContainsString('12', $editor->view(Theme::dark(), 100, 20));
         $editor = $editor->commitEdit();
         self::assertNull($editor->editing);
         self::assertSame(['maxToolSteps' => 12], $editor->set);

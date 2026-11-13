@@ -174,7 +174,7 @@ final class SettingsFilesAndProfilesTest extends TestCase
         [$prompt] = $app->update(new KeyMsg(KeyType::Char, 'x'));
         self::assertSame(SettingsEditor::PROFILE_EXPORT, $prompt->settingsEditor?->profileAction());
         self::assertSame(SettingsProfile::defaultPath($this->configPath), $prompt->settingsEditor?->profilePath());
-        self::assertStringContainsString('Export a settings profile to', Ansi::strip((string) $prompt->settingsEditor?->view(Theme::default(), 100, 30)));
+        self::assertStringContainsString('Export a settings profile to', Ansi::strip((string) $prompt->settingsEditor?->view(Theme::dark(), 100, 30)));
 
         $prompt = $prompt->withSettingsEditor($prompt->settingsEditor?->withProfilePrompt(SettingsEditor::PROFILE_EXPORT, $path));
         [$exporting, $cmd] = $prompt->update(new KeyMsg(KeyType::Enter));
@@ -246,11 +246,11 @@ final class SettingsFilesAndProfilesTest extends TestCase
 
         $idle = $app->withChat(new Chat())->previewSettings()->settingsEditor;
         self::assertFalse($idle?->preview?->turnRunning);
-        self::assertStringNotContainsString('A turn is running', Ansi::strip((string) $idle?->view(Theme::default(), 120, 40)));
+        self::assertStringNotContainsString('A turn is running', Ansi::strip((string) $idle?->view(Theme::dark(), 120, 40)));
 
         $busy = $app->withChat(new Chat(inFlight: true))->previewSettings()->settingsEditor;
         self::assertTrue($busy?->preview?->turnRunning);
-        self::assertStringContainsString('A turn is running', Ansi::strip((string) $busy?->view(Theme::default(), 120, 40)));
+        self::assertStringContainsString('A turn is running', Ansi::strip((string) $busy?->view(Theme::dark(), 120, 40)));
     }
 
     private function open(): App

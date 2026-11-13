@@ -146,7 +146,7 @@ final class PermissionModalHeightTest extends TestCase
     private static function shrink(array $lines, int $budget, int $optionsStart, int $inner = self::INNER): array
     {
         return (array) (new \ReflectionMethod(Renderer::class, 'shrinkPermissionModal'))
-            ->invoke(null, $lines, $budget, $optionsStart, Theme::default(), $inner);
+            ->invoke(null, $lines, $budget, $optionsStart, Theme::dark(), $inner);
     }
 
     /**

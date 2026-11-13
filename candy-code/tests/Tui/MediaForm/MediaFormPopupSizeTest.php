@@ -66,7 +66,7 @@ final class MediaFormPopupSizeTest extends TestCase
 
     public function testTheBoxIsContentSizedAndCentredInsideTheBand(): void
     {
-        $theme = Theme::default();
+        $theme = Theme::dark();
         $form = MediaForm::open(null);
         [$boxCols, $boxRows] = $form->naturalSize($theme, 200, 47);
 
@@ -95,7 +95,7 @@ final class MediaFormPopupSizeTest extends TestCase
 
     public function testContentWiderThanTheBandTakesTheWholeBandAndTheCapBoundsWideOnes(): void
     {
-        $theme = Theme::default();
+        $theme = Theme::dark();
         $roomy = MediaForm::open(MediaRequest::new()->fromArray(['prompt' => str_repeat('p', 400)]));
 
         [$narrowCols] = $roomy->naturalSize($theme, 80, 40);
@@ -107,7 +107,7 @@ final class MediaFormPopupSizeTest extends TestCase
 
     public function testAShallowBandBoundsTheBox(): void
     {
-        [$cols, $rows] = MediaForm::open(null)->naturalSize(Theme::default(), 200, 10);
+        [$cols, $rows] = MediaForm::open(null)->naturalSize(Theme::dark(), 200, 10);
 
         self::assertLessThanOrEqual(104, $cols);
         self::assertSame(10, $rows, 'the band is the ceiling; the box never overflows it');
@@ -132,7 +132,7 @@ final class MediaFormPopupSizeTest extends TestCase
 
     public function testFormZonesLandOnPaintedCells(): void
     {
-        $theme = Theme::default();
+        $theme = Theme::dark();
         $app = $this->popupApp()->openMediaForm();
         $form = $app->mediaForm;
         self::assertNotNull($form);
@@ -188,7 +188,7 @@ final class MediaFormPopupSizeTest extends TestCase
 
     public function testTheMenuBarAndTheBoxStayTheOnlyClickTargets(): void
     {
-        $theme = Theme::default();
+        $theme = Theme::dark();
         $app = $this->popupApp()->openMediaForm();
         $view = TuiRenderer::renderView($app, 200, 50);
         $lines = explode("\n", Ansi::strip($view->body));

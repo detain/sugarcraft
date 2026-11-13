@@ -81,7 +81,7 @@ final class ThemeTest extends TestCase
 
     public function testDefaultIsDark(): void
     {
-        $this->assertSame('dark', Theme::default()->name);
+        $this->assertSame('dark', Theme::dark()->name);
     }
 
     public function testDistinctThemesHaveDistinctColors(): void

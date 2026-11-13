@@ -84,7 +84,7 @@ final class MenuCascadeTest extends TestCase
 
     public function testClosedCursorLaysOutNothing(): void
     {
-        $theme = Theme::default();
+        $theme = Theme::dark();
         $tree = $this->mediaTree();
 
         self::assertSame([], MenuCascade::layout($tree, MenuCursor::closed(), $theme, 1, 1, 80, 24));
@@ -95,7 +95,7 @@ final class MenuCascadeTest extends TestCase
         $tree = $this->mediaTree();
         $cursor = MenuCursor::open(1, $tree);
 
-        $panels = MenuCascade::layout($tree, $cursor, Theme::default(), 1, 1, 80, 24);
+        $panels = MenuCascade::layout($tree, $cursor, Theme::dark(), 1, 1, 80, 24);
         self::assertCount(1, $panels);
 
         $frame = $this->compose($panels, 80, 24);
@@ -114,7 +114,7 @@ final class MenuCascadeTest extends TestCase
         $cursor = $this->openPlaylist($tree);
         self::assertSame([5, 0], $cursor->rows);
 
-        $panels = MenuCascade::layout($tree, $cursor, Theme::default(), 1, 1, 80, 24);
+        $panels = MenuCascade::layout($tree, $cursor, Theme::dark(), 1, 1, 80, 24);
         self::assertCount(2, $panels);
 
         // The child sits on its parent's highlighted row, flush against the
@@ -134,7 +134,7 @@ final class MenuCascadeTest extends TestCase
         // Title near the right edge: the root box shifts left to fit, and
         // the child would cross cols on the right, so it flips to the
         // parent's left border.
-        $panels = MenuCascade::layout($tree, $cursor, Theme::default(), 62, 1, 80, 24);
+        $panels = MenuCascade::layout($tree, $cursor, Theme::dark(), 62, 1, 80, 24);
         self::assertCount(2, $panels);
 
         self::assertSame(60, $panels[0]->col, 'root shifted left to fit the screen');
@@ -154,7 +154,7 @@ final class MenuCascadeTest extends TestCase
 
         self::assertSame([8], $cursor->rows);
 
-        $panels = MenuCascade::layout($tree, $cursor, Theme::default(), 28, 1, 40, 12);
+        $panels = MenuCascade::layout($tree, $cursor, Theme::dark(), 28, 1, 40, 12);
         self::assertCount(1, $panels);
 
         $panel = $panels[0];
@@ -184,7 +184,7 @@ final class MenuCascadeTest extends TestCase
         self::assertSame([5], $hovered->rows, 'hover does not enter');
         self::assertTrue($hovered->expanded);
 
-        $theme = Theme::default();
+        $theme = Theme::dark();
         $preview = MenuCascade::layout($tree, $hovered, $theme, 1, 1, 80, 24);
         $entered = MenuCascade::layout($tree, $this->openPlaylist($tree), $theme, 1, 1, 80, 24);
 
@@ -203,7 +203,7 @@ final class MenuCascadeTest extends TestCase
     {
         $tree = $this->mediaTree();
         $cursor = $this->openPlaylist($tree);
-        $theme = Theme::default();
+        $theme = Theme::dark();
 
         $painted = MenuCascade::layout($tree, $cursor, $theme, 1, 1, 80, 24, false);
         $marked = MenuCascade::layout($tree, $cursor, $theme, 1, 1, 80, 24, true);
@@ -239,7 +239,7 @@ final class MenuCascadeTest extends TestCase
             ->key('right', $tree)->cursor;
         self::assertSame([0, 1, 0], $cursor->rows);
 
-        $panels = MenuCascade::layout($tree, $cursor, Theme::default(), 1, 1, 80, 24, true);
+        $panels = MenuCascade::layout($tree, $cursor, Theme::dark(), 1, 1, 80, 24, true);
         self::assertCount(3, $panels);
 
         // root row 1 (Panes) = menuitem:1 → dock row 2 = menuitem:1.2 →
@@ -258,7 +258,7 @@ final class MenuCascadeTest extends TestCase
 
         foreach ([20, 28, 40, 60, 80, 120, 160, 200] as $cols) {
             foreach ([false, true] as $marked) {
-                $panels = MenuCascade::layout($tree, $cursor, Theme::default(), 1, 1, $cols, 24, $marked);
+                $panels = MenuCascade::layout($tree, $cursor, Theme::dark(), 1, 1, $cols, 24, $marked);
                 self::assertGreaterThan(1, count($panels), 'deepest path renders at ' . $cols);
 
                 foreach ($panels as $panel) {
@@ -279,7 +279,7 @@ final class MenuCascadeTest extends TestCase
 
     public function testRowsRideTheSameTokensMenuBarDropdownLinesUses(): void
     {
-        $theme = Theme::default();
+        $theme = Theme::dark();
         $prefix = static fn (Style $style): string => explode('x', $style->render('x'))[0];
 
         $border = $prefix(Style::new()->foreground($theme->border));

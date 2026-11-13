@@ -178,7 +178,7 @@ final class AgentLabelFoldingTest extends TestCase
     {
         $manager = $this->twinRunManager();
 
-        $out = AgentSplitColumn::renderRuns(array_values($manager->liveRuns()), Theme::default(), 40, 20);
+        $out = AgentSplitColumn::renderRuns(array_values($manager->liveRuns()), Theme::dark(), 40, 20);
 
         $this->assertStringContainsString('You are … sugar-dashboard', $out);
         $this->assertStringContainsString('You are … sugar-image', $out);

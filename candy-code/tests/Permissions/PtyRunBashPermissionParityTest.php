@@ -493,14 +493,14 @@ final class PtyRunBashPermissionParityTest extends TestCase
         $rendered = implode("\n", $lines->invoke(null, new ToolCall('PtyRun', [
             'command' => 'sh',
             'steps' => [['send' => ':!bash <Enter>'], ['send' => "multi\rline \x1b[A"]],
-        ]), 60, Theme::default()));
+        ]), 60, Theme::dark()));
 
         $this->assertStringContainsString(Lang::t('tui.permission.type_steps'), $rendered);
         $this->assertStringContainsString(':!bash', $rendered, 'the decoded keystrokes must be reviewable');
         $this->assertStringContainsString('> multi', $rendered);
         $this->assertStringContainsString('^[[A', $rendered, 'a bare ESC renders in caret form, not as a raw byte');
 
-        $bashOnly = implode("\n", $lines->invoke(null, new ToolCall('Bash', ['command' => 'ls']), 60, Theme::default()));
+        $bashOnly = implode("\n", $lines->invoke(null, new ToolCall('Bash', ['command' => 'ls']), 60, Theme::dark()));
         $this->assertStringNotContainsString(Lang::t('tui.permission.type_steps'), $bashOnly);
     }
 
@@ -565,18 +565,18 @@ final class PtyRunBashPermissionParityTest extends TestCase
         ];
 
         $invoke = new ReflectionMethod(Renderer::class, 'permissionSubjectLines');
-        $collapsed = implode("\n", $invoke->invoke(null, new ToolCall('Edit', $args, 'c9'), 60, Theme::default(), $dir, false));
+        $collapsed = implode("\n", $invoke->invoke(null, new ToolCall('Edit', $args, 'c9'), 60, Theme::dark(), $dir, false));
         self::assertStringContainsString(Lang::t('tui.permission.proposed_changes'), $collapsed);
         self::assertStringContainsString('-line 5', $collapsed);
         self::assertStringContainsString('press v', $collapsed, 'the elision row names the key that lifts the cap');
 
-        $expanded = implode("\n", $invoke->invoke(null, new ToolCall('Edit', $args, 'c9'), 60, Theme::default(), $dir, true));
+        $expanded = implode("\n", $invoke->invoke(null, new ToolCall('Edit', $args, 'c9'), 60, Theme::dark(), $dir, true));
         self::assertStringNotContainsString('press v', $expanded);
 
         // ApplyPatch rides its own patch text through the same section.
         $patched = implode("\n", $invoke->invoke(null, new ToolCall('ApplyPatch', [
             'patch' => "*** Begin Patch\n*** Update File: big.txt\n@@\n-line 5\n+FIVE\n*** End Patch",
-        ], 'c10'), 60, Theme::default(), $dir, true));
+        ], 'c10'), 60, Theme::dark(), $dir, true));
         self::assertStringContainsString('-line 5', $patched);
         @unlink($dir . '/big.txt');
         @rmdir($dir);

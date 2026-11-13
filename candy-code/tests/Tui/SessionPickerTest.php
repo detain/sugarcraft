@@ -43,7 +43,7 @@ final class SessionPickerTest extends TestCase
             'gitBranch' => "br\e[1manch",
             'lastActivity' => '2024-01-01T00:00:00Z',
         ]];
-        $out = SessionPicker::new($sessions)->render(100, 20, Theme::default());
+        $out = SessionPicker::new($sessions)->render(100, 20, Theme::dark());
 
         $this->assertStringNotContainsString("\e]0;", $out);
         $this->assertStringNotContainsString("\e[2J", $out);

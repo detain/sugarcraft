@@ -34,7 +34,7 @@ final class SettingsEditorPolishTest extends TestCase
 
     private static function plain(SettingsEditor $editor, int $cols = 120, int $rows = 30): string
     {
-        return Ansi::strip($editor->view(Theme::default(), $cols, $rows));
+        return Ansi::strip($editor->view(Theme::dark(), $cols, $rows));
     }
 
     private static function key(string $key): SettingDefinition
@@ -224,7 +224,7 @@ final class SettingsEditorPolishTest extends TestCase
         self::assertSame('parallelToolCalls: (not in this file) → off  [' . self::key('parallelToolCalls')->applyMode->badge() . ']', $changes[1]);
         self::assertStringStartsWith('maxOutputTokens: (not in this file) → (removed', $changes[2]);
 
-        $plain = implode("\n", array_map(Ansi::strip(...), $preview->lines(Theme::default(), 100)));
+        $plain = implode("\n", array_map(Ansi::strip(...), $preview->lines(Theme::dark(), 100)));
         self::assertStringContainsString('maxToolSteps: 1000 → 40', $plain);
         self::assertStringNotContainsString('committed file', $plain);
     }
@@ -232,7 +232,7 @@ final class SettingsEditorPolishTest extends TestCase
     public function testASaveToTheCommittedProjectFileSaysWhoElseGetsIt(): void
     {
         $preview = SettingsSavePreview::new(SettingsTier::ProjectShared, '/repo/.candy-code/settings.json', [], ['parallelToolCalls' => false], ['parallelToolCalls' => false]);
-        $plain = implode("\n", array_map(Ansi::strip(...), $preview->lines(Theme::default(), 120)));
+        $plain = implode("\n", array_map(Ansi::strip(...), $preview->lines(Theme::dark(), 120)));
 
         self::assertStringContainsString('Save to This project (shared)', $plain);
         self::assertStringContainsString('everyone who clones this repository', $plain);

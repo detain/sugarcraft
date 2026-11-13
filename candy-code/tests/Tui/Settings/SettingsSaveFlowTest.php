@@ -63,13 +63,13 @@ final class SettingsSaveFlowTest extends TestCase
     public function testTheViewShowsStagedValuesAndTheTier(): void
     {
         $editor = SettingsEditor::open($this->sources(), 'max tool steps')->stage('maxToolSteps', 40);
-        $plain = Ansi::strip($editor->view(Theme::default(), 120, 30));
+        $plain = Ansi::strip($editor->view(Theme::dark(), 120, 30));
 
         self::assertStringContainsString('1 unsaved · You (all projects)', $plain);
         self::assertStringContainsString('• 40', $plain);
 
         $editor = $editor->withTier(SettingsTier::ProjectLocal);
-        self::assertStringContainsString('This project (local)', Ansi::strip($editor->view(Theme::default(), 120, 30)));
+        self::assertStringContainsString('This project (local)', Ansi::strip($editor->view(Theme::dark(), 120, 30)));
         self::assertSame(['maxToolSteps' => 40], $editor->set, 'switching tier keeps the edit set');
     }
 
@@ -85,7 +85,7 @@ final class SettingsSaveFlowTest extends TestCase
             ['maxToolSteps' => 40, 'parallelToolCalls' => false],
         );
 
-        $plain = array_map(Ansi::strip(...), $preview->lines(Theme::default(), 60, turnRunning: true));
+        $plain = array_map(Ansi::strip(...), $preview->lines(Theme::dark(), 60, turnRunning: true));
 
         self::assertTrue($preview->canSave());
         self::assertContains('-    "maxToolSteps": 10', $plain);
@@ -93,7 +93,7 @@ final class SettingsSaveFlowTest extends TestCase
         self::assertContains('+    "parallelToolCalls": false', $plain);
         self::assertContains('Applies: 1 live · 1 next turn', $plain);
         self::assertContains('A turn is running — it keeps the settings it began with.', $plain);
-        foreach ($preview->lines(Theme::default(), 20) as $line) {
+        foreach ($preview->lines(Theme::dark(), 20) as $line) {
             self::assertLessThanOrEqual(20, Width::string($line));
         }
     }
@@ -103,7 +103,7 @@ final class SettingsSaveFlowTest extends TestCase
         $blocked = SettingsSavePreview::blocked(SettingsTier::ProjectLocal, null, 'not trusted');
 
         self::assertFalse($blocked->canSave());
-        self::assertContains('✗ not trusted', array_map(Ansi::strip(...), $blocked->lines(Theme::default(), 60)));
+        self::assertContains('✗ not trusted', array_map(Ansi::strip(...), $blocked->lines(Theme::dark(), 60)));
     }
 
     // ── the shell's save ────────────────────────────────────────────────

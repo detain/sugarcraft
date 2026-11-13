@@ -66,7 +66,7 @@ final class ThemeFileTest extends TestCase
         Theme::resetForTesting();
 
         Theme::byName('dark');
-        $builtInSuccess = Theme::default()->shellSuccess->toHex();
+        $builtInSuccess = Theme::dark()->shellSuccess->toHex();
 
         $theme = Theme::byName('midnight');
 
@@ -88,7 +88,7 @@ final class ThemeFileTest extends TestCase
 
         $theme = Theme::byName('broken');
 
-        $this->assertSame(Theme::default()->border->toHex(), $theme->border->toHex(), 'a broken file paints as its base (dark)');
+        $this->assertSame(Theme::dark()->border->toHex(), $theme->border->toHex(), 'a broken file paints as its base (dark)');
 
         $rows = RuntimeNoticeSink::drain();
         $this->assertCount(1, $rows);
@@ -209,7 +209,7 @@ final class ThemeFileTest extends TestCase
         $theme = Theme::byName('plain');
 
         $this->assertSame('plain', $theme->name);
-        $this->assertSame(Theme::default()->border->toHex(), $theme->border->toHex());
+        $this->assertSame(Theme::dark()->border->toHex(), $theme->border->toHex());
         $this->assertSame([], RuntimeNoticeSink::drain());
     }
 

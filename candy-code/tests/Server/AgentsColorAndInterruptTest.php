@@ -66,7 +66,7 @@ final class AgentsColorAndInterruptTest extends TestCase
 
         // A vocabulary word lands as its theme token's current hex — the
         // same round-trip the strip paints — never the raw word.
-        $theme = Theme::default();
+        $theme = Theme::dark();
         self::assertSame($theme->shellError->toHex(), $byName['crimson']['color'] ?? null);
 
         // A literal hex lands lower-cased, and only because it clears the

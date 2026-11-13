@@ -1610,7 +1610,7 @@ final class PaneWidthInvariantTest extends TestCase
                 id: 'call_bound',
                 error: $error,
             )]),
-            Theme::default(),
+            Theme::dark(),
             $width,
             [],
             new ImageLayer(),

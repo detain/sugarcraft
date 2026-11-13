@@ -66,7 +66,7 @@ export const useAgentsStore = defineStore('agents', () => {
    * The catalogue's `color:` names resolved by the server to `#rrggbb`
    * (P-AGENT.c: agents.list), keyed by agent name — the same hex the TUI
    * strip paints under the default theme (the server resolves against
-   * Theme::default(), so a themed TUI may paint word-colours differently),
+   * Theme::dark(), so a themed TUI may paint word-colours differently),
    * already contrast-checked. Kept here (not in the tree fold,
    * which stays pure) so any run row can look one up by name.
    */

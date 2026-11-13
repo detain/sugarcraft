@@ -56,7 +56,7 @@ final class PruneBadgeTest extends TestCase
         $block = (string) $render->invoke(
             null,
             Message::assistant('')->withToolResults([new ToolResult(name: 'Read', result: 'done', id: $id)]),
-            Theme::default(),
+            Theme::dark(),
             $width,
             [],
             new ImageLayer(),

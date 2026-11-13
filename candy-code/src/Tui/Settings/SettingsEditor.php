@@ -1325,7 +1325,7 @@ final class SettingsEditor
         }
 
         // The line count does not depend on the width or the theme: one line per entry.
-        $last = max(0, \count($this->preview->lines(Theme::default(), 80)) - 1);
+        $last = max(0, \count($this->preview->lines(Theme::dark(), 80)) - 1);
 
         return $this->mutate([
             'preview' => $this->preview,

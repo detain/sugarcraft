@@ -283,7 +283,7 @@ final class AgentViewTest extends TestCase
         $state = $live->get('run-1');
         $this->assertNotNull($state);
 
-        $row = AgentViewHeader::render($state->name, $state, ['run-1', 'run-2'], $width, Theme::default(), 0, 1012.0, true);
+        $row = AgentViewHeader::render($state->name, $state, ['run-1', 'run-2'], $width, Theme::dark(), 0, 1012.0, true);
 
         $this->assertLessThanOrEqual($width, Width::string(self::stripZones($row)), 'never wider than the row');
         $this->assertStringNotContainsString("\u{E000}", self::stripZones(Ansi::strip($row)), 'no Private-Use code point from the name');

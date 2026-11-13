@@ -139,7 +139,7 @@ final class AgentSplitCompositorTest extends TestCase
 
         $this->assertSame(['run-core', 'run-ansi'], array_map(static fn (SubAgent $r): string => $r->id, $manager->liveRuns()));
 
-        $column = Ansi::strip(AgentSplitColumn::renderRuns($manager->liveRuns(), Theme::default(), 40, 30));
+        $column = Ansi::strip(AgentSplitColumn::renderRuns($manager->liveRuns(), Theme::dark(), 40, 30));
 
         self::assertSame(2, substr_count($column, '╭ reviewer '), 'one tile per run, not one per agent name');
         self::assertStringContainsString('core findings', $column);
@@ -163,12 +163,12 @@ final class AgentSplitCompositorTest extends TestCase
             $runs[] = $run;
         }
 
-        $column = Ansi::strip(AgentSplitColumn::renderRuns($runs, Theme::default(), 40, 30, 1));
+        $column = Ansi::strip(AgentSplitColumn::renderRuns($runs, Theme::dark(), 40, 30, 1));
         self::assertStringContainsString('↑ 1 earlier', $column);
         self::assertStringNotContainsString('one output', $column);
         self::assertStringContainsString('two output', $column);
 
-        $clamped = Ansi::strip(AgentSplitColumn::renderRuns($runs, Theme::default(), 40, 30, 99));
+        $clamped = Ansi::strip(AgentSplitColumn::renderRuns($runs, Theme::dark(), 40, 30, 99));
         self::assertStringContainsString('three output', $clamped, 'the last tile always stays on screen');
         self::assertStringContainsString('↑ 2 earlier', $clamped);
     }
@@ -484,7 +484,7 @@ final class AgentSplitCompositorTest extends TestCase
         $manager = $this->managerWithLiveAgent('reviewer', "scanning src\nfound 3 issues");
 
         foreach ([24, 30, 40, 60] as $width) {
-            $column = AgentSplitColumn::render($manager->liveOutputs(), $manager, Theme::default(), $width, 20);
+            $column = AgentSplitColumn::render($manager->liveOutputs(), $manager, Theme::dark(), $width, 20);
 
             $widest = 0;
             foreach (explode("\n", $column) as $line) {
@@ -505,7 +505,7 @@ final class AgentSplitCompositorTest extends TestCase
         $manager = $this->managerWithLiveAgent('reviewer', "a\nb\nc\nd\ne\nf");
 
         foreach ([1, 2, 3, 5, 8, 20] as $rows) {
-            $column = AgentSplitColumn::render($manager->liveOutputs(), $manager, Theme::default(), 40, $rows);
+            $column = AgentSplitColumn::render($manager->liveOutputs(), $manager, Theme::dark(), 40, $rows);
             self::assertLessThanOrEqual($rows, substr_count($column, "\n") + 1, "Column taller than {$rows} rows.");
         }
     }
@@ -521,7 +521,7 @@ final class AgentSplitCompositorTest extends TestCase
         // A peek tile of a two-line buffer is 5 rows (2 border + header + 2).
         // 8 rows holds one whole tile and cannot hold two, leaving room for
         // the summary line.
-        $column = AgentSplitColumn::render($manager->liveOutputs(), $manager, Theme::default(), 40, 8);
+        $column = AgentSplitColumn::render($manager->liveOutputs(), $manager, Theme::dark(), 40, 8);
         $plain = $this->stripped($column);
 
         self::assertStringContainsString('alpha', $plain);
@@ -532,7 +532,7 @@ final class AgentSplitCompositorTest extends TestCase
 
     public function testColumnIsEmptyWithoutLiveOutput(): void
     {
-        self::assertSame('', AgentSplitColumn::render([], null, Theme::default(), 40, 20));
+        self::assertSame('', AgentSplitColumn::render([], null, Theme::dark(), 40, 20));
     }
 
     public function testColumnStripsControlBytesAndPrivateUseSentinelsFromAgentOutput(): void
@@ -543,7 +543,7 @@ final class AgentSplitCompositorTest extends TestCase
         // sentinels both begin.
         $manager = $this->managerWithLiveAgent('reviewer', "clean\u{E000}text\rOVERWRITE\x1b[2J");
 
-        $column = AgentSplitColumn::render($manager->liveOutputs(), $manager, Theme::default(), 40, 20);
+        $column = AgentSplitColumn::render($manager->liveOutputs(), $manager, Theme::dark(), 40, 20);
         $plain = $this->stripped($column);
 
         self::assertStringNotContainsString("\u{E000}", $column);

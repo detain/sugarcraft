@@ -151,7 +151,7 @@ final class SettingsSchemaTest extends TestCase
     /** Defaults restated from a source constant must still equal it. */
     public function testDefaultsAgreeWithTheConstantsTheReadersFallBackTo(): void
     {
-        self::assertSame(Theme::default()->name, SettingsSchema::byKey('theme')?->default);
+        self::assertSame(Theme::dark()->name, SettingsSchema::byKey('theme')?->default);
         // C-TUI-4.a: enumValues is deliberately empty for `theme` — the live
         // name list (built-ins plus this machine's files) comes from
         // Theme::names()/ThemeFile and must not be baked into the schema, so
