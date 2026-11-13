@@ -281,8 +281,9 @@ $lines = implode("\n", array_map(
 $viewport = Viewport::fromContent($lines, 80, 24);
 $viewport = $viewport->showScrollbar(true);
 
-// Viewport is a plain immutable component, not a Core\Model: drive it from
-// your own Model's update() and render the view it returns.
+// Viewport implements Core\Model (init/update/view/subscriptions): run it
+// as a program root, or drive it from your own Model's update() and
+// render the view it returns.
 $viewport = $viewport->lineDown(3)->withStickyHeader(1);
 echo $viewport->view();                    // Line 01 stays pinned; the numbered body has scrolled past Line 04
 ```

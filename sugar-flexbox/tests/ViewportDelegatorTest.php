@@ -451,6 +451,35 @@ final class ViewportDelegatorTest extends TestCase
         $this->assertNull($cmd);
     }
 
+    // ---- Core\Model contract (FBX-21) -----------------------------------
+
+    public function testViewportIsARealCoreModel(): void
+    {
+        $this->assertInstanceOf(\SugarCraft\Core\Model::class, Viewport::new(20, 5));
+    }
+
+    public function testSubscriptionsForwardToTheWrappedViewport(): void
+    {
+        $vp = Viewport::fromContent("a\nb", 20, 5);
+        $this->assertNull($vp->subscriptions());
+        $this->assertSame($vp->subscriptions(), Viewport::new(20, 5)->subscriptions());
+    }
+
+    public function testUpdateKeepsTheWrapperAndItsStickyRegions(): void
+    {
+        $vp = $this->fifty()->withStickyHeader(2);
+        [$next, ] = $vp->update(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Down));
+
+        $this->assertInstanceOf(Viewport::class, $next);
+        $this->assertSame(1, $next->yOffset());
+        $this->assertSame($vp->withYOffset(1)->view(), $next->view(), 'sticky header survives update()');
+    }
+
+    public function testInitMatchesTheDelegate(): void
+    {
+        $this->assertNull(Viewport::new(20, 5)->init());
+    }
+
     private function fifty(): Viewport
     {
         return Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10);

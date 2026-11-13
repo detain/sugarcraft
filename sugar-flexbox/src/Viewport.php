@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Flexbox;
 
+use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
+use SugarCraft\Core\Subscriptions;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Forms\Scrollbar\ScrollbarState;
 use SugarCraft\Core\Concerns\Mutable;
@@ -23,7 +25,7 @@ use SugarCraft\Flexbox\Support\CellPad;
  *
  * @see \SugarCraft\Forms\Viewport\Viewport
  */
-final readonly class Viewport
+final readonly class Viewport implements Model
 {
     use Mutable;
 
@@ -154,16 +156,16 @@ final readonly class Viewport
      */
     public function isSynced(): bool { return $this->hasLinkedViewport(); }
 
-    // ---- init/update/view forwarding (NOT the Core\Model contract) -----
+    // ---- init/update/view forwarding (the Core\Model trio, FBX-21) -----
 
     /**
      * Forward to the canonical forms viewport.
      *
-     * TRUTH: this class does NOT implement
-     * {@see \SugarCraft\Core\Model} — it has no `subscriptions()`, so
-     * `instanceof Model` is false. It merely forwards the Model-shaped
-     * init/update/view trio it delegates to. Compose it from your own
-     * Model; do not hand it to a program loop as one.
+     * This class IS a {@see Model} (FBX-21): init/update/view are the
+     * Model trio, `update()` hands back the wrapper (sticky regions and
+     * link survive) rather than the bare delegate, and subscriptions()
+     * forwards to the wrapped viewport so a program loop can run it
+     * directly.
      */
     public function init(): ?\Closure
     {
@@ -177,6 +179,11 @@ final readonly class Viewport
     {
         [$inner, $cmd] = $this->inner->update($msg);
         return [$this->mutate(['inner' => $inner]), $cmd];
+    }
+
+    public function subscriptions(): ?Subscriptions
+    {
+        return $this->inner->subscriptions();
     }
 
     public function view(): string
