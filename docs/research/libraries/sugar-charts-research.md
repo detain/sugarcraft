@@ -817,9 +817,7 @@ if ($this->fill) {
 | blessed-contrib | https://github.com/yaronn/blessed-contrib |
 | ChartGo | https://github.com/aayanmtn/chartgo |
 
----
-
-## 7. Appendix: Library Feature Matrix
+## 7. Appendix: Library Feature Matrix (2026-05-13 snapshot — see §8 errata)
 
 | Feature | sugar-charts | ntcharts | ratatui | plotext | blessed-contrib |
 |---------|--------------|----------|---------|---------|-----------------|
@@ -841,3 +839,32 @@ if ($this->fill) {
 | Mark lines | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Color themes | ❌ | LipGloss | Style | Themes | 256-color |
 | Aggregation | ❌ | ❌ | ❌ | ❌ | ❌ |
+
+---
+
+## 8. Status 2026-11 — errata on the 2026-05-13 survey
+
+The sections above are preserved as written in May; this block annotates what has since shipped in
+`sugar-charts/` so a reader today does not conclude the port lacks surface it already has. Every
+flipped row cites its on-disk path.
+
+| 2026-05 claim | 2026-11 state | On-disk pointer |
+|---|---|---|
+| Braille rendering ❌ (§7, :835) | shipped — `withBraille()` arms the lib-local 2×4 dot-grid on `Chart`/`LineChart`; `withCanvas(?CellGrid)` takes external grids | `sugar-charts/src/Chart/Chart.php` (`withBraille`), `sugar-charts/src/Canvas/BrailleGrid.php` |
+| Streaming push: Sparkline only (§7, :836) | shipped across the streaming surfaces — push/pushAll on Sparkline, BarChart, LineChart, TimeSeries, Waveline, Streamline, Heatmap + add/addMany on the Aggregation trio | `sugar-charts/src/Sparkline/Sparkline.php`, `.../BarChart/BarChart.php`, `.../LineChart/LineChart.php`, `.../LineChart/TimeSeries.php`, `.../LineChart/Waveline.php`, `.../LineChart/Streamline.php`, `.../Heatmap/Heatmap.php`, `.../Aggregation/*.php` |
+| Nice axis ticks ❌ (§3 :542, §7 :838) | shipped — `NiceScale::ticks` feeds formatter-free default axes (ladder at true plot rows); `Graph::niceNumbers` is the caller-facing primitive (Heckbert antecedent — the row stays ❌ for every other library) | `sugar-charts/src/Chart/NiceScale.php`, `sugar-charts/src/Canvas/Graph.php` |
+| Area fill ❌ (§4 Immediate, §7 :839; `Area` ❌ in the §1 chart-type matrix :342) | shipped — `LineChart::withFill()` paints the run under each sample's row | `sugar-charts/src/LineChart/LineChart.php` (`withFill`) |
+| Mark lines ❌ (§4 Short Term, §7 :841) | shipped for sugar-charts (`MarkLine` value object + `LineChart::withMarkLines`, LineStyle solid/dashed/dotted) — the ❌ for the other four libraries stands | `sugar-charts/src/MarkLine.php`, `sugar-charts/src/LineStyle.php` |
+| Color themes ❌ (§4 Short Term, §7 :842) | shipped — `LineChart`/`TimeSeries` consume a sugar-style `Theme` via `withTheme()` (all ten factories) | `sugar-charts/src/LineChart/LineChart.php` (`withTheme`), `sugar-style/src/Theme.php` |
+| Aggregation ❌ (§4 Short Term, §7 :843) | shipped — BucketByTime, MovingAverage, Resample (static helpers + builders) | `sugar-charts/src/Aggregation/` |
+| Mouse zoom/pan ❌ (§7 :837) | **still open** — no hit-testing/zones/legend-clicks; pointer primitives live in sugar-mouse | `sugar-charts/src/LineChart/LineChart.php` (no BubbleZone analogue) |
+| Multi-Y-axis ❌ (§4 Medium Term, §7 :840) | **still open** — recorded as future API work | — |
+
+§4 proposal ledger: "Add `niceNumbers()` to Graph" — SHIPPED (§8 row 3). "Add sliding window to
+LineChart" — SHIPPED as its own renderer, `src/LineChart/Streamline.php`. "Add `withFill()`" —
+SHIPPED. "Add MarkLine support" — SHIPPED (`src/MarkLine.php` + LineChart render pass). "Add color
+themes" — SHIPPED (consumes sugar-style `Theme`; no lib-local `src/Theme/` was needed). "Add
+aggregation helpers" — SHIPPED at `src/Aggregation/` (not `src/Util/Aggregator.php`). "BrailleCanvas"
+— SHIPPED in substance as the lib-local braille mode; the dashboard-package `BrailleCanvas` symbol
+remains an optional embedding helper (`sugar-dashboard/`). "Multiple Y-axes" and "Interactive zoom"
+— OPEN.
