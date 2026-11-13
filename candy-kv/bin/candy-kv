@@ -204,6 +204,7 @@ function stdinOrFail(): string
 function run(Store $store, string $cmd, array $argv, string $bin): void
 {
     switch ($cmd) {
+    // Mirrors charmbracelet/skate.set
     case 'set':
         $opts = ArgParser::set($argv, 2);
         if ($opts['key'] === null || $opts['key'] === '') {
@@ -232,6 +233,7 @@ function run(Store $store, string $cmd, array $argv, string $bin): void
         $store->set($opts['key'], $value, $binary, $opts['ttl']);
         break;
 
+    // Mirrors charmbracelet/skate.get
     case 'get':
         $opts = ArgParser::get($argv, 2);
         if ($opts['key'] === null) {
@@ -286,6 +288,7 @@ function run(Store $store, string $cmd, array $argv, string $bin): void
         }
         break;
 
+    // Mirrors charmbracelet/skate.list
     case 'list':
         $opts = ArgParser::list($argv, 2);
         // The delimiter is CONTROLLED by the operator (awk -F contract), so
@@ -322,6 +325,7 @@ function run(Store $store, string $cmd, array $argv, string $bin): void
         }
         break;
 
+    // Mirrors charmbracelet/skate.delete
     case 'delete':
         $opts = ArgParser::delete($argv, 2);
         if ($opts['key'] === null) {
@@ -394,6 +398,7 @@ function run(Store $store, string $cmd, array $argv, string $bin): void
         }
         break;
 
+    // Mirrors charmbracelet/skate.list-dbs
     case 'list-dbs':
         // Takes no arguments: junk tokens must fold into the exit-2 usage
         // contract, not print a happy list around them.
@@ -403,6 +408,7 @@ function run(Store $store, string $cmd, array $argv, string $bin): void
         }
         break;
 
+    // Mirrors charmbracelet/skate.delete-db
     case 'delete-db':
         // kv-046: the thin teardown verb over Store::deleteDatabase() —
         // the library door already returns false for 'did not exist OR a
