@@ -6,6 +6,9 @@ namespace SugarCraft\Code\Tui\Components;
 
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Code\Lang;
+use SugarCraft\Style\Bar\ZoneEntry;
+use SugarCraft\Style\Bar\ZonePiece;
+use SugarCraft\Style\Bar\ZoneRow;
 use SugarCraft\Style\Style;
 use SugarCraft\Code\App\App;
 use SugarCraft\Code\Theme;
@@ -231,23 +234,34 @@ final class MenuBar
         // one a shed title belongs to no more.
         self::$effective = $folded ? MenuTree::new($roots) : null;
 
-        $output = ' ';
+        // Painting, zone wrapping and the plain-measure / marked-wrap law are
+        // sugar-style's ZoneRow (rider R14), shared with the window strip. The
+        // FIT stays above in fold(): its rule (shed titles become children of
+        // a `»` submenu, and a door that cannot fit is painted anyway) is the
+        // bar's own and is not ZoneRow's greedy collapse, so the row is built
+        // from the already-folded roots and rendered unbounded.
+        $entries = [];
         foreach ($roots as $menuIndex => $root) {
             $index = $menuIndex + 1;
-            $isActive = self::cursor()->menu === $index;
             // The palettes carry ONE yellow (`warning`), so the bar's two
             // hand-picked yellows (#fde68a title, #e0af68 amber) collapse onto
             // it; the open menu switches to `primary` instead of merely going
             // bold, because `warning` and `primary` are distinct hues in all
             // five palettes and bold alone is not a colour cue at all.
-            $color = $isActive ? $theme->shellPrimary : $theme->shellWarning;
-            $title = Style::new()->foreground($color)->bold()->render($root->label);
-            $output .= $marked
-                ? Mark::zone(self::MENU_TITLE_ZONE_PREFIX . $index, $title)
-                : $title;
-            $output .= '   ';
+            $color = self::cursor()->menu === $index ? $theme->shellPrimary : $theme->shellWarning;
+            $entries[] = ZoneEntry::of([ZonePiece::of(
+                $root->label,
+                self::MENU_TITLE_ZONE_PREFIX . $index,
+                static fn (string $plain): string => Style::new()->foreground($color)->bold()->render($plain),
+            )], $root);
         }
-        $output .= ' ';
+        $output = ZoneRow::new()
+            ->withLead(ZonePiece::of(' '))
+            ->withEntries($entries)
+            ->withSeparator('   ')
+            ->withSeparatorAfter()
+            ->withMarker(static fn (string $id, string $painted): string => Mark::zone($id, $painted))
+            ->render(null, $marked) . ' ';
 
         return $output . self::indicator($a, $theme, $marked, $cols);
     }

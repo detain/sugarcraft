@@ -9,6 +9,9 @@ use SugarCraft\Code\Theme;
 use SugarCraft\Code\Tui\Components\PaneLabel;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Mouse\Mark;
+use SugarCraft\Style\Bar\ZoneEntry;
+use SugarCraft\Style\Bar\ZonePiece;
+use SugarCraft\Style\Bar\ZoneRow;
 use SugarCraft\Style\Style;
 
 /**
@@ -92,29 +95,7 @@ final class WindowStrip
      */
     public static function render(WindowList $list, Theme $theme, int $cols, bool $marked): string
     {
-        $plan = self::plan($list, $cols);
-        if ($plan === null) {
-            return '';
-        }
-
-        [$density, $placed, $dropped, $overflowShown] = $plan;
-        $row = $marked
-            ? self::mark(self::ZONE_NEW, self::plus($theme))
-            : self::plus($theme);
-
-        foreach ($placed as [$entry, $chips]) {
-            $row .= self::SEP . self::tab($entry, $density, $theme, $list->focusedKey(), $marked);
-            foreach ($chips as $chip) {
-                $row .= self::SEP . self::chip($chip, $density, $theme, $marked);
-            }
-        }
-
-        if ($overflowShown) {
-            $row .= self::SEP . Style::new()->foreground($theme->shellMuted)
-                ->render(Lang::t('tui.window.overflow', ['count' => $dropped]));
-        }
-
-        return $row;
+        return self::row($list, $theme, $cols)->render($cols, $marked);
     }
 
     /**
@@ -125,50 +106,62 @@ final class WindowStrip
      */
     public static function zones(WindowList $list, int $cols): array
     {
-        $plan = self::plan($list, $cols);
-        if ($plan === null) {
-            return [];
-        }
-
-        [$density, $placed, $dropped, $overflowShown] = $plan;
-        $zones = [];
-        $col = 0;
-
-        $take = static function (string $id, string $plain) use (&$col, &$zones): void {
-            $width = Width::string($plain);
-            if (WindowRef::keyIsZoneable($id)) {
-                $zones[] = [0, $col, $col + $width, $id];
-            }
-            $col += $width;
-        };
-
-        $take(self::ZONE_NEW, self::PLUS_PLAIN);
-        foreach ($placed as [$entry, $chips]) {
-            $col += Width::string(self::SEP);
-            [$body, $close] = self::tabPlains($entry, $density);
-            $take(self::ZONE_SESSION_PREFIX . $entry->ref->key, $body);
-            if ($close !== null) {
-                $take(self::ZONE_SESSION_CLOSE_PREFIX . $entry->ref->key, $close);
-            }
-            foreach ($chips as $chip) {
-                $col += Width::string(self::SEP);
-                [$body, $close] = self::chipPlains($chip, $density);
-                $take(self::ZONE_AGENT_PREFIX . $chip->ref->key, $body);
-                if ($close !== null) {
-                    $take(self::ZONE_AGENT_CLOSE_PREFIX . $chip->ref->key, $close);
-                }
-            }
-        }
-        if ($overflowShown) {
-            $col += Width::string(self::SEP) + Width::string(Lang::t('tui.window.overflow', ['count' => $dropped]));
-        }
-
-        return $zones;
+        // The theme only paints; widths come from the plain text, so zones
+        // never depend on it.
+        return self::row($list, Theme::dark(), $cols)->zones($cols);
     }
 
-    private static function plus(Theme $theme): string
+    /**
+     * The row for $cols at the densest shape whose WHOLE row fits. Placement,
+     * the `‹N›` collapse, the `[+]` reserve, the plain-measure /
+     * marked-wrap law and the zone arithmetic are sugar-style's
+     * {@see ZoneRow} (rider R14); what stays here is the strip's own
+     * vocabulary: density, tab and chip shapes, zone ids, colour.
+     */
+    private static function row(WindowList $list, Theme $theme, int $cols): ZoneRow
     {
-        return Style::new()->foreground($theme->shellMuted)->render(self::PLUS_PLAIN);
+        $entries = $list->entries();
+        $focusedKey = $list->focusedKey();
+
+        $row = null;
+        foreach ([self::DENSITY_FULL, self::DENSITY_ICON, self::DENSITY_TERSE] as $density) {
+            $row = self::build($entries, $focusedKey, $density, $theme);
+            if ($row->width() <= $cols) {
+                break;
+            }
+        }
+
+        return $row;
+    }
+
+    /**
+     * @param list<WindowEntry> $entries
+     */
+    private static function build(array $entries, ?string $focusedKey, int $density, Theme $theme): ZoneRow
+    {
+        $muted = static fn (string $plain): string => Style::new()->foreground($theme->shellMuted)->render($plain);
+
+        $units = [];
+        foreach ($entries as $entry) {
+            $pieces = self::tabPieces($entry, $density, $theme, $entry->ref->key === $focusedKey);
+            if ($density !== self::DENSITY_TERSE && $entry->ref->key === $focusedKey) {
+                foreach ($entry->children as $chip) {
+                    $pieces[] = ZonePiece::of(self::SEP);
+                    array_push($pieces, ...self::chipPieces($chip, $density, $theme));
+                }
+            }
+            $units[] = ZoneEntry::of($pieces, $entry);
+        }
+
+        return ZoneRow::new()
+            ->withLead(ZonePiece::of(self::PLUS_PLAIN, self::ZONE_NEW, $muted))
+            ->withEntries($units)
+            ->withSeparator(self::SEP)
+            ->withOverflow(static fn (int $count): ZoneEntry => ZoneEntry::of([
+                ZonePiece::of(Lang::t('tui.window.overflow', ['count' => $count]), null, $muted),
+            ]))
+            ->withMarker(static fn (string $id, string $painted): string => Mark::zone($id, $painted))
+            ->withZoneGate(static fn (string $id): bool => WindowRef::keyIsZoneable($id));
     }
 
     /**
@@ -230,33 +223,6 @@ final class WindowStrip
         return [$density, $placed, $dropped, $overflowShown];
     }
 
-    /** Width of ` ‹N›` — the separator included, as both passes draw it. */
-    private static function overflowWidth(int $count): int
-    {
-        return Width::string(self::SEP) + Width::string(Lang::t('tui.window.overflow', ['count' => $count]));
-    }
-
-    /** The largest density whose complete row fits $cols. */
-    private static function densityForWidth(array $entries, ?string $focusedKey, int $cols): int
-    {
-        foreach ([self::DENSITY_FULL, self::DENSITY_ICON, self::DENSITY_TERSE] as $density) {
-            $need = Width::string(self::PLUS_PLAIN);
-            foreach ($entries as $entry) {
-                $need += Width::string(self::SEP) + self::tabWidth($entry, $density);
-                if ($density !== self::DENSITY_TERSE && $entry->ref->key === $focusedKey) {
-                    foreach ($entry->children as $chip) {
-                        $need += Width::string(self::SEP) + self::chipWidth($chip, $density);
-                    }
-                }
-            }
-            if ($need <= $cols) {
-                return $density;
-            }
-        }
-
-        return self::DENSITY_TERSE;
-    }
-
     /**
      * The tab's plain pieces: body (glyph · name · badge) and close, the
      * close null at terse density. The body carries the tab's zone, the
@@ -298,35 +264,29 @@ final class WindowStrip
         return $safe === '' ? Lang::t('tui.window.unnamed') : Width::truncate($safe, self::NAME_COLS);
     }
 
-    private static function tabWidth(WindowEntry $entry, int $density): int
+    /**
+     * The tab as zoned pieces: the body (zone `win:s:<key>`) and, below terse
+     * density, the close mark (zone `winx:s:<key>`).
+     *
+     * @return list<ZonePiece>
+     */
+    private static function tabPieces(WindowEntry $entry, int $density, Theme $theme, bool $focused): array
     {
         [$body, $close] = self::tabPlains($entry, $density);
-
-        return Width::string($body) + ($close === null ? 0 : Width::string($close));
-    }
-
-    private static function chipWidth(WindowEntry $chip, int $density): int
-    {
-        [$body, $close] = self::chipPlains($chip, $density);
-
-        return Width::string($body) + Width::string($close);
-    }
-
-    private static function tab(WindowEntry $entry, int $density, Theme $theme, ?string $focusedKey, bool $marked): string
-    {
-        [$body, $close] = self::tabPlains($entry, $density);
-        $focused = $entry->ref->key === $focusedKey;
-
-        $painted = self::paintTab($entry, $body, $density, $theme, $focused);
-        $out = $marked ? self::mark(self::ZONE_SESSION_PREFIX . $entry->ref->key, $painted) : $painted;
+        $pieces = [ZonePiece::of(
+            $body,
+            self::ZONE_SESSION_PREFIX . $entry->ref->key,
+            static fn (string $plain): string => self::paintTab($entry, $plain, $density, $theme, $focused),
+        )];
         if ($close !== null) {
-            $closePainted = Style::new()->foreground($theme->shellMuted)->render($close);
-            $out .= $marked
-                ? self::mark(self::ZONE_SESSION_CLOSE_PREFIX . $entry->ref->key, $closePainted)
-                : $closePainted;
+            $pieces[] = ZonePiece::of(
+                $close,
+                self::ZONE_SESSION_CLOSE_PREFIX . $entry->ref->key,
+                static fn (string $plain): string => Style::new()->foreground($theme->shellMuted)->render($plain),
+            );
         }
 
-        return $out;
+        return $pieces;
     }
 
     /** Body with the glyph in its attention colour, the name focused-styled, the badge muted. */
@@ -352,7 +312,13 @@ final class WindowStrip
             . Style::new()->foreground($theme->shellMuted)->render($badge);
     }
 
-    private static function chip(WindowEntry $chip, int $density, Theme $theme, bool $marked): string
+    /**
+     * The agent chip as zoned pieces: body (zone `win:a:<runId>`) and close
+     * mark (zone `winx:a:<runId>`).
+     *
+     * @return list<ZonePiece>
+     */
+    private static function chipPieces(WindowEntry $chip, int $density, Theme $theme): array
     {
         [$body, $close] = self::chipPlains($chip, $density);
 
@@ -361,24 +327,20 @@ final class WindowStrip
             ? Style::new()->foreground($resolved)
             : Style::new()->foreground($theme->shellForeground);
         $marker = Style::new()->foreground($chip->attention->color($theme));
-        $namePart = $density === self::DENSITY_ICON ? '' : substr($body, strlen(self::CHIP_PLAIN));
 
-        $painted = $marker->render(self::CHIP_PLAIN) . $nameStyle->render($namePart);
-        $out = $marked ? self::mark(self::ZONE_AGENT_PREFIX . $chip->ref->key, $painted) : $painted;
-        $closePainted = Style::new()->foreground($theme->shellMuted)->render($close);
-
-        return $out . ($marked
-            ? self::mark(self::ZONE_AGENT_CLOSE_PREFIX . $chip->ref->key, $closePainted)
-            : $closePainted);
-    }
-
-    /**
-     * Mark $id's zone around $content when the id is zoneable; otherwise
-     * paint $content unmarked, so a hostile key degrades to "not clickable"
-     * the way {@see \SugarCraft\Code\Renderer}'s zone gate promises.
-     */
-    private static function mark(string $id, string $content): string
-    {
-        return WindowRef::keyIsZoneable($id) ? Mark::zone($id, $content) : $content;
+        return [
+            ZonePiece::of(
+                $body,
+                self::ZONE_AGENT_PREFIX . $chip->ref->key,
+                static function (string $plain) use ($marker, $nameStyle): string {
+                    return $marker->render(self::CHIP_PLAIN) . $nameStyle->render(substr($plain, strlen(self::CHIP_PLAIN)));
+                },
+            ),
+            ZonePiece::of(
+                $close,
+                self::ZONE_AGENT_CLOSE_PREFIX . $chip->ref->key,
+                static fn (string $plain): string => Style::new()->foreground($theme->shellMuted)->render($plain),
+            ),
+        ];
     }
 }
