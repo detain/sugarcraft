@@ -244,8 +244,9 @@ final class ReactInputDriver implements ReadableStreamInterface
 
     /**
      * Emit buffered events in arrival order, stopping the moment the stream
-     * is closed or a listener re-pauses mid-flush (the rest stays buffered for
-     * the next resume()/handleEnd()).
+     * is closed or a listener re-pauses mid-flush (the rest stays buffered
+     * for the next resume(); a stream that ends drains them regardless of
+     * pause state — see handleEnd).
      *
      * Consumption advances a cursor instead of array_shift-ing so a listener
      * that re-pauses mid-drain can never have already-delivered events
@@ -266,6 +267,12 @@ final class ReactInputDriver implements ReadableStreamInterface
 
     /**
      * Handle the 'end' event from the underlying stream.
+     *
+     * pause() defers EMISSION, not existence: events already decoded from an
+     * in-flight chunk park in the buffer, and a stream that has ended can
+     * never be resumed — so the parked events drain here REGARDLESS of
+     * $paused, before 'end'. (They used to strand: this leg called
+     * flushBuffer(), whose pause gate silently held them back.)
      */
     private function handleEnd(): void
     {
@@ -273,8 +280,14 @@ final class ReactInputDriver implements ReadableStreamInterface
             return;
         }
 
-        // Flush any remaining events
-        $this->flushBuffer();
+        // Drain the parked events first, in arrival order, bypassing the
+        // pause gate (the docblock on flushBuffer documents that difference).
+        while ($this->bufferOffset < count($this->eventBuffer)) {
+            $event = $this->eventBuffer[$this->bufferOffset++];
+            $this->emit('data', [$event]);
+        }
+        $this->eventBuffer = [];
+        $this->bufferOffset = 0;
 
         $this->emit('end');
         $this->close();
