@@ -21,9 +21,11 @@ declare(strict_types=1);
  * refused with exit 2, because on a pipe its frames are painted into the
  * wire and any pre-typed line dispatches ssh unattended). On Enter, the
  * picker replaces the current process with `ssh` connecting to the chosen
- * entry; Esc/Ctrl-C exits 130, a broken or empty config exits 1, a bad
- * argument or a non-terminal interactive run exits 2, and a field refused
- * at dispatch time (or a failed exec) exits 3 with a sanitized stderr line.
+ * entry; Esc/Ctrl+C exits 130, a broken or empty config exits 1 — except
+ * that `--list` on a zero-endpoint config prints nothing and exits 0 — a
+ * bad argument or a non-terminal interactive run exits 2, and a field
+ * refused at dispatch time (or a failed exec) exits 3 with a sanitized
+ * stderr line.
  */
 
 use SugarCraft\Core\I18n\T;

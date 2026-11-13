@@ -101,17 +101,17 @@ candy-ssh-launcher [--config <path>] [--ssh <ssh-binary>] [--list] [-h|--help] [
 | `-v`, `--version` | Print `candy-ssh-launcher <version>` and exit `0` — reads no config, touches no terminal. |
 | `--` | End of options — remaining arguments are ignored (there are no positional arguments). |
 
-Unrecognized flags and options given without their value exit `2` and name the offending argument. Flags that take no value ignore a glued `=value` portion: `--list=x` behaves as `--list`, and `-h=junk` prints help.
+Unrecognized flags **or arguments**, and options given without their value, exit `2` and name the offending argument. Flags that take no value ignore a glued `=value` portion: `--list=x` behaves as `--list`, and `-h=junk` prints help.
 
 ### Exit codes
 
 | Code | When |
 |------|------|
 | `0` | `--help` / `-h` or `--version` / `-v` printed, or `--list` succeeded |
-| `1` | No config found, config not found/unreadable/invalid, a config with no endpoints **on the picker path** (`--list` on such a config prints nothing and exits `0`), the composer autoload being missing, or — checked except when `--list` is given — the `--ssh` path not being an executable file |
-| `2` | Unknown flag, or `--config`/`--ssh` given without a value |
-| `3` | The selected endpoint was refused at dispatch time (a guard-rejected field such as a leading-dash `proxyJump`, `options` entry, or destination) or the ssh binary could not be exec'd; stderr names the sanitized reason |
-| `130` | Quit from the picker (Esc / Ctrl-C — SIGINT restores the terminal before exiting; stdin EOF reads as cancel too, the shape of a container started without `-i`) |
+| `1` | • no config file found • config unreadable or invalid • config valid but with **no endpoints**, on the picker path (`--list` on such a config prints nothing and exits `0`) • the composer autoload is missing • `--ssh` names a path that is not an executable file — except that `--list` skips this last check |
+| `2` | Unknown flag **or argument**, or `--config`/`--ssh` given without a value |
+| `3` | The selected endpoint was refused at dispatch time (a guard-rejected field: a leading-dash `host`, `user`, `proxyJump`, `options` entry, `identityFiles` item, `flags` item, or `remoteCommand`) or the ssh binary could not be exec'd; stderr names the sanitized reason |
+| `130` | Quit from the picker (Esc / Ctrl+C — SIGINT restores the terminal before exiting; stdin EOF at the picker reads as quit too, the typical cause being a terminal that died, while a container started without `-i` never reaches the picker — the exit-`2` non-TTY gate answers it) |
 
 ### Finding your config
 
@@ -121,7 +121,7 @@ Unrecognized flags and options given without their value exit `2` and name the o
 2. `wishlist.yml` / `wishlist.yaml` / `wishlist.json` in the **current directory** (first that exists) <!-- @rename-keep -->
 3. `~/.config/wishlist.yml` / `.yaml` / `.json` (only when `$HOME` is set; again first that exists)
 
-So a config in the directory you launch from takes precedence over your home config. (The `wishlist.{yml,yaml,json}` file names predate the product rename and are kept for config-file compatibility.) Hosts are managed by **editing that file** — the launcher never rewrites your config. Unfiltered, the picker lists endpoints in exactly the order they appear in the file; typing narrows and re-ranks by match score. Navigation is always the arrows, Home/End and PgUp/PgDn; `j` and `k` are query letters like any other, so filtering for `jumpbox` never scrolls the list instead of typing it.
+So a config in the directory you launch from takes precedence over your home config. (The `wishlist.{yml,yaml,json}` file names predate the product rename and are kept for config-file compatibility.) Hosts are managed by **editing that file** — the launcher never rewrites your config. List ordering and navigation live under [Keybindings](#keybindings).
 
 ## Config format
 
@@ -183,9 +183,11 @@ Limits of the embedded YAML reader: flat entries only, and a nested list is writ
 | Home / End | Jump to the first / last match                |
 | PgUp / PgDn | Scroll one page through the matches           |
 | Enter     | Connect to highlighted endpoint |
-| Esc / ^C  | Quit without connecting (exit 130; on a real terminal ^C raises SIGINT, which the picker traps to restore the terminal first) |
+| Esc / Ctrl+C | Quit without connecting (exit 130; on a real terminal Ctrl+C raises SIGINT, which the picker traps to restore the terminal first) |
 | (typing)  | Type to filter — every letter, `j`/`k` included, joins the query; Backspace deletes one filter codepoint (a compound emoji or flag-emoji such as 🇺🇸 may need two presses) |
 | (paste)   | Pasted text goes to the filter, newlines and all — a pasted Enter never connects (bracketed paste, with a same-batch fallback for older terminals) |
+
+Unfiltered, the picker lists endpoints in exactly the order they appear in the file; typing narrows and re-ranks by match score. Navigation is always the arrows, Home/End and PgUp/PgDn; `j` and `k` are query letters like any other, so filtering for `jumpbox` never scrolls the list instead of typing it.
 
 Arrow keys arrive as an `ESC [ A`-style byte burst; the decoder waits 150 ms for follow-on bytes so a burst fragmented by latency (tmux under load, a WAN hop) still reads as one keypress. Set `ESCDELAY` (milliseconds) to tune that window.
 
@@ -232,7 +234,7 @@ Import surprises worth knowing: keywords outside the table above are dropped sil
 
 **Your config file is trusted input** — exactly like `~/.ssh/config` itself. Whatever a config declares, the launcher passes to ssh: `options:` entries become real `-o` settings verbatim, and OpenSSH options such as `ProxyCommand` / `LocalCommand` **execute arbitrary commands at connect time**. Keep configs (and `~/.ssh/config`) owned by you with `0600`/`0644` permissions and do not accept endpoint files from strangers; see the fleet-wide [trust boundary](../docs/TRUST-BOUNDARY.md).
 
-Untrusted bytes are fenced where they only reach the *display* path: every picker row, the filter echo, and the `--list` columns pass through the canonical sanitizer (`Sanitize::untrusted()` plus its display policy `untrustedForDisplay()`) — escape sequences, C0 controls and encoded-C1 shims are removed, invisible formatting is marked as a visible sentinel, and CR/LF/TAB are folded to spaces so no field can forge an extra row. Fields that reach ssh as arguments are REFUSED, not stripped: a leading-dash `host` (destination), `user`, `proxyJump`, `options` entry, `identityFiles` item, `flags` item, or `remoteCommand` aborts with a named error (`Endpoint::assertNotOption family`) rather than being altered into a safe shape — every argv value passes the same guard, identity slots included (the old `-i` exemption assumed an OpenSSH-only contract; dropbear/busybox re-parse a leading-dash value after `-i` as an option).
+Untrusted bytes are fenced where they only reach the *display* path: every picker row, the filter echo, and the `--list` columns pass through the canonical sanitizer (`Sanitize::untrusted()` plus its display policy `untrustedForDisplay()`) — escape sequences, C0 controls and encoded-C1 shims are removed, invisible formatting is marked as a visible sentinel, and CR/LF/TAB are folded to spaces so no field can forge an extra row. Fields that reach ssh as arguments are REFUSED, not stripped: a leading-dash `host`, `user`, `proxyJump`, `options` entry, `identityFiles` item, `flags` item, or `remoteCommand` aborts with a named error (`Endpoint::assertNotOption family`) rather than being altered into a safe shape — every argv value passes the same guard, identity slots included (the old `-i` exemption assumed an OpenSSH-only contract; dropbear/busybox re-parse a leading-dash value after `-i` as an option).
 
 ## Internationalization
 
