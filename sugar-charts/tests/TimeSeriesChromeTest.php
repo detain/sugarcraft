@@ -135,14 +135,18 @@ final class TimeSeriesChromeTest extends TestCase
         // demanded, so the ordinal bytes are the defect, not the contract.
         // Dense resampling of this evenly-spaced, piecewise-linear series
         // traces the same line — the pin now guards any further drift.
-        $expected = "  │          ***\n" .
-            "  │       ***   *\n" .
-            "  │     **       **          *\n" .
-            "  │  ***           *      ***\n" .
-            "  │**               **  **\n" .
-            "  │                   **\n" .
-            "  └───────────────────────────\n" .
-            "  12:00        14:00     16:00";
+        // Re-recorded 2026-11-13 at CH-22: formatter-less axes now label the
+        // Y scale with the NiceScale ladder (0/0.5/1/1.5 rungs), which widens
+        // the left gutter from the bare 2 cells to the label column; the x
+        // labels shift right with the plot. Disclosed golden move.
+        $expected = "    │        ***\n" .
+            "1.5 │     ***   *\n" .
+            "  1 │   **       **          *\n" .
+            "    │***           *      ***\n" .
+            "0.5 │               **  **\n" .
+            "  0 │                 **\n" .
+            "    └─────────────────────────\n" .
+            "    12:00       14:00    16:00";
         $this->assertSame(
             $expected,
             TimeSeries::new(self::points(), 30, 8)->withXLabelCount(3)->withTimeFormat('H:i')->view(),

@@ -149,6 +149,7 @@ final class Graph
         array $xLabels,
         array $yLabels,
         ?Style $style = null,
+        array $yRows = [],
     ): void {
         // X labels: spaced evenly along the axis below the line. The
         // last label is right-anchored to the rightmost axis column
@@ -175,7 +176,12 @@ final class Graph
         if ($count > 0) {
             $top = $yOrigin - $yLen;
             for ($i = 0; $i < $count; $i++) {
-                $row = $top + (int) round($i * ($yLen - 1) / max(1, $count - 1));
+                // Explicit rows place value-anchored labels (the nice-tick
+                // ladder, sugar-charts-026) at their true plot rows; the
+                // even-slot spacing stays the fallback for slot-based lists.
+                $row = $yRows !== []
+                    ? $top + $yRows[$i]
+                    : $top + (int) round($i * ($yLen - 1) / max(1, $count - 1));
                 $label = $yLabels[$i];
                 $startCol = max(0, $xOrigin - Width::string($label) - 1);
                 self::drawString($c, $startCol, $row, $label, $style);
@@ -612,6 +618,11 @@ final class Graph
      *
      * Returns evenly-spaced round numbers that divide the given range
      * into readable intervals. Mirrors ntcharts' `niceNumbers` helper.
+     *
+     * Single ladder implementation of the lib (sugar-charts-026): the
+     * default formatter-less axes reach it through
+     * {@see \SugarCraft\Charts\Chart\NiceScale::ticks()}, which filters the
+     * result to the plotted domain and formats the labels.
      *
      * Zero-range edge case: when `$min === $max`
      * (after a swap of inverted bounds) the raw `$min` is returned

@@ -20,6 +20,7 @@ use SugarCraft\Core\Util\Width;
 use SugarCraft\Charts\Canvas\BrailleGrid;
 use SugarCraft\Charts\Canvas\Canvas;
 use SugarCraft\Charts\Canvas\Graph;
+use SugarCraft\Charts\Chart\NiceScale;
 use SugarCraft\Style\Style;
 use SugarCraft\Style\Theme;
 
@@ -784,7 +785,8 @@ final class LineChart extends Chart
         }
 
         // Resolve labels — explicit lists win, formatters fill in
-        // when no list was supplied.
+        // when no list was supplied, and formatter-less axes fall back
+        // to the NiceScale ladder (sugar-charts-026, below).
         // X-tick domain spans every series, not just the primary one
         // (sugar-charts-060): the value/range scan already covers
         // withDataset() series, so ticks derived from a shorter (or empty)
@@ -792,6 +794,21 @@ final class LineChart extends Chart
         $domain = max(array_merge([count($this->data)], array_map(static fn(array $s): int => count($s), $this->datasets)));
         $xLabels = $this->resolveXLabels($domain);
         $yLabels = $this->resolveYLabels((float) $min, (float) $max);
+        // Default (no manual list, no formatter) axes label the Y scale with
+        // the NiceScale ladder — 8/6/4/2-style round rungs placed at their
+        // true plot rows — instead of staying bare (sugar-charts-026).
+        // Explicit formatters and manual lists win: both come back non-empty
+        // from resolveYLabels and keep the even-slot spacing they always had.
+        $yLadder = [];
+        $yRows   = [];
+        if ($yLabels === [] && $this->showAxes) {
+            $yLadder = array_reverse(NiceScale::ticks(
+                (float) $min,
+                (float) $max,
+                $this->yLabelTicks > 0 ? $this->yLabelTicks : 4,
+            ));
+            $yLabels = NiceScale::formatTicks($yLadder);
+        }
 
         // When axes are on, reserve a 2-cell left gutter (Y labels +
         // axis line) and a 1-row bottom gutter (X axis + labels).
@@ -812,6 +829,13 @@ final class LineChart extends Chart
         $dataLeft = $this->showAxes ? $gutterLeft + 1 : $gutterLeft;
         $plotW = max(1, $this->width  - $dataLeft);
         $plotH = max(1, $this->height - $gutterBottom);
+        if ($yLadder !== []) {
+            $span  = (float) $max - (float) $min;
+            $yRows = array_map(
+                static fn(float $v): int => (int) round((1 - ($v - $min) / $span) * ($plotH - 1)),
+                $yLadder,
+            );
+        }
 
         // Plot primary + named series on the same axes.
         $allSeries = [self::PRIMARY_SERIES => $this->data] + $this->datasets;
@@ -937,7 +961,7 @@ final class LineChart extends Chart
             );
             Graph::drawXYAxisLabel(
                 $canvas, $xOrigin, $yOrigin, $plotW, $plotH,
-                $xLabels, $yLabels,
+                $xLabels, $yLabels, null, $yRows,
             );
         }
         return $canvas->view();

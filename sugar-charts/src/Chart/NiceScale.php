@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts\Chart;
 
+use SugarCraft\Charts\Canvas\Graph;
 use SugarCraft\Charts\Support\Finite;
 
 /**
@@ -70,5 +71,67 @@ final class NiceScale
         }
 
         return max($scale, self::FLOOR);
+    }
+
+    /**
+     * Ascending "nice" tick values covering `[$min, $max]` — the ladder the
+     * default (formatter-less) axes label with (sugar-charts-026).
+     *
+     * Delegates to {@see Graph::niceNumbers()}, the lib's single
+     * rung-ladder implementation (1/2/5 × 10^e), and drops rungs that fall
+     * outside the plotted domain so every returned tick maps to a real row.
+     * The ladder counts boundary-inclusive ticks, so it is asked for one
+     * rung more than `$labelBudget` — the emitted set then stays at least as
+     * dense as the even-slot interpolation the axes used before the ladder.
+     * Degenerate (empty) range returns no ticks: there is nothing to label.
+     *
+     * @return list<float> ascending
+     */
+    public static function ticks(float $min, float $max, int $labelBudget = 4): array
+    {
+        if ($min > $max) {
+            [$min, $max] = [$max, $min];
+        }
+        if ($min === $max) {
+            return [];
+        }
+        $ladder  = Graph::niceNumbers($min, $max, max(2, $labelBudget + 1));
+        $epsilon = ($max - $min) * 1e-9;
+        return array_values(array_filter(
+            $ladder,
+            static fn(float $t): bool => $t >= $min - $epsilon && $t <= $max + $epsilon,
+        ));
+    }
+
+    /**
+     * Format ladder ticks as axis labels using the smallest rung spacing
+     * (sugar-charts-026): a 1/2/5 × 10^e ladder needs exactly as many
+     * decimals as its step, which kills the raw-float blurt a bare
+     * `(string)` cast gives (0.1 + 0.1 + 0.1 === 0.30000000000000004).
+     *
+     * @param list<float> $ticks ascending or descending, evenly spaced
+     * @return list<string> same order
+     */
+    public static function formatTicks(array $ticks): array
+    {
+        $step = INF;
+        $prev = null;
+        foreach ($ticks as $t) {
+            if ($prev !== null) {
+                $step = min($step, abs($t - $prev));
+            }
+            $prev = $t;
+        }
+        $decimals = !is_finite($step) || $step <= 0.0
+            ? 0
+            : max(0, (int) ceil(-log10($step) - 1e-9));
+
+        return array_map(
+            static function (float $v) use ($decimals): string {
+                $s = number_format($v, $decimals, '.', '');
+                return $decimals > 0 ? rtrim(rtrim($s, '0'), '.') : $s;
+            },
+            $ticks,
+        );
     }
 }
