@@ -17,11 +17,12 @@ use SugarCraft\Core\Undo\UndoActionType;
 final class UndoAction
 {
     /**
-     * @param list<array{path:string,isDir:bool,trash:string}>|array<string,string> $items Items the action operates on
+     * @param list<array{path:string,isDir:bool,trash:string}>|array<string,string>|list<string> $items
+     *        Items the action operates on.
      *        (delete: the list shape — path, isDir, and the trash location the
      *        bytes were moved to; '' when the cross-device fallback removed
      *        them permanently. move/rename/copy: a map of old/source path →
-     *        new/destination path.)
+     *        new/destination path. insert: a list of created directory paths.)
      */
     private function __construct(
         public readonly UndoActionType $type,
@@ -69,6 +70,24 @@ final class UndoAction
             UndoActionType::Move,
             Lang::t('undo.move', ['count' => count($moves)]),
             $moves,
+        );
+    }
+
+    /**
+     * Create an insert action for directories the user created (CF-10).
+     *
+     * Undo removes the created paths — but only while they are still empty
+     * (reverseInsert), so anything the user put inside is never eaten by an
+     * undo keystroke. Redo recreates the (empty) directories.
+     *
+     * @param list<string> $paths Created directory paths, in creation order
+     */
+    public static function insert(array $paths): self
+    {
+        return new self(
+            UndoActionType::Insert,
+            Lang::t('undo.create', ['count' => count($paths)]),
+            $paths,
         );
     }
 

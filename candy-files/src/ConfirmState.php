@@ -11,8 +11,9 @@ namespace SugarCraft\Files;
  * the next keystroke is consumed by the confirmation handler, which
  * takes one of two shapes: DeleteSelected/CopySelected/MoveSelected
  * run a single-key y/n gate (`y` confirms, anything else cancels),
- * while RenameSelected is a text-entry submode — printable runes
- * append to the buffer, Enter commits, Esc cancels.
+ * while RenameSelected and MkdirPrompt are the same text-entry
+ * submode — printable runes append to the buffer, Enter commits,
+ * Esc cancels (CF-10: `N` creates a directory through it).
  */
 enum ConfirmState
 {
@@ -21,4 +22,5 @@ enum ConfirmState
     case CopySelected;
     case MoveSelected;
     case RenameSelected;
+    case MkdirPrompt;
 }

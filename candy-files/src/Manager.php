@@ -397,6 +397,10 @@ final class Manager implements Model
                 => $this->armMove(),
             $plain && $msg->rune === 'R'
                 => $this->armRename(),
+            // CF-10: mc-F7/superfile-N baseline — create a directory in the
+            // active pane's cwd through the shared text-entry sub-mode.
+            $plain && $msg->rune === 'N'
+                => $this->armMkdir(),
             $plain && $msg->rune === 'r'
                 => $this->refresh(),
             // Escape (outside search/confirm — those consume it earlier):
@@ -711,28 +715,37 @@ final class Manager implements Model
      */
     private function resolveConfirm(KeyMsg $msg): array
     {
-        // RenameSelected uses a text-entry sub-mode: characters accumulate
-        // in $inputBuffer; Enter commits; Escape cancels.
-        if ($this->confirm === ConfirmState::RenameSelected) {
+        // CF-10: RenameSelected and MkdirPrompt share one text-entry
+        // sub-mode — characters accumulate in $inputBuffer, Enter commits,
+        // Escape cancels, backspace edits. Only the prompt and the commit
+        // leg differ. (The branch was rename-only; parameterising it keeps
+        // the two grammar surfaces from drifting.)
+        $isMkdir = $this->confirm === ConfirmState::MkdirPrompt;
+        if ($this->confirm === ConfirmState::RenameSelected || $isMkdir) {
+            // Two literal key spellings below — the coverage guard greps
+            // for literal key arguments and a dynamic key name is invisible.
+            $promptText = static fn(self $m): string => $isMkdir
+                ? Lang::t('prompt.mkdir')
+                : Lang::t('confirm.rename', ['name' => Entry::sanitizeName($m->pendingOpDest ?? '')]);
+            $restate = static fn(self $m, string $status, ?string $buf): self =>
+                $m->withConfirm($m->confirm, $status, $m->pendingOpDest, $isMkdir ? 'mkdir' : 'rename', $buf);
             // Backspace: drop last character from buffer
             if ($msg->type === KeyType::Backspace) {
                 $buf = $this->inputBuffer ?? '';
                 $newBuf = $buf === '' ? '' : self::dropLast($buf);
-                return [$this->withConfirm(ConfirmState::RenameSelected,
-                    Lang::t('confirm.rename', ['name' => Entry::sanitizeName($this->pendingOpDest ?? '')]),
-                    $this->pendingOpDest, 'rename', $newBuf), null];
+                return [$restate($this, $promptText($this), $newBuf), null];
             }
-            // Enter: commit the typed buffer as the new name
+            // Enter: commit the typed buffer
             if ($msg->type === KeyType::Enter) {
                 $newName = $this->inputBuffer ?? '';
                 if ($newName === '') {
                     return [$this->withConfirm(ConfirmState::None, Lang::t('status.cancelled'))
                         ->withInputBuffer(null), null];
                 }
-                $renamed = $this->withConfirm(ConfirmState::RenameSelected,
-                    Lang::t('confirm.rename', ['name' => Entry::sanitizeName($this->pendingOpDest ?? '')]),
-                    $this->pendingOpDest, 'rename', $newName)->performRenameWithBuffer();
-                return [$renamed, null];
+                $committed = $isMkdir
+                    ? $restate($this, $promptText($this), $newName)->performMkdir()
+                    : $restate($this, $promptText($this), $newName)->performRenameWithBuffer();
+                return [$committed, null];
             }
             // Escape: cancel
             if ($msg->type === KeyType::Escape) {
@@ -746,17 +759,15 @@ final class Manager implements Model
             if (($msg->type === KeyType::Char || $msg->type === KeyType::Space) && !$msg->ctrl) {
                 $buf = $this->inputBuffer ?? '';
                 $newBuf = $buf . $msg->rune;
-                return [$this->withConfirm(ConfirmState::RenameSelected,
+                return [$restate($this,
                     // N-4: the typed buffer joins the status like every other
                     // name-bearing write — sanitize at the choke, even though
                     // live keystrokes are printables (defense-in-depth).
-                    Lang::t('confirm.rename', ['name' => Entry::sanitizeName($this->pendingOpDest ?? '')]) . Entry::sanitizeName($newBuf) . '_',
-                    $this->pendingOpDest, 'rename', $newBuf), null];
+                    $promptText($this) . Entry::sanitizeName($newBuf) . '_',
+                    $newBuf), null];
             }
             // All other keys: no-op, stay in confirm state
-            return [$this->withConfirm(ConfirmState::RenameSelected,
-                Lang::t('confirm.rename', ['name' => Entry::sanitizeName($this->pendingOpDest ?? '')]),
-                $this->pendingOpDest, 'rename', $this->inputBuffer), null];
+            return [$restate($this, $promptText($this), $this->inputBuffer), null];
         }
 
         // Single-key y/n confirmation for delete/copy/move. M-7: the prompt
@@ -955,6 +966,76 @@ final class Manager implements Model
             $current->name,
             'rename'
         );
+    }
+
+    /**
+     * CF-10: arm the mkdir text-entry sub-mode (the `N` chord). No entry
+     * under the cursor is required — creation targets the pane's cwd — so
+     * the chord works in an empty directory, where mc/superfile advertise
+     * it most.
+     */
+    private function armMkdir(): self
+    {
+        return $this->withConfirm(ConfirmState::MkdirPrompt, Lang::t('prompt.mkdir'));
+    }
+
+    /**
+     * Name legality for creation/rename into this directory (CF-10). A name
+     * that embeds a separator, a traversal, or a control byte is not a name
+     * at all; '.' and '..' are virtual entries and ' ' alone is legal but
+     * nothing-to-create. performRename's own (stricter than needed) guard
+     * stays its until CF-24 unifies the two — this helper is the correct
+     * predicate both will share.
+     */
+    private static function nameIsLegal(string $name): bool
+    {
+        if ($name === '' || $name === '.' || $name === '..') {
+            return false;
+        }
+        if (str_contains($name, "\0") || str_contains($name, '/') || str_contains($name, '\\')) {
+            return false;
+        }
+        return !preg_match('/[\x00-\x1F\x7F]/', $name);
+    }
+
+    /**
+     * CF-10: create one directory relative to the active cwd, recording an
+     * undoable Insert action. Undo removes it again ONLY while it is still
+     * empty (reverseInsert); anything the user put inside survives.
+     */
+    private function performMkdir(): self
+    {
+        $pane = $this->activePane();
+        $name = $this->inputBuffer ?? '';
+        $refused = Lang::t('status.mkdir_failed', ['name' => Entry::sanitizeName($name)]);
+        if (!self::nameIsLegal($name)) {
+            return $this->withConfirm(ConfirmState::None, $refused)->withInputBuffer(null);
+        }
+        $full = Pane::join($pane->cwd, $name);
+        // Never create over (or beside the refusal of) an existing name —
+        // lstat semantics so a dangling link counts as taken.
+        if (file_exists($full) || is_link($full)) {
+            return $this->withActivePane(fn(Pane $p) =>
+                Pane::open($p->cwd, $this->lister, $p->sort, $p->showHidden))
+                ->withConfirm(ConfirmState::None, $refused)
+                ->withInputBuffer(null);
+        }
+        if (!@mkdir($full)) {
+            return $this->withActivePane(fn(Pane $p) =>
+                Pane::open($p->cwd, $this->lister, $p->sort, $p->showHidden))
+                ->withConfirm(ConfirmState::None, $refused)
+                ->withInputBuffer(null);
+        }
+        $newUndoStack = $this->undoStack;
+        $newUndoStack[] = UndoAction::insert([$full]);
+        $newUndoStack = array_slice($newUndoStack, -self::UNDO_LIMIT);
+        $msg = Lang::t('status.created', ['count' => 1]);
+
+        return $this->withActivePane(fn(Pane $p) =>
+            Pane::open($p->cwd, $this->lister, $p->sort, $p->showHidden))
+            ->withConfirm(ConfirmState::None, $msg)
+            ->withInputBuffer(null)
+            ->withUndoRedoStacks($newUndoStack, []);
     }
 
     /**
@@ -1640,10 +1721,8 @@ final class Manager implements Model
             UndoActionType::Delete => $errors = $this->redoDelete($action->items),
             UndoActionType::Move => $errors = $this->redoMove($action->items),
             UndoActionType::Rename => $errors = $this->redoRename($action->items),
-            // This program never produces Insert (mkdir) undo actions — the
-            // dead UndoAction::mkdir factory was removed. Arm kept explicit
-            // for enum exhaustiveness; treat like the un-redoable group.
-            UndoActionType::Insert,
+            // CF-10: redoing an undone mkdir recreates the empty directory.
+            UndoActionType::Insert => $errors = $this->redoInsert($action->items),
             // Copy cannot be redone meaningfully — original is still there
             UndoActionType::Copy, UndoActionType::Modify, UndoActionType::Custom => $errors = 0,
         };
@@ -1723,12 +1802,103 @@ final class Manager implements Model
             UndoActionType::Delete => $this->reverseDelete($action->items),
             UndoActionType::Move => $this->reverseMove($action->items),
             UndoActionType::Rename => $this->reverseRename($action->items),
-            // No mkdir actions are produced anymore (factory removed); the
-            // arm only exists to keep the enum match exhaustive.
-            UndoActionType::Insert,
+            // CF-10: undoing a mkdir removes the created directory — but
+            // only while it is empty; a filled one (or one replaced by
+            // other bytes) is reported occupied, never recursively eaten.
+            UndoActionType::Insert => $this->reverseInsert($action->items),
             // Copy cannot be undone — original still exists
             UndoActionType::Copy, UndoActionType::Modify, UndoActionType::Custom => [0, 0],
         };
+    }
+
+    /**
+     * CF-10: undo one or more created directories.
+     *
+     * Goal-state law shared with the delete/move/rename reversers:
+     *  - path already absent  → goal state holds, no-op success;
+     *  - path exists but is NOT a directory (someone dropped a file or a
+     *    link onto the name since) → occupied — undo never deletes bytes
+     *    it did not create;
+     *  - directory non-empty (dotfiles count — they are real content and
+     *    the visibility law says nothing about existence) → occupied;
+     *  - empty directory → rmdir; failure counts as an error.
+     *
+     * @param mixed $paths list of created directory paths
+     *
+     * @return array{0:int,1:int} [failed legs, occupied legs]
+     */
+    private function reverseInsert(mixed $paths): array
+    {
+        $errors = 0;
+        $occupied = 0;
+        if (!is_array($paths)) {
+            return [1, 0];
+        }
+        foreach ($paths as $path) {
+            if (!is_string($path) || $path === '') {
+                $errors++;
+                continue;
+            }
+            if (!file_exists($path) && !is_link($path)) {
+                continue; // already removed — the create's goal state holds
+            }
+            if (!is_dir($path) || is_link($path)) {
+                $occupied++; // someone else's bytes own the name now
+                continue;
+            }
+            $children = @scandir($path);
+            if ($children === false) {
+                $errors++; // unreadable: cannot prove emptiness — hands off
+                continue;
+            }
+            $real = 0;
+            foreach ($children as $name) {
+                if ($name !== '.' && $name !== '..') {
+                    $real++;
+                }
+            }
+            if ($real > 0) {
+                $occupied++; // filled since creation: never recursively eaten
+                continue;
+            }
+            if (!@rmdir($path)) {
+                $errors++;
+            }
+        }
+        return [$errors, $occupied];
+    }
+
+    /**
+     * CF-10: replay an undone mkdir — recreate the empty directories.
+     * A path that is already there (or was replaced by other bytes) is
+     * goal-state-holding for the directory case and an occupied-substitute
+     * error otherwise.
+     *
+     * @param mixed $paths list of created directory paths
+     */
+    private function redoInsert(mixed $paths): int
+    {
+        $errors = 0;
+        if (!is_array($paths)) {
+            return 1;
+        }
+        foreach ($paths as $path) {
+            if (!is_string($path) || $path === '') {
+                $errors++;
+                continue;
+            }
+            if (is_dir($path) && !is_link($path)) {
+                continue; // already there — replay goal state holds
+            }
+            if (file_exists($path) || is_link($path)) {
+                $errors++; // a non-directory took the name meanwhile
+                continue;
+            }
+            if (!@mkdir($path)) {
+                $errors++;
+            }
+        }
+        return $errors;
     }
 
     /**

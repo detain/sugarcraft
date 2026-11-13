@@ -15,6 +15,7 @@ return [
     'confirm.copy'       => 'copy {names} to {dest}? (y/n)',
     'confirm.move'      => 'move {names} to {dest}? (y/n)',
     'confirm.rename'     => "rename '{name}' to: ",
+    'prompt.mkdir'   => 'create directory: ',
     'confirm.selected_entries' => '{count} selected entries',
     'confirm.affirmative' => 'y',
 
@@ -35,6 +36,8 @@ return [
     'status.copied_skipped'   => 'copied {count} entries ({skipped} skipped)',
     'status.copied_overwrote' => 'copied {count} entries ({overwrote} overwrote)',
     'status.moved'            => 'moved {count} entries',
+    'status.created'       => 'created {count} folder(s)',
+    'status.mkdir_failed'    => 'cannot create {name}',
     'status.moved_with_errors' => 'moved {count} entries with {errors} errors',
     'status.moved_skipped'    => 'moved {count} entries ({skipped} skipped)',
     'status.moved_overwrote'    => 'moved {count} entries ({overwrote} overwrote)',
@@ -56,6 +59,7 @@ return [
 
     // Undo/redo action descriptions (rendered inside status.undone/&c.)
     'undo.delete' => 'delete {count} item(s)',
+    'undo.create' => 'create {count} item(s)',
     'undo.rename' => 'rename {count} item(s)',
     'undo.move'   => 'move {count} item(s)',
     'undo.copy'   => 'copy {count} item(s)',
