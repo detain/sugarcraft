@@ -859,4 +859,58 @@ final class CliContractTest extends TestCase
         }
         @\rmdir($dir);
     }
+
+    public function testDeclaredExtensionsAndBootGateNameTheSameSet(): void
+    {
+        // candy-kv-057 pair law: an ext-* in composer require with no boot
+        // gate is a laundered fatal waiting for the one machine that lacks
+        // it; a gate entry with no require lets the silent degrade back in.
+        // One list, two surfaces — pinned equal.
+        $manifest = \json_decode((string) \file_get_contents(\dirname(__DIR__) . '/composer.json'), true, 512, \JSON_THROW_ON_ERROR);
+        $declared = \array_values(\array_filter(
+            \array_keys($manifest['require']),
+            static fn (string $dep): bool => \str_starts_with($dep, 'ext-'),
+        ));
+        $declared = \array_map(static fn (string $dep): string => \substr($dep, 4), $declared);
+        \sort($declared);
+
+        $binSource = (string) \file_get_contents(\dirname(__DIR__) . '/bin/candy-kv');
+        $this->assertSame(1, \preg_match('/foreach \(\[(.*?)\] as \$requiredExtension\)/s', $binSource, $m), 'boot gate loop must stay findable');
+        \preg_match_all('/[\x27"]([a-z0-9_]+)[\x27"]/', $m[1], $named);
+        $gated = $named[1];
+        \sort($gated);
+
+        $this->assertSame($declared, $gated);
+    }
+
+    public function testBootGateRefusesMissingExtensionsByName(): void
+    {
+        // candy-kv-057: `php -n` drops the ini-loaded shared extensions, and
+        // this runtime's sqlite3/mbstring are exactly those (probed live —
+        // on a build that statics them the probe answers YES and the gate
+        // cannot be armed, so the test says so instead of passing silently).
+        $probe = self::spawnBounded([\PHP_BINARY, '-n', '-r', 'echo extension_loaded("sqlite3") || extension_loaded("mbstring") ? "YES" : "NO";']);
+        if ($probe['stdout'] !== 'NO') {
+            $this->markTestSkipped('this php keeps sqlite3/mbstring even without an ini; the -n boot gate cannot be armed');
+        }
+
+        $env = \getenv();
+        $env['XDG_CONFIG_HOME'] = $this->configHome;
+        $bin = dirname(__DIR__) . '/bin/candy-kv';
+
+        $get = self::spawnBounded([\PHP_BINARY, '-n', $bin, 'get', 'whatever'], $env);
+        $this->assertSame(1, $get['exit'], $get['stdout'] . $get['stderr']);
+        // sqlite3 is checked first, so it is the extension named — and only
+        // the named ONE, not a lecture: the message is the diagnosis.
+        $this->assertStringContainsString('requires the PHP extension "sqlite3"', $get['stderr']);
+        $this->assertStringNotContainsString('Class not found', $get['stderr']);
+        $this->assertFileDoesNotExist($this->configHome . '/skate/default.db', 'the gate must run before any store boot');
+
+        // The purity law rides along: the help verb answers even when the
+        // runtime is too bare to store anything — it IS the repair manual.
+        $help = self::spawnBounded([\PHP_BINARY, '-n', $bin, '--help'], $env);
+        $this->assertSame(0, $help['exit'], $help['stderr']);
+        $this->assertStringContainsString('candy-kv', $help['stdout']);
+        $this->assertDirectoryDoesNotExist($this->configHome . '/skate');
+    }
 }

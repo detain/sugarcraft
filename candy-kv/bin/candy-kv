@@ -44,11 +44,17 @@ namespace SugarCraft\Kv;
     // downloaded phar must never boot the app with code from outside the
     // frozen archive, renamed or not.
     $candidates = [__DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'];
-    $running = \Phar::running(false);
+    // candy-kv-057's probe ride: a runtime without ext-phar (`php -n`, bare
+    // embeds) has NO Phar class — the archive-identity walk below is a
+    // phar-launch concern only, so it stands down class-absent and the
+    // filesystem candidates carry the boot. Without this the startup fatal
+    // from Phar::launder-shadow land, not the named-extension diagnosis.
+    $havePhar = \class_exists(\Phar::class, false);
+    $running = $havePhar ? \Phar::running(false) : '';
     $archive = $running !== ''
         ? 'phar://' . $running
         : (str_ends_with(__FILE__, '.phar') ? 'phar://' . __FILE__ : '');
-    if ($archive === '') {
+    if ($archive === '' && $havePhar) {
         try {
             \Phar::mapPhar('candy-kv.phar');
             $archive = 'phar://candy-kv.phar';
@@ -120,6 +126,20 @@ if (!in_array($argv[1], ['set', 'get', 'list', 'delete', 'list-dbs', 'delete-db'
     fwrite(STDERR, Lang::t('cli.unknown_command', ['cmd' => Store::sanitizeForTty($argv[1])]) . "\n");
     help($bin);
     exit(2);
+}
+
+// candy-kv-057: boot-time presence gate for the two extensions the runtime
+// actually calls — without sqlite3 every store verb dies as a laundered
+// Class-not-found deep inside Database, and without mbstring the codepoint
+// laws (suggestions, export fidelity, binary auto-detect) silently degrade
+// to byte-wise behavior. Name the missing extension, exit 1 (a runtime
+// fault, not a usage one), and keep the --help/--version verbs above
+// reachable without either: help text is the repair instructions.
+foreach (['sqlite3', 'mbstring'] as $requiredExtension) {
+    if (!\extension_loaded($requiredExtension)) {
+        fwrite(STDERR, "candy-kv requires the PHP extension \"{$requiredExtension}\".\n");
+        exit(1);
+    }
 }
 
 $store = new Store();
