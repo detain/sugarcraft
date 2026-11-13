@@ -1211,7 +1211,8 @@ final class Model
 
     /**
      * Find the index of an item whose EqualsFunc matches the given value.
-     * Returns -1 if not found.
+     * Returns -1 if not found — the {@see tryFind()} companion returns null
+     * and completes this lib's try* absence idiom (sugar-treelist-032).
      *
      * Intake follows the {@see withItem()} contract: a plain string finds
      * its own value; anything neither string nor \Stringable is refused.
@@ -1223,7 +1224,35 @@ final class Model
      */
     public function find(mixed $value): int
     {
-        $value = self::normalizeItem($value, 'Model::find()', 'the value');
+        return $this->locate($value, 'find') ?? -1;
+    }
+
+    /**
+     * Non-throwing absence sibling of {@see find()}: null when nothing
+     * matches, instead of the -1 sentinel that forces `if ($i !== -1)` next
+     * to every tryItemAt()/tryCursorItem() call site (sugar-treelist-032).
+     *
+     * Programmer errors still throw — a junk needle or a null-returning
+     * equalsFunc is a misconfiguration, not an absence. find() stays for
+     * upstream parity.
+     *
+     * @param string|\Stringable $value
+     * @throws \InvalidArgumentException if the value is neither string nor \Stringable
+     * @throws \LogicException if the installed equalsFunc returns null for a
+     *         comparison (unset slot falls back to string equality).
+     */
+    public function tryFind(mixed $value): ?int
+    {
+        return $this->locate($value, 'tryFind');
+    }
+
+    /**
+     * Shared search walk behind find()/tryFind(); $door keeps every error
+     * message naming the door actually called.
+     */
+    private function locate(mixed $value, string $door): ?int
+    {
+        $value = self::normalizeItem($value, 'Model::' . $door . '()', 'the value');
 
         if ($this->equalsFunc === null) {
             foreach ($this->items as $i => $item) {
@@ -1231,7 +1260,7 @@ final class Model
                     return $i;
                 }
             }
-            return -1;
+            return null;
         }
         foreach ($this->items as $i => $item) {
             $matches = ($this->equalsFunc)($item->value, $value);
@@ -1239,13 +1268,13 @@ final class Model
                 // Same stated policy as sort()/reapplyFilter()
                 // (sugar-treelist-011/025): null names a misconfiguration,
                 // it does not silently read as "not equal".
-                throw new \LogicException('Model::find(): the equalsFunc comparison returned null; it must return a bool.');
+                throw new \LogicException('Model::' . $door . '(): the equalsFunc comparison returned null; it must return a bool.');
             }
             if ($matches) {
                 return $i;
             }
         }
-        return -1;
+        return null;
     }
 
     // -------------------------------------------------------------------------

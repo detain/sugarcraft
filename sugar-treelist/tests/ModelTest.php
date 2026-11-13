@@ -137,6 +137,33 @@ final class ModelTest extends TestCase
         $this->assertSame(-1, $this->model->find(new StringItem('durian')));
     }
 
+    /**
+     * sugar-treelist-032: tryFind() completes the try* absence idiom — null
+     * instead of the -1 sentinel, same search walk, and the misconfiguration
+     * throws still name the door actually called.
+     */
+    public function testTryFindCompletesTheAbsenceIdiom(): void
+    {
+        foreach (['apple', 'banana', 'cherry'] as $v) {
+            $this->model = $this->model->withItem(new StringItem($v));
+        }
+
+        $this->assertSame(1, $this->model->tryFind(new StringItem('banana')));
+        $this->assertNull($this->model->tryFind('durian'), 'plain-string needle allowed');
+        // Pairing law: find()==-1 exactly when tryFind()==null.
+        foreach (['apple', 'durian'] as $needle) {
+            $this->assertSame($this->model->find($needle) === -1, $this->model->tryFind($needle) === null);
+        }
+
+        $broken = Model::new()->withItem('x')->withEqualsFunc(static fn ($a, $b) => null);
+        try {
+            $broken->tryFind('x');
+            $this->fail('null equalsFunc verdict accepted');
+        } catch (\LogicException $e) {
+            $this->assertStringContainsString('Model::tryFind()', $e->getMessage());
+        }
+    }
+
     public function testFindWithEqualsFunc(): void
     {
         foreach (['aa', 'bb', 'cc'] as $v) {
@@ -2379,6 +2406,7 @@ final class ModelTest extends TestCase
             'Model::withItems()' => static fn (mixed $v): Model => Model::new()->withItems($v),
             'Model::withItemsFromArray()' => static fn (mixed $v): Model => Model::new()->withItemsFromArray([$v]),
             'Model::find()' => static fn (mixed $v): int => Model::new()->find($v),
+            'Model::tryFind()' => static fn (mixed $v): ?int => Model::new()->tryFind($v),
         ];
         foreach ($doors as $door => $call) {
             foreach ([null, true, 1, 2.5, [], new \stdClass()] as $junk) {
