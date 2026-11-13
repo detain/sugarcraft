@@ -192,6 +192,13 @@ final class CredentialStore
         \clearstatcache(true, $this->path);
         $stat = @lstat($this->path);
         if ($stat === false) {
+            $blocker = $this->unsearchableAncestor();
+            if ($blocker !== null) {
+                throw new \RuntimeException(
+                    "channels store {$this->path} is unreadable: directory {$blocker} cannot be searched",
+                );
+            }
+
             return [];
         }
         if (((int) $stat['mode'] & 0o170000) !== 0o100000) {
@@ -225,6 +232,34 @@ final class CredentialStore
         }
 
         return $data;
+    }
+
+    /**
+     * When lstat fails the path is either simply missing (ENOENT — the
+     * honest "fresh, not configured") or a directory component cannot be
+     * searched (EACCES — a locked-down config dir must not masquerade as
+     * unconfigured: that is the silent-fresh-pairing hazard). PHP exposes
+     * no errno, so climb to the nearest existing ancestor — a component
+     * only reports as existing when every parent above it is searchable —
+     * and ask whether it can be searched at all. Existing-but-unsearchable
+     * is the EACCES shape and names the blocker; a fully missing chain is
+     * the ENOENT shape and returns null.
+     */
+    private function unsearchableAncestor(): ?string
+    {
+        $dir = \dirname($this->path);
+        while ('' !== $dir && '/' !== $dir && !\is_dir($dir)) {
+            $parent = \dirname($dir);
+            if ($parent === $dir) {
+                break;
+            }
+            $dir = $parent;
+        }
+        if ('' === $dir || !\is_dir($dir)) {
+            return null;
+        }
+
+        return \is_executable($dir) ? null : $dir;
     }
 
     /** The store file path this object reads and writes. */

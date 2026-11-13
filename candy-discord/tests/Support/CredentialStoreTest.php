@@ -40,6 +40,34 @@ final class CredentialStoreTest extends TestCase
         self::assertSame([], (new CredentialStore($this->path))->discordAccounts());
     }
 
+    public function testAnUnsearchableParentDirectoryRefusesInsteadOfReportingFresh(): void
+    {
+        if (DIRECTORY_SEPARATOR === '\\') {
+            self::markTestSkipped('POSIX search permissions do not exist on Windows');
+        }
+        if (\function_exists('posix_geteuid') && 0 === \posix_geteuid()) {
+            self::markTestSkipped('root bypasses directory search permissions');
+        }
+
+        $locked = $this->dir . '/locked';
+        mkdir($locked, 0o700);
+        $store = new CredentialStore($locked . '/channels.json');
+        chmod($locked, 0o000);
+        $error = null;
+        try {
+            $store->read();
+        } catch (RuntimeException $e) {
+            $error = $e;
+        } finally {
+            chmod($locked, 0o700);
+            @rmdir($locked);
+        }
+
+        self::assertNotNull($error, 'a locked config dir must refuse loudly, not masquerade as unconfigured');
+        self::assertStringContainsString('cannot be searched', $error->getMessage());
+        self::assertStringContainsString($locked, $error->getMessage());
+    }
+
     public function testTheWriteLandsZeroSixZeroZeroAndCarriesTheShapeBack(): void
     {
         $store = new CredentialStore($this->path);

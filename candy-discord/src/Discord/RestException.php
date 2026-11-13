@@ -8,7 +8,7 @@ namespace CandyCode\Bundles\Discord\Discord;
  * A Discord REST failure: the HTTP status (0 when the request never
  * completed) and the message the operator needs in the log.
  */
-class RestException extends \RuntimeException
+final class RestException extends \RuntimeException
 {
     public function __construct(
         string $message,

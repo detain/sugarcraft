@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CandyCode\Bundles\Discord\Tests\Discord;
 
 use CandyCode\Bundles\Discord\Discord\Rest;
+use CandyCode\Bundles\Discord\Discord\RestException;
 use CandyCode\Bundles\Discord\Support\Log;
 use CandyCode\Bundles\Discord\Tests\Fixture\FakeDiscordApi;
 use PHPUnit\Framework\TestCase;
@@ -63,5 +64,13 @@ final class RestGuardsTest extends TestCase
         }
         $api->stop();
         self::assertSame(['id' => 'app-9'], $application);
+    }
+
+    public function testRestExceptionIsFinalSoTheFailureShapeCannotBeSubclassed(): void
+    {
+        // The repo rule closes the exception vocabulary: public classes are
+        // final unless extension is a contract, and nothing in the bundle
+        // (or its tests) extends RestException — the finding's grep.
+        self::assertTrue((new \ReflectionClass(RestException::class))->isFinal());
     }
 }
