@@ -76,7 +76,9 @@ final class SignalForwarderExtendedTest extends TestCase
             \posix_kill(\posix_getpid(), SIGWINCH);
             SignalForwarder::dispatch();
 
-            $this->assertSame(1, $invoked, 'size provider should fire on SIGWINCH');
+            // PTY-36: a stable dispatch consults the provider twice —
+            // the ioctl size plus the post-ioctl drift re-check.
+            $this->assertSame(2, $invoked, 'size provider should fire on SIGWINCH (apply + drift re-check)');
             $this->assertContains(SIGWINCH, SignalForwarder::attachedSignals());
         } finally {
             $pty->close();
@@ -107,6 +109,49 @@ final class SignalForwarderExtendedTest extends TestCase
 
             $this->assertIsArray($resizeCalled);
             $this->assertSame([99, 33], $resizeCalled);
+        } finally {
+            $pty->close();
+        }
+    }
+
+    public function testSigwinchReAppliesWhenTerminalDriftsDuringIoctl(): void
+    {
+        $this->requirePtySyscalls();
+        $this->requirePcntl();
+
+        $pty = Pty::open();
+        try {
+            $reads = 0;
+            $applied = null;
+            $ok = SignalForwarder::attachSigwinchToFd(
+                $pty->fd(),
+                // Provider double that drifts once: the first read
+                // returns the stale size, every later read the size
+                // the terminal settled on mid-ioctl.
+                function () use (&$reads): array {
+                    ++$reads;
+
+                    return $reads === 1 ? ['cols' => 80, 'rows' => 24] : ['cols' => 100, 'rows' => 30];
+                },
+                function (int $cols, int $rows) use (&$applied): void {
+                    $applied = [$cols, $rows];
+                },
+                async: false,
+            );
+
+            $this->assertTrue($ok);
+
+            \posix_kill(\posix_getpid(), SIGWINCH);
+            SignalForwarder::dispatch();
+
+            // Two reads: the ioctl size plus the drift re-check; the
+            // bounded second round applies the latest size exactly once
+            // more, the kernel agrees, and onResize sees the final pair.
+            $this->assertSame(2, $reads);
+            $this->assertSame([100, 30], $applied);
+            $size = \SugarCraft\Pty\SizeIoctl::query($pty->fd());
+            $this->assertSame(100, $size['cols']);
+            $this->assertSame(30, $size['rows']);
         } finally {
             $pty->close();
         }

@@ -72,11 +72,15 @@ final class SignalForwarder
      *
      * `$sizeProvider` returns `array{cols:int, rows:int}`. Any
      * exception it throws is swallowed (signal handlers must not
-     * propagate exceptions across the runtime).
+     * propagate exceptions across the runtime). The provider may be
+     * consulted twice per delivered signal — once to size the ioctl
+     * and once to check for a resize that raced it — so keep it cheap
+     * and side-effect free.
      *
      * @param callable(): array{cols:int, rows:int} $sizeProvider
      * @param callable(int, int): void|null $onResize if provided,
-     *               called with `(cols, rows)` after a successful resize
+     *               called once with the last successfully applied
+     *               `(cols, rows)` after a stable resize
      * @return bool false means NOT attached — either the host lacks
      *              pcntl/`SIGWINCH` or `pcntl_signal()` refused the
      *              install; callers then fall back to size polling.
@@ -92,11 +96,28 @@ final class SignalForwarder
         $handler = static function (int $signo) use ($fd, $sizeProvider, $onResize): void {
             try {
                 $size = $sizeProvider();
-                $cols = (int) $size['cols'];
-                $rows = (int) $size['rows'];
-                $ws = \SugarCraft\Pty\SizeIoctl::pack($rows, $cols);
-                $rc = \SugarCraft\Pty\SizeIoctl::setSizeViaLibc(self::libc(), $fd, $ws);
-                if ($rc === 0 && $onResize !== null) {
+                for ($round = 1; ; ++$round) {
+                    $cols = (int) $size['cols'];
+                    $rows = (int) $size['rows'];
+                    $ws = \SugarCraft\Pty\SizeIoctl::pack($rows, $cols);
+                    if (\SugarCraft\Pty\SizeIoctl::setSizeViaLibc(self::libc(), $fd, $ws) !== 0) {
+                        return;
+                    }
+                    if ($round >= 2) {
+                        break;
+                    }
+                    // The ioctl above can race a fresh terminal resize:
+                    // re-read the provider and, if it drifted, spend the
+                    // one remaining round on the latest size. Bounded at
+                    // two applies — the kernel coalesces further
+                    // SIGWINCHes, so this is best-effort at-least-once.
+                    $after = $sizeProvider();
+                    if ((int) $after['cols'] === $cols && (int) $after['rows'] === $rows) {
+                        break;
+                    }
+                    $size = $after;
+                }
+                if ($onResize !== null) {
                     $onResize($cols, $rows);
                 }
             } catch (\Throwable) {
