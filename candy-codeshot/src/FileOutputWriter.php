@@ -8,6 +8,19 @@ namespace SugarCraft\CodeShot;
  * Output writer that forwards chunks straight to a file handle as they
  * arrive. Standalone helper — the renderers return complete bytes and
  * never write through this class themselves.
+ *
+ * Honesty about durability (candy-codeshot-051): constructing this writer
+ * opens the target with mode 'w', which TRUNCATES an existing file
+ * immediately — before a single {@see write()} call happens. A failure in
+ * the middle of streaming therefore leaves a partial file on disk where the
+ * old content used to be; nothing is restored. There is deliberately no
+ * temp-file-plus-rename machinery here: the CLI's single write pass either
+ * completes or reports a short-write RuntimeException, and callers that
+ * need atomic replacement must provide it themselves. The refusal pre-checks
+ * in {@see refuseUnopenablePath()} name common open failures before fopen()
+ * emits its E_WARNING; they are diagnostics, not a confinement capability —
+ * path confinement lives in the CLI jail (see the --unsafe-paths docs), and
+ * this class cannot see over the caller's shoulder.
  */
 final class FileOutputWriter implements OutputWriter
 {
@@ -43,6 +56,16 @@ final class FileOutputWriter implements OutputWriter
     private static function refuseUnopenablePath(string $path): void
     {
         $directory = dirname($path);
+
+        // candy-codeshot-051: fopen('w') follows symlinks, and every check
+        // below follows the link too — a path that IS a symlink would pass
+        // all of them while truncating whatever it points at, anywhere the
+        // process can write. The output directory being writable is no
+        // defence when the victim lives outside it, so refuse the link
+        // itself before anything dereferences it.
+        if (is_link($path)) {
+            throw new \RuntimeException("Failed to open file for writing: {$path} (path is a symbolic link)");
+        }
 
         if (is_dir($path)) {
             throw new \RuntimeException("Failed to open file for writing: {$path} (path is a directory)");
@@ -99,14 +122,30 @@ final class FileOutputWriter implements OutputWriter
 
     public function __destruct()
     {
-        $this->close();
+        // PHP cannot propagate an exception out of a destructor (it becomes a
+        // fatal during shutdown), so the best-effort close here swallows the
+        // loud close() failure. Callers who care about the final flush result
+        // must call close() explicitly — that is the documented loud surface.
+        try {
+            $this->close();
+        } catch (\RuntimeException) {
+            // Disclosed by design: the explicit-close contract carries the error.
+        }
     }
 
     public function close(): void
     {
         if ($this->fp !== null) {
-            fclose($this->fp);
+            // candy-codeshot-051: fclose() returns false when the final flush
+            // fails (disk full, mounted read-only mid-stream, hung device) —
+            // silently nulling the handle reported a completed file that was
+            // truncated on disk. Detach first so neither close() nor the
+            // destructor can double-close the resource, then answer loudly.
+            $handle = $this->fp;
             $this->fp = null;
+            if (!fclose($handle)) {
+                throw new \RuntimeException("FileOutputWriter: close() failed on {$this->path}");
+            }
         }
     }
 }

@@ -232,4 +232,26 @@ final class ChromaThemeLoaderTest extends TestCase
             );
         }
     }
+
+    public function testLoadRefusesFifoWithoutBlocking(): void
+    {
+        // candy-codeshot-049 (cs-27): file_exists admits FIFOs, and the old
+        // loader ran file_get_contents on one — with no writer attached that
+        // read blocks forever, hanging the process that merely wanted to
+        // reject a bad theme path. The is_file door answers instantly.
+        if (!function_exists('posix_mkfifo')) {
+            $this->markTestSkipped('posix_mkfifo unavailable');
+        }
+        $fifo = sys_get_temp_dir() . '/cs27-chroma-' . bin2hex(random_bytes(6)) . '.fifo';
+        if (!posix_mkfifo($fifo, 0600)) {
+            $this->markTestSkipped('could not create FIFO (named pipes not permitted here)');
+        }
+        try {
+            $this->expectException(\InvalidArgumentException::class);
+            $this->expectExceptionMessageMatches('/not a regular file/');
+            ChromaThemeLoader::load($fifo);
+        } finally {
+            unlink($fifo);
+        }
+    }
 }

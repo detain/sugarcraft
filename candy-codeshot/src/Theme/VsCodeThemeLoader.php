@@ -51,11 +51,16 @@ final class VsCodeThemeLoader
     /**
      * Load a Theme from a VS Code JSON theme file at `$path`.
      *
-     * The file is read up to 1 MB; a larger file is truncated, and the
-     * truncated JSON then fails to parse (JsonException) rather than
-     * silently loading half a theme.
+     * Only a regular, readable file is opened: `file_exists` alone admits
+     * FIFOs and sockets, whose untimed read would block forever (candy-codeshot-049).
+     * The read carries a 10 s stream timeout — an honest backstop only for
+     * stream-wrapper paths (a hung NFS regular file cannot be interrupted by
+     * it, which is exactly why the is_file door above is the real defence) —
+     * and is capped at 1 MB; a larger file is truncated, and the truncated
+     * JSON then fails to parse (JsonException) rather than silently loading
+     * half a theme.
      *
-     * @throws \InvalidArgumentException if the file does not exist or cannot be read.
+     * @throws \InvalidArgumentException if the path is not a regular readable file, or cannot be read.
      * @throws \JsonException if the (possibly truncated) contents are not valid JSON.
      */
     public static function load(string $path): Theme
@@ -64,7 +69,21 @@ final class VsCodeThemeLoader
             throw new \InvalidArgumentException("VS Code theme file not found: {$path}");
         }
 
-        $json = file_get_contents($path, false, null, 0, 1_000_000);
+        if (!is_file($path)) {
+            throw new \InvalidArgumentException("VS Code theme path is not a regular file: {$path}");
+        }
+
+        if (!is_readable($path)) {
+            throw new \InvalidArgumentException("VS Code theme file is not readable: {$path}");
+        }
+
+        $json = file_get_contents(
+            $path,
+            false,
+            stream_context_create(['options' => ['timeout' => 10]]),
+            0,
+            1_000_000,
+        );
         if ($json === false) {
             throw new \InvalidArgumentException("Failed to read VS Code theme file: {$path}");
         }

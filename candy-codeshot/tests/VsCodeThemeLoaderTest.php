@@ -358,4 +358,26 @@ final class VsCodeThemeLoaderTest extends TestCase
         $this->assertSame('#0d1117', $theme->background);
         $this->assertSame('#ff5f56', $theme->windowRed, 'junk scopes must not repaint chrome');
     }
+
+    public function testLoadRefusesFifoWithoutBlocking(): void
+    {
+        // candy-codeshot-049 (cs-27): file_exists admits FIFOs, and the old
+        // loader ran file_get_contents on one — with no writer attached that
+        // read blocks forever, hanging the process that merely wanted to
+        // reject a bad theme path. The is_file door answers instantly.
+        if (!function_exists('posix_mkfifo')) {
+            $this->markTestSkipped('posix_mkfifo unavailable');
+        }
+        $fifo = sys_get_temp_dir() . '/cs27-vsc-' . bin2hex(random_bytes(6)) . '.fifo';
+        if (!posix_mkfifo($fifo, 0600)) {
+            $this->markTestSkipped('could not create FIFO (named pipes not permitted here)');
+        }
+        try {
+            $this->expectException(\InvalidArgumentException::class);
+            $this->expectExceptionMessageMatches('/not a regular file/');
+            VsCodeThemeLoader::load($fifo);
+        } finally {
+            unlink($fifo);
+        }
+    }
 }

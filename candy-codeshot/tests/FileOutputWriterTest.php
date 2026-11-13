@@ -235,4 +235,106 @@ final class FileOutputWriterTest extends TestCase
             unlink($path);
         }
     }
+
+    public function testRefusesToWriteThroughASymbolicLink(): void
+    {
+        // candy-codeshot-051 (cs-27): every pre-check followed the link, so a
+        // symlinked target passed them all while fopen('w') truncated whatever
+        // the link pointed at — a victim the writable-directory check was
+        // never positioned to protect. The refusal must land BEFORE anything
+        // dereferences, and the victim's bytes must prove it.
+        if (!function_exists('symlink')) {
+            $this->markTestSkipped('symlink() unavailable on this platform');
+        }
+        $victim = $this->tempDir . '/victim.txt';
+        file_put_contents($victim, 'sensitive');
+        @symlink($victim, $this->tempFile);
+
+        try {
+            new FileOutputWriter($this->tempFile);
+            $this->fail('a symlinked output path must not open for writing');
+        } catch (\RuntimeException $e) {
+            $this->assertMatchesRegularExpression('/symbolic link/', $e->getMessage());
+        }
+
+        try {
+            $this->assertSame('sensitive', file_get_contents($victim), 'refusal must leave the victim intact');
+        } finally {
+            // tearDown's file_exists() follows the link, so a dangling link
+            // would survive it and wedge the rmdir — remove both ends here.
+            @unlink($this->tempFile);
+            unlink($victim);
+        }
+    }
+
+    public function testConstructorTruncatesTheExistingTargetImmediately(): void
+    {
+        // Behavior pin for the class docblock's honesty paragraph: 'w' means
+        // the old content is gone at CONSTRUCTION, before any write() — a
+        // mid-stream failure leaves a partial file. Documented, not jailed.
+        file_put_contents($this->tempFile, 'OLD CONTENT THAT MUST NOT SURVIVE');
+
+        $writer = new FileOutputWriter($this->tempFile);
+        try {
+            clearstatcache();
+            $this->assertSame(0, filesize($this->tempFile), 'opening the writer is the truncation point');
+        } finally {
+            $writer->close();
+        }
+        $this->assertSame('', file_get_contents($this->tempFile));
+    }
+
+    public function testExplicitCloseIsIdempotentAndSafeForTheDestructor(): void
+    {
+        // close() detaches before fclose(), so the destructor's second pass is
+        // a silent no-op — no double-fclose warning under failOnWarning.
+        $writer = new FileOutputWriter($this->tempFile);
+        $writer->write('once');
+        $writer->close();
+        $writer->close();
+        $this->assertSame('once', file_get_contents($this->tempFile));
+    }
+
+    public function testShortWriteRaisesWhenTheKernelTruncatesTheChunk(): void
+    {
+        // candy-codeshot-051 (cs-27) staged for real: RLIMIT_FSIZE makes fwrite
+        // return fewer bytes than the chunk, the exact short-write the writer
+        // documents. Process-local limit, so it runs in a child (the census
+        // scanner's scope is the root package; lib tests are exempt).
+        if (!extension_loaded('posix') || !extension_loaded('pcntl') || PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('posix rlimit staging needs posix+pcntl on a Unix host');
+        }
+        $path = $this->tempDir . '/rlimit.txt';
+        $autoload = realpath(__DIR__ . '/../vendor/autoload.php');
+        $this->assertIsString($autoload);
+
+        $child = sprintf(
+            'posix_setrlimit(POSIX_RLIMIT_FSIZE, 8, 8);'
+            . 'pcntl_signal(SIGXFSZ, SIG_IGN);'
+            . 'require %s;'
+            . '$w = new SugarCraft\CodeShot\FileOutputWriter(%s);'
+            . 'try { $w->write("0123456789"); echo "NOTHROWN"; $w->close(); exit(3); }'
+            . 'catch (RuntimeException $e) { echo $e->getMessage(); exit(7); }',
+            var_export($autoload, true),
+            var_export($path, true),
+        );
+
+        $handle = proc_open(
+            [PHP_BINARY, '-r', $child],
+            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($handle);
+        $stdout = (string) stream_get_contents($pipes[1]);
+        $stderr = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exit = proc_close($handle);
+
+        $this->assertSame(7, $exit, "child must report the short write, got exit {$exit} (stdout: {$stdout}, stderr: {$stderr})");
+        $this->assertMatchesRegularExpression('/short write/', $stdout);
+        // The disclosed half-truth of -051: the file keeps the partial payload.
+        $this->assertStringStartsWith('01234567', (string) @file_get_contents($path));
+        @unlink($path);
+    }
 }

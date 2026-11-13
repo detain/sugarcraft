@@ -242,6 +242,18 @@ final class SvgRenderer
                  . '  </filter>' . "\n";
         }
         if ($this->fontPath !== null) {
+            // candy-codeshot-048: the stat ceiling alone is a race and a lie.
+            // A path that statted small can be swapped for a bigger file before
+            // the read, and under --unsafe-paths a device reports a usable stat
+            // while streaming forever (/dev/zero stats 0 bytes and would make an
+            // unbounded file_get_contents consume all RAM). Two doors: regular
+            // file first, then a read that is itself capped — at most the embed
+            // limit plus one byte is ever taken in, and the byte count is
+            // reconciled against the stat, so a lying or changed source is
+            // refused with a bounded spike instead of embedded.
+            if (!is_file($this->fontPath)) {
+                throw new \RuntimeException("Font path is not a regular file: {$this->fontPath}");
+            }
             $fontSize = @filesize($this->fontPath);
             if ($fontSize === false) {
                 throw new \RuntimeException("Cannot stat font file: {$this->fontPath}");
@@ -251,9 +263,22 @@ final class SvgRenderer
                     "Font file too large to embed: {$fontSize} bytes exceed the 32 MiB limit ({$this->fontPath})"
                 );
             }
-            $fontData = file_get_contents($this->fontPath);
+            $handle = @fopen($this->fontPath, 'rb');
+            if ($handle === false) {
+                throw new \RuntimeException("Cannot read font file: {$this->fontPath}");
+            }
+            $fontData = stream_get_contents($handle, self::MAX_EMBEDDED_FONT_BYTES + 1);
+            fclose($handle);
             if ($fontData === false) {
                 throw new \RuntimeException("Cannot read font file: {$this->fontPath}");
+            }
+            if (strlen($fontData) !== $fontSize) {
+                throw new \RuntimeException(sprintf(
+                    'Font file changed while being embedded: stat reported %d bytes, the bounded read returned %d (%s)',
+                    $fontSize,
+                    strlen($fontData),
+                    $this->fontPath,
+                ));
             }
             {
                 $base64 = base64_encode($fontData);
