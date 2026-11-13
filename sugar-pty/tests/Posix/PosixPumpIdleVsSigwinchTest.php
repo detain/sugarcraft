@@ -12,7 +12,7 @@ use SugarCraft\Pty\SignalForwarder;
 
 /**
  * Verifies the idle / sigwinch split: onIdle fires on every stream_select
- * idle tick; onSigwinch is reserved exclusively for real terminal-resize
+ * idle tick; onResize is reserved exclusively for real terminal-resize
  * events driven by the consumer's SignalForwarder callback.
  *
  * These tests are the primary acceptance gate for step 01.03.
@@ -23,7 +23,7 @@ final class PosixPumpIdleVsSigwinchTest extends TestCase
 
     /**
      * Verify onIdle fires on every idle tick and is independent of
-     * onSigwinch. This is the "idle" side of the split.
+     * onResize. This is the "idle" side of the split.
      */
     public function testOnIdleFiresOnEveryIdleTick(): void
     {
@@ -47,7 +47,7 @@ final class PosixPumpIdleVsSigwinchTest extends TestCase
                 ->withOnIdle(function () use (&$idleCount): void {
                     $idleCount++;
                 })
-                ->withOnSigwinch(function (int $cols, int $rows) use (&$sigwinchCount): void {
+                ->withOnResize(function (int $cols, int $rows) use (&$sigwinchCount): void {
                     $sigwinchCount++;
                 });
 
@@ -66,7 +66,7 @@ final class PosixPumpIdleVsSigwinchTest extends TestCase
             $this->assertSame(
                 0,
                 $sigwinchCount,
-                'onSigwinch must not fire on idle ticks (got ' . $sigwinchCount . ')',
+                'onResize must not fire on idle ticks (got ' . $sigwinchCount . ')',
             );
         } finally {
             $pair->master()->close();
@@ -74,9 +74,9 @@ final class PosixPumpIdleVsSigwinchTest extends TestCase
     }
 
     /**
-     * Verify that when only onSigwinch is registered (no onIdle), the
-     * pump still runs normally but onSigwinch never fires on idle ticks.
-     * This confirms consumers that previously relied on onSigwinch(0,0) for
+     * Verify that when only onResize is registered (no onIdle), the
+     * pump still runs normally but onResize never fires on idle ticks.
+     * This confirms consumers that previously relied on onResize(0,0) for
      * idle-tick logic must migrate to onIdle.
      */
     public function testOnSigwinchDoesNotFireOnIdleWithoutSignalForwarder(): void
@@ -97,10 +97,10 @@ final class PosixPumpIdleVsSigwinchTest extends TestCase
             $lastCols = -1;
             $lastRows = -1;
 
-            // Only onSigwinch is registered — no SignalForwarder to drive it.
+            // Only onResize is registered — no SignalForwarder to drive it.
             $opts = (new PumpOptions())
                 ->withSelectTimeoutUs(20_000)
-                ->withOnSigwinch(function (int $cols, int $rows) use (&$sigwinchFired, &$lastCols, &$lastRows): void {
+                ->withOnResize(function (int $cols, int $rows) use (&$sigwinchFired, &$lastCols, &$lastRows): void {
                     $sigwinchFired = true;
                     $lastCols = $cols;
                     $lastRows = $rows;
@@ -113,7 +113,7 @@ final class PosixPumpIdleVsSigwinchTest extends TestCase
             \fclose($stdout);
 
             $this->assertSame(-1, $exitCode);
-            $this->assertFalse($sigwinchFired, 'onSigwinch must not fire on idle ticks without SignalForwarder');
+            $this->assertFalse($sigwinchFired, 'onResize must not fire on idle ticks without SignalForwarder');
             $this->assertSame(-1, $lastCols, 'cols must not have been captured');
             $this->assertSame(-1, $lastRows, 'rows must not have been captured');
         } finally {
@@ -123,7 +123,7 @@ final class PosixPumpIdleVsSigwinchTest extends TestCase
 
     /**
      * Verify both hooks can be registered simultaneously and fire
-     * independently: onIdle for periodic housekeeping, onSigwinch
+     * independently: onIdle for periodic housekeeping, onResize
      * exclusively for real resize events (which won't occur in this test
      * without SignalForwarder).
      */
@@ -149,7 +149,7 @@ final class PosixPumpIdleVsSigwinchTest extends TestCase
                 ->withOnIdle(function () use (&$idleCount): void {
                     $idleCount++;
                 })
-                ->withOnSigwinch(function (int $cols, int $rows) use (&$sigwinchCount): void {
+                ->withOnResize(function (int $cols, int $rows) use (&$sigwinchCount): void {
                     $sigwinchCount++;
                 });
 
@@ -161,22 +161,22 @@ final class PosixPumpIdleVsSigwinchTest extends TestCase
 
             $this->assertSame(-1, $exitCode);
             $this->assertGreaterThanOrEqual(1, $idleCount, 'onIdle should fire at least once');
-            $this->assertSame(0, $sigwinchCount, 'onSigwinch should not fire without a real signal');
+            $this->assertSame(0, $sigwinchCount, 'onResize should not fire without a real signal');
         } finally {
             $pair->master()->close();
         }
     }
 
     /**
-     * Verify onSigwinch is called via the SignalForwarder → resize → size
+     * Verify onResize is called via the SignalForwarder → resize → size
      * change detection path when SIGWINCH is raised.
      *
      * The step required faking a real SIGWINCH via SignalForwarder and
-     * asserting onSigwinch(cols, rows) was called with real values.
+     * asserting onResize(cols, rows) was called with real values.
      *
      * SignalForwarder::attachSigwinch installs a handler that calls
      * master->resize() when SIGWINCH fires. PosixPump detects the size
-     * change on the next idle tick and fires onSigwinch(cols, rows).
+     * change on the next idle tick and fires onResize(cols, rows).
      */
     public function testOnSigwinchFiredWithRealDimensionsViaSignalForwarder(): void
     {

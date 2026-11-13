@@ -182,12 +182,12 @@ final class PosixPump implements PumpContract
             : \microtime(true) + $opts->pumpDeadlineUs / 1_000_000;
 
         // Track last known PTY size so we can detect resize on idle
-        // ticks and fire onSigwinch. This makes onSigwinch work with
+        // ticks and fire onResize. This makes onResize work with
         // SignalForwarder-driven resize without requiring a callback
         // from MasterPty itself.
         $lastKnownCols = 0;
         $lastKnownRows = 0;
-        if ($opts->onSigwinch !== null) {
+        if ($opts->onResize !== null) {
             try {
                 $initialSize = $master->size();
                 $lastKnownCols = $initialSize['cols'];
@@ -247,11 +247,11 @@ final class PosixPump implements PumpContract
                 // Detect size change — SignalForwarder calls master->resize()
                 // when SIGWINCH fires; the kernel stores the new size so the
                 // next size() call returns updated dimensions.
-                if ($opts->onSigwinch !== null && $lastKnownCols !== 0) {
+                if ($opts->onResize !== null && $lastKnownCols !== 0) {
                     try {
                         $current = $master->size();
                         if ($current['cols'] !== $lastKnownCols || $current['rows'] !== $lastKnownRows) {
-                            ($opts->onSigwinch)((int) $current['cols'], (int) $current['rows']);
+                            ($opts->onResize)((int) $current['cols'], (int) $current['rows']);
                             $lastKnownCols = $current['cols'];
                             $lastKnownRows = $current['rows'];
                         }
@@ -484,7 +484,7 @@ final class PosixPump implements PumpContract
     // consumer's {@see SignalForwarder::attachSigwinch} callback, which
     // pipes dimensions into `MasterPty::resize()`. The pump loop fires
     // {@see PumpOptions::$onIdle} on every idle tick — that is the
-    // correct hook for keepalive / polling, not `onSigwinch`. The pump
+    // correct hook for keepalive / polling, not `onResize`. The pump
     // itself is reusable outside interactive-session contexts (e.g.
     // piping a non-tty command into a recording).
 }

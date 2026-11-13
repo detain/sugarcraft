@@ -285,10 +285,10 @@ final class ReactPump
         }
 
         // Track last known PTY size so the poll tick can detect resize
-        // and fire onSigwinch — same mechanism as the sync pump's idle path.
+        // and fire onResize — same mechanism as the sync pump's idle path.
         $this->lastKnownCols = 0;
         $this->lastKnownRows = 0;
-        if ($opts->onSigwinch !== null) {
+        if ($opts->onResize !== null) {
             try {
                 $size = $master->size();
                 $this->lastKnownCols = $size['cols'];
@@ -630,11 +630,11 @@ final class ReactPump
         if ($this->opts->keepalive !== null) {
             ($this->opts->keepalive)();
         }
-        if ($this->opts->onSigwinch !== null && $this->lastKnownCols !== 0) {
+        if ($this->opts->onResize !== null && $this->lastKnownCols !== 0) {
             try {
                 $current = $this->master->size();
                 if ($current['cols'] !== $this->lastKnownCols || $current['rows'] !== $this->lastKnownRows) {
-                    ($this->opts->onSigwinch)((int) $current['cols'], (int) $current['rows']);
+                    ($this->opts->onResize)((int) $current['cols'], (int) $current['rows']);
                     $this->lastKnownCols = $current['cols'];
                     $this->lastKnownRows = $current['rows'];
                 }

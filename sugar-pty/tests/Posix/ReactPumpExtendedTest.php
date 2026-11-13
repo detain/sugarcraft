@@ -129,7 +129,7 @@ final class ReactPumpExtendedTest extends TestCase
     }
 
     // ─────────────────────────────────────────────────────────────
-    // onPollTick() resize detection path (onSigwinch handler set)
+    // onPollTick() resize detection path (onResize handler set)
     // ─────────────────────────────────────────────────────────────
 
     public function testOnPollTickFiresResizeHandlerOnSizeChange(): void

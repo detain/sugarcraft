@@ -201,7 +201,7 @@ Inside, a single `stream_select()` loop watches:
 - host STDIN → master (forward keystrokes to the child),
 - master → host STDOUT (forward output to the user),
 - a timeout that fires the optional `onIdle` callback
-  (`PumpOptions`; `keepalive` is its legacy alias). `onSigwinch` is
+  (`PumpOptions`; `keepalive` is its legacy alias). `onResize` is
   *not* timeout-driven or signal-driven of its own: the consumer's
   `SignalForwarder` applies resizes, and the pump merely observes the
   resulting size change on an idle tick (polled; never fires on a

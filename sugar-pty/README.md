@@ -535,7 +535,7 @@ leaving the child and PTY for the caller to reap:
 |---|---|---|
 | `keepalive` | idle tick (stream_select → 0) | Legacy heartbeat alias; prefer `onIdle` |
 | `onIdle` | idle tick — every `stream_select` timeout | Keepalive pings, polling housekeeping, any periodic task |
-| `onSigwinch` | the pump *observes* `MasterPty::size()` differing from the last-known size on an idle tick — polled between reads, never signalled | React to a resize the consumer's `SignalForwarder` already applied; the pump itself never writes TIOCSWINSZ |
+| `onResize` | the pump *observes* `MasterPty::size()` differing from the last-known size on an idle tick — polled between reads, never signalled | React to a resize the consumer's `SignalForwarder` already applied; the pump itself never writes TIOCSWINSZ |
 | `onChildExit` | child process exits | Resource cleanup, notification |
 
 `PumpOptions::sshDefault(): self` — identity preset. Returns stock
@@ -550,8 +550,8 @@ that mean "pump an interactive SSH session", including outside the
 $opts = PumpOptions::sshDefault()->withOnIdle(fn () => error_log('alive'));
 ```
 
-**`onIdle` vs `onSigwinch`:** These are independent hooks.
-`onIdle` fires on *every* idle tick (no I/O ready). `onSigwinch`
+**`onIdle` vs `onResize`:** These are independent hooks.
+`onIdle` fires on *every* idle tick (no I/O ready). `onResize`
 fires only when `MasterPty::size()` differs from the last known size —
 a **polled size-diff observer**, not a signal hook: the SIGWINCH itself
 is consumed by the consumer's own `SignalForwarder` wiring, and the
@@ -561,8 +561,15 @@ never fires it until a real size is established, and `MultiPump`'s sync
 `tick()` does not deliver it at all (its idle arm fires `onIdle` +
 `keepalive` like the other pumps; `runAsync()` per-session ReactPumps
 observe size changes and do fire it).
-Do not conflate them: if you were passing `onSigwinch(0, 0)` as a fake
+Do not conflate them: if you were passing `onResize(0, 0)` as a fake
 idle tick, migrate to `onIdle`.
+
+Naming ledger (PTY-18): this hook was called `onSigwinch` — a name that
+promised a signal it never receives (the consumer's `SignalForwarder`
+consumes the signal; the pump only observes the result).
+`withOnSigwinch()` and the constructor's `$onSigwinch` parameter remain
+as deprecated forwarders; where both constructor spellings are given,
+`onResize` wins.
 
 ```php
 use SugarCraft\Pty\Posix\PosixPump;
@@ -570,7 +577,7 @@ use SugarCraft\Pty\PumpOptions;
 
 $opts = (new PumpOptions())
     ->withOnIdle(fn () => error_log('still alive'))        // every ~50 ms
-    ->withOnSigwinch(fn (int $cols, int $rows) => null)   // on dimension change
+    ->withOnResize(fn (int $cols, int $rows) => null)   // on dimension change
     ->withOnChildExit(fn (int $code) => error_log("exited $code"));
 
 (new PosixPump())->run($master, STDIN, STDOUT, $child, $opts);

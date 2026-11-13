@@ -105,10 +105,10 @@ final class PumpOptions
     /**
      * Called on each idle tick (stream_select returned 0). Use for
      * keepalive, polling, or any periodic housekeeping. Distinct from
-     * {@see onSigwinch}: the resize signal itself is consumed by the
-     * consumer's {@see SignalForwarder}, and onSigwinch only reports
-     * the resulting size change observed on this same tick — it is a
-     * polled observer riding the idle loop, never a signal hook.
+     * {@see onResize}: the resize signal itself is consumed by the
+     * consumer's {@see SignalForwarder}, and onResize only reports the
+     * resulting size change observed on this same tick — it is a polled
+     * observer riding the idle loop, never a signal hook.
      *
      * @var (\Closure(): void)|null
      */
@@ -124,9 +124,13 @@ final class PumpOptions
      * MultiPump::tick() does not deliver it at all.
      * Null when no callback is registered.
      *
+     * (PTY-18: was `onSigwinch` — the old name promised a signal it
+     * never receives; {@see withOnSigwinch()} forwards here, kept
+     * deprecated for one release cycle.)
+     *
      * @var (\Closure(int, int): void)|null
      */
-    public readonly \Closure|null $onSigwinch;
+    public readonly \Closure|null $onResize;
 
     /**
      * Called when the child process exits.
@@ -161,10 +165,11 @@ final class PumpOptions
      * @param float<0, max>                  $stdinEofGraceSec
      * @param (\Closure(): void)|null       $keepalive
      * @param (\Closure(): void)|null       $onIdle
-     * @param (\Closure(int, int): void)|null $onSigwinch
+     * @param (\Closure(int, int): void)|null $onResize
      * @param (\Closure(int): void)|null     $onChildExit
      * @param \SugarCraft\Core\Recorder|null $recorder
      * @param int<1, max>|null               $pumpDeadlineUs
+     * @param (\Closure(int, int): void)|null $onSigwinch @deprecated PTY-18 alias for $onResize; effective only when $onResize is null
      */
     public function __construct(
         int $chunkBytes = self::DEFAULT_CHUNK_BYTES,
@@ -174,10 +179,11 @@ final class PumpOptions
         string $veof = self::DEFAULT_VEOF,
         ?\Closure $keepalive = null,
         ?\Closure $onIdle = null,
-        ?\Closure $onSigwinch = null,
+        ?\Closure $onResize = null,
         ?\Closure $onChildExit = null,
         ?\SugarCraft\Core\Recorder $recorder = null,
         ?int $pumpDeadlineUs = null,
+        ?\Closure $onSigwinch = null,
     ) {
         if ($pumpDeadlineUs !== null && $pumpDeadlineUs <= 0) {
             throw new \InvalidArgumentException(
@@ -203,7 +209,7 @@ final class PumpOptions
         $this->veof = $veof;
         $this->keepalive = $keepalive;
         $this->onIdle = $onIdle;
-        $this->onSigwinch = $onSigwinch;
+        $this->onResize = $onResize ?? $onSigwinch;
         $this->onChildExit = $onChildExit;
         $this->recorder = $recorder;
         $this->pumpDeadlineUs = $pumpDeadlineUs;
@@ -263,9 +269,25 @@ final class PumpOptions
         return $this->mutate(['onIdle' => $v]);
     }
 
+    /**
+     * Register the polled size-diff observer. See the {@see onResize}
+     * docblock: it fires on an idle tick after the consumer's
+     * SignalForwarder has resized the master — and never on a session
+     * that opened at 0x0 until a real size is established.
+     */
+    public function withOnResize(?\Closure $v): self
+    {
+        return $this->mutate(['onResize' => $v]);
+    }
+
+    /**
+     * @deprecated PTY-18 — the name promised a signal hook; the hook is
+     *             a polled observer. {@see withOnResize()} is the same
+     *             field; this forwards to it.
+     */
     public function withOnSigwinch(?\Closure $v): self
     {
-        return $this->mutate(['onSigwinch' => $v]);
+        return $this->withOnResize($v);
     }
 
     public function withOnChildExit(?\Closure $v): self

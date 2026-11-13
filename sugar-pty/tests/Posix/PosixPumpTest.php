@@ -23,7 +23,7 @@ final class PosixPumpTest extends TestCase
         $this->assertSame(PumpOptions::DEFAULT_STDIN_EOF_GRACE_SEC, $opts->stdinEofGraceSec);
         $this->assertSame(PumpOptions::DEFAULT_VEOF, $opts->veof);
         $this->assertNull($opts->keepalive);
-        $this->assertNull($opts->onSigwinch);
+        $this->assertNull($opts->onResize);
         $this->assertNull($opts->onChildExit);
     }
 

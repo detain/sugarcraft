@@ -20,7 +20,7 @@ final class PumpOptionsTest extends TestCase
         $this->assertSame(PumpOptions::DEFAULT_VEOF, $opts->veof);
         $this->assertNull($opts->keepalive);
         $this->assertNull($opts->onIdle);
-        $this->assertNull($opts->onSigwinch);
+        $this->assertNull($opts->onResize);
         $this->assertNull($opts->onChildExit);
     }
 
@@ -36,7 +36,7 @@ final class PumpOptionsTest extends TestCase
         $this->assertSame(PumpOptions::DEFAULT_VEOF, $opts->veof);
         $this->assertNull($opts->keepalive);
         $this->assertNull($opts->onIdle);
-        $this->assertNull($opts->onSigwinch);
+        $this->assertNull($opts->onResize);
         $this->assertNull($opts->onChildExit);
     }
 
@@ -64,10 +64,10 @@ final class PumpOptionsTest extends TestCase
     public function testWithOnSigwinchAcceptsCallable(): void
     {
         $cb = fn (int $cols, int $rows) => null;
-        $opts = (new PumpOptions())->withOnSigwinch($cb);
+        $opts = (new PumpOptions())->withOnResize($cb);
 
-        $this->assertNotNull($opts->onSigwinch);
-        $this->assertSame($cb, $opts->onSigwinch);
+        $this->assertNotNull($opts->onResize);
+        $this->assertSame($cb, $opts->onResize);
     }
 
     public function testWithOnIdleAcceptsCallable(): void
@@ -118,19 +118,19 @@ final class PumpOptionsTest extends TestCase
 
         $byCallable = $opts
             ->withKeepalive($keepaliveCb)
-            ->withOnSigwinch($sigwinchCb)
+            ->withOnResize($sigwinchCb)
             ->withOnChildExit($childExitCb);
 
         $this->assertSame($keepaliveCb, $byCallable->keepalive);
-        $this->assertSame($sigwinchCb, $byCallable->onSigwinch);
+        $this->assertSame($sigwinchCb, $byCallable->onResize);
         $this->assertSame($childExitCb, $byCallable->onChildExit);
         $this->assertInstanceOf(PumpOptions::class, $byCallable);
     }
 
     public function testWithOnSigwinchAcceptsNull(): void
     {
-        $opts = (new PumpOptions())->withOnSigwinch(null);
-        $this->assertNull($opts->onSigwinch);
+        $opts = (new PumpOptions())->withOnResize(null);
+        $this->assertNull($opts->onResize);
     }
 
     public function testWithOnChildExitAcceptsCallable(): void
@@ -156,7 +156,7 @@ final class PumpOptionsTest extends TestCase
             veof: "\x04",
             keepalive: $keepaliveCb,
             onIdle: $idleCb,
-            onSigwinch: $sigwinchCb,
+            onResize: $sigwinchCb,
             onChildExit: $childExitCb,
         );
 
@@ -168,7 +168,7 @@ final class PumpOptionsTest extends TestCase
             ->withVEOF("\x03")
             ->withKeepalive(null)
             ->withOnIdle(null)
-            ->withOnSigwinch(null)
+            ->withOnResize(null)
             ->withOnChildExit(null);
 
         $this->assertSame(4096, $original->chunkBytes);
@@ -178,7 +178,7 @@ final class PumpOptionsTest extends TestCase
         $this->assertSame("\x04", $original->veof);
         $this->assertSame($keepaliveCb, $original->keepalive);
         $this->assertSame($idleCb, $original->onIdle);
-        $this->assertSame($sigwinchCb, $original->onSigwinch);
+        $this->assertSame($sigwinchCb, $original->onResize);
         $this->assertSame($childExitCb, $original->onChildExit);
 
         $this->assertSame(8192, $modified->chunkBytes);
@@ -188,7 +188,7 @@ final class PumpOptionsTest extends TestCase
         $this->assertSame("\x03", $modified->veof);
         $this->assertNull($modified->keepalive);
         $this->assertNull($modified->onIdle);
-        $this->assertNull($modified->onSigwinch);
+        $this->assertNull($modified->onResize);
         $this->assertNull($modified->onChildExit);
     }
 
@@ -233,7 +233,7 @@ final class PumpOptionsTest extends TestCase
             'veof'            => $opts->withVEOF("\x03"),
             'keepalive'       => $opts->withKeepalive(static fn () => null),
             'onIdle'          => $opts->withOnIdle(static fn () => null),
-            'onSigwinch'      => $opts->withOnSigwinch(static fn (int $c, int $r) => null),
+            'onResize'      => $opts->withOnResize(static fn (int $c, int $r) => null),
             'onChildExit'     => $opts->withOnChildExit(static fn (int $e) => null),
             'recorder'        => $opts->withRecorder(null),
         ];
@@ -257,5 +257,35 @@ final class PumpOptionsTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         (new PumpOptions())->withPumpDeadlineUs(-1);
+    }
+
+    // ─── PTY-18: onSigwinch → onResize deprecated aliases ───────────
+
+    public function testDeprecatedSetterWritesTheOneResizeField(): void
+    {
+        $cb = static function (int $cols, int $rows): void {};
+
+        $viaAlias = (new PumpOptions())->withOnSigwinch($cb);
+        $viaName = (new PumpOptions())->withOnResize($cb);
+
+        // One field, two spellings: the alias must not fork state.
+        $this->assertEquals($viaName, $viaAlias);
+        $this->assertSame($cb, $viaAlias->onResize);
+
+        // And the old chain keeps working after the new setter: last write wins.
+        $chained = $viaAlias->withOnResize(null);
+        $this->assertNull($chained->onResize);
+    }
+
+    public function testDeprecatedConstructorAliasStillRoutesTheResizeField(): void
+    {
+        $cb = static function (int $cols, int $rows): void {};
+
+        $this->assertSame($cb, (new PumpOptions(onSigwinch: $cb))->onResize);
+
+        // Both spellings supplied: the live name wins, the alias is inert.
+        $newer = static function (int $cols, int $rows): void {};
+        $both = new PumpOptions(onResize: $newer, onSigwinch: $cb);
+        $this->assertSame($newer, $both->onResize);
     }
 }

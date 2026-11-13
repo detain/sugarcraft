@@ -209,7 +209,7 @@ final class MultiPump
      *
      * Callback reach of the SYNC path: idle ticks deliver
      * {@see PumpOptions::$onIdle} then {@see PumpOptions::$keepalive},
-     * matching the single-session pumps. onSigwinch / onChildExit are not
+     * matching the single-session pumps. onResize / onChildExit are not
      * delivered by tick() — the size-diff observer lives in the pump loop;
      * a multiplexed caller wanting them drives runAsync() (one ReactPump
      * per session, hooks intact) or observes children around tick() itself.
