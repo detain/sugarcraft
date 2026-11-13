@@ -199,8 +199,9 @@ checkout the launch stood in.
   `notifications/cancelled` naming the request, and returns
   `{"error": "Tool call timed out after 30s and was cancelled; the server may
   still finish the work"}`; the connection stays usable and the late reply is
-  skipped by id. Null, zero, a negative or a non-finite value leaves the call
-  unbounded.
+  skipped by id. A `null` or non-finite value leaves the call unbounded; zero
+  and a negative are refused at the door — "never" is spelled `null`, never
+  by folding.
 - `callTool(..., onWait: $beat)` calls `$beat` at least once a second
   for as long as the call waits, so an embedder whose own watchdog measures
   silence can keep a long unbounded call visibly alive. Throttle it yourself;

@@ -1006,8 +1006,10 @@ final class StdioMcpServer implements McpServer
      * time queued behind another process's exchange is time the caller
      * spent), sends `notifications/cancelled` naming the request so the
      * server can stop the work, and answers `['error' => 'Tool call timed
-     * out …']`. Null, zero, a negative or a non-finite value keeps the
-     * call unbounded — a bad setting can never invent a bound of zero.
+     * out …']`. Null (or a non-finite value) keeps the call unbounded; zero
+     * and a negative are refused at the door with an InvalidArgumentException
+     * — "never" is spelled null, and a mis-set bound must not masquerade as
+     * a deliberate one.
      *
      * $onWait is the caller's liveness beat: it is called at least once per
      * READ_POLL_SECONDS for as long as this call waits — for the exchange
@@ -1045,6 +1047,17 @@ final class StdioMcpServer implements McpServer
      */
     public function callTool(string $name, array $arguments, ?\Closure $onWait = null, ?float $timeoutSeconds = null, ?\Closure $onServerMessage = null): array
     {
+        // A zero or negative bound is not "unbounded said politely". The
+        // constructor already folds its 0 into the default start wait, so a
+        // second, OPPOSITE reading of the same input at the call door would
+        // leave every caller guessing. Null says never, out loud; anything
+        // at or below zero is a bug and is refused like one.
+        if ($timeoutSeconds !== null && $timeoutSeconds <= 0.0) {
+            throw new \InvalidArgumentException(
+                'callTool() timeoutSeconds must be null (unbounded) or a positive number of seconds; zero and negatives are refused.',
+            );
+        }
+
         $previous = $this->onWait;
         $this->onWait = $onWait;
         $previousHandler = $this->callServerMessage;

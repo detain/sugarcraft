@@ -88,8 +88,6 @@ final class CallToolDeadlineTest extends TestCase
     public static function unbounded(): iterable
     {
         yield 'null' => [null];
-        yield 'zero' => [0.0];
-        yield 'negative' => [-3.0];
         yield 'infinite' => [INF];
         yield 'NaN' => [NAN];
     }
@@ -100,6 +98,43 @@ final class CallToolDeadlineTest extends TestCase
         $result = $this->slowServer()->callTool('sleep', ['seconds' => 0.3], null, $timeout);
 
         self::assertSame('slept 0.3', $result['content'][0]['text'] ?? null);
+    }
+
+    public static function refusedBounds(): iterable
+    {
+        yield 'zero' => [0.0];
+        yield 'negative' => [-3.0];
+    }
+
+    /**
+     * Finding 010: the class read the SAME input two diametric ways — the
+     * constructor folds 0 into a 60 s default, the call door folded 0 into
+     * "never". The door now refuses non-positive bounds outright; "no bound"
+     * is spelled null. The README sentence carrying the law is pinned so a
+     * doc drift re-opens the guessing game.
+     *
+     * @dataProvider refusedBounds
+     */
+    public function testAZeroOrNegativeBoundIsRefusedAtTheDoor(?float $timeout): void
+    {
+        $server = $this->slowServer();
+
+        $refusal = null;
+        try {
+            $server->callTool('sleep', ['seconds' => 0.1], null, $timeout);
+        } catch (\InvalidArgumentException $e) {
+            $refusal = $e->getMessage();
+        }
+        // Capture, exit the try, assert after — harness law.
+        self::assertIsString($refusal, 'a non-positive bound folded into a silently unbounded call');
+        self::assertStringContainsString('positive', $refusal);
+
+        // Refused at the door before any write: the session stays usable.
+        self::assertSame('slept 0.1', $server->callTool('sleep', ['seconds' => 0.1])['content'][0]['text'] ?? null);
+
+        $readme = (string) file_get_contents(__DIR__ . '/../README.md');
+        self::assertStringContainsString('or non-finite value leaves the call unbounded', $readme);
+        self::assertStringContainsString('and a negative are refused at the door', $readme);
     }
 
     public function testTheDeadlineAndTheWaitBeatCompose(): void
