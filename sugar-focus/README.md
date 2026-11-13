@@ -207,7 +207,8 @@ SGR borders are invisible *and* inaudible: an Orca-style reader never sees the
 accent paint, so the ring's state must reach the user as text. Announce
 `current()` by name whenever it changes — the demo's footer (`● focused: …`)
 is that contract in miniature. For a "region k of n" position, prefer
-`enabledIndex() + 1` over `enabledCount()` (`FocusRing.php:758, :612`) to the
+`enabledIndex() + 1` over `enabledCount()` (`FocusRing::enabledIndex()` /
+`FocusRing::enabledCount()`) to the
 raw `index()`/`count()` pair: it reflects what Tab can actually reach.
 `enabledIndex()` is `null` when focus is parked on a disabled region or the
 ring is empty — announce the region name alone in that case, never position
@@ -254,10 +255,18 @@ MIT © Joe Huss
 ## Credits & inspiration
 
 The focus ring is an **original SugarCraft design — no 1:1 Go counterpart**.
-It plays the role that charmbracelet/bubbles' focus handling and sugar-dashboard's
-`FocusManager` play in their stacks, but as a standalone, dependency-free
-ring, so the attribution above is by analogy only.
+It plays the role that charmbracelet/bubbles' focus handling plays in its
+stack, but as a standalone, dependency-free ring, so the attribution above is
+by analogy only (the Go side; the repo consumers below are real users, not
+analogies).
+
+Used by: sugar-dashboard's `Layout\FocusManager` (imports
+`SugarCraft\Focus\FocusRing`) and candy-code's `Tui\Pane` tab cycle — the ring
+is the shared keyboard-focus primitive under both TUIs.
 
 Runnable example: [`examples/focus-ring.php`](https://github.com/sugarcraft/sugar-focus/blob/master/examples/focus-ring.php) — run it with `php examples/focus-ring.php`; with no TTY it draws one frame and exits 0.
+
+*Demo note (2026-11-13): a looping terminal capture — it clears and repaints
+the frame each loop, so it may flicker on some displays.*
 
 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-focus/.vhs/focus-ring.gif" alt="sugar-focus demo">
