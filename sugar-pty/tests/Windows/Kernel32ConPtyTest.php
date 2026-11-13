@@ -851,6 +851,27 @@ final class Kernel32ConPtyTest extends TestCase
     }
 
     /**
+     * PTY-08 redaction, source-pinned so the Windows-only failure site is
+     * still watched from Linux: the CreateProcessW message must go through
+     * the argv describer, never interpolate the command line itself.
+     */
+    public function testCreateProcessFailureMessageIsRedactedAtTheSite(): void
+    {
+        $source = \file_get_contents(
+            \dirname(__DIR__, 2) . '/src/Windows/Kernel32ConPty.php',
+        );
+        self::assertIsString($source);
+        $body = self::methodBody($source, 'createProcess');
+
+        self::assertStringContainsString('Argv::describeWide($applicationName, $commandLine)', $body);
+        self::assertStringNotContainsString(
+            'failed for "%s"',
+            $body,
+            'the old message shape interpolated the full command line — secrets ride argv',
+        );
+    }
+
+    /**
      * Skip, by name, unless this host can carry a ConPTY at all.
      */
     private static function requireWindowsConPty(): void

@@ -803,8 +803,8 @@ CDEF;
 
         if (!$ok) {
             throw new PtyException(\sprintf(
-                'CreateProcessW failed for "%s" with win32 error %d',
-                $commandLine !== '' ? $commandLine : $applicationName,
+                'CreateProcessW failed for %s with win32 error %d',
+                \SugarCraft\Pty\Argv::describeWide($applicationName, $commandLine),
                 $this->lastError(),
             ));
         }

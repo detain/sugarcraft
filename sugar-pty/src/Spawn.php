@@ -135,7 +135,7 @@ final class Spawn
 
             if (!\is_resource($process)) {
                 throw new PtyException(Lang::t('spawn.proc_open_failed', [
-                    'cmd' => \implode(' ', $cmd),
+                    'cmd' => Argv::describe($cmd),
                 ]));
             }
 
@@ -144,7 +144,7 @@ final class Spawn
             if ($pid <= 0) {
                 \proc_close($process);
                 throw new PtyException(Lang::t('spawn.no_pid', [
-                    'cmd' => \implode(' ', $cmd),
+                    'cmd' => Argv::describe($cmd),
                 ]));
             }
 

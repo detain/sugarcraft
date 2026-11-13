@@ -90,7 +90,7 @@ final class PosixProcess implements Process
         $process = @\proc_open($cmd, $descriptors, $pipes, null, $env, null);
         if (!\is_resource($process)) {
             throw new PtyException(Lang::t('process.spawn_failed', [
-                'cmd' => \implode(' ', $cmd),
+                'cmd' => \SugarCraft\Pty\Argv::describe($cmd),
             ]));
         }
 
@@ -99,7 +99,7 @@ final class PosixProcess implements Process
         if ($pid <= 0) {
             \proc_close($process);
             throw new PtyException(Lang::t('process.no_pid', [
-                'cmd' => \implode(' ', $cmd),
+                'cmd' => \SugarCraft\Pty\Argv::describe($cmd),
             ]));
         }
 
