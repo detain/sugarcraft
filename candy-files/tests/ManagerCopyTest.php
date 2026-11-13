@@ -428,4 +428,37 @@ final class ManagerCopyTest extends TestCase
         $top = $final->undoStack[array_key_last($final->undoStack)];
         $this->assertSame([$srcDir . '/a.txt'], array_keys($top->items), 'undo must carry the survived leg only');
     }
+
+    /**
+     * CF-43 (closes audit 070): the copy half of the self-operation guard.
+     * Both panes on one cwd (the startup default) makes target === src; the
+     * old schedule shipped that leg to the copy engine, which failed it —
+     * the same-path move claimed success while the copy claimed an error,
+     * so two paths DISAGREED on identical inputs. Now the leg is filtered
+     * at schedule time: counted as skipped, nothing copied, no undo entry.
+     */
+    public function testCopyOntoSelfIsSkippedNotErrored(): void
+    {
+        $dir = $this->tmpDir . '/shared';
+        mkdir($dir, 0755, true);
+        $file = $dir . '/keep.txt';
+        file_put_contents($file, 'bytes');
+
+        $m = Manager::start($dir, $dir, $this->lister);
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));   // onto keep.txt
+        [$armed] = $m->update(new KeyMsg(KeyType::Char, 'c'));
+        $this->assertSame(ConfirmState::CopySelected, $armed->confirm);
+
+        [$pending, $cmd] = $armed->update(new KeyMsg(KeyType::Char, 'y'));
+        $this->assertInstanceOf(\Closure::class, $cmd);
+        $this->assertSame('copying 0 entries…', $pending->status,
+            'the schedule must not claim a leg it filtered out');
+
+        $final = $this->runToCompletion($pending, $cmd);
+
+        $this->assertSame('copied 0 entries (1 skipped)', $final->status, 'status: ' . $final->status);
+        $this->assertFileExists($file);
+        $this->assertSame('bytes', file_get_contents($file), 'the self-leg must not touch the bytes');
+        $this->assertFalse($final->canUndo(), 'no undo action may enter history for a self-leg');
+    }
 }

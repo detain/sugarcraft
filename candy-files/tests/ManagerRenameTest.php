@@ -110,6 +110,13 @@ final class ManagerRenameTest extends TestCase
         $this->assertSame('test content', file_get_contents($this->tmpDir . '/newname.txt'));
     }
 
+    /**
+     * CF-43 (closes audit 070) rename half: committing a rename onto the
+     * name the entry already carries is a CANCELLATION, not a mutation —
+     * no status claiming success, and above all no undo action for a leg
+     * that changed nothing. The canonical guard in performRename backs the
+     * byte-equality check up against lexical aliases.
+     */
     public function testRenameCancelledWhenSameName(): void
     {
         $file = $this->tmpDir . '/file.txt';
@@ -118,11 +125,19 @@ final class ManagerRenameTest extends TestCase
         $m = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'R'));
-
-        // Simulate entering the same name (file.txt) - pendingOpDest is 'file.txt' from armRename
-        // The actual rename operation with same name should cancel gracefully
-        // Since rename uses pendingOpDest, and it equals current name, performRename returns cancelled
         $this->assertSame(ConfirmState::RenameSelected, $m->confirm);
+
+        foreach (['f', 'i', 'l', 'e', '.', 't', 'x', 't'] as $ch) {
+            [$m] = $m->update(new KeyMsg(KeyType::Char, $ch));
+        }
+        $this->assertSame('file.txt', $m->inputBuffer);
+        [$done] = $m->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertSame(ConfirmState::None, $done->confirm);
+        $this->assertStringContainsString('cancelled', $done->status, 'status: ' . $done->status);
+        $this->assertFileExists($file);
+        $this->assertSame('content', file_get_contents($file), 'the self-rename must not touch the bytes');
+        $this->assertFalse($done->canUndo(), 'no undo action may enter history for a self-rename');
     }
 
     public function testRenameTypingAccumulatesInputBuffer(): void

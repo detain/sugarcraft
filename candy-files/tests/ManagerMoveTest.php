@@ -199,4 +199,33 @@ final class ManagerMoveTest extends TestCase
         $this->assertSame('payload', file_get_contents($src), 'the bytes came home on the retry');
         $this->assertFileDoesNotExist($this->dstDir . '/a.txt');
     }
+
+    /**
+     * CF-43 (closes audit 070): with both panes on one cwd — the documented
+     * startup default — the move destination equals the source directory.
+     * Before the guard, @rename($s,$s) succeeded as a silent no-op, so the
+     * status claimed "moved 1 entries" and pushed a self-reversing undo
+     * action. A same-path leg counts in neither moved nor errors, and zero
+     * undo actions enter history for it.
+     */
+    public function testMoveOntoSelfIsSkippedNotMoved(): void
+    {
+        $dir = $this->tmpDir . '/shared';
+        mkdir($dir, 0755, true);
+        $file = $dir . '/g.txt';
+        file_put_contents($file, 'bytes');
+
+        $m = Manager::start($dir, $dir, $this->lister);
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));   // off '..' onto g.txt
+        [$armed] = $m->update(new KeyMsg(KeyType::Char, 'm'));
+        $this->assertSame(ConfirmState::MoveSelected, $armed->confirm);
+        $this->assertSame($dir, $armed->pendingOpDest, 'the arm destination is the same cwd');
+
+        [$done] = $armed->update(new KeyMsg(KeyType::Char, 'y'));
+
+        $this->assertSame('moved 0 entries (1 skipped)', $done->status, 'status: ' . $done->status);
+        $this->assertFileExists($file);
+        $this->assertSame('bytes', file_get_contents($file), 'the self-leg must not touch the bytes');
+        $this->assertFalse($done->canUndo(), 'no undo action may enter history for a self-leg');
+    }
 }

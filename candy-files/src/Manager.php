@@ -1123,6 +1123,14 @@ final class Manager implements Model
             }
             $src = Pane::join($pane->cwd, $name);
             $target = Pane::join($dst, $name);
+            // CF-43: self-copy guard. With both panes on one cwd (the
+            // documented startup default) target === src: copyPath would
+            // relink a file onto itself — an error leg today while move's
+            // @rename($s,$s) reported success. A same-path leg is neither
+            // copied nor failed; it joins the skipped tally.
+            if (self::canonicalPath($src) === self::canonicalPath($target)) {
+                continue;
+            }
             $copiedItems[$src] = $target;
         }
         $skipped = count($names) - count($copiedItems);
@@ -1178,6 +1186,13 @@ final class Manager implements Model
             }
             $src = Pane::join($pane->cwd, $name);
             $target = Pane::join($dst, $name);
+            // CF-43: self-move guard — same rationale as the copy schedule.
+            // @rename($s,$s) succeeds as a silent no-op on POSIX, so the old
+            // code counted the leg as "moved 1" and pushed a self-reversing
+            // undo action that could never be undone meaningfully.
+            if (self::canonicalPath($src) === self::canonicalPath($target)) {
+                continue;
+            }
             // CF-06: probe the destination BEFORE the leg runs — the copy
             // engine's schedule-time $existedSrcs pattern. rename() silently
             // replaces an existing victim on POSIX, and undo can reverse the
@@ -1253,6 +1268,16 @@ final class Manager implements Model
             return $this->withActivePane(fn(Pane $p) =>
                 Pane::open($p->cwd, $this->lister, $p->sort, $p->showHidden))
                 ->withConfirm(ConfirmState::None, Lang::t('status.rename_failed', ['name' => Entry::sanitizeName($srcName)]))
+                ->withInputBuffer(null);
+        }
+        // CF-43: canonical self-rename guard. The string check above catches
+        // byte-identical names; this catches lexical aliases ('a' under a
+        // trailing-slash cwd still canonicalizes onto the source). A rename
+        // onto self is a cancellation, not a failure.
+        if ($resolvedDst === self::canonicalPath($src)) {
+            return $this->withActivePane(fn(Pane $p) =>
+                Pane::open($p->cwd, $this->lister, $p->sort, $p->showHidden))
+                ->withConfirm(ConfirmState::None, Lang::t('status.cancelled'))
                 ->withInputBuffer(null);
         }
         $renamedItems = [];
