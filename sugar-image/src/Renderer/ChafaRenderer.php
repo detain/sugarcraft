@@ -114,6 +114,19 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
     /** Bound of the repaint memo — eight frames of ANSI, then FIFO. */
     private const RENDER_MEMO_MAX = 8;
 
+    /** Name of the lib-owned scratch directory under the system temp root. */
+    private const SCRATCH_DIR_NAME = 'sugar-image-chafa';
+
+    /** Strays older than this are removed at first use (see {@see sweepStaleSinks()}). */
+    private const SCRATCH_GRACE_SECONDS = 300;
+
+    /**
+     * Memoised {@see sinkDir()} answer for this process — the owned
+     * directory, or the bare system temp when ownership cannot be
+     * established. Cleared by {@see reset()}.
+     */
+    private static ?string $sinkDir = null;
+
     /**
      * Reused per-process scratch file for the chafa input image, plus the
      * content hash of whatever is currently written to it.
@@ -160,7 +173,7 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
             return self::$available = false;
         }
 
-        $outPath = @tempnam(sys_get_temp_dir(), 'schafaout');
+        $outPath = @tempnam(self::sinkDir(), 'schafaout');
         if ($outPath === false) {
             self::$version = '';
             return self::$available = false;
@@ -264,7 +277,7 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
         // to the tty. tempnam() creates the file 0600; the 'w' open reuses
         // that mode. A file sink also satisfies the NO READER-LESS PIPES
         // law (AsyncRenderer): there is never a reader to block.
-        $errPath = tempnam(sys_get_temp_dir(), 'schafaerr');
+        $errPath = tempnam(self::sinkDir(), 'schafaerr');
         if ($errPath === false) {
             throw new \RuntimeException(Lang::t('chafa.sink_failed'));
         }
@@ -494,6 +507,82 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
     }
 
     /**
+     * The lib-owned scratch directory under the system temp root: every
+     * chafa sink (the reused input scratch, the stderr sink, the probe
+     * banner sink) is created inside it (finding 112). The old posture
+     * scattered `chafa*`/`schafa*` files straight into /tmp, where a
+     * kill -9 (or an OOM death) between creation and unlink left them
+     * forever with NO sweep to ever remove them — a /tmp of hundreds of
+     * stale frames is a real disk story on a long-lived box. Inside the
+     * owned directory a first-use sweep (the DiskCache mc-* idiom)
+     * removes what abandoned processes could not unlink. The directory
+     * is used only when it is OURS — created 0700, or pre-existing with
+     * our uid and exact 0700 mode; a foreign-owned or loosened-mode
+     * impostor (the classic /tmp planted-dir attack, and the same story
+     * DiskCache tells about adopted dirs) is REFUSED, falling back to
+     * bare system-temp reliance — the old behaviour, documented, and
+     * never a silent trust of a stranger's directory.
+     */
+    private static function sinkDir(): string
+    {
+        if (self::$sinkDir !== null) {
+            return self::$sinkDir;
+        }
+
+        $system = sys_get_temp_dir();
+        $dir    = $system . '/' . self::SCRATCH_DIR_NAME;
+
+        if (!is_dir($dir)) {
+            if (@mkdir($dir, 0700, false) === false && !is_dir($dir)) {
+                return self::$sinkDir = $system; // no room to own — old behaviour
+            }
+            @chmod($dir, 0700); // mkdir's mode is umask-cut; we want exactly 0700
+        }
+
+        // The mode we are about to trust must be read FRESH: PHP caches
+        // stat results per path, and this very process may have created
+        // the directory (and cached its 0700) before some other actor
+        // loosened it — a stale cache read would wave through exactly
+        // the planted-dir shape the check exists to refuse.
+        clearstatcache(true, $dir);
+        $owner = @fileowner($dir);
+        $perms = @fileperms($dir);        if ($owner === false || $perms === false
+            || $owner !== (function_exists('posix_getuid') ? posix_getuid() : $owner)
+            || ($perms & 0777) !== 0700) {
+            return self::$sinkDir = $system;
+        }
+
+        self::sweepStaleSinks($dir);
+
+        return self::$sinkDir = $dir;
+    }
+
+    /**
+     * Remove sink files older than the grace window (creation-time sweep,
+     * finding 112). The grace is deliberately wider than DiskCache's 30
+     * seconds: the reused input scratch lives for its process's whole
+     * render session, and while a sweep stealing it is SELF-HEALING
+     * (scratchFile re-creates when its path vanished), a five-minute
+     * window makes that race essentially theoretical while still
+     * reaping the dead within the first use of any later process.
+     *
+     * @param string $dir the lib-owned scratch directory ONLY — never
+     *                    called on the shared system temp
+     */
+    private static function sweepStaleSinks(string $dir): void
+    {
+        $cutoff = time() - self::SCRATCH_GRACE_SECONDS;
+
+        foreach ([$dir . '/chafa*', $dir . '/schafa*'] as $pattern) {
+            foreach (@glob($pattern) ?: [] as $stray) {
+                if (@filemtime($stray) < $cutoff) {
+                    @unlink($stray);
+                }
+            }
+        }
+    }
+
+    /**
      * Path to a temp file containing $bytes, reusing a single per-process
      * scratch file and skipping the write when its content is already current
      * (matched by hash). Replaces a fresh tempnam()+write+unlink per frame.
@@ -517,7 +606,7 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
             return $scratch['path'];
         }
 
-        $path = tempnam(sys_get_temp_dir(), 'chafa');
+        $path = tempnam(self::sinkDir(), 'chafa');
         if ($path === false) {
             throw new \RuntimeException(Lang::t('image_source.temp_failed'));
         }
@@ -614,6 +703,7 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
         self::$available   = null;
         self::$version     = null;
         self::$renderCache = [];
+        self::$sinkDir     = null;
         self::$reapWaitMs  = null;
         self::$termGraceMs = null;
         self::$drainBudgetMs = null;
