@@ -311,6 +311,7 @@ return [
     'cli.help.opt.preset' => 'btop layout preset N from the `presets` option — this session only, never saved.',
     'cli.help.opt.theme' => 'Theme file stem (or Default/TTY) — this session only, never saved.',
     'cli.help.opt.update' => 'Frame update period in ms, clamped to the Schema bounds — this session only, never saved.',
+    'cli.help.opt.themes_dir' => 'Custom theme directory searched before the user and bundled ones (btop --themes-dir).',
     'cli.help.opt.help' => 'Show this help.',
     'cli.help.opt.version' => 'Print the installed version and exit.',
     'cli.help.opt.check' => 'Report the latest release; install nothing.',

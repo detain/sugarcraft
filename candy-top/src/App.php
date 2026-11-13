@@ -292,9 +292,9 @@ final class App implements Model
      *
      * @return \Closure(Config): Palette
      */
-    public static function systemThemes(): \Closure
+    public static function systemThemes(?string $customDir = null): \Closure
     {
-        return static fn (Config $c): Palette => ThemeRegistry::new()->load($c->colorTheme(), $c->bool('theme_background'), $c->ttyMode());
+        return static fn (Config $c): Palette => ThemeRegistry::new($customDir)->load($c->colorTheme(), $c->bool('theme_background'), $c->ttyMode());
     }
 
     /**
@@ -1715,8 +1715,9 @@ final class App implements Model
         $file = $this->file;
         $base = $this->config;
         $rescan = $this->catalog !== null;
+        $customDir = $this->catalog?->customDir;
 
-        return static fn (): Msg => new ConfigLoadedMsg($file?->load($base), $rescan ? ThemeRegistry::new() : null);
+        return static fn (): Msg => new ConfigLoadedMsg($file?->load($base), $rescan ? ThemeRegistry::new($customDir) : null);
     }
 
     /**

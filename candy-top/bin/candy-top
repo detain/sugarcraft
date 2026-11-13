@@ -79,6 +79,9 @@ $report = static function (string $message): void {
 $args = array_slice($argv ?? [], 1);
 $fake = false;
 $configPath = null;
+// btop's --themes-dir (S-O07): a custom theme directory ranked above the user
+// and bundled ones for this run — session-only search state, nothing to store.
+$themesDir = null;
 // btop's launch overrides (-p/-t/-u): session-only config edits that feed
 // the existing keys without persisting (S-O06). null = flag not given.
 $presetIndex = null;
@@ -127,13 +130,14 @@ for ($i = 0; $i < count($args); $i++) {
             $pairs,
         ));
         fwrite(STDOUT, Lang::t('cli.help.title') . "\n\n"
-            . Lang::t('cli.help.usage') . "\n  candy-top [--fake] [--config <path>] [-p N] [-t theme] [-u ms] [--version]\n  candy-top self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|latest]\n\n"
+            . Lang::t('cli.help.usage') . "\n  candy-top [--fake] [--config <path>] [-p N] [-t theme] [-u ms] [--themes-dir <path>] [--version]\n  candy-top self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|latest]\n\n"
             . Lang::t('cli.help.options') . "\n" . $rows([
                 '--fake' => Lang::t('cli.help.opt.fake'),
                 '--config <path>' => Lang::t('cli.help.opt.config'),
                 '-p, --preset <N>' => Lang::t('cli.help.opt.preset'),
                 '-t, --theme <name>' => Lang::t('cli.help.opt.theme'),
                 '-u, --update <ms>' => Lang::t('cli.help.opt.update'),
+                '--themes-dir <path>' => Lang::t('cli.help.opt.themes_dir'),
                 '--version' => Lang::t('cli.help.opt.version'),
                 '-h, --help' => Lang::t('cli.help.opt.help'),
                 '--check' => Lang::t('cli.help.opt.check'),
@@ -154,6 +158,15 @@ for ($i = 0; $i < count($args); $i++) {
             exit(2);
         }
         $configPath = $value;
+    } elseif ($arg === '--themes-dir' || str_starts_with($arg, '--themes-dir=')) {
+        // btop clears an unusable theme dir itself; the registry skips missing or
+        // unreadable paths, so no liveness check here — only shape refusal.
+        $value = $arg === '--themes-dir' ? ($args[++$i] ?? null) : substr($arg, 13);
+        if ($value === null || $value === '' || ($arg === '--themes-dir' && str_starts_with($value, '-'))) {
+            $report(Lang::t('cli.missing_value', ['option' => '--themes-dir']));
+            exit(2);
+        }
+        $themesDir = $value;
     } elseif ($arg === '-p' || $arg === '--preset' || str_starts_with($arg, '-p=') || str_starts_with($arg, '--preset=')) {
         $space = $arg === '-p' || $arg === '--preset';
         $value = $takeValue($arg, $args, $i, '-p', '--preset');
@@ -232,7 +245,7 @@ foreach ($loaded->warnings as $warning) {
 $tty = function_exists('posix_ttyname') ? (posix_ttyname(STDIN) ?: '') : '';
 $config = $loaded->config->withTtyModeResolved(null, str_starts_with($tty, '/dev/tty'));
 // btop Theme::updateThemes: the list the options menu cycles (rescanned on ctrl+r).
-$catalog = ThemeRegistry::new();
+$catalog = ThemeRegistry::new($themesDir);
 // btop launch flags -p/-t/-u (S-O06): session-only overrides — they steer this
 // run but never reach the config file (Config::persistedValue keeps the file's
 // bytes). Applied before the accelerator probe so a preset's gpu boxes settle
@@ -302,6 +315,7 @@ $program = new Program(
         file: $file,
         writeNew: $loaded->needsRewrite,
         catalog: $catalog,
+        themes: App::systemThemes($themesDir),
         // btop compiles a macOS/OpenBSD collector; candy-top ships none —
         // say so up front instead of painting a silent all-n/a monitor.
         unsupportedOs: $platform->isSupported() ? null : $platform->os,

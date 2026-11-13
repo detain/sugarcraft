@@ -26,6 +26,7 @@ final class ThemeRegistry
      */
     private function __construct(
         private readonly array $entries,
+        public readonly ?string $customDir = null,
     ) {
     }
 
@@ -37,10 +38,12 @@ final class ThemeRegistry
     public static function new(?string $customDir = null, ?array $env = null): self
     {
         $env ??= getenv();
-        return self::fromDirs(...array_values(array_filter(
+        $dirs = array_values(array_filter(
             [$customDir, self::userDir($env), self::bundledDir()],
             static fn (?string $d): bool => $d !== null && $d !== '',
-        )));
+        ));
+
+        return new self(self::scan($dirs), $customDir);
     }
 
     /**
@@ -48,6 +51,15 @@ final class ThemeRegistry
      * unreadable directories are skipped, as btop clears an unusable theme dir.
      */
     public static function fromDirs(string ...$dirs): self
+    {
+        return new self(self::scan($dirs));
+    }
+
+    /**
+     * @param list<string> $dirs
+     * @return list<ThemeEntry>
+     */
+    private static function scan(array $dirs): array
     {
         $files = [];
         foreach ($dirs as $dir) {
@@ -73,7 +85,7 @@ final class ThemeRegistry
         foreach ($files as $path) {
             $entries[] = ThemeEntry::file($path);
         }
-        return new self($entries);
+        return $entries;
     }
 
     /** The upstream themes shipped with candy-top. */

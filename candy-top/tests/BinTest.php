@@ -144,9 +144,10 @@ final class BinTest extends TestCase
         // config-path refusal, every load warning, the box-layout reset
         // notice, the four exit/save-state error reports (2 in the crash
         // path, 2 after run()), the five launch-flag usage refusals (-p/-u/-t,
-        // S-O06) and the two after-load roster refusals (unknown theme,
-        // unknown preset). Raised 9 -> 16 on 2026-11-13 with S-O06.
-        $this->assertSame(16, substr_count($source, '$report('), 'no startup diagnostic bypasses $report');
+        // S-O06), the --themes-dir path refusal (S-O07) and the two after-load
+        // roster refusals (unknown theme, unknown preset). Raised 9 -> 16 on
+        // 2026-11-13 with S-O06, 16 -> 17 the same day with S-O07.
+        $this->assertSame(17, substr_count($source, '$report('), 'no startup diagnostic bypasses $report');
         $this->assertStringContainsString('foreach ($loaded->warnings as $warning) {', $source);
 
         $at = strpos($source, '$file = ConfigFile::new($configPath);');
@@ -197,6 +198,9 @@ final class BinTest extends TestCase
         yield 'update negative' => [['-u=-5'], 'bad value for -u: -5'];
         yield 'theme eaten by a flag' => [['-t', '--fake'], 'missing value for -t'];
         yield 'theme empty equals form' => [['--theme='], 'missing value for --theme'];
+        yield 'themes-dir last argument' => [['--themes-dir'], 'missing value for --themes-dir'];
+        yield 'themes-dir eaten by a flag' => [['--themes-dir', '--fake'], 'missing value for --themes-dir'];
+        yield 'themes-dir empty equals form' => [['--themes-dir='], 'missing value for --themes-dir'];
     }
 
     /**
@@ -216,10 +220,10 @@ final class BinTest extends TestCase
     {
         [$code, $out] = self::invoke(['--help']);
         $this->assertSame(0, $code);
-        foreach (['-p, --preset <N>', '-t, --theme <name>', '-u, --update <ms>', '[-p N] [-t theme] [-u ms]'] as $row) {
+        foreach (['-p, --preset <N>', '-t, --theme <name>', '-u, --update <ms>', '[-p N] [-t theme] [-u ms]', '--themes-dir <path>'] as $row) {
             $this->assertStringContainsString($row, $out, $row . ' is in the help');
         }
-        foreach (['cli.help.opt.preset', 'cli.help.opt.theme', 'cli.help.opt.update'] as $key) {
+        foreach (['cli.help.opt.preset', 'cli.help.opt.theme', 'cli.help.opt.update', 'cli.help.opt.themes_dir'] as $key) {
             $this->assertStringContainsString(Lang::t($key), $out, "{$key} comes from the lang table");
         }
     }
@@ -245,6 +249,9 @@ final class BinTest extends TestCase
         $this->assertStringContainsString('->withSessionUpdateMs($updateMs)', $source);
         $this->assertStringContainsString("withSessionOverrides(['color_theme'", $source);
         $this->assertStringContainsString('->withSessionPreset($preset)', $source);
+        // S-O07: --themes-dir reaches both the startup catalog and the runtime theme loader.
+        $this->assertStringContainsString('ThemeRegistry::new($themesDir)', $source);
+        $this->assertStringContainsString('themes: App::systemThemes($themesDir)', $source);
     }
 
     /**

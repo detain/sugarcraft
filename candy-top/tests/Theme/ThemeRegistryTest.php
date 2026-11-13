@@ -153,5 +153,7 @@ final class ThemeRegistryTest extends TestCase
         self::assertContains('nord', $r->names());
         self::assertContains('HotPurpleTrafficLight', $r->names());
         self::assertSame(dirname(__DIR__, 2) . '/themes', ThemeRegistry::bundledDir());
+        self::assertSame($this->tmp . '/user', $r->customDir, 'the launch directory rides the registry into the ctrl+r rescan');
+        self::assertNull(ThemeRegistry::fromDirs($this->tmp . '/user')->customDir, 'an explicit dir list carries no launch intent');
     }
 }
