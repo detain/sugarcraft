@@ -51,8 +51,8 @@ final class SpringCollectionTest extends TestCase
         $retargeted = $original->withTarget('a', 50.0);
 
         $this->assertNotSame($original, $retargeted);
-        $this->assertEqualsWithDelta(50.0, $retargeted->getTarget('a'), 1e-9);
-        $this->assertEqualsWithDelta(10.0, $original->getTarget('a'), 1e-9, 'withTarget() must not mutate the original');
+        $this->assertEqualsWithDelta(50.0, $retargeted->target('a'), 1e-9);
+        $this->assertEqualsWithDelta(10.0, $original->target('a'), 1e-9, 'withTarget() must not mutate the original');
     }
 
     public function testTickUpdatesPositions(): void
@@ -175,7 +175,7 @@ final class SpringCollectionTest extends TestCase
             ->withSpring('spring1', $spring, 0.0, 0.0, 10.0)
             ->withTarget('spring1', 50.0);
 
-        $this->assertEqualsWithDelta(50.0, $collection->getTarget('spring1'), 1e-9);
+        $this->assertEqualsWithDelta(50.0, $collection->target('spring1'), 1e-9);
     }
 
     public function testHasReturnsFalseForNonexistent(): void
@@ -312,28 +312,33 @@ final class SpringCollectionTest extends TestCase
         );
     }
 
-    // ── Deprecated in-place shims (retained one release) ────────────────────
+    // ── Deprecated shims (REMOVED-IN: 2.0.0) ────────────────────────────────
 
     /**
-     * add()/remove()/setTarget() still mutate in place for backward
-     * compatibility. Deprecations are swallowed so the result assertions stay
-     * clean under failOnWarning; the notices themselves are asserted below.
+     * SPR-17 (finding 019 ruling): the shims are now copy-on-write — they
+     * return the NEW collection and leave the receiver untouched, so the old
+     * `$c = $c->add(...)` null-assignment footgun is dead and the plain
+     * `$c->add(...)` mutation half is honestly disclosed as gone. The
+     * deprecation notices themselves are asserted in the legs below.
      */
-    public function testDeprecatedShimsStillMutateInPlace(): void
+    public function testDeprecatedShimsAreCopyOnWrite(): void
     {
         $spring = new Spring(1.0 / 60.0, 6.0, 1.0);
         $collection = new SpringCollection();
 
         set_error_handler(static fn(): bool => true, E_USER_DEPRECATED);
         try {
-            $collection->add('spring1', $spring, 0.0, 0.0, 10.0);
-            $this->assertTrue($collection->has('spring1'), 'add() must mutate in place');
+            $added = $collection->add('spring1', $spring, 0.0, 0.0, 10.0);
+            $this->assertFalse($collection->has('spring1'), 'add() must NOT mutate the receiver anymore');
+            $this->assertTrue($added->has('spring1'), 'add() returns the grown collection');
 
-            $collection->setTarget('spring1', 42.0);
-            $this->assertEqualsWithDelta(42.0, $collection->getTarget('spring1'), 1e-9, 'setTarget() must mutate in place');
+            $retargeted = $added->setTarget('spring1', 42.0);
+            $this->assertEqualsWithDelta(10.0, $added->target('spring1'), 1e-9, 'setTarget() must not touch the receiver');
+            $this->assertEqualsWithDelta(42.0, $retargeted->target('spring1'), 1e-9, 'setTarget() returns the retargeted collection');
 
-            $collection->remove('spring1');
-            $this->assertFalse($collection->has('spring1'), 'remove() must mutate in place');
+            $removed = $retargeted->remove('spring1');
+            $this->assertTrue($retargeted->has('spring1'), 'remove() must not touch the receiver');
+            $this->assertFalse($removed->has('spring1'), 'remove() returns the shrunk collection');
         } finally {
             restore_error_handler();
         }
@@ -359,6 +364,8 @@ final class SpringCollectionTest extends TestCase
         $this->assertSame(E_USER_DEPRECATED, $captured[0][0]);
         $this->assertStringContainsStringIgnoringCase('deprecated', $captured[0][1]);
         $this->assertStringContainsString($replacement, $captured[0][1]);
+        // SPR-17 (finding 054): one expiry vocabulary across the whole lib.
+        $this->assertStringContainsString('REMOVED-IN: 2.0.0', $captured[0][1]);
     }
 
     /** @return iterable<string, array{0: callable, 1: string}> */
@@ -381,6 +388,14 @@ final class SpringCollectionTest extends TestCase
                 ->withSpring('x', new Spring(1.0 / 60.0, 6.0, 1.0))
                 ->setTarget('x', 5.0),
             'withTarget()',
+        ];
+        // SPR-17 (finding 051): the read-side forwarder is loud too — no
+        // silent migration lingers on the getter while every writer warns.
+        yield 'getTarget' => [
+            static fn() => (new SpringCollection())
+                ->withSpring('x', new Spring(1.0 / 60.0, 6.0, 1.0), 0.0, 0.0, 5.0)
+                ->getTarget('x'),
+            'target()',
         ];
     }
 }

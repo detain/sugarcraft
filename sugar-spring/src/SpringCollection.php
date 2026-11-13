@@ -11,9 +11,10 @@ use SugarCraft\Core\Concerns\Mutable;
  *
  * Immutable: {@see withSpring()}, {@see without()} and {@see withTarget()}
  * each return a NEW collection, matching {@see tick()}'s copy-on-write
- * contract. The legacy in-place mutators — add()/remove()/setTarget() — are
- * retained as deprecated shims for one release so existing callers keep
- * working while migrating to the with*() API.
+ * contract. The legacy mutator spellings — add()/remove()/setTarget() — are
+ * deprecated shims (REMOVED-IN: 2.0.0) that now delegate to their with-*()
+ * twins: copy-on-write like everything else, notice-emitting like
+ * {@see getTarget()}.
  */
 final class SpringCollection
 {
@@ -157,60 +158,68 @@ final class SpringCollection
     }
 
     /**
-     * Add a spring to the collection (mutates in place).
+     * Add a spring to the collection.
      *
      * @deprecated Use {@see withSpring()}, which returns a new instance.
-     *             Retained one release for backward compatibility.
+     *             REMOVED-IN: 2.0.0. Since this release the shim is also
+     *             copy-on-write: it returns the NEW collection and no longer
+     *             mutates the receiver (finding 019 — the old mixed contract
+     *             made `$c = $c->add(...)` assign null while a plain
+     *             `$c->add(...)` mutated; one footgun at a time).
      */
-    public function add(string $id, Spring $spring, float $position = 0.0, float $velocity = 0.0, float $target = 0.0): void
+    public function add(string $id, Spring $spring, float $position = 0.0, float $velocity = 0.0, float $target = 0.0): self
     {
-        trigger_error(
-            'SpringCollection::add() is deprecated; use withSpring() which returns a new collection.',
-            E_USER_DEPRECATED,
-        );
+        $this->emitShimDeprecation('add()', 'withSpring()');
 
-        $this->springs[$id] = $spring;
-        $this->positions[$id] = $position;
-        $this->velocities[$id] = $velocity;
-        $this->targets[$id] = $target;
+        return $this->withSpring($id, $spring, $position, $velocity, $target);
     }
 
     /**
-     * Remove a spring from the collection by id (mutates in place).
+     * Remove a spring from the collection by id.
      *
      * @deprecated Use {@see without()}, which returns a new instance.
-     *             Retained one release for backward compatibility.
+     *             REMOVED-IN: 2.0.0. Copy-on-write like {@see add()}.
      */
-    public function remove(string $id): void
+    public function remove(string $id): self
     {
-        trigger_error(
-            'SpringCollection::remove() is deprecated; use without() which returns a new collection.',
-            E_USER_DEPRECATED,
-        );
+        $this->emitShimDeprecation('remove()', 'without()');
 
-        unset(
-            $this->springs[$id],
-            $this->positions[$id],
-            $this->velocities[$id],
-            $this->targets[$id]
-        );
+        return $this->without($id);
     }
 
     /**
-     * Set the target for a specific spring (mutates in place).
+     * Set the target for a specific spring.
      *
      * @deprecated Use {@see withTarget()}, which returns a new instance.
-     *             Retained one release for backward compatibility.
+     *             REMOVED-IN: 2.0.0. Copy-on-write like {@see add()};
+     *             unknown ids still throw OutOfBoundsException.
      */
-    public function setTarget(string $id, float $target): void
+    public function setTarget(string $id, float $target): self
+    {
+        $this->emitShimDeprecation('setTarget()', 'withTarget()');
+
+        return $this->withTarget($id, $target);
+    }
+
+    /**
+     * The ONE deprecation-notice shape for every deprecated surface here.
+     *
+     * These trigger_error strings are deliberately NOT routed through
+     * Lang::t (finding 055): the i18n law's scope is USER-facing runtime
+     * text; a deprecation notice is a developer-facing compiler-era message
+     * read in stack traces — translating it would scatter migration
+     * instructions across 16 files while making them harder to grep.
+     */
+    private function emitShimDeprecation(string $legacy, string $replacement): void
     {
         trigger_error(
-            'SpringCollection::setTarget() is deprecated; use withTarget() which returns a new collection.',
+            sprintf(
+                'SpringCollection::%s is deprecated; use %s instead. REMOVED-IN: 2.0.0.',
+                $legacy,
+                $replacement,
+            ),
             E_USER_DEPRECATED,
         );
-
-        $this->requireSpring($id);
-        $this->targets[$id] = $target;
     }
 
     /**
@@ -226,9 +235,8 @@ final class SpringCollection
      * outputs — whose non-finite INPUT door plus finite coefficient belt
      * make re-checking them redundant. No foreign input can ride through
      * unexamined: every value reaches the planes via the constructor or the
-     * with-prefix mutators (full validation), or via a deprecated in-place
-     * shim whose write is then refused one frame later by update()'s
-     * non-finite door — loud at first use, never silent.
+     * with-prefix mutators (full validation) — and the deprecated shims
+     * delegate to those, so the door covers them too.
      *
      * @return self New collection when motion happened; the same collection
      *              once nothing can move.
@@ -396,7 +404,16 @@ final class SpringCollection
     /**
      * BC forwarder for the pre-rename accessor name.
      *
-     * @deprecated The `get`-prefixed form breaks the house bare-accessor convention; kept only as a BC forwarder. Use {@see self::target()} instead. REMOVED-IN: 2.0.0.
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *             convention. Use {@see self::target()} instead.
+     *             REMOVED-IN: 2.0.0. Emits E_USER_DEPRECATED like the mutator
+     *             shims (finding 051) so the read-side migration can no
+     *             longer linger silently.
      */
-    public function getTarget(string $id): float { return $this->target($id); }
+    public function getTarget(string $id): float
+    {
+        $this->emitShimDeprecation('getTarget()', 'target()');
+
+        return $this->target($id);
+    }
 }

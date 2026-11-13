@@ -14,11 +14,11 @@ use SugarCraft\Spring\SpringCollection;
  *
  * SpringCollection::getTarget() was renamed to its bare twin target()
  * — unclaimed on the class (withTarget() is the fluent builder,
- * setTarget() the deprecated in-place shim; a bare target($id) getter
+ * setTarget() a deprecated shim; a bare target($id) getter
  * sits beside them cleanly, mirroring the collection's existing bare
- * get()/all()/has() readers). The legacy spelling stays a
- * byte-identical one-line BC forwarder marked '@deprecated' +
- * 'REMOVED-IN: 2.0.0' until v2.0.0.
+ * get()/all()/has() readers). The legacy spelling stays a thin BC
+ * forwarder marked '@deprecated' + 'REMOVED-IN: 2.0.0' until v2.0.0,
+ * loud with E_USER_DEPRECATED since SPR-17 (finding 051).
  */
 final class AccessorDeprecationTest extends TestCase
 {
@@ -44,16 +44,27 @@ final class AccessorDeprecationTest extends TestCase
     {
         $collection = (new SpringCollection())->withSpring('a', new Spring(1.0 / 60.0, 6.0, 1.0), 0.0, 0.0, 10.0);
         $this->assertSame(10.0, $collection->target('a'));
-        $this->assertSame($collection->target('a'), $collection->getTarget('a'));
-        $retargeted = $collection->withTarget('a', 50.0);
-        $this->assertSame(50.0, $retargeted->getTarget('a'));
-        $this->assertSame($retargeted->target('a'), $retargeted->getTarget('a'));
-        $this->assertSame(10.0, $collection->getTarget('a'), 'withTarget() must not mutate the original');
+
+        // SPR-17 (finding 051): the forwarder is loud now — exercise the BC
+        // legs under a swallowing handler so failOnWarning stays clean.
+        set_error_handler(static fn(): bool => true, E_USER_DEPRECATED);
+        try {
+            $this->assertSame($collection->target('a'), $collection->getTarget('a'));
+            $retargeted = $collection->withTarget('a', 50.0);
+            $this->assertSame(50.0, $retargeted->getTarget('a'));
+            $this->assertSame($retargeted->target('a'), $retargeted->getTarget('a'));
+            $this->assertSame(10.0, $collection->getTarget('a'), 'withTarget() must not mutate the original');
+        } finally {
+            restore_error_handler();
+        }
     }
     /**
-     * Structural leg: the swept forwarder is a one-line return
-     * statement carrying the @deprecated + REMOVED-IN markers and
-     * naming its bare twin in the docblock.
+     * Structural leg: the swept forwarder carries the @deprecated +
+     * REMOVED-IN markers, names its bare twin in the docblock, and stays a
+     * THIN delegation — at most one notice emission plus a single return of
+     * the bare twin, no logic. (SPR-17 widened "one-line" to "thin": the
+     * forwarder is loud now, finding 051, and the loudness must not become
+     * an excuse for a body.)
      *
      * @param class-string $class
      */
@@ -71,10 +82,21 @@ final class AccessorDeprecationTest extends TestCase
             $method->getStartLine() - 1,
             $method->getEndLine() - $method->getStartLine() + 1
         );
-        $this->assertCount(1, $lines, $class . '::' . $legacy . ' must be a single-line forwarder');
+        $body = \implode('', $lines);
         $this->assertMatchesRegularExpression(
-            '/public function ' . \preg_quote($legacy, '/') . '\(.*\)[^{]*\{ return \$this->' . \preg_quote($bare, '/') . '\((\$\w+(, \$\w+)*)?\); \}\s*$/',
-            $lines[0]
+            '/return \$this->' . \preg_quote($bare, '/') . '\((\$\w+(, \$\w+)*)?\);/',
+            $body,
+            $class . '::' . $legacy . ' must delegate to the bare twin in one return',
+        );
+        $this->assertSame(
+            1,
+            \preg_match_all('/\breturn\b/', $body),
+            $class . '::' . $legacy . ' must stay a thin forwarder (single return)',
+        );
+        $this->assertSame(
+            1,
+            \preg_match_all('/trigger_error\(|emitShimDeprecation\(/', $body),
+            $class . '::' . $legacy . ' must be loud exactly once (finding 051)',
         );
         $bareMethod = new \ReflectionMethod($class, $bare);
         $this->assertTrue($bareMethod->isPublic());

@@ -452,11 +452,13 @@ Read with `get($id)` / `all()` / `target($id)` / `velocity($id)` /
 `settled($threshold = Spring::SETTLING_THRESHOLD)` (it needs velocities, which
 is why they are exposed). Unknown ids are refused by `get()` / `target()` /
 `velocity()` / `withTarget()` with an `OutOfBoundsException` naming the id,
-and the constructor refuses misaligned or orphaned id planes. The earlier
-in-place `add()` / `remove()` / `setTarget()` mutators are **deprecated**
-shims that emit a visible `E_USER_DEPRECATED` and will be dropped; migrate to
-the `with*()` forms above (the shims mutate the receiver and return `void`,
-so `$c = $c->add(...)` assigns `null`).
+and the constructor refuses misaligned or orphaned id planes. The legacy
+`add()` / `remove()` / `setTarget()` mutators are **deprecated** shims
+(REMOVED-IN: 2.0.0) that emit `E_USER_DEPRECATED` and now delegate to their
+`with*()` twins — copy-on-write like everything else, so `$c = $c->add(...)`
+works (it used to assign `null` because the shims returned `void` while
+mutating the receiver; the receiver-mutation half is gone, the return value
+is the new collection). Migrate to the `with*()` forms above.
 
 ## Easing
 
@@ -599,9 +601,10 @@ back-flavoured control points — same honesty rule as `Easing`.
   `tick(): self` (new collection; positions map via `all()`) /
   `get($id): float` / `has($id): bool` / `all(): array<string,float>` /
   `target($id): float` / `velocity($id): float` / `allVelocities()` /
-  `settled($threshold = Spring::SETTLING_THRESHOLD): bool`. The in-place
+  `settled($threshold = Spring::SETTLING_THRESHOLD): bool`. The legacy
   `add()` / `remove()` / `setTarget()` mutators are deprecated
-  `E_USER_DEPRECATED` shims slated for removal — use the `with*()` forms.
+  copy-on-write `E_USER_DEPRECATED` shims (REMOVED-IN: 2.0.0) returning
+  `self` — use the `with*()` forms.
 - **`SpringPreset`** — `Gentle` / `Wobbly` / `Stiff` / `Slow` / `Molasses`.
   `resolve()` returns a `SpringConfig`.
 - **`SpringConfig`** — `__construct(tension, friction, mass)` (all finite and
