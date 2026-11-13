@@ -132,7 +132,8 @@ final class IgnoreRulesBacktrackingTest extends TestCase
         $this->assertTrue($rules->ignores($this->root . '/' . $long . '/two.txt', false));
         $this->assertFalse($rules->ignores($this->root . '/short.txt', false), 'a decidable path is still decided');
 
-        $this->assertSame([$this->root . '/.gitignore: ' . $pattern], $rules->undecidablePatterns());
+        // S-T06: the engine reports the ignore file root-relative.
+        $this->assertSame(['.gitignore: ' . $pattern], $rules->undecidablePatterns());
     }
 
     public function testAnUndecidableNegationDoesNotReInclude(): void
@@ -149,101 +150,8 @@ final class IgnoreRulesBacktrackingTest extends TestCase
     // Semantics — unchanged from the regex-only matcher
     // =========================================================================
 
-    /**
-     * Expected verdicts were taken from the regex-only implementation this
-     * replaced, so a row here failing means the matcher changed meaning, not
-     * just cost. Patterns with more than two wildcards, or two that cross `/`,
-     * exercise the automaton; the rest the PCRE fast path.
-     *
-     * @return array<string, array{0: string, 1: string, 2: bool, 3: bool}>
-     */
-    public static function semanticsProvider(): array
-    {
-        return [
-            'a/**/b, zero dirs' => ['a/**/b', 'a/b', false, true],
-            'a/**/b, one dir' => ['a/**/b', 'a/x/b', false, true],
-            'a/**/b, two dirs' => ['a/**/b', 'a/x/y/b', false, true],
-            'a/**/b is anchored' => ['a/**/b', 'x/a/b', false, false],
-            'a/**/b needs the whole name' => ['a/**/b', 'a/bc', false, false],
-            '**/foo at top' => ['**/foo', 'foo', false, true],
-            '**/foo deep' => ['**/foo', 'x/y/foo', false, true],
-            '**/foo is not a prefix' => ['**/foo', 'foobar', false, false],
-            '**/foo hides contents' => ['**/foo', 'x/foo/bar', false, true],
-            'foo/** below' => ['foo/**', 'foo/x', false, true],
-            'foo/** deep below' => ['foo/**', 'foo/x/y', false, true],
-            'foo/** not foo itself' => ['foo/**', 'foo', false, false],
-            'foo/** not a sibling' => ['foo/**', 'foobar/x', false, false],
-            '*.log top' => ['*.log', 'x.log', false, true],
-            '*.log deep' => ['*.log', 'a/b/x.log', false, true],
-            '*.log suffix only' => ['*.log', 'x.logs', false, false],
-            '*.log needs the dot' => ['*.log', 'log', false, false],
-            '*** a file' => ['***', 'x', false, true],
-            '*** a nested file' => ['***', 'a/b', false, true],
-            '***/x one dir' => ['***/x', 'a/x', false, true],
-            '***/x two dirs' => ['***/x', 'a/b/x', false, true],
-            '***/x needs a dir' => ['***/x', 'x', false, false],
-            'a**b adjacent' => ['a**b', 'ab', false, true],
-            'a**b crosses /' => ['a**b', 'a/x/b', false, true],
-            'a**b at depth' => ['a**b', 'c/axb', false, true],
-            'a**b order' => ['a**b', 'ba', false, false],
-            '**/*.php top' => ['**/*.php', 'x.php', false, true],
-            '**/*.php deep' => ['**/*.php', 'a/b/x.php', false, true],
-            '**/*.php suffix' => ['**/*.php', 'x.phpx', false, false],
-            '*.min.* top' => ['*.min.*', 'a.min.js', false, true],
-            '*.min.* deep' => ['*.min.*', 'd/a.min.js', false, true],
-            '*.min.* needs .min.' => ['*.min.*', 'a.js', false, false],
-            '**/build/** below' => ['**/build/**', 'build/x', false, true],
-            '**/build/** deep' => ['**/build/**', 'a/build/x/y', false, true],
-            '**/build/** not build itself' => ['**/build/**', 'build', false, false],
-            '**/build/** whole name' => ['**/build/**', 'a/builder/x', false, false],
-            'a/**/**/b zero dirs' => ['a/**/**/b', 'a/b', false, true],
-            'a/**/**/b two dirs' => ['a/**/**/b', 'a/x/y/b', false, true],
-            'a/**/**/b anchored' => ['a/**/**/b', 'b/a/b', false, false],
-            '*a*a*a*c spaced' => ['*a*a*a*c', 'xaxaxaxc', false, true],
-            '*a*a*a*c packed' => ['*a*a*a*c', 'aaac', false, true],
-            '*a*a*a*c too few' => ['*a*a*a*c', 'aac', false, false],
-            '*a*a*a*c no crossing' => ['*a*a*a*c', 'a/a/a/c', false, false],
-            '**a**a**c crossing' => ['**a**a**c', 'a/a/c', false, true],
-            '**a**a**c packed' => ['**a**a**c', 'aac', false, true],
-            '**a**a**c too few' => ['**a**a**c', 'ac', false, false],
-            '**/cache/ a dir' => ['**/cache/', 'cache', true, true],
-            '**/cache/ not a file' => ['**/cache/', 'cache', false, false],
-            '**/cache/ hides contents' => ['**/cache/', 'x/cache/y', false, true],
-            'negated automaton rule' => ["*.log\n!**/keep*.*", 'a/keep1.log', false, false],
-            'negated automaton rule, other' => ["*.log\n!**/keep*.*", 'a/drop.log', false, true],
-            'classes and ? with stars' => ['l?g[0-9]*.t*t', 'log7a.txt', false, true],
-            'class rejects' => ['l?g[0-9]*.t*t', 'logX.txt', false, false],
-        ];
-    }
-
-    /** @dataProvider semanticsProvider */
-    public function testVerdictsMatchTheRegexOnlyMatcher(string $gitignore, string $path, bool $isDirectory, bool $expected): void
-    {
-        $this->write('.gitignore', $gitignore . "\n");
-
-        $this->assertSame($expected, IgnoreRules::new($this->root)->ignores($this->root . '/' . $path, $isDirectory));
-    }
-
-    /**
-     * The same rows with PCRE starved, so (nearly) every match takes the
-     * automaton fallback: which engine answers must never change the answer.
-     *
-     * @dataProvider semanticsProvider
-     */
-    public function testVerdictsAreTheSameWhenEveryRegexErrors(string $gitignore, string $path, bool $isDirectory, bool $expected): void
-    {
-        $this->write('.gitignore', $gitignore . "\n");
-
-        $limit = ini_get('pcre.backtrack_limit');
-        ini_set('pcre.backtrack_limit', '1');
-        try {
-            $verdict = IgnoreRules::new($this->root)->ignores($this->root . '/' . $path, $isDirectory);
-        } finally {
-            ini_set('pcre.backtrack_limit', (string) $limit);
-        }
-
-        $this->assertSame($expected, $verdict);
-    }
+    // S-T06: the verdict-equivalence matrix (regex path vs automaton fallback)
+    // moved with the engine to sugar-ignore's BacktrackingTest.
 
     private function write(string $relative, string $contents): void
     {

@@ -582,7 +582,6 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // joined to a filesystem root.
         'MCP/OAuthDiscovery.php|.well-known/oauth-authorization-server' => self::NOT_A_TIER,
         'MCP/OAuthDiscovery.php|.well-known/oauth-protected-resource' => self::NOT_A_TIER,
-        'Tools/IgnoreRules.php|.git/info' => self::NOT_A_TIER,
         // Roadmap 5.7-1: where plan mode's one allowed write may land — a
         // write DESTINATION, like the worktrees directory above, never a file
         // the session reads configuration from. `PermissionGate::isPlanFile()`

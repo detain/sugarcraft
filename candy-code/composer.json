@@ -50,6 +50,7 @@
         "sugarcraft/sugar-async": "@dev",
         "sugarcraft/sugar-core": "@dev",
         "sugarcraft/sugar-forms": "@dev",
+        "sugarcraft/sugar-ignore": "@dev",
         "sugarcraft/sugar-releases": "@dev",
         "sugarcraft/sugar-style": "@dev",
         "sugarcraft/sugar-markdown": "@dev",
