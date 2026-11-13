@@ -1852,6 +1852,14 @@ final class EscapeDecoder
         if ($ord === 0x7f) {
             return 'Backspace';
         }
+        // 0x08 is the Ctrl-carrier lineage of Backspace (BS = Ctrl+H). On the
+        // bare wire it pairs the letter 'h' with Ctrl; the ESC-prefixed form
+        // carries no Ctrl bit, and terminals send ESC+0x08 for Alt+BS — it
+        // joins the 0x7f leg's harmonized name so both lineages of one key
+        // family answer with the same roster word (SI-21, m12 law).
+        if ($ord === 0x08) {
+            return 'Backspace';
+        }
 
         if ($ord >= 97 && $ord <= 122) {
             return chr($ord);
@@ -1876,13 +1884,34 @@ final class EscapeDecoder
         if ($ord === 0x09) return new KeyEvent('Tab', KeyModifier::none(), "\t");
         if ($ord === 0x0a || $ord === 0x0d) return new KeyEvent('Enter', KeyModifier::none(), $byte);
 
-        // Ctrl + letter (0x01-0x1a)
-        if ($ord >= 0x01 && $ord <= 0x1a) {
-            $letter = chr($ord + 0x60);
-            return new KeyEvent($letter, KeyModifier::ctrl(), $byte);
+        // NUL (0x00): keyboards that produce it produce it as Ctrl+Space (the
+        // layout's Ctrl+@ twin reaches the same byte). The wire byte has no
+        // letter to pair, so the conventional label IS the name: `Space`
+        // under Ctrl. The raw byte stays visible in `raw`.
+        if ($ord === 0x00) {
+            return new KeyEvent('Space', KeyModifier::ctrl(), $byte);
         }
 
-        return new KeyEvent($byte, KeyModifier::none(), $byte);
+        // Ctrl + carrier character. 0x01-0x1a pair the lowercase letters
+        // (chr(byte + 0x60)); 0x1C-0x1F (FS/GS/RS/US) pair their punctuation
+        // twins from the 0x40 block (chr(byte + 0x40): 0x1C = '\', 0x1D = ']',
+        // 0x1E = '^', 0x1F = '_') — both legs are the same ASCII law, the
+        // character whose code ANDs down to the byte, and both are what a US
+        // layout actually reaches with Ctrl. One vocabulary: no key in
+        // 0x00-0x1f reaches a host as a raw control byte.
+        if ($ord >= 0x01 && $ord <= 0x1a) {
+            return new KeyEvent(chr($ord + 0x60), KeyModifier::ctrl(), $byte);
+        }
+        if ($ord >= 0x1c && $ord <= 0x1f) {
+            return new KeyEvent(chr($ord + 0x40), KeyModifier::ctrl(), $byte);
+        }
+
+        // The match above covers 0x00-0x1f except 0x1b, which decodeClean()
+        // routes through handleEscape() before this method is reachable.
+        // Landing here means that dispatch broke.
+        throw new \LogicException(
+            'decodeControlChar received 0x' . dechex($ord) . ' — only 0x00-0x1f minus ESC may reach it'
+        );
     }
 
     /**

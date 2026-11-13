@@ -1359,6 +1359,69 @@ final class EscapeDecoderTest extends TestCase
         }
     }
 
+    // ─── One raw-control vocabulary, stated and enforced (SI-21) ─────────────
+
+    public function testEveryBareControlByteSurfacesAsARosterName(): void
+    {
+        // The one-vocabulary law: across the whole 0x00-0x1f block plus DEL,
+        // a bare press names a roster word — no `$key` is ever a raw control
+        // byte, while `raw` keeps the wire intact.
+        $expect = [];
+        foreach (range(0x00, 0x1f) as $ord) {
+            $expect[$ord] = match (true) {
+                $ord === 0x00 => 'Space',   // Ctrl+Space types NUL
+                $ord === 0x09 => 'Tab',
+                $ord === 0x0a, $ord === 0x0d => 'Enter',
+                $ord === 0x1b => 'Escape',  // lone-ESC default contract
+                $ord >= 0x01 && $ord <= 0x1a => chr($ord + 0x60),
+                $ord >= 0x1c && $ord <= 0x1f => chr($ord + 0x40),
+            };
+        }
+        $expect[0x7f] = 'Backspace';
+
+        foreach ($expect as $ord => $name) {
+            $decoder = new \SugarCraft\Input\EscapeDecoder();
+            $events = $decoder->decode(chr($ord));
+            $this->assertCount(1, $events, sprintf('0x%02x', $ord));
+            $this->assertSame($name, $events[0]->key, sprintf('0x%02x must name %s', $ord, $name));
+            $this->assertNotSame(chr($ord), $events[0]->key, sprintf('0x%02x must not surface as the raw byte', $ord));
+            $this->assertSame(chr($ord), $events[0]->raw, 'raw keeps the wire byte');
+        }
+
+        // Carrier truth for the new names:
+        $decoder = new \SugarCraft\Input\EscapeDecoder();
+        $nul = $decoder->decode("\x00")[0];
+        $this->assertTrue($nul->modifiers->includes(KeyModifier::CTRL), 'NUL is Ctrl+Space');
+        $sep = (new \SugarCraft\Input\EscapeDecoder())->decode("\x1c")[0];
+        $this->assertSame('\\', $sep->key);
+        $this->assertTrue($sep->modifiers->includes(KeyModifier::CTRL));
+        foreach ([0x1d => ']', 0x1e => '^', 0x1f => '_'] as $ord => $twin) {
+            $ev = (new \SugarCraft\Input\EscapeDecoder())->decode(chr($ord))[0];
+            $this->assertSame($twin, $ev->key);
+            $this->assertTrue($ev->modifiers->includes(KeyModifier::CTRL));
+        }
+    }
+
+    public function testAltBackspaceSharesOneNameAcrossBothLineages(): void
+    {
+        // ESC+DEL and ESC+BS (0x08) are the two lineages of Alt+Backspace;
+        // both answer with the roster name. The bare 0x08 press stays the
+        // Ctrl+letter carrier (no Alt bit on that wire).
+        $del = $this->decoder->decode("\x1b\x7f")[0];
+        $this->assertSame('Backspace', $del->key);
+        $this->assertTrue($del->modifiers->includes(KeyModifier::ALT));
+
+        $decoder2 = new \SugarCraft\Input\EscapeDecoder();
+        $bs = $decoder2->decode("\x1b\x08")[0];
+        $this->assertSame('Backspace', $bs->key);
+        $this->assertTrue($bs->modifiers->includes(KeyModifier::ALT));
+
+        $decoder3 = new \SugarCraft\Input\EscapeDecoder();
+        $bare = $decoder3->decode("\x08")[0];
+        $this->assertSame('h', $bare->key);
+        $this->assertTrue($bare->modifiers->includes(KeyModifier::CTRL));
+    }
+
     public function testTripleEscapeDecodesAltEscapeThenArrowNotPhantomBrackets(): void
     {
         // M12 evidence pin: xterm delivers Alt+ArrowRight as ESC ESC then

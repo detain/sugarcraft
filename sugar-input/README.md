@@ -224,13 +224,17 @@ never re-surfaced as its own event.
 | `ResizeEvent` | `cols`, `rows` — produced by `SignalResizeDriver` (see [Input drivers](#input-drivers)) |
 | `TerminalReplyEvent` | `family`, `params` (head-clamped to `MAX_PARAMS`, overflow counted in `paramsDropped`), `raw`, `body`, `truncated` |
 
-Control characters surface as `KeyEvent` pairing the lowercase letter with the
-Ctrl modifier — 0x01 arrives as key `a` with `modifiers` carrying Ctrl. The
-bytes with no letter to pair with — NUL (0x00) and the four separators
-0x1C–0x1F (FS/GS/RS/US) — carry the RAW byte itself as the key name, so
-`match ($event->key)` arms test for `"\0"` / `"\x1c"`…`"\x1f"` rather than an
-invented mnemonic. Alt-modified presses of the three symbolic control keys
-share it: `ESC` + `0x09`/`0x0A`/`0x0D`/`0x7F` name `Tab`/`Enter`/`Enter`/`Backspace`
+Control characters surface as `KeyEvent` pairing a character with the Ctrl
+modifier — 0x01 arrives as key `a` with `modifiers` carrying Ctrl, and the
+four separators 0x1C–0x1F (FS/GS/RS/US) pair their punctuation twins the same
+way: `\`, `]`, `^`, `_` under Ctrl. NUL (0x00) arrives as key `Space` with
+Ctrl (keyboards type the byte as Ctrl+Space; the layout's Ctrl+@ twin reaches
+the same byte). One vocabulary, stated and enforced: a bare 0x00–0x1F press
+never surfaces as a raw control byte in `$key`, so a
+`match ($event->key)` arm tests names, never `"\0"`; the wire bytes stay
+intact in `raw`. Alt-modified presses of the symbolic control keys share it:
+`ESC` + `0x09`/`0x0A`/`0x0D`/`0x7F`/`0x08` name
+`Tab`/`Enter`/`Enter`/`Backspace`/`Backspace`
 (with Alt), not raw bytes (a decoder quirk fixed long ago — if you matched
 on `"\r"`, match on `'Enter'` plus Alt now). Under Alt a key name is the byte
 itself — letters keep their character (uppercase arrives lower-cased), and
@@ -258,7 +262,7 @@ prefix.
 | Media (Kitty) | `MediaPlay`…`MediaRecord`, `LowerVolume`, `RaiseVolume`, `MuteVolume` |
 | Modifier-as-key (Kitty) | `LeftShift`, `RightShift`, `LeftCtrl`, `RightCtrl`, `LeftAlt`, `RightAlt`, `LeftSuper`, `RightSuper`, `LeftHyper`, `RightHyper`, `LeftMeta`, `RightMeta`, `IsoLevel3Shift`, `IsoLevel5Shift` |
 | Ctrl-paired | lowercase letter with the Ctrl modifier (`0x01` → `a`+Ctrl) |
-| Raw fallback | NUL and 0x1C–0x1F as the byte itself |
+| Ctrl-paired symbols | 0x00 → `Space` with Ctrl; 0x1C–0x1F → `\`, `]`, `^`, `_` with Ctrl (no bare control byte ever reaches `$key` — the raw wire byte stays in `raw`) |
 
 Shift+letter is protocol-dependent — code accordingly: legacy terminals send
 the capital directly (`Shift+a` → key `"A"`, NO `SHIFT` bit), the Kitty
@@ -305,7 +309,8 @@ every bit.
 
 Reserved combinations (the legacy wire cannot distinguish these — do not
 design keymaps against the distinction): `Ctrl+I` IS `Tab`, `Ctrl+J`/`Ctrl+M`
-ARE `Enter`, `Ctrl+[` IS `Escape`, `Ctrl+@`/`Ctrl+Space` collide with NUL,
+ARE `Enter`, `Ctrl+[` IS `Escape`, `Ctrl+@`/`Ctrl+Space` is NUL (it arrives as
+`Space` with Ctrl),
 and Alt via the `ESC` prefix collapses with Meta/Escape-then-key on legacy
 terminals. The Kitty protocol disambiguates all of them; negotiating it is
 the host's duty (above).
