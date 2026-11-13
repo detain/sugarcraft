@@ -52,8 +52,8 @@ use SugarCraft\DatePicker\DatePicker;
 $picker = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
 $picker = $picker->handleKey(DatePicker::KEY_ENTER);  // select the cursor date
 
-echo $picker->View();  // render the month grid
-$selected = $picker->SelectedDate();  // 2026-05-01
+echo $picker->view();  // render the month grid
+$selected = $picker->selectedDate();  // 2026-05-01
 ```
 
 Or drive it as a TEA model:
@@ -73,14 +73,14 @@ echo $model->view();
 
 ```php
 // Month navigation
-$picker = $picker->GoToPreviousMonth();
-$picker = $picker->GoToNextMonth();
-$picker = $picker->GoToPreviousYear();
-$picker = $picker->GoToNextYear();
-$picker = $picker->GoToToday();
+$picker = $picker->goToPreviousMonth();
+$picker = $picker->goToNextMonth();
+$picker = $picker->goToPreviousYear();
+$picker = $picker->goToNextYear();
+$picker = $picker->goToToday();
 
 // Set arbitrary month
-$picker = $picker->SetTime(new \DateTimeImmutable('2025-12-01'));
+$picker = $picker->setTime(new \DateTimeImmutable('2025-12-01'));
 ```
 
 Steps never throw and never wrap: the view position is clamped at the calendar
@@ -93,8 +93,8 @@ day only when the old index falls past the new month's day-cell window.
 The mirror edge exists at the top: an unbounded picker stepping past year 9999
 enters year 10000, whose grid date fails the strict four-digit `!Y-m-d` parse
 (`%04d` is only a minimum width, so the formatted year is the literal
-five-digit `10000`), leaving the date unresolvable — `View()` still renders
-(reporting year 10000), but `dateAtCursor()` is `null` and `SelectDate()`
+five-digit `10000`), leaving the date unresolvable — `view()` still renders
+(reporting year 10000), but `dateAtCursor()` is `null` and `selectDate()`
 refuses. This tolerated upper edge never crashes.
 
 ## Selection
@@ -105,8 +105,8 @@ date under the cursor; `Esc` clears the selection:
 ```php
 $picker = $picker->handleKey(DatePicker::KEY_ENTER);  // SelectDate() under the hood
 $picker = $picker->handleKey(DatePicker::KEY_ESCAPE); // ClearDate() under the hood
-$picker = $picker->ClearDate();                       // programmatic equivalent
-$picker = $picker->ToggleSelection();                 // select-or-clear in one call
+$picker = $picker->clearDate();                       // programmatic equivalent
+$picker = $picker->toggleSelection();                 // select-or-clear in one call
 ```
 
 If the cursor rests on an empty lead-in/trailing grid cell, Enter in single mode
@@ -157,7 +157,7 @@ $picker = $picker->withoutToday();  // drop the pin (falls back to the real cloc
 
 `withoutToday()` removes only the pinned reference — the picker then treats the
 real wall-clock as "today", so the highlight keeps rendering (it is not a way to
-hide the marker; set `WithTodayStyle('')` to suppress it). `GoToToday()` navigates
+hide the marker; set `withTodayStyle('')` to suppress it). `goToToday()` navigates
 to the pinned date, or to the real current day when nothing is pinned — unless
 that day lies outside a `min`/`max` window, in which case the view stays
 clamped inside the window (see the Min/max bounds section above).
@@ -165,11 +165,11 @@ clamped inside the window (see the Min/max bounds section above).
 ## Rendering
 
 ```php
-echo $picker->View();                 // default 21 columns, no week numbers
-echo $picker->View(30, true);         // 34 columns: 30-wide grid + 4-cell week column
+echo $picker->view();                 // default 21 columns, no week numbers
+echo $picker->view(30, true);         // 34 columns: 30-wide grid + 4-cell week column
 ```
 
-`View()` takes a column `width` and a `showWeekNumbers` flag. The TOTAL width —
+`view()` takes a column `width` and a `showWeekNumbers` flag. The TOTAL width —
 the `width`-wide calendar area plus the optional 4-cell ISO week column — is
 clamped into `[natural grid: 21 without a week column / 25 with one, 63]` and
 never rejected. The floor guarantees all seven day columns stay visible (a
@@ -185,18 +185,18 @@ delimiters and the extended-color introducers `38`/`48` are rejected with an
 rejected — it decodes as unrelated attributes, so avoid it. Only part of the
 SGR space decodes: attributes `1,2,3,4,5,6,7,9` and colors `30-37`/`40-47`/
 `90-97`; other well-formed codes (`0`, `21`-`29`, `39`, `49`, `53`) are
-silently dropped, so `WithTodayStyle('39')` suppresses the today marker rather
+silently dropped, so `withTodayStyle('39')` suppresses the today marker rather
 than resetting its style:
 
 ```php
 $picker = $picker
-    ->WithHeaderStyle('1;36')
-    ->WithDayNameStyle('1')
-    ->WithTodayStyle('1;33')
-    ->WithSelectedStyle('1;32')
-    ->WithSelectedTodayStyle('1;33;44')
-    ->WithCursorStyle('7')
-    ->WithRangeStyle('4;35');
+    ->withHeaderStyle('1;36')
+    ->withDayNameStyle('1')
+    ->withTodayStyle('1;33')
+    ->withSelectedStyle('1;32')
+    ->withSelectedTodayStyle('1;33;44')
+    ->withCursorStyle('7')
+    ->withRangeStyle('4;35');
 ```
 
 There is no dedicated disabled-day style: every out-of-bounds day always
@@ -211,7 +211,7 @@ movement, selection and clearing.
 Unrecognized keys are ignored (the receiver is returned unchanged). The `Model`
 wrapper routes Enter, Escape, Home and End through these `KEY_*` strings — its
 arrow arm calls the `MoveCursor*` methods directly, and `PageUp`/`PageDown`
-(which have no `KEY_*` constant) call `GoToPreviousMonth()`/`GoToNextMonth()` —
+(which have no `KEY_*` constant) call `goToPreviousMonth()`/`goToNextMonth()` —
 so a TEA application never needs to call `handleKey()` directly.
 
 Honest limitations: there is no month-wrap on arrow keys (they clamp at the grid
@@ -268,26 +268,29 @@ Beyond `DatePicker` itself, the shipped public classes are:
   which the picker's view floor prevents from ever reaching it in normal use.
 - **`Model`** — the TEA wrapper (`init()`/`update($msg)`/`view()`/
   `subscriptions()`). Its `update()` command is **always null** — a host learns
-  the outcome by polling `picker()->SelectedDate()`/`rangeStart()`/`rangeEnd()`
+  the outcome by polling `picker()->selectedDate()`/`rangeStart()`/`rangeEnd()`
   after each update, never from a returned command. The `EventStore` reports the
   same transitions for convenience, but not on range mode's cancel and restart
   paths (see Events above), so polling stays authoritative. Because
   the shared `Core\Model::view()` contract is argless, a framework-driven host
-  renders the default 21×9 grid; call `picker()->View($width, $showWeekNumbers)`
+  renders the default 21×9 grid; call `picker()->view($width, $showWeekNumbers)`
   directly for a sized render.
 - **`DatePicker` accessors** — `minDate()`, `maxDate()`, `isRangeMode()`,
-  `CursorIndex()`, `ViewMonth()`, `ViewYear()`, `dateAtCursor()`, and
-  `MoveToDate()` (aim the cursor at an existing value).
-- **Naming** — the picker keeps upstream bubble-datepicker's mixed casing:
-  PascalCase verbs and accessors (`GoTo*()`, `SetTime()`, `Move*()`,
-  `SelectDate()`, `ClearDate()`, `ToggleSelection()`, `SelectedDate()`,
-  `IsSelecting()`, `CursorIndex()`, `ViewMonth()`, `ViewYear()`, `View()`,
-  `With*Style()`) coexist with camelCase clones and probes (`with*()`,
-  `without*()`, `handleKey()`, `rangeStart()`, `rangeEnd()`, `isRangeMode()`,
-  `minDate()`, `maxDate()`, `dateAtCursor()`). There is no `setTime()`,
-  `setRangeMode()`, or lowercase `view()` on `DatePicker` — the shipped
-  spellings are `SetTime()`, `withRangeMode()`, and `View()`; `Model::view()`
-  stays lowercase because that is the sugar-core contract.
+  `cursorIndex()`, `viewMonth()`, `viewYear()`, `dateAtCursor()`, and
+  `moveToDate()` (aim the cursor at an existing value).
+- **Naming** — camelCase is the house API (AGENTS.md). The picker's verbs
+  and accessors are declared in camelCase (`goTo*()`, `setTime()`,
+  `move*()`, `selectDate()`, `clearDate()`, `toggleSelection()`,
+  `selectedDate()`, `isSelecting()`, `cursorIndex()`, `viewMonth()`,
+  `viewYear()`, `view()`, `with*Style()`) alongside the `with*()`/`without*()`
+  builders, `handleKey()`, `rangeStart()`, `rangeEnd()`, `isRangeMode()`,
+  `minDate()`, `maxDate()` and `dateAtCursor()`. They were originally
+  declared PascalCase mirroring upstream bubble-datepicker; the rename keeps
+  every PascalCase call site working unchanged because PHP method resolution
+  is case-insensitive — the old spellings (`GoToPreviousMonth()`, `View()`,
+  `With*Style()`, …) are deprecated in guidance, not in dispatch. There is
+  still no `setRangeMode()`: the shipped spelling is `withRangeMode()`;
+  `Model::view()` stays lowercase because that is the sugar-core contract.
 
 ## Internationalization
 

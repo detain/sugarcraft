@@ -24,6 +24,12 @@ use SugarCraft\Core\Util\Width;
  * Design antecedent: EthanEFung/bubble-datepicker, implemented as a native
  * PHP component (there is no Go runtime dependency).
  *
+ * Methods are declared camelCase per the house naming rule (AGENTS.md).
+ * The upstream PascalCase spellings (`GoToPreviousMonth()`, `SetTime()`,
+ * `View()`, `With*Style()`, …) remain supported: PHP resolves method names
+ * case-insensitively, so every legacy call site keeps working against the
+ * renamed declarations — deprecated in guidance, never in dispatch.
+ *
  * @see https://github.com/EthanEFung/bubble-datepicker
  */
 final class DatePicker
@@ -161,22 +167,22 @@ final class DatePicker
     // Navigation
     // -------------------------------------------------------------------------
 
-    public function GoToPreviousMonth(): self
+    public function goToPreviousMonth(): self
     {
         return $this->stepView(-1);
     }
 
-    public function GoToNextMonth(): self
+    public function goToNextMonth(): self
     {
         return $this->stepView(1);
     }
 
-    public function GoToPreviousYear(): self
+    public function goToPreviousYear(): self
     {
         return $this->stepView(-12);
     }
 
-    public function GoToNextYear(): self
+    public function goToNextYear(): self
     {
         return $this->stepView(12);
     }
@@ -198,7 +204,7 @@ final class DatePicker
         return $clone;
     }
 
-    public function GoToToday(): self
+    public function goToToday(): self
     {
         $today = $this->today();
         $clone = clone $this;
@@ -380,7 +386,7 @@ final class DatePicker
         return $this->today ?? new \DateTimeImmutable();
     }
 
-    public function SetTime(\DateTimeImmutable $t): self
+    public function setTime(\DateTimeImmutable $t): self
     {
         $clone = clone $this;
         [$clone->viewYear, $clone->viewMonth] = $clone->boundedView(
@@ -398,7 +404,7 @@ final class DatePicker
      * its cell; otherwise the view is unchanged and the cursor keeps its
      * clamped position. Immutable.
      */
-    public function MoveToDate(\DateTimeImmutable $date): self
+    public function moveToDate(\DateTimeImmutable $date): self
     {
         $clone = clone $this;
         $clone->cursorIndex = $clone->cursorForDate($date);
@@ -419,7 +425,7 @@ final class DatePicker
     // This is an architectural difference from upstream.
     // -------------------------------------------------------------------------
 
-    public function MoveCursorLeft(): self
+    public function moveCursorLeft(): self
     {
         $clone = clone $this;
         $clone->cursorIndex = \max(0, $clone->cursorIndex - 1);
@@ -427,7 +433,7 @@ final class DatePicker
         return $clone;
     }
 
-    public function MoveCursorRight(): self
+    public function moveCursorRight(): self
     {
         $clone = clone $this;
         $clone->cursorIndex = \min(self::DAY_INDEX_MAX, $clone->cursorIndex + 1);
@@ -435,7 +441,7 @@ final class DatePicker
         return $clone;
     }
 
-    public function MoveCursorUp(): self
+    public function moveCursorUp(): self
     {
         $clone = clone $this;
         $clone->cursorIndex = \max(0, $clone->cursorIndex - self::DAYS_IN_WEEK);
@@ -443,7 +449,7 @@ final class DatePicker
         return $clone;
     }
 
-    public function MoveCursorDown(): self
+    public function moveCursorDown(): self
     {
         $clone = clone $this;
         $clone->cursorIndex = \min(self::DAY_INDEX_MAX, $clone->cursorIndex + self::DAYS_IN_WEEK);
@@ -465,7 +471,7 @@ final class DatePicker
      * [minDate, maxDate] bounds, selection is REFUSED — the receiver is
      * returned unchanged (same reference, not a copy).
      */
-    public function SelectDate(): self
+    public function selectDate(): self
     {
         $date = $this->dateAtCursor() ?? $this->firstOfViewMonth();
         if ($date === null || !$this->inBounds($date)) {
@@ -482,7 +488,7 @@ final class DatePicker
     /**
      * Clear selection / exit selection mode.
      */
-    public function ClearDate(): self
+    public function clearDate(): self
     {
         $clone = clone $this;
         $clone->selecting = false;
@@ -491,9 +497,9 @@ final class DatePicker
         return $clone;
     }
 
-    public function ToggleSelection(): self
+    public function toggleSelection(): self
     {
-        return $this->selecting ? $this->ClearDate() : $this->SelectDate();
+        return $this->selecting ? $this->clearDate() : $this->selectDate();
     }
 
     // -------------------------------------------------------------------------
@@ -548,16 +554,16 @@ final class DatePicker
     public function handleKey(string $key): self
     {
         if ($key === self::KEY_LEFT) {
-            return $this->MoveCursorLeft();
+            return $this->moveCursorLeft();
         }
         if ($key === self::KEY_RIGHT) {
-            return $this->MoveCursorRight();
+            return $this->moveCursorRight();
         }
         if ($key === self::KEY_UP) {
-            return $this->MoveCursorUp();
+            return $this->moveCursorUp();
         }
         if ($key === self::KEY_DOWN) {
-            return $this->MoveCursorDown();
+            return $this->moveCursorDown();
         }
         if ($key === self::KEY_HOME) {
             return $this->jumpToFirstValidDay();
@@ -568,7 +574,7 @@ final class DatePicker
         if ($key === self::KEY_ENTER) {
             return $this->rangeMode
                 ? $this->handleRangeEnter()
-                : $this->SelectDate();
+                : $this->selectDate();
         }
         if ($key === self::KEY_ESCAPE) {
             if ($this->rangeMode) {
@@ -579,7 +585,7 @@ final class DatePicker
                 return $clone;
             }
 
-            return $this->ClearDate();
+            return $this->clearDate();
         }
 
         // Unrecognized key: no state to change — return the receiver.
@@ -636,27 +642,27 @@ final class DatePicker
     // Queries
     // -------------------------------------------------------------------------
 
-    public function SelectedDate(): ?\DateTimeImmutable
+    public function selectedDate(): ?\DateTimeImmutable
     {
         return $this->selectedDate;
     }
 
-    public function IsSelecting(): bool
+    public function isSelecting(): bool
     {
         return $this->selecting;
     }
 
-    public function CursorIndex(): int
+    public function cursorIndex(): int
     {
         return $this->cursorIndex;
     }
 
-    public function ViewMonth(): int
+    public function viewMonth(): int
     {
         return $this->viewMonth;
     }
 
-    public function ViewYear(): int
+    public function viewYear(): int
     {
         return $this->viewYear;
     }
@@ -761,7 +767,7 @@ final class DatePicker
      *                      clamped, never rejected.
      * @param bool $showWeekNumbers Show ISO week number column on the left (default false).
      */
-    public function View(int $width = 21, bool $showWeekNumbers = false): string
+    public function view(int $width = 21, bool $showWeekNumbers = false): string
     {
         $weekColWidth = $showWeekNumbers ? self::WEEK_COL_CHARS : 0;
         $minTotal = self::DAYS_IN_WEEK * self::CELL_CHARS + $weekColWidth;
@@ -867,7 +873,7 @@ final class DatePicker
     // Styling helpers
     // -------------------------------------------------------------------------
 
-    public function WithHeaderStyle(string $s): self
+    public function withHeaderStyle(string $s): self
     {
         self::assertSgr($s);
         $clone = clone $this;
@@ -876,7 +882,7 @@ final class DatePicker
         return $clone;
     }
 
-    public function WithDayNameStyle(string $s): self
+    public function withDayNameStyle(string $s): self
     {
         self::assertSgr($s);
         $clone = clone $this;
@@ -885,7 +891,7 @@ final class DatePicker
         return $clone;
     }
 
-    public function WithTodayStyle(string $s): self
+    public function withTodayStyle(string $s): self
     {
         self::assertSgr($s);
         $clone = clone $this;
@@ -894,7 +900,7 @@ final class DatePicker
         return $clone;
     }
 
-    public function WithSelectedStyle(string $s): self
+    public function withSelectedStyle(string $s): self
     {
         self::assertSgr($s);
         $clone = clone $this;
@@ -903,7 +909,7 @@ final class DatePicker
         return $clone;
     }
 
-    public function WithSelectedTodayStyle(string $s): self
+    public function withSelectedTodayStyle(string $s): self
     {
         self::assertSgr($s);
         $clone = clone $this;
@@ -912,7 +918,7 @@ final class DatePicker
         return $clone;
     }
 
-    public function WithCursorStyle(string $s): self
+    public function withCursorStyle(string $s): self
     {
         self::assertSgr($s);
         $clone = clone $this;
@@ -921,7 +927,7 @@ final class DatePicker
         return $clone;
     }
 
-    public function WithRangeStyle(string $s): self
+    public function withRangeStyle(string $s): self
     {
         self::assertSgr($s);
         $clone = clone $this;

@@ -45,8 +45,8 @@ final class Model implements \SugarCraft\Core\Model
      * Handle a KeyMsg, returning [nextModel, optionalCmd].
      *
      * Maps arrow keys to cursor movement, PageUp/PageDown to previous/next
-     * month, Enter to SelectDate (non-range mode) or range-start/end (range
-     * mode), Escape to ClearDate in single mode — in range mode Escape clears
+     * month, Enter to selectDate (non-range mode) or range-start/end (range
+     * mode), Escape to clearDate in single mode — in range mode Escape clears
      * the pending range and never the selection — and Home/End to the
      * first/last valid day.
      * Records events to the EventStore when one is injected.
@@ -56,7 +56,7 @@ final class Model implements \SugarCraft\Core\Model
      *
      * The command is permanently null: this widget never drives side effects of
      * its own. A host that wants "picked, now quit" must inspect
-     * {@see picker()}'s SelectedDate()/IsSelecting() after update() and emit
+     * {@see picker()}'s selectedDate()/isSelecting() after update() and emit
      * its own Cmd — do not wait for a selection command that will not arrive.
      *
      * @return array{0: Model, 1: ?\Closure}
@@ -85,14 +85,14 @@ final class Model implements \SugarCraft\Core\Model
         $chorded = $msg->ctrl || $msg->alt;
 
         return match (true) {
-            $msg->type === KeyType::Left   => $picker->MoveCursorLeft(),
-            $msg->type === KeyType::Right  => $picker->MoveCursorRight(),
-            $msg->type === KeyType::Up     => $picker->MoveCursorUp(),
-            $msg->type === KeyType::Down   => $picker->MoveCursorDown(),
+            $msg->type === KeyType::Left   => $picker->moveCursorLeft(),
+            $msg->type === KeyType::Right  => $picker->moveCursorRight(),
+            $msg->type === KeyType::Up     => $picker->moveCursorUp(),
+            $msg->type === KeyType::Down   => $picker->moveCursorDown(),
             $msg->type === KeyType::Home   => $picker->handleKey(DatePicker::KEY_HOME),
             $msg->type === KeyType::End    => $picker->handleKey(DatePicker::KEY_END),
-            $msg->type === KeyType::PageUp   && !$chorded => $picker->GoToPreviousMonth(),
-            $msg->type === KeyType::PageDown && !$chorded => $picker->GoToNextMonth(),
+            $msg->type === KeyType::PageUp   && !$chorded => $picker->goToPreviousMonth(),
+            $msg->type === KeyType::PageDown && !$chorded => $picker->goToNextMonth(),
             $msg->type === KeyType::Enter  && !$chorded => $picker->handleKey(DatePicker::KEY_ENTER),
             $msg->type === KeyType::Escape && !$chorded => $picker->handleKey(DatePicker::KEY_ESCAPE),
             default                       => $picker,
@@ -110,9 +110,9 @@ final class Model implements \SugarCraft\Core\Model
             return;
         }
 
-        if ($next->CursorIndex() !== $prev->CursorIndex()) {
+        if ($next->cursorIndex() !== $prev->cursorIndex()) {
             $this->store->record('cursor_moved', [
-                'index' => $next->CursorIndex(),
+                'index' => $next->cursorIndex(),
             ]);
         }
 
@@ -132,8 +132,8 @@ final class Model implements \SugarCraft\Core\Model
                 ]);
             }
         } else {
-            $prevDate = $prev->SelectedDate();
-            $nextDate = $next->SelectedDate();
+            $prevDate = $prev->selectedDate();
+            $nextDate = $next->selectedDate();
 
             if ($nextDate !== null && self::day($nextDate) !== self::day($prevDate)) {
                 $this->store->record('date_selected', [
@@ -161,7 +161,7 @@ final class Model implements \SugarCraft\Core\Model
      */
     public function view(int $width = 21, bool $showWeekNumbers = false): string
     {
-        return $this->picker->View($width, $showWeekNumbers);
+        return $this->picker->view($width, $showWeekNumbers);
     }
 
     /**
@@ -175,7 +175,7 @@ final class Model implements \SugarCraft\Core\Model
     /**
      * Expose the wrapped picker for direct inspection by callers that
      * prefer the imperative API — including month/year navigation reached
-     * through `GoToNextMonth()` and friends, which have no dedicated key
+     * through `goToNextMonth()` and friends, which have no dedicated key
      * beyond PageUp/PageDown.
      */
     public function picker(): DatePicker
