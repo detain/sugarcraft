@@ -72,17 +72,25 @@ final class VeilAnimationTest extends TestCase
         $this->assertStringContainsString('X', $result);
     }
 
-    public function testBackdropZeroNoDimCodes(): void
+    /**
+     * The old leg asserted the absence of \e[2m — a byte this truecolor
+     * compositor never emits — so it could not fail. The real zero-vs-
+     * absent law is dimPen()'s opacity === 0 early-return: a backdrop at
+     * zero is BYTE-IDENTICAL to no dimming at all (the pen-free fixture
+     * is plain text, so any pen — even the identity 255;255;255 one the
+     * computation would produce without the early-return — reddens both
+     * pins below).
+     */
+    public function testBackdropZeroIsByteIdenticalToNoBackdrop(): void
     {
-        $v = Veil::new()->withBackdrop(0);
-
         $bg = "..........";
         $fg = "X";
 
-        $result = $v->composite($fg, $bg, Position::TOP, Position::LEFT);
+        $noBackdrop = Veil::new()->composite($fg, $bg, Position::TOP, Position::LEFT);
+        $zeroBackdrop = Veil::new()->withBackdrop(0)->composite($fg, $bg, Position::TOP, Position::LEFT);
 
-        // No dim codes when backdrop is 0
-        $this->assertStringNotContainsString("\x1b[2m", $result);
+        $this->assertSame($noBackdrop, $zeroBackdrop);
+        $this->assertSame('X.........', $zeroBackdrop);
     }
 
     public function testBackdropPreservesBackgroundElsewhere(): void
