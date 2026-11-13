@@ -226,7 +226,7 @@ reference projects supplied the ideas, not the code.
 | SugarSpring (sugar-spring/) | [harmonica](https://github.com/charmbracelet/harmonica) |
 | SugarSshServer (sugar-ssh-server/) | [wish](https://github.com/charmbracelet/wish) |
 | SugarStyle (sugar-style/) | [lipgloss](https://github.com/charmbracelet/lipgloss) |
-| SugarTable (sugar-table/) | [bubble-table](https://github.com/Evertras/bubble-table) (no mouse integration; upstream's frozen-rows concept not ported — this lib freezes columns) |
+| SugarTable (sugar-table/) | [bubble-table](https://github.com/Evertras/bubble-table) (no mouse integration; upstream's WithHorizontalFreezeColumnCount column-prefix freeze IS ported here as withFrozenCols — upstream has no row-freeze concept) |
 | SugarTesting (sugar-testing/) | [x/exp/golden](https://github.com/charmbracelet/x-exp-golden) + [teatest](https://github.com/charmbracelet/teatest) (nearest prior art — first-party hardened; tape dialect charmbracelet/vhs) |
 | SugarToast (sugar-toast/) | [bubbleup](https://github.com/DaltonSW/bubbleup) |
 | SugarTreelist (sugar-treelist/) | [bubblelister](https://github.com/treilik/bubblelister) |
