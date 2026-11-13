@@ -874,9 +874,17 @@ final class ConversationRouter
      */
     private function sendPrompt(PlatformFace $channel, array $ref, string $sessionId, string $fenced, string $delivery, array $images = [], array $documents = []): PromiseInterface
     {
+        // Never rejects (candy-discord-009): every call site pipes this promise
+        // into chains that discard rejections, and an unhandled rejection either
+        // vanishes silently (react/promise v2) or kills the loop (v3). A failed
+        // prompt instead answers the user once through the delivery boundary
+        // and leaves one content-free prompt_refused row behind.
         if ($images === [] && $documents === []) {
             return $this->serve->send($sessionId, $fenced, $delivery)->then(
                 fn () => $this->log->info('prompt_admitted', ['session' => $sessionId, 'delivery' => $delivery]),
+                function (\Throwable $error) use ($channel, $ref, $sessionId): void {
+                    $this->refusePrompt($channel, $ref, $sessionId, $error);
+                },
             );
         }
 
@@ -884,14 +892,27 @@ final class ConversationRouter
             fn () => $this->log->info('prompt_admitted', ['session' => $sessionId, 'delivery' => $delivery, 'media' => 1]),
             function (\Throwable $error) use ($channel, $ref, $sessionId, $fenced, $delivery): PromiseInterface {
                 if (!self::isMediaRefusal($error)) {
-                    throw $error;
+                    $this->refusePrompt($channel, $ref, $sessionId, $error);
+
+                    return \React\Promise\resolve(null);
                 }
                 $this->log->warn('media_refused', ['session' => $sessionId, 'kind' => $error instanceof ServeError ? $error->kind : 'unknown']);
                 $this->deliver($channel, $ref, Lang::t('channels.discord.media.refused'));
 
-                return $this->serve->send($sessionId, $fenced, $delivery);
+                return $this->serve->send($sessionId, $fenced, $delivery)->then(null, function (\Throwable $retryError) use ($channel, $ref, $sessionId): void {
+                    $this->refusePrompt($channel, $ref, $sessionId, $retryError);
+                });
             },
         );
+    }
+
+    /**
+     * Terminal arm of sendPrompt: disclose to the user, log kind-only.
+     */
+    private function refusePrompt(PlatformFace $channel, array $ref, string $sessionId, \Throwable $error): void
+    {
+        $this->log->warn('prompt_refused', ['session' => $sessionId, 'kind' => $error instanceof ServeError ? $error->kind : 'unknown']);
+        $this->failWith($channel, $ref, Lang::t('channels.discord.prompt.failed', ['error' => $error->getMessage()]));
     }
 
     /**

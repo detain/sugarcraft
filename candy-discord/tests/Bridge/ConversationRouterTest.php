@@ -534,6 +534,55 @@ final class ConversationRouterTest extends TestCase
         self::assertStringContainsString('"stopped":true', $warns[0]);
     }
 
+    public function testAFailedNoMediaPromptStillAnswersTheUserOnceAndNeverVanishes(): void
+    {
+        $rows = [];
+        $log = new Log(static function (string $line) use (&$rows): void {
+            $rows[] = $line;
+        });
+        $this->boot([], $log);
+        $this->serve->sendRefusals = 1;
+        $this->inboundDm('hello there', false, 'm-9');
+
+        $answers = \array_values(\array_filter($this->face->delivered, static fn (string $d): bool => \str_contains($d, 'could not be delivered')));
+        self::assertCount(1, $answers, 'a refused prompt must answer the user exactly once');
+        $refusals = \array_values(\array_filter($rows, static fn (string $r): bool => \str_contains($r, 'prompt_refused')));
+        self::assertCount(1, $refusals);
+        self::assertStringContainsString('"kind":"not_connected"', $refusals[0]);
+        self::assertStringNotContainsString('not connected', $refusals[0], 'the row is content-free: kind only, no error payload');
+    }
+
+    public function testAMediaRefusalWhoseRetryAlsoFailsDisclosesExactlyOnce(): void
+    {
+        $rows = [];
+        $log = new Log(static function (string $line) use (&$rows): void {
+            $rows[] = $line;
+        });
+        $this->boot([], $log);
+        $this->inboundDm('bind me', false, 'm-1');
+        $before = $this->serve->sendSeen;
+        $this->serve->refuseMediaOnce = true;
+        $this->serve->sendRefusals = 1;
+
+        $this->router->inbound(
+            'discord',
+            self::DM_KEY,
+            ['channelId' => 'chan-9'],
+            'with file',
+            false,
+            'm-2',
+            [['name' => 'a.png', 'mime' => 'image/png', 'data' => 'AA==']],
+            [],
+        );
+        self::runFor($this->loop, 400);
+
+        self::assertSame($before + 2, $this->serve->sendSeen, 'media refusal retries once, then the retry fails');
+        $answers = \array_values(\array_filter($this->face->delivered, static fn (string $d): bool => \str_contains($d, 'could not be delivered')));
+        self::assertCount(1, $answers, 'the failed retry must disclose once, not twice');
+        $refusals = \array_values(\array_filter($rows, static fn (string $r): bool => \str_contains($r, 'prompt_refused')));
+        self::assertCount(1, $refusals);
+    }
+
     /** @param array<string,mixed> $policy */
     private function boot(array $policy = [], ?Log $log = null): void
     {

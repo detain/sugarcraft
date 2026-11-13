@@ -100,6 +100,9 @@ final class FakeServe
 
     public bool $refuseMediaOnce = false;
 
+    /** Number of upcoming session.send calls answered with an RPC error (kind not_connected). */
+    public int $sendRefusals = 0;
+
     public int $cancelSeen = 0;
 
     public int $execSeen = 0;
@@ -405,6 +408,14 @@ final class FakeServe
                     $this->emit($id, [
                         'jsonrpc' => '2.0', 'id' => $rpcId,
                         'error' => ['code' => -32602, 'message' => 'invalid params', 'data' => (object) ['kind' => 'image_mime_mismatch']],
+                    ]);
+                    break;
+                }
+                if ($this->sendRefusals > 0) {
+                    $this->sendRefusals--;
+                    $this->emit($id, [
+                        'jsonrpc' => '2.0', 'id' => $rpcId,
+                        'error' => ['code' => -32000, 'message' => 'not connected', 'data' => (object) ['kind' => 'not_connected']],
                     ]);
                     break;
                 }
