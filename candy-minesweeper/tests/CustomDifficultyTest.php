@@ -124,6 +124,24 @@ final class CustomDifficultyTest extends TestCase
     public function testLabelReflectsCurrentValues(): void
     {
         $cd = CustomDifficulty::fromInput(20, 30, 50);
-        $this->assertSame('20×30 · 50 mines', $cd->label());
+        // msw-09/-033: the label prints WIDTH first (cols=30) then height
+        // (rows=20) — the same order the CLI grammar and README use. The
+        // rows×cols spelling here used to invert that contract.
+        $this->assertSame('30×20 · 50 mines', $cd->label());
+    }
+
+    public function testLabelIsTranslatedNotInlined(): void
+    {
+        // -033's Lang::t leg: the "mines" word used to be an English
+        // literal baked into the return string. Deleting the Lang::t route
+        // must redden THIS test, not ship silent English.
+        $prior = T::locale();
+        T::setLocale('de');
+        try {
+            $cd = CustomDifficulty::fromInput(20, 30, 50);
+            $this->assertSame('30×20 · 50 Minen', $cd->label());
+        } finally {
+            T::setLocale($prior);
+        }
     }
 }

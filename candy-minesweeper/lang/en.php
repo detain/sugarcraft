@@ -19,6 +19,7 @@ return [
     'custom.min_mines'           => 'at least 1 mine required',
     'custom.max_mines'           => 'too many mines — leave a safe starting area',
     'custom.min_area'            => 'a custom board needs at least 10 cells (rows × cols)',
+    'custom.label' => '{width}×{height} · {mines} mines',
     'ui.status' => 'mines: {mines}  ·  flags: {flags}  ·  remaining: {remaining}  ·  time: {time}',
     'ui.status_stats' => '{preset}  ·  flags: {flags}  ·  remaining: {remaining}  ·  time: {time}  ·  best: {best}',
     'ui.preset_easy' => 'easy',

@@ -19,6 +19,7 @@ return [
     'custom.min_mines' => 'je vyžadováno alespoň 1 mina',
     'custom.max_mines' => 'příliš mnoho min — nechte bezpečnou výchozí oblast',
     'custom.min_area'            => 'vlastní deska potřebuje alespoň 10 polí (řádky × sloupce)',
+    'custom.label' => '{width}×{height} · {mines} min',
     'ui.status' => 'miny: {mines}  ·  vlajky: {flags}  ·  zbývá: {remaining}  ·  čas: {time}',
     'ui.status_stats' => '{preset}  ·  vlajky: {flags}  ·  zbývá: {remaining}  ·  čas: {time}  ·  nejlepší: {best}',
     'ui.preset_easy' => 'snadný',

@@ -83,11 +83,13 @@ final class StatsSurfaceTest extends TestCase
     public function testCustomBoardStatusSpellsItsRawShape(): void
     {
         // 12×8 with 10 mines matches no preset — the head segment is the
-        // raw W×H×M so the board at least proves custom sizes exist.
+        // width-first custom label routed through CustomDifficulty::labelShape
+        // (msw-09/-033), so the board proves custom sizes exist in the same
+        // vocabulary the form and CLI speak.
         $game = Game::withCustom(12, 8, 10, static fn(int $max): int => 0, stats: new Stats());
 
         $view = $game->view();
-        $this->assertStringContainsString('12×8×10  ·  ', $view, 'custom head names its own shape (width×height×mines per the naming law)');
+        $this->assertStringContainsString('12×8 · 10 mines  ·  ', $view, 'custom head names its own shape (width×height · mines per the naming law)');
         $this->assertStringContainsString('best: --', $view, 'custom boards tally nothing, the placeholder stays');
     }
 

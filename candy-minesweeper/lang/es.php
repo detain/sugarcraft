@@ -19,6 +19,7 @@ return [
     'custom.min_mines' => 'se requiere al menos 1 mina',
     'custom.max_mines' => 'demasiadas minas — deja un área de inicio segura',
     'custom.min_area'            => 'un tablero personalizado necesita al menos 10 celdas (filas × columnas)',
+    'custom.label' => '{width}×{height} · {mines} minas',
     'ui.status' => 'minas: {mines}  ·  banderas: {flags}  ·  restantes: {remaining}  ·  tiempo: {time}',
     'ui.status_stats' => '{preset}  ·  banderas: {flags}  ·  restantes: {remaining}  ·  tiempo: {time}  ·  mejor: {best}',
     'ui.preset_easy' => 'fácil',

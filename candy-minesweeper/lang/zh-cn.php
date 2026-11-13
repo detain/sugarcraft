@@ -19,6 +19,7 @@ return [
     'custom.min_mines' => '至少需要 1 个地雷',
     'custom.max_mines' => '地雷太多——请保留一个安全的起始区域',
     'custom.min_area'            => '自定义棋盘至少需要 10 个格子（行 × 列）',
+    'custom.label' => '{width}×{height} · 地雷 {mines} 个',
     'ui.status' => '地雷: {mines}  ·  旗帜: {flags}  ·  剩余: {remaining}  ·  时间: {time}',
     'ui.status_stats' => '{preset}  ·  旗帜: {flags}  ·  剩余: {remaining}  ·  时间: {time}  ·  最佳: {best}',
     'ui.preset_easy' => '初级',

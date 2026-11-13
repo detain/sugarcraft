@@ -81,10 +81,27 @@ final class CustomDifficulty
     }
 
     /**
-     * Return a display label for the current settings.
+     * Return a display label for the current settings — translated, and
+     * WIDTH-first (the same order the CLI grammar, README and every
+     * on-screen shape speak; this object's rows is the height, its cols
+     * the width — msw-09/-033).
      */
     public function label(): string
     {
-        return "{$this->rows}×{$this->cols} · {$this->mines} mines";
+        return self::labelShape($this->cols, $this->rows, $this->mines);
+    }
+
+    /**
+     * The single shape formatter (msw-09/-033): every surface that names
+     * a board as "{width}×{height} · {mines} mines" routes here, so the
+     * width-first convention and the translation cannot drift per-call.
+     */
+    public static function labelShape(int $width, int $height, int $mines): string
+    {
+        return Lang::t('custom.label', [
+            'width'  => $width,
+            'height' => $height,
+            'mines'  => $mines,
+        ]);
     }
 }

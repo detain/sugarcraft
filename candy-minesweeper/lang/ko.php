@@ -19,6 +19,7 @@ return [
     'custom.min_mines' => '지뢰는 최소 1개 필요합니다',
     'custom.max_mines' => '지뢰가 너무 많습니다 — 안전한 시작 영역을 남기세요',
     'custom.min_area'            => '사용자 판은 최소 10칸 필요 (행 × 열)',
+    'custom.label' => '{width}×{height} · 지뢰 {mines}개',
     'ui.status' => '지뢰: {mines}  ·  깃발: {flags}  ·  남은: {remaining}  ·  시간: {time}',
     'ui.status_stats' => '{preset}  ·  깃발: {flags}  ·  남은: {remaining}  ·  시간: {time}  ·  최고: {best}',
     'ui.preset_easy' => '초급',

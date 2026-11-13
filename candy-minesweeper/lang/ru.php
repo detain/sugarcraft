@@ -19,6 +19,7 @@ return [
     'custom.min_mines' => 'требуется хотя бы 1 мина',
     'custom.max_mines' => 'слишком много мин — оставьте безопасную стартовую область',
     'custom.min_area'            => 'своему полю нужно минимум 10 клеток (строки × столбцы)',
+    'custom.label' => '{width}×{height} · {mines} мин',
     'ui.status' => 'мины: {mines}  ·  флаги: {flags}  ·  осталось: {remaining}  ·  время: {time}',
     'ui.status_stats' => '{preset}  ·  флаги: {flags}  ·  осталось: {remaining}  ·  время: {time}  ·  рекорд: {best}',
     'ui.preset_easy' => 'лёгкий',

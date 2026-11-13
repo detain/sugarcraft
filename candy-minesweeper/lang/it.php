@@ -19,6 +19,7 @@ return [
     'custom.min_mines' => 'è richiesta almeno 1 mina',
     'custom.max_mines' => 'troppe mine — lascia un\'area di partenza sicura',
     'custom.min_area'            => 'una griglia personalizzata richiede almeno 10 celle (righe × colonne)',
+    'custom.label' => '{width}×{height} · {mines} mine',
     'ui.status' => 'mine: {mines}  ·  bandiere: {flags}  ·  rimanenti: {remaining}  ·  tempo: {time}',
     'ui.status_stats' => '{preset}  ·  bandiere: {flags}  ·  rimanenti: {remaining}  ·  tempo: {time}  ·  record: {best}',
     'ui.preset_easy' => 'facile',

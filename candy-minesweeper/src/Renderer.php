@@ -11,6 +11,7 @@ use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Mouse\Mark;
 use SugarCraft\Mouse\Scanner;
+use SugarCraft\Minesweeper\Ui\CustomDifficulty;
 use SugarCraft\Style\Border;
 use SugarCraft\Style\Style as SugarStyle;
 
@@ -550,15 +551,18 @@ final class Renderer
         if ($g->stats !== null) {
             // Stats are being kept (opt-in via CANDY_MINESWEEPER_STATS), so
             // the status line must show what they know: the preset's name
-            // (or the raw W×H×M shape of a board no preset matches — the
-            // only on-screen evidence custom sizes exist, 095) and the
-            // current best, with a dash placeholder until one is set. The
-            // mine count yields its segment to the preset name, which
-            // encodes the count; custom boards spell the count in the head.
+            // (or the translated W×H · N-mines label of a board no preset
+            // matches — the only on-screen evidence custom sizes exist,
+            // 095) and the current best, with a dash placeholder until one
+            // is set. The mine count yields its segment to the preset name,
+            // which encodes the count; custom boards spell the count in the
+            // head. msw-09/-033: the custom head routes through the one
+            // shape formatter (width-first, Lang::t) instead of an inline
+            // untranslated W×H×M.
             $preset = $g->difficulty();
             $label = $preset !== null
                 ? Lang::t('ui.preset_' . strtolower($preset->name))
-                : $b->width . '×' . $b->height . '×' . $b->mineCount;
+                : CustomDifficulty::labelShape($b->width, $b->height, $b->mineCount);
             // Custom boards tally nothing, so they have no bucket to read.
             $best = $preset !== null ? $g->stats->bestTime($preset) : null;
             return [

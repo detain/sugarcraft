@@ -52,7 +52,7 @@ final class LocaleParityTest extends TestCase
     {
         $en = require __DIR__ . '/../lang/en.php';
         $this->assertArrayHasKey('board.rows_shape_mismatch', $en);
-        foreach (['min_rows', 'min_cols', 'max_rows', 'max_cols', 'min_mines', 'max_mines'] as $suffix) {
+        foreach (['min_rows', 'min_cols', 'max_rows', 'max_cols', 'min_mines', 'max_mines', 'min_area', 'label'] as $suffix) {
             $this->assertArrayHasKey("custom.$suffix", $en);
         }
         // The ui.* family is what makes MAJOR-2 (i18n dormant) stay fixed:

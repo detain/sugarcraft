@@ -19,6 +19,7 @@ return [
     'custom.min_mines' => 'en az 1 mayın gerekli',
     'custom.max_mines' => 'çok fazla mayın — güvenli bir başlangıç alanı bırakın',
     'custom.min_area'            => 'özel tahta en az 10 hücre gerektirir (satır × sütun)',
+    'custom.label' => '{width}×{height} · {mines} mayın',
     'ui.status' => 'mayın: {mines}  ·  bayrak: {flags}  ·  kalan: {remaining}  ·  süre: {time}',
     'ui.status_stats' => '{preset}  ·  bayrak: {flags}  ·  kalan: {remaining}  ·  süre: {time}  ·  en iyi: {best}',
     'ui.preset_easy' => 'kolay',
