@@ -6,6 +6,7 @@ return [
     // Input validation
     'input.invalid_arrow' => 'Invalid arrow direction: {dir}',
     'input.ticks_factory_required' => 'ticks() requires a tick factory: the harness cannot guess your lib tick class, and the harness TickMsg matches nothing in models that ship their own; pass factory: static fn (int $i, float $s) => new YourTickMsg($s)',
+    'input.key_not_single_cluster' => 'key() takes exactly one grapheme cluster, got: {chars}',
 
     // Golden file operations
     'golden.write_failed' => 'Failed to write golden file {path}: {reason}',

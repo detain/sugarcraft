@@ -156,6 +156,41 @@ final class ScriptedInputTest extends TestCase
             ->enter();
 
         $this->assertSame(3, $input->count());
+        // The class declares \Countable, so the native form works too —
+        // without the interface a bare count($input) fatals while ->count()
+        // looks healthy.
+        $this->assertInstanceOf(\Countable::class, $input);
+        $this->assertSame(3, \count($input));
+    }
+
+    public function testKeyRefusesMultiClusterRunes(): void
+    {
+        // key() promises one character and now validates it: a two-rune
+        // KeyMsg is a wire state no keyboard emits. Chaining is the
+        // multi-key spelling.
+        foreach (['ab', '', "\xc3\xa9\xc3\xa9"] as $bad) {
+            try {
+                ScriptedInput::new()->key($bad);
+                $this->fail('key() accepted a non-single-cluster rune: ' . json_encode($bad));
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('one grapheme cluster', $e->getMessage());
+            }
+        }
+    }
+
+    public function testKeyAcceptsWholeGraphemeClusters(): void
+    {
+        // Precomposed e-acute (1 scalar), e + combining acute (2 scalars,
+        // 1 cluster) and a flag emoji (2 regional indicators, 1 cluster)
+        // are all real single keystrokes and must pass.
+        $input = ScriptedInput::new()
+            ->key('é')
+            ->key("é")
+            ->key('🇧🇪');
+
+        $messages = $input->build();
+        $this->assertCount(3, $messages);
+        $this->assertSame(['é', "é", '🇧🇪'], array_map(static fn ($m) => $m->rune, $messages));
     }
 
     public function testTicksAppendsTickMessages(): void

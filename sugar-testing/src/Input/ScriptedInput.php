@@ -54,7 +54,7 @@ use SugarCraft\Testing\Lang;
  * First-party harness — upstream-antecedented (charmbracelet/teatest input
  * scripting) but re-implemented for sugar-core's message types.
  */
-final readonly class ScriptedInput
+final readonly class ScriptedInput implements \Countable
 {
     /**
      * Bytes per read {@see bytes()} hands the parser — the `fread()` size
@@ -115,14 +115,22 @@ final readonly class ScriptedInput
     /**
      * Append a character key message.
      *
-     * @param string $char Single character
+     * @param string $char Single grapheme cluster — enforced: a multi-cluster string is a wire state no keyboard emits (chaining is the multi-key spelling: ->key('a')->key('b'))
      * @param bool   $shift Whether to set the shift modifier
      * @param bool   $ctrl  Whether to set the ctrl modifier
      * @param bool   $alt   Whether to set the alt modifier
      * @return self
+     * @throws \InvalidArgumentException when $char is not exactly one grapheme cluster
      */
     public function key(string $char, bool $shift = false, bool $ctrl = false, bool $alt = false): self
     {
+        // \X is one UAX#29 extended grapheme cluster: 'é' (precomposed or e+
+        // combining) and the 🇧🇪 flag (two regional indicators) pass as one;
+        // 'ab', '' and malformed UTF-8 (preg_match returns false) throw.
+        if (!\preg_match('/^\X$/u', $char)) {
+            throw new \InvalidArgumentException(Lang::t('input.key_not_single_cluster', ['chars' => $char]));
+        }
+
         return $this->push(new KeyMsg(
             type: KeyType::Char,
             rune: $char,
