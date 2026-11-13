@@ -20,17 +20,32 @@ php candy-tetris.phar --vs         # VS the computer</code></pre>
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-shell"># From the candy-tetris/ library directory:
 ./bin/candy-tetris
+./bin/candy-tetris --vs    # VS the computer</code></pre>
 
-# Controls
-# ← / →   Move left / right
-# ↑ / x   Rotate clockwise
-# z       Rotate counter-cw
-# ↓       Soft drop
-# Space   Hard drop
-# c       Hold piece
-# p       Pause / resume
-# r       Restart after game over
-# q       Quit</code></pre>
+    <h3 style="margin-top: 32px;">Controls</h3>
+    <p>The shipped default keys. The on-screen help card, the versus strip, the intro card's key line, the one-row sidebar pointer, the confirm prompts and the <code>--help</code> screen are all derived from this one table — a remap (via <code>$XDG_CONFIG_HOME/candy-tetris/keys.json</code>) shows up wherever the game teaches its own keys. The key reference <code>h</code> paints the full card over the frame from any posture, even a floor-sized terminal where the sidebar card cannot fit.</p>
+    <table class="api-table">
+    <tr><th>Key</th><th>Action</th></tr>
+    <tr><td>← / →</td><td>Move left / right</td></tr>
+    <tr><td>↑ / x</td><td>Rotate clockwise</td></tr>
+    <tr><td>z</td><td>Rotate counter-cw</td></tr>
+    <tr><td>a</td><td>Rotate 180</td></tr>
+    <tr><td>↓</td><td>Soft drop</td></tr>
+    <tr><td>Space</td><td>Hard drop</td></tr>
+    <tr><td>c</td><td>Hold piece</td></tr>
+    <tr><td>p</td><td>Pause / resume</td></tr>
+    <tr><td>h</td><td>Key reference — opens/closes the live card</td></tr>
+    <tr><td>r</td><td>New game (asks first during play, instant after game over)</td></tr>
+    <tr><td>q</td><td>Quit (asks first during play, instant on menus and after game over; <code>Ctrl+C</code> leaves in one press)</td></tr>
+    </table>
+
+    <h3 style="margin-top: 32px;">Terminal contracts</h3>
+    <ul>
+      <li><strong>The frame</strong> — the full single-player frame is 40×33; the honest floor is 40×24. Between them the sidebar reflows by budget, not by scroll: the help card gives way first and a one-row key pointer (the live <code>h</code> press) replaces it, so a floor terminal never loses every key at once. Below the floor a resize notice paints instead and play freezes until the terminal is big enough again — rows, not columns, are what the notice waits for.</li>
+      <li><strong>The duel</strong> — the VS board has one posture: 54×33, exact. There is no compact versus frame; anything smaller answers the resize notice.</li>
+      <li><strong>No TTY, no game</strong> — a launch with no terminal to play on (stdin or stdout a pipe or redirect, or <code>TERM=dumb</code>) is refused before anything paints: one plain line on stderr, zero escape bytes, exit code 1.</li>
+      <li><strong>No colour, still playable</strong> — <code>NO_COLOR</code> and <code>CLICOLOR=0</code> re-render the whole frame with zero SGR; shape carries every fact colour used to carry, and empty cells render as <code>·</code> so the grid stays readable. The escape hatches <code>CLICOLOR_FORCE=1</code> and <code>FORCE_COLOR</code> vouch for the terminal and skip the no-TTY refusal — under either one escapes are painted into a redirect as if the terminal were there.</li>
+    </ul>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
