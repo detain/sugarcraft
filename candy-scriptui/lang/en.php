@@ -42,10 +42,6 @@ return [
     // IO errors
     'io.read_failed'         => 'could not read file: {path}',
     'io.write_failed' => 'could not write to file: {path}',
-    'log.unknown_formatter' => 'unknown --formatter: {name}',
-    'completion.unknown_shell' => 'unsupported shell: {shell}',
-    'confirm.unknown_default' => 'unknown --default value: {value}',
-    'cursor_mode.unknown' => 'unknown --cursor-mode: {mode}',
     'runtime.no_terminal' => '{command} needs an interactive terminal; no controlling terminal is available.',
     'runtime.bad_timeout' => "Invalid --timeout value '{value}' — expected a non-negative number of seconds or a duration like 5s/250ms/1m30s (0 disables the deadline).",
     'runtime.bad_number' => 'Invalid {flag} value \'{value}\' — expected a non-negative whole number.',
