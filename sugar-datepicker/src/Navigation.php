@@ -8,8 +8,8 @@ namespace SugarCraft\DatePicker;
  * Grid-index → date conversion for the calendar.
  *
  * The former move() helper and its ROW/COL constants duplicated
- * DatePicker's own MoveCursor* family (the production path) and were never
- * called from src/ — removed 2026-10-23 (docs-fix-1023 E2) under the
+ * DatePicker's own moveCursor* family (the production path) and were never
+ * called from src/ — removed 2026-10-23 under the
  * single-source-of-truth law; cursor clamping lives in DatePicker alone.
  */
 final readonly class Navigation

@@ -1290,7 +1290,9 @@ final class DatePicker
         $firstOfMonth = \DateTimeImmutable::createFromFormat(
             '!Y-m-d', \sprintf('%04d-%02d-01', $this->viewYear, $this->viewMonth)
         );
-        if ($firstOfMonth === false) return [];
+        if ($firstOfMonth === false) {
+            return [];
+        }
 
         $daysInMonth = (int) $firstOfMonth->format('t');
         $firstDow    = (int) $firstOfMonth->format('w'); // 0=Sun
@@ -1411,7 +1413,9 @@ final class DatePicker
         // i.e. the range ends entirely before the first of this month, OR
         // the range starts entirely after the last of this month.
         $firstOfMonth = $this->firstOfViewMonth();
-        if ($firstOfMonth === null) return null;
+        if ($firstOfMonth === null) {
+            return null;
+        }
         $lastOfMonth = $firstOfMonth->modify('last day of this month');
 
         if (self::dayKey($this->rangeEnd) < self::dayKey($firstOfMonth)
