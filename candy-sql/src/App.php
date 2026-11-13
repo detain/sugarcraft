@@ -191,7 +191,7 @@ final class App implements Model
             // Standing status line so the disabled refresh is visible in-app,
             // not just in the launcher's one-time stderr notice.
             $a = $a->mutate([
-                'ui' => $a->ui->withStatus('admin live-refresh disabled — TLS-verified ssl-mode (sync transport only)'),
+                'ui' => $a->ui->withStatus(Lang::t('status.live_refresh_off')),
             ]);
         }
         return $a;
@@ -309,7 +309,7 @@ final class App implements Model
                 // Logging must never turn a surfaced fault back into silence-loss.
             }
             return [$this->mutate([
-                'ui' => $this->ui->withError('Async command failed: ' . $msg->exception->getMessage()),
+                'ui' => $this->ui->withError(Lang::t('status.async_failed', ['message' => $msg->exception->getMessage()])),
             ]), null];
         }
         if (!$msg instanceof KeyMsg) {
@@ -564,7 +564,7 @@ final class App implements Model
         if ($msg->type === KeyType::Escape) {
             return [$this->mutate([
                 'io' => $io->closed(),
-                'ui' => $this->ui->withStatus('file line cancelled'),
+                'ui' => $this->ui->withStatus(Lang::t('status.file_cancelled')),
             ]), null];
         }
         if ($msg->type === KeyType::Enter) {
@@ -605,7 +605,7 @@ final class App implements Model
         $io = $this->io;
         if ($io->stage === ExportState::STAGE_EXPORT_PATH) {
             if ($io->buffer === '') {
-                return [$this->mutate(['ui' => $this->ui->withStatus('a path is required — esc cancels')]), null];
+                return [$this->mutate(['ui' => $this->ui->withStatus(Lang::t('status.path_required'))]), null];
             }
             if (is_file($io->buffer)) {
                 return [$this->mutate([
@@ -623,7 +623,7 @@ final class App implements Model
             // The picker is file-gated: advance only onto something real,
             // so a typo cannot silently name an unreadable source.
             if ($io->buffer === '' || !is_file($io->buffer)) {
-                return [$this->mutate(['ui' => $this->ui->withStatus('no such file — keep typing or esc cancels')]), null];
+                return [$this->mutate(['ui' => $this->ui->withStatus(Lang::t('status.no_such_file'))]), null];
             }
 
             return [$this->mutate([
@@ -633,7 +633,7 @@ final class App implements Model
         }
         if ($io->stage === ExportState::STAGE_IMPORT_TABLE) {
             if ($io->buffer === '') {
-                return [$this->mutate(['ui' => $this->ui->withStatus('name the target table — esc cancels')]), null];
+                return [$this->mutate(['ui' => $this->ui->withStatus(Lang::t('status.table_required'))]), null];
             }
 
             return $this->doImport($io->path, $io->buffer);
@@ -654,13 +654,13 @@ final class App implements Model
         } catch (\RuntimeException | \PDOException $e) {
             return [$this->mutate([
                 'io' => $this->io->closed(),
-                'ui' => $this->ui->withError('export failed: ' . $e->getMessage())->withStatus(null),
+                'ui' => $this->ui->withError(Lang::t('status.export_failed', ['message' => $e->getMessage()]))->withStatus(null),
             ]), null];
         }
 
         return [$this->mutate([
             'io' => $this->io->closed(),
-            'ui' => $this->ui->withError(null)->withStatus('exported ' . count($rows) . ' rows to ' . $path),
+            'ui' => $this->ui->withError(null)->withStatus(Lang::t('status.exported', ['count' => count($rows), 'path' => $path])),
         ]), null];
     }
 
@@ -674,13 +674,13 @@ final class App implements Model
         } catch (\RuntimeException | \PDOException $e) {
             return [$this->mutate([
                 'io' => $this->io->closed(),
-                'ui' => $this->ui->withError('import failed: ' . $e->getMessage())->withStatus(null),
+                'ui' => $this->ui->withError(Lang::t('status.import_failed', ['message' => $e->getMessage()]))->withStatus(null),
             ]), null];
         }
 
         $done = $this->mutate([
             'io' => $this->io->closed(),
-            'ui' => $this->ui->withError(null)->withStatus('imported ' . $path . ' into ' . $table),
+            'ui' => $this->ui->withError(null)->withStatus(Lang::t('status.imported', ['path' => $path, 'table' => $table])),
         ]);
         if ($done->browse->selectedTable === $table) {
             // The table on screen IS the import target — re-show its window.
@@ -1256,7 +1256,7 @@ final class App implements Model
             'query' => $this->query
                 ->withEditor($this->editor()->setValue($sql))
                 ->withRecallIndex($next),
-            'ui' => $this->ui->withStatus('history ' . ($next + 1) . '/' . $count)->withError(null),
+            'ui' => $this->ui->withStatus(Lang::t('status.history', ['pos' => $next + 1, 'count' => $count]))->withError(null),
         ]);
     }
 
@@ -1282,7 +1282,7 @@ final class App implements Model
             if ($rows === null) {
                 return $this->mutate([
                     'query' => $query,
-                    'ui' => $this->ui->withError('connection lost; retry')->withStatus(null),
+                    'ui' => $this->ui->withError(Lang::t('status.conn_lost'))->withStatus(null),
                 ]);
             }
             return $this->mutate([
@@ -1346,7 +1346,7 @@ final class App implements Model
                 return [$this->mutate(['ui' => $this->ui
                     ->withArmedDestructive($trimmed)
                     ->withError(null)
-                    ->withStatus('⚠ destructive statement — ctrl+r again (unmodified) to confirm')]), null];
+                    ->withStatus(Lang::t('status.destructive'))]), null];
             }
             return $this->mutate(['ui' => $this->ui->withArmedDestructive(null)])->dispatchRunQuery();
         }
@@ -1423,7 +1423,7 @@ final class App implements Model
                 ->withResultTable(null)
                 ->withRowsLoading(true),
             'query' => $query,
-            'ui' => $this->ui->withError(null)->withStatus('running query…'),
+            'ui' => $this->ui->withError(null)->withStatus(Lang::t('status.running')),
         ]);
         return [$loading, Cmd::promise(fn () => $this->createQueryPromise($trimmed, $query->queryGen))];
     }
@@ -1460,7 +1460,7 @@ final class App implements Model
         }
         if ($context === null) {
             return \React\Promise\resolve(
-                new QueryRowsLoadedMsg($sql, [], 'This driver does not support async queries', $queryGen),
+                new QueryRowsLoadedMsg($sql, [], Lang::t('err.async_query_unsupported'), $queryGen),
             );
         }
 
@@ -1610,7 +1610,7 @@ final class App implements Model
         } catch (\PDOException | ReconnectException | StatementTimeoutException $e) {
             return [$this->mutate([
                 'query' => $query->withPlan(null),
-                'ui' => $this->ui->withError('EXPLAIN failed: ' . $e->getMessage())->withStatus(null),
+                'ui' => $this->ui->withError(Lang::t('status.explain_failed', ['message' => $e->getMessage()]))->withStatus(null),
             ]), null];
         }
 
@@ -1621,7 +1621,7 @@ final class App implements Model
                 ->withResultTable(null)
                 ->withSelectedTable(null),
             'query' => $query->withPlan($view->render()),
-            'ui' => $this->ui->withError(null)->withStatus('explain plan — any query run or table preview replaces it'),
+            'ui' => $this->ui->withError(null)->withStatus(Lang::t('status.explain_plan')),
         ]), null];
     }
 
@@ -1632,14 +1632,14 @@ final class App implements Model
         if ($forward) {
             if (count($this->browse->rows) < $limit) {
                 return [$this->mutate([
-                    'ui' => $this->ui->withStatus('end of table — no further page'),
+                    'ui' => $this->ui->withStatus(Lang::t('status.end_of_table')),
                 ]), null];
             }
             return $this->beginLoadTable($table, $this->browse->pageOffset + $limit);
         }
         if ($this->browse->pageOffset === 0) {
             return [$this->mutate([
-                'ui' => $this->ui->withStatus('already at the first page'),
+                'ui' => $this->ui->withStatus(Lang::t('status.first_page')),
             ]), null];
         }
         return $this->beginLoadTable($table, max(0, $this->browse->pageOffset - $limit));
@@ -1766,7 +1766,7 @@ final class App implements Model
         }
         if ($context === null) {
             return \React\Promise\resolve(
-                new TableRowsLoadedMsg($name, [], 'Async browse unsupported for this driver', $loadGen),
+                new TableRowsLoadedMsg($name, [], Lang::t('err.async_browse_unsupported'), $loadGen),
             );
         }
 
@@ -2052,7 +2052,7 @@ final class App implements Model
      */
     private static function rowsSummary(int $count): string
     {
-        return $count === 1 ? '1 row' : $count . ' rows';
+        return $count === 1 ? Lang::t('status.row_one') : Lang::t('status.rows', ['count' => $count]);
     }
 
     /**
@@ -2075,7 +2075,7 @@ final class App implements Model
         $first = $pageOffset + 1;
         $last = $pageOffset + $count;
 
-        return "page {$page} (rows {$first}–{$last})";
+        return Lang::t('status.page', ['page' => $page, 'first' => $first, 'last' => $last]);
     }
 
     public function editor(): TextArea
@@ -2085,7 +2085,7 @@ final class App implements Model
 
     private static function newEditor(): TextArea
     {
-        return TextArea::new()->withPlaceholder('-- type SQL, ctrl+r to run --');
+        return TextArea::new()->withPlaceholder(Lang::t('editor.placeholder'));
     }
 
     private function favoriteQuery(): self
@@ -2096,7 +2096,7 @@ final class App implements Model
         // UI — state mutation with zero observability (once-001).
         $trimmed = trim($this->editor()->value());
         if ($trimmed === '') {
-            return $this->mutate(['ui' => $this->ui->withStatus('nothing to save')->withError(null)]);
+            return $this->mutate(['ui' => $this->ui->withStatus(Lang::t('status.nothing_to_save'))->withError(null)]);
         }
         if (in_array($trimmed, $this->query->favorites, true)) {
             return $this->mutate(['ui' => $this->ui->withStatus(
@@ -2107,7 +2107,7 @@ final class App implements Model
         array_unshift($favorites, $trimmed);
         return $this->mutate([
             'query' => $this->query->withFavorites($favorites),
-            'ui' => $this->ui->withStatus('saved (' . count($favorites) . ')')->withError(null),
+            'ui' => $this->ui->withStatus(Lang::t('status.saved', ['count' => count($favorites)]))->withError(null),
         ]);
     }
 
@@ -2127,7 +2127,7 @@ final class App implements Model
         ));
         return $this->mutate([
             'query' => $this->query->withFavorites($favorites),
-            'ui' => $this->ui->withStatus('removed (' . count($favorites) . ')')->withError(null),
+            'ui' => $this->ui->withStatus(Lang::t('status.removed', ['count' => count($favorites)]))->withError(null),
         ]);
     }
 
