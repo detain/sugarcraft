@@ -14,7 +14,7 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 - **[gotcha:spark:param-arrays-are-shared]** sugar-ansi-parser routes DCS prelude bytes through the *same* `Action::Param` → `param()` path as a CSI, so `Parser::params()` / `Parser::subparams()` describe whichever prelude is in flight — which means `dcsDispatch()` must rebuild with `joinParams()` too, not `implode(';')`: the latter canonicalised `ESC P 1:2 q` into `1;2` and printed an omitted parameter as a literal `-1`. (The DCS *prelude* re-emission is
 still lossy for other reasons — final byte dropped, intermediate hoisted ahead of
 the parameters — that is the deferred fidelity item, and it is why the new test
-uses prelude inputs without an intermediate byte.) Six more deviations live in
+uses prelude inputs without an intermediate byte.) More deviations live in
 the shared parser rather than in this handler — the rewriting itself is
 byte-identical to `master`, each case is pinned by name in `ByteFidelityTest`, and
 `README.md` lists every deviation with its tests (de-numeralised so the list can

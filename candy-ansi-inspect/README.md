@@ -299,7 +299,7 @@ Reported bytes are the bytes that were sent, in four respects:
   `BEL`, `RI`, `\x8B`) so a payload can never forge a segment line or replay
   controls at the terminal.
 
-Eleven deviations from exact byte equality are known, and each is pinned by a
+Every deviation from exact byte equality that is known is pinned by a
 named test rather than hidden — anything *else* that loses a byte is a bug:
 
 1. An OSC is re-emitted with a BEL terminator (`ESC ] … BEL`) even when the input
