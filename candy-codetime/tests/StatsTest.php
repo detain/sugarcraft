@@ -83,4 +83,28 @@ final class StatsTest extends TestCase
         $s = new Stats([], []);
         $this->assertSame([], $s->timeline());
     }
+
+    public function testPerTagCreditsEveryLabelOfAMultiTagBeat(): void
+    {
+        // CT-S30: the third fold — a beat tagged work+review raises both rows,
+        // and untagged beats stay out of the ranking entirely.
+        $beats = $this->beats([
+            ['time' => 1, 'project' => 'a', 'language' => 'php', 'duration' => 60, 'tags' => ['work', 'review']],
+            ['time' => 2, 'project' => 'a', 'language' => 'php', 'duration' => 30, 'tags' => ['work']],
+            ['time' => 3, 'project' => 'b', 'language' => 'go',  'duration' => 120],
+        ]);
+        $s = Stats::compute($beats,
+            new \DateTimeImmutable('@0'), new \DateTimeImmutable('@86400'));
+        $this->assertSame(['work' => 90, 'review' => 60], $s->perTag());
+    }
+
+    public function testPerTagIsEmptyWhenNothingCarriesALabel(): void
+    {
+        $beats = $this->beats([
+            ['time' => 1, 'project' => 'a', 'language' => 'php', 'duration' => 60],
+        ]);
+        $s = Stats::compute($beats,
+            new \DateTimeImmutable('@0'), new \DateTimeImmutable('@86400'));
+        $this->assertSame([], $s->perTag());
+    }
 }

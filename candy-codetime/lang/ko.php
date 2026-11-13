@@ -51,6 +51,7 @@ return [
     'cli.migration_notice' => "candy-codetime: {notice}",
     'ui.top_projects' => '인기 프로젝트',
     'ui.by_language' => '언어별',
+    'ui.by_tags' => '태그별',
     'ui.help_row' => '  ←  이전 날  ·  →  다음 날  ·  r  새로고침  ·  q/Esc  종료',
     'ui.help_row_compact' => '  ← prev  ·  → next  ·  r  reload  ·  q/Esc  quit',
     'ui.total' => '합계:',

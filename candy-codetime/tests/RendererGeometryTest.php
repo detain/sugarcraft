@@ -503,4 +503,45 @@ final class RendererGeometryTest extends TestCase
             T::setLocale($previous);
         }
     }
+
+    /** @param list<\SugarCraft\CodeTime\Heartbeat> $beats */
+    private static function tagFrame(int $width, array $beats, bool $byTags, int $days = 7): string
+    {
+        $end = new \DateTimeImmutable(self::END);
+        $stats = Stats::compute($beats, $end->modify('-' . ($days - 1) . ' days'), $end);
+        return Renderer::render(new Dashboard(
+            new Store(sys_get_temp_dir()), $end, $days, $stats, $width,
+            null, null, null, 0, 0, null, $byTags
+        ));
+    }
+
+    public function testTheTagToggleSwapsTheLowerRankingPane(): void
+    {
+        $beats = [
+            Heartbeat::fromArray(['time' => strtotime('2024-06-06 10:00 UTC'), 'project' => 'alpha', 'language' => 'php', 'file' => '/x/a.php', 'duration' => 3600, 'tags' => ['work']]),
+            Heartbeat::fromArray(['time' => strtotime('2024-06-06 12:00 UTC'), 'project' => 'alpha', 'language' => 'js', 'file' => '/x/b.js', 'duration' => 1800, 'tags' => ['side project']]),
+        ];
+
+        $language = self::plain(self::tagFrame(62, $beats, false));
+        self::assertStringContainsString('By language', implode("\n", $language));
+        self::assertStringNotContainsString('By tag', implode("\n", $language));
+
+        $tagged = self::plain(self::tagFrame(62, $beats, true));
+        $joined = implode("\n", $tagged);
+        self::assertStringContainsString('By tag', $joined);
+        self::assertStringNotContainsString('By language', $joined);
+        // The fold rows themselves: both labels ranked, languages gone.
+        self::assertStringContainsString('work', $joined);
+        self::assertStringContainsString('side project', $joined);
+        self::assertStringNotContainsString('php', $joined);
+
+        // The frame budget survives the toggle at a width that forces stacking.
+        foreach (self::plain(self::tagFrame(40, $beats, true)) as $line) {
+            self::assertLessThanOrEqual(40, Width::string($line));
+        }
+        // Untagged history with the toggle on answers with the empty note, not
+        // a broken frame.
+        $empty = self::plain(self::tagFrame(62, [], true));
+        self::assertStringContainsString('(no activity)', implode("\n", $empty));
+    }
 }

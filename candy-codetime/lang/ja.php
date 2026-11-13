@@ -51,6 +51,7 @@ return [
     'cli.migration_notice' => "candy-codetime: {notice}",
     'ui.top_projects' => '主なプロジェクト',
     'ui.by_language' => '言語別',
+    'ui.by_tags' => 'タグ別',
     'ui.help_row' => '  ←  前日  ·  →  翌日  ·  r  再読み込み  ·  q/Esc  終了',
     'ui.help_row_compact' => '  ← prev  ·  → next  ·  r  reload  ·  q/Esc  quit',
     'ui.total' => '合計:',

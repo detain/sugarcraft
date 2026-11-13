@@ -555,4 +555,32 @@ final class DashboardTest extends TestCase
         }
         $this->assertSame($floor->format('Y-m-d'), $d->endDay->format('Y-m-d'), 'the walk sticks at the ceiling floor');
     }
+
+    public function testTPressTogglesTheTagPaneAndBack(): void
+    {
+        // CT-S30: the flip is a pure view change — no reload command, and the
+        // window, stats and store ride along untouched.
+        $model = new Dashboard(new Store($this->storeDir), new \DateTimeImmutable('2024-06-07'), 7);
+        $this->assertFalse($model->byTags);
+
+        [$toggled, $cmd] = $model->update(new KeyMsg(KeyType::Char, 't'));
+        $this->assertNull($cmd, 'the pane toggle must not schedule any effect');
+        $this->assertTrue($toggled->byTags);
+        $this->assertSame($model->stats, $toggled->stats);
+
+        [$back, ] = $toggled->update(new KeyMsg(KeyType::Char, 't'));
+        $this->assertFalse($back->byTags);
+    }
+
+    public function testResizeAndShiftKeepTheChosenPane(): void
+    {
+        $model = new Dashboard(new Store($this->storeDir), new \DateTimeImmutable('2024-06-07'), 7);
+        [$tagged, ] = $model->update(new KeyMsg(KeyType::Char, 't'));
+
+        [$sized, ] = $tagged->update(new \SugarCraft\Core\Msg\WindowSizeMsg(80, 24));
+        $this->assertTrue($sized->byTags, 'a resize repaints the pane the user chose');
+
+        [$moved, ] = $tagged->update(new KeyMsg(KeyType::Left, ''));
+        $this->assertTrue($moved->byTags, 'a window shift keeps the chosen pane');
+    }
 }

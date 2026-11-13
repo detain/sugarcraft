@@ -68,6 +68,12 @@ final class Dashboard implements Model
          * clean(), so a locked or swapped-out database never kills the TUI.
          */
         public readonly ?string $loadError = null,
+        /**
+         * CT-S30: false paints the lower ranking pane as By language; the `t`
+         * key flips it to By tag. Same frame budget, same clip rules — the
+         * toggle is a pure view flip over the already-loaded Stats.
+         */
+        public readonly bool $byTags = false,
     ) {
         // CT-S16 parse-at-boundary honesty: before this door, days=0 silently
         // widened into a two-day window, days=-5 sign-flipped the composed
@@ -106,6 +112,7 @@ final class Dashboard implements Model
                 $this->droppedLines,
                 $this->unreadableFiles,
                 $this->loadError,
+                $this->byTags,
             ), null];
         }
         if ($msg instanceof ColorProfileMsg) {
@@ -124,6 +131,7 @@ final class Dashboard implements Model
                 $this->droppedLines,
                 $this->unreadableFiles,
                 $this->loadError,
+                $this->byTags,
             ), null];
         }
         if (!$msg instanceof KeyMsg) {
@@ -148,6 +156,22 @@ final class Dashboard implements Model
         }
         if ($msg->type === KeyType::Char && $msg->rune === '-') {
             return [$this->stepWindow(-1), null];
+        }
+        if ($msg->type === KeyType::Char && $msg->rune === 't') {
+            return [new self(
+                $this->source,
+                $this->endDay,
+                $this->days,
+                $this->stats,
+                $this->width,
+                $this->colorProfile,
+                $this->height,
+                $this->backendLabel,
+                $this->droppedLines,
+                $this->unreadableFiles,
+                $this->loadError,
+                !$this->byTags,
+            ), null];
         }
         return [$this, null];
     }
@@ -190,6 +214,7 @@ final class Dashboard implements Model
                 $notes['dropped'],
                 $notes['unreadable'],
                 null,
+                $this->byTags,
             );
         } catch (\Throwable $error) {
             if ($this->source instanceof Store) {
@@ -207,6 +232,7 @@ final class Dashboard implements Model
                 $this->droppedLines,
                 $this->unreadableFiles,
                 $error->getMessage(),
+                $this->byTags,
             );
         }
     }
@@ -228,7 +254,7 @@ final class Dashboard implements Model
         // The width has to ride the shift: without it the next frame is laid
         // out for an unknown terminal and the rows we sized to the window
         // (panes, timeline) silently stop being clipped.
-        return (new self($this->source, $next, $this->days, $this->stats, $this->width, $this->colorProfile, $this->height, $this->backendLabel))->recompute();
+        return (new self($this->source, $next, $this->days, $this->stats, $this->width, $this->colorProfile, $this->height, $this->backendLabel, byTags: $this->byTags))->recompute();
     }
 
     /**
@@ -252,6 +278,7 @@ final class Dashboard implements Model
             $this->colorProfile,
             $this->height,
             $this->backendLabel,
+            byTags: $this->byTags,
         ))->recompute();
     }
 

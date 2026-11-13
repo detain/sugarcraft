@@ -63,6 +63,23 @@ final class Stats
         return $bucket;
     }
 
+    /**
+     * @return array<string,int>  tag → seconds (sorted desc) — CT-S30: the
+     *     third fold the tag store was built for. A beat credited to several
+     *     labels counts once per label; untagged beats simply do not appear.
+     */
+    public function perTag(): array
+    {
+        $bucket = [];
+        foreach ($this->beats as $b) {
+            foreach ($b->tags as $tag) {
+                $bucket[$tag] = ($bucket[$tag] ?? 0) + $b->duration;
+            }
+        }
+        arsort($bucket);
+        return $bucket;
+    }
+
     /** @return list<int>  one bucket per day in `$days`, in seconds */
     public function timeline(): array
     {

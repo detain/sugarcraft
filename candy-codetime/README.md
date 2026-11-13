@@ -270,6 +270,7 @@ the frame under the stored profile.
 | `→`            | Move it forward one day      |
 | `+`            | Widen the window (7/14/30/90 days) |
 | `-`            | Narrow the window back down  |
+| `t`            | Toggle the lower pane between languages and tags |
 | `r`            | Reload from disk             |
 | `q` / `Esc`    | Quit                         |
 | `Ctrl+C`       | Quit                         |

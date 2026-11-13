@@ -51,6 +51,7 @@ return [
     'cli.migration_notice' => "candy-codetime: {notice}",
     'ui.top_projects' => 'Лучшие проекты',
     'ui.by_language' => 'По языку',
+    'ui.by_tags' => 'По тегу',
     'ui.help_row' => '  ←  пред. день  ·  →  след. день  ·  r  обновить  ·  q/Esc  выход',
     'ui.help_row_compact' => '  ← prev  ·  → next  ·  r  reload  ·  q/Esc  quit',
     'ui.total' => 'всего:',

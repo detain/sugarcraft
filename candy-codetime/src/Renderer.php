@@ -102,7 +102,11 @@ final class Renderer
 
         $header = self::clip(self::header($d), $d->width);
         $projects = self::ranking(Lang::t('ui.top_projects'), $stats->perProject(), '#fde68a', $d->width, $d->colorProfile, $entries);
-        $languages = self::ranking(Lang::t('ui.by_language'), $stats->perLanguage(), '#7dd3fc', $d->width, $d->colorProfile, $entries);
+        // CT-S30: the lower pane answers the `t` toggle — By tag folds the
+        // labels the store has always carried; By language remains the default.
+        $languages = $d->byTags
+            ? self::ranking(Lang::t('ui.by_tags'), $stats->perTag(), '#7dd3fc', $d->width, $d->colorProfile, $entries)
+            : self::ranking(Lang::t('ui.by_language'), $stats->perLanguage(), '#7dd3fc', $d->width, $d->colorProfile, $entries);
 
         // Side by side only once two frames plus the gutter actually fit. The
         // threshold is derived from the numbers above, because the old literal

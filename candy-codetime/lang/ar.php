@@ -51,6 +51,7 @@ return [
     'cli.migration_notice' => "candy-codetime: {notice}",
     'ui.top_projects' => 'أبرز المشاريع',
     'ui.by_language' => 'حسب اللغة',
+    'ui.by_tags' => 'حسب الوسم',
     'ui.help_row' => '  ←  اليوم السابق  ·  →  اليوم التالي  ·  r  إعادة التحميل  ·  q/Esc  خروج',
     'ui.help_row_compact' => '  ← prev  ·  → next  ·  r  reload  ·  q/Esc  quit',
     'ui.total' => 'الإجمالي:',

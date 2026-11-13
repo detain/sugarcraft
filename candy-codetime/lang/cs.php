@@ -51,6 +51,7 @@ return [
     'cli.migration_notice' => "candy-codetime: {notice}",
     'ui.top_projects' => 'Nejaktivnější projekty',
     'ui.by_language' => 'Podle jazyka',
+    'ui.by_tags' => 'Podle štítku',
     'ui.help_row' => '  ←  předchozí den  ·  →  další den  ·  r  obnovit  ·  q/Esc  konec',
     'ui.help_row_compact' => '  ← prev  ·  → next  ·  r  reload  ·  q/Esc  quit',
     'ui.total' => 'celkem:',
