@@ -92,7 +92,24 @@ final class RequestIngressTest extends TestCase
 
         $this->readAll($socket);
         self::assertTrue(feof($socket), 'the first-byte deadline closed it');
-        self::assertContains('request deadline: a client connected and sent no request', $this->lines);
+        self::assertContains('request deadline: a client did not complete its request head in time', $this->lines);
+    }
+
+    public function testADripFedRequestHeadIsCutAtTheWallDeadline(): void
+    {
+        $socket = $this->connect();
+        $this->write($socket, 'G');
+        // One byte per interval, each well inside any idle window: only a
+        // wall deadline over the whole head can end this.
+        for ($i = 0; $i < 4; $i++) {
+            $this->spin(self::DEADLINE / 3);
+            @fwrite($socket, 'E');
+        }
+        $this->spin(0.5);
+
+        $this->readAll($socket);
+        self::assertTrue(feof($socket), 'the drip did not keep the socket alive');
+        self::assertContains('request deadline: a client did not complete its request head in time', $this->lines);
     }
 
     public function testOneAddressCannotParkMoreThanTheCapLeavesTheListenerAnswering(): void

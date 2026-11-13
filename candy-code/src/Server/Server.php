@@ -240,6 +240,12 @@ final class Server
         $http = new HttpServer(
             $this->loop,
             new StreamingRequestMiddleware(),
+            // S-O05: the request head is parsed — stop its wall deadline.
+            function (ServerRequestInterface $request, callable $next): mixed {
+                $this->headParsed($request);
+
+                return $next($request);
+            },
             // Ahead of the guards, so a refusal is logged like an answer.
             // Method, path and status only: never the query (a ticket rides
             // there), a header or a body (Appendix O §8.6) — and never a
@@ -301,17 +307,40 @@ final class Server
                 ($this->log)('tls error: ' . $e->getMessage());
             });
         }
-        // ISS-055, the header half: a connection that has not sent its first
-        // byte by the deadline never gets to hold a slot at all — close it.
-        // (Once bytes arrive the parser owns the request and $this->readDeadline
-        // bounds its body; react/http gives no handle between the two.)
+        // ISS-055, the header half: a connection that has not finished its
+        // request head by the deadline never gets to hold a slot — close it.
+        // S-O05: the deadline is a WALL deadline over the whole head, not an
+        // idle one. It used to be cancelled on the first byte, so one byte per
+        // keep-alive window held a socket indefinitely before the parser ever
+        // produced a request. It now stays armed until the parser hands the
+        // request to the middleware chain (headParsed(), which cancels it by
+        // peer address); react/http bounds the head's size (8 KiB), so the
+        // byte cap and this deadline together bound the pre-parse phase. Once
+        // the head is parsed $this->readDeadline bounds the body.
         $this->listener->on('connection', function (ConnectionInterface $connection): void {
-            $timer = $this->loop->addTimer($this->readDeadlineSeconds, function () use ($connection): void {
-                ($this->log)('request deadline: a client connected and sent no request');
+            $key = self::peerKey($connection->getRemoteAddress());
+            $timer = $this->loop->addTimer($this->readDeadlineSeconds, function () use ($connection, $key): void {
+                if ($key !== null) {
+                    unset($this->headTimers[$key]);
+                }
+                ($this->log)('request deadline: a client did not complete its request head in time');
                 $connection->close();
             });
-            $connection->once('data', function () use ($timer): void {
+            if ($key === null) {
+                // No peer identity to match the parsed request back to: fall
+                // back to the first-byte bound rather than kill healthy requests.
+                $connection->once('data', function () use ($timer): void {
+                    $this->loop->cancelTimer($timer);
+                });
+
+                return;
+            }
+            $this->headTimers[$key] = $timer;
+            $connection->once('close', function () use ($key, $timer): void {
                 $this->loop->cancelTimer($timer);
+                if (($this->headTimers[$key] ?? null) === $timer) {
+                    unset($this->headTimers[$key]);
+                }
             });
         });
         $http->listen($source);
@@ -330,6 +359,36 @@ final class Server
         });
 
         return (string) $this->listener->getAddress();
+    }
+
+    /** @var array<string, \React\EventLoop\TimerInterface> head deadlines by peer host:port (S-O05) */
+    private array $headTimers = [];
+
+    /** Normalise a `tcp://host:port` peer address (or react's REMOTE_ADDR/PORT pair) to `host:port`. */
+    private static function peerKey(?string $address): ?string
+    {
+        if ($address === null || $address === '') {
+            return null;
+        }
+        $parts = \parse_url(\str_contains($address, '://') ? $address : 'tcp://' . $address);
+        if (!\is_array($parts) || !isset($parts['host'], $parts['port'])) {
+            return null;
+        }
+
+        return \trim($parts['host'], '[]') . ':' . $parts['port'];
+    }
+
+    private function headParsed(ServerRequestInterface $request): void
+    {
+        $params = $request->getServerParams();
+        if (!isset($params['REMOTE_ADDR'], $params['REMOTE_PORT'])) {
+            return;
+        }
+        $key = \trim((string) $params['REMOTE_ADDR'], '[]') . ':' . $params['REMOTE_PORT'];
+        if (isset($this->headTimers[$key])) {
+            $this->loop->cancelTimer($this->headTimers[$key]);
+            unset($this->headTimers[$key]);
+        }
     }
 
     /** The bound port, once started. */
