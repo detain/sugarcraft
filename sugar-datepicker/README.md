@@ -36,6 +36,16 @@ sugar-datepicker — an interactive date picker component for terminal UIs, for 
 - **Selected date and range styling** — seven SGR style setters, validated
 - **Pure renderer** — outputs ANSI strings, no external TUI framework needed
 
+## Related widgets
+
+`SugarCraft\Dashboard\Components\Select\DatePicker` (sugar-dashboard) is a
+**separate** widget with its own API: a labelled form-input field for dashboard
+grids — it wraps a text entry with an optional calendar popup and speaks the
+dashboard `SizedItem` protocol. This package is the standalone TEA calendar:
+no label chrome, no popup overlay, no dashboard dependency. Neither consumes
+the other; pick by context (form field → dashboard, embedded calendar → this
+one).
+
 ## Install
 
 ```bash
