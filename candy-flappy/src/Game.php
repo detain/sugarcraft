@@ -646,7 +646,9 @@ final class Game implements Model
      * returns. `q`/Esc already settle inside update() via a batched Cmd; the
      * gap this closes is a signal death (Ctrl+C), where no KeyMsg ever ran
      * and a live qualifying score would be lost. Idempotent: re-persisting
-     * the same list after `q` writes byte-identical JSON.
+     * the same list after `q` writes byte-identical JSON. A failed final
+     * save is reported there and then — see the catch — this method never
+     * throws and never touches the exit status.
      */
     public function settleOnExit(): void
     {
@@ -657,7 +659,18 @@ final class Game implements Model
         if ($merged->newRecord === false) {
             return;
         }
-        $merged->persistHighScores();
+        try {
+            $merged->persistHighScores();
+        } catch (\Throwable) {
+            // flappy-17 (finding -017): PHP-03's split. The in-loop swallow
+            // in persistCmd() stays right — a full disk must not kill a live
+            // game. Here the loop is over and nothing is left to protect, so
+            // silence would be a lie: say the score did not land. One fixed
+            // line, no exception text (the message carries paths), no trace;
+            // stderr is not the game canvas so it stays raw English like the
+            // pre-flight refusal — deliberately not Lang-routed.
+            \fwrite(\STDERR, "candy-flappy: could not save the leaderboard\n");
+        }
     }
 
     /** Deferred leaderboard write (M18): the crash path and the settling

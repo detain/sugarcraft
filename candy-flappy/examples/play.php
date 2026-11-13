@@ -89,10 +89,8 @@ $program = new Program(
 );
 $final = $program->run();
 if ($final instanceof Game) {
-    try {
-        $final->settleOnExit();
-    } catch (\Throwable) {
-        // m5: a final save must never replace the game's exit status —
-        // mirrors bin/candy-flappy so the documented swallow holds here too.
-    }
+    // flappy-17: settleOnExit() reports a failed final save itself (one
+    // sanitized STDERR line) and never throws — mirrors bin/candy-flappy,
+    // the documented swallow is no longer needed here either.
+    $final->settleOnExit();
 }

@@ -994,6 +994,127 @@ final class GameTest extends TestCase
         }
     }
 
+    /**
+     * flappy-17 (finding -017): the settle/quit path has nothing left to
+     * protect, so a failed save must be announced — one fixed, sanitized
+     * STDERR line, never a trace, exit status untouched. The write has to
+     * actually fail for the child to announce it, and it must fail for
+     * every uid (root included): configDir's path runs through a REGULAR
+     * FILE, so no mkdir can succeed on it, permission or not.
+     */
+    public function testSettleOnExitAnnouncesAFailedSaveOnStderr(): void
+    {
+        $dir = \sys_get_temp_dir() . '/candy-flappy-settle-' . \uniqid();
+        \mkdir($dir, 0777, true);
+        $blocker = $dir . '/blocker';
+        \file_put_contents($blocker, '');
+        $child = $dir . '/settle-child.php';
+        \file_put_contents($child, <<<'PHP'
+            <?php
+            require $argv[1];
+            use SugarCraft\Flappy\Bird;
+            use SugarCraft\Flappy\Game;
+            $g = new Game(
+                bird: Bird::spawn(Game::BIRD_COL, 9.0),
+                pipes: [],
+                score: 3,
+                started: true,
+                highScores: [],
+                configDir: $argv[2],
+            );
+            $g->settleOnExit();
+            PHP,
+        );
+
+        [$exit, $out, $err] = self::runChild($child, [
+            \dirname(__DIR__) . '/vendor/autoload.php',
+            $blocker . '/nowhere',
+        ]);
+
+        try {
+            self::assertSame(0, $exit, 'a refused save must not replace the exit status');
+            self::assertSame('', $out, 'the announcement never rides stdout');
+            self::assertSame(
+                "candy-flappy: could not save the leaderboard\n",
+                $err,
+                'exactly one fixed line on stderr — no trace, no path leak',
+            );
+        } finally {
+            @\unlink($child);
+            @\unlink($blocker);
+            @\rmdir($dir);
+        }
+    }
+
+    /**
+     * flappy-17 companion: the live-loop swallow stays (PHP-03's split), so
+     * the crash path persists through persistCmd() with nothing on stderr —
+     * a dying loop keeps its silence and its frames.
+     */
+    public function testInLoopPersistFailureStaysSilent(): void
+    {
+        $dir = \sys_get_temp_dir() . '/candy-flappy-loop-' . \uniqid();
+        \mkdir($dir, 0777, true);
+        $blocker = $dir . '/blocker';
+        \file_put_contents($blocker, '');
+        $child = $dir . '/loop-child.php';
+        \file_put_contents($child, <<<'PHP'
+            <?php
+            require $argv[1];
+            use SugarCraft\Flappy\TickMsg;
+            use SugarCraft\Flappy\Bird;
+            use SugarCraft\Flappy\Game;
+            $g = new Game(
+                bird: Bird::spawn(Game::BIRD_COL, (float) Game::HEIGHT),
+                pipes: [],
+                score: 99,
+                started: true,
+                highScores: [],
+                configDir: $argv[2],
+            );
+            [$updated, $cmd] = $g->update(new TickMsg());
+            if ($updated->crashed !== true || $cmd === null) {
+                fwrite(STDERR, "fixture did not crash\n");
+                exit(9);
+            }
+            $cmd();
+            PHP,
+        );
+
+        [$exit, $out, $err] = self::runChild($child, [
+            \dirname(__DIR__) . '/vendor/autoload.php',
+            $blocker . '/nowhere',
+        ]);
+
+        try {
+            self::assertSame(0, $exit, $err);
+            self::assertSame('', $err, 'the in-loop swallow keeps its silence: a full disk must not kill a live game');
+            self::assertSame('', $out);
+        } finally {
+            @\unlink($child);
+            @\unlink($blocker);
+            @\rmdir($dir);
+        }
+    }
+
+    /** Child interpreter run with pipes drained; [exit, stdout, stderr]. */
+    private static function runChild(string $script, array $args): array
+    {
+        $proc = \proc_open(
+            [PHP_BINARY, $script, ...$args],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        self::assertIsResource($proc);
+        \fclose($pipes[0]);
+        $out = (string) \stream_get_contents($pipes[1]);
+        $err = (string) \stream_get_contents($pipes[2]);
+        \fclose($pipes[1]);
+        \fclose($pipes[2]);
+
+        return [\proc_close($proc), $out, $err];
+    }
+
     // ------------------------------------------------------------------
     // Playability block (M10/M18/M19/M20/M24/m28/m29, lib-reviews-1102)
     // ------------------------------------------------------------------

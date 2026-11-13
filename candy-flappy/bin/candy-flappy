@@ -234,11 +234,11 @@ $final = $program->run();
 // (Ctrl+C) never reaches update(), so settle once more here. The call is
 // idempotent, so the q path's re-write is the same bytes.
 if ($final instanceof Game) {
-    try {
-        $final->settleOnExit();
-    } catch (\Throwable) {
-        // A final save must never replace the game's exit status.
-    }
+    // flappy-17: settleOnExit() reports a failed final save itself (one
+    // sanitized STDERR line) and never throws — a save failure cannot
+    // replace the game's exit status, and there is no longer a swallow
+    // here to repeat that law.
+    $final->settleOnExit();
 }
 // m5: surface a signal death to the shell as the conventional 128+signo.
 $signal = $program->stopSignal();
