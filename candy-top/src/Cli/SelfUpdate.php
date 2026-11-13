@@ -48,7 +48,8 @@ use SugarCraft\Top\Support\Version;
  * says which release train to consult; omitted, what this build IS decides:
  * a dev-stamped archive (`dev-<sha>` through {@see Version::isDev()}, the
  * shape CI's dev builds carry) defaults to the LATEST train, everything else
- * to STABLE. The stable story is the paragraph above, unchanged. The latest * train is the SINGLE moving release tagged exactly `candy-top/latest`
+ * to STABLE. The stable story is the paragraph above, unchanged. The latest
+ * train is the SINGLE moving release tagged exactly `candy-top/latest`
  * ({@see self::LATEST_TAG}), prerelease flag allowed, draft refused, carrying
  * the same two required assets; its `target_commitish` names the commit the
  * archive was cut from, and "up to date" there means this build's stamp is

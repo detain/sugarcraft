@@ -546,7 +546,7 @@ final class SelfUpdateTest extends TestCase
         self::assertNull(SelfUpdate::selectLatestRelease($stableOnly));
 
         // A lookalike branch-shaped tag is NOT the train.
-        $lookalike = \json_decode((string) \json_encode([$this->stageRelease('candy-top/dev-feature', 'X')], \JSON_THROW_ON_ERROR), true);
+        $lookalike = \json_decode((string) \json_encode([$this->stageRelease('candy-top/latest-feature', 'X')], \JSON_THROW_ON_ERROR), true);
         self::assertIsArray($lookalike);
         $lookalike[0]['target_commitish'] = 'abcdef1234567';
         self::assertNull(SelfUpdate::selectLatestRelease($lookalike));
@@ -830,7 +830,7 @@ final class SelfUpdateTest extends TestCase
             $this->stageRelease('candy-top/v99.0.0', 'PRE', prerelease: true),
             $this->stageRelease('candy-top/v88.0.0', 'DRAFT', draft: true),
             $this->stageRelease('candy-top/v77.0.0', 'NOSIG', withSidecar: false),
-            $this->stageRelease('candy-top/dev-master', 'UNORDERABLE'),
+            $this->stageRelease('candy-top/latest', 'UNORDERABLE'),
             $this->stageRelease('candy-top/v0.10.0', 'TEN'),
         ];
         $this->releasesUrl($entries);
