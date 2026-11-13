@@ -321,4 +321,99 @@ final class AnsiPlacementTest extends TestCase
         $body = explode("\n", $out)[1] ?? '';
         $this->assertStringEndsWith('│', self::strip($body)); // right border intact
     }
+
+    // -------------------------------------------------------------------------
+    // Divergence classes vs the Ansi::strip oracle (sugar-panels-008)
+    // -------------------------------------------------------------------------
+
+    /**
+     * The paint path and sugar-core's strip oracle must consume the same bytes.
+     * Each divergence class renders, and the body's stripped text is compared
+     * against what the oracle leaves when run over the ORIGINAL content line —
+     * if escapeAt ever eats (or spares) a byte the oracle disagrees with, the
+     * painted row sits a column off the model and the diff stale-paints.
+     */
+    public function testPainterAndStripOracleAgreeOnEveryDivergenceClass(): void
+    {
+        $classes = [
+            // ESC + Fs final (0x60-0x7e): lone ESC to the oracle, so 'c' is text.
+            'ESC c (RIS)' => "\x1bcX",
+            // ESC + intermediate (SCS "ESC ( 0"): '(' is 0x28 — outside the Fe
+            // band — so the oracle leaves the whole "( 0" as text.
+            'SCS select default charachset' => "\x1b( 0X",
+            // ESC + control follower: not an escape at all; ESC M (0x4D) is.
+            'ESC M (RI)' => "\x1bMX",
+            // Stray ESC inside a string sequence: cancels it, then rescans.
+            'OSC broken by a stray ESC' => "\x1b]0;pay\x1bloadX",
+            // Unterminated string sequence: swallowed (see the polarity pin).
+            'unterminated OSC' => "\x1b]0;neverclosed tail",
+        ];
+
+        foreach ($classes as $label => $content) {
+            $width = 24;
+            // Fresh renderer per class: a shared instance takes the diff path on
+            // the second render, and a delta carries only changed cells.
+            $body = self::body(SugarPanels::new()->render(Node::leaf($content)->withBorder(false), $width, 1));
+
+            $this->assertSame(
+                \str_pad(self::strip($content), $width, ' '),
+                \substr(self::strip($body), 0, $width),
+                "painter/strip placement desync: {$label}",
+            );
+            $this->assertSame(Width::string($content), \strlen(\rtrim(self::strip($body))), "width oracle must measure the painted body: {$label}");
+        }
+    }
+
+    public function testUnterminatedStringSequenceSwallowsItsRemainder(): void
+    {
+        // -018 polarity pin: a string run that never meets BEL/ST is consumed to
+        // end of input — the same discard Ansi::strip performs and the only
+        // polarity under which grid, oracle and screen agree. Painting the
+        // remainder would leave the ESC introducer riding in cell 0, so the
+        // oracle reads 0 visible columns while the grid claims a cell per byte.
+        $content = "\x1b]0;neverclosed tailX";
+
+        $body = self::body($this->panels->render(Node::leaf($content)->withBorder(false), 30, 1));
+
+        $this->assertSame(\str_repeat(' ', 30), substr(self::strip($body), 0, 30));
+        $this->assertSame(0, Width::string($content), 'the oracle must agree: nothing after an unterminated OSC is visible');
+    }
+
+    public function testCanAndSubCancelAcsiRunMidSequence(): void
+    {
+        // -008 class 3: CAN/SUB cancel a CSI inclusive (ECMA-48 §5.4), exactly as
+        // stripCsi does; without the arm the real final byte (0x40-0x7e) is
+        // swallowed through as part of the run. Reached via the private scanner
+        // because Sanitize strips CAN/SUB from node content — the arm is grammar
+        // hygiene for every other byte source the scanner may see.
+        $reflection = new \ReflectionMethod($this->panels, 'escapeAt');
+        $reflection->setAccessible(true);
+
+        $run = "\x1b[3\x18X"; // CSI params, CAN cancels, 'X' would have been the final
+        $this->assertSame("\x1b[3\x18", $reflection->invoke($this->panels, $run, 0));
+        $run = "\x1b[3\x1aX"; // SUB variant
+        $this->assertSame("\x1b[3\x1a", $reflection->invoke($this->panels, $run, 0));
+        $run = "\x1b[3\x1bX"; // a stray ESC cancels EXCLUSIVE — the ESC rescans fresh
+        $this->assertSame("\x1b[3", $reflection->invoke($this->panels, $run, 0));
+    }
+
+    public function testDiffRoundTripIsStableAcrossEscapedContent(): void
+    {
+        // Same-grammar guarantee end-to-end: a first frame with a styled line,
+        // then a delta to a mutated line. Re-applying the delta's changed cells
+        // over the previous body must reproduce the new full frame byte-for-byte,
+        // so a grammar desync cannot silently re-home or stale-paint either cell.
+        $panels = SugarPanels::new();
+        $first = self::body($panels->render(Node::leaf("\x1bcAB")->withBorder(false), 6, 1));
+        $secondFull = self::body(SugarPanels::new()->render(Node::leaf("\x1bcAX")->withBorder(false), 6, 1));
+        $delta = self::body($panels->render(Node::leaf("\x1bcAX")->withBorder(false), 6, 1));
+
+        $this->assertNotSame($first, $secondFull, 'the two scenes differ (otherwise the round trip proves nothing)');
+        // The changed cell is 'B'->'X' at visible column 3 (bytes: ESC,c,A,B — the
+        // lone ESC rides with 'c'), so the delta must address exactly that cell.
+        $this->assertStringContainsString("\x1b[1;3HX", $delta);
+        $rebuilt = substr_replace($first, 'X', 3, 1); // bytes: ESC,c,A,B — 'B' is byte 3
+        $this->assertSame($secondFull, $rebuilt);
+        $this->assertSame('cAX   ', self::strip($rebuilt));
+    }
 }

@@ -875,11 +875,23 @@ final class SugarPanels
 
     /**
      * If an ANSI escape sequence begins at byte $i, return it; else null.
-     * Recognises CSI (ESC [ … final 0x40-0x7e) and OSC (ESC ] … BEL/ST)
-     * sequences. For any other ESC, consumes the two-byte form ONLY when the
-     * second byte is ASCII (an ECMA-48 nF/Fe/Fs escape's final byte is always
-     * 0x20-0x7e) — so a stray ESC sitting before a multi-byte grapheme returns
-     * just the ESC and never splits that grapheme.
+     *
+     * The grammar is a lib-local port of sugar-core's Ansi::strip trio
+     * (stripEscape / stripCsi / stripString) so the painter charges exactly the
+     * bytes the width oracle removes. Five string-sequence introducers are
+     * recognised: OSC (ESC ]) — closed by BEL or ST — plus the DCS (ESC P),
+     * SOS (ESC X), PM (ESC ^) and APC (ESC _) family, which run to ST only.
+     * A CSI (ESC [ …) closes on a final byte 0x40-0x7e; an ESC mid-run cancels
+     * and rescans as a fresh introducer, and CAN/SUB (0x18/0x1a) cancel
+     * inclusive (ECMA-48 §5.4). For any other ESC the two-byte form is consumed
+     * ONLY when the follower is an ECMA-48 Fe final (0x40-0x5f) — the band the
+     * strip oracle implements; any other follower (including Fs finals such as
+     * ESC c) leaves a lone ESC so its bytes are read on their own merits and a
+     * multi-byte grapheme is never split.
+     *
+     * A string run that reaches end-of-input without BEL/ST swallows its
+     * remainder — the same discard the strip oracle and a real terminal perform,
+     * keeping grid, oracle and screen in agreement (pinned, see below).
      */
     private function escapeAt(string $s, int $i): ?string
     {
@@ -893,8 +905,12 @@ final class SugarPanels
             $j = $i + 2;
             while ($j < $len) {
                 $c = \ord($s[$j]);
+                if ($c === 0x1b) {
+                    break; // ESC cancels; $j sits ON it so the run excludes it and it rescans fresh
+                }
                 $j++;
-                if ($c >= 0x40 && $c <= 0x7e) break;
+                if ($c >= 0x40 && $c <= 0x7e) break; // final byte closes the CSI
+                if ($c === 0x18 || $c === 0x1a) break; // CAN/SUB cancel inclusive (ECMA-48 §5.4)
             }
             return \substr($s, $i, $j - $i);
         }
@@ -905,14 +921,31 @@ final class SugarPanels
         if ($next === ']' || $next === 'P' || $next === 'X' || $next === '^' || $next === '_') {
             $j = $i + 2;
             while ($j < $len) {
-                if ($s[$j] === "\x07" && $next === ']') { $j++; break; }
-                if ($s[$j] === "\x1b" && ($s[$j + 1] ?? '') === '\\') { $j += 2; break; }
+                $c = \ord($s[$j]);
+                if ($c === 0x07 && $next === ']') {
+                    return \substr($s, $i, $j + 1 - $i); // BEL closes an OSC (xterm)
+                }
+                if ($c === 0x1b) {
+                    if (($s[$j + 1] ?? '') === '\\') {
+                        return \substr($s, $i, $j + 2 - $i); // ST closes the run
+                    }
+                    return \substr($s, $i, $j - $i); // stray ESC cancels; the ESC rescans fresh
+                }
                 $j++;
             }
+            // Unterminated: the run is swallowed to end of input — the polarity
+            // the strip oracle AND a live terminal both implement. The "paint
+            // the remainder as text" alternative is broken by construction: the
+            // ESC introducer rides in cell 0, so Ansi::strip/Width::string read
+            // the whole frame as one open string (0 columns) while the grid
+            // claims a cell per payload byte — the exact grid-vs-oracle desync
+            // this function exists to avoid. Pinned in AnsiPlacementTest.
             return \substr($s, $i, $j - $i);
         }
 
-        return ($next !== '' && \ord($next) < 0x80) ? \substr($s, $i, 2) : "\x1b";
+        return ($next !== '' && \ord($next) >= 0x40 && \ord($next) <= 0x5f)
+            ? \substr($s, $i, 2) // Fe final: a real two-byte escape
+            : "\x1b";             // anything else: a lone ESC
     }
 
     /** Read one extended grapheme cluster starting at byte $i (intl, with a UTF-8 fallback). */
