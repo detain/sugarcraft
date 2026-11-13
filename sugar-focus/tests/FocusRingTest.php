@@ -1401,6 +1401,56 @@ final class FocusRingTest extends TestCase
         }
     }
 
+    public function testDescribeIdEchoesNonUtf8HostileIdsFullyEscaped(): void
+    {
+        // A lone continuation byte (\xa9) survives the control/C1 escape list
+        // raw and would leave the whole message invalid UTF-8 at ANY clip
+        // position; the id must come back as pure printable ASCII instead,
+        // with the clip still refusing to cut inside an escape.
+        $id = "\xA9" . str_repeat('y', 70) . "\xE2\xBE";
+
+        try {
+            FocusRing::ofStrict($id, 'x', $id);
+            self::fail('expected the duplicate to throw');
+        } catch (\InvalidArgumentException $e) {
+            $msg = $e->getMessage();
+            self::assertSame(1, preg_match('//u', $msg), 'the message must be valid UTF-8 whatever the id smuggled');
+            self::assertSame(1, preg_match('/^[\x20-\x7e]*$/', $msg), 'high bytes must all come back octal-escaped');
+            self::assertStringContainsString('\251' . str_repeat('y', 70) . '\342...', $msg, 'complete escapes survive the clip; \276 is dropped whole');
+            self::assertStringNotContainsString('\27', $msg, 'no partial escape tail may survive');
+        }
+    }
+
+    public function testDescribeIdClipNeverStrandsAnOctalEscapeTail(): void
+    {
+        // \x1f escapes to the four bytes \037; the old fixed-79 cut dangled
+        // "\03" before the ellipsis, so a host that reinterprets escapes (or a
+        // reader) saw a truncated control sequence. The clip must walk out of
+        // the escape entirely.
+        $id = str_repeat('y', 76) . "\x1f" . str_repeat('y', 10);
+
+        try {
+            FocusRing::ofStrict($id, 'x', $id);
+            self::fail('expected the duplicate to throw');
+        } catch (\InvalidArgumentException $e) {
+            $msg = $e->getMessage();
+            self::assertStringContainsString(str_repeat('y', 76) . '...', $msg, 'the escape is dropped whole, not half-kept');
+            self::assertStringNotContainsString('\\0', $msg, 'no stranded \, \d or \dd tail');
+        }
+    }
+
+    public function testDescribeIdEscapesNonUtf8BelowTheClipBudgetToo(): void
+    {
+        // The invalid-UTF-8 guard is not a clip concern: a short hostile id
+        // reaches the message raw under the byte budget.
+        try {
+            FocusRing::ofStrict("\xA9abc", 'x', "\xA9abc");
+            self::fail('expected the duplicate to throw');
+        } catch (\InvalidArgumentException $e) {
+            self::assertStringContainsString('"\251abc"', $e->getMessage(), 'the whole id echoes fully escaped');
+        }
+    }
+
     // ─── Countable ─────────────────────────────────────────────────────────
 
     /** Regression: count($ring) must work, not throw a TypeError. */

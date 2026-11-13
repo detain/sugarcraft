@@ -133,9 +133,11 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
      * A caller-supplied id made safe to embed in an exception message: every
      * C0 control byte (`\x00..\x1f` — ESC, BEL, newlines…), DEL (`\x7f`) and
      * raw C1 byte (`\x80..\x9f` — a bare CSI `\x9b` followed by `H` is a
-     * complete cursor-motion sequence) becomes a printable octal escape, and
-     * absurd lengths are clipped, so a hostile id cannot forge terminal
-     * output through an error the host prints verbatim.
+     * complete cursor-motion sequence) becomes a printable octal escape, text
+     * that is still not valid UTF-8 is echoed fully octal-escaped, and absurd
+     * lengths are clipped onto a character or escape boundary — so a hostile
+     * id cannot forge terminal output through an error the host prints
+     * verbatim, and the message itself stays renderable.
      */
     private static function describeId(string $id): string
     {
@@ -144,16 +146,37 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
         // lead byte that remains is inert — the forgery is neutralised either way.
         $id = addcslashes($id, "\x00..\x1f\x7f\x80..\x9f");
 
+        if (preg_match('//u', $id) !== 1) {
+            // High bytes outside the escape list (a lone continuation byte
+            // like \xa9 smuggles through it) can survive raw and leave the
+            // whole message invalid UTF-8 — no clip position fixes that. Echo
+            // every remaining high byte as an octal escape so the rendered
+            // error is well-formed text whatever the caller passed.
+            $id = addcslashes($id, "\x80..\xff");
+        }
+
         if (strlen($id) <= 80) {
             return $id;
         }
 
-        // Clipping at a fixed byte can strand half of a multi-byte character the
-        // escape left raw, putting invalid UTF-8 into a terminal-rendered error.
-        // Walk back off continuation bytes so the clip lands on a character edge.
+        // Clipping at a fixed byte can strand half of a multi-byte character
+        // the escape left raw OR cut an \ddd octal escape short — either puts
+        // broken output into a terminal-rendered error. Walk back off
+        // continuation bytes and refuse tails of \, \d or \dd; a full 3-digit
+        // escape ends on a boundary the tail test accepts untouched.
         $clip = 79;
-        while ($clip > 0 && (ord($id[$clip]) & 0xC0) === 0x80) {
-            --$clip;
+        while ($clip > 0) {
+            if ((ord($id[$clip]) & 0xC0) === 0x80) {
+                --$clip;
+                continue;
+            }
+
+            if (preg_match('/\\\\[0-7]{0,2}$/', substr($id, 0, $clip))) {
+                --$clip;
+                continue;
+            }
+
+            break;
         }
 
         return substr($id, 0, $clip) . '...';
