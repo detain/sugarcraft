@@ -154,6 +154,16 @@ final class Table
      */
     private array $expandedRows = [];
 
+    /**
+     * Opt-in strict sanitization for hosts that compose the rendered frame
+     * into a Private-Use-codepoint-marked surface (sugar-mouse zones, the
+     * U+E002-and-up image-marker arena): every ingress sweep additionally
+     * removes the whole BMP Private Use block so cell data can never forge
+     * an arena marker (audit ST-47, finding 56). Default OFF — PUA glyphs
+     * are legitimate content for ordinary surfaces.
+     */
+    private bool $markedFrameSanitization = false;
+
     /** @var array<string,Style> Parsed-SGR memo, valid for one render pass only. */
     private array $styleMemo = [];
 
@@ -665,6 +675,20 @@ final class Table
      * inside another bordered container without a double border. Combine with
      * {@see withWidth()} for a width-exact borderless table.
      */
+    /**
+     * Route every content/header ingress through the marked-frame policy
+     * (strict Private-Use sweep). Residual host duty: values that never
+     * pass through a table ingress — styleFunc-returned SGR strings,
+     * configured border glyphs and the missing-value indicator — remain
+     * host-controlled and are NOT swept by this flag.
+     */
+    public function withMarkedFrameSanitization(bool $v = true): self
+    {
+        $clone = clone $this;
+        $clone->markedFrameSanitization = $v;
+        return $clone;
+    }
+
     public function withBorderless(bool $v = true): self
     {
         $clone = clone $this;
@@ -1717,7 +1741,7 @@ final class Table
 
         $col   = $this->columns[$colIndex];
         // Sanitize title and measure display width (not byte length)
-        $title = Sanitize::value($col->title, false);
+        $title = Sanitize::value($col->title, false, $this->markedFrameSanitization);
         $maxLen = Width::of($title);
 
         foreach ($this->rows as $row) {
@@ -1726,7 +1750,7 @@ final class Table
                 continue;
             }
             // StyledCell measures its display value, never its SGR wrapper.
-            $str = Sanitize::value(self::plainText($val), false);
+            $str = Sanitize::value(self::plainText($val), false, $this->markedFrameSanitization);
             $len = Width::of($str);
             if ($len > $maxLen) {
                 $maxLen = $len;
@@ -2078,7 +2102,7 @@ final class Table
             // Account for cell padding in header width
             $effectiveWidth = $colWidth - (2 * $this->cellPadding);
             $effectiveWidth = \max(1, $effectiveWidth);
-            $headerText = $column->renderHeader($effectiveWidth);
+            $headerText = $column->renderHeader($effectiveWidth, $this->markedFrameSanitization);
             $canvas = $this->fillCellContent($canvas, $row, $col, $headerText, $colWidth, $style);
             $col += $colWidth;
 
@@ -2158,7 +2182,7 @@ final class Table
             $cellStr = self::plainText($val);
 
             // Sanitize before width padding / renderCell / styleFunc
-            $cellStr = Sanitize::value($cellStr, false);
+            $cellStr = Sanitize::value($cellStr, false, $this->markedFrameSanitization);
 
             if ($this->styleFunc !== null) {
                 $rawResult = ($this->styleFunc)($rowIndex, $ci, $cellStr);
@@ -2224,7 +2248,7 @@ final class Table
                 $val = $this->missingIndicator;
             }
             $text = self::plainText($val);
-            $parts[] = Sanitize::value($text, false);
+            $parts[] = Sanitize::value($text, false, $this->markedFrameSanitization);
         }
         $detail = Column::clipToWidth(\implode('  ', $parts), $contentWidth);
 
@@ -2254,9 +2278,9 @@ final class Table
             $effectiveWidth = \max(1, $effectiveWidth);
             $cellStr = self::plainText($row->data->get($column->key));
             // Sanitize before renderCell width measurement
-            $cellStr = Sanitize::value($cellStr, true);
+            $cellStr = Sanitize::value($cellStr, true, $this->markedFrameSanitization);
 
-            $lines = $column->renderCell($cellStr, $effectiveWidth);
+            $lines = $column->renderCell($cellStr, $effectiveWidth, $this->markedFrameSanitization);
             $lineCount = \count($lines);
             if ($lineCount > $maxLines) {
                 $maxLines = $lineCount;
@@ -2319,7 +2343,7 @@ final class Table
             $cellStr = self::plainText($val);
 
             // Sanitize before styleFunc (multiline context: preserve \n for explode)
-            $cellStr = Sanitize::value($cellStr, true);
+            $cellStr = Sanitize::value($cellStr, true, $this->markedFrameSanitization);
 
             if ($this->styleFunc !== null) {
                 $rawResult = ($this->styleFunc)($rowIndex, $ci, $cellStr);
@@ -2337,7 +2361,7 @@ final class Table
             // reach here — renderToBuffer routes them to fillExpandedRow.
             $effectiveWidth = $colWidth - (2 * $this->cellPadding);
             $effectiveWidth = \max(1, $effectiveWidth);
-            $lines = $column->renderCell($cellStr, $effectiveWidth);
+            $lines = $column->renderCell($cellStr, $effectiveWidth, $this->markedFrameSanitization);
             $cellLines[$ci] = ['lines' => $lines, 'style' => $parsedStyle, 'width' => $colWidth];
         }
 

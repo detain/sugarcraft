@@ -272,4 +272,48 @@ final class TableSanitizeTest extends TestCase
         // U+E002 is the image-marker band — not a zone sentinel, passes by design.
         $this->assertSame("\u{E002}", Sanitize::value("\u{E002}"));
     }
+
+    public function testMarkedFramesFlagSweepsThePrivateUseBlock(): void
+    {
+        $strict = Sanitize::value("img \u{E002}\u{E0FF}end", false, true);
+        $this->assertSame('img end', $strict);
+        // Ordinary glyphs outside the block are untouched — the sweep is blunt
+        // only about PUA.
+        $this->assertSame('café ✓', Sanitize::value("caf\u{E9} \u{2713}", false, true));
+    }
+
+    /**
+     * Audit ST-47 (finding 56): a host compositing the table into a
+     * Private-Use-marked frame (sugar-mouse zones, the image-overlay arena)
+     * opts in via withMarkedFrameSanitization(); cell data can then never
+     * forge an arena marker. Default OFF is behavior-identical.
+     */
+    public function testForgedImageMarkerSweptFromRenderedFrameWhenFlagged(): void
+    {
+        $t = Table::fromColumns([Column::new('a', 'A', 12)])
+            ->withRows([Row::new(RowData::from(['a' => "x\u{E002}\u{E0FF}y"]))]);
+
+        $this->assertStringContainsString("\u{E002}", $t->View(), 'by default image markers pass by design');
+
+        $strict = $t->withMarkedFrameSanitization();
+        $view = $strict->View();
+        $this->assertStringNotContainsString("\u{E002}", $view);
+        $this->assertStringNotContainsString("\u{E0FF}", $view);
+        $this->assertStringContainsString('x', $view);
+        $this->assertStringContainsString('y', $view);
+    }
+
+    public function testMarkedFrameFlagSweepsHeadersAndMultilineToo(): void
+    {
+        $t = Table::fromColumns([Column::new('a', "h\u{E002}", 8)])
+            ->withRows([Row::new(RowData::from(['a' => "l1\u{E001}\nl2"]))])
+            ->withMultilineMode(true);
+
+        $view = $t->withMarkedFrameSanitization()->View();
+        $this->assertStringNotContainsString("\u{E002}", $view);
+        $this->assertStringNotContainsString("\u{E001}", $view);
+        // The sweep is orthogonal to newline policy: multiline still explodes.
+        $this->assertStringContainsString('l1', $view);
+        $this->assertStringContainsString('l2', $view);
+    }
 }

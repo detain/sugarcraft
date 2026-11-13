@@ -140,11 +140,13 @@ final class Column
      *
      * @return string
      */
-    public function renderHeader(int $totalWidth = 0): string
+    public function renderHeader(int $totalWidth = 0, bool $forMarkedFrames = false): string
     {
         $w = $totalWidth > 0 ? $totalWidth : $this->width;
-        // Sanitize title; pad() handles display-width truncation via Width helpers
-        $title = Sanitize::value($this->title, false);
+        // Sanitize title; pad() handles display-width truncation via Width
+        // helpers. $forMarkedFrames routes the ST-47 strictening threaded by
+        // Table for hosts compositing the frame into zone/image arenas.
+        $title = Sanitize::value($this->title, false, $forMarkedFrames);
         return $this->pad($title, $w, $this->alignLeft);
     }
 
@@ -162,7 +164,7 @@ final class Column
      * @param mixed $value
      * @return list<string> One or more plain-text lines, padded to $w
      */
-    public function renderCell(mixed $value, int $width = 0): array
+    public function renderCell(mixed $value, int $width = 0, bool $forMarkedFrames = false): array
     {
         $w = $width > 0 ? $width : $this->width;
         $str = \is_object($value) && method_exists($value, '__toString') ? (string) $value : (\is_scalar($value) ? (string) $value : '');
@@ -172,7 +174,7 @@ final class Column
         // returned "line" strings would leak it into a buffer cell, where
         // toAnsi() paints a real newline and desyncs the whole frame
         // (re-audit finding on the fix wave, same family as audit #2).
-        $str = Sanitize::value($str, true);
+        $str = Sanitize::value($str, true, $forMarkedFrames);
 
         $segments = \explode("\n", $str);
         $lines = [];

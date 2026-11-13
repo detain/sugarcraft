@@ -717,6 +717,14 @@ data cannot emit escape sequences:
 - The sugar-mouse zone sentinels (U+E000/U+E001) are stripped, so a forged
   click target cannot ride cell data, titles or the missing-value indicator
   into a host that zones around — or consumes the output of — the table.
+- **Marked-frame opt-in**: other Private-Use codepoints (image markers from
+  U+E002 up, patched-font glyphs) pass by design — they are legitimate content
+  for ordinary surfaces. A host whose frame allocates meaning from that arena
+  (an image-overlay compositor, a custom zone protocol) calls
+  `withMarkedFrameSanitization()`: every ingress then sweeps the whole BMP
+  Private-Use block so cell data can never forge an arena marker. Residual
+  host duty: content that never rides a table ingress — border glyphs you
+  configure yourself and the exact bytes of the note above — is still yours.
 - Trojan-Source bidi overrides and zero-width space render as visible
   `<U+XXXX>` markers instead of silently reordering or blanking the line a
   human reads.

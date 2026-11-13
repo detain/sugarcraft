@@ -24,7 +24,9 @@ namespace SugarCraft\Table;
  *    indicator, or expanded rows. Sweeping at ingress keeps that class of
  *    forgery out of every render path at once. Other Private Use codepoints
  *    (image markers U+E002-and-up, Nerd Font glyphs) pass by design —
- *    they carry no zone meaning.
+ *    they carry no zone meaning. Hosts whose frames DO allocate meaning from
+ *    that arena opt in via the third parameter — see
+ *    {@see self::value()::$forMarkedFrames}.
  * 3. {@see \SugarCraft\Core\Util\Sanitize::markInvisibleFormatting()} —
  *    Trojan-Source bidi overrides (U+202E and kin) and zero-width space are
  *    rendered as visible {@code <U+XXXX>} markers instead of silently
@@ -39,12 +41,25 @@ final class Sanitize
      * @param bool   $preserveNewlines When true, preserve \n (for multiline expand
      *                                  paths that explode on "\n"); when false,
      *                                  collapse all newline variants to ↵ (U+21B5)
+     * @param bool   $forMarkedFrames  Opt-in strictening for hosts that compose the
+     *                                  rendered frame into a surface whose markup is
+     *                                  Private-Use-codepoint based (sugar-mouse zone
+     *                                  sentinels, the U+E002-and-up image-marker
+     *                                  arena): the whole BMP Private Use block is
+     *                                  swept via the core's stripPrivateUse(), so
+     *                                  cell data can never forge arena markers.
+     *                                  Default OFF — icon fonts and image markers
+     *                                  are legitimate content for ordinary surfaces
+     *                                  (audit ST-47, finding 56).
      * @return string Sanitized string safe for the terminal
      */
-    public static function value(string $s, bool $preserveNewlines = false): string
+    public static function value(string $s, bool $preserveNewlines = false, bool $forMarkedFrames = false): string
     {
         $s = \SugarCraft\Core\Util\Sanitize::cellValue($s, $preserveNewlines);
         $s = \SugarCraft\Core\Util\Sanitize::stripZoneSentinels($s);
+        if ($forMarkedFrames) {
+            $s = \SugarCraft\Core\Util\Sanitize::stripPrivateUse($s);
+        }
 
         return \SugarCraft\Core\Util\Sanitize::markInvisibleFormatting($s);
     }
