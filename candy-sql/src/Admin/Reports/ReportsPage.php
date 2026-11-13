@@ -601,14 +601,19 @@ final class ReportsPage extends PageBase implements RowNavigable
             return $header . "\n" . Style::new()->faint()->render('  (no data)');
         }
 
-        $activeStyle = Style::new()->bold()->foreground(Color::hex('#4ade80'));
-        $mutedStyle = Style::new()->foreground(Color::hex('#6b7280'));
-
         // Each category is a Bits\Tree branch; only the selected category is
         // expanded, so its reports show as indented leaves. The widget owns the
-        // indentation, expand/collapse glyphs and structure. Selection is baked
-        // into the label styling because the tree is display-only here (never
-        // focused — its single cursor can't express category + report at once).
+        // indentation, expand/collapse glyphs and structure — and its label
+        // pipeline runs EVERY label through Sanitize::controlChars() (Tree's
+        // untrusted-content door), which strips the ESC of an embedded SGR and
+        // leaves the PARAMETERS visible: '[1m[38;2;74;222;128mproblems (6)[0m'
+        // shredded the whole left column, every node (adminpages-005). No colour
+        // may ride a Node label at any width — the old width-0 note blamed the
+        // truncation path, but the strip is unconditional. Selection is carried
+        // as plain-text state instead: the selected leaf gets a visible dot
+        // marker, and the selected category needs none — it is the one branch
+        // expanded. Bold/green contrast returns only if the widget ever grows a
+        // style channel (an upstream sugar-widgets leg, not this page's call).
         $roots = [];
         foreach ($this->categories as $category) {
             $reports = $this->reportsByCategory[$category] ?? [];
@@ -616,15 +621,14 @@ final class ReportsPage extends PageBase implements RowNavigable
 
             $leaves = [];
             foreach ($reports as $report) {
-                $style = $report->name === $this->selectedReport ? $activeStyle : $mutedStyle;
-                $leaves[] = new Node($style->render($report->caption), $report->name);
+                $caption = $report->name === $this->selectedReport
+                    ? "\u{25CF} {$report->caption}"
+                    : $report->caption;
+                $leaves[] = new Node($caption, $report->name);
             }
 
             $count = count($reports);
-            $style = $isSelectedCategory ? $activeStyle : $mutedStyle;
-            // width 0 (set below) keeps these styled labels intact — Tree::view()
-            // truncates with the ANSI-stripping Width::truncate when width > 0.
-            $roots[] = new Node($style->render("{$category} ({$count})"), $category, $leaves, $isSelectedCategory);
+            $roots[] = new Node("{$category} ({$count})", $category, $leaves, $isSelectedCategory);
         }
 
         $tree = Tree::fromList($roots)->withSize(0, 0);

@@ -167,6 +167,38 @@ final class ReportsPageTest extends TestCase
         $this->assertStringContainsString('⠋', $view);
     }
 
+    /**
+     * adminpages-005: the Bits\Tree label pipeline runs every Node label
+     * through Sanitize::controlChars(), which strips the ESC of an embedded
+     * SGR and leaves the parameters visible — styled labels painted literal
+     * '[1m[38;2;…m' garbage across the left column. Selection must ride as
+     * plain-text state (the dot marker), never as bytes the widget will eat.
+     */
+    public function testCategoryTreeCarriesNoShreddedSgrParameters(): void
+    {
+        $this->context->method('connection')->willReturn($this->db);
+        $page = ReportsPage::new($this->context, $this->db);
+        $view = $page->view();
+
+        // Any '[NNm'-shaped parameter run NOT preceded by its ESC byte is the
+        // shredded form; a live escape is always ESC-led (Style's own output
+        // for the header/grid rides the page un-sanitised).
+        $orphans = preg_match_all('/(?<!\x1b)\[[0-9;]*m/', $view);
+        $this->assertSame(0, $orphans, 'tree labels must not reach the page as orphan SGR parameters');
+    }
+
+    public function testCategoryTreeSelectsByPlainTextMarker(): void
+    {
+        $this->context->method('connection')->willReturn($this->db);
+        $page = ReportsPage::new($this->context, $this->db);
+        $view = $page->view();
+
+        // Category roots are plain 'name (count)'; the selected report carries
+        // the dot. Together they pin the label contract that replaced styling.
+        $this->assertStringContainsString('problems (', $view, 'category root label survives plain');
+        $this->assertStringContainsString("\u{25CF} ", $view, 'selected report carries the plain-text dot marker');
+    }
+
     public function testCatalogProperty(): void
     {
         $this->context->method('connection')->willReturn($this->db);
