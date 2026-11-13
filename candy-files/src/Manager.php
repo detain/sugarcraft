@@ -106,6 +106,8 @@ final class Manager implements Model
         public readonly int $copyBatchesInFlight = 0,
         /** CF-44: first `q` landed while a batch was in flight; second press quits. */
         public readonly bool $quitArmed = false,
+        /** CF-28: `?` opens the help overlay — a frame, not a side-effecting mode. */
+        public readonly bool $helpMode = false,
     ) {
         $this->lister = $lister ?? FsLister::lister();
     }
@@ -220,9 +222,25 @@ final class Manager implements Model
             return [$resolved, $cmd];
         }
 
+        // CF-28: the help overlay swallows every keystroke except its own
+        // dismissal. It is a frame — no cursor moves, no mode changes hide
+        // behind it.
+        if ($this->helpMode) {
+            if ($msg->type === KeyType::Escape || ($msg->type === KeyType::Char && $msg->rune === '?')) {
+                return [$this->mutate(['helpMode' => false]), null];
+            }
+            return [$this, null];
+        }
+
         // Search mode intercepts all keys
         if ($this->searchQuery !== null) {
             return [$this->handleSearchKey($msg), null];
+        }
+
+        // CF-28: `?` opens the overlay. Search mode was already intercepted
+        // above, so a '?' typed into a query can never open help by accident.
+        if ($msg->type === KeyType::Char && $msg->rune === '?' && !$msg->ctrl && !$msg->alt) {
+            return [$this->mutate(['helpMode' => true]), null];
         }
 
         if ($msg->type === KeyType::Char && $msg->rune === 'q' && !$msg->ctrl && !$msg->alt) {

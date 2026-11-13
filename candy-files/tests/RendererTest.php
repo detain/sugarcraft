@@ -46,6 +46,31 @@ final class RendererTest extends TestCase
         $this->assertStringContainsString('/', $out);
     }
 
+    public function testHelpOverlayWindowsToTheLiveHeight(): void
+    {
+        $m = Manager::start('/', '/', $this->fakeFs());
+        [$m] = $m->update(new \SugarCraft\Core\Msg\WindowSizeMsg(60, 10));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, '?'));
+        $out = Renderer::render($m);
+        $lines = explode("\n", $out);
+        // CF-28: the full legend is far taller than 10 rows — the overlay
+        // must fold, not flood the viewport.
+        $this->assertLessThanOrEqual(10, count($lines));
+        $this->assertStringContainsString('Esc', $out);   // en help.dismiss
+        $this->assertStringContainsString('+', $out);     // fold hint (help.more)
+        // the table replaces the browse frame: pane contents are gone
+        $this->assertStringNotContainsString('readme.txt', $out);
+    }
+
+    public function testHelpOverlayCloseRestoresTheBrowseFrame(): void
+    {
+        $m = Manager::start('/', '/', $this->fakeFs());
+        [$m] = $m->update(new KeyMsg(KeyType::Char, '?'));
+        [$m] = $m->update(new KeyMsg(KeyType::Escape, ''));
+        $out = Renderer::render($m);
+        $this->assertStringContainsString('readme.txt', $out, 'frame back to the panes');
+    }
+
     /**
      * MAJOR-2 (docs-fix-1023) / CF-01: pane boxes derive from the live
      * terminal width captured via WindowSizeMsg. At 120 cols each pane box

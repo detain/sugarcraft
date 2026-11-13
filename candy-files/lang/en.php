@@ -68,9 +68,12 @@ return [
     'undo.copy'   => 'items copied: {count}',
 
     // Key help
-    'keyhelp.default' => 'Tab swap · ↑↓ jk move · Home/End g/G jump · Enter open · ← h up · space select · s sort · . hidden · c copy · m move · R rename · d delete · r refresh · q quit · / search · Esc clear · t duplicate tab · ^w close tab · ^tab cycle · ^PgUp/^PgDn tabs · u/^z undo · ^y redo',
+    'keyhelp.default' => 'Tab swap · ↑↓ jk move · Home/End g/G jump · Enter open · ← h up · space select · s sort · . hidden · c copy · m move · R rename · d delete · r refresh · q quit · / search · Esc clear · t duplicate tab · ^w close tab · ^tab cycle · ^PgUp/^PgDn tabs · u/^z undo · ^y redo · ? help',
     'keyhelp.terse' => 'Tab swap · ↑↓ jk move · Enter open · ← h up · space select · s sort · c copy · m move · R rename · d delete · q quit · / search · u/^z undo · ^y redo',
     'keyhelp.minimal' => 'Enter open · q quit · / search',
+    'help.title' => '{count} key bindings',
+    'help.more' => '+{count} more',
+    'help.dismiss' => '? or Esc closes',
 
     // Search
     'search.no_match' => '(no matches)',

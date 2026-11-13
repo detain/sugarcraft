@@ -67,7 +67,16 @@ final class Renderer
             ? self::keyHelp($m->termCols, Width::of($focus), $glyphs, $rtl)
             : $m->status;
         $status = $focus . ' ' . Bidi::pinSeparator($glyphs->sep, $rtl) . ' ' . $rest;
-        $frame = $search . $tabBar . $body . "\n" . self::statusBar($status);
+        if ($m->helpMode) {
+            // CF-28 (closes 041): the overlay replaces the browse frame —
+            // the table is the whole point of the frame. The status line
+            // stays so the focus cue survives; renderHelp windows the
+            // entries to the viewport, and the two size belts below are
+            // still the last word.
+            $frame = self::renderHelp($m, $glyphs, $rtl) . "\n" . self::statusBar($status);
+        } else {
+            $frame = $search . $tabBar . $body . "\n" . self::statusBar($status);
+        }
         if ($m->termCols > 0) {
             // CF-01 belt: once a live width is known, no composed line may
             // exceed it. The status line in particular carries the full
@@ -281,6 +290,38 @@ final class Renderer
         // Even minimal overflows (comically narrow terminal): the frame
         // clamp in render() cuts the tail, status stays a single row.
         return $minimal;
+    }
+
+    /**
+     * CF-28 (closes 041): the help overlay. Every binding the key-help
+     * legend carries, one per row, windowed to the live height by the
+     * same rowWindow law the panes follow. Entries come from the already
+     * localized keyhelp.default legend split on its separator — the
+     * overlay is lang-backed without duplicating sixteen catalogues of
+     * action prose; '?' joins the legend so the strip itself advertises
+     * the door.
+     */
+    private static function renderHelp(Manager $m, GlyphSet $glyphs, bool $rtl): string
+    {
+        $items = explode(' · ', $glyphs->substitute(Lang::t('keyhelp.default')));
+        $count = count($items);
+        // Overhead rows in the help frame: title, blank, dismiss line,
+        // blank before status, status. Capacity 0 (unit shape / no live
+        // height) lists everything and lets the belts below have the
+        // last word.
+        $capacity = $m->termRows > 0 ? max(1, $m->termRows - 5) : $count;
+        // cursor 0: the table is a document, not a follow-the-cursor list.
+        [, $end, , $hiddenBelow] = self::rowWindow($count, 0, $capacity);
+        $lines = [Ansi::sgr(Ansi::BOLD) . Lang::t('help.title', ['count' => $count]) . Ansi::reset()];
+        foreach (array_slice($items, 0, $end) as $item) {
+            $lines[] = ' ' . Bidi::pinRuns($item, $glyphs->sep, $rtl);
+        }
+        if ($hiddenBelow > 0) {
+            $lines[] = ' ' . Lang::t('help.more', ['count' => $hiddenBelow]);
+        }
+        $lines[] = '';
+        $lines[] = ' ' . Lang::t('help.dismiss');
+        return implode("\n", $lines) . "\n\n";
     }
 
     private static function renderSearch(Manager $m): string

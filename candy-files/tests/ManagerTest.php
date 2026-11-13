@@ -92,6 +92,33 @@ final class ManagerTest extends TestCase
         $this->assertSame(0, $done->copyBatchesInFlight);
     }
 
+    public function testHelpOverlayOpensSwallowsCloses(): void
+    {
+        $m = $this->start();
+        [$m] = $m->update(new KeyMsg(KeyType::Char, '?'));
+        $this->assertTrue($m->helpMode);
+        // CF-28: the overlay is a frame, not a mode with side effects —
+        // a swallowed 'j' must not move the cursor behind the table.
+        [$swallowed] = $m->update(new KeyMsg(KeyType::Char, 'j'));
+        $this->assertTrue($swallowed->helpMode);
+        $this->assertSame(0, $swallowed->left->cursor);
+        [$closed] = $swallowed->update(new KeyMsg(KeyType::Char, '?'));
+        $this->assertFalse($closed->helpMode);
+        // reopen, then Escape closes
+        [$reopened] = $closed->update(new KeyMsg(KeyType::Char, '?'));
+        [$escaped] = $reopened->update(new KeyMsg(KeyType::Escape, ''));
+        $this->assertFalse($escaped->helpMode);
+    }
+
+    public function testSearchQuestionMarkTypesNeverOpensHelp(): void
+    {
+        $m = $this->start();
+        [$m] = $m->update(new KeyMsg(KeyType::Char, '/'));   // enter search
+        [$m] = $m->update(new KeyMsg(KeyType::Char, '?'));   // '?' joins the query
+        $this->assertFalse($m->helpMode, 'search intercepts the chord first');
+        $this->assertSame('?', $m->searchQuery);
+    }
+
     public function testTabSwapsActivePane(): void
     {
         $m = $this->start();

@@ -106,6 +106,7 @@ on a bare php-cli machine the step that refuses is `composer install`, naming `s
 | `d`             | Delete (selection or cursor); confirm the armed gate (see Status)        |
 | `r`             | Refresh active pane                                       |
 | `q`             | Quit; while copy batches are in flight the first press only arms the question ("press q again") and any other key drops it |
+| `?`             | Toggle the help overlay — every binding, one per row, windowed to the terminal height with a `+N more` fold when it overflows; `?` or `Escape` closes and restores the browse frame |
 | `/`             | Start search mode: fuzzy filter by **name** over the active pane's listing (current directory only; dotfiles obey the `.` visibility law); `↑`/`↓` move the result cursor, every printable char — `k`, `j`, even `.` — types into the query (`/` itself cannot); `Enter` opens a directory result, and on a file result exits search with the pane cursor landed on it; a `Backspace` that empties the query exits search |
 | `Escape`        | Exit search mode; cancels armed confirmations and text-entry (cancel-intent is never a confirm — only the gate's taught affirmative confirms the pending `d`/`c`/`m` op); otherwise clears the selection |
 | `t`             | Duplicate current tab                                     |
