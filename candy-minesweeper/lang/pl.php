@@ -29,6 +29,7 @@ return [
     'ui.help_rules' => 'liczba oznacza miny w pobliżu',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  ruch  ·  spacja / enter  odkryj',
     'ui.help_board' => 'lewy przycisk  otwórz · f / prawy  flaga · c / środkowy  otwórz okolice',
+    'ui.help_loss' => '{mark} zła flaga · * pominięta mina',
     'ui.help_session' => 'r  restart  ·  S  zapisz  ·  L  wczytaj  ·  q / Esc / Ctrl+C  wyjdź',
     'ui.saved' => 'Gra zapisana',
     'ui.restarted' => 'Plansza zrestartowana',

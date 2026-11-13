@@ -12,10 +12,15 @@ use SugarCraft\Minesweeper\Game;
 /**
  * M21 (lib-reviews-1103): post-mortem legibility. On a LOST board the overlay
  * must grade the player's work — a flag on safe ground was WRONG and wears
- * '✗' (dim lavender), and a mine they missed lights up in mine-red instead of
- * sharing the hidden-dot grey. Mid-play nothing changes (flags are 'F',
- * hidden cells are dots — no spoilers), and a WON board keeps the classic
+ * the bin's wrong-flag mark ('✗' on the colour-capable bin, 'x' on the
+ * narrow one — msw-16), and a mine they missed lights up in mine-red instead
+ * of sharing the hidden-mark grey. Mid-play nothing changes (flags are 'F',
+ * hidden cells are colons — no spoilers), and a WON board keeps the classic
  * dim-mine overlay untouched.
+ *
+ * The suite default pins the colour-capable bin (tests/bootstrap.php), so
+ * the ✗ arm is what these raw-SGR reads see; the narrow bin's 'x' is census-
+ * proved in GlyphEawCensusTest.
  *
  * Boards are hand-built through the public Board constructor so the glyph
  * states are pinned exactly; assertions read the raw SGR from view().
@@ -24,7 +29,7 @@ final class LossBoardGlyphTest extends TestCase
 {
     private const RED_PLAIN     = "38;2;255;95;135m*";
     private const RED_BOLD      = "38;2;255;95;135;1m*";
-    private const DIM_DOT       = "38;2;90;74;120m·";
+    private const DIM_DOT       = "38;2;90;74;120m:";
     private const DIM_STAR      = "38;2;90;74;120m*";
     private const WRONG_FLAG    = "38;2;125;110;152m✗";
     private const GOLD_FLAG     = "38;2;253;230;138;1mF";
@@ -86,7 +91,7 @@ final class LossBoardGlyphTest extends TestCase
         self::assertStringContainsString(self::RED_PLAIN, $view, 'a missed mine lights up in mine red');
         self::assertStringContainsString(self::RED_BOLD, $view, 'sanity: the detonated mine stays bold red');
         self::assertStringNotContainsString(self::DIM_STAR, $view, 'no missed mine may hide in the hidden-dot grey');
-        self::assertStringContainsString(self::DIM_DOT, $view, 'sanity: safe hidden cells stay dim dots');
+        self::assertStringContainsString(self::DIM_DOT, $view, 'sanity: safe hidden cells keep the dim colon mark');
     }
 
     public function testMidPlayShowsNoPostMortemHints(): void
@@ -96,7 +101,7 @@ final class LossBoardGlyphTest extends TestCase
         self::assertStringNotContainsString('✗', $view, 'the wrong-flag mark belongs to lost boards only');
         self::assertStringContainsString(self::GOLD_FLAG, $view, 'mid-play every flag reads as a plain gold F');
         self::assertStringNotContainsString(self::RED_PLAIN, $view, 'unflagged mines must not glow before the boom');
-        self::assertStringContainsString(self::DIM_DOT, $view, 'sanity: hidden cells are dots');
+        self::assertStringContainsString(self::DIM_DOT, $view, 'sanity: hidden cells are colons');
     }
 
     public function testWonBoardKeepsTheClassicDimMineOverlay(): void

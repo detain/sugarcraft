@@ -29,6 +29,7 @@ return [
     'ui.help_rules' => 'sayı yakındaki mayınları sayar',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  hareket  ·  space / enter  aç',
     'ui.help_board' => 'sol tık  aç · f / sağ tık  bayrak · c / orta tık  çevreyi aç',
+    'ui.help_loss' => '{mark} yanlış bayrak · * kaçırılan mayın',
     'ui.help_session' => 'r  yeniden  ·  S  kaydet  ·  L  yükle  ·  q / Esc / Ctrl+C  çık',
     'ui.saved' => 'Oyun kaydedildi',
     'ui.restarted' => 'Tahta yeniden başlatıldı',

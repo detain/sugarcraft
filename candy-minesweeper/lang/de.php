@@ -29,6 +29,7 @@ return [
     'ui.help_rules' => 'eine Zahl zählt die Minen daneben',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  bewegen  ·  Space / Enter  aufdecken',
     'ui.help_board' => 'Linksklick  aufdecken · f / Rechtsklick  flaggen · c / Mittelklick  aufdecken',
+    'ui.help_loss' => '{mark} falsche Flagge · * Mine übersehen',
     'ui.help_session' => 'r  Neustart  ·  S  speichern  ·  L  laden  ·  q / Esc / Ctrl+C  beenden',
     'ui.saved' => 'Spiel gespeichert',
     'ui.restarted' => 'Feld neu gestartet',

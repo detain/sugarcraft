@@ -29,6 +29,7 @@ return [
     'ui.help_rules' => 'een getal telt de mijnen eromheen',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  bewegen  ·  spatie / enter  onthullen',
     'ui.help_board' => 'klik links  openen · f / klik rechts  vlaggen · c / middelklik  rondom',
+    'ui.help_loss' => '{mark} vlag verkeerd · * mijn gemist',
     'ui.help_session' => 'r  herstart  ·  S  opslaan  ·  L  laden  ·  q / Esc / Ctrl+C  afsluiten',
     'ui.saved' => 'Spel opgeslagen',
     'ui.restarted' => 'Bord opnieuw gestart',

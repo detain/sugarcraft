@@ -29,6 +29,7 @@ return [
     'ui.help_rules' => 'un numero conta le mine vicine',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  muovi  ·  spazio / invio  rivela',
     'ui.help_board' => 'clic sinistro  apri · f / clic destro  bandiera · c / clic centrale  intorno',
+    'ui.help_loss' => '{mark} bandiera errata · * mina persa',
     'ui.help_session' => 'r  ricomincia  ·  S  salva  ·  L  carica  ·  q / Esc / Ctrl+C  esci',
     'ui.saved' => 'Partita salvata',
     'ui.restarted' => 'Griglia riavviata',

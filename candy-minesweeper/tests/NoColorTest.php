@@ -68,10 +68,16 @@ final class NoColorTest extends TestCase
 
             $this->assertStringNotContainsString('38;2;', $frame,
                 'no TrueColor sequences may survive a colour-refused boot');
-            $this->assertStringContainsString('·', $frame,
-                'board glyphs are plain Unicode and must render anyway');
+            $this->assertStringContainsString(':', $frame,
+                'board glyphs are plain Unicode and must render anyway (the hidden colon)');
             $this->assertStringContainsString('mines: 10', $frame,
                 'the status line keeps its text under the downgrade');
+            $clean = explode("\n", preg_replace('/\x1b\[[0-9;]*m/', '', $frame) ?? $frame);
+            $hiddenRow = mb_substr($clean[Renderer::INTERIOR_ROW_OFFSET], Renderer::INTERIOR_COL_OFFSET, 9);
+            $this->assertSame(str_repeat(':', 9), $hiddenRow,
+                'the hidden mark is the width-safe colon — never the middle dot, and a colour-free board still paints its grid');
+            $this->assertStringNotContainsString('✗', $frame,
+                'the downgrade bin paints the ASCII wrong-flag mark only (msw-16)');
             $this->assertStringContainsString("\x1b[0;7m", $frame,
                 'decorations are not colour: the reverse cursor stays');
         } finally {

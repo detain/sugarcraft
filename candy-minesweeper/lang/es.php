@@ -29,6 +29,7 @@ return [
     'ui.help_rules' => 'un número cuenta las minas cercanas',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  mover  ·  espacio / intro  revelar',
     'ui.help_board' => 'clic izquierdo  abrir · f / derecho  bandera · c / central  alrededor',
+    'ui.help_loss' => '{mark} bandera mala · * mina perdida',
     'ui.help_session' => 'r  reiniciar  ·  S  guardar  ·  L  cargar  ·  q / Esc / Ctrl+C  salir',
     'ui.saved' => 'Partida guardada',
     'ui.restarted' => 'Tablero reiniciado',

@@ -160,6 +160,23 @@ final class FooterWidthGuardTest extends TestCase
                 static fn(int $max): int => 0,
                 stats: new Stats(expertGames: 1, expertBest: 3599),
             )],
+            // msw-16: the post-mortem legend swap must ride this budget too.
+            ['exploded', (static function (): Game {
+                $mines = [[false, false, false], [false, true, false], [true, false, false]];
+                $rows = [];
+                for ($y = 0; $y < 3; $y++) {
+                    $row = [];
+                    for ($x = 0; $x < 3; $x++) {
+                        $row[] = new Cell(mine: $mines[$y][$x], revealed: $y === 1 && $x === 1);
+                    }
+                    $rows[] = $row;
+                }
+                return new Game(
+                    board: Board::fromRows(3, 3, 2, $rows, minesPlaced: true, exploded: true, revealedCount: 1, flaggedCount: 0),
+                    cursorX: 0,
+                    cursorY: 0,
+                );
+            })()],
         ];
         $locales = array_map('basename', array_combine($glob = glob(__DIR__ . '/../lang/*.php') ?: [], $glob));
         $this->assertNotEmpty($locales);

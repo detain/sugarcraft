@@ -87,6 +87,13 @@ final class Renderer
      * {@see NoColorTest} flips the knob to prove the strip. Production code
      * never calls this; the binary routes capability through
      * {@see ColorProfile::detect()} at boot.
+     *
+     * Since msw-16 (candy-minesweeper-021) the same answer bin also selects
+     * the glyph set: the downgrade swaps the post-mortem wrong-flag dingbat
+     * for a plain 'x' and the rounded border for its ASCII twin, because a
+     * terminal refusing colour is the closest proxy the fleet ships for one
+     * whose east-asian-width handling would double those glyphs. The
+     * dominant hidden-cell glyph is width-safe in BOTH bins.
      */
     private static ?bool $boardColourOverride = null;
 
@@ -176,8 +183,10 @@ final class Renderer
             return self::tooSmallNotice($g);
         }
 
+        // msw-16/-021: the rounded border's box-drawing glyphs are
+        // east-asian-ambiguous too — the downgrade bin takes the ASCII twin.
         $framed = SugarStyle::new()
-            ->border(Border::rounded())
+            ->border(self::colourBoards() ? Border::rounded() : Border::ascii())
             ->padding(0, 1)
             ->render($interior);
 
@@ -196,10 +205,17 @@ final class Renderer
         // The rules line leads the footer so a first-timer reads the
         // win condition before the key legend — TeachToPlayTest pins that
         // this copy reaches every frame via this call site.
+        // msw-16/-086: on an exploded board the board-legend line swaps for
+        // one that teaches the post-mortem marks ('✗ wrong flag · * missed
+        // mine'), because the overlay introduces two symbols the normal
+        // legend never mentions — and it must name the glyph the active bin
+        // actually painted, so {mark} rides wrongFlagGlyph().
         $helpPlain = [
             Lang::t('ui.help_rules'),
             Lang::t('ui.help_moves'),
-            Lang::t('ui.help_board'),
+            $g->board->exploded
+                ? Lang::t('ui.help_loss', ['mark' => self::wrongFlagGlyph()])
+                : Lang::t('ui.help_board'),
             Lang::t('ui.help_session'),
         ];
         $helpStyle = SugarStyle::new()->foreground(Color::hex(self::ink('#7d6e98', '#5b4a7f')));
@@ -336,26 +352,43 @@ final class Renderer
     }
 
     /**
+     * The wrong-flag mark for the active bin (msw-16/-021): the colour
+     * downgrade is the fleet's proxy for a terminal that may double
+     * east-asian-ambiguous glyphs, so that bin also sheds the dingbat '✗'
+     * for a width-safe ASCII 'x'. GlyphEawCensusTest pins that no live
+     * board ever emits the ambiguous family.
+     */
+    private static function wrongFlagGlyph(): string
+    {
+        return self::colourBoards() ? '✗' : 'x';
+    }
+
+    /**
      * @return array{0:string, 1:?int, 2:?int, 3:int} glyph, fg, bg, attrs
      */
     private static function cellStyleData(Cell $cell, Board $b, int $col, int $row, int $cx, int $cy): array
     {
         // Post-mortem legibility (M21): once the board is LOST, the overlay
         // must grade the player's own work. A flag sitting on a safe cell was
-        // wrong — it wears '✗' instead of 'F' so a correct flag (still gold F)
-        // and a wrong one are never the same glyph. Mines the player missed
-        // keep the '*' reveal but light up in the mine red instead of the dim
-        // hidden-dot grey, which on a lost board is information the overlay
-        // owes them. Mid-play nothing changes: flags stay 'F' and hidden
-        // cells stay dots — no spoilers before the boom.
+        // wrong — it wears the wrong-flag mark (msw-16: '✗' on the capable
+        // bin, plain 'x' on the downgrade) instead of 'F' so a correct flag
+        // (still gold F) and a wrong one are never the same glyph. Mines the
+        // player missed keep the '*' reveal but light up in the mine red
+        // instead of the dim hidden-colon grey, which on a lost board is
+        // information the overlay owes them. Mid-play nothing changes: flags
+        // stay 'F' and hidden cells stay colons — no spoilers before the boom.
         $wrongFlag  = $b->exploded && $cell->flagged && !$cell->mine;
         $missedMine = $b->exploded && $cell->mine && !$cell->flagged && !$cell->revealed;
 
         $glyph = match (true) {
-            $wrongFlag    => '✗',
+            $wrongFlag    => self::wrongFlagGlyph(),
             $cell->flagged => 'F',
             !$cell->revealed && ($b->exploded || $b->isWon()) && $cell->mine => '*',
-            !$cell->revealed => '·',
+            // msw-16/-021: the hidden mark used to be U+00B7, an
+            // east-asian-ambiguous glyph — on ambw=2 terminals every single
+            // unrevealed cell doubled and the whole grid shattered from the
+            // first frame. The colon is width-safe in every terminal class.
+            !$cell->revealed => ':',
             $cell->mine     => '*',
             $cell->adjacent === 0 => ' ',
             default => (string) $cell->adjacent,

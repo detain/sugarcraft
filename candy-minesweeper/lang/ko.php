@@ -29,6 +29,7 @@ return [
     'ui.help_rules' => '숫자는 주변 지뢰 수를 뜻함',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  이동  ·  space / enter  열기',
     'ui.help_board' => '왼쪽 클릭  열기 · f / 오른쪽 클릭  깃발 · c / 가운데 클릭  주변 열기',
+    'ui.help_loss' => '{mark} 잘못된 깃발 · * 놓친 지뢰',
     'ui.help_session' => 'r  재시작  ·  S  저장  ·  L  불러오기  ·  q / Esc / Ctrl+C  종료',
     'ui.saved' => '게임 저장됨',
     'ui.restarted' => '보드 재시작',

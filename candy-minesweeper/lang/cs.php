@@ -29,6 +29,7 @@ return [
     'ui.help_rules' => 'číslo udává počet min v okolí',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  pohyb  ·  mezerník / enter  odkrytí',
     'ui.help_board' => 'levé tlačítko  odkryt · f / pravé  vlajka · c / prostřední  okolí',
+    'ui.help_loss' => '{mark} špatná vlajka · * mine přehlédnutá',
     'ui.help_session' => 'r  restart  ·  S  uložit  ·  L  načíst  ·  q / Esc / Ctrl+C  konec',
     'ui.saved' => 'Hra uložena',
     'ui.restarted' => 'Deska restartována',

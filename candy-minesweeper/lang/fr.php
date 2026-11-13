@@ -29,6 +29,7 @@ return [
     'ui.help_rules' => 'un chiffre compte les mines voisines',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  déplacer  ·  espace / entrée  révéler',
     'ui.help_board' => 'clic gauche  ouvrir · f / clic droit  drapeau · c / milieu  ouvrir autour',
+    'ui.help_loss' => '{mark} drapeau faux · * mine manquée',
     'ui.help_session' => 'r  rejouer  ·  S  sauvegarder  ·  L  charger  ·  q / Esc / Ctrl+C  quitter',
     'ui.saved' => 'Partie sauvegardée',
     'ui.restarted' => 'Plateau relancé',
