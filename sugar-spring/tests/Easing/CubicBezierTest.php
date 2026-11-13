@@ -297,6 +297,87 @@ final class CubicBezierTest extends TestCase
     }
 
     /**
+     * Frozen factory→control-point roster: one entry per static factory,
+     * asserted against the class's actual control points. A corrupted or
+     * drifted row reddens exactly this one roster entry (mutation-proven
+     * 2026-11-13: flipping easeInOutQuad's y2 alone reddened precisely its
+     * row, 1/26 reds). The values are the pre-2022 easings.net approximation
+     * table rendered in the file's 2-dp convention (see class docblock).
+     *
+     * @dataProvider frozenFactoryTupleRosterProvider
+     */
+    public function testFrozenFactoryTupleRoster(string $factory, array $tuple): void
+    {
+        $this->assertSame($tuple, $this->tupleOf(CubicBezier::$factory()), "$factory control points");
+    }
+
+    /** @return array<string, array{string, array{float, float, float, float}}> */
+    public static function frozenFactoryTupleRosterProvider(): array
+    {
+        return [
+            'ease'           => ['ease',           [0.25, 0.10, 0.25, 1.00]],
+            'easeIn'         => ['easeIn',         [0.42, 0.00, 1.00, 1.00]],
+            'easeOut'        => ['easeOut',        [0.00, 0.00, 0.58, 1.00]],
+            'easeInOut'      => ['easeInOut',      [0.42, 0.00, 0.58, 1.00]],
+            'linear'         => ['linear',         [0.00, 0.00, 1.00, 1.00]],
+            'easeInSine'     => ['easeInSine',     [0.47, 0.00, 0.75, 0.72]],
+            'easeOutSine'    => ['easeOutSine',    [0.39, 0.58, 0.57, 1.00]],
+            'easeInOutSine'  => ['easeInOutSine',  [0.45, 0.05, 0.55, 0.95]],
+            'easeInQuad'     => ['easeInQuad',     [0.55, 0.09, 0.68, 0.53]],
+            'easeOutQuad'    => ['easeOutQuad',    [0.25, 0.46, 0.45, 0.94]],
+            'easeInOutQuad'  => ['easeInOutQuad',  [0.46, 0.03, 0.52, 0.96]],
+            'easeInCubic'    => ['easeInCubic',    [0.55, 0.06, 0.68, 0.19]],
+            'easeOutCubic'   => ['easeOutCubic',   [0.22, 0.61, 0.36, 1.00]],
+            'easeInOutCubic' => ['easeInOutCubic', [0.65, 0.05, 0.35, 1.00]],
+            'easeInQuart'    => ['easeInQuart',    [0.90, 0.03, 0.69, 0.22]],
+            'easeOutQuart'   => ['easeOutQuart',   [0.17, 0.84, 0.44, 1.00]],
+            'easeInOutQuart' => ['easeInOutQuart', [0.77, 0.00, 0.18, 1.00]],
+            'easeInQuint'    => ['easeInQuint',    [0.76, 0.05, 0.86, 0.06]],
+            'easeOutQuint'   => ['easeOutQuint',   [0.23, 1.00, 0.32, 1.00]],
+            'easeInOutQuint' => ['easeInOutQuint', [0.86, 0.00, 0.07, 1.00]],
+            'easeInExpo'     => ['easeInExpo',     [0.95, 0.05, 0.80, 0.00]],
+            'easeOutExpo'    => ['easeOutExpo',    [0.19, 1.00, 0.22, 1.00]],
+            'easeInOutExpo'  => ['easeInOutExpo',  [1.00, 0.00, 0.00, 1.00]],
+            'easeInCirc'     => ['easeInCirc',     [0.60, 0.04, 0.98, 0.34]],
+            'easeOutCirc'    => ['easeOutCirc',    [0.08, 0.82, 0.17, 1.00]],
+            'easeInOutCirc'  => ['easeInOutCirc',  [0.785, 0.135, 0.150, 0.860]],
+        ];
+    }
+
+    /**
+     * Per-family shape probes: monotone over t ∈ [0, 1], exact endpoints,
+     * and no stray overshoot for presets whose control points all live in
+     * [0, 1]. Exact-tuple pins above carry the truth; these probes are the
+     * coarse net that makes a wrong row loud (014's cure: the range check
+     * alone held for every corrupted row of SPR-01, hence the roster).
+     *
+     * @dataProvider frozenFactoryTupleRosterProvider
+     */
+    public function testPresetFamilyShapeProbes(string $factory, array $tuple): void
+    {
+        $cb = CubicBezier::$factory();
+        $this->assertSame(0.0, $cb->evaluate(0.0), "$factory endpoint 0");
+        $this->assertSame(1.0, $cb->evaluate(1.0), "$factory endpoint 1");
+
+        $prev = -2.0;
+        $min  = 1.0;
+        $max  = 0.0;
+        for ($i = 0; $i <= 100; $i++) {
+            $value = $cb->evaluate($i / 100.0);
+            $this->assertGreaterThanOrEqual($prev - 1e-12, $value, "$factory monotone at i=$i");
+            $prev = $value;
+            $min  = min($min, $value);
+            $max  = max($max, $value);
+        }
+
+        $inside = $tuple[1] >= 0.0 && $tuple[1] <= 1.0 && $tuple[3] >= 0.0 && $tuple[3] <= 1.0;
+        if ($inside) {
+            $this->assertGreaterThanOrEqual(0.0, $min, "$factory dips below 0 with in-range control points");
+            $this->assertLessThanOrEqual(1.0, $max, "$factory exceeds 1 with in-range control points");
+        }
+    }
+
+    /**
      * @return array{float, float, float, float}
      */
     private function tupleOf(CubicBezier $cb): array
