@@ -104,4 +104,46 @@ final class SgrEmitterTest extends TestCase
 
         $this->assertSame("\x1b[0;38;2;255;0;0;48;2;0;0;255;1m", SgrEmitter::emit($style));
     }
+
+    // ─── 58 without the underline attribute (sugar-cellbuffer-008) ─────
+
+    public function testTheUnderlineColourIsEmittedWithoutTheUnderlineAttribute(): void
+    {
+        $rgb = new Style(null, null, 0, null, null, 0x010203);
+        $this->assertSame("\x1b[0;58;2;1;2;3m", SgrEmitter::emit($rgb));
+
+        $slot = new Style(null, null, 0, null, null, null, 3);
+        $this->assertSame("\x1b[0;58;5;3m", SgrEmitter::emit($slot));
+    }
+
+    public function testAnUnderlinePenSurvivesParseEmitParseWithoutTheAttribute(): void
+    {
+        // The old gate forgot the colour on the second leg: fromSgr accepts
+        // 58 without 4, emit refused to restate it, parse->emit->parse lost
+        // state the pen still claimed to carry.
+        $original = Style::fromSgr('58;2;1;2;3');
+        $this->assertNotNull($original);
+        $this->assertSame(0, $original->attrs());
+
+        $bytes = SgrEmitter::emit($original);
+        preg_match('/\x1b\[([\d;]+)m/', $bytes, $m);
+        $restored = Style::fromSgr($m[1]);
+
+        $this->assertEquals($original, $restored);
+    }
+
+    public function testTheUnderlinePenRidesThroughBothEmittersWithoutTheAttribute(): void
+    {
+        $style = new Style(null, null, 0, null, null, 0x0A141E);
+        $buffer = Buffer::new(1, 1)->withCellAt(0, 0, Cell::new('x', $style));
+        $expected = "\x1b[0;58;2;10;20;30m";
+
+        $this->assertStringContainsString($expected, $buffer->toAnsi());
+
+        $delta = (new DiffEncoder())->encode([
+            new MoveCursorOp(0, 0),
+            new SetStyleOp($style),
+        ]);
+        $this->assertStringContainsString($expected, $delta);
+    }
 }

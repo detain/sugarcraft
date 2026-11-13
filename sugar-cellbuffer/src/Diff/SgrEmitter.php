@@ -82,21 +82,23 @@ final class SgrEmitter
             if ($attrs & Style::ATTR_OVERLINE) { $codes[] = '53'; }
         }
 
-        // Underline colour (SGR 58) rides after the attribute run, only
-        // when an underline pen was recorded by Style::fromSgr().
-        if (($attrs & Style::ATTR_UNDERLINE) !== 0) {
-            if ($style->ulSlot() !== null) {
-                $codes[] = '58';
-                $codes[] = '5';
-                $codes[] = (string) $style->ulSlot();
-            } elseif ($style->ul() !== null) {
-                $ul = $style->ul();
-                $codes[] = '58';
-                $codes[] = '2';
-                $codes[] = (string) (($ul >> 16) & 0xFF);
-                $codes[] = (string) (($ul >> 8) & 0xFF);
-                $codes[] = (string) ($ul & 0xFF);
-            }
+        // Underline colour (SGR 58) rides after the attribute run whenever
+        // an underline pen is set — independent of the ATTR_UNDERLINE bit,
+        // exactly as Style::fromSgr() parses 58 without requiring a 4. The
+        // old gate dropped the pen on parse->emit->parse round-trips: a
+        // style carrying only the colour encoded as a bare reset and the
+        // colour silently vanished.
+        if ($style->ulSlot() !== null) {
+            $codes[] = '58';
+            $codes[] = '5';
+            $codes[] = (string) $style->ulSlot();
+        } elseif ($style->ul() !== null) {
+            $ul = $style->ul();
+            $codes[] = '58';
+            $codes[] = '2';
+            $codes[] = (string) (($ul >> 16) & 0xFF);
+            $codes[] = (string) (($ul >> 8) & 0xFF);
+            $codes[] = (string) ($ul & 0xFF);
         }
 
         return "\x1b[" . implode(';', $codes) . "m";
