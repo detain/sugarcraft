@@ -21,9 +21,14 @@ use React\Promise\PromiseInterface;
  *
  * Mirrors yorukot/superfile.asyncOps.
  *
- * Disclosure: copies are content-only. PHP's copy() does not preserve the
- * source file mode (destination gets default-permission bits) and copied
- * directories are created 0755 (umask-filtered) regardless of the source.
+ * CF-07 disclosure flip: copies are NO LONGER content-only. File legs land
+ * through a same-directory temp file renamed into place (an interrupted
+ * copy never destroys the previous destination, and never leaves a corrupt
+ * half-written new one either), and carry the source mode (chmod, umask
+ * bypassed) plus source mtime across. Directories are created in the
+ * source's mode — applied AFTER their children, so unwritable source dirs
+ * stay writable while being filled. A failed recursive leg reverse-unlinks
+ * what the frame created: a half-tree never reads as a completed copy.
  */
 final class AsyncOps
 {
@@ -227,21 +232,133 @@ final class AsyncOps
      */
     private static function doCopy(string $src, string $dst): bool
     {
-        if (\is_link($src)) {
-            // M-10: symlink() onto an existing destination FAILS silently, so
-            // the schedule-time "(N overwrote)" count advertised a replacement
-            // that never landed. Unlink first — same replace semantics as the
-            // @copy() leg below (files replace; a directory destination fails
-            // both ways and reports false).
-            if (\file_exists($dst) || \is_link($dst)) {
-                @\unlink($dst);
+        $visited = [];
+
+        return self::copyEntry($src, $dst, $visited, 0);
+    }
+
+    /**
+     * One copy leg with the recursion context threaded through. CF-07(e):
+     * a SINGLE lstat answers link/dir/file — the old walk asked is_link +
+     * file_exists + readlink + is_dir + copy's own stat, six syscalls where
+     * one suffices, and each extra probe was another TOCTOU window.
+     *
+     * @param array<string,true> $visited
+     */
+    private static function copyEntry(string $src, string $dst, array &$visited, int $depth): bool
+    {
+        $st = @\lstat($src);
+        if ($st === false) {
+            return false; // source vanished or unreadable: honest failed leg
+        }
+        $type = $st['mode'] & 0170000;
+        if ($type === 0120000) {
+            return self::copySymlinkLeg($src, $dst);
+        }
+        if ($type === 0040000) {
+            return self::copyDir($src, $dst, $visited, $depth);
+        }
+        return self::copyFileLeg($src, $dst, (int) $st['mode'], (int) $st['mtime']);
+    }
+
+    /**
+     * CF-07(b): the old leg called symlink(readlink($src)) — when readlink
+     * failed PHP's strict_types turned the false into a TypeError that
+     * escaped copyAsync's catch and, on an unprivileged Windows, silently
+     * dropped whole link layers as "successful". A failed readlink now
+     * fails the leg; it is counted like every other failed leg.
+     */
+    private static function copySymlinkLeg(string $src, string $dst): bool
+    {
+        $target = @\readlink($src);
+        if ($target === false) {
+            return false;
+        }
+        // M-10: symlink() onto an existing destination FAILS silently, so
+        // unlink first — same replace semantics as the file leg (files
+        // replace; a directory destination fails both ways and reports false).
+        if (\file_exists($dst) || \is_link($dst)) {
+            @\unlink($dst);
+        }
+
+        return @\symlink($target, $dst);
+    }
+
+    /**
+     * CF-07(a,c): land the payload in a temp sibling FIRST, stamp mode and
+     * mtime on it while it is still invisible to the destination name, then
+     * rename it into place. An interrupted copy therefore never destroys the
+     * previous destination and never leaves a corrupt half-written new one;
+     * the rename is the atomic commit point on POSIX.
+     */
+    private static function copyFileLeg(string $src, string $dst, int $mode, int $mtime): bool
+    {
+        $tmp = $dst . '.candyfiles-tmp-' . \bin2hex(\random_bytes(6));
+        if (!@\copy($src, $tmp)) {
+            @\unlink($tmp);
+            return false;
+        }
+        // metadata before the commit — arriving with the file, not after it
+        @\chmod($tmp, $mode & 07777);
+        if ($mtime > 0) {
+            @\touch($tmp, $mtime);
+        }
+        if (self::moveIntoPlace($tmp, $dst)) {
+            return true;
+        }
+
+        return false; // moveIntoPlace cleaned the temp up
+    }
+
+    /**
+     * rename(2) replaces an existing destination on POSIX; on Windows it
+     * refuses, so there the victim is unlinked immediately before (not
+     * atomic, but never silent). Every losing path removes the temp file —
+     * no residue after a failed leg.
+     */
+    private static function moveIntoPlace(string $tmp, string $dst): bool
+    {
+        if (@\rename($tmp, $dst)) {
+            return true;
+        }
+        if (\DIRECTORY_SEPARATOR === '\\') {
+            if ((\file_exists($dst) || \is_link($dst)) && !@\unlink($dst)) {
+                @\unlink($tmp);
+                return false;
             }
-            return @\symlink(\readlink($src), $dst);
+            if (@\rename($tmp, $dst)) {
+                return true;
+            }
         }
-        if (\is_dir($src)) {
-            return self::copyDir($src, $dst);
+        @\unlink($tmp);
+
+        return false;
+    }
+
+    /**
+     * Remove a path AsyncOps itself created (file, symlink, or whole tree).
+     * The counterpart of the failed-leg cleanup in copyDir — a recursive
+     * copy that died halfway must not read as a completed tree.
+     */
+    private static function removeTree(string $path): void
+    {
+        if (\is_link($path)) {
+            @\unlink($path);
+            return;
         }
-        return @\copy($src, $dst);
+        if (\is_dir($path)) {
+            foreach (@\scandir($path) ?: [] as $item) {
+                if ($item === '.' || $item === '..') {
+                    continue;
+                }
+                self::removeTree(Pane::join($path, $item));
+            }
+            @\rmdir($path);
+            return;
+        }
+        if (\file_exists($path)) {
+            @\unlink($path);
+        }
     }
 
     /**
@@ -276,34 +393,53 @@ final class AsyncOps
             }
             $visited[$real] = true;
         }
-        if (!@\mkdir($dst, 0755, true) && !\is_dir($dst)) {
+        $st = @\lstat($src);
+        if ($st === false) {
             return false;
         }
+        // CF-07(c): the placeholder mode is 0700 (mine, private); the SOURCE
+        // mode is applied AFTER the walk below, so an unwritable source dir
+        // (0500) is still writable while being filled.
+        $madeHere = @\mkdir($dst, 0700, true);
+        if (!$madeHere && !\is_dir($dst)) {
+            return false; // mkdir failed AND the destination is not a usable dir
+        }
 
-        $items = @\scandir($src) ?: [];
+        $items = @\scandir($src);
+        if ($items === false) {
+            if ($madeHere) {
+                self::removeTree($dst);
+            }
+            return false; // an unreadable source dir is a FAILURE, not an empty copy
+        }
+        $fresh = []; // destination names this frame created (no pre-existing victim)
         foreach ($items as $item) {
             if ($item === '.' || $item === '..') {
                 continue;
             }
             $srcPath = Pane::join($src, $item);
             $dstPath = Pane::join($dst, $item);
-            if (\is_link($srcPath)) {
-                // M-10 parity: replace an existing link/file destination
-                // instead of failing the link creation silently.
-                if (\file_exists($dstPath) || \is_link($dstPath)) {
-                    @\unlink($dstPath);
+            $preExisted = \file_exists($dstPath) || \is_link($dstPath);
+            if (!self::copyEntry($srcPath, $dstPath, $visited, $depth + 1)) {
+                // CF-07(d): a half-tree must never read as a real copy.
+                // Remove what this frame CREATED; a same-named pre-existing
+                // destination was already replaced leg-by-leg (house replace
+                // semantics) — leave that name holding the new bytes.
+                if ($madeHere) {
+                    self::removeTree($dst);
+                } else {
+                    foreach ($fresh as $name) {
+                        self::removeTree(Pane::join($dst, $name));
+                    }
                 }
-                @\symlink(\readlink($srcPath), $dstPath);
-            } elseif (\is_dir($srcPath)) {
-                if (!self::copyDir($srcPath, $dstPath, $visited, $depth + 1)) {
-                    return false;
-                }
-            } else {
-                if (!@\copy($srcPath, $dstPath)) {
-                    return false;
-                }
+                return false;
+            }
+            if (!$preExisted) {
+                $fresh[] = $item;
             }
         }
+        @\chmod($dst, (int) $st['mode'] & 07777);
+
         return true;
     }
 }

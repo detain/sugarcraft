@@ -314,4 +314,106 @@ final class AsyncOpsTest extends TestCase
         $this->assertTrue(is_link($dstDir . '/note-link'), 'inner occupant replaced by the link');
         $this->assertSame('elsewhere', readlink($dstDir . '/note-link'));
     }
+    // ------------------------------------------------------- CF-07 engine
+
+    public function testFileLegPreservesModeAndMtime(): void
+    {
+        $src = $this->tmpDir . '/secret.txt';
+        $dst = $this->tmpDir . '/copy.txt';
+        file_put_contents($src, 'hush');
+        chmod($src, 0600);
+        touch($src, 1_600_000_000);
+
+        self::assertTrue(AsyncOps::copyPath($src, $dst));
+        clearstatcache();
+        self::assertSame(0600, fileperms($dst) & 07777, 'a 0600 secret stays 0600 through copy');
+        self::assertSame(1_600_000_000, filemtime($dst));
+    }
+
+    public function testFileLegCarriesTheExecBit(): void
+    {
+        $src = $this->tmpDir . '/tool.sh';
+        $dst = $this->tmpDir . '/tool-copy.sh';
+        file_put_contents($src, "#!/bin/sh\necho hi\n");
+        chmod($src, 0755);
+
+        self::assertTrue(AsyncOps::copyPath($src, $dst));
+        clearstatcache();
+        self::assertSame(0111, fileperms($dst) & 0111, 'exec bits survive the copy');
+    }
+
+    public function testAFailedLegLeavesDestinationIntactAndNoResidue(): void
+    {
+        $dst = $this->tmpDir . '/victim.txt';
+        file_put_contents($dst, 'keep me');
+
+        self::assertFalse(AsyncOps::copyPath($this->tmpDir . '/nope-src.txt', $dst));
+        self::assertSame('keep me', file_get_contents($dst), 'a failed copy never touches the old destination');
+        self::assertSame([], glob($this->tmpDir . '/*.candyfiles-tmp-*'), 'no temp residue after a failed leg');
+    }
+
+    public function testADirectoryDestinationIsCountedAsFailure(): void
+    {
+        $src = $this->tmpDir . '/file.txt';
+        $dstDir = $this->tmpDir . '/occupied-dir';
+        file_put_contents($src, 'x');
+        mkdir($dstDir);
+
+        self::assertFalse(AsyncOps::copyPath($src, $dstDir));
+        self::assertSame([], scandir($dstDir) === false ? [] : array_values(array_diff(scandir($dstDir), ['.', '..'])), 'nothing landed inside the occupied directory');
+    }
+
+    public function testRecursiveCopyWithFailingChildRemovesTheCreatedTree(): void
+    {
+        $src = $this->tmpDir . '/tree';
+        $lock = $src . '/locked';
+        mkdir($lock, 0755, true);
+        file_put_contents($src . '/aaa.txt', 'ok');
+        file_put_contents($lock . '/secret.bin', 'nope');
+        chmod($lock . '/secret.bin', 0000);
+        if (is_readable($lock . '/secret.bin')) {
+            $this->markTestSkipped('uid bypasses file modes (running as root?)');
+        }
+
+        $dst = $this->tmpDir . '/out';
+        self::assertFalse(AsyncOps::copyPath($src, $dst), 'the unreadable child fails the whole copy');
+        chmod($lock . '/secret.bin', 0600); // let tearDown delete it
+
+        self::assertDirectoryDoesNotExist($dst, 'a half-tree must not remain as if it were a real copy');
+    }
+
+    public function testSymlinkLegCopiesTheLinkItselfDanglingIncluded(): void
+    {
+        $probe = $this->tmpDir . '/.link-probe';
+        if (!@symlink('nowhere', $probe)) {
+            $this->markTestSkipped('symlinks unavailable for this user/platform');
+        }
+        @unlink($probe);
+
+        $link = $this->tmpDir . '/pointer';
+        symlink('the-target-need-not-exist', $link);
+        $dst = $this->tmpDir . '/pointer-copy';
+
+        self::assertTrue(AsyncOps::copyPath($link, $dst));
+        self::assertTrue(is_link($dst));
+        self::assertSame('the-target-need-not-exist', readlink($dst));
+    }
+
+    public function testSymlinkLegReplacesAnExistingDestination(): void
+    {
+        $probe = $this->tmpDir . '/.link-probe2';
+        if (!@symlink('nowhere', $probe)) {
+            $this->markTestSkipped('symlinks unavailable for this user/platform');
+        }
+        @unlink($probe);
+
+        $link = $this->tmpDir . '/pointer2';
+        symlink('fresh-target', $link);
+        $dst = $this->tmpDir . '/occupied';
+        file_put_contents($dst, 'old file bytes');
+
+        self::assertTrue(AsyncOps::copyPath($link, $dst));
+        self::assertTrue(is_link($dst), 'the victim file was replaced by the link (M-10 parity)');
+        self::assertSame('fresh-target', readlink($dst));
+    }
 }
