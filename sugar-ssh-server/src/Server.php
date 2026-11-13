@@ -272,6 +272,17 @@ final class Server
      * catalogue locale is set here first; an unarmed server leaves it
      * exactly as the entry script found it.
      *
+     * **Context scope.** `$ctx` bounds the middleware phases this run
+     * walks — dispatch between hops, await entry, the in-process pump's
+     * loop head and idle ticks, and the challenge loop between prompts
+     * (audit sugar-ssh-server-017). It never preempts a blocking read,
+     * and it is not a leash on the user's child process: a ForceCommand
+     * child running under sshd is hung up by sshd at session end, not
+     * by a PHP timer. When a bound fires, serve() reports it by
+     * raising the context's own error after the child is reaped; an
+     * entry script that must exit with a status instead of a stack
+     * trace catches `CancellationException` / `DeadlineExceededException`.
+     *
      * @param Context|null $ctx Root context for the run — pass a
      *                          cancellable context to make the M1
      *                          cancel-propagation machinery reachable

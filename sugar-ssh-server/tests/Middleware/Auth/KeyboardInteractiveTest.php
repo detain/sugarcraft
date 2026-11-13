@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\SshServer\Tests\Middleware\Auth;
 
+use SugarCraft\SshServer\CancellationException;
 use SugarCraft\SshServer\Context;
+use SugarCraft\SshServer\DeadlineExceededException;
 use SugarCraft\SshServer\Middleware\Auth\KeyboardInteractive;
 use SugarCraft\SshServer\Session;
 use PHPUnit\Framework\TestCase;
@@ -66,6 +68,66 @@ final class KeyboardInteractiveTest extends TestCase
             $reached = true;
         });
         $this->assertTrue($reached);
+    }
+
+    public function testACancelledContextAbortsTheExchangeAtThePromptBoundary(): void
+    {
+        // audit sugar-ssh-server-017: the guard fires before the first
+        // fgets too, so a cancelled session never waits on an answer it
+        // has disowned. The challenges were already written by handle();
+        // the exchange dies as the context's own error — not a silent
+        // "auth failed" refusal, and $next is never reached.
+        $stdin = $this->makeStdin("answer1\nanswer2\n");
+        [$out, $readOut] = $this->stdout();
+        [$err, $readErr] = $this->stderr();
+        $ki = new KeyboardInteractive(
+            [['prompt' => 'First?', 'echo' => true], ['prompt' => 'Second?']],
+            null,
+            stdout: $out,
+            stdin: $stdin,
+            stderr: $err
+        );
+        $ctx = Context::background()->withCancelable();
+        $this->assertTrue($ctx->cancel());
+        $reached = false;
+
+        try {
+            $ki->handle($ctx, $this->session(), function () use (&$reached): void {
+                $reached = true;
+            });
+            $this->fail('a dead context must not complete the exchange');
+        } catch (CancellationException $e) {
+            $this->assertFalse($reached);
+            $this->assertStringContainsString('First?', $readOut());
+            $this->assertSame('', $readErr());
+        }
+    }
+
+    public function testAnExpiredDeadlineContextAbortsAsADeadlineErrorNotACancellation(): void
+    {
+        // The error raised is the chain's own (audit 017): err() on an
+        // expired deadline answers DeadlineExceededException, and the
+        // challenge loop must forward that identity, not launder it into
+        // the bare-cancellation shape.
+        $stdin = $this->makeStdin("answer1\nanswer2\n");
+        [$out] = $this->stdout();
+        [$err] = $this->stderr();
+        $ki = new KeyboardInteractive(
+            [['prompt' => 'First?'], ['prompt' => 'Second?']],
+            null,
+            stdout: $out,
+            stdin: $stdin,
+            stderr: $err
+        );
+
+        $this->expectException(DeadlineExceededException::class);
+        $ki->handle(
+            Context::background()->withDeadline(new \DateTimeImmutable('-1 second')),
+            $this->session(),
+            function (): void {
+                $this->fail('a dead context must not reach the next hop');
+            }
+        );
     }
 
     public function testRejectsWhenValidatorReturnsFalse(): void

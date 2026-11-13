@@ -212,4 +212,35 @@ final class ContextTest extends TestCase
         $ctx = Context::background()->withValue('foo', 'bar');
         $this->assertNull($ctx->err());
     }
+
+    public function testDeadlineIsNullWhenNothingIsArmed(): void
+    {
+        $this->assertNull(Context::background()->withValue('a', '1')->deadline());
+    }
+
+    public function testDeadlineReturnsTheArmedInstant(): void
+    {
+        $when = new \DateTimeImmutable('+10 seconds');
+        $ctx = Context::background()->withDeadline($when);
+        $this->assertSame($when, $ctx->deadline());
+    }
+
+    public function testDeadlineReportsTheEarliestOfTheChainNotJustThisNode(): void
+    {
+        // done() already expires on an ancestor's deadline, so the bound a
+        // consumer arms must be the binding that actually fires.
+        $later = new \DateTimeImmutable('+10 seconds');
+        $sooner = new \DateTimeImmutable('+2 seconds');
+
+        $derivedPastDeadline = Context::background()
+            ->withDeadline($later)
+            ->withValue('a', '1');
+        $this->assertSame($later, $derivedPastDeadline->deadline());
+
+        $childWithItsOwn = $derivedPastDeadline->withDeadline($sooner);
+        $this->assertSame($sooner, $childWithItsOwn->deadline());
+
+        $reArmOutsideIn = Context::background()->withDeadline($sooner)->withDeadline($later);
+        $this->assertSame($sooner, $reArmOutsideIn->deadline());
+    }
 }

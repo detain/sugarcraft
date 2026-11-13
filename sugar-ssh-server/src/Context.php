@@ -12,6 +12,16 @@ namespace SugarCraft\SshServer;
  * Context derived from the receiver, forming a parent chain. Callers
  * can attach arbitrary metadata via `withValue()` and short-circuit
  * the chain by calling `cancel()`. Deadline-expiry also sets `done`.
+ *
+ * Enforcement is cooperative, never preemptive (audit sugar-ssh-server-017):
+ * the shipped surfaces poll `done()` at iteration boundaries — middleware
+ * dispatch between hops, `PromiseAwait::settle()` at spin entry, the
+ * in-process pump's loop head and idle ticks (a deadline is armed as the
+ * pump's own bound; a cancel calls SIGHUP on the child once, from the
+ * next idle tick — the same signal sshd sends at session end), and
+ * `KeyboardInteractive`'s challenge loop between prompts. Nothing
+ * shortens a blocking read that never returns: bound those streams
+ * yourselves.
  */
 final class Context
 {
@@ -150,6 +160,28 @@ final class Context
             return new CancellationException();
         }
         return new DeadlineExceededException();
+    }
+
+    /**
+     * The earliest deadline in this context's chain, or null when no
+     * node carries one.
+     *
+     * Mirrors Go's `ctx.Deadline()`, widened to the chain: `done()`
+     * already expires on an ancestor's deadline, so a consumer that
+     * wants to bound its own waiting must see the binding that will
+     * actually fire — the nearest deadline walking upward, not just
+     * this node's.
+     */
+    public function deadline(): ?\DateTimeImmutable
+    {
+        $earliest = $this->deadline;
+        for ($node = $this->parent; $node !== null; $node = $node->parent) {
+            if ($node->deadline !== null
+                && ($earliest === null || $node->deadline < $earliest)) {
+                $earliest = $node->deadline;
+            }
+        }
+        return $earliest;
     }
 
     /**

@@ -184,7 +184,7 @@ final class KeyboardInteractive implements Middleware
     public function handle(Context $ctx, Session $session, callable $next): void
     {
         $this->writeChallenges();
-        $responses = $this->readResponses();
+        $responses = $this->readResponses($ctx);
 
         if (\count($responses) !== \count($this->challenges)) {
             // EOF before the exchange finished: the client hung up mid-
@@ -259,19 +259,33 @@ final class KeyboardInteractive implements Middleware
      * the post-authentication `ForceCommand` child starts asking questions.
      * The Keepalive middleware is not a cure either: it writes a NUL into
      * the child's stdin when the pump idles, which produces no newline here
-     * (see {@see \SugarCraft\SshServer\Middleware\Keepalive}). Callers that
-     * need a deadline bound the stream they inject as `$stdin` — a
+     * (see {@see \SugarCraft\SshServer\Middleware\Keepalive}). The session
+     * `Context` aborts the loop cooperatively between prompts (audit 017,
+     * see {@see readResponses()}) — but it cannot preempt a parked read:
+     * callers that need a deadline bound the stream they inject as `$stdin` — a
      * `stream_select()`-guarded wrapper, or `timeout(1)` around the entry
      * script — and the README's provisioning notes say so.
      *
      * @return list<string> lines read so far — fewer than the prompt
      *                      count only when stdin hit EOF mid-exchange
+     *                      (a done context raises instead, audit 017)
      */
-    private function readResponses(): array
+    private function readResponses(Context $ctx): array
     {
         $responses = [];
         $count = \count($this->challenges);
         for ($i = 0; $i < $count; $i++) {
+            $abort = $ctx->err();
+            if ($abort !== null) {
+                throw $abort;
+            }
+            // Cooperative abort between prompts (audit sugar-ssh-server-017):
+            // a context cancelled or expired earlier in the chain ends the
+            // exchange at the next line boundary — the guard runs after each
+            // response lands, so the answers collected so far are never fed
+            // to a validator. The bound is a boundary, not a preemption: an
+            // `fgets()` already parked on a silent peer still needs the
+            // stream bound above.
             // +2 so a full budget plus its newline still reads as a line,
             // and anything beyond that is detectable by length.
             $line = fgets($this->stdin, self::MAX_RESPONSE_BYTES + 2);

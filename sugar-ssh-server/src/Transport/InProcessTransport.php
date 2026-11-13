@@ -370,8 +370,24 @@ final class InProcessTransport implements Transport, ChildSpawner, KeepaliveArmi
      * @param resource|null             $stdin   defaults to STDIN
      * @param resource|null             $stdout  defaults to STDOUT; must
      *                                           stay blocking (see above)
+     * @param Context|null              $ctx     when given, bounds the pump
+     *                                           (audit sugar-ssh-server-017):
+     *                                           a chain deadline is armed as
+     *                                           the pump's own bound and an
+     *                                           expiry at any boundary raises
+     *                                           the context's error after the
+     *                                           child is reaped; null leaves
+     *                                           the run unbounded, which is
+     *                                           the sshd-role contract —
+     *                                           there sshd's SIGHUP, not a
+     *                                           PHP timer, owns the child's
+     *                                           lifetime
      * @throws PtyException             if the host can't allocate a
      *                                  PTY or pcntl is missing
+     * @throws \RuntimeException        the context's own error
+     *                                  (CancellationException /
+     *                                  DeadlineExceededException) when the
+     *                                  run is aborted by $ctx
      */
     public function runChild(
         Session $session,
@@ -379,9 +395,19 @@ final class InProcessTransport implements Transport, ChildSpawner, KeepaliveArmi
         ?array $env = null,
         $stdin = null,
         $stdout = null,
+        ?Context $ctx = null,
     ): int {
         $stdin  ??= \STDIN;
         $stdout ??= \STDOUT;
+
+        // Cooperative entry gate (audit sugar-ssh-server-017): a context
+        // already done must not see a child spawned only to be killed by
+        // the teardown ladder. The error is the chain's own — deadline or
+        // cancel, whichever actually fired.
+        $abort = $ctx?->err();
+        if ($abort !== null) {
+            throw $abort;
+        }
 
         if (!\is_resource($stdin)) {
             throw new \InvalidArgumentException(Lang::t('transport.bad_stdin'));
@@ -466,12 +492,37 @@ final class InProcessTransport implements Transport, ChildSpawner, KeepaliveArmi
 
             try {
                 $this->master = $master;
-                $onIdle = $this->keepaliveCallback !== null
+                $beat = $this->keepaliveCallback !== null
                     ? \Closure::fromCallable($this->keepaliveCallback)
                     : null;
-                $opts = PumpOptions::sshDefault()->withOnIdle($onIdle);
+                $opts   = PumpOptions::sshDefault();
+                $boundUs = self::pumpBoundUs($ctx);
+                if ($boundUs !== null) {
+                    // The pump's own absolute bound (audit 017): the
+                    // deadline is a wall-clock instant, so one arm at
+                    // entry is exact — PosixPump re-checks it at every
+                    // loop head.
+                    $opts = $opts->withPumpDeadlineUs($boundUs);
+                }
+                $opts = $opts->withOnIdle($this->idleTickGuard(
+                    $ctx,
+                    $beat,
+                    static function () use ($child): void {
+                        // The cancel arm asks the child to leave with the
+                        // very signal sshd uses at session end, delivered
+                        // through Child::kill like the teardown ladder
+                        // does; the pump then unwinds via its own
+                        // loop-head check.
+                        $child->kill(\defined('SIGHUP') ? \SIGHUP : 1);
+                    },
+                ));
 
                 $pumpResult = (new PosixPump())->run($master, $stdin, $stdout, $child, $opts);
+                // Pump-end snapshot (audit 017): the abort decision is
+                // taken NOW, before the teardown ladder burns its grace
+                // window, so a fast child finishing just inside the
+                // deadline keeps its code.
+                $abort = $ctx !== null && $ctx->done() ? $ctx->err() : null;
             } finally {
                 $this->master = null;
                 if ($sigwinchAttached && \defined('SIGWINCH')) {
@@ -549,7 +600,86 @@ final class InProcessTransport implements Transport, ChildSpawner, KeepaliveArmi
         // exit() in the server script.
         $session->recordExitStatus($status);
 
+        // Bounded exit (audit sugar-ssh-server-017): the pump-end
+        // snapshot above decides, so the teardown ladder's own seconds
+        // cannot widen an abort that the run did not earn — a child
+        // that exited on its own just before expiry keeps its code.
+        if ($abort !== null) {
+            throw $abort;
+        }
+
         return $status;
+    }
+
+    /**
+     * Microseconds from now until the context's chain deadline, clamped
+     * to at least 1 (PumpOptions rejects a non-positive bound and "fire
+     * on the next loop head" is the truth for an expired one).
+     *
+     * Pure clock math — `$nowSeconds` is injectable for tests. A context
+     * with no deadline returns null: the pump keeps its unbounded
+     * contract, and cancellation rides the idle-tick guard instead.
+     *
+     * @param float|null $nowSeconds seconds since the epoch; null reads the wall clock
+     */
+    private static function pumpBoundUs(?Context $ctx, ?float $nowSeconds = null): ?int
+    {
+        $deadline = $ctx?->deadline();
+        if ($deadline === null) {
+            return null;
+        }
+        $now = $nowSeconds ?? \microtime(true);
+        $remaining = (float) $deadline->format('U.u') - $now;
+
+        return (int) max(1, floor($remaining * 1_000_000));
+    }
+
+    /**
+     * The pump's onIdle closure: a cooperative cancel poll in front of
+     * the keepalive beat (audit sugar-ssh-server-017).
+     *
+     * The guard runs on every idle tick (~one select timeout apart).
+     * When the context is done it asks the child to leave — exactly the
+     * SIGHUP sshd sends at session end — once, then stays quiet: the
+     * child's own exit (or the deadline bound, when one was armed) ends
+     * the pump through its loop-head check, and the teardown ladder
+     * still owns any escalation. The beat is short-circuited on a dying
+     * session: a NUL into the child's stdin is noise.
+     *
+     * The arm deliberately is NOT a mid-run `$master->close()`: the
+     * pump restores blocking mode on the stream handle it captured at
+     * entry (PosixPump's finally), and a closed resource turns that
+     * teardown into a TypeError that would replace the context's own
+     * error. That cross-lib constraint was discovered by this row's
+     * tests; until sugar-pty can survive a mid-pump hangup, the
+     * child-side idiom is the honest one.
+     *
+     * Returns null when there is nothing to poll, keeping the pump's
+     * zero-overhead path for the plain unbounded run.
+     *
+     * @param callable():void $onContextDone fires once, on the first
+     *                          idle tick that sees the context dead
+     */
+    private function idleTickGuard(?Context $ctx, ?\Closure $beat, callable $onContextDone): ?\Closure
+    {
+        if ($ctx === null && $beat === null) {
+            return null;
+        }
+        $hangupSent = false;
+
+        return function () use (&$hangupSent, $ctx, $beat, $onContextDone): void {
+            if ($ctx !== null && $ctx->done()) {
+                if (!$hangupSent) {
+                    $hangupSent = true;
+                    $onContextDone();
+                }
+
+                return;
+            }
+            if ($beat !== null) {
+                $beat();
+            }
+        };
     }
 
     /**

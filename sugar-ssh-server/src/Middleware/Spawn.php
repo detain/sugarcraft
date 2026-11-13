@@ -9,6 +9,7 @@ use SugarCraft\SshServer\Lang;
 use SugarCraft\SshServer\Middleware;
 use SugarCraft\SshServer\Session;
 use SugarCraft\SshServer\Transport\ChildSpawner;
+use SugarCraft\SshServer\Transport\InProcessTransport;
 use SugarCraft\SshServer\TransportAware;
 
 /**
@@ -101,7 +102,17 @@ final class Spawn implements Middleware, TransportAware
         $cmd = $cfg['cmd'];
         $env = isset($cfg['env']) && \is_array($cfg['env']) ? $cfg['env'] : null;
 
-        $this->transport->runChild($session, $cmd, $env);
+        // Bind the pump to this context when the spawner can take it.
+        // ChildSpawner is narrower than the class behind it (its file
+        // says so, in writing); the documented way to reach the wider
+        // form is a concrete instanceof, not a widened contract. A
+        // fake or third-party spawner keeps the plain three-argument
+        // call and the absence of pump bounds is its own contract.
+        if ($this->transport instanceof InProcessTransport) {
+            $this->transport->runChild($session, $cmd, $env, ctx: $ctx);
+        } else {
+            $this->transport->runChild($session, $cmd, $env);
+        }
 
         // Spawn is terminal — do not invoke $next.
     }

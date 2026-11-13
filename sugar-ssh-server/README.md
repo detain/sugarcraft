@@ -345,7 +345,7 @@ ssh wishuser@your-host
 | `PasswordAuth`       | both            | Compares a password from `SSH_PASSWORD` against a caller-supplied callback; a session that delivered no variable at all is refused before the validator is consulted. **Nothing in OpenSSH ever sets that variable**: a wrapper has to supply it out of band, and if you `AcceptEnv` it the value is peer-asserted rather than proven. Absent means denied, with a path-free notice. |
 | `CertificateAuth`    | both            | Hands a certificate string from `CertificateAuth::ENV_KEYS` (`SSL_CLIENT_CERT`, `SSH_CLIENT_CERT`, `CERTIFICATE`) to a caller-supplied validator. **Stock OpenSSH exports none of them**, so unless your wrapper maps one in, the gate announces that it checked nothing -- refusing at `required: true`, forwarding at `required: false`, and saying so either way. |
 | `AuthMethods`        | both            | Declares accepted auth methods and stores the list in Context (`auth.methods`, readable with `AuthMethods::fromContext()`). The `SSH_AUTH_METHODS` line on STDOUT is **opt-in** (`announce: true`) and off by default -- under `ForceCommand` stdout is the client's data channel, so that line is text in the user's terminal, not a protocol field. |
-| `KeyboardInteractive`| both            | Prompts on STDOUT, answers read from STDIN. *Shaped* like RFC 4256, but it is not: no SSH messages exist here. `echo` is a label, not terminal state -- input stays visible (the exchange says so when any prompt asks for silence), each answer is capped at `MAX_RESPONSE_BYTES`, and there is no deadline but the stream you inject. |
+| `KeyboardInteractive`| both            | Prompts on STDOUT, answers read from STDIN. *Shaped* like RFC 4256, but it is not: no SSH messages exist here. `echo` is a label, not terminal state -- input stays visible (the exchange says so when any prompt asks for silence), each answer is capped at `MAX_RESPONSE_BYTES`, and there is no deadline but the stream you inject and the session Context between prompts. |
 | `RateLimit`          | both            | Per-IP (optionally per-username) token bucket persisted to a JSON state file. Writers serialise on a stable `<state-path>.lock` sidecar — never on the payload inode, which the atomic rename replaces — and refilled idle buckets are pruned on every publish. Default policy on a state error is **fail-open**; `penalize()` exists so a failed credential can drain a bucket faster than connection attempts alone, but **no gate calls it directly** -- wrap the gate in `AuthRateLimitBridge` (or wire it into your own auth path). See `docs/admin/sugar-ssh-server.md`. |
 | `AuthRateLimitBridge`| both            | Composition wrapper: takes any synchronous auth `Middleware` plus the `RateLimit` instance, and charges the session's buckets `penalty` tokens (default 3.0) whenever the wrapped gate refuses (never invokes `$next`). Admits pass through untouched — same `Context`, same `Session`, one call. An async (promise-returning) gate is refused at `handle()` time with a `LogicException`: its verdict does not exist yet, and charging on non-continuation would penalise in-flight auth. |
 | `Spawn`              | InProcess only  | Terminal — spawns a child cmd in a sugar-pty controlled by the supervisor.                          |
@@ -405,7 +405,7 @@ when left alone.
 | `PasswordAuth` | `new PasswordAuth($validate, $stderr)` | Reads `SSH_PASSWORD`, which nothing in OpenSSH ever sets. A session that delivered no variable is refused **before** `$validate` runs; an explicitly empty one reaches it. |
 | `CertificateAuth` | `new CertificateAuth($validate, $required = true, $stderr)` | Probes `CertificateAuth::ENV_KEYS` (`SSL_CLIENT_CERT`, `SSH_CLIENT_CERT`, `CERTIFICATE`); stock OpenSSH exports none. **`$required = false` forwards** -- after announcing that it checked nothing. |
 | `AuthMethods` | `new AuthMethods($methods, $stdout, $announce = false)` | Stores the list in `Context`. The `SSH_AUTH_METHODS` stdout line is **off by default**; `announce: true` opts in and owns the placement. |
-| `KeyboardInteractive` | `new KeyboardInteractive($challenges, $validate, $name, $instruction, $stdout, $stdin, $stderr)` | **No `$validate` means any answer passes.** Answers capped at `KeyboardInteractive::MAX_RESPONSE_BYTES` (4096); `echo` is a label, not terminal state, and says so when a prompt asks for silence. No deadline but the stream you inject. |
+| `KeyboardInteractive` | `new KeyboardInteractive($challenges, $validate, $name, $instruction, $stdout, $stdin, $stderr)` | **No `$validate` means any answer passes.** Answers capped at `KeyboardInteractive::MAX_RESPONSE_BYTES` (4096); `echo` is a label, not terminal state, and says so when a prompt asks for silence. No deadline but the stream you inject and the session Context between prompts. |
 | `RateLimit` | `new RateLimit($statePath, $burst = 5, $ratePerSec = 0.5, $stderr, $failClosed = false, $userBurst = null, $userRatePerSec = null)` | **`$failClosed = false`**: a lock or decode problem lets the connection through with a notice. State serialises on a `<state>.lock` sidecar; idle refilled buckets are pruned; `$userBurst` adds a per-username bucket. |
 | `AuthRateLimitBridge` | `new AuthRateLimitBridge($gate, $rateLimit, $penalty = 3.0)` | Refusals by `$gate` charge `$rateLimit` `$penalty` extra tokens (detection: the gate did not continue the chain). Synchronous gates only — an async gate draws a `LogicException` at `handle()`; `$penalty <= 0` at construction. |
 | `Spawn` | `new Spawn($factory)` where `fn (Session): array{cmd: list<string>, env?: array}` returns the child command | Terminal. The factory's `cmd` is argv -- no shell is involved, and nothing here vetoes it. |
@@ -746,7 +746,11 @@ The context is immutable — each `with*()` method returns a new derived
 context that forms a parent chain. Middleware can attach key-value metadata
 via `withValue()`, set a deadline via `withDeadline()`, or make the context
 cancellable via `withCancelable()`. The terminal middleware (Spawn /
-BubbleTea) never call `$next`, short-circuiting the chain.
+BubbleTea) never call `$next`, short-circuiting the chain. A context bounds
+the machinery cooperatively — between dispatch hops, at await entry, at the
+in-process pump's loop head and idle ticks, and between interactive-auth
+prompts — never by preempting a blocking read, and never as a leash on a
+ForceCommand child's lifetime under sshd (that is SIGHUP's job).
 
 | Context method | What it does |
 |---------------|-------------|
@@ -754,9 +758,10 @@ BubbleTea) never call `$next`, short-circuiting the chain.
 | `->withValue(string $k, mixed $v)` | Return a new context with `$k → $v` attached |
 | `->withDeadline(\DateTimeImmutable)` | Return a new cancelable context that is done when the deadline passes |
 | `->withCancelable()` | Return a new cancelable context (no deadline; must call `->cancel()` explicitly) |
-| `->cancel(?\Throwable $reason)` | Mark the context (and all derived contexts) as cancelled |
+| `->cancel(?\Throwable $reason)` | Mark the context (and all derived contexts) as cancelled; returns whether the signal took effect |
 | `->done()` | Returns `true` when cancelled or deadline-exceeded |
 | `->err()` | Returns the cancellation error or `DeadlineExceededException` / `CancellationException` |
+| `->deadline()` | Returns the earliest deadline in the chain, or `null` when nothing is armed |
 | `->value(string $k)` | Walk the parent chain looking for `$k`; returns `null` if not found |
 
 ```php

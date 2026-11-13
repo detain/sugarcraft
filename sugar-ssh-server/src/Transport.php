@@ -40,6 +40,13 @@ interface Transport
      * extra plumbing (InProcess) before delegating to terminal
      * middleware that drive the actual user-visible behaviour.
      *
+     * The `$ctx` bounds the middleware phases this call walks — between
+     * hops, at await entry, and at the pump and challenge-loop boundaries
+     * a transport threads it into (audit sugar-ssh-server-017). It is not
+     * a leash on the user's child process: once a ForceCommand child is
+     * running under sshd, the kernel hangs it up at session end, not a PHP
+     * timer.
+     *
      * @param list<Middleware> $stack Registered middleware in
      *        registration order; the transport is responsible for
      *        invoking them (`->handle($ctx, $session, $next)` style).

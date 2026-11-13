@@ -287,7 +287,7 @@ need it.
 **`KeyboardInteractive` operational note:** This middleware performs blocking STDIN reads during the authentication phase. It writes all prompts to STDOUT, then reads one line per prompt before passing control on. Two limits are real, and three are not:
 
 - **Real bound:** each answer is capped at `KeyboardInteractive::MAX_RESPONSE_BYTES` (4096 bytes). A longer unterminated line refuses the exchange outright -- the validator is never consulted -- rather than growing the process.
-- **Real stop condition:** EOF on the stream ends the exchange, and an unfinished exchange is a refusal. Callers that need a deadline bound the stream they inject as `$stdin`.
+- **Real stop condition:** EOF on the stream ends the exchange, and an unfinished exchange is a refusal. A done `Context` aborts the loop between prompts (it raises the context's own error; see [Cooperative cancellation](#cooperative-cancellation)), but it cannot preempt a parked read: callers that need a deadline bound the stream they inject as `$stdin`.
 - **Not a deadline:** sshd's `LoginGraceTime` covers the *authentication* dialogue inside `sshd`, not your post-`ForceCommand` child. Once sshd has run your script, nothing upstream is timing your reads. Wrap the entry point in `timeout(1)` if a stalled human must not hold a process forever.
 - **Not concealment:** a prompt asking `echo: false` does not clear the terminal's echo flag. The user's keyboard is still echoed by the tty, and the answer lands in their scrollback. The middleware now says so out loud (`keyboardinteractive.input_visible`) once per exchange when any prompt asks for silence. Suppressing echo means `ECHO` off on the descriptor -- `sugar-pty`'s `Contract\Termios` currently offers only `makeRaw()`, which also drops `ICANON` and `ISIG`, so it is not a swap-in. Secret prompts belong behind `Auth` pairing, not behind this form.
 - **Not composable with `BubbleTea`:** both consume STDIN/STDOUT. Use it with `Spawn` under `InProcessTransport`.
@@ -348,7 +348,14 @@ to settlement before the chain continues. Operational consequences:
   context's error instead of blocking up to the ceiling, so a
   deadline set earlier in the chain (`Context::withDeadline()`) is
   honoured at the next await. Mid-await cancellation stays
-  producer-side: only the code holding the resolver can end it early.
+  producer-side: only the code holding the resolver can end it
+  early. The long-running surfaces poll the same `done()`: the
+  in-process pump arms the chain deadline as its own bound and, on
+  any expiry or cancel observed at an idle tick, sends the child a
+  single `SIGHUP` — the same signal sshd uses at session end — while
+  `KeyboardInteractive` aborts its challenge loop at the next prompt
+  boundary. Nothing here preempts a blocked read; a context is a
+  boundary poll, not a timer thread.
 - **Short-circuit on rejection:** if the promise rejects, the
   exception surfaces synchronously at the dispatch point and the
   session is terminated.
@@ -542,7 +549,7 @@ wants "sessions now" should count the `sshd` children of the forced program.
 | PTY allocation fails | Same shape: the `PtyException` from `PtySystem::open()` escapes `runChild()` uncaught, prints the trace onto the client's stream, exits `255`. |
 | Rate-limit exceeded | The throttle writes its `ratelimit.exceeded` line to the stream it was given, marks the session refused, and returns without invoking `$next`. No disconnect packet, no close, no body: the child simply never spawns and the process exits `Server::EXIT_DENIED` (`129`) — the same refusal gate as `Auth` in the table above, not the `0` of the idle-stack rule below. |
 | `sshd` misconfigured (no `ForceCommand`) | No session metadata exists, so `Session::fromEnvironment()` fills every slot it can from the supervisor's own environment (`USER`/`LOGNAME`, `TERM` defaulting to `xterm-256color`, zero `COLUMNS`/`LINES`) and the entry script runs as an ordinary command rather than a session. |
-| Child process hangs | The pump loop waits forever, and `Context::withDeadline()` does **not** save you: no deadline is consulted inside the pump (see [Cooperative cancellation](#cooperative-cancellation)). Bound the work yourself — a `timeout(1)` wrapper, or a middleware that signals the child on its own clock. |
+| Child process hangs | A context threaded through `Spawn` bounds the pump: the chain deadline is armed as the pump's own wall-clock bound and expires it, and any done context seen at an idle tick hangs the child up once with `SIGHUP` (escalation, if the child ignores it, is the teardown ladder's `SIGHUP` → `SIGKILL`). An **unbounded** run — no context, or a child that survives all of that — waits however long it waits: `timeout(1)` around the entry point, or sshd's own session teardown, remain the outer defense (see [Cooperative cancellation](#cooperative-cancellation)). |
 
 There is no HTTP status code, no response body and no close-on-error on any of
 these paths, because there is no protocol stack here to produce one: this
