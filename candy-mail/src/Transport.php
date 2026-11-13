@@ -12,6 +12,13 @@ use SugarCraft\Async\CancellationToken;
  * SugarCraft-only seam: charmbracelet/pop hard-wires its SMTP sender, so
  * there is no upstream interface to mirror - this abstraction exists to
  * keep the SMTP and Resend transports interchangeable.
+ *
+ * Session lifecycle is part of the contract's meaning: a send is
+ * connection-per-send (the SMTP transport dials on send() and quits
+ * within it). Upstream go-mail carries KeepAlive/Close semantics for
+ * batching multi-message sends over one session; this seam has no such
+ * counterpart - a batch sender that wants session reuse must pool at
+ * its own layer, above one Transport per connection.
  */
 interface Transport
 {

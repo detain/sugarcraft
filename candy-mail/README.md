@@ -393,7 +393,10 @@ a `zh-tw` catalog of their own.
 
 - `Email` — immutable email message value object
 - `Attachment` — immutable file attachment (path or inline content)
-- `Transport` — interface for sending implementations
+- `Transport` — interface for sending implementations; sends are
+  connection-per-send (dial and quit inside one `send()`), with no upstream
+  KeepAlive/Close counterpart — batch senders that want session reuse pool
+  at their own layer, above one connection per `Transport`
 - `ResendTransport` — sends via Resend REST API (HTTPS)
 - `SmtpTransport` — sends via direct SMTP (TCP/TLS)
 - `Mailer` — high-level API wrapping a Transport
