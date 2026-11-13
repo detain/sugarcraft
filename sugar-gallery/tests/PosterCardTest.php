@@ -690,6 +690,24 @@ final class PosterCardTest extends TestCase
         }
     }
 
+    public function testWithTitleReplacesOnlyThePlainTitle(): void
+    {
+        // sugar-gallery-010: withTitle was the one missing carrier — every
+        // other field had a with* and a rename meant hand-spelling the
+        // nine-argument constructor.
+        $card = new PosterCard('1', 'X', 'https://cdn/1.png', 0.25, 'art', "\e[1mS", 'sixel', 5);
+        $renamed = $card->withTitle('Dune');
+
+        self::assertSame('Dune', $renamed->title);
+        self::assertSame(
+            ['1', 'https://cdn/1.png', 0.25, 'art', "\e[1mS", 'sixel', 5],
+            [$renamed->id, $renamed->posterUrl, $renamed->progress, $renamed->poster, $renamed->styledTitle, $renamed->posterImage, $renamed->imageId],
+            'withTitle() rides the single carrier',
+        );
+        self::assertSame('X', $card->title, 'the original is untouched (immutable)');
+        self::assertNotSame($card, $renamed);
+    }
+
     /**
      * The README's cache-levers paragraph publishes the clear methods as the
      * sanctioned surface and states that both caps are PRIVATE constants whose

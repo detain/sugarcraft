@@ -98,6 +98,18 @@ final readonly class PosterCard
         return $this->carrying(['failed' => $failed]);
     }
 
+    /**
+     * Return a copy with a different plain title (sugar-gallery-010: the
+     * library shipped with* carriers for every other field but the host had
+     * to hand-spell the whole nine-argument constructor to rename a card).
+     * The styled title is a SEPARATE field — see {@see withStyledTitle()};
+     * a card rendering a styled title keeps showing it until that one moves.
+     */
+    public function withTitle(string $title): self
+    {
+        return $this->carrying(['title' => $title]);
+    }
+
     /** Whether the last fetch for this cell failed (see {@see withFailed()}). */
     public function isFailed(): bool
     {
