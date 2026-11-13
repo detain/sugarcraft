@@ -142,6 +142,11 @@ just scrolled away.
 echo $grid->render(focused: true);     // cursor shown only when the grid is focused
 ```
 
+When the cursor sits on an unfetched cell, the ▸ runs down **every** poster row of
+that skeleton — a whole-tile ghost of the cursor, not a single-row tick. This is
+pinned intentional: a one-row marker would read as a rendering glitch on a tile the
+grid has not painted yet.
+
 An empty grid (`isEmpty()`) renders `''` — zero rows, not a blank frame — so the
 owner can tell "nothing here yet" from "framed empty cells" and paint its own
 empty-state in its own chrome (`PosterGrid::emptyMessage()` hands you the
