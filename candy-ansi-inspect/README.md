@@ -2,7 +2,7 @@
 
 # CandyAnsiInspect
 
-> Formerly published as `sugarcraft/sugar-spark` (renamed 2026-10). <!-- @rename-keep -->
+> Formerly published as `sugarcraft/sugar-spark` (renamed in 2026-10). <!-- @rename-keep -->
 > Namespace changed: `SugarCraft\Spark\` → `SugarCraft\AnsiInspect\`. <!-- @rename-keep -->
 
 <!-- BADGES:BEGIN -->
@@ -13,14 +13,19 @@
 [![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
-
 ![demo](.vhs/inspect.gif)
 
-candy-ansi-inspect — an ANSI escape-sequence inspector for PHP 8.3+. Pipe styled output through it and each escape becomes a labelled line.
+candy-ansi-inspect — an ANSI escape-sequence inspector for PHP 8.3+, modeled
+on the Go tool [charmbracelet/sequin](https://github.com/charmbracelet/sequin).
+Pipe styled output through it and each escape becomes a labelled line.
 
 ```sh
-composer require sugarcraft/candy-ansi-inspect
+composer require sugarcraft/candy-ansi-inspect   # binary lands in vendor/bin/candy-ansi-inspect
 ```
+
+The CLI examples below type the bare command; from a project root that means
+`vendor/bin/candy-ansi-inspect`, or put `vendor/bin` on your `PATH` (a
+`composer global require` installs it likewise).
 
 ## CLI
 
@@ -104,7 +109,10 @@ candy-ansi-inspect: cannot read: data://text/plain
 ```
 
 A typo'd or plain-unreadable path prints only the first line — the wrapper
-hint would send you hunting for a scheme that is not there.
+hint would send you hunting for a scheme that is not there. The same refusal
+covers every non-regular operand: process substitution (`<(cmd)`), FIFOs and
+other special files are not readable regular files either — pipe them on
+stdin instead of naming them.
 
 ## Library
 
@@ -182,6 +190,26 @@ sequence that reaches the segmenter is dropped without a report. Bytes can
 still vanish further upstream, inside the parser's state table — the
 byte-fidelity notes below enumerate exactly that territory, deviation by
 deviation.
+
+## Localization
+
+Seventeen locale files ship in `lang/`, and the two messages the tool prints
+itself (usage, the not-a-file refusal) route through `Lang::t()`. The bin
+entry calls `T::setLocale(T::detect())`, so locale *selection* is live
+(`LC_ALL` → `LC_MESSAGES` → `LANG`, `fr_FR.UTF-8` normalises to `fr`, fallback
+`en`): `LANG=de.UTF-8 candy-ansi-inspect` answers German. The decoded labels
+inside a report are English-built in `Inspector`, so report bytes never depend
+on the caller's locale. Activating detection was an owner-gated decision,
+executed 2026-11-06; the decision record lives at
+`prompt_kit/findings/docs-reviews-1104/plan-review/candy-ansi-inspect-owner-gate.md`.
+
+## Test
+
+```sh
+cd candy-ansi-inspect && composer install && vendor/bin/phpunit
+```
+
+## Byte-fidelity contract
 
 Reported bytes are the bytes that were sent: parameters keep the separator the
 sender used (`ESC[4;3m` never comes back as `ESC[4:3m`, and an omitted
@@ -302,24 +330,6 @@ loses which spelling opened the sequence, so the inspector's re-emission can onl
 pick one. What *is* new here is what the inspector reports afterwards:
 before this branch a truncated tail simply vanished, which is why item 7's
 cancelled prelude can now reappear inside one.
-
-## Localization
-
-Seventeen locale files ship in `lang/`, and the two messages the tool prints
-itself (usage, the not-a-file refusal) route through `Lang::t()`. The bin
-entry calls `T::setLocale(T::detect())`, so locale *selection* is live
-(`LC_ALL` → `LC_MESSAGES` → `LANG`, `fr_FR.UTF-8` normalises to `fr`, fallback
-`en`): `LANG=de.UTF-8 candy-ansi-inspect` answers German. The decoded labels
-inside a report are English-built in `Inspector`, so report bytes never depend
-on the caller's locale. Activating detection was an owner-gated decision,
-executed 2026-11-06; the decision record lives at
-`prompt_kit/findings/docs-reviews-1104/plan-review/candy-ansi-inspect-owner-gate.md`.
-
-## Test
-
-```sh
-cd candy-ansi-inspect && composer install && vendor/bin/phpunit
-```
 
 ## Credits & inspiration
 
