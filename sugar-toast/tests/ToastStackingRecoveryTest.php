@@ -166,4 +166,41 @@ final class ToastStackingRecoveryTest extends TestCase
         $this->assertSame($toast, $toast->cancelAlert(1), 'out-of-range is a no-op, unchanged instance');
         $this->assertFalse($toast->cancelAlert(1)->activeAlerts()[0]->persistent);
     }
+
+    public function testShortViewportStackYMathIsPinnedForAllNineAnchors(): void
+    {
+        // TST-LAYOUT default leg (fold-to-fit stays a gated owner call):
+        // measured truth of the current layout under a 5-row viewport with
+        // six persistent 3-row boxes. The frame GROWS to 18 rows for EVERY
+        // anchor (position-independent), Top stacks run downward, Bottom
+        // stacks invert (newest lands at frame row 0, oldest below the
+        // viewport), and Middle clamps negative offsets to 0 — piling the
+        // three newest boxes 1:1 on the same rows. These numbers are the
+        // contract a host plans around; moving one is a POLICY change, not
+        // a byte pin, and must go through the gated fold leg.
+        $layout = new \ReflectionMethod(Toast::class, 'layout');
+        $expected = [
+            'TopLeft' => [0, 3, 6, 9, 12, 15],
+            'TopCenter' => [0, 3, 6, 9, 12, 15],
+            'TopRight' => [0, 3, 6, 9, 12, 15],
+            'BottomLeft' => [15, 12, 9, 6, 3, 0],
+            'BottomCenter' => [15, 12, 9, 6, 3, 0],
+            'BottomRight' => [15, 12, 9, 6, 3, 0],
+            'MiddleLeft' => [7, 4, 1, 0, 0, 0],
+            'MiddleCenter' => [7, 4, 1, 0, 0, 0],
+            'MiddleRight' => [7, 4, 1, 0, 0, 0],
+        ];
+
+        foreach (Position::cases() as $position) {
+            $toast = Toast::new(60)->withPosition($position)->withDuration(null);
+            foreach (['one', 'two', 'three', 'four', 'five', 'six'] as $message) {
+                $toast = $toast->alert(ToastType::Info, $message);
+            }
+            /** @var array{boxes: list<array{y:int}>, contentHeight:int} $r */
+            $r = $layout->invoke($toast, '', 60, 5);
+            $this->assertSame(18, $r['contentHeight'], "{$position->name}: frame must grow to stack height");
+            $this->assertSame($expected[$position->name], \array_column($r['boxes'], 'y'), "{$position->name}: y-math moved");
+            $this->assertCount(18, \explode("\n", $toast->view('', 60, 5)), "{$position->name}: emitted rows");
+        }
+    }
 }

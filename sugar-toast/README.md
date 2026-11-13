@@ -135,7 +135,11 @@ ones scroll off (delta hosts should know the frame can dirty more rows than
 the screen). Bottom- and middle-anchored stacks count their offsets against
 that inflated height, so with enough persistent alerts the oldest boxes land
 below the physical screen too; the "clamped" wording only ever meant "inside
-the frame", never "inside the viewport".
+the frame", never "inside the viewport". Growth is position-agnostic — ALL
+nine anchors can emit more rows than `viewportHeight` — so hosts with a
+"frame height ≤ terminal height" invariant must reserve stack-height rows
+(cap `maxConcurrent`, dismiss early, or clip their own output) rather than
+assume the viewport bounds the frame.
 
 Overlapping stacks (the pile-up case: more box rows than the anchor has
 room for) composite NEWER alerts over older ones — an older sibling's
