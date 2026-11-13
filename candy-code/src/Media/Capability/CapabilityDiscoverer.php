@@ -138,13 +138,15 @@ final readonly class CapabilityDiscoverer
      * unmistakably A1111; /object_info unmistakably ComfyUI; /model_info before
      * /v1/models because SGLang-Diffusion serves BOTH (W0.1 probe) and the
      * plain OpenAI door would otherwise shadow it. First affirmative match
-     * wins; every failure mode answers null.
+     * wins; every failure mode answers null. Every rung demands a decoded
+     * JSON ARRAY (a bare `true`/`"ok"`/`42` body is not a dialect fingerprint),
+     * so a captive portal or catch-all 200 falls through the whole ladder.
      */
     public function probe(SdTransport $transport): ?MediaCapability
     {
         try {
             $sdapi = $transport->request('GET', self::ROUTES['sdapi'], [], [], self::DISCOVERY_TIMEOUT_SECONDS);
-            if ($sdapi->is2xx() && $sdapi->decodedJson() !== null) {
+            if ($sdapi->is2xx() && is_array($sdapi->decodedJson())) {
                 return $this->sdapiCapability();
             }
         } catch (Throwable) {
@@ -159,6 +161,7 @@ final readonly class CapabilityDiscoverer
                     ->markProbed();
             }
         } catch (Throwable) {
+            // fail-open: same law as the first rung — a throw is absence.
         }
 
         try {
@@ -168,6 +171,7 @@ final readonly class CapabilityDiscoverer
                 return $this->sglangCapability($models);
             }
         } catch (Throwable) {
+            // fail-open: same law as the first rung — a throw is absence.
         }
 
         try {
@@ -179,13 +183,15 @@ final readonly class CapabilityDiscoverer
                     ->markProbed();
             }
         } catch (Throwable) {
+            // fail-open: last rung; falling out of the ladder answers null.
         }
 
         return null;
     }
 
     /**
-     * Per-route verdicts for a future doctor surface (plan W-step: honest
+     * Per-route verdicts, consumed by the `doctor` tool's media line
+     * ({@see \SugarCraft\Code\Tools\BuiltIn\Doctor}; honest
      * diagnosis without a bespoke error model): 'ok' | 'absent' | 'error' |
      * 'not-probed', plus 'config' => 'declared' | 'none'. Same fail-open law:
      * never throws.
@@ -211,7 +217,7 @@ final readonly class CapabilityDiscoverer
         foreach (self::ROUTES as $name => $path) {
             try {
                 $result = $transport->request('GET', $path, [], [], self::DISCOVERY_TIMEOUT_SECONDS);
-                $verdicts[$name] = ($result->is2xx() && $result->decodedJson() !== null) ? 'ok' : 'absent';
+                $verdicts[$name] = ($result->is2xx() && is_array($result->decodedJson())) ? 'ok' : 'absent';
             } catch (Throwable) {
                 $verdicts[$name] = 'error';
             }

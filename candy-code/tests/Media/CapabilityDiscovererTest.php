@@ -427,4 +427,20 @@ final class CapabilityDiscovererTest extends TestCase
 
         $capability->withSupport('hyperscale', true);
     }
+
+    /** content-007: a scalar 200 body is not a dialect fingerprint on ANY rung. */
+    public function testScalarBodiesFallThroughTheWholeLadder(): void
+    {
+        $answers = [];
+        foreach (CapabilityDiscoverer::ROUTES as $path) {
+            $answers[$path] = ['status' => 200, 'body' => 'true'];
+        }
+        $discoverer = new CapabilityDiscoverer();
+
+        $this->assertNull($discoverer->probe(self::responder($answers)));
+        $verdicts = $discoverer->diagnose([], self::responder($answers));
+        foreach (array_keys(CapabilityDiscoverer::ROUTES) as $name) {
+            $this->assertSame('absent', $verdicts[$name]);
+        }
+    }
 }

@@ -712,4 +712,16 @@ final class BuiltInToolTest extends TestCase
 
         return $tempDir;
     }
+
+    public function testDoctorReportsMediaDiagnosisLineAndFailsOpen(): void
+    {
+        $ok = (new Doctor(null, static fn (): string => 'Media endpoint probe (sdapi=ok).'))
+            ->execute(['id' => 'x']);
+        $this->assertStringContainsString('Media endpoint probe (sdapi=ok).', $ok->content());
+
+        $boom = (new Doctor(null, static function (): string {
+            throw new \RuntimeException('down');
+        }))->execute(['id' => 'x']);
+        $this->assertStringContainsString('Media endpoint: diagnosis unavailable.', $boom->content());
+    }
 }

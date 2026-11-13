@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tools\BuiltIn;
 
+use SugarCraft\Code\Media\Capability\CapabilityDiscoverer;
+use SugarCraft\Code\Media\Sd\Client;
+use SugarCraft\Code\Media\Sd\GuzzleTransport;
+use SugarCraft\Code\Media\Sd\UrlGuard;
 use SugarCraft\Code\RepoMap\CtagsSymbolExtractor;
 use SugarCraft\Code\ToolResult as BootProbe;
 use SugarCraft\Code\Tools\Tool;
@@ -65,6 +69,13 @@ final class Doctor implements Tool, BuildsFromCatalog
      */
     public function __construct(
         private readonly ?CtagsSymbolExtractor $ctags = null,
+        /**
+         * Produces the media-endpoint line; null uses the production probe
+         * ({@see self::mediaLine()}). A seam so tests never dial a socket.
+         *
+         * @var (\Closure(): string)|null
+         */
+        private readonly ?\Closure $mediaDiagnosis = null,
     ) {
     }
 
@@ -94,7 +105,7 @@ final class Doctor implements Tool, BuildsFromCatalog
             . 'naming the pixel-graphics protocol that was found (Kitty, Sixel, or iTerm2) '
             . 'or reporting that only a text-cell fallback is available, then a line saying '
             . 'whether universal-ctags is installed (the RepoMap tool maps non-PHP files only '
-            . 'with it), alongside a '
+            . 'with it), a line with the media endpoint probe verdicts when one is configured, alongside a '
             . '16-by-16 PNG capability swatch rendered green on a real pixel protocol and '
             . 'amber on the fallback. Reach for it when a decision depends on which image '
             . 'protocol this terminal speaks, such as before attaching an image to a '
@@ -133,6 +144,16 @@ final class Doctor implements Tool, BuildsFromCatalog
             ? 'Universal Ctags with JSON output is installed: the repo map covers non-PHP files too.'
             : 'Universal Ctags (with +json) was not found: the repo map covers PHP files only.');
 
+        // The one production consumer of CapabilityDiscoverer::diagnose():
+        // a bounded fail-open GET ladder against the configured media origin
+        // (only when one is configured; nothing is dialled otherwise).
+        try {
+            $summary .= "\n" . ($this->mediaDiagnosis ?? static fn (): string => self::mediaLine())();
+        } catch (\Throwable) {
+            // fail-open: diagnosis must never be the reason doctor fails.
+            $summary .= "\nMedia endpoint: diagnosis unavailable.";
+        }
+
         // F-06: report which text-cell glyph classes the terminal may actually
         // draw, straight from the declarative TermDb table. This is a pure
         // string consult of the inherited environment — like the rest of this
@@ -147,6 +168,37 @@ final class Doctor implements Tool, BuildsFromCatalog
             imageBytes: self::capabilitySwatchPng($pixelGraphics),
             imageProtocol: $protocol,
         );
+    }
+
+    /**
+     * One line: the configured media origin's per-route verdicts, or a note
+     * that none is configured. Only `sd.baseUrl` / its env override can make
+     * this dial, and only through the SSRF-guarded transport.
+     */
+    private static function mediaLine(): string
+    {
+        $base = Client::resolveBaseUrl();
+        if ($base === null) {
+            return 'Media endpoint: none configured (sd.baseUrl unset); media tools stay refused.';
+        }
+        try {
+            $config = \SugarCraft\Code\Cli\Bootstrap::readUserConfig();
+        } catch (\Throwable) {
+            $config = [];
+        }
+        $key = $config['sd.apiKey'] ?? null;
+        $transport = new GuzzleTransport(
+            UrlGuard::forBase($base),
+            Client::authHeaders(is_string($key) ? $key : null),
+        );
+        $parts = [];
+        foreach ((new CapabilityDiscoverer())->diagnose(['mediaBaseUrl' => $base], $transport) as $route => $verdict) {
+            if ($route !== 'config') {
+                $parts[] = "{$route}={$verdict}";
+            }
+        }
+
+        return 'Media endpoint probe (' . implode(', ', $parts) . ').';
     }
 
     /**

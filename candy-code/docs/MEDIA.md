@@ -42,7 +42,9 @@ not so they work.
 `CapabilityDiscoverer` probes the configured origin on a fail-open ladder of
 cheap reads — command flags first, then `object_info`, `model_info`, `/v1/models`
 — under a short per-request ceiling, and a probe that errors simply reports
-less. The result merges into a declared capability from config with one law:
+less. Each rung needs a JSON array body, so a catch-all `200` page does not
+match a dialect. The `doctor` tool surfaces the per-route verdicts when an
+endpoint is configured. The result merges into a declared capability from config with one law:
 **configuration outranks the probe** (the merged record keeps a `mergedFrom`
 marker saying which authority won). If you set `mediaFamily` or `mediaKinds`
 yourself, the probe cannot contradict you.
