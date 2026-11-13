@@ -197,7 +197,7 @@ final class Manager implements Model
             return [$this->handleSearchKey($msg), null];
         }
 
-        if ($msg->type === KeyType::Char && $msg->rune === 'q') {
+        if ($msg->type === KeyType::Char && $msg->rune === 'q' && !$msg->ctrl && !$msg->alt) {
             return [$this, Cmd::quit()];
         }
 
@@ -276,8 +276,16 @@ final class Manager implements Model
 
     private function dispatch(KeyMsg $msg): self
     {
+        // CF-05: shortcut letters are the UNMODIFIED keyboard's domain.
+        // InputReader decodes the legacy Ctrl+D byte (0x04) to a Char rune
+        // 'd' with ctrl set (ESC-prefixed forms arrive with alt set), so the
+        // old rune-only arms captured chords: Ctrl+D armed a delete, Alt+R
+        // refreshed, Ctrl+U undid. Every shortcut below keys on this $plain
+        // predicate; chords with explicit owners (Ctrl+Z/Y/W) keep their
+        // own modified arms further down.
+        $plain = $msg->type === KeyType::Char && !$msg->ctrl && !$msg->alt;
         return match (true) {
-            $msg->type === KeyType::Char && $msg->rune === '/'
+            $plain && $msg->rune === '/'
                 => $this->search(''),
             // Tab cycling. The parser NEVER puts a "\t" rune on a Char
             // message — bare 0x09 and every modified Tab decode to
@@ -308,22 +316,22 @@ final class Manager implements Model
             $msg->type === KeyType::PageUp
                 => $this->withActivePane(fn(Pane $p) => $p->moveCursor(-$this->pageSize())),
             $msg->type === KeyType::Up,
-            $msg->type === KeyType::Char && $msg->rune === 'k'
+            $plain && $msg->rune === 'k'
                 => $this->withActivePane(fn(Pane $p) => $p->moveCursor(-1)),
             $msg->type === KeyType::Down,
-            $msg->type === KeyType::Char && $msg->rune === 'j'
+            $plain && $msg->rune === 'j'
                 => $this->withActivePane(fn(Pane $p) => $p->moveCursor(1)),
             $msg->type === KeyType::Home,
-            $msg->type === KeyType::Char && $msg->rune === 'g'
+            $plain && $msg->rune === 'g'
                 => $this->withActivePane(fn(Pane $p) => $p->gotoTop()),
             $msg->type === KeyType::End,
-            $msg->type === KeyType::Char && $msg->rune === 'G'
+            $plain && $msg->rune === 'G'
                 => $this->withActivePane(fn(Pane $p) => $p->gotoBottom()),
             $msg->type === KeyType::Enter,
             $msg->type === KeyType::Right
                 => $this->navigate(),
             $msg->type === KeyType::Left,
-            $msg->type === KeyType::Char && $msg->rune === 'h'
+            $plain && $msg->rune === 'h'
                 => $this->goUp(),
             // Space toggles selection. InputReader decodes a bare 0x20
             // (and the kitty CSI-u code-32 report negotiated in init())
@@ -336,22 +344,22 @@ final class Manager implements Model
             // The Char leg stays as belt-braces for a future parser
             // revision that surfaces space on the printable side.
             $msg->type === KeyType::Space,
-            $msg->type === KeyType::Char && $msg->rune === ' '
+            $plain && $msg->rune === ' '
                 => $this->withActivePane(fn(Pane $p) => $p->toggleSelection())
                        ->withActivePane(fn(Pane $p) => $p->moveCursor(1)),
-            $msg->type === KeyType::Char && $msg->rune === 's'
+            $plain && $msg->rune === 's'
                 => $this->cycleSort(),
-            $msg->type === KeyType::Char && $msg->rune === '.'
+            $plain && $msg->rune === '.'
                 => $this->withActivePane(fn(Pane $p) => $p->toggleHidden($this->lister)),
-            $msg->type === KeyType::Char && $msg->rune === 'd'
+            $plain && $msg->rune === 'd'
                 => $this->armDelete(),
-            $msg->type === KeyType::Char && $msg->rune === 'c'
+            $plain && $msg->rune === 'c'
                 => $this->armCopy(),
-            $msg->type === KeyType::Char && $msg->rune === 'm'
+            $plain && $msg->rune === 'm'
                 => $this->armMove(),
-            $msg->type === KeyType::Char && $msg->rune === 'R'
+            $plain && $msg->rune === 'R'
                 => $this->armRename(),
-            $msg->type === KeyType::Char && $msg->rune === 'r'
+            $plain && $msg->rune === 'r'
                 => $this->refresh(),
             // Escape (outside search/confirm — those consume it earlier):
             // clear the multi-select. Before this arm existed,
@@ -360,18 +368,18 @@ final class Manager implements Model
             // time by re-pressing space.
             $msg->type === KeyType::Escape
                 => $this->withActivePane(fn(Pane $p) => $p->clearSelection()),
-            $msg->type === KeyType::Char && $msg->rune === 'u'
+            $plain && $msg->rune === 'u'
                 => $this->undo(),
-            $msg->ctrl && $msg->rune === 'z'
+            $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'z'
                 => $this->undo(),
-            $msg->ctrl && $msg->rune === 'y'
+            $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'y'
                 => $this->redo(),
             // Tab management: t duplicates, Ctrl+w closes.
             // (Ctrl+Tab cycling lives at the top of this match, keyed on
             // KeyType::Tab — see the comment there.)
-            $msg->ctrl && $msg->rune === 'w'
+            $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'w'
                 => $this->closeTab(),
-            $msg->type === KeyType::Char && $msg->rune === 't'
+            $plain && $msg->rune === 't'
                 => $this->duplicateTab(),
             default => $this,
         };
@@ -576,7 +584,11 @@ final class Manager implements Model
         // KeyMsg rune for Char is one UTF-8 codepoint string). Every other
         // answer still cancels; the rename submode above is untouched.
         $rune = mb_strtolower($msg->rune);
+        // CF-05: the affirmative is a bare keypress only. Ctrl+Y is REDO
+        // outside a prompt — letting it answer "y" here silently confirmed
+        // destructive operations through an unrelated chord.
         $confirmed = $msg->type === KeyType::Char
+            && !$msg->ctrl && !$msg->alt
             && ($rune === 'y' || $rune === mb_strtolower(Lang::t('confirm.affirmative')));
         if (!$confirmed) {
             return [$this->withConfirm(ConfirmState::None, Lang::t('status.cancelled'))
