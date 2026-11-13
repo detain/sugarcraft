@@ -4,7 +4,9 @@ The authoritative index of every package in the SugarCraft project —
 **42 libraries and 22 apps (64 packages total)** — with its status at a
 glance. The final section,
 [Inspirational reference projects](#inspirational-reference-projects),
-maps each package back to the Go projects that sparked its design.
+maps each package back to its Go upstream.
+
+SugarCraft is a set of PHP ports of the Charmbracelet TUI ecosystem, reimplemented class-for-class where the idiom fits (the upstream is cited in every `Mirrors charmbracelet/<repo>.<Method>` docblock); where no upstream exists the library is original work.
 
 > When this file changes, the matching row in the root
 > [`README.md`](../README.md) and the catalog card on
@@ -160,14 +162,12 @@ example — an app carrying `candy-`; its pre-law owner ruling is recorded in
 
 ## Inspirational reference projects
 
-SugarCraft is a PHP-native project. Its original design inspiration came
-from the Go terminal ecosystem — notably
+The upstreams are the Go terminal ecosystem — notably
 [Bubble Tea](https://github.com/charmbracelet/bubbletea) and the wider
-[Charm](https://github.com/charmbracelet) family of libraries —
-reimagined here for PHP 8.3+. The table is an idea map only: the
-reference projects supplied the ideas, not the code.
+[Charm](https://github.com/charmbracelet) family of libraries; the table
+maps each package to its upstream.
 
-| SugarCraft package | Ideas sparked by |
+| SugarCraft package | Upstream |
 |---|---|
 | CandyAnsiInspect (candy-ansi-inspect/) | [sequin](https://github.com/charmbracelet/sequin) |
 | CandyCodeWeb (candy-code-web/) | [opencode](https://github.com/sst/opencode) web UI · OpenClaw Control UI (loosely) |

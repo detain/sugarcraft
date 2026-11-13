@@ -22,7 +22,7 @@ Scaffold a new port so it looks byte-identical to existing libs and passes every
 - **`composer validate --strict` is EXPECTED to fail** on `"@dev"` constraints — drop `--strict`.
 - **NEVER hand-edit the generated pages in `docs/lib/`** — they are produced by `tools/gen-docs.php` from the sources in `docs/_data/` (copy `docs/_data/sugar-panels.json` + `docs/_data/sugar-panels.body.html` and swap identity).
 - **Run sub-agents ONE AT A TIME** — concurrent writes to `docs/MATCHUPS.md` / root `README.md` collide.
-- **Do NOT run `caliber`** on this machine and do NOT commit GIFs.
+- **Do NOT run `caliber`** on this machine and do NOT hand-render or hand-commit GIFs (the `commit` job in `vhs.yml` writes the site-referenced ones).
 
 ## Instructions
 
@@ -107,7 +107,7 @@ Add the icon-strip `<a>` link AND the `lib-card` block (both reference `sugar-pa
 Add a 48px icon. If none yet, copy a placeholder sibling icon so the README/docs img refs resolve.
 
 ### Step 13 — `.github/workflows/vhs.yml`
-Add `<slug>` to the hand-maintained `all=(...)` bash array (around line 143). Skip ONLY if the lib is non-visual (FFI, codec, pure-data — e.g. `sugar-pty`, `sugar-testing`). Add a `.vhs/<demo>.tape` under `<slug>/.vhs/` using `Set Theme "TokyoNight"`, quote ALL values, `Type "php examples/<demo>.php"`. Multi-directive lines are OK (`Down Sleep 200ms`).
+Add `<slug>` to the hand-maintained `all=(...)` bash array (around line 143). Skip ONLY if the lib is non-visual (FFI, codec, pure-data — e.g. `sugar-pty`, `sugar-testing`). Add a `.vhs/<demo>.tape` under `<slug>/.vhs/` using `Set Theme "TokyoNight"`, quote string values (bare numeric sizing args are tolerated), `Type "php examples/<demo>.php"`. Multi-directive lines are OK (`Down Sleep 200ms`).
 
 ### Step 14 — `codecov.yml`
 Add TWO entries: a `flag_management` flag and a `component_management` component (templates around lines 165 and 470):

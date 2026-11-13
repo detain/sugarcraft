@@ -1,6 +1,6 @@
 # SugarCraft contributor playbook
 
-PHP monorepo of 40 TUI libraries and 22 terminal apps (Charmbracelet ecosystem ports). PSR-4, PHP 8.3+ (8.4+ for Windows FFI), PHPUnit 10, ReactPHP. Each lib has its own `composer.json` + `vendor/`; siblings resolve from Packagist, and path repositories are injected at build time (never committed to a lib manifest).
+PHP monorepo of 42 TUI libraries and 22 terminal apps. SugarCraft is a set of PHP ports of the Charmbracelet TUI ecosystem, reimplemented class-for-class where the idiom fits (the upstream is cited in every `Mirrors charmbracelet/<repo>.<Method>` docblock); where no upstream exists the library is original work. PSR-4, PHP 8.3+ (8.4+ for Windows FFI), PHPUnit 10, ReactPHP. Each lib has its own `composer.json` + `vendor/`; siblings resolve from Packagist, and path repositories are injected at build time (never committed to a lib manifest).
 
 ## Source-of-truth files
 
@@ -27,7 +27,7 @@ PHPUnit XML: `bootstrap="vendor/autoload.php"`, `colors="true"`, `failOnWarning=
 ## Code conventions
 
 - `declare(strict_types=1);` first line. PSR-12 + PSR-4. Public classes `final` unless extension is contract.
-- **Immutable + fluent**: every `with*()` returns a new instance via private `mutate()` (canonical `sugar-style/src/Style.php`; trait `sugar-core/src/Concerns/Mutable.php`). Nullable fields use a paired `bool $XSet` sentinel. `with*()` setters must return a new instance via `mutate()` (S-X06); carriers with >=7 positional fields use sugar-core `Concerns\Mutable`; non-immutable setters are named `set*`/`attach*`, and small value objects carry a dated exemption docblock — guarded by `candy-code/tests/Support/MutateDriftGuardTest.php`.
+- **Immutable + fluent**: every `with*()` returns a new instance via private `mutate()` (canonical `sugar-style/src/Style.php`; trait `sugar-core/src/Concerns/Mutable.php`). Nullable fields pair a `bool $XSet` sentinel only where null and unset are observably different to a caller; where null is itself the meaning (inherit / persistent / none) no sentinel is added and an explicit paired bool is fine — `sugar-toast`'s `Alert`/`Toast` (`expiresAt` null beside `bool $persistent`) is the cited exemplar, and there is deliberately no `$XSet` retrofit. `with*()` setters must return a new instance via `mutate()` (S-X06); carriers with >=7 positional fields use sugar-core `Concerns\Mutable`; non-immutable setters are named `set*`/`attach*`, and small value objects carry a dated exemption docblock — guarded by `candy-code/tests/Support/MutateDriftGuardTest.php`.
 - Bare accessors (no `get`). Factories mirror upstream — `::new()` default, `Theme::ansi()`, `Spinner::line()`; never `::create()`/`::make()`/`::default()`.
 - Doc-comment cites `Mirrors charmbracelet/<repo>.<Method>`. Comment WHY not WHAT.
 - i18n: `Lang::t($key,$params)` over `SugarCraft\Core\I18n\T`; lookup exact → base → `en` → raw.
@@ -49,7 +49,7 @@ cd sugar-core && composer install && vendor/bin/phpunit
 
 ## VHS demos
 
-`.tape` under `<slug>/.vhs/`; `Set Theme "TokyoNight"`, quote ALL values, `Type "php examples/<demo>.php"`. CI re-renders via `.github/workflows/vhs.yml` (hand-maintained `all=(...)` array). Non-visual libs exempt. Don't commit GIFs.
+`.tape` under `<slug>/.vhs/`; `Set Theme "TokyoNight"` (the fleet default), quote string values (bare numeric sizing args such as `Set Width 800` are tolerated fleet-wide), `Type "php examples/<demo>.php"`. CI re-renders via `.github/workflows/vhs.yml` (hand-maintained `all=(...)` array). Non-visual libs exempt. Never hand-render GIFs: site-referenced GIFs (`<slug>/.vhs/*.gif`, hotlinked by READMEs and the site via `raw.githubusercontent.com`) are committed artifacts written by the `commit` job in `vhs.yml`; new demos stay render-on-CI.
 
 ## Adding a lib — checklist
 

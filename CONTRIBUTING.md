@@ -145,8 +145,9 @@ from the lock and silently ignore the injection — it only warns.
 
 ## Adding a new library or app
 
-SugarCraft grows with original work — components, tools, and
-terminal apps that fill gaps in the PHP stack. The flow:
+SugarCraft is a set of PHP ports of the Charmbracelet TUI ecosystem, reimplemented class-for-class where the idiom fits (the upstream is cited in every `Mirrors charmbracelet/<repo>.<Method>` docblock); where no upstream exists the library is original work.
+New libraries that fill gaps in the PHP stack with no upstream are original
+work; new ports follow the same Mirrors-citation convention. The flow:
 
 1. Open an issue proposing the library. Include a one-line role
    summary, any prior art, and the expected dependencies on existing

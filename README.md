@@ -228,11 +228,10 @@ sanitize gates must sit — is [docs/TRUST-BOUNDARY.md](./docs/TRUST-BOUNDARY.md
 
 ## Credits & inspiration
 
-SugarCraft is a PHP-native project. Its original design inspiration came
-from the Go terminal ecosystem — notably
+SugarCraft is a set of PHP ports of the Charmbracelet TUI ecosystem, reimplemented class-for-class where the idiom fits (the upstream is cited in every `Mirrors charmbracelet/<repo>.<Method>` docblock); where no upstream exists the library is original work.
+The upstreams are the Go terminal ecosystem — notably
 [Bubble Tea](https://github.com/charmbracelet/bubbletea) and the wider
-[Charm](https://github.com/charmbracelet) family of libraries — reimagined
-here for PHP 8.3+.
+[Charm](https://github.com/charmbracelet) family of libraries.
 
 ---
 
