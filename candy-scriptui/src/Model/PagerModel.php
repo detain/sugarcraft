@@ -50,11 +50,16 @@ final class PagerModel implements Model
         // Multi-line untrusted paint: control/escape bytes out, CR mapped to
         // LF so overwrite tricks cannot reach the viewport (cluster 12).
         $content = \SugarCraft\Core\Util\Sanitize::untrustedForDisplay($content);
-        if ($showLineNumbers) {
-            $content = self::numberLines($content);
-        }
+        // scriptui-72 (finding): --match used to run AFTER numberLines,
+        // so a needle like "1" (or "│") reverse-videoed the gutter digits
+        // and separator too — painting match styling onto chrome the user
+        // never typed. Highlight the BODY first, then prefix the gutter:
+        // program-composed digits can never be styled as matches.
         if ($match !== '') {
             $content = self::highlightMatches($content, $match);
+        }
+        if ($showLineNumbers) {
+            $content = self::numberLines($content);
         }
         $vp = Viewport::new($width, max(1, $height))->setContent($content);
         return new self($vp, false);
