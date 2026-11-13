@@ -1,14 +1,17 @@
 # SugarCraft library & app status
 
 The authoritative index of every package in the SugarCraft project —
-**40 libraries and 22 apps (62 packages total)** — with its status at a
+**42 libraries and 22 apps (64 packages total)** — with its status at a
 glance. The final section,
 [Inspirational reference projects](#inspirational-reference-projects),
 maps each package back to the Go projects that sparked its design.
 
-> When this file changes, the corresponding tile in
-> [`docs/index.html`](./index.html) (homepage lib / app grids) and the
-> per-package detail page under [`docs/lib/`](./lib/) must update too.
+> When this file changes, the matching row in the root
+> [`README.md`](../README.md) and the catalogue card on
+> [`docs/libraries.html`](./libraries.html) / [`docs/apps.html`](./apps.html)
+> must track it too. The per-package pages under [`docs/lib/`](./lib/) are
+> generated from [`docs/_data/`](./_data/) (`<slug>.json` +
+> `<slug>.body.html`) by `php tools/gen-docs.php` — never hand-edit them.
 > The naming rulebook lives in
 > [`PROJECT_NAMES.md`](../PROJECT_NAMES.md), and the contributor playbook
 > in [`AGENTS.md`](../AGENTS.md) walks through the full add-a-package
@@ -55,7 +58,7 @@ ships as `App\` — called out in the table below.
 | **SugarCellbuffer** (`sugar-cellbuffer/`) | 🟢 ready | Cell-grid value objects — Buffer (2-D cell grid) and Cell (rune/style/link/width); shared foundation for all rendering, with minimal-repaint diffs via `Buffer::diff()`. |
 | **SugarPty** (`sugar-pty/`) | 🟢 ready | PTY primitive (Linux + macOS + Windows) — contract interfaces (`PtySystem` / `MasterPty` / `SlavePty` / `Child` / `Process` / `Pump` / `Termios`) + POSIX implementations over FFI to libc, with sanctioned `stty(1)` shell-out fallbacks on macOS (winsize read/write both directions) and a `posix_kill`-preferring kill path; opt-in controlling-terminal support. Legacy facades (`Pty`, `Child`) remain @deprecated through v1.x; `Spawn` is @internal live plumbing. Windows ConPTY landed (`Windows\ConPtySystem` over FFI primitives: Windows 10 1809+ / PHP 8.4+; no ctty/signals/fd — POSIX keeps those). |
 | **SugarFocus** (`sugar-focus/`) | 🟢 ready | Dependency-free focus ring — ordered focusable regions with a single focused member + wrap-around Tab/Shift-Tab traversal. |
-| **SugarGallery** (`sugar-gallery/`) | 🟢 ready | Poster grids & rails for media TUIs — a 2-D virtualized, sparse, absolute-indexed `PosterGrid` with owner-driven `need-range` paging (+ optional sugar-mouse mouse), a horizontal `Rail` carousel, and a renderer-agnostic `PosterCard` tile. |
+| **SugarGallery** (`sugar-gallery/`) | 🟢 ready | Poster grids & rails for media TUIs — a 2-D virtualized, sparse, absolute-indexed `PosterGrid` with owner-driven `need-range` paging (+ optional sugar-mouse), a horizontal `Rail` carousel, and a renderer-agnostic `PosterCard` tile. |
 | **SugarFuzzy** (`sugar-fuzzy/`) | 🟢 ready | Fuzzy string matching with scored matched indices — Smith–Waterman + Sahilm algorithms. Unblocks filter-highlighting UI across the ecosystem. Extracted from sugar-forms. |
 | **SugarConstraints** (`sugar-constraints/`) | 🟢 ready | Foundation: greedy constraint solver (`GreedySolver`) for terminal layout — `CassowarySolver` is a deprecated shim over it. Plus `DockLayout` pane geometry. |
 | **SugarTesting** (`sugar-testing/`) | 🟢 ready | Test harness for SugarCraft programs — scripted input, golden snapshots, cell-grid assertions, program simulation, VHS tape building, and graphics-stream decoding. |
@@ -99,12 +102,24 @@ ships as `App\` — called out in the table below.
 | **CandyCodetime** (`candy-codetime/`) | 🟢 ready | Privacy-first coding-time tracker — JSONL day-files by default, optional SQLite backend (`--backend`). |
 | **CandyMinesweeper** (`candy-minesweeper/`) | 🟢 ready | Minesweeper — first-click safety / flood-fill. |
 | **CandyGifView** (`candy-gifview/`) | 🟢 ready | Terminal GIF viewer CLI (ext-gd via sugar-animation) — sugar-animation's viewer; antecedent: gifterm. |
-| **CandyImage** (`candy-image/`) | 🟡 in progress | Terminal image viewer CLI — chafa-independent front end on sugar-image: the full format ladder (auto, sixel/kitty/iTerm2 protocols, half/quarter block tiers, ascii/symbols, ansi16/ansi256/truecolor), cell sizing with the six-arm `--scale`, `--canvas`/`--work` dials, `--animate` (GIF), `--passthrough`, `--dump-detect`; ships bin, `lang/` i18n and a rolling latest phar. Unreleased: Packagist dev-master only (no tag/branch-alias); install via `:@dev` or the rolling latest phar — see candy-image README Install (2026-11-05). Demo GIF pending owner disposition (see fixes/candy-image-c2.md step 21). |
+| **CandyImage** (`candy-image/`) | 🟡 in progress | Terminal image viewer CLI — chafa-independent front end on sugar-image: the full format ladder (auto, sixel/kitty/iTerm2 protocols, half/quarter block tiers, ascii/symbols, ansi16/ansi256/truecolor), cell sizing with the six-arm `--scale`, `--canvas`/`--work` dials, `--animate` (GIF), `--passthrough`, `--dump-detect`; ships bin, `lang/` i18n and a rolling latest phar. Unreleased: Packagist dev-master only (no tag/branch-alias); install via `:@dev` or the rolling latest phar — see candy-image README Install (2026-11-05). Demo GIF pending owner disposition. |
 | **CandyTop** (`candy-top/`) | 🟢 ready | Terminal system monitor — cpu / mem+disks / net / process boxes with braille, block and sextant graphs, up to six multi-vendor GPU/NPU boxes, an ipmi BMC band and a VM dashboard, battery readouts, menus, presets, 43 themes (42 ported from btop plus candy-top's own pastel), btop-compatible config with save/reload; Linux `/proc`+`/sys` and FreeBSD collectors; container/VM tags; adopted btop upstream PRs. |
 | **CandyFlappy** (`candy-flappy/`) | 🟢 ready | Flappy Bird clone — the bird is a SugarSpring projectile. |
 
 <!-- Windows ConPTY backend for sugar-pty: landed (sugar-pty/src/Windows). -->
 
+
+---
+
+## Channel bundles (outside the package matrix)
+
+Two further directories ship channel plugins for `candy-code serve` rather
+than packages in the 42 + 22 matrix above: [`candy-discord/`](../candy-discord/)
+(Discord bot conversations become served sessions) and
+[`candy-msteams/`](../candy-msteams/) (Teams chats and channels do the same).
+Each publishes as its own `sugarcraft/*` composer library; neither is a
+require of the root aggregate, a row in the status tables above, or a tile
+in the site catalogue — their READMEs are the authority for how they work.
 ---
 
 ## Naming conventions (cheat sheet)
@@ -154,72 +169,72 @@ reference projects supplied the ideas, not the code.
 
 | SugarCraft package | Ideas sparked by |
 |---|---|
-| SugarAnsiParser (sugar-ansi-parser/) | [x/ansi](https://github.com/charmbracelet/x/tree/main/ansi) |
-| SugarAnimation (sugar-animation/) | [gifterm](https://github.com/namzug16/gifterm) |
-| SugarAsync (sugar-async/) | none — first-party |
-| SugarCellbuffer (sugar-cellbuffer/) | [vte](https://github.com/charmbracelet/vte) |
-| CandyFiles (candy-files/) | [superfile](https://github.com/yorukot/superfile) |
-| CandyGifView (candy-gifview/) | [gifterm](https://github.com/namzug16/gifterm) |
-| CandyImage (candy-image/) | [chafa](https://github.com/hpjansson/chafa) (CLI surface idea, not a port) |
-| SugarFocus (sugar-focus/) | none — first-party (plays the role of [bubbles](https://github.com/charmbracelet/bubbles) focus handling; sugar-dashboard `FocusManager` analog; analogy only) |
+| CandyAnsiInspect (candy-ansi-inspect/) | [sequin](https://github.com/charmbracelet/sequin) |
+| CandyCodeWeb (candy-code-web/) | [opencode](https://github.com/sst/opencode) web UI · OpenClaw Control UI (loosely) |
+| CandyCode (candy-code/) | [Crush](https://github.com/charmbracelet/crush) |
 | CandyCodeshot (candy-codeshot/) | [freeze](https://github.com/charmbracelet/freeze) |
-| SugarFuzzy (sugar-fuzzy/) | [fuzzy](https://github.com/sahilm/fuzzy) (+ internal algorithms) |
-| SugarQuickpick (sugar-quickpick/) | [theHermit](https://github.com/Genekkion/theHermit) |
-| SugarInput (sugar-input/) | none — first-party (semantics follow charmbracelet/bubbletea) |
-| SugarCli (sugar-cli/) | [fang](https://github.com/charmbracelet/fang) (output shape only — no argv/cobra layer) |
-| SugarConstraints (sugar-constraints/) | [ratatui](https://github.com/ratatui/ratatui) |
-| SugarTreelist (sugar-treelist/) | [bubblelister](https://github.com/treilik/bubblelister) |
-| SugarLog (sugar-log/) | [log](https://github.com/charmbracelet/log) |
-| SugarMetrics (sugar-metrics/) | [promwish](https://github.com/charmbracelet/promwish) |
-| CandyMinesweeper (candy-minesweeper/) | [go-sweep](https://github.com/maxpaulus43/go-sweep) |
-| CandyStarter (candy-starter/) | none — first-party (bootstrap template patterned on [bubbletea](https://github.com/charmbracelet/bubbletea) starter examples; analogy only) |
-| SugarMouse (sugar-mouse/) | [bubblezone](https://github.com/lrstanley/bubblezone) |
-| SugarImage (sugar-image/) | [x/mosaic](https://github.com/charmbracelet/x/tree/main/mosaic) |
-| SugarColorprofile (sugar-colorprofile/) | [colorprofile](https://github.com/charmbracelet/colorprofile) |
-| SugarPty (sugar-pty/) | [x/xpty](https://github.com/charmbracelet/x/tree/main/xpty) |
-| CandySql (candy-sql/) | [lazysql](https://github.com/jorgerojas26/lazysql) |
+| CandyCodetime (candy-codetime/) | [TakaTime](https://github.com/Rtarun3606k/TakaTime) |
+| CandyFiles (candy-files/) | [superfile](https://github.com/yorukot/superfile) |
+| CandyFlappy (candy-flappy/) | [flapioca](https://github.com/kbrgl/flapioca) |
+| CandyGifView (candy-gifview/) | [gifterm](https://github.com/namzug16/gifterm) |
 | CandyGitServer (candy-git-server/) | [soft-serve](https://github.com/charmbracelet/soft-serve) |
+| CandyGit (candy-git/) | [lazygit](https://github.com/jesseduffield/lazygit) |
+| CandyImage (candy-image/) | [chafa](https://github.com/hpjansson/chafa) (CLI surface idea, not a port) |
+| CandyKv (candy-kv/) | [skate](https://github.com/charmbracelet/skate) |
+| CandyMail (candy-mail/) | [pop](https://github.com/charmbracelet/pop) |
+| CandyMdview (candy-mdview/) | [glow](https://github.com/charmbracelet/glow) |
+| CandyMinesweeper (candy-minesweeper/) | [go-sweep](https://github.com/maxpaulus43/go-sweep) |
 | CandyScriptui (candy-scriptui/) | [gum](https://github.com/charmbracelet/gum) |
-| SugarMarkdown (sugar-markdown/) | [glamour](https://github.com/charmbracelet/glamour) |
-| SugarStyle (sugar-style/) | [lipgloss](https://github.com/charmbracelet/lipgloss) |
-| SugarTesting (sugar-testing/) | [x/exp/golden](https://github.com/charmbracelet/x-exp-golden) + [teatest](https://github.com/charmbracelet/teatest) (nearest prior art — first-party hardened; tape dialect charmbracelet/vhs) |
+| CandySql (candy-sql/) | [lazysql](https://github.com/jorgerojas26/lazysql) |
+| CandySshLauncher (candy-ssh-launcher/) | [wishlist](https://github.com/charmbracelet/wishlist) |
+| CandyStarter (candy-starter/) | none — first-party (bootstrap template patterned on [bubbletea](https://github.com/charmbracelet/bubbletea) starter examples; analogy only) |
 | CandyTetris (candy-tetris/) | [tetrigo](https://github.com/Broderick-Westrope/tetrigo) |
 | CandyTop (candy-top/) | [btop](https://github.com/aristocratos/btop) |
 | CandyVcr (candy-vcr/) | [x/vcr](https://github.com/charmbracelet/x/tree/main/vcr) |
-| SugarVterm (sugar-vterm/) | [x/vt](https://github.com/charmbracelet/x/tree/main/vt) |
-| SugarSshServer (sugar-ssh-server/) | [wish](https://github.com/charmbracelet/wish) |
-| SugarSpring (sugar-spring/) | [harmonica](https://github.com/charmbracelet/harmonica) |
-| CandyFlappy (candy-flappy/) | [flapioca](https://github.com/kbrgl/flapioca) |
-| SugarWidgets (sugar-widgets/) | [bubbles](https://github.com/charmbracelet/bubbles) |
-| SugarPanels (sugar-panels/) | [bubbleboxer](https://github.com/treilik/bubbleboxer) |
-| SugarDatepicker (sugar-datepicker/) | [bubble-datepicker](https://github.com/EthanEFung/bubble-datepicker) |
+| SugarAnimation (sugar-animation/) | [gifterm](https://github.com/namzug16/gifterm) |
+| SugarAnsiParser (sugar-ansi-parser/) | [x/ansi](https://github.com/charmbracelet/x/tree/main/ansi) |
+| SugarAsync (sugar-async/) | none — first-party |
+| SugarCellbuffer (sugar-cellbuffer/) | [vte](https://github.com/charmbracelet/vte) |
 | SugarCharts (sugar-charts/) | [ntcharts](https://github.com/NimbleMarkets/ntcharts) |
+| SugarCli (sugar-cli/) | [fang](https://github.com/charmbracelet/fang) (output shape only — no argv/cobra layer) |
+| SugarColorprofile (sugar-colorprofile/) | [colorprofile](https://github.com/charmbracelet/colorprofile) |
+| SugarConstraints (sugar-constraints/) | [ratatui](https://github.com/ratatui/ratatui) |
 | SugarCraft (sugar-core/) | [Bubble Tea](https://github.com/charmbracelet/bubbletea) |
-| CandyCode (candy-code/) | [Crush](https://github.com/charmbracelet/crush) |
-| CandyCodeWeb (candy-code-web/) | [opencode](https://github.com/sst/opencode) web UI · OpenClaw Control UI (loosely) |
-| SugarNavstack (sugar-navstack/) | [bubbleo](https://github.com/KevM/bubbleo) |
 | SugarDashboard (sugar-dashboard/) | [bubble-grid](https://github.com/shahar3/bubble-grid) · [btop](https://github.com/aristocratos/btop) · [termui](https://github.com/gizak/termui) (multi-antecedent) |
+| SugarDatepicker (sugar-datepicker/) | [bubble-datepicker](https://github.com/EthanEFung/bubble-datepicker) |
 | SugarDiff (sugar-diff/) | none — first-party |
-| SugarGallery (sugar-gallery/) | [bubbles](https://github.com/charmbracelet/bubbles) (list/viewport) · phlix web media grid (loosely) |
-| CandyMdview (candy-mdview/) | [glow](https://github.com/charmbracelet/glow) |
-| Sugar MCP Client (sugar-mcp-client/) | none — first-party |
-| SugarReleases (sugar-releases/) | none — first-party |
-| SugarIgnore (sugar-ignore/) | [git](https://git-scm.com/docs/gitignore) gitignore(5) semantics — first-party |
-| CandyMail (candy-mail/) | [pop](https://github.com/charmbracelet/pop) |
-| SugarForms (sugar-forms/) | [huh](https://github.com/charmbracelet/huh) |
-| SugarReadline (sugar-readline/) | [promptkit](https://github.com/erikgeiser/promptkit) |
-| SugarVideo (sugar-video/) | [tplay](https://github.com/maxcurzi/tplay) · [glyph](https://github.com/seatedro/glyph) · [video-to-ascii](https://github.com/joelibaceta/video-to-ascii) |
-| CandyKv (candy-kv/) | [skate](https://github.com/charmbracelet/skate) |
-| CandyAnsiInspect (candy-ansi-inspect/) | [sequin](https://github.com/charmbracelet/sequin) |
-| CandyGit (candy-git/) | [lazygit](https://github.com/jesseduffield/lazygit) |
 | SugarFlexbox (sugar-flexbox/) | [stickers](https://github.com/76creates/stickers) |
-| SugarTable (sugar-table/) | [bubble-table](https://github.com/Evertras/bubble-table) (no mouse integration; upstream's frozen-rows concept not ported — this lib freezes columns) |
-| CandyCodetime (candy-codetime/) | [TakaTime](https://github.com/Rtarun3606k/TakaTime) |
-| SugarToast (sugar-toast/) | [bubbleup](https://github.com/DaltonSW/bubbleup) |
+| SugarFocus (sugar-focus/) | none — first-party (plays the role of [bubbles](https://github.com/charmbracelet/bubbles) focus handling; sugar-dashboard `FocusManager` analog; analogy only) |
+| SugarForms (sugar-forms/) | [huh](https://github.com/charmbracelet/huh) |
+| SugarFuzzy (sugar-fuzzy/) | [fuzzy](https://github.com/sahilm/fuzzy) (+ internal algorithms) |
+| SugarGallery (sugar-gallery/) | [bubbles](https://github.com/charmbracelet/bubbles) (list/viewport) · phlix web media grid (loosely) |
+| SugarIgnore (sugar-ignore/) | [git](https://git-scm.com/docs/gitignore) gitignore(5) semantics — first-party |
+| SugarImage (sugar-image/) | [x/mosaic](https://github.com/charmbracelet/x/tree/main/mosaic) |
+| SugarInput (sugar-input/) | none — first-party (semantics follow charmbracelet/bubbletea) |
+| SugarLog (sugar-log/) | [log](https://github.com/charmbracelet/log) |
+| SugarMarkdown (sugar-markdown/) | [glamour](https://github.com/charmbracelet/glamour) |
+| Sugar MCP Client (sugar-mcp-client/) | none — first-party |
+| SugarMetrics (sugar-metrics/) | [promwish](https://github.com/charmbracelet/promwish) |
+| SugarMouse (sugar-mouse/) | [bubblezone](https://github.com/lrstanley/bubblezone) |
+| SugarNavstack (sugar-navstack/) | [bubbleo](https://github.com/KevM/bubbleo) |
 | SugarOverlay (sugar-overlay/) | [bubbletea-overlay](https://github.com/rmhubbert/bubbletea-overlay) |
-| CandySshLauncher (candy-ssh-launcher/) | [wishlist](https://github.com/charmbracelet/wishlist) |
+| SugarPanels (sugar-panels/) | [bubbleboxer](https://github.com/treilik/bubbleboxer) |
+| SugarPty (sugar-pty/) | [x/xpty](https://github.com/charmbracelet/x/tree/main/xpty) |
+| SugarQuickpick (sugar-quickpick/) | [theHermit](https://github.com/Genekkion/theHermit) |
+| SugarReadline (sugar-readline/) | [promptkit](https://github.com/erikgeiser/promptkit) |
+| SugarReleases (sugar-releases/) | none — first-party |
+| SugarSpring (sugar-spring/) | [harmonica](https://github.com/charmbracelet/harmonica) |
+| SugarSshServer (sugar-ssh-server/) | [wish](https://github.com/charmbracelet/wish) |
+| SugarStyle (sugar-style/) | [lipgloss](https://github.com/charmbracelet/lipgloss) |
+| SugarTable (sugar-table/) | [bubble-table](https://github.com/Evertras/bubble-table) (no mouse integration; upstream's frozen-rows concept not ported — this lib freezes columns) |
+| SugarTesting (sugar-testing/) | [x/exp/golden](https://github.com/charmbracelet/x-exp-golden) + [teatest](https://github.com/charmbracelet/teatest) (nearest prior art — first-party hardened; tape dialect charmbracelet/vhs) |
+| SugarToast (sugar-toast/) | [bubbleup](https://github.com/DaltonSW/bubbleup) |
+| SugarTreelist (sugar-treelist/) | [bubblelister](https://github.com/treilik/bubblelister) |
+| SugarVideo (sugar-video/) | [tplay](https://github.com/maxcurzi/tplay) · [glyph](https://github.com/seatedro/glyph) · [video-to-ascii](https://github.com/joelibaceta/video-to-ascii) |
+| SugarVterm (sugar-vterm/) | [x/vt](https://github.com/charmbracelet/x/tree/main/vt) |
+| SugarWidgets (sugar-widgets/) | [bubbles](https://github.com/charmbracelet/bubbles) |
 
-The table above lists every package in the two status tables — 40
-libraries and 22 apps, 62 rows total. Several projects outside Charm's
+The table above lists every package in the two status tables — 42
+libraries and 22 apps, 64 rows total. Several projects outside Charm's
 orbit inspired individual packages; each package's README carries its own
 attribution.
