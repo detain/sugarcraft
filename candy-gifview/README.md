@@ -73,16 +73,21 @@ works — inline-protocol rendering is a different route, offered by
 | `--version` / `-v`    | Print the version stamp and exit 0.                               |
 
 Flags may appear before or after the positional `<gif>` and preset token.
-`--fps` and the multiplier form of `--speed` compose: `--fps` sets the
-uniform base rate and `--speed=N` multiplies it (`--fps=10 --speed=2` plays
-at 20 fps), so the order of those two flags does not matter. Two spellings
-collide instead of composing: `--speed=Nfps` writes an absolute rate into
-the same slot as `--fps`, so the last of that pair wins, and `--speed=max`
-silently discards any explicit `--fps`. An unknown preset token (a typo like
-`densiy`) is refused with an explicit message — the two valid tokens are
-`solid` and `density`; a third positional argument is likewise refused.
-Stdin is not read: a bare `-` falls through to the positional ladder as a
-file path and is refused as `could not play '-'`.
+The rate arithmetic runs on three slots. A **rate slot** is written by both
+`--fps=N` and the absolute form `--speed=Nfps` — they share the slot, so the
+last of *those* spellings wins. A **multiplier** (`--speed=N`) composes onto
+whatever the rate slot holds (the GIF's own nominal rate when the slot is
+empty), so it matters not at all whether the multiplier or the rate flag came
+first: `--fps=10 --speed=2` plays at 20 fps, and so does `--speed=2 --fps=10`.
+And a **max latch**: once any `--speed=max` has been seen it overrides
+everything else and is never cleared by a later flag — the gotcha is
+first-spelling-wins, so `--speed=max --speed=2` still burns at the ceiling,
+and `--fps=10 --speed=2 --speed=3fps` lands on 3 × 2 = 6 fps (the `Nfps`
+form overwrote the rate slot, the multiplier composed onto it). An unknown
+preset token (a typo like `densiy`) is refused with an explicit message — the
+two valid tokens are `solid` and `density`; a third positional argument is
+likewise refused. Stdin is not read: a bare `-` falls through to the
+positional ladder as a file path and is refused as `could not play '-'`.
 
 A GIF's authored NETSCAPE loop count is honoured by default: `raw N`
 means N extra repeats after the first play (so N+1 total passes) and `raw 0`
