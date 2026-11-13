@@ -11,11 +11,17 @@ use InvalidArgumentException;
  *
  * The accepted flags are exactly the ones the README and the binary's own
  * help text promise: `-v`/`--vs` for VS Computer mode, `-h`/`--help` for the
- * usage screen, and no flag at all for single player. Anything else — including
- * bare `v`/`h`, which the parser shipped before this fix accepted while no
- * document ever mentioned them — is refused by name so a typo exits loudly
- * instead of silently starting the wrong game. The diagnostic `--version`
- * short-circuits in the binary before this contract runs (it names no mode).
+ * usage screen, and no flag at all for single player. Alongside any of those
+ * rides at most one `--seed=N` (candy-tetris-018): it names no mode, it only
+ * pins the run's RNG streams so `--seed=N` replays piece-for-piece. Anything
+ * else — including bare `v`/`h`, which the parser shipped before this fix
+ * accepted while no document ever mentioned them, and any token merely
+ * LOOKING like a seed (`--seed`, `--seed=x`, a second `--seed=`) — is refused
+ * by name so a typo exits loudly instead of silently starting the wrong game.
+ * The second `--seed` reaching the extras refusal is deliberate: it is an
+ * unexpected extra argument, and the refusal names exactly the token the user
+ * typed. The diagnostic `--version` short-circuits in the binary before this
+ * contract runs (it names no mode).
  *
  * Parsing lives here (not inline in the binary) so the whole argv contract is
  * unit-testable without constructing a terminal-backed Program.
@@ -35,6 +41,9 @@ final class LaunchMode
 
     private const HELP_FLAGS = ['-h', '--help'];
 
+    /** `--seed=N` with an optional sign — the ONLY shape that carries a seed. */
+    private const SEED_TOKEN = '/^--seed=(-?\d+)$/';
+
     /**
      * @param list<string> $argv Full argument vector (script name at index 0)
      *
@@ -42,14 +51,48 @@ final class LaunchMode
      */
     public static function resolve(array $argv): string
     {
-        $flags = array_slice($argv, 1);
+        return self::parse($argv)[0];
+    }
 
-        if ($flags === []) {
-            return self::SINGLE;
+    /**
+     * The `--seed=N` value, or null when the run takes fresh entropy
+     * (candy-tetris-018). Parses the same grammar as {@see self::resolve()},
+     * so the two views of argv can never drift apart.
+     *
+     * @param list<string> $argv
+     */
+    public static function resolveSeed(array $argv): ?int
+    {
+        return self::parse($argv)[1];
+    }
+
+    /**
+     * One pass over argv: the mode token (extras refuse inside) plus the
+     * single seed token, if any.
+     *
+     * @param list<string> $argv
+     *
+     * @return array{0: string, 1: ?int}
+     */
+    private static function parse(array $argv): array
+    {
+        $seed = null;
+        $modeFlags = [];
+
+        foreach (array_slice($argv, 1) as $token) {
+            if ($seed === null && preg_match(self::SEED_TOKEN, (string) $token) === 1) {
+                $seed = (int) substr((string) $token, strlen('--seed='));
+                continue;
+            }
+            $modeFlags[] = $token;
         }
 
-        if (count($flags) > 1) {
-            $extras = array_slice($flags, 1);
+        if ($modeFlags === []) {
+            return [self::SINGLE, $seed];
+        }
+
+        if (count($modeFlags) > 1) {
+            $extras = array_slice($modeFlags, 1);
             $listed = '"' . implode('", "', array_map(strval(...), $extras)) . '"';
 
             // One localized key (candy-tetris-033): the count rides a
@@ -61,14 +104,14 @@ final class LaunchMode
             ]));
         }
 
-        $flag = $flags[0];
+        $flag = $modeFlags[0];
 
         if (in_array($flag, self::VS_FLAGS, true)) {
-            return self::VS;
+            return [self::VS, $seed];
         }
 
         if (in_array($flag, self::HELP_FLAGS, true)) {
-            return self::HELP;
+            return [self::HELP, $seed];
         }
 
         throw new InvalidArgumentException(Lang::t('mode.unknown', ['flag' => (string) $flag]));

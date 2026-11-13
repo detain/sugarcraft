@@ -50,6 +50,46 @@ final class Bag
     private \Closure $rand;
 
     /**
+     * A reproducible RNG stream for a run seed (candy-tetris-018).
+     *
+     * A plain 31-bit linear congruential generator, NOT `mt_rand`/
+     * `random_int`: those streams are implementation details of the
+     * platform and carry no contract that two runs — or two PHP
+     * versions — must agree. The LCG is: same seed, same numbers,
+     * everywhere. Every derived stream (pieces, garbage holes) comes
+     * from a different seed value of the same run, so the streams are
+     * independent but each one is fully determined by the run.
+     *
+     * The returned closure is stateful BY DESIGN (the state cell is
+     * captured by reference): one stream object per game lineage, and
+     * every draw advances it. {@see Game::$garbageStream} carries the
+     * cell through immutable updates so the sequence never restarts.
+     *
+     * @return \Closure(int): int
+     */
+    public static function stream(int $seed): \Closure
+    {
+        $state = $seed & 0x7FFFFFFF;
+
+        return static function (int $max) use (&$state): int {
+            // Numerical Recipes constants; the product fits in 64-bit
+            // signed space, the mask keeps the state in its 31-bit ring.
+            $state = ($state * 1103515245 + 12345) & 0x7FFFFFFF;
+
+            return $state % ($max + 1);
+        };
+    }
+
+    /**
+     * A bag whose shuffle stream is fully determined by `$seed` — the
+     * door the injectable-RNG seam always lacked for the CLI (GAP-003).
+     */
+    public static function seeded(int $seed): self
+    {
+        return new self(self::stream($seed));
+    }
+
+    /**
      * @param (\Closure(int): int)|null $rand
      */
     public function __construct(?\Closure $rand = null)

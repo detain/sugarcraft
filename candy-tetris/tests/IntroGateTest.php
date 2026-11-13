@@ -138,7 +138,7 @@ final class IntroGateTest extends TestCase
     {
         $bin = (string) file_get_contents(__DIR__ . '/../bin/candy-tetris');
         self::assertStringContainsString('introPending: $scores === null || $scores->onboarded === false', $bin);
-        self::assertStringContainsString('LaunchMode::VS => VsGame::start($bindings, $scores, $scoresPath)', $bin);
+        self::assertStringContainsString('LaunchMode::VS => VsGame::start($bindings, $scores, $scoresPath, seed: $seed, reproducible: $seed !== null)', $bin);
     }
 
     private function intro(bool $pending, ?string $scoresPath = null): Game

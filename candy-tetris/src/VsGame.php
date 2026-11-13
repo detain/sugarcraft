@@ -84,7 +84,24 @@ final class VsGame implements Model
          * clock no longer throttles the AI in either direction.
          */
         public readonly int $computerChain = 0,
+        /**
+         * The match's root seed (candy-tetris-018): the human board's
+         * pieces and garbage holes derive from it directly, the computer
+         * board's from it mixed with {@see self::COMPUTER_STREAM_MIX}, so
+         * the two boards run independent streams that a single `--seed=N`
+         * still pins end-to-end.
+         */
+        public readonly ?int $seed = null,
+        /** True when the seed came from `--seed=N` (banner stamp law, {@see Game::$reproducible}). */
+        public readonly bool $reproducible = false,
     ) {}
+
+    /**
+     * Stream-split multiplier: seed ^ MIX gives board 2 its own LCG
+     * lineage from the same run seed (any odd 31-bit constant works;
+     * this one is documented rather than magic-decorated).
+     */
+    private const COMPUTER_STREAM_MIX = 0x5BD1E995;
 
     /**
      * True when the live terminal cannot host the VS frame
@@ -117,14 +134,22 @@ final class VsGame implements Model
      * that board could never be interacted with — instant lock IS the AI's
      * difficulty, and the asymmetry is a rule, not an oversight.
      */
-    public static function start(?KeyBindings $bindings = null, ?Scores $scores = null, ?string $scoresPath = null): self
+    public static function start(?KeyBindings $bindings = null, ?Scores $scores = null, ?string $scoresPath = null, ?int $seed = null, bool $reproducible = false): self
     {
+        // Seed law as in Game::start() (candy-tetris-018): production
+        // always carries a seed; --seed=N pins and stamps it, a plain
+        // launch captures fresh entropy once. Board 2 runs the mixed
+        // stream so the two boards never punch matching holes.
+        $seed ??= random_int(0, Game::SEED_MASK);
+
         return new self(
-            Game::startWithLockDelay(bindings: $bindings),
-            Game::start(bindings: $bindings),
+            Game::startWithLockDelay(bindings: $bindings, seed: $seed, reproducible: $reproducible),
+            Game::start(bindings: $bindings, seed: $seed ^ self::COMPUTER_STREAM_MIX, reproducible: $reproducible),
             bindings: $bindings,
             scores: $scores,
             scoresPath: $scoresPath,
+            seed: $seed,
+            reproducible: $reproducible,
         );
     }
 
@@ -233,7 +258,7 @@ final class VsGame implements Model
                 // player's counter, and the guard above must read them as
                 // the live chain they are — two number spaces, one clock.
                 $bumped = $this->gravityChain + 1;
-                $freshPair = self::start($this->bindings, $this->scores, $this->scoresPath);
+                $freshPair = self::start($this->bindings, $this->scores, $this->scoresPath, seed: $this->seed, reproducible: $this->reproducible);
                 $fresh = $freshPair->mutate([
                     'gravityChain' => $bumped,
                     'computerChain' => $this->computerChain + 1,
@@ -345,7 +370,9 @@ final class VsGame implements Model
         $linesCleared = $newPlayer->score->lines - $this->player->score->lines;
         $processedComputer = $newComputer;
         if ($linesCleared > 0) {
-            $processedComputer = $newComputer->addGarbageRows($linesCleared);
+            // addGarbage (not addGarbageRows): the holes ride the recipient
+            // board's seeded stream — the production path of -026.
+            $processedComputer = $newComputer->addGarbage($linesCleared);
         }
 
         // If computer cleared lines, add garbage to player
@@ -353,7 +380,7 @@ final class VsGame implements Model
         $computerLinesCleared = $processedComputer->score->lines - $computerBeforeLines;
         $finalPlayer = $newPlayer;
         if ($computerLinesCleared > 0) {
-            $finalPlayer = $newPlayer->addGarbageRows($computerLinesCleared);
+            $finalPlayer = $newPlayer->addGarbage($computerLinesCleared);
         }
 
         // Check for game over after garbage
@@ -565,6 +592,8 @@ final class VsGame implements Model
             $changes['scoresPath'] ?? $this->scoresPath,
             $changes['gravityChain'] ?? $this->gravityChain,
             $changes['computerChain'] ?? $this->computerChain,
+            $changes['seed'] ?? $this->seed,
+            $changes['reproducible'] ?? $this->reproducible,
         );
     }
 }

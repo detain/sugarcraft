@@ -327,6 +327,15 @@ final class Renderer
         if ($game->backToBack === true) {
             $score .= "\n" . Lang::t('b2b_line');
         }
+        // candy-tetris-018: the reproducible-run stamp rides the score
+        // card ONLY when --seed named the run — a plain launch captures
+        // hidden entropy and stamps nothing, so every pre-feature frame
+        // and golden stays byte-identical. 'SEED <n>' is developer-facing
+        // replay data (a number to retype), kept raw English on purpose:
+        // translating the token would make it unsearchable in help text.
+        if ($game->reproducible === true) {
+            $score .= "\nSEED " . $game->seed;
+        }
         // m27: the key column is DERIVED from the live table, so a remap
         // moves the card text with it — the card can no longer lie.
         $help = Support\Bindings::helpCard($game->bindings ?? Support\Bindings::table());

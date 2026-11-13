@@ -157,7 +157,40 @@ final class Game implements Model
          * default false keeps every existing construction byte-identical.
          */
         public readonly bool $introPending = false,
-    ) {}
+        /**
+         * The run's root seed (candy-tetris-018): every RNG stream this
+         * game owns derives from it, so `--seed=N` replays piece-for-piece
+         * across launches. Always set on the factory paths (an unseeded
+         * launch still captures fresh entropy HERE, once) — null only for
+         * hand-constructed test models.
+         */
+        public readonly ?int $seed = null,
+        /**
+         * True only when the seed came from `--seed=N` (the launcher
+         * passes it explicitly): the banner stamps the run as
+         * reproducible. A hidden fresh seed from a normal launch stamps
+         * nothing, so every pre-feature frame and golden stays
+         * byte-identical.
+         */
+        public readonly bool $reproducible = false,
+    ) {
+        // One stateful stream feeds this game's garbage holes. Built from
+        // the seed so the sequence is run-determined; Game::mutate()
+        // re-attaches THIS cell instead of re-deriving, so the stream
+        // advances across the whole lineage and never restarts mid-run
+        // (a re-derived stream would punch the same hole every arrival).
+        $this->garbageStream = Bag::stream($seed ?? random_int(0, self::SEED_MASK));
+    }
+
+    /** 31-bit seed ring shared with {@see Bag::stream()}. */
+    public const SEED_MASK = 0x7FFFFFFF;
+
+    /**
+     * Live garbage-hole stream (stateful closure, see the ctor note).
+     *
+     * @var \Closure(int): int
+     */
+    private \Closure $garbageStream;
 
     /** Death by spawn-block: the freshly spawned piece does not fit. */
     public const OVER_SPAWN_BLOCKED = 'spawn-blocked';
@@ -179,7 +212,7 @@ final class Game implements Model
      */
     public function mutate(array $changes): self
     {
-        return new self(
+        $fresh = new self(
             $changes['board']         ?? $this->board,
             $changes['piece']         ?? $this->piece,
             $changes['bag']           ?? $this->bag,
@@ -215,7 +248,15 @@ final class Game implements Model
             $changes['scoresPath']     ?? $this->scoresPath,
             $changes['newBest']        ?? $this->newBest,
             $changes['introPending']  ?? $this->introPending,
+            $changes['seed']          ?? $this->seed,
+            $changes['reproducible']  ?? $this->reproducible,
         );
+        // The live garbage stream rides the update (see ctor note): a
+        // re-derived stream would restart the hole sequence on every
+        // mutation, punching the same column each arrival.
+        $fresh->garbageStream = $this->garbageStream;
+
+        return $fresh;
     }
 
     /**
@@ -229,14 +270,19 @@ final class Game implements Model
         return $this->frameCols < Renderer::MIN_COLS || $this->frameRows < Renderer::MIN_ROWS;
     }
 
-    public static function start(?Bag $bag = null, ?KeyBindings $bindings = null, ?Scores $scores = null, ?string $scoresPath = null, bool $introPending = false): self
+    public static function start(?Bag $bag = null, ?KeyBindings $bindings = null, ?Scores $scores = null, ?string $scoresPath = null, bool $introPending = false, ?int $seed = null, bool $reproducible = false): self
     {
-        $bag ??= new Bag();
+        // candy-tetris-018: the production path always carries a seed.
+        // `--seed=N` pins it (and stamps the banner); a plain launch
+        // captures fresh entropy once, here, so no hot path ever falls
+        // back to an untracked global default mid-run.
+        $seed ??= random_int(0, self::SEED_MASK);
+        $bag ??= Bag::seeded($seed);
         [$first, $bag] = $bag->next();
         $piece = self::spawn($first);
         // init() will arm the gravity chain; the pending slot starts taken
         // so no key path can double-book it before then.
-        return new self(new Board(), $piece, $bag, new Score(), gravityPending: true, bindings: $bindings, scores: $scores, scoresPath: $scoresPath, introPending: $introPending);
+        return new self(new Board(), $piece, $bag, new Score(), gravityPending: true, bindings: $bindings, scores: $scores, scoresPath: $scoresPath, introPending: $introPending, seed: $seed, reproducible: $reproducible);
     }
 
     /**
@@ -245,9 +291,11 @@ final class Game implements Model
      * @param int $lockDelayMs Grounded window length in milliseconds
      *                         (SRS-style: ~0.5 s, independent of gravity).
      */
-    public static function startWithLockDelay(?Bag $bag = null, int $lockDelayMs = self::DEFAULT_LOCK_DELAY_MS, ?KeyBindings $bindings = null, ?Scores $scores = null, ?string $scoresPath = null, bool $introPending = false): self
+    public static function startWithLockDelay(?Bag $bag = null, int $lockDelayMs = self::DEFAULT_LOCK_DELAY_MS, ?KeyBindings $bindings = null, ?Scores $scores = null, ?string $scoresPath = null, bool $introPending = false, ?int $seed = null, bool $reproducible = false): self
     {
-        $bag ??= new Bag();
+        // Seed law as in {@see self::start()} (candy-tetris-018).
+        $seed ??= random_int(0, self::SEED_MASK);
+        $bag ??= Bag::seeded($seed);
         [$first, $bag] = $bag->next();
         $piece = self::spawn($first);
         return new self(
@@ -261,6 +309,8 @@ final class Game implements Model
             scores: $scores,
             scoresPath: $scoresPath,
             introPending: $introPending,
+            seed: $seed,
+            reproducible: $reproducible,
         );
     }
 
@@ -511,8 +561,8 @@ final class Game implements Model
                 // chain is armed right here — init() ran once at boot and
                 // will not re-run.
                 $fresh = $this->lockDelayMs > 0
-                    ? self::startWithLockDelay(lockDelayMs: $this->lockDelayMs, bindings: $this->bindings, scores: $this->scores, scoresPath: $this->scoresPath)
-                    : self::start(bindings: $this->bindings, scores: $this->scores, scoresPath: $this->scoresPath);
+                    ? self::startWithLockDelay(lockDelayMs: $this->lockDelayMs, bindings: $this->bindings, scores: $this->scores, scoresPath: $this->scoresPath, seed: $this->seed, reproducible: $this->reproducible)
+                    : self::start(bindings: $this->bindings, scores: $this->scores, scoresPath: $this->scoresPath, seed: $this->seed, reproducible: $this->reproducible);
                 // Bump the chain tag so any tick still in flight from the
                 // dead chain lands inert on the fresh board.
                 $fresh = $fresh->mutate([
@@ -1074,6 +1124,22 @@ final class Game implements Model
     }
 
     /**
+     * Receive garbage the way production does (candy-tetris-026): the VS
+     * hot path's entry point. With no explicit `$rand` the holes ride THIS
+     * game's seeded stream — the run's root seed (candy-tetris-018) thus
+     * controls the whole match: pieces, holes, everything. An unseeded
+     * global default is no longer reachable from any production path;
+     * fresh entropy is captured once at launch instead.
+     *
+     * @param int $count Number of garbage rows to add
+     * @param (\Closure(int): int)|null $rand Override stream (direct test injection)
+     */
+    public function addGarbage(int $count, ?\Closure $rand = null): self
+    {
+        return $this->addGarbageRows($count, $rand ?? $this->garbageStream);
+    }
+
+    /**
      * Receive garbage rows from the opponent: the new rows enter at the
      * BOTTOM and push existing content up (classic Tetris garbage). The
      * active piece rides the lift when there is room; a piece pinned
@@ -1083,10 +1149,15 @@ final class Game implements Model
      * if the stack already occupies the ceiling rows the lift would need,
      * the receive is a top-out instead.
      *
+     * This is the shared mechanics behind {@see self::addGarbage()}; the
+     * VS hot path arrived HERE with no `$rand` until -026 — that docblock
+     * lied about the seam being test-only, and this line is the honesty
+     * fix: production callers use addGarbage, tests may inject either.
+     *
      * Garbage rows have exactly one random hole to keep them challenging.
      *
      * @param int $count Number of garbage rows to add
-     * @param \Closure|null $rand Random number generator (for testing)
+     * @param (\Closure(int): int)|null $rand Hole stream; null = fresh entropy per row
      */
     public function addGarbageRows(int $count, ?\Closure $rand = null): self
     {

@@ -120,6 +120,11 @@ if ($mode === LaunchMode::HELP) {
     exit(0);
 }
 
+// candy-tetris-018: --seed=N replays the run piece-for-piece (and stamps
+// the banner); resolve() above already refused any malformed seed token,
+// so this second view of the same parse cannot throw.
+$seed = LaunchMode::resolveSeed($argv);
+
 // The live key map. A missing file leaves the shipped table
 // byte-identical; an unreadable one is ignored LOUDLY on stderr and the
 // game still launches on defaults — never silently on half a map.
@@ -146,7 +151,7 @@ if ($scoresPath !== null) {
 }
 
 $game = match ($mode) {
-    LaunchMode::VS => VsGame::start($bindings, $scores, $scoresPath),
+    LaunchMode::VS => VsGame::start($bindings, $scores, $scoresPath, seed: $seed, reproducible: $seed !== null),
     // Single-player enables lock delay so a grounded piece can still be
     // nudged/rotated for a short window before it locks (SRS lock delay).
     // A solo launch whose record has never seen the on-ramp opens
@@ -157,6 +162,8 @@ $game = match ($mode) {
         scores: $scores,
         scoresPath: $scoresPath,
         introPending: $scores === null || $scores->onboarded === false,
+        seed: $seed,
+        reproducible: $seed !== null,
     ),
 };
 
