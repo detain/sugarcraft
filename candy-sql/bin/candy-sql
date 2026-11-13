@@ -38,6 +38,7 @@ declare(strict_types=1);
     exit(1);
 })();
 
+use SugarCraft\Core\I18n\T;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Sql\Admin\History\HistoryRecorder;
@@ -55,6 +56,13 @@ use SugarCraft\Sql\Lang;
 use SugarCraft\Sql\Version;
 
 $argv = $argv ?? [];
+
+// client-013: bootstrap the i18n stack. Without this the registry answers
+// the default 'en' every launch and the sixteen committed locale files are
+// dead weight — this is the repo-documented startup pattern (T::setLocale
+// with T::detect from $LANG/$LC_ALL), run before any Lang::t call site can
+// fire (the first one is SqliteDatabase's no-file refusal).
+T::setLocale(T::detect());
 
 // Handle --help/-h and --version/-V before anything else
 $exit = handleGlobalFlags($argv);
