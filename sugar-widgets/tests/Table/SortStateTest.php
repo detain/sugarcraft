@@ -119,4 +119,24 @@ final class SortStateTest extends TestCase
             $this->assertStringContainsString('Cannot modify readonly property', $e->getMessage());
         }
     }
+
+    public function testWithoutColumnsBeyondIdentityWhenAllInScope(): void
+    {
+        $s = new SortState([[0, SortDirection::Asc]]);
+        $this->assertSame($s, $s->withoutColumnsBeyond(3), 'nothing dropped -> same instance');
+    }
+
+    public function testWithoutColumnsBeyondIdentityWhenAlreadyEmpty(): void
+    {
+        $s = new SortState();
+        $this->assertSame($s, $s->withoutColumnsBeyond(0), 'empty stays empty, same instance');
+    }
+
+    public function testWithoutColumnsBeyondShrinksTheChain(): void
+    {
+        $s = (new SortState())->withCriterion(0, SortDirection::Asc)->withCriterion(2, SortDirection::Desc);
+        $kept = $s->withoutColumnsBeyond(2);
+        $this->assertNotSame($s, $kept, 'a drop is a new instance (immutable)');
+        $this->assertSame([[0, SortDirection::Asc]], $kept->criteria, 'only the in-scope criterion survives');
+    }
 }

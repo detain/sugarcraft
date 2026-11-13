@@ -526,4 +526,10 @@ final class ProgressTest extends TestCase
             ->withColorFunc(static fn (): Color => Color::rgb(1, 2, 3));
         $this->assertNotEmpty($p->view());
     }
+
+    public function testToStringDelegatesToView(): void
+    {
+        $p = Progress::new(0.5)->withWidth(10);
+        $this->assertSame($p->view(), (string) $p, '__toString is view() — no second render path');
+    }
 }

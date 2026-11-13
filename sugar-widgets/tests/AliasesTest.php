@@ -108,4 +108,36 @@ final class AliasesTest extends TestCase
             "Façade {$alias} must resolve to {$target}.",
         );
     }
+
+    /**
+     * Fail-closed census (sugar-widgets-023): "add a row" used to be prose,
+     * so an alias introduced in an already-listed dir reddened nothing.
+     * Now the provider map must EXACTLY match every `class_alias(` site in
+     * src/ — a new shim without a row, or a row whose shim was deleted,
+     * fails here at test time rather than in review.
+     */
+    public function testProviderIsExactlyTheAliasSitesInSrc(): void
+    {
+        // PSR-4: one alias per shim file, so the file path IS the alias
+        // FQN — spelling-agnostic (src mixes `X::class` and string-literal
+        // class_alias arguments; W-32 normalizes the Viewport spelling).
+        $actual = [];
+        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(\dirname(__DIR__) . '/src'));
+        foreach ($files as $file) {
+            if ($file->isFile() && $file->getExtension() === 'php'
+                && \strpos((string) file_get_contents($file->getPathname()), 'class_alias(') !== false) {
+                $rel = \substr($file->getRealPath(), \strlen(\dirname(__DIR__) . '/src/'), -4);
+                $actual[\str_replace('/', '\\', $rel)] = true;
+            }
+        }
+
+        $expected = \array_keys(self::aliasProvider());
+        \sort($expected);
+        \ksort($actual);
+        $this->assertSame(
+            $expected,
+            \array_keys($actual),
+            'the AliasesTest provider must be exhaustive over the class_alias shims in src/ (both directions)',
+        );
+    }
 }

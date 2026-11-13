@@ -53,4 +53,13 @@ final class SortDirectionTest extends TestCase
     {
         $this->assertSame('Desc', SortDirection::Desc->name);
     }
+
+    public function testMarkerGlyphsAreTheUpAndDownArrows(): void
+    {
+        // sugar-widgets-047: the header indicator glyph pair, direct.
+        $this->assertSame("\u{2191}", SortDirection::Asc->marker());
+        $this->assertSame("\u{2193}", SortDirection::Desc->marker());
+        $this->assertSame(1, \SugarCraft\Core\Util\Width::string(SortDirection::Asc->marker()));
+        $this->assertSame(1, \SugarCraft\Core\Util\Width::string(SortDirection::Desc->marker()));
+    }
 }
