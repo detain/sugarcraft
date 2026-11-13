@@ -290,7 +290,11 @@ final class AsyncProbeTest extends TestCase
         // escalates and settles, the exit handler cancels it, and stale
         // reclamation kills the wedged child — remove any leg and this reddens.
         $src = file_get_contents(__DIR__ . '/../src/AsyncProbe.php');
-        $this->assertStringContainsString('addTimer(self::PROBE_TIMEOUT_SECONDS', $src);
+        // CP-28 moved the two rung durations behind the test seam, so the
+        // needles follow the accessor shape (the constants remain the null
+        // default behind it).
+        $this->assertStringContainsString('addTimer(self::timeoutSeconds()', $src);
+        $this->assertStringContainsString('addTimer(self::graceSeconds()', $src);
         $this->assertStringContainsString('$process->terminate();', $src);
         $this->assertStringContainsString('terminate(defined(\'SIGKILL\') ? \\SIGKILL : 9)', $src);
         $this->assertStringContainsString('cancelTimer($timeoutTimer)', $src);
@@ -508,9 +512,13 @@ final class AsyncProbeTest extends TestCase
         // The pid asserted is the child proc_open tracks (proc_get_status),
         // which is what terminate() signals and close() reaps — a killed-but-
         // unreaped child keeps its /proc entry as state Z on Linux, so entry
-        // absence == killed AND reaped. The announce via a pidfile is dropped
-        // because the sigchild wrapper dash forks makes the script a
-        // grandchild; the tracked child stays alive while its subshell sleeps.
+        // absence == killed AND reaped. Since CP-28 the spawn is shell-less
+        // (array command), so the tracked pid IS the script — and the script
+        // `exec`s its sleep, keeping that pid through the replacement. No
+        // pidfile indirection is needed (the pre-CP-28 string spawn forked a
+        // grandchild dash, which is why this test once distrusted the
+        // tracked pid; that wrapper is gone and the ladder now signals the
+        // process that can actually hang).
         if (\PHP_OS_FAMILY !== 'Linux') {
             $this->markTestSkipped('zombie-fd accounting requires /proc');
         }

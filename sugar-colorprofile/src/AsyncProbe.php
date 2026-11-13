@@ -90,6 +90,79 @@ final class AsyncProbe
     /** Grace between the TERM and the KILL rung of the escalation ladder. */
     private const KILL_GRACE_SECONDS = 1.0;
 
+    /**
+     * CP-28 @internal test seam: shrink the two ladder rungs so a behavior
+     * pin can drive a real SIGTERM→SIGKILL escalation inside a couple of
+     * seconds of wall time (sugar-colorprofile-029). Null = shipped
+     * defaults above. Cleared by {@see self::resetForTesting()}; no public
+     * production surface reads or writes it.
+     */
+    private static ?float $timeoutOverride = null;
+    private static ?float $graceOverride = null;
+
+    /**
+     * Arm the test seam (or pass nulls to restore the documented defaults).
+     *
+     * @internal — exists only so tests/AsyncProbeBoundedTest.php can prove
+     * the kill ladder REAPS, not merely that the source mentions the timers.
+     */
+    public static function setDeadlinesForTesting(?int $probeSeconds, ?int $graceSeconds): void
+    {
+        self::$timeoutOverride = $probeSeconds !== null ? (float) $probeSeconds : null;
+        self::$graceOverride = $graceSeconds !== null ? (float) $graceSeconds : null;
+    }
+
+    private static function timeoutSeconds(): float
+    {
+        return self::$timeoutOverride ?? self::PROBE_TIMEOUT_SECONDS;
+    }
+
+    private static function graceSeconds(): float
+    {
+        return self::$graceOverride ?? self::KILL_GRACE_SECONDS;
+    }
+
+    /**
+     * Kill a child and complete its REAP synchronously, on a live loop or a
+     * dead one (CP-28, sugar-colorprofile-029 — every clause below is probe-
+     * evidenced against the vendored react/child-process on this box).
+     *
+     * react emits 'exit' only once every READ pipe has fired its close event;
+     * a silent child (killed mid-busy-loop, or one that never wrote) never
+     * closes them itself, and even when the pipes do close the detection may
+     * fall into vendor's periodic check — which is armed on the CHILD'S loop
+     * and therefore never ticks once that loop has been abandoned. So merely
+     * terminate()-ing strands both the handle and (after death) a /proc Z
+     * entry. Calling Process::close() straight on a dead-but-unreaped handle
+     * is no good either: its own pipe-foreach exhausts the close count
+     * MID-CLOSE, the handler's canonical close() nulls the handle, and the
+     * suspended outer frame lands on proc_close(null) — a TypeError.
+     *
+     * The order that is safe in every interleaving: SIGKILL, close the
+     * pipes (whichever way the handler resolves it — immediate canonical
+     * close, or arming its dead-loop periodic — it has already done its
+     * single close or will do nothing further), and then let close() finish
+     * the job ONLY if the handle is still open: proc_close blocks until the
+     * killed child is reaped and never re-enters a handler that has already
+     * spent its close count.
+     */
+    private static function killAndReap(Process $process): void
+    {
+        $process->terminate(defined('SIGKILL') ? \SIGKILL : 9);
+        $process->stdout?->close();
+        $process->stderr?->close();
+        $process->stdin?->close();
+
+        if (\is_resource((new \ReflectionProperty($process, 'process'))->getValue($process))) {
+            // Handle still open: vendor never reached its canonical close
+            // (the periodic branch on a loop that will not tick, or a child
+            // still mid-death when the pipes went away). Reap here —
+            // proc_close() inside close() blocks until the SIGKILLed child
+            // is waited, so on return the /proc entry is gone.
+            $process->close();
+        }
+    }
+
     /** Keep-a-prefix bound for the child's stderr drain (see MT8 listener). */
     private const STDERR_CAP_BYTES = 8192;
 
@@ -232,7 +305,18 @@ final class AsyncProbe
         }
 
         $deferred = new Deferred();
-        $command = $infocmpPath . ' -1 ' . escapeshellarg($term);
+        // NO WRAPPER TO SWALLOW THE LADDER (CP-28, sugar-colorprofile-029):
+        // react v0.6 takes a command STRING (and its constructor contract
+        // stays string), PHP proc_open hands that to `sh -c` — and dash
+        // FORKED the script instead of exec-ing it (probe-evidenced on this
+        // box), so every ladder signal died on the untrapped wrapper while
+        // the wedged child survived ORPHANED, still holding the child pipes
+        // open — which additionally starved react's pipe-close exit
+        // detection forever. Leading `exec ` replaces the wrapper in place:
+        // one process, tracked pid == signaled pid, the child's own TERM
+        // disposition decides, and every field still rides
+        // escapeshellarg() per the repo-wide CLI law (AGENTS.md).
+        $command = 'exec ' . \escapeshellarg($infocmpPath) . ' -1 ' . \escapeshellarg($term);
 
         $token = self::$nextToken++;
         $settled = false;
@@ -258,7 +342,7 @@ final class AsyncProbe
             $process = new Process($command, null, InfocmpBinary::childEnvironment($term));
             self::$inFlight[$token] = [
                 'process' => $process,
-                'deadline' => \microtime(true) + self::PROBE_TIMEOUT_SECONDS + self::KILL_GRACE_SECONDS,
+                'deadline' => \microtime(true) + self::timeoutSeconds() + self::graceSeconds(),
             ];
             $process->start($loop);
         } catch (\Throwable) {
@@ -269,8 +353,7 @@ final class AsyncProbe
             // it past proc_open left no child — vendor stores the boolean
             // false in that case, so the handle is checked before signaling.
             if ($process !== null && \is_resource((new \ReflectionProperty($process, 'process'))->getValue($process))) {
-                $process->terminate(defined('SIGKILL') ? \SIGKILL : 9);
-                $process->close();
+                self::killAndReap($process);
             }
 
             return \React\Promise\resolve(self::settleFromChain($chain));
@@ -301,10 +384,10 @@ final class AsyncProbe
         // later KILL it, and settle the caller with the chain answer. A hung
         // infocmp can therefore never strand the promise OR the slot.
         $graceTimer = null;
-        $timeoutTimer = $loop->addTimer(self::PROBE_TIMEOUT_SECONDS, static function () use ($process, $loop, $deferred, $release, $chain, &$graceTimer): void {
+        $timeoutTimer = $loop->addTimer(self::timeoutSeconds(), static function () use ($process, $loop, $deferred, $release, $chain, &$graceTimer): void {
             $process->terminate();
-            $graceTimer = $loop->addTimer(self::KILL_GRACE_SECONDS, static function () use ($process): void {
-                $process->terminate(defined('SIGKILL') ? \SIGKILL : 9);
+            $graceTimer = $loop->addTimer(self::graceSeconds(), static function () use ($process): void {
+                self::killAndReap($process);
             });
             $release();
             $deferred->resolve(self::settleFromChain($chain));
@@ -357,6 +440,8 @@ final class AsyncProbe
         self::$inFlight = [];
         self::$nextToken = 1;
         self::$settledMemo = [];
+        self::$timeoutOverride = null;
+        self::$graceOverride = null;
     }
 
     /**
@@ -412,20 +497,17 @@ final class AsyncProbe
                 continue;
             }
             unset(self::$inFlight[$token]);
-            $slot['process']->terminate(defined('SIGKILL') ? \SIGKILL : 9);
-            // The kill alone is not the end of it: react/child-process reaps
-            // only through Process::close(), which its own code reaches from
-            // stream-close events on the child's loop (0.6.7: close() is
-            // public, closing each pipe then proc_close()-ing the handle).
-            // An abandoned loop never delivers those events, so terminate()
-            // without close() would strand a zombie plus its pipe fds for the
-            // life of the PHP process — every abandoned probe accumulating one
-            // — exactly what "dangling processes" cleanup promised and did
-            // not do. close() is idempotent (null handle guard inside), and
-            // proc_close() blocks only until the SIGKILLed child is reaped.
-            // On the Windows face the constructor refuses pipe children
-            // outright, so a slot here is always POSIX.
-            $slot['process']->close();
+            // CP-14 established that terminate() alone strands a zombie plus
+            // its pipe fds — the child must be REAPED, not only killed. Its
+            // remedy called Process::close() straight, which type-crashes
+            // when the child is dead-but-unreaped: close()'s own pipe-foreach
+            // exhausts react's close-count mid-call and the handler's nested
+            // canonical close nulls the handle under the suspended frame
+            // (proc_close(null)). killAndReap (CP-28) closes the pipes
+            // FIRST, then finishes close() only if the handle is still open
+            // — proc_close() blocks out the reaping of a killed child even
+            // when the abandoned loop can never tick vendor's periodic check.
+            self::killAndReap($slot['process']);
         }
     }
 }

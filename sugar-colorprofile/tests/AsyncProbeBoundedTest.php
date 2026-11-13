@@ -14,7 +14,9 @@ use SugarCraft\ColorProfile\AsyncProbe;
  * These scan src/AsyncProbe.php the same way the existing ladder test scans
  * it: a handler-signature regression or a re-spotted blocking sync call is
  * invisible to behavior tests that cannot drive a SIGKILL through a test
- * loop, but must not survive review either.
+ * loop, but must not survive review either. (That concession held until
+ * CP-28: the deadline-seam band at the bottom of this file drives a real
+ * SIGTERM→SIGKILL escalation; the needles above stay as cheap prose guards.)
  */
 final class AsyncProbeBoundedTest extends TestCase
 {
@@ -78,7 +80,16 @@ final class AsyncProbeBoundedTest extends TestCase
         $src = self::src();
         self::assertStringContainsString('$process->start($loop);', $src);
         self::assertStringContainsString('} catch (\Throwable) {', $src, 'fallible spawn calls must sit behind a catch');
-        self::assertStringContainsString('$slot[\'process\']->close();', $src, 'reclaim must reap, not only kill');
+        self::assertStringContainsString(
+            'self::killAndReap($slot[\'process\']);',
+            $src,
+            'reclaim must reap, not only kill (CP-28 safe form: never close() on a possibly-dead handle)',
+        );
+        self::assertStringContainsString(
+            'self::killAndReap($process);',
+            $src,
+            'the grace rung must kill AND reap through the handler path, or the killed child is never observed',
+        );
     }
 
     public function testChildStderrIsDrainedIntoABoundedBuffer(): void
@@ -177,5 +188,252 @@ final class AsyncProbeBoundedTest extends TestCase
             $terminal,
             'CP-11: the terminal probe phase-2 leg must answer through the door',
         );
+    }
+
+    /**
+     * CP-28 behavior pin (i) (sugar-colorprofile-029): a TERM-ignoring child
+     * must die on the grace SIGKILL and be reaped. The spelling needles above
+     * can only prove the source MENTIONS the ladder; this drives a real
+     * escalation over the CP-28 deadline seam (1 s TERM, 1 s KILL) against a
+     * single-process fixture that traps TERM away.
+     */
+    public function testTheGraceKillActuallyKillsAndReapsATermIgnoringChild(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('POSIX signal semantics (trap, SIGKILL) are not available here.');
+        }
+
+        $term = 'xterm-256color';
+        $saved = $this->armCleanEnv();
+        $_ENV['TERM'] = $term;
+        \putenv("TERM={$term}");
+        $path = $this->plantBinary("#!/bin/sh\ntrap '' TERM\nwhile :; do :; done\n");
+
+        $process = null;
+        $exit = null;
+        $exitAt = null;
+        $settled = null;
+        $settleAt = null;
+        $t0 = \microtime(true);
+
+        AsyncProbe::setDeadlinesForTesting(1, 1);
+        try {
+            $loop = new \React\EventLoop\StreamSelectLoop();
+            AsyncProbe::colorProfile($loop)->then(static function (\SugarCraft\ColorProfile\ColorProfile $p) use (&$settled, &$settleAt, $t0): void {
+                $settled = $p;
+                $settleAt = \microtime(true) - $t0;
+            });
+
+            $capture = $loop->addPeriodicTimer(0.05, static function () use ($loop, &$process, &$capture, &$exit, &$exitAt, $t0): void {
+                $slots = (new \ReflectionProperty(AsyncProbe::class, 'inFlight'))->getValue();
+                if ($slots === []) {
+                    return;
+                }
+                $process = $slots[array_key_first($slots)]['process'];
+                $process->on('exit', static function (?int $code, ?int $signal) use (&$exit, &$exitAt, $t0): void {
+                    $exit = [$code, $signal];
+                    $exitAt = \microtime(true) - $t0;
+                });
+                $loop->cancelTimer($capture);
+            });
+            $loop->addTimer(3.2, static function () use ($loop): void {
+                $loop->stop();
+            });
+            $loop->run();
+
+            self::assertNotNull($process, 'the slot must be capturable before the deadline releases it');
+            self::assertNotNull($settled, 'the deadline arm must settle the caller with the chain answer');
+            self::assertSame(
+                \SugarCraft\ColorProfile\ColorProfile::Ansi256,
+                $settled,
+                'a ladder-killed child proves nothing about the TERM; the env rung must stand',
+            );
+            self::assertLessThanOrEqual(2.2, $settleAt, 'the detach at the deadline must not wait for the kill');
+            self::assertNotNull($exit, 'the killed child must be observed and reaped through the vendor close path');
+            // On a signal death this vendor build emits proc_close()'s
+            // SIGNAL NUMBER as the exit code (PHP yields the signal number
+            // for signal-killed children), and the signal slot only carries
+            // a value when vendor's own status refresh won the wait — so the
+            // deterministic proof of WHICH rung killed is the code: the
+            // TERM-immune trap guarantees 15 can never appear here, and 9 is
+            // the grace rung's signature.
+            self::assertSame(9, $exit[0], 'the grace rung must answer with a real SIGKILL');
+            self::assertTrue(
+                $exit[1] === null || $exit[1] === \SIGKILL,
+                'the vendor signal slot is race-dependent on a killed child (null or SIGKILL); SIGTERM never is',
+            );
+            self::assertGreaterThanOrEqual(1.5, $exitAt, 'the KILL lands at deadline+grace, never before the TERM rung');
+            self::assertLessThanOrEqual(2.9, $exitAt, 'the KILL lands within grace + scheduling slack');
+            self::assertFalse($process->isRunning(), 'no live child survives the settle');
+            self::assertNull(
+                (new \ReflectionProperty(\React\ChildProcess\Process::class, 'process'))->getValue($process),
+                'vendor must have proc_close-d the killed child — reaped, not merely signaled',
+            );
+            self::assertSame(
+                [],
+                (new \ReflectionProperty(AsyncProbe::class, 'inFlight'))->getValue(),
+                'the slot table must drain',
+            );
+            self::assertSame(
+                [],
+                (new \ReflectionProperty(AsyncProbe::class, 'settledMemo'))->getValue(),
+                'CP-13 contract under a real signal kill: a killed child mints no memo entry',
+            );
+        } finally {
+            if ($process !== null && $process->isRunning()) {
+                $process->terminate(\defined('SIGKILL') ? \SIGKILL : 9);
+            }
+            if ($process !== null) {
+                // CP-28 lesson: close() on a dead-but-unreaped handle
+                // re-enters itself through the stream-close handler — drive
+                // the same canonical path the library uses (the handler's
+                // single close reaps; an already-closed handle no-ops).
+                $process->stdout?->close();
+                $process->stderr?->close();
+                $process->stdin?->close();
+            }
+            AsyncProbe::resetForTesting();
+            $this->restoreEnv($saved);
+            unset($_ENV['TERM']);
+            \putenv('TERM');
+            @\unlink($path);
+        }
+    }
+
+    /**
+     * CP-28 behavior pin (ii): the positive control — a child that HONOURS
+     * SIGTERM exits at the deadline rung with a clean status, never needing
+     * the grace kill (5 s grace vs ~1 s to exit), and its clean exit mints
+     * the CP-13 negative sentinel like any other zero-status child.
+     */
+    public function testATermHonoringChildExitsAtTheDeadlineRungWithoutWaitingForGrace(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('POSIX signal semantics (trap, SIGTERM) are not available here.');
+        }
+
+        $term = 'xterm-256color';
+        $saved = $this->armCleanEnv();
+        $_ENV['TERM'] = $term;
+        \putenv("TERM={$term}");
+        // One stdout byte on purpose: react's read streams self-close on EOF
+        // once data has flowed (the established fixture behavior), so the
+        // handler's exit at ~the deadline is observed WITHOUT the grace rung.
+        // 'x' is not a terminfo cap — the CP-13 verdict stays negative.
+        $path = $this->plantBinary("#!/bin/sh\ntrap 'exit 0' TERM\nprintf x\nwhile :; do :; done\n");
+
+        $process = null;
+        $exit = null;
+        $exitAt = null;
+        $settled = null;
+        $t0 = \microtime(true);
+
+        // Grace deliberately LONGER than the whole run: reaching the KILL
+        // rung would push the observed exit past the assertions below.
+        AsyncProbe::setDeadlinesForTesting(1, 5);
+        try {
+            $loop = new \React\EventLoop\StreamSelectLoop();
+            AsyncProbe::colorProfile($loop)->then(static function (\SugarCraft\ColorProfile\ColorProfile $p) use (&$settled, $t0): void {
+                $settled = $p;
+            });
+
+            $capture = $loop->addPeriodicTimer(0.05, static function () use ($loop, &$process, &$capture, &$exit, &$exitAt, $t0): void {
+                $slots = (new \ReflectionProperty(AsyncProbe::class, 'inFlight'))->getValue();
+                if ($slots === []) {
+                    return;
+                }
+                $process = $slots[array_key_first($slots)]['process'];
+                $process->on('exit', static function (?int $code, ?int $signal) use (&$exit, &$exitAt, $t0): void {
+                    $exit = [$code, $signal];
+                    $exitAt = \microtime(true) - $t0;
+                });
+                $loop->cancelTimer($capture);
+            });
+            $loop->addTimer(2.6, static function () use ($loop): void {
+                $loop->stop();
+            });
+            $loop->run();
+
+            self::assertNotNull($settled, 'the TERM rung settles the caller at the deadline');
+            self::assertNotNull($exit, 'the TERM-honoring child must be observed and reaped');
+            self::assertLessThanOrEqual(
+                1.95,
+                $exitAt,
+                'the exit must land on the TERM rung, long before the 5 s grace — the KILL never fired',
+            );
+            self::assertSame([0, null], $exit, 'a handler exit carries status 0 and no kill signal — the grace KILL never fired');
+            self::assertFalse($process->isRunning());
+            self::assertSame(
+                [$term => null],
+                (new \ReflectionProperty(AsyncProbe::class, 'settledMemo'))->getValue(),
+                'a clean zero-output child is a NEGATIVE verdict (CP-13 sentinel), not a promotion',
+            );
+        } finally {
+            if ($process !== null && $process->isRunning()) {
+                $process->terminate(\defined('SIGKILL') ? \SIGKILL : 9);
+            }
+            if ($process !== null) {
+                // CP-28 lesson: close() on a dead-but-unreaped handle
+                // re-enters itself through the stream-close handler — drive
+                // the same canonical path the library uses (the handler's
+                // single close reaps; an already-closed handle no-ops).
+                $process->stdout?->close();
+                $process->stderr?->close();
+                $process->stdin?->close();
+            }
+            AsyncProbe::resetForTesting();
+            $this->restoreEnv($saved);
+            unset($_ENV['TERM']);
+            \putenv('TERM');
+            @\unlink($path);
+        }
+    }
+
+    /**
+     * Neutralize every key the ladder could answer TrueColor/suppression
+     * from on THIS host (ambient COLORTERM would skip the spawn entirely),
+     * house save/restore idiom. TERM is pinned by the callers.
+     *
+     * @return array<string, string|false>
+     */
+    private function armCleanEnv(): array
+    {
+        $saved = [];
+        foreach ([
+            'CLICOLOR_FORCE', 'FORCE_COLOR', 'NO_COLOR', 'CLICOLOR', 'COLORTERM',
+            'TERM_PROGRAM', 'WT_SESSION', 'GOOGLE_CLOUD_SHELL', 'TMUX', 'STY',
+        ] as $key) {
+            $saved[$key] = \getenv($key);
+            unset($_ENV[$key]);
+            \putenv($key);
+        }
+
+        return $saved;
+    }
+
+    private function restoreEnv(array $saved): void
+    {
+        foreach ($saved as $key => $value) {
+            if ($value === false) {
+                unset($_ENV[$key]);
+                \putenv($key);
+                continue;
+            }
+            $_ENV[$key] = $value;
+            \putenv("{$key}={$value}");
+        }
+    }
+
+    private function plantBinary(string $body): string
+    {
+        // House binary-stub shape (M10 precedent): tempnam script + the
+        // InfocmpBinary path seam stuffed by reflection.
+        $path = \tempnam(\sys_get_temp_dir(), 'cp28');
+        self::assertIsString($path);
+        \file_put_contents($path, $body);
+        \chmod($path, 0755);
+        (new \ReflectionProperty(\SugarCraft\ColorProfile\Probe\InfocmpBinary::class, 'path'))->setValue(null, $path);
+
+        return $path;
     }
 }
