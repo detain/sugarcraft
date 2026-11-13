@@ -143,4 +143,66 @@ final class FsListerTest extends TestCase
             chmod($secret, 0755);
         }
     }
+
+    /** CF-39: same mtime = one scan; an mtime bump (entry-set move) re-reads. */
+    public function testMemoizeServesRepeatReadsWithoutTouchingTheInnerLister(): void
+    {
+        $calls = 0;
+        $inner = function (string $path) use (&$calls): ?array {
+            $calls++;
+            return [new Entry('a', false, 1, 0)];
+        };
+        $mtimes = ['/x' => 100];
+        $memo = FsLister::memoize($inner, static function (string $path) use (&$mtimes): ?int {
+            return $mtimes[$path] ?? null;
+        });
+        $first = $memo('/x');
+        $second = $memo('/x');
+        $this->assertSame(1, $calls, 'same mtime = one scan');
+        $this->assertSame($first, $second);
+        $mtimes['/x'] = 101;
+        $memo('/x');
+        $this->assertSame(2, $calls, 'mtime bump invalidates the memo');
+    }
+
+    /** CF-39: nulls stored, nulls distrusted over a live stat, absence memoized. */
+    public function testMemoizeStoresAndInvalidatesNulls(): void
+    {
+        $calls = 0;
+        $inner = function () use (&$calls): ?array {
+            $calls++;
+            return null;
+        };
+        $mtimes = ['/w' => 50];
+        $memo = FsLister::memoize($inner, static function (string $path) use (&$mtimes): ?int {
+            return $mtimes[$path] ?? null;
+        });
+        $this->assertNull($memo('/w'));
+        $this->assertNull($memo('/w'));
+        $this->assertSame(2, $calls, 'a refusal over a live stat re-lists: r recovers a restored permission');
+        $mtimes['/w'] = null;
+        $this->assertNull($memo('/w'));
+        $this->assertNull($memo('/w'));
+        $this->assertSame(3, $calls, 'an unstatable dir memoizes its absence');
+        $mtimes['/w'] = 77;
+        $this->assertNull($memo('/w'));
+        $this->assertSame(4, $calls, 'null-mtime entries self-invalidate when stat returns');
+    }
+
+    /** CF-39: the invalidator bypasses an mtime tie — the same-second op case. */
+    public function testMemoInvalidatorDropsASlotDespiteAnUnchangedMtime(): void
+    {
+        $calls = 0;
+        $inner = function () use (&$calls): ?array {
+            $calls++;
+            return [new Entry('n' . $calls, false, 1, 0)];
+        };
+        [$memo, $forget] = FsLister::memo($inner, static fn(string $p): ?int => 7);
+        $this->assertSame(['n1'], array_map(static fn(Entry $e): string => $e->name, $memo('/s')));
+        $this->assertSame(['n1'], array_map(static fn(Entry $e): string => $e->name, $memo('/s')));
+        $this->assertSame(1, $calls, 'unchanged mtime is a cache hit');
+        $forget('/s');
+        $this->assertSame(['n2'], array_map(static fn(Entry $e): string => $e->name, $memo('/s')));
+        $this->assertSame(2, $calls, 'after a forget the same mtime must NOT answer from the memo');
+    }
 }

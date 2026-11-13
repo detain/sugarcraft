@@ -12,6 +12,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\InputReader;
 use SugarCraft\Files\ConfirmState;
 use SugarCraft\Files\Entry;
+use SugarCraft\Files\FsLister;
 use SugarCraft\Files\Manager;
 use SugarCraft\Files\Msg\CopyCompletedMsg;
 use PHPUnit\Framework\TestCase;
@@ -190,6 +191,37 @@ final class ManagerTest extends TestCase
         [$edge] = $m->update(new KeyMsg(KeyType::Char, '9'));
         $this->assertSame($m->tabIndex, $edge->tabIndex);
         $this->assertCount(3, $edge->tabs);
+    }
+
+    /** CF-39: goUp-and-back pays zero scans; an external touch + r shows fresh bytes. */
+    public function testMemoizedListingSparesRepeatNavigationTheScan(): void
+    {
+        $tmp = sys_get_temp_dir() . '/candyfiles-memo-' . getmypid() . '-' . bin2hex(random_bytes(4));
+        mkdir($tmp . '/aDir', 0755, true);
+        try {
+            $calls = [];
+            $raw = FsLister::lister();
+            $counter = function (string $path) use ($raw, &$calls): ?array {
+                $calls[$path] = ($calls[$path] ?? 0) + 1;
+                return $raw($path);
+            };
+            $m = Manager::start($tmp, $tmp, $counter);
+            [$m] = $m->update(new KeyMsg(KeyType::Char, 'j')); // past '..' onto 'aDir'
+            [$m] = $m->update(new KeyMsg(KeyType::Enter, ''));
+            $this->assertSame($tmp . '/aDir', $m->left->cwd);
+            $snapshot = $calls;
+            [$m] = $m->update(new KeyMsg(KeyType::Char, 'h'));   // goUp
+            [$m] = $m->update(new KeyMsg(KeyType::Enter, ''));    // back in
+            $this->assertSame($snapshot, $calls, 'the round trip cost no new lister calls');
+            touch($tmp . '/aDir/added');                          // external entry-set change
+            [$m] = $m->update(new KeyMsg(KeyType::Char, 'r'));   // mtime moved -> fresh bytes
+            $names = array_map(static fn(Entry $e): string => $e->name, $m->left->entries);
+            $this->assertContains('added', $names, 'mtime invalidation proven through the live seams');
+        } finally {
+            @unlink($tmp . '/aDir/added');
+            @rmdir($tmp . '/aDir');
+            @rmdir($tmp);
+        }
     }
 
     public function testMarksSurviveGoUpAndBack(): void

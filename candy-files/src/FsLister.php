@@ -72,4 +72,75 @@ final class FsLister
             return $out;
         };
     }
+
+    /**
+     * CF-39 (closes audit 063): memoized decorator over any lister —
+     * keyed by path, invalidated by the directory's own mtime. The
+     * injectable-lister contract is untouched (this just wraps whatever
+     * closure it is handed), so tests keep their deterministic fakes and
+     * the counter seam is the fake's own call tally.
+     *
+     * WHY mtime IS ENOUGH: a directory's mtime moves whenever its
+     * ENTRY SET moves (create, unlink, rename in or out) — exactly the
+     * changes the file manager itself performs. Navigation round-trips
+     * (goUp-and-back, re-open the same path) and the both-panes re-reads
+     * after every op complete are then cache hits: a delete of one file
+     * in a 170k-entry pane no longer pays a full parent re-scan.
+     *
+     * DISCLOSED LIMIT: rewriting a file IN PLACE changes the file, not
+     * the directory — its size column can read stale until the entry set
+     * changes. That is the price of zero-syscall repeat navigation; mc's
+     * re-opens pay a scan per keystroke instead.
+     *
+     * CF-22 contract kept THROUGH the cache: null (unreadable) listings
+     * are stored but never trusted over a live stat — a null paired with
+     * a readable mtime (the chmod'd-wall shape: filemtime answered,
+     * scandir refused) always re-lists, so `r` recovers a permission that
+     * came back without any entry-set change. A null stored while the
+     * directory itself is unstatable re-hits (re-scanning a vanished dir
+     * answers null again anyway) and self-invalidates the moment stat
+     * returns.
+     *
+     * @param \Closure(string): list<Entry>|null $lister
+     * @param (callable(string): ?int)|null      $mtime mtime seam for tests
+     */
+    public static function memoize(\Closure $lister, ?callable $mtime = null): \Closure
+    {
+        return self::memo($lister, $mtime)[0];
+    }
+
+    /**
+     * @return array{0: \Closure(string): list<Entry>|null, 1: \Closure(string): void}
+     *         [memoized lister, slot invalidator]
+     */
+    public static function memo(\Closure $lister, ?callable $mtime = null): array
+    {
+        $stat = $mtime ?? static function (string $path): ?int {
+            $m = @\filemtime($path);
+            return $m === false ? null : $m;
+        };
+        /** @var array<string, array{0: ?int, 1: list<Entry>|null}> $cache */
+        $cache = [];
+        $read = static function (string $path) use ($lister, $stat, &$cache): ?array {
+            $m = $stat($path);
+            if (array_key_exists($path, $cache) && $cache[$path][0] === $m) {
+                [$cachedM, $cached] = $cache[$path];
+                if ($cached !== null || $cachedM === null) {
+                    return $cached;
+                }
+            }
+            $entries = $lister($path);
+            $cache[$path] = [$m, $entries];
+            // FIFO bound: a long browse must not retain every directory
+            // it ever glanced at.
+            if (count($cache) > 256) {
+                unset($cache[array_key_first($cache)]);
+            }
+            return $entries;
+        };
+        $invalidate = static function (string $path) use (&$cache): void {
+            unset($cache[$path]);
+        };
+        return [$read, $invalidate];
+    }
 }

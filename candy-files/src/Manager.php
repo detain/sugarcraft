@@ -120,7 +120,13 @@ final class Manager implements Model
          * long session must not accumulate a directory's marks forever.
          */
         public readonly array $dirMarks = [],
+        /** CF-39: memo slot-dropper wired by start()/build(); null when the seam answers raw. */
+        public readonly ?\Closure $listerInvalidator = null,
     ) {
+        // The lister arrives exactly as the seam decided it (start() and
+        // ManagerBuilder::build() are the memoized production paths);
+        // re-wrapping HERE would double-stack caches and break the
+        // identity-through-mutate pins.
         $this->lister = $lister ?? FsLister::lister();
     }
 
@@ -130,6 +136,11 @@ final class Manager implements Model
     public static function start(string $leftCwd, string $rightCwd, ?\Closure $lister = null): self
     {
         $lister ??= FsLister::lister();
+        // CF-39: the production seam memoizes by directory mtime — repeat
+        // navigation and post-op re-reads cost zero scans while nothing
+        // moved — and keeps the invalidator so the disk-trusted refresh
+        // points (ops, `r`) can bypass second-granularity mtime ties.
+        [$lister, $invalidate] = FsLister::memo($lister);
         $left = Pane::open($leftCwd, $lister);
         $right = Pane::open($rightCwd, $lister);
         // Initialize with 1 tab containing the dual panes
@@ -156,6 +167,7 @@ final class Manager implements Model
             $left,
             $right,
             lister: $lister,
+            listerInvalidator: $invalidate,
             tabs: [$initialTab],
             tabIndex: 0,
             undoStack: [],
@@ -319,6 +331,22 @@ final class Manager implements Model
     }
 
     /**
+     * CF-39: the disk-trusted points. An op that just MOVED bytes (or an
+     * explicit `r`) must be believed even inside the same second the
+     * directory mtime was last stamped — drop this pane set's memo slots
+     * so the re-read below truly re-reads. Navigation keeps the memo.
+     */
+    private function forgetListings(Pane ...$panes): void
+    {
+        if ($this->listerInvalidator === null) {
+            return;
+        }
+        foreach ($panes as $pane) {
+            ($this->listerInvalidator)($pane->cwd);
+        }
+    }
+
+    /**
      * Re-read both pane listings from the filesystem, preserving each
      * pane's cwd / sort / hidden state and the tab they live in.
      */
@@ -327,11 +355,13 @@ final class Manager implements Model
         $lister = $this->lister;
         $reopen = static fn(Pane $p): Pane => Pane::open($p->cwd, $lister, $p->sort, $p->showHidden);
         if ($this->tabs !== [] && ($tab = $this->tabs[$this->tabIndex] ?? null) !== null) {
+            $this->forgetListings($tab['left'], $tab['right']);
             $newTab = ['left' => $reopen($tab['left']), 'right' => $reopen($tab['right']), 'activeIdx' => $tab['activeIdx']];
             $newTabs = $this->tabs;
             $newTabs[$this->tabIndex] = $newTab;
             return $this->mutate(['left' => $newTab['left'], 'right' => $newTab['right'], 'tabs' => $newTabs]);
         }
+        $this->forgetListings($this->left, $this->right);
         return $this->mutate(['left' => $reopen($this->left), 'right' => $reopen($this->right)]);
     }
 
@@ -348,11 +378,13 @@ final class Manager implements Model
         $lister = $this->lister;
         $relist = static fn(Pane $p): Pane => $p->relist($lister);
         if ($this->tabs !== [] && ($tab = $this->tabs[$this->tabIndex] ?? null) !== null) {
+            $this->forgetListings($tab['left'], $tab['right']);
             $newTab = ['left' => $relist($tab['left']), 'right' => $relist($tab['right']), 'activeIdx' => $tab['activeIdx']];
             $newTabs = $this->tabs;
             $newTabs[$this->tabIndex] = $newTab;
             return $this->mutate(['left' => $newTab['left'], 'right' => $newTab['right'], 'tabs' => $newTabs]);
         }
+        $this->forgetListings($this->left, $this->right);
         return $this->mutate(['left' => $relist($this->left), 'right' => $relist($this->right)]);
     }
 
@@ -848,7 +880,12 @@ final class Manager implements Model
     {
         // relist() (not Pane::open) so a re-read does not silently wipe the
         // cursor position and the entries of the selection that survived.
-        $pane = $this->activePane()->relist($this->lister);
+        // CF-39: `r` is the explicit "believe the disk" gesture — it drops
+        // the memo slot first, so an external touch inside the same second
+        // (mtime tie) still shows fresh bytes.
+        $active = $this->activePane();
+        $this->forgetListings($active);
+        $pane = $active->relist($this->lister);
         // CF-22: `r` on a directory that stopped answering no longer reports
         // "refreshed" — it names the refusal, and the pane above the status
         // still shows the last honest listing (relist retained it).
