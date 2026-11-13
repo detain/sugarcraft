@@ -1192,6 +1192,21 @@ final class Renderer
     /** True when $url targets a refused executable scheme. */
     private static function refusesUrl(string $url): bool
     {
+        if (self::isBenignUrl($url)) {
+            // Fast path (SM-S51): a plain-ASCII target that carries none of
+            // the bytes the decode battery can act on cannot reform into a
+            // different scheme, so one lowercase prefix check settles the
+            // same answer the three-probe battery would give — minus about
+            // ten allocations per link.
+            $lower = strtolower($url);
+            foreach (self::REFUSED_URL_SCHEMES as $refused) {
+                if (str_starts_with($lower, $refused)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         foreach (self::schemeProbes($url) as $probe) {
             foreach (self::REFUSED_URL_SCHEMES as $refused) {
                 if (str_starts_with($probe, $refused)) {
@@ -1201,6 +1216,21 @@ final class Renderer
         }
 
         return false;
+    }
+
+    /**
+     * Whether the decode battery can do nothing to $url: a benign target
+     * carries no percent escape, no entity introducer (`&` / `;`), no
+     * space, control byte or DEL (the battery's ltrim/strip legs), and no
+     * multi-byte character, so every {@see schemeProbes()} leg collapses to
+     * strtolower($url) and the single-check fast path in
+     * {@see refusesUrl()} is exact (SM-S51).
+     */
+    private static function isBenignUrl(string $url): bool
+    {
+        return strcspn($url, "%&; \x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F"
+            . "\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F\x7F") === strlen($url)
+            && !preg_match('/[\x80-\xFF]/', $url);
     }
 
     /**

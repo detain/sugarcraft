@@ -239,4 +239,92 @@ final class LinkSafetyTest extends TestCase
 
         $this->assertStringContainsString(' (b)', $plain->render('[a](b)'));
     }
+
+    /**
+     * SM-S51: refusesUrl() runs a single-check fast path for plain-ASCII
+     * benign targets; the ~10-allocation decode battery runs exactly when
+     * it could change the answer. These legs pin the guard's own semantics,
+     * fast-path/battery equivalence over the full spelling matrix (every
+     * SM-S09 provider spelling still refuses), and the case-insensitivity
+     * the fast path inherits.
+     */
+    private static function batteryRefuses(string $url): bool
+    {
+        $probes = new \ReflectionMethod(Renderer::class, 'schemeProbes');
+        $probes->setAccessible(true);
+        $refused = (new \ReflectionClass(Renderer::class))->getConstant('REFUSED_URL_SCHEMES');
+
+        foreach ($probes->invoke(null, $url) as $probe) {
+            foreach ($refused as $scheme) {
+                if (str_starts_with($probe, $scheme)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static function gateRefuses(string $url): bool
+    {
+        $refuses = new \ReflectionMethod(Renderer::class, 'refusesUrl');
+        $refuses->setAccessible(true);
+        return (bool) $refuses->invoke(null, $url);
+    }
+
+    /** @return iterable<string, array{0:string}> */
+    public static function spellingMatrixProvider(): iterable
+    {
+        // Benign spellings — the fast path settles these.
+        yield 'plain-https'         => ['https://example.com/a?b=1#frag'];
+        yield 'upper-scheme'        => ['HTTPS://EXAMPLE.COM'];
+        yield 'mailto-plain'        => ['mailto:a@b.c'];
+        yield 'mixed-case-refused'  => ['JavaScript:alert(1)'];
+        yield 'data-naked'          => ['data:text/html,x'];
+        yield 'relative-path'       => ['docs/page.md'];
+        // Disqualified spellings — each carries a byte the battery acts on.
+        yield 'percent'             => ['%6Aavascript:alert(1)'];
+        yield 'entity'              => ['&#106;avascript:alert(1)'];
+        yield 'nul-smuggle'         => ["java\x00script:alert(1)"];
+        yield 'lead-space'          => ['  javascript:alert(1)'];
+        yield 'zwsp-split'          => ["java\u{200B}script:alert(1)"];
+        yield 'fffd-percent'        => ['java%EF%BF%BDscript:alert(1)'];
+        yield 'del-byte'            => ["java\x7Fscript:alert(1)"];
+        yield 'non-ascii-https'     => ['https://example.com/café'];
+    }
+
+    public function testTheFastPathAndTheBatteryAgreeOnEverySpelling(): void
+    {
+        foreach (self::spellingMatrixProvider() as $name => [$url]) {
+            $this->assertSame(
+                self::batteryRefuses($url),
+                self::gateRefuses($url),
+                "fast path and battery disagree on {$name}",
+            );
+        }
+    }
+
+    public function testTheGuardClassifiesBenignAndDisqualifiedTargets(): void
+    {
+        $isBenign = new \ReflectionMethod(Renderer::class, 'isBenignUrl');
+        $isBenign->setAccessible(true);
+
+        foreach (['https://example.com/a?b=1#frag', 'mailto:a@b.c', 'JavaScript:alert(1)', ''] as $benign) {
+            $this->assertTrue((bool) $isBenign->invoke(null, $benign), var_export($benign, true));
+        }
+        foreach (
+            [
+                '%6Aavascript:', 'a&b', 'a;b', "a\x01b", "java\x00script:",
+                "x\x7Fy", 'xéy', "x\u{200B}y", ' x',
+            ] as $disqualified
+        ) {
+            $this->assertFalse((bool) $isBenign->invoke(null, $disqualified), var_export($disqualified, true));
+        }
+    }
+
+    public function testTheFastPathRefusesMixedCaseSchemesTheBatteryWouldCatch(): void
+    {
+        foreach (['JavaScript:alert(1)', 'DATA:text/html,x', 'VBScript:msgbox(1)'] as $url) {
+            $this->assertTrue(self::gateRefuses($url), $url);
+        }
+    }
 }
