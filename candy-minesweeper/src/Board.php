@@ -140,6 +140,14 @@ final class Board
         if ($cell === null) {
             return $this;
         }
+        // Rule-fidelity gate (msw-17/-030): the classic rulebook refuses the
+        // next flag once the flags already equal the mines — placement stops
+        // at the count, un-flagging stays free. Returning the board identity
+        // makes Game's changed-guard treat the refused press exactly like a
+        // dud: no state move, notice untouched.
+        if ($this->flaggedCount >= $this->mineCount && !$cell->flagged) {
+            return $this;
+        }
         $rows = $this->rows;
         $rows[$y][$x] = $cell->toggleFlag();
         // Cell::toggleFlag no-ops on a revealed cell (and returns the same

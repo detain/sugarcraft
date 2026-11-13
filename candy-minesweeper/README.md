@@ -60,12 +60,19 @@ The board renders in full — there is no scrolling viewport — and the help fo
 Ctrl- and Alt-modified letters are inert (only Ctrl+C quits), so editor
 muscle-memory cannot restart or save the game by accident.
 
+Flag placement follows the classic rulebook: once the flags equal the mine
+count, another flag is refused (un-flagging stays free, and the room an
+un-flag opens is immediately usable). A board that somehow carries more
+flags than mines — a hand-restored savegame — reads a negative remaining
+counter rather than a false zero, so the impossibility shows before the
+wrong-chord detonation does.
+
 Mouse support arms SGR cell-tracking (`MouseMode::CellMotion`), so a click
 plus drag also reports motion rows, not just button presses. Terminals or
 multiplexers that do not honour the mode simply never deliver mouse rows —
 the game stays fully playable on the keyboard, and the absence is silent.
 
-Flagged cells render as a bold gold `F` (a wrong flag is revealed as `✗` once the board is blown, and missed mines light up in red), and the cursor as reverse video, so board semantics survive even when adjacent-count colors are hard to distinguish — the number palette leans on hue differences. On terminals that treat East-Asian-ambiguous glyphs as double-width (e.g. `--ambigwidth=2` configurations), the footer separators `·`, the wrong-flag `✗` and the arrow hints render two cells wide; there is no ASCII fallback.
+Flagged cells render as a bold gold `F` (a wrong flag is revealed as `✗` once the board is blown, and missed mines light up in red), and the cursor as reverse video, so board semantics survive even when adjacent-count colors are hard to distinguish — the number palette leans on hue differences. Hidden cells wear a width-safe colon `:`; on terminals that treat East-Asian-ambiguous glyphs as double-width (e.g. `--ambigwidth=2` configurations) the board grid itself no longer doubles. The colour-downgrade boot (NO_COLOR / CLICOLOR=0 / TERM=dumb) additionally switches to the narrow glyph set — wrong-flag `x` and an ASCII `+` border — and the post-mortem legend then teaches exactly the marks that bin paints; a full-colour terminal keeps the `✗` dingbat and the rounded border, whose ambiguous glyphs (with the footer separators `·` and the arrow hints) still render two cells wide under an ambiguous-wide configuration.
 
 ## Save / resume
 

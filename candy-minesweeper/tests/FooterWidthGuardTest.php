@@ -111,7 +111,21 @@ final class FooterWidthGuardTest extends TestCase
                 stats: new Stats(easyGames: 2, easyWins: 1, easyBest: 3600),
                 newBest: true,
                 beatenRecord: 3600,
-            )]];
+            )],
+            // msw-17: the signed over-flag counter (a restored board's flags
+            // past the mine count) rides the same budget with its minus sign.
+            ['over-flag', new Game(board: (static function (): Board {
+                $rows = [];
+                for ($y = 0; $y < 3; $y++) {
+                    $row = [];
+                    for ($x = 0; $x < 3; $x++) {
+                        $mine = ($x === 1 && $y === 1) || ($x === 2 && $y === 2);
+                        $row[] = new Cell(mine: $mine, flagged: !$mine && $x + $y < 3);
+                    }
+                    $rows[] = $row;
+                }
+                return Board::fromRows(3, 3, 2, $rows, minesPlaced: true, exploded: false, revealedCount: 0, flaggedCount: 5);
+            })())]];
     }
 
     public function testEveryFrameLineFitsEightyColumnsInEveryLocale(): void

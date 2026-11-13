@@ -26,7 +26,7 @@ return [
     'ui.preset_expert' => 'エキスパート',
     'ui.boom' => '💥 ドカン — r で再スタート',
     'ui.cleared' => '★ クリア — r でもう一度',
-    'ui.help_rules' => '数字は周囲の地雷の数',
+    'ui.help_rules' => '数字は周囲の地雷の数 · 旗は地雷数を越えられない',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  移動  ·  space / enter  開く',
     'ui.help_board' => '左クリック  開く · f / 右クリック  旗 · c / 中クリック  周囲を開く',
     'ui.help_loss' => '{mark} 誤った旗 · * 取り逃した地雷',

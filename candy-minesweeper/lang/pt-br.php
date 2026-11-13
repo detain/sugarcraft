@@ -26,7 +26,7 @@ return [
     'ui.preset_expert' => 'expert',
     'ui.boom' => '💥 boom — pressione r para reiniciar',
     'ui.cleared' => '★ vencido — pressione r para jogar novamente',
-    'ui.help_rules' => 'um número conta as minas próximas',
+    'ui.help_rules' => 'um número conta as minas próximas · bandeiras não excedem as minas',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  mover  ·  espaço / enter  revelar',
     'ui.help_board' => 'clique esquerdo  abrir · f / direito  bandeira · c / do meio  ao redor',
     'ui.help_loss' => '{mark} bandeira errada · * mina perdida',

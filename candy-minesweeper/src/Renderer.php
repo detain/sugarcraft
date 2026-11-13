@@ -538,7 +538,12 @@ final class Renderer
                 SugarStyle::new()->foreground(Color::hex($b->exploded ? self::ink('#ff5f87', '#be123c') : self::ink('#6ee7b7', '#047857')))->bold(),
             ];
         }
-        $remaining = max(0, $b->mineCount - $b->flagCount());
+        // msw-17/-029: the SIGNED remainder — classic counters go negative on
+        // an over-flagged board so the impossibility is visible before the
+        // wrong-chord detonation. Interactive play cannot drive it below zero
+        // (Board::toggleFlag caps placement at the mine count); a restored
+        // hand-crafted board can, and the counter tells the truth about it.
+        $remaining = $b->mineCount - $b->flagCount();
         $elapsed = $g->elapsed();
         $time = $elapsed !== null ? self::formatTime((int) $elapsed) : '0:00';
         $style = SugarStyle::new()->foreground(Color::hex(self::ink('#a78bfa', '#6d28d9')));

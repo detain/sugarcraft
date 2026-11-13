@@ -26,7 +26,7 @@ return [
     'ui.preset_expert' => 'expert',
     'ui.boom' => '💥 bouch — stiskněte r pro restart',
     'ui.cleared' => '★ vyčištěno — stiskněte r pro novou hru',
-    'ui.help_rules' => 'číslo udává počet min v okolí',
+    'ui.help_rules' => 'číslo udává počet min v okolí · praporků max tolik co min',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  pohyb  ·  mezerník / enter  odkrytí',
     'ui.help_board' => 'levé tlačítko  odkryt · f / pravé  vlajka · c / prostřední  okolí',
     'ui.help_loss' => '{mark} špatná vlajka · * mine přehlédnutá',

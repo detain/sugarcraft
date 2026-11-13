@@ -10,7 +10,7 @@
 │          [0m │
 ╰───────────╯
   [1m[38;2;255;95;135m💥 boom — press r to restart · 0:00[0m
-  [38;2;125;110;152ma number counts nearby mines                                   [0m
+  [38;2;125;110;152ma number counts nearby mines · flags cannot outnumber mines    [0m
 [38;2;125;110;152m  ↑ ↓ ← → / hjkl  move  ·  space / enter  reveal               [0m
 [38;2;125;110;152m  ✗ wrong flag · * missed mine                                 [0m
 [38;2;125;110;152m  r  restart  ·  S  save  ·  L  load  ·  q / Esc / Ctrl+C  quit[0m

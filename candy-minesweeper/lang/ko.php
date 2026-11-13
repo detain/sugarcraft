@@ -26,7 +26,7 @@ return [
     'ui.preset_expert' => '전문가',
     'ui.boom' => '💥 펑 — 다시 시작하려면 r',
     'ui.cleared' => '★ 클리어 — 다시 하려면 r',
-    'ui.help_rules' => '숫자는 주변 지뢰 수를 뜻함',
+    'ui.help_rules' => '숫자는 주변 지뢰 수를 뜻함 · 깃발은 지뢰 수를 초과할 수 없음',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  이동  ·  space / enter  열기',
     'ui.help_board' => '왼쪽 클릭  열기 · f / 오른쪽 클릭  깃발 · c / 가운데 클릭  주변 열기',
     'ui.help_loss' => '{mark} 잘못된 깃발 · * 놓친 지뢰',

@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Minesweeper\Tests;
 
 use SugarCraft\Minesweeper\Board;
+use SugarCraft\Minesweeper\Cell;
+use SugarCraft\Minesweeper\Game;
+use SugarCraft\Minesweeper\Renderer;
 use PHPUnit\Framework\TestCase;
 
 final class BoardTest extends TestCase
@@ -95,6 +98,60 @@ final class BoardTest extends TestCase
         $b = $b->toggleFlag(1, 1);   // unflag
         $this->assertSame(1, $b->flagCount());
         $this->assertSame(1, $b->flaggedCount);
+    }
+
+    public function testFlagPlacementCapsAtTheMineCount(): void
+    {
+        // msw-17/-030 rule fidelity: once the flags equal the mines, another
+        // flag is refused with the board identity (Game's changed-guard then
+        // treats it as the dud press it is); un-flagging stays free, and the
+        // room it opens is immediately usable again.
+        $b = Board::blank(3, 3, 2)->toggleFlag(0, 0)->toggleFlag(1, 1);
+        $this->assertSame(2, $b->flagCount(), 'sanity: at the cap');
+
+        $capped = $b->toggleFlag(2, 2);
+        $this->assertSame($b, $capped, 'placement past the cap must return the same board, untouched');
+        $this->assertFalse($capped->cell(2, 2)->flagged, 'no ghost flag on the identity board');
+
+        $freed = $b->toggleFlag(0, 0);
+        $this->assertSame(1, $freed->flagCount(), 'un-flagging below the cap stays free');
+
+        $again = $freed->toggleFlag(2, 2);
+        $this->assertNotSame($freed, $again, 'the opened room accepts a new flag');
+        $this->assertTrue($again->cell(2, 2)->flagged);
+    }
+
+    public function testOverFlaggedBoardReadsSignedRemainder(): void
+    {
+        // msw-17/-029: a hand-restored board carrying more flags than mines
+        // reads the negative truth, never a false zero (interactive play
+        // cannot reach this state — the cap above refuses it — so the board
+        // is built through the public direct-construction boundary).
+        $prior = \SugarCraft\Core\I18n\T::locale();
+        \SugarCraft\Core\I18n\T::setLocale('en');
+        try {
+            $rows = [];
+            $flags = 0;
+            for ($y = 0; $y < 3; $y++) {
+                $row = [];
+                for ($x = 0; $x < 3; $x++) {
+                    $mine = ($x === 1 && $y === 1) || ($x === 2 && $y === 2);
+                    $flagged = !$mine && $flags < 3;
+                    if ($flagged) {
+                        $flags++;
+                    }
+                    $row[] = new Cell(mine: $mine, flagged: $flagged);
+                }
+                $rows[] = $row;
+            }
+            $over = Board::fromRows(3, 3, 2, $rows, minesPlaced: true, exploded: false, revealedCount: 0, flaggedCount: 3);
+            $view = Renderer::render(new Game(board: $over));
+
+            $this->assertStringContainsString('remaining: -1', $view, 'the classic counter goes negative');
+            $this->assertStringNotContainsString('remaining: 0', $view, 'no false zero may saturate the over-flag state');
+        } finally {
+            \SugarCraft\Core\I18n\T::setLocale($prior);
+        }
     }
 
     public function testFlagCountSurvivesSerializeRoundTrip(): void

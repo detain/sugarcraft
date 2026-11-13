@@ -26,7 +26,7 @@ return [
     'ui.preset_expert' => 'expert',
     'ui.boom' => '💥 boem — druk op r om opnieuw te starten',
     'ui.cleared' => '★ gewonnen — druk op r om opnieuw te spelen',
-    'ui.help_rules' => 'een getal telt de mijnen eromheen',
+    'ui.help_rules' => 'een getal telt de mijnen eromheen · vlaggen nooit talrijker dan mijnen',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  bewegen  ·  spatie / enter  onthullen',
     'ui.help_board' => 'klik links  openen · f / klik rechts  vlaggen · c / middelklik  rondom',
     'ui.help_loss' => '{mark} vlag verkeerd · * mijn gemist',
