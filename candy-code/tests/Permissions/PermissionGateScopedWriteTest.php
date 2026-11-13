@@ -198,6 +198,9 @@ final class PermissionGateScopedWriteTest extends TestCase
             // list: the historical shape is the same — a flag value that
             // escapes — and only containment can refuse it.
             'dotdot via a flag value'  => ['touch -r ../../etc/passwd ./x'],
+            // S-O43 polarity: the date is skipped, the PATH operand is still judged.
+            'touch -d date, escaping path' => ['touch -d 2026-01-01 ../../etc/x'],
+            'touch -d date, protected path' => ['touch -d 2026-01-01 ./.git/hooks/pre-commit'],
             // KILLS M7. `-t` is not on SCOPED_WRITE_SHORT_FLAGS, and every path
             // here is contained, so the ONLY thing that can refuse this line is
             // the whitelist. MEASURED: Ask today, Allow under M7 — and under
@@ -216,6 +219,15 @@ final class PermissionGateScopedWriteTest extends TestCase
             // mask the whitelist): `touch -c` is not on the list either, and
             // every operand is contained.
             'unlisted flag, safe value' => ['touch -c ./x'],
+            // S-O43: the old shared letter table let mkdir/rmdir/touch borrow
+            // each other's letters. `-r`/`-d` are not mkdir booleans, `-f` is
+            // not a touch one, and a clustered value flag is not recognised.
+            'mkdir -d is not a flag'   => ['mkdir -d ./x'],
+            'rmdir -r is not a flag'   => ['rmdir -r ./x'],
+            'touch -f is not a flag'   => ['touch -f ./x'],
+            'touch clustered -d'       => ['touch -rd 2026-01-01 ./x'],
+            'touch -d with no value'   => ['touch ./x -d'],
+            'touch -d long form'       => ['touch --date=2026-01-01 ./x'],
             // The working directory itself is not "something inside it".
             'removes the root itself'  => ['rmdir .'],
             'removes the root, slashed' => ['rmdir ./'],
@@ -256,6 +268,12 @@ final class PermissionGateScopedWriteTest extends TestCase
             'touch'                => ['touch ./file'],
             'touch bare relative'  => ['touch tmp/demo.txt'],
             'touch two relatives'  => ['touch ./a ./b'],
+            // S-O43: the operand behind `-d`/`-t` is a date, not a path, so it
+            // is skipped; only ./x is judged.
+            'touch -d date'        => ['touch -d 2026-01-01 ./x'],
+            'touch -d spaced date' => ['touch -d "2026-01-01 10:00" ./x'],
+            'touch -t stamp'       => ['touch -t 202601011000 ./x'],
+            'touch -r contained ref' => ['touch -r ./ref ./x'],
             'rmdir'                => ['rmdir ./tmp'],
             'rmdir -p'             => ['rmdir -p ./tmp/a/b'],
             'clustered flags'      => ['mkdir -pv ./tmp'],

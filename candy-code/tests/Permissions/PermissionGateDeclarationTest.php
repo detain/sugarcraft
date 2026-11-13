@@ -369,4 +369,25 @@ final class PermissionGateDeclarationTest extends TestCase
             'evaluate() must take a real call',
         );
     }
+
+    /**
+     * S-O43: refuses() on a keystroke-typing declaration (ShellSend) must not
+     * write the forced-ask mark or the reason a real call left behind.
+     */
+    public function testDeclarationProbeLeavesKeystrokeStateUntouched(): void
+    {
+        $gate = new PermissionGate(PermissionMode::Default);
+        $gate->refuses(new ToolDeclaration(\SugarCraft\Code\Tools\BuiltIn\ShellSend::NAME));
+
+        $this->assertFalse($gate->lastAskForced());
+        $this->assertNull($gate->lastAutoReason());
+
+        $gate->evaluate(new ToolCall(name: \SugarCraft\Code\Tools\BuiltIn\ShellSend::NAME, arguments: []));
+        $this->assertTrue($gate->lastAskForced());
+        $reason = $gate->lastAutoReason();
+
+        $gate->refuses(new ToolDeclaration('Read'));
+        $this->assertTrue($gate->lastAskForced());
+        $this->assertSame($reason, $gate->lastAutoReason());
+    }
 }

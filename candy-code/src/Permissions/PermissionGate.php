@@ -1031,7 +1031,10 @@ final class PermissionGate
         // IS typing, by name — the design's keystroke rule includes it.
         $typesKeystrokes = ShellSubjectTools::stepTexts($call->name, $call->arguments) !== []
             || $call->name === \SugarCraft\Code\Tools\BuiltIn\ShellSend::NAME;
-        if ($typesKeystrokes) {
+        // The state write is for a REAL call only: a declaration probe
+        // (refuses()) must not leave the modal badge or reason of the last
+        // real call changed. The verdict itself rides the local flag.
+        if ($typesKeystrokes && $commitAutoStrikes) {
             $this->forcedAsk = true;
             $this->lastAutoReason = 'types keystrokes into a live terminal, which always asks';
         }
@@ -2402,16 +2405,32 @@ final class PermissionGate
         $paths = [];
         $endOfOptions = false;
 
+        $valueFlags = self::SCOPED_WRITE_VALUE_FLAGS[$command] ?? [];
+        $pendingValue = null;
+
         foreach ($tokens as $token) {
+            if ($pendingValue !== null) {
+                if ($pendingValue) {
+                    $paths[] = $token;
+                }
+                $pendingValue = null;
+                continue;
+            }
+
             if (!$endOfOptions && $token === '--') {
                 $endOfOptions = true;
+                continue;
+            }
+
+            if (!$endOfOptions && array_key_exists($token, $valueFlags)) {
+                $pendingValue = $valueFlags[$token];
                 continue;
             }
 
             // A bare `-` is a filename, not a flag — the same call this file's
             // `rm -rf` breaker already makes in segmentIsRmRfRootOrHome().
             if (!$endOfOptions && $token !== '-' && str_starts_with($token, '-')) {
-                if (!$this->isPermittedScopedWriteFlag($token)) {
+                if (!$this->isPermittedScopedWriteFlag($command, $token)) {
                     return false;
                 }
                 continue;
@@ -2420,7 +2439,8 @@ final class PermissionGate
             $paths[] = $token;
         }
 
-        if ($paths === []) {
+        // A value flag with nothing after it is a malformed line, not a grant.
+        if ($pendingValue !== null || $paths === []) {
             return false;
         }
 
@@ -2450,33 +2470,54 @@ final class PermissionGate
     private const DOUBLE_QUOTE_ACTIVE_CHARS = "\$`\\";
 
     /**
-     * Short flag letters accepted in a scoped write, as a cluster (`-rf`) or
-     * singly (`-p`): parents, force, interactive, recursive (both spellings),
-     * verbose, no-clobber, dir.
+     * Short flag letters accepted in a scoped write, PER COMMAND, as a cluster
+     * (`-pv`) or singly (`-p`).
      *
      * A WHITELIST, because the alternative — "anything starting with `-` is a
      * flag, skip it" — silently skipped flags that TAKE A PATH: `mv -t ../../etc
      * ./x` passed the old containment loop because `-t` was skipped and
      * `../../etc` was merely non-absolute. An unlisted flag yields Ask, i.e. a
      * prompt, not a refusal of the operation.
+     *
+     * One table per command (S-O43): the old single string `pfirRvnd` let
+     * `touch -d`/`-r` through as "dir"/"recursive" booleans although both TAKE
+     * A VALUE for touch, so a date was judged as if it were a path operand.
+     * mkdir and rmdir share `-p` (parents) and `-v` (verbose); touch has no
+     * boolean letter here at all — its value flags are in
+     * {@see SCOPED_WRITE_VALUE_FLAGS}.
+     *
+     * @var array<string, string>
      */
-    private const SCOPED_WRITE_SHORT_FLAGS = 'pfirRvnd';
+    private const SCOPED_WRITE_SHORT_FLAGS = [
+        'mkdir' => 'pv',
+        'rmdir' => 'pv',
+        'touch' => '',
+    ];
 
     /**
-     * Long-flag spellings of the same set. `--target-directory` is deliberately
+     * Short flags that consume the NEXT token as a value, per command, mapped
+     * to whether that value is a PATH (judged by containment like an operand)
+     * or an opaque string (a date for `touch -d`/`-t`, which is not a path and
+     * must not be judged as one). Only the standalone spelling is accepted; a
+     * clustered or `=`-attached form is an unlisted flag and so asks.
+     *
+     * @var array<string, array<string, bool>>
+     */
+    private const SCOPED_WRITE_VALUE_FLAGS = [
+        'touch' => ['-d' => false, '-t' => false, '-r' => true],
+    ];
+
+    /**
+     * Long-flag spellings, per command. `--target-directory` is deliberately
      * absent: it takes a path, and its `=`-attached form would hide that path
      * inside a token this loop treats as a flag.
      *
-     * @var string[]
+     * @var array<string, string[]>
      */
     private const SCOPED_WRITE_LONG_FLAGS = [
-        '--parents',
-        '--recursive',
-        '--force',
-        '--verbose',
-        '--interactive',
-        '--no-clobber',
-        '--dir',
+        'mkdir' => ['--parents', '--verbose'],
+        'rmdir' => ['--parents', '--verbose'],
+        'touch' => [],
     ];
 
     /**
@@ -2564,10 +2605,10 @@ final class PermissionGate
      * @see SCOPED_WRITE_SHORT_FLAGS for why this is a whitelist rather than a
      *      "starts with a dash" test.
      */
-    private function isPermittedScopedWriteFlag(string $token): bool
+    private function isPermittedScopedWriteFlag(string $command, string $token): bool
     {
         if (str_starts_with($token, '--')) {
-            return in_array($token, self::SCOPED_WRITE_LONG_FLAGS, true);
+            return in_array($token, self::SCOPED_WRITE_LONG_FLAGS[$command] ?? [], true);
         }
 
         $cluster = substr($token, 1);
@@ -2576,7 +2617,7 @@ final class PermissionGate
         }
 
         for ($i = 0, $length = strlen($cluster); $i < $length; ++$i) {
-            if (!str_contains(self::SCOPED_WRITE_SHORT_FLAGS, $cluster[$i])) {
+            if (!str_contains(self::SCOPED_WRITE_SHORT_FLAGS[$command] ?? '', $cluster[$i])) {
                 return false;
             }
         }
