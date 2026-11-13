@@ -7536,6 +7536,58 @@ final class Renderer
      * per category (§4 E6/E7); a typed query stays a flat relevance-ranked
      * list, headers omitted, so the best match is always the first row.
      */
+    /**
+     * Visible half-open slice [start, end) of the palette result list that
+     * fits `$budget` content lines and always contains `$selected`.
+     *
+     * @param array<int, mixed> $results
+     * @return array{0:int,1:int}
+     */
+    private static function paletteWindow(Chat $chat, array $results, int $selected, bool $grouped, int $budget): array
+    {
+        $n = \count($results);
+        $selected = max(0, min($selected, $n - 1));
+        $keys = array_keys($results);
+        $fill = static function (int $start) use ($chat, $results, $keys, $grouped, $budget, $n): int {
+            $used = 0;
+            $last = null;
+            for ($i = $start; $i < $n; $i++) {
+                $cost = 1;
+                if ($grouped) {
+                    $cat = $chat->paletteCategory($results[$keys[$i]]->haystack);
+                    if ($cat !== null && $cat !== $last) {
+                        $cost++;
+                        $last = $cat;
+                    }
+                }
+                if ($used + $cost > $budget && $i > $start) {
+                    return $i;
+                }
+                $used += $cost;
+            }
+
+            return $n;
+        };
+
+        $start = 0;
+        $end = $fill(0);
+        if ($selected >= $end) {
+            // Anchor the cursor near the middle of the window.
+            $start = max(0, $selected - intdiv(max(1, $end), 2));
+            $end = $fill($start);
+            while ($selected >= $end && $start < $selected) {
+                $start++;
+                $end = $fill($start);
+            }
+            // Pull back so a short tail does not leave dead space.
+            while ($start > 0 && $end === $n && $fill($start - 1) === $n) {
+                $start--;
+            }
+        }
+
+        return [$start, $end];
+    }
+
     private static function renderPalette(Chat $chat, Theme $theme, RenderFrame $frame): string
     {
         $palette = $chat->palette();
@@ -7594,7 +7646,21 @@ final class Renderer
             // and model lists — and the root command list — byte-identical.
             $activePickerRow = $palette->mode === 'themes' ? $chat->activeThemeName() : null;
 
+            // S-U01: the box is capped to the viewport. Derive-then-clamp (no
+            // stored offset): the window is re-derived from selectedIndex on
+            // every paint, so arrows, clicks and Enter all name a row that is
+            // on the canvas. Category headers spend budget too.
+            [$winStart, $winEnd] = self::paletteWindow(
+                $chat,
+                $results,
+                $selected,
+                $grouped,
+                max(3, $chat->rows() - 8 - \count($lines)),
+            );
             foreach ($results as $index => $result) {
+                if ($index < $winStart || $index >= $winEnd) {
+                    continue;
+                }
                 if ($grouped) {
                     $category = $chat->paletteCategory($result->haystack);
                     if ($category !== null && $category !== $lastCategory) {
