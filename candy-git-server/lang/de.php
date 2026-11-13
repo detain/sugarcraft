@@ -92,6 +92,7 @@ return [
     'cli.repo_root_unreadable' => 'serve: Repository-Wurzel {path} ist nicht lesbar',
     'cli.token_no_config' => 'token: keine lesbare Konfiguration unter {data}/config.yaml — führen Sie init aus oder übergeben Sie einen Datenpfad',
     'cli.token_no_secret' => 'token: http.auth_secret ist für diesen Datenpfad nicht konfiguriert; setzen Sie ihn im Abschnitt http: von config.yaml, bevor Sie Tokens ausstellen',
+    'cli.token_ttl_capped' => 'token: die angeforderte Laufzeit von {ttl}s ueberschreitet die unter {key} konfigurierte Obergrenze von {max}s; verringern Sie die Laufzeit oder erhohen Sie diesen Schluessel in config.yaml',
     'cli.password_flag_needs_value' => 'candy-git-server: --password benötigt einen Wert (\'-\' liest von stdin)',
     'cli.password_flag_empty' => 'candy-git-server: --password benötigt einen nicht-leeren Wert',
     'cli.username_invalid' => 'Ungültiger Benutzername: \'{username}\' (Buchstaben, Ziffern, Punkt, Unterstrich, Bindestrich; nicht nur Punkte)',

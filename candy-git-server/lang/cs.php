@@ -83,6 +83,7 @@ return [
     'cli.repo_root_unreadable' => 'serve: kořen repozitářů {path} nelze číst',
     'cli.token_no_config' => 'token: není čitelná konfigurace v {data}/config.yaml — spusťte init nebo zadejte cestu k datům',
     'cli.token_no_secret' => 'token: http.auth_secret není pro tuto datovou cestu nastaven; nastavte ji v sekci http: souboru config.yaml před vydáváním tokenů',
+    'cli.token_ttl_capped' => 'token: pozadovany TTL {ttl}s prekrocuje strop {max}s nastaveny pod {key}; snizte TTL nebo zvyste tento klic v config.yaml',
     'cli.password_flag_needs_value' => 'candy-git-server: --password vyžaduje hodnotu (\'-\' čte ze stdin)',
     'cli.password_flag_empty' => 'candy-git-server: --password vyžaduje neprázdnou hodnotu',
     'cli.username_invalid' => 'Neplatné uživatelské jméno: \'{username}\' (písmena, číslice, tečka, podtržítko, pomlčka; ne pouze tečky)',

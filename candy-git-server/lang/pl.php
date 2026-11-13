@@ -83,6 +83,7 @@ return [
     'cli.repo_root_unreadable' => 'serve: nie można odczytać katalogu głównego repozytoriów {path}',
     'cli.token_no_config' => 'token: brak czytelnej konfiguracji w {data}/config.yaml — uruchom init lub podaj ścieżkę danych',
     'cli.token_no_secret' => 'token: http.auth_secret nie jest skonfigurowany dla tej ścieżki danych; ustaw go w sekcji http: pliku config.yaml przed wydawaniem tokenów',
+    'cli.token_ttl_capped' => 'token: zadany TTL {ttl}s przekracza limit {max}s skonfigurowany pod {key}; obniz TTL lub podwyz ten klucz w config.yaml',
     'cli.password_flag_needs_value' => 'candy-git-server: --password wymaga wartości (\'-\' czyta ze stdin)',
     'cli.password_flag_empty' => 'candy-git-server: --password wymaga wartości nieprawidłowo pustej',
     'cli.username_invalid' => 'Nieprawidłowa nazwa użytkownika: \'{username}\' (litery, cyfry, kropka, podkreślenie, myślnik; nie same kropki)',

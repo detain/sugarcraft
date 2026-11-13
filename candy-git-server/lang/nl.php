@@ -83,6 +83,7 @@ return [
     'cli.repo_root_unreadable' => 'serve: repository-root {path} kan niet gelezen worden',
     'cli.token_no_config' => 'token: geen leesbare configuratie in {data}/config.yaml — voer init uit of geef een datapad op',
     'cli.token_no_secret' => 'token: http.auth_secret is niet geconfigureerd voor dit datapad; stel het in onder het http:-deel van config.yaml voordat u tokens aanmaakt',
+    'cli.token_ttl_capped' => 'token: de verzochte TTL van {ttl}s overschrijdt het plafond van {max}s geconfigureerd onder {key}; verlaag de TTL of verhoog die sleutel in config.yaml',
     'cli.password_flag_needs_value' => 'candy-git-server: --password vereist een waarde (\'-\' leest van stdin)',
     'cli.password_flag_empty' => 'candy-git-server: --password vereist een niet-lege waarde',
     'cli.username_invalid' => 'Ongeldige gebruikersnaam: \'{username}\' (letters, cijfers, punt, underscore, koppelteken; niet alleen punten)',

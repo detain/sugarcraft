@@ -188,6 +188,43 @@ final class ConfigTest extends TestCase
         $this->assertSame('s3cr3t', $c->authSecret);
     }
 
+    /** S22 (finding 039): the TTL ceiling knob — default, explicit parse... */
+    public function testHttpTokenMaxTtlDefaultsToThirtyDays(): void
+    {
+        $configPath = $this->tmpDir . '/ttl-default.yaml';
+        \file_put_contents($configPath, "http: { listen_addr: \":0\" }\n");
+
+        $this->assertSame(2_592_000, Config::load($configPath)->httpTokenMaxTtl);
+    }
+
+    public function testHttpTokenMaxTtlParsesAnExplicitValue(): void
+    {
+        $configPath = $this->tmpDir . '/ttl-explicit.yaml';
+        \file_put_contents($configPath, "http: { token_max_ttl: 600 }\n");
+
+        $this->assertSame(600, Config::load($configPath)->httpTokenMaxTtl);
+    }
+
+    /** ...strict vocabulary (S07 family: '7d' is not a duration)... */
+    public function testHttpTokenMaxTtlRefusesUnitStrings(): void
+    {
+        $configPath = $this->tmpDir . '/ttl-unit.yaml';
+        \file_put_contents($configPath, "http: { token_max_ttl: \"7d\" }\n");
+
+        $this->expectException(\InvalidArgumentException::class);
+        Config::load($configPath);
+    }
+
+    /** ...and the knob itself is capped at one year: config cannot re-mint immortality. */
+    public function testHttpTokenMaxTtlRefusesBeyondItsOwnParseCeiling(): void
+    {
+        $configPath = $this->tmpDir . '/ttl-overflow.yaml';
+        \file_put_contents($configPath, "http: { token_max_ttl: 31536001 }\n");
+
+        $this->expectException(\InvalidArgumentException::class);
+        Config::load($configPath);
+    }
+
     public function testLoadParsesCommaSeparatedTrustedProxies(): void
     {
         $configPath = $this->tmpDir . '/trust-csv.yaml';

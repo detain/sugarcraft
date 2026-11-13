@@ -537,6 +537,18 @@ function cmdUserToken(array $args): int
         return error(Lang::t('cli.token_no_secret') . "\n");
     }
 
+    // S22 (finding 039): the mint side refuses a TTL past the ceiling
+    // OUT LOUD (naming the knob) rather than silently minting a shorter
+    // life the operator did not ask for — and the verifier independently
+    // refuses any signature that claims more than the ceiling anyway.
+    if ($ttl > $config->httpTokenMaxTtl) {
+        return error(Lang::t('cli.token_ttl_capped', [
+            'ttl' => (string) $ttl,
+            'max' => (string) $config->httpTokenMaxTtl,
+            'key' => 'http.token_max_ttl',
+        ]) . "\n");
+    }
+
     return say(\SugarCraft\GitServer\HttpSmartProtocol\Server::mintUserToken(
         $username,
         \time() + $ttl,

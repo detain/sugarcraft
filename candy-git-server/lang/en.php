@@ -92,6 +92,7 @@ return [
     'cli.repo_root_unreadable' => 'serve: cannot read repository root {path}',
     'cli.token_no_config' => 'token: no readable config at {data}/config.yaml — run init or pass a data-path',
     'cli.token_no_secret' => 'token: http.auth_secret is not configured for this data path; set it under the http: section of config.yaml before minting tokens',
+    'cli.token_ttl_capped' => 'token: requested TTL {ttl}s exceeds the ceiling {max}s configured under {key}; lower the TTL or raise that key in config.yaml',
     'cli.password_flag_needs_value' => 'candy-git-server: --password requires a value (\'-\' reads from stdin)',
     'cli.password_flag_empty' => 'candy-git-server: --password requires a non-empty value',
     'cli.username_invalid' => 'Invalid username: \'{username}\' (letters, digits, dot, underscore, hyphen; not all dots)',

@@ -83,6 +83,7 @@ return [
     'cli.repo_root_unreadable' => 'serve：无法读取仓库根目录 {path}',
     'cli.token_no_config' => 'token: {data}/config.yaml 没有可读配置 — 请运行 init 或指定数据路径',
     'cli.token_no_secret' => 'token: 此数据路径未配置 http.auth_secret；请在 config.yaml 的 http: 段中设置后再签发令牌',
+    'cli.token_ttl_capped' => 'token: 请求的 TTL {ttl}秒超过 {key} 配置的上限 {max}秒；请降低 TTL，或在 config.yaml 中提高该键值',
     'cli.password_flag_needs_value' => 'candy-git-server: --password 需要一个值（\'-\' 从标准输入读取）',
     'cli.password_flag_empty' => 'candy-git-server: --password 需要非空值',
     'cli.username_invalid' => '无效用户名：\'{username}\'（仅限字母、数字、点、下划线、连字符；不能全为点）',

@@ -281,7 +281,7 @@ final class CheckChildLifetimes
                 . 'TERM→SIGKILL ladder, bounded polls, proc_close on every path. Pinned by the '
                 . 'same census test; one spawn site, derived once by the single-prefix walk.',
         ],
-        'candy-git-server/src/Support/BoundedCommand.php::run' => [
+        'candy-git-server/src/Support/BoundedCommand.php::spawn' => [
             'count' => 1,
             'kind' => 'fd-open',
             'reason' => 'S15 (finding 024) replaced the runner\'s unconditional '

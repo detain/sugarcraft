@@ -257,6 +257,43 @@ final class UserTrustTest extends TestCase
         $this->assertSame('alice', $user->username);
     }
 
+    /**
+     * S22 (finding 039): verify enforces the ceiling too — a signature
+     * claiming more remaining life than http.token_max_ttl is refused
+     * even while its expiry is still in the future. The immortal
+     * pre-hardening shape (expiry 999999999999) is structurally revoked
+     * under the DEFAULT ceiling, no secret rotation required.
+     */
+    public function testSignatureClaimingLifeBeyondTheCeilingIsRefused(): void
+    {
+        $server = $this->makeServer('user_trust_mode: "token", auth_secret: "s3cr3t", token_max_ttl: 60');
+
+        $user = $this->resolveTrustedUser($server, [
+            'X-CandyGitServer-User' => 'alice',
+            'X-CandyGitServer-User-Sig' => Server::mintUserToken('alice', \time() + 3600, 's3cr3t'),
+        ], null);
+        $this->assertNull($user, 'a 3600s life under a 60s ceiling must not authenticate');
+
+        $immortal = $this->resolveTrustedUser($server, [
+            'X-CandyGitServer-User' => 'alice',
+            'X-CandyGitServer-User-Sig' => Server::mintUserToken('alice', 999_999_999_999, 's3cr3t'),
+        ], null);
+        $this->assertNull($immortal, 'the immortal expiry shape is refused by the remaining-life test');
+    }
+
+    public function testSignatureWithinTheCeilingStillResolves(): void
+    {
+        $server = $this->makeServer('user_trust_mode: "token", auth_secret: "s3cr3t", token_max_ttl: 120');
+
+        $user = $this->resolveTrustedUser($server, [
+            'X-CandyGitServer-User' => 'alice',
+            'X-CandyGitServer-User-Sig' => Server::mintUserToken('alice', \time() + 30, 's3cr3t'),
+        ], null);
+
+        $this->assertNotNull($user, 'a life inside the ceiling keeps working');
+        $this->assertSame('alice', $user->username);
+    }
+
     public function testExpiredTokenIsRefused(): void
     {
         $server = $this->makeServer('user_trust_mode: "token", auth_secret: "s3cr3t"');

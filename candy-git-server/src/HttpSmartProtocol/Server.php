@@ -1138,6 +1138,15 @@ final class Server
             return false;
         }
 
+        // S22 (finding 039): the mint side is not the only door — a
+        // signature may not claim a remaining life past the configured
+        // ceiling either. This is what revokes the pre-hardening
+        // shape: an expiry of 999999999999 is REFUSED while it is
+        // still years away, no secret rotation required.
+        if ($expiry - \time() > $this->config->httpTokenMaxTtl) {
+            return false;
+        }
+
         return \hash_equals(self::mintUserToken($username, $expiry, $secret), $sig);
     }
 

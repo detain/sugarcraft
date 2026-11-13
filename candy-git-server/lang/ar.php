@@ -83,6 +83,7 @@ return [
     'cli.repo_root_unreadable' => 'serve: تعذّرت قراءة جذر المستودعات {path}',
     'cli.token_no_config' => 'token: لا يوجد إعداد قابل للقراءة في {data}/config.yaml — شغّل init أو مرّر مسار بيانات',
     'cli.token_no_secret' => 'token: http.auth_secret غير مُهيأ لمسار البيانات هذا؛ اضبطه تحت قسم http: في config.yaml قبل إصدار الرموز',
+    'cli.token_ttl_capped' => 'token: مدة TTL المطلوبة {ttl} ثانية تتجاوز الحد {max} ثانية المضبوط تحت {key}; قلل المدة أو ارفع هذا المفتاح في config.yaml',
     'cli.password_flag_needs_value' => 'candy-git-server: --password يتطلب قيمة (\'-\' تقرأ من stdin)',
     'cli.password_flag_empty' => 'candy-git-server: --password يتطلب قيمة غير فارغة',
     'cli.username_invalid' => 'اسم مستخدم غير صالح: \'{username}\' (حروف وأرقام ونقطة وشرطة سفلية وشرطة؛ ليس نقاطًا فقط)',

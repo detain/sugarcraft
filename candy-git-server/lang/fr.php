@@ -92,6 +92,7 @@ return [
     'cli.repo_root_unreadable' => 'serve : impossible de lire la racine de dépôt {path}',
     'cli.token_no_config' => 'token : aucune configuration lisible dans {data}/config.yaml — exécutez init ou passez un chemin de données',
     'cli.token_no_secret' => 'token : http.auth_secret n\'est pas configuré pour ce chemin de données ; définissez-le dans la section http: de config.yaml avant de créer des jetons',
+    'cli.token_ttl_capped' => 'token : le TTL demande de {ttl}s depasse le plafond de {max}s configure sous {key} ; reduisez le TTL ou relevez cette cle dans config.yaml',
     'cli.password_flag_needs_value' => 'candy-git-server : --password nécessite une valeur (\'-\' lit depuis stdin)',
     'cli.password_flag_empty' => 'candy-git-server : --password nécessite une valeur non vide',
     'cli.username_invalid' => 'Nom d\'utilisateur invalide : \'{username}\' (lettres, chiffres, point, souligné, trait d\'union ; pas uniquement des points)',

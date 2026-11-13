@@ -83,6 +83,7 @@ return [
     'cli.repo_root_unreadable' => 'serve: depo kökü {path} okunamıyor',
     'cli.token_no_config' => 'token: okunabilir yapılandırma yok: {data}/config.yaml — init çalıştırın veya bir veri yolu geçin',
     'cli.token_no_secret' => 'token: bu veri yolu için http.auth_secret yapılandırılmamış; token basmadan önce config.yaml içindeki http: bölümünde ayarlayın',
+    'cli.token_ttl_capped' => 'token: istenen {ttl}s TTL, {key} altinda yapilandirilan {max}s ust sinirini asiyor; TTL\'yi dusurun veya o anahtari config.yaml icinde yukseltin',
     'cli.password_flag_needs_value' => 'candy-git-server: --password bir değer gerektirir (\'-\' stdin\'den okur)',
     'cli.password_flag_empty' => 'candy-git-server: --password boş olmayan bir değer gerektirir',
     'cli.username_invalid' => 'Geçersiz kullanıcı adı: \'{username}\' (harfler, rakamlar, nokta, alt çizgi, tire; yalnızca nokta olamaz)',

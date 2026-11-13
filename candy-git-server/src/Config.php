@@ -89,6 +89,15 @@ final class Config
     /** Shared secret keying the HMAC user token (used when userTrustMode is 'token'). */
     public readonly string $authSecret;
 
+    /**
+     * S22 (finding 039): the ceiling on how far in the future a proxy
+     * token may claim to live — enforced at BOTH mint (the CLI refuses
+     * past it) and verify (a signature whose remaining life exceeds it
+     * is refused, which structurally revokes every pre-hardening
+     * immortal token without waiting for a secret rotation).
+     */
+    public readonly int $httpTokenMaxTtl;
+
     /** Max buffered packfile size in bytes (null = server default). */
     public readonly ?int $maxPackBytes;
 
@@ -240,6 +249,9 @@ final class Config
         $this->userTrustMode  = self::parseUserTrustMode((string) ($http['user_trust_mode'] ?? 'off'));
         $this->trustedProxies = self::parseTrustedProxies($http['trusted_proxies'] ?? []);
         $this->authSecret     = (string) ($http['auth_secret'] ?? '');
+        // S22 (finding 039): default 30 days, hard parse ceiling one year —
+        // the CONFIG knob itself cannot smuggle an immortal TTL back in.
+        $this->httpTokenMaxTtl = self::parseInt('http.token_max_ttl', $http['token_max_ttl'] ?? null, 2_592_000, 1, 31_536_000);
 
         $lfs = $data['lfs'] ?? [];
         $this->lfsEnabled   = self::parseBool('lfs.enabled', $lfs['enabled'] ?? null, true);

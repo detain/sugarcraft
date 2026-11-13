@@ -83,6 +83,7 @@ return [
     'cli.repo_root_unreadable' => 'serve: リポジトリルート {path} を読み込めません',
     'cli.token_no_config' => 'token: 読み取り可能な設定がありません {data}/config.yaml — init を実行するかデータパスを指定してください',
     'cli.token_no_secret' => 'token: このデータパスに http.auth_secret が設定されていません。トークンを発行する前に config.yaml の http: セクションに設定してください',
+    'cli.token_ttl_capped' => 'token: 要求された TTL {ttl}秒は {key} の上限 {max}秒 を超えています。TTL を下げるか、config.yaml でこのキーを引き上げてください',
     'cli.password_flag_needs_value' => 'candy-git-server: --password には値が必要です (\'-\' は標準入力から読み込み)',
     'cli.password_flag_empty' => 'candy-git-server: --password には空でない値が必要です',
     'cli.username_invalid' => '無効なユーザー名: \'{username}\' (使用可能: 英数字、ドット、アンダースコア、ハイフン。ドットのみは不可)',
