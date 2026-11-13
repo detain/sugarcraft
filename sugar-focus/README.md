@@ -66,7 +66,8 @@ $style = $ring->isFocused('sidebar') && $ring->isEnabled('sidebar')
 ```
 
 The `isEnabled()` conjunct matters: focus can legally park on a disabled
-region, so `isFocused()` alone can paint an accent border on a dimmed panel.
+region, so `isFocused()` alone can paint an accent border on a dimmed panel —
+`if ($ring->isParked())` names that whole-ring state in one call.
 The same parked state must stay inert in key routing: a consumer dispatching
 shortcuts off `current()` checks `isEnabled()` there too, not only at paint
 time.
@@ -120,7 +121,9 @@ strength itself under 1.4.11 *Non-text Contrast*).
 - **Paint the accent with `isFocused($id) && isEnabled($id)`.** Focus can
   legally park on a disabled region — `disable()` never moves it, and
   `unregister()` lands on the vacated slot when every survivor is disabled —
-  so `isFocused()` alone can highlight a dimmed panel.
+  so `isFocused()` alone can highlight a dimmed panel. For the ring as a
+  whole the same fact is `if ($ring->isParked())`; the per-id pair remains
+  the test when painting many regions at once.
 - `register()` always adds an enabled region (a re-registered id was
   unregistered first, so it comes back enabled by construction).
   `unregister()` clears the removed id's flag, and `reorder()` keeps flags
@@ -245,6 +248,7 @@ perceivable (2.4.7 *Focus Visible*).
 | `ids(): list<string>` | Registered region ids in traversal order. |
 | `count(): int` | Number of registered regions (`Countable`, so `count($ring)` works too). |
 | `isEmpty(): bool` | Whether the ring has no regions. |
+| `isParked(): bool` | Whether focus currently sits on a **disabled** region (non-empty ring with `enabledIndex()` null) — the paint/key-routing guard for the focused region in one call; parks happen only via `disable()`/`unregister()`/`restore()`. |
 | `getIterator(): Traversable<int, string>` | `foreach` support — every registered id in traversal order. |
 | `jsonSerialize(): array` | `['ids' => …, 'focused' => …, 'index' => …, 'disabled' => …]` snapshot for `json_encode()`; `restore()` reads it back. |
 

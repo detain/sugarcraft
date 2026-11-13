@@ -877,4 +877,19 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
     {
         return $this->ids === [];
     }
+
+    /**
+     * Whether focus currently sits on a DISABLED region — the ring is
+     * non-empty and {@see enabledIndex()} has no answer. Focus parks ONLY
+     * through disable() on the focused id, or unregister()/restore landing it
+     * on an all-disabled survivor. The paint rule and the key-routing guard
+     * are one question about the whole ring; naming it here stops every call
+     * site from recombining the two accessors and getting the empty case
+     * wrong. Per-region paint still pairs isFocused()/isEnabled() — this
+     * answers about the FOCUSED region.
+     */
+    public function isParked(): bool
+    {
+        return !$this->isEmpty() && $this->enabledIndex() === null;
+    }
 }

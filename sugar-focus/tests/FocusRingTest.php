@@ -1364,6 +1364,29 @@ final class FocusRingTest extends TestCase
         self::assertNull($parked->enabledIndex(), 'focus on a disabled region is not among the enabled');
     }
 
+    public function testIsParkedNamesTheDisabledFocusStateInOneCall(): void
+    {
+        self::assertTrue(
+            FocusRing::of('a', 'b')->focus('b')->disable('b')->isParked(),
+            'disable() on the focused id parks it',
+        );
+        self::assertTrue(
+            FocusRing::of('a', 'b')->focus('a')->disable('b')->unregister('a')->isParked(),
+            'unregister() onto an all-disabled survivor parks it too',
+        );
+        self::assertTrue(
+            FocusRing::restore(['ids' => ['a', 'b'], 'focused' => 'b', 'disabled' => ['b']])->isParked(),
+            'a restored spec can carry a parked focus',
+        );
+
+        self::assertFalse(FocusRing::of('a', 'b')->isParked(), 'fresh focus is never parked');
+        self::assertFalse(FocusRing::new()->isParked(), 'the empty ring parks nothing: there is no focus to park');
+        self::assertFalse(
+            FocusRing::of('a')->disable('b')->isParked(),
+            'a sole enabled region is not parked even when others are off',
+        );
+    }
+
     public function testFocusFirstAndLastSkipDisabledEnds(): void
     {
         $ring = FocusRing::of('a', 'b', 'c')->disable('a')->disable('c');
