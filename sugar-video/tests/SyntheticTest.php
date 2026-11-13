@@ -241,6 +241,7 @@ final class SyntheticTest extends TestCase
             $spec,
             $pipes,
         );
+        $stdout = stream_get_contents($pipes[1]);
         $stderr = stream_get_contents($pipes[2]);
         fclose($pipes[2]);
         fclose($pipes[1]);
@@ -251,6 +252,11 @@ final class SyntheticTest extends TestCase
         $this->assertStringNotContainsString('Undefined array key', $stderr);
         // m28, flipped in-step: --help is a success path, not an error.
         $this->assertSame(0, $exit, 'help should exit with code 0');
+        // SV-L73: a help request writes to STDOUT (the pager-able convention) —
+        // usage bytes land on stdout, stderr stays silent; error usages keep
+        // writing STDERR (pinned by the bad-mode legs of this file's era).
+        $this->assertStringContainsString('Usage:', $stdout, 'help rides stdout');
+        $this->assertSame('', $stderr, 'the --help path writes nothing to stderr anymore');
     }
 
     /**

@@ -41,9 +41,9 @@ use SugarCraft\Video\Reel;
 use SugarCraft\Video\Render\Mode;
 use SugarCraft\Video\Synthetic;
 
-function help(string $prog): void
+function helpText(string $prog): string
 {
-    fwrite(STDERR, <<<HELP
+    return <<<HELP
 Usage: php {$prog} [path|synthetic] [mode]
 
 Play a video file or a built-in synthetic test pattern in the terminal.
@@ -85,8 +85,7 @@ Examples:
   php {$prog} video.mp4 halfblock
   SUGAR_VIDEO_COLS=120 SUGAR_VIDEO_ROWS=40 php {$prog} synthetic
 
-HELP
-    );
+HELP;
 }
 
 // ── CLI argument parsing ──────────────────────────────────────────────────────
@@ -111,7 +110,9 @@ $arg1 = $positional[0] ?? '';
 $arg2 = $positional[1] ?? '';
 
 if (($arg1 === '--help' || $arg1 === '-h') && $subsArg === null) {
-    help($prog);
+    // SV-L73: a help REQUEST is a success surface — usage rides STDOUT so
+    // `play.php --help | less` shows something. Exit codes unchanged.
+    fwrite(STDOUT, helpText($prog));
     exit(0);
 }
 
@@ -127,7 +128,8 @@ $modeArg = $arg2 === '' ? Mode::AUTO_WIRE : $arg2;
 // The enum owns the vocabulary (SV-M36): Mode::wires() is the accepted token
 // list, so a new case arrives at the CLI without anyone editing this file.
 if (!in_array($modeArg, Mode::wires(), true)) {
-    help($prog);
+    // A bad mode is an error, not a help request: usage stays on STDERR.
+    fwrite(STDERR, helpText($prog));
     exit(1);
 }
 
