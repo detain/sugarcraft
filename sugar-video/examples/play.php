@@ -168,3 +168,28 @@ try {
     fwrite(STDERR, $e->getMessage() . "\n");
     exit(1);
 }
+
+/*
+ * Second example (embedded, SV-L63): the wiring Reel::play() owns internally,
+ * for hosts with their own event loop.  Player::open resolves the renderer and
+ * mode itself (RendererFactory/Mode knobs below its signature — the manual
+ * factory construction this example once duplicated has no reason to exist),
+ * spawns the decoder child, and hands back the poster frame; update()/view()
+ * advance and paint; stop() reaps the child (also reaped by play()'s finally).
+ *
+ *     use SugarCraft\Video\Msg\TickMsg;
+ *     use SugarCraft\Video\Player;
+ *
+ *     $player = Player::open($path, $cols, $rows);       // auto mode, probe once
+ *     echo $player->view();                              // the poster frame
+ *     while ($running) {                                 // your input sets $running;
+ *         [$player, $cmd] = $player->update(TickMsg::instance());
+ *         echo $player->view();                          // view() says "[ended]" once exhausted
+ *         usleep(66_667);   // $cmd schedules the next tick — hand it to your
+ *                        // loop for real pacing, or sleep here as a stopgap
+ *     }
+ *     $player->stop();
+ *
+ * Space=toggle and the seek keys are KeyMsg/Msg instances on the same
+ * update() door; see Player::update() for the full message roster.
+ */
