@@ -1,12 +1,11 @@
 <?php
-
-declare(strict_types=1);
-
 /**
- * SugarTable — data table component demo.
+ * sugar-table — data table component demo.
  *
  * Run: php examples/basic.php
  */
+
+declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
