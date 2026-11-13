@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\GitServer\Support;
 
-use SugarCraft\Async\ChildStdio;
 use SugarCraft\Core\Util\Proc\WindowsPipes;
 
 /**
@@ -183,9 +182,11 @@ final class BoundedCommand
         // Child-relative descriptors: index 0 ['pipe','r'] means the CHILD
         // reads stdin (the parent holds the write end); we never write a
         // prompt-answered stdin, so it is closed straight away.
-        // stdout is a socket on Windows (see ChildStdio: a pipe there defeats
-        // select); stderr stays a pipe there and is polled below instead.
-        $descriptors = ChildStdio::descriptors();
+        $descriptors = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
         $pipes = [];
         $env = \getenv() !== false ? \getenv() : [];
         foreach ($extraEnv as $name => $value) {
@@ -215,12 +216,48 @@ final class BoundedCommand
         $timedOut = false;
         $deadlineNs = \hrtime(true) + (int) \round($timeoutSeconds * 1_000_000_000);
 
-        // Windows: the stderr PIPE never enters select (select calls a pipe
-        // ready while empty and the fread then parks); it is polled for what
-        // fstat reports waiting, and counts as done once stdout's socket has
-        // reached EOF and a last poll has run.
-        $pollStderr = WindowsPipes::runtimeNeedsIt();
+        // Windows: the pipes stay blocking there, select() calls them ready
+        // while empty and the fread then parks until the child exits, so the
+        // deadline below never fired. Read only what fstat reports waiting;
+        // a Windows pipe shows no EOF, so the child's exit (sampled before
+        // the reads) plus an empty pass ends the loop.
+        if (WindowsPipes::runtimeNeedsIt()) {
+            $running = WindowsPipes::runningProbe($proc);
+            while (true) {
+                if (\hrtime(true) >= $deadlineNs) {
+                    $timedOut = true;
 
+                    break;
+                }
+                $exited = !$running();
+                $out = WindowsPipes::readAvailable($pipes[1], self::CHUNK_BYTES);
+                $err = WindowsPipes::readAvailable($pipes[2], self::CHUNK_BYTES);
+                if ($out !== '') {
+                    $room = $maxOutputBytes - \strlen($stdout);
+                    if ($room <= 0 || \strlen($out) > $room) {
+                        $truncated = true;
+                    }
+                    if ($room > 0) {
+                        $stdout .= \substr($out, 0, $room);
+                    }
+                }
+                if ($err !== '') {
+                    $stderr .= $err;
+                    if (\strlen($stderr) > $maxOutputBytes) {
+                        $stderr = \substr($stderr, -$maxOutputBytes);
+                        $truncated = true;
+                    }
+                }
+                if ($out === '' && $err === '') {
+                    if ($exited) {
+                        break;
+                    }
+                    \usleep(WindowsPipes::POLL_MICROSECONDS);
+                }
+            }
+            $stdoutOpen = false;
+            $stderrOpen = false;
+        }
         while ($stdoutOpen || $stderrOpen) {
             if (\hrtime(true) >= $deadlineNs) {
                 $timedOut = true;
@@ -231,24 +268,8 @@ final class BoundedCommand
             if ($stdoutOpen) {
                 $read[] = $pipes[1];
             }
-            if ($stderrOpen && !$pollStderr) {
+            if ($stderrOpen) {
                 $read[] = $pipes[2];
-            }
-            if ($pollStderr && $stderrOpen) {
-                $polled = WindowsPipes::readAvailable($pipes[2], self::CHUNK_BYTES);
-                if ($polled !== '') {
-                    $stderr .= $polled;
-                    if (\strlen($stderr) > $maxOutputBytes) {
-                        $stderr = \substr($stderr, -$maxOutputBytes);
-                        $truncated = true;
-                    }
-                }
-                if (!$stdoutOpen) {
-                    $stderrOpen = false;
-                }
-            }
-            if ($read === []) {
-                continue;
             }
             $write = null;
             $except = null;

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\MCP;
 
+use SugarCraft\Code\Support\WindowsPipes;
 use SugarCraft\Core\Util\Proc\BoundedShutdown;
 use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\HomeDirectory;
@@ -1788,6 +1789,30 @@ final readonly class GitCommandHandlers
 
             $limit = $exitCode !== null ? $exitedAt + self::POST_EXIT_DRAIN_SECONDS : $deadline;
             $slice = max(0.0, min(self::DRAIN_SLICE_SECONDS, $limit - $now));
+
+            if (WindowsPipes::runtimeNeedsIt()) {
+                // Windows: the pipes stay blocking and select() calls them
+                // ready while empty, so the fread below parked until git wrote
+                // or exited, and reading an empty stderr while git filled
+                // stdout deadlocked (a git diff over 4 KiB never returned).
+                // Read only what fstat reports waiting; the exit sampled above
+                // stands in for the EOF a Windows pipe never shows.
+                $got = false;
+                foreach ($open as $slot => $pipe) {
+                    $chunk = WindowsPipes::readAvailable($pipe, 65536);
+                    if ($chunk !== '') {
+                        $append($slot, $chunk);
+                        $got = true;
+                    } elseif ($exitCode !== null) {
+                        unset($open[$slot]);
+                    }
+                }
+                if (!$got) {
+                    usleep((int) max(1000, min(WindowsPipes::POLL_MICROSECONDS, $slice * 1_000_000)));
+                }
+
+                continue;
+            }
             $seconds = (int) $slice;
             $micros = (int) round(($slice - $seconds) * 1_000_000);
 
@@ -1822,7 +1847,8 @@ final readonly class GitCommandHandlers
         // it without waiting on a writer that is still alive.
         foreach ($open as $slot => $pipe) {
             for ($budget = 64; $budget > 0; $budget--) {
-                $chunk = fread($pipe, 65536);
+                // (Windows: never a blocking fread on a pipe a survivor holds.)
+                $chunk = WindowsPipes::runtimeNeedsIt() ? WindowsPipes::readAvailable($pipe, 65536) : fread($pipe, 65536);
                 if ($chunk === false || $chunk === '') {
                     break;
                 }

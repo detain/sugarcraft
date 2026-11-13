@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dashboard\Plugin;
 
+use SugarCraft\Core\Util\Proc\WindowsPipes;
 use SugarCraft\Core\Util\Executable\Locator;
 use SugarCraft\Core\Util\Proc\BoundedShutdown;
 use SugarCraft\Dashboard\Module\LegacyModule;
@@ -83,6 +84,9 @@ final class ExternalModule implements LegacyModule
     private $process = null;
 
     private bool $running = false;
+
+    /** Windows only: stdout bytes read past the last newline, kept for the next response. */
+    private string $windowsReadBuffer = '';
 
     public function __construct(
         private readonly string $name,
@@ -289,6 +293,28 @@ final class ExternalModule implements LegacyModule
         $offset = 0;
         $deadline = hrtime(true) / 1_000_000_000 + self::WRITE_TIMEOUT_SECS;
 
+        if (WindowsPipes::runtimeNeedsIt()) {
+            // Windows: select() calls a pipe writable whatever its state, and
+            // a write over its 4096-byte buffer blocks until the plugin reads.
+            // Feed pipe-buffer-sized pieces, draining stderr and checking the
+            // deadline and the child between them.
+            while ($offset < $length) {
+                if (hrtime(true) / 1_000_000_000 >= $deadline) {
+                    $this->disable('write timeout');
+                    return false;
+                }
+                $this->drainStderr();
+                $written = @fwrite($this->stdin, substr($payload, $offset, WindowsPipes::PIPE_BUFFER_BYTES));
+                if ($written === false || ($written === 0 && !$this->childAlive())) {
+                    $this->disable('write failed: plugin stdin closed');
+                    return false;
+                }
+                $offset += (int) $written;
+            }
+            fflush($this->stdin);
+            return true;
+        }
+
         while ($offset < $length) {
             $remaining = $deadline - hrtime(true) / 1_000_000_000;
             if ($remaining <= 0) {
@@ -337,6 +363,10 @@ final class ExternalModule implements LegacyModule
         stream_set_timeout($this->stdout, self::READ_TIMEOUT_SECS);
 
         $deadline = hrtime(true) / 1_000_000_000 + self::READ_TIMEOUT_SECS;
+
+        if (WindowsPipes::runtimeNeedsIt()) {
+            return $this->readResponseWindows($deadline);
+        }
 
         // Multiplex stdout (the response we owe the caller) against stderr
         // (the pipe whose fullness would wedge the child). Draining stderr
@@ -403,6 +433,67 @@ final class ExternalModule implements LegacyModule
     }
 
     /**
+     * readResponse() on Windows: a pipe there stays blocking and select()
+     * calls it ready while empty, so fgets() after select parked until the
+     * plugin wrote or exited. Gather what fstat reports waiting until a
+     * newline arrives; the child's exit (sampled before the read) with
+     * nothing waiting is EOF. The line rules are the same as the POSIX path.
+     */
+    private function readResponseWindows(float $deadline): Response
+    {
+        while (true) {
+            $this->drainStderr();
+
+            $newline = strpos($this->windowsReadBuffer, "\n");
+            if ($newline !== false) {
+                $line = substr($this->windowsReadBuffer, 0, $newline + 1);
+                $this->windowsReadBuffer = (string) substr($this->windowsReadBuffer, $newline + 1);
+                if (strlen($line) > self::MAX_LINE_BYTES) {
+                    $this->disable('protocol error: line exceeds maximum length');
+                    return Response::error('protocol error: line exceeds maximum length');
+                }
+                try {
+                    return Response::fromJson(trim($line));
+                } catch (\InvalidArgumentException $e) {
+                    $this->disable('protocol error: ' . $e->getMessage());
+                    return Response::error('protocol error: malformed plugin response');
+                }
+            }
+            if (strlen($this->windowsReadBuffer) >= self::MAX_LINE_BYTES) {
+                $this->disable('protocol error: line exceeds maximum length');
+                return Response::error('protocol error: line exceeds maximum length');
+            }
+            if (hrtime(true) / 1_000_000_000 >= $deadline) {
+                $this->disable('read timeout');
+                return Response::error('read timeout');
+            }
+
+            $alive = $this->childAlive();
+            $chunk = WindowsPipes::readAvailable($this->stdout, self::MAX_LINE_BYTES);
+            if ($chunk === '') {
+                if (!$alive) {
+                    $this->disable('EOF from process');
+                    return Response::error('EOF from process');
+                }
+                usleep(WindowsPipes::POLL_MICROSECONDS);
+                continue;
+            }
+            $this->windowsReadBuffer .= $chunk;
+        }
+    }
+
+    /** Whether the plugin process is still running (false once it is gone or unknown). */
+    private function childAlive(): bool
+    {
+        if (!is_resource($this->process)) {
+            return false;
+        }
+        $status = @proc_get_status($this->process);
+
+        return is_array($status) && $status['running'] === true;
+    }
+
+    /**
      * Consume everything currently pending on stderr, up to one bounded
      * round, and discard it. Non-blocking reads make this cheap when the
      * child is quiet; the per-round cap keeps a chatty one from starving
@@ -416,7 +507,11 @@ final class ExternalModule implements LegacyModule
 
         $consumed = 0;
         while ($consumed < self::STDERR_DRAIN_BYTES_PER_ROUND) {
-            $chunk = fread($this->stderr, self::STDERR_DRAIN_CHUNK_BYTES);
+            // Windows: never a blocking fread on a pipe (it parks until the
+            // plugin writes stderr or exits); take only what is waiting.
+            $chunk = WindowsPipes::runtimeNeedsIt()
+                ? WindowsPipes::readAvailable($this->stderr, self::STDERR_DRAIN_CHUNK_BYTES)
+                : fread($this->stderr, self::STDERR_DRAIN_CHUNK_BYTES);
             if ($chunk === false || $chunk === '') {
                 return; // EAGAIN (non-blocking) or EOF
             }

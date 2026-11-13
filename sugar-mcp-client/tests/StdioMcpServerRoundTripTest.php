@@ -642,6 +642,20 @@ final class StdioMcpServerRoundTripTest extends TestCase
         $buffer = '';
         $deadline = microtime(true) + $budgetSeconds;
         while (microtime(true) < $deadline) {
+            if (\PHP_OS_FAMILY === 'Windows') {
+                // select() is no use on a Windows pipe (it reports ready while
+                // empty, or fails), and a bare fread parks until the server
+                // writes or exits; poll what fstat reports waiting instead.
+                $buffer .= \SugarCraft\Core\Util\Proc\WindowsPipes::readAvailable($out, 65536);
+                $at = strpos($buffer, "\n");
+                if ($at !== false) {
+                    return substr($buffer, 0, $at);
+                }
+                usleep(10000);
+
+                continue;
+            }
+
             $reads = [$out];
             $writes = null;
             $excepts = null;

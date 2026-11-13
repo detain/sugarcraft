@@ -24,7 +24,9 @@ namespace SugarCraft\Core\Util\Proc;
  * Swapping the pipes for proc_open SOCKET descriptors is no general cure:
  * node.exe, python.exe, cmd.exe and every MSYS/Cygwin tool (Git-for-Windows
  * sh, bash, cat) lose their output or fail on a socket stdio (measured), so
- * an arbitrary child must keep pipes.
+ * an arbitrary child must keep pipes. Even for a child that copes, PHP's
+ * Windows socket pair is a loopback TCP connection whose accept is not
+ * checked, so another local process could race into a child's stdio.
  *
  * What works with pipes is `fstat()`: for a pipe, PHP's Windows fstat fills
  * `size` from PeekNamedPipe, the bytes readable right now, and a read of at
@@ -116,6 +118,31 @@ final class WindowsPipes
 
             return \is_array($status) && $status['running'] === true;
         };
+    }
+
+    /**
+     * Stage bytes a child should read on stdin as a private temp file, for a
+     * `['file', $path, 'r']` proc_open descriptor. On Windows a stdin PIPE
+     * write blocks once its 4096-byte buffer is full and the child is not
+     * reading, which no deadline can interrupt; a file never blocks anyone,
+     * and the child sees EOF after the last byte exactly as after a closed
+     * pipe. tempnam() creates the file exclusively (0600 on POSIX, the user's
+     * own temp directory on Windows). The caller removes it once the child is
+     * reaped. Null when it cannot be written (the caller falls back to a pipe).
+     */
+    public static function stageStdin(string $bytes): ?string
+    {
+        $path = @\tempnam(\sys_get_temp_dir(), 'sc-stdin-');
+        if (!\is_string($path)) {
+            return null;
+        }
+        if (@\file_put_contents($path, $bytes) !== \strlen($bytes)) {
+            @\unlink($path);
+
+            return null;
+        }
+
+        return $path;
     }
 
     /**

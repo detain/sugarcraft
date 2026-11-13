@@ -263,6 +263,11 @@ final class S24FsHygieneTest extends TestCase
 
     public function testServeRefusesAnUnreadableRepoRootWithALineNotATrace(): void
     {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            // chmod(0000) is a no-op there (it only toggles read-only), so the
+            // root stays readable and `serve` starts serving for real.
+            $this->markTestSkipped('Windows has no POSIX permission bits to make a directory unreadable with.');
+        }
         $root = $this->tmpDir . '/unreadable';
         \mkdir($root, 0700, true);
         \chmod($root, 0000);

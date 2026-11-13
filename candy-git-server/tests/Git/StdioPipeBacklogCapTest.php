@@ -76,6 +76,9 @@ final class StdioPipeBacklogCapTest extends TestCase
      */
     public function testUnconsumedClientBacklogIsCappedAndFailsTheStream(): void
     {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('On Windows a pipe write to a child that never reads stdin blocks and cannot be bounded (the documented StdioPipe limitation there); git always reads its stdin.');
+        }
         // Margin: the child's stdin pipe itself absorbs roughly one pipe
         // buffer of the pile before stalling, so a cap+1 blob can leave the
         // backlog one byte short of the breach under real timing. Four extra

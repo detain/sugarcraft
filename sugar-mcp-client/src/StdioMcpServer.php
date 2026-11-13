@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\McpClient;
 
+use SugarCraft\Core\Util\Proc\WindowsPipes;
 use SugarCraft\Core\Util\Proc\BoundedShutdown;
 
 /**
@@ -1965,6 +1966,10 @@ final class StdioMcpServer implements McpServer
         $consecutiveSelectFailures = 0;
         $livenessCheckedAt = self::nowSeconds();
 
+        if (WindowsPipes::runtimeNeedsIt()) {
+            return $this->writeLineWindows($payload, $deadline);
+        }
+
         while ($payload !== '') {
             $this->beat();
             $remaining = $deadline === null ? null : $deadline - self::nowSeconds();
@@ -2042,6 +2047,44 @@ final class StdioMcpServer implements McpServer
                 continue;
             }
 
+            $payload = substr($payload, $written);
+        }
+
+        fflush($this->pipes[0]);
+
+        return true;
+    }
+
+    /**
+     * writeLine() on Windows. A pipe there takes 4096 bytes and a bigger
+     * write blocks until the server reads (select() cannot say when it would
+     * not), so the payload goes in pipe-buffer-sized pieces with stderr
+     * absorbed and the deadline and liveness checked between them. A piece
+     * still blocks while the server is not reading stdin at all; an MCP
+     * server reads it continuously, and a server that is gone fails the
+     * write instead of holding it.
+     */
+    private function writeLineWindows(string $payload, ?float $deadline): bool
+    {
+        while ($payload !== '') {
+            $this->beat();
+            if ($deadline !== null && $deadline - self::nowSeconds() <= 0.0) {
+                return false;
+            }
+            if (!$this->serverIsRunning()) {
+                return false;
+            }
+            $this->absorbStderr();
+
+            $written = @fwrite($this->pipes[0], substr($payload, 0, WindowsPipes::PIPE_BUFFER_BYTES));
+            if ($written === false) {
+                return false;
+            }
+            if ($written === 0) {
+                usleep(1000);
+
+                continue;
+            }
             $payload = substr($payload, $written);
         }
 
@@ -2427,6 +2470,45 @@ final class StdioMcpServer implements McpServer
                 return $this->readBuffer === '' ? null : $this->drainBuffer();
             }
 
+            if (WindowsPipes::runtimeNeedsIt()) {
+                // Windows: a pipe there stays blocking and select() calls it
+                // ready while empty, so the select pass below would park in
+                // fread (with a quiet stderr, every exchange hung). Read what
+                // fstat reports waiting; liveness is sampled BEFORE the read,
+                // so an empty pipe from a server already gone is its end.
+                $alive = $this->serverIsRunning();
+                $this->absorbStderr();
+                // 64 KiB per pass: a multi-megabyte frame has to cross
+                // quickly enough for the oversize refusal to stay fail-fast.
+                $chunk = WindowsPipes::readAvailable($this->pipes[1], 65536);
+                if ($chunk === '') {
+                    if (!$alive) {
+                        $this->lastFailureCause = 'the server process exited';
+
+                        return $this->frameLeftByAnExitedServer();
+                    }
+                    $nap = $remaining === null ? WindowsPipes::POLL_MICROSECONDS : (int) min(WindowsPipes::POLL_MICROSECONDS, max(1, $remaining * 1_000_000));
+                    usleep($nap);
+
+                    continue;
+                }
+                $scannedFrom = strlen($this->readBuffer);
+                $this->readBuffer .= $chunk;
+                // Keep pulling while bytes are waiting, without the per-pass
+                // liveness and stderr polls: a 4096-byte Windows pipe makes the
+                // writer wait on every buffer, and a 64 MiB frame must still
+                // reach the frame cap fail-fast.
+                while (strpos($chunk, "\n") === false
+                    && strlen($this->readBuffer) <= self::MAX_FRAME_BYTES
+                    && ($chunk = WindowsPipes::readAvailable($this->pipes[1], 65536)) !== ''
+                ) {
+                    $this->readBuffer .= $chunk;
+                }
+                $this->refuseAnOversizedFrame();
+
+                continue;
+            }
+
             $read = [$this->pipes[1]];
             if ($this->stderrOpen && is_resource($this->pipes[2])) {
                 $read[] = $this->pipes[2];
@@ -2569,6 +2651,22 @@ final class StdioMcpServer implements McpServer
             return;
         }
 
+        if (WindowsPipes::runtimeNeedsIt()) {
+            // Never a blocking fread on Windows (it parks until the server
+            // writes stderr or exits); a Windows pipe shows no EOF, so it
+            // simply stays open.
+            $chunk = WindowsPipes::readAvailable($this->pipes[2], 8192);
+            if ($chunk !== '') {
+                $this->stderrTail .= $chunk;
+                if (strlen($this->stderrTail) > self::MAX_STDERR_BYTES) {
+                    $this->stderrTail = substr($this->stderrTail, -self::MAX_STDERR_BYTES);
+                    $this->stderrTruncated = true;
+                }
+            }
+
+            return;
+        }
+
         $chunk = fread($this->pipes[2], 8192);
 
         if ($chunk === false || ($chunk === '' && feof($this->pipes[2]))) {
@@ -2667,6 +2765,17 @@ final class StdioMcpServer implements McpServer
         while ($this->pipes !== null && is_resource($this->pipes[1])
             && strpos($this->readBuffer, "\n") === false
         ) {
+            if (WindowsPipes::runtimeNeedsIt()) {
+                $chunk = WindowsPipes::readAvailable($this->pipes[1], 8192);
+                if ($chunk === '') {
+                    break;
+                }
+                $this->readBuffer .= $chunk;
+                $this->refuseAnOversizedFrame();
+
+                continue;
+            }
+
             $read = [$this->pipes[1]];
             $write = [];
             $except = [];

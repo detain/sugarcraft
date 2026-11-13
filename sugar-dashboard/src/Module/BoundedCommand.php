@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dashboard\Module;
 
+use SugarCraft\Core\Util\Proc\WindowsPipes;
 use SugarCraft\Core\Util\Proc\BoundedShutdown;
 
 /**
@@ -92,7 +93,18 @@ final class BoundedCommand
         $timedOut = false;
         $interrupted = false;
 
-        while ($streams !== []) {
+        if (WindowsPipes::runtimeNeedsIt()) {
+            // Windows: the pipes stay blocking there and select() calls them
+            // ready while empty, so the fread below parked until the command
+            // exited and the deadline never fired (a hung command ran 30 s past
+            // a 15 s bound). Read what fstat reports waiting until it exits.
+            $drained = WindowsPipes::drainUntilExit($streams, WindowsPipes::runningProbe($process), microtime(true) + $timeoutSeconds, $maxOutputBytes);
+            $buffers['out'] = $drained['buffers']['out'];
+            $buffers['err'] = substr($drained['buffers']['err'], 0, max(0, $maxOutputBytes - strlen($buffers['out'])));
+            $timedOut = $drained['timedOut'];
+        }
+
+        while ($streams !== [] && !WindowsPipes::runtimeNeedsIt()) {
             if (hrtime(true) >= $deadline) {
                 $timedOut = true;
                 break;

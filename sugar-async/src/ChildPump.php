@@ -111,10 +111,11 @@ final class ChildPump
             $dropped[$slot] += $refused;
         };
 
-        // Sockets (ChildStdio's Windows spec) are honest under select() on
-        // every host, so only a set holding a real Windows pipe needs polling.
+        // A socket (a caller's socket descriptor or pair) is honest under
+        // select() on every host, so only a set holding a real Windows pipe
+        // needs polling.
         $pollPipes ??= WindowsPipes::runtimeNeedsIt()
-            && array_filter($pipes, static fn ($p): bool => !ChildStdio::isSocket($p)) !== [];
+            && array_filter($pipes, static fn ($p): bool => !self::isSocket($p)) !== [];
         if ($pollPipes) {
             return self::pollDrain($pipes, $deadline, $maxBytes, $clock, $stopAtCap, $buffers, $dropped, $capture, $running);
         }
@@ -240,10 +241,9 @@ final class ChildPump
 
             $got = false;
             foreach ($pipes as $slot => $pipe) {
-                // A socket among the pipes (ChildStdio's Windows spec) reports
-                // fstat size 0, but it was made non-blocking above, so a plain
-                // read answers at once.
-                $chunk = ChildStdio::isSocket($pipe)
+                // A socket among the pipes reports fstat size 0, but it was
+                // made non-blocking above, so a plain read answers at once.
+                $chunk = self::isSocket($pipe)
                     ? (string) @fread($pipe, self::READ_BYTES)
                     : WindowsPipes::readAvailable($pipe, self::READ_BYTES);
                 if ($chunk !== '') {
@@ -261,5 +261,20 @@ final class ChildPump
                 usleep(max(1, $nap));
             }
         }
+    }
+
+    /**
+     * Whether $stream is a socket (selectable and non-blocking capable on
+     * every host) rather than a Windows-hostile pipe.
+     *
+     * @param resource $stream
+     */
+    private static function isSocket($stream): bool
+    {
+        if (!\is_resource($stream)) {
+            return false;
+        }
+
+        return \str_contains((string) (\stream_get_meta_data($stream)['stream_type'] ?? ''), 'socket');
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Hooks;
 
+use SugarCraft\Code\Support\WindowsPipes;
 use SugarCraft\Code\Cli\LaunchContext;
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Lang;
@@ -874,6 +875,15 @@ final readonly class ScriptHook implements BoundedHookInterface
             1 => ['pipe', 'w'],
             2 => ['pipe', 'w'],
         ];
+        // Windows: the stdin payload (200 KB tool outputs are normal) cannot
+        // go through a pipe there: a write past its 4096-byte buffer blocks
+        // until the hook reads, and a hook that never reads stdin would hang
+        // it past every deadline. The payload is staged as a file instead;
+        // the hook reads the same bytes and the same EOF.
+        $stdinFile = WindowsPipes::runtimeNeedsIt() ? WindowsPipes::stageStdin($this->stdinPayload($context)) : null;
+        if ($stdinFile !== null) {
+            $descriptors[0] = ['file', $stdinFile, 'r'];
+        }
 
         $spec = $this->spawnCommand($cwd, $payload['files']);
         if ($spec === null) {
@@ -919,6 +929,9 @@ final readonly class ScriptHook implements BoundedHookInterface
         }
 
         if (!is_resource($process)) {
+            if ($stdinFile !== null) {
+                @unlink($stdinFile);
+            }
             // NAMES THE SIZES. This branch's old message — "Hook X could not be
             // executed" — was the whole of what a user saw when a 128 KB tool
             // call hit `MAX_ARG_STRLEN` (see stagePayloads()), and it reads as
@@ -954,8 +967,9 @@ final readonly class ScriptHook implements BoundedHookInterface
             $pipes[1],
             $pipes[2],
             $deadline,
-            $pipes[0],
-            $this->stdinPayload($context),
+            $stdinFile === null ? $pipes[0] : null,
+            $stdinFile === null ? $this->stdinPayload($context) : '',
+            WindowsPipes::runningProbe($process),
         );
 
         // THE DRAIN CAN END WITH THE CHILD STILL RUNNING and `proc_close()`
@@ -982,6 +996,9 @@ final readonly class ScriptHook implements BoundedHookInterface
 
         \SugarCraft\Code\Support\HookProcessGroups::release($hookPid);
         $exitCode = proc_close($process);
+        if ($stdinFile !== null) {
+            @unlink($stdinFile);
+        }
 
         if ($timedOut) {
             // The exit code from a killed child says "signalled", never what
@@ -1485,7 +1502,7 @@ final readonly class ScriptHook implements BoundedHookInterface
      *        pump when given — see {@see stdinPayload()} for WHAT rides it
      * @return array{0: string, 1: string, 2: bool} stdout, stderr, timed-out
      */
-    private function drain($stdout, $stderr, float $deadline, $stdin = null, string $stdinData = ''): array
+    private function drain($stdout, $stderr, float $deadline, $stdin = null, string $stdinData = '', ?\Closure $running = null): array
     {
         $buffers = ['', ''];
         // Bytes refused for the slot because the cap was reached — the marker
@@ -1544,6 +1561,7 @@ final readonly class ScriptHook implements BoundedHookInterface
             stdin: $stdin,
             stdinData: $stdinData,
             selectRetries: self::DRAIN_SELECT_RETRIES,
+            running: $running,
         );
 
         $seal();

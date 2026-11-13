@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\GitServer\Git;
 
-use SugarCraft\Async\ChildStdio;
 use SugarCraft\Core\Util\Proc\WindowsPipes;
 
 /**
@@ -115,15 +114,11 @@ final class StdioPipe
             return 1;
         }
 
-        // On Windows a proc_open PIPE can't be made non-blocking, select()
-        // calls it ready while empty and the read then parks, so this relay
-        // deadlocked there (the upload-pack census test hung > 5 min).
-        // ChildStdio hands out sockets for git's stdin/stdout on Windows, so
-        // the loop's select stays honest. stderr stays a pipe (git's hooks
-        // run under MSYS sh, which inherits it and cannot use a socket); on
-        // Windows it is polled rather than selected ($pollStderr below).
-        $descriptors = ChildStdio::descriptors();
-        $pollStderr = WindowsPipes::runtimeNeedsIt();
+        $descriptors = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
         /** @var array<int, resource|null> $pipes */
         $pipes = [];
         /** @var resource|\Process|false $proc */
@@ -174,32 +169,36 @@ final class StdioPipe
             $lastActivityNs = $startNs;
             $wedgedNs = null;
 
+            // Windows: the child's PIPES never enter select() there (it calls
+            // a pipe ready while empty, and the fread then parks until git
+            // exits; the upload-pack census test hung > 5 min). Only the
+            // client socket is selected; the pipes are polled every tick for
+            // what fstat reports waiting, git's exit (sampled before the
+            // reads) stands in for the EOF a Windows pipe never shows, and a
+            // stdin write never exceeds the 4096-byte pipe buffer.
+            // LIMITATION (Windows only): PHP cannot make that write
+            // non-blocking or tell when the pipe has room, so a child that
+            // stops reading stdin while the client keeps sending stalls the
+            // relay inside fwrite until the child exits; the idle and hard
+            // deadlines cannot preempt it. git reads its stdin throughout
+            // the protocol. (Socket stdio would avoid this but was refused:
+            // PHP's Windows socket pair is an unauthenticated loopback TCP
+            // connection another local process could race into.)
+            $windows = WindowsPipes::runtimeNeedsIt();
+
             while (!$backlogBreached) {
                 $read = [];
                 if (!$clientInDone) {
                     $read[] = $inStream;
                 }
-                if (!$childOutDone) {
+                if (!$childOutDone && !$windows) {
                     $read[] = $pipes[1];
                 }
-                if (!$childErrDone && !$pollStderr) {
+                if (!$childErrDone && !$windows) {
                     $read[] = $pipes[2];
                 }
-                if ($pollStderr && !$childErrDone) {
-                    $polled = WindowsPipes::readAvailable($pipes[2], self::CHUNK_BYTES);
-                    if ($polled !== '') {
-                        $errTail .= $polled;
-                        if (\strlen($errTail) > self::STDERR_TAIL_BYTES) {
-                            $errTail = \substr($errTail, -self::STDERR_TAIL_BYTES);
-                        }
-                        $lastActivityNs = \hrtime(true);
-                    }
-                    if ($childOutDone) {
-                        $childErrDone = true;
-                    }
-                }
                 $write = [];
-                if ($childInOpen && $toChild !== '') {
+                if ($childInOpen && $toChild !== '' && !$windows) {
                     $write[] = $pipes[0];
                 }
                 if (!$clientGone && $pendingOut !== '' && $writtenOut < \strlen($pendingOut)) {
@@ -211,7 +210,8 @@ final class StdioPipe
                 if ($nowNs - $startNs >= $hardNs || $nowNs - $lastActivityNs >= $idleNs) {
                     break;
                 }
-                if ($read === [] && $write === []) {
+                $pipeWork = $windows && (!$childOutDone || !$childErrDone || ($childInOpen && $toChild !== ''));
+                if ($read === [] && $write === [] && !$pipeWork) {
                     // Nothing left to talk to. If the child is still
                     // running it is wedged; the reap ladder ends it.
                     if (!$running) {
@@ -228,8 +228,25 @@ final class StdioPipe
                 $except = null;
                 $readCopy = $read;
                 $writeCopy = $write;
-                $ready = @\stream_select($readCopy, $writeCopy, $except, 0, self::TICK_MICROSECONDS);
+                if ($read === [] && $write === []) {
+                    // Windows with only pipe work left: one short poll slice.
+                    \usleep(WindowsPipes::POLL_MICROSECONDS);
+                    $ready = 0;
+                } else {
+                    $ready = @\stream_select($readCopy, $writeCopy, $except, 0, $windows ? WindowsPipes::POLL_MICROSECONDS : self::TICK_MICROSECONDS);
+                }
                 $nowNs = \hrtime(true);
+                if ($windows) {
+                    // The child's pipes are polled, never selected: every tick
+                    // treats them as ready, and the reads below take only what
+                    // fstat reports waiting.
+                    if (!$childOutDone) {
+                        $readCopy[] = $pipes[1];
+                    }
+                    if (!$childErrDone) {
+                        $readCopy[] = $pipes[2];
+                    }
+                }
 
                 if ($ready === false) {
                     // Signal-interrupted or errored select: treat as an
@@ -274,9 +291,13 @@ final class StdioPipe
                 if (!$childOutDone && \in_array($pipes[1], $readCopy, true)
                     && \strlen($pendingOut) <= self::PENDING_TO_CHILD_MAX_BYTES
                 ) {
-                    $chunk = @\fread($pipes[1], self::CHUNK_BYTES);
+                    $chunk = $windows
+                        ? WindowsPipes::readAvailable($pipes[1], self::CHUNK_BYTES)
+                        : @\fread($pipes[1], self::CHUNK_BYTES);
                     if ($chunk === false || $chunk === '') {
-                        if (@\feof($pipes[1])) {
+                        // Windows: $running was sampled before this read, so
+                        // an empty pipe from an exited git is its EOF.
+                        if ($windows ? !$running : @\feof($pipes[1])) {
                             $childOutDone = true;
                         }
                     } else {
@@ -291,9 +312,11 @@ final class StdioPipe
 
                 // Child stderr -> bounded tail buffer
                 if (!$childErrDone && \in_array($pipes[2], $readCopy, true)) {
-                    $chunk = @\fread($pipes[2], self::CHUNK_BYTES);
+                    $chunk = $windows
+                        ? WindowsPipes::readAvailable($pipes[2], self::CHUNK_BYTES)
+                        : @\fread($pipes[2], self::CHUNK_BYTES);
                     if ($chunk === false || $chunk === '') {
-                        if (@\feof($pipes[2])) {
+                        if ($windows ? !$running : @\feof($pipes[2])) {
                             $childErrDone = true;
                         }
                     } else {
@@ -309,7 +332,7 @@ final class StdioPipe
                 // tick: the full-buffer fwrite re-copied the whole pile on
                 // every partial accept — quadratic against a stalled child).
                 if ($childInOpen && $toChild !== '') {
-                    $n = @\fwrite($pipes[0], \substr($toChild, 0, self::CHUNK_BYTES));
+                    $n = @\fwrite($pipes[0], \substr($toChild, 0, $windows ? WindowsPipes::PIPE_BUFFER_BYTES : self::CHUNK_BYTES));
                     if ($n === false) {
                         $childInOpen = false; // child closed its stdin
                     } elseif ($n > 0) {
@@ -387,7 +410,7 @@ final class StdioPipe
             // Honest failure reporting: a fast-dying child can still have
             // stderr bytes in the pipe when the loop breaks (the exit
             // condition above does not wait for STDERR EOF).
-            if ($pollStderr && isset($pipes[2]) && \is_resource($pipes[2])) {
+            if (WindowsPipes::runtimeNeedsIt() && isset($pipes[2]) && \is_resource($pipes[2])) {
                 // Windows: one fstat-sized read; a blocking fread on a pipe a
                 // surviving hook still holds would park here.
                 $errTail .= WindowsPipes::readAvailable($pipes[2], self::CHUNK_BYTES);

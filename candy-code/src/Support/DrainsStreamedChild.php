@@ -159,6 +159,7 @@ final class DrainsStreamedChild
         $stdin = null,
         string $stdinData = '',
         int $selectRetries = self::SELECT_RETRIES,
+        ?\Closure $running = null,
     ): string {
         stream_set_blocking($stdout, false);
         stream_set_blocking($stderr, false);
@@ -170,12 +171,63 @@ final class DrainsStreamedChild
             stream_set_blocking($stdin, false);
         }
 
+        // Windows: proc_open pipes stay blocking there and select() calls them
+        // ready while empty, so the select walk below parks in fread until the
+        // child writes or exits. With a running probe, the walk polls instead:
+        // reads take only what fstat reports waiting, stdin goes in pieces no
+        // bigger than the pipe buffer, and the child's exit (sampled before
+        // the reads) plus an empty pass is the close a Windows pipe never shows.
+        $poll = $running !== null && WindowsPipes::runtimeNeedsIt();
+
         try {
             $open = [0 => $stdout, 1 => $stderr];
             $failures = 0;
             $reason = self::CLOSED;
 
-            while ($open !== []) {
+            while ($poll && $open !== []) {
+                if ($keepGoing !== null && !$keepGoing()) {
+                    $reason = self::STOPPED;
+                    break;
+                }
+                $now = $clock();
+                if ($deadline - $now <= 0.0) {
+                    $reason = self::EXPIRED;
+                    break;
+                }
+                $exited = !$running();
+
+                if ($pending !== '' && $stdinOpen) {
+                    $written = $exited ? false : @fwrite($stdin, substr($pending, 0, WindowsPipes::PIPE_BUFFER_BYTES));
+                    if ($written === false) {
+                        $pending = '';
+                    } elseif ($written > 0) {
+                        $pending = substr($pending, $written);
+                    }
+                    if ($pending === '') {
+                        // THE CLOSE IS THE CONTRACT: see the docblock.
+                        fclose($stdin);
+                        $stdinOpen = false;
+                    }
+                }
+
+                $got = false;
+                foreach ($open as $slot => $pipe) {
+                    $chunk = WindowsPipes::readAvailable($pipe, self::READ_BYTES);
+                    if ($chunk !== '') {
+                        $capture($slot, $chunk);
+                        $got = true;
+                    }
+                }
+                if (!$got) {
+                    if ($exited) {
+                        $open = [];
+                        break;
+                    }
+                    usleep((int) max(1000, min(WindowsPipes::POLL_MICROSECONDS, ($deadline - $now) * 1_000_000)));
+                }
+            }
+
+            while (!$poll && $open !== []) {
                 if ($keepGoing !== null && !$keepGoing()) {
                     $reason = self::STOPPED;
                     break;

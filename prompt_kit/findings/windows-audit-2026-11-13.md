@@ -1,56 +1,54 @@
-# Windows audit + fix lane — 2026-11-13 (handoff)
+# Windows audit + fix lane: handoff (updated 2026-11-13, end of session 2)
 
-Owner rule for this lane: commit straight to **master** (no PR), `git pull --rebase` then `git push origin master` when done.
-C: is nearly full (~19 GB free): keep ≥1 GB free, put temp files on F:, delete them immediately. Never copy the tree into WSL (its vhdx lives on C:).
+Owner rule for this lane: commit straight to **master** (no PR), `git pull --rebase`, then `git push origin master`.
+Run each phpunit suite ONCE with output to a file, grep that file, delete it afterwards.
 
-## Tooling in place
-- **Windows PHP 8.4.27** (same build as CI): `F:\dev\php84-wintest\php.exe` (Bash: `/f/dev/php84-wintest/php.exe`), ini has ffi/mbstring/intl/sqlite3/gd/curl/openssl/sockets/fileinfo/zip. Delete the dir when the lane is finished.
-- **Linux server** (PHP 8.3.6, 64 cores): `ssh -i ~/.ssh/id_ed25519_new my@myadmin1.interserver.net`. Work dir `~/sc-wintest` (NOT `/home/sites/sugarcraft`, someone works there). It is a throwaway git repo of this tree with path repos injected; sync changed files with `tar czf /f/dev/x.tgz $(git diff --name-only) && scp …` then `tar xzf` there, and delete local tarballs right away. `candy-code`, `sugar-pty`, `sugar-core` have vendor installed there (`COMPOSER_ROOT_VERSION=dev-master composer update -q -n` for others). Remove `~/sc-wintest` when finished.
-- Full candy-code Linux run on the server: `bash scripts/parallel-tests.sh 24 --durations scripts/parallel-tests-durations.tsv --against-json candy-code/tests/Config/Support/suite-figure.json --out /tmp/sc-wintest-pt --timeout 1800` (≈5 min). Then `rm -rf /tmp/sc-wintest-pt`.
-- WSL over /mnt/f is far too slow for the candy-code suite (9P); don't use it for full runs.
+## Resuming from the Linux server (myadmin1)
+- `/home/sites/sugarcraft` is a live working copy that other sessions use. Pull with `git pull --rebase --autostash origin master`, and leave other sessions' uncommitted work alone. The usual conflict is `candy-code/tests/Config/Support/suite-figure.json` and the README headline: resolve to the HIGHER counts (merged = origin figure + the other side's delta).
+- A throwaway test copy lives at `~/sc-wintest` (path repos injected, most libs have vendor). Delete it when the lane is done.
+- Windows-only verification needs a Windows box with PHP 8.4 (the dev box had `F:\dev\php84-wintest\php.exe`; delete it when done). Linux can verify only that the POSIX paths stay green.
 
-## Shipped (on master)
-- `123902a99` sugar-pty ConPTY: lpReturnSize NULL (err 87), pipe ends inverted, CREATE_NO_WINDOW, STARTF_USESTDHANDLES, CREATE_UNICODE_ENVIRONMENT=0x400, the 6 h blocking-ReadFile test, close() order.
-- `fd53d59da` candy-code: `Support\WindowsPipes` (fstat-size reads) in `runCaptured()`, MSYS group kill in `WindowsTaskKill::tree()`, ci.yml `windows-test` `timeout-minutes: 30`, smoke job gating + `--do-not-fail-on-phpunit-warning`.
-- `baaf17081` candy-code: deadline checked every pass (chatty child), bounded post-exit drain.
-- Pinned candy-code suite figure now 33,105T / 801,247A / 9 skipped (old figure + exact deltas). Pristine master separately carries 10 upstream failures (Media/ImageIngress, MaskIngest, MediaForm ×6, ComparisonTruthDrift — from sugar-image 41dc6fd69 + lang counts) and +266A drift: not ours, reported.
-- Every new candy-code test file must be added to `scripts/parallel-tests-durations.tsv` (3rd column = test count); every new Windows-only skip needs a `SuiteSkipRoster` entry + `SuiteSkipRosterTest` `_ENTRY` const + lift in `expectedForLayout()`, and the figure/README headline bump (+1T, +7A per roster entry in SuiteSkipRosterTest, +1S).
+## Core facts (measured, Windows 11 / PHP 8.4.27)
+- proc_open **pipes** on Windows: `stream_set_blocking(false)` fails; `stream_select()` reports them ready while empty; `fread()` then parks until the child writes or exits; a write over the **4096-byte** buffer blocks until the child reads (and fails with every byte lost if the child dies).
+- Fix pattern: `SugarCraft\Core\Util\Proc\WindowsPipes` (sugar-core): `readAvailable()` (fstat = PeekNamedPipe sized reads), `runningProbe($proc)`, `drainUntilExit()`, `stageStdin()` (stdin bytes known up front go in as a temp FILE descriptor, never through a pipe), `PIPE_BUFFER_BYTES`. EOF is the child's exit, sampled BEFORE the reads, plus an empty pass. sugar-async `WindowsPipes` and candy-code `Support\WindowsPipes` delegate to it. `ChildPump::drain(running:)` has the poll arm.
+- **Do NOT use proc_open `['socket']` stdio on Windows.** node, python, cmd.exe and MSYS tools (sh, bash, cat) lose their output or fail on it, and PHP's Windows socketpair is an unauthenticated loopback TCP connection another local process can race into (security review). That approach was tried and removed (`sugar-async ChildStdio` was deleted).
+- PHP `is_executable()` is false for `.cmd`/`.bat` on Windows: use sugar-core `Locator::isExecutable()` (PATHEXT).
+- MSYS path conversion: when testing from Git Bash, `MSYS_NO_PATHCONV=1` (otherwise `/c` becomes `C:\`).
+- Never let a bash heredoc carry `'\\'`: it collapses to `'\'`. Write PHP patch scripts with the Write tool.
 
-## In progress — UNCOMMITTED in the working tree (sugar-core audit fixes A/B/C/D/E/F/G/H)
-Files: `sugar-core/src/Util/Tty/Kernel32.php` (GetStdHandle/CreateFileW return `long long`; no FFI::cast of returned pointers — that segfaulted, exit 139, the CI sugar-core Windows cell death; `\FFI::NULL`→null; real 20-byte INPUT_RECORD + `INPUT_RECORD[N]` buffers, no `\FFI::ptr`; readConsoleInput gated by `WaitForSingleObject(h,0)`; UTF-16 surrogates in toWideString; setConsoleCtrlHandler docblock honest), `sugar-core/src/Util/Tty/PosixBackend.php` (Windows returns LAST_RESORT_SIZE before the `2>/dev/null` shell-outs), `sugar-core/tests/Util/Tty/Kernel32Test.php` (20 `*RequiresWindows` tests now real on Windows via `requireWindows()`/`live()`), `sugar-core/tests/Util/Tty/DescriptorSinkScanner.php` (uses `Libc::cdefFor('Linux')`), `sugar-pty/src/Libc.php` (new `cdefFor(string $family)`, `cdef()` delegates).
-- Windows: `sugar-core tests/Util/Tty` 150T green exit 0 (was segfault); Kernel32Test 49/49.
-- Linux server run of sugar-core + sugar-pty full suites was in flight at handoff — re-run to confirm, then commit as `sugar-core: …` (mention sugar-pty Libc::cdefFor) and push.
+## Shipped on master this lane
+- `123902a99` sugar-pty ConPTY live spawn (the 6 h CI hang). `fd53d59da` + `baaf17081` candy-code Bash capture deadlines, MSYS group kill, CI caps.
+- `cd1beeee2` sugar-core Kernel32 (segfault, openTty, INPUT_RECORD, UTF-16) + PosixBackend; sugar-pty `Libc::cdefFor`.
+- `368850c3d` sugar-async ChildPump Windows poll arm; candy-code WindowsTaskKill/Keychain/ProcessContainment probes.
+- `0c2ea0d87` candy-vcr: `record` and `Set Shell` exec mode WORK on Windows (`Cli\WindowsRecordLoop`, sugar-core `WindowsConsoleInput` + `Kernel32` key fields, `Support\HostShell`), ArgvInput, AF_INET socket pairs, `\` paths; Windows suite 1464T green.
+- `69b32c4e4`, `48f2c327b`, `b9054a071`: sugar-core WindowsPipes + `Kernel32::processAlive`; candy-git-server; candy-top AsyncCommand/Help (1 s timeout now 1.03 s, Windows absolute path gate, SignalExitTest rc 255); sugar-mcp-client ExchangeLock no mode check on Windows + ProcessLiveness via kernel32; sugar-dashboard Discovery/Locator; sugar-image/sugar-video/sugar-colorprofile Windows drains, NUL, `Synthetic::defaultPath()`.
+- Final commit of session 2 (this file's commit): sockets removed again (pipes + polling everywhere); candy-git-server StatelessRpc (stdin via staged file on Windows), BoundedCommand, StdioPipe Windows arms; sugar-mcp-client StdioMcpServer readLine/writeLine/absorbStderr Windows arms (greedy 64 KiB reads keep the 64 MiB frame-cap test fail-fast); sugar-dashboard ExternalModule/BoundedCommand arms; candy-code `DrainsStreamedChild::walk(running:)`, ScriptHook + StatusLineCommand (stdin staged as a file on Windows), GitCommandHandlers::drain arm; ChafaRenderer `devNull()` with the 0700 check kept (security review).
+- Known Windows limitation (documented in StdioPipe): a stdin pipe write to a child that stops reading cannot be bounded; git always reads. `StdioPipeBacklogCapTest` skips on Windows.
 
-## Remaining audit findings to fix (ordered; fix ONE lib at a time, Windows-verify with PHP 8.4, Linux-verify on server, commit+push each)
-### Shared primitive first
-- Hoist `WindowsPipes` into **sugar-async** (`SugarCraft\Async\WindowsPipes`), candy-code keeps a thin alias/delegate. **`sugar-async/src/ChildPump.php:120-157` drain()** loses deadlines and DEADLOCKS on Windows (fread on empty stderr while child fills stdout; 200 KB stdout child stuck; silent child 1 s deadline took 6.3 s reporting closed=true; EXPIRED cleanup :153 stream_get_contents blocks). Callers: candy-code WindowsTaskKill:226 (the kill helper itself is unbounded!), ProcessContainment:412, Keychain:396, AsyncOps::drain. Fix: Windows arm takes a "child running" callable, reads `readAvailable()`, ends on exit + final bounded drain. Tests: silent child timedOut <2 s; 200 KB stdout returned whole. `tests/ChildPumpTest.php:95/106/136` sleep(30) legs need Windows versions.
-### HANG
-- **candy-vcr** `src/Cli/RecordCommand.php:265-289` reapBounded kills only `if (defined('SIGTERM'))` then `$child->wait()` INFINITE → record hangs forever (always hit: `PosixPump::run` throws on ConPTY master). Use numeric 15/9; add ConPTY poll pump or refuse `record` on Windows.
-- **candy-git-server** `src/Git/StdioPipe.php:123-200` select+fread relay deadlocks (`ChildProcessLifetimeCensusTest::testUploadPackServeCompletesNegotiationAndReapsItsChild` hung >5 min; move its Linux-only skip to the top). `StatelessRpc::drainBounded/writeBounded :409-480` same pattern.
-- **candy-top** `src/Collect/Process/AsyncCommand.php:119-130,207-243,418-437` timeout never fires (1 s timeout returned after 7.16 s); `src/Cli/Help.php:249-290` same.
-- **sugar-mcp-client** `src/StdioMcpServer.php` readLine :2435-2470 absorbStderr before stdout read, writeLine :1980-1990 → every exchange hangs with quiet stderr. Also `ExchangeLock.php:122,483-490` chmod(0600) verify fails on Windows (mode reads 0666) → **no stdio MCP server can start on Windows** (lib + candy-code). Skip mode verify when `DIRECTORY_SEPARATOR === '\\'` (pattern: sugar-quickpick FileHistory.php:248).
-- **sugar-dashboard** `src/Plugin/ExternalModule.php:309,410-424` drainStderr bare fread; `src/Module/BoundedCommand.php:104-125` (GenericModule, nvidia-smi); `src/Plugin/Discovery.php:129` dirs report 0777 → every plugin rejected; `ExternalModule::resolveExecutable :603` ignores PATHEXT.
-- **sugar-video** `src/Source/VideoSource.php:308-345` drainWithTimeout loses timeout. Lower: sugar-image `ChafaRenderer::drainStdout :399`, Detect/TmuxPassthrough tmux queries, `InfocmpBinary:219-234`.
-- **candy-scriptui** `src/Runtime/IntakeReader.php:50-60` `--timeout` doesn't bound piped stdin (style/join/format/log/table/filter/pager hang). Needs fstat polling + PeekNamedPipe for EOF (sugar-core Kernel32 home) or an honest "timeout not enforced" warning. Un-skip `IntakeReaderTest::testStalledPipeExits124AtTheDeadline` (:71) with a proc_get_status loop.
-### candy-code remaining loops (all affected on Windows)
-`MCP/GitCommandHandlers.php:1799` (git diff/log >4 KB deadlock), `Support/DrainsStreamedChild.php:203` (ScriptHook:1528, StatusLineCommand:910), `Providers/{ClaudeCodeInvocation:306,ClaudeCodeProvider:383,CodexInvocation:252,CodexProvider:301}`, `ClaudeCodeMcpClient.php` readFrame/sendMessage, `LSP/LspConnection.php`, `MCP/McpClient.php:659 probe()`, `Backend/CommandBackend.php:183` (NULL-timeout select over 3 pipes), `Agents/ProcessExecutor.php:242,426` (+ stderr :715 never drained), `Cli/Subcommands.php:5420`, `Cli/NonInteractive.php:2542` (stdin first-byte grace lost → `-p` hangs on silent open stdin). Not affected: PermissionAskRelay, Runtime:3307, ChildChannel:612. ScriptRunner:146 unreachable (STREAM_PF_UNIX fails; INET works).
-### CRASH / broken
-- **candy-code `Cli/Acp.php:116`**: React ReadableResourceStream(STDIN) throws (can't set non-blocking) → `candy-code acp` dies at startup on Windows.
-- **sugar-input** `src/Driver/StreamInputDriver.php:83-90` ctor always throws on Windows (stream_set_blocking false) → breaks **sugar-readline** `Readline::runLoop :375`; Windows fallback :221 dead.
-- **candy-scriptui** P2: file-redirected stdin swallowed by symfony `Terminal::getWidth()` → `mode CON` child consumes the shared handle (`join < in.txt` empty). Fix in `bin/candy-scriptui`: putenv COLUMNS/LINES from sugar-core size probe (no child) or 80x24 before `$app->run()`. P3: `src/Runtime/ColourGate.php:148-153` termIsDumb() treats unset TERM as dumb on native Windows → no styling ever; on Windows only ''/'dumb' are dumb, add `sapi_windows_vt100_support(STDOUT)` rung.
-- **candy-vcr** B2 `src/Cli/Application.php:166-181` argv re-joined into StringInput → stripcslashes eats backslashes (`C:UsersjoehuAppData…`); use `new ArgvInput(['candy-vcr', $name, ...$argv])`. B3 `src/Player.php:218` STREAM_PF_UNIX → use INET on Windows. B4 `src/Encode/TapeToGif.php:411` rejects `\` paths. `RecordCommand.php:811-818` captureEnv drops SystemRoot/PATHEXT/COMSPEC.
-- **candy-files** `src/Manager.php:2050` absolute path test `$path[0] === '/'` (drive/UNC/`\` paths). `bin/candy-files:87` `--print-cd` checks /dev/tty.
-- **candy-top** B1 `AsyncCommand.php:367` spawn gate rejects `C:\…` paths (GPU panel never runs) — ship only with the H3 fix.
-- **candy-git** `src/Platform.php:35-50` taskkill misses MSYS orphans → reuse candy-code WindowsTaskKill (or hoist the MSYS kill to a shared lib).
-- **`/dev/null` in proc_open descriptors** → use `NUL` on Windows: sugar-image Detect:721/723, TmuxPassthrough:210/212, ChafaRenderer:196/289; candy-code `Support/SystemClipboard.php:161-162` (+ add `clip.exe`). `sugar-input SignalResizeDriver:370` `tput … 2>/dev/null`. `sugar-video Synthetic::DEFAULT_PATH` /tmp. `ChafaRenderer:551` 0700 check.
-- **candy-ansi-inspect** `src/Exec/ExecRunner.php:132` uses POSIX `Pty::open()` → use `PtySystemFactory`.
-### Test-only (Windows CI cells)
-- **candy-scriptui** (33 CI failures): A) 24 tests read ambient TERM/COLORTERM — fix `tests/bootstrap.php` to pin `TERM=xterm-256color COLORTERM=truecolor` and unset NO_COLOR/FORCE_COLOR/CLICOLOR/CLICOLOR_FORCE/CANDY_SCRIPTUI_NO_DECORATION (also red on Linux CI); B) `LoopPinTest:66` reads CI-injected composer.json; C) STREAM_PF_UNIX in `SpinEventedExitTest:88`, `IntakeReaderTest:97` → INET on Windows; `DiagnosticsTest:33` `timeout` resolves to timeout.exe; `FileModelSpoofTest:85,91` control-byte dir names (skip on Windows) + `exec('rm -rf')` tearDowns (here and FileModelExtensionsTest:25) → PHP recursive delete; `SignalHonestyTest:41` static `$pcntlWarned` latch needs reset seam.
-- **sugar-forms** `tests/FilePicker/FilePickerTest.php:439-441`: don't mkdir/chmod — `FilePicker::new($root.DS."evil\x1b]0;pwned\x07link\x1b[31m\rX")` makes scandir fail and sets error() to the crafted path on every OS. SUSPECTED: `TextArea::setValue() :841` CRLF from external editors.
-- **candy-git** (Windows CI pool, full suite: 1E/10F/443 warnings locally): `tests/Concerns/RecursiveDirCleanup.php:20` chmod 0666 before unlink (read-only git objects); `GitStatusIntegrationTest:43-44` `2>/dev/null` + single quotes via cmd; `GitUnicodePathTest` `we"ird.txt` illegal; `CommandLineTest:127` shell-script shim + env wipe; `GitSpawnPreludeGuardTest:318` `/` vs `\`; `ProcessTest:205` MSYS kill on a Windows pid; `ProcessTest:177` `/bin:/usr/bin`.
-- **candy-top** whole suite rc=255: `tests/Cli/SignalExitTest.php:41` bare `SIGTERM` in a data provider.
-- candy-files 2E/20F, candy-vcr 33E/45F, candy-git-server — mostly the product items above plus /dev/null, 0600 checks, `/` expectations.
-
-## Verified NOT bugs
-- sugar-core `DWORD` as `unsigned long` is 4 bytes on Windows (LLP64) — fine.
-- candy-scriptui `spin` deliberately refuses Windows. candy-ssh-launcher is documented Unix-only.
+## REMAINING (in order)
+### A. candy-code product loops still on select+fread (Windows hangs)
+Use the same pattern (runningProbe + readAvailable; stdin known up front → `WindowsPipes::stageStdin`):
+`Providers/{ClaudeCodeInvocation:~306, ClaudeCodeProvider:~383, CodexInvocation:~252, CodexProvider:~301}`, `ClaudeCodeMcpClient.php` readFrame/sendMessage/drainStderr, `LSP/LspConnection.php` (drainStderr ~1574, reads), `MCP/McpClient.php probe() ~659`, `Backend/CommandBackend.php ~183` (NULL-timeout select over 3 pipes), `Agents/ProcessExecutor.php ~242, ~426` (+ stderr ~715 never drained), `Cli/Subcommands.php ~5420`, `Cli/NonInteractive.php ~2542` (stdin first-byte grace: `-p` hangs on a silent open stdin; for a console stdin use sugar-core `WindowsConsoleInput`/WaitForSingleObject), `Cli/Acp.php:116` (React `ReadableResourceStream(STDIN)` throws on Windows → `acp` dies at startup; needs a polling stdin reader on Windows).
+After candy-code src edits: add tests (Windows legs skip elsewhere), add new test files to `scripts/parallel-tests-durations.tsv`, keep `suite-figure.json` + README headline in sync, and add new Windows-only skips to `SuiteSkipRoster` (see `candy-code/tests/Support/SuiteSkipRoster.php`).
+### B. Crash/broken items
+- sugar-input `src/Driver/StreamInputDriver.php:83-90`: the ctor throws on Windows (stream_set_blocking false), which breaks sugar-readline `Readline::runLoop :375`. Use sugar-core `WindowsConsoleInput` for a console stdin, and fstat reads for a pipe.
+- candy-scriptui: P2 `bin/candy-scriptui`, where symfony `Terminal::getWidth()` runs `mode CON`, which eats a file-redirected stdin; putenv COLUMNS/LINES before `$app->run()`. P3 `src/Runtime/ColourGate.php:148-153`: unset TERM is not "dumb" on Windows; add a `sapi_windows_vt100_support(STDOUT)` rung. `IntakeReader.php:50-60`: `--timeout` doesn't bound piped stdin (fstat polling).
+- candy-files `src/Manager.php:2050` absolute-path test (`$path[0]==='/'`), and `bin/candy-files:87` `--print-cd` /dev/tty.
+- candy-git `src/Platform.php:35-50`: reuse candy-code's MSYS group kill (`WindowsTaskKill`).
+- candy-code `Support/SystemClipboard.php:161-162`: /dev/null → NUL, plus add `clip.exe`. sugar-input `SignalResizeDriver:370` `tput 2>/dev/null`.
+- candy-ansi-inspect `src/Exec/ExecRunner.php:132`: POSIX `Pty::open()` → `PtySystemFactory`.
+### C. Windows test-only failures (pre-existing and new; the user wants them fixed too)
+Measured on Windows (full suites):
+- candy-top: 113 (shell-script fixtures in AsyncCommandTest, IPMI `posix_*`, DRM fdinfo, BinTest, ConfigFile HOME).
+- sugar-dashboard: GoldenSnapshotTest ×250 (check golden CRLF: probably needs `.gitattributes eol=lf` for golden fixtures); ExternalModule `.sh` fixtures; Discovery executable/0777 legs; GenericModule.
+- sugar-mcp-client: ExchangeLock 0600 assertions, Cwd `/` vs `\`, `/bin/sh` + `/usr/bin/env` fixtures.
+- candy-git-server: BinRepoCommands/BinServeRefusal (bin invocation), ChildProcessLifetimeCensus (`/proc`), Config mode bits, GitDaemonAsync.
+- sugar-core tests/Util: 39 (AtomicJsonFile modes, Open, Clipboard, LockFile, LocatorTest extension-less fixtures + `/` paths, BoundedShutdown).
+- sugar-video: `SyntheticTest::testPlayPhpNoArgsEmitsNoWarnings` (shell string path).
+- sugar-image ChafaRendererChildTest (fake chafa shell scripts).
+- candy-scriptui (bootstrap TERM pin, LoopPinTest, STREAM_PF_UNIX, timeout.exe, control-byte dirs, rm -rf teardowns, SignalHonestyTest latch); sugar-forms FilePickerTest:439-441; candy-git (RecursiveDirCleanup chmod, `2>/dev/null`, `we"ird.txt`, shims, `/` vs `\`, `/bin:/usr/bin`); candy-files; candy-vcr leftovers are done (green).
+Patterns: `PHP_BINARY -r` instead of /bin/sh|echo|sleep fixtures; `NUL`; `DIRECTORY_SEPARATOR`/`realpath()` in expectations; POSIX-mode and symlink legs gated on what the host can do (see candy-vcr `tests/Support/HostFilesystem.php`).
+### D. Upstream (not this lane)
+On Linux: sugar-image has 6 failing GIF-corpus tests (ImageSourceDims/GifFlipWalkParity/GifRound4Security), and candy-top `LangPackParityTest` is missing `lang/it.php`.
+### E. Cleanup when done
+Delete `~/sc-wintest` on the server and `F:\dev\php84-wintest` + `F:\dev\sc-tmp` on the Windows box.

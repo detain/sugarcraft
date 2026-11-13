@@ -597,9 +597,7 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
         $owner = @fileowner($dir);
         $perms = @fileperms($dir);        if ($owner === false || $perms === false
             || $owner !== (function_exists('posix_getuid') ? posix_getuid() : $owner)
-            // Windows has no POSIX mode bits (directories read 0777), so the
-            // exact-0700 test can only fail there; the profile ACL guards it.
-            || (\DIRECTORY_SEPARATOR !== '\\' && ($perms & 0777) !== 0700)) {
+            || ($perms & 0777) !== 0700) {
             return self::$sinkDir = $system;
         }
 

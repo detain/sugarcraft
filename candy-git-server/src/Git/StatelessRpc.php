@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\GitServer\Git;
 
-use SugarCraft\Async\ChildStdio;
 use SugarCraft\Core\Util\Proc\WindowsPipes;
 
 /**
@@ -198,8 +197,7 @@ final class StatelessRpc
 
         $proc = \proc_open(
             ['git', '-C', $repoPath, $binary, '--stateless-rpc', '--advertise-refs', '.'],
-            // Sockets on Windows (pipes there defeat the bounded select loops).
-            ChildStdio::descriptors(),
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes
         );
         if (!\is_resource($proc)) {
@@ -220,7 +218,8 @@ final class StatelessRpc
                 $pipes[2],
                 \hrtime(true) + (int) (($deadlineSeconds ?? self::ADVERTISE_DEADLINE_SECONDS) * 1e9),
                 $maxBytes,
-                $stderrTail
+                $stderrTail,
+                WindowsPipes::runningProbe($proc),
             );
             $bytes      = $drained['bytes'];
             $timedOut   = $drained['reason'] === self::REASON_TIMEOUT;
@@ -307,13 +306,28 @@ final class StatelessRpc
         // verbatim — the child's in-band protocol error IS the answer.
         $stdin = self::stripServiceHeader($service, $body);
 
+        // Windows: a pipe write bigger than its 4096-byte buffer blocks until
+        // git reads, and git may be blocked writing output this process is
+        // not reading yet, so the body reaches git through a private temp
+        // file as its stdin instead of through a pipe. (A socket stdio was
+        // rejected: PHP's Windows socket pair is a loopback TCP connection
+        // another local process could race to.)
+        $stdinFile = null;
+        $descriptors = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+        if (WindowsPipes::runtimeNeedsIt()) {
+            $stdinFile = self::bodyFile($stdin);
+            $descriptors[0] = ['file', $stdinFile, 'r'];
+        }
+
         $proc = \proc_open(
             ['git', '-C', $repoPath, $binary, '--stateless-rpc', '.'],
-            // Sockets on Windows (pipes there defeat the bounded select loops).
-            ChildStdio::descriptors(),
+            $descriptors,
             $pipes
         );
         if (!\is_resource($proc)) {
+            if ($stdinFile !== null) {
+                @\unlink($stdinFile);
+            }
             throw new \RuntimeException('failed to start git ' . $binary . ' --stateless-rpc');
         }
 
@@ -327,9 +341,11 @@ final class StatelessRpc
         $bytes = '';
         $reason = self::REASON_OK;
         try {
-            self::writeBounded($pipes[0], $stdin, $deadline);
-            \fclose($pipes[0]);
-            $drained = self::drainBounded($pipes[1], $pipes[2], $deadline, $maxBytes, $stderrTail);
+            if ($stdinFile === null) {
+                self::writeBounded($pipes[0], $stdin, $deadline);
+                \fclose($pipes[0]);
+            }
+            $drained = self::drainBounded($pipes[1], $pipes[2], $deadline, $maxBytes, $stderrTail, WindowsPipes::runningProbe($proc));
             $bytes   = $drained['bytes'];
             $reason  = $drained['reason'];
         } finally {
@@ -340,6 +356,10 @@ final class StatelessRpc
             $reap = self::reapBounded($proc, $pipes, $binary === 'receive-pack'
                 ? self::RECEIVE_PACK_TERM_GRACE_SECONDS
                 : self::TERM_GRACE_SECONDS);
+            // The staged Windows body goes once the child that read it is gone.
+            if ($stdinFile !== null) {
+                @\unlink($stdinFile);
+            }
         }
 
         // Reported once the child is actually dead, so the line carries
@@ -450,8 +470,12 @@ final class StatelessRpc
      * @param string $stderrTail bounded stderr tail, collected by reference
      * @return array{bytes: string, reason: string}
      */
-    private static function drainBounded($stdoutPipe, $stderrPipe, int $deadlineNs, int $maxBytes, string &$stderrTail): array
+    private static function drainBounded($stdoutPipe, $stderrPipe, int $deadlineNs, int $maxBytes, string &$stderrTail, ?\Closure $running = null): array
     {
+        if ($running !== null && WindowsPipes::runtimeNeedsIt()) {
+            return self::drainBoundedWindows($stdoutPipe, $stderrPipe, $deadlineNs, $maxBytes, $stderrTail, $running);
+        }
+
         $data   = '';
         $outEof = false;
         $errEof = false;
@@ -459,38 +483,17 @@ final class StatelessRpc
         \stream_set_blocking($stdoutPipe, false);
         \stream_set_blocking($stderrPipe, false);
 
-        // Windows: stdout is a socket (ChildStdio) but stderr is a PIPE, which
-        // select() calls ready while empty and whose fread then parks. It is
-        // polled for what fstat reports waiting instead, and closes with
-        // stdout's EOF after one last poll.
-        $pollStderr = WindowsPipes::runtimeNeedsIt();
-
         while (!($outEof && $errEof)) {
             $remainingNs = $deadlineNs - \hrtime(true);
             if ($remainingNs <= 0) {
                 return ['bytes' => $data, 'reason' => self::REASON_TIMEOUT]; // wedged child — caller reaps
             }
 
-            if ($pollStderr && !$errEof) {
-                $polled = WindowsPipes::readAvailable($stderrPipe, 65536);
-                if ($polled !== '') {
-                    $stderrTail .= $polled;
-                    if (\strlen($stderrTail) > self::STDERR_TAIL_BYTES) {
-                        $stderrTail = \substr($stderrTail, -self::STDERR_TAIL_BYTES);
-                    }
-                }
-                if ($outEof) {
-                    $errEof = true;
-
-                    continue;
-                }
-            }
-
             $read = [];
             if (!$outEof) {
                 $read[] = $stdoutPipe;
             }
-            if (!$errEof && !$pollStderr) {
+            if (!$errEof) {
                 $read[] = $stderrPipe;
             }
 
@@ -500,9 +503,7 @@ final class StatelessRpc
             // raw remainder made the final tick sleep up to ~1000x past
             // the deadline (a ~1 s overshoot per poll once under a
             // millisecond remained). Convert, then clamp to one second.
-            // (Windows polls stderr each pass, so its slice stays short.)
-            $slice = $pollStderr ? 50_000 : 1_000_000;
-            $ready = @\stream_select($read, $null, $null, 0, (int) \min($slice, \intdiv((int) $remainingNs, 1000)));
+            $ready = @\stream_select($read, $null, $null, 0, (int) \min(1_000_000, \intdiv((int) $remainingNs, 1000)));
             if ($ready === false) {
                 \usleep(1000); // interrupted (signal): re-check the deadline next turn
                 continue;
@@ -546,5 +547,67 @@ final class StatelessRpc
         }
 
         return ['bytes' => $data, 'reason' => self::REASON_OK];
+    }
+
+    /**
+     * drainBounded() on Windows: the pipes there stay blocking and select()
+     * calls them ready while empty, so read only what fstat reports waiting
+     * on each. A Windows pipe shows no EOF either; the child's exit (sampled
+     * before the reads) plus an empty pass is the end.
+     *
+     * @param resource $stdoutPipe
+     * @param resource $stderrPipe
+     * @param \Closure(): bool $running
+     * @return array{bytes: string, reason: string}
+     */
+    private static function drainBoundedWindows($stdoutPipe, $stderrPipe, int $deadlineNs, int $maxBytes, string &$stderrTail, \Closure $running): array
+    {
+        $data = '';
+        while (true) {
+            if (\hrtime(true) >= $deadlineNs) {
+                return ['bytes' => $data, 'reason' => self::REASON_TIMEOUT];
+            }
+            $exited = !$running();
+
+            $err = WindowsPipes::readAvailable($stderrPipe, 65536);
+            if ($err !== '') {
+                $stderrTail .= $err;
+                if (\strlen($stderrTail) > self::STDERR_TAIL_BYTES) {
+                    $stderrTail = \substr($stderrTail, -self::STDERR_TAIL_BYTES);
+                }
+            }
+            $out = WindowsPipes::readAvailable($stdoutPipe, 65536);
+            if ($out !== '') {
+                $data .= $out;
+                if (\strlen($data) > $maxBytes) {
+                    return ['bytes' => $data, 'reason' => self::REASON_OVERFLOW];
+                }
+            }
+
+            if ($out === '' && $err === '') {
+                if ($exited) {
+                    return ['bytes' => $data, 'reason' => self::REASON_OK];
+                }
+                \usleep(WindowsPipes::POLL_MICROSECONDS);
+            }
+        }
+    }
+
+    /**
+     * The request body as a private temp file, for git's stdin on Windows
+     * (see negotiate()). tempnam() creates it exclusively; it is removed as
+     * soon as the child is reaped.
+     */
+    private static function bodyFile(string $body): string
+    {
+        $path = \tempnam(\sys_get_temp_dir(), 'cgs-rpc-');
+        if ($path === false || @\file_put_contents($path, $body) !== \strlen($body)) {
+            if (\is_string($path)) {
+                @\unlink($path);
+            }
+            throw new \RuntimeException('could not stage the stateless-rpc request body');
+        }
+
+        return $path;
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Config;
 
+use SugarCraft\Code\Support\WindowsPipes;
 use React\EventLoop\Loop;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
@@ -681,6 +682,13 @@ final class StatusLineCommand
             1 => ['pipe', 'w'],
             2 => ['pipe', 'w'],
         ];
+        // Windows: a stdin pipe write past 4096 bytes blocks until the command
+        // reads, which a command that ignores stdin never does; stage the
+        // JSON as a file there instead (same bytes, same EOF).
+        $stdinFile = WindowsPipes::runtimeNeedsIt() && $stdin !== null && $stdin !== '' ? WindowsPipes::stageStdin($stdin) : null;
+        if ($stdinFile !== null) {
+            $descriptors[0] = ['file', $stdinFile, 'r'];
+        }
 
         // `@` for ScriptHook's reason: a refused exec emits a warning that
         // lands mid-frame over whatever sugar-core last painted, and under
@@ -700,10 +708,15 @@ final class StatusLineCommand
             ProcessContainment::env()
         );
         if (!\is_resource($process)) {
+            if ($stdinFile !== null) {
+                @unlink($stdinFile);
+            }
             return '';
         }
 
-        if ($stdin !== null && $stdin !== '') {
+        if ($stdinFile !== null) {
+            // stdin is the staged file: there is no pipe to write or close.
+        } elseif ($stdin !== null && $stdin !== '') {
             @fwrite($pipes[0], $stdin);
             @fclose($pipes[0]);
         } else {
@@ -719,7 +732,7 @@ final class StatusLineCommand
         // `proc_close()`.
         $deadline = microtime(true) + self::TIMEOUT_SECONDS;
 
-        [$output, $timedOut] = self::drain($pipes[1], $pipes[2], $deadline);
+        [$output, $timedOut] = self::drain($pipes[1], $pipes[2], $deadline, WindowsPipes::runningProbe($process));
 
         if (!$timedOut) {
             $timedOut = !self::waitForExit($process, $deadline);
@@ -736,6 +749,9 @@ final class StatusLineCommand
         fclose($pipes[2]);
 
         $exitCode = proc_close($process);
+        if ($stdinFile !== null) {
+            @unlink($stdinFile);
+        }
 
         // A NON-ZERO EXIT PAINTS NOTHING, and neither does a timeout. The
         // divergence from ScriptHook is deliberate and is about where the
@@ -903,7 +919,7 @@ final class StatusLineCommand
      * @param resource $stderr
      * @return array{0: string, 1: bool} stdout (capped), timed-out-or-capped
      */
-    private static function drain($stdout, $stderr, float $deadline): array
+    private static function drain($stdout, $stderr, float $deadline, ?\Closure $running = null): array
     {
         $buffer = '';
 
@@ -926,6 +942,7 @@ final class StatusLineCommand
             keepGoing: static function () use (&$buffer): bool {
                 return \strlen($buffer) < self::MAX_OUTPUT_BYTES;
             },
+            running: $running,
         );
 
         return [
