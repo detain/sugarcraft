@@ -11,6 +11,7 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Async\AsyncOps;
 use SugarCraft\Async\CancellationSource;
 use SugarCraft\Async\OperationCancelledException;
+use SugarCraft\Async\Tests\Support\SharedLoopClean;
 use SugarCraft\Async\TimeoutException;
 
 /**
@@ -18,6 +19,13 @@ use SugarCraft\Async\TimeoutException;
  */
 final class AsyncOpsTest extends TestCase
 {
+    use SharedLoopClean;
+
+    protected function tearDown(): void
+    {
+        $this->assertSharedLoopClean();
+        parent::tearDown();
+    }
     public function testWithTimeoutRejectsOnTimeout(): void
     {
         $loop = Loop::get();
@@ -245,7 +253,11 @@ final class AsyncOpsTest extends TestCase
 
     public function testRetryRetriesOnFailure(): void
     {
-        $loop = Loop::get();
+        // Private StreamSelectLoop: this and its siblings stop() their run()
+        // as soon as the cycle settles, with the safety-cap guard timer still
+        // armed — on the shared loop that leftover is what made sibling drain
+        // and default-loop pins order-dependent (0.461 s foreign drain class).
+        $loop = new \React\EventLoop\StreamSelectLoop();
         $attempts = 0;
 
         $promise = AsyncOps::retry(
@@ -258,6 +270,7 @@ final class AsyncOpsTest extends TestCase
             },
             attempts: 3,
             baseBackoffSeconds: 0.01,
+            loop: $loop,
         );
 
         $result = null;
@@ -277,7 +290,9 @@ final class AsyncOpsTest extends TestCase
 
     public function testRetryFailsAfterMaxAttempts(): void
     {
-        $loop = Loop::get();
+        // Private loop for the same early-stop residue reason as
+        // testRetryRetriesOnFailure above.
+        $loop = new \React\EventLoop\StreamSelectLoop();
         $attempts = 0;
 
         $promise = AsyncOps::retry(
@@ -287,6 +302,7 @@ final class AsyncOpsTest extends TestCase
             },
             attempts: 3,
             baseBackoffSeconds: 0.01,
+            loop: $loop,
         );
 
         $rejected = null;
@@ -330,7 +346,9 @@ final class AsyncOpsTest extends TestCase
         // retry logic. With baseBackoffSeconds=0.01 (10ms), the old code's
         // backoff*2=20ms deadline would have killed this before it completed.
         // After Step 6, retry() imposes no per-attempt timeout.
-        $loop = Loop::get();
+        // Private loop: the test stops at 60 ms with the 150 ms cap guard
+        // still armed (same shared-loop residue class as the retry siblings).
+        $loop = new \React\EventLoop\StreamSelectLoop();
         $attempts = 0;
         $deferred = new Deferred();
 
@@ -342,6 +360,7 @@ final class AsyncOpsTest extends TestCase
             },
             attempts: 3,
             baseBackoffSeconds: 0.01,
+            loop: $loop,
         );
 
         $result = null;
