@@ -686,11 +686,16 @@ final class HttpListener
         );
 
         $reason = self::REASON_PHRASES[$result['status']] ?? 'Unknown';
-        $wire = "HTTP/1.1 {$result['status']} {$reason}\r\n";
+        // 049: head and body travel as SEPARATE writes. The concat used
+        // to hand the body one extra full materialization on every
+        // response — for a max-size download that is another
+        // max_pack_bytes of peak memory for zero wire difference (the
+        // socket cannot tell which write a byte arrived in).
+        $headWire = "HTTP/1.1 {$result['status']} {$reason}\r\n";
         foreach ($result['headers'] as $name => $value) {
-            $wire .= "{$name}: {$value}\r\n";
+            $headWire .= "{$name}: {$value}\r\n";
         }
-        $wire .= "\r\n" . $result['body'];
+        $headWire .= "\r\n";
         // The socket is non-blocking, so a
         // bare fwrite hands the kernel AT MOST one send-buffer of bytes and
         // the rest of the response would be silently lost on close — real
@@ -698,7 +703,8 @@ final class HttpListener
         // with curl 18 "transfer closed with N bytes remaining".
         // HttpWire::writeAll() keeps feeding the socket until it is drained
         // or the client stalls (shared with the stats transport, S13).
-        HttpWire::writeAll($client, $wire);
+        HttpWire::writeAll($client, $headWire);
+        HttpWire::writeAll($client, (string) $result['body']);
     }
 
     /** @param resource $client */

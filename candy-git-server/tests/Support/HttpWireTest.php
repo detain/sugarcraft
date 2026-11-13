@@ -181,7 +181,11 @@ final class HttpWireTest extends TestCase
         self::assertGreaterThanOrEqual(2, \substr_count($listener, 'HttpWire::writeAll($client'), 'both listener response writers must drain via the shared loop');
 
         $dispatch = self::sliceBetween($listener, 'private function dispatch', 'private static function peerAddress');
-        self::assertStringContainsString('HttpWire::writeAll($client, $wire)', $dispatch);
+        // 049 split the answer into two drains (head, then body) so a
+        // max-size response never materializes a concat copy; the guard
+        // re-aims to the new shape — both legs must still ride writeAll.
+        self::assertStringContainsString('HttpWire::writeAll($client, $headWire);', $dispatch);
+        self::assertStringContainsString("HttpWire::writeAll(\$client, (string) \$result['body']);", $dispatch);
 
         $writeStatus = self::sliceBetween($listener, 'private function writeStatus', 'private function closeClient');
         self::assertStringContainsString('HttpWire::writeAll($client,', $writeStatus);

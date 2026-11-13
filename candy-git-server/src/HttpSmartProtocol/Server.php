@@ -7,6 +7,7 @@ namespace SugarCraft\GitServer\HttpSmartProtocol;
 use SugarCraft\GitServer\{AccessControl, Config, Repo, Stats, User, UserStore};
 use SugarCraft\GitServer\Git\{PktLine, ReceivePack, StatelessRpc, UploadPack};
 use SugarCraft\GitServer\LFS\LFSHandler;
+use SugarCraft\GitServer\LFS\LocalStorageBackend;
 
 /**
  * HTTP server that speaks the Git smart protocol.
@@ -811,16 +812,28 @@ final class Server
             return $this->errorResponse(422, 'Object hash does not match OID');
         }
 
-        $stream = \fopen('php://temp', 'r+');
-        if ($stream === false) {
-            return $this->errorResponse(500, 'Internal server error');
-        }
-        try {
-            \fwrite($stream, $body);
-            \rewind($stream);
-            $handler->storageBackend()->write($oid, $stream);
-        } finally {
-            \fclose($stream);
+        $backend = $handler->storageBackend();
+        if ($backend instanceof LocalStorageBackend) {
+            // 049: the payload already sits materialized and hash-verified
+            // in $body, and the default backend only ever wants the bytes —
+            // the php://temp round trip this site used to take copied the
+            // whole object a second time for zero benefit. Custom backends
+            // keep the stream contract below (the documented extension
+            // point speaks write() alone; inventing a bytes door there
+            // would break third parties for a local-only win).
+            $backend->writeBytes($oid, $body);
+        } else {
+            $stream = \fopen('php://temp', 'r+');
+            if ($stream === false) {
+                return $this->errorResponse(500, 'Internal server error');
+            }
+            try {
+                \fwrite($stream, $body);
+                \rewind($stream);
+                $backend->write($oid, $stream);
+            } finally {
+                \fclose($stream);
+            }
         }
 
         $this->stats()->recordLfsUpload();

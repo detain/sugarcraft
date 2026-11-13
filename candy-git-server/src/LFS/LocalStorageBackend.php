@@ -93,6 +93,54 @@ final class LocalStorageBackend implements LFSStorageBackendInterface
      */
     public function write(string $oid, $stream): void
     {
+        $this->publish($oid, static function ($handle) use ($oid, $stream): void {
+            try {
+                if (@\stream_copy_to_stream($stream, $handle) === false) {
+                    throw new \RuntimeException("Failed to write LFS object {$oid}");
+                }
+            } catch (\Throwable $e) {
+                // The interface contract says RuntimeException on write
+                // failure — a stream that dies mid-copy (or was never a
+                // readable resource) must not surface as a raw TypeError.
+                throw new \RuntimeException("Failed to write LFS object {$oid}", 0, $e);
+            }
+        });
+    }
+
+    /**
+     * Publish straight from an in-memory payload (049). The upload
+     * router already holds the complete, hash-VERIFIED bytes; before
+     * this seam it round-tripped them through php://temp merely to
+     * satisfy the stream API, materializing the object one extra time
+     * per upload for a default backend that only ever wants the bytes.
+     * Same atomic 0600 publish as write(), sliced at the lib's 64 KiB
+     * law so no oversized temporary ever rides the copy.
+     */
+    public function writeBytes(string $oid, string $bytes): void
+    {
+        $this->publish($oid, static function ($handle) use ($oid, $bytes): void {
+            $offset = 0;
+            $length = \strlen($bytes);
+            while ($offset < $length) {
+                $written = @\fwrite($handle, \substr($bytes, $offset, \SugarCraft\GitServer\Support\HttpWire::CHUNK_BYTES));
+                if ($written === false || $written === 0) {
+                    throw new \RuntimeException("Failed to write LFS object {$oid}");
+                }
+                $offset += $written;
+            }
+        });
+    }
+
+    /**
+     * The shared atomic publish: shard dir 0750, private temp inode
+     * before a payload byte lands, rename onto the target, and removal
+     * of both handle and temp on any failure — no half-written object,
+     * no orphaned temp. One shape for both write paths (049).
+     *
+     * @param callable(resource): void $sink
+     */
+    private function publish(string $oid, callable $sink): void
+    {
         $path = $this->objectPath($oid);
         $dir = \dirname($path);
 
@@ -122,9 +170,7 @@ final class LocalStorageBackend implements LFSStorageBackendInterface
             if (@\chmod($temp, 0600) === false) {
                 throw new \RuntimeException("Cannot set LFS object mode: {$path}");
             }
-            if (@\stream_copy_to_stream($stream, $handle) === false) {
-                throw new \RuntimeException("Failed to write LFS object {$oid}");
-            }
+            $sink($handle);
             \fflush($handle);
             if (@\rename($temp, $path) === false) {
                 throw new \RuntimeException("Cannot publish LFS object {$oid}");

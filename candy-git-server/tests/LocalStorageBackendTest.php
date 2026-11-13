@@ -268,17 +268,20 @@ final class LocalStorageBackendTest extends TestCase
     {
         // Functional arms can pass under a 'chmod AFTER rename' mutation —
         // the window where the final object is world-readable is exactly
-        // what must stay structurally impossible.
+        // what must stay structurally impossible. Since 049 the shape
+        // lives once in publish() and BOTH doors route through it, so the
+        // guard moved with the code: seam ordering here, door wiring
+        // below, and no door may open the final path directly.
         $source = (string) \file_get_contents(\dirname(__DIR__) . '/src/LFS/LocalStorageBackend.php');
-        \preg_match('/public function write\(.*?\n    \}/s', $source, $body);
-        $this->assertNotEmpty($body, 'write() vanished from the backend source');
+        \preg_match('/private function publish\(.*?\n    \}/s', $source, $body);
+        $this->assertNotEmpty($body, 'the publish seam vanished from the backend source');
 
         $this->assertStringContainsString("fopen(\$temp, 'xb')", $body[0], 'temp-file publish lost');
         $this->assertStringContainsString('rename($temp, $path)', $body[0]);
         $this->assertStringContainsString('chmod($temp, 0600)', $body[0], 'mode must settle on the temp, before rename');
         $chmod = \strpos($body[0], 'chmod($temp, 0600)');
-        $copy = \strpos($body[0], 'stream_copy_to_stream');
-        // Order: chmod strictly before the payload copy, and the copy
+        $copy = \strpos($body[0], '$sink($handle)');
+        // Order: chmod strictly before ANY payload sink runs, and the sink
         // strictly before the publish rename. The mode arrives on a temp
         // inode that never held bytes at the umask default, so neither the
         // temp nor the renamed target is ever world-readable — the
@@ -290,6 +293,14 @@ final class LocalStorageBackendTest extends TestCase
             'payload must land in the temp before the rename publishes it'
         );
         $this->assertStringNotContainsString('fopen($path', $body[0], 'direct write to the final path is back');
+
+        \preg_match('/public function write\(.*?\n    \}/s', $source, $writeDoor);
+        \preg_match('/public function writeBytes\(.*?\n    \}/s', $source, $bytesDoor);
+        $this->assertNotEmpty($writeDoor, 'the stream door vanished');
+        $this->assertNotEmpty($bytesDoor, 'the bytes door vanished');
+        $this->assertStringContainsString('$this->publish($oid,', $writeDoor[0], 'the stream door must route through the shared seam');
+        $this->assertStringContainsString('$this->publish($oid,', $bytesDoor[0], 'the bytes door must route through the shared seam');
+        $this->assertStringNotContainsString('fopen($path', $writeDoor[0] . $bytesDoor[0], 'no door may open the final path directly');
     }
 
     public function testWritePublishesWithModeZeroSixHundredEvenOverALoosePredecessor(): void
@@ -307,5 +318,58 @@ final class LocalStorageBackendTest extends TestCase
         $backend->write($oid, \fopen('data://text/plain,second', 'rb'));
         $this->assertSame(0600, \fileperms($path) & 0777, 'replacement must re-tighten the mode');
         $this->assertSame('second', \file_get_contents($path));
+    }
+
+    public function testWriteBytesPublishesSliceCrossingPayloadsByteExactlyAtPrivateMode(): void
+    {
+        // 049: the upload router's bytes door. Past one 64 KiB slice so
+        // the bounded loop's reassembly is what's under test, not a
+        // single lucky fwrite — and through the SHARED publish seam, so
+        // the mode/temp/rename guarantees of write() carry over.
+        $backend = new LocalStorageBackend($this->tmpDir);
+        $payload = \str_repeat('lfs', 30000); // 90_000 bytes
+        $oid = \hash('sha256', $payload);
+
+        $backend->writeBytes($oid, $payload);
+
+        $this->assertTrue($backend->exists($oid));
+        $this->assertSame(\strlen($payload), $backend->size($oid));
+        $this->assertSame($payload, $backend->readAll($oid), 'slice reassembly must be byte-exact');
+
+        $path = $this->tmpDir . '/' . \substr($oid, 0, 2) . '/' . \substr($oid, 2, 2) . '/' . $oid;
+        $this->assertSame(0600, \fileperms($path) & 0777, 'the bytes door settles 0600 before the first payload byte');
+        $this->assertSame(
+            [\basename($path)],
+            \array_values(\array_diff(\scandir(\dirname($path)), ['.', '..'])),
+            'no .tmp- residue may survive a successful writeBytes'
+        );
+    }
+
+    public function testWriteBytesRefusesAndSweepsWhenThePayloadCannotLand(): void
+    {
+        // The writeBytes sink's failure leg: a zero-length fwrite from a
+        // disk-full handle is not testable here, so arm the deterministic
+        // one — an oid whose object path collides with a DIRECTORY, which
+        // makes rename (and thus publish) fail after the sink ran, and
+        // the seam must sweep the temp and throw.
+        $backend = new LocalStorageBackend($this->tmpDir);
+        $oid = \hash('sha256', 'collision');
+        $path = $this->tmpDir . '/' . \substr($oid, 0, 2) . '/' . \substr($oid, 2, 2) . '/' . $oid;
+        \mkdir(\dirname($path), 0755, true);
+        \mkdir($path); // final object slot occupied by a directory
+
+        try {
+            $backend->writeBytes($oid, 'payload bytes');
+            $this->fail('writeBytes() must refuse a publish its rename cannot complete');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('Cannot publish LFS object', $e->getMessage());
+        }
+
+        $bucket = \dirname($path);
+        $this->assertSame(
+            [\basename($path)],
+            \array_values(\array_diff(\scandir($bucket), ['.', '..'])),
+            'the temp must be swept when publication fails'
+        );
     }
 }

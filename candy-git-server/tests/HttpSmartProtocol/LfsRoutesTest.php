@@ -373,4 +373,21 @@ final class LfsRoutesTest extends TestCase
 
         $this->assertSame(2, $this->stats->connections());
     }
+
+    public function testUploadTakesTheBytesDoorForTheDefaultBackend(): void
+    {
+        // Structural leg of 049: with the default backend the verified
+        // in-memory payload goes straight to writeBytes — a php://temp
+        // detour would re-materialize the whole object once more for
+        // zero benefit. Third-party stream backends keep the round trip
+        // in the fallback arm (the documented extension point speaks
+        // write() only), so the pin checks for the fast door's presence,
+        // not for the word php://temp's absence.
+        $method = new \ReflectionMethod(Server::class, 'handleLfsUpload');
+        $lines = \file((string) $method->getFileName());
+        $source = \implode('', \array_slice($lines, $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1));
+
+        self::assertStringContainsString('instanceof LocalStorageBackend', $source, 'the default backend is recognized at the door');
+        self::assertStringContainsString('$backend->writeBytes($oid, $body)', $source, 'the bytes door is the default path');
+    }
 }

@@ -467,6 +467,20 @@ final class HttpListenerHardeningTest extends TestCase
         self::assertStringNotContainsString('8192', $body, 'the 8 KiB slice multiplied tick count on cap-sized pushes');
     }
 
+    public function testResponseHeadAndBodyTravelAsSeparateWritesNotAConcatenation(): void
+    {
+        // Structural pin for 049's response leg: concat behaviorally
+        // equals two writes on the wire, so only the source shape keeps
+        // a future refactor from re-materializing a max-size body into
+        // one extra combined string.
+        $method = new \ReflectionMethod(HttpListener::class, 'dispatch');
+        $lines = \file((string) $method->getFileName());
+        $body = \implode('', \array_slice($lines, $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1));
+
+        self::assertStringContainsString("HttpWire::writeAll(\$client, (string) \$result['body'])", $body, 'the body goes to the socket through its own bounded drain');
+        self::assertStringNotContainsString(".\"\\r\\n\" . \$result[", $body, 'no head+body concatenation may return');
+    }
+
     public function testPeerAddressHandsOutIpv6PeersWithoutBrackets(): void
     {
         $peer = \Closure::bind(static fn ($sock): ?string => HttpListener::peerAddress($sock), null, HttpListener::class);
