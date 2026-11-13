@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Agents;
 
+use SugarCraft\Code\Support\LineAppends;
+
 /**
  * Append-only JSON-lines mailbox for inter-teammate message delivery.
  *
@@ -49,9 +51,9 @@ final class Mailbox
             'read' => $message->read,
         ], JSON_THROW_ON_ERROR) . "\n";
 
+        LineAppends::append($inboxPath, $line);
         $previous = umask(0o077);
         try {
-            file_put_contents($inboxPath, $line, FILE_APPEND | LOCK_EX);
             $this->touchWakeMarker($toTeammateId);
         } finally {
             umask($previous);
@@ -186,16 +188,7 @@ final class Mailbox
         // Append the messageId to the read-markers file (oneId per line).
         // receive() checks this file to determine read status without ever
         // needing to modify the inbox itself.
-        $previous = umask(0o077);
-        try {
-            file_put_contents(
-                $this->readMarkersPath($teammateId),
-                $messageId . "\n",
-                FILE_APPEND | LOCK_EX,
-            );
-        } finally {
-            umask($previous);
-        }
+        LineAppends::append($this->readMarkersPath($teammateId), $messageId . "\n");
     }
 
     /**

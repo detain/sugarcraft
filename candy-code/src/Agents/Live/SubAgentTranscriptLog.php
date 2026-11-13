@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Agents\Live;
 
 use SugarCraft\Code\Support\HomeDirectory;
+use SugarCraft\Code\Support\LineAppends;
 
 /**
  * One delegated run's transcript, as JSONL, written by the process that runs
@@ -218,36 +219,7 @@ final class SubAgentTranscriptLog
             return false;
         }
 
-        $previous = umask(0o077);
-        try {
-            $dir = \dirname($this->path);
-            if (!is_dir($dir) && !@mkdir($dir, 0o700, true) && !is_dir($dir)) {
-                return false;
-            }
-            if (is_link($dir) || is_link($this->path)) {
-                return false;
-            }
-
-            $handle = @fopen($this->path, 'ab');
-            if ($handle === false) {
-                return false;
-            }
-
-            try {
-                if (!flock($handle, LOCK_EX)) {
-                    return false;
-                }
-                $written = fwrite($handle, $line);
-                fflush($handle);
-                flock($handle, LOCK_UN);
-
-                return $written === \strlen($line);
-            } finally {
-                fclose($handle);
-            }
-        } finally {
-            umask($previous);
-        }
+        return LineAppends::append($this->path, $line);
     }
 
     /**
