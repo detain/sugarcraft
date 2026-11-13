@@ -365,6 +365,13 @@ final class Table
      * the remaining space truncates on the focused row only. The string is
      * sanitized at ingress like the separator. Default '' renders exactly
      * the bytes it always did.
+     *
+     * Accessibility pairing (FBX-09): the marker is a GLYPH change — a
+     * screen reader announces neither colour nor shape, so pair the cue
+     * with a spoken one by reading cursor()/currentRow() on every move.
+     * The prefix is free text: carry a localized label ('  › ',
+     * '  ➜ ', a translated word) through the app's i18n layer instead
+     * of hard-coding a symbol that assumes what the glyph means.
      */
     public function withCursorMarker(string $prefix): self
     {

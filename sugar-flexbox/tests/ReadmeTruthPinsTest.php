@@ -35,6 +35,9 @@ final class ReadmeTruthPinsTest extends TestCase
         // below (testTheSweepMatchesItsDocumentation...).
         'DELETED (not replaced)',
         'over-allocation, never a truncation',
+        'announces neither colour nor shape',
+        'is not a `width × height` guarantee',
+        'share one code path',
     ];
 
     /**

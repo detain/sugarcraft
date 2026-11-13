@@ -152,6 +152,7 @@
             <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
             <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
             <li class="toc-h3"><a href="#trust-boundary">Trust boundary</a></li>
+            <li class="toc-h3"><a href="#accessibility">Accessibility</a></li>
             <li class="toc-h3"><a href="#api">API</a></li>
             <li class="toc-h2"><a href="#demos">Demos.</a></li>
             <li class="toc-h3"><a href="#flexbox-row-column">FlexBox row + column</a></li>
@@ -161,13 +162,14 @@
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">FlexBox layout engine for terminal grids — ratio-based item sizing, gap, align. Plus a simple table with sort, filter, cursor nav, and column styling. Viewport and Scrollbar compose the canonical sugar-forms classes (the sugar-widgets symbols are deprecated aliases).</p>
+<p class="lede" style="margin-top: 28px;">FlexBox layout engine for terminal grids — ratio-based item sizing, gap, align. Plus a simple table with sort, filter, cursor nav, and column styling. Viewport and Scrollbar compose the canonical sugar-forms classes.</p>
 
     <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-flexbox</code></pre>
 
     <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Flexbox\Flex\{FlexBox, FlexItem};
+use SugarCraft\Flexbox\Flex\Align;
 use SugarCraft\Flexbox\Table\{Table, Column};
 
 $flex = FlexBox::row(
@@ -175,11 +177,12 @@ $flex = FlexBox::row(
     FlexItem::new('RIGHT')-&gt;withRatio(2),
 )-&gt;withGap(2);
 
-$table = (new Table())
-    -&gt;addColumn(Column::make('Name', 20))
-    -&gt;addRow(['Alice'])
-    -&gt;addRow(['Bob'])
-    -&gt;sortBy(0, true);
+$table = Table::new()
+    -&gt;withColumn(Column::new('Name', 20))
+    -&gt;withColumn(Column::new('Age', 5)-&gt;withAlign(Align::End))
+    -&gt;withRow(['Alice', '30'])
+    -&gt;withRow(['Bob', '25'])
+    -&gt;withSort(0);
 
 echo $flex-&gt;render(40, 1), PHP_EOL;
 echo $table-&gt;render(), PHP_EOL;</code></pre>
@@ -187,8 +190,8 @@ echo $table-&gt;render(), PHP_EOL;</code></pre>
     <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>FlexBox</strong><span>Ratio-based row / column layout. Align: Start, Center, End, Stretch (one value drives both axes — box height plus text placement in row mode, rendered width plus placement in column mode; no CSS justify-content counterpart).</span></div>
-            <div class="feature"><strong>Table</strong><span>Sort by column (asc/desc toggle), filter by text, cursor navigation, per-column style.</span></div>
-            <div class="feature"><strong>Viewport</strong><span>Scrollable viewport composes the canonical sugar-forms Viewport. Keyboard nav (line/page/half-page), mouse wheel, smooth scroll, scrollbar. Sticky headers and footers via withStickyHeader()/withStickyFooter(); syncWith() is a decorative partner marker only (scroll state never propagates).</span></div>
+            <div class="feature"><strong>Table</strong><span>Sort by column (asc/desc toggle, with authored secondary tiebreakers via Column::sorted()), filter by case-folded text, cursor navigation guarded at its door, per-column style, hidden (width-0) columns, themeable ruler, and an over-wide disclosure: computeTotalWidth() is the whole grid's width and render() never wraps — compose in a Viewport to scroll it.</span></div>
+            <div class="feature"><strong>Viewport</strong><span>Scrollable viewport composes the canonical sugar-forms Viewport. Keyboard nav (line/page/half-page), mouse wheel, smooth scroll, scrollbar. Sticky headers and footers via withStickyHeader()/withStickyFooter(); a document that fits renders the plain streaming face. withLinkedViewport() is a decorative partner marker only (scroll state never propagates).</span></div>
             <div class="feature"><strong>Scrollbar</strong><span>Scrollbar composes the canonical sugar-forms Scrollbar. Vertical/horizontal, configurable thumb/track chars.</span></div>
             <div class="feature"><strong>Immutability</strong><span>All builders return new instances.</span></div>
             
@@ -203,7 +206,11 @@ echo $table-&gt;render(), PHP_EOL;</code></pre>
     </ul>
 
     <h3 id="trust-boundary" style="margin-top: 32px;">Trust boundary</h3>
-    <p>Table, Column and FlexBox treat everything they render as untrusted data: cell values and column titles pass through <code>Sanitize::untrusted()</code>, and newlines, tabs and carriage returns are replaced with spaces at render time, so no escape sequence can ride in through content. Style strings are gated to legal SGR parameter text (codes 0..255 separated by single <code>;</code>) or empty for no style; anything else throws <code>InvalidArgumentException</code> naming the refused property. Viewport and Scrollbar are trusted-input by design — the Viewport renders your <code>withContent()</code> lines as given and the Scrollbar emits your runes verbatim — so sanitize user input before feeding them. The FlexBox measures an item's raw content before the render-time sweep, so control bytes still consume measured cells even though the printed frame carries the swept text.</p>
+    <p>Table, Column and FlexBox treat everything they render as untrusted data: cell values and column titles pass through <code>Sanitize::untrusted()</code>, and at render time a line feed or a CRLF pair collapses to a single space, a tab becomes a single space, and a lone carriage return is DELETED (not replaced) — so no escape sequence can ride in through content. One asymmetry to know about: the FlexBox <em>measures</em> an item's raw content before the sweep, and only the tab skews the budget (it measures four cells and prints one space — over-allocation, never a truncation); every other swept byte measures zero cells on both sides. Style strings are gated to legal SGR parameter text (codes 0..255 separated by single <code>;</code>, colon sub-parameters normalized at the door) or empty for no style; anything else throws <code>InvalidArgumentException</code> naming the refused property. Viewport and Scrollbar are trusted-input by design — the Viewport renders your <code>setContent()</code> / <code>fromContent()</code> lines as given and the Scrollbar emits your runes verbatim — so sanitize user input before feeding them.</p>
+
+    <h3 id="accessibility" style="margin-top: 32px;">Accessibility</h3>
+    <p><strong>Focus is never carried by colour alone.</strong> The cursor row's default cue is its style; <code>withCursorMarker()</code> prepends a glyph inside the first column's width without moving frame dimensions. A screen reader announces neither colour nor shape — pair the visual cue by reading <code>cursor()</code>/<code>currentRow()</code> on every change. Sort state is a glyph (▲/▼), not a colour; a filtered-to-nothing table can say so with <code>withEmptyText()</code> over <code>totalRowCount()</code>/<code>filterText()</code>.</p>
+    <p><strong>Reduced motion has a real switch</strong> (<code>withSmoothScroll(false)</code>), <strong>keyboard is the primary path</strong> (every scroll verb answers <code>update()</code> with a <code>KeyMsg</code>; see <code>examples/viewport-keys.php</code>), and <strong>colour policy stays the host's</strong>: the library never reads <code>NO_COLOR</code>/<code>TERM</code> — validated SGR you pass in is passed through deliberately.</p>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
@@ -217,25 +224,29 @@ echo $table-&gt;render(), PHP_EOL;</code></pre>
 <tr><td>FlexItem</td><td>new(content)</td><td>Create flex item</td></tr>
 <tr><td>FlexItem</td><td>withRatio(n)</td><td>Share of leftover main-axis space (0 = never grows, keeps its floor)</td></tr>
 <tr><td>FlexItem</td><td>withBasis(cells)</td><td>Fixed main-axis reservation before ratios share the rest</td></tr>
-<tr><td>FlexItem</td><td>withWidth(cells)</td><td>Legacy alias of withBasis() — in column mode the reserved axis is the HEIGHT; prefer withBasis</td></tr>
+<tr><td>FlexItem</td><td>withWidth(cells)</td><td>Deprecated alias of withBasis() retiring in 2.0.0 — in column mode the reserved axis is the HEIGHT; prefer withBasis</td></tr>
 <tr><td>Table</td><td>new()</td><td>Create empty table</td></tr>
-<tr><td>Table</td><td>addColumn(col)</td><td>Add table column</td></tr>
-<tr><td>Table</td><td>addRow(cells)</td><td>Add table row</td></tr>
-<tr><td>Table</td><td>sortBy(col, asc)</td><td>Sort by column (resets the cursor to row 0)</td></tr>
-<tr><td>Table</td><td>sortByNext(col)</td><td>Toggle asc/desc on a column (resets the cursor to row 0)</td></tr>
-<tr><td>Table</td><td>filter(text)</td><td>Rows containing the case-insensitive substring in any cell (resets the cursor to row 0)</td></tr>
-<tr><td>Table</td><td>withCursorStyle(style)</td><td>SGR string for the cursor row (default '' marks nothing)</td></tr>
-<tr><td>Table</td><td>setCursor(row)</td><td>Move the cursor — not clamped; an off-range index falls off the view</td></tr>
-<tr><td>Table</td><td>currentRow()</td><td>Row under the cursor, or null when the cursor is off the view</td></tr>
-<tr><td>Table</td><td>currentCell(col)</td><td>Single cell under the cursor (null when off the view)</td></tr>
+<tr><td>Table</td><td>withColumn(col)</td><td>Add a column (addColumn() retires in 2.0.0)</td></tr>
+<tr><td>Table</td><td>withRow(cells)</td><td>Add a row; surplus values throw at the door (withRow is the canonical spelling)</td></tr>
+<tr><td>Table</td><td>withSort(col, asc)</td><td>Sort by column — the selection follows its row through the re-sort</td></tr>
+<tr><td>Table</td><td>sortByNext(col)</td><td>Toggle asc/desc on a column (selection follows its row)</td></tr>
+<tr><td>Table</td><td>withFilter(text)</td><td>Rows containing the Unicode case-folded substring in any cell; a selection whose row is filtered away falls back to row 0</td></tr>
+<tr><td>Table</td><td>withCursorStyle(style)</td><td>SGR string for the cursor row (default '' marks nothing on screen)</td></tr>
+<tr><td>Table</td><td>withCursorMarker(prefix)</td><td>Non-colour focus glyph inside the first column's width (screen readers still need a spoken cue — read cursor())</td></tr>
+<tr><td>Table</td><td>withEmptyText(text)</td><td>Row spanning the grid when a filter drops every row ('no matches' disclosure)</td></tr>
+<tr><td>Table</td><td>withCursor(row)</td><td>Move the cursor — the door settles the view and refuses indexes outside it</td></tr>
+<tr><td>Table</td><td>cursor()</td><td>Cursor index of the settled view (null only while the view holds no rows)</td></tr>
+<tr><td>Table</td><td>rawCurrentRow()</td><td>Stored values of the cursor row, un-rendered (null when the view has no rows)</td></tr>
+<tr><td>Table</td><td>rawCurrentCell(col)</td><td>Single stored cell under the cursor (currentRow()/currentCell() were renamed raw* and retire in 2.0.0)</td></tr>
 <tr><td>Table</td><td>render()</td><td>Full frame (pure); use TableRenderer for deltas</td></tr>
 <tr><td>TableRenderer</td><td>render(table)</td><td>First/resize frame full, then change-only delta</td></tr>
-<tr><td>Column</td><td>new(title, width)</td><td>Create a column (width in cells; `make()` remains as its BC alias)</td></tr>
-<tr><td>Column</td><td>withAlign(align)</td><td>Left / right / center cell placement</td></tr>
+<tr><td>Column</td><td>new(title, width)</td><td>Create a column (width in cells; `make()` remains as its deprecated BC alias retiring in 2.0.0)</td></tr>
+<tr><td>Column</td><td>withAlign(align)</td><td>Align case (Start/Center/End) or legacy string via the shared alignOf() door; Stretch is FlexBox sizing language and refuses</td></tr>
 <tr><td>Column</td><td>withStyle(style)</td><td>SGR parameter string applied to every cell of the column (validated at the door; the cursor style paints over it)</td></tr>
-<tr><td>Viewport</td><td>withContent(str, w=80, h=24)</td><td>Create viewport from string content</td></tr>
-<tr><td>Viewport</td><td>withStickyHeader/Footer(rows)</td><td>Pin lines at top/bottom across scrolling</td></tr>
-<tr><td>Viewport</td><td>withScrollbar(bool)</td><td>Toggle scrollbar display</td></tr>
+<tr><td>Viewport</td><td>fromContent(str, w=80, h=24)</td><td>Create viewport from string content (withContent() was the old factory name — it impersonated a fluent setter and retires in 2.0.0)</td></tr>
+<tr><td>Viewport</td><td>withStickyHeader/Footer(rows)</td><td>Pin FIRST/LAST rows across scrolling; negatives throw at the door</td></tr>
+<tr><td>Viewport</td><td>showScrollbar(bool)</td><td>Toggle scrollbar display (withScrollbar() retires in 2.0.0)</td></tr>
+<tr><td>Viewport</td><td>withSmoothScroll(bool)</td><td>Reduced-motion switch: off, every scroll settles in one frame</td></tr>
 <tr><td>Viewport</td><td>lineUp/Down(n)</td><td>Scroll by n lines</td></tr>
 <tr><td>Viewport</td><td>pageUp/Down(), halfPageUp/Down()</td><td>Scroll by a page or half the viewport height</td></tr>
 <tr><td>Viewport</td><td>withMouseWheelEnabled(bool)</td><td>Accept mouse-wheel scroll messages</td></tr>
@@ -263,7 +274,7 @@ echo $table-&gt;render(), PHP_EOL;</code></pre>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-flexbox/.vhs/sort-filter.gif" alt="Table frames with sort arrows, then a highlighted cursor row and a raw readout" onerror="this.parentElement.style.display='none'">
                 <h3 id="sort-cursor-table">Sort + cursor table</h3>
-                <span class="demo-caption">Sort flips on Name and the flag column, then cursor styling, movement and a raw currentRow()/currentCell() readout — no filter call.</span>
+                <span class="demo-caption">Sort flips on Name and the flag column, then cursor styling, movement and a rawCurrentRow()/rawCurrentCell() readout — no filter call.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-flexbox/.vhs/table.gif" alt="Table frames sorted by column then narrowed to rows containing the letter e" onerror="this.parentElement.style.display='none'">

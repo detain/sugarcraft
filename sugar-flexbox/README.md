@@ -48,7 +48,7 @@ The library carries the house i18n plumbing (`src/Lang.php` plus locale files un
 - **Scrollable viewport** — composes the canonical `sugar-forms` `Viewport`
   directly (FBX-20: the lib's require and imports name Forms, not the
   deprecated `sugar-widgets` `class_alias` façade)
-- **Keyboard navigation** — line-up/down, page-up/down, half-page-up/down (`halfPageUp()`/`halfPageDown()`), goto-top/bottom
+- **Keyboard navigation** — line-up/down, page-up/down, half-page-up/down (`halfPageUp()`/`halfPageDown()`), goto-top/bottom; every one is also reachable through `update()` with a `KeyMsg`, so a key handler and a wheel share one code path (`examples/viewport-keys.php` drives the whole contract headlessly)
 - **Sticky regions** — `withStickyHeader($rows)` / `withStickyFooter($rows)` pin lines across scrolling; a row can never appear
   in both regions (the footer is clamped when the document is shorter than header + footer), and a document that FITS the box —
   nothing scrolled out — renders the plain streaming frame instead of reserving blank bands for pinned rows
@@ -195,7 +195,28 @@ whose row a filter drops lands back at row 0. `cursor()` answers the raw index
 (`null` only while the view holds no rows); `rawCurrentRow()` and
 `rawCurrentCell()` answer that row's stored values or `null`.
 
+A table wider than the terminal is honest about its width and nothing else:
+`computeTotalWidth()` counts the full grid, and `render()` emits it as
+measured — **no wrapping, no truncation at the box**. A console will
+soft-wrap those rows, which breaks the column alignment the frame was
+built to express (a name column can silently bleed onto the next row's
+cells). Gate before you paint: compare `computeTotalWidth()` against
+your terminal width, or compose the table inside a `Viewport`, whose
+horizontal scroll (`scrollLeft()`/`scrollRight()`) moves whole cells
+through the over-wide region instead of letting the terminal fold it.
+(Shipping an automatic clamp like `withMaxWidth()` is a parked API
+decision; the discipline above is the contract today.)
+
 ## Viewport Quick Start
+
+`view()` is not a `width × height` guarantee, and the two faces differ
+deliberately: the plain (streaming) face answers **variable row counts**
+— a 1-line document in a 10-row frame paints 1 row, not 10 — while the
+sticky face pads its regions so a document with pinned rows is always
+exactly `height` rows tall. Size your surrounding chrome to "at most
+`height`", not to `height` (a shape-unifying change is a parked API
+decision; this is the contract today).
+
 
 ```php
 use SugarCraft\Flexbox\Viewport;
@@ -299,6 +320,44 @@ dimensions change, the next frame diffs against the previous one on a union
 canvas so cells the new size no longer paints arrive as erases (a SHRINK does
 not ghost) — callers that clear the terminal out-of-band must still call
 `reset()`.
+
+## Accessibility
+
+The renderer's a11y posture, stated as contract rather than hope:
+
+- **Focus is never carried by colour alone.** The cursor row's default
+  cue is its background style — invisible on monochrome terminals, to
+  colour-blind users, and under `NO_COLOR` hosts. `withCursorMarker()`
+  prepends a glyph inside the first column's width (frame dimensions
+  never move); the glyph is a *shape* change, though, and a screen
+  reader announces neither colour nor shape — pair the visual cue with
+  a spoken one by reading `cursor()`/`currentRow()` on every change
+  and announcing it in your app's layer. The sort state IS a glyph
+  (▲/▼ in the header, never colour), and a filtered-to-nothing table
+  can say so with `withEmptyText()` (with `totalRowCount()` and
+  `filterText()` answering why the view is empty).
+- **Reduced motion has a real switch.** `withSmoothScroll(false)` makes
+  every scroll jump settle in one frame; the mouse wheel never arms an
+  animation (that leg is instant by design, FBX-13), and `view()` is a
+  pure function of state — repeated calls return identical bytes, so a
+  restatement for a screen reader costs nothing.
+- **Keyboard is the primary path; the mouse is parity.** Every scroll
+  verb exists as a method and as a `KeyMsg` through `update()`;
+  `examples/viewport-keys.php` is the executable mapping (PageDown,
+  End, wheel). A keyboard-driven app never needs a mouse event, and a
+  wheel event answers exactly like the key it mirrors.
+- **Colour policy is the host's, not the library's.** Nothing here
+  reads `NO_COLOR` or `TERM` — stripping is the terminal's (or the
+  user's wrapper's) decision, and style strings you pass in are
+  validated SGR passed through *deliberately*, byte for byte. The
+  examples print a fixed `1;37` style for illustration; your app should
+  honour the same host policy its users set.
+- **Sticky header clamp is a content guarantee, not a layout quirk.**
+  Header rows are capped at `height − footer rows`: a pinned header
+  that left zero room for the body would repeat content screen-reader
+  users already heard in the footer band. The row budget is the
+  disclosure; `cursor()` never lies (FBX-26's door refuses indexes
+  that address nothing).
 
 ## Accessor deprecation (2026-10-24)
 
