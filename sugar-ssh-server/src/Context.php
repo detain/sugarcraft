@@ -65,6 +65,8 @@ final class Context
      *
      * When the deadline expires, the context is considered done
      * (equivalent to calling `cancel()` with a deadline error).
+     * The derived context is cancelable, so `cancel()` takes effect
+     * on it as well as on its expiry.
      */
     public function withDeadline(\DateTimeImmutable $deadline): self
     {
@@ -92,17 +94,25 @@ final class Context
     /**
      * Mark this Context (and all derived contexts) as cancelled.
      *
-     * Only contexts created with `withCancelable()` can be cancelled.
-     * Once cancelled, `done()` returns true and `err()` returns the
-     * supplied error (or a generic CancellationException if null).
+     * Only contexts created with `withCancelable()` (or `withDeadline()`,
+     * which implies cancelable) can be cancelled. Once cancelled,
+     * `done()` returns true and `err()` returns the supplied error (or
+     * a generic CancellationException if null).
+     *
+     * Returns true when the signal took effect and false when the
+     * context was silently inert because it is not cancelable — callers
+     * on signal-handler paths can branch on it instead of wondering
+     * whether their cancellation landed.
      */
-    public function cancel(?\Throwable $reason = null): void
+    public function cancel(?\Throwable $reason = null): bool
     {
         if (!$this->cancelable) {
-            return;
+            return false;
         }
         $this->cancelled = true;
         $this->cancelErr = $reason ?? new CancellationException();
+
+        return true;
     }
 
     /**

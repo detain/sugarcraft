@@ -79,6 +79,30 @@ final class ContextTest extends TestCase
         $this->assertSame($reason, $ctx->err());
     }
 
+    public function testCancelReportsFalseWhenTheContextIsInert(): void
+    {
+        // The silent no-op must be observable: a non-cancelable context
+        // answers false and its state stays untouched.
+        $ctx = Context::background();
+
+        $this->assertFalse($ctx->cancel());
+        $this->assertFalse($ctx->done());
+        $this->assertNull($ctx->err());
+    }
+
+    public function testCancelReportsTrueWhenTheSignalTakesEffect(): void
+    {
+        $ctx = Context::background()->withCancelable();
+        $this->assertTrue($ctx->cancel());
+        $this->assertTrue($ctx->done());
+        $this->assertInstanceOf(CancellationException::class, $ctx->err());
+
+        $reason = new \RuntimeException('hangup');
+        $armed = Context::background()->withCancelable();
+        $this->assertTrue($armed->cancel($reason));
+        $this->assertSame($reason, $armed->err());
+    }
+
     public function testDeadlineExpiryMarksContextDone(): void
     {
         $ctx = Context::background()->withDeadline(
