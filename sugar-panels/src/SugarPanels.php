@@ -146,13 +146,28 @@ final class SugarPanels
     private readonly GreedySolver $flexSolver;
 
     /**
-     * Create a new SugarPanels instance.
+     * Create a new SugarPanels instance — the canonical door (mirrors the house
+     * `::new()` factory convention Node follows). It is sugar over the identical
+     * public constructor below; both are documented at {@see self::__construct()}.
      */
     public static function new(): self
     {
         return new self();
     }
 
+    /**
+     * Create a new SugarPanels instance.
+     *
+     * The canonical door is {@see self::new()}; this public constructor is the
+     * SAME object reached directly. Both stay open on purpose: a SugarPanels is
+     * a STATEFUL per-session renderer (it remembers the previous frame so the
+     * next can diff against it), so a host that treats "one render session" as a
+     * unit constructs exactly one — and `new` is the honest spelling of that,
+     * not a footgun. `::new()` mirrors the factory house convention (Node and the
+     * rest of the fleet); it is sugar over the identical call, not a second
+     * lifecycle. No hidden state escapes either door: they share one constructor
+     * body.
+     */
     public function __construct()
     {
         $this->sgrPrefixCache = new \WeakMap();
