@@ -764,7 +764,10 @@ The house convention is bare accessors (`$user->name()`, never `$user->getName()
 The public `get`-prefixed accessors below were renamed to their bare twins and the
 old names remain available as one-line BC forwarders, each carrying a
 `@deprecated` docblock marked `REMOVED-IN: 2.0.0`. New code must call the bare
-name; the forwarders exist so pre-2.0 callers keep working unchanged.
+name; the forwarders exist so pre-2.0 callers keep working unchanged. The
+window is closed at these 22 members: it admits no new `get`-prefixed twin —
+the roster, the src census, and this table are pinned equal by
+`AccessorDeprecationTest`, so any drift goes red.
 
 | Namespace | Class | Deprecated | Use instead |
 | --- | --- | --- | --- |

@@ -36,6 +36,12 @@ use SugarCraft\Sql\Explain\SqliteExplainProvider;
  *
  * The forwarders are one-line delegators by contract; the bare twin is the
  * keeper of behaviour and its docblock carries no removal marker.
+ *
+ * The window is FROZEN at the 2026-10-24 sweep (admindata-013, SQL-A08): the
+ * roster is closed at its 22 members — there is no path to admit a new
+ * get-prefix twin. New public accessors are bare-name only; the counts below
+ * assert the freeze, so census, roster, and README drift apart (or any of
+ * them grows) RED BY MEMBER, not silently.
  */
 final class AccessorDeprecationTest extends TestCase
 {
@@ -43,9 +49,10 @@ final class AccessorDeprecationTest extends TestCase
 
     /**
      * Named keepers allowed to stay get-prefixed without a marker. Empty for
-     * candy-sql: the era census swept all 20 members (the 20th,
-     * ExplainProviderInterface::getDriverName(), is an interface member renamed
-     * outright — interface declarations are exempted by the inverse leg).
+     * candy-sql: the frozen window carries all 22 BC forwarders, and the one
+     * interface member the era census touched (ExplainProviderInterface::
+     * getDriverName()) was renamed outright — interface declarations are
+     * exempted by the inverse leg.
      */
     private const NAMED_CARVE_OUTS = [];
 
@@ -125,7 +132,7 @@ final class AccessorDeprecationTest extends TestCase
         ];
     }
 
-    public function testTheSweepCoversNineteenPublicForwarders(): void
+    public function testTheSweepCoversTheFrozenTwentyTwoMemberWindow(): void
     {
         $this->assertCount(22, self::deprecatedAccessors());
         $this->assertCount(22, self::srcCensus());
@@ -254,7 +261,7 @@ final class AccessorDeprecationTest extends TestCase
             $rows,
             PREG_SET_ORDER
         );
-        $this->assertCount(22, $rows, 'the README table must list all 19 forwarders');
+        $this->assertCount(22, $rows, 'the README table must list all 22 forwarders (the window is frozen)');
 
         $documented = [];
         foreach ($rows as $row) {
