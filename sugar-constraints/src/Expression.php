@@ -8,17 +8,15 @@ namespace SugarCraft\Constraints;
  * Linear expression: sum(a_i * x_i) + c.
  *
  * Formerly the fully-public mutable builder of the retired simplex prototype.
- * The coefficient map `$terms` is now frozen: private readonly, seeded by the
- * constructor and read via the bare {@see terms()} accessor (PHP array value
- * semantics make every read a defensive copy). The arithmetic methods build
- * results through the constructor, never through field writes.
- *
- * $constant intentionally STAYS public and writable: the natural reader name
- * `constant()` is taken by the {@see self::constant()} static factory, and
- * inventing a second-spelling accessor would widen the API for no behaviour.
- * Externally mutating $constant does not desynchronise any cached derived
- * state, so this residual mutability is disclosed rather than frozen — the
- * asymmetry with $terms is known and accepted.
+ * Both fields are now frozen: `$terms` and `$constant` are private readonly,
+ * seeded by the constructor and read via the bare {@see terms()} and
+ * {@see constant()} accessors (PHP array value semantics make every terms()
+ * read a defensive copy). The arithmetic methods build results through the
+ * constructor, never through field writes, and {@see withConstant()} is the
+ * fluent door for a changed scalar term. The 2026-11 freeze retired the last
+ * asymmetry: the static factory that used to squat on the reader name
+ * `constant()` (PHP forbids a static and an instance method sharing one) is
+ * now `ofConstant()`, matching the house factory vocabulary.
  *
  * No solver in this package consumes it any more: the Big-M simplex that built
  * its tableau rows from these expressions was retired (see
@@ -35,7 +33,7 @@ final class Expression
     /** @param array<string, float> $terms Variable coefficients */
     public function __construct(
         private readonly array $terms = [],
-        public float $constant = 0.0,
+        private readonly float $constant = 0.0,
     ) {
     }
 
@@ -49,12 +47,29 @@ final class Expression
         return $this->terms;
     }
 
+    /**
+     * Bare reader for the scalar term — the name the static factory used to
+     * occupy; the factory is {@see ofConstant()} now.
+     */
+    public function constant(): float
+    {
+        return $this->constant;
+    }
+
+    /**
+     * Fluent door for the scalar term: same terms, new constant, new instance.
+     */
+    public function withConstant(float $value): self
+    {
+        return new self($this->terms, $value);
+    }
+
     public static function zero(): self
     {
         return new self();
     }
 
-    public static function constant(float $c): self
+    public static function ofConstant(float $c): self
     {
         return new self([], $c);
     }

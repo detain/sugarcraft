@@ -286,7 +286,9 @@ split through it, env-selectable via `SolverFactory`), `sugar-panels`
 solved. `sugar-widgets` does not consume it. The stable surface is the
 `LayoutSolver::solve()` contract, the `Constraint` factories, and the
 `Dock\*` API; `Expression` (a leftover of the retired simplex) is
-`@internal` and half-immutable on purpose — shipped dead, kept for a future
+`@internal` and fully immutable — the 2026-11 freeze made `constant()` the
+bare reader, moved the factory to `ofConstant()`, and made `withConstant()`
+the fluent door — shipped dead, kept for a future
 relational engine.
 
 `Region` here is deliberately distinct from `SugarCraft\CellBuffer\Region` in
