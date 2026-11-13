@@ -246,7 +246,7 @@ There is no focus or active-panel facet — see
 | `Node::vertical(Node ...)` | Static vertical constructor |
 | `Node::noBorder(Node)` | Static no-border constructor |
 | `$node->totalWidth()` / `totalHeight()` | Footprint the node claims: natural content, floored by `min*`, capped by `max*`, plus padding, frame and margin |
-| `->withMinWidth(int)` / `->withMinHeight(int)` | Floor for the natural size. In the flex path it floors; in the legacy equal-split fallback a `min*` acts as a proportional **weight**, not a floor |
+| `->withMinWidth(int)` / `->withMinHeight(int)` | Floor for the natural size. That floor enters the flex path through fixed children's bases; a grown child gets only its weighted share, its `min*` is not applied, and `totalWidth()` / `totalHeight()` over-claim for grown children; in the legacy equal-split fallback, a `min*` acts as a proportional **weight**, not a floor |
 | `->withMaxWidth(int)` / `->withMaxHeight(int)` | Cap on the node's painted footprint (frame + padding + content). `0` means no cap. Margin rides **outside** the cap: the claimed footprint is cap + margin, and `totalWidth()` / `totalHeight()` say so |
 | `->withPadding(int)` | Inner padding (cells) — leaf nodes only; ignored on containers |
 | `->withBorder(bool)` | Show/hide **this node's own** frame — **on by default** for leaves and containers; the chosen style survives a `false → true` round-trip (contrast `noBorder()`, which flattens a whole subtree) |

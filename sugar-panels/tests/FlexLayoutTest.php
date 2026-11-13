@@ -267,6 +267,29 @@ final class FlexLayoutTest extends TestCase
         $this->assertSame(10, $wide->totalWidth(), 'content larger than min* wins');
     }
 
+    public function testAGrownChildGetsItsWeightedShareNotItsMinWidthFloor(): void
+    {
+        // sugar-panels-002 pin: min* floors the CLAIM, never the flex share.
+        $fixed = $this->panels->leaf(str_repeat('X', 20))->withBorder(false);
+        $grown = $this->panels->leaf('B')->withGrow()->withMinWidth(100);
+
+        // Claimed footprint: 100 (the floor) + 2 (its own frame) — a number the
+        // 50-column host can never honour. totalWidth() over-states it honestly
+        // only because the README row says so; this is that promise pinned.
+        $this->assertSame(102, $grown->totalWidth());
+
+        $rows = $this->rows($this->panels->horizontal($fixed, $grown)->withBorder(false), 50, 3);
+
+        // The fixed sibling keeps its natural 20-column basis and the grown pane
+        // gets exactly the weighted leftover — columns 20..49, thirty wide, not
+        // the 100 it claims. Had the floor entered the flex path, the frame
+        // would have closed far past the viewport (clipping) or squeezed the
+        // fixed column off its base.
+        $this->assertSame(0, mb_strpos($rows[0], 'X'));
+        $this->assertSame(20, mb_strpos($rows[0], '╭'));
+        $this->assertSame(49, mb_strpos($rows[0], '╮'));
+    }
+
     public function testAnEmptyLeafClaimsNoContent(): void
     {
         // A leaf with no text must not claim a row or column of its own: the
