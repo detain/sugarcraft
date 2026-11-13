@@ -24,8 +24,10 @@ use SugarCraft\ColorProfile\Env;
  * Pipeline:
  *  1. Environment phase  → chain ladder mapped to capability entries
  *  2. Terminfo phase     → `infocmp -1` name-position Tc/RGB and Sixel caps
- *  3. Environment upgrade table (interactive only — issues no raw OSC query
- *     round-trips; see capabilitiesFromTermProgram)
+ *  3. Environment upgrade table (gated on interactivity as a DELIBERATE
+ *     POLICY — a piped consumer cannot act on capabilities it never renders
+ *     to; no query protocol is involved, the table issues no round-trips at
+ *     all — see capabilitiesFromTermProgram)
  *  4. Fallbacks          → BasicAscii floor
  *
  * Extension seams (protected on purpose): {@see self::getEnv()},
@@ -144,7 +146,11 @@ class TerminalProbe
                 $caps = $this->checkTerminfo($caps);
             }
 
-            // Phase 3: Environment upgrade table (if interactive)
+            // Phase 3: Environment upgrade table (if interactive). Gating a
+            // query-FREE env table on TTY-ness is DELIBERATE POLICY, not a
+            // protocol limitation — non-interactive surfaces report only
+            // what the environment guarantees, because a piped consumer
+            // cannot act on capabilities it never renders to.
             if (!$gated && $this->interactive) {
                 $caps = $this->capabilitiesFromTermProgram($caps);
             }
@@ -306,7 +312,10 @@ class TerminalProbe
      * owned by the TUI layer; until then terminfo (Phase 2) is the
      * authoritative deep probe, and the two query-implying enum cases stay
      * @deprecated RESERVED (Capability::BracketedPaste,
-     * Capability::FocusEvents).
+     * Capability::FocusEvents). The TTY gate at the call site is a
+     * DELIBERATE POLICY, not one of these limits: capabilities here depend
+     * on interactivity because a non-interactive consumer cannot act on
+     * what it never renders to — the table itself answers purely from env.
      *
      * @param array<string, string> $caps
      * @return array<string, string>
