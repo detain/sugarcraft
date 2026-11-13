@@ -34,7 +34,7 @@ filter:
 * PHP **8.3+** with `ext-pcntl` (the launcher hands off via `pcntl_exec`).
 * **Unix only** — raw-mode terminals, `pcntl`, and `~` expansion have no Windows story.
 * A **UTF-8 terminal**: the picker draws `▸`, `─`, and `…`.
-* ANSI is always emitted: `NO_COLOR` / `TERM=dumb` are **not** currently honored.
+* The picker honors the capability signals: `NO_COLOR` (and BSD `CLICOLOR=0`) drop every SGR — the frame keeps its `▸` marker and plain-text layout — and `TERM=dumb` additionally prints single-pass frames with no cursor addressing, no alternate buffer and no paste bracketing. `CLICOLOR_FORCE=1` / `FORCE_COLOR=1` overrule both opt-outs. `--list` is plain text by construction either way.
 * Inside a container, attach a TTY: `docker run -it --rm <image> candy-ssh-launcher`.
 
 ## Install

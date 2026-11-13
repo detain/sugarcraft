@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\SshLauncher;
 
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\RawMode;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Tty;
@@ -14,7 +15,7 @@ use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 
 /**
  * Tiny terminal picker — renders marker-prefixed display lines
- * (SELECTED_MARKER over displayLine()) of {@see Endpoint}s. The user
+ * (selectedMarker() over displayLine()) of {@see Endpoint}s. The user
  * moves with ↑/↓, Home/End and PgUp/PgDn (j/k are query letters on
  * every row — the invert model, -060), narrows with type-to-search,
  * and picks with Enter. Returns the selected Endpoint,
@@ -38,11 +39,16 @@ class Picker
      * Palette bytes for the selected-row marker and the filter echo, as
      * exactly produced by Ansi::sgr(1,36)/Ansi::reset()/Ansi::sgr(36).
      * Byte-pinned by the picker tests (2026-10-23 — extracted from the
-     * inline literals without changing a single emitted byte).
+     * inline literals without changing a single emitted byte). -11 moved
+     * them behind selectedMarker()/filterColor()/descriptionColor(): the
+     * bytes are unchanged whenever ANSI is honored, and fall away to the
+     * bare '▸ ' marker / plain text under NO_COLOR, CLICOLOR=0 or
+     * TERM=dumb — the opt-outs the raw consts used to steamroll.
      */
-    private const SELECTED_MARKER = "\x1b[1;36m▸\x1b[0m ";
+    private const MARKER_COLORED = "\x1b[1;36m▸\x1b[0m ";
+    private const MARKER_PLAIN = '▸ ';
     private const UNSELECTED_MARKER = "  ";
-    private const FILTER_COLOR = "\x1b[36m";
+    private const FILTER_COLOR_COLORED = "\x1b[36m";
     /**
      * The description tier's dim grade (F-26): SGR 90 dark gray, not SGR 2
      * faint. Faint is near-invisible on many terminals (and renders as a
@@ -50,7 +56,7 @@ class Picker
      * documented for descriptions was effectively hidden. Dark gray is the
      * usable dim grade the four-color palette always has.
      */
-    private const DESCRIPTION_COLOR = "\x1b[90m";
+    private const DESCRIPTION_COLOR_COLORED = "\x1b[90m";
     /**
      * Rows the visible window shows at once (F-25) — a CAP, not the
      * window: on a short terminal the window shrinks to what fits above
@@ -126,6 +132,16 @@ class Picker
     private bool $lastKeyWasText = false;
     private bool $lastKeyWasEnter = false;
     private bool $burstPending = false;
+    /**
+     * Terminal capability flags (-11), resolved from the environment at
+     * the top of every pick(): colorOn gates the SGR palette, gate
+     * addressable gates cursor addressing AND the alternate-buffer /
+     * bracketed-paste switches (a truly dumb terminal honors none of
+     * them). Defaults keep the historical always-ANSI shape for callers
+     * that drive draw()/pick() machinery without the environment step.
+     */
+    private bool $colorOn = true;
+    private bool $addressable = true;
     /** Terminal geometry in cells; re-probed at the top of every draw()
      * (-013: the old one-shot latch held the first size forever, so a
      * mid-pick resize re-stranded the frame). null = not probed yet.
@@ -174,6 +190,7 @@ class Picker
         $this->lastKeyWasText = false;
         $this->lastKeyWasEnter = false;
         $this->burstPending = false;
+        $this->resolveTerminalCapability();
         // Arm BEFORE raw mode: setRawMode shells out to stty (fork+exec+
         // reap), and a Ctrl+C landing in that window would hit SIG_DFL —
         // process dies, finally never runs, echo stays off. A SIGINT
@@ -188,10 +205,14 @@ class Picker
             // every exit path restores them byte-exactly). Entering
             // inside the try means the finally's leave covers every
             // return, throw and cancel shape.
-            fwrite($this->out, Ansi::altScreenEnter());
-            // -09: ask the terminal to bracket pasted blocks while we own
-            // the screen; PASTE_OFF rides every exit path below.
-            fwrite($this->out, self::PASTE_ON);
+            // -08/-11: the buffer switch and paste bracketing are
+            // addressing features — a dumb terminal would only log them.
+            if ($this->addressable) {
+                fwrite($this->out, Ansi::altScreenEnter());
+                // -09: ask the terminal to bracket pasted blocks while we
+                // own the screen; PASTE_OFF rides every exit path below.
+                fwrite($this->out, self::PASTE_ON);
+            }
             while (true) {
                 $matches = $this->filterMatches($endpoints);
                 if ($this->cursor >= count($matches)) {
@@ -333,9 +354,12 @@ class Picker
             // ssh takes the screen over; after a cancel the shell prompt
             // returns untouched.
             // -09: paste bracketing unwinds before the buffer switch, on
-            // the same every-exit contract as the alt screen.
-            fwrite($this->out, self::PASTE_OFF);
-            fwrite($this->out, Ansi::altScreenLeave());
+            // the same every-exit contract as the alt screen (-11: both
+            // are addressing features, armed together or not at all).
+            if ($this->addressable) {
+                fwrite($this->out, self::PASTE_OFF);
+                fwrite($this->out, Ansi::altScreenLeave());
+            }
             fwrite($this->out, "\n");
         }
     }
@@ -392,8 +416,10 @@ class Picker
     private function restoreTerminalForSignal(): void
     {
         $this->setRawMode(false);
-        fwrite($this->out, self::PASTE_OFF);
-        fwrite($this->out, Ansi::altScreenLeave());
+        if ($this->addressable) {
+            fwrite($this->out, self::PASTE_OFF);
+            fwrite($this->out, Ansi::altScreenLeave());
+        }
         fwrite($this->out, "\n");
     }
 
@@ -512,7 +538,9 @@ class Picker
         // no-matches rows — the rows the budget below must leave for data.
         $chromeRows = 4 + ($showCount ? 1 : 0) + ($showNone ? 1 : 0);
 
-        fwrite($this->out, Ansi::cursorTo(1, 1) . Ansi::eraseToEnd());
+        if ($this->addressable) {
+            fwrite($this->out, Ansi::cursorTo(1, 1) . Ansi::eraseToEnd());
+        }
         // -014: every row the frame writes goes through clampRow — the
         // chrome used to bypass it, and a localized help string (62-78
         // cells) soft-wrapped on ≤78-col panes, stranding the overflow
@@ -523,7 +551,7 @@ class Picker
         // strings use, so no raw ESC can reach the terminal from here either.
         // The 'en' filter prompt is byte-pinned as 'filter: ' by the
         // integrity suite — picker.filter must keep that shape verbatim.
-        $filterLine = Lang::t('picker.filter') . self::FILTER_COLOR . $this->stripControls($this->filter) . Ansi::reset();
+        $filterLine = Lang::t('picker.filter') . $this->filterColor() . $this->stripControls($this->filter) . $this->sgrReset();
         fwrite($this->out, $this->clampRow($filterLine) . "\r\n");
         if ($showCount) {
             // Honest funnel: how much of the config the filter killed
@@ -553,11 +581,11 @@ class Picker
         $top     = max(0, min($this->cursor, $total - $visible));
         foreach (array_slice($matches, $top, $visible, true) as $i => $record) {
             $e = $record['endpoint'];
-            $marker = $i === $this->cursor ? self::SELECTED_MARKER : self::UNSELECTED_MARKER;
+            $marker = $i === $this->cursor ? $this->selectedMarker() : self::UNSELECTED_MARKER;
             // The displayLine is already sanitized from filterMatches()
             $line = $this->highlightLine($record['displayLine'], $record['result']);
             if ($e->description !== null && $e->description !== '') {
-                $line .= '  ' . self::DESCRIPTION_COLOR . $this->stripControls($e->description) . Ansi::reset();
+                $line .= '  ' . $this->descriptionColor() . $this->stripControls($e->description) . $this->sgrReset();
             }
             fwrite($this->out, $this->clampRow("{$marker}{$line}") . "\r\n");
         }
@@ -685,6 +713,11 @@ class Picker
         if ($result === null || $result->matchedIndices === []) {
             return $line;
         }
+        if (!$this->colorOn) {
+            // -11: the highlight tier rides the palette — plain text under
+            // NO_COLOR/dumb, positions unchanged.
+            return $line;
+        }
 
         $matchSet = array_flip($result->matchedIndices);
 
@@ -782,6 +815,60 @@ class Picker
     private function isRealInputStream(): bool
     {
         return (stream_get_meta_data($this->in)['stream_type'] ?? '') !== 'MEMORY';
+    }
+
+    /**
+     * Route the palette and the addressing switches through the fleet
+     * color authority (-11). ColorProfile::detect gets $stdout=null on
+     * purpose: the interactive leg in bin has already proven the tty, and
+     * the picker's historical contract (byte-pinned by dozens of drives,
+     * honored by `| less -R` classic workflows) keeps escapes flowing on
+     * pipes. Only explicit signals change behavior:
+     *   NO_COLOR / CLICOLOR=0  → no SGR anywhere (layout glyphs stay)
+     *   TERM=dumb (→ NoTty)    → no cursor addressing, no ?1049/?2004
+     *                            switches: the frame prints once, plain
+     * A capability-less TERM (unset, CI) keeps the legacy rich shape —
+     * silence about capabilities must never COST the colors on terminals
+     * that simply did not announce themselves.
+     */
+    private function resolveTerminalCapability(): void
+    {
+        $profile = ColorProfile::detect(null, null);
+        $explicitColorOff = $this->truthyEnv('NO_COLOR')
+            || (getenv('CLICOLOR') !== false && getenv('CLICOLOR') === '0');
+        $this->colorOn = $profile->supportsAnsi() || !$explicitColorOff;
+        // NoTty with $stdout=null is only reachable via TERM=dumb — the
+        // one signal that means "this device cannot honor addressing".
+        $this->addressable = $profile !== ColorProfile::NoTty;
+        if (!$this->addressable) {
+            $this->colorOn = false;
+        }
+    }
+
+    private function truthyEnv(string $name): bool
+    {
+        $v = getenv($name);
+        return $v !== false && $v !== '' && $v !== '0' && strtolower($v) !== 'false';
+    }
+
+    private function selectedMarker(): string
+    {
+        return $this->colorOn ? self::MARKER_COLORED : self::MARKER_PLAIN;
+    }
+
+    private function filterColor(): string
+    {
+        return $this->colorOn ? self::FILTER_COLOR_COLORED : '';
+    }
+
+    private function descriptionColor(): string
+    {
+        return $this->colorOn ? self::DESCRIPTION_COLOR_COLORED : '';
+    }
+
+    private function sgrReset(): string
+    {
+        return $this->colorOn ? Ansi::reset() : '';
     }
 
     /**
