@@ -214,6 +214,9 @@ final class SmtpTransportErrorTest extends TestCase
         $this->invokePrivate($transport, 'startTlsIfNeeded');
     }
 
+    /**
+     * @param array<array-key, mixed> $args
+     */
     private function invokePrivate(object $obj, string $method, array $args = []): mixed
     {
         $ref = new \ReflectionMethod($obj, $method);

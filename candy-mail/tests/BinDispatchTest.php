@@ -40,14 +40,12 @@ final class BinDispatchTest extends TestCase
      * @param list<string>                      $args
      * @param array<string, string>             $env
      * @param string|null                       $binOverride  alternate bin path (layout pins)
+     * @param array<string,string>              $extraEnv     verbatim child-env additions for
+     *                                                        names outside NEUTRAL_ENV (plain
+     *                                                        ASCII only: control-byte NAME
+     *                                                        delivery is impossible through
+     *                                                        PHP's env layer, B3 discovery)
      * @return array{status: int, out: string, err: string}
-     */
-    /**
-     * @param array<string,string> $extraEnv verbatim child-env additions for
-     *                                       names outside NEUTRAL_ENV (plain
-     *                                       ASCII only: control-byte NAME
-     *                                       delivery is impossible through
-     *                                       PHP's env layer, B3 discovery)
      */
     private function runCli(array $args, string $stdin = '', array $env = [], ?string $binOverride = null, array $extraEnv = []): array
     {

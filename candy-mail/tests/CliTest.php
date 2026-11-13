@@ -567,7 +567,11 @@ final class CliTest extends TestCase
     public function testBuildTransportPrefersResendThenSmtpAndNone(): void
     {
         $this->setEnv('RESEND_API_KEY', 're_test_key');
-        $this->assertInstanceOf(\SugarCraft\Mail\ResendTransport::class, \SugarCraft\Mail\buildTransport());
+        // CM-24: asserting on the bare call expression lets the recorded
+        // type guard leak into the next buildTransport() line; binding to a
+        // variable keeps each arm's narrowing where it belongs.
+        $resend = \SugarCraft\Mail\buildTransport();
+        $this->assertInstanceOf(\SugarCraft\Mail\ResendTransport::class, $resend);
 
         unset($_ENV['RESEND_API_KEY']);
         \putenv('RESEND_API_KEY');

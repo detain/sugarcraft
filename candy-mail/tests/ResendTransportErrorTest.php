@@ -122,6 +122,9 @@ final class ResendTransportErrorTest extends TestCase
         return $method->invoke($transport, $email);
     }
 
+    /**
+     * @param array<array-key, string> $addrs
+     */
     private function invokeFirstAddr(ResendTransport $transport, array $addrs): string
     {
         $reflection = new \ReflectionClass($transport);

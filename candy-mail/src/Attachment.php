@@ -59,6 +59,10 @@ final class Attachment
      * attachment whose content silently reads back as 0 bytes at send time.
      *
      * @throws \RuntimeException if the file cannot be read
+     * @throws \InvalidArgumentException if the path carries a stream wrapper,
+     *                                   the filename breaches the grammar or
+     *                                   byte ceiling, or the file exceeds the
+     *                                   per-attachment size ceiling
      */
     public static function fromPath(string $path, ?string $filename = null): self
     {

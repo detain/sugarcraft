@@ -1,0 +1,44 @@
+includes:
+	- vendor/phpstan/phpstan-phpunit/extension.neon
+
+parameters:
+	level: 6
+	paths:
+		- src
+		- tests
+		- tools
+	scanFiles:
+		# The suite require_once()s the bin in-process to reach parseArgs(),
+		# cliVersion() and friends; PHPStan needs the same symbol table the
+		# runtime has. scanFiles collects declarations without analysing the
+		# script itself (its dispatch body is a CLI entrypoint, not a lib unit).
+		- bin/candy-mail
+	excludePaths:
+		- vendor
+	treatPhpDocTypesAsCertain: false
+	ignoreErrors:
+		# CM-24 enable_crypto stub-vs-runtime pair, dated 2026-11-13.
+		# PHPStan's internal metadata models stream_socket_enable_crypto as
+		# returning 0|bool, but the transport (and the TLS-server arm of the
+		# dialogue harness) must keep both live arms: the documented int 1
+		# (PHP docs legacy wording; older runtimes answered 1) and the bool
+		# true current blocking-stream runtimes actually return — the latter
+		# is live-pinned by TlsChannelTest, which is exactly why the strict
+		# === 1-only posture was abandoned. A stubFile was tried first and is
+		# a no-op here (internal-function metadata wins over stubs — MEASURED,
+		# same class as sugar-core's FFI::open/close ruling in its neon), and
+		# the inline @var that CM-24's own note suggested is refused by
+		# phpstan 2.3.5 (varTag.nativeType). The runtime checks are NOT
+		# weakened — the ceiling-silence law holds. Entries are narrowed to
+		# this identifier + this exact message on these two paths only, so
+		# any NEW provable-true comparison — here or anywhere else — reddens.
+		-
+			identifier: notIdentical.alwaysTrue
+			path: src/SmtpTransport.php
+			messages:
+				- '#^Strict comparison using !== between 0\|bool and 1 will always evaluate to true\.$#'
+		-
+			identifier: notIdentical.alwaysTrue
+			path: tests/TlsChannelTest.php
+			messages:
+				- '#^Strict comparison using !== between 0\|bool and 1 will always evaluate to true\.$#'

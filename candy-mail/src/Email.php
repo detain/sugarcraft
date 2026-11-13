@@ -50,6 +50,7 @@ final class Email
      * @param list<string>      $cc
      * @param list<string>      $bcc
      * @param list<Attachment>  $attachments
+     * @param array<string,string> $headers
      */
     public function __construct(
         array $from,
@@ -135,16 +136,9 @@ final class Email
             $seen[$key] = true;
             $merged[]   = $addr;
         }
-        \assert(\array_is_list($merged));
         return $merged;
     }
 
-    /**
-     * Sanitize a list of addresses (refuse injection bytes, validate format).
-     *
-     * @param array<array-key, string> $addrs
-     * @return list<string>
-     */
     /**
      * Name-grammar gate + fixed-set ban + value control gate for the
      * withHeader escape hatch. Returns the original-case name => value pairs
@@ -195,6 +189,12 @@ final class Email
         return $value;
     }
 
+    /**
+     * Sanitize a list of addresses (refuse injection bytes, validate format).
+     *
+     * @param array<array-key, string> $addrs
+     * @return list<string>
+     */
     private function sanitizeAddressList(array $addrs): array
     {
         // Empty arrays are allowed; filter out empty strings first
@@ -204,7 +204,7 @@ final class Email
                 $filtered[] = $this->sanitizeAddr($addr);
             }
         }
-        return \array_values($filtered);
+        return $filtered;
     }
 
     /**

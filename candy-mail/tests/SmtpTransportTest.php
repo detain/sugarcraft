@@ -109,7 +109,10 @@ final class SmtpTransportTest extends TestCase
     public function testLegalHostShapesStillConstruct(): void
     {
         foreach (['ok.example', '127.0.0.1', 'localhost', 'smtp.invalid.example'] as $host) {
-            $this->assertInstanceOf(SmtpTransport::class, new SmtpTransport($host));
+            // CM-24: instanceof over a direct `new` is a tautology; the real
+            // claim is that a legal host survives the grammar filter and
+            // lands verbatim in the channel URL (name() before any dial).
+            $this->assertSame("smtp://{$host}:587", (new SmtpTransport($host))->name());
         }
     }
 

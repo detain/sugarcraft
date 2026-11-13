@@ -146,6 +146,8 @@ final class ResendTransport implements Transport
     /**
      * Refuse var_export() resurrection.
      *
+     * @param array<string,mixed> $properties
+     *
      * @throws \RuntimeException always
      */
     public static function __set_state(array $properties): static
@@ -266,6 +268,14 @@ final class ResendTransport implements Transport
         return $payload;
     }
 
+    /**
+     * First address or the named refusal — a senderless payload must never
+     * fabricate an address (see the in-body note).
+     *
+     * @param array<array-key, string> $addrs
+     *
+     * @throws \InvalidArgumentException when the list is empty
+     */
     private function firstAddr(array $addrs): string
     {
         // 'unknown@localhost' was a fabrication — it mailed every

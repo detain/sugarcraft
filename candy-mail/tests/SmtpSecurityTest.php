@@ -539,9 +539,11 @@ final class SmtpSecurityTest extends TestCase
     public function testLongVendorMimeTypesStayAccepted(): void
     {
         // Grammar must not reject what the internal guesser/default produce.
+        // CM-24: the tautological assertNotNull over a non-null factory is
+        // replaced by the real claim — the accepted type rides through.
         $doc = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-        $this->assertNotNull(\SugarCraft\Mail\Attachment::fromContent('x', 'a.docx', $doc));
-        $this->assertNotNull(\SugarCraft\Mail\Attachment::fromContent('x', 'a.bin', 'application/octet-stream'));
+        $this->assertSame($doc, \SugarCraft\Mail\Attachment::fromContent('x', 'a.docx', $doc)->mimeType);
+        $this->assertSame('application/octet-stream', \SugarCraft\Mail\Attachment::fromContent('x', 'a.bin', 'application/octet-stream')->mimeType);
     }
 
     public function testInlineAttachmentForgedFilenameIsRefused(): void
@@ -1005,6 +1007,9 @@ final class SmtpSecurityTest extends TestCase
         \pcntl_waitpid($pid, $status);
     }
 
+    /**
+     * @param array<array-key, mixed> $args
+     */
     private function invokePrivate(object $obj, string $method, array $args = []): mixed
     {
         $ref = new \ReflectionMethod($obj, $method);

@@ -144,7 +144,7 @@ foreach (INCLUDE_ROOTS as $root) {
 }
 
 $files = [];
-$walk = static function (string $dir) use (&$walk, &$files, $package): void {
+$walk = static function (string $dir) use (&$walk, &$files): void {
     foreach (scandir($dir) ?: [] as $name) {
         if ($name === '.' || $name === '..') {
             continue;

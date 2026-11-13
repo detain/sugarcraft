@@ -327,6 +327,9 @@ final class SmtpTransportHelpersTest extends TestCase
         $prop->setValue($this->transport, $response);
     }
 
+    /**
+     * @param array<array-key, mixed> $args
+     */
     private function invokePrivate(object $obj, string $method, array $args = []): mixed
     {
         $ref = new \ReflectionMethod($obj, $method);

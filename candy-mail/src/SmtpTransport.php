@@ -289,6 +289,8 @@ final class SmtpTransport implements Transport
      * Refuse var_export() resurrection — see the __debugInfo contract
      * above for what this does and does not seal.
      *
+     * @param array<string,mixed> $properties
+     *
      * @throws \RuntimeException always
      */
     public static function __set_state(array $properties): static
@@ -583,6 +585,11 @@ final class SmtpTransport implements Transport
         // the PEER's chain) onto stderr — an untrusted-bytes egress the rest
         // of this transport refuses to have. The failure IS handled: the
         // return value below routes it into the named starttls_failed throw.
+        // CM-24 typing: PHPStan models the answer as 0|bool; the docs' int 1
+        // (older runtimes answered 1) and the live-pinned bool true
+        // (TlsChannelTest) are both real, so both arms stay strict and the
+        // analyser's provable-true claim on `!== 1` is exempted — surgically,
+        // see the dated rule in phpstan.neon.
         $crypto = @\stream_socket_enable_crypto($this->socket, true, self::TLS_CRYPTO_METHODS);
         if ($crypto !== 1 && $crypto !== true) {
             // Success signal: the docs promise 1, but a blocking-stream
@@ -1140,6 +1147,11 @@ final class SmtpTransport implements Transport
                 // even one byte — on this platform the stall reads back as
                 // false with timed_out set. The socket's confession tells
                 // them apart; the old code called both 'no response'.
+                // CM-24 typing: the annotation keeps the defensive pair live
+                // without pretending the stub shape is law — stream_get_meta_data
+                // can answer false on a degraded resource, and the old code
+                // treated both masks as honest branches.
+                /** @var array<string,mixed>|false $meta */
                 $meta = @\stream_get_meta_data($this->socket);
                 if (\is_array($meta) && ($meta['timed_out'] ?? false) === true) {
                     throw new \RuntimeException(Lang::t('smtp.response_timeout'));
@@ -1151,6 +1163,8 @@ final class SmtpTransport implements Transport
                 // report a stall as '' rather than false). A bare newline
                 // that actually arrived (no timed_out) is protocol
                 // noise and still classifies as empty_response.
+                // CM-24 typing: same honest union as the false-arm above.
+                /** @var array<string,mixed>|false $meta */
                 $meta = @\stream_get_meta_data($this->socket);
                 if (\is_array($meta) && ($meta['timed_out'] ?? false) === true) {
                     throw new \RuntimeException(Lang::t('smtp.response_timeout'));
@@ -1279,6 +1293,11 @@ final class SmtpTransport implements Transport
         return $clean !== '' ? $clean : 'localhost';
     }
 
+    /**
+     * Render an address list as one RFC 2822 comma-separated header body.
+     *
+     * @param array<array-key, string> $addrs
+     */
     private function addrListHeader(array $addrs): string
     {
         $formatted = [];

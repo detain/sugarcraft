@@ -381,8 +381,11 @@ final class ResendTransportTest extends TestCase
             $this->assertNotNull($thrown, 'whitespace in a bearer token must not reach the header');
         }
         // Printable ASCII passes untouched (the shape gate is not a format gate).
+        // CM-24: the direct-new instanceof is a tautology; the load-bearing
+        // claim is that the key-shape gate accepted the token, which the
+        // channel name proves without re-testing the type.
         $transport = new ResendTransport('re_legit-key_123!');
-        $this->assertInstanceOf(ResendTransport::class, $transport);
+        $this->assertSame('resend', $transport->name());
     }
 
     public function testProxyIsExplicitlyDisabledForCredentialBearingCalls(): void
