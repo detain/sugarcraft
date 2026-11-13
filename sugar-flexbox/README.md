@@ -34,7 +34,11 @@ The library carries the house i18n plumbing (`src/Lang.php` plus locale files un
 - **Cell styling** — per-column ANSI style support
 - **Cursor tracking** — get current row/cell on selection. Note the cursor
   style is empty by default, so `withCursor()` alone marks nothing on screen —
-  call `withCursorStyle()` to paint the cursor row.
+  call `withCursorStyle()` to paint the cursor row. The style wraps the whole
+  row, separator joints included, so the focused row renders solid; pair it
+  with `withCursorMarker('> ')` for focus a colour-less host can still see —
+  the marker rides inside the first column's allocated width, so frame
+  dimensions never move.
 - **Delta rendering** — the stateful `TableRenderer` emits only the cells that changed between frames (see Buffer diffing below)
 
 ### Viewport

@@ -50,6 +50,9 @@ final class Table
     /** Style for cursor row (ANSI string). */
     private string $cursorStyle = '';
 
+    /** Non-colour focus marker prepended to the cursor row's first cell. */
+    private string $cursorMarker = '';
+
     /** Style for header row (ANSI string). */
     private string $headerStyle = '';
 
@@ -243,6 +246,24 @@ final class Table
         return $clone;
     }
 
+    /**
+     * Non-colour focus marker prepended to the cursor row's first cell.
+     *
+     * Colour-only focus is invisible on monochrome terminals, to colour-blind
+     * users and under NO_COLOR hosts (finding-023). The prefix rides INSIDE
+     * the first column's allocated width — mirroring the header's ▲/▼ sort
+     * arrow precedent — so frame dimensions never move; a value wider than
+     * the remaining space truncates on the focused row only. The string is
+     * sanitized at ingress like the separator. Default '' renders exactly
+     * the bytes it always did.
+     */
+    public function withCursorMarker(string $prefix): self
+    {
+        $clone = clone $this;
+        $clone->cursorMarker = \SugarCraft\Core\Util\Sanitize::untrusted($prefix);
+        return $clone;
+    }
+
     public function withHeaderStyle(string $ansiStyle): self
     {
         Sgr::assertParameterString($ansiStyle, 'Table header style');
@@ -379,20 +400,40 @@ final class Table
                 $cellStr = $col->padded($val, $ri);
 
                 // Per-column style reaches every data cell — the knob was
-                // once stored but never rendered. Cursor style wraps outside
-                // it so the selected row stays visually dominant.
+                // once stored but never rendered.
                 if ($col->ansiStyle !== '') {
                     $cellStr = $this->applyStyle($cellStr, $col->ansiStyle);
                 }
 
-                if ($isCursor && $this->cursorStyle !== '') {
-                    $cellStr = $this->applyStyle($cellStr, $this->cursorStyle);
+                // Non-colour focus marker (finding-023): prepend like the
+                // header's sort arrow, then re-clamp so the cell keeps its
+                // exact allocated width. Applied AFTER the column style so
+                // the prefix always renders un-styled and bare.
+                if ($isCursor && $this->cursorMarker !== '' && $ci === 0) {
+                    $clamped = Width::truncateAnsi(
+                        $this->cursorMarker . $cellStr,
+                        $col->width
+                    );
+                    $cellStr = match ($col->align) {
+                        'right'  => Width::padLeft($clamped, $col->width),
+                        'center' => Width::padCenter($clamped, $col->width),
+                        default  => Width::padRight($clamped, $col->width),
+                    };
                 }
 
                 $rowCols[] = $cellStr;
             }
 
-            $lines[] = \implode($this->separator, $rowCols);
+            $line = \implode($this->separator, $rowCols);
+
+            // Row style wraps the IMPLoded line (finding-019): a per-cell
+            // wrap left every ' │ ' joint bare between reset runs, so the
+            // focused row rendered striped instead of solid.
+            if ($isCursor && $this->cursorStyle !== '') {
+                $line = $this->applyStyle($line, $this->cursorStyle);
+            }
+
+            $lines[] = $line;
         }
 
         return $lines;

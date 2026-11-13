@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Flexbox\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Flexbox\Table\{Column, Table};
 
 /**
@@ -510,5 +511,93 @@ final class TableTest extends TestCase
         $this->assertStringContainsString('a', $lines[2]);
         $this->assertStringNotContainsString('B', $lines[2]);
         $this->assertStringContainsString('B', $lines[3]);
+    }
+
+    // ---- cursor affordance (finding-019 / finding-023, FBX-08) ----------
+
+    public function testCursorStyleSpansSeparatorJoints(): void
+    {
+        $t = Table::new()
+            ->withColumn(Column::new('Name', 10))
+            ->withColumn(Column::new('Num', 5))
+            ->withRow(['Alice', '1'])
+            ->withCursorStyle('7');
+
+        $line = $t->buildLines()[2]; // cursor defaults to row 0
+
+        // The whole imploded row rides inside ONE style span: the ' │ '
+        // joint renders reverse-video, not as an unstyled gutter between
+        // per-cell runs (finding-019).
+        $this->assertSame("\x1b[7mAlice      │ 1    \x1b[0m", $line);
+        // Probe: no reset gap anywhere before the closing reset.
+        $this->assertSame(1, substr_count($line, "\x1b[0m"));
+    }
+
+    public function testCursorMarkerLandsOnlyOnFocusedRow(): void
+    {
+        $t = Table::new()
+            ->withColumn(Column::new('Name', 8))
+            ->withColumn(Column::new('Num', 4))
+            ->withRow(['Alice', '1'])
+            ->withRow(['Bob', '2'])
+            ->withCursorMarker('> ')
+            ->withCursor(0);
+
+        $lines = $t->buildLines();
+        // Marker + value inside the allocated 8 cells, so the row keeps its
+        // exact pre-marker width.
+        $this->assertSame('> Alice  │ 1   ', $lines[2]);
+        $this->assertSame('Bob      │ 2   ', $lines[3]);
+    }
+
+    public function testCursorMarkerKeepsFrameDimensionsStable(): void
+    {
+        $base = Table::new()
+            ->withColumn(Column::new('Name', 8))
+            ->withColumn(Column::new('Num', 4))
+            ->withRow(['Alice', '1'])
+            ->withRow(['Bob', '2']);
+
+        $marked = $base->withCursorMarker("\u{25B6}\u{25B6}")->withCursor(1);
+
+        foreach ($base->buildLines() as $i => $plainLine) {
+            $this->assertSame(
+                Width::string($plainLine),
+                Width::string($marked->buildLines()[$i]),
+                "line {$i} must keep its cell width under the marker"
+            );
+        }
+    }
+
+    public function testCursorMarkerRidesInsideTheRowStyleSpan(): void
+    {
+        $t = Table::new()
+            ->withColumn(Column::new('Name', 8))
+            ->withRow(['Alice'])
+            ->withCursorMarker('> ')
+            ->withCursorStyle('7');
+
+        // Focus stays one solid run: style -> marker -> cell -> reset.
+        $this->assertSame("\x1b[7m> Alice \x1b[0m", $t->buildLines()[2]);
+    }
+
+    public function testCursorMarkerIsSanitizedAtIngress(): void
+    {
+        $t = Table::new()
+            ->withColumn(Column::new('Name', 8))
+            ->withRow(['Alice'])
+            ->withCursorMarker("\x1b[7m>"); // smuggled styling must not survive
+
+        $this->assertStringNotContainsString("\x1b", $t->buildLines()[2]);
+    }
+
+    public function testCursorMarkerDefaultIsByteStable(): void
+    {
+        $t = Table::new()
+            ->withColumn(Column::new('Name', 8))
+            ->withRow(['Alice'])
+            ->withCursorStyle('7');
+
+        $this->assertSame($t->buildLines(), $t->withCursorMarker('')->buildLines());
     }
 }
