@@ -327,7 +327,10 @@ bounding boxes, then ask zones whether a
 the app-facing surface; the marker scheme and its parser live once in the
 primitive `Mark` / `Scan` classes of this same package and are reused by
 every SugarCraft zone consumer. `mark()` encodes through
-`SugarCraft\Mouse\Mark::zone()` (which validates via `wrap()`), and `scan()`
+`SugarCraft\Mouse\Mark::wrap()` on an instance carrying the manager's
+enabled flag (not the `Mark::zone()` static convenience, which is
+always-enabled — inlining that while `setEnabled(false)` emits markers the
+manager's `scan()` suppresses), and `scan()`
 takes its bounding boxes from the instance `parse()` method of a constructed
 `SugarCraft\Mouse\Scan`, then strips
 the markers so the returned frame is display-ready.
