@@ -51,6 +51,7 @@ final class TableCommand extends Command
                 [])
             ->addOption('height',     null, InputOption::VALUE_REQUIRED, 'Cap rendered height in rows. 0 = unlimited.', 0)
             ->addOption('print',      'p',  InputOption::VALUE_NONE, 'Alias for the default print-and-exit behaviour (gum-compat).')
+            ->addOption('raw',        null, InputOption::VALUE_NONE, 'Emit data bytes verbatim, skipping the control-byte display policy (trusted pipelines only).')
             ->addOption('show-help',  null, InputOption::VALUE_NONE, 'Alias for --help (gum-compat).')
             ->addOption('timeout',    null, InputOption::VALUE_REQUIRED, 'Seconds to wait before auto-exiting (no-op for table — gum-compat).', 0);
     }
@@ -111,6 +112,21 @@ final class TableCommand extends Command
         $colOverride = $input->getOption('columns');
         if (is_array($colOverride) && $colOverride !== []) {
             $headers = array_values(array_map('strval', $colOverride));
+        }
+
+        // scriptui-24 (finding 019): the rendered data channel carries
+        // third-party bytes. Apply the house untrusted-display policy
+        // (sugar-core Sanitize::untrustedForDisplay, same doctrine as the
+        // pager) BEFORE measurement and layout, so stripped bytes never
+        // skew the widths and no OSC/cursor/C1 sequence survives into the
+        // operator's terminal. --raw opts out for byte-exact pipelines.
+        if (!$input->getOption('raw')) {
+            $policy = static fn (string $cell): string => \SugarCraft\Core\Util\Sanitize::untrustedForDisplay($cell);
+            $rows   = array_map(
+                static fn (array $row) => array_map($policy, $row),
+                $rows,
+            );
+            $headers = array_map($policy, $headers);
         }
 
         // --widths truncates each cell to the corresponding budget.

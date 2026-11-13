@@ -28,6 +28,7 @@ final class JoinCommand extends Command
             ->addOption('horizontal', null, InputOption::VALUE_NONE, 'Join side-by-side per line.')
             ->addOption('vertical',   null, InputOption::VALUE_NONE, 'Join with newlines (default).')
             ->addOption('separator',  null, InputOption::VALUE_REQUIRED, 'Custom separator (default: "\n" vertical, "" horizontal).')
+            ->addOption('raw',        null, InputOption::VALUE_NONE, 'Emit data bytes verbatim, skipping the control-byte display policy (trusted pipelines only).')
             ->addOption('align',      null, InputOption::VALUE_REQUIRED,
                 "Block alignment.\n"
               . "Horizontal mode: top|middle|bottom (vertical alignment of blocks of unequal height).\n"
@@ -43,6 +44,18 @@ final class JoinCommand extends Command
         $parts = $input->getArgument('parts') ?: self::stdinLines();
         if ($parts === []) {
             return Command::SUCCESS;
+        }
+
+        // scriptui-24 (finding 019): joined parts are the rendered data
+        // channel — apply the house untrusted-display policy at intake
+        // (pager doctrine) so control/escape bytes cannot ride through the
+        // join into the operator's terminal, and alignment measures the
+        // bytes that actually render. --raw opts out for byte-exact use.
+        if (!$input->getOption('raw')) {
+            $parts = array_map(
+                static fn (string $part): string => \SugarCraft\Core\Util\Sanitize::untrustedForDisplay($part),
+                $parts,
+            );
         }
 
         $horizontal = (bool) $input->getOption('horizontal');

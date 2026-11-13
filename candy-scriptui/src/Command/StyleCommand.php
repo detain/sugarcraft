@@ -46,6 +46,7 @@ final class StyleCommand extends Command
             ->addOption('border-background',  null, InputOption::VALUE_REQUIRED, 'Border background colour.')
             ->addOption('trim',               null, InputOption::VALUE_NONE,     'Trim trailing whitespace from each line.')
             ->addOption('strip-ansi',         null, InputOption::VALUE_NONE,     'Strip ANSI escapes from input before styling.')
+            ->addOption('raw',                null, InputOption::VALUE_NONE,     'Emit data bytes verbatim, skipping the control-byte display policy (trusted pipelines only).')
             ->addOption('show-help',          null, InputOption::VALUE_NONE,     'Alias for --help (gum compat).')
             ->addOption('timeout',            null, InputOption::VALUE_REQUIRED, 'Auto-abort after N seconds (0 = none, no-op for non-interactive style).', 0);
     }
@@ -54,6 +55,15 @@ final class StyleCommand extends Command
     {
         $argv = $input->getArgument('text') ?: [];
         $text = $argv === [] ? self::readStdin() : implode(' ', $argv);
+
+        // scriptui-24 (finding 019): styled text is the rendered data channel
+        // — third-party bytes get the house untrusted-display policy (same
+        // doctrine as the pager) before styling is applied, so no OSC,
+        // cursor-rewrite, C1, or forged SGR survives; decoration comes only
+        // from the operator's own flags. --raw opts out for byte-exact use.
+        if (!$input->getOption('raw')) {
+            $text = \SugarCraft\Core\Util\Sanitize::untrustedForDisplay($text);
+        }
 
         // --strip-ansi clears any inline SGR sequences before applying
         // styling, mirroring gum's behaviour for piped output.

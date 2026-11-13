@@ -401,6 +401,18 @@ doc-comments, and those are exercised by the model tests.
   visible, and `ColourGate` lowers colour — the DEC-private modes the
   renderer would emit are exactly what such terminals cannot digest.
 
+## Untrusted content
+
+This tool's documented purpose is rendering THIRD-PARTY content, so the
+data channel of the render commands carries a control-byte policy: `table`
+cells, `style` text, `join` parts, and `pager` content have escape
+sequences, C0/C1 controls, and invisible bidi/zero-width marks stripped at
+intake (sugar-core `Sanitize::untrustedForDisplay`), so no OSC title
+spoof, clipboard write, cursor rewrite, or forged SGR can ride output into
+the operator's terminal. Decoration comes only from the operator's own
+flags. Pipe trusted byte-exact data through `--raw` on `table`, `style`,
+and `join` to ship input verbatim instead.
+
 ## Compatibility with `gum` invocations
 
 Most `gum X` invocations work as `candy-scriptui X` verbatim. Known
