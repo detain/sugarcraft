@@ -53,7 +53,7 @@ composer require sugarcraft/sugar-dashboard
 | `StyleParser` | Parses `[text](fg:red,bg:blue)` into Dash Cell arrays — sugar-dashboard SSOT, NOT drop-in compatible with `\SugarCraft\Style\StyleParser` | |
 | `Color` | Backward-compat alias for `\SugarCraft\Core\Util\Color` (true duplicate, replaced by `class_alias` shim — prefer Core import in new code) | |
 | `Theme` | Pre-defined theme palettes (9 colour slots + helpers; `fg()`/`bg()` emit at the process-wide `ColorMode` capability, `NO_COLOR` → empty string) — sugar-dashboard SSOT, distinct from `\SugarCraft\Style\Theme` (13 slots, readonly properties, immutable `with*()` builders, no render helpers) | `dark()`, `dracula()`, `oneDark()`, `githubDark()`, `light()` |
-| `ColorMode` | Process-wide colour capability gate for every renderer in the library — charts, gauges and chrome route through it instead of each deciding on its own — the chain answers what `ColorProfile::detect()` answers (finding M-7, one capability authority) | `use(?ColorProfile): void`, `profile(): ColorProfile` |
+| `ColorMode` | Process-wide colour capability gate for every renderer in the library — charts, gauges and chrome route through it instead of each deciding on its own — the one capability authority (finding M-7); it deliberately diverges from `ColorProfile::detect()` in three documented, probe-pinned places, see Color Environment | `use(?ColorProfile): void`, `profile(): ColorProfile` |
 | `Threshold` | Maps a numeric value (typically a 0..1 ratio) to a `Color` via ordered stops — the shared "green below 60%, yellow below 80%, red above" pattern that gauges, meters and status indicators would otherwise each reinvent; `health()` is the preset triple | `of(array $stops)`, `health(?ok, ?warn, ?critical)`, `colorFor(float): Color`, `stops()` |
 | `EdgeStyle` | String enum `Solid`/`Dashed`/`Dotted`/`Bold` — currently dormant: no consumers in the library (the live tree-edge variant is `Components\Tree\EdgeStyle`, which carries `Double` in place of `Bold` and is consumed by `Network`) | |
 | `Segment` | 7-segment display component (digital-clock/calculator style) — renders characters from horizontal and vertical segments | `new(string)`, `withDigitWidth()`, `withShowColon()`, `withOnColor()`, `withOffColor()`, `withContent()` |
@@ -857,16 +857,26 @@ in the same namespace are its value parts.
 > and the frames above stay valid no matter which way that ruling lands.
 >
 > **Color environment.** Every color emission funnels through
-> `Foundation\ColorMode`, and the chain answers exactly what
-> `ColorProfile::detect()` answers (finding M-7 — one capability authority):
-> `TERM=dumb` collapses to plain text (no colour, no bold — the same `NoTty`
-> the detector reports), `NO_COLOR` set to any non-empty value disables colour
-> while keeping decoration, and `CLICOLOR=0` opts out — `CLICOLOR_FORCE` or
-> `FORCE_COLOR` set truthy beats all three. Everything else lands on the
-> TrueColor floor, so piped and unconfigured bytes are unchanged. An explicit
-> profile argument always wins over the process mode, and embedding hosts that
-> know the real destination can seed the full detector tier with
-> `ColorMode::use(ColorProfile::detect(null, $stdout))`.
+> `Foundation\ColorMode` — the library's one capability authority (finding
+> M-7 is about renderers never calling `ColorProfile::detect()` on their
+> own, not about the two chains agreeing): the chain checks
+> `CLICOLOR_FORCE`/`FORCE_COLOR` (truthy beats every off-switch), then
+> `TERM=dumb` → plain text, then `NO_COLOR` present-and-non-empty → color
+> off with decoration kept, then `CLICOLOR=0` → the same, and everything
+> else lands on the TrueColor floor. It diverges from what
+> `ColorProfile::detect()` would answer in exactly three documented places,
+> each pinned by `tests/Foundation/ColorModeDetectDivergenceTest.php`:
+> `NO_COLOR=0` disables color here while detect's truthiness test ignores
+> it; a force variable outranks `NO_COLOR` here while detect lets
+> `NO_COLOR` win; and the chain funnels without negotiating sub-tiers, so
+> `TERM=xterm-256color` answers TrueColor here versus detect's `Ansi256`
+> (detect additionally consults `COLORTERM`, `TERM_PROGRAM` and CI hosts,
+> and refuses color on a non-tty stdout — a pipe keeps byte-identical
+> output here, and embedding hosts that know the real destination collapse
+> that last gap deliberately with
+> `ColorMode::use(ColorProfile::detect(null, $stdout))`). An explicit
+> profile argument — or a seeded override — always wins over the process
+> mode.
 >
 > **Sizing.** The library never reads the terminal itself: hosts forward
 > `Core\Msg\WindowSizeMsg` to the root model, which is what `LegacyModuleAdapter`

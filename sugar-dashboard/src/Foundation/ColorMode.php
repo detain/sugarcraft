@@ -23,7 +23,7 @@ use SugarCraft\Core\Util\ColorProfile;
  *      two chains can never split-brain a dumb terminal (finding M-7:
  *      renderers used to ask `detect()` directly and collapse to plain text
  *      here while this chain kept emitting TrueColor bytes).
- *   4. `NO_COLOR` set to ANY non-empty value → `Ascii` (no-color.org: colour
+ *   4. `NO_COLOR` set to ANY non-empty value → `Ascii` (no-color.org: color
  *      off, decoration kept; an empty value does NOT disable). Deliberately
  *      presence-based: unlike `ColorProfile::detect()`'s truthiness test this
  *      honours `NO_COLOR=0`, matching the spec's "present, regardless of
@@ -39,6 +39,16 @@ use SugarCraft\Core\Util\ColorProfile;
  * mid-frame would desync a running dashboard's repaints. Every emission
  * site in src/ reads this class — none may call `ColorProfile::detect()`
  * on its own (pinned by tests/Foundation/ColorModeFunnelTest.php).
+ *
+ * Named divergences from `ColorProfile::detect()` (the README's Color
+ * Environment paragraph documents them for readers; this list and
+ * tests/Foundation/ColorModeDetectDivergenceTest.php are their source of
+ * truth): NO_COLOR=0 disables color here while detect's truthiness test
+ * ignores it; a force variable outranks NO_COLOR here while detect lets
+ * NO_COLOR win; and the chain never negotiates sub-tiers — a
+ * TERM=xterm-256color host answers TrueColor here versus detect's Ansi256
+ * ladder (detect also consults COLORTERM, TERM_PROGRAM, CI, and a non-tty
+ * stdout, where this chain stays byte-identical under a pipe by design).
  */
 final class ColorMode
 {
