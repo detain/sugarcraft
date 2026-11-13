@@ -413,7 +413,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      */
     private const REAP_ATTEMPTS = 20;
 
-    private const REAP_POLL_MICROSECONDS = 5_000;
+    private const REAP_POLL_MICROSECONDS = \SugarCraft\Code\Support\ProcessReaper::POLL_INTERVAL_US;
 
     /**
      * How often {@see completeAsync()} asks whether the turn child is still

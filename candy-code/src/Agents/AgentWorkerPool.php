@@ -185,7 +185,7 @@ final class AgentWorkerPool
     public const RESULT_DIR_PREFIX = 'sc_pool_';
 
     /** Poll backoff for waitForCompletion() when nothing has completed yet (microseconds). */
-    private const WAIT_POLL_INTERVAL_USEC = 5_000;
+    private const WAIT_POLL_INTERVAL_USEC = \SugarCraft\Code\Support\ProcessReaper::POLL_INTERVAL_US;
 
     /**
      * {@see reapTerminatedWorkers()}'s bounded WNOHANG window: 20 attempts x
@@ -198,7 +198,7 @@ final class AgentWorkerPool
      */
     private const REAP_ATTEMPTS = 20;
 
-    private const REAP_POLL_MICROSECONDS = 5_000;
+    private const REAP_POLL_MICROSECONDS = \SugarCraft\Code\Support\ProcessReaper::POLL_INTERVAL_US;
 
     /**
      * How long {@see terminateWorker()} lets a cancelled worker's tree act on

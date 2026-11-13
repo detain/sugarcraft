@@ -90,7 +90,7 @@ final class CommandBackend implements Backend, TracksActiveChildren
      * borrows this only as the back-off for an interrupted syscall, which is
      * the one case where its wait returns without anything having happened.
      */
-    private const POLL_INTERVAL_SECONDS = 0.005;
+    private const POLL_INTERVAL_SECONDS = \SugarCraft\Code\Support\ProcessReaper::POLL_INTERVAL_US / 1_000_000;
 
     private const DESCRIPTOR = [
         0 => ['pipe', 'r'],

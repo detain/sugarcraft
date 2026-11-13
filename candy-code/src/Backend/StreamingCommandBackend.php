@@ -111,7 +111,7 @@ final class StreamingCommandBackend implements Backend, TracksActiveChildren
      * again. Unconditional: an iteration that read nothing must yield, whether
      * or not the child is still running — see {@see complete()}.
      */
-    private const POLL_INTERVAL_US = 5000;
+    private const POLL_INTERVAL_US = ProcessReaper::POLL_INTERVAL_US;
 
     /**
      * Seconds of silence AFTER THE DIRECT CHILD HAS EXITED before its pipes
