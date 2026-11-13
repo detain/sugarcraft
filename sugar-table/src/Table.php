@@ -1343,7 +1343,11 @@ final class Table
                         if ($val === null) {
                             continue;
                         }
-                        if (\stripos(\strtolower(self::plainText($val)), $searchLower) !== false) {
+                        // ST-31: no per-haystack strtolower — case folding is
+                        // stripos's own job (the Filter path has always done
+                        // exactly this; matching its precedent also keeps the
+                        // two paths' UTF-8 folding behaviour identical).
+                        if (\stripos(self::plainText($val), $searchLower) !== false) {
                             return true;
                         }
                     }
