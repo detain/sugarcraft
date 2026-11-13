@@ -166,4 +166,19 @@ final class SecretStoreTest extends TestCase
             @rmdir($dir);
         }
     }
+
+    public function testForgetDropsAMemoisedMissSoALaterWriteIsSeen(): void
+    {
+        $answer = ['status' => 'miss', 'stdout' => '', 'exitCode' => 1];
+        SecretStore::armSpawnSeamForTesting(static function () use (&$answer): array {
+            return $answer;
+        });
+        self::assertNull(SecretStore::lookup('svc', 'ent'));
+
+        $answer = ['status' => 'hit', 'stdout' => 'fresh', 'exitCode' => 0];
+        self::assertNull(SecretStore::lookup('svc', 'ent'), 'memoised miss');
+
+        SecretStore::forget('svc', 'ent');
+        self::assertSame('fresh', SecretStore::lookup('svc', 'ent'));
+    }
 }

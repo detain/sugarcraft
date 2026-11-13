@@ -81,6 +81,16 @@ final class SecretStore
     }
 
     /**
+     * Drop the memoised verdict for $service/$entry — for a caller that has
+     * just WRITTEN the entry, so a stale miss is not served for the rest of
+     * the process.
+     */
+    public static function forget(string $service, string $entry): void
+    {
+        unset(self::$memo[$service . "\0" . $entry]);
+    }
+
+    /**
      * The backend argv for one OS family, or null when it has no backend.
      * Public so tests can pin that the secret-bearing words stay out of argv.
      *
