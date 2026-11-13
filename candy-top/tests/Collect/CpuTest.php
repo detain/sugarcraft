@@ -97,6 +97,17 @@ final class CpuTest extends TestCase
         $this->assertSame($cpu, $next);
     }
 
+    public function testNegativeUptimeCollapsesToSentinel(): void
+    {
+        // /proc/uptime is attacker-visible under some namespaces; a negative
+        // first field must normalize like the sibling channels, never publish
+        // a duration the footer could render below zero (candy-top-047).
+        $this->tree->write('proc/uptime', "-42.00 100.00\n");
+        [$snap] = Cpu::new($this->tree->paths())->sample();
+
+        $this->assertSame(Sentinel::UNMEASURED, $snap->uptime);
+    }
+
     public function testTruncatedLineIsSkipped(): void
     {
         $this->tree->write('proc/stat', "cpu  1 2\ncpu0 10 0 0 90\n");

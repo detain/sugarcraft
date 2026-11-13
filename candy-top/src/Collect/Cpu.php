@@ -133,8 +133,14 @@ final class Cpu
     private function readUptime(): float
     {
         $first = explode(' ', Read::line($this->paths->proc('uptime')) ?? '')[0];
+        // Garbage (negatives included — /proc is attacker-visible under some
+        // namespaces) collapses to the sentinel like every sibling channel,
+        // so the footer can never render a negative uptime duration.
+        if (!is_numeric($first) || (float) $first < 0.0) {
+            return Sentinel::UNMEASURED;
+        }
 
-        return is_numeric($first) ? (float) $first : Sentinel::UNMEASURED;
+        return (float) $first;
     }
 
     private static function clamp(float $percent): float
