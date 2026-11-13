@@ -9,6 +9,9 @@ use SugarCraft\Async\CancellationToken;
 /**
  * Sends email via the Resend REST API.
  *
+ * The HTTPS leg is pinned like the SMTP transports: peer verification on and
+ * a TLS 1.2 protocol floor (see {@see curlOptions()}).
+ *
  * @see https://resend.com/docs/api-reference/emails/send-email
  */
 final class ResendTransport implements Transport
@@ -151,6 +154,10 @@ final class ResendTransport implements Transport
             // curl's build-time defaults for this credential-bearing request.
             \CURLOPT_SSL_VERIFYPEER => true,
             \CURLOPT_SSL_VERIFYHOST => 2,
+            // TLS 1.2 protocol floor, matching the SMTP transport's promise:
+            // curl >= 7.34 treats this as a minimum and still negotiates 1.3
+            // when the endpoint supports it.
+            \CURLOPT_SSLVERSION => \CURL_SSLVERSION_TLSv1_2,
         ];
     }
 

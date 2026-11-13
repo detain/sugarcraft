@@ -22,7 +22,10 @@ use SugarCraft\Async\CancellationToken;
  *    of falling back to plaintext. {@see withRequireTls(false)} restores the
  *    historical opportunistic behaviour for trusted networks only.
  *
- * Peer certificates are verified in both modes; {@see withCaFile()} selects a
+ * Peer certificates are verified in both modes; the handshake itself carries
+ * a TLS 1.2 protocol floor on every encrypted path (implicit connect and
+ * STARTTLS upgrade alike) — legacy SSLv3/TLS 1.0/1.1 are never negotiated.
+ * {@see withCaFile()} selects a
  * custom CA bundle. Credentials are never sent over an unencrypted channel:
  * AUTH LOGIN refuses to start on a plaintext connection in every mode.
  *
@@ -50,6 +53,16 @@ final class SmtpTransport implements Transport
     private bool $encrypted = false;
     /** EHLO capability snapshot — lastResponse is clobbered by later replies. */
     private bool $serverSupports8Bit = false;
+
+    /**
+     * Protocol floor for every encrypted channel: TLS 1.2, with 1.3 eligible.
+     * SSLv3/TLS 1.0/1.1 are refused by negotiation, never offered — a server
+     * that can only speak them fails the handshake loudly (the point of
+     * REQUIRE_TLS is that the channel IS encrypted to a modern standard).
+     */
+    private const TLS_MIN_PROTO = \STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT;
+    /** enable_crypto bitmask: TLS 1.2|1.3 only, not the legacy TLS_CLIENT auto set. */
+    private const TLS_CRYPTO_METHODS = \STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT | \STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT;
 
     public function __construct(
         string $host,
@@ -362,12 +375,27 @@ final class SmtpTransport implements Transport
                 'verify_peer_name' => true,
                 'peer_name'        => $this->host,
                 'SNI_enabled'      => true,
-            ];
+            ] + self::sslFloorOptions();
             if ($this->caFile !== null) {
                 $options['ssl']['cafile'] = $this->caFile;
             }
         }
         return $options;
+    }
+
+    /**
+     * The ssl-context legs that carry the TLS 1.2 protocol floor. Shared by
+     * the implicit-TLS connect context and the pre-STARTTLS option block so
+     * both encrypted paths floor identically (assertable through either seam).
+     *
+     * @return array<string, int>
+     */
+    private static function sslFloorOptions(): array
+    {
+        return [
+            'min_proto_version' => self::TLS_MIN_PROTO,
+            'crypto_method'     => self::TLS_CRYPTO_METHODS,
+        ];
     }
 
     private function startTlsIfNeeded(): void
@@ -395,11 +423,16 @@ final class SmtpTransport implements Transport
         \stream_context_set_option($this->socket, 'ssl', 'verify_peer', true);
         \stream_context_set_option($this->socket, 'ssl', 'verify_peer_name', true);
         \stream_context_set_option($this->socket, 'ssl', 'peer_name', $this->host);
+        foreach (self::sslFloorOptions() as $key => $value) {
+            \stream_context_set_option($this->socket, 'ssl', $key, $value);
+        }
         if ($this->caFile !== null) {
             \stream_context_set_option($this->socket, 'ssl', 'cafile', $this->caFile);
         }
 
-        $crypto = \stream_socket_enable_crypto($this->socket, true, \STREAM_CRYPTO_METHOD_TLS_CLIENT);
+        // Explicit 1.2|1.3 bitmask rather than the TLS_CLIENT catch-all: the
+        // server must not be able to settle the upgrade on a legacy protocol.
+        $crypto = \stream_socket_enable_crypto($this->socket, true, self::TLS_CRYPTO_METHODS);
         if ($crypto !== 1) {
             // 1 = handshake completed; 0/false = failure. Treat anything else as
             // a failed upgrade so requireTls semantics stay honest.

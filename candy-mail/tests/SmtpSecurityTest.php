@@ -64,6 +64,26 @@ final class SmtpSecurityTest extends TestCase
         $this->assertTrue($options['ssl']['verify_peer']);
         $this->assertTrue($options['ssl']['verify_peer_name']);
         $this->assertSame('smtp.example.com', $options['ssl']['peer_name']);
+
+        // CM-05 protocol floor: the implicit connect negotiates TLS 1.2|1.3
+        // only — SSLv3/TLS 1.0/1.1 cannot settle on this channel.
+        $this->assertSame(
+            \STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT,
+            $options['ssl']['min_proto_version'],
+            'implicit-TLS context must floor the protocol at TLS 1.2'
+        );
+        $this->assertSame(
+            \STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT | \STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT,
+            $options['ssl']['crypto_method'],
+            'implicit-TLS context must offer exactly the 1.2|1.3 bitmask'
+        );
+        // The same floor legs feed the pre-STARTTLS option block (CM-05):
+        // one source, both paths.
+        $this->assertSame(
+            ['min_proto_version' => \STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT,
+             'crypto_method'     => \STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT | \STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT],
+            $this->invokePrivate($transport, 'sslFloorOptions'),
+        );
     }
 
     public function testPlaintextContextHasNoSslBlock(): void

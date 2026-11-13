@@ -48,6 +48,10 @@ final class ResendTransportTest extends TestCase
         $this->assertGreaterThan(0, $opts[\CURLOPT_CONNECTTIMEOUT]);
         $this->assertTrue($opts[\CURLOPT_SSL_VERIFYPEER]);
         $this->assertSame(2, $opts[\CURLOPT_SSL_VERIFYHOST]);
+        // CM-05 protocol floor: TLS 1.2 minimum, 1.3 eligible (curl >= 7.34
+        // reads this spelling as a floor and negotiates upward).
+        $this->assertArrayHasKey(\CURLOPT_SSLVERSION, $opts);
+        $this->assertSame(\CURL_SSLVERSION_TLSv1_2, $opts[\CURLOPT_SSLVERSION]);
         // The overall transfer timeout stays set alongside the connect cap.
         $this->assertArrayHasKey(\CURLOPT_TIMEOUT, $opts);
         $this->assertGreaterThan(0, $opts[\CURLOPT_TIMEOUT]);
