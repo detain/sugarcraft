@@ -125,15 +125,39 @@ final class GreedySolverMinShareTest extends TestCase
         $this->assertNotSame($base, $s);
     }
 
-    public function testFloorComposesWithCompatFlags(): void
+    public function testWithMinShareResetsCompatFlagsToModeTruth(): void
     {
         $s = GreedySolver::compat()->withMinShare(1);
-        // compat() flags survive the floor toggle …
-        $this->assertTrue($s->roundSplit);
+        // SC-04 (finding 017): the engaged floor never consults roundSplit or
+        // remainderToLast, so the instance now REPORTS the floor's own policy
+        // instead of claiming flags it ignores.
+        $this->assertFalse($s->roundSplit);
         $this->assertTrue($s->remainderToLast);
+        // truncateOverflow is the one knob the floor does not fake — it stays.
         $this->assertFalse($s->truncateOverflow);
-        // … and the floor is engaged.
         $this->assertSame(1, $s->minShare);
+    }
+
+    public function testWithMinShareFromDefaultReportsRemainderToLastTrue(): void
+    {
+        $s = GreedySolver::new()->withMinShare(2);
+        $this->assertFalse($s->roundSplit);
+        $this->assertTrue($s->remainderToLast);
+        $this->assertTrue($s->truncateOverflow);
+    }
+
+    public function testMinShareFloorFactoryArrivesAtModeTruth(): void
+    {
+        $s = GreedySolver::minShareFloor(2, 3, 4);
+        $this->assertSame(2, $s->minShare);
+        $this->assertSame(3, $s->reserveGap);
+        $this->assertSame(4, $s->reserveLead);
+        $this->assertFalse($s->roundSplit);
+        $this->assertTrue($s->remainderToLast);
+        $this->assertTrue($s->truncateOverflow);
+        // The dedicated door and the resetting mutator converge on the same
+        // policy for a from-default instance.
+        $this->assertEquals(GreedySolver::new()->withMinShare(2, 3, 4), $s);
     }
 
     public function testNegativeFloorParamsRejected(): void

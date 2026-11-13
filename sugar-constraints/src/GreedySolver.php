@@ -204,7 +204,41 @@ final class GreedySolver implements LayoutSolver
      */
     public function withMinShare(int $cells = 1, int $reserveGap = 0, int $reserveLead = 0): self
     {
-        return $this->mutate(['minShare' => $cells, 'reserveGap' => $reserveGap, 'reserveLead' => $reserveLead]);
+        // The floor path IS a round split (solveMinShare rounds each share)
+        // with the last region absorbing the remainder —
+        // it never consults roundSplit or remainderToLast. Carrying those
+        // flags forward would leave the instance CLAIMING a policy the
+        // engaged path ignores, so the read-back always reports the mode's
+        // truth. truncateOverflow stays: the min-share path itself never
+        // truncates, so its only effect is on a later withMinShare(0)
+        // return-to-default walk — a compat()/non-truncating instance keeps
+        // the knob it was built with.
+        return $this->mutate([
+            'minShare' => $cells,
+            'reserveGap' => $reserveGap,
+            'reserveLead' => $reserveLead,
+            'roundSplit' => false,
+            'remainderToLast' => true,
+        ]);
+    }
+
+    /**
+     * Dedicated construction door for the sequential min-share floor: the
+     * compat knobs arrive at the mode's truth (floor split, remainder-to-last;
+     * truncateOverflow neutral-true) instead of inheriting a policy the floor
+     * path ignores — the loud alternative to withMinShare()'s reset when the
+     * instance is being built, not retuned.
+     */
+    public static function minShareFloor(int $cells = 1, int $reserveGap = 0, int $reserveLead = 0): self
+    {
+        return new self(
+            roundSplit: false,
+            remainderToLast: true,
+            truncateOverflow: true,
+            minShare: $cells,
+            reserveGap: $reserveGap,
+            reserveLead: $reserveLead,
+        );
     }
 
     /**
@@ -739,6 +773,10 @@ final class GreedySolver implements LayoutSolver
 
         // Flip area to use horizontal solver on the "other" dimension.
         // Origin must be 0,0 — the flip-back below re-adds $area->x/$area->y.
+        // Cost note (PERF, finding 027): the transpose allocates 2n Regions
+        // per vertical solve (n fake + n remapped) on a per-frame path —
+        // rated "nuisance not a wound" at terminal sizes; the anchor for a
+        // future hot-path report lives here.
         $fakeArea = new Region(0, 0, $totalHeight, $width);
         $hRects = $this->solveHorizontal($fakeArea, $constraints);
 
