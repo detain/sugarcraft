@@ -21,7 +21,8 @@
     ],
     "support": {
         "issues": "https://github.com/sugarcraft/candy-kv/issues",
-        "source": "https://github.com/sugarcraft/candy-kv"
+        "source": "https://github.com/sugarcraft/candy-kv",
+        "docs": "https://sugarcraft.github.io/lib/candy-kv.html"
     },
     "require": {
         "php": "^8.3",

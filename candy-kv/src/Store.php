@@ -19,7 +19,6 @@ namespace SugarCraft\Kv;
 
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
-use SugarCraft\Kv\Lang;
 use SugarCraft\Kv\Support\InputPath;
 use SugarCraft\Kv\Support\Ttl;
 
@@ -423,7 +422,7 @@ final class Store
         }
 
         // If the key contains glob characters, treat as pattern
-        if ($this->isPattern($entryKey)) {
+        if (self::isPattern($entryKey)) {
             return $db->deleteMany($entryKey);
         }
 
@@ -992,7 +991,7 @@ final class Store
     /**
      * Check if a key string contains glob wildcard characters.
      */
-    private function isPattern(string $key): bool
+    private static function isPattern(string $key): bool
     {
         return \strcspn($key, '*?') < \strlen($key);
     }

@@ -842,7 +842,7 @@ final class StoreTest extends TestCase
         $method = $reflection->getMethod('isPattern');
         $method->setAccessible(true);
 
-        $this->assertTrue($method->invoke($this->store, 'temp-*'));
+        $this->assertTrue($method->invoke(null, 'temp-*'));
     }
 
     public function testIsPatternReturnsTrueForQuestionMark(): void
@@ -851,7 +851,7 @@ final class StoreTest extends TestCase
         $method = $reflection->getMethod('isPattern');
         $method->setAccessible(true);
 
-        $this->assertTrue($method->invoke($this->store, 'item?'));
+        $this->assertTrue($method->invoke(null, 'item?'));
     }
 
     public function testIsPatternReturnsFalseForPlainKey(): void
@@ -860,7 +860,7 @@ final class StoreTest extends TestCase
         $method = $reflection->getMethod('isPattern');
         $method->setAccessible(true);
 
-        $this->assertFalse($method->invoke($this->store, 'plainkey'));
+        $this->assertFalse($method->invoke(null, 'plainkey'));
     }
 
     // ─── kv-043: escaped-glob get helpers ────────────────────────────────

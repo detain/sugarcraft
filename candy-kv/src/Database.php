@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Kv;
 
-use SugarCraft\Kv\Lang;
 use SugarCraft\Kv\Support\Ttl;
 
 /**
