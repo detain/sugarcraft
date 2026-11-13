@@ -214,6 +214,13 @@ final class DiffWriterTest extends TestCase
         // inserted line — the retired positional walker marked every
         // later line "changed" and bloated this into a full re-print.
         self::assertSame(1, preg_match_all('/^@@/m', $diff));
+        // Counting one hunk is not enough: the header must carry GNU's
+        // 1-based start (three context rows kept, insertion never deletes).
+        self::assertStringContainsString(
+            '@@ -1,3 +1,4 @@',
+            $diff,
+            'the single hunk must be named like GNU diff -u names it',
+        );
         self::assertStringContainsString("+NEW\n l1\n", $diff);
         self::assertSame(
             0,
@@ -282,7 +289,33 @@ final class DiffWriterTest extends TestCase
 
         $dir = self::scratchDir();
         file_put_contents("{$dir}/expected.txt", $expected);
+        file_put_contents("{$dir}/actual.txt", $actual);
         file_put_contents("{$dir}/drift.diff", $this->writer->buildUnifiedDiff($expected, $actual));
+
+        // patch alone is lenient about hunk line numbers, so pair it with
+        // the strictest claim on the finding: our @@ headers must be
+        // byte-identical to what GNU diff -u itself prints for the same pair.
+        $diffTool = trim((string) @shell_exec('command -v diff 2>/dev/null'));
+        if ($diffTool === '') {
+            self::markTestSkipped('GNU diff not installed on this host');
+        }
+        $gnuHeaders = array_values(array_filter(
+            explode("\n", (string) shell_exec(sprintf(
+                'cd %1$s && %2$s -u expected.txt actual.txt 2>/dev/null',
+                escapeshellarg($dir),
+                escapeshellarg($diffTool),
+            ))),
+            static fn (string $line): bool => str_starts_with($line, '@@'),
+        ));
+        $ourHeaders = array_values(array_filter(
+            explode("\n", (string) file_get_contents("{$dir}/drift.diff")),
+            static fn (string $line): bool => str_starts_with($line, '@@'),
+        ));
+        self::assertSame(
+            $gnuHeaders,
+            $ourHeaders,
+            'the @@ hunk headers must match GNU diff byte for byte',
+        );
 
         exec(
             sprintf('cd %s && patch --silent --fuzz=0 expected.txt drift.diff 2>&1', escapeshellarg($dir)),
