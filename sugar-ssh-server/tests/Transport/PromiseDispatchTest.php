@@ -274,4 +274,69 @@ final class PromiseDispatchTest extends TestCase
             'src/ must contain exactly one PromiseAwait::settle() call site (the transport stack walk)',
         );
     }
+
+    public function testStackedAsyncHopsAreRefusedByTheInnerDoorNotTheOuterCeiling(): void
+    {
+        // Audit 015's stacked-hop shape: an async hop dispatched from
+        // inside another async hop's continuation used to corrupt the
+        // outer spin — the inner settle ended the shared loop at the
+        // inner promise's decision, the outer promise's resolution never
+        // drained, and the caller was told LIVE work had hit
+        // transport.async_timeout. Law 2 is mechanical now: the inner
+        // await is refused by name at its own entry, and the refusal is
+        // a LogicException, never the timeout lie.
+        $log = [];
+        $outer = new class($log) extends AsyncMiddleware {
+            /** @var array<string> */
+            private array $log;
+            public function __construct(array &$ref) { $this->log = &$ref; }
+            protected function handleAsync(Context $ctx, Session $s, callable $next): PromiseInterface
+            {
+                $this->log[] = 'outer';
+
+                return (new Promise\Promise(static function (callable $resolve): void {
+                    \React\EventLoop\Loop::get()->addTimer(0.001, static fn () => $resolve(null));
+                }))->then(static fn () => $next($ctx, $s));
+            }
+        };
+        $inner = new class($log) extends AsyncMiddleware {
+            /** @var array<string> */
+            private array $log;
+            public function __construct(array &$ref) { $this->log = &$ref; }
+            protected function handleAsync(Context $ctx, Session $s, callable $next): PromiseInterface
+            {
+                $this->log[] = 'inner';
+
+                return (new Promise\Promise(static function (callable $resolve): void {
+                    \React\EventLoop\Loop::get()->addTimer(0.001, static fn () => $resolve(null));
+                }))->then(static fn () => $next($ctx, $s));
+            }
+        };
+        $terminal = new class($log) implements Middleware {
+            /** @var array<string> */
+            private array $log;
+            public function __construct(array &$ref) { $this->log = &$ref; }
+            public function handle(Context $ctx, Session $s, callable $next): void
+            {
+                $this->log[] = 'terminal';
+            }
+        };
+
+        try {
+            (new HostSshdTransport())->run(
+                Context::background(),
+                $this->fakeSession(),
+                [$outer, $inner, $terminal],
+            );
+            $this->fail('stacked async hops must be refused, not awaited twice');
+        } catch (\LogicException $e) {
+            $this->assertStringContainsString('entered while another settle spin', $e->getMessage());
+            $this->assertStringNotContainsString('timed out', $e->getMessage());
+        }
+
+        // Both hops were reached (the refusal lands at the inner AWAIT,
+        // after the inner middleware already produced its promise), and
+        // the chain short-circuited before the terminal handler.
+        $this->assertSame(['outer', 'inner'], $log);
+    }
 }

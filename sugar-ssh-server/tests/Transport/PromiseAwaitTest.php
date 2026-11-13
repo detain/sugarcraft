@@ -309,4 +309,68 @@ final class PromiseAwaitTest extends TestCase
             'The admin guide must stop asserting that driving the loop until settlement is not a spin.'
         );
     }
+
+    public function testASpinEndedByAnotherOwnerCancelsItsCeilingTimer(): void
+    {
+        // Audit 015 (PROC-05's residue class): an await abandoned by a
+        // foreign stop() used to leave its ceiling timer armed on the
+        // shared loop — the timer kept react/promise-timer's wrapper
+        // alive, and when it finally fired it rejected that wrapper and
+        // stopped WHATEVER spin happened to be running, mid-flight. The
+        // ceiling is armed, decided, and cancelled here now, so the
+        // no-decision finally can reach it too. This census only works
+        // on the select loop (the uv loop has no such property); the
+        // suite pins the shape on CI's default loop.
+        $loop = \React\EventLoop\Loop::get();
+        if (!$loop instanceof \React\EventLoop\StreamSelectLoop) {
+            $this->markTestSkipped('timer census requires StreamSelectLoop.');
+        }
+        // event-loop 1.5+ keeps timers in a private Timer\Timers wrapper
+        // (before that the property itself was the storage) — count the
+        // wrapper's list, whatever its shape.
+        $timers = new \ReflectionProperty(\React\EventLoop\StreamSelectLoop::class, 'timers');
+        $list = new \ReflectionProperty(\React\EventLoop\Timer\Timers::class, 'timers');
+
+        $armedCount = static function () use ($timers, $list, $loop): int {
+            $storage = $timers->getValue($loop);
+            if ($storage instanceof \Countable) {
+                return \count($storage);
+            }
+            $inner = $list->getValue($storage);
+
+            return \is_array($inner) ? \count($inner) : 0;
+        };
+
+        $before = $armedCount();
+        // The synchronous decision path settles before any spin starts:
+        // the frame must hand the ceiling back there too, not only in
+        // the post-run finally.
+        PromiseAwait::settle(Promise\resolve(null), 5.0);
+        $this->assertSame(
+            $before,
+            $armedCount(),
+            'a synchronously-decided await must leave nothing armed either',
+        );
+
+        $never = new Promise\Promise(static function (): void {
+        });
+        // A foreign owner stops the spin long before the five-second
+        // ceiling: settle() must come back with an error (pinned by the
+        // test above) AND with nothing of its own left armed.
+        $loop->addTimer(0.005, static function () use ($loop): void {
+            $loop->stop();
+        });
+        try {
+            PromiseAwait::settle($never, 5.0);
+            $this->fail('the abandoned await must refuse to fake success');
+        } catch (\RuntimeException) {
+            // Expected shape; the residue below is the point.
+        }
+
+        $this->assertSame(
+            $before,
+            $armedCount(),
+            'an abandoned await must leave no armed ceiling (or watchdog) on the shared loop',
+        );
+    }
 }

@@ -325,12 +325,15 @@ The library's single settle point lives in the transport stack walk
 to settlement before the chain continues. Operational consequences:
 
 - **Timeout ceiling:** `PromiseAwait::settle()` bounds each await with
-  a **30-second** default. The ceiling is enforced twice over:
-  `react/promise-timer` rejects the promise, and the wait ends its own
+  a **30-second** default. The ceiling is enforced twice over: the
+  timer `settle()` arms for this one await rejects it with
+  react/promise-timer's `TimeoutException`, and the wait ends its own
   spin at that decision instead of running the loop until it happens to
-  go quiet. A middleware that has not settled in time raises a
-  `RuntimeException` carrying the `transport.async_timeout` message
-  and the chain short-circuits.
+  go quiet. The timer belongs to the await — a settled or abandoned
+  spin cancels it before handing the loop back, so no stale ceiling can
+  fire inside a later one. A middleware that has not settled in time
+  raises a `RuntimeException` carrying the `transport.async_timeout`
+  message and the chain short-circuits.
 - **Who owns the loop:** the settle call *drives* the loop while it
   waits and stops it as soon as the awaited promise is decided. That is
   right for the shipped transports, which build the middleware chain
