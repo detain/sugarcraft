@@ -43,9 +43,11 @@ use SugarCraft\Pty\PtyException;
  * entries whose names differ only by case therefore land adjacent, in a stable
  * tie-broken order, instead of being scattered — and both are kept, because
  * Windows allows both to exist in one block even though the child will see the
- * later one win. That collision is disclosed by {@see encode()} rather than
- * hidden, since a caller who meant one variable and handed two has a bug this
- * class cannot fix on their behalf.
+ * later one win. Whether that collision is a bug is the CALLER's question, and
+ * {@see hasCaseCollisions()} is the live surface that answers it; encode()
+ * neither discloses nor refuses — it accepts the pattern Windows itself
+ * permits. A caller who meant one variable and handed two has a bug this class
+ * cannot fix on their behalf, but it can point at: check before you encode.
  *
  * ## What is refused
  *
@@ -78,7 +80,6 @@ final class EnvBlock
     public static function encode(array $variables): string
     {
         $entries = [];
-        $seen = [];
 
         foreach ($variables as $name => $value) {
             if (!\is_string($value)) {
@@ -91,9 +92,6 @@ final class EnvBlock
 
             self::guardName((string) $name);
             self::guardValue((string) $name, $value);
-
-            $upper = \mb_strtoupper((string) $name, 'UTF-8');
-            $seen[$upper] = ($seen[$upper] ?? 0) + 1;
 
             $entries[] = ['name' => (string) $name, 'value' => $value];
         }
