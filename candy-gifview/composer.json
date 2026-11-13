@@ -30,12 +30,10 @@
     ],
     "require": {
         "php": "^8.3",
+        "ext-gd": "*",
         "sugarcraft/sugar-core": "dev-master",
         "sugarcraft/sugar-animation": "dev-master",
         "sugarcraft/sugar-pty": "dev-master"
-    },
-    "suggest": {
-        "ext-gd": "Required to decode GIF animations (via sugarcraft/sugar-animation)."
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5"
