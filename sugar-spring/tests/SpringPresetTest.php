@@ -95,4 +95,31 @@ final class SpringPresetTest extends TestCase
         $spring = Spring::fromPreset(SpringPreset::Wobbly, 1.0 / 30.0);
         $this->assertInstanceOf(Spring::class, $spring);
     }
+
+    /**
+     * SPR-21 (finding 080): resolve() rebuilt a fresh SpringConfig per call;
+     * SpringConfig is `final readonly`, so the five presets memoize to one
+     * shared instance each — callers resolving inside a loop stop
+     * allocating. Identity pinned for all five cases; distinctness across
+     * cases proves the table is keyed, not a single global. (Boundedness is
+     * structural: the static-local memo keys on `$this->name`, so five
+     * cases is the ceiling — enums cannot hold properties, hence no
+     * reflection census here unlike CubicBezier's $presets.)
+     */
+    public function testResolveIsMemoizedPerPreset(): void
+    {
+        foreach (SpringPreset::cases() as $preset) {
+            $this->assertSame(
+                $preset->resolve(),
+                $preset->resolve(),
+                "{$preset->name} must hand back the same readonly config",
+            );
+        }
+
+        $this->assertNotSame(
+            SpringPreset::Gentle->resolve(),
+            SpringPreset::Stiff->resolve(),
+            'distinct presets must not alias to one instance',
+        );
+    }
 }

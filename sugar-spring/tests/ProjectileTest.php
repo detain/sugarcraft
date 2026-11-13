@@ -271,4 +271,33 @@ final class ProjectileTest extends TestCase
         $this->assertEquals($base->position(), $swapped->position(), 'an equal-value swap keeps the state identical');
         $this->assertNotSame($base, $swapped, 'fluent rebuild always returns a new instance');
     }
+
+    /**
+     * SPR-21 (finding 080): the gravity statics are the canonical preset
+     * home and hand back SHARED readonly vectors — identity per preset,
+     * distinctness across presets, and a memo table that cannot grow past
+     * the four named vectors. (P2 confirmed this is caller-loop relief, not
+     * a frame-path cure: Projectile::update() never calls them.)
+     */
+    public function testGravityStaticsAreSharedImmutableInstances(): void
+    {
+        $this->assertSame(Projectile::gravity(), Projectile::gravity());
+        $this->assertSame(Projectile::terminalGravity(), Projectile::terminalGravity());
+        $this->assertSame(Projectile::gravityYDown(), Projectile::gravityYDown());
+        $this->assertSame(Projectile::terminalGravityYDown(), Projectile::terminalGravityYDown());
+
+        $this->assertNotSame(Projectile::gravity(), Projectile::gravityYDown(), 'opposite signs must not alias to one vector');
+        $this->assertNotSame(Projectile::gravity(), Projectile::terminalGravity());
+
+        $memo = (new \ReflectionProperty(Projectile::class, 'gravityVectors'))->getValue();
+        $this->assertCount(4, $memo, 'exactly the four named presets, forever');
+
+        $keys = array_keys($memo);
+        sort($keys);
+        $this->assertSame(
+            ['gravityYDown', 'gravityYUp', 'terminalGravityYDown', 'terminalGravityYUp'],
+            $keys,
+            'the memo is keyed by the four named vector roles (sorted: insertion order is suite-visit order)',
+        );
+    }
 }

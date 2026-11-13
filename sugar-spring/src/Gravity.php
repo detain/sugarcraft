@@ -5,35 +5,37 @@ declare(strict_types=1);
 namespace SugarCraft\Spring;
 
 /**
- * Package-level gravity {@see Vector} constants.
+ * DEPRECATED package-level gravity {@see Vector} aliases.
  *
- * Mirrors upstream harmonica's package-level
- * `Gravity = Vector{0, -9.81, 0}` and `TerminalGravity = Vector{0, -53, 0}`.
- * PHP `const` expressions do NOT permit `new` initializers — the 8.1
- * "new in initializers" RFC covers parameter defaults, attribute arguments
- * and global-const positions only, and a class constant carrying `new` is
- * still a fatal error. So a constant could not carry these vectors even if
- * one shared instance were acceptable.
+ * SPR-21 ruling (findings 050/080, shipped default — flip deferred to
+ * Phase 5): the canonical home of the gravity presets is the
+ * {@see Projectile} statics — `Projectile::gravity()`,
+ * `Projectile::terminalGravity()`, `Projectile::gravityYDown()`,
+ * `Projectile::terminalGravityYDown()` — because that is where the
+ * GRAVITY/TERMINAL_GRAVITY constants live and where the harmonica port
+ * actually computes. This façade has always been four pure forwarders;
+ * keeping two spellings of one value invites the "which is canonical"
+ * drift this file's history proves (fresh-per-call vs memoized, Y-up vs
+ * Y-down wording each had to be reconciled TWICE, once per home). Every
+ * accessor here emits `E_USER_DEPRECATED` and will be removed in 2.0.0;
+ * both stay callable until then (pre-2.0 BC ruling: either direction of
+ * retirement breaks somebody, so the choice is loud and dated).
  *
- * It is not: a const Vector would be ONE instance handed to every caller.
- * These are therefore exposed as static accessors returning a fresh
- * {@see Vector} per call — drop-in idioms for callers translating Go
- * reference code, with the fresh-instance contract made explicit.
+ * The vectors returned through either spelling are SHARED immutable
+ * instances: {@see Vector} is readonly, so "a const Vector would be one
+ * instance handed to every callers'" worry this docblock once answered
+ * is void — callers cannot mutate what they did not build (finding 080
+ * memoizes the allocation; the old fresh-per-call contract was
+ * inverted here, deliberately and disclosed).
+ *
+ * Deprecation strings are developer-facing diagnostics, not user-facing
+ * messages, so they are not Lang-wrapped (fleet ruling 055, same
+ * rationale as SpringCollection's shim emitter).
  *
  * ```php
- * use SugarCraft\Spring\Gravity;
- *
- * $proj = Projectile::new(
- *     deltaTime:    Spring::fps(60),
- *     position:     Point::zero(),
- *     velocity:     new Vector(5.0, 10.0),
- *     acceleration: Gravity::standard(),     // Y-up: (0, -9.81, 0)
- * );
+ * // canonical (stays):
+ * $acceleration = Projectile::gravity();   // Y-up: (0, -9.81, 0)
  * ```
- *
- * Each accessor returns a fresh {@see Vector} per call so callers
- * can't accidentally mutate a shared instance — Vector is itself
- * immutable but the contract is clearer this way.
  */
 final class Gravity
 {
@@ -41,40 +43,64 @@ final class Gravity
 
     /**
      * Standard gravity vector (Y-up): `(0, -9.81, 0)`. Equivalent to
-     * harmonica's package-level `Gravity`. Alias of
-     * {@see Projectile::gravity()}.
+     * harmonica's package-level `Gravity`.
+     *
+     * @deprecated Use {@see Projectile::gravity()}. REMOVED-IN: 2.0.0.
      */
     public static function standard(): Vector
     {
+        trigger_error(
+            'Gravity::standard() is deprecated; use Projectile::gravity() instead. REMOVED-IN: 2.0.0.',
+            E_USER_DEPRECATED,
+        );
+
         return Projectile::gravity();
     }
 
     /**
      * Terminal-velocity gravity (Y-up): `(0, -53, 0)`. Equivalent to
-     * harmonica's package-level `TerminalGravity`. Alias of
-     * {@see Projectile::terminalGravity()}.
+     * harmonica's package-level `TerminalGravity`.
+     *
+     * @deprecated Use {@see Projectile::terminalGravity()}. REMOVED-IN: 2.0.0.
      */
     public static function terminal(): Vector
     {
+        trigger_error(
+            'Gravity::terminal() is deprecated; use Projectile::terminalGravity() instead. REMOVED-IN: 2.0.0.',
+            E_USER_DEPRECATED,
+        );
+
         return Projectile::terminalGravity();
     }
 
     /**
      * Y-down standard gravity: `(0, +9.81, 0)`. Use when your model's
-     * coordinate system grows downward (the default for terminal
-     * grids). Alias of {@see Projectile::gravityYDown()}.
+     * coordinate system grows downward (the default for terminal grids).
+     *
+     * @deprecated Use {@see Projectile::gravityYDown()}. REMOVED-IN: 2.0.0.
      */
     public static function standardYDown(): Vector
     {
+        trigger_error(
+            'Gravity::standardYDown() is deprecated; use Projectile::gravityYDown() instead. REMOVED-IN: 2.0.0.',
+            E_USER_DEPRECATED,
+        );
+
         return Projectile::gravityYDown();
     }
 
     /**
-     * Y-down terminal-velocity gravity: `(0, +53, 0)`. Alias of
-     * {@see Projectile::terminalGravityYDown()}.
+     * Y-down terminal-velocity gravity: `(0, +53, 0)`.
+     *
+     * @deprecated Use {@see Projectile::terminalGravityYDown()}. REMOVED-IN: 2.0.0.
      */
     public static function terminalYDown(): Vector
     {
+        trigger_error(
+            'Gravity::terminalYDown() is deprecated; use Projectile::terminalGravityYDown() instead. REMOVED-IN: 2.0.0.',
+            E_USER_DEPRECATED,
+        );
+
         return Projectile::terminalGravityYDown();
     }
 }

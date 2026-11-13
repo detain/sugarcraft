@@ -23,11 +23,20 @@ enum SpringPreset
     case Molasses;
 
     /**
-     * Resolve this preset to a fully constructed SpringConfig.
+     * Resolve this preset to a fully constructed SpringConfig. The
+     * returned instance is SHARED per preset (immutable by type).
+     *
+     * SPR-21 (finding 080): one config per preset, remembered — enums
+     * cannot declare properties, so the memo is a static local: keys are
+     * `$this->name`, structurally bounded to the five cases, and callers
+     * resolving inside a loop stop allocating.
      */
     public function resolve(): SpringConfig
     {
-        return match ($this) {
+        /** @var array<string, SpringConfig> $resolved */
+        static $resolved = [];
+
+        return $resolved[$this->name] ??= match ($this) {
             self::Gentle   => new SpringConfig(
                 tension: 100.0,
                 friction: 10.0,

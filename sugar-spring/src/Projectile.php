@@ -47,6 +47,15 @@ final class Projectile
     /** Approximate skydiver terminal-velocity magnitude. Mirrors `harmonica.TerminalGravity`. */
     public const TERMINAL_GRAVITY = 53.0;
 
+    /**
+     * Shared immutable gravity vectors — four keys, never grows (finding
+     * 080): {@see Vector} is readonly, so handing every caller the same
+     * instance is safe and a per-call `new` was pure allocation for the
+     * ported-Go idiom's loop. These are the canonical home of the gravity
+     * presets; the {@see Gravity} façade forwards here and is deprecated.
+     */
+    private static array $gravityVectors = [];
+
     public function __construct(
         public readonly float  $deltaTime,
         public readonly Point  $position,
@@ -177,36 +186,41 @@ final class Projectile
     /**
      * Gravity vector — Y-up, matching upstream harmonica
      * `Gravity = Vector{0, -9.81, 0}`. Use this when porting examples
-     * from the harmonica docs verbatim.
+     * from the harmonica docs verbatim. Returns a shared immutable
+     * instance (see the memo above).
      */
     public static function gravity(): Vector
     {
-        return new Vector(0.0, -self::GRAVITY, 0.0);
+        return self::$gravityVectors['gravityYUp'] ??= new Vector(0.0, -self::GRAVITY, 0.0);
     }
 
     /**
      * Terminal-velocity gravity — Y-up, matching upstream harmonica
-     * `TerminalGravity = Vector{0, -53, 0}`.
+     * `TerminalGravity = Vector{0, -53, 0}`. Shared immutable instance.
      */
     public static function terminalGravity(): Vector
     {
-        return new Vector(0.0, -self::TERMINAL_GRAVITY, 0.0);
+        return self::$gravityVectors['terminalGravityYUp'] ??= new Vector(0.0, -self::TERMINAL_GRAVITY, 0.0);
     }
 
     /**
      * Legacy Y-down gravity. Earlier versions of SugarSpring used
      * `(0, +9.81, 0)` (Y-down) — kept here so existing PHP code that
      * relied on the old convention can opt back in via a single name
-     * change without flipping every Y-coord in the model.
+     * change without flipping every Y-coord in the model. Shared
+     * immutable instance.
      */
     public static function gravityYDown(): Vector
     {
-        return new Vector(0.0, self::GRAVITY, 0.0);
+        return self::$gravityVectors['gravityYDown'] ??= new Vector(0.0, self::GRAVITY, 0.0);
     }
 
-    /** Legacy Y-down terminal-velocity gravity. See {@see gravityYDown()}. */
+    /**
+     * Legacy Y-down terminal-velocity gravity. See {@see gravityYDown()}.
+     * Shared immutable instance.
+     */
     public static function terminalGravityYDown(): Vector
     {
-        return new Vector(0.0, self::TERMINAL_GRAVITY, 0.0);
+        return self::$gravityVectors['terminalGravityYDown'] ??= new Vector(0.0, self::TERMINAL_GRAVITY, 0.0);
     }
 }

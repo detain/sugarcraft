@@ -310,11 +310,14 @@ Gravity constants: `Projectile::GRAVITY` (9.81) and
 the constructor; `gravityYDown()` / `terminalGravityYDown()` keep the
 legacy Y-down sign reachable.
 
-`SugarCraft\Spring\Gravity` exposes the same vectors as static
-accessors at the package level — `Gravity::standard()`,
-`Gravity::terminal()`, `Gravity::standardYDown()`,
-`Gravity::terminalYDown()` — so gravity presets read
-uniformly across call sites.
+`sugar-spring` once shipped these same vectors twice: the `Gravity` façade
+(`Gravity::standard()` etc.) forwarded to the `Projectile` statics, with no
+canonical answer. Ruling: **the Projectile statics are the canonical home**
+— they stand beside the constants they read. `SugarCraft\Spring\Gravity`
+stays callable for pre-2.0 compatibility but every accessor emits
+`E_USER_DEPRECATED` and names its `Projectile::` replacement
+(REMOVED-IN: 2.0.0). Both spellings return the same SHARED immutable
+`Vector` (readonly by type — no caller can mutate what they did not build).
 
 ## Damping-ratio regimes
 
@@ -345,11 +348,11 @@ and up), so compare magnitudes through `normalize()`d operands on extreme
 inputs — it refuses the overflow loudly, where a raw `length()` comparison
 would silently see `INF` against `INF`.
 
-The Y-axis convention is **Y-up** by default: `Gravity::standard()` returns `(0, -9.81, 0)` so increasing
+The Y-axis convention is **Y-up** by default: `Projectile::gravity()` returns `(0, -9.81, 0)` so increasing
 Y means "up the screen". Terminal renderers usually grow downward —
-flip to `Gravity::standardYDown()` (or its `Projectile::gravityYDown()`
-alias) when you want gravity to pull toward the bottom of the grid
-without manually negating every coordinate.
+flip to `Projectile::gravityYDown()` when you want gravity to pull toward the bottom of the grid
+without manually negating every coordinate. (The deprecated `Gravity::standard()` /
+`Gravity::standardYDown()` spellings answer identically until 2.0.0.)
 
 `Projectile::update()` returns a **new `Projectile`** instance each
 call — `update()` never mutates the receiver. The hazard is discarding
@@ -625,8 +628,10 @@ back-flavoured control points — same honesty rule as `Easing`.
   `withDeltaTime()` (fluent: each returns a new Projectile preserving the
   other three fields; the construction door still refuses poisoned values) /
   `gravity()` / `terminalGravity()` / `gravityYDown()` /
-  `terminalGravityYDown()` / `GRAVITY` / `TERMINAL_GRAVITY`.
-- **`Gravity`** — package-level static accessors: `standard()`, `terminal()`,
+  `terminalGravityYDown()` (canonical gravity presets, shared immutable
+  vectors) / `GRAVITY` / `TERMINAL_GRAVITY`.
+- **`Gravity`** — DEPRECATED forwarders to the `Projectile` gravity statics
+  (`E_USER_DEPRECATED`, REMOVED-IN: 2.0.0): `standard()`, `terminal()`,
   `standardYDown()`, `terminalYDown()`.
 - **`Vector`** — immutable 3D vector (finite components enforced) with `add` /
   `sub` / `scale` / `length` / `lengthSquared` / `dot` / `cross` / `lerp` /
