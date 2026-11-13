@@ -73,7 +73,7 @@ Flagged cells render as a bold gold `F` (a wrong flag is revealed as `✗` once 
 
 The slot is `$XDG_CONFIG_HOME/candy-minesweeper/savegame.json` when `XDG_CONFIG_HOME` is set and `~/.config/candy-minesweeper/savegame.json` otherwise, written mode `0600` through sugar-core's `AtomicJsonFile` (flock sidecar, temp + `fsync` + rename — a crash never yields a half-written save). The payload wraps `Board::serialize()`'s versioned JSON with cursor position and elapsed time; `Board::unserialize()` re-validates every shape and refuses tampered or foreign-version payloads, so a hand-edited slot degrades to "load refused, game untouched" instead of a corrupt board. With `HOME` unset, or an unreadable slot, save and load stay non-fatal no-ops — announced with a toast on the failure path (`no_save` / `save_failed` / `load_refused`), never silent — the game never dies over its save file.
 
-Colour degrades gracefully: with `NO_COLOR` set, `CLICOLOR=0`, or `TERM=dumb`, the renderer drops to plain text through sugar-core's colour profile — counts stay visible as digits and the game remains fully playable without ANSI styling.
+Colour degrades gracefully: with `NO_COLOR` set, `CLICOLOR=0`, or `TERM=dumb`, the renderer drops to plain text through sugar-core's colour profile — counts stay visible as digits and the game remains fully playable without ANSI styling. A light console that declares itself via `COLORFGBG` (a `…;7` background — the classic xterm report) paints darkened twins of every ink instead, each clearing 4.5:1 contrast against white; hosts that never declare light — the overwhelming default — render byte-identically to the dark palette.
 
 ## Language
 

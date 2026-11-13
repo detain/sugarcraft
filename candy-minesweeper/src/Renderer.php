@@ -41,6 +41,25 @@ final class Renderer
     ];
 
     /**
+     * The same ladder darkened for light terminals (see
+     * {@see lightBackground()}): the pastels above ride ~1-3:1 against
+     * white — invisible. Every entry here clears WCAG 4.5:1 on #ffffff
+     * (LightPaletteTest recomputes the ratios from the rendered bytes), and
+     * the hue order keeps Windows-classic memory: 1 blue, 2 green, 3 red,
+     * 4 purple, 5 brown, 6 teal, 7 slate, 8 grey.
+     */
+    private const ADJ_COLORS_LIGHT = [
+        1 => 0x1d4ed8,  // blue   6.3:1
+        2 => 0x15803d,  // green  4.6:1
+        3 => 0xb91c1c,  // red    6.0:1
+        4 => 0x6b21a8,  // purple 9.5:1
+        5 => 0x92400e,  // brown  7.3:1
+        6 => 0x0f766e,  // teal   5.2:1
+        7 => 0x1f2937,  // slate 12.6:1
+        8 => 0x4b5563,  // grey   7.6:1
+    ];
+
+    /**
      * Geometry coupling between {@see frame()} and mouse hit-testing: the
      * rounded border costs 1 cell and the padding(0,1) layer 1 more, so the
      * first interior cell glyph sits at 0-based terminal coordinates
@@ -79,6 +98,32 @@ final class Renderer
     private static function colourBoards(): bool
     {
         return self::$boardColourOverride ?? ColorProfile::detect()->supportsAnsi();
+    }
+
+    /**
+     * Terminal-background probe for palette selection: COLORFGBG's BOTTOM
+     * field declares the background colour index, and index 7 is the light
+     * grey/white every classic terminal assigns it. Unset, malformed, or any
+     * other answer means "dark" — which keeps every shipped byte sequence
+     * identical on hosts that never declare a light background (zero golden
+     * movement by default).
+     */
+    private static function lightBackground(): bool
+    {
+        $value = getenv('COLORFGBG');
+        if ($value === false || !preg_match('/(?:^|;)(\d+)$/', $value, $m)) {
+            return false;
+        }
+        return (int) $m[1] === 7;
+    }
+
+    /**
+     * Choose between the dark-host ink and its light-host twin (a pale
+     * pastel on a pale background is not a decoration, it is a blink).
+     */
+    private static function ink(string $darkHex, string $lightHex): string
+    {
+        return self::lightBackground() ? $lightHex : $darkHex;
     }
 
     /**
@@ -152,12 +197,12 @@ final class Renderer
             Lang::t('ui.help_board'),
             Lang::t('ui.help_session'),
         ];
-        $helpStyle = SugarStyle::new()->foreground(Color::hex('#7d6e98'));
+        $helpStyle = SugarStyle::new()->foreground(Color::hex(self::ink('#7d6e98', '#5b4a7f')));
         // Toast: save/load/restart outcomes (and the boot resume hint)
         // ride their own line ABOVE the status, so a load that lands on a
         // lost board still shows the boom/cleared banner underneath it.
         $toastPlain = $g->notice === null ? null : '» ' . $g->notice;
-        $toastStyle = SugarStyle::new()->foreground(Color::hex('#fde68a'));
+        $toastStyle = SugarStyle::new()->foreground(Color::hex(self::ink('#fde68a', '#854d0e')));
 
         // The column budget is what the live terminal actually offers beside
         // the board interior. When every footer line fits it (always, on an
@@ -315,18 +360,23 @@ final class Renderer
         $bg = null;
         $attrs = 0;
 
+        // Ink selection rides the terminal-background probe: on a declared
+        // light background every pale dark-host hue below has a darkened
+        // twin (ADJ_COLORS_LIGHT / the hex arms) that clears 4.5:1 on white.
+        $light = self::lightBackground();
+
         if ($cell->revealed && $cell->mine) {
-            $fg = 0xff5f87;
+            $fg = $light ? 0xbe123c : 0xff5f87;
             $attrs = Style::ATTR_BOLD;
         } elseif ($wrongFlag) {
-            $fg = 0x7d6e98;
+            $fg = $light ? 0x5b4a7f : 0x7d6e98;
         } elseif ($cell->flagged) {
-            $fg = 0xfde68a;
+            $fg = $light ? 0xb45309 : 0xfde68a;
             $attrs = Style::ATTR_BOLD;
         } elseif ($missedMine) {
-            $fg = 0xff5f87;
+            $fg = $light ? 0xbe123c : 0xff5f87;
         } elseif ($cell->revealed && $cell->adjacent > 0) {
-            $fg = self::ADJ_COLORS[$cell->adjacent] ?? 0xffffff;
+            $fg = ($light ? self::ADJ_COLORS_LIGHT : self::ADJ_COLORS)[$cell->adjacent] ?? ($light ? 0x1f2937 : 0xffffff);
         } elseif (!$cell->revealed) {
             $fg = 0x5a4a78;
         }
@@ -422,7 +472,7 @@ final class Renderer
             }
             return [
                 Lang::t($b->exploded ? 'ui.boom' : 'ui.cleared') . $suffix,
-                SugarStyle::new()->foreground(Color::hex($b->exploded ? '#ff5f87' : '#6ee7b7'))->bold(),
+                SugarStyle::new()->foreground(Color::hex($b->exploded ? self::ink('#ff5f87', '#be123c') : self::ink('#6ee7b7', '#047857')))->bold(),
             ];
         }
         $remaining = max(0, $b->mineCount - $b->flagCount());
@@ -435,7 +485,7 @@ final class Renderer
                 'remaining' => $remaining,
                 'time'      => $time,
             ]),
-            SugarStyle::new()->foreground(Color::hex('#a78bfa')),
+            SugarStyle::new()->foreground(Color::hex(self::ink('#a78bfa', '#6d28d9'))),
         ];
     }
 

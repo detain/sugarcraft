@@ -14,3 +14,9 @@ declare(strict_types=1);
 require __DIR__ . '/../vendor/autoload.php';
 
 \SugarCraft\Minesweeper\Renderer::setBoardColourOverride(true);
+
+// Background hermeticity: the light-palette probe (msw-06) answers from the
+// ambient COLORFGBG, and the goldens compare the dark bytes. Pin the dark
+// answer here the same way the colour override is pinned; LightPaletteTest
+// arms the light report explicitly to prove the twins.
+putenv('COLORFGBG');
