@@ -141,6 +141,9 @@ final class Server
      */
     private bool $revokeHooked = false;
 
+    /** @var list<\Closure(?string): void> */
+    private array $revocationListeners = [];
+
     private function __construct(
         private readonly ServerConfig $config,
         private readonly AuthContext $auth,
@@ -317,6 +320,7 @@ final class Server
             $this->revokeHooked = true;
             $this->auth->viewerTokens->onRevoked(function (string $id): void {
                 $this->closeViewerSockets($id);
+                $this->credentialsRevoked($id);
             });
         }
 
@@ -370,6 +374,25 @@ final class Server
         );
     }
 
+    /**
+     * Subscribe to credential death: $listener gets a viewer token id when
+     * that grant is revoked, or null when a rotation revokes every credential.
+     * The seam the protocol's idempotency cache hangs off (S-V02).
+     *
+     * @param \Closure(?string): void $listener
+     */
+    public function onCredentialsRevoked(\Closure $listener): void
+    {
+        $this->revocationListeners[] = $listener;
+    }
+
+    private function credentialsRevoked(?string $tokenId): void
+    {
+        foreach ($this->revocationListeners as $listener) {
+            $listener($tokenId);
+        }
+    }
+
     /** Every principal class a token rotation revokes; their push rows go with them. */
     private const ROTATION_REVOKED_PRINCIPALS = ['bearer', 'subprotocol', 'ticket', 'cookie', 'viewer'];
 
@@ -392,6 +415,7 @@ final class Server
             $closed++;
         }
         $this->sessionLastUsed = [];
+        $this->credentialsRevoked(null);
         // Every credential class the rotation just revoked: a push row it
         // owned would keep notifying a client that can no longer sign in.
         $pushStore = PushSubscriptionStore::forStateDir($this->config->stateDir, $this->log);

@@ -50,6 +50,10 @@ final class TokenReloadTest extends TestCase
         $ticket = $auth->tickets->mint($cookie);
         $auth->loginCodes->mint();
         $server = Server::new(ServerConfig::new($this->stateDir)->withPort(0), $auth, StaticFiles::new(null), null, Loop::get());
+        $forgotten = [];
+        $server->onCredentialsRevoked(static function (?string $id) use (&$forgotten): void {
+            $forgotten[] = $id;
+        });
         $server->start();
 
         try {
@@ -66,6 +70,7 @@ final class TokenReloadTest extends TestCase
 
             $new = TokenStore::new($this->stateDir)->rotate();
             self::assertSame(1, $server->reloadToken());
+            self::assertSame([null], $forgotten, 'a rotation tells the idempotency seam every credential died');
 
             self::assertSame(Server::CLOSE_CREDENTIALS_ROTATED, $this->fixture->await($closed->promise()));
             self::assertTrue($tokens->matches($new));

@@ -417,6 +417,21 @@ final class Dispatcher implements MessageHandler
         return \hash('sha256', $client->tokenId() ?? self::OWNER);
     }
 
+    /**
+     * A credential died (`token.revoke`, or a rotation when $tokenId is null):
+     * drop the answers its bucket held. Null forgets every bucket, the owner's
+     * included.
+     */
+    public function forgetCredential(?string $tokenId): void
+    {
+        if ($tokenId === null) {
+            $this->idempotency->forgetAll();
+
+            return;
+        }
+        $this->idempotency->forgetPrincipal(\hash('sha256', $tokenId));
+    }
+
     private function call(Client $client, Request $request): void
     {
         try {

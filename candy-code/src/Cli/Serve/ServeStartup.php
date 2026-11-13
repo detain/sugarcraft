@@ -391,6 +391,10 @@ trait ServeStartup
             $channels = $channelRegistry->httpRouter();
         }
         $server = Server::new($config, $auth, $static, $gateway, $loop, $log, null, null, $share(...), $canvas(...), $hooks, $channels);
+        // S-V02: a revoked or rotated credential's remembered answers go with it.
+        $server->onCredentialsRevoked(static function (?string $tokenId) use ($protocol): void {
+            $protocol->forgetCredential($tokenId);
+        });
 
         try {
             $server->start();

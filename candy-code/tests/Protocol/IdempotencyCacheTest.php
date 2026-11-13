@@ -133,4 +133,56 @@ final class IdempotencyCacheTest extends TestCase
         self::assertSame(\strlen(\serialize($big)), $cache->bytes('owner'));
         self::assertSame(['answer' => $big], $cache->get('owner', 'm.x', 'k'));
     }
+
+    public function testForgetPrincipalDropsOnlyThatPrincipalsAnswers(): void
+    {
+        $cache = IdempotencyCache::new(static fn (): float => 100.0);
+        $cache->put('a', 'm.x', 'k', 'one');
+        $cache->put('b', 'm.x', 'k', 'two');
+
+        $cache->forgetPrincipal('a');
+
+        self::assertNull($cache->get('a', 'm.x', 'k'));
+        self::assertSame(['answer' => 'two'], $cache->get('b', 'm.x', 'k'));
+        self::assertSame(0, $cache->bytes('a'));
+        self::assertSame(1, $cache->totalCount());
+        self::assertSame($cache->bytes('b'), $cache->totalBytes());
+    }
+
+    public function testForgetAllEmptiesTheMap(): void
+    {
+        $cache = IdempotencyCache::new(static fn (): float => 100.0);
+        $cache->put('a', 'm.x', 'k', 'one');
+        $cache->put('b', 'm.x', 'k', 'two');
+
+        $cache->forgetAll();
+
+        self::assertSame(0, $cache->totalCount());
+        self::assertSame(0, $cache->totalBytes());
+        self::assertNull($cache->get('b', 'm.x', 'k'));
+    }
+
+    public function testTheGlobalEntryCeilingHoldsAcrossManyPrincipals(): void
+    {
+        $cache = IdempotencyCache::new(static fn (): float => 100.0);
+        for ($i = 0; $i < IdempotencyCache::MAX_TOTAL_ENTRIES + 50; ++$i) {
+            $cache->put('p' . $i, 'm.x', 'k', 1);
+        }
+
+        self::assertLessThanOrEqual(IdempotencyCache::MAX_TOTAL_ENTRIES, $cache->totalCount());
+    }
+
+    public function testTheGlobalByteCeilingShedsTheHeaviestPrincipalFirst(): void
+    {
+        $cache = IdempotencyCache::new(static fn (): float => 100.0);
+        $fat = \str_repeat('x', 6 * 1024 * 1024);
+        $cache->put('light', 'm.x', 'k', 'tiny');
+        for ($i = 0; $i < 12; ++$i) {
+            // 12 principals x 6 MiB = 72 MiB > the 64 MiB ceiling.
+            $cache->put('fat' . $i, 'm.x', 'k', $fat);
+        }
+
+        self::assertLessThanOrEqual(IdempotencyCache::MAX_TOTAL_BYTES, $cache->totalBytes());
+        self::assertSame(['answer' => 'tiny'], $cache->get('light', 'm.x', 'k'), 'the light principal is not the victim');
+    }
 }
