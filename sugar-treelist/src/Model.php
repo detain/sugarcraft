@@ -103,10 +103,10 @@ final class Model
     private int $lineOffset = 5;    // how many lines before cursor to show
     private int $wrap = 0;          // max lines per item (0 = unlimited)
 
-    /** @var \Closure(\Stringable, \Stringable): int|null */
+    /** Slot optional; once installed the comparison itself must return int. */
     private ?\Closure $lessFunc = null;
 
-    /** @var \Closure(\Stringable, \Stringable): bool|null */
+    /** Slot optional; once installed the comparison itself must return bool. */
     private ?\Closure $equalsFunc = null;
 
     private ?Prefixer $prefixer = null;
@@ -118,7 +118,7 @@ final class Model
     /** Style for current item (ANSI string); set via withCurrentStyle(). */
     private string $currentStyle = '';
 
-    /** @var \Closure(\Stringable): bool|null */
+    /** Slot optional; once installed the predicate itself must return bool. */
     private ?\Closure $filterFn = null;
 
     private ?FilterState $filterState = null;
@@ -296,10 +296,10 @@ final class Model
 
     public function wrap(): int { return $this->wrap; }
 
-    /** @return \Closure(\Stringable, \Stringable): int|null */
+    /** @return (\Closure(\Stringable, \Stringable): int)|null */
     public function lessFunc(): ?\Closure { return $this->lessFunc; }
 
-    /** @return \Closure(\Stringable, \Stringable): bool|null */
+    /** @return (\Closure(\Stringable, \Stringable): bool)|null */
     public function equalsFunc(): ?\Closure { return $this->equalsFunc; }
 
     public function prefixer(): ?Prefixer { return $this->prefixer; }
@@ -310,7 +310,7 @@ final class Model
 
     public function currentStyle(): string { return $this->currentStyle; }
 
-    /** @return \Closure(\Stringable): bool|null */
+    /** @return (\Closure(\Stringable): bool)|null */
     public function filterFn(): ?\Closure { return $this->filterFn; }
 
     public function filterState(): ?FilterState { return $this->filterState; }
@@ -318,7 +318,12 @@ final class Model
     /**
      * Install the comparison used by {@see sort()}.
      *
-     * @param \Closure(\Stringable, \Stringable): int|null $fn
+     * One stated policy for callback slots (sugar-treelist-011/025): the
+     * slot is optional, but an installed comparison must return int — a
+     * null verdict is a misconfiguration and sort() refuses it loudly with
+     * a LogicException naming lessFunc, never a silent TypeError from usort.
+     *
+     * @param \Closure(\Stringable, \Stringable): int|null $fn  (null return refused at call time)
      */
     public function withLessFunc(?\Closure $fn): self
     {
@@ -335,7 +340,11 @@ final class Model
     /**
      * Install the comparison used by {@see find()}.
      *
-     * @param \Closure(\Stringable, \Stringable): bool|null $fn
+     * Same stated policy as {@see self::withLessFunc()}: find() refuses a
+     * null verdict with a LogicException naming equalsFunc instead of
+     * silently reading it as "not equal".
+     *
+     * @param \Closure(\Stringable, \Stringable): bool|null $fn  (null return refused at call time)
      */
     public function withEqualsFunc(?\Closure $fn): self
     {
@@ -462,7 +471,9 @@ final class Model
     /**
      * Set a filter function and return a new Model with filtering active.
      *
-     * The filterFn receives a \Stringable and returns bool (true = keep item).
+     * The filterFn receives a \Stringable and returns bool (true = keep item);
+     * a null verdict is refused with a LogicException (same stated policy as
+     * sort()/find() — it no longer silently drops the item).
      * Setting a filter transitions filterState to filtering; the items list
      * is immediately filtered. While a filter is active the model keeps the
      * pristine list authoritative — see {@see reapplyFilter()} — so the
@@ -554,7 +565,16 @@ final class Model
         $cursorId = $this->items[$this->cursorIndex]->id ?? null;
         $this->items = array_values(array_filter(
             $this->originalItems,
-            static fn(Item $item): bool => (bool) $fn($item->value),
+            // Same stated policy as sort()/find() (sugar-treelist-011/025):
+            // a null verdict is a misconfigured predicate; refusing it beats
+            // the old silent drop where (bool) null quietly excluded items.
+            static function (Item $item) use ($fn): bool {
+                $keep = $fn($item->value);
+                if ($keep === null) {
+                    throw new \LogicException('The filterFn callback returned null; it must return a bool (true keeps the item).');
+                }
+                return (bool) $keep;
+            },
         ));
         $this->cursorIndex = self::relocateCursor($this->items, $cursorId, $this->cursorIndex);
     }
@@ -741,6 +761,9 @@ final class Model
      * never silently a de-select. While a filter is active the pristine list
      * is the thing ordered, so the new order survives withoutFilter() instead
      * of being un-sorted by the stale pristine copy.
+     *
+     * @throws \LogicException if the installed lessFunc returns null for a
+     *         comparison (the slot being unset is fine — see withLessFunc()).
      */
     public function sort(): self
     {
@@ -751,7 +774,17 @@ final class Model
         $preferred = $this->cursorIndex;
         return $this->mutate(function ($m) use ($cursorId, $preferred) {
             $list = $m->filterFn !== null ? $m->originalItems : $m->items;
-            \usort($list, fn(Item $a, Item $b): int => ($this->lessFunc)($a->value, $b->value));
+            // One stated policy for callback returns (sugar-treelist-011/025):
+            // null is a misconfigured comparison, not a sortable value —
+            // naming the slot here beats a TypeError surfacing from inside
+            // usort far from the setter.
+            \usort($list, function (Item $a, Item $b): int {
+                $order = ($this->lessFunc)($a->value, $b->value);
+                if ($order === null) {
+                    throw new \LogicException('Model::sort(): the lessFunc comparison returned null; it must return an int (negative, zero, or positive).');
+                }
+                return $order;
+            });
             if ($m->filterFn !== null) {
                 $m->originalItems = $list;
                 $m->reapplyFilter();
@@ -1004,6 +1037,9 @@ final class Model
     /**
      * Find the index of an item whose EqualsFunc matches the given value.
      * Returns -1 if not found.
+     *
+     * @throws \LogicException if the installed equalsFunc returns null for a
+     *         comparison (unset slot falls back to string equality).
      */
     public function find(\Stringable $value): int
     {
@@ -1016,7 +1052,14 @@ final class Model
             return -1;
         }
         foreach ($this->items as $i => $item) {
-            if (($this->equalsFunc)($item->value, $value)) {
+            $matches = ($this->equalsFunc)($item->value, $value);
+            if ($matches === null) {
+                // Same stated policy as sort()/reapplyFilter()
+                // (sugar-treelist-011/025): null names a misconfiguration,
+                // it does not silently read as "not equal".
+                throw new \LogicException('Model::find(): the equalsFunc comparison returned null; it must return a bool.');
+            }
+            if ($matches) {
                 return $i;
             }
         }

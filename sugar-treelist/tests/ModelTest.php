@@ -1901,6 +1901,76 @@ final class ModelTest extends TestCase
         }
     }
 
+    // -------------------------------------------------------------------------
+    // Nullable callback returns — one stated policy (sugar-treelist-011/025):
+    // the slot is optional, but an installed callback must return its
+    // declared type; a null verdict is refused by name, never coerced or
+    // laundered into a distant TypeError.
+    // -------------------------------------------------------------------------
+
+    public function testLessFuncReturningNullIsRefusedByNameNotATypeError(): void
+    {
+        // The finding's reproducer: setLessFunc(fn(...): ?int => null)->sort()
+        // used to die inside usort with 'Return value must be of type int,
+        // null returned' — far from the misconfigured setter.
+        $m = $this->model
+            ->withItem(new StringItem('b'))
+            ->withItem(new StringItem('a'))
+            ->withLessFunc(static fn ($x, $y): ?int => null);
+        try {
+            $m->sort();
+            $this->fail('a null comparison verdict must be refused');
+        } catch (\LogicException $e) {
+            $this->assertStringContainsString('lessFunc', $e->getMessage());
+        }
+    }
+
+    public function testEqualsFuncReturningNullIsRefusedByName(): void
+    {
+        // Null no longer reads as a silent 'not equal' in find()'s if-context.
+        $m = $this->model
+            ->withItem(new StringItem('needle'))
+            ->withEqualsFunc(static fn ($x, $y): ?bool => null);
+        try {
+            $m->find(new StringItem('needle'));
+            $this->fail('a null equality verdict must be refused');
+        } catch (\LogicException $e) {
+            $this->assertStringContainsString('equalsFunc', $e->getMessage());
+        }
+    }
+
+    public function testFilterFnReturningNullIsRefusedNotSilentlyDropped(): void
+    {
+        // Disclosed flip: the old (bool) coercion made a null verdict silently
+        // exclude the item; the setter's own contract ('returns bool') is now
+        // enforced at the call site.
+        $m = $this->model->withItem(new StringItem('anything'));
+        try {
+            $m->withFilterFn(static fn ($x): ?bool => null);
+            $this->fail('a null filter verdict must be refused');
+        } catch (\LogicException $e) {
+            $this->assertStringContainsString('filterFn', $e->getMessage());
+        }
+    }
+
+    public function testHealthyCallbackVerdictsAreUnaffectedByThePolicy(): void
+    {
+        // The guards refuse null only: int verdicts still order, bool false
+        // still means 'not equal', bool truthiness still filters.
+        $sorted = $this->model
+            ->withItem(new StringItem('b'))
+            ->withItem(new StringItem('a'))
+            ->withLessFunc(static fn ($x, $y): int => (string) $x <=> (string) $y)
+            ->sort();
+        $this->assertSame('a', (string) $sorted->itemAt(0));
+
+        $m = $this->model->withItem(new StringItem('x'));
+        $this->assertSame(-1, $m->withEqualsFunc(static fn ($x, $y): ?bool => false)->find(new StringItem('x')));
+
+        $kept = $m->withFilterFn(static fn ($v): ?bool => (string) $v === 'x');
+        $this->assertSame(1, $kept->length());
+    }
+
     public function testPrefixerAndSuffixerReturnsAreSweptIntoTheFrame(): void
     {
         // Extension points splice INSIDE an already-wrapped row: a hostile
