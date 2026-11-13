@@ -40,6 +40,7 @@ final class DiscordAccountTest extends TestCase
     private DiscordAccount $face;
     private ?Gateway $faceGateway = null;
     private ?Log $faceLog = null;
+    private TextSafety $faceSafety;
     private CredentialStore $store;
     private PairingCodes $pairing;
     private string $tempDir;
@@ -163,6 +164,24 @@ final class DiscordAccountTest extends TestCase
         self::assertSame('PATCH', $patch['method']);
         self::assertSame('Resolved.', $patch['body']['content']);
         self::assertSame([], $patch['body']['components']);
+    }
+
+    public function testTheApprovalCardRidesTheRedactionChoke(): void
+    {
+        $this->buildFace(['approvalRoster' => ['boss']]);
+        $this->faceSafety->addSecret('s3cr3t-token');
+        $this->face->promptApproval(['channelId' => 'c1', 'messageId' => 'm1'], 'sess_1', [
+            'askId' => 'ask_r',
+            'tool' => 'Bash s3cr3t-token',
+            'reason' => 'reading with s3cr3t-token',
+            'arguments' => ['cmd' => 'ls -la /home/s3cr3t-token'],
+        ]);
+        $this->settle();
+        $call = $this->api->lastCallFor('/messages');
+        self::assertNotNull($call);
+        $wire = (string) \json_encode($call['body']);
+        self::assertStringNotContainsString('s3cr3t-token', $wire, 'the card must leave the secret redacted');
+        self::assertStringContainsString('[redacted]', $wire);
     }
 
     public function testATtlBeyondTheCoreCeilingArmsTheCeilingAndLogsLoudly(): void
@@ -504,8 +523,9 @@ final class DiscordAccountTest extends TestCase
             $this->loop,
         );
         $this->faceLog = $faceLog ?? Log::silent();
+        $this->faceSafety = new TextSafety();
         $this->face = new DiscordAccount('default', $rest, $this->faceGateway, $router, $cfg, $this->faceLog,
-            $this->pairing, new TextSafety(), $this->loop);
+            $this->pairing, $this->faceSafety, $this->loop);
         $router->addChannel($this->face, 'default');
         $own = new \ReflectionProperty(DiscordAccount::class, 'ownUserId');
         $own->setAccessible(true);

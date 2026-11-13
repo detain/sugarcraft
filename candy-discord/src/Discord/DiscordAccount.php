@@ -164,6 +164,8 @@ final class DiscordAccount implements PlatformFace
             'flags' => $this->boolCfg('suppressEmbeds', true) ? Buttons::FLAG_SUPPRESS_EMBEDS : null,
         ], static fn (mixed $v): bool => $v !== null);
 
+        // @redaction-choke: $chunk arrives pre-fenced — the router runs
+        // every transcript leg through safety->outbound before splitting.
         return $this->rest->send($channelId, $chunk, $extra + ['allowed_mentions' => ['parse' => []]]);
     }
 
@@ -185,7 +187,15 @@ final class DiscordAccount implements PlatformFace
             return;
         }
         $roster = \array_map('strval', $this->listCfg('approvalRoster'));
-        $payload = Buttons::approvalPayload($ask, self::approvalSummary($ask), $roster, $nonce);
+        // @redaction-choke: the card is server-derived text like every other
+        // outbound leg — headline tool and reason ride the choke here, the
+        // arguments inside approvalSummary. The 400-clip bounds size, never
+        // secrecy, so redaction runs BEFORE the clip.
+        $safe = $ask;
+        $safe['tool'] = $this->safety->outbound((string) ($ask['tool'] ?? 'tool'));
+        $safe['reason'] = $this->safety->outbound((string) ($ask['reason'] ?? ''));
+        $payload = Buttons::approvalPayload($safe, $this->approvalSummary($safe), $roster, $nonce);
+        // @redaction-choke: every display field of $payload was swept above.
         $this->rest->send($channelId, (string) $payload['content'], [
             'components' => $payload['components'],
             'flags' => Buttons::FLAG_COMPONENTS_V2,
@@ -433,7 +443,7 @@ final class DiscordAccount implements PlatformFace
             default => '', // 'silent' / 'paired': inside the reminder window, or raced onto the roster
         };
         if ($notice !== '') {
-            // The notice IS the code's one legitimate surface (§7.3): it
+            // @allow-raw-send: the notice IS the code's one legitimate surface (§7.3): it
             // rides raw REST, NOT safety->outbound — everywhere else
             // (transcripts, logs, channel chatter) the code is redacted,
             // because PairingCodes registered it as a secret.
@@ -602,7 +612,9 @@ final class DiscordAccount implements PlatformFace
             return;
         }
         $notice = Lang::t('channels.discord.attachments.skipped', ['count' => (string) \count($notes), 'notes' => \implode('; ', $notes)]);
-        $this->rest->send($channelId, $notice, ['allowed_mentions' => ['parse' => []]])
+        // @redaction-choke: inbound attachment names could echo a registered
+        // secret, so even the fixed-template notice rides the choke.
+        $this->rest->send($channelId, $this->safety->outbound($notice), ['allowed_mentions' => ['parse' => []]])
             ->then(null, fn (\Throwable $e) => $this->log->debug('drop_notice_failed', ['error' => $e->getMessage()]));
     }
 
@@ -766,6 +778,9 @@ final class DiscordAccount implements PlatformFace
                 return;
             }
             if ($channelId !== '') {
+                // @allow-raw-send: every $say argument is a fixed Lang::t
+                // operator string (§9.5: the pair surface never repeats a
+                // code this channel does not already own).
                 $this->rest->send($channelId, $text, ['allowed_mentions' => ['parse' => []]])
                     ->then(null, fn (\Throwable $e) => $this->log->warn('pair_answer_failed', ['error' => $e->getMessage()]));
             }
@@ -975,12 +990,15 @@ final class DiscordAccount implements PlatformFace
     }
 
     /** @param array<string,mixed> $ask */
-    private static function approvalSummary(array $ask): string
+    private function approvalSummary(array $ask): string
     {
         $tool = (string) ($ask['tool'] ?? 'a tool');
         $reason = (string) ($ask['reason'] ?? '');
         $args = $ask['arguments'] ?? [];
         $rendered = \is_array($args) ? (string) \json_encode($args, \JSON_UNESCAPED_SLASHES | \JSON_INVALID_UTF8_SUBSTITUTE) : (string) $args;
+        // The arguments blob is model-authored: it rides the choke before
+        // the size clip, so a clipped tail can never expose half a secret.
+        $rendered = $this->safety->outbound($rendered);
         if (\strlen($rendered) > 400) {
             $rendered = \substr($rendered, 0, 400) . '…';
         }

@@ -383,4 +383,36 @@ final class ApprovalGateTest extends TestCase
         }
         @\rmdir($dir);
     }
+
+    public function testEveryRawRestSendSiteCarriesARedactionToken(): void
+    {
+        // Asserted allowlist (discord-12): every DiscordAccount site that
+        // puts channel content on the wire must carry, within a few lines,
+        // either @redaction-choke (the text passed through safety->outbound)
+        // or @allow-raw-send (an acknowledged fixed-string surface). A new
+        // untokenised content send fails this test.
+        $root = \dirname(__DIR__, 2) . '/src';
+        $sites = [];
+        $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS));
+        for ($iterator->rewind(); $iterator->valid(); $iterator->next()) {
+            $file = $iterator->current();
+            if (!$file instanceof \SplFileInfo || $file->getExtension() !== 'php') {
+                continue;
+            }
+            $lines = \file($file->getPathname());
+            foreach ($lines as $index => $line) {
+                if (\strpos((string) $line, '->rest->send(') === false) {
+                    continue;
+                }
+                $window = \implode("\n", \array_slice($lines, \max(0, $index - 5), 6));
+                self::assertMatchesRegularExpression(
+                    '/@(?:redaction-choke|allow-raw-send)/',
+                    $window,
+                    \sprintf('%s:%d sends channel content without a redaction token', $file->getFilename(), $index + 1),
+                );
+                $sites[] = $file->getFilename() . ':' . ($index + 1);
+            }
+        }
+        self::assertCount(5, $sites, 'the raw-send roster changed shape: ' . \implode(', ', $sites));
+    }
 }
