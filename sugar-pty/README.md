@@ -543,8 +543,10 @@ a **polled size-diff observer**, not a signal hook: the SIGWINCH itself
 is consumed by the consumer's own `SignalForwarder` wiring, and the
 pump merely notices the resulting size change between reads. Two
 consequences: a session that opened at 0×0 (a refused ioctl at open)
-never fires it until a real size is established, and `MultiPump` does
-not deliver it at all (`tick()`/`runAsync()` drive `keepalive` only).
+never fires it until a real size is established, and `MultiPump`'s sync
+`tick()` does not deliver it at all (its idle arm fires `onIdle` +
+`keepalive` like the other pumps; `runAsync()` per-session ReactPumps
+observe size changes and do fire it).
 Do not conflate them: if you were passing `onSigwinch(0, 0)` as a fake
 idle tick, migrate to `onIdle`.
 

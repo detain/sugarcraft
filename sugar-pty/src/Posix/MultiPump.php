@@ -205,11 +205,12 @@ final class MultiPump
      * masters that were drained on this tick (0 on idle / no live
      * sessions).
      *
-     * Callback reach of the SYNC path: only {@see PumpOptions::$keepalive}
-     * fires on idle ticks here. onIdle / onSigwinch / onChildExit are
-     * PosixPump and ReactPump hooks — a multiplexed caller wanting them
-     * drives runAsync() (one ReactPump per session) or observes children
-     * around tick() itself.
+     * Callback reach of the SYNC path: idle ticks deliver
+     * {@see PumpOptions::$onIdle} then {@see PumpOptions::$keepalive},
+     * matching the single-session pumps. onSigwinch / onChildExit are not
+     * delivered by tick() — the size-diff observer lives in the pump loop;
+     * a multiplexed caller wanting them drives runAsync() (one ReactPump
+     * per session, hooks intact) or observes children around tick() itself.
      */
     public function tick(): int
     {
@@ -289,6 +290,14 @@ final class MultiPump
         }
         if ($ready === 0) {
             foreach ($live as $session) {
+                // The idle arm delivers the same hook pair, in the same
+                // order, as the single-session pumps: onIdle first, the
+                // legacy keepalive alias second. (It used to be keepalive
+                // only — options carrying onIdle silently no-op'd here
+                // while every other pump fired them.)
+                if ($session->opts->onIdle !== null) {
+                    ($session->opts->onIdle)();
+                }
                 if ($session->opts->keepalive !== null) {
                     ($session->opts->keepalive)();
                 }
