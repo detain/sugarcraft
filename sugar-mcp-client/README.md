@@ -231,8 +231,8 @@ checkout the launch stood in.
   `callTool(name: $name, arguments: $args, timeoutSeconds: 30.0)` abandons the
   wait at the deadline (time queued for the exchange lock counts), sends
   `notifications/cancelled` naming the request, and returns
-  `{"error": "Tool call timed out after 30s and was cancelled; the server may
-  still finish the work"}`; the connection stays usable and the late reply is
+  `['error' => 'Tool call timed out after 30s and was cancelled; the server may
+  still finish the work']`; the connection stays usable and the late reply is
   skipped by id. A `null` or non-finite value leaves the call unbounded; zero
   and a negative are refused at the door — "never" is spelled `null`, never
   by folding.
@@ -379,13 +379,13 @@ and neither this client nor `McpRouter` ever consults it — a hint is an
 unverified server claim about itself, and enforcing it is the consumer's
 policy to write, not a behaviour to inherit.
 
-## Failure reporting
+## Inspecting a failed call
 
 - `McpMessage::toJson()` throws `InvalidArgumentException` for an envelope
   JSON cannot carry (INF/NAN — a model's `1e999` decodes to `INF` — or
   invalid UTF-8) instead of emitting a blank line no server would answer.
   `request()` and `notify()` let it through, with nothing written;
-  `callTool()` turns it into an `{"error": ...}` payload, per the `McpServer`
+  `callTool()` turns it into a `['error' => ...]` payload, per the `McpServer`
   contract.
 - `notify()` returns `bool`: whether the whole line went out.
 - A spawn planner must return its command as a non-empty argv list of
@@ -553,8 +553,9 @@ stderr is not locked — it is diagnostics only.
 ## Deliberate exclusions
 
 - **Downstream (product policy, not protocol):** contained/detached spawning
-  (setsid wrapping, PATH pre-checks, curated environments) — wrap `proc_open`
-  policy at the embedder.
+  (setsid wrapping, PATH pre-checks, curated environments) — inject
+  containment through the `spawnPlanner` seam (see *Trust boundary*); the
+  transport never wraps `proc_open` policy itself.
 - **Deferred (not planned in this package):** HTTP/SSE transport, server-side
   implementation, and OAuth (PKCE, loopback, dynamic client registration).
   `resources/*` and `prompts/*` traffic rides the shipped convenience quartet
