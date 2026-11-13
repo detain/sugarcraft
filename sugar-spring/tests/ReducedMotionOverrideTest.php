@@ -21,12 +21,16 @@ final class ReducedMotionOverrideTest extends TestCase
         parent::setUp();
         putenv('REDUCE_MOTION');
         putenv('PREFERS_REDUCED_MOTION');
+        // SPR-09: the env probe is a process-wide memo — re-read the env this
+        // test just cleared before letting any null-override leg consult it.
+        Spring::resetReducedMotionProbe();
     }
 
     protected function tearDown(): void
     {
         putenv('REDUCE_MOTION');
         putenv('PREFERS_REDUCED_MOTION');
+        Spring::resetReducedMotionProbe();
         parent::tearDown();
     }
 
@@ -56,7 +60,12 @@ final class ReducedMotionOverrideTest extends TestCase
         $this->assertLessThan(100.0, $quietPos, 'no env signal + null override must animate');
 
         putenv('PREFERS_REDUCED_MOTION=1');
+        // SPR-09 ruling (a): the env leg is memoized process-wide, so an
+        // env-only flip (no per-spring override involved) lands at the next
+        // PROBE, not the next call — the test seam is the documented way to
+        // stand in for a fresh process.
+        Spring::resetReducedMotionProbe();
         [$loudPos] = $unpinned->update(0.0, 0.0, 100.0);
-        $this->assertSame(100.0, $loudPos, 'env signal + null override must snap at call time');
+        $this->assertSame(100.0, $loudPos, 'env signal + null override must snap once the probe re-reads');
     }
 }

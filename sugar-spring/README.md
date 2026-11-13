@@ -151,8 +151,15 @@ first, then `PREFERS_REDUCED_MOTION` — and either reading *on* snaps, so an
 *off* value in one never suppresses an *on* value in the other, and the
 per-spring `reducedMotionOverride` (below) is the only opt-back-in path when
 the environment is set. There is no terminal query or
-accessibility-daemon channel, and the value is consulted per call: flipping
-the env var mid-session changes behaviour on the next frame. When the host
+accessibility-daemon channel, and the value is read **once per process**: the
+first spring `update()` that needs it probes the environment and remembers the
+answer, so flipping the env var mid-session does NOT change behaviour on the
+next frame (a CLI/TUI run's a11y setting is fixed for its lifetime — that is
+the whole point of the memo, and why a frame loop of springs no longer pays an
+environment scan per spring per frame). `Spring::resetReducedMotionProbe()` is
+the documented seam for processes that genuinely hot-swap the signal (and for
+tests); the per-spring `reducedMotionOverride` remains evaluated per call and
+always beats the memo. When the host
 sets one of the variables this supports the [WCAG 2.3.3 (Animation from
 Interactions) reduced-motion
 guideline](https://www.w3.org/WAI/WCAG21/Understanding/animate-from-interactions.html);
@@ -195,8 +202,9 @@ parameter.
 ```php
 use SugarCraft\Spring\Spring;
 
-// With REDUCE_MOTION=1 the spring skips animation entirely:
+// With REDUCE_MOTION=1 at the first probe the spring skips animation:
 putenv('REDUCE_MOTION=1');
+Spring::resetReducedMotionProbe(); // only needed if this process already probed
 $spring = new Spring(deltaTime: Spring::fps(60), angularFrequency: 6.0, dampingRatio: 1.0);
 [$pos, $vel] = $spring->update(0.0, 0.0, 100.0);  // returns [100.0, 0.0]
 

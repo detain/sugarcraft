@@ -29,6 +29,16 @@ final class Spring
     private readonly ?bool $reducedMotionOverride;
 
     /**
+     * Process-wide memo of the host reduced-motion signal. Probe::reducedMotion()
+     * rebuilt two full env snapshots (`array_merge($_ENV, getenv())`) on EVERY
+     * call, so a frame loop of live springs paid an env scan per spring per
+     * frame — a CLI/TUI process does not grow new a11y settings mid-run, so
+     * the verdict is read once and remembered. {@see resetReducedMotionProbe()}
+     * is the documented seam for the one legitimate flipper: tests.
+     */
+    private static ?bool $reducedMotionProbe = null;
+
+    /**
      * @param float  $deltaTime           seconds elapsed per integration step
      * @param float  $angularFrequency    rad/sec (note: NOT Hz; multiply Hz by 2π)
      * @param float  $dampingRatio        <1 = oscillating, =1 = critical, >1 = over-damped
@@ -138,7 +148,10 @@ final class Spring
      *
      * If reduced motion is enabled via environment (REDUCE_MOTION or
      * PREFERS_REDUCED_MOTION) — or pinned per spring via the constructor's
-     * $reducedMotionOverride — the spring snaps to its target instantly.
+     * $reducedMotionOverride — the spring snaps to its target instantly. The
+     * environment signal is probed once per process and remembered (see
+     * {@see resetReducedMotionProbe()} for the test/hot-config seam); the
+     * override is evaluated per call and always wins.
      * Anything composed of springs inherits that behaviour: {@see SpringChain}
      * advances one stage per tick, so under reduced motion its final positions
      * land after 2n−1 ticks and it completes on tick 2n (one snap tick plus
@@ -166,7 +179,7 @@ final class Spring
             ]));
         }
 
-        if (($this->reducedMotionOverride ?? Probe::reducedMotion()) === true) {
+        if (($this->reducedMotionOverride ?? self::probeReducedMotion()) === true) {
             return [$target, 0.0];
         }
 
@@ -174,6 +187,28 @@ final class Spring
         $newPos = $oldPos * $this->posPosCoef + $vel * $this->posVelCoef + $target;
         $newVel = $oldPos * $this->velPosCoef + $vel * $this->velVelCoef;
         return [$newPos, $newVel];
+    }
+
+    /**
+     * The memoized environment leg of the reduced-motion decision (the
+     * per-spring $reducedMotionOverride still wins outright — it is consulted
+     * with ?? before this runs, so a pinned spring never touches the memo).
+     */
+    private static function probeReducedMotion(): bool
+    {
+        return self::$reducedMotionProbe ??= Probe::reducedMotion();
+    }
+
+    /**
+     * Test seam: forget the memoized reduced-motion verdict so the next probe
+     * re-reads the environment. Production callers should never need this —
+     * the point of the memo is that a process's a11y setting is read once.
+     * Environments that DO hot-swap REDUCE_MOTION mid-run (long-lived daemons
+     * re-reading config) are the documented reason this seam is public.
+     */
+    public static function resetReducedMotionProbe(): void
+    {
+        self::$reducedMotionProbe = null;
     }
 
     /**

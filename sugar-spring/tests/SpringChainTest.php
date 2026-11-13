@@ -274,6 +274,7 @@ final class SpringChainTest extends TestCase
     public function testReducedMotionChainCompletesOnTickTwoNWithPositionsAtTwoNMinusOne(): void
     {
         putenv('REDUCE_MOTION=1');
+        Spring::resetReducedMotionProbe(); // SPR-09: the verdict is memoized, the seam re-reads
 
         try {
             foreach ([[100.0], [100.0, 50.0, 75.0]] as $targets) {
@@ -301,6 +302,7 @@ final class SpringChainTest extends TestCase
             }
         } finally {
             putenv('REDUCE_MOTION');
+            Spring::resetReducedMotionProbe(); // do not leak the snap verdict into sibling tests
         }
     }
 }

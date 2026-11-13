@@ -54,6 +54,9 @@ final class GoldenRenderTest extends TestCase
             $this->savedEnv[$key] = getenv($key);
             putenv($key);
         }
+        // SPR-09: clearing the env only helps if the process-wide probe memo
+        // is cleared with it — byte goldens must never inherit a snap verdict.
+        \SugarCraft\Spring\Spring::resetReducedMotionProbe();
     }
 
     protected function tearDown(): void
@@ -66,6 +69,7 @@ final class GoldenRenderTest extends TestCase
             putenv($value === false ? $key : "{$key}={$value}");
         }
         $this->savedEnv = [];
+        \SugarCraft\Spring\Spring::resetReducedMotionProbe();
     }
 
     /**

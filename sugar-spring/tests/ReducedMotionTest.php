@@ -28,12 +28,16 @@ final class ReducedMotionTest extends TestCase
         // Ensure reduced motion is disabled by default
         putenv('REDUCE_MOTION=0');
         putenv('PREFERS_REDUCED_MOTION=0');
+        // SPR-09: the env probe is memoized process-wide; re-read it against
+        // the env this test is about to establish.
+        Spring::resetReducedMotionProbe();
     }
 
     protected function tearDown(): void
     {
         putenv('REDUCE_MOTION');
         putenv('PREFERS_REDUCED_MOTION');
+        Spring::resetReducedMotionProbe();
         parent::tearDown();
     }
 
@@ -106,6 +110,7 @@ final class ReducedMotionTest extends TestCase
 
         // Enable reduced motion
         putenv('REDUCE_MOTION=1');
+        Spring::resetReducedMotionProbe(); // the memo, not the env, is what the probe just froze
 
         // Create new spring instance after env change
         $springReduced = new Spring(1.0 / 60.0, 6.0, 1.0);
@@ -200,6 +205,7 @@ final class ReducedMotionTest extends TestCase
         // here so a fleet-wide Probe change is loud in THIS suite too.
         foreach (['false', 'no', 'off', '0', 'FALSE'] as $off) {
             putenv("REDUCE_MOTION={$off}");
+            Spring::resetReducedMotionProbe(); // per-leg: the polarity table is read live
             $spring = new Spring(1.0 / 60.0, 6.0, 1.0);
             [$pos] = $spring->update(0.0, 0.0, 100.0);
             $this->assertLessThan(100.0, $pos, "REDUCE_MOTION={$off} must NOT snap");
@@ -207,9 +213,48 @@ final class ReducedMotionTest extends TestCase
 
         foreach (['1', 'yes', 'anything'] as $on) {
             putenv("REDUCE_MOTION={$on}");
+            Spring::resetReducedMotionProbe();
             $spring = new Spring(1.0 / 60.0, 6.0, 1.0);
             [$pos] = $spring->update(0.0, 0.0, 100.0);
             $this->assertSame(100.0, $pos, "REDUCE_MOTION={$on} must snap");
         }
+    }
+
+    /**
+     * SPR-09 (finding 007, ruling (a)): the env verdict is memoized on first
+     * probe — an env flip AFTER the process has already asked is invisible
+     * until the documented reset seam runs, the memo is process-wide (not
+     * per-spring), and the constructor override still beats both memo states
+     * in each direction without touching the probe.
+     */
+    public function testEnvProbeIsMemoizedUntilTheDocumentedResetSeamRuns(): void
+    {
+        putenv('REDUCE_MOTION=0');
+        Spring::resetReducedMotionProbe();
+
+        $spring = new Spring(1.0 / 60.0, 6.0, 1.0);
+        [$normalPos] = $spring->update(0.0, 0.0, 100.0);
+        $this->assertLessThan(100.0, $normalPos, 'first probe reads the env (off)');
+
+        putenv('REDUCE_MOTION=1');
+        [$frozenPos] = $spring->update(0.0, 0.0, 100.0);
+        $this->assertLessThan(100.0, $frozenPos, 'env flip after the first probe stays invisible — the memo is the contract');
+
+        $freshSpring = new Spring(1.0 / 60.0, 6.0, 1.0);
+        [$freshPos] = $freshSpring->update(0.0, 0.0, 100.0);
+        $this->assertLessThan(100.0, $freshPos, 'the memo is process-wide, not per-spring');
+
+        // The override is evaluated per call and beats the memo in BOTH
+        // directions: true snaps while the memoized answer is off...
+        [$overrideSnaps] = (new Spring(1.0 / 60.0, 6.0, 1.0, true))->update(0.0, 0.0, 100.0);
+        $this->assertSame(100.0, $overrideSnaps, 'override true wins over the memoized off');
+
+        Spring::resetReducedMotionProbe();
+        [$snappedPos] = $spring->update(0.0, 0.0, 100.0);
+        $this->assertSame(100.0, $snappedPos, 'the seam re-reads the env');
+
+        // ...and false animates while the re-read memo is on.
+        [$overrideRefuses] = (new Spring(1.0 / 60.0, 6.0, 1.0, false))->update(0.0, 0.0, 100.0);
+        $this->assertLessThan(100.0, $overrideRefuses, 'override false wins over the memoized on');
     }
 }
