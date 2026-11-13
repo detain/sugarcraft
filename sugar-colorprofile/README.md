@@ -464,8 +464,9 @@ keeps decoration) — with `Probe` adding the opt-in terminfo phase on top. Neit
 is wrong on its own terms — but anything that can observe both enums must not
 assume agreement, and should pin which ladder produced a given value.
 Reconciling the forks (a single enum, or a documented bridge between the two)
-is an owner-level ruling, recorded as follow-up #26 in
-`findings/plan_sugar-colorprofile.md`.
+is an owner-level ruling, tracked as follow-up #26 — status: OPEN (the audit
+record lives outside this repository; the divergence table above is its public
+data and must stay current while the ruling is pending).
 
 ## Architecture
 
