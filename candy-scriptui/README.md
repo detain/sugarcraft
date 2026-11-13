@@ -533,6 +533,31 @@ update arms, and those arms are exercised by the model tests.
   wrapper lives in the renderer core and has no per-terminal opt-out
   yet — filed upstream.)
 
+## Accessibility
+
+- **Selection never rides colour alone.** The cursor row is marked by
+  reverse video plus its leading cursor glyph (and a `✓` tick when a
+  multi-select item is picked); matched characters are emphasised with
+  bold. Those decorations are non-colour signals that survive any
+  colour-vision profile. They also ride a single capability gate: under
+  `--no-ansi`, `NO_COLOR`, or `TERM=dumb` every escape byte — reverse
+  and bold included — is dropped from the frame, and the cursor row
+  stays identifiable by its glyph alone.
+- **Screen readers and scrollback.** Pass `--no-alt-screen` to `choose`,
+  `filter`, `pager`, `write`, or `file` and the frames render inline in
+  the terminal's normal buffer instead of taking over the alternate
+  screen, so a transcript stays linear and inspectable. Diagnostics and
+  refusals always go to STDERR, never into the STDOUT payload a script
+  captures.
+- **Reduced motion is NOT honoured (known gap).** All twelve `spin`
+  styles animate on a fixed interval — there is no static/`none` style
+  and no environment gate for reduced-motion preference. If animated
+  output is a problem, run the command without `spin` and emit plain
+  progress via `log` instead.
+- **Keyboard complete.** Every interactive command is fully operable
+  from the keys in the Keyboard map above; no command arms mouse
+  tracking, so pointer input is never required (nor available).
+
 ## Untrusted content
 
 This tool's documented purpose is rendering THIRD-PARTY content, so the
