@@ -745,6 +745,13 @@ final class Theme
         if (!is_array($data)) {
             throw new \InvalidArgumentException(Lang::t('theme.json_object'));
         }
+        // A JSON list is not a schema either way: the flat reader would
+        // ignore the integer keys and the glamour router would find no
+        // `document`, both quietly yielding an all-plain Theme. The door
+        // refuses it as the non-object payload the README promises.
+        if (array_is_list($data)) {
+            throw new \InvalidArgumentException(Lang::t('theme.json_object'));
+        }
         if (StyleGuide::isGlamourSchema($data)) {
             return StyleGuide::fromDecoded($data)->theme();
         }

@@ -8,6 +8,7 @@ use PHPUnit\Framework\Attributes\WithoutErrorHandler;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Markdown\StyleGuide;
+use SugarCraft\Markdown\Theme;
 use SugarCraft\Style\Style;
 
 /**
@@ -316,6 +317,23 @@ final class StyleGuideTest extends TestCase
             StyleGuide::fromFile($path);
         } finally {
             @unlink($path);
+        }
+    }
+
+    /**
+     * SM-S10 door: a JSON array (list) is neither schema. Before the fix
+     * both readers accepted it and silently produced an all-plain Theme;
+     * the README promises InvalidArgumentException on a non-object payload.
+     */
+    public function testThemeFromJsonStringRefusesListPayloads(): void
+    {
+        foreach (['[1,2]', '[{"heading1":{}}]'] as $payload) {
+            try {
+                Theme::fromJsonString($payload);
+                self::fail('the list door must refuse: ' . $payload);
+            } catch (\InvalidArgumentException $e) {
+                self::assertStringContainsString('must decode to an object', $e->getMessage());
+            }
         }
     }
 }
