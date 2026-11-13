@@ -181,9 +181,11 @@ final class TableCommand extends Command
     /**
      * Parse a CSV/TSV blob into rows.
      *
-     * Single-character separators are handled via {@see fgetcsv()} over
-     * an in-memory stream so records with newlines inside quoted fields
-     * stay together (e.g. exported description columns containing line
+     * Single-character separators run through {@see parseCsv()}, a
+     * hand-rolled RFC-4180 reader with NO escape character (scriptui-30:
+     * byte-constant across PHP versions where fgetcsv's escape folds
+     * `\"` away) so records with newlines inside quoted fields stay
+     * together (e.g. exported description columns containing line
      * breaks). Multi-character separators fall back to a literal-split
      * implementation — there is no quoting convention for those, so each
      * physical line is one row.
@@ -212,27 +214,87 @@ final class TableCommand extends Command
             return $rows;
         }
 
-        // php://temp spills to disk past 8 MiB so a huge piped CSV cannot
-        // exhaust RAM the way php://memory would.
-        $stream = fopen('php://temp/maxmemory:8388608', 'r+');
-        if ($stream === false) {
-            return [];
-        }
-        try {
-            fwrite($stream, $raw);
-            rewind($stream);
-            $rows = [];
-            while (($row = fgetcsv($stream, 0, $separator, '"', '\\')) !== false) {
-                if ($row === [null]) {
-                    // fgetcsv returns [null] for blank lines.
+        // scriptui-30 (finding 040): the RFC lane used to run through
+        // fgetcsv(escape:'\\') — a NON-RFC fold: PHP turns `"a\"b"` into
+        // `a"b` while Go's encoding/csv (gum's compatibility bar) treats
+        // backslash as ordinary data, and PHP 8.4 deprecates the custom
+        // escape (removal in 9.0) — with failOnWarning="true" that is a
+        // standing CI red waiting for the matrix move. Hand-rolled here so
+        // the reading is BYTE-CONSTANT across every PHP the manifest
+        // admits: doubled quotes escape a quote, a lone backslash is just
+        // data, and after a closing quote the remainder of the segment
+        // rides verbatim (the lenient arm — Go would reject the input; a
+        // CLI printer must not).
+        return self::parseCsv($raw, $separator);
+    }
+
+    /**
+     * @return list<list<string>>
+     */
+    private static function parseCsv(string $raw, string $sep): array
+    {
+        $rows  = [];
+        $row   = [];
+        $field = '';
+        $quoted = false;
+        // Once a quoted field has CLOSED, further quotes inside the same
+        // segment are literal data (no silent re-open).
+        $closed = false;
+        $n = strlen($raw);
+        $i = 0;
+
+        $out = [];
+        while ($i < $n) {
+            $c = $raw[$i];
+            if ($quoted) {
+                if ($c === '"') {
+                    if ($i + 1 < $n && $raw[$i + 1] === '"') {
+                        $field .= '"';
+                        $i += 2;
+                        continue;
+                    }
+                    $quoted = false;
+                    $closed = true;
+                    $i++;
                     continue;
                 }
-                $rows[] = array_map(static fn($c) => (string) ($c ?? ''), $row);
+                $field .= $c;
+                $i++;
+                continue;
             }
-            return $rows;
-        } finally {
-            fclose($stream);
+            if ($c === '"' && !$closed && $field === '') {
+                $quoted = true;
+                $i++;
+                continue;
+            }
+            if ($c === $sep) {
+                $row[]  = $field;
+                $field  = '';
+                $closed = false;
+                $i++;
+                continue;
+            }
+            if ($c === "\r" || $c === "\n") {
+                $i += ($c === "\r" && $i + 1 < $n && $raw[$i + 1] === "\n") ? 2 : 1;
+                $row[]  = $field;
+                $field  = '';
+                $closed = false;
+                if ($row !== ['']) {
+                    $out[] = $row;
+                }
+                $row = [];
+                continue;
+            }
+            $field .= $c;
+            $i++;
         }
+        if ($field !== '' || $row !== []) {
+            $row[] = $field;
+            if ($row !== ['']) {
+                $out[] = $row;
+            }
+        }
+        return $out;
     }
 
     public static function parseBorder(string $name): ?Border
