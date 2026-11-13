@@ -102,14 +102,21 @@
   }
 
   /* ── Highlight match ────────────────────────────────────────────── */
+  /* Contract (SD-S04, SRVFE-001): ALWAYS returns a Node — callers
+     appendChild() the result. The two early paths used to hand back a
+     String, so an empty query, a space, or a symbol-bearing query like
+     "c++" threw a TypeError inside the shared handler and left the
+     results list permanently dead for the rest of the page. Raw text
+     inside a text node is literal by construction, matching the
+     fragment path below (no HTML-escaping needed on a Node). */
   function highlight(text, query) {
     if (!query.trim()) {
-      return escapeHtml(text);
+      return document.createTextNode(text);
     }
     // Validate query is a safe string before constructing regexp
     var trimmed = query.trim();
     if (!/^[\w\s-]+$/.test(trimmed)) {
-      return escapeHtml(text);
+      return document.createTextNode(text);
     }
     var escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     var safe = escapeHtml(text);
