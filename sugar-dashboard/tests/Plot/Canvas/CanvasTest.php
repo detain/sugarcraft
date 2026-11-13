@@ -7,12 +7,29 @@ namespace SugarCraft\Dashboard\Tests\Plot\Canvas;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Dashboard\Plot\Canvas\Canvas;
+use SugarCraft\Dashboard\Plot\Canvas\DrawingOps;
 
 /**
  * Tests for the 2D pixel drawing canvas.
  */
 final class CanvasTest extends TestCase
 {
+    /**
+     * D-96 (finding sugar-dashboard-189): DrawingOps::drawLine was a
+     * published-by-accident API broken by construction - it ASSIGNED the
+     * $setPixel closure to $canvas and only ever returned the last pixel
+     * write (or the raw closure itself when every pixel fell out of
+     * bounds). Zero callers in src/tests/examples/docs; the honest Bresenham
+     * route arrives with the D-89 single walker. This pin keeps a future
+     * resurrection from slipping back in unexamined.
+     */
+    public function testBrokenDrawLineApiStaysDeleted(): void
+    {
+        $this->assertFalse(
+            method_exists(DrawingOps::class, 'drawLine'),
+            'DrawingOps::drawLine was deleted for being broken by construction (finding 189); use the D-89 walker route'
+        );
+    }
     public function testNewFactory(): void
     {
         $c = Canvas::new(40, 20);
