@@ -57,7 +57,7 @@ final class RuneDoorGuardTest extends TestCase
     {
         $chart = LineChart::new([1, 2], 8, 2);
         $this->expectException(\InvalidArgumentException::class);
-        $chart->withLegendStyle('');
+        $chart->withLegendIndicator('');
     }
 
     public function testMarkLineListElementsAreTypedAtTheDoor(): void

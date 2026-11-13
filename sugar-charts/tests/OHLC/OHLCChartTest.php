@@ -127,7 +127,7 @@ final class OHLCChartTest extends TestCase
         $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
         $chart = OHLCChart::new([$bar], 6, 3)
             ->withLegend(true)
-            ->withLegendStyle('◆');
+            ->withLegendIndicator('◆');
         $this->assertSame('◆', $chart->legendIndicatorChar);
     }
 
@@ -151,7 +151,7 @@ final class OHLCChartTest extends TestCase
             ->withYLabel('Price $')
             ->withLegend(true)
             ->withLegendPosition(Position::Right)
-            ->withLegendStyle('●')
+            ->withLegendIndicator('●')
             ->withTitle('AAPL Daily');
 
         $this->assertSame('Trading Day', $chart->xLabel);
@@ -367,7 +367,7 @@ final class OHLCChartTest extends TestCase
             ->colors(null, null)
             ->legend(true)
             ->legendPos(Position::Top)
-            ->legendStyle('●')
+            ->legendIndicator('●')
             ->title('Test', Position::Bottom)
             ->xLabel('X')
             ->yLabel('Y')

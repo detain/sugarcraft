@@ -347,10 +347,23 @@ final class BarChart implements ChromeAccessors
         return $this->copy(legendPosition: $position);
     }
 
-    /** Customize legend indicator character. */
-    public function withLegendStyle(?string $indicatorChar = null): self
+    /**
+     * Customize the legend indicator glyph (one cell-wide rune). Passing
+     * null clears it back to the default bullet.
+     */
+    public function withLegendIndicator(?string $indicatorChar = null): self
     {
         return $this->copy(legendIndicatorChar: $indicatorChar === null ? null : Rune::cell($indicatorChar, 'legend indicator'), legendIndicatorCharSet: true);
+    }
+
+    /**
+     * @deprecated use {@see self::withLegendIndicator()}: the argument is
+     *             the indicator RUNE, not a style. Kept one minor as the
+     *             house alias window; REMOVED-IN 2.0.0.
+     */
+    public function withLegendStyle(?string $indicatorChar = null): self
+    {
+        return $this->withLegendIndicator($indicatorChar);
     }
 
     /** Set the chart title. */
@@ -411,7 +424,17 @@ final class BarChart implements ChromeAccessors
     public function barColor(?\Closure $fn): self    { return $this->withBarColor($fn); }
     public function legend(bool $on = true): self     { return $this->withLegend($on); }
     public function legendPos(Position $pos): self    { return $this->withLegendPosition($pos); }
-    public function legendStyle(?string $char): self  { return $this->withLegendStyle($char); }
+    /**
+     * Dual-form knob: bare `legendIndicator()` reads the rune, an argument
+     * (null clears) sets it via {@see withLegendIndicator()}.
+     */
+    public function legendIndicator(?string $char = null): string|self|null
+    {
+        return func_num_args() === 0 ? $this->legendIndicatorChar : $this->withLegendIndicator($char);
+    }
+
+    /** @deprecated use {@see self::legendIndicator()}; REMOVED-IN 2.0.0. */
+    public function legendStyle(?string $char): self { return $this->withLegendIndicator($char); }
     public function title(?string $t = null, Position $p = Position::Top): self { return $this->withTitle($t, $p); }
     /** Short-form alias for {@see withTitlePosition()} — Position-suffix deviates to `Pos`, mirroring `legendPos`. */
     public function titlePos(Position $pos): self     { return $this->withTitlePosition($pos); }

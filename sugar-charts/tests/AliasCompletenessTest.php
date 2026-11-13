@@ -134,7 +134,7 @@ final class AliasCompletenessTest extends TestCase
         // OHLCChart::withDojiColor added by CH-10 (sugar-charts-101 doji arm),
         // including every documented deviation. A count collapse here would
         // mean the reflection silently stopped seeing withers.
-        $this->assertSame(152, $checked, 'wither census count drifted from the documented 152');
+        $this->assertSame(157, $checked, 'wither census drifted from the documented 157 (152 plus the five CH-58 withLegendIndicator canonicals)');
         $this->assertGreaterThanOrEqual(5, $exception, 'documented alias deviations must all be present');
     }
 

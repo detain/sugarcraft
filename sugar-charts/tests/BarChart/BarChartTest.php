@@ -292,7 +292,7 @@ final class BarChartTest extends TestCase
     {
         $chart = BarChart::new([['a', 0.5]], 10, 3)
             ->withLegend(true)
-            ->withLegendStyle('◆');
+            ->withLegendIndicator('◆');
         $this->assertSame('◆', $chart->legendIndicatorChar);
     }
 
@@ -301,7 +301,7 @@ final class BarChartTest extends TestCase
         $chart = BarChart::new([['a', 0.5]], 10, 3)
             ->legend(true)
             ->legendPos(Position::Left)
-            ->legendStyle('●');
+            ->legendIndicator('●');
         $this->assertTrue($chart->showLegend);
         $this->assertSame(Position::Left, $chart->legendPosition);
         $this->assertSame('●', $chart->legendIndicatorChar);
@@ -351,7 +351,7 @@ final class BarChartTest extends TestCase
             ->withYLabel('Y Axis')
             ->withLegend(true)
             ->withLegendPosition(Position::Right)
-            ->withLegendStyle('█')
+            ->withLegendIndicator('█')
             ->withTitle('My Bar Chart')
             ->withTitlePosition(Position::Top);
 

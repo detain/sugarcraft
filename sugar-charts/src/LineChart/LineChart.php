@@ -500,13 +500,26 @@ final class LineChart extends Chart
         return $this->lineChartCopy(legendPosition: $position);
     }
 
-    /** Customize legend styling. */
-    public function withLegendStyle(?string $indicatorChar = null): self
+    /**
+     * Customize the legend indicator glyph (one cell-wide rune). Passing
+     * null clears it back to the default bullet.
+     */
+    public function withLegendIndicator(?string $indicatorChar = null): self
     {
         return $this->lineChartCopy(
             legendIndicatorChar: $indicatorChar === null ? null : Rune::cell($indicatorChar, 'legend indicator'),
             legendIndicatorCharSet: true,
         );
+    }
+
+    /**
+     * @deprecated use {@see self::withLegendIndicator()}: the argument is
+     *             the indicator RUNE, not a style. Kept one minor as the
+     *             house alias window; REMOVED-IN 2.0.0.
+     */
+    public function withLegendStyle(?string $indicatorChar = null): self
+    {
+        return $this->withLegendIndicator($indicatorChar);
     }
 
     /** Set the X-axis label (rendered at bottom). */

@@ -47,6 +47,36 @@ final class GetAliasWindowTest extends TestCase
         $this->assertNotSame($c, $c->animationProgress(1.0));
     }
 
+    /**
+     * CH-58 (sugar-charts-092): withLegendIndicator/legendIndicator are
+     * canonical; the style-named pair forwards to them on all five seats.
+     *
+     * @return list<array{0:object}>
+     */
+    public static function legendSeatProvider(): array
+    {
+        return [
+            'LineChart' => [LineChart::new([1.0, 2.0])],
+            'BarChart' => [\SugarCraft\Charts\BarChart\BarChart::new([['a', 1.0]])],
+            'Scatter' => [\SugarCraft\Charts\Scatter\Scatter::new()],
+            'OHLCChart' => [\SugarCraft\Charts\OHLC\OHLCChart::new([])],
+        ];
+    }
+
+    /** @dataProvider legendSeatProvider */
+    public function testLegendIndicatorCanonicalAndStyleForwarderAgree(object $c): void
+    {
+        $this->assertNull($c->legendIndicator());
+        $set = $c->withLegendIndicator('◆');
+        $this->assertSame('◆', $set->legendIndicator());
+        $this->assertEquals($set, $c->withLegendStyle('◆'));
+        $this->assertEquals($set, $c->legendStyle('◆'));
+        $this->assertNotSame($c, $c->legendIndicator('●'));
+        $this->assertSame('●', $c->legendIndicator('●')->legendIndicator());
+        // explicit null is a clear, not a bare read
+        $this->assertNull($set->legendIndicator(null)->legendIndicator());
+    }
+
     public function testHeatmapKnobPairsAgree(): void
     {
         $h = Heatmap::new([[1.0]])->withMonoRamp(true)->withAutoValueRange(false);
@@ -107,6 +137,15 @@ final class GetAliasWindowTest extends TestCase
             [Heatmap::class, 'getCellStyle'],
             [Heatmap::class, 'getMonoRamp'],
             [Heatmap::class, 'getAutoValueRange'],
+            [\SugarCraft\Charts\Chart\Chart::class, 'withLegendStyle'],
+            [\SugarCraft\Charts\Chart\Chart::class, 'legendStyle'],
+            [LineChart::class, 'withLegendStyle'],
+            [\SugarCraft\Charts\BarChart\BarChart::class, 'withLegendStyle'],
+            [\SugarCraft\Charts\BarChart\BarChart::class, 'legendStyle'],
+            [\SugarCraft\Charts\Scatter\Scatter::class, 'withLegendStyle'],
+            [\SugarCraft\Charts\Scatter\Scatter::class, 'legendStyle'],
+            [\SugarCraft\Charts\OHLC\OHLCChart::class, 'withLegendStyle'],
+            [\SugarCraft\Charts\OHLC\OHLCChart::class, 'legendStyle'],
             [Graph::class, 'getCirclePoints'],
             [Graph::class, 'getCirclePointsWithLimit'],
             [Graph::class, 'getFullCirclePoints'],

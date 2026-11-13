@@ -122,7 +122,7 @@ final class ChartTest extends TestCase
         $chart = TestChart::new(10, 3)
             ->legendItems([['label' => 'A', 'color' => 'red']])
             ->withLegend(true)
-            ->withLegendStyle('●');
+            ->withLegendIndicator('●');
         $out = $chart->view();
         $this->assertStringContainsString('●', $out);
     }

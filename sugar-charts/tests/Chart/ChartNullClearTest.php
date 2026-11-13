@@ -38,10 +38,10 @@ final class ChartNullClearTest extends TestCase
     public function testLineChartLegendIndicatorAndExtrasClear(): void
     {
         $c = LineChart::new([1.0, 2.0])
-            ->withLegendStyle('#')
+            ->withLegendIndicator('#')
             ->withTheme(Theme::dark())
             ->withCanvas(new \SugarCraft\Charts\Canvas\Canvas(20, 8));
-        $cleared = $c->withLegendStyle(null);
+        $cleared = $c->withLegendIndicator(null);
         $this->assertNull($cleared->legendIndicatorChar);
 
         $noTheme = $c->withTheme(null);
@@ -61,11 +61,11 @@ final class ChartNullClearTest extends TestCase
             ->withTitle('T')
             ->withXLabel('x')
             ->withYLabel('y')
-            ->withLegendStyle('#');
+            ->withLegendIndicator('#');
         $this->assertNull($c->withTitle(null)->title);
         $this->assertNull($c->withXLabel(null)->xLabel);
         $this->assertNull($c->withYLabel(null)->yLabel);
-        $this->assertNull($c->withLegendStyle(null)->legendIndicatorChar);
+        $this->assertNull($c->withLegendIndicator(null)->legendIndicatorChar);
 
         $fmt = $c->withDataLabelFormatter(fn (float $v): string => (string) $v);
         $this->assertNotNull($fmt->dataLabelFormatter);
@@ -78,11 +78,11 @@ final class ChartNullClearTest extends TestCase
             ->withTitle('T')
             ->withXLabel('x')
             ->withYLabel('y')
-            ->withLegendStyle('#');
+            ->withLegendIndicator('#');
         $this->assertNull($c->withTitle(null)->title);
         $this->assertNull($c->withXLabel(null)->xLabel);
         $this->assertNull($c->withYLabel(null)->yLabel);
-        $this->assertNull($c->withLegendStyle(null)->legendIndicatorChar);
+        $this->assertNull($c->withLegendIndicator(null)->legendIndicatorChar);
     }
 
     public function testOhlcNullClears(): void
@@ -92,11 +92,11 @@ final class ChartNullClearTest extends TestCase
             ->withTitle('T')
             ->withXLabel('x')
             ->withYLabel('y')
-            ->withLegendStyle('#');
+            ->withLegendIndicator('#');
         $this->assertNull($c->withTitle(null)->title);
         $this->assertNull($c->withXLabel(null)->xLabel);
         $this->assertNull($c->withYLabel(null)->yLabel);
-        $this->assertNull($c->withLegendStyle(null)->legendIndicatorChar);
+        $this->assertNull($c->withLegendIndicator(null)->legendIndicatorChar);
     }
 
     public function testClearedTitleRemovesItFromTheRender(): void

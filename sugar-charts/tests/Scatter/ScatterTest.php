@@ -140,7 +140,7 @@ final class ScatterTest extends TestCase
     {
         $chart = Scatter::new([[1, 4]], 10, 3)
             ->withLegend(true)
-            ->withLegendStyle('◆');
+            ->withLegendIndicator('◆');
         $this->assertSame('◆', $chart->legendIndicatorChar);
     }
 
@@ -149,7 +149,7 @@ final class ScatterTest extends TestCase
         $chart = Scatter::new([[1, 4]], 10, 3)
             ->legend(true)
             ->legendPos(Position::Left)
-            ->legendStyle('●');
+            ->legendIndicator('●');
         $this->assertTrue($chart->showLegend);
         $this->assertSame(Position::Left, $chart->legendPosition);
         $this->assertSame('●', $chart->legendIndicatorChar);
@@ -185,7 +185,7 @@ final class ScatterTest extends TestCase
             ->withYLabel('Y Axis')
             ->withLegend(true)
             ->withLegendPosition(Position::Right)
-            ->withLegendStyle('*')
+            ->withLegendIndicator('*')
             ->withTitle('My Scatter');
 
         $this->assertSame('X Axis', $chart->xLabel);
