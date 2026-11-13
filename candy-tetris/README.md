@@ -147,14 +147,14 @@ The versus strip teaches the table itself: its key rows are never budgeted
 out, and once a moment is earned the row carries the same award, `xN`
 combo and `B2B` tail the solo badges show. The `h` key-card overlay is a
 solo surface and deliberately inert here — the strip is already the full
-table. Hold works on your field, and the VS sidebar does paint your hold
+table. Hold works on your field, and the VS sidebar also shows your hold
 card — it carries an `(used)` cue while the slot is spent for the current
 drop. The computer's queue stays private by design: the strip shows its
 score, not its next piece.
 
 The computer opponent uses weighted heuristics (board height, holes, gaps,
 lines) to pick the best move available to it — a one-piece greedy search
-under its weights, not provably optimal play. The plan and the step machine
+scored by its weights, not provably optimal play. The plan and the step machine
 that walks it can disagree about a jammed board: a plan leg that never
 becomes executable counts a stall, and past the ceiling (eight re-evaluations)
 the piece locks where it rests — a resting piece always fits, so the duel
@@ -252,13 +252,13 @@ reason and the final score. Press **r** to
 start a completely new game — the score does not carry over (it embeds the
 level, so a restarted board falls at level-0 gravity again). **q** quits.
 
-The record survives the exit. A finished game settles into
-`$XDG_CONFIG_HOME/candy-tetris/scores.json` (falling back to
+The record outlives the run. When a game finishes, the settlement is
+written to `$XDG_CONFIG_HOME/candy-tetris/scores.json` (falling back to
 `~/.config/candy-tetris/scores.json`): the solo best score, how many solo
 games ended, and a win/loss tally for versus matches. The banner reads the
-best against your final score, says how many games the best came out of,
-and flags `new best!` when the table top was
-beat. Versus games never touch the solo best — the two players keep
+stored best against your final score, says how many games the best came out
+of, and flags `new best!` when you beat the stored best. Versus games never
+touch the solo best — the two players keep
 separate boards and tallies by design, and versus results land only in the
 win/loss tally. The file is written atomically at mode 0600 and merged
 against the disk on save, so two terminals settling at once lose neither
@@ -267,9 +267,9 @@ and the game starts fresh without zeroing the old file; a save refused
 mid-session is announced on the frame itself, through the same notice band
 the clear and level-up moments ride — never raw text scribbled across a
 live screen. A launch with no resolvable HOME writes no
-file and shows no best — byte-identical to the pre-record game.
+file and shows no best — it plays exactly as a run with no record present.
 
-There is still no saved state: only the record persists, so **r** restarts
+The game saves no in-progress state: only the record persists, so **r** restarts
 from a clean board and quitting mid-drop loses the run (only the record of
 *finished* games survives — a confirmed live **r** surrender counts as
 unfinished, though the fresh board takes over immediately).
@@ -364,7 +364,8 @@ are filled and at least one sits on the nub side, **or** when three corners are
 filled but only one nub-side corner is engaged — the classic kick-out shape,
 which competitive rules deny the full award. Two filled corners with no
 nub-side corner score nothing — the spin never engaged the slot. A mini that
-clears two or more lines is promoted to a full T-Spin (difficulty parity).
+clears two or more lines is promoted to a full T-Spin: the two-line mini
+clears as much as the guideline's full-spin double.
 
 **Last-input rule:** the flag is `Game::$lastActionWasRotation` — set by
 rotate, cleared by move/soft drop/hard drop; gravity steps leave it alone. The
@@ -428,10 +429,9 @@ the row cannot fit — `candy-tetris-086`).
 - **Kick table**: `src/Rotation/SrsKickTable.php` transcribes the published
   SRS offsets verbatim (spec `+y` = up); the only sign conversion to
   board coordinates lives at `Piece::rotationsWithKicks`. Two tables ship,
-  JLSTZ and I; the O answers the JLSTZ list through the match's default
-  arm, which is behaviourally silent — every O rotation state is identical,
-  so the first candidate `(0, 0)` always fits and no kick is ever applied,
-  matching the spec's no-kick O. The 180° entries are the published naive
+  JLSTZ and I; the O piece is looked up in the JLSTZ table, and every O
+  rotation state is identical, so the first candidate `(0, 0)` always fits
+  and the kick list never fires — the spec's no-kick O. The 180° entries are the published naive
   offsets only: a half-turn that would need a wall kick is refused, not
   invented.
 - **Scoring**: `src/Scoring/TSpin.php` and `src/Score.php` are pure
