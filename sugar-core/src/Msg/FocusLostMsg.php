@@ -13,6 +13,11 @@ use SugarCraft\Core\Msg;
  * instead; an `instanceof FocusLostMsg` branch is dead code in live
  * programs. The class remains because external replay and test code still
  * constructs it.
+ *
+ * @deprecated sc-24: dead on the live input path; the reader emits
+ *   {@see BlurMsg} instead. Scheduled for removal once the external
+ *   replay/test constructors (candy-vcr BuiltinSerializer, candy-code
+ *   HandlesRunControl) flip to BlurMsg — those flips are riders.
  */
 final class FocusLostMsg implements Msg
 {
