@@ -11,4 +11,4 @@ namespace SugarCraft\Widgets\Timer;
  *             silently swallowed. The alias keeps old `use` lines
  *             resolving; new code names `TimerTick`. Removal at 2.0.
  */
-class_alias('SugarCraft\Widgets\Timer\TimerTick', 'SugarCraft\Widgets\Timer\TickMsg');
+class_alias(\SugarCraft\Widgets\Timer\TimerTick::class, 'SugarCraft\Widgets\Timer\TickMsg');

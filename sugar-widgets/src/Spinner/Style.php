@@ -7,4 +7,4 @@ namespace SugarCraft\Widgets\Spinner;
 /**
  * @deprecated Use SugarCraft\Forms\Spinner\Style
  */
-class_alias('SugarCraft\Forms\Spinner\Style', 'SugarCraft\Widgets\Spinner\Style');
+class_alias(\SugarCraft\Forms\Spinner\Style::class, 'SugarCraft\Widgets\Spinner\Style');

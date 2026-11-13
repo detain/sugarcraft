@@ -7,4 +7,4 @@ namespace SugarCraft\Widgets\FilePicker;
 /**
  * @deprecated Use SugarCraft\Forms\FilePicker\FilePicker
  */
-class_alias('SugarCraft\Forms\FilePicker\FilePicker', 'SugarCraft\Widgets\FilePicker\FilePicker');
+class_alias(\SugarCraft\Forms\FilePicker\FilePicker::class, 'SugarCraft\Widgets\FilePicker\FilePicker');

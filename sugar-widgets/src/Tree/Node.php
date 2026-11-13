@@ -45,7 +45,17 @@ final class Node
     /** @return self with expansion flipped or set to `$on`. */
     public function withExpanded(bool $on): self
     {
-        return new self($this->label, $this->value, $this->children, $on);
+        return $this->copy(children: $this->children, expanded: $on);
+    }
+
+    /**
+     * The construction funnel (W-32): every copy of an existing node
+     * routes through here, so `new self(` lives in the ctor, the
+     * factories, and this one method only.
+     */
+    private function copy(array $children, bool $expanded): self
+    {
+        return new self($this->label, $this->value, $children, $expanded);
     }
 
     /**
@@ -54,7 +64,7 @@ final class Node
      */
     public function withChildren(array $children): self
     {
-        return new self($this->label, $this->value, array_values($children), $this->expanded);
+        return $this->copy(array_values($children), $this->expanded);
     }
 
     /** True iff this node has no children (a leaf). */

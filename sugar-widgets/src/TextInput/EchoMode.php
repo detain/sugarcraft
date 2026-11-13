@@ -7,4 +7,4 @@ namespace SugarCraft\Widgets\TextInput;
 /**
  * @deprecated Use SugarCraft\Forms\TextInput\EchoMode
  */
-class_alias('SugarCraft\Forms\TextInput\EchoMode', 'SugarCraft\Widgets\TextInput\EchoMode');
+class_alias(\SugarCraft\Forms\TextInput\EchoMode::class, 'SugarCraft\Widgets\TextInput\EchoMode');

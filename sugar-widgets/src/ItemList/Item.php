@@ -7,4 +7,4 @@ namespace SugarCraft\Widgets\ItemList;
 /**
  * @deprecated Use SugarCraft\Forms\ItemList\Item
  */
-class_alias('SugarCraft\Forms\ItemList\Item', 'SugarCraft\Widgets\ItemList\Item');
+class_alias(\SugarCraft\Forms\ItemList\Item::class, 'SugarCraft\Widgets\ItemList\Item');

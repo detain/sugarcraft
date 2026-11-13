@@ -64,7 +64,7 @@ final class Stopwatch implements Model
             throw new \TypeError('TimerTick fed to Stopwatch::update(); ticks are per-widget.');
         }
         if ($msg instanceof StopwatchTick && $msg->id === $this->id && $msg->epoch === $this->epoch && $this->running) {
-            $next = new self($this->elapsed + $this->interval, $this->interval, true, $this->id, $this->epoch);
+            $next = $this->copy(elapsed: $this->elapsed + $this->interval);
             return [$next, $next->tick()];
         }
         return [$this, null];
@@ -106,18 +106,18 @@ final class Stopwatch implements Model
         if ($this->running) {
             return [$this, null];
         }
-        $next = new self($this->elapsed, $this->interval, true, $this->id, $this->epoch + 1);
+        $next = $this->copy(running: true, epoch: $this->epoch + 1);
         return [$next, $next->tick()];
     }
 
     public function stop(): self
     {
-        return new self($this->elapsed, $this->interval, false, $this->id, $this->epoch);
+        return $this->copy(running: false);
     }
 
     public function reset(): self
     {
-        return new self(0.0, $this->interval, false, $this->id, $this->epoch);
+        return $this->copy(elapsed: 0.0, running: false);
     }
 
     /**
@@ -164,7 +164,27 @@ final class Stopwatch implements Model
         if (!is_finite($interval) || $interval <= 0.0) {
             throw new \InvalidArgumentException(Lang::t('stopwatch.interval_positive'));
         }
-        return new self($this->elapsed, $interval, $this->running, $this->id, $this->epoch);
+        return $this->copy(interval: $interval);
+    }
+
+    /**
+     * The construction funnel (W-32): every copy of an existing state
+     * routes through here so `new self(` lives in the ctor, the new()
+     * factory, and this one method only.
+     */
+    private function copy(
+        ?float $elapsed = null,
+        ?float $interval = null,
+        ?bool $running = null,
+        ?int $epoch = null,
+    ): self {
+        return new self(
+            $elapsed  ?? $this->elapsed,
+            $interval ?? $this->interval,
+            $running  ?? $this->running,
+            $this->id,
+            $epoch    ?? $this->epoch,
+        );
     }
 
     private function tick(): \Closure

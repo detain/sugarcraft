@@ -24,6 +24,16 @@ final readonly class SortState
     {
         $criteria = $this->criteria;
         $criteria[] = [$column, $direction];
+        return $this->withCriteria($criteria);
+    }
+
+    /**
+     * The construction funnel (W-32): copies of an existing state route
+     * through here; `new self(` lives in the ctor, empty(), and this one
+     * method only.
+     */
+    private function withCriteria(array $criteria): self
+    {
         return new self($criteria);
     }
 
@@ -47,7 +57,7 @@ final readonly class SortState
             $this->criteria,
             static fn(array $c): bool => $c[0] < $columnCount,
         ));
-        return count($kept) === count($this->criteria) ? $this : new self($kept);
+        return count($kept) === count($this->criteria) ? $this : $this->withCriteria($kept);
     }
 
     public function isEmpty(): bool

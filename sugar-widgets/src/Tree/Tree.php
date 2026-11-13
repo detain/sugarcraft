@@ -147,19 +147,12 @@ final class Tree implements Model
         ?string $collapsedGlyph = null,
         ?string $leafGlyph = null,
     ): self {
-        return new self(
-            $this->roots,
-            $this->cursor,
-            $this->offset,
-            $this->width,
-            $this->height,
-            $this->focused,
-            $cursorPrefix ?? $this->cursorPrefix,
-            $unselectedPrefix ?? $this->unselectedPrefix,
-            $expandedGlyph ?? $this->expandedGlyph,
-            $collapsedGlyph ?? $this->collapsedGlyph,
-            $leafGlyph ?? $this->leafGlyph,
-            $this->unfocusedSelection,
+        return $this->copy(
+            cursorPrefix: $cursorPrefix,
+            unselectedPrefix: $unselectedPrefix,
+            expandedGlyph: $expandedGlyph,
+            collapsedGlyph: $collapsedGlyph,
+            leafGlyph: $leafGlyph,
         );
     }
 
@@ -169,20 +162,7 @@ final class Tree implements Model
      */
     public function withUnfocusedSelection(?Style $style): self
     {
-        return new self(
-            $this->roots,
-            $this->cursor,
-            $this->offset,
-            $this->width,
-            $this->height,
-            $this->focused,
-            $this->cursorPrefix,
-            $this->unselectedPrefix,
-            $this->expandedGlyph,
-            $this->collapsedGlyph,
-            $this->leafGlyph,
-            $style ?? Style::new()->dim(),
-        );
+        return $this->copy(unfocusedSelection: $style ?? Style::new()->dim());
     }
 
     /** Construct a tree from variadic root nodes. */
@@ -466,7 +446,8 @@ final class Tree implements Model
         return $this->copy(cursor: $cursor, offset: $offset);
     }
 
-    /** @internal builder helper preserving readonly props */
+    /** @internal builder helper preserving readonly props — the single
+     *  copy funnel of this class (W-32); every derived state routes here. */
     private function copy(
         ?array $roots = null,
         ?int $cursor = null,
@@ -474,6 +455,12 @@ final class Tree implements Model
         ?int $width = null,
         ?int $height = null,
         ?bool $focused = null,
+        ?string $cursorPrefix = null,
+        ?string $unselectedPrefix = null,
+        ?string $expandedGlyph = null,
+        ?string $collapsedGlyph = null,
+        ?string $leafGlyph = null,
+        ?Style $unfocusedSelection = null,
     ): self {
         return new self(
             $roots   ?? $this->roots,
@@ -482,12 +469,12 @@ final class Tree implements Model
             $width   ?? $this->width,
             $height  ?? $this->height,
             $focused ?? $this->focused,
-            $this->cursorPrefix,
-            $this->unselectedPrefix,
-            $this->expandedGlyph,
-            $this->collapsedGlyph,
-            $this->leafGlyph,
-            $this->unfocusedSelection,
+            $cursorPrefix ?? $this->cursorPrefix,
+            $unselectedPrefix ?? $this->unselectedPrefix,
+            $expandedGlyph ?? $this->expandedGlyph,
+            $collapsedGlyph ?? $this->collapsedGlyph,
+            $leafGlyph ?? $this->leafGlyph,
+            $unfocusedSelection ?? $this->unfocusedSelection,
         );
     }
 

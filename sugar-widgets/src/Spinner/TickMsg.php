@@ -7,4 +7,4 @@ namespace SugarCraft\Widgets\Spinner;
 /**
  * @deprecated Use SugarCraft\Forms\Spinner\TickMsg
  */
-class_alias('SugarCraft\Forms\Spinner\TickMsg', 'SugarCraft\Widgets\Spinner\TickMsg');
+class_alias(\SugarCraft\Forms\Spinner\TickMsg::class, 'SugarCraft\Widgets\Spinner\TickMsg');

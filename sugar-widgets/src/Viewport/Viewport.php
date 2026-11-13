@@ -7,4 +7,4 @@ namespace SugarCraft\Widgets\Viewport;
 /**
  * @deprecated Use SugarCraft\Forms\Viewport\Viewport
  */
-class_alias('SugarCraft\Forms\Viewport\Viewport', 'SugarCraft\Widgets\Viewport\Viewport');
+class_alias(\SugarCraft\Forms\Viewport\Viewport::class, 'SugarCraft\Widgets\Viewport\Viewport');

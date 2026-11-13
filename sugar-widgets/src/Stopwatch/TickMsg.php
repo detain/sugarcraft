@@ -10,4 +10,4 @@ namespace SugarCraft\Widgets\Stopwatch;
  *             collision story. The alias keeps old `use` lines resolving;
  *             new code names `StopwatchTick`. Removal at 2.0.
  */
-class_alias('SugarCraft\Widgets\Stopwatch\StopwatchTick', 'SugarCraft\Widgets\Stopwatch\TickMsg');
+class_alias(\SugarCraft\Widgets\Stopwatch\StopwatchTick::class, 'SugarCraft\Widgets\Stopwatch\TickMsg');
