@@ -279,44 +279,56 @@ final class Game implements Model
         return $this->frameCols < self::MIN_COLS || $this->frameRows < self::MIN_ROWS;
     }
 
+    /**
+     * flappy-06 (finding -006): the field list lives HERE once. The eight
+     * hand-copied `new self(...)` sites could silently drop a field added
+     * later — the m30 frame-reset bug (restart tripping through start() and
+     * losing the live viewport) is exactly that class of defect. Every
+     * transition builder now routes through mutate() (canonical
+     * `candy-tetris` Game::mutate pattern): the `??` arms inherit, and the
+     * nullable fields use `array_key_exists` so an explicit null can still be
+     * SET. The AGENTS.md sentinel-pair variant is deliberately not adopted:
+     * adding `bool $XSet` params would widen the public constructor beyond a
+     * pure structural change, and this file's nulls are load-bearing values
+     * (colorProfile null = not yet reported, configDir null = derive), so the
+     * explicit-null arms carry the same law without the signature churn.
+     *
+     * `start()` and the r-arm's fresh board keep an explicit constructor on
+     * purpose: they RESET state, they do not carry it.
+     *
+     * @param array<string, mixed> $changes
+     */
+    private function mutate(array $changes): self
+    {
+        return new self(
+            bird: $changes['bird'] ?? $this->bird,
+            pipes: $changes['pipes'] ?? $this->pipes,
+            score: $changes['score'] ?? $this->score,
+            crashed: $changes['crashed'] ?? $this->crashed,
+            tickIndex: $changes['tickIndex'] ?? $this->tickIndex,
+            highScores: $changes['highScores'] ?? $this->highScores,
+            newRecord: $changes['newRecord'] ?? $this->newRecord,
+            started: $changes['started'] ?? $this->started,
+            // The live PRNG cell rides the lineage (tetris re-attaches its
+            // stream the same way): a mutation must never re-roll the dice.
+            rand: $this->rand,
+            configDir: array_key_exists('configDir', $changes) ? $changes['configDir'] : $this->configDir,
+            frameCols: $changes['frameCols'] ?? $this->frameCols,
+            frameRows: $changes['frameRows'] ?? $this->frameRows,
+            colorProfile: array_key_exists('colorProfile', $changes) ? $changes['colorProfile'] : $this->colorProfile,
+        );
+    }
+
     /** A new viewport from a WindowSizeMsg — the model never re-frames itself. */
     private function withFrameSize(int $cols, int $rows): self
     {
-        return new self(
-            bird: $this->bird,
-            pipes: $this->pipes,
-            score: $this->score,
-            crashed: $this->crashed,
-            tickIndex: $this->tickIndex,
-            highScores: $this->highScores,
-            newRecord: $this->newRecord,
-            started: $this->started,
-            rand: $this->rand,
-            configDir: $this->configDir,
-            frameCols: $cols,
-            frameRows: $rows,
-            colorProfile: $this->colorProfile,
-        );
+        return $this->mutate(['frameCols' => $cols, 'frameRows' => $rows]);
     }
 
     /** The Program's detected colour capability (M7/M8). */
     private function withColorProfile(ColorProfile $profile): self
     {
-        return new self(
-            bird: $this->bird,
-            pipes: $this->pipes,
-            score: $this->score,
-            crashed: $this->crashed,
-            tickIndex: $this->tickIndex,
-            highScores: $this->highScores,
-            newRecord: $this->newRecord,
-            started: $this->started,
-            rand: $this->rand,
-            configDir: $this->configDir,
-            frameCols: $this->frameCols,
-            frameRows: $this->frameRows,
-            colorProfile: $profile,
-        );
+        return $this->mutate(['colorProfile' => $profile]);
     }
 
     /**
@@ -337,21 +349,7 @@ final class Game implements Model
         if (count($scores) > self::MAX_HIGH_SCORES) {
             $scores = array_values(array_slice($scores, -self::MAX_HIGH_SCORES));
         }
-        return new self(
-            bird: $this->bird,
-            pipes: $this->pipes,
-            score: $this->score,
-            crashed: $this->crashed,
-            tickIndex: $this->tickIndex,
-            highScores: $scores,
-            newRecord: true,
-            started: $this->started,
-            rand: $this->rand,
-            configDir: $this->configDir,
-            frameCols: $this->frameCols,
-            frameRows: $this->frameRows,
-            colorProfile: $this->colorProfile,
-        );
+        return $this->mutate(['highScores' => $scores, 'newRecord' => true]);
     }
 
     /**
@@ -539,38 +537,18 @@ final class Game implements Model
             }
         }
 
-        return new self(
-            bird: $bird,
-            pipes: $pipes,
-            score: $score,
-            crashed: $crashed,
-            tickIndex: $tick,
-            highScores: $this->highScores,
-            started: $this->started,
-            rand: $this->rand,
-            configDir: $this->configDir,
-            frameCols: $this->frameCols,
-            frameRows: $this->frameRows,
-            colorProfile: $this->colorProfile,
-        );
+        return $this->mutate([
+            'bird' => $bird,
+            'pipes' => $pipes,
+            'score' => $score,
+            'crashed' => $crashed,
+            'tickIndex' => $tick,
+        ]);
     }
 
     private function withBird(Bird $b): self
     {
-        return new self(
-            bird: $b,
-            pipes: $this->pipes,
-            score: $this->score,
-            crashed: $this->crashed,
-            tickIndex: $this->tickIndex,
-            highScores: $this->highScores,
-            started: $this->started,
-            rand: $this->rand,
-            configDir: $this->configDir,
-            frameCols: $this->frameCols,
-            frameRows: $this->frameRows,
-            colorProfile: $this->colorProfile,
-        );
+        return $this->mutate(['bird' => $b]);
     }
 
     /** First flap arms the run (M10): the ready board becomes live. */
@@ -579,20 +557,7 @@ final class Game implements Model
         if ($this->started === true) {
             return $this;
         }
-        return new self(
-            bird: $this->bird,
-            pipes: $this->pipes,
-            score: $this->score,
-            crashed: $this->crashed,
-            tickIndex: $this->tickIndex,
-            highScores: $this->highScores,
-            started: true,
-            rand: $this->rand,
-            configDir: $this->configDir,
-            frameCols: $this->frameCols,
-            frameRows: $this->frameRows,
-            colorProfile: $this->colorProfile,
-        );
+        return $this->mutate(['started' => true]);
     }
 
     /** Deferred leaderboard write (M18): the crash path and the settling

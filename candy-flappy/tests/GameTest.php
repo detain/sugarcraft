@@ -7,7 +7,10 @@ namespace SugarCraft\Flappy\Tests;
 use SugarCraft\Core\BatchMsg;
 use SugarCraft\Core\InputReader;
 use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\ColorProfileMsg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\WindowSizeMsg;
+use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Flappy\Bird;
 use SugarCraft\Flappy\Game;
 use SugarCraft\Flappy\Pipe;
@@ -218,6 +221,90 @@ final class GameTest extends TestCase
         $sentinel = static fn(int $max): int => 42;
         $g = Game::start($sentinel, $this->hermeticConfigDir());
         $this->assertSame($sentinel, $g->rand());
+    }
+
+    /**
+     * flappy-06 (finding -006): every transition builder must thread the
+     * WHOLE field list through mutate(). This is the structural law that
+     * kills the m30 class of bug — a hand-copied `new self(...)` silently
+     * forgetting one field. The probe board below carries a distinct value
+     * in EVERY slot; each transition asserts the slots it must not touch,
+     * newRecord included (the pre-06 advance/withBird/withStarted omitted
+     * it and were only incidentally green because no reachable live board
+     * ever arrives there with a record flagged).
+     */
+    public function testMutateRoundTripPreservesEveryFieldThroughEachTransition(): void
+    {
+        $rand = static fn(int $max): int => $max;
+        $configDir = new \ReflectionProperty(Game::class, 'configDir');
+        $board = new Game(
+            bird: Bird::spawn(Game::BIRD_COL, 5.0),
+            pipes: [new Pipe(20, 9, 5)],
+            score: 5,
+            crashed: false,
+            tickIndex: 7,
+            highScores: [3, 9],
+            newRecord: true,
+            started: true,
+            rand: $rand,
+            configDir: '/tmp/flappy-mutate-probe',
+            frameCols: 100,
+            frameRows: 40,
+            colorProfile: ColorProfile::Ansi256,
+        );
+
+        // Slots no transition below may move: keyed by property name.
+        // $skip names the slots THAT transition is allowed to change.
+        $inherited = static function (Game $next, array $skip) use ($board, $configDir): void {
+            foreach ([
+                'score' => $board->score,
+                'crashed' => $board->crashed,
+                'tickIndex' => $board->tickIndex,
+                'highScores' => $board->highScores,
+                'newRecord' => $board->newRecord,
+                'started' => $board->started,
+                'frameCols' => $board->frameCols,
+                'frameRows' => $board->frameRows,
+                'colorProfile' => $board->colorProfile,
+            ] as $field => $want) {
+                if (in_array($field, $skip, true)) {
+                    continue;
+                }
+                self::assertSame($want, $next->$field, "mutate() dropped {$field}");
+            }
+            if (!in_array('pipes', $skip, true)) {
+                self::assertSame($board->pipes, $next->pipes, 'mutate() re-rolled the pipes');
+            }
+            self::assertSame($board->rand(), $next->rand(), 'mutate() re-rolled the PRNG');
+            self::assertSame($configDir->getValue($board), $configDir->getValue($next), 'mutate() dropped configDir');
+        };
+
+        [$windowed, ] = $board->update(new WindowSizeMsg(120, 50));
+        $this->assertSame([120, 50], [$windowed->frameCols, $windowed->frameRows]);
+        $this->assertSame($board->bird, $windowed->bird);
+        $inherited($windowed, ['frameCols', 'frameRows']);
+
+        [$profiled, ] = $board->update(new ColorProfileMsg(ColorProfile::TrueColor));
+        $this->assertSame(ColorProfile::TrueColor, $profiled->colorProfile);
+        $inherited($profiled, ['colorProfile']);
+
+        // A tick legitimately evolves bird/pipes/score/tickIndex — the
+        // assertion that matters here is the CARRIAGE of everything else,
+        // newRecord first among them (the thread 06 makes structural).
+        [$ticked, ] = $board->update(new TickMsg());
+        $this->assertNotSame($board->bird, $ticked->bird);
+        $this->assertSame(8, $ticked->tickIndex);
+        $this->assertTrue($ticked->newRecord);
+        $inherited($ticked, ['score', 'crashed', 'tickIndex', 'pipes']);
+
+        [$flapped, ] = $board->update(new KeyMsg(KeyType::Space, ''));
+        $this->assertNotSame($board->bird, $flapped->bird);
+        $inherited($flapped, []);
+
+        $merged = $board->withHighScore(12);
+        $this->assertSame([3, 9, 12], $merged->highScores);
+        $this->assertTrue($merged->newRecord);
+        $inherited($merged, ['highScores']);
     }
 
     public function testScoresAreSeededViaStart(): void
