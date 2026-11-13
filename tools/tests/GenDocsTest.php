@@ -286,6 +286,54 @@ final class GenDocsTest extends TestCase
     // Generation
     // -----------------------------------------------------------------
 
+    public function testAWriteFailureExitsTwoNamingThePath(): void
+    {
+        // RT-14 (014): a faulted docs/ still printed "generated N file(s)"
+        // and exit 0 - the generate leg's CI pass was fictional, and since
+        // --check is a DIFFERENT invocation nothing ever caught it.
+        if (0 === \posix_geteuid()) {
+            self::markTestSkipped('chmod 000 does not block root');
+        }
+
+        $root = $this->makeFixtureRoot();
+        \chmod("$root/docs/lib", 0o000);
+
+        try {
+            $result = $this->runScript($root);
+            $this->assertSame(2, $result['exit'], $result['output']);
+            $this->assertStringContainsString('gen-docs: cannot write', $result['output']);
+            $this->assertStringContainsString('fixture-alpha.html', $result['output']);
+        } finally {
+            \chmod("$root/docs/lib", 0o755);
+        }
+    }
+
+    public function testARequiredCountShapeRetypedOutOfProseFailsCheckNotSilentlyVanishes(): void
+    {
+        // RT-14 (016): prose a patcher no longer matches used to be a
+        // permanent silent loss - the token stopped being owned while
+        // --check kept passing (an unmatchable pattern rewrites nothing,
+        // so page and generated output agreed).
+        $root = $this->makeFixtureRoot();
+        $this->assertSame(0, $this->runScript($root)['exit'], 'seed generate');
+
+        $index = "$root/docs/index.html";
+        $html = (string) \file_get_contents($index);
+        $mutated = \str_replace('TUI ecosystem —', 'TUI experience —', $html);
+        $this->assertNotSame($html, $mutated, 'the fixture anchor drifted');
+        \file_put_contents($index, $mutated);
+
+        $check = $this->runScript($root, ['--check']);
+        $this->assertSame(1, $check['exit'], $check['output']);
+        $this->assertStringContainsString("count shape 'hero-prose-spelled-out' matched nothing", $check['output']);
+
+        // Generate mode keeps the advisory (not a hard stop), and it NAMES
+        // the vanished shape.
+        $generate = $this->runScript($root);
+        $this->assertSame(0, $generate['exit'], $generate['output']);
+        $this->assertStringContainsString("advisory: index.html count shape 'hero-prose-spelled-out' matched nothing", $generate['output']);
+    }
+
     public function testGenerationWritesOnePagePerDataSlugAndReportsTheMatchupsSplit(): void
     {
         $root = $this->makeFixtureRoot();

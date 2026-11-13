@@ -145,7 +145,8 @@ const USAGE = <<<'TXT'
     Exit codes:
       0  Nothing to do, or the requested work succeeded
       1  --check found a page that differs from what the data would generate
-      2  Bad usage, or the monorepo root could not be resolved
+      2  Bad usage, the monorepo root could not be resolved, or a
+         generated write failed
     TXT;
 
 // --help IS ANSWERED BEFORE THE ROOT IS RESOLVED, deliberately: the text below
@@ -231,7 +232,10 @@ foreach ($slugs as $slug) {
         continue;
     }
 
-    file_put_contents($target, $html);
+    if (file_put_contents($target, $html) === false) {
+        fwrite(STDERR, "gen-docs: cannot write $target\n");
+        exit(2);
+    }
     $written++;
 }
 
@@ -251,7 +255,10 @@ foreach ($stubs as $old => $final) {
         continue;
     }
 
-    file_put_contents($stubPath, $stubHtml);
+    if (file_put_contents($stubPath, $stubHtml) === false) {
+        fwrite(STDERR, "gen-docs: cannot write $stubPath\n");
+        exit(2);
+    }
     $written++;
 }
 
@@ -263,19 +270,38 @@ foreach ($stubs as $old => $final) {
 // shape a page does not carry are no-ops there. The patch is idempotent: it
 // matches count POSITIONS, not specific values, so a second run is a no-op and
 // --check catches any hand-edit that reintroduces drift.
-foreach ([$index, "$docs/libraries.html", "$docs/apps.html"] as $counted) {
+// The shapes each page provably carries (measured repo-tooling RT-14,
+// 2026-11-12 - every one of these matches today on both the real tree and
+// the GenDocsTest fixtures). A required shape that stops matching means a
+// hand-edit moved the prose off the token the generator owns.
+$indexShapes = ['numerals-libraries-and-apps', 'numeral-packages-total', 'hero-prose-spelled-out', 'stat-libraries', 'stat-apps', 'h2-libraries', 'h2-apps'];
+$libraryShapes = ['numerals-libraries-and-apps', 'numeral-packages-total', 'h2-libraries'];
+$appsShapes = ['numerals-libraries-and-apps', 'numeral-packages-total', 'h2-apps'];
+foreach ([$index => $indexShapes, "$docs/libraries.html" => $libraryShapes, "$docs/apps.html" => $appsShapes] as $counted => $requiredShapes) {
     if (!is_file($counted)) {
         continue;
     }
     $currentCounts = (string) file_get_contents($counted);
-    $patchedCounts = patch_index_counts($currentCounts, $nLib, $nApp);
+    $zeroHits = [];
+    $patchedCounts = patch_index_counts($currentCounts, $nLib, $nApp, $requiredShapes, $zeroHits);
+    foreach ($zeroHits as $shape) {
+        if ($mode === '--check') {
+            fwrite(STDERR, 'drift: ' . basename((string) $counted) . " count shape '$shape' matched nothing - prose moved off the token the generator owns\n");
+            $drift++;
+        } else {
+            fwrite(STDERR, "advisory: " . basename((string) $counted) . " count shape '$shape' matched nothing\n");
+        }
+    }
     if ($mode === '--check') {
         if ($currentCounts !== $patchedCounts) {
             fwrite(STDERR, 'drift: ' . basename($counted) . " counts differ from computed $nLib/$nApp\n");
             $drift++;
         }
     } elseif ($currentCounts !== $patchedCounts) {
-        file_put_contents($counted, $patchedCounts);
+        if (file_put_contents($counted, $patchedCounts) === false) {
+            fwrite(STDERR, "gen-docs: cannot write $counted\n");
+            exit(2);
+        }
         $written++;
     }
 }
@@ -303,7 +329,10 @@ if ($mode === '--check') {
         fwrite(STDERR, "cannot create " . dirname($searchPath) . "\n");
         exit(1);
     }
-    file_put_contents($searchPath, $searchJson);
+    if (file_put_contents($searchPath, $searchJson) === false) {
+        fwrite(STDERR, "gen-docs: cannot write $searchPath\n");
+        exit(2);
+    }
     $written++;
 }
 
@@ -495,11 +524,17 @@ function run_extract(string $libDir, string $dataDir, array $types, array $stubs
         $pages[] = $slug;
         $html = (string) file_get_contents($file);
         [$meta, $body] = extract_one($slug, $html);
-        file_put_contents(
+        if (file_put_contents(
             "$dataDir/$slug.json",
             json_encode($meta, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n"
-        );
-        file_put_contents("$dataDir/$slug.body.html", $body);
+        ) === false) {
+            fwrite(STDERR, "gen-docs: cannot write $dataDir/$slug.json\n");
+            exit(2);
+        }
+        if (file_put_contents("$dataDir/$slug.body.html", $body) === false) {
+            fwrite(STDERR, "gen-docs: cannot write $dataDir/$slug.body.html\n");
+            exit(2);
+        }
         $count++;
     }
     fwrite(STDOUT, "extracted $count page(s) into $dataDir\n");
@@ -1083,59 +1118,55 @@ function normalize_port_label(string $meta): string
  * numeral forms (meta description, og:description, JSON-LD, the .stat spans, the
  * "(N packages)" totals) and the spelled-out forms (hero prose, the two section
  * <h2> headings) are driven from the same counts.
+ *
+ * RT-14 (016): "a regex whose shape a page does not carry is a no-op" is also
+ * how a SILENT LOSS hid — once a hand-retyped sentence stopped a count token
+ * matching, the token simply stopped being owned while --check kept passing.
+ * The caller declares which shapes each page MUST carry ($required); every
+ * application now reports its replacement count, and a required shape that
+ * matched nothing comes back in &$zeroHits (the caller reddens it in --check,
+ * advises it in generate).
+ *
+ * @param list<string> $required
+ * @param-out list<string> $zeroHits
  */
-function patch_index_counts(string $html, int $nLib, int $nApp): string
+function patch_index_counts(string $html, int $nLib, int $nApp, array $required = [], ?array &$zeroHits = null): string
 {
     $nTotal = $nLib + $nApp;
     $wLib   = number_to_words($nLib);
     $wApp   = number_to_words($nApp);
     $wTotal = number_to_words($nTotal);
 
-    // Numeral "<lib> libraries and <app> apps" — meta description, og:description, JSON-LD.
-    $html = preg_replace(
-        '#\d+( libraries and )\d+( apps)#',
-        $nLib . '${1}' . $nApp . '${2}',
-        $html
-    ) ?? $html;
+    $shapes = [
+        // Numeral "<lib> libraries and <app> apps" — meta description, og:description, JSON-LD.
+        'numerals-libraries-and-apps' => ['#\d+( libraries and )\d+( apps)#', $nLib . '${1}' . $nApp . '${2}'],
+        // Numeral "(<total> packages)" total — meta description + JSON-LD.
+        'numeral-packages-total' => ['#\(\d+ packages\)#', '(' . $nTotal . ' packages)'],
+        // Hero prose, spelled out — interior whitespace groups preserved verbatim
+        // (string backreferences are exactly what the old callback returned).
+        'hero-prose-spelled-out' => [
+            '#(TUI ecosystem — )[a-z-]+(\s+libraries and )[a-z-]+( apps \()[a-z-]+( packages total\))#',
+            '$1' . $wLib . '$2' . $wApp . '$3' . $wTotal . '$4',
+        ],
+        // Hero .stat numerals.
+        'stat-libraries' => ['#(<span class="num">)\d+(</span><span class="label">libraries</span>)#', '${1}' . $nLib . '${2}'],
+        'stat-apps' => ['#(<span class="num">)\d+(</span><span class="label">apps</span>)#', '${1}' . $nApp . '${2}'],
+        // Section headings, spelled out + capitalized.
+        'h2-libraries' => ['#<h2>[A-Z][a-z-]+( libraries, one ecosystem\.</h2>)#', '<h2>' . ucfirst($wLib) . '${1}'],
+        'h2-apps' => ['#<h2>[A-Z][a-z-]+( apps built on the stack\.</h2>)#', '<h2>' . ucfirst($wApp) . '${1}'],
+    ];
 
-    // Numeral "(<total> packages)" total — meta description + JSON-LD.
-    $html = preg_replace(
-        '#\(\d+ packages\)#',
-        '(' . $nTotal . ' packages)',
-        $html
-    ) ?? $html;
+    $missed = [];
+    foreach ($shapes as $name => [$pattern, $replacement]) {
+        $count = 0;
+        $result = preg_replace($pattern, $replacement, $html, -1, $count);
+        $html = $result ?? $html;
+        if ($count === 0) {
+            $missed[] = $name;
+        }
+    }
 
-    // Hero prose, spelled out: "… ecosystem — <lib>\n libraries and <app> apps
-    // (<total> packages total)". The interior whitespace group is preserved verbatim.
-    $html = preg_replace_callback(
-        '#(TUI ecosystem — )[a-z-]+(\s+libraries and )[a-z-]+( apps \()[a-z-]+( packages total\))#',
-        static fn (array $m): string => $m[1] . $wLib . $m[2] . $wApp . $m[3] . $wTotal . $m[4],
-        $html
-    ) ?? $html;
-
-    // Hero .stat numerals.
-    $html = preg_replace(
-        '#(<span class="num">)\d+(</span><span class="label">libraries</span>)#',
-        '${1}' . $nLib . '${2}',
-        $html
-    ) ?? $html;
-    $html = preg_replace(
-        '#(<span class="num">)\d+(</span><span class="label">apps</span>)#',
-        '${1}' . $nApp . '${2}',
-        $html
-    ) ?? $html;
-
-    // Section headings, spelled out + capitalized.
-    $html = preg_replace(
-        '#<h2>[A-Z][a-z-]+( libraries, one ecosystem\.</h2>)#',
-        '<h2>' . ucfirst($wLib) . '${1}',
-        $html
-    ) ?? $html;
-    $html = preg_replace(
-        '#<h2>[A-Z][a-z-]+( apps built on the stack\.</h2>)#',
-        '<h2>' . ucfirst($wApp) . '${1}',
-        $html
-    ) ?? $html;
+    $zeroHits = array_values(array_intersect($required, $missed));
 
     return $html;
 }
