@@ -253,7 +253,15 @@ final class Glyphs
             // rather than synthetic emboldening via imagettftext's bold parameter.
             // The $bold parameter is passed through to the font resolution path
             // (style='bold') and the resulting -Bold face is used directly.
-            imagettftext($tile, (float) $this->fontSize, $angle, $xOffset, $yOffset, $fgColor, $fontPath, $char);
+            // A false return means FreeType could not open the face — fail loud
+            // instead of shipping a tile that is only a background rectangle
+            // (finding candy-vcr-023: phar:// paths reached this line silently
+            // blank every glyph). @-suppression converts the E_WARNING into our
+            // own message; the blank-artifact class must name itself.
+            $box = @imagettftext($tile, (float) $this->fontSize, $angle, $xOffset, $yOffset, $fgColor, $fontPath, $char);
+            if ($box === false) {
+                throw new \RuntimeException("Font face unusable for glyph \"{$char}\": {$fontPath}");
+            }
         }
 
         if ($underline) {

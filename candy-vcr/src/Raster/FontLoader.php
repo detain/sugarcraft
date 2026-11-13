@@ -23,6 +23,13 @@ final class FontLoader
     private ?string $lastResolvedPath = null;
 
     /**
+     * phar:// → real-path extraction cache, keyed on the archive path.
+     *
+     * @var array<string, string>
+     */
+    private static array $materialized = [];
+
+    /**
      * @param list<string> $fontDirs
      */
     public function __construct(array $fontDirs = [])
@@ -60,9 +67,90 @@ final class FontLoader
             throw new \RuntimeException("Font file not readable: {$fontFile}");
         }
 
-        $this->lastResolvedPath = $fontFile;
+        $this->lastResolvedPath = self::materializeForGd($fontFile);
 
-        return $fontFile;
+        return $this->lastResolvedPath;
+    }
+
+    /**
+     * Turn a phar font path into a real filesystem path.
+     *
+     * FreeType (imagettftext) reads only plain paths: a `phar://…/Fonts.ttf`
+     * name passes is_file()/is_readable() yet comes back "Could not open font"
+     * at render time, so a phar build would ship GIFs of empty background
+     * tiles (finding candy-vcr-023, reproduced on-host: real-FS bytes return
+     * the bbox array, the same bytes at phar:// return false). Extract the
+     * bytes once per process to a stable temp file and hand every backend
+     * the real path. Real paths pass through untouched.
+     */
+    public static function materializeForGd(string $path): string
+    {
+        if (!self::isWithinPhar($path)) {
+            return $path;
+        }
+
+        $cached = self::$materialized[$path] ?? null;
+        if ($cached !== null && is_file($cached)) {
+            return $cached;
+        }
+
+        $bytes = @file_get_contents($path);
+        if ($bytes === false) {
+            throw new \RuntimeException("Unable to read bundled font from archive: {$path}");
+        }
+
+        $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        $extension = $extension === 'otf' ? 'otf' : 'ttf';
+        $dir = sys_get_temp_dir() . '/candy-vcr-fonts-' . getmypid();
+        if (!is_dir($dir) && !@mkdir($dir, 0o700, true) && !is_dir($dir)) {
+            throw new \RuntimeException("Unable to create font extraction directory: {$dir}");
+        }
+        // Atomic land: write a per-attempt temp then rename, so two processes
+        // extracting the same archive path never expose a half-written TTF.
+        $final = $dir . '/' . sha1($path) . '.' . $extension;
+        $temp = $final . '.' . bin2hex(random_bytes(4));
+        if (@file_put_contents($temp, $bytes) === false) {
+            @unlink($temp);
+            throw new \RuntimeException("Unable to write extracted font: {$final}");
+        }
+        chmod($temp, 0o600);
+        if (!@rename($temp, $final)) {
+            @unlink($temp);
+            if (!is_file($final)) {
+                throw new \RuntimeException("Unable to place extracted font: {$final}");
+            }
+        }
+
+        self::$materialized[$path] = $final;
+
+        return $final;
+    }
+
+    /**
+     * Is this path served by the phar stream wrapper?
+     *
+     * Two spellings reach GD the same way: the explicit `phar://…` form and
+     * the implicit `/abs/app.phar/inner/file` form that a running archive's
+     * own __DIR__ expands to (the form this defect actually shipped in).
+     */
+    private static function isWithinPhar(string $path): bool
+    {
+        if (str_starts_with($path, 'phar://')) {
+            return true;
+        }
+
+        $probe = '';
+        foreach (explode('/', str_replace('\\', '/', $path)) as $segment) {
+            if ($segment === '') {
+                continue;
+            }
+            $probe .= '/' . $segment;
+            if (str_ends_with($segment, '.phar') && (is_file($probe) || is_file(ltrim($probe, '/')))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
