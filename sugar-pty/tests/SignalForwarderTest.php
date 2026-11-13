@@ -304,6 +304,37 @@ final class SignalForwarderTest extends TestCase
         }
     }
 
+    /**
+     * A targeted reset must detach exactly what was attached: a host
+     * handler on a signal this class never installed stays in place
+     * (PTY-35). Before the fix the targeted leg SIG_DFL'd any signo it
+     * was handed, laundering an installed host handler into null-land.
+     */
+    public function testTargetedResetLeavesUnattachedHostDispositionsAlone(): void
+    {
+        $this->requireSigchldLifecycle();
+        if (!\defined('SIGUSR1')) {
+            $this->markTestSkipped('SIGUSR1 is not defined on this host.');
+        }
+
+        $hostHandler = static function (int $signo): void {};
+        \pcntl_signal(SIGUSR1, $hostHandler);
+
+        try {
+            $this->assertNotContains(SIGUSR1, SignalForwarder::attachedSignals());
+
+            SignalForwarder::reset(SIGUSR1);
+
+            $this->assertSame(
+                $hostHandler,
+                \pcntl_signal_get_handler(SIGUSR1),
+                'the targeted reset must not uninstall a handler it never installed',
+            );
+        } finally {
+            \pcntl_signal(SIGUSR1, \SIG_DFL);
+        }
+    }
+
     public function testAttachAfterFullResetReenablesAsyncDispatch(): void
     {
         $this->requireSigchldLifecycle();

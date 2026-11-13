@@ -37,13 +37,13 @@ use SugarCraft\Pty\Contract\MasterPty;
  * class installed and undo `pcntl_async_signals(true)` if this class
  * enabled it.
  *
- * ## One slot per signal
+ * ## Reset restores SIG_DFL, not your previous handler
  *
- * Handler installation keeps a single previous-handler slot per signal
- * class, so forwarding is not composable: attaching twice (e.g. both
- * `attachSigwinch` calls from two sessions) lets the second install
- * capture the FIRST handler as its "previous", and a later restore
- * rewinds only one step. A host application that already owns
+ * There is no previous-handler slot to rewind: `pcntl_signal()` keeps
+ * the callback PHP-side and the C disposition is simply replaced on
+ * install. Attaching over a handler the host already owns discards it
+ * irrecoverably, and {@see reset()} restores `SIG_DFL` — never whatever
+ * ran before this class attached. A host application that already owns
  * SIGWINCH/SIGCHLD should not attach this class — read the size and
  * call `resize()` itself.
  */
@@ -77,9 +77,11 @@ final class SignalForwarder
      * @param callable(): array{cols:int, rows:int} $sizeProvider
      * @param callable(int, int): void|null $onResize if provided,
      *               called with `(cols, rows)` after a successful resize
-     * @return bool true if the handler installed; false on platforms
-     *              without pcntl or `SIGWINCH`.
-     * @see attachSigwinch()
+     * @return bool false means NOT attached — either the host lacks
+     *              pcntl/`SIGWINCH` or `pcntl_signal()` refused the
+     *              install; callers then fall back to size polling.
+     *              true means the handler is live.
+     * @see attachSigwinch() the MasterPty-object twin of this fd variant
      */
     public static function attachSigwinchToFd(int $fd, callable $sizeProvider, ?callable $onResize = null, bool $async = true): bool
     {
@@ -122,9 +124,12 @@ final class SignalForwarder
      * propagate exceptions across the runtime).
      *
      * @param callable(): array{cols:int, rows:int} $sizeProvider
-     * @return bool true if the handler installed; false on platforms
-     *              without pcntl or `SIGWINCH`.
+     * @return bool false means NOT attached — either the host lacks
+     *              pcntl/`SIGWINCH` or `pcntl_signal()` refused the
+     *              install; callers then fall back to size polling.
+     *              true means the handler is live.
      * @see creack/pty.InheritSize()
+     * @see attachSigwinchToFd() the raw-fd twin for callers without a MasterPty
      */
     public static function attachSigwinch(MasterPty $master, callable $sizeProvider, bool $async = true): bool
     {
@@ -158,6 +163,9 @@ final class SignalForwarder
      * {@see Child} instances and probes `proc_get_status()` on each.
      *
      * @param callable(): void $reaper
+     * @return bool false means NOT attached — either the host lacks
+     *              pcntl/`SIGCHLD` or `pcntl_signal()` refused the
+     *              install; true means the handler is live.
      */
     public static function attachSigchld(callable $reaper, bool $async = true): bool
     {
@@ -222,6 +230,13 @@ final class SignalForwarder
         }
 
         foreach ($signals as $signo) {
+            // Detach exactly what was attached: a signal absent from the
+            // ledger belongs to the host, and SIG_DFL'ing it would
+            // silently uninstall a handler this class never installed
+            // (pcntl stores no previous handler to give back).
+            if (!isset(self::$attached[$signo])) {
+                continue;
+            }
             @\pcntl_signal($signo, \SIG_DFL);
             unset(self::$attached[$signo]);
         }
