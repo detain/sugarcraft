@@ -593,6 +593,13 @@ final class EscapeDecoder
     /**
      * Handle an SS3 (ESC O) sequence.
      *
+     * Modified forms carry a parameter span before the final byte — xterm's
+     * legacy modified-key shape `ESC O 1 ; <mod> <final>` (Shift+Left is
+     * `ESC O 1;2D`). The span MUST be consumed through the final byte: the
+     * old single-byte scan dropped only the digit and leaked the rest as
+     * printable keys. Same resync-through-the-final discipline the X10-mouse
+     * branch names and uses.
+     *
      * @param string $afterO Bytes after "ESC O"
      * @return array{events: list<Event>, remaining: string}
      */
@@ -603,19 +610,64 @@ final class EscapeDecoder
             return ['events' => [], 'remaining' => "\x1bO"];
         }
 
-        $final = $afterO[0];
+        $modifiers = KeyModifier::none();
+        $lead = ord($afterO[0]);
+
+        if ($lead >= 0x30 && $lead <= 0x39) {
+            // Parameter span <num>[;<mod>], then the final byte must follow.
+            if (preg_match('/^(\d+)(?:;(\d*))?/', $afterO, $pm) !== 1) {
+                $this->droppedUnknownCount++;
+                return ['events' => [], 'remaining' => substr($afterO, 1)];
+            }
+            $span = strlen($pm[0]);
+            $runs = [$pm[1]];
+            if ($span >= strlen($afterO) || (isset($pm[2]) && $pm[2] === '')) {
+                // Final byte (or the modifier digit after ';') has not
+                // arrived yet: buffer the WHOLE tail for the next decode()
+                // call (a leading digit means no printable interpretation is
+                // possible anyway).
+                return ['events' => [], 'remaining' => "\x1bO" . $afterO];
+            }
+            if (isset($pm[2]) && $pm[2] !== '') {
+                $runs[] = $pm[2];
+            }
+            if (!$this->validateDigits($runs)) {
+                // Oversized/non-digit parameter span: one counted drop of the
+                // digits seen so far, resync on the remainder.
+                $this->droppedUnknownCount++;
+                return ['events' => [], 'remaining' => substr($afterO, $span)];
+            }
+            // Modifier param is 1 + bitmask; absent is an explicit no-modifier
+            // (";1" de-bases to 0 the same way fromXtermParam's callers rely on).
+            if (isset($pm[2]) && $pm[2] !== '') {
+                $modRaw = (int) $pm[2];
+                if ($modRaw < 1) {
+                    // ";0" would de-base to -1 and fabricate every bit (see
+                    // the modifyOtherKeys guard) — refused, fail-fast.
+                    $this->droppedUnknownCount++;
+                    return ['events' => [], 'remaining' => substr($afterO, $span + 1)];
+                }
+                $modifiers = KeyModifier::fromXtermParam($modRaw);
+            }
+            $final = $afterO[$span];
+        } else {
+            $span = 0;
+            $final = $afterO[0];
+        }
+
         $ss3Map = self::SS3_KEY_MAP;
 
         if (!isset($ss3Map[$final])) {
-            // Unknown final byte — skip it
+            // Unknown final byte — the whole parameter+final span is ONE
+            // counted drop (never a one-byte drop plus a leaked remainder).
             $this->droppedUnknownCount++;
-            return ['events' => [], 'remaining' => substr($afterO, 1)];
+            return ['events' => [], 'remaining' => substr($afterO, $span + 1)];
         }
 
-        $raw = "\x1bO" . $final;
+        $raw = "\x1bO" . substr($afterO, 0, $span + 1);
         return [
-            'events' => [new KeyEvent($ss3Map[$final], KeyModifier::none(), $raw)],
-            'remaining' => substr($afterO, 1),
+            'events' => [new KeyEvent($ss3Map[$final], $modifiers, $raw)],
+            'remaining' => substr($afterO, $span + 1),
         ];
     }
 

@@ -181,6 +181,52 @@ final class EscapeDecoderTest extends TestCase
         $this->assertSame('F4', $events[0]->key);
     }
 
+    public function testModifiedSS3ConsumesFullParameterSpan(): void
+    {
+        // SI-03: xterm legacy modified SS3 `ESC O 1;<mod> <final>` must name
+        // the key with its modifiers and consume the whole span — the old
+        // single-byte scan dropped the digit and leaked ";2D" as printables.
+        $events = $this->decoder->decode("\x1bO1;2D");
+        $this->assertCount(1, $events);
+        $this->assertSame('ArrowLeft', $events[0]->key);
+        $this->assertTrue($events[0]->modifiers->includes(KeyModifier::SHIFT));
+        $this->assertSame("\x1bO1;2D", $events[0]->raw);
+
+        $ctrl = $this->decoder->decode("\x1bO1;5C");
+        $this->assertSame('ArrowRight', $ctrl[0]->key);
+        $this->assertTrue($ctrl[0]->modifiers->includes(KeyModifier::CTRL));
+
+        $f1 = $this->decoder->decode("\x1bO1;2P");
+        $this->assertSame('F1', $f1[0]->key);
+        $this->assertTrue($f1[0]->modifiers->includes(KeyModifier::SHIFT));
+
+        // Same sequence split across two decode() calls at a chunk boundary:
+        // the partial span buffers and completes, never leaks.
+        $partial = $this->decoder->decode("\x1bO1;");
+        $this->assertSame([], $partial);
+        $this->assertSame("\x1bO1;", $this->decoder->remainder());
+        $joined = $this->decoder->decode("2D");
+        $this->assertCount(1, $joined);
+        $this->assertSame('ArrowLeft', $joined[0]->key);
+        $this->assertTrue($joined[0]->modifiers->includes(KeyModifier::SHIFT));
+    }
+
+    public function testUnknownFinalModifiedSS3IsOneCountedDropNoLeak(): void
+    {
+        // `ESC O 9;9Z` — 'Z' is not an SS3 final: the ENTIRE parameter+final
+        // span is one counted drop, never a one-byte drop plus leaked ";9Z".
+        $before = $this->decoder->droppedUnknownCount();
+        $events = $this->decoder->decode("\x1bO9;9Z");
+        $this->assertSame([], $events);
+        $this->assertSame($before + 1, $this->decoder->droppedUnknownCount());
+
+        // ";0" would de-base to -1 and fabricate every modifier bit — refused
+        // (same guard the modifyOtherKeys leg applies).
+        $before = $this->decoder->droppedUnknownCount();
+        $this->assertSame([], $this->decoder->decode("\x1bO1;0C"));
+        $this->assertSame($before + 1, $this->decoder->droppedUnknownCount());
+    }
+
     public function testF5(): void
     {
         $events = $this->decoder->decode("\x1b[15~");
