@@ -45,6 +45,9 @@ final class StatelessRpc
     /** How much of the child's stderr is kept for failure reporting. */
     public const STDERR_TAIL_BYTES = 8192;
 
+    /** Bytes handed to one fwrite feed by writeBounded() (the lib's write quantum). */
+    private const WRITE_CHUNK_BYTES = 65536;
+
     /** Grace between SIGTERM and SIGKILL for an undrained child. */
     private const TERM_GRACE_SECONDS = 1.0;
 
@@ -365,7 +368,10 @@ final class StatelessRpc
         $offset = 0;
         $total  = \strlen($bytes);
         while ($offset < $total) {
-            $written = @\fwrite($stream, \substr($bytes, $offset));
+            // One chunk per feed: re-slicing the whole remainder on every
+            // partial accept made a large push body quadratic work for the
+            // server (the fleet's quadratic-writer family; S02-lineage).
+            $written = @\fwrite($stream, \substr($bytes, $offset, self::WRITE_CHUNK_BYTES));
             if ($written === false) {
                 throw new \RuntimeException('stateless-rpc stdin closed by the child');
             }

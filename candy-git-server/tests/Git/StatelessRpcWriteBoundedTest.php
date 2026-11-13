@@ -40,6 +40,28 @@ final class StatelessRpcWriteBoundedTest extends TestCase
         }
     }
 
+    public function testWriteBoundedHandsAMultiChunkBodyWithByteFidelity(): void
+    {
+        // S02: writeBounded feeds one 64 KiB chunk per attempt; a body many
+        // chunks wide must still reach the child verbatim.
+        [$reader, $writer] = \stream_socket_pair(\STREAM_PF_UNIX, \STREAM_SOCK_STREAM, \STREAM_IPPROTO_IP);
+        self::assertIsResource($reader);
+        self::assertIsResource($writer);
+        try {
+            $body = \random_bytes(3 * 65536 + 77);
+
+            self::invokeWriteBounded($writer, $body, \hrtime(true) + 5_000_000_000);
+
+            @\fclose($writer); // half-close so the blocking drain below sees EOF
+            self::assertSame($body, (string) \stream_get_contents($reader));
+        } finally {
+            @\fclose($reader);
+            if (\is_resource($writer)) {
+                @\fclose($writer);
+            }
+        }
+    }
+
     public function testWriteBoundedRaisesWhenTheChildStopsConsuming(): void
     {
         // The production wedge shape: writeBounded's stream IS a proc_open

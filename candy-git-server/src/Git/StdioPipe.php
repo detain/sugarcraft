@@ -263,9 +263,11 @@ final class StdioPipe
                     }
                 }
 
-                // Pending client -> child bytes
+                // Pending client -> child bytes (one CHUNK_BYTES feed per
+                // tick: the full-buffer fwrite re-copied the whole pile on
+                // every partial accept — quadratic against a stalled child).
                 if ($childInOpen && $toChild !== '') {
-                    $n = @\fwrite($pipes[0], $toChild);
+                    $n = @\fwrite($pipes[0], \substr($toChild, 0, self::CHUNK_BYTES));
                     if ($n === false) {
                         $childInOpen = false; // child closed its stdin
                     } elseif ($n > 0) {
@@ -281,7 +283,7 @@ final class StdioPipe
 
                 // Pending child -> client bytes
                 if (!$clientGone && $pendingOut !== '' && $writtenOut < \strlen($pendingOut)) {
-                    $n = @\fwrite($outStream, \substr($pendingOut, $writtenOut));
+                    $n = @\fwrite($outStream, \substr($pendingOut, $writtenOut, self::CHUNK_BYTES));
                     if ($n === false) {
                         $clientGone = true;
                     } elseif ($n > 0) {

@@ -78,6 +78,32 @@ final class HttpListenerWriteTest extends TestCase
         }
     }
 
+    public function testWriteAllDeliversLargePayloadsSliceBySliceWithByteFidelity(): void
+    {
+        // S02: the write loop now feeds one 64 KiB chunk per fwrite instead
+        // of re-slicing the whole remainder per attempt. The remainder must
+        // still land verbatim — no truncation, no reordering, no duplication
+        // across slice boundaries.
+        [$reader, $writer] = \stream_socket_pair(\STREAM_PF_UNIX, \STREAM_SOCK_STREAM, \STREAM_IPPROTO_IP);
+        self::assertIsResource($reader);
+        self::assertIsResource($writer);
+        try {
+            \stream_set_blocking($writer, false);
+            $payload = \random_bytes(5 * 65536 + 1234); // 4+ slices, non-aligned tail
+
+            $written = self::invokeWriteAll($writer, $payload, 5.0);
+
+            self::assertSame(\strlen($payload), $written);
+            @\fclose($writer); // half-close so the blocking drain below sees EOF
+            self::assertSame($payload, (string) \stream_get_contents($reader));
+        } finally {
+            @\fclose($reader);
+            if (\is_resource($writer)) {
+                @\fclose($writer);
+            }
+        }
+    }
+
     public function testWriteAllStopsATricklingPeerAtTheAbsoluteCeiling(): void
     {
         // S01: the progress re-arm bounds the ZERO-progress grace only — a

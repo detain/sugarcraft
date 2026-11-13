@@ -120,6 +120,31 @@ final class StdioPipeBacklogCapTest extends TestCase
         \fclose($out);
     }
 
+    /**
+     * S02: the pump feeds one CHUNK_BYTES per fwrite in BOTH directions. A
+     * seed many chunks wide must round-trip through the child verbatim —
+     * slice boundaries may never truncate, duplicate, or reorder bytes.
+     */
+    public function testMultiChunkSeedRoundTripsWithByteFidelity(): void
+    {
+        $blob = \random_bytes(3 * StdioPipe::CHUNK_BYTES + 999);
+        $in = $this->readPointer('blob-in.txt', $blob);
+        $out = $this->filePointer('blob-out.txt', 'wb');
+
+        $code = StdioPipe::run(
+            $in,
+            $out,
+            ['php', '-r', 'while (!feof(STDIN)) { $c = fread(STDIN, 65536); if (!$c) break; fwrite(STDOUT, $c); }'],
+            \sys_get_temp_dir(),
+        );
+
+        \fclose($out);
+        \fclose($in);
+
+        $this->assertSame(0, $code, 'a consuming child finishes clean');
+        $this->assertSame($blob, (string) \file_get_contents($this->tmpDir . '/blob-out.txt'));
+    }
+
     /** @return resource a readable pointer over a freshly written file */
     private function readPointer(string $name, string $contents = '')
     {

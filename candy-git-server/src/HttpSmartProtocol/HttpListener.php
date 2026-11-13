@@ -537,7 +537,13 @@ final class HttpListener
             if (\microtime(true) >= $giveUp || \hrtime(true) >= $absoluteNs) {
                 return $offset; // wedged (zero progress past the grace) or dribbling (past the ceiling)
             }
-            $written = @\fwrite($stream, \substr($bytes, $offset));
+            // Hand the kernel ONE chunk per feed: substr($bytes, $offset)
+            // re-sliced the whole remainder on every partial accept, so a
+            // max-size response on a slow peer did O(n²/chunk) byte copying
+            // inside the write loop (the same quadratic-writer family as
+            // the fleet's streaming holds). The slice is also what keeps a
+            // huge $bytes from being copied twice per attempt.
+            $written = @\fwrite($stream, \substr($bytes, $offset, self::WRITE_CHUNK_BYTES));
             if ($written === false) {
                 return $offset; // socket error / reset by peer
             }
@@ -559,6 +565,9 @@ final class HttpListener
 
     /** How long a response write may make ZERO progress on a client socket. */
     private const WRITE_STALL_SECONDS = 10.0;
+
+    /** Bytes handed to one fwrite feed by writeAll() (the lib's write quantum). */
+    private const WRITE_CHUNK_BYTES = 65536;
 
     /**
      * Absolute ceiling for one response write regardless of trickle
