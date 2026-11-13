@@ -1,13 +1,13 @@
 {
     "name": "sugarcraft/candy-git-server",
-    "description": "Self-hostable Git server: smart-HTTP clone/fetch/push plus LFS run today via 'serve --http' behind fail-closed access gates; config, accounts, repos, git-daemon advertisement and a ForceCommand SSH dispatcher round out the library. Modeled on the charmbracelet/soft-serve Go project.",
+    "description": "Self-hostable Git server: smart-HTTP clone, fetch and push with Git LFS, behind fail-closed access gates. PHP port of the charmbracelet/soft-serve Go project; the git-daemon, SSH dispatcher and stats faces ship as classes, with serve --http the assembled listener (README Known gaps).",
     "type": "project",
     "license": "MIT",
     "keywords": [
         "git",
         "git-server",
         "soft-serve",
-        "self-hosted",
+        "self-hostable",
         "ssh",
         "lfs",
         "sugarcraft"
@@ -37,7 +37,8 @@
         "ext-sockets": "*"
     },
     "suggest": {
-        "ext-ssh2": "Enables the anonymous-read capability gate on the SSH ForceCommand dispatcher; without it, that gate stays closed and SSH access requires a stored account key."
+        "ext-pcntl": "Graceful shutdown of the serve --http listener: SIGINT/SIGTERM handlers need pcntl, and a supervisor's stop signal on a pcntl-less host lands as the default-termination 130/143 exit instead of the documented clean stop. Minimal container images (php:8.3-cli) do not ship pcntl or sockets.",
+        "ext-ssh2": "Lets User::generateKeyPair mint account keypairs in-process; without it, key generation needs ssh-keygen on PATH. It plays no part in authentication — the SSH dispatcher answers AccessControl and stored keys alone (finding 099)."
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5"
@@ -56,8 +57,5 @@
         "bin/candy-git-server"
     ],
     "minimum-stability": "dev",
-    "prefer-stable": true,
-    "scripts": {
-        "serve": "php bin/candy-git-server serve --http"
-    }
+    "prefer-stable": true
 }

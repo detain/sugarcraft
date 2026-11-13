@@ -159,7 +159,6 @@ composer install
 bin/candy-git-server help
 ```
 
-As a library consumer: `composer require sugarcraft/candy-git-server`.
 The shipped single-file build (rebuilt and published on every push to
 master) needs only PHP:
 
