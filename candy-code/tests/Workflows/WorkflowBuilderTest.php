@@ -256,7 +256,7 @@ final class WorkflowBuilderTest extends TestCase
             $builder->when(['stage' => 'a', 'gt' => 3]);
             $this->fail('the grammar must not admit a made-up op');
         } catch (\InvalidArgumentException $error) {
-            $this->assertStringContainsString('where a condition belongs', $error->getMessage());
+            $this->assertStringContainsString('is not a condition key', $error->getMessage());
         }
     }
 }
