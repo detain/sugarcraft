@@ -650,6 +650,19 @@ echo $t->view();
 // Columns 0 and 1 are hidden from view
 ```
 
+### Overflow Window, Pan Helpers and Arrows
+
+```php
+$t = $t->withMaxTotalWidth(40)      // columns + gaps budget; the rest sit off-screen
+       ->withOverflowArrows()       // '«' when scrolled off left, '»' when cut off right
+       ->scrollRight();             // pan one column; scrollLeft() pans back
+```
+
+`withMaxTotalWidth()` windows the scrollable columns by their declared widths
+(frozen columns always stay, one scrollable column is always kept);
+`scrollRight()` stops once nothing overflows; `scrollX()` reads the offset.
+Arrows are opt-in and replace one title cell of the header cell they sit on.
+
 ### How It Works
 
 - **scrollX** skips `$offset` non-frozen columns from the left of the scrollable region
@@ -1190,6 +1203,10 @@ in this README is still documented — this table is the completeness floor.
 | `withShowHeader(bool $v): self` | — |
 | `withShowFooter(bool $v): self` | — |
 | `withFooterType(FooterType $type): self` | Set the footer display type. |
+| `withMaxTotalWidth(int $cells): self` | Cap the content span; window scrollable columns |
+| `withOverflowArrows(bool $v = true): self` | '«'/'»' header overflow marks |
+| `scrollX(): int` | Horizontal scroll offset |
+| `scrollLeft(): self` / `scrollRight(): self` | Pan one scrollable column |
 | `withRowSeparator(bool $v = true): self` | Rule between data rows |
 | `withStaticFooter(string $text): self` | Fixed footer text replacing the Page/Rows label |
 | `withPaginationWrap(bool $v = true): self` | Cycle cursor/pages instead of clamping |

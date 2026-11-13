@@ -98,6 +98,8 @@ final class Table
     private ?\Closure $filterFunc = null;
     private bool $paginationWrap = false;
     private bool $rowSeparator = false;
+    private int $maxTotalWidth = 0;
+    private bool $overflowArrows = false;
     private string $staticFooter = '';
 
     /** Vertical scroll offset — first visible row index in the filtered+sorted view. */
@@ -1205,6 +1207,60 @@ final class Table
         $clone = clone $this;
         $clone->paginationWrap = $v;
         return $clone;
+    }
+
+    /**
+     * Cap the content span (columns plus gaps, excluding the outer border) at
+     * `$cells` and window the scrollable columns to what fits, measured on
+     * declared widths; the rest sit off-screen until scrollRight(). Frozen
+     * columns always stay and one scrollable column is always kept. 0
+     * (default) = no cap. Mirrors Evertras/bubble-table.WithMaxTotalWidth.
+     */
+    public function withMaxTotalWidth(int $cells): self
+    {
+        $clone = clone $this;
+        $clone->maxTotalWidth = \max(0, $cells);
+        $clone->invalidateRenderCaches();
+        return $clone;
+    }
+
+    /**
+     * Mark horizontal overflow in the header (OG-5 / ST-70): '«' leads the
+     * first scrolled header cell while columns are scrolled off on the left,
+     * '»' ends the last one while withMaxTotalWidth() cuts columns on the
+     * right. Mirrors Evertras/bubble-table's header overflow arrows.
+     */
+    public function withOverflowArrows(bool $v = true): self
+    {
+        $clone = clone $this;
+        $clone->overflowArrows = $v;
+        return $clone;
+    }
+
+    public function scrollX(): int
+    {
+        return $this->scrollX;
+    }
+
+    /** Pan one scrollable column left; clamps at 0. */
+    public function scrollLeft(): self
+    {
+        return $this->withScrollX(\max(0, $this->scrollX - 1));
+    }
+
+    /**
+     * Pan one scrollable column right; stops once the last column is the
+     * window's first (never scrolls past the data) and, with
+     * withMaxTotalWidth(), once nothing overflows on the right any more.
+     */
+    public function scrollRight(): self
+    {
+        $scrollable = \count($this->columns) - \count($this->frozenCols);
+        if ($this->scrollX >= $scrollable - 1 || ($this->maxTotalWidth > 0 && !$this->overflowsRight())) {
+            return $this;
+        }
+
+        return $this->withScrollX($this->scrollX + 1);
     }
 
     /**
@@ -2435,7 +2491,60 @@ final class Table
             return true;
         }
         $scrollableStartIndex = \count($this->frozenCols) + $this->scrollX;
-        return $colIndex >= $scrollableStartIndex;
+        if ($colIndex < $scrollableStartIndex) {
+            return false;
+        }
+        return $this->maxTotalWidth <= 0 || $colIndex <= $this->lastFittingColumn();
+    }
+
+    /**
+     * Last column index inside the withMaxTotalWidth() window, measured on
+     * declared widths plus one gap cell per boundary. Frozen columns always
+     * count; at least one scrollable column is always kept so a narrow
+     * budget never blanks the table.
+     */
+    private function lastFittingColumn(): int
+    {
+        $used = 0;
+        $shown = 0;
+        $last = -1;
+        $start = \count($this->frozenCols) + $this->scrollX;
+        foreach ($this->columns as $i => $col) {
+            if (\in_array($i, $this->hiddenCols, true)) {
+                continue;
+            }
+            $frozen = \in_array($i, $this->frozenCols, true);
+            if (!$frozen && $i < $start) {
+                continue;
+            }
+            $need = $col->width + ($shown > 0 ? 1 : 0);
+            if (!$frozen && $shown > 0 && $used + $need > $this->maxTotalWidth && $last >= $start) {
+                break;
+            }
+            $used += $need;
+            $shown++;
+            if (!$frozen || $i > $last) {
+                $last = $i;
+            }
+        }
+
+        return $last;
+    }
+
+    /** True when columns past the withMaxTotalWidth() window are cut off on the right. */
+    private function overflowsRight(): bool
+    {
+        if ($this->maxTotalWidth <= 0) {
+            return false;
+        }
+        $last = $this->lastFittingColumn();
+        foreach ($this->columns as $i => $_) {
+            if ($i > $last && !\in_array($i, $this->hiddenCols, true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -2592,6 +2701,9 @@ final class Table
             $effectiveWidth = $colWidth - (2 * $this->cellPadding);
             $effectiveWidth = \max(1, $effectiveWidth);
             $headerText = $column->renderHeader($effectiveWidth, $this->markedFrameSanitization);
+            if ($this->overflowArrows && $effectiveWidth >= 2) {
+                $headerText = $this->withOverflowMark($headerText, $ci, $lastCi, $visibleColumnIndices, $effectiveWidth);
+            }
             $canvas = $this->fillCellContent($canvas, $row, $col, $headerText, $colWidth, $style);
             $col += $colWidth;
 
@@ -2601,6 +2713,31 @@ final class Table
         }
 
         return $this->writeRightEdge($canvas, $row, $col, $sepStyle);
+    }
+
+    /**
+     * Stamp '«' / '»' onto one header cell, keeping its display width: the
+     * arrow takes a cell and the title clips to make room.
+     *
+     * @param list<int> $visibleColumnIndices
+     */
+    private function withOverflowMark(string $headerText, int $ci, int $lastCi, array $visibleColumnIndices, int $width): string
+    {
+        $firstScrollable = null;
+        foreach ($visibleColumnIndices as $v) {
+            if (!\in_array($v, $this->frozenCols, true)) {
+                $firstScrollable = $v;
+                break;
+            }
+        }
+        if ($ci === $firstScrollable && $this->scrollX > 0) {
+            $headerText = '«' . Width::padRight(Width::truncate($headerText, $width - 1), $width - 1);
+        }
+        if ($ci === $lastCi && $this->overflowsRight()) {
+            $headerText = Width::padRight(Width::truncate($headerText, $width - 1), $width - 1) . '»';
+        }
+
+        return $headerText;
     }
 
     private function fillHeaderSeparatorRow(RenderCanvas $canvas, int $row, int $contentWidth): RenderCanvas
