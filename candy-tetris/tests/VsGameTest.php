@@ -13,6 +13,7 @@ use SugarCraft\Tetris\GravityMsg;
 use SugarCraft\Tetris\Piece;
 use SugarCraft\Tetris\Tetromino;
 use SugarCraft\Tetris\VsGame;
+use SugarCraft\Tetris\VsRenderer;
 use PHPUnit\Framework\TestCase;
 
 final class VsGameTest extends TestCase
@@ -38,14 +39,35 @@ final class VsGameTest extends TestCase
         return new Bag(static fn(int $_max): int => 0);
     }
 
-    public function testStartCreatesTwoGames(): void
+    /**
+     * -066 cure: the old body was two `assertInstanceOf(Game::class, ...)`
+     * lines — readonly typed props, cannot fail. The fresh versus pair now
+     * gets the contract that actually matters at kickoff: boards empty,
+     * scores zeroed, the AI holding no plan yet, the frame natural.
+     */
+    public function testStartCreatesAFreshEmptyVersusPair(): void
     {
         $vs = VsGame::start();
 
-        $this->assertInstanceOf(Game::class, $vs->player);
-        $this->assertInstanceOf(Game::class, $vs->computer);
+        foreach ([$vs->player, $vs->computer] as $game) {
+            $occupied = 0;
+            foreach ($game->board->rows() as $row) {
+                foreach ($row as $cell) {
+                    $occupied += $cell === null ? 0 : 1;
+                }
+            }
+            $this->assertSame(0, $occupied, 'a fresh versus board must start empty');
+            $this->assertSame(0, $game->score->points);
+            $this->assertFalse($game->over);
+        }
+
         $this->assertFalse($vs->over);
         $this->assertNull($vs->winner);
+        $this->assertFalse($vs->hasComputerPlan, 'the AI starts without a recorded plan');
+        $this->assertSame(0, $vs->computerRotationsLeft);
+        $this->assertSame(0, $vs->computerShiftLeft);
+        $this->assertSame(VsRenderer::NATURAL_COLS, $vs->frameCols);
+        $this->assertSame(VsRenderer::NATURAL_ROWS, $vs->frameRows);
     }
 
     public function testInitReturnsTickClosure(): void
