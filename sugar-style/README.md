@@ -101,6 +101,26 @@ Only lowercase method names are defined (`joinHorizontal`, `place`, …);
 the capitalized spellings inherited from the upstream Go API resolve to the
 same functions because PHP method names are case-insensitive.
 
+## Zone rows (`Bar\ZoneRow`)
+
+One-row bars of clickable pieces (menu titles, window tabs) that fit a
+width budget and report their own click zones. Widths are always measured
+on PLAIN text; a marked render wraps zoned pieces afterwards, so painted
+and marked rows share one layout. Overflow collapses the tail into a
+caller-built marker (`‹N›`, `»`). The full law is in the `ZoneRow`
+docblock.
+
+```php
+$row = ZoneRow::new()
+    ->withLead(ZonePiece::of('[+]', 'win:new'))
+    ->withEntries($tabs)                       // list<ZoneEntry>
+    ->withOverflow(fn (int $n) => ZoneEntry::of([ZonePiece::of("‹{$n}›")]))
+    ->withMarker(fn (string $id, string $s) => Mark::zone($id, $s));
+
+echo $row->render($cols, marked: false);
+$zones = $row->zones($cols);   // [row, from, to, id] spans
+```
+
 ## Constraint-based layout
 
 The `Layout` sub-namespace provides a ratatui-inspired constraint solver
