@@ -670,7 +670,7 @@ final class Veil
      * @param string    $background    The base content. TRUST BOUNDARY: equally attacker-reachable — forged sentinels or OSC 8 links in the BACKDROP mint real zones and links too, so sweep background text the same way you sweep foreground text.
      * @param Position  $vertical     Vertical position anchor
      * @param Position  $horizontal   Horizontal position anchor
-     * @param float     $progress    Animation progress — clamped to 0.0–1.0 (0=start, 1=end); values outside the interval saturate instead of overshooting
+     * @param float     $progress    Animation progress — clamped to 0.0–1.0 (0=start, 1=end); values outside the interval saturate instead of overshooting. Non-finite inputs take documented ends: NAN paints the settled end (1.0), +INF saturates high, -INF saturates low.
      * @param int       $xOffset      Additional columns rightward (+) / leftward (-)
      * @param int       $yOffset     Additional lines downward (+) / upward (-)
      * @return string                 The composited output
@@ -684,7 +684,12 @@ final class Veil
         int $xOffset = 0,
         int $yOffset = 0,
     ): string {
-        $progress = \max(0.0, \min(1.0, $progress));
+        // NAN is not absorbed by the clamp: comparisons with NAN are
+        // libc-dependent, so max/min alone could silently freeze, skip, or
+        // propagate the poison depending on the host. The interval law
+        // spells the end out: NAN takes the settled end (the box-probed
+        // value, so no host regresses), ±INF saturate through the clamp.
+        $progress = \is_nan($progress) ? 1.0 : \max(0.0, \min(1.0, $progress));
         if ($this->reducedMotion) {
             $progress = 1.0;
         }

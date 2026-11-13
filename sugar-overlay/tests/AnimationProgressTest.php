@@ -52,6 +52,20 @@ final class AnimationProgressTest extends TestCase
         $this->assertSame($atStart, $negative, 'progress below 0 must paint the opening frame, not vanish');
     }
 
+    public function testNonFiniteProgressTakesTheDocumentedEnds(): void
+    {
+        $fade = AnimationKind::FADE;
+        $atEnd = $this->veil($fade)->animate('MODAL', self::BG, Position::TOP, Position::LEFT, 1.0);
+        $atStart = $this->veil($fade)->animate('MODAL', self::BG, Position::TOP, Position::LEFT, 0.0);
+        $this->assertNotSame($atStart, $atEnd, 'the two ends must be distinguishable or the non-finite pins below are vacuous');
+
+        $nan = $this->veil($fade)->animate('MODAL', self::BG, Position::TOP, Position::LEFT, \NAN);
+        $this->assertSame($atEnd, $nan, 'NAN progress must paint the settled end — the documented saturation for incomparable input');
+
+        $this->assertSame($atEnd, $this->veil($fade)->animate('MODAL', self::BG, Position::TOP, Position::LEFT, \INF), '+INF must saturate to the end');
+        $this->assertSame($atStart, $this->veil($fade)->animate('MODAL', self::BG, Position::TOP, Position::LEFT, -\INF), '-INF must saturate to the start');
+    }
+
     public function testReducedMotionSnapsToTheSettledFrame(): void
     {
         $this->assertSame(
