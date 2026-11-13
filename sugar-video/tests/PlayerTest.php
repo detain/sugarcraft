@@ -9,6 +9,7 @@ use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Video\AudioPlayer;
+use SugarCraft\Video\Decode\FfmpegDecodeFailure;
 use SugarCraft\Video\Decode\RgbFrame;
 use SugarCraft\Video\Msg\ResizeRebuildMsg;
 use SugarCraft\Video\Msg\TickMsg;
@@ -2354,8 +2355,12 @@ final class PlayerTest extends TestCase
             $this->assertNotSame($a->bytes, $b->bytes, 'a -ss seek lands at different content per time');
 
             $seeked = $player->seekToSeconds(1.5);
-            $this->assertSame(1.5, $seeked->position());
             $this->assertSame(23, $seeked->frameIndex, '1.5s @ 15fps = frame 23 (round)');
+            $this->assertSame(
+                $seeked->frameIndex / 15.0,
+                $seeked->position(),
+                'SV-H4/013: the recorded playhead is the LANDED frame\'s own content time — the frame the decoder is actually on, never the requested float',
+            );
 
             $player->stop();
             $seeked->stop();
@@ -2518,6 +2523,155 @@ final class PlayerTest extends TestCase
 
         $backward = $forward->withSeek(100);
         $this->assertEqualsWithDelta(100 / 30.0, $backward->position(), 1e-9, 'an unbudgeted backward rebuild lands on the requested index');
+    }
+
+    /**
+     * @testdox SV-H4: a seek after a decode failure clears the error row, keeps the picture and re-arms the tick
+     */
+    public function testASeekAfterAFailureRecoversTheStream(): void
+    {
+        $frames = [];
+        for ($i = 0; $i < 20; $i++) {
+            $frames[] = new RgbFrame(str_repeat("\x10\x20\x30", 12), 4, 1);
+        }
+        // Paints one frame, then crashes exactly once — the way a real ffmpeg
+        // child dies mid-stream — then feeds fresh frames on the rebuilt walk.
+        $decoder = new class($frames) extends FakeDecoder {
+            private int $pulls = 0;
+
+            public function next(): ?RgbFrame
+            {
+                $this->pulls++;
+                if ($this->pulls === 2) {
+                    throw new FfmpegDecodeFailure('sugar-video: ffmpeg exited with code 7 before the stream ended (/fake)');
+                }
+                return parent::next();
+            }
+        };
+        $player = Player::fromDecoder(
+            decoder: $decoder,
+            cellsW: 40,
+            cellsH: 1,
+            fps: 10.0,
+            mode: Mode::Ascii,
+            paused: false,
+        );
+
+        // Tick 1 paints frame 0; tick 2 (backdated so the elapsed gate opens)
+        // is the one that dies.
+        [$painted] = $player->update(new TickMsg());
+        $armed = $this->backdateLastTick($painted, 1.0);
+        [$failed, $deadCmd] = $armed->update(new TickMsg());
+        $this->assertNotNull($failed->failure, 'the crash lands as a visible failure state');
+        $this->assertTrue($failed->ended);
+        $this->assertNull($deadCmd, 'a crashed stream schedules no follow-up tick');
+        $this->assertStringContainsString('[error]', $failed->view());
+
+        // → from frame 0 walks forward: the seek must resurrect the stream.
+        [$recovered, $rearm] = $failed->update(new KeyMsg(KeyType::Right));
+
+        $this->assertNotSame($failed, $recovered, 'the seek rebuilt the player state');
+        $this->assertNull($recovered->failure, 'a seek after a failure clears the dead session error row');
+        $this->assertFalse($recovered->ended, 'a seek that landed a frame claims a live stream');
+        $this->assertStringNotContainsString('[error]', $recovered->view(), 'the error row is gone from the picture');
+        // onDecodeFailure PAUSES the dead session (nothing may auto-resume audio
+        // behind an error row), and the seek honors that pause — Space, not a
+        // seek, is what resumes playback. The clean-ended re-arm is pinned in
+        // testTheArrowAtTheLastFrameIsANoOp.
+        $this->assertTrue($recovered->paused, 'recovery does not sneak past the failure pause');
+        $this->assertNull($rearm, 'a paused recovery arms no tick');
+
+        // And a tick against the paused recovery is inert, never resurrecting
+        // the crashed session's state.
+        [$pumped, $nextCmd] = $recovered->update(new TickMsg());
+        $this->assertNull($pumped->failure, 'the recovered stream stays clean');
+        $this->assertLessThan(20, $pumped->frameIndex);
+    }
+
+    /**
+     * @testdox SV-H4: seekToSeconds() records the LANDED playhead when the walk yields on the budget
+     */
+    public function testSeekToSecondsRecordsTheLandedPlayheadWhenTheWalkYields(): void
+    {
+        $frames = [];
+        for ($i = 0; $i < 900; $i++) {
+            $frames[] = new RgbFrame(str_repeat("\x10\x20\x30", 12), 4, 1);
+        }
+        $decoder = new CountingDecoder($frames);
+        $player = Player::fromDecoder(
+            decoder: $decoder,
+            cellsW: 4,
+            cellsH: 1,
+            fps: 30.0,
+            mode: Mode::Ascii,
+            frameBudgetMs: 5.0,
+        );
+
+        $seeked = $player->seekToSeconds(20.0);
+
+        $this->assertGreaterThan(0, $seeked->frameIndex, 'guaranteed progress: at least one frame landed');
+        $this->assertLessThan(600, $seeked->frameIndex, 'the walk yielded on the budget long before the 600-frame target');
+        $this->assertSame(
+            $seeked->frameIndex / 30.0,
+            $seeked->position(),
+            'the recorded time is exactly the landed index — never the requested target (SV-H4/013)',
+        );
+        $this->assertFalse($seeked->ended, 'the yielded seek landed a frame, so the stream is live');
+    }
+
+    /**
+     * @testdox SV-H4: an arrow at the last frame is a TRUE no-op — no respawned audio, no resurrected playhead
+     */
+    public function testTheArrowAtTheLastFrameIsANoOp(): void
+    {
+        $spy = new SpyAudioPlayer('/fake', 0);
+        $created = [];
+        $factory = static function (string $path, ?int $startMs) use ($spy, &$created): AudioPlayer {
+            $created[] = $startMs;
+            return $spy;
+        };
+
+        $player = Player::openForTest(
+            decoder: $this->makeFakeDecoder(12),
+            fps: 10.0,
+            totalFrames: 12,
+            videoPath: '/fake',
+            audioFactory: \Closure::fromCallable($factory),
+            audioPlayer: $spy,
+            paused: false,
+        );
+
+        // Walk to the last frame, then run the decoder dry so ended=true.
+        $atEnd = $player->withSeek(11);
+        $armed = $this->backdateLastTick($atEnd, 1.0);
+        [$endedPlayer] = $armed->update(new TickMsg());
+        $this->assertTrue($endedPlayer->ended, 'running the decoder dry ends the stream');
+        $this->assertSame(12, $endedPlayer->frameIndex, 'a fully consumed stream sits at frameIndex == totalFrames');
+
+        $stopsBefore = $spy->stopCallCount;
+        $createdBefore = count($created);
+
+        [$same, $cmd] = $endedPlayer->update(new KeyMsg(KeyType::Right));
+
+        $this->assertSame($endedPlayer, $same, '→ at the last frame does not pretend to move');
+        $this->assertTrue($same->ended, 'the ended state survives the no-op (no half-dead "playing" claim)');
+        $this->assertSame($stopsBefore, $spy->stopCallCount, 'the no-op must not stop the audio companion');
+        $this->assertCount($createdBefore, $created, 'the no-op must not respawn audio');
+        $this->assertNull($cmd, 'a no-op seek arms no tick');
+        $this->assertStringContainsString('[ended]', $same->view(), 'the end row stays visible');
+
+        // ← at frame 0 is the mirrored no-op.
+        $fresh = Player::openForTest($this->makeFakeDecoder(5), 10.0, totalFrames: 5);
+        [$sameZero, $cmdZero] = $fresh->update(new KeyMsg(KeyType::Left));
+        $this->assertSame($fresh, $sameZero, '← at frame 0 is a no-op too');
+        $this->assertNull($cmdZero);
+
+        // A seek out of a CLEAN ended stream (not paused — onReachedEnd never
+        // pauses) must re-arm the tick pump: that is seekTickCmd's whole job.
+        [$replay, $rearm] = $endedPlayer->update(new KeyMsg(KeyType::Left));
+        $this->assertNotSame($endedPlayer, $replay, '← from the true end rebuilds backward');
+        $this->assertFalse($replay->ended, 'the replay seek landed a frame and resumed the stream');
+        $this->assertNotNull($rearm, 'a seek out of the clean ended state re-arms the tick pump');
     }
 
 

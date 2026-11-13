@@ -529,10 +529,13 @@ final class Player implements Model
         }
 
         if ($this->failure !== null) {
-            // M12: a failed session is terminal — the decoder child it died
-            // with is closed; nothing here may respawn it behind the error
-            // row (host keypresses restart through digit-seek/'0', which
-            // rebuild from the source path, not from this corpse).
+            // M12: a failed session is terminal FOR THE TICK PUMP — the
+            // decoder child it died with is closed and nothing here may
+            // respawn it behind the error row. Recovery is a SEEK, and the
+            // seek arms genuinely clear the row now (SV-H4/004): withSeek()
+            // and seekToSeconds() rebuild from the source path and pass
+            // 'failure' => null, so the fresh child feeds a live frame
+            // instead of freezing under a stale error.
             return [$this, null];
         }
 
@@ -845,7 +848,15 @@ final class Player implements Model
 
         // → : seek forward 10 frames.
         if ($msg->type === KeyType::Right) {
-            $nextIndex = $this->frameIndex + 10;
+            // SV-H4/090: clamp to the terminal playhead when the length is
+            // known (digit-seek already guarded; arrows did not). A fully
+            // consumed stream sits at frameIndex == totalFrames — one PAST the
+            // last 0-based content index — so that is the ceiling: at the end
+            // the seek is then a same-index no-op, no respawned audio, no
+            // half-dead "playing" state past EOF.
+            $nextIndex = $this->totalFrames > 0
+                ? min($this->frameIndex + 10, $this->totalFrames)
+                : $this->frameIndex + 10;
             $nextPlayer = $this->withSeek($nextIndex);
             return [$nextPlayer, $this->seekTickCmd($nextPlayer)];
         }
@@ -1444,7 +1455,11 @@ final class Player implements Model
      */
     private function seekTickCmd(self $nextPlayer): ?\Closure
     {
-        return ($this->ended && !$nextPlayer->paused)
+        // SV-H4/090: a same-index seek returns the SAME instance (true no-op) —
+        // arming a tick for a stream that never moved would only pump the
+        // ended-guard harmlessly, but it is noise; only a seek that actually
+        // rebuilt or walked re-arms the pump.
+        return ($this->ended && !$nextPlayer->paused && $nextPlayer !== $this)
             ? Cmd::tick(1.0 / $this->fps, static fn (): Msg => TickMsg::instance())
             : null;
     }
@@ -1511,6 +1526,13 @@ final class Player implements Model
         // Clamp to valid range.
         $targetIndex = max(0, $targetIndex);
 
+        // SV-H4/090: a same-index seek is a TRUE no-op — the check runs
+        // BEFORE the audio rebuild so the committed state is never touched
+        // and the companion is never respawned for a seek that seeks nothing.
+        if ($targetIndex === $this->frameIndex) {
+            return $this;
+        }
+
         // F6: realign audio to the seek target position.
         $newAudio = $this->rebuildAudio((int)round(($targetIndex / $this->fps) * 1000));
 
@@ -1527,15 +1549,18 @@ final class Player implements Model
                 'decoder' => $decoder,
                 'videoTime' => $newVideoTime,
                 'frameIndex' => $landed,
-                'currentFrame' => $frame,
+                'currentFrame' => $frame ?? $this->currentFrame,
                 'lastTickTime' => microtime(true),
                 'audioPlayer' => $newAudio,
-                'ended' => false,
+                // SV-H4/004: a seek rebuilds from the SOURCE PATH, so a dead
+                // session's error row is cleared deliberately — the fresh
+                // child can feed, and leaving the row up over a live frame is
+                // the worst of both (frozen picture, no error, dead tick).
+                'failure' => null,
+                // SV-H4/090: with no frame to paint the seek did not actually
+                // land anywhere — do not claim a resumed stream.
+                'ended' => $frame !== null ? false : $this->ended,
             ]);
-        }
-
-        if ($targetIndex === $this->frameIndex) {
-            return $this;
         }
 
         // Forward seek: advance decoder to target frame — under the player's
@@ -1569,7 +1594,8 @@ final class Player implements Model
             'currentFrame' => $frame,
             'lastTickTime' => microtime(true),
             'audioPlayer' => $newAudio,
-            'ended' => false, // a seek clears the ended state
+            'failure' => null, // SV-H4/004: see the backward arm's law
+            'ended' => $frame !== null ? false : $this->ended, // a seek clears the ended state when it landed
         ]);
     }
 
@@ -1620,21 +1646,25 @@ final class Player implements Model
         if ($duration > 0.0 && $sec > $duration) {
             $sec = $duration;
         }
-        $targetIndex = (int) round($sec * $this->fps);
 
         // Realign audio to the seek target (same factory seam as withSeek()).
         $newAudio = $this->rebuildAudio((int)round($sec * 1000));
 
-        [$decoder, $frame] = $this->rebuildDecoderAtSeconds($this->cellsW, $this->cellsH, $this->mode, $sec);
+        [$decoder, $frame, $landed] = $this->rebuildDecoderAtSeconds($this->cellsW, $this->cellsH, $this->mode, $sec);
 
+        // SV-H4/013: record the LANDED position, not the requested one — the
+        // walk of an in-place decoder can yield short on the frame budget, and
+        // rebuildDecoderAt()'s own law is that callers re-record the truth so
+        // later ticks converge from there instead of desyncing ahead.
         return $this->mutate([
             'decoder' => $decoder,
             'currentFrame' => $frame ?? $this->currentFrame,
-            'frameIndex' => $targetIndex,
-            'videoTime' => $sec,
+            'frameIndex' => $landed,
+            'videoTime' => $landed / $this->fps,
             'lastTickTime' => microtime(true),
             'audioPlayer' => $newAudio,
-            'ended' => false, // a seek clears the end-of-stream state
+            'failure' => null, // SV-H4/004: a rebuild-from-source clears the dead session's row
+            'ended' => $frame !== null ? false : $this->ended, // a seek clears the end-of-stream state when it landed
         ]);
     }
 
@@ -1796,7 +1826,7 @@ final class Player implements Model
      * equivalent frame — which is the capability's honest meaning here, not a
      * path-string special case.
      *
-     * @return array{0: Decoder, 1: ?RgbFrame}
+     * @return array{0: Decoder, 1: ?RgbFrame, 2: int} decoder, first frame, landed content index (SV-H4/013: three-tuple like {@see rebuildDecoderAt()})
      */
     private function rebuildDecoderAtSeconds(int $cellsW, int $cellsH, Mode $mode, float $startSec): array
     {
@@ -1809,7 +1839,10 @@ final class Player implements Model
         $decoder = DecoderFactory::new($this->videoPath, $cellsW, $cellsH, $this->fps, $mode, max(0.0, $startSec), $this->cellPxW, $this->cellPxH, $this->headers, hostRestricted: $this->hostRestricted);
         $frame = $decoder->next(); // with -ss, the first frame IS the seek target
 
-        return [$decoder, $frame];
+        // SV-H4/013: three-tuple like the walk arm — with the fast input seek
+        // applied the landed index IS the requested one when a frame came; a
+        // silent child has landed nowhere (0).
+        return [$decoder, $frame, $frame !== null ? (int) round(max(0.0, $startSec) * $this->fps) : 0];
     }
 
     /**
