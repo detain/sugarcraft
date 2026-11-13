@@ -1945,10 +1945,15 @@ final class StdioMcpServer implements McpServer
      * True when $line, which McpMessage::parse() refused, is still a JSON-RPC
      * 2.0 response envelope addressed to $id (see readResponse()). The id is
      * coerced the way parse() coerces it, so an integer id matches its string.
+     * The decode depth mirrors McpMessage::MAX_DEPTH on purpose: a reply the
+     * real parser refuses for nesting must not be READ as a malformed reply
+     * here — that would blame the server for "answering neither result nor
+     * error" when the honest verdict is "unparseable", the same bucket every
+     * other unreadable line strikes into.
      */
     private static function isMalformedReplyTo(string $line, string $id): bool
     {
-        $decoded = json_decode($line, true);
+        $decoded = json_decode($line, true, McpMessage::MAX_DEPTH);
         if (!is_array($decoded) || ($decoded['jsonrpc'] ?? null) !== '2.0') {
             return false;
         }

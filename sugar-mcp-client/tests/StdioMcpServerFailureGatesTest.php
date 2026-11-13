@@ -457,6 +457,29 @@ final class StdioMcpServerFailureGatesTest extends TestCase
     }
 
     /**
+     * Depth-parity law: a valid envelope addressed to OUR id that is nested
+     * past McpMessage::MAX_DEPTH cannot be read by the parser any more than
+     * garbage can — the honest classification is a strike, not a server that
+     * "answered neither result nor error". The old 512-vs-64 divergence in
+     * the attribution helper made such a reply deterministically blame the
+     * server with a fast, confident, WRONG diagnosis.
+     */
+    public function testADeeplyNestedReplyToOurIdJoinsTheStrikeBucketNotTheFalseServerFault(): void
+    {
+        $server = $this->spawn('unattributable_server.php', ['--deep-id']);
+        $server->start();
+
+        $reply = $server->callTool('echo', ['raw' => 'first']);
+
+        self::assertArrayHasKey('error', $reply);
+        self::assertStringContainsString('attributable to no request', $reply['error'],
+            'the unparseable depth-65 reply was blamed as a server fault instead of struck');
+        self::assertStringNotContainsString('answered neither result nor error', $reply['error'],
+            'the depth divergence revived the false server-fault diagnosis');
+        self::assertTrue($server->isUp(), 'striking an unreadable line must not stop a server that merely answers deeply');
+    }
+
+    /**
      * The under-threshold half of the strike law: fewer strike frames than the
      * threshold, then a genuine reply — the call must SUCCEED, proving the
      * tripwire bounds only hopeless waits and per-read counting lets any

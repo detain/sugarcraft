@@ -18,9 +18,14 @@ declare(strict_types=1);
 // JSON-RPC parse-refusal shape. Since review M8 that is attributed to the
 // awaiting exchange (it answers our possibly-malformed write) and must end
 // the wait at once, not join the strike bucket.
+//
+// With --deep-id it floods depth-65 envelopes addressed to the AWAITING id:
+// the parser cannot read them for nesting, so the strike-bucket classification
+// must win over the false "answered neither result nor error" server blame.
 
 $recovers = in_array('--recovers', $argv, true);
 $parseError = in_array('--parse-error', $argv, true);
+$deepId = in_array('--deep-id', $argv, true);
 $strikes = $recovers ? 7 : 9; // threshold is 8; 9 crosses it, 7 stays under
 
 $write = static function (array|string $payload): void {
@@ -69,6 +74,17 @@ while (($line = fgets(STDIN)) !== false) {
 
             if ($parseError) {
                 $write('{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"parse error"}}');
+                break; // then alive, listening, silent
+            }
+
+            if ($deepId) {
+                $deep = 'leaf';
+                for ($i = 0; $i < 65; $i++) {
+                    $deep = ['n' => $deep];
+                }
+                for ($n = 0; $n < $strikes; $n++) {
+                    $write(['jsonrpc' => '2.0', 'id' => $id, 'result' => $deep]);
+                }
                 break; // then alive, listening, silent
             }
 
