@@ -44,7 +44,7 @@ final class IcalExporterTest extends TestCase
         $this->assertStringContainsString('DESCRIPTION:Project: my-project | Language: php', $ical);
         $this->assertStringContainsString('CATEGORIES:feature', $ical);
         $this->assertStringContainsString('END:VEVENT', $ical);
-        $this->assertStringEndsWith('END:VCALENDAR', $ical);
+        $this->assertStringEndsWith("END:VCALENDAR\r\n", $ical); // CT-S18: every line, last included, CRLF-terminated
     }
 
     public function testExportMultipleHeartbeats(): void
@@ -66,7 +66,7 @@ final class IcalExporterTest extends TestCase
     {
         $ical = $this->exporter->export('Empty', []);
         $this->assertStringStartsWith('BEGIN:VCALENDAR', $ical);
-        $this->assertStringEndsWith('END:VCALENDAR', $ical);
+        $this->assertStringEndsWith("END:VCALENDAR\r\n", $ical); // CT-S18: every line, last included, CRLF-terminated
         $this->assertStringNotContainsString('BEGIN:VEVENT', $ical);
     }
 
@@ -122,5 +122,130 @@ final class IcalExporterTest extends TestCase
         $this->assertStringContainsString('SUMMARY:file', $ical);
         // Verify no raw BEGIN:VEVENT injection via newlines in file field
         $this->assertStringNotContainsString("SUMMARY:file\nwith", $ical);
+    }
+
+    /**
+     * CT-S18 (finding 044): the pins that catch invalid iCal, named after
+     * what they actually verify.
+     */
+    public function testDatedLinesRoundTripToTheBeatDuration(): void
+    {
+        $hbs = [
+            new Heartbeat(time: 1719000000, project: 'p', language: 'php', file: 'a.php', duration: 120),
+        ];
+
+        $ical = $this->exporter->export('Test', $hbs);
+
+        $this->assertSame(1, preg_match('/^DTSTART:(\d{8}T\d{6}Z)\r$/m', $ical, $start));
+        $this->assertSame(1, preg_match('/^DTEND:(\d{8}T\d{6}Z)\r$/m', $ical, $end));
+        $from = \DateTimeImmutable::createFromFormat('Ymd\THis\Z', $start[1], new \DateTimeZone('UTC'));
+        $to = \DateTimeImmutable::createFromFormat('Ymd\THis\Z', $end[1], new \DateTimeZone('UTC'));
+        $this->assertNotFalse($from);
+        $this->assertNotFalse($to);
+        $this->assertSame(120, $to->getTimestamp() - $from->getTimestamp());
+    }
+
+    public function testTwoSameFileSameSecondBeatsKeepDistinctUids(): void
+    {
+        // Duration backdating and plugin retries mint these: the store
+        // keeps both rows and their sums ride every other surface, so
+        // the calendar leg must not silently dedupe them on import.
+        $hbs = [
+            new Heartbeat(time: 1719000000, project: 'p', language: 'php', file: 'a.php', duration: 60),
+            new Heartbeat(time: 1719000000, project: 'p', language: 'php', file: 'a.php', duration: 90),
+        ];
+
+        $ical = $this->exporter->export('Test', $hbs);
+
+        $uids = [];
+        foreach (explode("\r\n", $ical) as $line) {
+            if (str_starts_with($line, 'UID:')) {
+                $uids[] = $line;
+            }
+        }
+        $this->assertCount(2, $uids);
+        $this->assertCount(2, array_unique($uids));
+    }
+
+    public function testReExportingTheSameWindowIsByteIdentical(): void
+    {
+        $hbs = [
+            new Heartbeat(time: 1719000000, project: 'p', language: 'php', file: 'a.php', duration: 60),
+            new Heartbeat(time: 1719003600, project: 'p', language: 'php', file: 'b.php', duration: 60),
+        ];
+
+        $first = $this->exporter->export('T', $hbs);
+        $second = $this->exporter->export('T', $hbs);
+        $this->assertSame(
+            $this->strip($first),
+            $this->strip($second),
+            'UIDs and summaries must reproduce across re-exports of the same window (DTSTAMP excluded)',
+        );
+    }
+
+    public function testEveryPhysicalLineStaysUnderTheOctetCeiling(): void
+    {
+        $deep = '/home/dev/projects/' . str_repeat('nested-directory/', 12) . 'Über-touch-π.php';
+        $hbs = [
+            new Heartbeat(time: 1719000000, project: 'p', language: 'php', file: $deep, duration: 60),
+        ];
+
+        $ical = $this->exporter->export($deep, $hbs);
+
+        foreach (explode("\r\n", $ical) as $line) {
+            $this->assertLessThanOrEqual(75, strlen($line), 'RFC 5545 §3.1 caps content lines at 75 octets: ' . $line);
+        }
+        // Unfolding must restore the exact value, byte for byte, with no
+        // split multi-byte sequence anywhere.
+        $unfolded = str_replace("\r\n ", '', $ical);
+        $this->assertStringContainsString('SUMMARY:' . $this->escapeExpected($deep), $unfolded);
+    }
+
+    public function testPositiveEscapeFormsArePaintedVerbatim(): void
+    {
+        $hbs = [
+            new Heartbeat(
+                time: 1719000000,
+                project: 'p',
+                language: 'php',
+                file: 'one\\two;three,four' . "\n" . 'tail',
+                duration: 60,
+                tags: ['tag,with;commas'],
+            ),
+        ];
+
+        $ical = $this->exporter->export('Test', $hbs);
+        $unfolded = str_replace("\r\n ", '', $ical);
+
+        $this->assertStringContainsString(
+            'SUMMARY:one\\\\two\\;three\\,four\\ntail',
+            $unfolded,
+        );
+        $this->assertStringContainsString('CATEGORIES:tag\\,with\\;commas', $unfolded);
+        $this->assertStringContainsString('X-WR-CALNAME:Test', $ical);
+    }
+
+    public function testNoBareLineFeedEverLeaksIntoTheStream(): void
+    {
+        $hbs = [
+            new Heartbeat(time: 1719000000, project: "lf\nproject", language: 'php', file: "crlf\r\nfile", duration: 60),
+        ];
+
+        $ical = $this->exporter->export('Test', $hbs);
+
+        $this->assertSame(0, \preg_match('/(?<!\r)\n/', $ical), 'every LF must ride a CRLF');
+    }
+
+    /** escapeText mirror for the assertion above (test-side so the pin stays honest). */
+    private function escapeExpected(string $v): string
+    {
+        $v = str_replace(['\\', ';', ','], ['\\\\', '\\;', '\\,'], $v);
+        return \preg_replace('/\r\n|\r|\n/', '\\\\n', $v) ?? $v;
+    }
+
+    /** Drop the wall-clock DTSTAMP so byte comparison of two runs is meaningful. */
+    private function strip(string $ical): string
+    {
+        return \preg_replace('/^DTSTAMP:.*$/m', '', $ical) ?? $ical;
     }
 }

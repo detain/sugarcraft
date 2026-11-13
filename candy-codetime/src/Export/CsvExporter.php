@@ -68,14 +68,31 @@ final class CsvExporter implements TabularExporterInterface
      */
     public function encode(array $heartbeats): string
     {
+        // A false here (fd exhaustion, memory pressure) must answer with
+        // the library's own one-line failure, not a TypeError exit 255 at
+        // the first fputcsv. The handle leaves through finally no matter
+        // which leg fails — consumers of this class are library callers,
+        // not one-shot CLIs.
         $fh = fopen('php://temp', 'r+');
-        fputcsv($fh, $this->headers());
-        foreach ($this->rows($heartbeats) as $row) {
-            fputcsv($fh, $row);
+        if ($fh === false) {
+            throw new \RuntimeException('export could not open the output buffer for writing');
         }
-        rewind($fh);
-        $csv = stream_get_contents($fh);
-        fclose($fh);
+
+        try {
+            fputcsv($fh, $this->headers());
+            foreach ($this->rows($heartbeats) as $row) {
+                fputcsv($fh, $row);
+            }
+            rewind($fh);
+            $csv = stream_get_contents($fh);
+        } finally {
+            fclose($fh);
+        }
+
+        if (!is_string($csv)) {
+            throw new \RuntimeException('export could not read the CSV back from the output buffer');
+        }
+
         return $csv;
     }
 
