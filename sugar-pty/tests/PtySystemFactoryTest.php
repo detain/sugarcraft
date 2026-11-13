@@ -23,29 +23,17 @@ final class PtySystemFactoryTest extends TestCase
 
     /**
      * `::new()` is the root factory per the project convention; the old
-     * `::default()` name stays as a deprecated alias that resolves through
-     * it, env handling included, so existing callers keep working.
+     * `::default()` alias was deleted once its last live callers (three
+     * in candy-vcr) moved over — this pin keeps it dead.
      */
-    public function testDeprecatedDefaultAliasDelegatesToNew(): void
+    public function testDeprecatedDefaultAliasIsRemoved(): void
     {
-        $this->assertTrue(
-            \str_contains((string) (new \ReflectionMethod(PtySystemFactory::class, 'default'))->getDocComment(), '@deprecated'),
-            'default() must be marked @deprecated in favour of new()',
+        // PTY-16: the ::default() alias was deleted after migrating its
+        // last live callers; ::new() is the single factory entry point.
+        $this->assertFalse(
+            \method_exists(PtySystemFactory::class, 'default'),
+            'the deprecated default() alias must not come back without a deprecation cycle',
         );
-
-        if (\PHP_OS_FAMILY !== 'Windows') {
-            $this->assertInstanceOf(PosixPtySystem::class, PtySystemFactory::default());
-        }
-
-        \putenv('SUGARCRAFT_PTY_BACKEND=junk-value');
-        try {
-            PtySystemFactory::default();
-            $this->fail('the alias must apply the same SUGARCRAFT_PTY_BACKEND validation as new()');
-        } catch (\InvalidArgumentException $e) {
-            $this->assertStringContainsString('SUGARCRAFT_PTY_BACKEND', $e->getMessage());
-        } finally {
-            \putenv('SUGARCRAFT_PTY_BACKEND');
-        }
     }
 
     public function testForLinuxReturnsPosixSystem(): void

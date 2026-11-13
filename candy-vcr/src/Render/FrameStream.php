@@ -454,7 +454,7 @@ final class FrameStream implements \IteratorAggregate
         }
 
         try {
-            $system = PtySystemFactory::default();
+            $system = PtySystemFactory::new();
             $pair = $system->open($cols, $rows);
             $child = $pair->slave()->spawn(
                 $this->shellCommand(),

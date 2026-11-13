@@ -146,7 +146,7 @@ final class ShirleyOverheadTest extends TestCase
      */
     private function runOnce(bool $withRecorder): float
     {
-        $system = PtySystemFactory::default();
+        $system = PtySystemFactory::new();
         $pair = $system->open(80, 24);
         $child = $pair->slave()->spawn(['/bin/bash', '-c', 'seq 100000']);
 

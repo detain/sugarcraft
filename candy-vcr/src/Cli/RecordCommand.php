@@ -153,7 +153,7 @@ final class RecordCommand implements DocumentedCommand
                 self::installRescueHandlers($savedTermios);
             }
 
-            $system = PtySystemFactory::default();
+            $system = PtySystemFactory::new();
             $pair = $system->open($cols, $rows);
 
             $env = $this->captureEnv();

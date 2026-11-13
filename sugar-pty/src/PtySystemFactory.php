@@ -115,20 +115,6 @@ final class PtySystemFactory
     }
 
     /**
-     * Former name of {@see new()}, kept so existing callers (sugar-ssh-server's
-     * InProcessTransport among them) keep resolving. The project's root
-     * factory is `::new()`; `::default()` is reserved against.
-     *
-     * @deprecated use {@see new()}
-     * @throws UnsupportedPlatformException
-     * @throws \InvalidArgumentException
-     */
-    public static function default(): PtySystem
-    {
-        return self::new();
-    }
-
-    /**
      * Explicit-platform variant for tests: returns the implementation
      * the factory would pick for the given `$platform` string (matches
      * PHP's `PHP_OS_FAMILY` values: 'Linux', 'Darwin', 'BSD', 'Solaris',

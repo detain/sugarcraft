@@ -97,6 +97,9 @@ Production code should wrap the drain and reap in `try/finally` so
 `@deprecated` shims kept for consumers predating the contract split —
 `Pty::open()` delegates to the same `PosixPtySystem` path, and both
 go away at v2.0. New code should use `PtySystemFactory` as above.
+(`PtySystemFactory::default()` — the old name of `::new()` — has already
+been deleted: it carried no behaviour of its own and its last live callers
+were migrated in-tree, so `::new()` is the single factory entry point.)
 
 Rename bookkeeping: this package was formerly published as
 `sugarcraft/candy-pty` (renamed 2026-10). <!-- @rename-keep -->
