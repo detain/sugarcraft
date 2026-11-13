@@ -56,7 +56,7 @@ composer require sugarcraft/sugar-dashboard
 | `ColorMode` | Process-wide colour capability gate for every renderer in the library — charts, gauges and chrome route through it instead of each deciding on its own — the one capability authority (finding M-7); it deliberately diverges from `ColorProfile::detect()` in three documented, probe-pinned places, see Color Environment | `use(?ColorProfile): void`, `profile(): ColorProfile` |
 | `Threshold` | Maps a numeric value (typically a 0..1 ratio) to a `Color` via ordered stops — the shared "green below 60%, yellow below 80%, red above" pattern that gauges, meters and status indicators would otherwise each reinvent; `health()` is the preset triple | `of(array $stops)`, `health(?ok, ?warn, ?critical)`, `colorFor(float): Color`, `stops()` |
 | `EdgeStyle` | String enum `Solid`/`Dashed`/`Dotted`/`Bold` — currently dormant: no consumers in the library (the live tree-edge variant is `Components\Tree\EdgeStyle`, which carries `Double` in place of `Bold` and is consumed by `Network`) | |
-| `Segment` | 7-segment display component (digital-clock/calculator style) — renders characters from horizontal and vertical segments | `new(string)`, `withDigitWidth()`, `withShowColon()`, `withOnColor()`, `withOffColor()`, `withContent()` |
+| `Segment` | 7-segment display component (digital-clock/calculator style) — renders characters from horizontal and vertical segments | `new(string)`, `withDigitWidth()`, `withShowColon()`, `withOnColor()`, `withOffColor()`, `withContent()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/segment.gif) |
 
 > **Dual-SSOT note.** Five Foundation primitives (`Style`/`Theme`/`Rect`/`Buffer`/`Cell`) plus `StyleParser` are intentionally distinct from same-named canonical types in `sugar-style`/`sugar-core`/`sugar-vterm`. The two families have distinct design lineages and the API shapes diverge. Only `Color` was a true duplicate and is now a `class_alias` to `\SugarCraft\Core\Util\Color`. See `CALIBER_LEARNINGS.md` entries `[pattern:dual-foundation-ssot]`, `[pattern:dual-style-ssot]`, `[pattern:dual-theme-ssot]`, `[pattern:dual-rect-models]`, `[pattern:dual-buffer-roles]`, `[pattern:dual-cell-shapes]`.
 
@@ -88,7 +88,7 @@ composer require sugarcraft/sugar-dashboard
 | `HStack` | Horizontal stack with spacing and alignment | `new(...items)`, `spaced(int, ...items)`, `centered(...items)` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/hstack.gif) |
 | `ZStack` | Layered stack (items on top of each other) | `new(...items)`, `left(...items)`, `right(...items)`, `top(...items)`, `bottom(...items)` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/zstack.gif) |
 | `Stack` | Basic vertical stack | `new(...items)`, `spaced(int, ...items)` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/stack.gif) |
-| `Split` | Split view with two panes | `new(...items)`, `horizontal()`, `vertical()` | |
+| `Split` | Split view with two panes | `new(...items)`, `horizontal()`, `vertical()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/split.gif) |
 
 ### Border & Frame Components
 
@@ -123,9 +123,9 @@ in the Components section).
 | `Constraint` | How a child is sized along a container axis (tealeaves constraint law): fixed pixels, a flex weight, or fit-to-content, with min/max clamps; the active flavour is reported as a `ConstraintKind` enum | `fixed(px)`, `flex(weight)`, `fit()`, `withMinSize()`, `withMaxSize()` |
 | `Resolver` | Five-phase tile-dimension solver turning constraints into concrete rectangles (`resolveLinear` for one axis, `resolveTile` for the 2-D walk) | `resolveLinear()`, `resolveTile()` |
 | `SizeHint` | Min + desired size a widget reports to the solver; widgets supply one through the `SizeHinter` contract | `empty()` |
-| `Boxer` | Tree-based layout engine (bubbleboxer pattern): nested horizontal/vertical `Node` splits addressed by path (`Address`); items live beside the tree, so editing a leaf never rebuilds the layout tree | `leaf(address, Item)`, `tree(Node, modelMap)`, `horizontal(...nodes)`, `vertical(...nodes)`, `editLeaf(address, callable)`, `setSize()`, `render()` |
+| `Boxer` | Tree-based layout engine (bubbleboxer pattern): nested horizontal/vertical `Node` splits addressed by path (`Address`); items live beside the tree, so editing a leaf never rebuilds the layout tree | `leaf(address, Item)`, `tree(Node, modelMap)`, `horizontal(...nodes)`, `vertical(...nodes)`, `editLeaf(address, callable)`, `setSize()`, `render()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/boxer-demo.gif) |
 | `RatioGrid` | Grid whose rows/columns are sized by ratio (termui grid pattern); cells placed by `(row, col)` coordinate, `NewColRow` carries the generated guides | `new(columns, rows)`, `withCell(row, col, GridItem)`, `setSize()`, `render()`, `innerSize()` |
-| `FocusManager` | Persistence wrapper over sugar-focus's `FocusRing` for a layout hierarchy: the ring owns the ordered focusable ids and wrap-around Tab/Shift-Tab traversal; `persistState()`/`restoreState()` park the focused id through a `State\Persistence` file so focus survives panel swaps and reloads | `register(id)`, `unregister(id)`, `focus(id)`, `blur(id)`, `isFocused(id)`, `focusedId()`, `focusNext()`, `focusPrevious()`, `persistState(persistence, path)`, `restoreState(persistence, path)` |
+| `FocusManager` | Persistence wrapper over sugar-focus's `FocusRing` for a layout hierarchy: the ring owns the ordered focusable ids and wrap-around Tab/Shift-Tab traversal; `persistState()`/`restoreState()` park the focused id through a `State\Persistence` file so focus survives panel swaps and reloads | `register(id)`, `unregister(id)`, `focus(id)`, `blur(id)`, `isFocused(id)`, `focusedId()`, `focusNext()`, `focusPrevious()`, `persistState(persistence, path)`, `restoreState(persistence, path)` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/focus.gif) |
 
 ### Layout\Grid (StackedGrid Option Parts)
 
@@ -164,7 +164,7 @@ its `Layout\Grid\` option value parts.
 | `Sparkline` | Inline sparkline chart (ring buffer) | `new(int $width = 40)` with data via `push()`/`pushAll()` (no ctor data), `withWidth()`, `withHeight()`, `withDataPoints()`, `withFill()`, `withDimEdge()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/sparkline.gif) |
 | `SparklineBar` | Bar-style sparkline | `new(array $data)`, `withData()`, `withWidth()`, `withHeight()`, `withShowValues()`, `withColor()`, `withMaxColor()`, `withMinColor()`, `withBarGaps()`, `withSeparator()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/sparkline-bar.gif) |
 | `SparklineArea` | Area-style sparkline | `new(array $data)`, `withData()`, `withWidth()`, `withHeight()`, `withShowLine()`, `withShowFill()`, `withLineColor()`, `withFillColor()`, `withMaxColor()`, `withMinColor()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/sparkline-area.gif) |
-| `SparkArea` | Spark area chart | `new(array $values)`, `withHeight()`, `withColor()`, `withShowMinMax()`, `withGradient()` | |
+| `SparkArea` | Spark area chart | `new(array $values)`, `withHeight()`, `withColor()`, `withShowMinMax()`, `withGradient()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/spark-area.gif) |
 | `FunnelChart` | Funnel chart visualization | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/funnel-chart.gif) |
 | `Funnel` | Funnel visualization component | | |
 | `Meter` | Meter/gauge component | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/meter.gif) |
@@ -203,7 +203,7 @@ shape, so the panels stay readable in a colour-blind terminal:
 | `Bubble` | Bubble chart | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/bubble.gif) |
 | `BubblePoint` | Bubble chart point | | |
 | `WordCloud` | Word cloud visualization | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/word-cloud.gif) |
-| `DotMatrix` | Dot matrix display | | |
+| `DotMatrix` | Dot matrix display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/dot-matrix.gif) |
 | `Partition` | Partition chart | | |
 | `PartitionSegment` | Partition segment | | |
 | `Canvas` | Drawing canvas | | |
@@ -532,7 +532,7 @@ in the same namespace are its value parts.
 | `Level` | Toast level enum: `Info`, `Warning`, `Error`, `Success` | `icon()`, `isError()`, `isHighlighted()` | |
 | `Notification` | Toast notification DTO: `message`, `level`, `title` | `info()`, `warning()`, `error()`, `success()` | |
 | `Tooltip` | Tooltip popup | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/tooltip.gif) |
-| `Hint` | Hint/caption text line — muted/italic/severity presets, optional icon prefix, wraps long text within the allocated width | `new(string)`, `muted()`, `italic()`, `info()`, `success()`, `warning()`, `danger()`, `withText()`, `withColor()`, `withStyle()`, `withIcon()` | |
+| `Hint` | Hint/caption text line — muted/italic/severity presets, optional icon prefix, wraps long text within the allocated width | `new(string)`, `muted()`, `italic()`, `info()`, `success()`, `warning()`, `danger()`, `withText()`, `withColor()`, `withStyle()`, `withIcon()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/hint.gif) |
 | `NoticePosition` | Screen-position enum for toast notifications: the four corners, edge centres, `Center` and `Anchor` — resolves to vertical/horizontal alignment and maps to the sugar-toast `Position` vocabulary | `vertical()`, `horizontal()`, `isCorner()`, `isCenter()`, `isAnchor()`, `toToastPosition()` | |
 
 ### Components\Modal (Modal Dialogs)
@@ -601,7 +601,7 @@ in the same namespace are its value parts.
 | `Pricing` | Pricing table | | |
 | `Features` | Feature grid | | |
 | `Accordion` | Accordion/collapsible | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/accordion.gif) |
-| `Comment` | Comment component | | |
+| `Comment` | Comment component | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/comment.gif) |
 | `ActivityFeed` | Activity feed | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/activity-feed.gif) |
 | `Leaderboard` | Leaderboard display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/leaderboard.gif) |
 | `BoxDrawing` | Unicode box-drawing frame generator | `new(?string)`, `titled(string)`, `double()`, `rounded()`, `bold()`, `withStyle()`, `withBorderColor()`, `withBgColor()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/box-drawing.gif) |
@@ -643,7 +643,7 @@ in the same namespace are its value parts.
 | `Emoji` | Emoji display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/emoji.gif) |
 | `Marquee` | Scrolling marquee text | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/marquee.gif) |
 | `Shadow` | Drop shadow effect wrapping any Item | `new(Item)`, `withStyle()`, `withColor()`, `withOffset()`, `withHeavy()`, `withNoShadow()` | |
-| `Pictogram` | Pictogram display | | |
+| `Pictogram` | Pictogram display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/pictogram.gif) |
 
 ### Components\Calendar (Calendar & Date Components)
 
@@ -749,7 +749,7 @@ in the same namespace are its value parts.
 
 | Type | Description | Key Methods |
 |------|-------------|-------------|
-| `Center` | Calculate centered position | |
+| `Center` | Calculate centered position | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/center.gif) |
 | `Overlay` | Auto-positioning helper for overlays — computes the optimal position relative to an anchor, choosing above or below based on available space, clamped to container bounds | `calculate(int $overlayWidth, int $overlayHeight, int $anchorX, int $anchorY, int $containerWidth, int $containerHeight): array`, `fitsBelow()`, `fitsAbove()` | |
 
 > Note: `Position\Center` is the geometry helper (computes centered
@@ -973,6 +973,11 @@ cd sugar-dashboard && composer install && vendor/bin/phpunit
 | ![Boxer](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/boxer.gif) | **Three-panel Boxer layout** — horizontal split with three named leaves and visual focus indicator |
 | ![GridTable](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/gridtable.gif) | **Sortable/filterable GridTable** — pagination, column sort, text filter across 25 rows |
 | ![Plot Braille](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/plot-braille.gif) | **Plot marker comparison** — side-by-side MarkerDot vs MarkerBraille rendering |
+| ![Dashboard](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/dashboard.gif) | Dashboard basics (`examples/dashboard.php`) |
+| ![Dashboard Modules](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/dashboard-modules.gif) | Module-registry dashboard (`examples/dashboard-modules.php`) |
+| ![Dashboard Showcase](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/dashboard-showcase.gif) | Full component showcase (`examples/dashboard-showcase.php`) |
+| ![Tag](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/tag.gif) | Tag component (`examples/tag.php`) |
+| ![State](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/state.gif) | Status indicator states (`examples/state.php`) |
 
 ## Example Demos
 
