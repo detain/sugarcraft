@@ -14,15 +14,24 @@ use PHPUnit\Framework\TestCase;
  * child `php` process under a real wall-clock ceiling, asserting exit
  * code 0 and empty stderr. A template that documents a fatal (or a
  * hang) teaches the fatal; a doc that runs is a doc that stays honest.
+ * A fence that is pure commentary (the commented panic-handler pair)
+ * still gets linted, but its execution arm skips LOUDLY instead of
+ * counting a guaranteed-green pass as coverage (candy-starter-009).
  *
  * The ceiling is coreutils `timeout -s KILL N` (Linux, where this
  * suite is gated) plus `</dev/null` — `-d max_execution_time` alone is
  * decorative for CLI SAPI blocking work, and an inherited STDIN lets a
  * snippet that reads input stall forever (lib-reviews-1102 int-php M2 /
  * architect M2 / senior M2 / qa M3: the old "ceiling" was empirically
- * vacuous on both counts). The ceiling's own pin is
- * testTheWallClockCeilingActuallyKillsAStalledSnippet: neuter the
- * wrapper and the suite hangs on that test instead of passing silently.
+ * vacuous on both counts). Both halves of that ceiling now carry their
+ * own DISCRIMINATING pin (candy-starter-010): the timeout wrapper is
+ * pinned by a sleeper that must die at the deadline, and the stdin
+ * redirect is pinned by a drainer that must reach its exit 0 through
+ * the immediate EOF.
+ *
+ * The three ```bash fences are the literal newcomer on-ramp; they are
+ * structure-pinned against a command roster so renames and typos
+ * redden without the suite ever needing network (candy-starter-021).
  *
  * README blocks must be self-contained: each runs against the package
  * autoloader plus `declare(strict_types=1)` prepended, so
@@ -34,6 +43,18 @@ final class ReadmeSnippetsTest extends TestCase
 
     /** Wall-clock ceiling per snippet, seconds (SIGKILL at the deadline). */
     private const RUN_TIMEOUT_SECONDS = 15;
+
+    /**
+     * The shipped ```bash fences in README order: create-project quickstart,
+     * test runner, optional sugar-log install (candy-starter-021). This is
+     * a documented-invariant roster — moving or rewording a fence is a
+     * deliberate act that must update this list in the same commit.
+     */
+    private const BASH_FENCE_ROSTER = [
+        'composer create-project sugarcraft/candy-starter my-app --stability=dev',
+        'vendor/bin/phpunit',
+        'composer require sugarcraft/sugar-log',
+    ];
 
     private string $scratchDir;
 
@@ -66,13 +87,16 @@ final class ReadmeSnippetsTest extends TestCase
             $blocks[] = $block[1][0];
             $offset   = $block[0][1] + strlen($block[0][0]);
         }
-        // The template README carries exactly two php fences today (the
-        // Model anatomy class and the commented panic-handler pair).
-        // Fewer means the extractor or the README broke; both blocks
-        // must stay runnable for the guard to mean anything.
-        if (count($blocks) !== 2) {
+        // Documented invariant, deliberately a FLOOR not an equality
+        // (candy-starter-036): the template ships at least two php fences —
+        // the Model anatomy class and the panic-handler pair — and the
+        // extractor finding fewer means the README or the fence syntax
+        // broke. A docs writer legitimately adding a third runnable fence
+        // must not be greeted by four provider errors claiming the
+        // extractor died; the guard iterates over however many exist.
+        if (count($blocks) < 2) {
             self::fail(sprintf(
-                'expected exactly two fenced php blocks in README.md, found %d — the extractor broke',
+                'expected at least two fenced php blocks in README.md, found %d — the extractor broke or a taught example was lost',
                 count($blocks),
             ));
         }
@@ -97,6 +121,18 @@ final class ReadmeSnippetsTest extends TestCase
      */
     public function testEveryDocumentedSnippetRunsToCompletion(string $kind, string $source): void
     {
+        // candy-starter-009: the commented panic-handler fence is prose,
+        // not a program — executing it can only ever pass, so the run arm
+        // would book a guaranteed-green "coverage" row for a doc that
+        // nothing runs. Its real signal is the lint arm above; here it
+        // skips loudly instead of padding the matrix.
+        if (!self::blockIsExecutable($source)) {
+            $this->markTestSkipped(
+                "the {$kind} snippet is commentary-only (every line is a // comment) — "
+                . 'it is pinned by php -l, not by execution; uncomment it into real code and this arm runs',
+            );
+        }
+
         $script = $this->materialise($source);
 
         [$status, $stderr] = $this->runPhp([
@@ -111,12 +147,15 @@ final class ReadmeSnippetsTest extends TestCase
 
     public function testTheWallClockCeilingActuallyKillsAStalledSnippet(): void
     {
-        // Discriminating pin for the ceiling itself (the pre-2026-11
-        // `-d max_execution_time` story was measured inert on this SAPI:
-        // `php -d max_execution_time=1 -r 'sleep(3);'` exits 0). Remove
-        // the timeout wrapper and THIS test hangs the suite — the honest
-        // shape of a guard whose ceiling regrows fake.
-        $script = $this->materialise('if (stream_get_contents(STDIN, 1) !== false) { echo "ate stdin\n"; } sleep(60);');
+        // Discriminating pin for the `timeout` half of the ceiling (the
+        // pre-2026-11 `-d max_execution_time` story was measured inert on
+        // this SAPI: `php -d max_execution_time=1 -r 'sleep(3);'` exits 0).
+        // The sleeper never touches STDIN, so this test pins ONLY the
+        // deadline — the redirect half has its own case below
+        // (candy-starter-010). Remove the timeout wrapper and THIS test
+        // hangs the suite — the honest shape of a guard whose ceiling
+        // regrows fake.
+        $script = $this->materialise('sleep(60);');
 
         [$status, $stderr] = $this->runPhp([$script], 2);
         // GNU timeout has two documented shapes for a ceiling that fired:
@@ -137,6 +176,81 @@ final class ReadmeSnippetsTest extends TestCase
         );
     }
 
+    public function testTheStdinRedirectFeedsTheChildAnImmediateEof(): void
+    {
+        // Discriminating pin for the `</dev/null` half of the ceiling
+        // (candy-starter-010): the old stall script slept unconditionally,
+        // so deleting the redirect left the suite green — the half of the
+        // documented ceiling the stdin arm exists to police could not
+        // fail. This child drains STDIN to EOF and prints how much it
+        // ate; only an immediate EOF lets it reach its exit 0 inside the
+        // deadline. Delete ` </dev/null` from runPhp and this inherits the
+        // runner's blocking handle, the drainer never finishes, and the
+        // deadline reddens it 124/137 — exactly the regression it exists
+        // to catch. The drained:0 stdout assert additionally pins that the
+        // marker the docblock promised was actually measured (the old
+        // runPhp discarded stdout and never asserted it).
+        $script = $this->materialise('printf("drained:%d\n", strlen((string) stream_get_contents(STDIN)));');
+
+        [$status, $stderr, $stdout] = $this->runPhp([$script], 5);
+        $this->assertSame(
+            'drained:0',
+            trim($stdout),
+            'the child must see an immediate empty EOF on stdin (drained:0) and its stdout must be measured, not discarded: '
+                . $stderr,
+        );
+        $this->assertSame(0, $status, 'a stdin-draining snippet must exit 0 through the </dev/null EOF, got ' . $status);
+    }
+
+    public function testTheDocumentedBashOnRampsMatchTheirRoster(): void
+    {
+        // candy-starter-021: three ```bash fences are the literal
+        // newcomer on-ramp (create-project quickstart, test runner,
+        // sugar-log install) and the php-only extractor pinned none of
+        // them. Structural roster check, no network execution in the lib
+        // suite — a typo or rename inside any of the commands reddens
+        // this pin instead of stranding a copy-pasting newcomer.
+        $readme = (string) file_get_contents(dirname(__DIR__) . '/README.md');
+
+        $blocks   = [];
+        $block    = [];
+        $offset   = 0;
+        while (preg_match('/^```bash[ \t]*\n(.*?)\n```/ms', $readme, $block, PREG_OFFSET_CAPTURE, $offset) === 1) {
+            $blocks[] = $block[1][0];
+            $offset   = $block[0][1] + strlen($block[0][0]);
+        }
+        if (count($blocks) < count(self::BASH_FENCE_ROSTER)) {
+            self::fail(sprintf(
+                'expected at least %d fenced bash blocks in README.md, found %d — the extractor broke or a taught command was lost',
+                count(self::BASH_FENCE_ROSTER),
+                count($blocks),
+            ));
+        }
+        foreach (self::BASH_FENCE_ROSTER as $index => $command) {
+            $firstLine = trim(explode("\n", $blocks[$index])[0]);
+            $this->assertSame(
+                $command,
+                $firstLine,
+                'bash fence ' . ($index + 1) . ' must carry the rostered command verbatim (update the roster in the same commit as a deliberate command change)',
+            );
+        }
+    }
+
+    /** A fence is executable when at least one non-blank line is not a // comment. */
+    private static function blockIsExecutable(string $body): bool
+    {
+        foreach (explode("\n", $body) as $line) {
+            $trimmed = ltrim($line);
+            if ($trimmed === '' || str_starts_with($trimmed, '//')) {
+                continue;
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
     /** README bodies become child-process scripts. */
     private function materialise(string $source): string
     {
@@ -149,7 +263,7 @@ final class ReadmeSnippetsTest extends TestCase
 
     /**
      * @param list<string> $args
-     * @return array{0:int, 1:string} [exit status, captured stderr]
+     * @return array{0:int, 1:string, 2:string} [exit status, captured stderr, captured stdout]
      */
     private function runPhp(array $args, int $timeoutSeconds = self::RUN_TIMEOUT_SECONDS): array
     {
@@ -166,6 +280,6 @@ final class ReadmeSnippetsTest extends TestCase
         $lines = [];
         exec($command, $lines, $status);
 
-        return [$status, (string) file_get_contents($errorFile)];
+        return [$status, (string) file_get_contents($errorFile), implode("\n", $lines)];
     }
 }
