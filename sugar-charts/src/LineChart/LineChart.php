@@ -7,6 +7,7 @@ namespace SugarCraft\Charts\LineChart;
 use SugarCraft\Charts\Chart\Chart;
 use SugarCraft\Charts\Chart\Position;
 use SugarCraft\Charts\Lang;
+use SugarCraft\Charts\LineStyle;
 use SugarCraft\Charts\Support\CellGrid;
 use SugarCraft\Charts\MarkLine;
 use SugarCraft\Charts\Support\Finite;
@@ -1098,10 +1099,9 @@ final class LineChart extends Chart
                 continue;
             }
             $glyph = match ($mark->style) {
-                MarkLine::STYLE_SOLID  => '─',  // U+2500
-                MarkLine::STYLE_DASHED => '╌',  // U+254C
-                MarkLine::STYLE_DOTTED => '┄',  // U+2504
-                default => throw new \InvalidArgumentException("Invalid MarkLine style: {$mark->style}"),
+                LineStyle::Solid  => '─',  // U+2500
+                LineStyle::Dashed => '╌',  // U+254C
+                LineStyle::Dotted => '┄',  // U+2504
             };
             $row = self::rowForValue($mark->value, $min, $max, $plotH);
             for ($col = $gutterLeft; $col < $gutterLeft + $plotW; $col++) {

@@ -22,12 +22,21 @@ use SugarCraft\Charts\Support\UntrustedText;
  *
  * Value and style are validated at construction, not at render time: a
  * non-finite value defeats the range maths it would be mapped through,
- * and a misspelt style would otherwise surface as a throw buried inside
- * somebody else's `view()` call.
+ * and an unknown style would otherwise surface as a throw buried inside
+ * somebody else's `view()` call. The canonical style vocabulary is the
+ * {@see LineStyle} enum; the deprecated `STYLE_*` string constants are
+ * still accepted and normalise to their case.
  */
 final class MarkLine
 {
-    /** Built-in line types. */
+    /**
+     * Built-in line type spellings.
+     *
+     * @deprecated since CH-17 — the canonical vocabulary is the
+     *             {@see LineStyle} enum. These strings stay accepted at
+     *             every style-taking surface (alias window per house law)
+     *             and are pinned to the enum's values by MarkLineStyleTest.
+     */
     public const STYLE_SOLID  = 'solid';
     public const STYLE_DASHED  = 'dashed';
     public const STYLE_DOTTED  = 'dotted';
@@ -37,22 +46,25 @@ final class MarkLine
     public const MAX     = 'max';
     public const AVERAGE = 'average';
 
-    /** @var list<string> every accepted style spelling. */
+    /** @var list<string> every accepted legacy style spelling (error-message vocabulary). */
     private const STYLES = [self::STYLE_SOLID, self::STYLE_DASHED, self::STYLE_DOTTED];
 
     private function __construct(
         public readonly float $value,
         public readonly string $label,
-        public readonly string $style,
+        public readonly LineStyle $style,
     ) {}
 
     /**
      * Create a mark line at an explicit value.
      *
+     * @param string|LineStyle $style canonical enum case, or a legacy
+     *                                STYLE_* spelling (deprecated alias,
+     *                                normalised here)
      * @throws \InvalidArgumentException when $value is NaN/±INF or $style
-     *                                  is not one of the STYLE_* constants
+     *                                  is not a LineStyle case/spelling
      */
-    public static function at(float $value, string $label = '', string $style = self::STYLE_DASHED): self
+    public static function at(float $value, string $label = '', string|LineStyle $style = LineStyle::Dashed): self
     {
         return new self(Finite::assert($value), UntrustedText::guard($label), self::validatedStyle($style));
     }
@@ -61,11 +73,12 @@ final class MarkLine
      * Derive a MarkLine from a dataset's Min, Max, or Average.
      *
      * @param list<int|float> $data
+     * @param string|LineStyle $style enum case or legacy STYLE_* spelling
      * @throws \InvalidArgumentException  if $type is not MIN/MAX/AVERAGE, data is empty,
      *                                    the derived value is non-finite, or $style is
-     *                                    not one of the STYLE_* constants
+     *                                    not a LineStyle case/spelling
      */
-    public static function fromDataset(array $data, string $type, string $style = self::STYLE_DASHED): self
+    public static function fromDataset(array $data, string $type, string|LineStyle $style = LineStyle::Dashed): self
     {
         if ($data === []) {
             throw new \InvalidArgumentException('Cannot derive MarkLine from empty dataset');
@@ -91,7 +104,7 @@ final class MarkLine
      * Short-form factory for a minimum reference line.
      * @param list<int|float> $data
      */
-    public static function min(array $data, string $style = self::STYLE_DASHED): self
+    public static function min(array $data, string|LineStyle $style = LineStyle::Dashed): self
     {
         return self::fromDataset($data, self::MIN, $style);
     }
@@ -100,7 +113,7 @@ final class MarkLine
      * Short-form factory for a maximum reference line.
      * @param list<int|float> $data
      */
-    public static function max(array $data, string $style = self::STYLE_DASHED): self
+    public static function max(array $data, string|LineStyle $style = LineStyle::Dashed): self
     {
         return self::fromDataset($data, self::MAX, $style);
     }
@@ -109,23 +122,30 @@ final class MarkLine
      * Short-form factory for an average reference line.
      * @param list<int|float> $data
      */
-    public static function average(array $data, string $style = self::STYLE_DASHED): self
+    public static function average(array $data, string|LineStyle $style = LineStyle::Dashed): self
     {
         return self::fromDataset($data, self::AVERAGE, $style);
     }
 
     /**
-     * Reject style spellings the render pass could not rasterise, naming the
+     * Reject style values the render pass could not rasterise, naming the
      * accepted set so the caller can fix it without opening this file.
+     * Enum cases pass through; legacy string spellings are the deprecated
+     * alias form and normalise to their case.
      */
-    private static function validatedStyle(string $style): string
+    private static function validatedStyle(string|LineStyle $style): LineStyle
     {
-        if (!in_array($style, self::STYLES, true)) {
+        if ($style instanceof LineStyle) {
+            return $style;
+        }
+
+        $case = LineStyle::tryFrom($style);
+        if ($case === null) {
             throw new \InvalidArgumentException(
                 "Invalid MarkLine style: {$style} (expected one of: " . implode(', ', self::STYLES) . ')',
             );
         }
 
-        return $style;
+        return $case;
     }
 }

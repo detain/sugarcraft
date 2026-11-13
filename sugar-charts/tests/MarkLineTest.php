@@ -14,7 +14,7 @@ final class MarkLineTest extends TestCase
         $ml = MarkLine::at(42.0, 'answer', MarkLine::STYLE_SOLID);
         $this->assertSame(42.0, $ml->value);
         $this->assertSame('answer', $ml->label);
-        $this->assertSame(MarkLine::STYLE_SOLID, $ml->style);
+        $this->assertSame(MarkLine::STYLE_SOLID, $ml->style->value, 'legacy constant input must land on the matching LineStyle case');
     }
 
     public function testFromDatasetMin(): void
@@ -74,6 +74,6 @@ final class MarkLineTest extends TestCase
     public function testDashedStyleIsDefault(): void
     {
         $ml = MarkLine::at(5.0);
-        $this->assertSame(MarkLine::STYLE_DASHED, $ml->style);
+        $this->assertSame(MarkLine::STYLE_DASHED, $ml->style->value, 'default style must be LineStyle::Dashed via its legacy spelling');
     }
 }
