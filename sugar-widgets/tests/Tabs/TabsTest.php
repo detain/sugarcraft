@@ -487,8 +487,13 @@ final class TabsTest extends TestCase
             ->withWidth(15)
             ->withScrollOffset(0)
             ->withActive(2);
-        // Tab 2 is beyond visible range for width=15; activating it should auto-scroll.
-        $this->assertGreaterThanOrEqual(2, $t->scrollOffset);
+        // Tab 2 is beyond visible range for width=15; activating it
+        // auto-scrolls. Since W-18 the forward jump right-aligns: the
+        // active tab lands inside the window (the old >=2 left-align
+        // contract would leave nothing to the right of it).
+        $this->assertGreaterThanOrEqual(0, $t->scrollOffset);
+        $this->assertLessThanOrEqual($t->scrollEnd, 2, 'tab 2 is inside the window');
+        $this->assertGreaterThanOrEqual(2, $t->scrollEnd, 'the window ends at or past the active tab');
     }
 
     public function testTabNavigationAdjustsScrollToKeepActiveVisible(): void
@@ -503,10 +508,53 @@ final class TabsTest extends TestCase
         // tab C needs 15 (> 10), so scrollEnd=1. Tab 3 is outside [0,1].
         $this->assertSame(1, $t->scrollEnd, 'Sanity: scrollEnd=1 at offset=0, width=10');
 
-        // Activate tab 3, which is outside the visible window.
+        // Activate tab 3, which is outside the visible window. W-18's
+        // minimal forward reveal: the window slides the smallest amount
+        // that brings tab 3 in — at width 10 with the overflow ellipsis
+        // reserved, offset 2 still would not reveal it, so 3 is minimal.
         $t = $t->withActive(3);
-        // scrollOffset should auto-adjust to bring tab 3 into view.
-        $this->assertGreaterThanOrEqual(3, $t->scrollOffset);
+        $this->assertSame(3, $t->scrollOffset, 'forward press scrolls by the minimum reveal amount');
+        $this->assertGreaterThanOrEqual(3, $t->scrollEnd, 'active tab stays inside the window');
+    }
+
+    public function testForwardPressesAdvanceExactlyOneSlotPerPress(): void
+    {
+        // The W-18 regression: past the first window, every further
+        // activation steps scrollOffset by at most one, and the active
+        // tab is always visible. Labels are single-cell so the width-26
+        // window really shows a row of tabs (the old jump paged the
+        // whole window per press).
+        $labels = [];
+        for ($i = 0; $i < 20; $i++) {
+            $labels[] = \chr(0x41 + $i % 26) . (string) intdiv($i, 26);
+        }
+        $t = Tabs::new($labels)->withWidth(26)->withScrollOffset(0)->focus();
+        $capacity0 = $t->scrollEnd - $t->scrollOffset + 1;
+        $this->assertGreaterThanOrEqual(2, $capacity0, 'the window must hold several tabs for this pin');
+        $prevOffset = $t->scrollOffset;
+        $firstJump = null;
+        for ($i = 1; $i < 20; $i++) {
+            $t = $t->withActive($i);
+            $this->assertGreaterThanOrEqual($prevOffset, $t->scrollOffset, 'never scrolls backwards on forward presses');
+            $stride = $t->scrollOffset - $prevOffset;
+            if ($stride > 1 && $firstJump === null) {
+                // The first overflow press may stride past one slot when
+                // the leading ellipsis reserve shrinks the window; it is
+                // still strictly smaller than the old whole-page jump.
+                $this->assertLessThan($capacity0, $stride, 'first overflow still sub-page');
+                $firstJump = $i;
+            } elseif ($firstJump !== null) {
+                $this->assertLessThanOrEqual(1, $stride, "press $i advanced by $stride — one slot per press after the first overflow");
+            }
+            $this->assertLessThanOrEqual($t->scrollEnd, $i, 'active tab visible');
+            $this->assertGreaterThanOrEqual($t->scrollOffset, $i);
+            
+            $prevOffset = $t->scrollOffset;
+        }
+        $this->assertNotNull($firstJump, 'the run must actually overflow the window');
+        // Final offsets must sit inside the tail window (no page overshoot).
+        $this->assertLessThanOrEqual(19, $prevOffset);
+        $this->assertGreaterThanOrEqual(15, $prevOffset, 'the tail presses keep the offset close behind the cursor');
     }
 
     public function testStyledTabsClipsWithoutSeveringAnsi(): void

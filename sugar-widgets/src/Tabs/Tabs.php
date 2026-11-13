@@ -472,15 +472,29 @@ final class Tabs implements Model
             return $this;
         }
 
-        // If tab is before visible window, scroll back.
+        // If tab is before visible window, scroll back (left-align the jump).
         if ($tabIndex < $this->scrollOffset) {
             return $this->withScrollOffset($tabIndex);
         }
-        // If tab is after visible window, scroll forward.
+        // If tab is after visible window, scroll FORWARD by the smallest
+        // amount that reveals it: the window slides slot-by-slot instead
+        // of page-jumping, so consecutive forward presses advance the
+        // offset one cell at a time (W-18). Monotone: a forward press
+        // never scrolls the view backwards.
         if ($tabIndex > $this->scrollEnd) {
-            return $this->withScrollOffset($tabIndex);
+            $offset = max($this->scrollOffset + 1, min($tabIndex, $count - 1));
+            while ($offset > $this->scrollOffset + 1 && $this->endForOffset($offset - 1) >= $tabIndex) {
+                $offset--;
+            }
+            return $this->withScrollOffset($offset);
         }
         return $this;
+    }
+
+    /** Visible-window end for a hypothetical scroll offset (W-18 probe). */
+    private function endForOffset(int $offset): int
+    {
+        return $this->withScrollOffset($offset)->scrollEnd;
     }
 
     /**
