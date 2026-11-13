@@ -94,6 +94,15 @@ final class BatchEventSink implements EventSink, RetryingEventSink
      */
     private int $encodeFailures = 0;
 
+    /** Bodies evicted from the capped carry-over queue (dropped for good). */
+    private int $carryEvictions = 0;
+
+    /** Whether the one first-failure line has been written (rate limit). */
+    private bool $failureReported = false;
+
+    /** @var \Closure(string): void operator-diagnostic writer (default error_log) */
+    private readonly \Closure $diagnostic;
+
     private readonly int $batchSize;
 
     /** The pid whose `exit()` owns the shutdown flush (OBS-1-P4). */
@@ -111,13 +120,19 @@ final class BatchEventSink implements EventSink, RetryingEventSink
      *        to `hrtime()`, so successive reads are monotonic to the nanosecond)
      * @param \Closure(): int|null $currentPid @internal test seam returning the
      *        current pid (default `getmypid()`), same shape as the MCP arms'
+     * @param \Closure(string): void|null $diagnostic @internal test seam for the
+     *        operator-facing export-failure line (default `error_log()`)
      */
     public function __construct(
         private readonly OtelSink $sink,
         int $batchSize = OtelConfig::DEFAULT_BATCH_SIZE,
         ?\Closure $unixNanosClock = null,
         ?\Closure $currentPid = null,
+        ?\Closure $diagnostic = null,
     ) {
+        $this->diagnostic = $diagnostic ?? static function (string $line): void {
+            \error_log($line);
+        };
         $this->batchSize = max(OtelConfig::MIN_BATCH_SIZE, min(OtelConfig::MAX_BATCH_SIZE, $batchSize));
 
         if (null === $unixNanosClock) {
@@ -207,6 +222,8 @@ final class BatchEventSink implements EventSink, RetryingEventSink
             $this->unsent = [];
             $this->send($bodies);
         }
+
+        $this->reportShutdownLoss();
     }
 
     /** Whether a failed body is waiting for the next {@see tick()}. */
@@ -233,6 +250,49 @@ final class BatchEventSink implements EventSink, RetryingEventSink
         return $this->encodeFailures;
     }
 
+    /**
+     * Operator-only diagnostic (deliberately untranslated, like the serve
+     * diagnostics): telemetry failures were silent, so a wrong OTLP endpoint
+     * looked identical to a healthy one. Never includes the endpoint (it can
+     * carry credentials). Healthy sinks write nothing.
+     */
+    private function reportFirstFailure(string $what): void
+    {
+        if ($this->failureReported) {
+            return;
+        }
+        $this->failureReported = true;
+        ($this->diagnostic)('candy-code: OTLP telemetry export failing (' . $what . '); check OTEL_EXPORTER_OTLP_ENDPOINT. Further failures are summarised once at shutdown.');
+    }
+
+    /** Shutdown summary: only when something was actually lost. */
+    private function reportShutdownLoss(): void
+    {
+        $lost = \count($this->unsent);
+        if (0 === $this->encodeFailures && 0 === $this->carryEvictions && 0 === $lost) {
+            return;
+        }
+        ($this->diagnostic)(\sprintf(
+            'candy-code: OTLP telemetry lost at shutdown: %d batch(es) failed to encode, %d body(ies) evicted from the retry queue, %d body(ies) undelivered.',
+            $this->encodeFailures,
+            $this->carryEvictions,
+            $lost,
+        ));
+    }
+
+    /**
+     * Append to the capped retry queue, counting evictions.
+     *
+     * @param list<string> $add
+     */
+    private function carry(array $add): void
+    {
+        $merged = array_merge($this->unsent, $add);
+        $this->carryEvictions += max(0, \count($merged) - $this->batchSize);
+        $this->unsent = \array_slice($merged, -$this->batchSize);
+        $this->reportFirstFailure('endpoint refused a body');
+    }
+
     private function exportBuffer(): void
     {
         if ([] === $this->pending) {
@@ -249,6 +309,7 @@ final class BatchEventSink implements EventSink, RetryingEventSink
             // cannot be rendered is lost and counted; undeliverable bytes
             // must not poison the caller's turn.
             ++$this->encodeFailures;
+            $this->reportFirstFailure('a batch could not be encoded');
 
             return;
         }
@@ -291,7 +352,7 @@ final class BatchEventSink implements EventSink, RetryingEventSink
                 // memory. A later successful send drains the queue by
                 // replacing it wholesale on the next failure only.
                 $remaining = \array_slice($bodies, $index);
-                $this->unsent = \array_slice(array_merge($this->unsent, $remaining), -$this->batchSize);
+                $this->carry($remaining);
 
                 return;
             }
@@ -319,6 +380,6 @@ final class BatchEventSink implements EventSink, RetryingEventSink
             return;
         }
 
-        $this->unsent = \array_slice(array_merge($this->unsent, [$body]), -$this->batchSize);
+        $this->carry([$body]);
     }
 }

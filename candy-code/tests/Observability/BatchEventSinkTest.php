@@ -295,6 +295,52 @@ final class BatchEventSinkTest extends TestCase
         return json_decode($body, true, 512, \JSON_THROW_ON_ERROR)['resourceSpans'][0]['scopeSpans'][0]['spans'];
     }
 
+    public function testRefusedEndpointWritesOneNamedLineThenAShutdownSummary(): void
+    {
+        $lines = [];
+        $sink = new BatchEventSink(
+            $this->collectorSink(),
+            1,
+            null,
+            null,
+            static function (string $line) use (&$lines): void {
+                $lines[] = $line;
+            },
+        );
+        $this->endpointAccepts = false;
+
+        $sink->consume(new StepStarted(1, 9));
+        $sink->consume(new SpendCapBreached(1, 2.0, 1.0));
+        $sink->consume(new StepStarted(2, 9));
+        $sink->consume(new SpendCapBreached(2, 2.0, 1.0));
+        $this->assertCount(1, $lines, 'rate limited: one line at the first refusal, however many follow');
+        $this->assertStringContainsString('OTEL_EXPORTER_OTLP_ENDPOINT', $lines[0]);
+
+        $sink->flush();
+        $this->assertCount(2, $lines);
+        $this->assertStringContainsString('lost at shutdown', $lines[1]);
+    }
+
+    public function testHealthySinkStaysSilent(): void
+    {
+        $lines = [];
+        $sink = new BatchEventSink(
+            $this->collectorSink(),
+            1,
+            null,
+            null,
+            static function (string $line) use (&$lines): void {
+                $lines[] = $line;
+            },
+        );
+        $sink->consume(new StepStarted(1, 9));
+        $sink->consume(new SpendCapBreached(1, 2.0, 1.0));
+        $sink->flush();
+
+        $this->assertNotSame([], $this->bodies);
+        $this->assertSame([], $lines);
+    }
+
     private function collectorSink(): OtelSink
     {
         return OtelSink::withTransport(function (string $body): bool {
