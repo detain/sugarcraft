@@ -194,7 +194,7 @@ reports the skipped paths and reasons in one notice. (One malformed file used to
 throw out of `list()` and leave the session with no presets at all.)
 
 **The body is the prompt.** That is where Claude Code and opencode both put a
-subagent's prompt, so a `reviewer.md` written to either convention used to
+sub-agent's prompt, so a `reviewer.md` written to either convention used to
 register with an empty prompt — the agent arrived carrying nothing but its
 environment block. An explicit `initialPrompt:` wins over the body: a file
 carrying both is asking for the declared one.

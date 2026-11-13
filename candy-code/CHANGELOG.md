@@ -16,7 +16,7 @@ tagged commit's author date (`git log -1 --format=%ad <tag>`).
 |---|---|---|---|
 | `candy-code/v0.1.0` | 2026-10-20 | Original build, Remediation pass, Second audit pass, Feature-parity pass, Review wave (2026-10-14) | everything below it in time |
 | `candy-code/v0.1.1` | 2026-10-20 | (same set as v0.1.0 — a same-day re-tag) | Security and one-shot hardening (2026-10-21) onward |
-| `candy-code/dev` | rolling (last moved 2026-11-04) | everything through the media surface and help screen (2026-10-30 → 2026-11-03) | the 2026-11-05 migration and the 2026-11-12 wave are untagged on master |
+| `candy-code/dev` | rolling (last moved 2026-11-04) | everything through the media surface and help screen (2026-11) | the 2026-11-05 migration and the 2026-11-12 wave are untagged on master |
 
 ## Changed — review remediation wave, 2026-11-12
 
@@ -224,7 +224,7 @@ docs keep only the contract the repair established.
   or refuses with the fix named (`HeadlessPermissionPrompt` on `-p`, the
   modal on the TUI, deliberate refusal for background sessions).
 
-## Added — media surface and help screen, 2026-10-30 → 2026-11-03
+## Added — media surface and help screen, 2026-11
 
 The media generation recorded under the rename era kept growing, and the
 help surface caught up with what had shipped:
@@ -333,13 +333,13 @@ one-shot `-p` path. In user-visible terms:
   a composer script (`composer analyse`).
 - **Layout normalized.** The thirty-five root-level TEA message classes
   moved under `src/App/`, and `src/Sessions/` became `src/Background/` to
-  match the background-process classes that live there. Behavior untouched.
+  match the background-process classes that live there. Behaviour untouched.
 - **The codebase got thinner.** `Chat.php` shed about 2,200 lines and
-  `Cli/Bootstrap.php` about 1,300 in behavior-exact extractions: the
+  `Cli/Bootstrap.php` about 1,300 in behaviour-exact extractions: the
   message router split into per-handler-family traits, the launch-time
   stores moved into a dedicated `LaunchContext`, and the permission state
   machine and session-tab bookkeeping each became their own class. Each
-  extraction carries a parity test pinning both behavior and shape.
+  extraction carries a parity test pinning both behaviour and shape.
 - **One log side-channel.** Scattered `error_log()` diagnostics now all
   flow through a single logging facade with named channels, and the new
   `CANDY_CODE_QUIET_LOGS` (`1`, `true` or `yes`) silences the whole
@@ -374,7 +374,7 @@ were fixed in six grouped changes:
 
 - **Two-press destructive keys.** On the Agents dashboard, bare `s` (stop
   every run) now arms with a countdown and fires only on a second press
-  within 3 s; the `Ctrl+X` `s` chord keeps its immediate behavior. In the
+  within 3 s; the `Ctrl+X` `s` chord keeps its immediate behaviour. In the
   settings view, `d` on the list arms the same discard confirmation `Esc`
   opens — no more dead key, no more one-press loss of staged changes.
 - **`Ctrl+O` walks older.** The first press still expands the newest tool
@@ -813,7 +813,7 @@ before the next wave starts.
   `evaluateAuto()` fail **closed** (`Ask`, not `Allow`) with no classifier
   configured. A `.fix` pass hardened the breaker further against quoted
   targets and updated stale pre-hardening tests for the new fail-closed
-  behavior.
+  behaviour.
 - **Mode-seal fix** — allowed the `Plan → {Auto, AcceptEdits, Default}`
   transition the design requires, while keeping the seal against re-entering
   `BypassPermissions`/`DontAsk` once sub-agents are live.
@@ -852,7 +852,7 @@ before the next wave starts.
 - Several `.fix` commits across R5/R16/R20/R24/R28 replaced misleading test
   assertions, dead placeholder checks, and doc-comments that overstated
   what was actually wired, with honest descriptions of the real (sometimes
-  still partial) behavior.
+  still partial) behaviour.
 
 ### Wave 1 — data-layer fixes
 

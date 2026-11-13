@@ -261,7 +261,7 @@ What matters from the plugin side:
 
 - every tool it declares reaches the model under the wire name
   `user__<name>`, and `user__*` is write-classed — it asks wherever a
-  judgment is made ([PERMISSIONS.md](PERMISSIONS.md));
+  judgement is made ([PERMISSIONS.md](PERMISSIONS.md));
 - the directory is read ONCE at launch; adding or editing a file takes
   effect at the next start, like the MCP roster;
 - the project tier has no script-tool surface — a `tools/` directory inside a

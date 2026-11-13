@@ -1022,7 +1022,7 @@ panel instead:
 
 `uses:` arms a stage with the name of another workflow. The stage runs that
 workflow — all of its stages, in order — as its body, and settles as exactly
-ONE outer stage row labeled with the outer stage's own name; the inner run's
+ONE outer stage row labelled with the outer stage's own name; the inner run's
 detail rides the row's output as one `name: status` line per inner stage, and
 every agent it dispatched bills the outer run's token and cost totals.
 
@@ -1637,7 +1637,7 @@ four `as:` shapes:
 |---|---|---|
 | `file-list` | rows joined by newlines | the note `[input: no sources joined]` |
 | `first` | the first present row, verbatim | the stage **fails**: every source is missing |
-| `all` | a labeled `=== name ===` block per present row | the stage **fails** |
+| `all` | a labelled `=== name ===` block per present row | the stage **fails** |
 | `results` | a JSON document keyed by source name | the stage **fails** |
 
 - **Prior stages only.** A `from:` name must be a stage declared before the
@@ -2525,7 +2525,7 @@ Semantics, precisely:
   reviewers that grade several findings per run, one stray quoted "REJECT"
   then no longer sinks the stage. The threshold pairs with the pattern in the
   same call (there is no standalone `rejectCount()`); it is meaningless without
-  `reject()`. At the default `1` the behavior and the reason string are
+  `reject()`. At the default `1` the behaviour and the reason string are
   byte-identical to match-once; above it the reason counts matches
   (`matched /REJECT/ 3 of at least 2 matches on: "…"`). A threshold below 1
   throws at the builder boundary like a broken pattern, and a hand-built DTO

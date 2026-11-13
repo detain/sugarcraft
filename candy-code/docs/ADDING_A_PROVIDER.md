@@ -136,7 +136,7 @@ that cannot be replayed is never collected, and a block from another family's
 wire is skipped, not rejected — a store replayed under a different provider
 must degrade to text, not 400.
 
-## Behavior laws a provider must not break
+## Behaviour laws a provider must not break
 
 - **No blanket request timeouts on the LLM call path.** A provider must not
   install its own wall-clock kill on a model request; long thinking is a
