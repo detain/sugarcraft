@@ -14,6 +14,7 @@ return [
     'barchart.dim_nonneg'      => 'çubuk grafik genişlik/yüksekliği >= 0 olmalıdır',
     'barchart.bar_width_min'   => 'barWidth >= 1 olmalıdır',
     'barchart.bar_gap_nonneg'  => 'barGap >= 0 olmalıdır',
+    'barchart.value_numeric'   => 'çubuk değeri sayısal olmalıdır, {given} verildi',
     'barchart.color_return'   => 'çubuk grafik renk çözücüsü {expected} veya null döndürmelidir, {given} verildi',
     'heatmap.dim_nonneg'       => 'ısı haritası genişlik/yüksekliği >= 0 olmalıdır',
     'heatmap.coords_nonneg'    => 'ısı noktası koordinatları >= 0 olmalıdır',
@@ -23,6 +24,7 @@ return [
     'waveline.dim_nonneg'      => 'dalga çizgisi genişlik/yüksekliği >= 0 olmalıdır',
     'ohlc.dim_nonneg'          => 'OHLC grafiği genişlik/yüksekliği >= 0 olmalıdır',
     'scatter.dim_nonneg'       => 'dağılım grafiği genişlik/yüksekliği >= 0 olmalıdır',
+    'scatter.point_numeric'    => 'dağılım noktası [sayısal x, sayısal y] olmalıdır, {given} verildi',
     'chart.dim_nonneg'         => 'grafik genişliği/yüksekliği >= 0 olmalıdır',
     'finite.non_finite'        => 'grafik değeri sonlu olmalıdır, alınan: {value}',
 // Support/Rune.php

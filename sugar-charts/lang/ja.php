@@ -14,6 +14,7 @@ return [
     'barchart.dim_nonneg'      => '棒グラフの幅/高さは >= 0 である必要があります',
     'barchart.bar_width_min'   => 'barWidth は >= 1 である必要があります',
     'barchart.bar_gap_nonneg'  => 'barGap は >= 0 である必要があります',
+    'barchart.value_numeric'   => 'バーの値は数値である必要があります。指定された型: {given}',
     'barchart.color_return'   => '棒グラフの色リゾルバーは {expected} または null を返す必要があります（{given} が渡されました）',
     'heatmap.dim_nonneg'       => 'ヒートマップの幅/高さは >= 0 である必要があります',
     'heatmap.coords_nonneg'    => 'ヒートポイント座標は >= 0 である必要があります',
@@ -23,6 +24,7 @@ return [
     'waveline.dim_nonneg'      => '波線の高さ/幅は >= 0 である必要があります',
     'ohlc.dim_nonneg'          => 'OHLC チャートの幅/高さは >= 0 である必要があります',
     'scatter.dim_nonneg'       => '散布図の幅/高さは >= 0 である必要があります',
+    'scatter.point_numeric'    => '散布図の点は [数値 x, 数値 y] である必要があります。指定された型: {given}',
     'chart.dim_nonneg'         => 'チャートの幅/高さは >= 0 である必要があります',
     'finite.non_finite'        => 'チャートの値は有限である必要があります。取得値: {value}',
 // Support/Rune.php

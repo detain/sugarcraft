@@ -14,6 +14,7 @@ return [
     'barchart.dim_nonneg'      => 'a largura/altura do gráfico de barras deve ser >= 0',
     'barchart.bar_width_min'   => 'barWidth deve ser >= 1',
     'barchart.bar_gap_nonneg'  => 'barGap deve ser >= 0',
+    'barchart.value_numeric'   => 'o valor da barra deve ser numérico, {given} informado',
     'barchart.color_return'   => 'o resolvedor de cor do gráfico de barras deve retornar {expected} ou null, recebido {given}',
     'heatmap.dim_nonneg'       => 'a largura/altura do heatmap deve ser >= 0',
     'heatmap.coords_nonneg'    => 'as coordenadas do ponto de calor devem ser >= 0',
@@ -23,6 +24,7 @@ return [
     'waveline.dim_nonneg'      => 'a largura/altura da waveline deve ser >= 0',
     'ohlc.dim_nonneg'          => 'a largura/altura do gráfico OHLC deve ser >= 0',
     'scatter.dim_nonneg'       => 'a largura/altura do gráfico de dispersão deve ser >= 0',
+    'scatter.point_numeric'    => 'o ponto de dispersão deve ser [x numérico, y numérico], {given} informado',
     'chart.dim_nonneg'         => 'a largura/altura do gráfico deve ser >= 0',
     'finite.non_finite'        => 'o valor do gráfico deve ser finito, obtido {value}',
 // Support/Rune.php

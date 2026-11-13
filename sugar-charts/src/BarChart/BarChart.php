@@ -689,13 +689,18 @@ final class BarChart implements ChromeAccessors
     /**
      * Default value text: whole numbers print bare (12, not 12.00);
      * fractional values print up to 2dp with trailing zeros trimmed.
+     * `number_format` with an explicit dot separator (sugar-charts-045) —
+     * `sprintf('%.2f')` honours LC_NUMERIC, so a de_DE host would render
+     * `3,14` and the zero-strip would mis-fire. Same cure as
+     * Heatmap.php's formatter; note rounding is half-away-from-zero, a
+     * hair from %f's half-even on exact binary halves (0.125 → `0.13`).
      */
     private static function defaultDataLabel(float $value): string
     {
         if ($value === floor($value) && abs($value) < 1.0e15) {
             return (string) (int) $value;
         }
-        return rtrim(rtrim(sprintf('%.2f', $value), '0'), '.');
+        return rtrim(rtrim(number_format($value, 2, '.', ''), '0'), '.');
     }
 
     /**
@@ -737,9 +742,11 @@ final class BarChart implements ChromeAccessors
                 continue;
             }
             if (is_array($value) && count($value) === 2 && isset($value[0], $value[1])) {
+                self::assertNumericValue($value[1]);
                 $out[] = new Bar((string) $value[0], (float) $value[1]);
                 continue;
             }
+            self::assertNumericValue($value);
             if (is_string($key)) {
                 $out[] = new Bar($key, (float) $value);
                 continue;
@@ -747,6 +754,22 @@ final class BarChart implements ChromeAccessors
             $out[] = new Bar((string) $key, (float) $value);
         }
         return $out;
+    }
+
+    /**
+     * Ingestion door (sugar-charts-063): `(float) 'abc'` is 0.0 with a
+     * warning only test runtimes escalate — a non-numeric bar value would
+     * silently plot at the floor. Reject at the door with the same
+     * exception family as the geometry guards. Booleans are non-numeric
+     * here by design: data, not coercion bait.
+     */
+    private static function assertNumericValue(mixed $value): void
+    {
+        if (!is_numeric($value)) {
+            throw new \InvalidArgumentException(Lang::t('barchart.value_numeric', [
+                'given' => get_debug_type($value),
+            ]));
+        }
     }
 
     private static function truncate(string $s, int $max): string

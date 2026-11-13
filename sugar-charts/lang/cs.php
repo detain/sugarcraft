@@ -14,6 +14,7 @@ return [
     'barchart.dim_nonneg'      => 'šířka/výška sloupcového grafu musí být >= 0',
     'barchart.bar_width_min'   => 'barWidth musí být >= 1',
     'barchart.bar_gap_nonneg'  => 'barGap musí být >= 0',
+    'barchart.value_numeric'   => 'hodnota sloupce musí být číselná, zadáno {given}',
     'barchart.color_return'   => 'funkce barev sloupcového grafu musí vracet {expected} nebo null, předáno {given}',
     'heatmap.dim_nonneg'       => 'šířka/výška heatmapy musí být >= 0',
     'heatmap.coords_nonneg'    => 'souřadnice heatpointu musí být >= 0',
@@ -23,6 +24,7 @@ return [
     'waveline.dim_nonneg'      => 'šířka/výška waveline musí být >= 0',
     'ohlc.dim_nonneg'          => 'šířka/výška OHLC grafu musí být >= 0',
     'scatter.dim_nonneg'       => 'šířka/výška bodového grafu musí být >= 0',
+    'scatter.point_numeric'    => 'bod grafu musí být [číselné x, číselné y], zadáno {given}',
     'chart.dim_nonneg'         => 'šířka/výška grafu musí být >= 0',
     'finite.non_finite'        => 'hodnota grafu musí být konečná, získáno {value}',
 // Support/Rune.php

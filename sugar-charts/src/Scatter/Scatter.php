@@ -108,6 +108,13 @@ final class Scatter implements ChromeAccessors
     private static function assertFinitePoints(array $points): void
     {
         foreach ($points as $p) {
+            // sugar-charts-063: the (float) pre-cast made 'abc' a silent
+            // 0.0 plotted at the origin — gate the shape before the cast.
+            if (!is_array($p) || !isset($p[0], $p[1]) || !is_numeric($p[0]) || !is_numeric($p[1])) {
+                throw new \InvalidArgumentException(Lang::t('scatter.point_numeric', [
+                    'given' => get_debug_type($p),
+                ]));
+            }
             Finite::assert((float) $p[0]);
             Finite::assert((float) $p[1]);
         }

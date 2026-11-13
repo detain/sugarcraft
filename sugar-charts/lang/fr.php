@@ -21,6 +21,7 @@ return [
     'barchart.dim_nonneg'      => 'la largeur/hauteur du graphique à barres doit être >= 0',
     'barchart.bar_width_min'   => 'barWidth doit être >= 1',
     'barchart.bar_gap_nonneg'  => 'barGap doit être >= 0',
+    'barchart.value_numeric'   => 'la valeur de la barre doit être numérique, {given} fourni',
     'barchart.color_return'   => 'le résolveur de couleur du graphique en barres doit renvoyer {expected} ou null, {given} reçu',
 
     // Heatmap/Heatmap.php
@@ -40,6 +41,7 @@ return [
 
     // Scatter/Scatter.php
     'scatter.dim_nonneg'       => 'la largeur/hauteur du nuage de points doit être >= 0',
+    'scatter.point_numeric'    => 'le point du nuage de points doit être [x numérique, y numérique], {given} fourni',
     'chart.dim_nonneg'         => 'la largeur/hauteur du graphique doit être >= 0',
     'finite.non_finite'        => 'la valeur du graphique doit être finie, valeur reçue : {value}',
 // Support/Rune.php

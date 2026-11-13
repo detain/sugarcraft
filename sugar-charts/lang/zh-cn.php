@@ -14,6 +14,7 @@ return [
     'barchart.dim_nonneg'      => '条形图宽/高必须 >= 0',
     'barchart.bar_width_min'   => 'barWidth 必须 >= 1',
     'barchart.bar_gap_nonneg'  => 'barGap 必须 >= 0',
+    'barchart.value_numeric'   => '条形值必须为数值，收到 {given}',
     'barchart.color_return'   => '柱状图颜色解析器必须返回 {expected} 或 null，实际为 {given}',
     'heatmap.dim_nonneg'       => '热力图宽/高必须 >= 0',
     'heatmap.coords_nonneg'    => '热点坐标必须 >= 0',
@@ -23,6 +24,7 @@ return [
     'waveline.dim_nonneg'      => '波形线宽/高必须 >= 0',
     'ohlc.dim_nonneg'          => 'OHLC 图宽/高必须 >= 0',
     'scatter.dim_nonneg'       => '散点图宽/高必须 >= 0',
+    'scatter.point_numeric'    => '散点必须为 [数值 x, 数值 y]，收到 {given}',
     'chart.dim_nonneg'         => '图表宽度/高度必须 >= 0',
     'finite.non_finite'        => '图表值必须是有限值，实际为 {value}',
 // Support/Rune.php

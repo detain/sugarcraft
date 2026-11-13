@@ -14,6 +14,7 @@ return [
     'barchart.dim_nonneg'      => 'عرض/ارتفاع الرسم البياني الشريطي يجب أن يكون >= 0',
     'barchart.bar_width_min'   => 'barWidth يجب أن يكون >= 1',
     'barchart.bar_gap_nonneg'  => 'barGap يجب أن يكون >= 0',
+    'barchart.value_numeric'   => 'يجب أن تكون قيمة العمود رقميًا، تم تقديم {given}',
     'barchart.color_return'   => 'يجب أن تُرجع دالة ألوان الرسم البياني الشريطي {expected} أو null، تم تمرير {given}',
     'heatmap.dim_nonneg'       => 'عرض/ارتفاع خريطة الحرارة يجب أن يكون >= 0',
     'heatmap.coords_nonneg'    => 'إحداثيات نقطة الحرارة يجب أن تكون >= 0',
@@ -23,6 +24,7 @@ return [
     'waveline.dim_nonneg'      => 'عرض/ارتفاع خط الموجة يجب أن يكون >= 0',
     'ohlc.dim_nonneg'          => 'عرض/ارتفاع مخطط OHLC يجب أن يكون >= 0',
     'scatter.dim_nonneg'       => 'عرض/ارتفاع الرسم البياني المبعثر يجب أن يكون >= 0',
+    'scatter.point_numeric'    => 'يجب أن تكون النقطة [س رقميًا، ص رقميًا]، تم تقديم {given}',
     'chart.dim_nonneg'         => 'يجب أن يكون عرض/ارتفاع الرسم >= 0',
     'finite.non_finite'        => 'يجب أن تكون قيمة الرسم نهائية، وقد حصل على {value}',
 // Support/Rune.php

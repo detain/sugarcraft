@@ -14,6 +14,7 @@ return [
     'barchart.dim_nonneg'      => 'staafdiagram breedte/hoogte moet >= 0 zijn',
     'barchart.bar_width_min'   => 'barWidth moet >= 1 zijn',
     'barchart.bar_gap_nonneg'  => 'barGap moet >= 0 zijn',
+    'barchart.value_numeric'   => 'balkwaarde moet numeriek zijn, {given} opgegeven',
     'barchart.color_return'   => 'kleurresolver van staafdiagram moet {expected} of null teruggeven, {given} gekregen',
     'heatmap.dim_nonneg'       => 'heatmap breedte/hoogte moet >= 0 zijn',
     'heatmap.coords_nonneg'    => 'heatpoint-coördinaten moeten >= 0 zijn',
@@ -23,6 +24,7 @@ return [
     'waveline.dim_nonneg'      => 'golfijn breedte/hoogte moet >= 0 zijn',
     'ohlc.dim_nonneg'          => 'OHLC-diagram breedte/hoogte moet >= 0 zijn',
     'scatter.dim_nonneg'       => 'spreidingsdiagram breedte/hoogte moet >= 0 zijn',
+    'scatter.point_numeric'    => 'spreidingsdiagram-punt moet [numeriek x, numeriek y] zijn, {given} opgegeven',
     'chart.dim_nonneg'         => 'breedte/hoogte van de grafiek moet >= 0 zijn',
     'finite.non_finite'        => 'de grafiekwaarde moet eindig zijn, gekregen {value}',
 // Support/Rune.php

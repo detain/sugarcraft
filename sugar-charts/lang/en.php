@@ -21,6 +21,7 @@ return [
     'barchart.dim_nonneg'      => 'bar chart width/height must be >= 0',
     'barchart.bar_width_min'   => 'barWidth must be >= 1',
     'barchart.bar_gap_nonneg'  => 'barGap must be >= 0',
+    'barchart.value_numeric'   => 'bar value must be numeric, {given} given',
     'barchart.color_return'   => 'bar chart color resolver must return {expected} or null, {given} given',
 
     // Heatmap/Heatmap.php
@@ -40,6 +41,7 @@ return [
 
     // Scatter/Scatter.php
     'scatter.dim_nonneg'       => 'scatter width/height must be >= 0',
+    'scatter.point_numeric'    => 'scatter point must be [numeric x, numeric y], {given} given',
 
     // Chart/Chart.php
     'chart.dim_nonneg'         => 'chart width/height must be >= 0',

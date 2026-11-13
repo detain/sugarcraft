@@ -14,6 +14,7 @@ return [
     'barchart.dim_nonneg'      => 'szerokość/wysokość wykresu słupkowego musi być >= 0',
     'barchart.bar_width_min'   => 'barWidth musi być >= 1',
     'barchart.bar_gap_nonneg'  => 'barGap musi być >= 0',
+    'barchart.value_numeric'   => 'wartość słupka musi być numeryczna, podano {given}',
     'barchart.color_return'   => 'funkcja kolorów wykresu słupkowego musi zwracać {expected} lub null, otrzymano {given}',
     'heatmap.dim_nonneg'       => 'szerokość/wysokość mapy ciepła musi być >= 0',
     'heatmap.coords_nonneg'    => 'współrzędne punktu ciepła muszą być >= 0',
@@ -23,6 +24,7 @@ return [
     'waveline.dim_nonneg'      => 'szerokość/wysokość linii falowej musi być >= 0',
     'ohlc.dim_nonneg'          => 'szerokość/wysokość wykresu OHLC musi być >= 0',
     'scatter.dim_nonneg'       => 'szerokość/wysokość wykresu punktowego musi być >= 0',
+    'scatter.point_numeric'    => 'punkt wykresu musi być [numeryczne x, numeryczne y], podano {given}',
     'chart.dim_nonneg'         => 'szerokość/wysokość wykresu musi wynosić >= 0',
     'finite.non_finite'        => 'wartość wykresu musi być skończona, otrzymano {value}',
 // Support/Rune.php

@@ -21,6 +21,7 @@ return [
     'barchart.dim_nonneg'      => 'el ancho/alto del gráfico de barras debe ser >= 0',
     'barchart.bar_width_min'   => 'barWidth debe ser >= 1',
     'barchart.bar_gap_nonneg'  => 'barGap debe ser >= 0',
+    'barchart.value_numeric'   => 'el valor de la barra debe ser numérico, {given} recibido',
     'barchart.color_return'   => 'el resolvedor de color del gráfico de barras debe devolver {expected} o null, se recibió {given}',
 
     // Heatmap/Heatmap.php
@@ -40,6 +41,7 @@ return [
 
     // Scatter/Scatter.php
     'scatter.dim_nonneg'       => 'el ancho/alto del diagrama de dispersión debe ser >= 0',
+    'scatter.point_numeric'    => 'el punto de dispersión debe ser [x numérico, y numérico], {given} recibido',
     'chart.dim_nonneg'         => 'el ancho/alto del gráfico debe ser >= 0',
     'finite.non_finite'        => 'el valor del gráfico debe ser finito, se obtuvo {value}',
 // Support/Rune.php

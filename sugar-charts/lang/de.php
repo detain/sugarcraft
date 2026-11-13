@@ -21,6 +21,7 @@ return [
     'barchart.dim_nonneg'      => 'Balken.diagramm-Breite/-Höhe muss >= 0 sein',
     'barchart.bar_width_min'   => 'barWidth muss >= 1 sein',
     'barchart.bar_gap_nonneg'  => 'barGap muss >= 0 sein',
+    'barchart.value_numeric'   => 'Balkenwert muss numerisch sein, {given} übergeben',
     'barchart.color_return'   => 'Farbfunktion des Balkendiagramms muss {expected} oder null zurückgeben, {given} erhalten',
 
     // Heatmap/Heatmap.php
@@ -40,6 +41,7 @@ return [
 
     // Scatter/Scatter.php
     'scatter.dim_nonneg'       => 'Streudiagramm-Breite/-Höhe muss >= 0 sein',
+    'scatter.point_numeric'    => 'Streudiagrammpunkt muss [numerisches x, numerisches y] sein, {given} übergeben',
     'chart.dim_nonneg'         => 'Diagrammbreite/-höhe muss >= 0 sein',
     'finite.non_finite'        => 'Diagrammwert muss endlich sein, erhalten: {value}',
 // Support/Rune.php

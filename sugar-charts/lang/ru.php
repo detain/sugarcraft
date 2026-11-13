@@ -14,6 +14,7 @@ return [
     'barchart.dim_nonneg'      => 'ширина/высота столбчатой диаграммы должна быть >= 0',
     'barchart.bar_width_min'   => 'barWidth должен быть >= 1',
     'barchart.bar_gap_nonneg'  => 'barGap должен быть >= 0',
+    'barchart.value_numeric'   => 'значение столбца должно быть числовым, передано {given}',
     'barchart.color_return'   => 'функция цвета столбчатой диаграммы должна возвращать {expected} или null, получено {given}',
     'heatmap.dim_nonneg'       => 'ширина/высота тепловой карты должна быть >= 0',
     'heatmap.coords_nonneg'    => 'координаты тепловой точки должны быть >= 0',
@@ -23,6 +24,7 @@ return [
     'waveline.dim_nonneg'      => 'ширина/высота волновой линии должна быть >= 0',
     'ohlc.dim_nonneg'          => 'ширина/высота OHLC-графика должна быть >= 0',
     'scatter.dim_nonneg'       => 'ширина/высота точечной диаграммы должна быть >= 0',
+    'scatter.point_numeric'    => 'точка диаграммы должна быть [числовые x, числовые y], передано {given}',
     'chart.dim_nonneg'         => 'ширина/высота диаграммы должны быть >= 0',
     'finite.non_finite'        => 'значение диаграммы должно быть конечным, получено {value}',
 // Support/Rune.php
