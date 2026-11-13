@@ -150,6 +150,24 @@ Reduced motion is gated per component: `AnimatedProgress` honours
 hosts that follow WCAG 2.2.2 must stop forwarding those ticks when the
 user asks for reduced motion.
 
+### Colour on constrained terminals (NO_COLOR / TERM=dumb)
+
+Nothing in this lib self-detects: `Progress` takes
+`ColorProfile::TrueColor` as its constructor default and every component
+renders the authored colours — on a `TERM=dumb` or `NO_COLOR` host that
+is the host's wiring to fix, and the doc until now only alluded to a
+"Progress precedent". The one-stop detector is `sugar-colorprofile`:
+`Probe::colorProfile()` runs the full detection chain (CLICOLOR_FORCE,
+FORCE_COLOR, **NO_COLOR**, TERM, COLORTERM — NO_COLOR counts only when
+set to a NON-EMPTY value; an empty string means unset, per no-color.org)
+and `Probe::isNoColor()` answers that preference directly. Host pattern:
+detect once at startup, then pass the result down — `withColorProfile()`
+on Progress, and palette-chosen shades in any `styleFunc` / `colorFunc`
+closure (the `Progress` precedent is spelled out under
+*Table — per-cell styles* below).
+Components deliberately do not read the environment themselves so a
+single detection point keeps every widget consistent.
+
 ### Verb return-shape parity
 
 The house law (W-10): a value verb returns `self`; only `update()` — and
@@ -469,7 +487,9 @@ $table = Table::new(['Name', 'Status'], $rows)
 The composer returns *style* only — colours and attributes, never cell
 text. A fixed TrueColor hex renders as authored on TrueColor hosts; to
 degrade gracefully on palettes that cannot carry it, follow the
-`Progress` precedent: accept a `SugarCraft\Core\Util\ColorProfile`
+`Progress` precedent (detection itself is `Probe::colorProfile()` — see
+*Colour on constrained terminals* above): accept a
+`SugarCraft\Core\Util\ColorProfile`
 (Progress takes one as its constructor default `ColorProfile::TrueColor`
 and offers `withColorProfile()`) and choose the shades from the detected
 profile inside your closure.
