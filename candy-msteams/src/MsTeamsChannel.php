@@ -314,7 +314,9 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
             return self::json(503, ['error' => 'channel_not_started']);
         }
         $path = rtrim($request->getUri()->getPath(), '/');
-        if (!\str_starts_with($path, $this->mountPath)) {
+        // msteams-19 (022): EXACT mount, not prefix. '/channels/msteams/api/messagesX'
+        // must 404 like any other foreign path — the door has no subroutes.
+        if ($path !== $this->mountPath) {
             return self::json(404, ['error' => 'not_found']);
         }
         if ($request->getMethod() !== 'POST') {

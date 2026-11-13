@@ -362,6 +362,11 @@ final class ConversationRouter
             $this->map->noteSeqForSession($sessionId, $seq);
         }
         if ($channel === null) {
+            // msteams-19 (021): the cursor above has ALREADY advanced past
+            // this seq — the event is counted but seen by no face. That is a
+            // silent no-op on an at-least-once ledger, so it says its name.
+            $this->log->debug('durable_event_dropped_no_channel', ['session' => $sessionId, 'key' => $key]);
+
             return;
         }
 

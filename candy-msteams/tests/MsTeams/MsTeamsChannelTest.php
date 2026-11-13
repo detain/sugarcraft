@@ -482,6 +482,28 @@ final class MsTeamsChannelTest extends TestCase
         $loop->cancelTimer($timer);
     }
 
+    /**
+     * msteams-19 (022): the mount door is EXACT. A suffixed lookalike
+     * (/channels/msteams/api/messagesX) rode the old prefix match into the
+     * whole auth+parse pipeline; it must 404 at the door like any foreign
+     * path (the bundle's route table has no subroutes).
+     */
+    public function testASuffixedLookalikePathIsNotFoundAtTheDoor(): void
+    {
+        $keysFile = self::rosterFixturePath();
+        $channel = $this->bootServedChannel($keysFile);
+        try {
+            $response = $channel->handleRequest(new ServerRequest('POST', 'https://h.test/channels/msteams/api/messagesX'));
+            self::assertSame(404, $response->getStatusCode(), 'a suffixed lookalike must not reach the pipeline');
+
+            $exact = $channel->handleRequest(new ServerRequest('POST', 'https://h.test/channels/msteams/api/messages'));
+            self::assertNotSame(404, $exact->getStatusCode(), 'the true mount still answers');
+        } finally {
+            $channel->dispose();
+            @unlink($keysFile);
+        }
+    }
+
     /** Well-formed invoke Activity — fast-ack law answers 200 inside the request. */
     private const INVOKE_BODY = '{"type":"invoke","id":"p4b-1","name":"adaptiveCard.action","from":{"id":"u-p4b"},"conversation":{"id":"c-p4b","conversationType":"personal"},"serviceUrl":"https://example.test","value":{}}';
 

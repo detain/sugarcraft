@@ -550,6 +550,47 @@ final class ConversationRouterTest extends TestCase
         self::assertSame(2, $this->serve->sendSeen, 'and the re-confirmed row stays closed');
     }
 
+    /**
+     * msteams-19 (021): a durable event whose session maps to a face that no
+     * longer exists gets its cursor advanced and the payload dropped — the
+     * -22 ladder and the two-state claim make that ledger load-bearing, so
+     * the drop must name itself instead of vanishing.
+     */
+    public function testADurableEventWithoutAFaceNamesItsDrop(): void
+    {
+        $lines = [];
+        $router = new ConversationRouter(
+            $this->bridge,
+            $this->map,
+            new \CandyCode\Bundles\MsTeams\Support\Log(static function (string $line) use (&$lines): void {
+                $lines[] = $line;
+            }, 'debug'),
+            new TextSafety(),
+            $this->loop,
+            [],
+        );
+        $this->map->rememberConversation('sess_noface', 'msteams:ghost:dm:p', [
+            'conversationId' => '19:x@thread.v2',
+            'serviceUrl' => 'https://s.test',
+        ]);
+
+        $handle = new \ReflectionMethod(ConversationRouter::class, 'handleEvent');
+        $handle->setAccessible(true);
+        $handle->invoke($router, [
+            'sessionId' => 'sess_noface',
+            'type' => 'assistant.completed',
+            'durable' => true,
+            'seq' => 7,
+            'data' => [],
+        ]);
+
+        $hits = \array_values(\array_filter(
+            $lines,
+            static fn (string $l): bool => \str_contains($l, 'durable_event_dropped_no_channel'),
+        ));
+        self::assertCount(1, $hits, 'the counted-but-unseen drop must say its name once');
+    }
+
     /** @param array<string,mixed> $policy */
     private function boot(array $policy = [], ?PlatformFace $face = null): void
     {
