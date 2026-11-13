@@ -19,6 +19,7 @@ use React\Socket\ConnectionInterface;
 use React\Socket\SecureServer;
 use React\Stream\ReadableStreamInterface;
 use Ratchet\RFC6455\Messaging\Frame;
+use SugarCraft\Code\Server\Push\PushSubscriptionStore;
 use SugarCraft\Code\Share\ShareStore;
 use SugarCraft\Code\Server\Auth\AuthContext;
 use SugarCraft\Code\Server\Auth\CookieSessions;
@@ -359,6 +360,9 @@ final class Server
         );
     }
 
+    /** Every principal class a token rotation revokes; their push rows go with them. */
+    private const ROTATION_REVOKED_PRINCIPALS = ['bearer', 'subprotocol', 'ticket', 'cookie', 'viewer'];
+
     /**
      * `serve token --rotate` reached this server (roadmap O-3b, carried from
      * W6): re-read the token file and, when the token changed, sign every
@@ -378,6 +382,12 @@ final class Server
             $closed++;
         }
         $this->sessionLastUsed = [];
+        // Every credential class the rotation just revoked: a push row it
+        // owned would keep notifying a client that can no longer sign in.
+        $pushStore = PushSubscriptionStore::forStateDir($this->config->stateDir, $this->log);
+        foreach (self::ROTATION_REVOKED_PRINCIPALS as $principal) {
+            $pushStore->prunePrincipal($principal);
+        }
         ($this->log)(\sprintf('token rotated: signed every client out (%d socket%s closed)', $closed, $closed === 1 ? '' : 's'));
 
         return $closed;

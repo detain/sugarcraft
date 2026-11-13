@@ -102,7 +102,7 @@ final class PushSubscriptionStore
      */
     public function put(PushSubscription $subscription, string $principal, bool $withName): bool
     {
-        $rows = $this->load();
+        $rows = $this->fresh();
         $rows[self::keyHash($subscription->endpoint)] = [
             ...$subscription->toArray(),
             'principal' => $principal,
@@ -123,7 +123,7 @@ final class PushSubscriptionStore
      */
     public function remove(string $endpoint, string $principal): bool
     {
-        $rows = $this->load();
+        $rows = $this->fresh();
         $key = self::keyHash($endpoint);
         if (($rows[$key]['principal'] ?? null) !== $principal) {
             return false;
@@ -141,7 +141,7 @@ final class PushSubscriptionStore
      */
     public function prunePrincipal(string $principal): int
     {
-        $rows = $this->load();
+        $rows = $this->fresh();
         $kept = array_filter($rows, static fn (array $row): bool => $row['principal'] !== $principal);
         $dropped = \count($rows) - \count($kept);
         if ($dropped === 0) {
@@ -149,6 +149,21 @@ final class PushSubscriptionStore
         }
 
         return $this->persist($kept) ? $dropped : 0;
+    }
+
+    /**
+     * The rows as the disk holds them NOW. Every writer starts here, not at
+     * the per-instance cache: the token-rotation prune runs on a second
+     * store instance (the server's), and a writer holding a stale cache
+     * would rewrite the just-pruned rows back onto disk.
+     *
+     * @return array<string, array{endpoint: string, p256dh: string, auth: string, principal: string, name: bool}>
+     */
+    private function fresh(): array
+    {
+        $this->rows = null;
+
+        return $this->load();
     }
 
     /**
@@ -160,7 +175,7 @@ final class PushSubscriptionStore
     public function entries(): array
     {
         $out = [];
-        foreach ($this->load() as $key => $row) {
+        foreach ($this->fresh() as $key => $row) {
             try {
                 $subscription = PushSubscription::new($row['endpoint'], $row['p256dh'], $row['auth']);
             } catch (\InvalidArgumentException) {

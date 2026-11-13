@@ -1046,6 +1046,9 @@ registers a push subscription first. Three methods cover the lifecycle
   class; `name: true` opts that row into carrying the session title.
 - `push.unsubscribe` (write) drops the row for an endpoint, and only when
   the caller's principal class owns it.
+- A token rotation (`serve token --rotate`) signs every credential class out
+  and drops the push rows those classes owned, so rotations never accumulate
+  rows for clients that can no longer sign in.
 
 Triggers: a question waiting for an answer and a finished turn each send one
 notification — and only while **no client is following that session**, the
