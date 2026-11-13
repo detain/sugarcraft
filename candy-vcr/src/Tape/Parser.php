@@ -6,14 +6,19 @@ namespace SugarCraft\Vcr\Tape;
 
 use SugarCraft\Vcr\Tape\Ast\ArrowDirective;
 use SugarCraft\Vcr\Tape\Ast\BackspaceDirective;
+use SugarCraft\Vcr\Tape\Ast\CopyDirective;
 use SugarCraft\Vcr\Tape\Ast\CtrlDirective;
 use SugarCraft\Vcr\Tape\Ast\Directive;
 use SugarCraft\Vcr\Tape\Ast\EnvDirective;
 use SugarCraft\Vcr\Tape\Ast\EnterDirective;
 use SugarCraft\Vcr\Tape\Ast\EscapeDirective;
 use SugarCraft\Vcr\Tape\Ast\HideDirective;
+use SugarCraft\Vcr\Tape\Ast\KeyDirective;
+use SugarCraft\Vcr\Tape\Ast\ModifierDirective;
 use SugarCraft\Vcr\Tape\Ast\OutputDirective;
 use SugarCraft\Vcr\Tape\Ast\ParseError;
+use SugarCraft\Vcr\Tape\Ast\PasteDirective;
+use SugarCraft\Vcr\Tape\Ast\RequireDirective;
 use SugarCraft\Vcr\Tape\Ast\ScreenshotDirective;
 use SugarCraft\Vcr\Tape\Ast\SetDirective;
 use SugarCraft\Vcr\Tape\Ast\ShowDirective;
@@ -92,6 +97,20 @@ final readonly class Parser
 
             Lexer::TOKEN_CTRL => new CtrlDirective($token->value),
 
+            Lexer::TOKEN_KEY => new KeyDirective($token->value),
+
+            Lexer::TOKEN_MODIFIER => new ModifierDirective($token->value),
+
+            Lexer::TOKEN_COPY => $token->value === ''
+                ? new ParseError($token->line, 'Copy expects string') // upstream's measured phrase
+                : new CopyDirective($token->value),
+
+            Lexer::TOKEN_PASTE => new PasteDirective(),
+
+            Lexer::TOKEN_REQUIRE => $token->value === ''
+                ? new ParseError($token->line, 'Require expects one string') // upstream's measured phrase
+                : new RequireDirective($token->value),
+
             Lexer::TOKEN_SPACE => new SpaceDirective(),
 
             Lexer::TOKEN_ESCAPE => new EscapeDirective(),
@@ -108,7 +127,14 @@ final readonly class Parser
 
             Lexer::TOKEN_SOURCE => new SourceDirective($token->value),
 
-            Lexer::TOKEN_UNKNOWN => null,
+            // Finding 005's silence close: an unclassifiable line used to be
+            // dropped `null` — `Typ "hello"` deleted a whole keystroke group
+            // even under `--strict`, because the strict gate only sees
+            // ParseError NODES. The head word now becomes one, so non-strict
+            // mode warns (Compiler collects it as a parse problem) and
+            // strict mode aborts. Argument-shaped heads answer upstream's
+            // own measured phrases.
+            Lexer::TOKEN_UNKNOWN => new ParseError($token->line, self::unknownDirectiveMessage($token->value)),
 
             // E15 grammar port classified JSON/REGEX values by the lexer (so
             // they can never hide the directive behind them). A grammar follow-up gave REGEX
@@ -149,5 +175,24 @@ final readonly class Parser
     {
         $parts = explode("\x00", $token->value, 2);
         return new EnvDirective($parts[0], $parts[1] ?? '');
+    }
+
+    /**
+     * Classify an UNKNOWN run by its head word. Argument-taking commands
+     * answer upstream's measured phrases (`VhsTapeContractTest`: `parseType`
+     * and `parseCopy` build "Type/Copy expects string", `parseRequire`
+     * "Require expects one string"); everything else is named as an unknown
+     * directive. Either way it is a node the strict gate can finally see.
+     */
+    private static function unknownDirectiveMessage(string $value): string
+    {
+        $head = preg_split('/\s+/', trim($value), 2)[0] ?? '';
+
+        return match ($head) {
+            'Type'    => 'Type expects string',
+            'Copy'    => 'Copy expects string',
+            'Require' => 'Require expects one string',
+            default   => "Unknown directive: {$head}",
+        };
     }
 }

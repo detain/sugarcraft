@@ -12,7 +12,13 @@ use SugarCraft\Vcr\Event;
  * Each non-empty line that doesn't start with # is a directive.
  * Token types: TYPE, ENTER, TAB, BACKSPACE, SLEEP, SET, ENV, OUTPUT,
  * ARROW, CTRL, SPACE, ESCAPE, HIDE, SHOW, WAIT, SCREEN, SCREENSHOT, SOURCE,
- * JSON, REGEX, UNKNOWN.
+ * KEY, MODIFIER, COPY, PASTE, REQUIRE, JSON, REGEX, UNKNOWN, COMMENT.
+ *
+ * The KEY/MODIFIER/COPY/PASTE/REQUIRE arms (finding 005) carry the twelve
+ * upstream command keywords the original port never lexed — the roster is
+ * the measured 60-name set pinned in {@see \SugarCraft\Vcr\Tests\Tape\KeywordRosterParityTest}
+ * against `candy-code/tests/VhsTapeContractTest.php`; nothing upstream-legal
+ * may fall to UNKNOWN's silent drop.
  * Comments are preserved for round-trip.
  *
  * ## Grammar port (E15 / tracker #81)
@@ -65,6 +71,11 @@ final readonly class Lexer
     public const TOKEN_SCREEN = 'SCREEN';
     public const TOKEN_SCREENSHOT = 'SCREENSHOT';
     public const TOKEN_SOURCE = 'SOURCE';
+    public const TOKEN_KEY = 'KEY';
+    public const TOKEN_MODIFIER = 'MODIFIER';
+    public const TOKEN_COPY = 'COPY';
+    public const TOKEN_PASTE = 'PASTE';
+    public const TOKEN_REQUIRE = 'REQUIRE';
     public const TOKEN_JSON = 'JSON';
     public const TOKEN_REGEX = 'REGEX';
     public const TOKEN_UNKNOWN = 'UNKNOWN';
@@ -176,8 +187,13 @@ final readonly class Lexer
         }
 
         // Bare keyword directives — anchored with a trailing boundary so
-        // "Down" never swallows the start of a longer word.
-        if (preg_match('/^(Enter|Tab|Backspace|Space|Escape|Hide|Show|Up|Down|Left|Right)(?=\s|$)/', $s, $m)) {
+        // "Down" never swallows the start of a longer word. The roster is
+        // upstream's measured command set (finding 005): the seven KEY
+        // words and two MODIFIER words the original port never lexed, plus
+        // argument-less Paste. ScrollUp/ScrollDown must precede nothing —
+        // the alternation is fixed and longest-first per word — but note
+        // the boundary gate keeps "PageUpward" out.
+        if (preg_match('/^(Enter|Tab|Backspace|Space|Escape|Hide|Show|Up|Down|Left|Right|Delete|Insert|PageUp|PageDown|End|ScrollUp|ScrollDown|Alt|Shift|Paste)(?=\s|$)/', $s, $m)) {
             $keyword = $m[1];
             $type = match ($keyword) {
                 'Enter'     => self::TOKEN_ENTER,
@@ -187,10 +203,42 @@ final readonly class Lexer
                 'Escape'    => self::TOKEN_ESCAPE,
                 'Hide'      => self::TOKEN_HIDE,
                 'Show'      => self::TOKEN_SHOW,
+                'Alt'       => self::TOKEN_MODIFIER,
+                'Shift'     => self::TOKEN_MODIFIER,
+                'Paste'     => self::TOKEN_PASTE,
+                'Delete', 'Insert', 'PageUp', 'PageDown', 'End', 'ScrollUp', 'ScrollDown' => self::TOKEN_KEY,
                 default     => self::TOKEN_ARROW, // Up / Down / Left / Right
             };
             return [new Token($type, $keyword, $lineNum), strlen($keyword)];
         }
+
+        // `Copy "<text>"` — upstream's parseCopy measures as string-argument
+        // only (`Copy expects string`, quoted at the candy-code oracle). A
+        // bare `Copy` still lexes as COPY with an empty value so the Parser
+        // can answer upstream's own phrase instead of the head-guessing
+        // UNKNOWN path.
+        if (preg_match('/^Copy\s+([\'"`])(.*?)\1/s', $s, $m)) {
+            return [new Token(self::TOKEN_COPY, $m[2], $lineNum), strlen($m[0])];
+        }
+        if (preg_match('/^Copy(?=\s|$)/', $s, $m)) {
+            return [new Token(self::TOKEN_COPY, '', $lineNum), strlen($m[0])];
+        }
+
+        // `Require <module>` — upstream's precondition loader (measured
+        // phrase `Require expects one string`, and the acceptance form
+        // `Require git` spells the module bare). Quoted and bare-word
+        // values both lex; a bare trailing `Require` keeps the boundary
+        // gate honest so `Required` is never split into a value.
+        if (preg_match('/^Require\s+([\'"`])(.*?)\1/s', $s, $m)) {
+            return [new Token(self::TOKEN_REQUIRE, $m[2], $lineNum), strlen($m[0])];
+        }
+        if (preg_match('/^Require\s+(\S+)(?=\s|$)/', $s, $m)) {
+            return [new Token(self::TOKEN_REQUIRE, $m[1], $lineNum), strlen($m[0])];
+        }
+        if (preg_match('/^Require(?=\s|$)/', $s, $m)) {
+            return [new Token(self::TOKEN_REQUIRE, '', $lineNum), strlen($m[0])];
+        }
+
 
         // `Set key <value>`: a `{` value is a JSON literal and a `/…/` value
         // is a regex literal — each ends AT ITS CLOSER, so a directive or

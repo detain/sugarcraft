@@ -361,4 +361,85 @@ TAPE;
         $this->assertCount(1, $tokens);
         $this->assertSame(Lexer::TOKEN_UNKNOWN, $tokens[0]->type);
     }
+
+    /**
+     * Finding 005: the twelve measured upstream command keywords that used
+     * to fall to the UNKNOWN silent-drop now lex to their own tokens.
+     *
+     * @return array<string, array{0: string, 1: string}>
+     */
+    public static function rosterKeywordLines(): array
+    {
+        return [
+            'Delete'      => ['Delete', Lexer::TOKEN_KEY],
+            'Insert'      => ['Insert', Lexer::TOKEN_KEY],
+            'PageUp'      => ['PageUp', Lexer::TOKEN_KEY],
+            'PageDown'    => ['PageDown', Lexer::TOKEN_KEY],
+            'End'         => ['End', Lexer::TOKEN_KEY],
+            'ScrollUp'    => ['ScrollUp', Lexer::TOKEN_KEY],
+            'ScrollDown'  => ['ScrollDown', Lexer::TOKEN_KEY],
+            'Alt'         => ['Alt', Lexer::TOKEN_MODIFIER],
+            'Shift'       => ['Shift', Lexer::TOKEN_MODIFIER],
+            'Paste'       => ['Paste', Lexer::TOKEN_PASTE],
+        ];
+    }
+
+    /**
+     * @dataProvider rosterKeywordLines
+     */
+    public function testRosterKeywordLexesToItsOwnToken(string $keyword, string $tokenType): void
+    {
+        $tokens = $this->lexer->tokenize($keyword);
+        $this->assertCount(1, $tokens);
+        $this->assertSame($tokenType, $tokens[0]->type);
+        $this->assertSame($keyword, $tokens[0]->value);
+    }
+
+    public function testCopyQuotedArmAndBareCopy(): void
+    {
+        $tokens = $this->lexer->tokenize('Copy "file.txt"');
+        $this->assertCount(1, $tokens);
+        $this->assertSame(Lexer::TOKEN_COPY, $tokens[0]->type);
+        $this->assertSame('file.txt', $tokens[0]->value);
+
+        $bare = $this->lexer->tokenize('Copy');
+        $this->assertCount(1, $bare);
+        $this->assertSame(Lexer::TOKEN_COPY, $bare[0]->type);
+        $this->assertSame('', $bare[0]->value);
+    }
+
+    public function testRequireQuotedAndBareWordArms(): void
+    {
+        $quoted = $this->lexer->tokenize('Require "git"');
+        $this->assertCount(1, $quoted);
+        $this->assertSame(Lexer::TOKEN_REQUIRE, $quoted[0]->type);
+        $this->assertSame('git', $quoted[0]->value);
+
+        $bareWord = $this->lexer->tokenize('Require git');
+        $this->assertCount(1, $bareWord);
+        $this->assertSame(Lexer::TOKEN_REQUIRE, $bareWord[0]->type);
+        $this->assertSame('git', $bareWord[0]->value);
+
+        $empty = $this->lexer->tokenize('Require');
+        $this->assertCount(1, $empty);
+        $this->assertSame(Lexer::TOKEN_REQUIRE, $empty[0]->type);
+        $this->assertSame('', $empty[0]->value);
+    }
+
+    public function testRosterKeywordsOnSharedLineWithInlineSleep(): void
+    {
+        $tokens = $this->lexer->tokenize('Delete Sleep 200ms');
+        $this->assertCount(2, $tokens);
+        $this->assertSame(Lexer::TOKEN_KEY, $tokens[0]->type);
+        $this->assertSame('Delete', $tokens[0]->value);
+        $this->assertSame(Lexer::TOKEN_SLEEP, $tokens[1]->type);
+    }
+
+    public function testEndDoesNotSwallowLongerWordPrefix(): void
+    {
+        // Boundary gate: "EndOfFile" must not split into End + "OfFile".
+        $tokens = $this->lexer->tokenize('EndOfFile');
+        $this->assertCount(1, $tokens);
+        $this->assertSame(Lexer::TOKEN_UNKNOWN, $tokens[0]->type);
+    }
 }

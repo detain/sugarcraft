@@ -10,14 +10,19 @@ use SugarCraft\Vcr\Event;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Tape\Ast\ArrowDirective;
 use SugarCraft\Vcr\Tape\Ast\BackspaceDirective;
+use SugarCraft\Vcr\Tape\Ast\CopyDirective;
 use SugarCraft\Vcr\Tape\Ast\CtrlDirective;
 use SugarCraft\Vcr\Tape\Ast\Directive;
 use SugarCraft\Vcr\Tape\Ast\EnterDirective;
 use SugarCraft\Vcr\Tape\Ast\EnvDirective;
 use SugarCraft\Vcr\Tape\Ast\EscapeDirective;
 use SugarCraft\Vcr\Tape\Ast\HideDirective;
+use SugarCraft\Vcr\Tape\Ast\KeyDirective;
+use SugarCraft\Vcr\Tape\Ast\ModifierDirective;
 use SugarCraft\Vcr\Tape\Ast\OutputDirective;
 use SugarCraft\Vcr\Tape\Ast\ParseError;
+use SugarCraft\Vcr\Tape\Ast\PasteDirective;
+use SugarCraft\Vcr\Tape\Ast\RequireDirective;
 use SugarCraft\Vcr\Tape\Ast\ScreenshotDirective;
 use SugarCraft\Vcr\Tape\Ast\SetDirective;
 use SugarCraft\Vcr\Tape\Ast\ShowDirective;
@@ -67,6 +72,17 @@ final class Compiler
     private ?string $shell = null;
 
     private float $currentTime = 0.0;
+
+    /**
+     * Pending keystroke modifiers armed by bare `Alt` / `Shift` keyword
+     * directives (finding 005). Upstream lexes them as commands; they carry
+     * no standalone encoding here, so each one merges into the NEXT
+     * keystroke's bytes (Alt as the ESC meta lead sugar-core's InputReader
+     * documents, Shift as the xterm `;2` parameter where the sequence has
+     * one). A tape that ends with a flag unset is reported, never silent.
+     */
+    private bool $pendingAlt = false;
+    private bool $pendingShift = false;
 
     /** @var list<Event> */
     private array $events = [];
@@ -118,9 +134,25 @@ final class Compiler
                 if ($strict) {
                     throw new \RuntimeException("Parse error at line {$node->line}: {$node->message}");
                 }
+                // Non-strict still records the problem (finding 005's silence
+                // close): a skipped unknown directive is a loud diagnostic,
+                // not a vanishing keystroke.
+                $this->warnings[] = "Parse error at line {$node->line}: {$node->message}";
                 continue;
             }
             $this->compileNode($node);
+        }
+
+        // A modifier armed at the end of a tape never reaches a keystroke to
+        // merge into; report it rather than dropping the intent silently.
+        if ($this->pendingAlt || $this->pendingShift) {
+            $modifiers = $this->pendingAlt && $this->pendingShift
+                ? 'Alt/Shift'
+                : ($this->pendingAlt ? 'Alt' : 'Shift');
+            $this->reportCompileProblem(
+                "Unapplied {$modifiers} modifier: no keystroke follows it on the tape",
+            );
+            $this->pendingAlt = $this->pendingShift = false;
         }
 
         // Derive the terminal grid from the pixel image dimensions and the font
@@ -242,6 +274,8 @@ final class Compiler
         $this->sourceStack = [];
         $this->strict = false;
         $this->warnings = [];
+        $this->pendingAlt = false;
+        $this->pendingShift = false;
     }
 
     /**
@@ -264,13 +298,22 @@ final class Compiler
             $node instanceof SetDirective => $this->compileSet($node),
             $node instanceof EnvDirective => $this->env[$node->key] = trim($node->value, '"\' '),
             $node instanceof TypeDirective => $this->compileType($node),
-            $node instanceof EnterDirective => $this->emitInputBytes("\r"),
-            $node instanceof TabDirective => $this->emitInputBytes("\t"),
-            $node instanceof BackspaceDirective => $this->emitInputBytes("\x7f"),
+            $node instanceof EnterDirective => $this->emitKey("\r", null, 'Enter'),
+            $node instanceof TabDirective => $this->emitKey("\t", "\x1b[Z", 'Tab'),
+            $node instanceof BackspaceDirective => $this->emitKey("\x7f", null, 'Backspace'),
             $node instanceof ArrowDirective => $this->compileArrow($node),
             $node instanceof CtrlDirective => $this->compileCtrl($node),
-            $node instanceof SpaceDirective => $this->emitInputBytes(' '),
-            $node instanceof EscapeDirective => $this->emitInputBytes("\x1b"),
+            $node instanceof KeyDirective => $this->compileNamedKey($node),
+            $node instanceof ModifierDirective => $this->compileModifier($node),
+            $node instanceof CopyDirective => $this->compileCopy($node),
+            $node instanceof PasteDirective => $this->reportCompileProblem(
+                'Paste requires a clipboard to read; the record-side compiler emits no bytes for it',
+            ),
+            $node instanceof RequireDirective => $this->reportCompileProblem(
+                "Require {$node->module} is an upstream precondition loader; candy-vcr emits no bytes for it",
+            ),
+            $node instanceof SpaceDirective => $this->emitKey(' ', null, 'Space'),
+            $node instanceof EscapeDirective => $this->emitKey("\x1b", null, 'Escape'),
             $node instanceof SleepDirective => $this->currentTime += $node->seconds,
             $node instanceof WaitDirective => $this->compileWait($node),
             $node instanceof HideDirective => $this->emitEvent(EventKind::Hide, []),
@@ -379,10 +422,25 @@ final class Compiler
     {
         $chars = mb_str_split($node->text);
 
+        // A pending Alt/Shift (finding 005 modifiers) merges into the run:
+        // Alt becomes the ESC meta lead byte per character — sugar-core's
+        // InputReader decodes "Meta as ESC <bytes>" into one alt-flagged
+        // key event — and Shift uppercases ASCII letters, which IS a
+        // shifted keystroke's whole encoding for runes. An empty Type
+        // leaves the flags armed for the next keystroke directive.
+        $alt = $this->pendingAlt;
+        $shift = $this->pendingShift;
+        if ($chars !== []) {
+            $this->pendingAlt = $this->pendingShift = false;
+        }
+
         foreach ($chars as $char) {
+            if ($shift && strlen($char) === 1 && $char >= 'a' && $char <= 'z') {
+                $char = chr(ord($char) - 32);
+            }
             $byte = $this->charToByte($char);
             if ($byte !== null) {
-                $this->emitInputBytes($byte);
+                $this->emitInputBytes($alt ? "\x1b" . $byte : $byte);
             }
             $this->currentTime += $this->typingSpeed / 1000.0;
         }
@@ -430,16 +488,19 @@ final class Compiler
 
     private function compileArrow(ArrowDirective $node): void
     {
-        $bytes = match ($node->direction) {
-            'Up' => "\x1b[A",
-            'Down' => "\x1b[B",
-            'Left' => "\x1b[D",
-            'Right' => "\x1b[C",
-            default => '',
+        [$bytes, $shifted] = match ($node->direction) {
+            'Up' => ["\x1b[A", "\x1b[1;2A"],
+            'Down' => ["\x1b[B", "\x1b[1;2B"],
+            'Left' => ["\x1b[D", "\x1b[1;2D"],
+            'Right' => ["\x1b[C", "\x1b[1;2C"],
+            default => ['', ''],
         };
-        if ($bytes !== '') {
-            $this->emitInputBytes($bytes);
+        if ($bytes === '') {
+            // Defensive: the lexer only ever builds the four directions.
+            $this->reportCompileProblem("Unknown arrow direction '{$node->direction}'");
+            return;
         }
+        $this->emitKey($bytes, $shifted, $node->direction);
     }
 
     private function compileCtrl(CtrlDirective $node): void
@@ -465,7 +526,86 @@ final class Compiler
         } else {
             $ctrlCode = $ord & 0x1F;
         }
-        $this->emitInputBytes(chr($ctrlCode));
+        $this->emitKey(chr($ctrlCode), null, 'Ctrl+' . $letter);
+    }
+
+    /**
+     * Named-key encodings (finding 005): plain and `;2`-shifted spellings
+     * for the five CSI keystrokes plus the SGR wheel pair sugar-input's own
+     * decoder recognises (button 96/97 wheel up/down, +4 for shift).
+     *
+     * @var array<string, array{0: string, 1: string}>
+     */
+    private const NAMED_KEY_BYTES = [
+        'Delete'     => ["\x1b[3~", "\x1b[3;2~"],
+        'Insert'     => ["\x1b[2~", "\x1b[2;2~"],
+        'PageUp'     => ["\x1b[5~", "\x1b[5;2~"],
+        'PageDown'   => ["\x1b[6~", "\x1b[6;2~"],
+        'End'        => ["\x1b[F", "\x1b[1;2F"],
+        'ScrollUp'   => ["\x1b[<96;1;1M\x1b[<96;1;1m", "\x1b[<100;1;1M\x1b[<100;1;1m"],
+        'ScrollDown' => ["\x1b[<97;1;1M\x1b[<97;1;1m", "\x1b[<101;1;1M\x1b[<101;1;1m"],
+    ];
+
+    /**
+     * `Delete` / `Insert` / `PageUp` / `PageDown` / `End` / `ScrollUp` /
+     * `ScrollDown` — the KEY roster arm from the Lexer (finding 005). The
+     * sequences are the exact shapes sugar-core's InputReader decodes back
+     * into KeyType cases, so a compiled tape round-trips as real keystrokes.
+     */
+    private function compileNamedKey(KeyDirective $node): void
+    {
+        $entry = self::NAMED_KEY_BYTES[$node->key] ?? null;
+        if ($entry === null) {
+            $this->reportCompileProblem("Named key '{$node->key}' has no byte encoding");
+            return;
+        }
+        $this->emitKey($entry[0], $entry[1], $node->key);
+    }
+
+    /**
+     * Bare `Alt` / `Shift`: arm the pending modifier. It merges into the
+     * next keystroke directive (see {@see emitKey()}); if the tape ends
+     * first, compile() reports the dangling flag.
+     */
+    private function compileModifier(ModifierDirective $node): void
+    {
+        match ($node->modifier) {
+            'Alt' => $this->pendingAlt = true,
+            default => $this->pendingShift = true,
+        };
+    }
+
+    /**
+     * `Copy "text"` — the terminal-native clipboard wire: OSC 52 set with a
+     * base64-confined payload (the same encoding family finding 004 warns
+     * hostile cassettes can forge — minting it from a tape directive is the
+     * legitimate side of that door, and base64 keeps raw tape bytes out of
+     * the escape sequence).
+     */
+    private function compileCopy(CopyDirective $node): void
+    {
+        $this->emitInputBytes("\x1b]52;c;" . base64_encode($node->text) . "\x07");
+    }
+
+    /**
+     * Merge any pending Alt/Shift flags into a keystroke emission and
+     * consume them. Alt = the ESC meta lead (sugar-core documents "Meta as
+     * ESC <bytes>", InputReader's alt-flag path); Shift = the directive's
+     * xterm `;<mod>` spelling when one exists, otherwise the keystroke has
+     * no distinct shifted byte and the gap is reported, not swallowed.
+     */
+    private function emitKey(string $bytes, ?string $shifted, string $name): void
+    {
+        if ($this->pendingShift) {
+            if ($shifted !== null) {
+                $bytes = $shifted;
+            } else {
+                $this->reportCompileProblem("Shift+{$name} has no distinct byte encoding; keystroke emitted unshifted");
+            }
+        }
+        $alt = $this->pendingAlt;
+        $this->pendingAlt = $this->pendingShift = false;
+        $this->emitInputBytes($alt ? "\x1b" . $bytes : $bytes);
     }
 
     /**
