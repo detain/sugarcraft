@@ -305,6 +305,28 @@ final class HomeDirectory
             return $home;
         }
 
+        return self::passwdDirectory();
+    }
+
+    /**
+     * True when {@see resolved()} answers from the passwd database because
+     * neither `$HOME` nor `$USERPROFILE` is set. That answer is a real
+     * directory, so nothing downstream refuses on it; a launch that never
+     * reads a terminal (`-p`, `run`, `serve`) uses it to say where its
+     * `~/.candy-code` came from. Pure: reads the environment, records nothing.
+     */
+    public static function resolvedViaPasswd(): bool
+    {
+        $home = getenv('HOME') ?: (getenv('USERPROFILE') ?: null);
+        if (\is_string($home) && $home !== '') {
+            return false;
+        }
+
+        return self::passwdDirectory() !== null;
+    }
+
+    private static function passwdDirectory(): ?string
+    {
         if (!\function_exists('posix_geteuid') || !\function_exists('posix_getpwuid')) {
             return null;
         }

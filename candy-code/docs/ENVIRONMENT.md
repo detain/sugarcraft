@@ -378,7 +378,7 @@ Read for their standard meanings, not as CandyCode settings:
 
 | Variable | Used for |
 |----------|----------|
-| `HOME` (`USERPROFILE` on Windows) | Locating `~/.candy-code/`, expanding `~` in `@import` paths, and the environment handed to forked git commands. Falls back to `/tmp`. |
+| `HOME` (`USERPROFILE` on Windows) | Locating `~/.candy-code/`, expanding `~` in `@import` paths, and the environment handed to forked git commands. Falls back to `/tmp`. When unset, the passwd database supplies the directory and `-p`/`run`/`serve` print a one-line stderr notice. |
 | `PATH` | Resolving MCP server executables and the git binary. |
 | `VISUAL`, `EDITOR` | The editor `/editor` opens to compose a prompt — `VISUAL` first, then `EDITOR`, then `vi` (`notepad` on Windows). Run through the shell, so a value with arguments (`code --wait`) works. |
 | `TMUX`, `TERM_PROGRAM` | Multiplexer detection (tmux vs iTerm2) for split-pane support. |

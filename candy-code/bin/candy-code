@@ -539,6 +539,9 @@ try {
 // on an install this catch would otherwise turn into a bare exit 2. Both are
 // asserted in Tests\Integration\BinCandyCodeDispatchTest.
 if ($args->subcommand !== null) {
+    if ($args->subcommand === 'serve') {
+        Bootstrap::reportHomeFromPasswd();
+    }
     exit(Subcommands::dispatch($args));
 }
 
@@ -566,6 +569,7 @@ if ($args->worktreeRequested) {
 // BM-1: --batch is its own one-shot request — the stream-json feed carries
 // the work, so the run dispatches without any -p prompt value at all.
 if ($args->promptRequested || $args->batch) {
+    Bootstrap::reportHomeFromPasswd();
     exit(NonInteractive::run($args, null, $args->outputFormat));
 }
 

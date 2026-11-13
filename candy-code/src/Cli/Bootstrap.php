@@ -11414,6 +11414,25 @@ public static function useMaxCost(?string $maxCost): void
     }
 
     /**
+     * S-H03: the one-line stderr notice for the launches that never reach the
+     * TUI drain (`-p`/`run`, `serve`) when `~` resolved through the passwd
+     * database because `$HOME` and `$USERPROFILE` are both unset. Notice
+     * only — the directory is a real one and nothing refuses on it. Once per
+     * process (the seam de-dupes by message).
+     */
+    public static function reportHomeFromPasswd(): void
+    {
+        if (!HomeDirectory::resolvedViaPasswd()) {
+            return;
+        }
+
+        self::warnPermissionConfigOnce(
+            'HOME is not set, so the home directory (' . (string) HomeDirectory::resolved()
+            . ') was taken from the passwd database — export HOME to silence this',
+        );
+    }
+
+    /**
      * The dumb-family test, split out as a pure function so the gate is
      * pinned by a table instead of a fake terminal. THE FAMILY: `''`
      * (TERM unset — nothing was advertised), and any `dumb…`/`unknown…`
