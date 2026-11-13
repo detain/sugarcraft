@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Flexbox\Flex;
 
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Flexbox\Support\CellPad;
 
 /**
  * CSS flexbox-like layout for terminal UIs.
@@ -186,7 +187,7 @@ final class FlexBox
                 $parts[] = $column[$line];
             }
             $lineStr     = $gapStr === '' ? \implode('', $parts) : \implode($gapStr, $parts);
-            $resultLines[] = \SugarCraft\Core\Util\Width::truncateAnsi($lineStr, $totalWidth);
+            $resultLines[] = CellPad::fit($lineStr, $totalWidth)[0];
         }
 
         return \implode("\n", $resultLines);
@@ -233,8 +234,11 @@ final class FlexBox
                     $lineStr = $this->applyStyle($lineStr, $m['item']->style);
                 }
                 // Cell-based padding: a byte-based str_pad under-padded lines
-                // carrying wide (CJK/emoji) glyphs.
-                $resultLines[] = \SugarCraft\Core\Util\Width::padRight($lineStr, $totalWidth);
+                // carrying wide (CJK/emoji) glyphs. alignCell's (styled)
+                // output is EXACTLY $maxW cells wide and maxW is clamped to
+                // $totalWidth, so the fill is pure arithmetic — no walk.
+                $lineStr = CellPad::pad($lineStr, $maxW, $totalWidth, 'right');
+                $resultLines[] = $lineStr;
             }
 
             // Pad to allocated height
@@ -380,17 +384,18 @@ final class FlexBox
 
     private function alignCell(string $text, int $width, Align $align): string
     {
-        // Truncate to display width if needed (ANSI-aware).
-        $truncated = \SugarCraft\Core\Util\Width::truncateAnsi($text, $width);
-        $visualWidth = \SugarCraft\Core\Util\Width::string($truncated);
+        // One memoized measure; the truncate walk runs only on overflow
+        // (CellPad's byte-identity to the naive pairing is pinned by
+        // tests/Support/CellPadTest.php — finding-040).
+        [$line, $visualWidth] = CellPad::fit($text, $width);
         if ($visualWidth >= $width) {
-            return $truncated;
+            return $line;
         }
         return match ($align) {
-            Align::Start    => \SugarCraft\Core\Util\Width::padRight($truncated, $width),
-            Align::End      => \SugarCraft\Core\Util\Width::padLeft($truncated, $width),
-            Align::Center   => \SugarCraft\Core\Util\Width::padCenter($truncated, $width),
-            Align::Stretch  => \SugarCraft\Core\Util\Width::padRight($truncated, $width),
+            Align::Start    => CellPad::pad($line, $visualWidth, $width, 'right'),
+            Align::End      => CellPad::pad($line, $visualWidth, $width, 'left'),
+            Align::Center   => CellPad::pad($line, $visualWidth, $width, 'center'),
+            Align::Stretch  => CellPad::pad($line, $visualWidth, $width, 'right'),
         };
     }
 

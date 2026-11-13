@@ -8,6 +8,7 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Forms\Scrollbar\ScrollbarState;
 use SugarCraft\Forms\Viewport\Viewport as FormsViewport;
+use SugarCraft\Flexbox\Support\CellPad;
 
 /**
  * Immutable viewport wrapper over the canonical {@see FormsViewport}.
@@ -399,12 +400,11 @@ final readonly class Viewport
      */
     private function padRight(string $line, int $width): string
     {
-        $line = \SugarCraft\Core\Util\Width::truncateAnsi($line, $width);
-        $visual = \SugarCraft\Core\Util\Width::string($line);
-        if ($visual >= $width) {
-            return $line;
-        }
-        return $line . str_repeat(' ', $width - $visual);
+        // CellPad: one memoized measure, truncate walk only on overflow;
+        // byte-identical to the old truncateAnsi+str_repeat pairing
+        // (differential-pinned in tests/Support/CellPadTest.php, FBX-36).
+        [$fitted, $visual] = CellPad::fit($line, $width);
+        return CellPad::pad($fitted, $visual, $width, 'right');
     }
 
     /**
