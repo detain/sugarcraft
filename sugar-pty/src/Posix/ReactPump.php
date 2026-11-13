@@ -20,7 +20,16 @@ use SugarCraft\Pty\PumpOptions;
  * blocking `stream_select` loop, so a ReactPHP application can multiplex
  * PTY I/O with timers, sockets, and other loop work.
  *
- * Semantics mirror {@see PosixPump::run()} exactly: the returned promise
+ * Back-pressure mirrors the sync pump on BOTH axes: while a stdin
+ * remainder is parked (the master would-block), the stdin read watcher is
+ * paused, so the park stays bounded at one chunk and flow control
+ * propagates upstream instead of buffering in RAM — the loop-side port of
+ * {@see PosixPump::run()}'s drain-time exclusion of stdin from the select
+ * read set (its \$r build: \$draining drops \$stdinStream). The sink side
+ * already mirrored it via holdMasterRead/resumeMasterRead; this is the
+ * same law on the input side.
+ *
+ * Resolution semantics mirror {@see PosixPump::run()}: the returned promise
  * resolves with the child's exit code when it has exited (tail bytes are
  * drained from the master within `PumpOptions::$flushDeadlineSec`);
  * with `0` when there is no child to monitor and the master EOFs; and
@@ -146,6 +155,9 @@ final class ReactPump
 
     private bool $masterWriteAttached = false;
 
+    /** Whether the stdin read watcher is registered (false while back-pressure parks). */
+    private bool $stdinReadAttached = false;
+
     private ?TimerInterface $pollTimer = null;
 
     /** stdin-EOF grace timer or post-child-exit flush timer. */
@@ -247,6 +259,7 @@ final class ReactPump
             ? null
             : \microtime(true) + $opts->pumpDeadlineUs / 1_000_000;
         $this->masterWriteAttached = false;
+        $this->stdinReadAttached = false;
         $this->deadlineTimer = null;
         $this->deferred = new Deferred(function (): void {
             // Promise cancellation == detach: same contract as stop().
@@ -264,6 +277,7 @@ final class ReactPump
             $this->stdinWasBlocking = (bool) (\stream_get_meta_data($this->stdinStream)['blocked'] ?? true);
             \stream_set_blocking($this->stdinStream, false);
             $this->loop->addReadStream($this->stdinStream, fn () => $this->onStdinReadable());
+            $this->stdinReadAttached = true;
         }
 
         // Track last known PTY size so the poll tick can detect resize
@@ -358,6 +372,14 @@ final class ReactPump
         if (!$this->running) {
             return;
         }
+        if ($this->pendingStdin !== '') {
+            // A remainder is parked against a would-block master: reading
+            // more now would grow the park one chunk per readable tick.
+            // Pause until onMasterWritable drains it (PosixPump excludes
+            // stdin from the read set while draining — same law, loop form).
+            $this->pauseStdinRead();
+            return;
+        }
         $bytes = @\fread($this->stdinStream, $this->opts->chunkBytes);
         if ($bytes === false || $bytes === '') {
             if (\feof($this->stdinStream)) {
@@ -378,6 +400,7 @@ final class ReactPump
     private function onStdinEof(): void
     {
         $this->loop->removeReadStream($this->stdinStream);
+        $this->stdinReadAttached = false;
         $this->stdinStream = null;
         // Short-write-safe: a bare fwrite dropped VEOF whenever the
         // master queue was momentarily full (would-block or partial
@@ -411,6 +434,9 @@ final class ReactPump
                     $this->masterWriteAttached = true;
                     $this->loop->addWriteStream($this->masterStream, fn () => $this->onMasterWritable());
                 }
+                // Flow control propagates upstream: stop pulling stdin while
+                // the master owes bytes.
+                $this->pauseStdinRead();
                 break;
             }
             $written += $n;
@@ -427,6 +453,7 @@ final class ReactPump
     {
         if (!$this->running || $this->pendingStdin === '') {
             $this->detachMasterWrite();
+            $this->resumeStdinRead();
             return;
         }
         $pending = $this->pendingStdin;
@@ -434,7 +461,36 @@ final class ReactPump
         $this->writeToMaster($pending);
         if ($this->pendingStdin === '') {
             $this->detachMasterWrite();
+            // The park drained: stdin may be pulled again.
+            $this->resumeStdinRead();
         }
+    }
+
+    /**
+     * Un-register the stdin read watcher while a master-write remainder is
+     * parked. Idempotent; a no-op once stdin EOFed (stream already gone).
+     */
+    private function pauseStdinRead(): void
+    {
+        if (!$this->stdinReadAttached || $this->stdinStream === null) {
+            return;
+        }
+        $this->loop->removeReadStream($this->stdinStream);
+        $this->stdinReadAttached = false;
+    }
+
+    /**
+     * Re-arm the stdin read watcher after the park drains — the counterpart
+     * of {@see pauseStdinRead()}, mirroring resumeMasterRead() on the sink
+     * side. A no-op when stdin is not (or no longer) being pumped.
+     */
+    private function resumeStdinRead(): void
+    {
+        if ($this->stdinReadAttached || $this->stdinStream === null || !$this->running) {
+            return;
+        }
+        $this->loop->addReadStream($this->stdinStream, fn () => $this->onStdinReadable());
+        $this->stdinReadAttached = true;
     }
 
     private function attachSinkWrite(): void
@@ -599,6 +655,7 @@ final class ReactPump
             $this->loop->removeReadStream($this->stdinStream);
             $this->stdinStream = null;
         }
+        $this->stdinReadAttached = false;
         $this->detachMasterWrite();
         $this->detachSinkWrite();
         if ($this->pendingSink !== '' && $this->stdoutStream !== null) {
