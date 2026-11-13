@@ -9,7 +9,6 @@
 # Fleet rollout of this pattern stays coordinated on the fleet
 # .gitattributes wave (route (b)); this file is lib-local by design.
 /tests/ export-ignore
-/.vhs/ export-ignore
 /examples/ export-ignore
 /tools/ export-ignore
 /phpunit.xml export-ignore
