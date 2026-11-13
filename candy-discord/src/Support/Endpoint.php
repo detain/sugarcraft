@@ -58,6 +58,43 @@ final class Endpoint
         return preg_match('/^127\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$/', $host) === 1;
     }
 
+    /**
+     * Is a READY-supplied `resume_gateway_url` an address the operator
+     * actually dialed? The resume legs re-send the bot token and session
+     * id to this URL on every reconnect, so an unvetted handback is a
+     * credential-exfil vector and a `ws://` handback is a plaintext
+     * downgrade around resolve()'s door.
+     *
+     * Trusted means: host equals or is a subdomain of the dialed host,
+     * the port matches exactly, and the scheme is wss — or ws when the
+     * dialed target is itself a loopback ws proxy (the mirror may hand
+     * back its own address, nothing else).
+     */
+    public static function resumeUrlTrusted(string $candidate, string $dialedUrl): bool
+    {
+        $c = parse_url(trim($candidate));
+        $d = parse_url(trim($dialedUrl));
+        $cScheme = strtolower((string) ($c['scheme'] ?? ''));
+        $cHost = strtolower((string) ($c['host'] ?? ''));
+        $dScheme = strtolower((string) ($d['scheme'] ?? ''));
+        $dHost = strtolower((string) ($d['host'] ?? ''));
+        if ($cHost === '' || $dHost === '' || $cScheme === '') {
+            return false;
+        }
+
+        if ($cHost !== $dHost && !str_ends_with($cHost, '.' . $dHost)) {
+            return false;
+        }
+        if (($c['port'] ?? null) !== ($d['port'] ?? null)) {
+            return false;
+        }
+        if ($cScheme === 'wss') {
+            return true;
+        }
+
+        return $cScheme === 'ws' && $dScheme === 'ws' && self::isLoopback($cHost);
+    }
+
     private static function resolve(string $override, bool $insecureLoopbackProxy, string $default): string
     {
         $override = trim($override);

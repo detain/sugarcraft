@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\Discord\Discord;
 
+use CandyCode\Bundles\Discord\Support\Endpoint;
 use CandyCode\Bundles\Discord\Support\Log;
 use Ratchet\Client\Connector as WebSocketConnector;
 use Ratchet\Client\WebSocket;
@@ -251,12 +252,26 @@ final class Gateway
             $this->sessionId = isset($d['session_id']) ? (string) $d['session_id'] : null;
             $this->applicationId = isset($d['application']['id']) ? (string) $d['application']['id'] : (string) ($d['user']['id'] ?? '');
             if (isset($d['resume_gateway_url']) && \is_string($d['resume_gateway_url']) && $d['resume_gateway_url'] !== '') {
-                $this->resumeUrl = $d['resume_gateway_url'] . '?v=10&encoding=json';
+                $dialed = $this->gatewayUrl ?? self::DEFAULT_URL;
+                if (Endpoint::resumeUrlTrusted($d['resume_gateway_url'], $dialed)) {
+                    $this->resumeUrl = $d['resume_gateway_url'] . '?v=10&encoding=json';
+                } else {
+                    // The resume ladder re-sends the bot token + session id
+                    // to wherever this URL points. A READY that hands back
+                    // a foreign host or a plaintext scheme is answered by
+                    // dropping the resume state entirely: the next dial is
+                    // a fresh identify against the endpoint the operator
+                    // actually configured, and the refusal is loud.
+                    $this->log->warn('discord_resume_url_refused', ['url' => $d['resume_gateway_url']]);
+                    $this->sessionId = null;
+                    $this->seq = null;
+                    $this->resumeUrl = $dialed;
+                }
             }
             $this->attempts = 0;
             $this->log->info('discord_ready', [
                 'app' => $this->applicationId,
-                'resumeUrl' => $this->resumeUrl === self::DEFAULT_URL ? 'default' : 'from READY',
+                'resumeUrl' => $this->resumeUrl !== ($this->gatewayUrl ?? self::DEFAULT_URL) ? 'from READY' : 'default',
                 'contentIntent' => $this->contentIntent ? 1 : 0,
             ]);
             foreach ($this->readyListeners as $listener) {

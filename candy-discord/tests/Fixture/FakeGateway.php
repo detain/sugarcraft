@@ -28,6 +28,8 @@ final class FakeGateway
     public int $hbMs = 41250;
     /** Emit the pre-v10 `heartbeat_interval_ms` HELLO spelling (fallback-arm pin). */
     public bool $legacyHelloKey = false;
+    /** READY handback for `resume_gateway_url` (null = the fake's own trusted address). */
+    public ?string $resumeGatewayUrl = null;
     public ?int $closeAfterIdentify = null;
     public bool $ackHeartbeats = true;
 
@@ -199,7 +201,7 @@ final class FakeGateway
                     'd' => [
                         'v' => 10,
                         'session_id' => 'gsess',
-                        'resume_gateway_url' => $this->wsUrl(),
+                        'resume_gateway_url' => $this->resumeGatewayUrl ?? $this->wsUrl(),
                         'application' => ['id' => 'app-9'],
                         'user' => ['id' => 'bot-9'],
                     ],

@@ -14,6 +14,37 @@ use RuntimeException;
  */
 final class EndpointTest extends TestCase
 {
+    /**
+     * @return array<string, array{string, string, bool}>
+     */
+    public static function resumeTrustTable(): array
+    {
+        return [
+            'canonical default' => ['wss://gateway.discord.gg', Endpoint::DEFAULT_GATEWAY, true],
+            'v10 subdomain handback' => ['wss://canary-usea.gateway.discord.gg', Endpoint::DEFAULT_GATEWAY, true],
+            'deep subdomain' => ['wss://a.b.gateway.discord.gg', Endpoint::DEFAULT_GATEWAY, true],
+            'foreign host refused' => ['wss://evil.example.com', Endpoint::DEFAULT_GATEWAY, false],
+            'suffix without dot boundary refused' => ['wss://gateway.discord.gg.evil.com', Endpoint::DEFAULT_GATEWAY, false],
+            'lookalike hyphen host refused' => ['wss://evil-gateway.discord.gg', Endpoint::DEFAULT_GATEWAY, false],
+            'plaintext downgrade refused' => ['ws://gateway.discord.gg', Endpoint::DEFAULT_GATEWAY, false],
+            'http refused' => ['http://gateway.discord.gg', Endpoint::DEFAULT_GATEWAY, false],
+            'no scheme refused' => ['gateway.discord.gg', Endpoint::DEFAULT_GATEWAY, false],
+            'empty refused' => ['', Endpoint::DEFAULT_GATEWAY, false],
+            'loopback mirror self-handback trusted' => ['ws://127.0.0.1:9229', 'ws://127.0.0.1:9229', true],
+            'loopback handback to other port refused' => ['ws://127.0.0.1:9999', 'ws://127.0.0.1:9229', false],
+            'loopback ws to remote wss refused' => ['ws://127.0.0.1:9229', 'wss://gateway.discord.gg', false],
+            'encrypted mirror may hand back wss' => ['wss://proxy.example', 'wss://proxy.example', true],
+        ];
+    }
+
+    /**
+     * @dataProvider resumeTrustTable
+     */
+    public function testResumeUrlTrustFollowsTheDialedAddress(string $candidate, string $dialed, bool $trusted): void
+    {
+        self::assertSame($trusted, Endpoint::resumeUrlTrusted($candidate, $dialed), $candidate);
+    }
+
     public function testEmptyOverridesFallBackToTheDiscordDefaults(): void
     {
         self::assertSame(Endpoint::DEFAULT_API, Endpoint::apiBase(''));

@@ -102,10 +102,41 @@ final class GatewayLadderTest extends TestCase
         self::assertFalse($this->gateway->connected());
     }
 
-    private function connect(bool $wantContent): void
+    public function testAForeignResumeUrlIsRefusedAndTheLadderIdentifiesFresh(): void
+    {
+        // NET-CD-03 defense: the resume legs re-send the token to wherever
+        // READY points. A foreign handback is refused LOUDLY and the resume
+        // state is dropped — the next dial must be a fresh identify to the
+        // configured endpoint, never a RESUME to a stranger.
+        $this->fake->resumeGatewayUrl = 'wss://evil.example.com';
+        $lines = [];
+        $this->connect(true, new Log(static function (string $line) use (&$lines): void {
+            $lines[] = $line;
+        }));
+        self::assertStringNotContainsString('evil.example.com', $this->gateway->resumeUrl);
+        self::assertStringContainsString('discord_resume_url_refused', implode("\n", $lines));
+        $this->fake->dropConnection();
+        $this->settle(2200);
+        self::assertSame(0, $this->fake->resumeCount, 'a refused handback must not mint a RESUME leg');
+        self::assertSame(2, $this->fake->identifyCount, 'the ladder restarts with a fresh identify');
+    }
+
+    public function testAMirrorHandingBackItsOwnAddressIsTrusted(): void
+    {
+        // The loopback-proxy topology is supported: the mirror may resume
+        // at itself. Identical host+port+scheme as the dialed URL is the
+        // trusted shape, and the drop-resume leg proves it is walked.
+        $this->connect(true);
+        $this->fake->dropConnection();
+        $this->settle(2200);
+        self::assertSame(1, $this->fake->resumeCount);
+        self::assertStringContainsString('127.0.0.1', $this->gateway->resumeUrl);
+    }
+
+    private function connect(bool $wantContent, ?Log $log = null): void
     {
         $port = $this->fake->listen();
-        $this->gateway = new Gateway('tok', Log::silent(), $this->loop, $this->fake->wsUrl(), $wantContent);
+        $this->gateway = new Gateway('tok', $log ?? Log::silent(), $this->loop, $this->fake->wsUrl(), $wantContent);
         $this->gateway->start();
         $this->settle(700);
     }
