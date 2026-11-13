@@ -323,9 +323,10 @@ $geometry->dividerColumns();                    // [['x' => 32, 'side' => Side::
 ```
 
 `$geometry->regions` iterates in insertion order — left stack, center, right
-stack — but treat the pane ids as the only identity contract; `regionFor()`
-answers `null` for never-docked panes, dropped sides, and degenerate frames
-alike (compare against the input `DockLayout` to tell them apart).
+stack — but treat the pane ids as the only identity contract. Dropped panes
+are ABSENT from `$geometry->regions` (the iterable tell), while `regionFor()`
+answers the same `null` for them as for never-docked ids and degenerate
+frames — compare against the input `DockLayout` to tell them apart.
 
 **Degradation ladder.** `resolve()` never throws on small frames: a side
 column is raised to `sideMinCols` only while the center keeps `centerMinCols`;

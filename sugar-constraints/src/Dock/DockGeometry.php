@@ -10,6 +10,13 @@ use SugarCraft\Constraints\Region;
  * Immutable result of {@see DockLayout::resolve()} — concrete grid regions
  * for one frame.
  *
+ * Immutable in full, precisely: `final readonly` freezes the two array props
+ * against reassignment AND element writes through them (PHP 8.3 answers both
+ * with "Cannot modify readonly property"), and {@see Region} is itself
+ * readonly — so nothing reachable from a geometry can be mutated. Hosts that
+ * want a scratch copy get one for free: every read of `$regions` hands the
+ * array out by value, so writes land on the copy only.
+ *
  * Original SugarCraft design (no upstream mirror).
  *
  * The center pane is carried INSIDE {@see $regions} keyed by its pane id

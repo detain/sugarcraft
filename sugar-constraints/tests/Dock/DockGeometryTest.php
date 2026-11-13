@@ -41,6 +41,29 @@ final class DockGeometryTest extends TestCase
         $this->assertSame($columns, $geometry->dividerColumns());
     }
 
+    public function testElementWritesThroughTheArrayPropsAreRefused(): void
+    {
+        $geometry = DockGeometry::new(['chat' => Region::fromSize(5, 5)], [['x' => 5, 'side' => Side::Left]]);
+
+        // The README/docblock freeze claim, pinned at both props: readonly
+        // rejects indirect modification, not just reassignment.
+        $this->expectException(\Error::class);
+        $this->expectExceptionMessage('Cannot modify readonly property');
+        $geometry->regions['chat'] = Region::fromSize(9, 9);
+    }
+
+    public function testReadsHandTheArrayOutByValueSoCopiesAreScratchSafe(): void
+    {
+        $chat = Region::fromSize(5, 5);
+        $geometry = DockGeometry::new(['chat' => $chat]);
+        $copy = $geometry->regions;
+        $copy['chat'] = Region::fromSize(9, 9);
+
+        // Same object identity on the shared result: the array is copied by
+        // value, the Region refs ride through untouched.
+        $this->assertSame($chat, $geometry->regions['chat'], 'writes to a read-out copy never reach the shared result');
+    }
+
     public function testNonRegionValueIsRefused(): void
     {
         $this->expectException(\InvalidArgumentException::class);
