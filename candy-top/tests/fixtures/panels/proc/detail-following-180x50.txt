@@ -30,5 +30,5 @@
 │                                                                                                 │
 │                                                                                                 │
 │                                                                                                 │
-│                                Paused list and Following process                                │
+│                                Process list paused and following                                │
 ╰┘↑ select ↓└┘info ↵└┘terminate└┘kill└┘signals└┘Nice└┘Follow└───────────────────────────────┘1/13└╯

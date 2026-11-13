@@ -211,7 +211,7 @@ final class ProcPanelPaintTest extends TestCase
 
         [$s, $box] = self::painted(120, 40, [], ['down', 'F', 'u']);
         $this->assertSame(Surface::canonical($ink->bg('proc_banner_bg') . $ink->fg('proc_banner_fg') . "\x1b[1m"), $s->style($box->x + 1, $box->y + $box->height - 2));
-        $this->assertStringContainsString('Paused list and Following process', self::crop($s, $box)[$box->height - 2]);
+        $this->assertStringContainsString('Process list paused and following', self::crop($s, $box)[$box->height - 2]);
     }
 
     public function testActionButtonsGreyOutWithoutASelection(): void

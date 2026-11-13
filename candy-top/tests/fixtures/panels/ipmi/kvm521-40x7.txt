@@ -3,5 +3,5 @@
 │Inlet Ambient                     17°C│
 │CPU 1                             40°C│
 │CPU 2                             40°C│
-│ PSU 1/2   SEL 100%  · fans redundant │
+│ PSU1/2   SEL 100%  · fans redundant  │
 ╰──────────────────────────────────────╯
