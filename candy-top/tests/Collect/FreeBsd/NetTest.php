@@ -134,4 +134,53 @@ final class NetTest extends TestCase
         $this->assertNull($snap->selectedName);
         $this->assertSame($net, $next);
     }
+
+    public function testIfconfigRidesTheRunningTtlMemo(): void
+    {
+        // Frames: t=100 probe, t=102 memo hit (2 s < 5 s TTL), t=106 re-probe.
+        $probe = new FixtureProbe('', [
+            'netstat' => [FixtureProbe::fixture('netstat-ibn.txt'), FixtureProbe::fixture('netstat-ibn-next.synthetic.txt')],
+            'ifconfig' => FixtureProbe::fixture('ifconfig-a.synthetic.txt'),
+        ], [100.0, 102.0, 106.0]);
+        [, $net] = Net::new($probe)->sample();
+        $probe->advance();
+        [, $net] = $net->sample();
+        $probe->advance();
+        [, $net] = $net->sample();
+
+        $this->assertSame([
+            ['netstat', '-i', '-b', '-n', '-W'],
+            ['ifconfig', '-a'],
+            ['netstat', '-i', '-b', '-n', '-W'],
+            ['netstat', '-i', '-b', '-n', '-W'],
+            ['ifconfig', '-a'],
+        ], $probe->runs, 'one ifconfig per TTL window, netstat every sample');
+    }
+
+    public function testFailedIfconfigIsNeverMemoized(): void
+    {
+        // em0 is UP without '*' in netstat but has no carrier (not RUNNING).
+        // Sample 1: ifconfig fails → netstat-'*' fallback says connected.
+        // Sample 2 sits inside any window a success would have opened, yet
+        // re-probes: the recovered ifconfig answers on the very next sample.
+        $netstat = str_replace('em0*', 'em0 ', FixtureProbe::fixture('netstat-ibn-down-and-macless.synthetic.txt'));
+        $probe = new FixtureProbe('', [
+            'netstat' => [$netstat],
+            'ifconfig' => [null, FixtureProbe::fixture('ifconfig-a-no-carrier.synthetic.txt')],
+        ], [100.0, 102.0]);
+        [, $net] = Net::new($probe)->sample();
+        $this->assertTrue($net->sample()[0]->interfaces['em0']->connected, 'failed probe falls back to the UP marker');
+        $probe->advance();
+        [$snap] = $net->sample();
+
+        $this->assertFalse($snap->interfaces['em0']->connected, 'recovered ifconfig answers on the next sample');
+        $this->assertSame([
+            ['netstat', '-i', '-b', '-n', '-W'],
+            ['ifconfig', '-a'],
+            ['netstat', '-i', '-b', '-n', '-W'],
+            ['ifconfig', '-a'],
+            ['netstat', '-i', '-b', '-n', '-W'],
+            ['ifconfig', '-a'],
+        ], $probe->runs, 'a failure opens no TTL window');
+    }
 }

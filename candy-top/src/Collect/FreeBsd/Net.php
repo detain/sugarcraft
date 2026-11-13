@@ -18,7 +18,9 @@ use SugarCraft\Top\Collect\Sentinel;
  *    (Ibytes / Obytes, located from the header and counted from the END
  *    of the row, because an interface without a MAC has no Address
  *    column);
- *  - connected = IFF_RUNNING, as btop: one `ifconfig -a` per sample,
+ *  - connected = IFF_RUNNING, as btop: `ifconfig -a` at most once per
+ *    {@see RUNNING_TTL} window (the flag is near-static; the child costs
+ *    5-15 ms per sample),
  *    flags=<...RUNNING...> (UP alone is not enough — a cable-less NIC is
  *    UP but not RUNNING). When ifconfig fails or does not list an
  *    interface, netstat's trailing '*' (= not IFF_UP, netstat(1)) is the
@@ -29,13 +31,19 @@ use SugarCraft\Top\Collect\Sentinel;
  *
  * Rates, the wrap rollover, per-direction tops, user zeroing and the
  * sticky auto-pick (pinned `net_iface`, else most traffic among the
- * connected) behave exactly as {@see \SugarCraft\Top\Collect\Net}. Two
- * children per sample (netstat, ifconfig).
+ * connected) behave exactly as {@see \SugarCraft\Top\Collect\Net}. One
+ * `netstat` child per sample; the `ifconfig -a` child rides the TTL memo
+ * (a failed probe is never memoized, so a recovering ifconfig is
+ * consulted on the very next sample) — the Linux carrier-memo precedent.
  */
 final class Net
 {
+    /** Seconds an `ifconfig -a` answer is reused (IFF_RUNNING is near-static). */
+    private const RUNNING_TTL = 5.0;
+
     /**
      * @param array<string, array<string, int|float>> $state per-interface counter memory
+     * @param array<string, bool>                     $runningMap memoized IFF_RUNNING map
      */
     private function __construct(
         private readonly Probe $probe,
@@ -43,6 +51,8 @@ final class Net
         private readonly ?float $lastAt,
         private readonly ?string $selected,
         private readonly ?string $pinned,
+        private readonly array $runningMap = [],
+        private readonly ?float $runningAt = null,
     ) {
     }
 
@@ -54,7 +64,7 @@ final class Net
     /** Pin an interface (btop `net_iface`); null returns to auto-pick. */
     public function withInterface(?string $iface): self
     {
-        return new self($this->probe, $this->state, $this->lastAt, $iface, $iface);
+        return new self($this->probe, $this->state, $this->lastAt, $iface, $iface, $this->runningMap, $this->runningAt);
     }
 
     /** Toggle the totals offset for an interface (btop `z`). */
@@ -69,7 +79,7 @@ final class Net
             $state[$iface][$dir . 'Offset'] = $s[$dir . 'Offset'] > 0 ? 0 : $s[$dir . 'Last'] + $s[$dir . 'Rollover'];
         }
 
-        return new self($this->probe, $state, $this->lastAt, $this->selected, $this->pinned);
+        return new self($this->probe, $state, $this->lastAt, $this->selected, $this->pinned, $this->runningMap, $this->runningAt);
     }
 
     /**
@@ -84,7 +94,16 @@ final class Net
             return [new NetSnapshot([], null), $this];
         }
 
-        $running = self::running($this->probe->run(['ifconfig', '-a']));
+        $runningAt = $this->runningAt;
+        if ($runningAt !== null && $now - $runningAt < self::RUNNING_TTL) {
+            $running = $this->runningMap;
+        } else {
+            $rawRunning = $this->probe->run(['ifconfig', '-a']);
+            $running = self::running($rawRunning);
+            // A failed probe answers the netstat-'*' fallback for this tick
+            // but is never memoized: recovery lands on the next sample.
+            $runningAt = $rawRunning === null ? null : $now;
+        }
         $elapsed = $this->lastAt === null ? 0.0 : $now - $this->lastAt;
         $state = [];
         $interfaces = [];
@@ -131,7 +150,7 @@ final class Net
 
         return [
             new NetSnapshot($interfaces, $selected),
-            new self($this->probe, $state, $now, $selected, $this->pinned),
+            new self($this->probe, $state, $now, $selected, $this->pinned, $running, $runningAt),
         ];
     }
 
