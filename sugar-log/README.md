@@ -390,6 +390,7 @@ Untrusted data can never forge or reshape a record:
 
 ```php
 use SugarCraft\Log\Log;
+use SugarCraft\Log\PanicFormatter;
 
 // Install a panic handler that catches uncaught exceptions and fatal errors,
 // restores the terminal from altscreen mode, and prints a panic report —
@@ -397,12 +398,17 @@ use SugarCraft\Log\Log;
 // CLICOLOR_FORCE=1), plain ANSI-free text otherwise.
 Log::installPanicHandler();
 
+// $showLocals/$redactPaths configure only the formatter chosen by default.
+// To force them alongside your own formatter, build them into it — passing
+// both throws instead of silently dropping the knobs.
+Log::installPanicHandler(PanicFormatter::plain(true, ['/etc/secrets']));
+
 // Restore terminal state manually (exit altscreen, show cursor).
 // Called automatically by the panic handler, but safe to call directly.
 Log::restoreTerminal();
 ```
 
-The panic handler catches uncaught exceptions and fatal PHP errors (`E_ERROR`, `E_PARSE`, `E_CORE_ERROR`, `E_COMPILE_ERROR`, `E_USER_ERROR`), restores the terminal to a usable state, and prints a banner with the error class, message, and backtrace — styling is decided once at install time from whether STDERR is a color-capable terminal (NO_COLOR suppresses it unless CLICOLOR_FORCE overrides), not re-evaluated per report, so a report captured to a file after a TTY install still carries ANSI unless you pass `PanicFormatter::plain()` explicitly. The exception message is treated as untrusted input: terminal-control bytes are swept and newlines flattened, so a message that embeds user data can never forge extra report rows or emit escape sequences into whoever displays it, and `redactPaths` substrings are stripped from it as they are from frames and locals under one policy: exact-substring matching on raw bytes (case-folded on Windows, where path case carries no meaning) before the control sweep, compared against both the configured spelling and its `realpath` when that path resolves, with empty entries ignored. Re-installing replaces the previous sugar-log handler instead of stacking. Internal frames with no file/line render honestly as `?:?`, and the report ends with a neutral footer identifying sugar-log for issue filing. `showLocals` dumps call arguments only for traces that carry them — PHP's engine omits `args` from exception traces, so for plain uncaught exceptions there are no locals to show; the knob is live for manually injected frame arrays.
+The panic handler catches uncaught exceptions and fatal PHP errors (`E_ERROR`, `E_PARSE`, `E_CORE_ERROR`, `E_COMPILE_ERROR`, `E_USER_ERROR`), restores the terminal to a usable state, and prints a banner with the error class, message, and backtrace — styling is decided once at install time from whether STDERR is a color-capable terminal (NO_COLOR suppresses it unless CLICOLOR_FORCE overrides), not re-evaluated per report, so a report captured to a file after a TTY install still carries ANSI unless you pass `PanicFormatter::plain()` explicitly. `$showLocals`/`$redactPaths` configure only the formatter chosen by default: combining an explicit formatter with non-default knobs throws `InvalidArgumentException` rather than silently ignoring the caller's privacy settings. The exception message is treated as untrusted input: terminal-control bytes are swept and newlines flattened, so a message that embeds user data can never forge extra report rows or emit escape sequences into whoever displays it, and `redactPaths` substrings are stripped from it as they are from frames and locals under one policy: exact-substring matching on raw bytes (case-folded on Windows, where path case carries no meaning) before the control sweep, compared against both the configured spelling and its `realpath` when that path resolves, with empty entries ignored. Re-installing replaces the previous sugar-log handler instead of stacking. Internal frames with no file/line render honestly as `?:?`, and the report ends with a neutral footer identifying sugar-log for issue filing. `showLocals` dumps call arguments only for traces that carry them — PHP's engine omits `args` from exception traces, so for plain uncaught exceptions there are no locals to show; the knob is live for manually injected frame arrays.
 
 ## PSR-3 Bridge
 

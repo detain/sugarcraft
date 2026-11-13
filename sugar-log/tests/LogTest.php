@@ -262,6 +262,28 @@ final class LogTest extends TestCase
         $this->assertNotNull($handler);
     }
 
+    public function testInstallPanicHandlerRefusesKnobsAlongsideExplicitFormatter(): void
+    {
+        // [SL-08] silent-arg-drop trap: a formatter you pass has already
+        // decided locals/redaction; non-default knobs alongside it are a
+        // bug-shaped call and must throw, naming the knob it refuses. Both
+        // arms run in one test (expectException would abort the loop at the
+        // first throw, silently skipping the redactPaths arm).
+        $arms = [
+            ['showLocals', [PanicFormatter::plain(), true]],
+            ['redactPaths', [PanicFormatter::plain(), false, ['/etc/secrets']]],
+        ];
+
+        foreach ($arms as [$knob, $args]) {
+            try {
+                Log::installPanicHandler(...$args);
+                $this->fail('expected InvalidArgumentException refusing the silently-ignored ' . $knob);
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('$' . $knob, $e->getMessage());
+            }
+        }
+    }
+
     public function testContextIsMergedInLogMessages(): void
     {
         $log = $this->logger(Level::Debug);

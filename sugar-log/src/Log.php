@@ -131,18 +131,41 @@ final class Log
      * shutdown hook (one panic reporter per process at a time); the chained
      * "previous" handler captured at install time still runs afterwards.
      *
+     * $showLocals/$redactPaths configure the DEFAULT-chosen formatter only —
+     * a formatter you build yourself has already made those decisions.
+     * Passing both an explicit $formatter and non-default knobs therefore
+     * throws: a silently dropped $redactPaths is a privacy failure, not a
+     * styling preference, and this API refuses the trap instead of quietly
+     * honoring the wrong half of the call.
+     *
      * @param PanicFormatter|null $formatter  Omitted: chosen at install time by STDERR capability
      *                                        (never revisited per report, m-09); a NO_COLOR
      *                                        environment suppresses pretty() unless
      *                                        CLICOLOR_FORCE overrides (m-05).
-     * @param bool                $showLocals Include local variables in backtrace.
-     * @param list<string>        $redactPaths Paths to redact from backtrace.
+     * @param bool                $showLocals Include local variables in backtrace;
+     *                                        applies only to the default-chosen formatter
+     *                                        (throws when combined with an explicit one).
+     * @param list<string>        $redactPaths Paths to redact from backtrace; same
+     *                                        default-formatter-only rule as $showLocals.
+     *
+     * @throws \InvalidArgumentException If an explicit $formatter is passed together with
+     *                                  non-default $showLocals/$redactPaths (they would be
+     *                                  silently ignored).
      */
     public static function installPanicHandler(
         ?PanicFormatter $formatter = null,
         bool $showLocals = false,
         array $redactPaths = [],
     ): void {
+        if (null !== $formatter && ($showLocals || [] !== $redactPaths)) {
+            throw new \InvalidArgumentException(
+                'installPanicHandler(): $showLocals/$redactPaths configure only the'
+                . ' formatter chosen by default — set them on the PanicFormatter you'
+                . ' pass instead of alongside it (silently dropped redaction is the'
+                . ' failure mode this refuses)'
+            );
+        }
+
         // [PORT-01] SAPI-safe STDERR (php-fpm never defines the constant).
         $panicStderr = Stdio::err();
         $formatter ??= self::panicFormatterPrefersColor(
