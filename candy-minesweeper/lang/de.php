@@ -27,7 +27,7 @@ return [
     'ui.preset_expert' => 'experte',
     'ui.boom' => '💥 Boom — drücken Sie r für einen Neustart',
     'ui.cleared' => '★ Geschafft — drücken Sie r für eine neue Partie',
-    'ui.help_rules' => 'eine Zahl zählt die Minen daneben · Flaggen nie mehr als Minen',
+    'ui.help_rules' => 'eine Zahl zählt die Minen daneben · markiere Minen · öffne sichere Felder',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  bewegen  ·  Space / Enter  aufdecken',
     'ui.help_board' => 'Linksklick  aufdecken · f / Rechtsklick  flaggen · c / Mittelklick  aufdecken',
     'ui.help_loss' => '{mark} falsche Flagge · * Mine übersehen',

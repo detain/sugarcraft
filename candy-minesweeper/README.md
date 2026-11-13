@@ -51,12 +51,16 @@ The board renders in full — there is no scrolling viewport — and the help fo
 | `f`                | Toggle flag                      |
 | Left-click         | Reveal cell (mouse)              |
 | Right-click        | Toggle flag (mouse)              |
-| `c` / middle-click | Open around flags (chord)      |
+| `c` / middle-click | Chord — open a number's ring once its flags match |
 | `S`                | Save the live game to the slot   |
 | `L`                | Load the saved game              |
 | `r`                | Restart with new mines           |
 | `q` / `Esc`  | Quit (asks once on a live, unsaved board — see below)  |
 | `Ctrl+C`     | Quit — always immediate (the terminal contract)        |
+
+**Win**: reveal every cell that is not a mine. Flags are survival notes — the
+win check counts revealed safe cells only, so a board can be won with zero
+flags and flagging every mine is neither required nor sufficient on its own.
 
 Ctrl- and Alt-modified letters are inert (only Ctrl+C quits), so editor
 muscle-memory cannot restart or save the game by accident.

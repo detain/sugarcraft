@@ -27,7 +27,7 @@ return [
     'ui.preset_expert' => 'expert',
     'ui.boom' => '💥 boom — press r to restart',
     'ui.cleared' => '★ cleared — press r to play again',
-    'ui.help_rules' => 'a number counts nearby mines · flags cannot outnumber mines',
+    'ui.help_rules' => 'a number counts nearby mines · flag suspected mines · open safe cells to win',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  move  ·  space / enter  reveal',
     'ui.help_board' => 'left-click  open · f / right-click  flag · c / middle-click  open around flags',
     'ui.help_loss' => '{mark} wrong flag · * missed mine',

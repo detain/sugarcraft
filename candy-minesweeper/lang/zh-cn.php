@@ -27,7 +27,7 @@ return [
     'ui.preset_expert' => '专家',
     'ui.boom' => '💥 砰 — 按 r 重新开始',
     'ui.cleared' => '★ 通关 — 按 r 再玩一局',
-    'ui.help_rules' => '数字表示周围的地雷数 · 旗帜不超过地雷数',
+    'ui.help_rules' => '数字表示周围地雷数 · 标记可疑地雷 · 打开所有安全格获胜',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  移动  ·  space / enter  翻开',
     'ui.help_board' => '左键  打开 · f / 右键  插旗 · c / 中键  开周围',
     'ui.help_loss' => '{mark} 错误旗帜 · * 漏掉的地雷',

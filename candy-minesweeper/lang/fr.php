@@ -27,7 +27,7 @@ return [
     'ui.preset_expert' => 'expert',
     'ui.boom' => '💥 boum — appuyez sur r pour recommencer',
     'ui.cleared' => '★ gagné — appuyez sur r pour rejouer',
-    'ui.help_rules' => 'un chiffre compte les mines voisines · pas plus de drapeaux que de mines',
+    'ui.help_rules' => 'un chiffre = mines voisines · drapeau si suspect · ouvrez tout pour gagner',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  déplacer  ·  espace / entrée  révéler',
     'ui.help_board' => 'clic gauche  ouvrir · f / clic droit  drapeau · c / milieu  ouvrir autour',
     'ui.help_loss' => '{mark} drapeau faux · * mine manquée',

@@ -27,7 +27,7 @@ return [
     'ui.preset_expert' => 'esperto',
     'ui.boom' => '💥 boom — premi r per ricominciare',
     'ui.cleared' => '★ completato — premi r per giocare ancora',
-    'ui.help_rules' => 'un numero conta le mine vicine · bandiere mai più delle mine',
+    'ui.help_rules' => 'un numero = mine vicine · segnala le sospette · apri tutto per vincere',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  muovi  ·  spazio / invio  rivela',
     'ui.help_board' => 'clic sinistro  apri · f / clic destro  bandiera · c / clic centrale  intorno',
     'ui.help_loss' => '{mark} bandiera errata · * mina persa',

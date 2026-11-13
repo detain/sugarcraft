@@ -27,7 +27,7 @@ return [
     'ui.preset_expert' => 'ekspert',
     'ui.boom' => '💥 bum — naciśnij r, aby zacząć od nowa',
     'ui.cleared' => '★ wygrane — naciśnij r, aby zagrać ponownie',
-    'ui.help_rules' => 'liczba oznacza miny w pobliżu · flag nie więcej niż min',
+    'ui.help_rules' => 'liczba = miny obok · flaguj podejrzane · odkryj resztę by wygrać',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  ruch  ·  spacja / enter  odkryj',
     'ui.help_board' => 'lewy przycisk  otwórz · f / prawy  flaga · c / środkowy  otwórz okolice',
     'ui.help_loss' => '{mark} zła flaga · * pominięta mina',

@@ -27,7 +27,7 @@ return [
     'ui.preset_expert' => 'uzman',
     'ui.boom' => '💥 bum — yeniden başlatmak için r tuşuna basın',
     'ui.cleared' => '★ tamamlandı — tekrar oynamak için r tuşuna basın',
-    'ui.help_rules' => 'sayı yakındaki mayınları sayar · bayraklar mayın sayısını aşamaz',
+    'ui.help_rules' => 'sayı yakındaki mayındır · şüpheliye bayrak · kazanmak için hepsini aç',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  hareket  ·  space / enter  aç',
     'ui.help_board' => 'sol tık  aç · f / sağ tık  bayrak · c / orta tık  çevreyi aç',
     'ui.help_loss' => '{mark} yanlış bayrak · * kaçırılan mayın',
