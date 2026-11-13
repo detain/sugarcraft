@@ -10,10 +10,12 @@ hit-testing and incremental diff output for efficient redraws.
 - **Composite overlays** — place a modal, dialog or tooltip over existing
   terminal content by vertical and horizontal anchor, with column/row
   offsets from the anchor.
-- **Positioning** — nine named anchors (TOP, RIGHT, BOTTOM, LEFT, CENTER
+- **Positioning** — nine named anchors (TOP, RIGHT, BOTTOM, LEFT, CENTER,
   and the four corners). Placement is two-axis: `composite()` takes a
   vertical anchor and a horizontal anchor, and any case is valid on either
-  axis — each axis reads only the component it cares about (see
+  axis — each axis reads only the component it cares about, so the nine
+  cases project to three per axis: `RIGHT`, `TOP_RIGHT` and `BOTTOM_RIGHT`
+  all seat the overlay on the right edge (see
   [Positioning](#positioning)).
 - **Backdrop dimming** — darken the whole canvas except the overlay's own
   footprint by wrapping every non-empty background line in a truecolor dim
@@ -75,9 +77,10 @@ overlay itself is returned as the frame.
 
 Placement is decided by two anchors plus offsets:
 
-```
-composite(string $foreground, string $background,
-    Position $vertical, Position $horizontal, int $xOffset = 0, int $yOffset = 0): string
+```php
+<?php
+// composite(string $foreground, string $background,
+//     Position $vertical, Position $horizontal, int $xOffset = 0, int $yOffset = 0): string
 ```
 
 - `$vertical` pins the block's row: `TOP`-family cases to the first row,
@@ -143,7 +146,8 @@ echo Veil::new()->composite($fg, $bg, Position::BOTTOM_RIGHT, Position::BOTTOM_R
 ```
 
 (Corner cases set both axes from one value; mixing `Position::BOTTOM`
-with `Position::RIGHT` works identically.)
+for the vertical anchor with `Position::RIGHT` for the horizontal one
+composites the same frame as `BOTTOM_RIGHT` on both axes.)
 
 ## Backdrop Dimming
 
@@ -360,7 +364,7 @@ echo $stack->composite($background, Position::CENTER, Position::CENTER) . "\n";
 | `all(): array` | layers in insertion order |
 | `count(): int` / `isEmpty(): bool` | size |
 | `maxZIndex(): ?int` / `minZIndex(): ?int` | z-range (`null` when empty) |
-| `composite($background, $vertical, $horizontal, $xOffset = 0, $yOffset = 0): string` | paint all layers at one shared anchor |
+| `composite(string $background, Position $vertical, Position $horizontal, int $xOffset = 0, int $yOffset = 0): string` | paint all layers at one shared anchor |
 | `compositeAll(string $background): string` | paint each layer at **its own** `withPosition()` anchor — see below |
 
 Both passes feed every layer the **accumulated** canvas (later veils see
@@ -372,9 +376,9 @@ away): scan/hit-test the **returned canvas**, not the members' session
 state. Per-layer `withAnimation()` is inert on both passes too — the
 stack calls `composite()`, never `animate()` — while each layer's static
 style (dims, border, zones) paints as usual. A stack
-holds at most `VeilStack::MAX_LAYERS` (256) layers; `add()` throws
-`OverflowException` beyond the bound, which keeps the per-frame walk cost
-of both `composite()` and `compositeAll()` finite.
+holds at most `VeilStack::MAX_LAYERS` (256) layers. `add()` throws
+`OverflowException` past the cap, so one frame's paint walk stays
+bounded however much the caller stacks up.
 
 The stack reads each veil's `content()` **verbatim** — it performs no
 sweep of its own. Untrusted payloads must be swept per-veil with
@@ -385,10 +389,11 @@ hit-test zone with the attacker's chosen id (see
 
 ### Per-veil placement: withPosition()
 
-`withPosition(?Position $vertical, ?Position $horizontal, int $x = 0, int
-$y = 0)` stores an anchor + offsets **on the veil**; `compositeAll()`
-reads them (`vPosition() ?? Position::CENTER`, and likewise horizontally,
-plus `positionX()`/`positionY()`). Passing `null` for an axis clears that
+`withPosition()` stores an anchor + offsets **on the veil**:
+`withPosition(?Position $vertical, ?Position $horizontal, int $x = 0, int $y = 0): self`
+`compositeAll()` reads them — `vPosition() ?? Position::CENTER` vertically,
+`hPosition() ?? Position::CENTER` horizontally, plus
+`positionX()`/`positionY()`. Passing `null` for an axis clears that
 anchor back to the stack default; the offsets always take the given
 values.
 
@@ -554,6 +559,8 @@ from. (These three figures are pinned live by `tests/ReadmeByteFigureTest.php`
 > returned. Scanning a delta finds zero zones, so every click reads as
 > "outside" and a dismissal-enabled modal self-closes from frame two.
 
+### Implementation notes
+
 Extended color operands saturate before any arithmetic runs: a `38;5;n`
 palette index is clamped to 0–255 and `38;2;r;g;b` components to 0–255
 each, so a hostile `38;5;300` cannot push the grayscale-ramp formula
@@ -561,7 +568,7 @@ each, so a hostile `38;5;300` cannot push the grayscale-ramp formula
 `0xRRGGBB` range the cell model stores (unclamped, it would have run the
 ramp to 688 per channel — a value no frame can round-trip).
 
-## Wiring into a program
+## Wiring into a Program
 
 Everything so far is string-in/string-out; a live terminal program needs
 the one place render state LIVES. The rule is short: **the session rides
@@ -608,7 +615,7 @@ no zone markers), and anything derived from the model veil — a
 `withContent()` variant per tick — renders through the SAME delta chain,
 which is the point: one remembered frame, one screen.
 
-## Security — untrusted content
+## Security — Untrusted Content
 
 The compositor is marker-sensitive: U+E000/U+E001 zone sentinels become
 **real hit-test zones**, OSC 8 sequences become **live hyperlinks**, and
@@ -658,13 +665,17 @@ The two sweeps differ deliberately:
   reports four cells, so every clip and anchor computed from the
   measured width cuts the row short or past its end.
 
-The law, exactly: **sweep the raw payload at the boundary, then mark,
-then render.** Marked frames go through
+The law, exactly: **sweep the raw payload at the boundary, then
+`mark()`, then `composite()`/`animate()`.** Marked frames go through
 `Sanitize::untrustedForMarkedFrames()`; untrusted bodies entering
 content/stack paths go through `withUntrustedContent()`; mark() only
 text you swept and assembled yourself, never raw payloads (a payload
 that contains sentinels mints its own zones if you skip the sweep).
 Both sweeps preserve sugar-image's U+E002+ image-marker band.
+And the law covers **both** inputs to `composite()`: a backdrop that is
+not host-owned is just as attacker-reachable as the payload — forged
+sentinels in the background mint real zones too — so sweep backdrop
+text through the same doors.
 
 ## Zone markers and presentation
 
@@ -673,8 +684,8 @@ envelopes. These cost ZERO columns everywhere in the
 compositor — measurement, clipping, and anchoring all account them like
 escape sequences — but they are not invisible: the id characters are
 printable bytes, and a host that forwards a marked frame straight to a
-dumb pipe (or to a logger) sees `[Kept]`-style garbage where the zone
-sat. The split is by consumer:
+dumb pipe (or to a logger) sees the zone id as plain text between two
+private-use codepoints — placeholder-box garbage where the zone sat. The split is by consumer:
 
 - the **scanner** needs the envelopes — `scan($veil->lastFullFrame())`
   reads them before anything is stripped;
@@ -685,10 +696,11 @@ sat. The split is by consumer:
   U+E000/U+E001 pair and leaves everything else — image markers included
   — byte-for-byte, but the id text between a pair survives as printable
   garbage. To remove whole `U+E000 id U+E001` envelopes (id included),
-  use the tag-aware sweep sugar-mouse ships in its `src/Scan.php`:
-  `Scan::strip($rendered)`. (The fleet does this today: candy-code's
-  `src/Tui/Renderer.php` strips marker triples on its own transcript
-  path.)
+  use the tag-aware sweep `SugarCraft\Mouse\Scan::strip($rendered)`.
+  (The fleet's live call today is the weaker door, not this one:
+  candy-code's `src/Tui/Renderer.php` transcript path strips sentinel
+  **bytes only** via `Sanitize::stripZoneSentinels()`, exactly the
+  pair-vs-envelope split above.)
 
 If your app never hit-tests, opt out entirely with
 `Veil::withoutZoneMarkers()`: `mark()` then returns the content
@@ -715,7 +727,14 @@ one geometry by construction. When an overlay opens, announce it: the
 **text** you emit (a title line) is the screen-reader cue; a
 `withBorder()` frame is a sighted-user affordance that only adds
 box-glyph noise for terminal screen readers, so never treat it as the
-announcement. Return focus to the underlying pane when it closes.
+announcement — users who want the box itself gone have
+`Border::hidden()` and `Border::ascii()` from sugar-style. Return focus to the underlying pane when it closes.
+
+`NO_COLOR` gets the opposite treatment: the renderer intentionally does
+not consult it, because the dim pen *is* color and stripping pens is the
+host's presentation choice, not the compositor's. A host that honours
+`NO_COLOR` decides upstream — emit the backdrop pre-striped and run with
+`withBackdrop(0)` and no animation for the color-free rendering.
 
 For motion, call `withReducedMotion()` whenever the user has asked their
 platform to reduce it. The fleet-standard read is sugar-colorprofile's
@@ -728,7 +747,7 @@ one shot: no dim-pen sweep, no travel. Without it — ordinary animation —
 the scrim ramps with the animation instead of snapping to full opacity
 at frame one.
 
-## API reference
+## API Reference
 
 The tables below cover **all public methods** of each class — a roster
 transcribed from the shipped `src/` surface, not a hand-typed count.
@@ -868,6 +887,17 @@ Built on the monorepo's cell model: sugar-cellbuffer `Buffer` powers the
 diff, sugar-mouse `Scanner`/`Mark` the hit-testing, sugar-spring
 `CubicBezier` the easing, sugar-style `Border`/`Style` the chrome, and
 sugar-core `Width` the terminal-column measurement.
+
+### Related packages
+
+For neighbouring jobs, the better tool often lives next door:
+`sugar-toast` owns transient self-expiring notices (a toast ends itself;
+a veil waits for you), plain `sugar-style` `Border` chrome fits a frame
+with nothing behind it to dim, and `candy-scriptui` dialogs carry form
+mechanics — fields, focus, validation — that this library deliberately
+paints around but does not own. Beyond that split the surface mirrors
+the Go antecedent; where it deliberately does not, see
+[Divergences from Upstream](#divergences-from-upstream).
 
 ## Divergences from Upstream
 
