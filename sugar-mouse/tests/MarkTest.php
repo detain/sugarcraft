@@ -157,7 +157,7 @@ final class MarkTest extends TestCase
 
         // Round-trips through both the low-level Scan::parse() and the
         // high-level Scanner without desync.
-        $zones = (new Scan())->parse($rendered);
+        $zones = Scan::parse($rendered);
         self::assertArrayHasKey($id, $zones);
         self::assertSame($id, $zones[$id]->id);
 
@@ -357,10 +357,10 @@ final class MarkTest extends TestCase
     {
         $unswept = (new Mark())->wrap('real', 'A' . Sentinel::OPEN . 'ghost' . Sentinel::CLOSE . 'B' . Sentinel::OPEN . '/ghost' . Sentinel::CLOSE);
         // Close-order registration: ghost closes before real does.
-        self::assertSame(['ghost', 'real'], array_keys((new Scan())->parse($unswept)));
+        self::assertSame(['ghost', 'real'], array_keys(Scan::parse($unswept)));
 
         $swept = (new Mark())->wrap('real', Mark::untrusted('A' . Sentinel::OPEN . 'ghost' . Sentinel::CLOSE . 'B' . Sentinel::OPEN . '/ghost' . Sentinel::CLOSE));
-        $zones = (new Scan())->parse($swept);
+        $zones = Scan::parse($swept);
         self::assertSame(['real'], array_keys($zones));
         self::assertSame('AghostB/ghost', Scan::strip($swept), 'swept residue is inert plain text');
     }
