@@ -27,4 +27,7 @@ return [
     'progress.bad_value_format' => 'formát hodnoty musí být platný sprintf se dvěma celými čísly',
     'progress.rune_cell_width' => 'znaky panelu musí být přesně jeden zobrazovací řádek',
     'progress.color_func_type' => 'colorFunc musí vrátit Color',
+    'tabs.next_tab' => 'další karta',
+    'tabs.prev_tab' => 'předchozí karta',
+    'tabs.jump_to' => 'karta {index}',
 ];

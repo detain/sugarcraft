@@ -27,4 +27,7 @@ return [
     'progress.bad_value_format' => 'le format de valeur doit être un sprintf valide de deux entiers',
     'progress.rune_cell_width' => 'les caractères de la barre doivent mesurer exactement une cellule',
     'progress.color_func_type' => 'colorFunc doit renvoyer un Color',
+    'tabs.next_tab' => 'onglet suivant',
+    'tabs.prev_tab' => 'onglet précédent',
+    'tabs.jump_to' => 'onglet {index}',
 ];

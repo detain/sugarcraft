@@ -27,4 +27,7 @@ return [
     'progress.bad_value_format' => '値形式は整数2個の有効なsprintfでなければなりません',
     'progress.rune_cell_width' => 'バーの文字はちょうど1表示セル幅でなければなりません',
     'progress.color_func_type' => 'colorFuncはColorを返す必要があります',
+    'tabs.next_tab' => '次のタブ',
+    'tabs.prev_tab' => '前のタブ',
+    'tabs.jump_to' => 'タブ{index}',
 ];

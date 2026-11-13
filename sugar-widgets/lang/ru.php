@@ -27,4 +27,7 @@ return [
     'progress.bad_value_format' => 'формат значения должен быть корректным sprintf с двумя целыми числами',
     'progress.rune_cell_width' => 'символы полосы должны занимать ровно одну ячейку',
     'progress.color_func_type' => 'colorFunc должен возвращать Color',
+    'tabs.next_tab' => 'следующая вкладка',
+    'tabs.prev_tab' => 'предыдущая вкладка',
+    'tabs.jump_to' => 'вкладка {index}',
 ];

@@ -98,4 +98,30 @@ final class TabsKeyMapTest extends TestCase
         $allBindings = [$km->nextTab, $km->prevTab, ...$km->jumpBindings];
         $this->assertCount(11, $allBindings);
     }
+
+    public function testHelpLabelsResolveThroughLangInDefaultLocale(): void
+    {
+        $km = TabsKeyMap::new();
+        $this->assertSame('next tab', $km->nextTab->help->desc);
+        $this->assertSame('prev tab', $km->prevTab->help->desc);
+        $this->assertSame('tab 3', $km->jumpBindings[2]->help->desc);
+        $this->assertStringNotContainsString('{index}', $km->jumpBindings[0]->help->desc);
+    }
+
+    public function testHelpLabelsAreLocalizedWhenLocaleSwitched(): void
+    {
+        // The README promise: label copy resolves through Lang. The Help
+        // overlay shows these descs verbatim, so every locale gets the
+        // translated strings, not English literals.
+        \SugarCraft\Core\I18n\T::setLocale('de');
+        try {
+            $km = TabsKeyMap::new();
+            $this->assertSame('nächster Tab', $km->nextTab->help->desc);
+            $this->assertSame('vorheriger Tab', $km->prevTab->help->desc);
+            $this->assertSame('Tab 7', $km->jumpBindings[6]->help->desc);
+        } finally {
+            \SugarCraft\Core\I18n\T::setLocale('en');
+        }
+        $this->assertSame('next tab', TabsKeyMap::new()->nextTab->help->desc, 'locale state restored');
+    }
 }

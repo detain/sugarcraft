@@ -27,4 +27,7 @@ return [
     'progress.bad_value_format' => 'değer biçimi iki tamsayılı geçerli bir sprintf olmalıdır',
     'progress.rune_cell_width' => 'çubuk karakterleri tam olarak bir görüntü hücresi genişliğinde olmalıdır',
     'progress.color_func_type' => 'colorFunc bir Color döndürmeli',
+    'tabs.next_tab' => 'sonraki sekme',
+    'tabs.prev_tab' => 'önceki sekme',
+    'tabs.jump_to' => 'sekme {index}',
 ];

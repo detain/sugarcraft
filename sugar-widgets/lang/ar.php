@@ -27,4 +27,7 @@ return [
     'progress.bad_value_format' => 'يجب أن يكون تنسيق القيمة sprintf صالحًا لعددين صحيحين',
     'progress.rune_cell_width' => 'يجب أن يكون عرض رموز الشريط خانة عرض واحدة بالضبط',
     'progress.color_func_type' => 'يجب أن ترجع colorFunc قيمة من نوع Color',
+    'tabs.next_tab' => 'التبويب التالي',
+    'tabs.prev_tab' => 'التبويب السابق',
+    'tabs.jump_to' => 'التبويب {index}',
 ];

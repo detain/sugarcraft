@@ -27,4 +27,7 @@ return [
     'progress.bad_value_format' => 'il formato valore deve essere un sprintf valido di due interi',
     'progress.rune_cell_width' => 'i caratteri della barra devono essere larghi esattamente una cella',
     'progress.color_func_type' => 'colorFunc deve restituire un Color',
+    'tabs.next_tab' => 'scheda successiva',
+    'tabs.prev_tab' => 'scheda precedente',
+    'tabs.jump_to' => 'scheda {index}',
 ];

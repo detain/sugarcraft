@@ -27,4 +27,7 @@ return [
     'progress.bad_value_format' => 'value format must be a valid sprintf of two integers',
     'progress.rune_cell_width' => 'bar runes must be exactly one display cell',
     'progress.color_func_type' => 'colorFunc must return a Color',
+    'tabs.next_tab' => 'next tab',
+    'tabs.prev_tab' => 'prev tab',
+    'tabs.jump_to' => 'tab {index}',
 ];

@@ -7,6 +7,7 @@ namespace SugarCraft\Widgets\Tabs;
 use SugarCraft\Widgets\Key\Binding;
 use SugarCraft\Widgets\Key\Help;
 use SugarCraft\Widgets\Key\KeyMap;
+use SugarCraft\Widgets\Lang;
 
 /**
  * Key bindings for the {@see Tabs} component.
@@ -38,11 +39,11 @@ final class TabsKeyMap implements KeyMap
         return new self(
             nextTab: Binding::new(
                 keys: ['tab'],
-                help: new Help('tab', 'next tab'),
+                help: new Help('tab', Lang::t('tabs.next_tab')),
             ),
             prevTab: Binding::new(
                 keys: ['shift+tab'],
-                help: new Help('shift+tab', 'prev tab'),
+                help: new Help('shift+tab', Lang::t('tabs.prev_tab')),
             ),
             jumpBindings: self::jumpBindings(),
         );
@@ -55,7 +56,7 @@ final class TabsKeyMap implements KeyMap
         for ($i = 1; $i <= 9; $i++) {
             $bindings[] = Binding::new(
                 keys: [(string) $i],
-                help: new Help((string) $i, "tab {$i}"),
+                help: new Help((string) $i, Lang::t('tabs.jump_to', ['index' => $i])),
             );
         }
         return $bindings;

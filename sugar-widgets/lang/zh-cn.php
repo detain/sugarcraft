@@ -27,4 +27,7 @@ return [
     'progress.bad_value_format' => '值格式必须是接受两个整数的有效 sprintf',
     'progress.rune_cell_width' => '进度条字符必须恰好占一个显示单元',
     'progress.color_func_type' => 'colorFunc 必须返回 Color',
+    'tabs.next_tab' => '下一个标签页',
+    'tabs.prev_tab' => '上一个标签页',
+    'tabs.jump_to' => '标签页 {index}',
 ];

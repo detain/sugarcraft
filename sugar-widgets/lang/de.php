@@ -27,4 +27,7 @@ return [
     'progress.bad_value_format' => 'Wertformat muss ein gültiges sprintf mit zwei Ganzzahlen sein',
     'progress.rune_cell_width' => 'Balken-Zeichen müssen genau eine Anzeigenzelle breit sein',
     'progress.color_func_type' => 'colorFunc muss ein Color zurückgeben',
+    'tabs.next_tab' => 'nächster Tab',
+    'tabs.prev_tab' => 'vorheriger Tab',
+    'tabs.jump_to' => 'Tab {index}',
 ];

@@ -27,4 +27,7 @@ return [
     'progress.bad_value_format' => 'format wartości musi być prawidłowym sprintf z dwiema liczbami całkowitymi',
     'progress.rune_cell_width' => 'znaki paska muszą mieć dokładnie jedną komórkę wyświetlania',
     'progress.color_func_type' => 'colorFunc musi zwracać Color',
+    'tabs.next_tab' => 'następna karta',
+    'tabs.prev_tab' => 'poprzednia karta',
+    'tabs.jump_to' => 'karta {index}',
 ];
