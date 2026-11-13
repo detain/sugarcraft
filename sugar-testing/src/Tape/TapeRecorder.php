@@ -7,6 +7,7 @@ namespace SugarCraft\Testing\Tape;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\QuitMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
+use SugarCraft\Testing\Concerns\FilesystemErrorCapture;
 use SugarCraft\Testing\Lang;
 
 /**
@@ -41,6 +42,8 @@ use SugarCraft\Testing\Lang;
  */
 final class TapeRecorder
 {
+    use FilesystemErrorCapture;
+
     /** @var list<string> */
     private array $lines = [];
 
@@ -277,40 +280,50 @@ final class TapeRecorder
 
         $dir = \dirname($path);
         if (\is_dir($dir) === false) {
-            @\mkdir($dir, 0755, true);
+            [, $mkdirError] = self::captureFilesystemError(
+                static fn () => @\mkdir($dir, 0755, true),
+            );
             if (\is_dir($dir) === false) {
                 throw new \RuntimeException(Lang::t('tape.write_failed', [
                     'path'   => $path,
-                    'reason' => 'could not create parent directory ' . $dir,
+                    'reason' => 'could not create parent directory ' . $dir
+                        . ($mkdirError !== null ? ': ' . $mkdirError : ''),
                 ]));
             }
         }
 
         $content = implode("\n", $this->lines) . "\n";
+        $expected = \strlen($content);
 
-        // '@' fronts the checked-false shape: a failed write raises an
-        // E_WARNING (which failOnWarning would trip) before we can raise
-        // the typed error; the reason is recovered from error_get_last().
+        // The scoped handler consumes the E_WARNING a failed write raises
+        // (failOnWarning would otherwise trip) and binds the reason to THIS
+        // call — never to whatever last failed somewhere in the process.
         $tmp = $dir . '/.tape-tmp-' . \bin2hex(\random_bytes(6)) . '-' . \getmypid();
-        $written = @\file_put_contents($tmp, $content);
+        [$written, $writeError] = self::captureFilesystemError(
+            static fn () => @\file_put_contents($tmp, $content),
+        );
 
-        if ($written !== \strlen($content)) {
+        if ($written !== $expected) {
             @\unlink($tmp);
 
             throw new \RuntimeException(Lang::t('tape.write_failed', [
                 'path'   => $path,
-                'reason' => $written === false
-                    ? (string) (error_get_last()['message'] ?? 'write failed')
-                    : \sprintf('short write (%d of %d bytes)', $written, \strlen($content)),
+                'reason' => \is_int($written)
+                    ? \sprintf('short write (%d of %d bytes)', $written, $expected)
+                    : ($writeError ?? 'write failed'),
             ]));
         }
 
-        if (!@\rename($tmp, $path)) {
+        [$renamed, $renameError] = self::captureFilesystemError(
+            static fn () => @\rename($tmp, $path),
+        );
+
+        if ($renamed === false || $renameError !== null) {
             @\unlink($tmp);
 
             throw new \RuntimeException(Lang::t('tape.write_failed', [
                 'path'   => $path,
-                'reason' => (string) (error_get_last()['message'] ?? 'rename failed'),
+                'reason' => $renameError ?? 'rename failed',
             ]));
         }
     }

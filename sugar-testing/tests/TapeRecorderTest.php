@@ -515,4 +515,17 @@ final class TapeRecorderTest extends TestCase
         $this->assertFileExists($this->tapePath);
         $this->assertStringStartsWith('Set Theme "TokyoNight"', (string) file_get_contents($this->tapePath));
     }
+
+    public function testSaveAgainstADirectoryTargetReportsTheCapturedRenameReason(): void
+    {
+        // rename(file -> existing dir) fails with EISDIR; the typed error
+        // carries that captured reason, not a stale process-global one.
+        $occupied = $this->tmpDir . '/.occupied-dir';
+        mkdir($occupied);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Is a directory');
+
+        TapeRecorder::new($occupied)->header()->save();
+    }
 }

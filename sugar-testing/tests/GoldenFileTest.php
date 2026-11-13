@@ -207,4 +207,60 @@ final class GoldenFileTest extends TestCase
 
         $this->assertSame('/home/test/fixtures/', $resolved);
     }
+
+    public function testWriteFailureReasonClassifiesEveryFailureShape(): void
+    {
+        // The old is_string($written) test made the short-write branch dead
+        // code — file_put_contents returns int|false, never string. Each
+        // shape must classify on its own terms.
+        $cases = [
+            [false, null, 10, 'unknown error'],
+            [false, 'disk full', 10, 'disk full'],
+            [0, null, 10, 'short write (0 of 10 bytes)'],
+            [9, null, 10, 'short write (9 of 10 bytes)'],
+        ];
+
+        foreach ($cases as [$written, $diagnostic, $expected, $want]) {
+            $this->assertSame(
+                $want,
+                GoldenFile::writeFailureReason($written, $diagnostic, $expected),
+                'shape ' . var_export($written, true) . '/' . var_export($diagnostic, true)
+            );
+        }
+    }
+
+    public function testCaptureIsScopedToItsOwnCallAndLeavesGlobalErrorAlone(): void
+    {
+        // Plant an unrelated process-global diagnostic; the scoped capture
+        // must neither report it nor overwrite it.
+        @unlink($this->tmpDir . '/.ghost-414');
+        $ghost = error_get_last()['message'] ?? '';
+        $this->assertStringContainsString('.ghost-414', $ghost);
+
+        $capture = new \ReflectionMethod(GoldenFile::class, 'captureFilesystemError');
+        $capture->setAccessible(true);
+
+        [$value, $diagnostic] = $capture->invoke(null, static fn () => 7);
+        $this->assertSame(7, $value);
+        $this->assertNull($diagnostic, 'a clean call captures nothing');
+
+        [$failed, $why] = $capture->invoke(null, static fn () => @file_get_contents('/definitely-missing-414'));
+        $this->assertFalse($failed);
+        $this->assertIsString($why);
+        $this->assertStringContainsString('definitely-missing-414', (string) $why);
+        $this->assertSame($ghost, error_get_last()['message'] ?? '', 'capture must not touch the global last error');
+    }
+
+    public function testUpdateAgainstADirectoryTargetReportsTheRenameLegFailure(): void
+    {
+        // rename(file -> existing dir) fails with EISDIR: the typed error
+        // must surface the captured reason instead of a stale global.
+        $occupied = $this->tmpDir . '/.occupied-dir';
+        mkdir($occupied);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Is a directory');
+
+        GoldenFile::update($occupied, 'payload');
+    }
 }

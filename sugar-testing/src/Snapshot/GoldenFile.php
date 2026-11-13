@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Testing\Snapshot;
 
+use SugarCraft\Testing\Concerns\FilesystemErrorCapture;
 use SugarCraft\Testing\Lang;
 
 /**
@@ -30,6 +31,8 @@ use SugarCraft\Testing\Lang;
  */
 final class GoldenFile
 {
+    use FilesystemErrorCapture;
+
     /**
      * Load a golden file's contents.
      *
@@ -53,12 +56,14 @@ final class GoldenFile
             return null;
         }
 
-        $contents = @\file_get_contents($path);
+        [$contents, $diagnostic] = self::captureFilesystemError(
+            static fn () => @\file_get_contents($path),
+        );
 
         if ($contents === false) {
             throw new \RuntimeException(Lang::t('golden.read_failed', [
                 'path'   => $path,
-                'reason' => self::lastErrorReason(),
+                'reason' => $diagnostic ?? 'unknown error',
             ]));
         }
 
@@ -181,32 +186,38 @@ final class GoldenFile
     {
         $dir = \dirname($path);
         if (!\is_dir($dir)) {
-            // '@' + is_dir re-check: concurrent first-baseline runs race here,
-            // and an unchecked mkdir EWARNING would trip failOnWarning.
-            @\mkdir($dir, 0755, true);
+            // Scoped capture + is_dir re-check: concurrent first-baseline
+            // runs race here, and an unchecked mkdir EWARNING would trip
+            // failOnWarning; the diagnostic belongs to THIS call, not to
+            // whatever last failed process-wide.
+            [, $mkdirError] = self::captureFilesystemError(
+                static fn () => @\mkdir($dir, 0755, true),
+            );
             if (!\is_dir($dir)) {
                 throw new \RuntimeException(Lang::t('golden.write_failed', [
                     'path'   => $path,
-                    'reason' => 'could not create parent directory ' . $dir,
+                    'reason' => 'could not create parent directory ' . $dir
+                        . ($mkdirError !== null ? ': ' . $mkdirError : ''),
                 ]));
             }
         }
 
         $tmp = $dir . '/.golden-tmp-' . \bin2hex(\random_bytes(6)) . '-' . \getmypid();
+        $expected = \strlen($content);
 
-        // '@' fronts the checked-false shape: a failed write would raise an
-        // E_WARNING (which failOnWarning would trip) before we can raise the
-        // typed error; the reason is recovered from error_get_last().
-        $written = @\file_put_contents($tmp, $content);
+        // The scoped handler consumes the E_WARNING a failed write raises
+        // (failOnWarning would otherwise trip) before we can raise the
+        // typed error; the reason is captured from this call only.
+        [$written, $writeError] = self::captureFilesystemError(
+            static fn () => @\file_put_contents($tmp, $content),
+        );
 
-        if ($written !== \strlen($content)) {
+        if ($written !== $expected) {
             @\unlink($tmp);
 
             throw new \RuntimeException(Lang::t('golden.write_failed', [
                 'path'   => $path,
-                'reason' => \is_string($written)
-                    ? 'short write (' . $written . ' of ' . \strlen($content) . ' bytes)'
-                    : self::lastErrorReason(),
+                'reason' => self::writeFailureReason($written, $writeError, $expected),
             ]));
         }
 
@@ -214,7 +225,10 @@ final class GoldenFile
             // link() fails with EEXIST if the target exists at all: the
             // no-clobber guarantee is enforced by the filesystem, not by a
             // check-then-act window.
-            if (@\link($tmp, $path)) {
+            [$linked] = self::captureFilesystemError(
+                static fn () => @\link($tmp, $path),
+            );
+            if ($linked === true) {
                 @\unlink($tmp);
 
                 return;
@@ -228,28 +242,42 @@ final class GoldenFile
 
             throw new \RuntimeException(Lang::t('golden.write_failed', [
                 'path'   => $path,
-                'reason' => self::lastErrorReason(),
+                'reason' => 'linking the temp file failed',
             ]));
         }
 
-        if (!@\rename($tmp, $path)) {
+        [$renamed, $renameError] = self::captureFilesystemError(
+            static fn () => @\rename($tmp, $path),
+        );
+
+        if ($renamed === false || $renameError !== null) {
             @\unlink($tmp);
 
             throw new \RuntimeException(Lang::t('golden.write_failed', [
                 'path'   => $path,
-                'reason' => self::lastErrorReason(),
+                'reason' => $renameError ?? 'rename failed',
             ]));
         }
     }
 
     /**
-     * Message for the most recent failed filesystem call, if any.
+     * Classify a failed write for the error message: an int return is a
+     * short write (the count says how short — the old is_string() test made
+     * that branch dead code), false is a hard failure whose reason comes
+     * from the scoped capture. Public so the shape roster is directly
+     * testable without failing devices.
+     *
+     * @param int|false   $written    return of the write call
+     * @param string|null $diagnostic message captured for this call, if any
+     * @param int         $expected   bytes the payload should have filled
      */
-    private static function lastErrorReason(): string
+    public static function writeFailureReason(int|false $written, ?string $diagnostic, int $expected): string
     {
-        $error = \error_get_last();
+        if (\is_int($written)) {
+            return \sprintf('short write (%d of %d bytes)', $written, $expected);
+        }
 
-        return $error === null ? 'unknown error' : $error['message'];
+        return $diagnostic ?? 'unknown error';
     }
 
     /**
