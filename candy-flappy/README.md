@@ -78,8 +78,8 @@ what you hold, not a cryptographic attestation of who built it.
 
 ### Command line
 
-`bin/candy-flappy` takes exactly two diagnostic flags; the game itself takes
-no arguments:
+`bin/candy-flappy` takes exactly two diagnostic flags; the table also covers
+how other invocations behave (the game itself takes no arguments):
 
 | Invocation              | Behaviour                                       |
 |-------------------------|-------------------------------------------------|
