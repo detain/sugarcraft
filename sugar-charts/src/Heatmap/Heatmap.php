@@ -13,6 +13,7 @@ use SugarCraft\Charts\Support\UntrustedText;
 use SugarCraft\Charts\Canvas\Canvas;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Style;
 
 /**
@@ -124,10 +125,22 @@ final class Heatmap
      */
     public function pushPoint(HeatPoint $p): self
     {
+        $grid = $this->grid;
+        self::writePoint($grid, $p);
+        return $this->copy(grid: $grid);
+    }
+
+    /**
+     * Grow-and-write one point into a local grid, shared by the streaming
+     * and batch doors.
+     *
+     * @param array<int, array<int, float|int>> $grid
+     */
+    private static function writePoint(array &$grid, HeatPoint $p): void
+    {
         if ($p->x < 0 || $p->y < 0) {
             throw new \InvalidArgumentException(Lang::t('heatmap.coords_nonneg'));
         }
-        $grid = $this->grid;
         // Pad rows up to y inclusive.
         $targetRows = $p->y + 1;
         $gridCount = count($grid);
@@ -145,7 +158,6 @@ final class Heatmap
         }
         $row[$p->x] = $p->value;
         $grid[$p->y] = $row;
-        return $this->copy(grid: $grid);
     }
 
     /**
@@ -156,11 +168,18 @@ final class Heatmap
      */
     public function pushAll(array $points): self
     {
-        $next = $this;
-        foreach ($points as $p) {
-            $next = $next->pushPoint($p);
+        if ($points === []) {
+            return $this;
         }
-        return $next;
+        // sugar-charts-039: looping pushPoint copy-on-wrote the ENTIRE
+        // grid per point — a 64×64 feed churned ~500k array copies.
+        // Batch into one local grid with a single copy() at the end
+        // (the BarChart/Sparkline pushAll shape).
+        $grid = $this->grid;
+        foreach ($points as $p) {
+            self::writePoint($grid, $p);
+        }
+        return $this->copy(grid: $grid);
     }
     /**
      * Fill rune for colored mode. Control bytes (escape sequences,
@@ -429,17 +448,20 @@ final class Heatmap
     {
         $minLabel = self::formatLabel($min);
         $maxLabel = self::formatLabel($max);
-        $minLen = mb_strlen($minLabel, 'UTF-8');
-        $maxLen = mb_strlen($maxLabel, 'UTF-8');
+        // sugar-charts-046: budget in CELLS, not codepoints — every other
+        // string-placement path in the lib measures with Width; mb
+        // counting under-trims wide-glyph labels past the frame edge.
+        $minLen = Width::string($minLabel);
+        $maxLen = Width::string($maxLabel);
 
         $totalLabelLen = $minLen + $maxLen;
         if ($totalLabelLen + 2 > $this->width) {
             $budget = max(0, $this->width - 2);
             $halfBudget = intdiv($budget, 2);
-            $minLabel = mb_substr($minLabel, 0, $halfBudget, 'UTF-8');
-            $maxLabel = mb_substr($maxLabel, 0, $budget - $halfBudget, 'UTF-8');
-            $minLen = mb_strlen($minLabel, 'UTF-8');
-            $maxLen = mb_strlen($maxLabel, 'UTF-8');
+            $minLabel = Width::truncate($minLabel, $halfBudget);
+            $maxLabel = Width::truncate($maxLabel, $budget - $halfBudget);
+            $minLen = Width::string($minLabel);
+            $maxLen = Width::string($maxLabel);
         }
 
         $stripWidth = max(0, $this->width - $minLen - $maxLen - 2);
