@@ -17,7 +17,7 @@ final class ReleaseSourceTest extends TestCase
         self::assertSame('widget.phar.sha256', $s->sidecarAsset());
         self::assertSame('widget.phar.minisig', $s->signatureAsset());
         self::assertSame('widget.phar.sha256.sig', $s->sidecarSignatureAsset());
-        self::assertSame('widget/dev', $s->devTag());
+        self::assertSame('widget/latest', $s->latestTag());
         self::assertSame('https://api.github.com/repos/acme/tools/releases?per_page=100', $s->releasesUrl());
         self::assertSame('/repos/acme/tools/releases', $s->releasesPath());
         self::assertSame('', $s->publicKey, 'keyless unless a key is pinned');
@@ -30,7 +30,7 @@ final class ReleaseSourceTest extends TestCase
         $b = $a->withTagPrefix('w-')->withPharAsset('w.phar')->withPublicKey('KEY')->withComposerPackage('acme/widget')->withUserAgent('ua');
         self::assertNotSame($a, $b);
         self::assertSame('widget/', $a->tagPrefix);
-        self::assertSame('w-dev', $b->devTag());
+        self::assertSame('w-latest', $b->latestTag());
         self::assertSame('w.phar.sha256', $b->sidecarAsset());
         self::assertSame('KEY', $b->publicKey);
         self::assertSame('composer update acme/widget', $b->composerCommand());

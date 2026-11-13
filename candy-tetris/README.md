@@ -37,8 +37,8 @@ composer require sugarcraft/candy-tetris
 ./vendor/bin/candy-tetris
 ```
 
-A rolling development phar is published on GitHub Releases under
-`candy-tetris/dev` as `candy-tetris.phar` together with the
+A rolling latest phar is published on GitHub Releases under
+`candy-tetris/latest` as `candy-tetris.phar` together with the
 `candy-tetris.phar.sha256`, `candy-tetris.phar.commit` and
 `candy-tetris.phar.pins.json` companions every build carries; a run with
 the sugarcraft signing key configured adds the three signing assets
@@ -47,8 +47,8 @@ the sugarcraft signing key configured adds the three signing assets
 pipeline on `candy-tetris/v*` tags. (Dated 2026-11-12: the channel was
 structurally dead from the sibling-pin wave until the fleet WF-CURE
 commit `191ccd566` restored the build's tree/sidecar flow; the published
-`candy-tetris/dev` asset is the last pre-freeze build until the next
-green phar-dev CI run advances the tag. The `.phar.commit` companion
+`candy-tetris/latest` asset is the last pre-freeze build until the next
+green phar-latest CI run advances the tag. The `.phar.commit` companion
 names exactly which build is live.)
 
 The launcher detects that it is running from inside a phar and loads
@@ -61,10 +61,10 @@ preflighted by the launcher itself (one plain refusal line naming the
 missing extension).
 
 Verify a download from the repo's release assets
-(`https://github.com/detain/sugarcraft/releases/download/candy-tetris/dev/...`):
+(`https://github.com/detain/sugarcraft/releases/download/candy-tetris/latest/...`):
 
 ```bash
-gh release download candy-tetris/dev -R detain/sugarcraft -p 'candy-tetris.phar*'
+gh release download candy-tetris/latest -R detain/sugarcraft -p 'candy-tetris.phar*'
 sha256sum -c candy-tetris.phar.sha256
 php -r '$m = (new Phar("candy-tetris.phar"))->getMetadata(); echo $m["version"], " ", $m["commit"], PHP_EOL;'
 ```

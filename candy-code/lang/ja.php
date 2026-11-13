@@ -503,7 +503,7 @@ CandyCode — ターミナル向けAIコーディングアシスタント。
                          も含む）、このマシンのOS・アーキテクチャ向け
                          リリースの有無。何も起動せず、
                          何もダウンロードしない。
-  self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|dev]
+  self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|latest]
                          このpharインストールを最新公開のcandy-code
                          リリースに置換、スワップ前にリリースサイドカーで
                          sha256検証; 実行中のpharは<phar>.oldとして保持、
@@ -515,7 +515,7 @@ CandyCode — ターミナル向けAIコーディングアシスタント。
                          exit 1。Composerインストールは明示的に拒否し、
                          代わりに実行すべきcomposer updateコマンドを
                          提示。devビルドはデフォルトでローリングの
-                         candy-code/devリリースを追跡（リリースのtarget
+                         candy-code/latestリリースを追跡（リリースのtarget
                          commitがstampのshaと一致すれば最新）、--channelで
                          明示的にいずれかのトレインを選択。
                          train を明示的に選択します。
@@ -1207,7 +1207,7 @@ TXT,
     'cli.refuse.not_searchable' => '{dir} はこのプロセスが検索可能ではない',
     'cli.refuse.project_settings_unusable' => '{path} を permissionRules のために読み取れなかった（{reason}）。不明な権限ポリシーでの実行を拒否し、起動しない。',
     'cli.refuse.world_writable' => '{path} はこのマシンの全アカウントが書き込み可能で、権限ポリシーとフックチェーンは本ユーザーのものではない。誰でも書き込み得るポリシーでの実行を拒否し、起動しない — `chmod o-w {path}`。',
-    'cli.selfupdate.channel_invalid' => '{value}: candy-code self-update --channel は stable または dev のみ受け付けます。',
+    'cli.selfupdate.channel_invalid' => '{value}: candy-code self-update --channel は stable または latest のみ受け付けます。',
     'cli.selfupdate.check_available' => 'candy-code: 更新あり — 現在のインストールは {current}、最新リリースは {latest}。（--check は報告のみ、インストールは行っていません。）',
     'cli.selfupdate.check_unknown' => 'candy-code: 現在のインストール（{current}）と最新リリース（{latest}）を比較できません。',
     'cli.selfupdate.check_up_to_date' => 'candy-code: 最新 — 現在のインストールは {current}、最新リリースは {latest}。',
@@ -1222,7 +1222,7 @@ TXT,
     'cli.selfupdate.hash_mismatch' => 'candy-code: ダウンロードした phar のハッシュが {actual} で、サイドカーが署名する {expected} と一致しません。置き換えは行っていません。',
     'cli.selfupdate.hash_unreadable' => 'なし（一時ファイルを読み取れませんでした）',
     'cli.selfupdate.installed' => 'candy-code: self-update が {path} を置き換えました（{from} -> {to}）。旧 phar は {old} に退避済み — `self-update --rollback` で一度だけ復元可能。',
-    'cli.selfupdate.no_dev_release' => 'candy-code: 公開済み dev リリース（タグ {tag}）に {phar} と {sidecar} の両方がありません。',
+    'cli.selfupdate.no_latest_release' => 'candy-code: 公開済み latest リリース（タグ {tag}）に {phar} と {sidecar} の両方がありません。',
     'cli.selfupdate.no_release' => 'candy-code: 公開済み candy-code リリースに {phar} と {sidecar} の両方がありません。',
     'cli.selfupdate.phar_not_writable' => 'candy-code: phar を置き換えできません — {path} が書き込み不可。',
     'cli.selfupdate.preserve_failed' => 'candy-code: 実行中の phar を {old} にコピーできませんでした。置き換えは行っていません。',
@@ -1243,7 +1243,7 @@ TXT,
     'cli.selfupdate.unexpected_operand' => '{operand}: candy-code self-update はオペランドを取りません。',
     'cli.selfupdate.unsigned_allowed' => 'candy-code: --allow-unsigned は固定キー署名検証をスキップします。sha256 サイドカーはこれらのバイトにバインド済み。dev/test 用バイパス — リリースでは使用しないこと。',
     'cli.selfupdate.up_to_date' => 'candy-code: self-update: このインストールは既に最新リリースです（{current}）。',
-    'cli.selfupdate.usage' => 'Usage: candy-code self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|dev]',
+    'cli.selfupdate.usage' => 'Usage: candy-code self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|latest]',
     'cli.serve.already_running' => '{dir} からサーバーが既に稼働中 — 停止: candy-code serve stop',
     'cli.serve.already_running_pid' => '{dir} からサーバーが既に稼働中（pid {pid}, {url}）— 停止: candy-code serve stop',
     'cli.serve.also' => '追加の問題: {problems}。',

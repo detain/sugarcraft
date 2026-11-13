@@ -107,7 +107,7 @@ for ($i = 0; $i < count($args); $i++) {
             $pairs,
         ));
         fwrite(STDOUT, Lang::t('cli.help.title') . "\n\n"
-            . Lang::t('cli.help.usage') . "\n  candy-top [--fake] [--config <path>] [--version]\n  candy-top self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|dev]\n\n"
+            . Lang::t('cli.help.usage') . "\n  candy-top [--fake] [--config <path>] [--version]\n  candy-top self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|latest]\n\n"
             . Lang::t('cli.help.options') . "\n" . $rows([
                 '--fake' => Lang::t('cli.help.opt.fake'),
                 '--config <path>' => Lang::t('cli.help.opt.config'),
@@ -116,7 +116,7 @@ for ($i = 0; $i < count($args); $i++) {
                 '--check' => Lang::t('cli.help.opt.check'),
                 '--rollback' => Lang::t('cli.help.opt.rollback'),
                 '--allow-unsigned' => Lang::t('cli.help.opt.allow_unsigned'),
-                '--channel=stable|dev' => Lang::t('cli.help.opt.channel'),
+                '--channel=stable|latest' => Lang::t('cli.help.opt.channel'),
             ], 24) . "\n"
             . Lang::t('cli.help.keys') . "\n" . $rows($keys, max(array_map(static fn (int|string $k): int => strlen((string) $k), array_keys($keys))) + 2));
         exit(0);

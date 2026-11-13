@@ -502,7 +502,7 @@ CandyCode — 終端機 AI 程式碼助理。
                          此機器的作業系統與架構是否有
                          對應發行版。不啟動任何服務，
                          不下載任何內容。
-  self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|dev]
+  self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|latest]
                          以最新發行的 candy-code 版本取代此 phar 安裝，
                          換檔前以 sha256 對照發行附檔驗證；
                          執行中的 phar 保留為 <phar>.old，
@@ -514,7 +514,7 @@ CandyCode — 終端機 AI 程式碼助理。
                          版本，有更新可用時退出碼 1。
                          Composer 安裝會被明確拒絕，並指出
                          應改執行的 composer update 指令。開發建置的
-                         安裝預設跟隨滾動式 candy-code/dev 發行
+                         安裝預設跟隨滾動式 candy-code/latest 發行
                          （發行目標 commit 與戳記 sha 相符時即為最新），
                          --channel 可明確選擇任一
                          更新通道。
@@ -1204,7 +1204,7 @@ TXT,
     'cli.refuse.not_searchable' => '{dir} 無法被此程序搜尋',
     'cli.refuse.project_settings_unusable' => '無法讀取 {path} 的 permissionRules（{reason}）。拒絕啟動，而非以未知的權限政策執行。',
     'cli.refuse.world_writable' => '{path} 可被此機器上的所有帳號寫入，因此其權限政策與 hook 鏈不屬於此使用者。拒絕啟動，而非以任何人都可能寫入的政策執行——`chmod o-w {path}`。',
-    'cli.selfupdate.channel_invalid' => '{value}：candy-code self-update --channel 僅接受 stable 或 dev。',
+    'cli.selfupdate.channel_invalid' => '{value}：candy-code self-update --channel 僅接受 stable 或 latest。',
     'cli.selfupdate.check_available' => 'candy-code: 有更新可用——目前安裝版本為 {current}，最新發布版本為 {latest}。（--check 僅報告；未安裝任何內容。）',
     'cli.selfupdate.check_unknown' => 'candy-code: 無法比較目前安裝版本（{current}）與最新發布版本（{latest}）。',
     'cli.selfupdate.check_up_to_date' => 'candy-code: 已是最新——目前安裝版本為 {current}，最新發布版本為 {latest}。',
@@ -1219,7 +1219,7 @@ TXT,
     'cli.selfupdate.hash_mismatch' => 'candy-code: 下載的 phar 雜湊值為 {actual}，而非 sidecar 簽名的 {expected}。未替換任何內容。',
     'cli.selfupdate.hash_unreadable' => '無（無法讀取暫存檔案）',
     'cli.selfupdate.installed' => 'candy-code: self-update 已替換 {path}（{from} -> {to}）；先前的 phar 保留於 {old}——`self-update --rollback` 可還原一次。',
-    'cli.selfupdate.no_dev_release' => 'candy-code: 沒有已發布的 dev 版本（標籤 {tag}）同時包含 {phar} 與 {sidecar}。',
+    'cli.selfupdate.no_latest_release' => 'candy-code: 沒有已發布的 latest 版本（標籤 {tag}）同時包含 {phar} 與 {sidecar}。',
     'cli.selfupdate.no_release' => 'candy-code: 沒有已發布的 candy-code 版本同時包含 {phar} 與 {sidecar}。',
     'cli.selfupdate.phar_not_writable' => 'candy-code: 無法替換 phar——{path} 不可寫入。',
     'cli.selfupdate.preserve_failed' => 'candy-code: 無法將執行中的 phar 複製到 {old}；未替換任何內容。',
@@ -1240,7 +1240,7 @@ TXT,
     'cli.selfupdate.unexpected_operand' => '{operand}：candy-code self-update 不接受運算元。',
     'cli.selfupdate.unsigned_allowed' => 'candy-code: --allow-unsigned 跳過固定金鑰簽章驗證；sha256 sidecar 仍綁定了這些位元組。僅供開發/測試使用——切勿在正式環境使用。',
     'cli.selfupdate.up_to_date' => 'candy-code: self-update：此安裝已是最新發布版本（{current}）。',
-    'cli.selfupdate.usage' => '用法：candy-code self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|dev]',
+    'cli.selfupdate.usage' => '用法：candy-code self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|latest]',
     'cli.serve.already_running' => '已有伺服器從 {dir} 執行中——請使用以下指令停止：candy-code serve stop',
     'cli.serve.already_running_pid' => '已有伺服器從 {dir} 執行中（pid {pid}，{url}）——請使用以下指令停止：candy-code serve stop',
     'cli.serve.also' => '另外：{problems}。',

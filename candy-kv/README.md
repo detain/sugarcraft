@@ -62,11 +62,11 @@ composer require sugarcraft/candy-kv
 candy-kv needs PHP 8.3+ and the SQLite3 extension (`ext-sqlite3`, declared in
 `composer.json`): the store is a plain SQLite file and there is no fallback
 engine. The CLI lands at `vendor/bin/candy-kv`; add `vendor/bin` to your
-`$PATH`, or invoke the full path. A rolling dev-channel phar (self-contained,
+`$PATH`, or invoke the full path. A rolling latest-channel phar (self-contained,
 stamped `dev-<sha>`) is also published:
 
 ```bash
-wget https://github.com/detain/sugarcraft/releases/download/candy-kv/dev/candy-kv.phar -O candy-kv
+wget https://github.com/detain/sugarcraft/releases/download/candy-kv/latest/candy-kv.phar -O candy-kv
 chmod +x candy-kv
 ```
 

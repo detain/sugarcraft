@@ -14,7 +14,7 @@ use PHPUnit\Framework\TestCase;
  *
  * WHY: every publisher in this repo used to fire from untested bytes - the
  * stable phar trio built HEAD of a tag with no CI verdict, sync split-pushed
- * every master push before CI had spoken, phar-dev published rolling dev
+ * every master push before CI had spoken, phar-latest published rolling dev
  * prereleases the same way, and the Packagist/GHCR route consumed a bundle
  * that CI never built. The ruled posture is: nothing publishes unless CI is
  * green at the exact commit, tags must be ancestors of master, releases are
@@ -163,17 +163,17 @@ final class ReleasePublishPostureTest extends TestCase
         }
     }
 
-    public function testTheDevChannelWaitsForCiAndPinsSiblings(): void
+    public function testTheLatestChannelWaitsForCiAndPinsSiblings(): void
     {
-        $text = $this->workflow('phar-dev.yml');
+        $text = $this->workflow('phar-latest.yml');
         $gate = $this->jobSection($text, 'ci-gate');
         self::assertStringContainsString(
             'gh run list --workflow CI --branch master --commit "$TARGET_SHA"',
             $gate,
-            'phar-dev polls CI at the pushed SHA (OD-7)'
+            'phar-latest polls CI at the pushed SHA (OD-7)'
         );
         $build = $this->jobSection($text, 'build');
-        self::assertStringContainsString('needs: [detect, ci-gate]', $build, 'phar-dev build needs the gate');
+        self::assertStringContainsString('needs: [detect, ci-gate]', $build, 'phar-latest build needs the gate');
         // MAJOR-1 companion pin: the guard's blind spot is semantic
         // composition — `needs: [detect, ci-gate]` is textually present even
         // when the gate is decorative, because a custom job-level `if`
@@ -182,7 +182,7 @@ final class ReleasePublishPostureTest extends TestCase
         self::assertStringContainsString(
             "if: needs.detect.outputs.matrix_count != '0' && needs.ci-gate.result == 'success'",
             $build,
-            'phar-dev build folds needs.ci-gate.result into its custom if (the gate is enforced, not ornamental)'
+            'phar-latest build folds needs.ci-gate.result into its custom if (the gate is enforced, not ornamental)'
         );
         $inject = strpos($text, 'php scripts/pin-siblings.php inject "$APP" --root . --sha "$SHA"');
         $install = strpos($text, 'composer install --no-dev');
@@ -226,7 +226,7 @@ final class ReleasePublishPostureTest extends TestCase
      * pin on them, flipping a refuse to `exit 0` or smuggling `|| true` onto
      * the verdict path guts every gate while this guard stays all-green.
      * Pinned shapes per gate: the non-success-conclusion refuse (exit 1 glued
-     * to its "refusing <verb>: ... concluded" echo — same line in phar-dev's
+     * to its "refusing <verb>: ... concluded" echo — same line in phar-latest's
      * one-line case arm, next line in the multi-line arms) and the
      * budget-exhaustion refuse below the loop, plus the absence of any
      * `|| true` escape hatch anywhere inside the gate job.
@@ -238,7 +238,7 @@ final class ReleasePublishPostureTest extends TestCase
             'release-phar.yml' => ['gate', 'release'],
             'release-app-phar.yml' => ['gate', 'release'],
             'release-candy-top-phar.yml' => ['gate', 'release'],
-            'phar-dev.yml' => ['ci-gate', 'build'],
+            'phar-latest.yml' => ['ci-gate', 'build'],
             'sync-sugarcraft.yml' => ['ci-gate', 'sync'],
         ];
         foreach ($pollers as $file => [$job, $verb]) {
@@ -298,7 +298,7 @@ final class ReleasePublishPostureTest extends TestCase
         $canonical = '[.[] | select(.status == "completed")] | if length == 0 then "PENDING" else (first(.[]) | .conclusion) end';
         $old = 'sort_by(.conclusion)';
         $files = [
-            'phar-dev.yml',
+            'phar-latest.yml',
             'release-phar.yml',
             'release-app-phar.yml',
             'release-candy-top-phar.yml',

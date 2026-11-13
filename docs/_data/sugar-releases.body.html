@@ -13,7 +13,7 @@ $source = ReleaseSource::new('acme/tools', 'widget')   // tags widget/v1.2.3, as
     ->withComposerPackage('acme/widget')
     ->withPublicKey($base64Ed25519PublicKey);          // '' = keyless state
 
-// `widget self-update --check` / bare / --rollback / --channel=dev
+// `widget self-update --check` / bare / --rollback / --channel=latest
 $exit = SelfUpdate::new($source)->run(UpdateOptions::new()->withCheck(), $currentVersion);
 
 // at launch: refresh a 24 h cache over the event loop, paint the PREVIOUS check's answer

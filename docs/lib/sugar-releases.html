@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SugarCraft — SugarReleases</title>
-<meta name="description" content="SugarReleases: phar self-update engine and launch-time update notice — GitHub release selection (stable + rolling dev channel), sha256 sidecar and pinned-key Ed25519 verification before the swap, one-shot rollback, Windows relaunch-dance swap. Extracted from candy-code; first-party.">
+<meta name="description" content="SugarReleases: phar self-update engine and launch-time update notice — GitHub release selection (stable + rolling latest channel), sha256 sidecar and pinned-key Ed25519 verification before the swap, one-shot rollback, Windows relaunch-dance swap. Extracted from candy-code; first-party.">
 <meta property="og:title" content="SugarCraft — SugarReleases">
 <meta property="og:description" content="One fail-closed self-update engine for every phar-shipped SugarCraft app: pick the right release from a shared GitHub release stream, verify the bytes before the rename, keep a one-shot undo copy, and tell the user at launch when a newer release exists.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-releases.png">
@@ -174,7 +174,7 @@ $source = ReleaseSource::new('acme/tools', 'widget')   // tags widget/v1.2.3, as
     ->withComposerPackage('acme/widget')
     ->withPublicKey($base64Ed25519PublicKey);          // '' = keyless state
 
-// `widget self-update --check` / bare / --rollback / --channel=dev
+// `widget self-update --check` / bare / --rollback / --channel=latest
 $exit = SelfUpdate::new($source)->run(UpdateOptions::new()->withCheck(), $currentVersion);
 
 // at launch: refresh a 24 h cache over the event loop, paint the PREVIOUS check's answer

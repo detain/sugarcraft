@@ -16,7 +16,7 @@ declare(strict_types=1);
  * exactly right for users.
  *
  * WHO RUNS IT: `.github/workflows/release-app-phar.yml` on `candy-codetime/v*`
- * and `candy-codetime/dev` tags — the release carries the .phar plus its
+ * and `candy-codetime/latest` tags — the release carries the .phar plus its
  * .sha256, .sha256.sig and .minisig sidecars. There is no self-update: the
  * published file is inert payload, and a user upgrades by downloading the
  * new one (README Install documents exactly that to end users).

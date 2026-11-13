@@ -30,7 +30,7 @@ composer require sugarcraft/candy-codeshot:dev-master
 > monorepo publishes all libs together, so sibling versions always line up.
 
 A rolling standalone binary is also published on GitHub Releases under
-[`candy-codeshot/dev`](https://github.com/detain/sugarcraft/releases/tag/candy-codeshot/dev)
+[`candy-codeshot/latest`](https://github.com/detain/sugarcraft/releases/tag/candy-codeshot/latest)
 as `candy-codeshot.phar`; stable `candy-codeshot/v*` tags are reserved for
 maintainers. A GitHub release download lands as a non-executable regular
 file, so run the phar through PHP: `php candy-codeshot.phar`. The phar
@@ -44,8 +44,8 @@ The release carries the sidecars `candy-codeshot.phar.sha256`,
 Check a download with:
 
 ```bash
-curl -LO https://github.com/detain/sugarcraft/releases/download/candy-codeshot/dev/candy-codeshot.phar
-curl -LO https://github.com/detain/sugarcraft/releases/download/candy-codeshot/dev/candy-codeshot.phar.sha256
+curl -LO https://github.com/detain/sugarcraft/releases/download/candy-codeshot/latest/candy-codeshot.phar
+curl -LO https://github.com/detain/sugarcraft/releases/download/candy-codeshot/latest/candy-codeshot.phar.sha256
 sha256sum -c candy-codeshot.phar.sha256   # integrity
 grep -m1 . candy-codeshot.phar.commit     # which build you actually hold
 ```

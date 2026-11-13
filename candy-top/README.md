@@ -71,7 +71,7 @@ tag it was built from.
 **Channel status (dated 2026-11-12).** Both published trains are frozen
 while the fleet phar rebuilds resume: the stable train's only release is
 `candy-top/v0.1.0`, built from commit `e3b51e769` (2026-10-20), and the
-rolling `candy-top/dev` release carries the 2026-11-04 build (commit
+rolling `candy-top/latest` release carries the 2026-11-04 build (commit
 `f1c90bb34`) — pre-hardening bytes. The sibling-pin CI wave (OD-14) blocked
 phar rebuilds fleet-wide, and the workflow cure has since landed in-tree but
 no newer artifact has been cut yet. Until the release page shows a build
@@ -83,18 +83,18 @@ An installed phar updates itself:
 php candy-top.phar self-update --check    # report only: exit 0 current, 1 update available
 php candy-top.phar self-update            # swap to the latest stable candy-top/v* release
 php candy-top.phar self-update --rollback # undo the swap once (restores the kept .old copy)
-php candy-top.phar self-update --channel=dev # consult the rolling candy-top/dev release instead
+php candy-top.phar self-update --channel=latest # consult the rolling candy-top/latest release instead
 ```
 
-`self-update --channel=dev` currently swaps in exactly those frozen
+`self-update --channel=latest` currently swaps in exactly those frozen
 `f1c90bb34` bytes named above; on the stable side there is likewise nothing
 newer than the 2026-10-20 `e3b51e769` build to update to.
 
 The channel defaults to what the build itself is: an archive stamped
-`dev-<commit>` (the CI dev builds) consults the dev train, everything else
+`dev-<commit>` (the CI dev builds) consults the latest train, everything else
 the stable head — asking the stable train "what is new" from a dev build
-would answer "downgrade to the last tag" every time. `--channel=stable|dev`
-overrides explicitly. On the dev train the release's `target_commitish` is
+would answer "downgrade to the last tag" every time. `--channel=stable|latest`
+overrides explicitly. On the latest train the release's `target_commitish` is
 located against the build's stamp (this build IS the tip when its stamp is
 that commit's prefix); a release that names no well-formed commit is
 refused rather than guessed at, and there is no downgrade concept — dev
@@ -132,7 +132,7 @@ vendor/bin/candy-top --version           # version line, no tty needed
 | `--config <path>`, `--config=<path>` | Reads the config from `<path>` instead of `$XDG_CONFIG_HOME/candy-top/config.conf`. That file is also where the config is saved. A missing value is an error (exit 2). So is a following argument that starts with `-` in the space-separated form (`--config -x`); `--config=-x` is accepted as a path. |
 | `--version` | Prints `candy-top <version>` on stdout and exits 0, before any config, theme or host probe. Works without a tty. A tagged phar build prints the tag it was built from; a plain checkout prints the dev version and short sha (`+dirty` when the tree is modified), and `unknown` when the package's composer metadata is unavailable. |
 | `-h`, `--help` | Prints usage and the KEYS section, which is generated from the same key table as the help overlay, then exits 0. Works without a tty. |
-| `self-update [flags]` | The updater verb for a phar install: `--check`, `--rollback` and `--allow-unsigned` (see [Phar release and self-update](#phar-release-and-self-update)). It answers before the tty gate, so it works over ssh and in cron; every argument after `self-update` belongs to the updater, not to candy-top. A composer install is refused loudly rather than silently no-op'd. `--channel=dev` currently resolves against the frozen 2026-11-04 dev build named in that section. |
+| `self-update [flags]` | The updater verb for a phar install: `--check`, `--rollback` and `--allow-unsigned` (see [Phar release and self-update](#phar-release-and-self-update)). It answers before the tty gate, so it works over ssh and in cron; every argument after `self-update` belongs to the updater, not to candy-top. A composer install is refused loudly rather than silently no-op'd. `--channel=latest` currently resolves against the frozen 2026-11-04 dev build named in that section. |
 
 On first run you get four boxes: **cpu** (per-core meters and load), **memory** (the legend, plus disks when `show_disks` is on), **network** (one interface with its rates) and **processes** (the sortable list). `1` to `4` toggle the four boxes, `5` to `0` the gpu slots, `F1` (or `h`) opens the help overlay that lists every key, and `q` quits — saving the layout on the way out, as btop does. Nothing needs configuring to start: the defaults are btop's — except the theme, which is candy-top's own pastel (see [Themes](#themes)) — and a copied `btop.conf` loads as-is. Run it against fake data (`--fake`) to see all of that without touching your host.
 

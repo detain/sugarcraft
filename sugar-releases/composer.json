@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-releases",
-    "description": "Phar self-update engine and launch-time update notice for SugarCraft apps: GitHub release selection (stable + rolling dev channel), sha256 sidecar + Ed25519 verification before the swap, one-shot .old rollback, Windows relaunch-dance swap helper. Extracted from candy-code.",
+    "description": "Phar self-update engine and launch-time update notice for SugarCraft apps: GitHub release selection (stable + rolling latest channel), sha256 sidecar + Ed25519 verification before the swap, one-shot .old rollback, Windows relaunch-dance swap helper. Extracted from candy-code.",
     "type": "library",
     "license": "MIT",
     "keywords": [

@@ -16,7 +16,7 @@ tagged commit's author date (`git log -1 --format=%ad <tag>`).
 |---|---|---|---|
 | `candy-code/v0.1.0` | 2026-10-20 | Original build, Remediation pass, Second audit pass, Feature-parity pass, Review wave (2026-10-14) | everything below it in time |
 | `candy-code/v0.1.1` | 2026-10-20 | (same set as v0.1.0 — a same-day re-tag) | Security and one-shot hardening (2026-10-21) onward |
-| `candy-code/dev` | rolling (last moved 2026-11-04) | everything through the media surface and help screen (2026-11) | the 2026-11-05 migration and the 2026-11-12 wave are untagged on master |
+| `candy-code/latest` | rolling (last moved 2026-11-04) | everything through the media surface and help screen (2026-11) | the 2026-11-05 migration and the 2026-11-12 wave are untagged on master |
 
 ## Changed — review remediation wave, 2026-11-12
 

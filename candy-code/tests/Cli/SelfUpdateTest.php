@@ -224,7 +224,7 @@ final class SelfUpdateTest extends TestCase
      * Stage one release on the fake server and return its JSON entry. The
      * sidecar defaults to the true digest of the staged phar in sha256sum's
      * own '<hex>  <name>' spelling. $commitish stages the GitHub release
-     * field the dev channel reads; null OMITS the key, so every fixture
+     * field the latest channel reads; null OMITS the key, so every fixture
      * that predates channels serializes byte-identically.
      *
      * @return array<array-key, mixed>
@@ -326,8 +326,8 @@ final class SelfUpdateTest extends TestCase
         self::assertSame(['--check' => true, '--allow-unsigned' => true], $mixed->subcommandFlags);
         self::assertSame([], $mixed->unknownFlags);
 
-        $channeled = self::selfUpdateArgs(['self-update', '--check', '--channel=dev']);
-        self::assertSame(['--check' => true, '--channel' => 'dev'], $channeled->subcommandFlags);
+        $channeled = self::selfUpdateArgs(['self-update', '--check', '--channel=latest']);
+        self::assertSame(['--check' => true, '--channel' => 'latest'], $channeled->subcommandFlags);
         self::assertSame([], $channeled->unknownFlags);
         $spaced = self::selfUpdateArgs(['self-update', '--channel', 'stable']);
         self::assertSame(['--channel' => 'stable'], $spaced->subcommandFlags);
@@ -723,12 +723,12 @@ final class SelfUpdateTest extends TestCase
             $this->stageRelease('candy-code/v77.0.0', 'NOSIG', withSidecar: false),
             $this->stageRelease('candy-code/dev-master', 'UNORDERABLE'),
             $this->stageRelease('candy-code/v0.10.0', 'TEN'),
-            // PHA: the dev train must be invisible to the stable filter —
+            // PHA: the latest train must be invisible to the stable filter —
             // prerelease, draft, and plain spellings of the dev tag all
             // skip (a version-less tag also fails isComparable by design).
-            $this->stageRelease('candy-code/dev', 'DEVPRERELEASE', prerelease: true, commitish: '1a2b3c4def1a2b3c4def1a2b3c4def1a2b3c4def'),
-            $this->stageRelease('candy-code/dev', 'DEVDRAFT', draft: true, commitish: '1a2b3c4def1a2b3c4def1a2b3c4def1a2b3c4def'),
-            $this->stageRelease('candy-code/dev', 'DEVPLAIN', commitish: '1a2b3c4def1a2b3c4def1a2b3c4def1a2b3c4def'),
+            $this->stageRelease('candy-code/latest', 'DEVPRERELEASE', prerelease: true, commitish: '1a2b3c4def1a2b3c4def1a2b3c4def1a2b3c4def'),
+            $this->stageRelease('candy-code/latest', 'DEVDRAFT', draft: true, commitish: '1a2b3c4def1a2b3c4def1a2b3c4def1a2b3c4def'),
+            $this->stageRelease('candy-code/latest', 'DEVPLAIN', commitish: '1a2b3c4def1a2b3c4def1a2b3c4def1a2b3c4def'),
         ];
         $this->releasesUrl($entries);
         $decoded = \json_decode((string) \file_get_contents($this->dir . '/srv/releases.json'), true);
@@ -1260,17 +1260,17 @@ final class SelfUpdateTest extends TestCase
     // ------------------------------------------------------------------
 
     /**
-     * A `dev-<shortsha>` current version rides the DEV channel by default —
+     * A `dev-<shortsha>` current version rides the LATEST channel by default —
      * exact-tag selection, commit-prefix freshness — and a NEWER stable
      * tag in the same list stays invisible to a dev install (the stable
      * ordering that would pick v9.9.9 must not leak across channels).
      */
-    public function testTheCurrentDevStampDefaultsToTheDevChannel(): void
+    public function testTheCurrentDevStampDefaultsToTheLatestChannel(): void
     {
         $target = '1a2b3c4def1a2b3c4def1a2b3c4def1a2b3c4def';
         $url = $this->releasesUrl([
             $this->stageRelease('candy-code/v9.9.9', 'STABLE-NEWER'),
-            $this->stageRelease('candy-code/dev', 'DEVNEW', prerelease: true, commitish: $target),
+            $this->stageRelease('candy-code/latest', 'DEVNEW', prerelease: true, commitish: $target),
         ]);
 
         $current = SelfUpdate::run(
@@ -1283,7 +1283,7 @@ final class SelfUpdateTest extends TestCase
         self::assertSame(NonInteractive::EXIT_OK, $current, 'a commit-prefix match IS current on the rolling train');
         $text = $this->errorText();
         self::assertStringContainsString('up to date', $text);
-        self::assertStringContainsString('dev@' . $target, $text);
+        self::assertStringContainsString('latest@' . $target, $text);
         self::assertStringNotContainsString('v9.9.9', $text, 'the stable train must not answer a dev install');
     }
 
@@ -1292,11 +1292,11 @@ final class SelfUpdateTest extends TestCase
      * naming the newer commit, and a real run swaps the bytes — the stable
      * channel's downgrade refusal is unreachable here by construction.
      */
-    public function testTheDevChannelRollsToANewerCommit(): void
+    public function testTheLatestChannelRollsToANewerCommit(): void
     {
         self::assertNotFalse(\file_put_contents($this->livePharPath(), 'DEV-INSTALLED'));
         $url = $this->releasesUrl([
-            $this->stageRelease('candy-code/dev', 'DEVNEW', prerelease: true, commitish: '1a2b3c4def56789012345678901234567890abcd'),
+            $this->stageRelease('candy-code/latest', 'DEVNEW', prerelease: true, commitish: '1a2b3c4def56789012345678901234567890abcd'),
         ]);
 
         $check = SelfUpdate::run(
@@ -1309,7 +1309,7 @@ final class SelfUpdateTest extends TestCase
         self::assertSame(NonInteractive::EXIT_FAILURE, $check);
         $text = $this->errorText();
         self::assertStringContainsString('update available', $text);
-        self::assertStringContainsString('dev@1a2b3c4def', $text);
+        self::assertStringContainsString('latest@1a2b3c4def', $text);
 
         $this->resetErrorStream();
 
@@ -1324,7 +1324,7 @@ final class SelfUpdateTest extends TestCase
         );
         self::assertSame(NonInteractive::EXIT_OK, $swapped, 'the rolling channel swaps an OLDER-looking dev stamp forward without a downgrade fight');
         self::assertSame('DEVNEW', \file_get_contents($this->livePharPath()));
-        self::assertStringContainsString('dev-9999999 -> dev@1a2b3c4def', $this->errorText(), 'the installed report carries both commit identities');
+        self::assertStringContainsString('dev-9999999 -> latest@1a2b3c4def', $this->errorText(), 'the installed report carries both commit identities');
     }
 
     /**
@@ -1333,7 +1333,7 @@ final class SelfUpdateTest extends TestCase
      * not a commit ('dev-master', 'dev-'). The release is FOUND (so the
      * answer is cannot-compare, not no-dev-release) and NOTHING swaps.
      */
-    public function testTheDevChannelRefusesEveryUndecidableComparison(): void
+    public function testTheLatestChannelRefusesEveryUndecidableComparison(): void
     {
         $valid = '1a2b3c4def56789012345678901234567890abcd';
         $cases = [
@@ -1347,7 +1347,7 @@ final class SelfUpdateTest extends TestCase
             $this->resetErrorStream();
             self::assertNotFalse(\file_put_contents($this->livePharPath(), 'KEEP'));
             $url = $this->releasesUrl([
-                $this->stageRelease('candy-code/dev', 'DEVNEW', prerelease: true, commitish: $commitish),
+                $this->stageRelease('candy-code/latest', 'DEVNEW', prerelease: true, commitish: $commitish),
             ]);
             $check = SelfUpdate::run(
                 self::selfUpdateArgs(['self-update', '--check']),
@@ -1375,18 +1375,18 @@ final class SelfUpdateTest extends TestCase
     }
 
     /**
-     * A dev install whose list carries no qualifying `candy-code/dev` —
+     * A dev install whose list carries no qualifying `candy-code/latest` —
      * only stable tags, only a draft dev, a dev without the sidecar, or
      * the near-miss tag `candy-code/dev-master` — is refused by the
      * dev-shaped no-release message naming the tag, never silently handed
      * to the stable train.
      */
-    public function testNoDevReleaseOnTheWaterRefusesTheDevChannel(): void
+    public function testNoLatestReleaseOnTheWaterRefusesTheLatestChannel(): void
     {
         $lists = [
             'stable only' => [$this->stageRelease('candy-code/v9.9.9', 'STABLE')],
-            'draft dev only' => [$this->stageRelease('candy-code/dev', 'D', draft: true, commitish: '1a2b3c4def')],
-            'assetless dev only' => [$this->stageRelease('candy-code/dev', 'A', withSidecar: false, commitish: '1a2b3c4def')],
+            'draft dev only' => [$this->stageRelease('candy-code/latest', 'D', draft: true, commitish: '1a2b3c4def')],
+            'assetless dev only' => [$this->stageRelease('candy-code/latest', 'A', withSidecar: false, commitish: '1a2b3c4def')],
             'near-miss tag' => [$this->stageRelease('candy-code/dev-master', 'M', commitish: '1a2b3c4def')],
         ];
         foreach ($lists as $name => $entries) {
@@ -1400,8 +1400,8 @@ final class SelfUpdateTest extends TestCase
             );
             self::assertSame(NonInteractive::EXIT_FAILURE, $exit, $name);
             $text = $this->errorText();
-            self::assertStringContainsString('no published dev release', $text, $name);
-            self::assertStringContainsString(SelfUpdate::DEV_TAG, $text, $name . ': the refusal names the tag it wanted');
+            self::assertStringContainsString('no published latest release', $text, $name);
+            self::assertStringContainsString(SelfUpdate::LATEST_TAG, $text, $name . ': the refusal names the tag it wanted');
         }
     }
 
@@ -1417,7 +1417,7 @@ final class SelfUpdateTest extends TestCase
         $target = '1a2b3c4def56789012345678901234567890abcd';
         $url = $this->releasesUrl([
             $this->stageRelease('candy-code/v9.9.9', 'STABLE-NEWER'),
-            $this->stageRelease('candy-code/dev', 'DEVNEW', prerelease: true, commitish: $target),
+            $this->stageRelease('candy-code/latest', 'DEVNEW', prerelease: true, commitish: $target),
         ]);
 
         $forcedStable = SelfUpdate::run(
@@ -1430,13 +1430,13 @@ final class SelfUpdateTest extends TestCase
         self::assertSame(NonInteractive::EXIT_FAILURE, $forcedStable);
         $text = $this->errorText();
         self::assertStringContainsString('cannot compare', $text);
-        self::assertStringContainsString('v9.9.9', $text, 'stable selection ran: the tag, not the dev release, answered');
-        self::assertStringNotContainsString('dev@', $text);
+        self::assertStringContainsString('v9.9.9', $text, 'stable selection ran: the tag, not the latest release, answered');
+        self::assertStringNotContainsString('latest@', $text);
 
         $this->resetErrorStream();
 
         $forcedDev = SelfUpdate::run(
-            self::selfUpdateArgs(['self-update', '--check', '--channel', 'dev']),
+            self::selfUpdateArgs(['self-update', '--check', '--channel', 'latest']),
             $this->fakeServerClient(),
             $url,
             $this->livePharPath(),
@@ -1445,7 +1445,7 @@ final class SelfUpdateTest extends TestCase
         self::assertSame(NonInteractive::EXIT_FAILURE, $forcedDev);
         $text = $this->errorText();
         self::assertStringContainsString('cannot compare', $text);
-        self::assertStringContainsString('dev@' . $target, $text, 'dev selection ran: the commit, not the stable tag');
+        self::assertStringContainsString('latest@' . $target, $text, 'latest selection ran: the commit, not the stable tag');
         self::assertStringNotContainsString('v9.9.9', $text);
     }
 
@@ -1463,9 +1463,9 @@ final class SelfUpdateTest extends TestCase
         // failUsage writes the REAL stderr (no test seam by design — same
         // shape as every sibling usage door), so the words are pinned at
         // their source instead of by capture.
-        self::assertStringContainsString('accepts stable or dev', Lang::t('cli.selfupdate.channel_invalid', ['value' => 'bogus']));
+        self::assertStringContainsString('accepts stable or latest', Lang::t('cli.selfupdate.channel_invalid', ['value' => 'bogus']));
         self::assertStringContainsString('bogus', Lang::t('cli.selfupdate.channel_invalid', ['value' => 'bogus']), 'the refusal names the bad value');
-        self::assertStringContainsString('[--channel=stable|dev]', Lang::t('cli.selfupdate.usage'), 'the usage line gained the flag');
+        self::assertStringContainsString('[--channel=stable|latest]', Lang::t('cli.selfupdate.usage'), 'the usage line gained the flag');
 
         $this->resetErrorStream();
         $mixedCase = SelfUpdate::run(self::selfUpdateArgs(['self-update', '--channel=Stable']), null, null, $this->livePharPath(), 'v0.1.0');
@@ -1485,17 +1485,17 @@ final class SelfUpdateTest extends TestCase
 
     /**
      * The minisign rule is a fact about the KEY state, not the channel:
-     * the pinned default refuses an unsigned dev release exactly as it
+     * the pinned default refuses an unsigned latest release exactly as it
      * refuses an unsigned stable one (the dev branch falls into the SAME
      * sidecar/hash/signature legs).
      */
-    public function testTheDevChannelKeepsThePinnedSignatureRule(): void
+    public function testTheLatestChannelKeepsThePinnedSignatureRule(): void
     {
         self::assertNotFalse(\file_put_contents($this->livePharPath(), 'KEEP'));
         $unsigned = SelfUpdate::run(
             self::selfUpdateArgs(['self-update']),
             $this->fakeServerClient(),
-            $this->releasesUrl([$this->stageRelease('candy-code/dev', 'DEVNEW', prerelease: true, commitish: '9999999def56789012345678901234567890abcd')]),
+            $this->releasesUrl([$this->stageRelease('candy-code/latest', 'DEVNEW', prerelease: true, commitish: '9999999def56789012345678901234567890abcd')]),
             $this->livePharPath(),
             'dev-1a2b3c4',
             self::FIXTURE_PUBLIC_KEY_BASE64,
@@ -1512,24 +1512,24 @@ final class SelfUpdateTest extends TestCase
      * missing target is STILL a found release (the refusal belongs to the
      * decision arm, never hidden as 'no release').
      */
-    public function testSelectDevReleaseFiltersOnExactTagAndAssetsAlone(): void
+    public function testSelectLatestReleaseFiltersOnExactTagAndAssetsAlone(): void
     {
         $entries = [
             $this->stageRelease('candy-code/v1.0.0', 'STABLE'),
             $this->stageRelease('candy-code/devx', 'NEARTAG'),
-            $this->stageRelease('candy-top/dev', 'OTHERAPP'),
-            $this->stageRelease('candy-code/dev', 'DEVOK', prerelease: true, commitish: ' 1A2B3C4def '),
+            $this->stageRelease('candy-top/latest', 'OTHERAPP'),
+            $this->stageRelease('candy-code/latest', 'DEVOK', prerelease: true, commitish: ' 1A2B3C4def '),
         ];
         $decoded = \json_decode(\json_encode($entries, \JSON_THROW_ON_ERROR), true);
-        $selected = SelfUpdate::selectDevRelease($decoded);
+        $selected = SelfUpdate::selectLatestRelease($decoded);
         self::assertIsArray($selected);
-        self::assertSame('dev', $selected['version']);
+        self::assertSame('latest', $selected['version']);
         self::assertSame('1a2b3c4def', $selected['commitish'], 'the target arrives lower-cased and trimmed for the decision arm');
-        self::assertStringEndsWith('candy-code-dev.phar', $selected['pharUrl']);
+        self::assertStringEndsWith('candy-code-latest.phar', $selected['pharUrl']);
 
-        self::assertNull(SelfUpdate::selectDevRelease([]));
-        self::assertNull(SelfUpdate::selectDevRelease([$this->stageRelease('candy-code/dev', 'NOSIDE', withSidecar: false)]));
-        $noTarget = SelfUpdate::selectDevRelease([$this->stageRelease('candy-code/dev', 'DEVNOTARGET', prerelease: true)]);
+        self::assertNull(SelfUpdate::selectLatestRelease([]));
+        self::assertNull(SelfUpdate::selectLatestRelease([$this->stageRelease('candy-code/latest', 'NOSIDE', withSidecar: false)]));
+        $noTarget = SelfUpdate::selectLatestRelease([$this->stageRelease('candy-code/latest', 'DEVNOTARGET', prerelease: true)]);
         self::assertIsArray($noTarget, 'a missing target_commitish is still a found release — the refusal is the decision arm, not selection');
         self::assertSame('', $noTarget['commitish']);
     }
@@ -1541,7 +1541,7 @@ final class SelfUpdateTest extends TestCase
      * decision runs on its stamped commit — DST-1's machinery now serving
      * the rolling train too.
      */
-    public function testAStampedDevArchiveRidesTheDevChannelEndToEnd(): void
+    public function testAStampedDevArchiveRidesTheLatestChannelEndToEnd(): void
     {
         $stamped = self::mintStampedPhar('dev-1a2b3c4');
         Help::pretendHostArchiveForTesting($stamped);
@@ -1550,10 +1550,10 @@ final class SelfUpdateTest extends TestCase
             $exit = SelfUpdate::run(
                 self::selfUpdateArgs(['self-update', '--check']),
                 $this->fakeServerClient(),
-                $this->releasesUrl([$this->stageRelease('candy-code/dev', 'DEVNEW', prerelease: true, commitish: '1a2b3c4def5678')]),
+                $this->releasesUrl([$this->stageRelease('candy-code/latest', 'DEVNEW', prerelease: true, commitish: '1a2b3c4def5678')]),
                 $this->livePharPath(),
             );
-            self::assertSame(NonInteractive::EXIT_OK, $exit, 'the stamp read from the archive is current against the dev release');
+            self::assertSame(NonInteractive::EXIT_OK, $exit, 'the stamp read from the archive is current against the latest release');
             $text = $this->errorText();
             self::assertStringContainsString('dev-1a2b3c4', $text, 'the stamped commit, not a frozen dev-master guess, is what answered');
             self::assertStringNotContainsString('dev-master', $text);

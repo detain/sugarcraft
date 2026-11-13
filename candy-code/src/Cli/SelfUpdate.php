@@ -19,10 +19,10 @@ use SugarCraft\Releases\UpdateOptions;
  * published one, verified before the swap, with the pre-swap copy kept for a
  * one-shot rollback (plan_comparison DST-3).
  *
- *     self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|dev]
+ *     self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|latest]
  *
  * S-L01 (G-10=A): the ENGINE — phar-only refusal, per-library tag selection on
- * the shared GitHub release stream, the stable and rolling dev channels,
+ * the shared GitHub release stream, the stable and rolling latest channels,
  * sidecar-then-phar download judged per HTTP status, sha256 `hash_equals`,
  * Ed25519 verification before the rename, the one-shot `.old` rollback, the
  * Windows relaunch dance, the exit-code contract (0 / 1 / 2) and every
@@ -51,10 +51,10 @@ final class SelfUpdate
 
     public const CHANNEL_STABLE = UpdateOptions::CHANNEL_STABLE;
 
-    public const CHANNEL_DEV = UpdateOptions::CHANNEL_DEV;
+    public const CHANNEL_LATEST = UpdateOptions::CHANNEL_LATEST;
 
-    /** The rolling dev release's tag: the stable prefix plus `dev`. */
-    public const DEV_TAG = self::TAG_PREFIX . 'dev';
+    /** The rolling latest release's tag: the stable prefix plus `dev`. */
+    public const LATEST_TAG = self::TAG_PREFIX . 'latest';
 
     public const PHAR_ASSET = 'candy-code.phar';
 
@@ -143,7 +143,7 @@ final class SelfUpdate
             'selfupdate.hash_mismatch' => Lang::t('cli.selfupdate.hash_mismatch', $params),
             'selfupdate.hash_unreadable' => Lang::t('cli.selfupdate.hash_unreadable', $params),
             'selfupdate.installed' => Lang::t('cli.selfupdate.installed', $params),
-            'selfupdate.no_dev_release' => Lang::t('cli.selfupdate.no_dev_release', $params),
+            'selfupdate.no_latest_release' => Lang::t('cli.selfupdate.no_latest_release', $params),
             'selfupdate.no_release' => Lang::t('cli.selfupdate.no_release', $params),
             'selfupdate.phar_not_writable' => Lang::t('cli.selfupdate.phar_not_writable', $params),
             'selfupdate.preserve_failed' => Lang::t('cli.selfupdate.preserve_failed', $params),
@@ -217,15 +217,15 @@ final class SelfUpdate
     }
 
     /**
-     * The rolling `candy-code/dev` release (prerelease allowed, draft skipped), or null.
+     * The rolling `candy-code/latest` release (prerelease allowed, draft skipped), or null.
      *
      * @param array<int, mixed> $releases
      *
      * @return array<string, mixed>|null
      */
-    public static function selectDevRelease(array $releases): ?array
+    public static function selectLatestRelease(array $releases): ?array
     {
-        return ReleaseSelector::for(self::source())->selectDevRelease($releases);
+        return ReleaseSelector::for(self::source())->selectLatestRelease($releases);
     }
 
     /** The lowercase 64-hex digest a sidecar body carries, or null. */

@@ -504,7 +504,7 @@ Sitzung aus; acp führt Runden für einen Editor aus, bis der Editor sich trennt
                          es nicht ist), und ob ein Release für das OS und die
                          Architektur dieses Rechners existiert. Startet nichts,
                          lädt nichts herunter.
-  self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|dev]
+  self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|latest]
                          Ersetzt diese phar-Installation durch die neueste veröffentlichte
                          candy-code-Version, sha256-verifiziert gegen die
                          Release-Sidecar VOR dem Austausch; die laufende phar wird
@@ -1210,7 +1210,7 @@ TXT,
     'cli.refuse.not_searchable' => '{dir} ist von diesem Prozess nicht durchsuchbar',
     'cli.refuse.project_settings_unusable' => '{path} konnte nicht auf permissionRules gelesen werden ({reason}). Start verweigert, statt mit unbekannter Berechtigungsrichtlinie zu laufen.',
     'cli.refuse.world_writable' => '{path} ist von jedem Konto auf diesem Rechner beschreibbar, daher stammen die Berechtigungsrichtlinie und Hook-Kette nicht von diesem Benutzer. Start verweigert, statt eine Richtlinie auszuführen, die jeder geschrieben haben könnte — `chmod o-w {path}`.',
-    'cli.selfupdate.channel_invalid' => '{value}: candy-code self-update --channel akzeptiert nur stable oder dev.',
+    'cli.selfupdate.channel_invalid' => '{value}: candy-code self-update --channel akzeptiert nur stable oder latest.',
     'cli.selfupdate.check_available' => 'candy-code: Update verfügbar — diese Installation ist {current}, die neueste Version ist {latest}. (--check meldet nur; nichts wurde installiert.)',
     'cli.selfupdate.check_unknown' => 'candy-code: Diese Installation ({current}) kann nicht mit der neuesten Version ({latest}) verglichen werden.',
     'cli.selfupdate.check_up_to_date' => 'candy-code: aktuell — diese Installation ist {current}, die neueste Version ist {latest}.',
@@ -1225,7 +1225,7 @@ TXT,
     'cli.selfupdate.hash_mismatch' => 'candy-code: Das heruntergeladene phar hat den Hash {actual}, nicht den {expected}, den der Sidecar signiert. Nichts wurde ausgetauscht.',
     'cli.selfupdate.hash_unreadable' => 'nichts (die temporäre Datei konnte nicht gelesen werden)',
     'cli.selfupdate.installed' => 'candy-code: self-update hat {path} ersetzt ({from} -> {to}); das vorherige phar liegt unter {old} — `self-update --rollback` stellt es einmalig wieder her.',
-    'cli.selfupdate.no_dev_release' => 'candy-code: Keine veröffentlichte dev-Version (Tag {tag}) enthält sowohl {phar} als auch {sidecar}.',
+    'cli.selfupdate.no_latest_release' => 'candy-code: Keine veröffentlichte latest-Version (Tag {tag}) enthält sowohl {phar} als auch {sidecar}.',
     'cli.selfupdate.no_release' => 'candy-code: Keine veröffentlichte candy-code-Version enthält sowohl {phar} als auch {sidecar}.',
     'cli.selfupdate.phar_not_writable' => 'candy-code: phar kann nicht ersetzt werden — {path} ist nicht beschreibbar.',
     'cli.selfupdate.preserve_failed' => 'candy-code: Das laufende phar konnte nicht nach {old} kopiert werden; nichts wurde ausgetauscht.',
@@ -1246,7 +1246,7 @@ TXT,
     'cli.selfupdate.unexpected_operand' => '{operand}: candy-code self-update akzeptiert keine Operatoren.',
     'cli.selfupdate.unsigned_allowed' => 'candy-code: --allow-unsigned überspringt den Signaturpfad mit festgelegtem Schlüssel; der sha256-Sidecar hat diese Bytes weiterhin gebunden. Dev/Test-Umgehung — niemals eine Release-Gewohnheit.',
     'cli.selfupdate.up_to_date' => 'candy-code: self-update: Diese Installation ist bereits die neueste Version ({current}).',
-    'cli.selfupdate.usage' => 'Verwendung: candy-code self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|dev]',
+    'cli.selfupdate.usage' => 'Verwendung: candy-code self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|latest]',
     'cli.serve.already_running' => 'Ein Server läuft bereits aus {dir} — stoppen mit: candy-code serve stop',
     'cli.serve.already_running_pid' => 'Ein Server läuft bereits aus {dir} (pid {pid}, {url}) — stoppen mit: candy-code serve stop',
     'cli.serve.also' => 'Außerdem: {problems}.',

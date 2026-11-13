@@ -56,7 +56,7 @@ composer install
 ```
 
 **3. Rolling phar** — the self-contained build published on GitHub Releases under
-`candy-files/dev` as `candy-files.phar` (with `.sha256`/`.sig` verification sidecars,
+`candy-files/latest` as `candy-files.phar` (with `.sha256`/`.sig` verification sidecars,
 plus the `.phar.commit` build stamp and `.phar.pins.json` sibling pin-map — the latter
 pair is what to quote in a bug report); stable cuts ride the same release pipeline on
 `candy-files/v*` tags. The launcher
@@ -64,7 +64,7 @@ detects that it is running from inside a phar and `--version` reports that archi
 own build stamp (see `Support\Version` below):
 
 ```bash
-wget https://github.com/detain/sugarcraft/releases/download/candy-files/dev/candy-files.phar
+wget https://github.com/detain/sugarcraft/releases/download/candy-files/latest/candy-files.phar
 php candy-files.phar [LEFT_DIR] [RIGHT_DIR]
 ```
 

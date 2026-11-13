@@ -14,7 +14,7 @@ use PHPUnit\Framework\TestCase;
  * into the text of a `run:` script — every such value must cross through a
  * step `env:` binding. The roster is the whole directory since RT-17
  * (repo-tooling-019); the five release/publisher workflows that started this
- * guard (C-SES-9.d trio + phar-dev.yml and sync-sugarcraft.yml from
+ * guard (C-SES-9.d trio + phar-latest.yml and sync-sugarcraft.yml from
  * reviews-1103 G6-P) additionally carry per-file binding pins and body floors.
  *
  * WHY THIS FILE EXISTS AT ALL. GitHub evaluates `${{ }}` textually BEFORE
@@ -85,7 +85,7 @@ final class WorkflowRunInterpolationTest extends TestCase
         '.github/workflows/release-phar.yml',
         '.github/workflows/release-app-phar.yml',
         '.github/workflows/release-candy-top-phar.yml',
-        '.github/workflows/phar-dev.yml',
+        '.github/workflows/phar-latest.yml',
         '.github/workflows/sync-sugarcraft.yml',
     ];
 
@@ -135,7 +135,7 @@ final class WorkflowRunInterpolationTest extends TestCase
         '.github/workflows/release-phar.yml' => 10,
         '.github/workflows/release-app-phar.yml' => 8,
         '.github/workflows/release-candy-top-phar.yml' => 8,
-        '.github/workflows/phar-dev.yml' => 10,
+        '.github/workflows/phar-latest.yml' => 10,
         '.github/workflows/sync-sugarcraft.yml' => 5,
     ];
 
@@ -393,13 +393,13 @@ final class WorkflowRunInterpolationTest extends TestCase
         self::assertStringContainsString('app="$APP"', $appJoined, 'release-app-phar.yml: no run body reads the APP env binding');
         self::assertStringContainsString('tag="$TAG"', $appJoined, 'release-app-phar.yml: no run body reads the TAG env binding in the fleet steps');
 
-        // G6-P: the publisher pair moved under this guard when phar-dev and
+        // G6-P: the publisher pair moved under this guard when phar-latest and
         // sync gained their gate jobs. Same law, their own variable set: the
-        // dispatch input there is the boolean `all` (phar-dev only), the CI
+        // dispatch input there is the boolean `all` (phar-latest only), the CI
         // poller's commit arrives as TARGET_SHA, and the affected-range legs
         // read github.event.before/sha through env - never pasted inline.
         $publisherBindings = [
-            '.github/workflows/phar-dev.yml' => [
+            '.github/workflows/phar-latest.yml' => [
                 '/EVENT_NAME:\s*\$\{\{\s*github\.event_name\s*\}\}/',
                 '/DISPATCH_ALL:\s*\$\{\{\s*github\.event\.inputs\.all\s*\}\}/',
                 '/TARGET_SHA:\s*\$\{\{\s*github\.sha\s*\}\}/',
@@ -418,9 +418,9 @@ final class WorkflowRunInterpolationTest extends TestCase
             $joined = \implode("\n", self::runBodies($rel));
             self::assertStringContainsString('$TARGET_SHA', $joined, $rel . ': no run body reads the TARGET_SHA env binding');
         }
-        $devJoined = \implode("\n", self::runBodies('.github/workflows/phar-dev.yml'));
-        self::assertStringContainsString('${DISPATCH_ALL', $devJoined, 'phar-dev.yml: no run body reads the DISPATCH_ALL env binding');
-        self::assertStringContainsString('"$EVENT_NAME"', $devJoined, 'phar-dev.yml: no run body reads the EVENT_NAME env binding');
+        $devJoined = \implode("\n", self::runBodies('.github/workflows/phar-latest.yml'));
+        self::assertStringContainsString('${DISPATCH_ALL', $devJoined, 'phar-latest.yml: no run body reads the DISPATCH_ALL env binding');
+        self::assertStringContainsString('"$EVENT_NAME"', $devJoined, 'phar-latest.yml: no run body reads the EVENT_NAME env binding');
         $syncJoined = \implode("\n", self::runBodies('.github/workflows/sync-sugarcraft.yml'));
         self::assertStringContainsString('${BEFORE_SHA', $syncJoined, 'sync-sugarcraft.yml: no run body reads the BEFORE_SHA env binding');
     }

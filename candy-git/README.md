@@ -28,7 +28,7 @@ first — `vendor/` is gitignored, and without it the launcher exits with
 `candy-git: cannot find composer autoload.php`. Then `php candy-git/bin/candy-git`
 works. Release users can grab the `candy-git.phar` from the GitHub release and run
 `php candy-git.phar`. Until a stable `candy-git/v*` tag is cut, the only release
-channel is the rolling `candy-git/dev` prerelease. `--version`, `--help`, and the
+channel is the rolling `candy-git/latest` prerelease. `--version`, `--help`, and the
 `-h` alias short-circuit and exit 0 anywhere; any *other* argument exits 2 with a
 usage line rather than being silently ignored.
 

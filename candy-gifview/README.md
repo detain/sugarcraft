@@ -31,8 +31,8 @@ candy-gifview [options] <gif> [solid|density]
 
 With a project-local install, invoke the binary as `./vendor/bin/candy-gifview`.
 
-A rolling development phar is published on GitHub Releases under
-[`candy-gifview/dev`](https://github.com/detain/sugarcraft/releases/tag/candy-gifview/dev)
+A rolling latest phar is published on GitHub Releases under
+[`candy-gifview/latest`](https://github.com/detain/sugarcraft/releases/tag/candy-gifview/latest)
 as `candy-gifview.phar`. **The channel is FROZEN at the 2026-11-04 build
 (commit `f1c90bb34`)**: the sibling-pin CI wave (OD-14) has blocked phar
 rebuilds fleet-wide, and rolling builds resume only with the fleet

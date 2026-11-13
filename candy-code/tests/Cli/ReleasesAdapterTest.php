@@ -28,7 +28,7 @@ final class ReleasesAdapterTest extends TestCase
         self::assertSame(SelfUpdate::SIDECAR_ASSET, $source->sidecarAsset());
         self::assertSame(SelfUpdate::SIGNATURE_ASSET, $source->signatureAsset());
         self::assertSame(SelfUpdate::SIDECAR_SIGNATURE_ASSET, $source->sidecarSignatureAsset());
-        self::assertSame(SelfUpdate::DEV_TAG, $source->devTag());
+        self::assertSame(SelfUpdate::LATEST_TAG, $source->latestTag());
         self::assertSame(SelfUpdate::RELEASES_URL, $source->releasesUrl());
         self::assertSame(SelfUpdate::COMPOSER_COMMAND, $source->composerCommand());
         self::assertSame(SelfUpdate::PUBLIC_KEY_BASE64, $source->publicKey);

@@ -93,12 +93,12 @@ works after `scripts/refresh-deps.php`.
 ### Standalone phar
 
 Run the single-file phar — no Composer, no `vendor/`: download `candy-mail.phar`
-and its `candy-mail.phar.sha256` sidecar from the `candy-mail/dev` release,
+and its `candy-mail.phar.sha256` sidecar from the `candy-mail/latest` release,
 verify, and run:
 
 ```bash
-curl -LO https://github.com/detain/sugarcraft/releases/download/candy-mail/dev/candy-mail.phar
-curl -LO https://github.com/detain/sugarcraft/releases/download/candy-mail/dev/candy-mail.phar.sha256
+curl -LO https://github.com/detain/sugarcraft/releases/download/candy-mail/latest/candy-mail.phar
+curl -LO https://github.com/detain/sugarcraft/releases/download/candy-mail/latest/candy-mail.phar.sha256
 sha256sum -c candy-mail.phar.sha256
 php candy-mail.phar --version
 ```

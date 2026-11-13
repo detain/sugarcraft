@@ -503,7 +503,7 @@ CandyCode — 터미널용 AI 코딩 어시스턴트.
                          이 머신의 OS 및 아키텍처용 릴리스 존재
                          여부. 아무것도 시작하지 않고,
                          아무것도 다운로드하지 않음.
-  self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|dev]
+  self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|latest]
                          이 phar 설치를 최신 공개 candy-code 릴리스로
                          교체, 교체 전 릴리스 사이드카로 sha256
                          검증; 실행 중인 phar는 <phar>.old로
@@ -515,7 +515,7 @@ CandyCode — 터미널용 AI 코딩 어시스턴트.
                          업데이트 가능 시 exit 1. Composer 설치는
                          명확히 거부하며, 대신 실행할
                          composer update 명령을 표시. dev 빌드
-                         설치는 기본으로 rolling candy-code/dev
+                         설치는 기본으로 rolling candy-code/latest
                          릴리스를 따름(릴리스의 target 커밋이
                          stamp의 sha와 일치하면 최신)이며 --channel로
                          트레인을 명시적으로 선택.
@@ -1207,7 +1207,7 @@ TXT,
     'cli.refuse.not_searchable' => '{dir}은(는) 이 프로세스가 탐색할 수 없습니다',
     'cli.refuse.project_settings_unusable' => '{path}에서 permissionRules를 읽을 수 없습니다 ({reason}). 알 수 없는 권한 정책으로 실행하는 대신 시작을 거부합니다.',
     'cli.refuse.world_writable' => '{path}은(는) 이 머신의 모든 계정이 쓸 수 있어, 해당 파일의 권한 정책과 훅 체인은 이 사용자의 것이 아닙니다. 누구나 쓸 수 있는 정책으로 실행하는 대신 시작을 거부합니다 — `chmod o-w {path}`.',
-    'cli.selfupdate.channel_invalid' => '{value}: candy-code self-update --channel은 stable 또는 dev만 허용합니다.',
+    'cli.selfupdate.channel_invalid' => '{value}: candy-code self-update --channel은 stable 또는 latest만 허용합니다.',
     'cli.selfupdate.check_available' => 'candy-code: 업데이트 가능 — 현재 설치 버전 {current}, 최신 릴리스 {latest}. (--check는 보고만 하며, 아무것도 설치하지 않았습니다.)',
     'cli.selfupdate.check_unknown' => 'candy-code: 현재 설치 버전 ({current})과 최신 릴리스 ({latest})을 비교할 수 없습니다.',
     'cli.selfupdate.check_up_to_date' => 'candy-code: 최신 상태 — 현재 설치 버전 {current}, 최신 릴리스 {latest}.',
@@ -1222,7 +1222,7 @@ TXT,
     'cli.selfupdate.hash_mismatch' => 'candy-code: 다운로드한 phar의 해시가 {actual}입니다. 사이드카가 서명한 {expected}와 일치하지 않습니다. 교체하지 않았습니다.',
     'cli.selfupdate.hash_unreadable' => '없음 (임시 파일을 읽을 수 없음)',
     'cli.selfupdate.installed' => 'candy-code: self-update가 {path}을(를) 교체했습니다 ({from} -> {to}); 이전 phar는 {old}에 보관되어 있습니다 — `self-update --rollback`으로 1회 복원 가능.',
-    'cli.selfupdate.no_dev_release' => 'candy-code: 게시된 dev 릴리스 (tag {tag})에 {phar}과 {sidecar}이(가) 모두 없습니다.',
+    'cli.selfupdate.no_latest_release' => 'candy-code: 게시된 latest 릴리스 (tag {tag})에 {phar}과 {sidecar}이(가) 모두 없습니다.',
     'cli.selfupdate.no_release' => 'candy-code: 게시된 candy-code 릴리스에 {phar}과 {sidecar}이(가) 모두 없습니다.',
     'cli.selfupdate.phar_not_writable' => 'candy-code: phar를 교체할 수 없습니다 — {path}에 쓰기 권한이 없습니다.',
     'cli.selfupdate.preserve_failed' => 'candy-code: 실행 중인 phar를 {old}에 복사할 수 없습니다. 교체하지 않았습니다.',
@@ -1243,7 +1243,7 @@ TXT,
     'cli.selfupdate.unexpected_operand' => '{operand}: candy-code self-update는 피연산자를 받지 않습니다.',
     'cli.selfupdate.unsigned_allowed' => 'candy-code: --allow-unsigned는 고정 키 서명 경로를 건너뜁니다. sha256 사이드카는 여전히 이 바이트를 바인딩합니다. dev/테스트 우회 — 릴리스 관행으로 사용하지 마세요.',
     'cli.selfupdate.up_to_date' => 'candy-code: self-update: 이 설치는 이미 최신 릴리스입니다 ({current}).',
-    'cli.selfupdate.usage' => 'Usage: candy-code self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|dev]',
+    'cli.selfupdate.usage' => 'Usage: candy-code self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|latest]',
     'cli.serve.already_running' => '{dir}에서 서버가 이미 실행 중입니다 — 다음으로 중지하세요: candy-code serve stop',
     'cli.serve.already_running_pid' => '{dir}에서 서버가 이미 실행 중입니다 (pid {pid}, {url}) — 다음으로 중지하세요: candy-code serve stop',
     'cli.serve.also' => '추가: {problems}.',

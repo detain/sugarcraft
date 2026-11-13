@@ -1,22 +1,22 @@
-# Rolling DEV phars for every phar-capable app in the monorepo.
+# Rolling LATEST phars for every phar-capable app in the monorepo.
 #
 # Each app gets a permanent, wget-able channel:
-#   https://github.com/detain/sugarcraft/releases/download/<app>/dev/<app>.phar
-#   https://github.com/detain/sugarcraft/releases/download/<app>/dev/<app>.phar.sha256
-#   https://github.com/detain/sugarcraft/releases/download/<app>/dev/<app>.phar.sha256.sig      (when signed)
-#   https://github.com/detain/sugarcraft/releases/download/<app>/dev/<app>.phar.minisig         (when signed)
-#   https://github.com/detain/sugarcraft/releases/download/<app>/dev/<app>.phar.minisig.sha256  (when signed)
-#   https://github.com/detain/sugarcraft/releases/download/<app>/dev/<app>.phar.commit          (tested SHA, OD-8)
-#   https://github.com/detain/sugarcraft/releases/download/<app>/dev/<app>.phar.pins.json       (sibling pin map, OD-14)
+#   https://github.com/detain/sugarcraft/releases/download/<app>/latest/<app>.phar
+#   https://github.com/detain/sugarcraft/releases/download/<app>/latest/<app>.phar.sha256
+#   https://github.com/detain/sugarcraft/releases/download/<app>/latest/<app>.phar.sha256.sig      (when signed)
+#   https://github.com/detain/sugarcraft/releases/download/<app>/latest/<app>.phar.minisig         (when signed)
+#   https://github.com/detain/sugarcraft/releases/download/<app>/latest/<app>.phar.minisig.sha256  (when signed)
+#   https://github.com/detain/sugarcraft/releases/download/<app>/latest/<app>.phar.commit          (tested SHA, OD-8)
+#   https://github.com/detain/sugarcraft/releases/download/<app>/latest/<app>.phar.pins.json       (sibling pin map, OD-14)
 #
 # The phar-capable set is FILESYSTEM-DRIVEN: an app is built iff it appears
 # in the affected set of scripts/affected-libs.php AND carries a
 # <app>/tools/build-phar.php. Adding build plumbing to another app (the
 # PHD/PHE/PHF waves) needs no edit to this file. candy-code and candy-top are
-# built HERE for the dev channel; their versioned releases stay owned by the
+# built HERE for the latest channel; their versioned releases stay owned by the
 # dedicated release-phar.yml / release-candy-top-phar.yml pipelines.
 #
-# VERSION STAMP LAW (pinned by the self-update dev gates shipped by PHA/PHB):
+# VERSION STAMP LAW (pinned by the self-update latest-channel gates shipped by PHA/PHB):
 # every archive here is stamped --version="dev-<SHORT_SHA>" (7 hex). The
 # `dev-` prefix is what classifies the build as development for the
 # self-update comparators; the SHORT_SHA is what makes it LOCATABLE — an
@@ -40,14 +40,14 @@
 # documented @dev doctrine untouched (tools/check-path-repos.php
 # --no-lib-path-repos stays green on the tree). Each archive ships a
 # .phar.commit sidecar (the exact tested SHA it was built from) and a
-# .phar.pins.json provenance map as release assets, so a downloaded dev phar
+# .phar.pins.json provenance map as release assets, so a downloaded latest phar
 # is traceable to bytes CI actually tested instead of a moving dev-master.
 #
 # GITHUB_TOKEN pushes do not trigger other workflows, and this file
-# deliberately chains nothing: the <app>/dev tag pushes below exist only to
+# deliberately chains nothing: the <app>/latest tag pushes below exist only to
 # anchor the rolling release, never to kick off release-app-phar.yml (whose
-# `candy-*/v*` filter could not match `dev` anyway).
-name: Dev PHARs
+# `candy-*/v*` filter could not match `latest` anyway).
+name: Latest PHARs
 
 on:
   push:
@@ -59,12 +59,12 @@ on:
         type: boolean
         default: false
 
-# Serialize the whole stream: publishes force-move shared <app>/dev tags and
+# Serialize the whole stream: publishes force-move shared <app>/latest tags and
 # clobber shared release assets, so two concurrent runs racing on the same
 # app could interleave a tag with another run's release edit. Queued (not
 # cancelled) rebuilds are the honest semantics for a rolling channel.
 concurrency:
-  group: phar-dev
+  group: phar-latest
   cancel-in-progress: false
 
 permissions:
@@ -163,7 +163,7 @@ jobs:
           echo "matrix_count=$COUNT" >> "$GITHUB_OUTPUT"
 
   ci-gate:
-    # G6-P OD-7: the rolling dev channel publishes ONLY from a commit CI
+    # G6-P OD-7: the rolling latest channel publishes ONLY from a commit CI
     # tested green. The push trigger arrives in parallel with the CI run for
     # the same SHA, so this job waits on that verdict instead of bypassing
     # it: bounded poll, fail-closed on red, cancelled, or budget exhaustion.
@@ -207,7 +207,7 @@ jobs:
     # "all needs succeeded" gate, so the needs list alone is decorative — the
     # condition itself must name the gate's verdict. Without the ci-gate.result
     # leg, a red/cancelled/budget-exhausted CI at the pushed SHA still built
-    # and force-published the rolling <app>/dev prerelease (exactly the
+    # and force-published the rolling <app>/latest prerelease (exactly the
     # untested-bytes publish OD-7 rules out). With it: matrix_count 0 skips
     # both jobs in lockstep; any non-success ci-gate outcome skips the build.
     if: needs.detect.outputs.matrix_count != '0' && needs.ci-gate.result == 'success'
@@ -277,7 +277,7 @@ jobs:
         # OD-14's inject rewrites the tracked $APP/composer.json, and build-phar
         # Guard 2's porcelain is REPO-WIDE (`git -C $APP status --porcelain`
         # reports every path of the monorepo), so the injected manifest froze
-        # the whole dev fleet from 2026-11-04 on. The injection has done its
+        # the whole latest-channel fleet from 2026-11-04 on. The injection has done its
         # job by now — vendor holds the pinned bytes and build-phar reads
         # vendor/composer/installed.json, never the manifest — so restore it,
         # then prove Guard 2's exact precondition at the seat: the tripwire
@@ -368,7 +368,7 @@ jobs:
 
       - name: Sign the archive (pinned-key mode)
         # OPTIONAL by design (identical semantics to the release pipelines):
-        # without SUGARCRAFT_SIGNING_KEY the step skips green and the dev
+        # without SUGARCRAFT_SIGNING_KEY the step skips green and the latest
         # channel ships unsigned. When the owner populates the sugarcraft-wide
         # secret, every app's phar carries — verified by each app against the
         # public half pinned in its own source:
@@ -441,10 +441,10 @@ jobs:
           APP: ${{ matrix.app }}
           STEP_STAMP: dev-${{ steps.build.outputs.short }}
 
-      - name: Publish rolling dev release
+      - name: Publish rolling latest release
         # CRITICAL: --target with the explicit commit SHA on BOTH branches.
         # A GITHUB_TOKEN-created release defaults target_commitish to the
-        # default BRANCH NAME; the self-update dev gates (PHA/PHB) fail
+        # default BRANCH NAME; the self-update latest-channel gates (PHA/PHB) fail
         # closed on exactly that shape, and gh release create after a
         # force-moved tag can otherwise keep a stale target from the old
         # release object — hence `gh release edit --target` on the
@@ -453,8 +453,8 @@ jobs:
           set -euo pipefail
           app="$APP"
           stamp="$STEP_STAMP"
-          git tag -f "$app/dev" "$GITHUB_SHA"
-          git push -f origin "refs/tags/$app/dev"
+          git tag -f "$app/latest" "$GITHUB_SHA"
+          git push -f origin "refs/tags/$app/latest"
           assets=("dist/$app.phar" "dist/$app.phar.sha256" "dist/$app.phar.commit" "dist/$app.phar.pins.json")
           if [ -f "dist/$app.phar.minisig" ]; then
             assets+=("dist/$app.phar.minisig" "dist/$app.phar.minisig.sha256" "dist/$app.phar.sha256.sig")
@@ -462,15 +462,15 @@ jobs:
           else
             signed="Unsigned in this build (no SUGARCRAFT_SIGNING_KEY on the runner at build time)."
           fi
-          notes="Rolling development PHAR for $app at ${stamp}. Rebuilt by .github/workflows/phar-dev.yml whenever a CI-green change touches the app (master push, gated on that commit's CI verdict, or workflow_dispatch with 'all'). This archive carries the locatable stamp dev-${GITHUB_SHA::7} in its manifest metadata, and the .phar.commit sidecar names the full tested SHA. ${signed} Not a stable channel — the bytes move with every CI-green master merge."
-          if gh release view "$app/dev" >/dev/null 2>&1; then
-            gh release upload "$app/dev" "${assets[@]}" --clobber
-            gh release edit "$app/dev" --target "$GITHUB_SHA" --title "$app dev ${stamp#dev-}" --notes "$(printf '%b' "$notes")"
+          notes="Rolling development PHAR for $app at ${stamp}. Rebuilt by .github/workflows/phar-latest.yml whenever a CI-green change touches the app (master push, gated on that commit's CI verdict, or workflow_dispatch with 'all'). This archive carries the locatable stamp dev-${GITHUB_SHA::7} in its manifest metadata, and the .phar.commit sidecar names the full tested SHA. ${signed} Not a stable channel — the bytes move with every CI-green master merge."
+          if gh release view "$app/latest" >/dev/null 2>&1; then
+            gh release upload "$app/latest" "${assets[@]}" --clobber
+            gh release edit "$app/latest" --target "$GITHUB_SHA" --title "$app latest ${stamp#dev-}" --notes "$(printf '%b' "$notes")"
           else
-            gh release create "$app/dev" "${assets[@]}" \
+            gh release create "$app/latest" "${assets[@]}" \
               --prerelease \
               --target "$GITHUB_SHA" \
-              --title "$app dev ${stamp#dev-}" \
+              --title "$app latest ${stamp#dev-}" \
               --notes "$(printf '%b' "$notes")"
           fi
         env:

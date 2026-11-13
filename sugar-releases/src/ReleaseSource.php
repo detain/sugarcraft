@@ -11,7 +11,7 @@ namespace SugarCraft\Releases;
  * repo, the Composer package named in the refusal) is an input here.
  *
  * The release trains in a monorepo are per-app tags sharing ONE GitHub release
- * stream (`<app>/v1.2.3`, `<app>/dev`), so the tag prefix is what separates one
+ * stream (`<app>/v1.2.3`, `<app>/latest`), so the tag prefix is what separates one
  * tool's releases from its siblings' — the repo-wide `/releases/latest` answer
  * is usually some other tool's tag.
  *
@@ -109,10 +109,10 @@ final class ReleaseSource
         return $this->pharAsset . '.sha256.sig';
     }
 
-    /** The exact tag the rolling dev release is moved under. */
-    public function devTag(): string
+    /** The exact tag the rolling latest release is moved under. */
+    public function latestTag(): string
     {
-        return $this->tagPrefix . 'dev';
+        return $this->tagPrefix . 'latest';
     }
 
     /** `composer update <package>` — printed verbatim in the composer-mode refusal. */

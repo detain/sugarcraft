@@ -24,8 +24,8 @@ use SugarCraft\Code\Tests\Support\RunsWallClockBoundedChildTrait;
  *
  * What is NOT tested here: the GitHub-API pagination leg needs a live API
  * (it mirrors {@see SelfUpdate::selectRelease}, pinned in its own suite),
- * and `--channel dev` against the real `candy-code/dev` tag is likewise a
- * live shape — the dev leg is pinned against fixtures instead.
+ * and `--channel latest` against the real `candy-code/latest` tag is likewise a
+ * live shape — the latest leg is pinned against fixtures instead.
  */
 final class InstallScriptTest extends TestCase
 {
@@ -280,11 +280,11 @@ final class InstallScriptTest extends TestCase
         $this->assertSame($winnerBytes, (string) \file_get_contents($this->root . '/bin/candy-code'));
     }
 
-    public function testTheDevChannelSelectsTheExactDevTagEvenWhenStableIsHigher(): void
+    public function testTheLatestChannelSelectsTheExactLatestTagEvenWhenStableIsHigher(): void
     {
         $devBytes = 'CANDY-PHAR-DEV-' . \uniqid('', true);
-        $dev = $this->fixtureReleaseEntry(SelfUpdate::DEV_TAG, $devBytes, $this->sidecarFor($devBytes), true);
-        $dev['prerelease'] = true; // the rolling dev release IS a prerelease
+        $dev = $this->fixtureReleaseEntry(SelfUpdate::LATEST_TAG, $devBytes, $this->sidecarFor($devBytes), true);
+        $dev['prerelease'] = true; // the rolling latest release IS a prerelease
 
         $stableBytes = 'CANDY-PHAR-STABLE-' . \uniqid('', true);
         $stable = $this->fixtureReleaseEntry('candy-code/v99.0.0', $stableBytes, $this->sidecarFor($stableBytes), true);
@@ -297,15 +297,15 @@ final class InstallScriptTest extends TestCase
         [$status, $output] = $this->runSwappedInstaller([
             '--base-url', $this->fixtureFileUrl($this->fixtureRoot),
             '--dir', $this->root . '/bin',
-            '--channel', 'dev',
+            '--channel', 'latest',
         ]);
 
         $this->assertSame(0, $status, $output);
-        $this->assertStringContainsString('selected ' . SelfUpdate::DEV_TAG, $output);
+        $this->assertStringContainsString('selected ' . SelfUpdate::LATEST_TAG, $output);
         $this->assertSame($devBytes, (string) \file_get_contents($this->root . '/bin/candy-code'));
 
         // The other polarity in the same fixture: the default stable channel
-        // picks the higher stable release and skips the exact-tag dev one.
+        // picks the higher stable release and skips the exact-tag latest one.
         $this->purgeFixtureTree($this->root . '/bin');
         [$status, $output] = $this->runSwappedInstaller([
             '--base-url', $this->fixtureFileUrl($this->fixtureRoot),
@@ -371,7 +371,7 @@ final class InstallScriptTest extends TestCase
         $this->assertFileDoesNotExist($this->root . '/bin/candy-code');
     }
 
-    public function testTheVersionFlagRefusesMalformedPinsAndTheDevChannel(): void
+    public function testTheVersionFlagRefusesMalformedPinsAndTheLatestChannel(): void
     {
         // Flag-side guards run against the raw script — every refusal names
         // --version so a user sees which knob said no.
@@ -384,10 +384,10 @@ final class InstallScriptTest extends TestCase
         $this->assertStringContainsString('--version requires a value', $output);
 
         [$status, $output] = $this->runBoundedSh([
-            'sh', $this->scriptPath, '--channel', 'dev', '--version', '1.2.3',
+            'sh', $this->scriptPath, '--channel', 'latest', '--version', '1.2.3',
         ]);
         $this->assertNotSame(0, $status);
-        $this->assertStringContainsString('dev channel', $output);
+        $this->assertStringContainsString('latest channel', $output);
     }
 
     public function testUrlsAndPathsCarryingSpacesSurviveTheQuoting(): void

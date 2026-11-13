@@ -21,7 +21,7 @@ $source = ReleaseSource::new('acme/tools', 'widget')   // tags widget/v1.2.3, as
     ->withComposerPackage('acme/widget')
     ->withPublicKey($base64Ed25519PublicKey);          // '' = keyless state
 
-// `widget self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|dev]`
+// `widget self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|latest]`
 $exit = SelfUpdate::new($source)->run(
     UpdateOptions::new()->withCheck(),
     $currentVersion,                                    // 'v1.2.3' or 'dev-<sha>'

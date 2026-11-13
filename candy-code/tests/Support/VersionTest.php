@@ -117,7 +117,7 @@ final class VersionTest extends TestCase
 
     /**
      * devShaOf is the parse-don't-validate seam: a canonical dev stamp
-     * yields its lower-cased embedded commit; every shape the dev channel
+     * yields its lower-cased embedded commit; every shape the latest channel
      * cannot compare with commit precision — a branch name, a too-short or
      * non-hex remainder, no remainder, no prefix — yields null, and the
      * verb reads that null as its fail-closed refusal.
@@ -165,7 +165,7 @@ final class VersionTest extends TestCase
      * DST-1: the minted-archive round-trip — a tagged stamp comes back as
      * the bare comparable version (the `candy-code/` namespace decoration
      * stripped), a canonical `dev-<sha>` stamp comes back as itself (the
-     * dev channel's commit identity), and every other shape — the
+     * latest channel's commit identity), and every other shape — the
      * working-tree `dev-build` fallback, junk — answers null so the caller
      * falls through to the Composer arms. Mints via the shared child
      * process helper, so this runs (no skip) on every runner.

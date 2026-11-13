@@ -31,7 +31,7 @@ composer require "sugarcraft/candy-image:@dev"   # no stable release yet — see
 Composer's `vendor/bin` is not on your `PATH` by default, so the bare
 `candy-image` command above only works if you add it. Inside a checkout the
 entry point is `php bin/candy-image …` — the spelling the demo tape runs — and
-a rolling dev phar is published too (see Install).
+a rolling latest phar is published too (see Install).
 
 **Long options only.** Apart from `-h`, every flag is `--`-prefixed; chafa's
 single-dash muscle memory (`-f`, `-s 80x24`, `-w 7`) is not parsed as options —
@@ -69,8 +69,8 @@ composer require "sugarcraft/candy-image:@dev"
 push to master that touches it or its dependency closure:
 
 ```bash
-curl -LO https://github.com/detain/sugarcraft/releases/download/candy-image/dev/candy-image.phar
-curl -LO https://github.com/detain/sugarcraft/releases/download/candy-image/dev/candy-image.phar.sha256
+curl -LO https://github.com/detain/sugarcraft/releases/download/candy-image/latest/candy-image.phar
+curl -LO https://github.com/detain/sugarcraft/releases/download/candy-image/latest/candy-image.phar.sha256
 php candy-image.phar photo.png
 ```
 

@@ -31,7 +31,7 @@ A self-contained phar is the other door: `tools/build-phar.php` seals the app
 plus its published `vendor/` into one file (`php -d phar.readonly=0
 tools/build-phar.php --out=dist/candy-ansi-inspect.phar`; the build refuses a
 linked-mode vendor or a dirty tree, so release artifacts always ship tested
-bytes, and the dev-channel CI build skips the source-tree gate only in its
+bytes, and the latest-channel CI build skips the source-tree gate only in its
 `--vendor=monorepo` dev mode). A downloaded archive — even renamed to drop the
 suffix — boots through its own frozen autoload and answers `--version` with
 the stamp it was built under; a checkout reports `dev-master` rather than

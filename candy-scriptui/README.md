@@ -34,13 +34,13 @@ installs the same code.
 
 Composer installs the launcher at `vendor/bin/candy-scriptui`. Prebuilt
 single-file binaries are published per commit that changes this app as
-rolling dev phars:
+rolling latest phar:
 
 ```sh
 curl -fsSLO \
-  https://github.com/detain/sugarcraft/releases/download/candy-scriptui/dev/candy-scriptui.phar
+  https://github.com/detain/sugarcraft/releases/download/candy-scriptui/latest/candy-scriptui.phar
 curl -fsSLO \
-  https://github.com/detain/sugarcraft/releases/download/candy-scriptui/dev/candy-scriptui.phar.sha256
+  https://github.com/detain/sugarcraft/releases/download/candy-scriptui/latest/candy-scriptui.phar.sha256
 sha256sum -c candy-scriptui.phar.sha256 && chmod +x candy-scriptui.phar
 ```
 

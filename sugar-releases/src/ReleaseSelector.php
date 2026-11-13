@@ -10,8 +10,8 @@ namespace SugarCraft\Releases;
  *
  * STABLE: non-draft, non-prerelease releases whose tag starts with the source's
  * tag prefix, that carry BOTH required assets (phar + sha256 sidecar), highest by
- * {@see Version::compare()}. DEV: the single rolling `<prefix>dev` release
- * (prerelease ALLOWED, draft skipped), judged by COMMIT via {@see devDecision()},
+ * {@see Version::compare()}. LATEST: the single rolling `<prefix>latest` release
+ * (prerelease ALLOWED, draft skipped), judged by COMMIT via {@see latestDecision()},
  * never by ordering. Signature assets are REPORTED (`''` when absent) but never
  * REQUIRED here: whether one is required is a fact about the pinned-key state,
  * not about the release.
@@ -65,22 +65,22 @@ final class ReleaseSelector
 
     /**
      * The target commit rides along lower-cased ('' when the entry names none)
-     * for {@see devDecision()} to judge: selection stays decidable on assets
+     * for {@see latestDecision()} to judge: selection stays decidable on assets
      * alone, so a malformed target is the loud cannot-compare refusal, never a
      * silent no-release. Tag names are unique per repository, so at most one
-     * entry can match; an asset-less dev entry is skipped.
+     * entry can match; an asset-less latest entry is skipped.
      *
      * @param array<array-key, mixed> $releases
      *
      * @return array{version: string, pharUrl: string, sidecarUrl: string, sigUrl: string, sigSidecarUrl: string, commitish: string}|null
      */
-    public function selectDevRelease(array $releases): ?array
+    public function selectLatestRelease(array $releases): ?array
     {
         foreach ($releases as $release) {
             if (!\is_array($release) || ($release['draft'] ?? false) === true) {
                 continue;
             }
-            if ((string) ($release['tag_name'] ?? '') !== $this->source->devTag()) {
+            if ((string) ($release['tag_name'] ?? '') !== $this->source->latestTag()) {
                 continue;
             }
             $urls = $this->assetUrls($release['assets'] ?? []);
@@ -90,7 +90,7 @@ final class ReleaseSelector
             $commitish = $release['target_commitish'] ?? '';
 
             return [
-                'version' => 'dev',
+                'version' => 'latest',
                 'commitish' => \is_string($commitish) ? \strtolower(\trim($commitish)) : '',
                 ...$urls,
             ];
@@ -100,7 +100,7 @@ final class ReleaseSelector
     }
 
     /**
-     * Is the running dev build already the commit the dev release names?
+     * Is the running dev build already the commit the latest release names?
      * [decision, label]: 0 up to date, 1 a newer commit is published, null
      * INDECIDABLE — the current version carries no commit to match, or the
      * release names a target that is missing or not a hex object name (a branch
@@ -112,10 +112,10 @@ final class ReleaseSelector
      *
      * @return array{0: ?int, 1: string}
      */
-    public function devDecision(string $current, array $release): array
+    public function latestDecision(string $current, array $release): array
     {
         $target = $release['commitish'];
-        $label = 'dev@' . ($target === '' ? '?' : $target);
+        $label = 'latest@' . ($target === '' ? '?' : $target);
         $embedded = Version::devShaOf($current);
         if ($embedded === null || $target === '' || \preg_match(Version::HEX_SHA_PATTERN, $target) !== 1) {
             return [null, $label];

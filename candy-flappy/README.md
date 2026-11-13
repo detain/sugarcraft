@@ -44,13 +44,13 @@ composer install
 #   composer require sugarcraft/candy-flappy:@dev
 
 # Standalone executable (the published channel is currently FROZEN — see below):
-wget https://github.com/detain/sugarcraft/releases/download/candy-flappy/dev/candy-flappy.phar
+wget https://github.com/detain/sugarcraft/releases/download/candy-flappy/latest/candy-flappy.phar
 php candy-flappy.phar
 ```
 
-A rolling development phar is published on the host repository
+A rolling latest phar is published on the host repository
 [`detain/sugarcraft`](https://github.com/detain/sugarcraft) under the GitHub
-Releases tag [`candy-flappy/dev`](https://github.com/detain/sugarcraft/releases/tag/candy-flappy/dev)
+Releases tag [`candy-flappy/latest`](https://github.com/detain/sugarcraft/releases/tag/candy-flappy/latest)
 as `candy-flappy.phar`. Once the freeze below lifts, that artifact is
 rebuilt automatically whenever the game's code changes on master. **It is
 currently FROZEN at the 2026-11-04 build

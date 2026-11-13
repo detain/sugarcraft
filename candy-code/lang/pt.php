@@ -504,7 +504,7 @@ de um servidor em execução; acp executa turnos para um editor, até este se de
                          está), e se existe um lançamento para o SO e a
                          arquitetura desta máquina. Não inicia nada,
                          não descarrega nada.
-  self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|dev]
+  self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|latest]
                          Substituir esta instalação phar pelo lançamento
                          candy-code mais recente publicado, verificado por sha256 contra o
                          sidecar de lançamento ANTES da substituição; o phar em execução é
@@ -516,7 +516,7 @@ de um servidor em execução; acp executa turnos para um editor, até este se de
                          a mais recente e termina com 1 quando há atualização disponível. Uma
                          instalação via Composer é recusada com aviso, indicando o
                          comando composer update a executar em alternativa. Uma
-                         instalação de desenvolvimento segue o lançamento contínuo candy-code/dev
+                         instalação de desenvolvimento segue o lançamento contínuo candy-code/latest
                          por omissão (está atual quando o commit de destino do lançamento
                          corresponde ao sha do carimbo) e --channel
                          seleciona explicitamente um dos ramos.
@@ -1210,7 +1210,7 @@ TXT,
     'cli.refuse.not_searchable' => '{dir} não é pesquisável por este processo',
     'cli.refuse.project_settings_unusable' => '{path} não pôde ser lido para obter as suas permissionRules ({reason}). A recusar iniciar em vez de executar com uma política de permissões desconhecida.',
     'cli.refuse.world_writable' => '{path} é gravável por todas as contas nesta máquina, pelo que a política de permissões e a cadeia de hooks que transporta não pertencem a este utilizador. A recusar iniciar em vez de executar uma política que qualquer pessoa poderia ter escrito — `chmod o-w {path}`.',
-    'cli.selfupdate.channel_invalid' => '{value}: candy-code self-update --channel aceita stable ou dev.',
+    'cli.selfupdate.channel_invalid' => '{value}: candy-code self-update --channel aceita stable ou latest.',
     'cli.selfupdate.check_available' => 'candy-code: atualização disponível — esta instalação é {current}, o lançamento mais recente é {latest}. (--check apenas reporta; nada foi instalado.)',
     'cli.selfupdate.check_unknown' => 'candy-code: não é possível comparar esta instalação ({current}) com o lançamento mais recente ({latest}).',
     'cli.selfupdate.check_up_to_date' => 'candy-code: atualizado — esta instalação é {current}, o lançamento mais recente é {latest}.',
@@ -1225,7 +1225,7 @@ TXT,
     'cli.selfupdate.hash_mismatch' => 'candy-code: o phar transferido tem o hash {actual}, não o {expected} que o sidecar assina. Nada foi trocado.',
     'cli.selfupdate.hash_unreadable' => 'nada (o ficheiro temporário não pôde ser lido)',
     'cli.selfupdate.installed' => 'candy-code: self-update substituiu {path} ({from} -> {to}); o phar anterior é guardado em {old} — `self-update --rollback` restaura-o uma vez.',
-    'cli.selfupdate.no_dev_release' => 'candy-code: nenhum lançamento dev publicado (tag {tag}) contém {phar} e {sidecar}.',
+    'cli.selfupdate.no_latest_release' => 'candy-code: nenhum lançamento latest publicado (tag {tag}) contém {phar} e {sidecar}.',
     'cli.selfupdate.no_release' => 'candy-code: nenhum lançamento candy-code publicado contém {phar} e {sidecar}.',
     'cli.selfupdate.phar_not_writable' => 'candy-code: não é possível substituir o phar — {path} não é gravável.',
     'cli.selfupdate.preserve_failed' => 'candy-code: o phar em execução não pôde ser copiado para {old}; nada foi trocado.',
@@ -1246,7 +1246,7 @@ TXT,
     'cli.selfupdate.unexpected_operand' => '{operand}: candy-code self-update não aceita operandos.',
     'cli.selfupdate.unsigned_allowed' => 'candy-code: --allow-unsigned ignora a etapa de assinatura com chave fixada; o sidecar sha256 ainda vinculou estes bytes. Contorno de dev/teste — nunca um hábito de lançamento.',
     'cli.selfupdate.up_to_date' => 'candy-code: self-update: esta instalação já é o lançamento mais recente ({current}).',
-    'cli.selfupdate.usage' => 'Utilização: candy-code self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|dev]',
+    'cli.selfupdate.usage' => 'Utilização: candy-code self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|latest]',
     'cli.serve.already_running' => 'já existe um servidor em execução a partir de {dir} — pare-o com: candy-code serve stop',
     'cli.serve.already_running_pid' => 'já existe um servidor em execução a partir de {dir} (pid {pid}, {url}) — pare-o com: candy-code serve stop',
     'cli.serve.also' => 'Também: {problems}.',

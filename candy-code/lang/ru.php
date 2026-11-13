@@ -504,7 +504,7 @@ acp выполняет ходы для редактора, пока редакт
                          и существует ли релиз для ОС и архитектуры
                          этой машины. Ничего не запускает,
                          ничего не скачивает.
-  self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|dev]
+  self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|latest]
                          Заменить эту phar-установку последним опубликованным
                          релизом candy-code, sha256-проверенным по
                          sidecar релиза ДО замены; работающий phar
@@ -516,7 +516,7 @@ acp выполняет ходы для редактора, пока редакт
                          последнюю версию и выходит с кодом 1, когда доступно обновление. A
                          Composer-установка отклоняется громко, с указанием
                          команды composer update для запуска вместо этого. Сборка из
-                         исходников следует за rolling-релизом candy-code/dev
+                         исходников следует за rolling-релизом candy-code/latest
                          по умолчанию (актуальна, когда целевой коммит
                          релиза совпадает с sha в штампе), а --channel
                          явно выбирает одну из веток.
@@ -1210,7 +1210,7 @@ TXT,
     'cli.refuse.not_searchable' => '{dir} недоступен для поиска этому процессу',
     'cli.refuse.project_settings_unusable' => '{path} не читается для получения permissionRules ({reason}). Отказ от запуска вместо работы с неизвестной политикой разрешений.',
     'cli.refuse.world_writable' => '{path} доступен для записи всем учётным записям на этой машине, поэтому политика разрешений и цепочка хуков в нём — не этого пользователя. Отказ от запуска вместо работы с политикой, которую мог записать кто угодно — `chmod o-w {path}`.',
-    'cli.selfupdate.channel_invalid' => '{value}: candy-code self-update --channel принимает stable или dev.',
+    'cli.selfupdate.channel_invalid' => '{value}: candy-code self-update --channel принимает stable или latest.',
     'cli.selfupdate.check_available' => 'candy-code: доступно обновление — текущая версия {current}, последняя {latest}. (--check только выводит информацию; ничего не установлено.)',
     'cli.selfupdate.check_unknown' => 'candy-code: не удалось сравнить текущую версию ({current}) с последним релизом ({latest}).',
     'cli.selfupdate.check_up_to_date' => 'candy-code: актуальная версия — текущая {current}, последняя {latest}.',
@@ -1225,7 +1225,7 @@ TXT,
     'cli.selfupdate.hash_mismatch' => 'candy-code: хеш загруженного phar — {actual}, а не {expected}, подписанный sidecar-файлом. Ничего не заменено.',
     'cli.selfupdate.hash_unreadable' => 'ничего (временный файл не читается)',
     'cli.selfupdate.installed' => 'candy-code: self-update заменил {path} ({from} -> {to}); предыдущий phar сохранён в {old} — `self-update --rollback` восстановит его один раз.',
-    'cli.selfupdate.no_dev_release' => 'candy-code: ни один опубликованный dev-релиз (тег {tag}) не содержит одновременно {phar} и {sidecar}.',
+    'cli.selfupdate.no_latest_release' => 'candy-code: ни один опубликованный latest-релиз (тег {tag}) не содержит одновременно {phar} и {sidecar}.',
     'cli.selfupdate.no_release' => 'candy-code: ни один опубликованный релиз candy-code не содержит одновременно {phar} и {sidecar}.',
     'cli.selfupdate.phar_not_writable' => 'candy-code: не удалось заменить phar — {path} недоступен для записи.',
     'cli.selfupdate.preserve_failed' => 'candy-code: не удалось скопировать запущенный phar в {old}; ничего не заменено.',
@@ -1246,7 +1246,7 @@ TXT,
     'cli.selfupdate.unexpected_operand' => '{operand}: candy-code self-update не принимает операндов.',
     'cli.selfupdate.unsigned_allowed' => 'candy-code: --allow-unsigned пропускает проверку подписи по закреплённому ключу; sha256 sidecar по-прежнему привязан к этим байтам. Обход для dev/тестов — никогда не для релизов.',
     'cli.selfupdate.up_to_date' => 'candy-code: self-update: эта установка уже на последнем релизе ({current}).',
-    'cli.selfupdate.usage' => 'Использование: candy-code self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|dev]',
+    'cli.selfupdate.usage' => 'Использование: candy-code self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|latest]',
     'cli.serve.already_running' => 'сервер уже запущен из {dir} — остановите его: candy-code serve stop',
     'cli.serve.already_running_pid' => 'сервер уже запущен из {dir} (pid {pid}, {url}) — остановите его: candy-code serve stop',
     'cli.serve.also' => 'Также: {problems}.',

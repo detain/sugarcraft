@@ -33,7 +33,7 @@ final class VersionTest extends TestCase
 
     public function testDevBuildStampsPassThrough(): void
     {
-        // CI (phar-dev.yml) stamps dev-<shortsha>; those must report their
+        // CI (phar-latest.yml) stamps dev-<shortsha>; those must report their
         // commit id instead of silently falling back to CURRENT.
         self::assertSame('dev-1a2b3c4', self::normalize('dev-1a2b3c4'));
         self::assertSame('dev-1a2b3c4', self::normalize('candy-codeshot/dev-1a2b3c4'));

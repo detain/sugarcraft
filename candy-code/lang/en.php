@@ -545,7 +545,7 @@ answers from the pause records alone):
                          is not), and whether a release exists for this
                          machine's OS and architecture. Starts nothing,
                          downloads nothing.
-  self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|dev]
+  self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|latest]
                          Replace this phar install with the latest published
                          candy-code release, sha256-verified against the
                          release sidecar BEFORE the swap; the running phar is
@@ -557,7 +557,7 @@ answers from the pause records alone):
                          latest and exits 1 when an update is available. A
                          Composer install is refused loudly, naming the
                          composer update command to run instead. A dev-built
-                         install follows the rolling candy-code/dev release
+                         install follows the rolling candy-code/latest release
                          by default (it is current when the release's target
                          commit matches the stamp's sha) and --channel
                          selects either train explicitly.
@@ -1285,7 +1285,7 @@ TXT,
     'cli.refuse.not_searchable' => '{dir} is not searchable by this process',
     'cli.refuse.project_settings_unusable' => '{path} could not be read for its permissionRules ({reason}). Refusing to start rather than run with an unknown permission policy.',
     'cli.refuse.world_writable' => '{path} is writable by every account on this machine, so the permission policy and hook chain it carries are not this user\'s. Refusing to start rather than run policy anyone could have written — `chmod o-w {path}`.',
-    'cli.selfupdate.channel_invalid' => '{value}: candy-code self-update --channel accepts stable or dev.',
+    'cli.selfupdate.channel_invalid' => '{value}: candy-code self-update --channel accepts stable or latest.',
     'cli.selfupdate.check_available' => 'candy-code: update available — this install is {current}, the latest release is {latest}. (--check reports only; nothing was installed.)',
     'cli.selfupdate.check_unknown' => 'candy-code: cannot compare this install ({current}) with the latest release ({latest}).',
     'cli.selfupdate.check_up_to_date' => 'candy-code: up to date — this install is {current}, the latest release is {latest}.',
@@ -1300,7 +1300,7 @@ TXT,
     'cli.selfupdate.hash_mismatch' => 'candy-code: the downloaded phar hashes to {actual}, not the {expected} the sidecar signs. Nothing was swapped.',
     'cli.selfupdate.hash_unreadable' => 'nothing (the temp file could not be read)',
     'cli.selfupdate.installed' => 'candy-code: self-update replaced {path} ({from} -> {to}); the previous phar is kept at {old} — `self-update --rollback` restores it once.',
-    'cli.selfupdate.no_dev_release' => 'candy-code: no published dev release (tag {tag}) carries both {phar} and {sidecar}.',
+    'cli.selfupdate.no_latest_release' => 'candy-code: no published latest release (tag {tag}) carries both {phar} and {sidecar}.',
     'cli.selfupdate.no_release' => 'candy-code: no published candy-code release carries both {phar} and {sidecar}.',
     'cli.selfupdate.phar_not_writable' => 'candy-code: cannot replace the phar — {path} is not writable.',
     'cli.selfupdate.preserve_failed' => 'candy-code: the running phar could not be copied to {old}; nothing was swapped.',
@@ -1321,7 +1321,7 @@ TXT,
     'cli.selfupdate.unexpected_operand' => '{operand}: candy-code self-update takes no operands.',
     'cli.selfupdate.unsigned_allowed' => 'candy-code: --allow-unsigned skips the pinned-key signature leg; the sha256 sidecar still bound these bytes. Dev/test bypass — never a release habit.',
     'cli.selfupdate.up_to_date' => 'candy-code: self-update: this install is already the latest release ({current}).',
-    'cli.selfupdate.usage' => 'Usage: candy-code self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|dev]',
+    'cli.selfupdate.usage' => 'Usage: candy-code self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|latest]',
     'cli.serve.already_running' => 'a server is already running from {dir} — stop it with: candy-code serve stop',
     'cli.serve.already_running_pid' => 'a server is already running from {dir} (pid {pid}, {url}) — stop it with: candy-code serve stop',
     'cli.serve.also' => 'Also: {problems}.',

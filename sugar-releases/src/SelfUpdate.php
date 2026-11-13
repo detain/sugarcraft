@@ -26,7 +26,7 @@ use GuzzleHttp\Exception\TransferException;
  *    A silent no-op there would report success while changing nothing.
  *  - LATEST means the newest release of THIS tool's tag family carrying BOTH
  *    required assets (see {@see ReleaseSelector}); two channels, stable
- *    (ordered by {@see Version::compare()}) and dev (rolling `<prefix>dev`,
+ *    (ordered by {@see Version::compare()}) and latest (rolling `<prefix>latest`,
  *    judged by commit identity). The release list is walked via
  *    `Link: rel="next"` up to five pages.
  *  - VERIFY BEFORE RENAME: the sidecar is fetched first and must parse to a
@@ -283,7 +283,7 @@ final class SelfUpdate
         // Resolution moved ahead of the fetch (choosing a channel needs the
         // current version): same seam, same arms, identical value.
         $current = \trim($currentVersion);
-        $channel = $channelArg ?? (Version::isDev($current) ? UpdateOptions::CHANNEL_DEV : UpdateOptions::CHANNEL_STABLE);
+        $channel = $channelArg ?? (Version::isDev($current) ? UpdateOptions::CHANNEL_LATEST : UpdateOptions::CHANNEL_STABLE);
 
         $http = $this->http ?? $this->httpClient();
         // DST-3-P5: one page is not the whole train. GitHub paginates the
@@ -319,18 +319,18 @@ final class SelfUpdate
                 break;
             }
         }
-        if ($channel === UpdateOptions::CHANNEL_DEV) {
-            $release = $this->selector->selectDevRelease($releases);
+        if ($channel === UpdateOptions::CHANNEL_LATEST) {
+            $release = $this->selector->selectLatestRelease($releases);
             if ($release === null) {
-                $this->stderr($this->t('selfupdate.no_dev_release', [
-                    'tag' => $this->source->devTag(),
+                $this->stderr($this->t('selfupdate.no_latest_release', [
+                    'tag' => $this->source->latestTag(),
                     'phar' => $this->source->pharAsset,
                     'sidecar' => $this->source->sidecarAsset(),
                 ]));
 
                 return self::EXIT_FAILURE;
             }
-            [$cmp, $latest] = $this->selector->devDecision($current, $release);
+            [$cmp, $latest] = $this->selector->latestDecision($current, $release);
         } else {
             $release = $this->selector->selectRelease($releases);
             if ($release === null) {
@@ -371,7 +371,7 @@ final class SelfUpdate
         if ($cmp < 0) {
             // The sanctioned downgrade path is --rollback, which returned
             // above without consulting the network at all.
-            // On the dev train the decision is never behind (up-to-date or
+            // On the latest channel the decision is never behind (up-to-date or
             // available, by construction), so this arm is stable-only — and
             // the stable logic is byte-for-byte the one that shipped.
             $this->stderr($this->t('selfupdate.downgrade_refused', ['current' => $current, 'latest' => $latest]));

@@ -11,7 +11,7 @@
  * @return array<string, string>
  */
 return [
-    'selfupdate.channel_invalid' => '{value}: {app} self-update --channel accepts stable or dev.',
+    'selfupdate.channel_invalid' => '{value}: {app} self-update --channel accepts stable or latest.',
     'selfupdate.check_available' => '{app}: update available — this install is {current}, the latest release is {latest}. (--check reports only; nothing was installed.)',
     'selfupdate.check_unknown' => '{app}: cannot compare this install ({current}) with the latest release ({latest}).',
     'selfupdate.check_up_to_date' => '{app}: up to date — this install is {current}, the latest release is {latest}.',
@@ -26,7 +26,7 @@ return [
     'selfupdate.hash_mismatch' => '{app}: the downloaded phar hashes to {actual}, not the {expected} the sidecar signs. Nothing was swapped.',
     'selfupdate.hash_unreadable' => 'nothing (the temp file could not be read)',
     'selfupdate.installed' => '{app}: self-update replaced {path} ({from} -> {to}); the previous phar is kept at {old} — `self-update --rollback` restores it once.',
-    'selfupdate.no_dev_release' => '{app}: no published dev release (tag {tag}) carries both {phar} and {sidecar}.',
+    'selfupdate.no_latest_release' => '{app}: no published latest release (tag {tag}) carries both {phar} and {sidecar}.',
     'selfupdate.no_release' => '{app}: no published {app} release carries both {phar} and {sidecar}.',
     'selfupdate.phar_not_writable' => '{app}: cannot replace the phar — {path} is not writable.',
     'selfupdate.preserve_failed' => '{app}: the running phar could not be copied to {old}; nothing was swapped.',
@@ -47,6 +47,6 @@ return [
     'selfupdate.unexpected_operand' => '{operand}: {app} self-update takes no operands.',
     'selfupdate.unsigned_allowed' => '{app}: --allow-unsigned skips the pinned-key signature leg; the sha256 sidecar still bound these bytes. Dev/test bypass — never a release habit.',
     'selfupdate.up_to_date' => '{app}: self-update: this install is already the latest release ({current}).',
-    'selfupdate.usage' => 'Usage: {app} self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|dev]',
+    'selfupdate.usage' => 'Usage: {app} self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|latest]',
     'update.available' => 'update available: {release} — run `{app} self-update`',
 ];

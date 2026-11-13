@@ -257,18 +257,18 @@ final class UpdateCheckTest extends TestCase
             ['channel' => 'stable', 'available' => "0.9.9\x1b[31m"],
             ['channel' => 'stable', 'available' => 'nightly 9.9'],
             ['channel' => 'stable', 'available' => ''],
-            ['channel' => 'dev', 'available' => 'main'],
-            ['channel' => 'dev', 'available' => ''],
+            ['channel' => 'latest', 'available' => 'main'],
+            ['channel' => 'latest', 'available' => ''],
         ] as $planted) {
             UpdateCheck::resetForTesting();
             self::writeCache(['checked_at' => self::NOW] + $planted);
             self::assertNull(
-                UpdateCheck::cachedNotice(self::PHAR, $planted['channel'] === 'dev' ? 'dev-abc1234' : self::CURRENT, $this->cache),
+                UpdateCheck::cachedNotice(self::PHAR, $planted['channel'] === 'latest' ? 'dev-abc1234' : self::CURRENT, $this->cache),
             );
         }
     }
 
-    public function testTheDevChannelAdvertisesOnlyANewerCommitAndSilencesItsOwn(): void
+    public function testTheLatestChannelAdvertisesOnlyANewerCommitAndSilencesItsOwn(): void
     {
         $target = \str_repeat('f', 40);
         UpdateCheck::refreshIfStale(
@@ -280,14 +280,14 @@ final class UpdateCheckTest extends TestCase
         );
 
         $written = \json_decode((string) @\file_get_contents($this->cache), true);
-        self::assertSame('dev', $written['channel']);
+        self::assertSame('latest', $written['channel']);
         self::assertSame($target, $written['available']);
         self::assertSame(
-            Lang::t('startup.update.available', ['release' => 'dev@' . \substr($target, 0, 10)]),
+            Lang::t('startup.update.available', ['release' => 'latest@' . \substr($target, 0, 10)]),
             UpdateCheck::cachedNotice(self::PHAR, 'dev-abc1234', $this->cache),
         );
 
-        // Rebuilt onto the very commit the dev release names: same cache,
+        // Rebuilt onto the very commit the latest release names: same cache,
         // the notice silences itself against the running version.
         UpdateCheck::resetForTesting();
         self::assertNull(UpdateCheck::cachedNotice(self::PHAR, 'dev-' . \substr($target, 0, 7), $this->cache));
@@ -513,11 +513,11 @@ final class UpdateCheckTest extends TestCase
         ];
     }
 
-    /** The rolling dev release, naming (or not) a target commit. */
+    /** The rolling latest release, naming (or not) a target commit. */
     private static function devRelease(string $commitish): array
     {
         return [
-            'tag_name' => SelfUpdate::DEV_TAG,
+            'tag_name' => SelfUpdate::LATEST_TAG,
             'draft' => false,
             'prerelease' => true,
             'target_commitish' => $commitish,

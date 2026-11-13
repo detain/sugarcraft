@@ -138,7 +138,7 @@ final class Version
 
     /**
      * The commit embedded in a canonical dev stamp `dev-<hex4-40>`, lower-
-     * cased — or null for every string the dev channel cannot compare with
+     * cased — or null for every string the latest channel cannot compare with
      * that precision ('dev' bare, 'dev-' with nothing after it, 'dev-master'
      * — a branch name, not a commit — and every non-dev shape). This is the
      * parse-don't-validate seam: one read turns the stamp into the trusted
@@ -176,7 +176,7 @@ final class Version
      * the Composer/checkout arms instead of shipping a label the release
      * stream cannot name. A canonical dev stamp, by contrast, IS the answer
      * — the CI dev build stamps `dev-$SHORT_SHA` precisely so `--version`
-     * and the dev channel of `self-update` can read the commit back (the
+     * and the latest channel of `self-update` can read the commit back (the
      * DST-1 lesson: inside a phar the manifest is the authority, and
      * falling through to the frozen vendor reproduces the stale-guess lie
      * the stamp exists to cure).

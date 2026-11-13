@@ -914,7 +914,7 @@ final class HelpTest extends TestCase
 
         // The CI dev stamp is a NAME, not a guess: `dev-<shortsha>` reads
         // back from the manifest exactly as the release tag does, so the
-        // dev channel of `self-update` compares against the commit this
+        // latest channel of `self-update` compares against the commit this
         // archive was built from — never the frozen vendor's stale guess.
         $named = self::mintStampedPhar('dev-1a2b3c4');
         try {

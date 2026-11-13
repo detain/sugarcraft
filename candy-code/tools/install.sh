@@ -9,7 +9,7 @@
 #      sodium_crypto_sign_verify_detached leg SelfUpdate.php runs).
 #   2. Resolve the release: the highest non-draft, non-prerelease tag of the
 #      form candy-code/vX.Y.Z (--channel stable, the default), or the exact
-#      candy-code/dev prerelease (--channel dev). --base-url swaps the
+#      candy-code/latest prerelease (--channel latest). --base-url swaps the
 #      GitHub API origin for a location holding one releases.json of the
 #      same shape, which is what the test fixtures and any future mirror
 #      use; every later leg runs identically because the asset URLs come
@@ -25,7 +25,7 @@
 #      when HOME is unset) as `candy-code` with mode 0755, staged and moved
 #      so a running binary is never truncated in place.
 #
-# Options: --channel stable|dev, --version X.Y.Z, --dir DIR, --base-url URL,
+# Options: --channel stable|latest, --version X.Y.Z, --dir DIR, --base-url URL,
 # -h|--help.
 # No environment variables are read: flags only.
 #
@@ -48,7 +48,7 @@ SIDECAR_ASSET="candy-code.phar.sha256"
 SIDECAR_SIG_ASSET="candy-code.phar.sha256.sig"
 MINISIG_ASSET="candy-code.phar.minisig"
 TAG_PREFIX="candy-code/"
-DEV_TAG="candy-code/dev"
+LATEST_TAG="candy-code/latest"
 BIN_NAME="candy-code"
 
 CHANNEL="stable"
@@ -59,13 +59,13 @@ TMP=""
 
 usage() {
 	cat <<'USAGE'
-Usage: install.sh [--channel stable|dev] [--version X.Y.Z]
+Usage: install.sh [--channel stable|latest] [--version X.Y.Z]
                   [--dir DIR] [--base-url URL]
 
 Installs the signed candy-code phar as DIR/candy-code (mode 0755).
 
   --channel stable   Install the newest candy-code/vX.Y.Z release (default).
-  --channel dev      Install the rolling candy-code/dev prerelease.
+  --channel latest   Install the rolling candy-code/latest prerelease.
   --version X.Y.Z    Install exactly that candy-code/vX.Y.Z release instead
                      of the newest (stable channel; a leading v is accepted).
   --dir DIR          Install destination directory (default $HOME/.local/bin,
@@ -88,8 +88,8 @@ need_arg() {
 
 set_channel() {
 	case "$1" in
-	stable | dev) CHANNEL="$1" ;;
-	*) die "unknown --channel '$1' (expected stable or dev)" ;;
+	stable | latest) CHANNEL="$1" ;;
+	*) die "unknown --channel '$1' (expected stable or latest)" ;;
 	esac
 }
 
@@ -157,8 +157,8 @@ case "$BASE_URL" in
 -*) die "--base-url must not start with '-'" ;;
 esac
 
-if [ -n "$PIN_VERSION" ] && [ "$CHANNEL" = "dev" ]; then
-	die "--version pins a stable release; the dev channel carries only the rolling tag"
+if [ -n "$PIN_VERSION" ] && [ "$CHANNEL" = "latest" ]; then
+	die "--version pins a stable release; the latest channel carries only the rolling tag"
 fi
 
 # ---------------------------------------------------------------- 1. tools ---
@@ -196,7 +196,7 @@ cat >"$TMP/select.php" <<'PHPSELECTION'
 <?php
 // Mirrors SelfUpdate::selectRelease / selectDevRelease (plan_comparison
 // C-SES-5.b): drafts are always skipped, prereleases are skipped on the
-// stable channel and matched by EXACT tag on the dev channel, both required
+// stable channel and matched by EXACT tag on the latest channel, both required
 // assets must carry non-empty download URLs, and the highest comparable
 // X.Y.Z wins on the stable channel.
 //
@@ -208,7 +208,7 @@ cat >"$TMP/select.php" <<'PHPSELECTION'
 $out = $argv[1];
 $channel = $argv[2];
 $tagPrefix = $argv[3];
-$devTag = $argv[4];
+$latestTag = $argv[4];
 $pageList = @file($argv[5], FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
 if ($pageList === false) {
 	fwrite(STDERR, "could not read the page list\n");
@@ -255,13 +255,13 @@ foreach ($pageList as $page) {
 	}
 }
 
-$pickTag = static function (array $release) use ($channel, $tagPrefix, $devTag, $want): ?string {
+$pickTag = static function (array $release) use ($channel, $tagPrefix, $latestTag, $want): ?string {
 	$tag = isset($release['tag_name']) ? (string) $release['tag_name'] : '';
 	if ($tag === '' || ($release['draft'] ?? false) === true) {
 		return null;
 	}
-	if ($channel === 'dev') {
-		return $tag === $devTag ? 'dev' : null;
+	if ($channel === 'latest') {
+		return $tag === $latestTag ? 'latest' : null;
 	}
 	if (($release['prerelease'] ?? false) === true) {
 		return null;
@@ -315,7 +315,7 @@ foreach ($releases as $release) {
 	if (($assets[$pharKey] ?? '') === '' || ($assets[$sidecarKey] ?? '') === '') {
 		continue; // the two required legs; same rule as SelfUpdate
 	}
-	if ($best === null || ($channel !== 'dev' && $cmp($version, $best) > 0)) {
+	if ($best === null || ($channel !== 'latest' && $cmp($version, $best) > 0)) {
 		$best = $version;
 		$bestAssets = $assets;
 	}
@@ -324,7 +324,7 @@ foreach ($releases as $release) {
 if ($best === null) {
 	fwrite(STDERR, 'no candy-code release carrying its phar and sidecar assets'
 		. ($want !== '' ? " matching --version $want" : '')
-		. ' was found on the ' . ($channel === 'dev' ? 'dev channel' : 'stable channel') . "\n");
+		. ' was found on the ' . ($channel === 'latest' ? 'latest channel' : 'stable channel') . "\n");
 	exit(1);
 }
 
@@ -360,7 +360,7 @@ else
 	done
 fi
 
-php "$TMP/select.php" "$TMP/selection" "$CHANNEL" "$TAG_PREFIX" "$DEV_TAG" \
+php "$TMP/select.php" "$TMP/selection" "$CHANNEL" "$TAG_PREFIX" "$LATEST_TAG" \
 	"$TMP/pages" "$PIN_VERSION" 2>"$TMP/err" || {
 	sed 's/^/install.sh: /' "$TMP/err" >&2
 	exit 1

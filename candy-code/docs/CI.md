@@ -374,10 +374,10 @@ repositories pinning every `sugarcraft/*` sibling to the exact monorepo commit b
 and a `verify` step aborts the build if the resolved lock floated any sibling to the network.
 The injected manifest lives only in the runner's checkout — committed lib manifests keep bare
 `@dev` requires, so `tools/check-path-repos.php --no-lib-path-repos` stays green on the tree
-(pinned by `tools/tests/ReleaseSiblingPinsTest.php`). The rolling `<app>/dev` prerelease
+(pinned by `tools/tests/ReleaseSiblingPinsTest.php`). The rolling `<app>/latest` prerelease
 channel and the split/Packagist sync publish the same way: both wait for CI green at their
 commit — a green that now includes CI's own `web-bundle` job, which runs the same legs `web.yml`
-builds for the bundle these publishers ship — and dev builds carry the same
+builds for the bundle these publishers ship — and latest-channel builds carry the same
 `.phar.commit` / `.phar.pins.json` sidecars. A published
 `.sha256` still names the bytes that job produced rather than a rebuild promise — but those
 bytes are now traceable to one tested SHA, siblings included.

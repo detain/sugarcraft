@@ -149,8 +149,8 @@ and earlier are unsigned and report an uncomparable `dev-master` version
 stamp, so an install from one cannot self-update — download
 `candy-code/v0.1.1` manually instead. `self-update` keeps the phar current
 from then on; a CI dev build stamped `dev-<shortsha>` rides the rolling
-`candy-code/dev` release instead (current iff that release's target commit
-matches the stamp — `--channel=stable|dev` overrides the default). That dev
+`candy-code/latest` release instead (current iff that release's target commit
+matches the stamp — `--channel=stable|latest` overrides the default). That dev
 archive is rebuilt and re-stamped on every push to `master` that touches it,
 so the phar on that channel carries the newest master commit that did — the
 `dev-<shortsha>` it prints is the commit it was packed from. A release carries
@@ -165,8 +165,8 @@ pin map) provenance pair, the rendered `candy-code.rb` formula, and a copy of
 `tools/install.sh` itself.
 
 Or let the bundled `tools/install.sh` run those legs in one command: it
-resolves the newest `candy-code/v*` release (or `candy-code/dev` with
-`--channel=dev`), downloads the phar with its sidecar and signature, checks
+resolves the newest `candy-code/v*` release (or `candy-code/latest` with
+`--channel=latest`), downloads the phar with its sidecar and signature, checks
 the signature against the same pinned key `self-update` uses and the digest
 against the sidecar, then installs `candy-code` (mode 0755) into
 `--dir` (default `$HOME/.local/bin`):
@@ -177,7 +177,7 @@ curl -fsSL https://raw.githubusercontent.com/detain/sugarcraft/master/candy-code
 
 The trailing `--` closes the outer shell's options and opens the installer's: script flags go after it (the script itself is a plain file at that URL — reading it before piping it is a reasonable habit). It takes flags only — no
 environment variables — plus `--version X.Y.Z` (an exact stable tag; refused on
-the dev channel) and `--base-url URL` to read `releases.json` from a mirror of
+the latest channel) and `--base-url URL` to read `releases.json` from a mirror of
 the release list instead of the GitHub API. Homebrew: a formula is rendered per release by
 `candy-code/tools/gen-homebrew-formula.php` and ships as that release's
 `candy-code.rb` asset — there is no tap, so install the formula file itself,
@@ -2586,9 +2586,9 @@ candy-code serve status|stop|logs|url|token
                                      # the running server: stop [--force], logs [-f], token [--rotate]
 candy-code self-update [--check]     # replace this phar with the latest verified release;
                                      #   --check only compares versions (exit 1 when one is newer)
-candy-code self-update [--channel=dev|stable]
+candy-code self-update [--channel=latest|stable]
                                      #   release trains: a dev build rides the rolling
-                                     #   candy-code/dev release by default (freshness =
+                                     #   candy-code/latest release by default (freshness =
                                      #   commit match), everything else rides stable
 candy-code self-update --rollback    # restore the kept pre-swap phar, exactly once
 candy-code self-update --allow-unsigned

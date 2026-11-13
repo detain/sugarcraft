@@ -6,7 +6,7 @@ namespace SugarCraft\Releases;
 
 /**
  * The parsed shape of `self-update [--check] [--rollback] [--allow-unsigned]
- * [--channel=stable|dev]`, free of any CLI framework: the host parses its own
+ * [--channel=stable|latest]`, free of any CLI framework: the host parses its own
  * argv and hands the engine this.
  *
  * {@see validate()} states the usage laws once (flags exclusivity, channel
@@ -16,7 +16,7 @@ final class UpdateOptions
 {
     public const CHANNEL_STABLE = 'stable';
 
-    public const CHANNEL_DEV = 'dev';
+    public const CHANNEL_LATEST = 'latest';
 
     /** @param list<string> $operands */
     private function __construct(
@@ -72,7 +72,7 @@ final class UpdateOptions
         if ($this->check && ($this->rollback || $this->allowUnsigned)) {
             return ['selfupdate.flags_exclusive', []];
         }
-        if ($this->channel !== null && $this->channel !== self::CHANNEL_STABLE && $this->channel !== self::CHANNEL_DEV) {
+        if ($this->channel !== null && $this->channel !== self::CHANNEL_STABLE && $this->channel !== self::CHANNEL_LATEST) {
             return ['selfupdate.channel_invalid', ['value' => $this->channel]];
         }
         if ($this->operands !== []) {

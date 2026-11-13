@@ -403,9 +403,9 @@ final class UpdateCheck
         }
 
         if (Version::isDev($current)) {
-            $dev = $this->selector->selectDevRelease($releases);
+            $dev = $this->selector->selectLatestRelease($releases);
             $available = null;
-            $channel = UpdateOptions::CHANNEL_DEV;
+            $channel = UpdateOptions::CHANNEL_LATEST;
             if ($dev !== null) {
                 $target = $dev['commitish'];
                 $embedded = Version::devShaOf($current);
@@ -460,7 +460,7 @@ final class UpdateCheck
 
             return $this->t('update.available', ['release' => 'v' . \ltrim($available, 'v')]);
         }
-        if ($data['channel'] === UpdateOptions::CHANNEL_DEV) {
+        if ($data['channel'] === UpdateOptions::CHANNEL_LATEST) {
             $embedded = Version::devShaOf($current);
             if (\preg_match(Version::HEX_SHA_PATTERN, $available) !== 1
                 || $embedded === null
@@ -468,7 +468,7 @@ final class UpdateCheck
                 return null;
             }
 
-            return $this->t('update.available', ['release' => 'dev@' . \substr($available, 0, 10)]);
+            return $this->t('update.available', ['release' => 'latest@' . \substr($available, 0, 10)]);
         }
 
         return null;

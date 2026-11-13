@@ -40,9 +40,9 @@ namespace SugarCraft\Top\Support;
  * canonical CI stamp `dev-<shortsha>` by its prefix alone — a dev tag names
  * a POSITION in history, not a rung on a ladder, and no dev stamp is
  * orderable against any other. `self-update` uses it to pick the release
- * CHANNEL to consult (and `--channel=dev` to refuse acting on a build it
+ * CHANNEL to consult (and `--channel=latest` to refuse acting on a build it
  * cannot locate), never to answer "newer than" — the strict refusal above
- * is exactly why the dev train exists as its own channel.
+ * is exactly why the latest train exists as its own channel.
  */
 final class Version
 {
@@ -116,7 +116,7 @@ final class Version
      * lowercased strings that start with that `dev-` prefix. Nothing more —
      * no hex-length rule, no ordering, no claim that `dev-abc123` relates to
      * `dev-def456` in any way. Callers that need to LOCATE a dev build
-     * against the dev release train validate the suffix themselves; this
+     * against the latest release train validate the suffix themselves; this
      * only decides which channel `self-update` consults.
      */
     public static function isDev(string $version): bool

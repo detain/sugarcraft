@@ -26,18 +26,18 @@ final class UpdateOptionsTest extends TestCase
         self::assertSame(['selfupdate.flags_exclusive', []], UpdateOptions::new()->withCheck()->withAllowUnsigned()->validate());
         self::assertSame(['selfupdate.channel_invalid', ['value' => 'Dev']], UpdateOptions::new()->withChannel('Dev')->validate());
         self::assertSame(['selfupdate.unexpected_operand', ['operand' => 'x']], UpdateOptions::new()->withOperands(['x', 'y'])->validate());
-        self::assertNull(UpdateOptions::new()->withChannel('dev')->withCheck()->validate());
+        self::assertNull(UpdateOptions::new()->withChannel('latest')->withCheck()->validate());
         self::assertNull(UpdateOptions::new()->withChannel(UpdateOptions::CHANNEL_STABLE)->withRollback()->validate());
     }
 
     public function testWithersAreImmutable(): void
     {
         $a = UpdateOptions::new();
-        $b = $a->withCheck()->withRollback(false)->withAllowUnsigned()->withChannel('dev')->withOperands(['q']);
+        $b = $a->withCheck()->withRollback(false)->withAllowUnsigned()->withChannel('latest')->withOperands(['q']);
         self::assertFalse($a->check);
         self::assertTrue($b->check);
         self::assertTrue($b->allowUnsigned);
-        self::assertSame('dev', $b->channel);
+        self::assertSame('latest', $b->channel);
         self::assertSame(['q'], $b->operands);
     }
 }

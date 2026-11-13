@@ -164,7 +164,7 @@ The shipped single-file build (rebuilt and published on every push to
 master) needs only PHP:
 
 ```bash
-curl -LO https://github.com/detain/sugarcraft/releases/download/candy-git-server/dev/candy-git-server.phar
+curl -LO https://github.com/detain/sugarcraft/releases/download/candy-git-server/latest/candy-git-server.phar
 chmod +x candy-git-server.phar
 php candy-git-server.phar serve --http --repo-root /srv/git/repositories
 ```

@@ -246,7 +246,7 @@ jobs:
       - name: Verify the tools/ guards
         run: phpunit --no-configuration --colors=never tools/tests/
 
-  # G6-P (OD-6, reviews-1103): the publishers (sync-sugarcraft, phar-dev) poll
+  # G6-P (OD-6, reviews-1103): the publishers (sync-sugarcraft, phar-latest) poll
   # THIS workflow for their gate, so a green CI must already mean the shipped
   # web bundle is verified — not just the PHP legs. web.yml stays the deep
   # pipeline (audit, lint, typecheck, unit, e2e); this job mirrors only the
