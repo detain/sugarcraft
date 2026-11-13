@@ -557,7 +557,11 @@ Ceilings that shape what plays: source capture is capped at 64 MiB per file (`Gi
 
 ## Color and terminal honesty
 
-The graphics ladder in `RendererFactory::auto()` descends Sixel → Kitty → iTerm2 → half-block → ANSI 256-color → plain ASCII: a TrueColor profile answers with the half-block rung when the terminal draws block glyphs safely, and with ANSI 256 when it cannot, so auto never selects `truecolor` or `quarterblock` — those are explicit modes only. The rung walk is a pure decision over the collected signals (`RendererFactory::autoModeFrom()`); `supports()` is the door for explicit modes and the mode cycle, where an unsupported choice raises a typed refusal naming the best mode for this seat. Graphics modes refuse loudly when the PHP lacks ext-gd. `NO_COLOR` is honored transitively: sugar-colorprofile's probe (CLICOLOR_FORCE/FORCE_COLOR/NO_COLOR chain) reports reduced capability and the ladder steps down accordingly.
+The graphics ladder in `RendererFactory::auto()` descends Sixel → Kitty → iTerm2 → half-block → ANSI 256-color → plain ASCII: a TrueColor profile answers with the half-block rung when the terminal draws block glyphs safely, and with ANSI 256 when it cannot, so auto never selects `truecolor` or `quarterblock` — those are explicit modes only. The rung walk is a pure decision over the collected signals (`RendererFactory::autoModeFrom()`); `supports()` is the door for explicit modes and the mode cycle, where an unsupported choice raises a typed refusal naming the best mode for this seat. Graphics modes refuse loudly when the PHP lacks ext-gd — and the refuse runs
+before any probe or decoder child is spawned, so a refused open leaks nothing
+(SV-L66); an auto-resolved graphics seat on such a build steps down to the
+next honest rung instead of throwing — refusals are for promises, not
+guesses. `NO_COLOR` is honored transitively: sugar-colorprofile's probe (CLICOLOR_FORCE/FORCE_COLOR/NO_COLOR chain) reports reduced capability and the ladder steps down accordingly.
 
 ## Localization
 

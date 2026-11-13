@@ -263,4 +263,83 @@ final class PlayerOpenSpawnTest extends TestCase
 
         return $audio;
     }
+    /**
+     * SV-L66/066: the refusal path must not leave children behind. Before
+     * this step the renderer capability gate ran AFTER probe + decoder
+     * construction — a graphics-mode open on a gd-less build spawned the
+     * ffprobe metadata child and a full ffmpeg decode child, then threw
+     * and abandoned both to __destruct. The gate now runs before any
+     * child exists: a refused open spawns nothing, provably (stub log).
+     */
+    public function testARefusedExplicitGraphicsOpenSpawnsNoChildren(): void
+    {
+        $this->withStubChildren(function (): void {
+            \SugarCraft\Video\Render\RendererFactory::setDiagnoseForTesting(new \SugarCraft\ColorProfile\Probe\ProbeReport([
+                \SugarCraft\ColorProfile\Probe\Capability::Sixel->value => true,
+            ]));
+            \SugarCraft\Video\Render\RendererFactory::setGraphicsGateForTesting(static fn (): bool => false);
+            try {
+                $this->expectException(\RuntimeException::class);
+                $this->expectExceptionMessage('ext-gd');
+                Player::open($this->subject, 12, 8, null, Mode::Sixel);
+            } finally {
+                $this->assertCount(0, $this->spawnLines('ffmpeg'), 'a refused open must never build the decode child');
+                $this->assertCount(0, $this->spawnLines('ffprobe'), 'not even the metadata child');
+                \SugarCraft\Video\Render\RendererFactory::setGraphicsGateForTesting(null);
+                \SugarCraft\Video\Render\RendererFactory::setDiagnoseForTesting(null);
+            }
+        });
+    }
+
+    /**
+     * SV-L66/066: the AUTO half of the split — a chooser-resolved graphics
+     * seat on a gd-less build is a suggestion, not a promise: the ladder
+     * steps down to the next honest rung and opens normally, instead of
+     * throwing the whole seat away.
+     */
+    public function testTheAutoLadderStepsDownWhenGdIsMissing(): void
+    {
+        $this->withStubChildren(function (): void {
+            $path = Synthetic::generate($this->dir . '/auto.gif', 24, 12, 6, 8);
+            \SugarCraft\Video\Render\RendererFactory::setGraphicsGateForTesting(static fn (): bool => false);
+            try {
+                $player = Player::open(
+                    $path,
+                    12,
+                    8,
+                    12.5,
+                    null,
+                    false,
+                    'standard',
+                    10,
+                    20,
+                    null,
+                    [],
+                    null,
+                    static fn (): Mode => Mode::Sixel,
+                );
+                try {
+                    $this->assertNotSame(Mode::Sixel, $player->mode, 'the refused rung must not survive the degrade');
+                    $this->assertFalse($player->mode->isGraphics(), 'a gd-less build lands on a text rung');
+                    $this->assertNotNull($player->currentFrame, 'the degraded open still paints its poster');
+                } finally {
+                    $player->stop();
+                }
+            } finally {
+                \SugarCraft\Video\Render\RendererFactory::setGraphicsGateForTesting(null);
+                @unlink($path);
+            }
+        });
+    }
+
+    /**
+     * SV-L66/066: the seam default is the live GD answer — with GD present
+     * (every normal host) an explicit supported graphics mode still builds,
+     * so the gate itself did not move, only its POSITION in open().
+     */
+    public function testTheGraphicsGateDefaultsToTheLiveGdAnswer(): void
+    {
+        $expected = function_exists('imagecreatetruecolor');
+        $this->assertSame($expected, \SugarCraft\Video\Render\RendererFactory::graphicsRenderable());
+    }
 }

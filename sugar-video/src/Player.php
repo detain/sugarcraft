@@ -247,6 +247,14 @@ final class Player implements Model
      *                            redirects so a 302 cannot ride out of the allowlist
      *                            (SSRF transport law, see
      *                            {@see FfmpegCommandBuilder::ALLOWED_MAX_REDIRECTS}).
+     *
+     * @throws \InvalidArgumentException for a non-positive $fpsOverride.
+     * @throws \RuntimeException for an EXPLICIT mode the seat cannot honestly
+     *         render (no ext-gd for a graphics rung, or a protocol the
+     *         terminal never claimed). SV-L66/066: this gate runs BEFORE any
+     *         child is spawned, so a refused open leaks nothing; an AUTO
+     *         (or chooser-resolved) mode never throws — the ladder steps
+     *         down to the next rung that constructs.
      */
     public static function open(string $videoPath, int $cellsW, int $cellsH, ?float $fpsOverride = null, ?Mode $mode = null, bool $loop = false, string $ramp = 'standard', int $cellPxW = 10, int $cellPxH = 20, ?WebVtt $subtitles = null, array $headers = [], ?float $frameBudgetMs = null, ?\Closure $autoModeChooser = null, bool $hostRestricted = false): self
     {
@@ -268,7 +276,26 @@ final class Player implements Model
         // downstream consumer (decoder geometry, renderer, mode cycling) trusts
         // a concrete Mode. The chooser is the hermetic test seam; production
         // callers leave it null and get the live probe.
+        $explicitMode = $mode !== null;
         $mode ??= $autoModeChooser !== null ? $autoModeChooser() : RendererFactory::autoMode();
+
+        // SV-L66/066: renderer construction IS the capability gate (ext-gd
+        // for the graphics rungs, terminal support for all) — build it here,
+        // BEFORE any child is spawned, so a refused open leaves zero procs
+        // for __destruct to sweep later (the finding's real fix: the gate
+        // used to run after probe + the decode child already existed).
+        // The split on refusal is deliberate: an EXPLICIT mode is a promise
+        // the caller made, so it stays a loud throw; an AUTO-resolved mode
+        // is a suggestion, so the ladder steps down to the next rung that
+        // can honestly render instead of failing the whole seat.
+        try {
+            $renderer = RendererFactory::new($mode, $ramp, $cellPxW, $cellPxH);
+        } catch (\RuntimeException $refusal) {
+            if ($explicitMode) {
+                throw $refusal;
+            }
+            [$mode, $renderer] = self::degradeAutoMode($mode, $ramp, $cellPxW, $cellPxH, $refusal);
+        }
 
         // SV-M39/039: an explicit fps override is the caller declaring they
         // know the stream. fps is then the ONLY probe product the Player
@@ -308,9 +335,10 @@ final class Player implements Model
         // so audio and the video wall clock share the same t0.
         $audioPlayer = $source->hasAudio ? $audioFactory($videoPath, null, $headers, $hostRestricted) : null;
 
-        // Build and cache the renderer for direct-render modes (Sixel/Kitty/iTerm2/Ansi256).
-        // The renderer is rebuilt on mode change or resize via mutate(['renderer' => ...]).
-        $renderer = RendererFactory::new($mode, $ramp, $cellPxW, $cellPxH);
+        // SV-L66/066: the renderer was already constructed above — the
+        // capability gate runs BEFORE the probe and the decode child, so a
+        // refused open never spawned anything. The renderer is rebuilt on
+        // mode change or resize via mutate(['renderer' => ...]).
 
         // M23: pull one frame at open so the paused start screen shows real
         // content instead of the 'loading...' claim. Nothing auto-plays, which is
@@ -377,6 +405,35 @@ final class Player implements Model
             frameBudgetMs: $frameBudgetMs,
             failure: $posterFailure,
         );
+    }
+
+    /**
+     * SV-L66/066: the auto-ladder step-down when the terminal's best rung
+     * cannot honestly be built (no ext-gd for a graphics seat, or a rung the
+     * renderer door rejects for reasons the capability report missed).
+     * Walks the remaining rungs in descending-preference order — reversed
+     * Mode::cases() puts the graphics protocols above the block rungs and
+     * the block rungs above the palette rungs, matching the ladder's own
+     * taste — and takes the first rung {@see RendererFactory::new()}
+     * accepts. If EVERY rung refuses, the original refusal is rethrown:
+     * degrading must not swallow the report of why the seat is broken.
+     *
+     * @return array{0: Mode, 1: FrameRenderer}
+     */
+    private static function degradeAutoMode(Mode $refused, string $ramp, int $cellPxW, int $cellPxH, \RuntimeException $refusal): array
+    {
+        foreach (array_reverse(Mode::cases()) as $rung) {
+            if ($rung === $refused) {
+                continue;
+            }
+            try {
+                return [$rung, RendererFactory::new($rung, $ramp, $cellPxW, $cellPxH)];
+            } catch (\RuntimeException) {
+                // This rung is unusable too — step down.
+            }
+        }
+
+        throw $refusal;
     }
 
     /**

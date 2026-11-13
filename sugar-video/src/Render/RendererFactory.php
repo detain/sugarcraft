@@ -44,6 +44,9 @@ final class RendererFactory
      */
     private static ?ProbeReport $reportMemo = null;
 
+    /** SV-L66/066: scripted ext-gd presence (null = live check). */
+    private static ?\Closure $graphicsGate = null;
+
     /**
      * The terminal's capability report — probed once, memoized thereafter.
      */
@@ -61,6 +64,30 @@ final class RendererFactory
     public static function setDiagnoseForTesting(?ProbeReport $report): void
     {
         self::$reportMemo = $report;
+    }
+
+    /**
+     * SV-L66/066: seam for the graphics rung's ext-gd requirement
+     * (null = the live function_exists check). {@see new()} consults it
+     * through {@see graphicsRenderable()}, so a pin can script a gd-less
+     * PHP build — the honest test target is the caller's DEGRADE/THROW
+     * split, which is otherwise unreachable on every real host.
+     */
+    public static function setGraphicsGateForTesting(?\Closure $gate): void
+    {
+        self::$graphicsGate = $gate;
+    }
+
+    /**
+     * Whether this PHP build can encode graphics-rung payloads (GD-backed).
+     */
+    public static function graphicsRenderable(): bool
+    {
+        if (self::$graphicsGate !== null) {
+            return (bool) (self::$graphicsGate)();
+        }
+
+        return function_exists('imagecreatetruecolor');
     }
 
     /**
@@ -214,7 +241,11 @@ final class RendererFactory
     {
         // Graphics rungs delegate to ext-gd encode paths upstream; refuse with a
         // typed error here instead of fataling on an undefined GD function.
-        if ($mode->isGraphics() && !function_exists('imagecreatetruecolor')) {
+        // SV-L66/066: the answer rides a seam (default = the live function
+        // check) so a test can script the gd-less seat without uninstalling
+        // an extension — the point being proven is the PLAYER's response to
+        // this refusal, not GD's absence itself.
+        if ($mode->isGraphics() && !self::graphicsRenderable()) {
             throw new \RuntimeException(Lang::t('decoder.gd_missing'));
         }
 
