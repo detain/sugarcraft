@@ -16,6 +16,7 @@ return [
     'style.maxwidth_nonneg' => 'maxWidth >= 0 olmalıdır',
     'style.maxheight_nonneg' => 'maxHeight >= 0 olmalıdır',
     'style.tabwidth_nonneg' => 'tabWidth >= 0 olmalıdır',
+    'style.spacing_nonneg' => 'spacing >= 0 olmalıdır',
     'style.hyperlink_id_delimiter' => 'bağlantı kimliği ";" veya ":" içermemelidir (OSC 8 parametre ayırıcıları)',
     'style.markup_depth' => 'içiçe markup {levels} seviyeyi aşıyor',
     'style.label_nonneg'    => '{label} değerleri >= 0 olmalıdır',

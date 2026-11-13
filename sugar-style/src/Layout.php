@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Style;
 
+use SugarCraft\Core\I18n\Lang;
 use SugarCraft\Core\Util\Width as WidthUtil;
 
 /**
@@ -79,6 +80,20 @@ final class Layout
     }
 
     /**
+     * Shared fail-fast for the spacing legs of both join methods
+     * (finding 004): previously a negative gap raised a raw ValueError
+     * from str_repeat() horizontally but silently meant "no gap"
+     * vertically — the divergence itself was the defect. House pattern
+     * is Style::tabWidth: reject programmer error loudly at the door.
+     */
+    private static function checkSpacing(?int $spacing): void
+    {
+        if ($spacing !== null && $spacing < 0) {
+            throw new \InvalidArgumentException(Lang::t('style.spacing_nonneg'));
+        }
+    }
+
+    /**
      * Stitch blocks side by side with explicit spacing.
      *
      * @param float  $pos     Vertical anchor (0.0-1.0)
@@ -87,6 +102,7 @@ final class Layout
      */
     public static function joinHorizontalWithSpacing(float $pos, ?int $spacing, string ...$blocks): string
     {
+        self::checkSpacing($spacing);
         if ($blocks === []) {
             return '';
         }
@@ -163,6 +179,7 @@ final class Layout
      */
     public static function joinVerticalWithSpacing(float $pos, ?int $spacing, string ...$blocks): string
     {
+        self::checkSpacing($spacing);
         if ($blocks === []) {
             return '';
         }

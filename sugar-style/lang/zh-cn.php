@@ -16,6 +16,7 @@ return [
     'style.maxwidth_nonneg' => 'maxWidth 必须 >= 0',
     'style.maxheight_nonneg' => 'maxHeight 必须 >= 0',
     'style.tabwidth_nonneg' => 'tabWidth 必须 >= 0',
+    'style.spacing_nonneg' => 'spacing 必须 >= 0',
     'style.hyperlink_id_delimiter' => 'hyperlink id 不得包含 ";" 或 ":" (OSC 8 参数分隔符)',
     'style.markup_depth' => 'markup 嵌套超过 {levels} 层',
     'style.label_nonneg'    => '{label} 值必须 >= 0',

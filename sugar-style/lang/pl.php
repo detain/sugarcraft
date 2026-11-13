@@ -16,6 +16,7 @@ return [
     'style.maxwidth_nonneg' => 'maxWidth musi być >= 0',
     'style.maxheight_nonneg' => 'maxHeight musi być >= 0',
     'style.tabwidth_nonneg' => 'tabWidth musi być >= 0',
+    'style.spacing_nonneg' => 'spacing musi być >= 0',
     'style.hyperlink_id_delimiter' => 'id hiperłącza nie może zawierać ";" ani ":" (separatory parametrów OSC 8)',
     'style.markup_depth' => 'zagnieżdżenie markupu przekracza {levels} poziomów',
     'style.label_nonneg'    => 'wartości {label} muszą być >= 0',

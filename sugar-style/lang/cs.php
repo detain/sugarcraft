@@ -16,6 +16,7 @@ return [
     'style.maxwidth_nonneg' => 'maxWidth musí být >= 0',
     'style.maxheight_nonneg' => 'maxHeight musí být >= 0',
     'style.tabwidth_nonneg' => 'tabWidth musí být >= 0',
+    'style.spacing_nonneg' => 'spacing musí být >= 0',
     'style.hyperlink_id_delimiter' => 'ID odkazu nesmí obsahovat ";" ani ":" (oddělovače parametrů OSC 8)',
     'style.markup_depth' => 'úrovření zanoření markupu přesahuje {levels} úrovní',
     'style.label_nonneg'    => '{label} hodnoty musí být >= 0',

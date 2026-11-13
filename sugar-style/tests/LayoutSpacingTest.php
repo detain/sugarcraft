@@ -112,4 +112,37 @@ final class LayoutSpacingTest extends TestCase
         // Then join with spacing 1: AAA X -> "AAA X", BBB  -> "BBB  "
         $this->assertSame("AAA X\nBBB  ", $result);
     }
+
+    public function testNegativeHorizontalSpacingThrowsInvalidArgument(): void
+    {
+        // finding 004: was a raw ValueError from str_repeat(-1); now the
+        // uniform house fail-fast (Style::tabWidth shape).
+        try {
+            Layout::joinHorizontalWithSpacing(0.0, -1, 'a', 'b');
+            $this->fail('expected InvalidArgumentException for negative spacing');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertSame(\SugarCraft\Core\I18n\Lang::t('style.spacing_nonneg'), $e->getMessage());
+        }
+    }
+
+    public function testNegativeVerticalSpacingThrowsLikeHorizontal(): void
+    {
+        // The vertical leg used to silently mean "no gap" — same throw now.
+        $this->expectException(\InvalidArgumentException::class);
+        Layout::joinVerticalWithSpacing(0.0, -1, 'a', 'b');
+    }
+
+    public function testNegativeSpacingRejectedEvenWithNoBlocks(): void
+    {
+        // Programmer error is rejected before the empty-input shortcut.
+        $this->expectException(\InvalidArgumentException::class);
+        Layout::joinHorizontalWithSpacing(0.0, -1);
+    }
+
+    public function testZeroAndNullSpacingRemainValid(): void
+    {
+        $this->assertSame("ab", Layout::joinHorizontalWithSpacing(0.0, 0, 'a', 'b'));
+        $this->assertSame("ab", Layout::joinHorizontalWithSpacing(0.0, null, 'a', 'b'));
+        $this->assertSame("a\nb", Layout::joinVerticalWithSpacing(0.0, 0, 'a', 'b'));
+    }
 }
