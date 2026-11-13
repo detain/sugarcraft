@@ -93,4 +93,20 @@ final class ToastHistoryLogTest extends TestCase
 
         $this->assertSame($bg, $t->View($bg));
     }
+
+    public function testNewFactorySeedsThroughTheFailFastDoor(): void
+    {
+        // CONV-03: siblings all ship ::new(); HistoryLog had only the bare
+        // ctor. The factory delegates, so the ingress law is identical —
+        // an empty seed, a valid list, and a garbage payload each behave
+        // exactly as `new self(...)` would.
+        $this->assertSame([], HistoryLog::new()->all());
+        $alert = new Alert(ToastType::Info, 'seeded');
+        $log = HistoryLog::new([$alert]);
+        $this->assertSame([$alert], $log->all());
+        $this->assertSame(1, $log->count());
+
+        $this->expectException(\InvalidArgumentException::class);
+        HistoryLog::new(['not-an-alert']);
+    }
 }

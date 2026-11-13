@@ -219,4 +219,61 @@ final class AlertTest extends TestCase
         $this->assertSame([], $original->actions);
         $this->assertNull($original->expiresAt);
     }
+
+    // ─── TST-CONV: single reconstruction site + explicit-null override ───
+
+    public function testAlertPhpCarriesOnePositionalTranscriptionSite(): void
+    {
+        // House law (root AGENTS.md "Immutable + fluent"): every with*()
+        // rebuilds via the private mutate(). The whole file may spell
+        // `new self(` exactly twice — the base construction inside the
+        // ::new() factory and the named-argument rebuild inside mutate().
+        // A third spelling means a positional chain crept back in, and a
+        // transposed ?float/?Color pair there would compile silently.
+        $src = (string) \file_get_contents(\dirname(__DIR__) . '/src/Alert.php');
+        $this->assertSame(
+            2,
+            \substr_count($src, 'new self('),
+            'Alert.php must route reconstruction through mutate()'
+        );
+    }
+
+    public function testExplicitNullOverrideClearsTheFieldNotFallsThrough(): void
+    {
+        // mutate() tests key PRESENCE, not nullness: with* setters must be
+        // able to SET null (clear the colour / cancel the expiry). A
+        // `?? $this->field` shortcut would read "no override" here and
+        // leave the old value riding along.
+        $alert = Alert::new(ToastType::Warning, 'x')
+            ->withForegroundColor(\SugarCraft\Core\Util\Color::hex('#0f0'))
+            ->withExpiry(60.0);
+        $this->assertNotNull($alert->foregroundColor);
+        $this->assertNotNull($alert->expiresAt);
+
+        $cleared = $alert->withForegroundColor(null)->withCancelledExpiry();
+        $this->assertNull($cleared->foregroundColor, 'explicit null override must clear the colour');
+        $this->assertNull($cleared->expiresAt, 'cancelling expiry must write null through the override');
+        $this->assertTrue($cleared->persistent);
+    }
+
+    public function testFactoryFillsEveryFieldExactlyLikeTheConstructor(): void
+    {
+        // ::new() now seeds type/message directly and rides mutate() for the
+        // rest — a dropped or misnamed override key would silently default
+        // the field to null while the ctor spelled it positionally.
+        $actions = [new Action('Go', static function (): void {})];
+        $bg = \SugarCraft\Core\Util\Color::hex('#111');
+        $fg = \SugarCraft\Core\Util\Color::hex('#222');
+        $border = \SugarCraft\Core\Util\Color::hex('#333');
+        $args = [
+            ToastType::Success, 'built', 123.5, 0.5, $actions, $bg, $fg, $border, true, 'id-1',
+        ];
+
+        $viaCtor = new Alert(...$args);
+        $viaFactory = Alert::new(...$args);
+
+        foreach (['type', 'message', 'expiresAt', 'progress', 'actions', 'backgroundColor', 'foregroundColor', 'borderColor', 'persistent', 'id'] as $field) {
+            $this->assertSame($viaCtor->{$field}, $viaFactory->{$field}, "Alert::new() lost the {$field} override");
+        }
+    }
 }

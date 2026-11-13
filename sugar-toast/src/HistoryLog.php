@@ -36,6 +36,20 @@ final class HistoryLog implements \Countable
     }
 
     /**
+     * Factory mirroring Toast::new() / Alert::new() / Action::new() — the
+     * house `::new()` law; every sibling exposes it and the bare
+     * constructor previously stood alone. Delegates to the fail-fast ctor,
+     * so a non-list or garbage payload throws here exactly as it would at
+     * `new self(...)`.
+     *
+     * @param list<Alert> $entries
+     */
+    public static function new(array $entries = []): self
+    {
+        return new self($entries);
+    }
+
+    /**
      * Append an alert, returning a new log instance.
      *
      * When $limit is set and the log would exceed it, the OLDEST entries are

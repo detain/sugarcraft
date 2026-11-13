@@ -62,7 +62,9 @@ final class Alert
     /**
      * Factory mirroring Action::new() / Toast::new() — Alert once had only
      * the bare ctor while its siblings led with ::new().
-     * Arguments and defaults mirror the constructor exactly.
+     * Arguments and defaults mirror the constructor exactly; the remaining
+     * fields ride through mutate() so the full positional transcription
+     * lives in exactly one place (the mutate() call itself).
      */
     public static function new(
         ToastType $type,
@@ -76,7 +78,50 @@ final class Alert
         bool $persistent = false,
         ?string $id = null,
     ): self {
-        return new self($type, $message, $expiresAt, $progress, $actions, $backgroundColor, $foregroundColor, $borderColor, $persistent, $id);
+        return (new self($type, $message))->mutate([
+            'expiresAt' => $expiresAt,
+            'progress' => $progress,
+            'actions' => $actions,
+            'backgroundColor' => $backgroundColor,
+            'foregroundColor' => $foregroundColor,
+            'borderColor' => $borderColor,
+            'persistent' => $persistent,
+            'id' => $id,
+        ]);
+    }
+
+    /**
+     * Re-build the value object with the named fields overridden; every
+     * other field rides through unchanged.
+     *
+     * One transcription site for the constructor signature (root AGENTS.md
+     * "Immutable + fluent: every with*() returns a new instance via private
+     * mutate()"): an 11th ctor param becomes a one-line edit instead of a
+     * hunt through nine hand-transcribed positional constructor chains where
+     * a transposed ?float/?Color pair would compile silently. Explicit
+     * nulls are SETTINGS, not absences, so keys are tested with
+     * array_key_exists — 'expiresAt' => null must reach the field instead of
+     * falling back to the current value.
+     *
+     * @param array<string, mixed> $overrides field name => new value
+     */
+    private function mutate(array $overrides): self
+    {
+        $pick = static fn (string $field, mixed $current): mixed
+            => \array_key_exists($field, $overrides) ? $overrides[$field] : $current;
+
+        return new self(
+            type: $pick('type', $this->type),
+            message: $pick('message', $this->message),
+            expiresAt: $pick('expiresAt', $this->expiresAt),
+            progress: $pick('progress', $this->progress),
+            actions: $pick('actions', $this->actions),
+            backgroundColor: $pick('backgroundColor', $this->backgroundColor),
+            foregroundColor: $pick('foregroundColor', $this->foregroundColor),
+            borderColor: $pick('borderColor', $this->borderColor),
+            persistent: $pick('persistent', $this->persistent),
+            id: $pick('id', $this->id),
+        );
     }
 
     /**
@@ -105,7 +150,7 @@ final class Alert
 
     public function withCancelledExpiry(): self
     {
-        return new self($this->type, $this->message, null, $this->progress, $this->actions, $this->backgroundColor, $this->foregroundColor, $this->borderColor, true, $this->id);
+        return $this->mutate(['expiresAt' => null, 'persistent' => true]);
     }
 
     /**
@@ -116,23 +161,15 @@ final class Alert
      */
     public function withExtendedExpiry(float $additionalSeconds): self
     {
-        return new self(
-            $this->type,
-            $this->message,
-            \microtime(true) + $additionalSeconds,
-            $this->progress,
-            $this->actions,
-            $this->backgroundColor,
-            $this->foregroundColor,
-            $this->borderColor,
-            false,
-            $this->id,
-        );
+        return $this->mutate([
+            'expiresAt' => \microtime(true) + $additionalSeconds,
+            'persistent' => false,
+        ]);
     }
 
     public function withExpiry(float $duration): self
     {
-        return new self($this->type, $this->message, \microtime(true) + $duration, $this->progress, $this->actions, $this->backgroundColor, $this->foregroundColor, $this->borderColor, false, $this->id);
+        return $this->mutate(['expiresAt' => \microtime(true) + $duration, 'persistent' => false]);
     }
 
     /**
@@ -149,7 +186,7 @@ final class Alert
             );
         }
         $clamped = \max(0.0, \min(1.0, $progress));
-        return new self($this->type, $this->message, $this->expiresAt, $clamped, $this->actions, $this->backgroundColor, $this->foregroundColor, $this->borderColor, $this->persistent, $this->id);
+        return $this->mutate(['progress' => $clamped]);
     }
 
     /**
@@ -159,7 +196,7 @@ final class Alert
      */
     public function withActions(array $actions): self
     {
-        return new self($this->type, $this->message, $this->expiresAt, $this->progress, $actions, $this->backgroundColor, $this->foregroundColor, $this->borderColor, $this->persistent, $this->id);
+        return $this->mutate(['actions' => $actions]);
     }
 
     /**
@@ -170,7 +207,7 @@ final class Alert
      */
     public function withBackgroundColor(?Color $color): self
     {
-        return new self($this->type, $this->message, $this->expiresAt, $this->progress, $this->actions, $color, $this->foregroundColor, $this->borderColor, $this->persistent, $this->id);
+        return $this->mutate(['backgroundColor' => $color]);
     }
 
     /**
@@ -178,7 +215,7 @@ final class Alert
      */
     public function withForegroundColor(?Color $color): self
     {
-        return new self($this->type, $this->message, $this->expiresAt, $this->progress, $this->actions, $this->backgroundColor, $color, $this->borderColor, $this->persistent, $this->id);
+        return $this->mutate(['foregroundColor' => $color]);
     }
 
     /**
@@ -186,6 +223,6 @@ final class Alert
      */
     public function withBorderColor(?Color $color): self
     {
-        return new self($this->type, $this->message, $this->expiresAt, $this->progress, $this->actions, $this->backgroundColor, $this->foregroundColor, $color, $this->persistent, $this->id);
+        return $this->mutate(['borderColor' => $color]);
     }
 }

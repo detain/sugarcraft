@@ -454,7 +454,7 @@ that had expired but not yet been pruned; a `DropOldest` eviction files the
 evictee; `DropNewest` refusals (never displayed) and `clear()` (a bulk reset,
 not a dismissal) file nothing.
 
-`HistoryLog` is immutable and implements `\Countable`; its constructor accepts only a `list<Alert>` (garbage payloads and string-keyed arrays throw) — `dismiss()` returns a new `Toast` with an
+`HistoryLog` is immutable and implements `\Countable`; `HistoryLog::new()` and the constructor accept only a `list<Alert>` (garbage payloads and string-keyed arrays throw) — `dismiss()` returns a new `Toast` with an
 updated log; prior instances are unchanged. The log is capped at 100 entries
 by default, oldest-first eviction; `withHistoryLimit(?int)` adjusts it
 (`null` = unbounded). A newly LOWERED limit caps FUTURE pushes — entries
@@ -525,6 +525,7 @@ already over the new cap survive until the next push evicts them.
 | `Action` | `new(string $label, \Closure(): void $callback)` | Factory |
 | `Action` | `->label: non-empty-string` | Button label (readonly; normalised at construction — inline SGR kept, other control/escape constructs stripped, printable-empty refused) |
 | `Action` | `->callback: \Closure(): void` | Callback (readonly) |
+| `HistoryLog` | `new(array $entries = []): self` | Factory mirroring the sibling `::new()`s; seeds a log from a `list<Alert>` (garbage throws, same fail-fast door) |
 | `HistoryLog` | `push(Alert, ?int $limit = null): self` | Append alert, evicting oldest past `$limit`; new log |
 | `HistoryLog` | `all(): list<Alert>` | Return all entries |
 | `HistoryLog` | `count(): int` | Entry count |

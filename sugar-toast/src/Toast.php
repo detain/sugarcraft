@@ -117,7 +117,7 @@ final class Toast
     public function __construct(int $maxWidth = 50)
     {
         $this->maxWidth = $maxWidth;
-        $this->historyLog = new HistoryLog();
+        $this->historyLog = HistoryLog::new();
     }
 
     public static function new(int $maxWidth = 50): self
