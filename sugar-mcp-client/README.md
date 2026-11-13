@@ -220,8 +220,9 @@ checkout the launch stood in.
   `/proc` exists the probe reads `/proc/<pid>/stat` and treats a zombie, or a
   pid whose start time no longer matches the server's (a reused pid), as dead.
   Without `/proc` (macOS, BSD) a forked caller falls back to signal 0 and to
-  pipe EOF. The ~1s shape holds where each poll slice is capped at one second:
-  an unbounded call, or a bounded call carrying an `onWait:` beat (inbound
+  pipe EOF. The one-second probe cadence therefore applies wherever the
+  wait is slice-bounded: an unbounded call, or a bounded call carrying an
+  `onWait:` beat (inbound
   stderr wakes the poll for a rate-limited probe either way). A bounded call
   with no beat may instead sleep in a single slice across its remaining
   budget — there, a silent helper holding the pipes means the call ends at
@@ -302,10 +303,10 @@ consumed by every `@return`):
   - a `tools/list` page that is not shaped like a tool list — a non-array
     `tools`, or a definition malformed enough that the name cannot be
     trusted — SKIPS and COUNTS rather than axing the boot: the poisoned
-    shapes never enter the roster, the server's well-formed definitions do,
-    and `malformedToolDefinitionsReport()` announces the count and first
-    names for whoever launches the server to surface (a legitimately EMPTY
-    `tools: []` stays legal). Server-level failures — an error reply, no
+    shapes never enter the roster; the server's well-formed definitions
+    still do. `malformedToolDefinitionsReport()` announces the count and
+    first names, so whoever launches the server can surface them. A
+    legitimately empty `tools: []` stays legal. Server-level failures — an error reply, no
     reply, lying pagination — still throw by name and cause.
 - `callTool()` **answers, never throws**: a failed call comes back as
   `['error' => ...]` naming its CAUSE — the server's own JSON-RPC code and
@@ -345,7 +346,7 @@ of already-built servers and takes deny patterns as config — either a plain
 list of glob patterns (every entry denies) or a `pattern => action` map; an
 action other than the exact string `"deny"` is ignored, and a malformed
 spec (a non-string list entry, or a map value that is neither an action
-string nor a spec array carrying one) throws at construction:
+string nor an array of the form `['action' => <action string>]`) throws at construction:
 
 ```php
 use SugarCraft\McpClient\{McpRouter, StdioMcpServer};
@@ -398,9 +399,9 @@ policy to write, not a behaviour to inherit.
   2.0.0 major); its file is opened at mode `0600`, verified before any
   payload lands, and a filesystem that refuses the mode fails the open
   loudly.
-- `callTool()`/`callTool(name:, arguments:)`: the concrete parameter names
-  match the `McpServer` interface, so named-argument calls written against
-  the contract bind here. The three trailing opt-ins (`onWait:`,
+- Concrete `callTool()` parameter names (`name:`, `arguments:`) match the
+  `McpServer` interface, so named-argument calls written against the
+  contract bind here. The three trailing opt-ins (`onWait:`,
   `timeoutSeconds:`, `onServerMessage:`) exist on `StdioMcpServer` only —
   code typed against the interface cannot pass them.
 - What you can READ when a call fails: most of the failure evidence
