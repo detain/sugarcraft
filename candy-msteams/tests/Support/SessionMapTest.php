@@ -43,6 +43,69 @@ final class SessionMapTest extends TestCase
         return new SessionMap($this->path);
     }
 
+    /** msteams-22: a fresh ledger is stamped with the schema it carries. */
+    public function testAFreshLedgerCarriesTheSchemaVersionStamp(): void
+    {
+        $map = $this->map();
+
+        $db = new \PDO('sqlite:' . $this->path);
+        self::assertSame(SessionMap::SCHEMA_VERSION, (int) $db->query('PRAGMA user_version')->fetchColumn());
+    }
+
+    /** msteams-22: an unversioned legacy file migrates in place — rows ride. */
+    public function testALegacyUnversionedLedgerIsMigratedWithoutLoss(): void
+    {
+        $map = $this->map();
+        $map->bind('msteams:default:dm:peer-v', 'sess-legacy');
+
+        // Pretend the file predates the stamp.
+        $db = new \PDO('sqlite:' . $this->path);
+        $db->exec('PRAGMA user_version = 0');
+        $db = null;
+
+        $reopened = $this->map();
+        self::assertSame(['msteams:default:dm:peer-v'], $reopened->bindingsOfSession('sess-legacy'), 'the legacy binding must survive the stamp');
+        $db = new \PDO('sqlite:' . $this->path);
+        self::assertSame(SessionMap::SCHEMA_VERSION, (int) $db->query('PRAGMA user_version')->fetchColumn());
+    }
+
+    /** msteams-22: a ledger written by a NEWER bundle is refused, never half-believed. */
+    public function testALedgerFromTheFutureIsRefused(): void
+    {
+        $this->map();
+        $db = new \PDO('sqlite:' . $this->path);
+        $db->exec('PRAGMA user_version = 99');
+        $db = null;
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('refusing to open it');
+        $this->map();
+    }
+
+    /**
+     * msteams-22: the sweep deletes bindings and reply addresses idle past
+     * the horizon and keeps the ones touched since — a live conversation
+     * always refreshes updated_at, so age is real disuse.
+     */
+    public function testPruneBindingsSweepsIdleRowsAndKeepsLiveOnes(): void
+    {
+        $map = $this->map();
+        $map->bind('msteams:default:dm:old-peer', 'sess-old');
+        $map->rememberConversation('sess-old', 'msteams:default:dm:old-peer', ['conversationId' => '19:old@thread.v2', 'serviceUrl' => 'https://s.test']);
+
+        \usleep(1_100_000);
+
+        $map->bind('msteams:default:dm:fresh-peer', 'sess-fresh');
+        $map->rememberConversation('sess-fresh', 'msteams:default:dm:fresh-peer', ['conversationId' => '19:fresh@thread.v2', 'serviceUrl' => 'https://s.test']);
+
+        $map->pruneBindings(0); // cutoff = now: the >1 s-old rows are strictly older
+
+        self::assertSame([], $map->bindingsOfSession('sess-old'), 'an idle binding must be swept');
+        self::assertSame(['msteams:default:dm:fresh-peer'], $map->bindingsOfSession('sess-fresh'), 'a live binding must ride');
+        self::assertNull($map->lastConversation('sess-old'), 'the idle reply address must be swept');
+        self::assertNotNull($map->lastConversation('sess-fresh'), 'the live reply address must ride');
+    }
+
     /**
      * The M-7 keystone: re-binding a key onto a fresh session resets
      * its cursor, so the fresh session's low seqs stay deliverable.

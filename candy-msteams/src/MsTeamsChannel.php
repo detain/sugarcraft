@@ -279,6 +279,10 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
     {
         try {
             $this->map?->pruneSeen(7);
+            // msteams-22: same cadence sweeps dead bindings/reply-addresses —
+            // a live conversation always touches updated_at, so 180 d idle is
+            // a conversation that will never speak again.
+            $this->map?->pruneBindings();
         } catch (\Throwable $e) {
             $this->log?->warn('channels.msteams.prune_tick_failed', ['error' => $e->getMessage()]);
         }

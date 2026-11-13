@@ -29,6 +29,12 @@ namespace CandyCode\Bundles\MsTeams\Support;
  */
 final class SessionMap
 {
+    /** msteams-22: the schema this code writes (see the user_version door). */
+    public const SCHEMA_VERSION = 1;
+
+    /** msteams-22: idle bindings/reply-addresses older than this are pruned. */
+    public const BINDING_KEEP_DAYS = 180;
+
     private \PDO $db;
 
     public function __construct(
@@ -53,6 +59,20 @@ final class SessionMap
             $db->exec('PRAGMA journal_mode = WAL');
             $db->exec('PRAGMA busy_timeout = 5000');
             $db->exec('PRAGMA synchronous = NORMAL');
+            // msteams-22: version the ledger (the CredentialStore door doctrine
+            // — a shape you do not understand is refused, never half-believed).
+            // 0 is the pre-version legacy file; anything above the current
+            // schema means a newer bundle already wrote here.
+            $version = (int) $db->query('PRAGMA user_version')->fetchColumn();
+            if ($version > self::SCHEMA_VERSION) {
+                throw new \RuntimeException(
+                    "session ledger {$path} carries schema v{$version}; this bundle understands at most v"
+                    . self::SCHEMA_VERSION . ' — refusing to open it',
+                );
+            }
+            // v0 -> v1 migration is the schema settle itself: every statement
+            // below is IF NOT EXISTS over the legacy shape, so stamping is all
+            // a legacy file needs.
             $db->exec(<<<'SQL'
                 CREATE TABLE IF NOT EXISTS bindings (
                     key        TEXT PRIMARY KEY,
@@ -89,6 +109,7 @@ final class SessionMap
                     PRIMARY KEY (platform, inbound_id)
                 )
                 SQL);
+            $db->exec('PRAGMA user_version = ' . self::SCHEMA_VERSION);
         } finally {
             \umask($priorUmask);
         }
@@ -287,6 +308,21 @@ final class SessionMap
     {
         $stmt = $this->db->prepare('DELETE FROM seen_inbound WHERE seen_at < :cutoff');
         $stmt->execute(['cutoff' => \time() - $days * 86_400]);
+    }
+
+    /**
+     * msteams-22: sweep dead bindings and their reply addresses. Every live
+     * conversation touches `updated_at` (cursor advance, rememberConversation),
+     * so rows idle past $days are conversations that will never speak again —
+     * their seats leak forever without this. The cadence rides the prune tick
+     * in the channel root; the horizon is a constant for now (a settings key
+     * is the follow-up row, reported).
+     */
+    public function pruneBindings(int $days = self::BINDING_KEEP_DAYS): void
+    {
+        $cutoff = \time() - $days * 86_400;
+        $this->db->prepare('DELETE FROM bindings WHERE updated_at < :cutoff')->execute(['cutoff' => $cutoff]);
+        $this->db->prepare('DELETE FROM last_conversation WHERE updated_at < :cutoff')->execute(['cutoff' => $cutoff]);
     }
 
     /** @return list<string> */
