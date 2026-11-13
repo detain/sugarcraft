@@ -24,9 +24,9 @@ sugar-log — a minimal, colorful leveled logging library for PHP 8.3+.
 - **Per-field styling** — the `Styles` instance property `values` maps individual field names to their styles; `keys` styles the generic key and value roles
 - **Threshold-friendly levels** — integer values (-4/0/4/8/12, charmbracelet/log-aligned deltas — not RFC 5424 severities) for easy threshold filtering
 - **stdlog adapter** — `StandardLogAdapter` offers a Go-style call pattern (`print`/`printLn`/`fatal`/`panic`) over a sugar-log logger — a shape, not an interface: it implements no external contract (see [Stdlog adapter](#stdlog-adapter))
-- **PSR-3 bridge** — `PsrBridge` implements `Psr\Log\LoggerInterface`; the eight severity methods never throw (a failed write lands as an internal notice, not an exception), while `log()` rejects unknown level strings with `InvalidArgumentException` as PSR-3 itself prescribes
+- **PSR-3 bridge** — `PsrBridge` implements `Psr\Log\LoggerInterface`; the eight severity methods never throw (a failed write lands as an internal notice, not an exception), while `log()` rejects unknown level strings by throwing an `InvalidArgumentException`, as PSR-3 itself prescribes
 - **Record integrity** — colliding context keys are namespaced (`ctx_`), logfmt values escape `\` and `"`, control bytes are neutralised (see [Record integrity](#record-integrity))
-- **Error-stream routing** — optional second stream for severe records (threshold defaults to `Error`) without moving everything else off `STDOUT`
+- **Error-stream routing** — optional second stream for severe records (threshold defaults to `Error`) while keeping all other output on `STDOUT`
 - **Hook system** — register callbacks per log level via `HookRegistry::onLevel()` — fired via `PsrBridge` (direct `Logger` calls never dispatch hooks)
 - **Configurable log-part ordering** — `PartsOrder` DTO controls which parts appear and in what sequence
 
@@ -59,9 +59,9 @@ Every `Logger` constructor call also takes `formatter:`/`stream:`/`prefix:` — 
 
 ## Levels
 
-Levels carry charmbracelet/log-aligned integer deltas (Debug -4 through
-Fatal 12 — deliberately *not* RFC 5424 severities) — use `->value` for
-threshold comparisons. A record is emitted when its level value is at or
+Levels carry charmbracelet/log-aligned integer deltas, from Debug at -4
+through Fatal at 12. They are deliberately *not* RFC 5424 severities, so use
+`->value` for threshold comparisons. A record is emitted when its level value is at or
 above the logger's `minLevel` (default `Info`, hence the `Debug` opt-in
 above). The two methods that bypass the filter are `print()` and its
 formatted sibling `printf()`. A PSR-3 severity string (from env, config, or
@@ -142,8 +142,8 @@ try {
 $fh = fopen('php://stderr', 'w');
 Log::default()->setOutput($fh); // reach the shared logger itself
 // setOutput is process-lifetime state — the shared logger keeps $fh until it
-// is re-pointed, so closing the handle here would leave every later Log::call
-// writing to a dead resource. Tear down by re-pointing first, then close:
+// is re-pointed, so closing the handle here would leave every later Log::
+// call that writes to a dead resource. Tear down by re-pointing first, then close:
 // Log::default()->setOutput(STDERR);
 // fclose($fh);
 ```
@@ -251,10 +251,13 @@ Override level styles via `Logger::styles()`:
 > snapshot, so mutating `Logger::styles()` changes that logger only. The
 > process-wide `Styles::default()` singleton is opt-in: explicitly installed
 > via `setStyles(Styles::default())`, it couples every rider. To stay private
-> anyway, build a fresh `Styles`,
-> start from `Styles::snapshot()` — a private copy (mutable arrays fresh,
-> `Style` value-objects shared) safe to edit without touching the process
-> default — or hand one to the formatter, and install it with `setStyles()`:
+> anyway, pick one of three sources and install it with `setStyles()`:
+>
+> 1. Build a fresh `Styles`.
+> 2. Start from `Styles::snapshot()` — a private copy (mutable arrays fresh,
+>    `Style` value-objects shared) safe to edit without touching the process
+>    default.
+> 3. Hand a `Styles` to the formatter instead of the logger.
 
 ```php
 use SugarCraft\Core\Util\Color;
@@ -275,7 +278,7 @@ $log->setStyles($styles);
 `message`) and the field-pair roles (`key`, `value`) to individual `Style`
 objects. Part roles ship as do-nothing styles (raw bytes, no SGR); the
 formatter falls back to the matching property (`$timestamp`, `$prefix`,
-`$caller`, `$message`) or the level colour map when a part style is unset:
+`$caller`, `$message`) or the level color map when a part style is unset:
 
 ```php
 use SugarCraft\Core\Util\Color;
@@ -452,7 +455,7 @@ Log::installPanicHandler(PanicFormatter::plain(true, ['/etc/secrets']));
 Log::restoreTerminal();
 ```
 
-The panic handler catches uncaught exceptions and fatal PHP errors (`E_ERROR`, `E_PARSE`, `E_CORE_ERROR`, `E_COMPILE_ERROR`, `E_USER_ERROR`), restores the terminal to a usable state, and prints a banner with the error class, message, and backtrace — styling is decided once at install time from whether STDERR is a color-capable terminal (NO_COLOR suppresses it unless CLICOLOR_FORCE overrides), not re-evaluated per report, so a report captured to a file after a TTY install still carries ANSI unless you pass `PanicFormatter::plain()` explicitly. `$showLocals`/`$redactPaths` configure only the formatter chosen by default: combining an explicit formatter with non-default knobs throws `InvalidArgumentException` rather than silently ignoring the caller's privacy settings. The exception message is treated as untrusted input: terminal-control bytes are swept and newlines flattened, so a message that embeds user data can never forge extra report rows or emit escape sequences into whoever displays it, and `redactPaths` substrings are stripped from it as they are from frames and locals under one policy: exact-substring matching on raw bytes (case-folded on Windows, where path case carries no meaning) before the control sweep, compared against both the configured spelling and its `realpath` when that path resolves, with empty entries ignored. Re-installing replaces the previous sugar-log handler instead of stacking. Internal frames with no file/line render honestly as `?:?`, and the report ends with a neutral footer identifying sugar-log for issue filing. `showLocals` dumps call arguments only for traces that carry them — PHP's engine omits `args` from exception traces, so for plain uncaught exceptions there are no locals to show; the knob is live for manually injected frame arrays.
+The panic handler catches uncaught exceptions and fatal PHP errors (`E_ERROR`, `E_PARSE`, `E_CORE_ERROR`, `E_COMPILE_ERROR`, `E_USER_ERROR`), restores the terminal to a usable state, and prints a banner with the error class, message, and backtrace. Styling is decided once, at install time, from whether STDERR is a color-capable terminal then (NO_COLOR suppresses it unless CLICOLOR_FORCE overrides); it is not re-evaluated per report, so a report captured to a file after a TTY install still carries ANSI unless you pass `PanicFormatter::plain()` explicitly. All four banner roles (`title`, `exception`, `backtrace`, `muted`) are replaceable per instance with `withTitleStyle()`, `withExceptionStyle()`, `withBacktraceStyle()` and `withMutedStyle()`, so the crash report's colors can be retuned without subclassing the formatter. Both factories take two knobs, `$showLocals` and `$redactPaths` — the latter a list of secret substrings (paths, tokens, any literal) replaced with `[redacted]` wherever it can surface — and those knobs configure only the formatter chosen by default: combining an explicit formatter with non-default knobs throws `InvalidArgumentException` rather than silently ignoring the caller's privacy settings. The exception message is treated as untrusted input: terminal-control bytes are swept and newlines flattened, so a message that embeds user data can never forge extra report rows and no escape sequences are emitted into whatever displays the output. `redactPaths` substrings are stripped from the message as they are from frames and locals under one policy: exact-substring matching on raw bytes (case-folded on Windows, where path case carries no meaning) before the control sweep, compared against both the configured spelling and its `realpath` when that path resolves, with empty entries ignored. Re-installing replaces the previous sugar-log handler instead of stacking. Internal frames with no file/line render honestly as `?:?`, and the report ends with a neutral footer identifying sugar-log for issue filing. `showLocals` dumps call arguments only for traces that carry them — PHP's engine omits `args` from exception traces, so for plain uncaught exceptions there are no locals to show; the knob is live for manually injected frame arrays.
 
 ## PSR-3 Bridge
 
@@ -493,7 +496,7 @@ never cancel the walk or eat the log line.
 
 The hook system lets you register callbacks that fire whenever a log entry is emitted at or above a given level. Hooks receive the `Level`, PSR-3 level string, message, and context — useful for reacting to a completed write: forwarding, counters, alerts. They run *after* the record is written and receive copies, so a hook can never modify or suppress the record it observes.
 
-> **Note:** Hooks fire **only via `PsrBridge`** — they do not fire when calling `Logger->info()` etc. directly. For the plain `Logger` API, hooks are not invoked. To use hooks, wrap your `Logger` in a `PsrBridge` and call methods on the bridge. A record the bridge's level filter drops is neither written nor dispatched to hooks.
+> **Note:** Hooks fire **only via `PsrBridge`**: calling `$logger->info()` or any other plain `Logger` method directly never dispatches them. To use hooks, wrap your `Logger` in a `PsrBridge` and call methods on the bridge. A record the bridge's level filter drops is neither written nor dispatched to hooks.
 
 ```php
 use SugarCraft\Log\Logger;
@@ -572,23 +575,26 @@ a logfmt record is fixed-shape).
 
 ## Caller Information
 
-`Logger::setReportCaller(true)` is the normal switch — the logger then tags
-each line automatically. Underneath, `CallerFormatter::find()` walks the call
-stack (skipping at most 20 frames) and returns `"basename:line"` of the first
-frame outside the log package, or `null` when the call site is not found
-within that budget:
-
-```php
-use SugarCraft\Log\CallerFormatter;
-
-$caller = CallerFormatter::find(); // e.g. "my-script.php:42"
-```
+The normal way to enable caller reporting is `Logger::setReportCaller(true)`
+(or the `reportCaller:` constructor argument); the logger then tags every
+line it writes:
 
 ```php
 use SugarCraft\Log\Logger;
 
 $log = Logger::new(reportCaller: true);
 $log->info('who called me'); // line carries a <file:line> tag
+```
+
+The column itself is computed by `CallerFormatter::find()`, which walks the
+call stack (skipping at most 20 frames) and returns `"basename:line"` of the
+first frame outside the log package, or `null` when the call site is not
+found within that budget:
+
+```php
+use SugarCraft\Log\CallerFormatter;
+
+$caller = CallerFormatter::find(); // e.g. "my-script.php:42"
 ```
 
 ## Stdlog adapter
