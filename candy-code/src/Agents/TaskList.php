@@ -340,6 +340,12 @@ final class TaskList
      */
     private function finishAt(string $taskId, TaskStatus $status, string $column, string $text, ?int $expectedRevision): bool
     {
+        // SQLite cannot bind an identifier, so $column is interpolated; a
+        // runtime whitelist keeps a future caller from turning it into SQL.
+        if (!in_array($column, ['result', 'error'], true)) {
+            throw new \InvalidArgumentException(sprintf('Unsupported task column "%s".', $column));
+        }
+
         $revision = $this->revision($taskId);
         if ($revision === null || ($expectedRevision !== null && $revision !== $expectedRevision)) {
             return false;

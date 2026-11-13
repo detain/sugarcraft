@@ -1183,4 +1183,23 @@ final class TaskListTest extends TestCase
         $stmt->close();
         $db->close();
     }
+
+    public function testFinishAtRefusesOffRosterColumnAndAcceptsBoth(): void
+    {
+        $list = new TaskList($this->dbPath);
+        $id = $list->addTask(new Task(id: 'fa-1', teamId: 'tm', title: 't', description: 'd', prompt: 'p', assignedTo: null, status: TaskStatus::Pending, result: null, error: null, createdAt: new \DateTimeImmutable()));
+        $finish = new \ReflectionMethod($list, 'finishAt');
+
+        try {
+            $finish->invoke($list, $id, TaskStatus::Completed, 'status = 1, result', 'x', null);
+            $this->fail('off-roster column must throw');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('Unsupported task column', $e->getMessage());
+        }
+        $this->assertSame(TaskStatus::Pending, $list->task($id)?->status);
+
+        $this->assertTrue($finish->invoke($list, $id, TaskStatus::Completed, 'result', 'ok', null));
+        $id2 = $list->addTask(new Task(id: 'fa-2', teamId: 'tm', title: 't', description: 'd', prompt: 'p', assignedTo: null, status: TaskStatus::Pending, result: null, error: null, createdAt: new \DateTimeImmutable()));
+        $this->assertTrue($finish->invoke($list, $id2, TaskStatus::Failed, 'error', 'bad', null));
+    }
 }
