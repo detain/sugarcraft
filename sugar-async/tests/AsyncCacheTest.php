@@ -96,10 +96,11 @@ final class AsyncCacheTest extends TestCase
 
     public function testStaleEntryRefetchesWhilePeekKeepsServingTheOldValue(): void
     {
-        $cache = AsyncCache::new(ttlSeconds: 0.02);
+        $clock = new FakeClock(1000.0);
+        $cache = AsyncCache::new(ttlSeconds: 0.02, clock: $clock);
         $cache->fetch('k', static fn (): PromiseInterface => resolve('v1'))->then(static fn () => null);
 
-        usleep(30_000); // past the 20ms TTL
+        $clock->advance(0.03); // past the 20ms TTL, no wall time spent
 
         $this->assertFalse($cache->isFresh('k'));
 
@@ -132,10 +133,11 @@ final class AsyncCacheTest extends TestCase
         // E718 ordering law: the stale serve must NOT re-stamp storedAt, or a
         // failing upstream would freeze a "fresh-looking" entry and the poll
         // would stop retrying until the TTL accidentally elapsed.
-        $cache = AsyncCache::new(ttlSeconds: 0.02, serveStaleOnError: true);
+        $clock = new FakeClock(1000.0);
+        $cache = AsyncCache::new(ttlSeconds: 0.02, serveStaleOnError: true, clock: $clock);
         $cache->fetch('k', static fn (): PromiseInterface => resolve('v1'))->then(static fn () => null);
 
-        usleep(30_000);
+        $clock->advance(0.03);
 
         $value = null;
         $cache->fetch('k', static fn (): PromiseInterface => reject(new \RuntimeException('blip')))
