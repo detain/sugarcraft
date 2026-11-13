@@ -1065,7 +1065,23 @@ final class SmtpTransport implements Transport
 
     private function getHeloHost(): string
     {
-        return $this->heloHost !== '' ? $this->heloHost : (\gethostname() ?: 'localhost');
+        return $this->heloHost !== '' ? $this->heloHost : self::heloHostOrLocalhost((string) (\gethostname() ?: ''));
+    }
+
+    /**
+     * Sanitise a machine-derived identity for the EHLO argument.
+     *
+     * The constructor rejects an operator-supplied heloHost outside the RFC
+     * 1123 hostname grammar outright (fail loud at the boundary); a value
+     * sourced from gethostname() is machine-controlled, so a weird hostname
+     * must not brick every send — it falls back to the legal generic
+     * 'localhost' instead. Either way the bytes reaching the wire after
+     * "EHLO " match `^[A-Za-z0-9.\-]{1,253}$`: no CRLF smuggles a second
+     * command into the greeting.
+     */
+    private static function heloHostOrLocalhost(string $candidate): string
+    {
+        return \preg_match('/^[A-Za-z0-9.\-]{1,253}$/', $candidate) === 1 ? $candidate : 'localhost';
     }
 
     /**

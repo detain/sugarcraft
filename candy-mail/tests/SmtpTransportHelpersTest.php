@@ -235,6 +235,51 @@ final class SmtpTransportHelpersTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // heloHostOrLocalhost() / getHeloHost() (CM-28)
+    // -------------------------------------------------------------------------
+
+    public function testHeloFilterPassesLegalHostname(): void
+    {
+        $this->assertSame('mail.example.com', $this->invokePrivate($this->transport, 'heloHostOrLocalhost', ['mail.example.com']));
+    }
+
+    public function testHeloFilterRefusesCrlfSmuggleToFallback(): void
+    {
+        // A machine-controlled identity (gethostname()) that carries wire
+        // bytes must never reach the EHLO argument verbatim.
+        $this->assertSame('localhost', $this->invokePrivate($this->transport, 'heloHostOrLocalhost', ["evil\r\nQUIT forged"]));
+    }
+
+    public function testHeloFilterRefusesIllegalCharactersToFallback(): void
+    {
+        $this->assertSame('localhost', $this->invokePrivate($this->transport, 'heloHostOrLocalhost', ['host_name!']));
+        $this->assertSame('localhost', $this->invokePrivate($this->transport, 'heloHostOrLocalhost', ['ünïcode.example']));
+        $this->assertSame('localhost', $this->invokePrivate($this->transport, 'heloHostOrLocalhost', ['space host.example']));
+    }
+
+    public function testHeloFilterRefusesEmptyAndOverlongToFallback(): void
+    {
+        $this->assertSame('localhost', $this->invokePrivate($this->transport, 'heloHostOrLocalhost', ['']));
+        $this->assertSame('localhost', $this->invokePrivate($this->transport, 'heloHostOrLocalhost', [\str_repeat('a', 254)]));
+        // The 253-octet RFC 1123 ceiling itself stays legal.
+        $this->assertSame(\str_repeat('a', 253), $this->invokePrivate($this->transport, 'heloHostOrLocalhost', [\str_repeat('a', 253)]));
+    }
+
+    public function testGetHeloHostReturnsExplicitHostVerbatimAndFallbackIsGrammarClean(): void
+    {
+        $prop = new \ReflectionProperty($this->transport, 'heloHost');
+        $prop->setAccessible(true);
+        $prop->setValue($this->transport, 'mail.example.com');
+        $this->assertSame('mail.example.com', $this->invokePrivate($this->transport, 'getHeloHost'));
+
+        // With no explicit host the machine identity is used — and whatever
+        // gethostname() answers here, the value that would land after "EHLO "
+        // must satisfy the RFC 1123 grammar (filter or fallback).
+        $prop->setValue($this->transport, '');
+        $this->assertMatchesRegularExpression('/^[A-Za-z0-9.\-]{1,253}$/', $this->invokePrivate($this->transport, 'getHeloHost'));
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 
