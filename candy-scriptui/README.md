@@ -319,9 +319,11 @@ precedence order:
 and answers its UI and hint strings in that language — a handful of
 programmer-facing diagnostics (the `format` unknown-value refusal
 scaffolding, the `find()` did-you-mean suggestions) are English-only by
-design. Sixteen catalogs ship
+design. Seventeen catalogs ship
 with the package; a territory spelling falls back to its base language
 (`de_DE.UTF-8` → `de`) and then to English. `C`/`POSIX` stay English.
+Traditional Chinese is its own catalog (`zh-tw`, Taiwan usage) rather than
+a fallback of `zh-cn` — the naming rulebook lists the pair as divergent.
 
 ## Exit codes
 
