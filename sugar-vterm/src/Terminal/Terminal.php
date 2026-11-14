@@ -38,6 +38,27 @@ use function React\Promise\resolve;
  */
 final class Terminal
 {
+    /**
+     * Intake ceiling for facade-created grids. A terminal's dimensions are
+     * routinely derived from a peer's XTWINOPS/window-size reports — hostile
+     * or runaway input must not turn `new Terminal(100000, 100000)` into a
+     * multi-gigabyte eager grid. 4096 per axis is far past any real display
+     * (the widest hardware mode here is ~4x the largest consumer in the
+     * fleet); the low-level {@see Buffer} keeps its `>= 1` guard untouched
+     * so engine internals are unaffected, and an injected pre-built Buffer
+     * intentionally bypasses the ceiling (the caller already paid for it).
+     */
+    public const MAX_COLS = 4096;
+    public const MAX_ROWS = 4096;
+
+    /**
+     * Intake ceiling for the scrollback ring. {@see Scrollback} eager-fills
+     * its slot array at construction, so the size argument is a direct
+     * memory commitment from caller-supplied input. One million rows bounds
+     * a single ring's slot array well below any consumer's working set.
+     */
+    public const MAX_SCROLLBACK = 1_000_000;
+
     private Parser $parser;
     private ScreenHandler $handler;
     private int $scrollbackSize;
@@ -51,6 +72,12 @@ final class Terminal
         int $scrollbackSize = 1000,
         ?\Closure $onFocusEvent = null,
     ) {
+        if ($cols > self::MAX_COLS || $rows > self::MAX_ROWS) {
+            throw new \InvalidArgumentException('cols and rows must be <= MAX_COLS/MAX_ROWS (' . self::MAX_COLS . '/' . self::MAX_ROWS . ')');
+        }
+        if ($scrollbackSize > self::MAX_SCROLLBACK) {
+            throw new \InvalidArgumentException('scrollbackSize must be <= MAX_SCROLLBACK (' . self::MAX_SCROLLBACK . ')');
+        }
         $this->scrollbackSize = $scrollbackSize;
         $this->handler = new ScreenHandler(
             buffer: $buffer ?? new Buffer($cols, $rows),
@@ -568,6 +595,9 @@ final class Terminal
         if ($cols < 1 || $rows < 1) {
             throw new \InvalidArgumentException('cols and rows must be >= 1');
         }
+        if ($cols > self::MAX_COLS || $rows > self::MAX_ROWS) {
+            throw new \InvalidArgumentException('cols and rows must be <= MAX_COLS/MAX_ROWS (' . self::MAX_COLS . '/' . self::MAX_ROWS . ')');
+        }
         // Resize both screens: the saved alt-state buffer must follow the
         // active one, or leaving DEC 1049 later would restore a stale-size
         // grid into a resized terminal (real terminals resize both).
@@ -680,6 +710,9 @@ final class Terminal
     {
         if ($size < 1) {
             throw new \InvalidArgumentException('scrollbackSize must be >= 1');
+        }
+        if ($size > self::MAX_SCROLLBACK) {
+            throw new \InvalidArgumentException('scrollbackSize must be <= MAX_SCROLLBACK (' . self::MAX_SCROLLBACK . ')');
         }
         $clone = clone $this;
         $clone->scrollbackSize = $size;
