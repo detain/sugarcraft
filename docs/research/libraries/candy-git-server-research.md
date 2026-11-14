@@ -3,7 +3,10 @@
 **Project:** candy-git-server (PHP port of charmbracelet/soft-serve)
 **Upstream:** https://github.com/charmbracelet/soft-serve
 **Research Date:** 2026-05-13
-**Status:** 🟢 v1 ready (public API + tests + docs + demo) per MATCHUPS.md
+**Status:** 🟡 in progress — matching the MATCHUPS.md row. (Dated
+correction 2026-11-15, S43: this line previously claimed "🟢 v1 ready",
+contradicting MATCHUPS' 🟡 and the shipped reality re-derived below.
+The research snapshot's analysis stands; the capability cells did not.)
 
 ---
 
@@ -20,7 +23,7 @@ Candy-serve is a solid foundation port of soft-serve with SSH Git protocol handl
 | Tool | Language | SSH TUI | HTTP Git | Git Daemon | LFS | Access Control | Markdown Rendering | Complexity |
 |------|----------|---------|----------|------------|-----|----------------|-------------------|------------|
 | **soft-serve** | Go | ✅ Full | ✅ | ✅ | ✅ | SSH keys + per-repo | ✅ BubbleTea | Medium |
-| **candy-git-server** | PHP | ❌ **Missing** | ❌ | ❌ | ✅ Basic | ✅ SSH keys | ❌ (SugarMarkdown exists) | Low |
+| **candy-git-server** | PHP | ❌ **Missing** | ✅ `serve --http` (clone, fetch, push + LFS) | ◐ advertisement-only (want/have + pack relay open; pushes refused by design) | ✅ Basic (batch + objects over HTTP) | ✅ SSH keys + persisted accounts (admin/collaborator, Basic, trust modes) | ❌ (SugarMarkdown exists) | Low |
 | **gitea** | Go | ✅ Web UI | ✅ | ❌ | ✅ | Web UI + SSH | ✅ | High |
 | **gitolite** | Perl | ❌ CLI only | ❌ | ❌ | ❌ | SSH-based | ❌ | Medium |
 | **cgit** | C | ❌ Web only | ❌ | ❌ | ❌ | None | ✅ | Low |
@@ -148,7 +151,7 @@ canRead(), canWrite(), canAdmin(), canCreateRepos(), allowAnonymousRead()
 
 ### 3.1 HIGH PRIORITY — Interactive SSH TUI
 
-This is the **core missing feature**. Without it, candy-git-server is just a Git-over-SSH plumbing layer, not a true soft-serve port.
+This is the **core missing feature**. Without it, candy-git-server is a Git transport + access-control library (SSH plumbing plus the shipped smart-HTTP listener), not a true soft-serve port — the browse-in-your-terminal experience is what makes soft-serve unique.
 
 **What soft-serve's TUI does:**
 
@@ -176,38 +179,43 @@ SSH Connection → SSHServer → [TUI Session Manager] → BubbleTea-style TUI
 
 **Implementation effort:** High (several thousand lines)
 
-### 3.2 MEDIUM PRIORITY — HTTP Smart Protocol Server
+### 3.2 MEDIUM PRIORITY — HTTP Smart Protocol Server ✅ LANDED
 
 **What it does:** Enables `git clone https://...` and `git push https://...`
 
-**Current state:** Config exists (`httpListenAddr`), no implementation
+**State (re-derived 2026-11-15, S43):** IMPLEMENTED. `serve --http`
+starts an `HttpListener` feeding `HttpSmartProtocol\Server`: codec-
+framed advertisements on `info/refs`, stateless-rpc POST relay for
+upload-pack and receive-pack (auth-gated writes, body caps, timeout
+and overflow typing), and the LFS batch + object routes. TLS is by
+design NOT terminated here (`http.tls_key_path`/`tls_cert_path` refuse
+at load; terminate at a proxy — see the README Deployment section).
+Note: the config key is `http.listen_addr`, and it is parsed-but-dead —
+`serve --http` binds from its CLI flags (`--http-host`/`--http-port`).
 
-**What needs implementing:**
-
-- HTTP server (ReactPHP or PHP built-in)
-- `/git-upload-pack` and `/git-receive-pack` endpoints
-- Git wire protocol over HTTP
-- LFS batch API endpoint already exists in `LFSHandler`
-
-**Implementation effort:** Medium (1-2 weeks)
-
-### 3.3 MEDIUM PRIORITY — Git Daemon (git://)
+### 3.3 MEDIUM PRIORITY — Git Daemon (git://) ◐ PARTIAL
 
 **What it does:** Enables anonymous `git clone git://...`
 
-**Current state:** Config exists (`gitListenAddr`), no implementation
+**State (re-derived 2026-11-15, S43):** `Git\GitDaemon` is implemented
+at class level (bind from `git.listen_addr`, idle timer, capacity with
+newcomer-refusal, blocking and ReactPHP async modes, SIGTERM/SIGINT/
+SIGHUP all-stop) and serves the **advertisement only**: a real
+`git upload-pack --advertise-refs` child per connection, bytes relayed
+verbatim. Want/have negotiation and pack transfer past the
+advertisement are open work (README Known gaps 1), `git-receive-pack`
+is refused at dispatch by design, and nothing in the shipped CLI
+constructs the class — so `git://` clones still do not complete from
+an out-of-the-box install.
 
-**What needs implementing:**
+### 3.4 LOW PRIORITY — Real Daemon Mode ✗ REFUSED BY DESIGN
 
-- TCP server on port 9418
-- Git daemon protocol (dumb protocol)
-- `git-daemon-export-ok` file support
-
-**Implementation effort:** Medium
-
-### 3.4 LOW PRIORITY — Real Daemon Mode
-
-**Current state:** `bin/candy-git-server serve` prints info but doesn't daemonize
+**Current state (re-derived 2026-11-15, S43):** `bin/candy-git-server
+serve` without `--http` refuses with exit 1, and `--daemon`/`--pid-file`
+are refused on the live path too — the shipped posture is one
+supervised foreground process (`serve --http`), with process management
+delegated to systemd/supervisord (README Deployment). The list below is
+the old snapshot's wish, not open work.
 
 **What needs implementing:**
 
@@ -232,13 +240,13 @@ SSH Connection → SSHServer → [TUI Session Manager] → BubbleTea-style TUI
 | 4 | **Syntax Highlighting** | Medium | High | Integrate SugarMarkdown |
 | 5 | **Commit Log View** | Medium | Medium | Browse commit history |
 
-### Phase 2: Protocol Servers (2-3 weeks)
+### Phase 2: Protocol Servers (2-3 weeks) — ✅ delivered 2026-11-15 (S43 re-derivation)
 
 | # | Feature | Effort | Impact |
 |---|---------|--------|--------|
-| 6 | **HTTP Git Server** | Medium | High |
-| 7 | **Git Daemon** | Medium | Medium |
-| 8 | **LFS HTTP Endpoints** | Medium | Medium |
+| 6 | **HTTP Git Server** | Medium | High — shipped: `serve --http` clone/fetch/push |
+| 7 | **Git Daemon** | Medium | Medium — class-level, advertisement only; relay open work |
+| 8 | **LFS HTTP Endpoints** | Medium | Medium — shipped on the HTTP listener |
 
 ### Phase 3: Polish (1-2 weeks)
 
