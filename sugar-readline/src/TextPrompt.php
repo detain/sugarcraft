@@ -121,16 +121,17 @@ final class TextPrompt
     private int $completionRingIndex = -1;
 
     /**
-     * History store consulted by ↑/↓ navigation. Navigation state lives on
-     * the prompt ({@see $historyPosition}), never in the store's own cursor,
-     * so clones may share the store without drifting.
+     * History store consulted by ↑/↓ navigation: the LIVE handle the
+     * caller passed to withHistory(). Navigation state lives on the prompt
+     * ({@see $historyPosition}), never in the store's own cursor, so every
+     * prompt sharing a store sees the same entries without drifting.
      */
     private ?HistoryInterface $history = null;
 
     /**
-     * The original history passed to withHistory(), used for persistence (push).
-     * This is separate from $history so that cloning in navigation doesn't affect
-     * the caller's history reference.
+     * The history handle passed to withHistory(), used for persistence
+     * (push). Same object as {@see $history}: the prompt never mints a
+     * private copy, so navigation, search and push share one live store.
      */
     private ?HistoryInterface $historyOriginal = null;
 
@@ -254,19 +255,19 @@ final class TextPrompt
     /**
      * Attach a history store.
      *
-     * The store handed in is the PERSISTENT one: submit() pushes recalled or
-     * newly typed lines into it directly. Navigation and search never move
-     * the store's own cursor (they use the read-only search() window with
-     * indices kept on the prompt), so navigation state is per-prompt by
-     * construction. A private copy backs those reads as isolation —
-     * FileHistory::__clone deliberately drops the pending-write queue, so
-     * prompt-side reads can never observe or flush a deferred write twice.
+     * The store handed in is the LIVE one: submit() pushes recalled or
+     * newly typed lines into it directly, and navigation and search
+     * consult the same handle, so entries pushed earlier in the session
+     * are reachable by Up/Down (and Ctrl+R) without rebuilding the
+     * prompt chain. Neither read path moves the store's own cursor (they
+     * use the read-only search() window with indices kept on the prompt),
+     * so navigation state is per-prompt by construction and search and
+     * navigation can never disagree about what the store holds.
      */
     public function withHistory(HistoryInterface $history): self
     {
         $clone = clone $this;
-        $clone->history = clone $history;
-        // Keep reference to the original history for persistence (push) operations.
+        $clone->history = $history;
         $clone->historyOriginal = $history;
         return $clone;
     }
@@ -651,7 +652,8 @@ final class TextPrompt
      *
      * $historyPosition is the authoritative index into the newest-first
      * entry list (-1 = live buffer). The store is consulted through the
-     * read-only search() with an empty query — it never uses the store's
+     * same live handle incremental search uses ({@see searchSource()}),
+     * read-only via search() with an empty query — it never uses the store's
      * own cursor, and the store is never cloned/reset per keystroke (that
      * made every ↑ re-return the newest entry, so 2nd-older history was
      * unreachable).
@@ -673,7 +675,7 @@ final class TextPrompt
                 // at the newest entry can restore what was typed.
                 $clone->bufferBeforeHistory = $clone->buffer;
             }
-            $found = $clone->history->search('', $target, SearchDirection::Reverse);
+            $found = $clone->searchSource()->search('', $target, SearchDirection::Reverse);
             if ($found === null) {
                 // Already at the oldest entry — stay put, like GNU readline.
                 return $clone;
@@ -690,7 +692,7 @@ final class TextPrompt
             return $clone;
         }
         $target = $clone->historyPosition - 1;
-        $found = $target >= 0 ? $clone->history->search('', $target, SearchDirection::Forward) : null;
+        $found = $target >= 0 ? $clone->searchSource()->search('', $target, SearchDirection::Forward) : null;
         if ($found === null) {
             // Stepping past the newest entry returns the saved buffer.
             $clone->buffer = $clone->bufferBeforeHistory ?? '';
@@ -872,8 +874,9 @@ final class TextPrompt
     }
 
     /**
-     * History used for searching: the live (caller-owned) store, matching
-     * what autosuggest reads, so entries pushed after withHistory() are found.
+     * History read by navigation and searching: the live (caller-owned)
+     * store, matching what autosuggest reads, so entries pushed after
+     * withHistory() are found by Up/Down and Ctrl+R alike.
      */
     private function searchSource(): HistoryInterface
     {
