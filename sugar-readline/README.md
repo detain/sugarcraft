@@ -267,6 +267,14 @@ indicator rows. On tiny terminals (under 5 rows) the indicators are gated
 off and a page floors at one choice — the frame never renders empty, but
 it may exceed such a screen by a row or two; size the terminal up or pass
 `withViewportRows(0)` to opt out.
+Mid-session resizes follow the *adopted* bounds: when the driver yields a
+sugar-input `ResizeEvent`, the fit re-runs against the new frame and the
+next frame is a full repaint from a cleared display (a width or height the
+caller pinned explicitly is never moved). A plain `StreamInputDriver`
+reports only bytes, so it never resizes; to get live reflow your input
+source must emit `ResizeEvent` (sugar-input's `SignalResizeDriver` detects
+SIGWINCH but carries no key bytes, so it is a resize source to merge, not a
+standalone driver).
 Multi-line textarea output and wrapped labels can still exceed the window —
 long **prompts** (labels) are the host's layout responsibility either way.
 

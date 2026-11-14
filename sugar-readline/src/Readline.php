@@ -10,6 +10,7 @@ use SugarCraft\Input\Event\KeyEvent;
 use SugarCraft\Input\Event\MouseEvent;
 use SugarCraft\Input\Event\FocusEvent;
 use SugarCraft\Input\Event\PasteEvent;
+use SugarCraft\Input\Event\ResizeEvent;
 use SugarCraft\Input\KeyModifier;
 use SugarCraft\Input\Driver\StreamInputDriver;
 use SugarCraft\Core\Util\Tty;
@@ -60,6 +61,16 @@ final class Readline
 
     /** Rows painted by the previous repaint() — drives the multi-line erase sequence. */
     private int $lastPaintedRows = 0;
+
+    /**
+     * Bounds THIS run adopted from the environment (see fitPromptToWidth/
+     * fitPromptToHeight), as opposed to bounds the caller set explicitly.
+     * A resize may only overwrite adopted values: an explicit width is the
+     * caller's promise to the renderer and nothing on the pump's authority
+     * to break. Reset at every run() start, so a re-run re-adopts fresh.
+     */
+    private ?int $adoptedCols = null;
+    private ?int $adoptedRows = null;
 
     /**
      * The STDIN pump this instance owns when constructed without an injected
@@ -445,6 +456,15 @@ final class Readline
      * pump idling until stop() or an abort key. Pass a driver you control,
      * or call stop() from the producer side.
      *
+     * Resize handling: when the driver yields a sugar-input ResizeEvent
+     * (any host or composite driver that turns SIGWINCH into events —
+     * sugar-input's SignalResizeDriver detects them but carries no key
+     * bytes, so it must be merged with a byte driver, never swapped in
+     * alone), the pump re-fits the environment-ADOPTED bounds to the new
+     * frame, preserves explicit ones, and force-repaints from a cleared
+     * display — the old frame's row maths is worthless across a geometry
+     * change. A plain StreamInputDriver only ever reports bytes.
+     *
      * @param object        $prompt Object with handleKey(string): object method
      * @param resource|null $output Output stream for repainting; null (the
      *                              default) paints nothing — pass STDOUT to
@@ -454,6 +474,8 @@ final class Readline
      */
     public function run(object $prompt, $output = null): object
     {
+        $this->adoptedCols = null;
+        $this->adoptedRows = null;
         $prompt = $this->fitPromptToWidth($prompt, $output);
         $prompt = $this->fitPromptToHeight($prompt, $output);
         $bracketedPaste = $this->enableBracketedPaste($output);
@@ -547,8 +569,12 @@ final class Readline
         }
 
         $columns = $this->resolveColumns($output, $columnsOverride);
+        if ($columns <= 0) {
+            return $prompt;
+        }
+        $this->adoptedCols = $columns;
 
-        return $columns > 0 ? $prompt->withDisplayWidth($columns) : $prompt;
+        return $prompt->withDisplayWidth($columns);
     }
 
     /**
@@ -608,8 +634,12 @@ final class Readline
         }
 
         $rows = $this->resolveRows($output, $rowsOverride);
+        if ($rows <= 0) {
+            return $prompt;
+        }
+        $this->adoptedRows = $rows;
 
-        return $rows > 0 ? $prompt->withViewportRows($rows) : $prompt;
+        return $prompt->withViewportRows($rows);
     }
 
     /**
@@ -739,8 +769,54 @@ final class Readline
                 continue;
             }
 
+            if ($event instanceof ResizeEvent) {
+                // Geometry changed under us: the previous frame's row maths
+                // describes a window that no longer exists. Re-fit the
+                // adopted bounds, wipe the slate (clearDisplay resets the
+                // climb counter), and paint the whole next frame fresh.
+                $prompt = $this->refitAfterResize($prompt, $event);
+                $this->clearDisplay($output);
+                $this->repaint($prompt, $output);
+                continue;
+            }
+
             // Unknown event — ignore
         }
+    }
+
+    /**
+     * Re-adopt display bounds after a ResizeEvent.
+     *
+     * Only bounds this run ADOPTED (or that were never set) follow the
+     * window: a width or height the caller pinned explicitly survives a
+     * resize untouched — that was the original S-01 promise ("an explicit
+     * width always survives"), extended through time. The event's own
+     * dimensions are authoritative here; SignalResizeDriver re-probes them
+     * at delivery, so no second ioctl is needed.
+     */
+    private function refitAfterResize(object $prompt, ResizeEvent $event): object
+    {
+        if (is_callable([$prompt, 'withDisplayWidth']) && is_callable([$prompt, 'displayWidth'])) {
+            $current = $prompt->displayWidth();
+            if ($current === null || $current === $this->adoptedCols) {
+                if ($current !== $event->cols) {
+                    $prompt = $prompt->withDisplayWidth($event->cols);
+                    $this->adoptedCols = $event->cols;
+                }
+            }
+        }
+
+        if (is_callable([$prompt, 'withViewportRows']) && is_callable([$prompt, 'viewportRows'])) {
+            $current = $prompt->viewportRows();
+            if ($current === null || $current === $this->adoptedRows) {
+                if ($current !== $event->rows) {
+                    $prompt = $prompt->withViewportRows($event->rows);
+                    $this->adoptedRows = $event->rows;
+                }
+            }
+        }
+
+        return $prompt;
     }
 
     /**
