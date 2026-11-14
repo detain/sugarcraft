@@ -140,7 +140,7 @@ final class SideBySideFormatTest extends TestCase
         // (the old side ends unterminated). It occupies no line of either
         // file, so it must not stand alone on the left and leave 'add' alone
         // on the right — both paths must still show one paired row.
-        $options = DiffOptions::new()->withNoNewlineMarker();
+        $options = DiffOptions::new()->withNoNewlineAnnotation();
         $diff = Diff::compute('del', 'add', $options);
 
         $this->assertStringContainsString("\\ No newline at end of file\n", $diff->unified('f'));
@@ -162,7 +162,7 @@ final class SideBySideFormatTest extends TestCase
     {
         $wide = DiffOptions::new()->withContextLines(5);
         $tight = DiffOptions::new()->withContextLines(0);
-        $markers = DiffOptions::new()->withNoNewlineMarker();
+        $annotations = DiffOptions::new()->withNoNewlineAnnotation();
         $devNull = DiffOptions::new()->withDevNullOnEmptySide();
 
         return [
@@ -183,9 +183,9 @@ final class SideBySideFormatTest extends TestCase
             'empty context rows' => ["keep\n\ngone\n", "keep\n\nadded\n", $wide],
             'sql comment shaped removals' => ["-- drop table\nuseful\n++ counter\n", "-- alter table\nuseful\n++ count\n", $wide],
             'hunk-header shaped content' => ["@@ -1 +1 @@\nreal\n", "@@ -2 +2 @@\nreal\n", $wide],
-            'unterminated both ends' => ["same\nold-tail", "same\nnew-tail", $markers],
-            'unterminated old side only' => ["head\ntail-no-eol", "head\ntail-no-eol\nadded\n", $markers],
-            'unterminated new side only' => ["head\ntail\n", "head\n", $markers],
+            'unterminated both ends' => ["same\nold-tail", "same\nnew-tail", $annotations],
+            'unterminated old side only' => ["head\ntail-no-eol", "head\ntail-no-eol\nadded\n", $annotations],
+            'unterminated new side only' => ["head\ntail\n", "head\n", $annotations],
             'no context replace at eof' => ["a\nlast-old", "a\nlast-new", $tight],
             'crlf content' => ["a\r\nb\r\n", "a\r\nc\r\n", $wide],
         ];

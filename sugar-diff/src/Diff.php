@@ -74,7 +74,7 @@ final class Diff
      * `file($path)` returns without FILE_IGNORE_NEW_LINES) is refused
      * fail-fast, because emitting it would produce a marker-less row that
      * breaks the patch for every reader. List sides are therefore always read
-     * as terminated, and {@see DiffOptions::withNoNewlineMarker()} can only
+     * as terminated, and {@see DiffOptions::withNoNewlineAnnotation()} can only
      * annotate an unterminated end on STRING sides.
      *
      * @param string|list<string> $before
@@ -93,9 +93,9 @@ final class Diff
             $options,
             // sugar-diff-022: with the annotation ON, a differing final-line
             // terminator is a change GNU renders as a delete/insert pair —
-            // fold it into equality only while the marker option is off
+            // fold it into equality only while the annotation option is off
             // (byte-identical legacy path below).
-            $options->noNewlineMarker && $beforeNewline !== $afterNewline,
+            $options->noNewlineAnnotation && $beforeNewline !== $afterNewline,
         );
         $hunks = self::assemble($kinds, $beforeLines, $afterLines, $options);
 
@@ -297,7 +297,7 @@ final class Diff
      * @param list<string> $old
      * @param list<string> $new
      * @param bool $terminatorMismatch the sides end with different newline
-     *        facts under the no-newline-marker option: the final row of the
+     *        facts under the no-newline-annotation option: the final row of the
      *        old side carries an unreachable comparison flag below, so every
      *        fold path (prefix, suffix, LCS) treats the EOF pair as an
      *        explicit delete/insert — GNU's `-c`/`+c` pair — while emitted

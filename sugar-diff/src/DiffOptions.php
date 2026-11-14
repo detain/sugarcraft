@@ -16,15 +16,15 @@ namespace SugarCraft\Diff;
  * GNU-faithful — zero-length sides anchor at the preceding line and
  * single-line ranges drop their `,1` count — so a hunk that IS triggered
  * is `patch`-tool-compatible. Hunk BODIES and grouping remain
- * byte-for-byte, which (by default, marker OFF) includes the ported
+ * byte-for-byte, which (by default, annotation OFF) includes the ported
  * blindness to a final-line terminator difference: enable
- * {@see self::withNoNewlineMarker()} for the GNU pair rendering that makes
+ * {@see self::withNoNewlineAnnotation()} for the GNU pair rendering that makes
  * such a change visible and applicable.
  *
  * Mirrors the hardcoded behaviour of
  * candy-code/src/Tools/Concerns/BuildsUnifiedDiff.php
  * (`CONTEXT_LINES = 3`, `MAX_LCS_CELLS = 250_000`, exact `===` line
- * comparison, marker-free output) widened from constants into options.
+ * comparison, annotation-free output) widened from constants into options.
  */
 final class DiffOptions
 {
@@ -49,7 +49,7 @@ final class DiffOptions
         public readonly int $maxLcsCells,
         public readonly bool $ignoreWhitespace,
         public readonly bool $ignoreCase,
-        public readonly bool $noNewlineMarker,
+        public readonly bool $noNewlineAnnotation,
         public readonly bool $devNullOnEmptySide,
     ) {}
 
@@ -61,7 +61,7 @@ final class DiffOptions
             maxLcsCells: self::DEFAULT_MAX_LCS_CELLS,
             ignoreWhitespace: false,
             ignoreCase: false,
-            noNewlineMarker: false,
+            noNewlineAnnotation: false,
             devNullOnEmptySide: false,
         );
     }
@@ -106,11 +106,11 @@ final class DiffOptions
      * `patch`-faithful (sugar-diff-022). Only meaningful for STRING sides of
      * {@see Diff::compute()} — a `list<string>` side is always read as
      * terminated (elements may not carry newlines at all), so no row on it
-     * can ever sit at an unterminated end and this marker stays inert.
+     * can ever sit at an unterminated end and this annotation stays inert.
      */
-    public function withNoNewlineMarker(bool $on = true): self
+    public function withNoNewlineAnnotation(bool $on = true): self
     {
-        return $this->mutate(['noNewlineMarker' => $on]);
+        return $this->mutate(['noNewlineAnnotation' => $on]);
     }
 
     /** Label an empty side's header row `/dev/null` (git's new/deleted-file shape). */
@@ -119,7 +119,7 @@ final class DiffOptions
         return $this->mutate(['devNullOnEmptySide' => $on]);
     }
 
-    /** @param array{contextLines?:int,maxLcsCells?:int,ignoreWhitespace?:bool,ignoreCase?:bool,noNewlineMarker?:bool,devNullOnEmptySide?:bool} $changes */
+    /** @param array{contextLines?:int,maxLcsCells?:int,ignoreWhitespace?:bool,ignoreCase?:bool,noNewlineAnnotation?:bool,devNullOnEmptySide?:bool} $changes */
     private function mutate(array $changes = []): self
     {
         return new self(
@@ -127,7 +127,7 @@ final class DiffOptions
             maxLcsCells: $changes['maxLcsCells'] ?? $this->maxLcsCells,
             ignoreWhitespace: $changes['ignoreWhitespace'] ?? $this->ignoreWhitespace,
             ignoreCase: $changes['ignoreCase'] ?? $this->ignoreCase,
-            noNewlineMarker: $changes['noNewlineMarker'] ?? $this->noNewlineMarker,
+            noNewlineAnnotation: $changes['noNewlineAnnotation'] ?? $this->noNewlineAnnotation,
             devNullOnEmptySide: $changes['devNullOnEmptySide'] ?? $this->devNullOnEmptySide,
         );
     }

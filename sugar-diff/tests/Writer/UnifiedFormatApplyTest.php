@@ -25,7 +25,7 @@ final class UnifiedFormatApplyTest extends TestCase
 
     private static function options(): DiffOptions
     {
-        return DiffOptions::new()->withNoNewlineMarker();
+        return DiffOptions::new()->withNoNewlineAnnotation();
     }
 
     /** @return array<string, array{0:string, 1:string}> */

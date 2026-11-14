@@ -64,11 +64,11 @@ final class UnifiedFormatTest extends TestCase
         $this->assertStringStartsWith("--- a/f\n+++ b/f\n", $diff->unified('f'));
     }
 
-    public function testNoNewlineMarkerAnnotatesEveryUnterminatedEofRow(): void
+    public function testNoNewlineAnnotationAnnotatesEveryUnterminatedEofRow(): void
     {
         // Both sides end WITHOUT a newline and both EOF lines change: GNU
         // repeats the annotation after each row.
-        $options = DiffOptions::new()->withNoNewlineMarker();
+        $options = DiffOptions::new()->withNoNewlineAnnotation();
         $diff = Diff::compute("a\nb\nc\ndel-me", "a\nb\nc\nadd-me", $options);
 
         $this->assertSame(
@@ -80,7 +80,7 @@ final class UnifiedFormatTest extends TestCase
         );
     }
 
-    public function testNoNewlineMarkerTurnsATerminatorMismatchIntoAGnuPair(): void
+    public function testNoNewlineAnnotationTurnsATerminatorMismatchIntoAGnuPair(): void
     {
         // sugar-diff-022: the old side runs out WITHOUT a newline while the
         // new side ends the same row WITH one — GNU does not fold that to a
@@ -88,7 +88,7 @@ final class UnifiedFormatTest extends TestCase
         // pair with the annotation under the old-side row. The pre-022
         // shared-context fold mis-applied under /usr/bin/patch; the shape
         // below is oracle-pinned by UnifiedFormatApplyTest.
-        $options = DiffOptions::new()->withNoNewlineMarker();
+        $options = DiffOptions::new()->withNoNewlineAnnotation();
         $diff = Diff::compute("one\ntwo", "zero\none\ntwo\n", $options);
 
         $this->assertSame(
@@ -117,6 +117,6 @@ final class UnifiedFormatTest extends TestCase
 
     public function testNoNewlineRowConstantMatchesTheEmittedShape(): void
     {
-        $this->assertSame("\\ No newline at end of file\n", UnifiedFormat::NO_NEWLINE_ROW);
+        $this->assertSame("\\ No newline at end of file\n", UnifiedFormat::NO_NEWLINE_ANNOTATION);
     }
 }

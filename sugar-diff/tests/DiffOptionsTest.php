@@ -24,7 +24,7 @@ final class DiffOptionsTest extends TestCase
         $this->assertSame(DiffOptions::DEFAULT_MAX_LCS_CELLS, $options->maxLcsCells);
         $this->assertFalse($options->ignoreWhitespace);
         $this->assertFalse($options->ignoreCase);
-        $this->assertFalse($options->noNewlineMarker);
+        $this->assertFalse($options->noNewlineAnnotation);
         $this->assertFalse($options->devNullOnEmptySide);
     }
 
@@ -61,7 +61,7 @@ final class DiffOptionsTest extends TestCase
         $cases = [
             'withIgnoreWhitespace' => $base->withIgnoreWhitespace(),
             'withIgnoreCase' => $base->withIgnoreCase(),
-            'withNoNewlineMarker' => $base->withNoNewlineMarker(),
+            'withNoNewlineAnnotation' => $base->withNoNewlineAnnotation(),
             'withDevNullOnEmptySide' => $base->withDevNullOnEmptySide(),
         ];
 
@@ -70,7 +70,7 @@ final class DiffOptionsTest extends TestCase
             $this->assertSame(250_000, $option->maxLcsCells, $name);
             $this->assertSame($name === 'withIgnoreWhitespace', $option->ignoreWhitespace);
             $this->assertSame($name === 'withIgnoreCase', $option->ignoreCase);
-            $this->assertSame($name === 'withNoNewlineMarker', $option->noNewlineMarker);
+            $this->assertSame($name === 'withNoNewlineAnnotation', $option->noNewlineAnnotation);
             $this->assertSame($name === 'withDevNullOnEmptySide', $option->devNullOnEmptySide);
         }
     }

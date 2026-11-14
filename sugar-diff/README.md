@@ -48,7 +48,7 @@ echo $patchText;
 $wide = Diff::compute($before, $after, DiffOptions::new()
     ->withContextLines(10)
     ->withIgnoreWhitespace()
-    ->withNoNewlineMarker()
+    ->withNoNewlineAnnotation()
     ->withDevNullOnEmptySide());
 
 // None of those four options bite this one-line change: the sides differ
@@ -74,10 +74,10 @@ foreach (UnifiedScan::lines($patchText) as $row) {
 | Class | Purpose |
 |-------|---------|
 | `Diff` | `compute()` entry point; `hunks` (retained row model — hunk bodies only), `options`, `beforeCount`/`afterCount`, `beforeHasFinalNewline`/`afterHasFinalNewline`, `degraded`; `lines()` (full row sequence, materialized on demand and memoized), `isEmpty()`, `addedLines()`, `removedLines()`, `unified($oldPath, ?$newPath = null)` (second argument names the new side only — the before side uses the first), `hunkText()` |
-| `DiffOptions` | `new()`; `withContextLines(int)` (negative clamps to 0; `DEFAULT_CONTEXT_LINES` = 3), `withMaxLcsCells(int)` (0 = a middle with rows on both sides falls back degraded; a one-sided middle is linear work and stays exact; `DEFAULT_MAX_LCS_CELLS` = 250 000), `withIgnoreWhitespace(bool $ignore = true)`, `withIgnoreCase(bool $ignore = true)`, `withNoNewlineMarker(bool $on = true)`, `withDevNullOnEmptySide(bool $on = true)` |
+| `DiffOptions` | `new()`; `withContextLines(int)` (negative clamps to 0; `DEFAULT_CONTEXT_LINES` = 3), `withMaxLcsCells(int)` (0 = a middle with rows on both sides falls back degraded; a one-sided middle is linear work and stays exact; `DEFAULT_MAX_LCS_CELLS` = 250 000), `withIgnoreWhitespace(bool $ignore = true)`, `withIgnoreCase(bool $ignore = true)`, `withNoNewlineAnnotation(bool $on = true)`, `withDevNullOnEmptySide(bool $on = true)` |
 | `Hunk` | `header()`, `lines()`, `removedCount()`/`addedCount()` (`-`/`+` rows only), the `oldStart`/`oldLines`/`newStart`/`newLines` anchors |
 | `Line` / `LineKind` | One numbered row (verbatim text, side numbers, `marker()`, `toUnifiedRow()`); `eq`/`del`/`ins` vocabulary |
-| `Writer\UnifiedFormat` | `write()` / `hunksOnly()` statics behind `Diff::unified()` / `Diff::hunkText()`; `NO_NEWLINE_ROW` |
+| `Writer\UnifiedFormat` | `write()` / `hunksOnly()` statics behind `Diff::unified()` / `Diff::hunkText()`; `NO_NEWLINE_ANNOTATION` |
 | `Writer\SideBySideFormat` / `Writer\SideBySideRow` | `rows()` / `fromUnified()` pairing into `[left?, right?]` value rows for split layouts; `SideBySideRow::isPaired()` |
 | `Reader\UnifiedScan` | `lines()` / `fileHeaders()` / `rowsOf()` row walks with declared-count budgets and fail-closed boundaries; `isHunkHeader()` recognition predicate; `MAX_LINE_NUMBER_DIGITS` |
 | `Reader\ScannedLine` / `Reader\ScanRowKind` | Per-row `(old, new, fileHeader, kind)` region model; row classification enum — `isContentRow()` is true exactly for `Context`/`Insert`/`Delete`, so a pairing renderer gates its runs on the kind instead of re-sniffing the marker column |
@@ -93,7 +93,7 @@ channel and cast away `file_get_contents()`'s `string|false`:
 $diff = Diff::compute(
     (string) file_get_contents($a),
     (string) file_get_contents($b),
-    DiffOptions::new()->withNoNewlineMarker(),
+    DiffOptions::new()->withNoNewlineAnnotation(),
 );
 echo $diff->unified($a, $b);
 ```
@@ -137,7 +137,7 @@ Colour never has to carry a change alone, and the model refuses to make it carry
 - git appends an optional function-context heading after the closing `@@`; this engine has no enclosing-function notion, emits none, and the scanner ignores anything there.
 - File headers are git-style `--- a/<path>` / `+++ b/<path>` with no timestamps; GNU's own shape is bare paths tab-separated from a date column. The `a/`/`b/` prefix is prepended by literal concatenation: an absolute path `/etc/passwd` renders `--- a//etc/passwd`, and a path already beginning `a/` doubles it (`--- a/a/lib.php`) — GNU prints paths as given and git's prefixes are repo-root-relative, so pass root-relative paths if you care how the label reads (the scanner's sibling-header logic is unbothered by the doubled slash).
 - Path quoting is `core.quotePath`-*style*, not a git clone, in two deliberate ways: bytes ≥ 0x80 pass through raw (git octal-escapes every byte above 0x7E — high bytes can carry no control code, and raw UTF-8 filenames stay readable), and the `a/`/`b/` prefix rides *inside* the quoted string (git quotes the path and keeps the prefix outside). Only labels carrying control bytes, `"` or `\` are quoted at all, so clean paths — and their prefixes — stay byte-identical.
-- A terminator-only change is invisible to the line diff **only while the marker option is off**: with `withNoNewlineMarker()` OFF (the default), `"a\n"` vs `"a"` folds to no hunks at all — the ported behaviour, kept byte-for-byte — and the `beforeHasFinalNewline`/`afterHasFinalNewline` facts are exposed so a caller can surface such a change itself.
+- A terminator-only change is invisible to the line diff **only while the annotation option is off**: with `withNoNewlineAnnotation()` OFF (the default), `"a\n"` vs `"a"` folds to no hunks at all — the ported behaviour, kept byte-for-byte — and the `beforeHasFinalNewline`/`afterHasFinalNewline` facts are exposed so a caller can surface such a change itself.
 - With the marker ON the terminator is part of the last line's equality: a side that ends without a newline against a side that ends with one renders GNU's `-c` / `+c` pair with the `\ No newline at end of file` annotation under the unterminated side (oracle-verified and apply-tested via `patch` — `tests/Writer/UnifiedFormatApplyTest.php`), and any triggered hunk that ends on an unterminated final row carries the same annotation. With it OFF the row prints without the annotation. The annotation is a `string`-side affair only — a `list<string>` side is terminated by construction, so the marker is inert there.
 - CRLF vs LF differ in **every** line under default exact comparison (`\r` is content); `withIgnoreWhitespace()` folds `\r` away — deliberately stronger than git's `--strip-trailing-cr`.
 - Binary files are out of scope: `git diff --binary` payloads are not modelled — binary content would diff as text by design.

@@ -18,7 +18,7 @@ use SugarCraft\Diff\LineKind;
  * Two GNU affordances are opt-in through {@see \SugarCraft\Diff\DiffOptions}
  * so the default output stays byte-identical to the ported engine:
  * `withDevNullOnEmptySide()` labels an empty side `/dev/null` (git's
- * new/deleted-file header) and `withNoNewlineMarker()` annotates rows that sit
+ * new/deleted-file header) and `withNoNewlineAnnotation()` annotates rows that sit
  * at an unterminated end-of-file with `\ No newline at end of file`.
  *
  * Mirrors the string assembly of
@@ -33,7 +33,7 @@ use SugarCraft\Diff\LineKind;
 final class UnifiedFormat
 {
     /** The annotation row GNU emits after an end-of-file line without a newline. */
-    public const NO_NEWLINE_ROW = "\\ No newline at end of file\n";
+    public const NO_NEWLINE_ANNOTATION = "\\ No newline at end of file\n";
 
     private function __construct()
     {
@@ -119,7 +119,7 @@ final class UnifiedFormat
         foreach ($hunk->lines() as $line) {
             $out .= $line->toUnifiedRow();
             if (self::sitsAtUnterminatedEof($diff, $line)) {
-                $out .= self::NO_NEWLINE_ROW;
+                $out .= self::NO_NEWLINE_ANNOTATION;
             }
         }
 
@@ -133,7 +133,7 @@ final class UnifiedFormat
      */
     private static function sitsAtUnterminatedEof(Diff $diff, Line $line): bool
     {
-        if (!$diff->options->noNewlineMarker) {
+        if (!$diff->options->noNewlineAnnotation) {
             return false;
         }
 

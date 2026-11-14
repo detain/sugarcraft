@@ -85,7 +85,7 @@ final class UnifiedScanTest extends TestCase
         $this->assertSame([null, 5], $numbers[8]);
     }
 
-    public function testNoNewlineMarkerConsumesNoLineNumber(): void
+    public function testNoNewlineAnnotationConsumesNoLineNumber(): void
     {
         $this->assertSame(
             [[null, null], [1, null], [null, null], [null, 1]],
