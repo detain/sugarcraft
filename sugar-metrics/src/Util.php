@@ -52,6 +52,21 @@ final class Util
     }
 
     /**
+     * The storage-key NAME segment gets the identical escape a tag token
+     * gets (see {@see self::escapeTagToken()}). In-memory accumulation
+     * accepts arbitrary raw names — there is no sanitize-name gate on that
+     * path — so without this the name 'x|y=1' would land in exactly the
+     * bucket 'x' + tags ['y' => '1'] folds into (finding 013). One escaper
+     * for every segment makes the separator unforgeable from both sides,
+     * and the map stays readable: a clean name escapes to itself, so the
+     * storage key of every well-behaved series is unchanged.
+     */
+    public static function nameToken(string $name): string
+    {
+        return self::escapeTagToken($name);
+    }
+
+    /**
      * Canonical exposition spellings for non-finite readings.
      *
      * `sprintf('%.6f', -INF)` renders "INF" — the sign silently flips and

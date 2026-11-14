@@ -379,7 +379,11 @@ final class Registry
 
     /**
      * Track a label-value combination and evict the oldest when
-     * the per-metric cardinality limit is exceeded.
+     * the per-metric cardinality limit is exceeded. Eviction is
+     * insertion-order FIFO with NO bump-on-touch — an isset cache hit
+     * returns early without moving the entry, so the victim is the oldest
+     * first-seen combination regardless of heat; hot-series loss under
+     * churn is by design (008; mirrors InMemoryBackend::retainSeries()).
      *
      * Eviction also removes the evicted series from the backend, so a
      * flood of unique tag combinations can't grow backend memory without

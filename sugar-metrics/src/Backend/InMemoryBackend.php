@@ -83,7 +83,11 @@ final class InMemoryBackend implements Backend
      * Register a series key for cardinality accounting and evict the
      * oldest series while the configured cap is exceeded. Reads
      * (counterValue & friends) never call this — only writes create
-     * series.
+     * series. Eviction is insertion-order FIFO with NO bump-on-touch: the
+     * victim is the oldest first-seen series regardless of heat, so
+     * hot-series loss under label churn is by design, not an LRU slip
+     * (008; the Registry::trackCardinality() twin shares the semantics —
+     * an LRU retrofit is owner appetite, this sentence is the honesty).
      */
     private function retainSeries(string $key): void
     {
@@ -204,11 +208,23 @@ final class InMemoryBackend implements Backend
     /** @return array<string,float> */
     public function asyncGauges(): array { return $this->asyncGauges; }
 
+    /**
+     * @return float the accumulated value; a NEVER-COUNTED counter reads
+     *               0.0 — indistinguishable from one that counted zero
+     *               (007: polarity stated rather than flipped, the flip
+     *               being a gated behavior change this doc deliberately
+     *               does not take).
+     */
     public function counterValue(string $name, array $tags = []): float
     {
         return $this->counters[$this->key($name, $tags)] ?? 0.0;
     }
 
+    /**
+     * @return ?float null means "series absent" — the one accessor whose
+     *               unknown/zero split is representable (gauge 0.0 is a
+     *               meaningful last write); see 007 for the asymmetry map.
+     */
     public function gaugeValue(string $name, array $tags = []): ?float
     {
         return $this->gauges[$this->key($name, $tags)] ?? null;
@@ -220,16 +236,19 @@ final class InMemoryBackend implements Backend
         return $this->histograms[$this->key($name, $tags)] ?? [];
     }
 
+    /** @return float 0.0 for an absent series (007: counter-family polarity — see counterValue()). */
     public function upDownCounterValue(string $name, array $tags = []): float
     {
         return $this->upDownCounters[$this->key($name, $tags)] ?? 0.0;
     }
 
+    /** @return float 0.0 for an absent series (007: counter-family polarity — see counterValue()). */
     public function asyncCounterValue(string $name, array $tags = []): float
     {
         return $this->asyncCounters[$this->key($name, $tags)] ?? 0.0;
     }
 
+    /** @return ?float null means series absent (007: gauge-family polarity — see gaugeValue()). */
     public function asyncGaugeValue(string $name, array $tags = []): ?float
     {
         return $this->asyncGauges[$this->key($name, $tags)] ?? null;
@@ -282,19 +301,23 @@ final class InMemoryBackend implements Backend
 
     /**
      * Build a storage key for this backend's accumulator arrays.
-     * Format: `name|k1=v1|k2=v2` with tags sorted by key and each key
-     * and value backslash-escaped (see {@see Util::tagKey()}), so a
-     * separator inside a tag payload cannot forge a second pair and
-     * collapse two distinct series into one accumulator.
-     * This format is for in-memory storage accumulation (not cardinality tracking).
+     * Format: `name|k1=v1|k2=v2` with BOTH the name segment and every tag
+     * key/value escaped by the same escaper ({@see Util::nameToken()} /
+     * {@see Util::tagKey()}), tags sorted by key — so a separator inside a
+     * tag payload cannot forge a second pair AND an adversarial raw name
+     * like 'x|y=1' can never impersonate the fold of 'x' + ['y' => '1']
+     * (finding 013; the tag-side sibling is
+     * testLookalikeTagSetsDoNotCollapseIntoOneAccumulator). This format is
+     * for in-memory storage accumulation (not cardinality tracking).
      *
      * @param array<string,string> $tags
      */
     private function key(string $name, array $tags): string
     {
+        $token = Util::nameToken($name);
         if ($tags === []) {
-            return $name;
+            return $token;
         }
-        return $name . '|' . Util::tagKey($tags);
+        return $token . '|' . Util::tagKey($tags);
     }
 }

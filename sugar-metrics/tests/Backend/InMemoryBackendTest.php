@@ -42,6 +42,24 @@ final class InMemoryBackendTest extends TestCase
         $this->assertSame(2.0, $b->counterValue('m', ['x' => 'a', 'y' => 'b']));
     }
 
+    public function testNameContainingPipeEqualsFoldCannotImpersonateTagsSeries(): void
+    {
+        // 013 (HIGH): the name-side twin of the lookalike family — the raw
+        // name 'x|y=1' used to BE the storage key the tagged 'x' with
+        // ['y' => '1'] folds to, so two distinct series merged into one
+        // accumulator (contaminated values; a remove of one wiped the
+        // other). The name segment now rides the same escaper, and both
+        // series store, read, and reclaim independently.
+        $b = new InMemoryBackend();
+        $b->counter('x|y=1', 1.0);
+        $b->counter('x', 2.0, ['y' => '1']);
+        $this->assertSame(1.0, $b->counterValue('x|y=1'));
+        $this->assertSame(2.0, $b->counterValue('x', ['y' => '1']));
+        $b->remove('x|y=1');
+        $this->assertSame(0.0, $b->counterValue('x|y=1'));
+        $this->assertSame(2.0, $b->counterValue('x', ['y' => '1']), 'an innocent twin across the fold must survive the reclaim');
+    }
+
     public function testGaugeLastWriteWins(): void
     {
         $b = new InMemoryBackend();
