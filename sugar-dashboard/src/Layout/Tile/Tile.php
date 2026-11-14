@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dashboard\Layout\Tile;
 
+use SugarCraft\Dashboard\Foundation\Drawable;
 use SugarCraft\Dashboard\Foundation\Item;
 use SugarCraft\Dashboard\Foundation\Sizer;
+use SugarCraft\Dashboard\Foundation\Theme;
 
 /**
  * A tile in a tile layout.
@@ -64,6 +66,27 @@ final class Tile extends BaseTile
      *     {@see self::content()} instead. REMOVED-IN: 2.0.0.
      */
     public function getContent(): ?Item { return $this->content(); }
+
+    /**
+     * Rebuild this tile with its content themed, keeping name, size and
+     * any box already allocated to it.
+     *
+     * The rebuild goes through the constructor because `$content` is a
+     * promoted readonly property; the allocation box (width/height) is
+     * copied field-for-field so a themed tile renders the same frame.
+     */
+    public function withTheme(Theme $theme): static
+    {
+        if (!$this->content instanceof Drawable) {
+            return $this;
+        }
+
+        $themed = new self($this->name, $this->size, $this->content->withTheme($theme));
+        $themed->width = $this->width;
+        $themed->height = $this->height;
+
+        return $themed;
+    }
 
     public function render(): string
     {

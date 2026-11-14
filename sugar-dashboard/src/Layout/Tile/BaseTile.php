@@ -7,11 +7,12 @@ namespace SugarCraft\Dashboard\Layout\Tile;
 use SugarCraft\Dashboard\Foundation\Item;
 use SugarCraft\Dashboard\Foundation\Sizer;
 use SugarCraft\Dashboard\Foundation\SizedItem;
+use SugarCraft\Dashboard\Foundation\Theme;
 
 /**
  * Base tile implementation.
  */
-class BaseTile implements Item, SizedItem
+class BaseTile implements Item, SizedItem, ThemedTile
 {
     protected ?int $width = null;
     protected ?int $height = null;
@@ -60,6 +61,17 @@ class BaseTile implements Item, SizedItem
     public function render(): string
     {
         return '';
+    }
+
+    /**
+     * Identity by default: the base tile carries no themeable content.
+     *
+     * Subclasses that own themeable state override this and return a
+     * themed sibling of the same static type (see {@see Tile}).
+     */
+    public function withTheme(Theme $theme): static
+    {
+        return $this;
     }
 
     public function innerSize(): array

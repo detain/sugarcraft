@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dashboard\Layout\Tile;
 
-use SugarCraft\Dashboard\Foundation\Drawable;
 use SugarCraft\Dashboard\Foundation\Item;
 use SugarCraft\Dashboard\Foundation\Sizer;
 use SugarCraft\Dashboard\Foundation\SizedItem;
@@ -249,24 +248,18 @@ final class TileLayout implements Item, SizedItem
 
     /**
      * Apply a theme, fanning it down to any theme-aware children.
+     *
+     * The fan speaks {@see ThemedTile}: every tile rebuilds itself and
+     * keeps its own type. The layout must never reconstruct a child it
+     * does not fully understand — the old rebuild downgraded custom
+     * tiles to a bare {@see Tile} (losing name, size and subclass state)
+     * and fatalled on a plain {@see BaseTile}, which has no content().
      */
     public function withTheme(Theme $theme): self
     {
         $themedTiles = [];
         foreach ($this->tiles as $tile) {
-            $content = $tile->content();
-            if ($content instanceof Drawable) {
-                $themedContent = $content->withTheme($theme);
-                // Reconstruct tile with themed content - need to build new Tile
-                $themedTile = new Tile(
-                    name: $tile instanceof \SugarCraft\Dashboard\Layout\Tile\BaseTile ? $tile->name() : '',
-                    size: $tile instanceof \SugarCraft\Dashboard\Layout\Tile\BaseTile ? $tile->size() : new Size(),
-                    content: $themedContent,
-                );
-                $themedTiles[] = $themedTile;
-            } else {
-                $themedTiles[] = $tile;
-            }
+            $themedTiles[] = $tile instanceof ThemedTile ? $tile->withTheme($theme) : $tile;
         }
 
         $layout = new self(

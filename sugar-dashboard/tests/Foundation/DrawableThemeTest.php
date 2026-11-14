@@ -263,7 +263,7 @@ final class DrawableThemeTest extends TestCase
     public function testTileLayoutWithThemeAppliesToTileContent(): void
     {
         $badge = Badge::new('test');
-        $tile = new Tile('test', new Size(), $badge);
+        $tile = new Tile('cpu', new Size(fixedWidth: 20), $badge);
         $tilelayout = TileLayout::horizontal('root')->withTile($tile);
         $themed = $tilelayout->withTheme($this->dark);
 
@@ -275,6 +275,13 @@ final class DrawableThemeTest extends TestCase
 
         $this->assertCount(1, $tiles);
         $themedTile = $tiles[0];
+
+        // D-131: the fan must keep the tile ITSELF — type, name and the
+        // advertised size — not rebuild it into a blank shell.
+        $this->assertInstanceOf(Tile::class, $themedTile);
+        $this->assertSame('cpu', $themedTile->name());
+        $this->assertSame(20, $themedTile->size()->fixedWidth);
+
         $themedBadge = $themedTile->getContent();
 
         // The themed badge should have different colors
@@ -283,5 +290,56 @@ final class DrawableThemeTest extends TestCase
         $bgThemed = $origReflection->getProperty('bgColor')->getValue($themedBadge);
 
         $this->assertNotEquals($bgOrig, $bgThemed);
+    }
+
+    public function testTileThemeKeepsTheAllocatedBox(): void
+    {
+        $tile = (new Tile('named', new Size(), Badge::new('x')))->setSize(40, 10);
+        $themed = $tile->withTheme($this->dark);
+
+        $this->assertNotSame($tile, $themed);
+        $this->assertSame([40, 10], $themed->innerSize());
+    }
+
+    public function testCustomTileTypeAndStateSurviveThemeFanDown(): void
+    {
+        $custom = new class extends \SugarCraft\Dashboard\Layout\Tile\BaseTile {
+            public function __construct(public readonly string $extra = 'kept')
+            {
+                parent::__construct('custom', new Size(weight: 2));
+            }
+
+            public function withTheme(\SugarCraft\Dashboard\Foundation\Theme $theme): static
+            {
+                return new self($this->extra);
+            }
+        };
+        $layout = new TileLayout('root', \SugarCraft\Dashboard\Layout\Tile\Direction::Horizontal, [$custom]);
+
+        $themed = $layout->withTheme($this->dark);
+
+        $tilesProp = new \ReflectionProperty(TileLayout::class, 'tiles');
+        $tilesProp->setAccessible(true);
+        $faned = $tilesProp->getValue($themed)[0];
+
+        // The old rebuild downgraded this to a bare Tile: name '', size
+        // default, subclass gone. The ThemedTile fan keeps everything.
+        $this->assertSame($custom::class, get_class($faned));
+        $this->assertSame('custom', $faned->name());
+        $this->assertSame(2.0, $faned->size()->weight);
+        $this->assertSame('kept', $faned->extra);
+    }
+
+    public function testPlainBaseTileFanDownDoesNotCrash(): void
+    {
+        // The old loop called content() on every child; a plain BaseTile
+        // carries no such method and the fan fatalled.
+        $layout = new TileLayout('root', \SugarCraft\Dashboard\Layout\Tile\Direction::Horizontal, [new \SugarCraft\Dashboard\Layout\Tile\BaseTile('plain', new Size())]);
+
+        $themed = $layout->withTheme($this->dark);
+
+        $tilesProp = new \ReflectionProperty(TileLayout::class, 'tiles');
+        $tilesProp->setAccessible(true);
+        $this->assertSame('plain', $tilesProp->getValue($themed)[0]->name());
     }
 }
