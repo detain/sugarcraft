@@ -28,13 +28,10 @@ use SugarCraft\Vterm\Terminal\Terminal as FullTerminal;
  *
  * Where an engine legitimately does not implement a sequence at all, the
  * case stays out of this corpus (the README coverage table is the ledger
- * for those asymmetries). TAB handling is the one DELIBERATE divergence
- * kept OUT here on purpose: the emulator advances to the next tab-stop
- * (defaults every 8 columns, HTS/CSI g/Z/I respected through TabHandler),
- * while the renderer documents tab-stop modelling as out of scope —
- * CsiHandlerImpl::cht/tbc/cbt take single-column steps or no-ops. Adding
- * tab-stop state to the renderer is a separate feature, not a ghost-class
- * divergence this guard should police.
+ * for those asymmetries). TAB handling used to be the one DELIBERATE
+ * divergence kept OUT here — the renderer's single-column cht/cbt/no-op
+ * tbc has since been replaced by the shared TabHandler stop model
+ * (vterm-10), so HT/CHT/CBT/HTS/TBC streams are policed IN the corpus now.
  */
 final class EngineDifferentialTest extends TestCase
 {
@@ -79,6 +76,10 @@ final class EngineDifferentialTest extends TestCase
             'mark over wide tail' => ["漢\xcc\x81done"],
             'backspace then write' => ["ab\x1b[Dc"],
             'origin clamp' => ["\x1b[99;99Hcorner"],
+            'ht to next stop' => ["a\tb"],
+            'cht two stops then cbt' => ["ab\x1b[2I|\x1b[Z-"],
+            'hts hard stop then ht' => ["\x1b[1;4H\x1bH\x1b[1;1Hx\ty"],
+            'tbc 3 clears all, ht clamps to edge' => ["\x1b[3gstart\tx"],
             // DECSTBM invalidities: same-row and inverted regions are
             // ignored whole in both engines (xterm) — no one-row region,
             // no home. Divergence here would mean one engine accepted the

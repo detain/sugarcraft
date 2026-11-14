@@ -321,7 +321,7 @@ implements the superset.
 | `F` | CPL | (Handler) | Cursor up N + column 0. |
 | `G` | CHA | (Handler) | Cursor to column N. |
 | `H` | CUP | `cup($row, $col)` | Move cursor to (row, col) 1-indexed. |
-| `I` | CHT | `cht($n=1)` | Cursor forward N tab stops (emulator honours the tab-stop table; the renderer offsets the column forward by N, clamped to the last column, ignoring tab stops entirely). Shadowed while `?1004 h` is set — the focus intercept consumes any `CSI Ps I` as focus-in before tab handling runs. |
+| `I` | CHT | `cht($n=1)` | Cursor forward N tab stops (both engines walk the tab-stop table through the shared `TabHandler`: defaults every 8 columns from 8, clamped to the last column when no stop remains). Shadowed while `?1004 h` is set — the focus intercept consumes any `CSI Ps I` as focus-in before tab handling runs. |
 | `J` | ED | `ed($mode=0)` | Erase display: 0=cursor→end, 1=begin→cursor, 2=all, 3=all+scrollback (the emulator drains its scrollback ring and leaves the visible grid alone; the renderer has no ring and arms 0/1/2 only, so mode 3 is a no-op there). |
 | `K` | EL | `el($mode=0)` | Erase line: 0=cursor→eol, 1=bol→cursor, 2=full line. |
 | `L` | IL | `il($n=1)` | Insert N blank lines at cursor. |
@@ -330,10 +330,10 @@ implements the superset.
 | `S` | SU | `su($n=1)` | Scroll up N lines. |
 | `T` | SD | `sd($n=1)` | Scroll down N lines. |
 | `X` | ECH | (Handler) | Erase N characters from cursor (preserves BCE bg). |
-| `Z` | CBT | `cbt($n=1)` | Cursor backward N tab stops (emulator honours the tab-stop table; the renderer offsets the column back by N, clamped to column 0, ignoring tab stops entirely). |
+| `Z` | CBT | `cbt($n=1)` | Cursor backward N tab stops (both engines walk the tab-stop table through the shared `TabHandler`, clamped to column 0). |
 | `d` | VPA | (Handler) | Cursor to row N. |
 | `f` | HVP | `hvp($row, $col)` | Same as CUP — move cursor to (row, col). |
-| `g` | TBC | `tbc($mode=0)` | Tab clear: 0=column, 3=all (renderer: no-op — tab stops unmodelled). |
+| `g` | TBC | `tbc($mode=0)` | Tab clear: 0=column, 3=all (both engines share the `TabHandler` clear semantics; unknown modes no-op). |
 | `h` | DECSET (private, `?`-prefixed only) | `decset($mode, $prefix)` | Set mode; bare SM without the `?` prefix is inert on both engines (the emulator gate and `CsiHandlerImpl::decset` refuse it). `?7 h` enables DECAWM, `?25 h` cursor visible (`?12 h` is xterm's blinking-text-cursor control, not a BCE gate — accepted and discarded by both engines), `?47/?1047/?1049 h` alt screen, `?1004 h` focus events, `?2026 h` synchronized output, `?6 h` DECOM, `?1000/?1001/?1002/?1003 h` mouse tracking, `?1005/?1006/?1015 h` mouse encoding, `?1048 h` cursor save/restore, `?2004 h` bracketed paste (the renderer's `decset` matches only `?7` and `?25` — every other mode named here is emulator-side state) — full roster below. |
 | `l` | DECRST (private, `?`-prefixed only) | `decrst($mode, $prefix)` | Reset mode (mirror of `h`; bare RM without the prefix is inert). |
 | `m` | SGR | `sgr($params)` | Set graphic rendition. Subparam colons (`4:1`..`4:5`) parsed. |
@@ -348,10 +348,8 @@ by `SugarCraft\Vterm\Terminal\Terminal`; the renderer's upstream
 `HandlerAdapter` does not route those final bytes, so the renderer path
 silently discards them. Rows with an explicit `Method` are implemented by
 `Parser/CsiHandlerImpl` — the emulator implements a superset of those, save
-the seven asymmetries named below (one of them, `b` REP, is renderer-only).
-Seven asymmetries are deliberate: tab handling (`I`/`Z`/`g` — the emulator
-walks a tab-stop table, the renderer merely offsets the column by N and
-ignores tab stops entirely, and `TBC` no-ops), `b` REP (renderer only, the
+the six asymmetries named below (one of them, `b` REP, is renderer-only).
+Six asymmetries are deliberate: `b` REP (renderer only, the
 emulator discards it), `X` ECH (emulator only), ED mode-3 scrollback
 clearing (the emulator drains its ring and leaves the visible grid alone;
 the renderer has no ring and arms 0/1/2 only, so mode 3 does nothing
@@ -360,8 +358,12 @@ confines cursor addressing to the scroll region, while the renderer always
 clamps to the whole buffer), BCE erase fill (on the DEC model the emulator
 carries the current SGR background into erased cells; the renderer's erases
 write plain default cells), and the SGR rendition subset (the renderer
-paints the five `Cell::ATTR_*` bits — see "SGR attributes" below). The
-first five concern grid shape and text and stay out of
+paints the five `Cell::ATTR_*` bits — see "SGR attributes" below). Tab
+handling (`I`/`Z`/`g`) was formerly a seventh asymmetry: the renderer now
+models tab stops with the same `TabHandler` arithmetic as the emulator, and
+`tests/EngineDifferentialTest.php`'s corpus polices the HT/CHT/CBT/HTS/TBC
+streams. The
+first four concern grid shape and text and stay out of
 `tests/EngineDifferentialTest.php`'s corpus on purpose; the last two differ
 only in rendition, which that corpus's text-only cell encoding cannot see.
 The renderer honours the same DECAWM/DECTCEM private modes as the emulator,

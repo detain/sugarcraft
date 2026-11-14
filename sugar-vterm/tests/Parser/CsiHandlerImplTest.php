@@ -364,24 +364,29 @@ final class CsiHandlerImplTest extends TestCase
         $this->assertSame('K', $this->csi->grid()->cell(3, 0)->char, 'outside the region, untouched');
     }
 
-    public function testCbtMovesCursorBackwardByCount(): void
+    public function testCbtWalksPreviousTabStops(): void
     {
+        // vterm-10: CBT is stop arithmetic, not column subtraction — from
+        // col 10 the stops run 8, then 0, then clamp at 0 (the old pin
+        // asserted the naive 10-3=7 the renderer shared with nothing).
         $this->cursor = new Cursor(row: 0, col: 10);
         $this->csi = new CsiHandlerImpl($this->grid, $this->cursor, $this->theme);
 
         $this->csi->cbt(3);
 
-        $this->assertSame(7, $this->csi->cursor()->col);
+        $this->assertSame(0, $this->csi->cursor()->col);
     }
 
-    public function testChtMovesCursorForwardByCount(): void
+    public function testChtWalksForwardTabStops(): void
     {
+        // vterm-10: from col 2 the every-8 stops run 8, 16, 24 for CSI 3I
+        // (an 80-wide grid still has stops past col 24 — clamp is not hit).
         $this->cursor = new Cursor(row: 0, col: 2);
         $this->csi = new CsiHandlerImpl($this->grid, $this->cursor, $this->theme);
 
         $this->csi->cht(3);
 
-        $this->assertSame(5, $this->csi->cursor()->col);
+        $this->assertSame(24, $this->csi->cursor()->col);
     }
 
     public function testGridRowsReturnsCorrectCount(): void

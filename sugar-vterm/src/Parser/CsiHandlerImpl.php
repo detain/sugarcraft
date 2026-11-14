@@ -9,6 +9,7 @@ use SugarCraft\Core\Util\Width;
 use SugarCraft\Vterm\Cell;
 use SugarCraft\Vterm\Buffer\Buffer;
 use SugarCraft\Vterm\Cursor;
+use SugarCraft\Vterm\Handler\TabHandler;
 use SugarCraft\Vterm\Hyperlink\Hyperlink;
 use SugarCraft\Vterm\Rendition;
 use SugarCraft\Vterm\Theme;
@@ -26,6 +27,21 @@ final class CsiHandlerImpl implements CsiHandler
 {
     private int $scrollTop = 0;
     private int $scrollBottom;
+
+    /**
+     * Tab-stop table keyed by column index — the renderer's exact mirror of
+     * the emulator's `ScreenHandler::$tabStops`, sharing the stateless
+     * {@see TabHandler} arithmetic so the two engines can never drift.
+     * Defaults every 8 columns starting at 8; HTS sets, TBC clears (mode 3
+     * all), RIS rebuilds. The renderer host exposes no resize, so the table
+     * lives for the handler's constructed width; a future resize surface must
+     * rebuild it per ECMA-48.
+     *
+     * @var array<int, bool>
+     */
+    private array $tabStops;
+
+    private TabHandler $tabs;
 
     private int $fg;
     private int $bg;
@@ -110,6 +126,8 @@ final class CsiHandlerImpl implements CsiHandler
         $this->fg = $theme->defaultFg;
         $this->bg = $theme->defaultBg;
         $this->scrollBottom = $grid->rows - 1;
+        $this->tabs = new TabHandler();
+        $this->tabStops = TabHandler::defaults($grid->cols);
     }
 
     public function grid(): Buffer
@@ -826,22 +844,34 @@ final class CsiHandlerImpl implements CsiHandler
 
     public function tbc(int $mode = 0): void
     {
-        // No-op — tab clear is out of scope for the renderer path; $mode
-        // is part of the CsiHandler contract, reserved for a future impl.
+        // TBC (CSI g) walks the shared TabHandler, exactly like the
+        // emulator's ScreenHandler: mode 0 clears the stop at the cursor
+        // column, mode 3 clears all stops, anything else is a no-op.
+        $this->tabStops = $this->tabs->clear($mode, $this->cursor->col, $this->tabStops);
     }
 
     public function cbt(int $count = 1): void
     {
         // Tab-family motion deliberately leaves the phantom flag armed —
         // the emulator's HT/CHT/CBT route does (xterm _wrapnext survives).
-        $newCol = max(0, $this->cursor->col - $count);
-        $this->cursor = $this->cursor->at($this->cursor->row, $newCol);
+        $col = $this->cursor->col;
+        for ($i = 0, $n = max(1, $count); $i < $n; $i++) {
+            $col = $this->tabs->backward($col, $this->tabStops);
+        }
+        $this->cursor = $this->cursor->at($this->cursor->row, $col);
     }
 
     public function cht(int $count = 1): void
     {
-        $newCol = min($this->grid->cols - 1, $this->cursor->col + $count);
-        $this->cursor = $this->cursor->at($this->cursor->row, $newCol);
+        // CHT (CSI I) — and HT through the adapter's 0x09 => cht(1) route,
+        // whose "tab to next stop" comment this makes true — walks forward
+        // stop-by-stop via the shared TabHandler, clamping at the right
+        // edge when no stop remains (emulator parity).
+        $col = $this->cursor->col;
+        for ($i = 0, $n = max(1, $count); $i < $n; $i++) {
+            $col = $this->tabs->forward($col, $this->tabStops, $this->grid->cols);
+        }
+        $this->cursor = $this->cursor->at($this->cursor->row, $col);
     }
 
     /**
@@ -1138,13 +1168,16 @@ final class CsiHandlerImpl implements CsiHandler
     }
 
     /**
-     * ESC H — HTS (hard tab stop). The renderer models no tab-stop table
-     * ({@see tbc()} and {@see cbt()} move by count, not stops), so this is a
-     * documented no-op — there is no per-column stop state to set.
+     * ESC H — HTS (hard tab stop). Sets a stop at the cursor column, gated
+     * to the grid width exactly like the emulator's
+     * {@see \SugarCraft\Vterm\Handler\ScreenHandler::setTabStop()}; the
+     * renderer shares its {@see TabHandler} model (see {@see tbc()}).
      */
     public function escSetTabStop(): void
     {
-        // No tab-stop model on the renderer path.
+        if ($this->cursor->col >= 0 && $this->cursor->col < $this->grid->cols) {
+            $this->tabStops[$this->cursor->col] = true;
+        }
     }
 
     /**
@@ -1173,7 +1206,9 @@ final class CsiHandlerImpl implements CsiHandler
      * the full-page scroll region and re-enables DECAWM — the renderer's
      * expressive-range match for the emulator's
      * {@see \SugarCraft\Vterm\Handler\ScreenHandler::hardReset()}.
-     * Scrollback/alt-screen/charsets/tab-stops have no renderer counterpart.
+     * Scrollback/alt-screen/charsets have no renderer counterpart.
+     * Tab stops are rebuilt to the defaults (emulator hardReset parity,
+     * ScreenHandler::defaults route).
      * Clearing {@see $lastPrintable} is renderer-local hygiene: the emulator
      * never dispatches REP at all, so post-RIS `CSI b` printing nothing is the
      * agreement xterm/VT510 full-reset semantics demand ("no graphic was the
@@ -1183,6 +1218,7 @@ final class CsiHandlerImpl implements CsiHandler
     {
         $this->grid = $this->grid->clear();
         $this->cursor = new Cursor();
+        $this->tabStops = TabHandler::defaults($this->grid->cols);
         $this->wrapPending = false;
         $this->autoWrap = true;
         $this->scrollTop = 0;
