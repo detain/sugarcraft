@@ -23,9 +23,20 @@ use SugarCraft\SshServer\Session;
  *   - `ssh.session.error`      counter — incremented if `\$next` threw
  *
  * Tags on every emit: `user`, `term`; the error emit also carries
- * `exception` (the thrown class, normalized). Add more by passing
- * `extraTags` as a callable that receives the {@see Session} —
- * useful for stamping client subnet, geo, build version, etc.
+ * `exception` — the thrown class's basename, normalized (pass
+ * `$fullExceptionClass: true` to restore full FQCNs on a private sink;
+ * a public scrape should not carry your dependency layout —
+ * sugar-metrics-049). Add more by passing `extraTags` as a callable that
+ * receives the {@see Session} — useful for stamping client subnet, geo,
+ * build version, etc. The closure supplies tag VALUES only: each value
+ * rides the same clamp as `user`/`term`, and base tags stay
+ * authoritative — an entry returning a `user`/`term` key can never
+ * rewrite the normalized session identity (sugar-metrics-005).
+ *
+ * Budget: each tag value is normalized to at most 64 bytes from
+ * `[A-Za-z0-9._:@/-]`, so one session's dimension cannot bloat the
+ * label space or push a statsd UDP datagram past MTU (fragmented
+ * datagrams drop silently at most agents — the flood dies with itself).
  *
  * @phpstan-type ExtraTagsFn callable(Session): array<string,string>
  */
@@ -43,19 +54,22 @@ final class SessionMetrics implements Middleware
     private $extraTags;
 
     /**
+     * House-idiom factory (sugar-metrics-014): `SessionMetrics::new($registry)`.
+     *
      * @param (callable(Session): array<string,string>)|null $extraTags
      */
-    /**
-     * House-idiom factory (sugar-metrics-014): `SessionMetrics::new($registry)`.
-     */
-    public static function new(Registry $registry, ?callable $extraTags = null): self
+    public static function new(Registry $registry, ?callable $extraTags = null, bool $fullExceptionClass = false): self
     {
-        return new self($registry, $extraTags);
+        return new self($registry, $extraTags, fullExceptionClass: $fullExceptionClass);
     }
 
+    /**
+     * @param (callable(Session): array<string,string>)|null $extraTags
+     */
     public function __construct(
         private readonly Registry $registry,
         ?callable $extraTags = null,
+        private readonly bool $fullExceptionClass = false,
     ) {
         $this->extraTags = $extraTags;
     }
@@ -67,7 +81,19 @@ final class SessionMetrics implements Middleware
             'term' => self::normalizeTag($session->term),
         ];
         if ($this->extraTags !== null) {
-            $tags = array_merge($tags, ($this->extraTags)($session));
+            // sugar-metrics-005: base tags are AUTHORITATIVE — the merge
+            // order (extra first, base last) keeps a closure's `user`/`term`
+            // entries from rewriting the normalized session identity,
+            // mirroring the error arm's doctrine below. The closure's own
+            // keys survive; its VALUES ride the same clamp — an attacker-
+            // bounded field such as Session::$clientVersion (raw, unlength-
+            // bounded) cannot smuggle unclamped bytes or a 400-byte value
+            // into the scraped label space.
+            $extra = [];
+            foreach (($this->extraTags)($session) as $key => $value) {
+                $extra[$key] = self::normalizeTag($value);
+            }
+            $tags = array_merge($extra, $tags);
         }
 
         try {
@@ -89,9 +115,21 @@ final class SessionMetrics implements Middleware
             try {
                 // Assigned, not unioned: a caller-supplied extraTags entry
                 // for 'exception' must never shadow the real thrown class.
-                // normalizeTag folds namespace backslashes to underscores.
+                // sugar-metrics-049: default to the class BASENAME — the
+                // full FQCN of every failure path is a free dependency
+                // fingerprint on a public scrape (exact vendor layout and
+                // versioned namespaces read through the label). Operators
+                // who want full names back pass $fullExceptionClass: true
+                // on a private sink. normalizeTag folds any remaining
+                // backslashes to underscores either way.
                 $errorTags = $tags;
-                $errorTags['exception'] = self::normalizeTag($e::class);
+                if ($this->fullExceptionClass) {
+                    $thrown = $e::class;
+                } else {
+                    $segments = explode('\\', $e::class);
+                    $thrown = end($segments);
+                }
+                $errorTags['exception'] = self::normalizeTag($thrown);
                 $this->registry->counter('ssh.session.error', 1.0, $errorTags);
             } catch (\Throwable) {
                 // Registry failures must not suppress the original exception.

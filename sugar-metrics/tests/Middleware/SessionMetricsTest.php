@@ -320,4 +320,99 @@ final class SessionMetricsTest extends TestCase
         // The session ran and the exception propagated.
         $this->assertTrue($ran);
     }
+
+    public function testExtraTagsCannotRewriteTheBaseSessionIdentity(): void
+    {
+        // sugar-metrics-005: a hostile (or buggy) extraTags closure used to
+        // ride array_merge AFTER the base tags, so ['user' => 'mallory']
+        // replaced the normalized session identity on connect/duration —
+        // cardinality and identity spoofing on the scraped plane, while the
+        // error arm protected 'exception' by doctrine. Base tags are now
+        // authoritative: the closure's own keys survive, its user/term do not.
+        $b = new InMemoryBackend();
+        $r = new Registry($b);
+        $mw = new SessionMetrics($r, fn (Session $s): array => ['user' => 'mallory', 'region' => 'eu-1']);
+        $mw->handle(Context::background(), $this->session(), fn () => null);
+
+        $this->assertSame(1.0, $b->counterValue('ssh.session.connect', [
+            'region' => 'eu-1', 'user' => 'alice', 'term' => 'xterm-256color',
+        ]));
+        $this->assertSame(0.0, $b->counterValue('ssh.session.connect', [
+            'region' => 'eu-1', 'user' => 'mallory', 'term' => 'xterm-256color',
+        ]));
+    }
+
+    public function testExtraTagValuesRideTheSameClampAsBaseTags(): void
+    {
+        // sugar-metrics-005 (SEC-06/NET-04 legs): the docblock invited
+        // "read a field off $session" closures, but Session fields such as
+        // clientVersion are raw and unlength-bounded — the values bypassed
+        // normalizeTag, re-opening the label-space budget MAX_TAG_LENGTH
+        // exists to cap and risking UDP fragmentation drops on statsd.
+        // Closure values now ride the same clamp; author-sanitized values
+        // are fixed points.
+        $b = new InMemoryBackend();
+        $r = new Registry($b);
+        $mw = new SessionMetrics($r, fn (Session $s): array => [
+            'build' => str_repeat('a', 190) . '!!!',
+            'subnet' => "10.0.0|1 evil=2\n;rm",
+            'clean' => 'v1.2.3-rc_1',
+        ]);
+        $mw->handle(Context::background(), $this->session(), fn () => null);
+
+        $expected = [
+            'build' => str_repeat('a', 64),
+            'subnet' => '10.0.0_1_evil_2__rm',
+            'clean' => 'v1.2.3-rc_1',
+        ];
+        $this->assertSame(1.0, $b->counterValue('ssh.session.connect',
+            $expected + ['user' => 'alice', 'term' => 'xterm-256color']));
+        foreach ($expected as $key => $value) {
+            $this->assertLessThanOrEqual(64, strlen($value), $key);
+        }
+    }
+
+    public function testExceptionLabelCarriesBasenameByDefaultAndFullClassOnOptIn(): void
+    {
+        // sugar-metrics-049: the thrown class's FULL FQCN was exported as a
+        // scraped label — a free fingerprint of application and vendor
+        // layout. Default is now the basename; $fullExceptionClass restores
+        // the old spelling (backslashes folded to '_') for private sinks.
+        $b = new InMemoryBackend();
+        $r = new Registry($b);
+        $mw = new SessionMetrics($r);
+        $throw = static fn (): never => throw new ProbeException('namespaced boom');
+        try {
+            $mw->handle(Context::background(), $this->session(), $throw);
+            $this->fail('expected exception to propagate');
+        } catch (ProbeException) {
+            // expected
+        }
+        $base = ['user' => 'alice', 'term' => 'xterm-256color'];
+        $this->assertSame(1.0, $b->counterValue('ssh.session.error', $base + ['exception' => 'ProbeException']));
+        $this->assertSame(0.0, $b->counterValue('ssh.session.error', $base + [
+            'exception' => 'SugarCraft_Metrics_Tests_Middleware_ProbeException',
+        ]));
+
+        $bf = new InMemoryBackend();
+        $full = new SessionMetrics(new Registry($bf), fullExceptionClass: true);
+        try {
+            $full->handle(Context::background(), $this->session(), $throw);
+            $this->fail('expected exception to propagate');
+        } catch (ProbeException) {
+            // expected
+        }
+        $this->assertSame(1.0, $bf->counterValue('ssh.session.error', $base + [
+            'exception' => 'SugarCraft_Metrics_Tests_Middleware_ProbeException',
+        ]));
+    }
+}
+
+/**
+ * The basename-vs-FQCN exception-label arm (sugar-metrics-049) needs a
+ * thrown class that actually carries a namespace — root-namespace classes
+ * like RuntimeException are identical spellings under both knobs.
+ */
+final class ProbeException extends \RuntimeException
+{
 }

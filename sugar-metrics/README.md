@@ -244,7 +244,7 @@ Per session this emits:
 | `ssh.session.duration`    | histogram | `user`, `term`                    |
 | `ssh.session.error`       | counter   | `user`, `term`, `exception`       |
 
-`user` and `term` are attacker-controllable, so they are normalised to `[A-Za-z0-9._:@/-]` (everything else collapses to `_`) and clamped to 64 bytes. The `exception` tag carries the throwable class name normalised the same way (namespace backslashes fold to `_`); it is assigned *after* `extraTags` merge, so an `extraTags` closure can never shadow it. Values you add via `extraTags` are otherwise passed through unmodified — sanitise them yourself if they can contain hostile input.
+`user` and `term` are attacker-controllable, so they are normalised to `[A-Za-z0-9._:@/-]` (everything else collapses to `_`) and clamped to 64 bytes. The same clamp is applied to every value your `extraTags` closure returns — the closure contributes tag *keys* freely, but its values cannot smuggle unbounded or control bytes into the scraped label space. Base `user`/`term` stay authoritative: an `extraTags` entry returning a `user` key can never rewrite the normalised session identity. The `exception` tag carries the throwable class **basename** normalised the same way — a public scrape should not fingerprint your dependency layout through full FQCNs — and it is assigned *after* the merge, so a closure can never shadow it either; operators on a private sink can restore full names with `new($registry, extraTags: …, fullExceptionClass: true)` (backslashes fold to `_`).
 
 Pass `extraTags` (a callable receiving the `Session`) to add things like client subnet, geo, build version.
 
@@ -262,7 +262,7 @@ Sixteen locales ship: `ar`, `cs`, `de`, `en`, `es`, `fr`, `it`, `ja`, `ko`, `nl`
 
 ## Status
 
-Feature-complete and in production use: UpDownCounter, AsyncCounter and AsyncGauge instrument kinds, Registry cardinality tracking with FIFO eviction and backend reclaim, exposition-integrity guards, fsync-before-rename durability, and five backends — `InMemory`, `JsonStream`, `Statsd`, `PrometheusFile` and `Multi`. 261 tests (1,340 assertions; ≈4 s baseline suite: Registry, each backend, SessionMetrics middleware, wire-format and tag-key collision pins, hex-level forgery pins, i18n locale parity across all 16 shipped locales, and example smoke checks).
+Feature-complete and in production use: UpDownCounter, AsyncCounter and AsyncGauge instrument kinds, Registry cardinality tracking with FIFO eviction and backend reclaim, exposition-integrity guards, fsync-before-rename durability, and five backends — `InMemory`, `JsonStream`, `Statsd`, `PrometheusFile` and `Multi`. 264 tests (1,352 assertions; ≈4 s baseline suite: Registry, each backend, SessionMetrics middleware, wire-format and tag-key collision pins, hex-level forgery pins, i18n locale parity across all 16 shipped locales, and example smoke checks).
 
 ## Breaking changes
 
