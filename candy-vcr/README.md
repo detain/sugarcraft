@@ -1,7 +1,10 @@
 # CandyVcr
 
-Cassette recorder / replayer for sugar-core `Program`s **and** a
-`.tape` → `.gif` terminal-demo renderer for PHP 8.3+. Pairs with
+Cassette recorder / replayer for sugar-core `Program`s, and a
+`.tape` → `.gif` terminal-demo renderer for PHP 8.3+ — `.tape` is the
+terminal-recording DSL from [VHS](https://github.com/charmbracelet/vhs).
+The `Program`/`Msg` model being recorded lives in
+[sugar-core](https://github.com/sugarcraft/sugar-core); the renderer pairs with
 [sugar-vterm](https://github.com/sugarcraft/sugar-vterm) — every frame
 fed to the GIF encoder is a `SugarCraft\Vterm\Snapshot` taken off
 sugar-vterm's `Terminal`.
@@ -14,20 +17,21 @@ equality via [sugar-vterm](https://github.com/sugarcraft/sugar-vterm), with byte
 ## Contents
 
 - [Status](#status) · [Use cases](#use-cases) · [Install](#install) · [Quickstart](#quickstart)
-- [Cassette formats](#cassette-formats) — Jsonl / CompressedJsonl / Relative / Yaml / Asciinema
+- [Cassette format](#cassette-format) — [Cassette formats](#cassette-formats) · [Timestamp modes](#timestamp-modes) · [Gzip compression](#gzip-compression) · [Asciinema import](#asciinema-import)
 - [PHP API](#php-api) — `Cassette`, `Recorder`, `Player`, `Player::loadAny()`
-- [Assertion classes](#engine-parity-tests) — Byte / Screen / Contains / Regex
-- [Matcher classes](#matcher-classes--replay-side-flexibility) — Passthrough / Content / TimingTolerant
-- [Hook system](#hook-system) · [Migration system](#cassette-migration)
-- [CLI commands](#cli) — `record` · `inspect` · `replay` · `diff` · `stats` · `migrate` · `render-tape` · `render-batch`
-- [Tape DSL](#tape-compiler) — Lexer / Parser / Compiler / Decompiler / full directive table
-- [Renderer pipeline](#frame-renderer) — Renderer / FrameStream / FrameDedup
-- [Rasterizer](#frame-rasterizer) — GdRasterizer / ImagickRasterizer / Glyphs / FontLoader
+- [CLI](#cli) — `record` · `inspect` · `replay` · `diff` · `stats` · `migrate` · `render-tape` · `render-batch`
+- [Hook system](#hook-system) — Sanitizing / Metadata / custom hooks
+- [Matcher classes — replay-side flexibility](#matcher-classes--replay-side-flexibility) — Passthrough / Content / TimingTolerant
+- [Rendering `.tape` files to GIF](#rendering-tape-files-to-gif) — `render-tape` · `render-batch` · exec mode · pipeline
+- [Cassette migration](#cassette-migration) — `migrate` · pluggable migrators
+- [Tape compiler](#tape-compiler) — Lexer / Parser / Compiler / Decompiler / full directive table
+- [Frame renderer](#frame-renderer) — Renderer / FrameStream / FrameDedup
+- [Frame rasterizer](#frame-rasterizer) — GdRasterizer / ImagickRasterizer / Glyphs / FontLoader
 - [GIF encoder](#gif-encoder) — FfmpegGifEncoder / PhpGifEncoder / TapeToGif
 - [Limitations](#limitations) — memory · seeking · clip export · exec timing · redaction
-- [Examples](#examples) — record / replay / mouse encodings / Msg serializers
+- [Examples](#examples) — record / replay / mouse encodings / [Assertion classes](#assertion-classes) / Msg serializers
 - [Visual regression goldens](#visual-regression-goldens) · [Snapshot tests](#snapshot-tests)
-- [Development](#development) · [CI integration](#ci-integration) · [License](#license) · [Credits](#credits--inspiration)
+- [Development](#development) · [CI integration](#ci-integration) · [License](#license) · [Credits & inspiration](#credits--inspiration)
 
 ## Status
 
@@ -35,7 +39,7 @@ equality via [sugar-vterm](https://github.com/sugarcraft/sugar-vterm), with byte
 frame rendering, rasterization and GIF encoding all ship in the library.
 
 Start with [Quickstart](#quickstart) for the shortest end-to-end path, or jump straight to
-[CLI commands](#cli) if you only want the `candy-vcr` binary.
+[CLI](#cli) if you only want the `candy-vcr` binary.
 
 ## Use cases
 
@@ -55,14 +59,48 @@ composer require sugarcraft/candy-vcr
 ```
 
 Examples in this README invoke the binary as `vendor/bin/candy-vcr`; inside a checkout of this
-repo (the Examples tour below, run from the `candy-vcr/` directory) the same program answers at
-`bin/candy-vcr`; with a phar install or a composer global install it answers to plain
-`candy-vcr`. The library itself hard-requires **ext-mbstring**. Rendering needs **ext-gd** (or
+repo (the [Examples](#examples) tour, which runs from the `candy-vcr/` directory) the same program
+sits at `bin/candy-vcr`; with a PHAR install or a composer global install it is simply
+`candy-vcr` on `PATH`. The library itself hard-requires **ext-mbstring**. Rendering needs **ext-gd** (or
 `--backend=imagick` with **ext-imagick**) and, for the default encoder, **ffmpeg** on `PATH`;
 `PhpGifEncoder` is the pure-PHP fallback that needs no external binaries. `YamlFormat`
 additionally suggests `symfony/yaml`.
 
-## Cassette format (JSONL)
+Nothing to record yet? Two commands play with the cassette that ships in this repo:
+
+```sh
+bin/candy-vcr inspect examples/cassettes/counter.cas
+bin/candy-vcr stats   examples/cassettes/counter.cas
+```
+
+## Quickstart
+
+Record a session:
+
+```php
+use SugarCraft\Core\Program;
+use SugarCraft\Vcr\Recorder;
+
+// $model — any sugar-core Model; examples/record.php ships a tiny CounterModel.
+$program = new Program($model);
+$program->setRecorder(Recorder::open('/tmp/session.cas'));  // void — statement form
+$program->run();
+// cassette is closed automatically when the run loop ends
+// (final recordQuit rides only a QuitMsg exit; a crash still flushes)
+```
+
+Read a recorded cassette back:
+
+```php
+use SugarCraft\Vcr\Format\JsonlFormat;
+
+$cassette = (new JsonlFormat())->read('/tmp/session.cas');
+foreach ($cassette->events as $event) {
+    echo $event->kind->value, ' @ ', $event->t, "\n";
+}
+```
+
+## Cassette format
 
 > **Full schema reference:** [`docs/CASSETTE.md`](docs/CASSETTE.md) — includes
 > dual-timestamp (`t` + `tRaw`) format, all event kinds, and the header
@@ -229,37 +267,11 @@ The core types in `SugarCraft\Vcr\`:
 | `CassetteHeader` | Schema metadata — `$version`, `$createdAt`, `$cols`, `$rows`, `$runtime`, `$theme`, `$typingSpeed`, `$env`, `$timestampMode`, `$playbackSpeed`, `$fontSize`, `$fontFamily`, `$widthPx`, `$heightPx`. Constants `CURRENT_VERSION` (2 — the version writers stamp; `MAX_READABLE_VERSION` is also 2, so readers accept v2 today and refuse anything newer), `PLAYBACK_SPEED_DEFAULT` (1.0), `TIMESTAMP_MODE_ABSOLUTE`, `TIMESTAMP_MODE_RELATIVE`. (The wire key is `created`; the DTO property is `$createdAt`.) |
 | `Event` | One recorded line. Fields: `t: float`, `kind: EventKind`, payload `array`. |
 | `EventKind` | Enum: `Resize`, `Input`, `Output`, `Quit`, `Snapshot`, `Hide`, `Show`. |
-| `Recorder` | Record-side. Construct via `Recorder::open($path, ?CassetteHeader $header = null)` — the cassette file is created and tightened to `0600` (owner-only) because cassettes can embed secrets; the header's `timestampMode` decides absolute vs relative. Methods: `withFormat(Format)` (confirms only — throws when the header is not relative), `withHook(Hook)`, `withIdleTrim($threshold, $compressedMax=0.5)`, `recordResize($cols, $rows)`, `recordInputBytes($bytes)`, `recordOutput($bytes)`, `recordQuit()`, `close()`, `captureWriteErrors(): int` (count of failed write/flush attempts — a non-zero total means the cassette is silently incomplete). Helpers `defaultHeader($cols, $rows, $runtime)`, `hooks(): HookRegistry`. Env filtering is `RecordCommand::filteredHostEnv()` — see the record options below. |
+| `Recorder` | Record-side. Construct via `Recorder::open($path, ?CassetteHeader $header = null)` — the cassette file is created and tightened to `0600` (owner-only) because cassettes can embed secrets; the header's `timestampMode` decides absolute vs relative. Methods: `withFormat(Format)` (confirms only — throws when the header is not relative), `withHook(Hook)`, `withIdleTrim($threshold, $compressedMax=0.5)`, `recordResize($cols, $rows)`, `recordInputBytes($bytes)`, `recordOutput($bytes)`, `recordQuit()`, `close()`, `captureWriteErrors(): int` (count of failed write/flush attempts — a non-zero total means the cassette is silently incomplete). Helpers `defaultHeader($cols, $rows, $runtime)`, `hooks(): HookRegistry` — `hookErrors(): list<string>` reports the `afterCapture()` hooks that threw during capture (recorded, never swallowed; the `record` command prints them as warnings). Env filtering is `RecordCommand::filteredHostEnv()` — see the [record options](#recording-commands). |
 | `Player` | Replay-side. Factories: `Player::open($path)` (a `.gz` name is routed straight to `CompressedJsonlFormat` without sniffing; any other name content-sniffs the second line — a `dt` field selects `RelativeFormat`, otherwise `JsonlFormat`, so for non-`.gz` names the extension is not consulted), `Player::loadAny($path)` (extension + content sniff via `CassetteLoader`, accepts `.tape` sources). Methods: `withIdleTrim(?float)`, `play(programFactory, ?assertion, speed, ?serializerRegistry, ?timeoutSeconds, skipFirstResize, ?matcher, ?idleThresholdSeconds, useRawTimestamps)`. Constants `SPEED_INSTANT`, `SPEED_REALTIME`, `INSTANT_YIELD_SECONDS`. |
 | `Format\Format` (interface) | `write(Cassette, $path)`, `read($path): Cassette`, `encode(Cassette): string`, `decode(string): Cassette`. Implementations: `JsonlFormat` (default), `CompressedJsonlFormat`, `RelativeFormat`, `YamlFormat`. `AsciinemaFormat` is a read-only importer with `read()` only and implements nothing. |
 | `Format\CassetteLoader` | `load($path): Cassette` — auto-detects cassette vs tape source. `isTape($path): bool` — exposes the sniff. |
 | `ReplayResult` | DTO returned by `Player::play()`. `$ok: bool`, `$diff: string` (empty when `ok`; the assertion diff otherwise), `$eventCount`, `$inputCount`, `$resizeCount`, `$outputCount`, `$quitCount`, `$programQuitCleanly: bool`, `$undecodedInputCount` (input events whose `msg` envelope had no registered decoder and were skipped — `diffSummary()` prints it when non-zero); helper `diffSummary(): string`. |
-
-## Quickstart
-
-Record a session:
-
-```php
-use SugarCraft\Core\Program;
-use SugarCraft\Vcr\Recorder;
-
-$program = new Program($model);
-$program->setRecorder(Recorder::open('/tmp/session.cas'));  // void — statement form
-$program->run();
-// cassette is closed automatically when the run loop ends
-// (final recordQuit rides only a QuitMsg exit; a crash still flushes)
-```
-
-Read a recorded cassette back:
-
-```php
-use SugarCraft\Vcr\Format\JsonlFormat;
-
-$cassette = (new JsonlFormat())->read('/tmp/session.cas');
-foreach ($cassette->events as $event) {
-    echo $event->kind->value, ' @ ', $event->t, "\n";
-}
-```
 
 ## CLI
 
@@ -275,7 +287,24 @@ vendor/bin/candy-vcr render-tape demo.tape                                 # ren
 vendor/bin/candy-vcr render-batch demos/                                     # render all .tape files in directory
 ```
 
-`record` spawns the given command under a fresh master/slave PTY, drops the host stdin into raw mode, runs the sugar-pty byte pump with a `Recorder` tee'd onto every stdin/master-output chunk, and writes a `session-<timestamp>.cas` cassette (override with `--output PATH`). The CLI is defensive about that file: an existing target is never silently truncated — without `--force`, `record` exits 2 with `refusing to overwrite existing cassette …pass --force to replace` — and a `--output` ending in `.gz` is refused outright (exit 2), because the CLI records plain JSONL bytes only; gzip cassettes are the API's job (`CompressedJsonlFormat`, see [Gzip compression](#gzip-compression)). The recorded child gets a controlling terminal by default so Ctrl+C reaches it (use `--no-ctty` to disable); the host termios is restored on every exit path including thrown exceptions. The cassette can then be replayed via `vendor/bin/candy-vcr replay …` or loaded by tests through `Player::play()`.
+`record` runs the given command under a fresh master/slave PTY. It drops the host stdin into raw
+mode, pumps bytes through sugar-pty with a `Recorder` teed onto every stdin and master-output
+chunk, and writes a `session-<timestamp>.cas` cassette (override with `--output PATH`). The CLI is
+defensive about that file:
+
+- An existing target is never silently truncated. Two doors guard it: an advisory existence
+  check — without `--force`, `record` exits 2 with
+  `refusing to overwrite existing cassette {path} — pass --force to replace` — and, once that
+  passes, an exclusive `flock` taken before the file is touched, so a second recorder racing for
+  the same path refuses by name instead of clobbering it.
+- A `--output` ending in `.gz` is refused outright (exit 2), because the CLI records plain JSONL
+  bytes only; gzip cassettes are the API's job (`CompressedJsonlFormat`, see
+  [Gzip compression](#gzip-compression)).
+- The recorded child gets a controlling terminal by default so Ctrl+C reaches it (use `--no-ctty`
+  to disable); the host termios is restored on every exit path including thrown exceptions.
+
+The cassette can then be replayed via `vendor/bin/candy-vcr replay …` or loaded by tests through
+`Player::play()`.
 
 A finished `replay` prints one summary line to **stderr** — events streamed,
 output bytes and virtual time — so a silent terminal is never ambiguous about
@@ -283,8 +312,8 @@ whether anything played; stdout keeps carrying only the recorded bytes, which is
 what makes `candy-vcr replay x.cas | cmp - expected` a valid test.
 `render-tape` likewise announces what it is rendering, and reports every 100
 frames while it works, so a multi-minute render is not indistinguishable from a
-hang. Every verb answers `-h` / `--help` with its own usage block on stdout and
-exit 0; `--version` / `-V` answers before verb dispatch — it prints `candy-vcr <version>` on
+hang. Every verb responds to `-h` / `--help` with its own usage block on stdout and
+exit 0; `--version` / `-V` is handled before verb dispatch — it prints `candy-vcr <version>` on
 stdout and exits 0 (a `dev` stamp in a plain checkout, the composer or phar version otherwise).
 
 ### Localization
@@ -398,7 +427,7 @@ as "within noise" — the assertion budget below is what carries the signal.
 
 The assertion budget is 8 % to absorb shared-runner jitter while still catching the regression class this test exists to flag (a real serialization-per-chunk regression would land at dozens of percent). The original performance survey's 2 % acceptance target is reported by the test but not asserted.
 
-### Hook system
+## Hook system
 
 Hooks intercept and transform events during recording, enabling sanitization,
 metadata injection, and custom logging:
@@ -432,7 +461,10 @@ $program->run();
 - Custom hooks implement `SugarCraft\Vcr\Hook\Hook` (`beforeSave($event): ?Event` + `afterCapture($event): void`)
 
 Hooks are managed by `Hook\HookRegistry`
-(`addHook`, `beforeSave`, `afterCapture`, `count`, `clear`).
+(`addHook`, `beforeSave`, `afterCapture`, `count`, `clear`). An
+`afterCapture()` hook that throws is recorded — never silently swallowed:
+`Recorder::hookErrors()` lists the failures, and the `record` command prints
+each one as a warning on stderr after the session.
 
 **Redaction is opt-in wiring.** Nothing attaches a hook automatically: a
 `record` run stores exactly what the terminal sent, so scrubbing typed
@@ -442,7 +474,7 @@ event payload bytes (see [Limitations](#limitations)).
 `Recorder::withHook()` appends to its private registry; returning
 `null` from `beforeSave()` drops the event entirely.
 
-### Matcher classes — replay-side flexibility
+## Matcher classes — replay-side flexibility
 
 `SugarCraft\Vcr\Matcher\EventMatcher` controls when a replayed event
 "matches" the recorded one. Use cases: timing-tolerant replays (CI
@@ -463,7 +495,7 @@ $matcher->matches($recordedEvent, $actualEvent);  // bool
 
 Custom matchers implement `EventMatcher::matches(Event $recorded, Event $actual): bool`.
 
-### Rendering `.tape` files to GIF
+## Rendering `.tape` files to GIF
 
 The `render-tape` and `render-batch` commands convert `.tape` files to animated GIFs. They use the `TapeToGif` pipeline: Lexer → Parser → Compiler → Player → Terminal → Renderer → FrameStream → FrameDedup → Rasterizer → GifEncoder. `.tape` is the only renderable input — a recorded cassette cannot be exported to GIF, and no command seeks or window-crops a tape (see [Limitations](#limitations)).
 
@@ -510,7 +542,7 @@ vendor/bin/candy-vcr render-batch demos/ --recursive
 vendor/bin/candy-vcr render-batch demos/ -o output-gifs/
 ```
 
-#### `render-tape` options
+### `render-tape` options
 
 | Option | Short | Description |
 |--------|-------|-------------|
@@ -525,7 +557,7 @@ vendor/bin/candy-vcr render-batch demos/ -o output-gifs/
 | `--exec` | | Enable exec mode with a default shell (`$SHELL` or `/bin/sh`) when the tape sets no `Set Shell` |
 | `--dry-run` | | Print the compiled event stream as JSONL to stdout; no GIF is written |
 
-##### Exec mode — rendering program output (`Set Shell`)
+#### Exec mode — rendering program output (`Set Shell`)
 
 By default `render-tape` rasterizes the *keystrokes* a tape types — it
 never runs them, so it cannot render a demo of a program's output. Exec
@@ -578,10 +610,10 @@ spending the GIF render cost. The `-o` flag (if also passed) is ignored
 in dry-run mode.
 
 ```sh
-candy-vcr render-tape demo.tape --dry-run | head -5
+vendor/bin/candy-vcr render-tape demo.tape --dry-run | head -5
 ```
 
-#### `inspect --frames`
+### `inspect --frames`
 
 `inspect <cassette|.tape> --frames` walks the cassette through a Renderer
 and Terminal at the configured fps (default 30; set it with `--fps=<n>` or
@@ -603,10 +635,10 @@ by consecutive `Snapshot::equals()` comparison — the same rule
 GIF-encoding job before committing to a full render.
 
 ```sh
-candy-vcr inspect demo.tape --frames --fps 60
+vendor/bin/candy-vcr inspect demo.tape --frames --fps 60
 ```
 
-#### `render-batch` options
+### `render-batch` options
 
 `render-batch <dir>` takes its own option set — the render flags below, but **no** `--shell`, `--exec` or `--dry-run` (those are single-tape only: a batch never spawns a shell, and dry-run has no meaning across a directory).
 
@@ -621,7 +653,7 @@ candy-vcr inspect demo.tape --frames --fps 60
 | `--recursive` | `-r` | Search recursively for .tape files |
 | `--strict` | | Error on unknown directives instead of skipping |
 
-#### GIF encoding pipeline
+### GIF encoding pipeline
 
 The `TapeToGif` class wires together the full render pipeline:
 
@@ -634,25 +666,25 @@ The `TapeToGif` class wires together the full render pipeline:
 
 Frame hold durations are tracked through the dedup stage and passed to the encoder for accurate VFR (variable frame rate) timing.
 
-### Cassette migration
+## Cassette migration
 
 Cassette format versions evolve over time. The `migrate` command upgrades cassettes automatically:
 
 ```sh
 # Migrate in-place (creates session.cas.bak backup)
-candy-vcr migrate session.cas
+vendor/bin/candy-vcr migrate session.cas
 
 # Migrate to a new file
-candy-vcr migrate session.cas upgraded.cas
+vendor/bin/candy-vcr migrate session.cas upgraded.cas
 
 # Replace an existing output file (it is refused without --force)
-candy-vcr migrate session.cas upgraded.cas --force
+vendor/bin/candy-vcr migrate session.cas upgraded.cas --force
 
 # Dry-run — validate without writing
-candy-vcr migrate session.cas --dry-run
+vendor/bin/candy-vcr migrate session.cas --dry-run
 
 # Show registered migrators
-candy-vcr migrate --info
+vendor/bin/candy-vcr migrate --info
 ```
 
 The migration system is pluggable via `SugarCraft\Vcr\Migration\CassetteMigrator`.
@@ -1007,7 +1039,9 @@ bin/candy-vcr replay  examples/cassettes/counter.cas --speed=realtime
 php examples/replay.php examples/cassettes/counter.cas
 ```
 
-To record your own run, point `record.php` at a scratch path — it opens its target with plain `fopen(..., 'wb')` and silently replaces an existing file, so never let it write over the tracked fixture (with no argument it defaults to `examples/cassettes/recorded.cas`):
+To record your own run, point `record.php` at a scratch path — it opens its target through
+`Recorder::open`, which locks the file and replaces an existing unlocked one, so never let it
+write over the tracked fixture (with no argument it defaults to `examples/cassettes/recorded.cas`):
 
 ```sh
 php examples/record.php /tmp/session.cas
@@ -1115,6 +1149,8 @@ renderer-only REP, and the explicit `CSI 0 L/M` count no-op that sugar-ansi-pars
 `HandlerAdapter` clamps to 1 before the renderer sees it — each pinned as an
 explicit tripwire case with a fix pointer rather than left to surface as a
 mystery assertion failure.
+
+#### Assertion classes
 
 `ByteAssertion` is the strict baseline — exact byte equality with a hex-and-printable diff window on failure. `ScreenAssertion` (cell-grid equality via [sugar-vterm](https://github.com/sugarcraft/sugar-vterm)) is the recommended choice for round-trip tests:
 
