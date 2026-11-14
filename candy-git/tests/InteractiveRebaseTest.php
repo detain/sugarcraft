@@ -193,10 +193,4 @@ final class InteractiveRebaseTest extends TestCase
         // Original unchanged
         $this->assertSame(RebaseAction::Edit, $commit->action);
     }
-
-    public function testRebaseCommitDisplayLine(): void
-    {
-        $commit = new RebaseCommit('abc1234', 'my subject', RebaseAction::Pick);
-        $this->assertSame('pick abc1234 my subject', $commit->displayLine());
-    }
 }

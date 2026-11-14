@@ -230,7 +230,7 @@ marker carries no color, so tab cycling stays visible under `NO_COLOR`,
 | `Renderer`        | Pure view function — three `Style::border(rounded)` panes joined horizontally / vertically; the focused pane gets a brighter accent **and** a `▸` text prefix on its title, so focus survives color stripping. |
 | `StashEntry`        | Immutable stash entry — `index`, `sha`, `branch`, `message` + `stashRef()` / `displayLine()`.                                      |
 | `StashManager`     | Immutable stash list state — `stashes`, `cursor`, `withCursor()`, `withStashes()`, `current()`, `count()`.                        |
-| `CherryPick`       | Immutable cherry-pick state — `collecting` flag + `commitRef` accumulator + `withChar()`/`cancel()`.                              |
+| `CherryPick`       | Immutable cherry-pick state — `collecting` flag + `commitRef` accumulator + `withCommitRef()` (the only writer; App owns the buffer).                              |
 | `WorktreeEntry`    | Immutable worktree entry — `path`, `branch`, `isBare`, `HEAD`.                                                                     |
 | `Worktrees`        | Immutable worktree manager state — `worktrees`, `cursor`, `adding`/`removing` modes + path collection (new worktrees branch from HEAD).                     |
 | `RebaseAction`      | Enum — `Pick`, `Reword`, `Edit`, `Squash`, `Drop`.                                                                               |

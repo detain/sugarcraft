@@ -27,12 +27,4 @@ final readonly class RebaseCommit
     {
         return new self(sha: $this->sha, subject: $this->subject, action: $action);
     }
-
-    /**
-     * Display line for the rebase todo list.
-     */
-    public function displayLine(): string
-    {
-        return $this->action->value . ' ' . $this->sha . ' ' . $this->subject;
-    }
 }

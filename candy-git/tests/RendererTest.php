@@ -121,7 +121,6 @@ final class RendererTest extends TestCase
             public function worktreeList(): array { return []; }
             public function worktreeAdd(string $_path, string $_branch): void {}
             public function worktreeRemove(string $_path): void {}
-            public function rebaseInProgress(): bool { return false; }
             public function sequenceState(): string { return ''; }
         };
         $a = App::start($g);
@@ -191,7 +190,6 @@ final class RendererTest extends TestCase
             public function worktreeList(): array { return []; }
             public function worktreeAdd(string $path, string $branch): void {}
             public function worktreeRemove(string $path): void {}
-            public function rebaseInProgress(): bool { return false; }
             public function sequenceState(): string { return ''; }
         };
         $a = App::start($g);
@@ -468,7 +466,7 @@ final class RendererTest extends TestCase
     public function testRenderWithCherryPickCollection(): void
     {
         $g = new FixtureGit([], [], []);
-        $cp = \SugarCraft\Git\CherryPick::collecting()->withChar('a')->withChar('b');
+        $cp = \SugarCraft\Git\CherryPick::collecting()->withCommitRef('ab');
         $a = new \SugarCraft\Git\App($g, cherryPick: $cp);
         $out = \SugarCraft\Git\Renderer::render($a);
         // The rendered output shows "cherry-pick:" (with hyphen from lang file)
@@ -525,7 +523,6 @@ final class RendererTest extends TestCase
             public function worktreeList(): array { return []; }
             public function worktreeAdd(string $path, string $branch): void {}
             public function worktreeRemove(string $path): void {}
-            public function rebaseInProgress(): bool { return false; }
             public function sequenceState(): string { return ''; }
         };
         $a = App::start($g);

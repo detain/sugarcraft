@@ -198,9 +198,6 @@ interface GitDriver
     /** Remove an existing worktree at $path. */
     public function worktreeRemove(string $path): void;
 
-    /** Check if a rebase is currently in progress. */
-    public function rebaseInProgress(): bool;
-
     /** Sequencer stop state: 'rebase' | 'cherry' | 'merge' | '' (none). */
     public function sequenceState(): string;
 }

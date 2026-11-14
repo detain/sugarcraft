@@ -112,7 +112,6 @@ $fixture = new class implements GitDriver {
     public function worktreeList(): array { return []; }
     public function worktreeAdd(string $path, string $branch): void {}
     public function worktreeRemove(string $path): void {}
-    public function rebaseInProgress(): bool { return false; }
     public function sequenceState(): string { return ''; }
 };
 

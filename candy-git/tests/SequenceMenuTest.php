@@ -266,6 +266,5 @@ final class SequenceMenuTest extends TestCase
         unlink($gitDir . '/CHERRY_PICK_HEAD');
         mkdir($gitDir . '/rebase-apply');
         self::assertSame('rebase', $git->sequenceState(), 'rebase beats every other stop');
-        self::assertTrue($git->rebaseInProgress());
     }
 }

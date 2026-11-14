@@ -63,7 +63,6 @@ final class FixtureGit implements GitDriver
     public array $worktreeAdds = [];
     /** @var list<string> */
     public array $worktreeRemoves = [];
-    public bool $rebaseInProgressResult = false;
     /** @var array<string, \Throwable> method => exception to throw */
     public array $throwOn = [];
 
@@ -139,7 +138,6 @@ final class FixtureGit implements GitDriver
     }
     public function worktreeAdd(string $path, string $branch): void { $this->maybeThrow('worktreeAdd'); $this->worktreeAdds[] = ['path' => $path, 'branch' => $branch]; }
     public function worktreeRemove(string $path): void { $this->maybeThrow('worktreeRemove'); $this->worktreeRemoves[] = $path; }
-    public function rebaseInProgress(): bool { $this->maybeThrow('rebaseInProgress'); return $this->rebaseInProgressResult; }
     public string $sequenceStateResult = '';
     public function sequenceState(): string { $this->maybeThrow('sequenceState'); return $this->sequenceStateResult; }
 }
@@ -1365,7 +1363,6 @@ final class AppTest extends TestCase
     public function testRebaseKeyShowsErrorWhenNoRebaseInProgress(): void
     {
         $g = $this->git();
-        $g->rebaseInProgressResult = false;
         $a = App::start($g);
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'r'));
         $this->assertNotNull($a->error);

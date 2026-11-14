@@ -30,26 +30,15 @@ final readonly class CherryPick
     }
 
     /**
-     * Return a new CherryPick with an added character to the commit ref.
-     */
-    public function withChar(string $rune): self
-    {
-        return new self(collecting: true, commitRef: $this->commitRef . $rune);
-    }
-
-    /**
      * Return a new CherryPick with the given commit ref.
+     *
+     * Dead-code sweep part 1 (candy-git-029): withChar()/cancel() are gone —
+     * the keyboard path accumulated in App and handed the full buffer to
+     * withCommitRef(), and Escape closes the overlay directly; nothing ever
+     * called the removed pair.
      */
     public function withCommitRef(string $ref): self
     {
         return new self(collecting: $this->collecting, commitRef: $ref);
-    }
-
-    /**
-     * Cancel cherry-pick collection.
-     */
-    public function cancel(): self
-    {
-        return new self(collecting: false, commitRef: '');
     }
 }

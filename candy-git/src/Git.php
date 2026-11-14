@@ -588,11 +588,6 @@ final class Git implements GitDriver
         $this->run(['worktree', 'remove', $path]);
     }
 
-    public function rebaseInProgress(): bool
-    {
-        return $this->sequenceState() === 'rebase';
-    }
-
     /**
      * Which sequencer (if any) is stopped mid-flight waiting for attention.
      *
