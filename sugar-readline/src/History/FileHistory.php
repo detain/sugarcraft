@@ -32,13 +32,19 @@ namespace SugarCraft\Readline\History;
  * duplicate can no longer survive concurrent append — including the batch
  * flush() of deferred writes.
  *
- * On-disk format: one entry per line, with backslash escapes (mirroring
- * bash history-file conventions) applied at the write choke and undone at
- * load — `\\` for a backslash, `\n` / `\r` for embedded newlines and
- * carriage returns. Without escaping an entry containing a raw LF reloads
- * as TWO entries. Files written before escaping existed may therefore
- * decode a literal `\n` sequence into a newline on load (documented
- * consequence of adopting the format).
+ * On-disk format: an optional `#sugar-readline-history/v2` first line (the
+ * version marker; see below) then one entry per line, with backslash escapes
+ * (mirroring bash history-file conventions) applied at the write choke and
+ * undone at load — `\\` for a backslash, `\n` / `\r` for embedded newlines
+ * and carriage returns. Without escaping an entry containing a raw LF
+ * reloads as TWO entries. Files written before escaping existed may
+ * therefore decode a literal `\n` sequence into a newline on load
+ * (documented consequence of adopting the format). The marker line itself
+ * is skipped by every decoder; it is written by the bounded full rewrite
+ * and NEVER by the append paths — a markerless file decodes identically
+ * (the v2 escape rule is the only rule so far), so adoption is a
+ * trajectory, not a migration: each store gains the marker the first time
+ * a cap-merge rewrites it whole.
  *
  * Entry view: entries()/count() (inherited, finding 014) expose this
  * process's retained window — the file as loaded plus pushes since, capped
@@ -86,6 +92,15 @@ namespace SugarCraft\Readline\History;
  */
 final class FileHistory extends InMemoryHistory
 {
+    /**
+     * First-line format marker written by the bounded full rewrite
+     * (finding 069). Its presence declares "v2 escape rules apply and
+     * future rules can be dispatched on it"; its absence is likewise
+     * unambiguous - every file predates the marker, and the v2 rule is the
+     * only rule so far.
+     */
+    private const FORMAT_HEADER = '#sugar-readline-history/v2';
+
     private string $filePath;
     private string $tempDir;
     private bool $deferWrites;
@@ -706,6 +721,11 @@ final class FileHistory extends InMemoryHistory
                         // would re-permanentize crash garbage as an entry.
                         array_pop($fileLines);
                     }
+                    if ($fileLines !== [] && $fileLines[0] === self::FORMAT_HEADER) {
+                        // Format marker (finding 069): metadata, never an
+                        // entry — and never re-merged as one.
+                        array_shift($fileLines);
+                    }
                     foreach ($fileLines as $fileLine) {
                         $decoded = self::unescapeLine(rtrim($fileLine, "\r"));
                         if ($decoded !== '') {
@@ -774,6 +794,9 @@ final class FileHistory extends InMemoryHistory
             @unlink($tempFile);
             throw new \RuntimeException('sugar-readline: cannot lock temp file for history rewrite: ' . $tempFile);
         }
+        // Format stamp (finding 069): a full rewrite declares the format it
+        // wrote. Append paths never add this line - adoption is a trajectory.
+        fwrite($fp, self::FORMAT_HEADER . "\n");
         foreach ($entries as $entry) {
             fwrite($fp, self::escapeLine($entry) . "\n");
         }
@@ -895,12 +918,20 @@ final class FileHistory extends InMemoryHistory
             $this->noteReadLockDegraded();
         }
         $lines = [];
+        $atFirst = true;
         while (($line = fgets($fp)) !== false) {
             if (!str_ends_with($line, "\n")) {
                 // Torn-tail law (finding 064): an unterminated final line is
                 // a crash fragment — every writer path terminates, so it is
                 // dropped rather than decoded into a bogus entry.
                 break;
+            }
+            // Format marker (finding 069): a first line equal to the v2
+            // header is metadata, never an entry.
+            $isHeader = $atFirst && rtrim($line, "\r\n") === self::FORMAT_HEADER;
+            $atFirst = false;
+            if ($isHeader) {
+                continue;
             }
             $decoded = self::unescapeLine(rtrim($line, "\r\n"));
             if ($decoded !== '') {

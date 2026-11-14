@@ -86,7 +86,7 @@ final class FileHistoryTornTailTest extends TestCase
         $history->push('gamma');
         $history->flush();
 
-        $this->assertSame("alpha\nbeta\ngamma\n", $this->diskBytes());
+        $this->assertSame("#sugar-readline-history/v2\nalpha\nbeta\ngamma\n", $this->diskBytes());
         $this->assertStringNotContainsString('frag', $this->diskBytes());
     }
 

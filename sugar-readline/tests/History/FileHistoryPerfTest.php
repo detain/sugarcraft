@@ -60,7 +60,7 @@ final class FileHistoryPerfTest extends TestCase
         $h->push('e6'); // overflow 3 == cap -> the one deferred rewrite fires
         $this->assertNotSame($inode, (int) stat($this->historyFile)['ino'], 'exactly one rewrite at the threshold');
 
-        $lines = array_values(array_filter(explode("\n", (string) file_get_contents($this->historyFile)), static fn ($l) => $l !== ''));
+        $lines = array_values(array_filter(explode("\n", (string) file_get_contents($this->historyFile)), static fn ($l) => $l !== '' && $l !== '#sugar-readline-history/v2'));
         $this->assertSame(['e4', 'e5', 'e6'], $lines, 'trim still lands the merged bounded view');
     }
 
@@ -79,7 +79,7 @@ final class FileHistoryPerfTest extends TestCase
 
         $h->flush();
 
-        $lines = array_values(array_filter(explode("\n", $raw = (string) file_get_contents($this->historyFile)), static fn ($l) => $l !== ''));
+        $lines = array_values(array_filter(explode("\n", $raw = (string) file_get_contents($this->historyFile)), static fn ($l) => $l !== '' && $l !== '#sugar-readline-history/v2'));
         $this->assertSame(['f2', 'f3', 'f4'], $lines, 'flush must not leave the superseded head on disk');
     }
 
@@ -103,7 +103,7 @@ final class FileHistoryPerfTest extends TestCase
         $this->assertSame('a', $entries[0], 're-pushed evicted line returns to the newest slot');
 
         $h->flush();
-        $lines = array_values(array_filter(explode("\n", (string) file_get_contents($this->historyFile)), static fn ($l) => $l !== ''));
+        $lines = array_values(array_filter(explode("\n", (string) file_get_contents($this->historyFile)), static fn ($l) => $l !== '' && $l !== '#sugar-readline-history/v2'));
         $this->assertSame(['c', 'a'], $lines, 'trimmed file rides the same union the merge has always produced');
     }
 

@@ -97,7 +97,7 @@ final class FileHistoryPersistOrderTest extends TestCase
         $this->unpoisonLock();
         $history->push('b');
         $this->assertSame(['b'], $history->entries());
-        $this->assertSame("b\n", $this->diskBytes());
+        $this->assertSame("#sugar-readline-history/v2\nb\n", $this->diskBytes(), 'the bounded merge rewrite stamps the format marker');
     }
 
     public function testCappedAppendFailureAdvancesNoCheckpoint(): void
@@ -122,7 +122,7 @@ final class FileHistoryPersistOrderTest extends TestCase
         $history->push('d'); // retried checkpoint commits
         $this->assertSame(['d', 'c'], $history->entries());
         $this->assertSame(0, $this->trimOverflowOf($history));
-        $this->assertSame("c\nd\n", $this->diskBytes());
+        $this->assertSame("#sugar-readline-history/v2\nc\nd\n", $this->diskBytes());
     }
 
     public function testClearFailureKeepsTheWholeStore(): void
@@ -175,6 +175,6 @@ final class FileHistoryPersistOrderTest extends TestCase
 
         $this->unpoisonLock();
         $history->flush();
-        $this->assertSame("a\nb\n", $this->diskBytes());
+        $this->assertSame("#sugar-readline-history/v2\na\nb\n", $this->diskBytes());
     }
 }

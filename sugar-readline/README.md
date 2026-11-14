@@ -541,6 +541,10 @@ permissions. Keep the history in a private directory: `0600` protects the
 **content**, not the filename listing, so the mere name of the file is
 visible to anyone who can read its directory.
 
+The bounded full rewrite makes the file self-describing: it stamps
+`#sugar-readline-history/v2` as the first line. Every decoder skips the
+marker, and the append paths never add one — a markerless file decodes
+identically, so a store simply gains the marker at its first full rewrite.
 Entries are stored one per line with backslash escapes (`\\`, `\n`, `\r`)
 applied at the write choke and undone on load — a value that somehow
 contains a raw newline survives a save/reload round-trip as **one** entry

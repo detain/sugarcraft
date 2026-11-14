@@ -646,7 +646,7 @@ final class FileHistoryTest extends TestCase
             $h->push($entry);
         }
 
-        $lines = array_values(array_filter(explode("\n", (string) file_get_contents($this->historyFile)), static fn ($l) => $l !== ''));
+        $lines = array_values(array_filter(explode("\n", (string) file_get_contents($this->historyFile)), static fn ($l) => $l !== '' && $l !== '#sugar-readline-history/v2'));
         $this->assertSame(['e4', 'e5', 'e6'], $lines, 'file keeps exactly the newest cap entries, oldest-first');
 
         $reloaded = new FileHistory($this->historyFile, 3);
@@ -664,7 +664,7 @@ final class FileHistoryTest extends TestCase
         $h->push('d3');
         $h->flush();
 
-        $lines = array_values(array_filter(explode("\n", (string) file_get_contents($this->historyFile)), static fn ($l) => $l !== ''));
+        $lines = array_values(array_filter(explode("\n", (string) file_get_contents($this->historyFile)), static fn ($l) => $l !== '' && $l !== '#sugar-readline-history/v2'));
         $this->assertSame(['d2', 'd3'], $lines);
     }
 
@@ -681,7 +681,7 @@ final class FileHistoryTest extends TestCase
         // documented checkpoint that forces the merged, cap-trimmed view.
         $h->flush();
 
-        $lines = array_values(array_filter(explode("\n", (string) file_get_contents($this->historyFile)), static fn ($l) => $l !== ''));
+        $lines = array_values(array_filter(explode("\n", (string) file_get_contents($this->historyFile)), static fn ($l) => $l !== '' && $l !== '#sugar-readline-history/v2'));
         $this->assertSame(['shared-b', 'mine'], $lines);
     }
 
