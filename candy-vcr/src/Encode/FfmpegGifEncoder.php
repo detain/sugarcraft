@@ -74,8 +74,13 @@ final class FfmpegGifEncoder implements GifEncoder
             } else {
                 foreach ($pngPaths as $index => $srcPath) {
                     $dst = $tempDir . '/frame' . sprintf('%05d', $index) . '.png';
-                    if (!copy($srcPath, $dst)) {
-                        throw new \RuntimeException("Failed to copy frame {$index}: {$srcPath}");
+                    // Stage by hard link, not byte copy (PERF-12): ffmpeg only
+                    // READS the %05d sequence, and long tapes were paying a
+                    // full second write of every frame — hundreds of MB — to
+                    // satisfy the pattern. link() is refused cross-device or
+                    // on FAT-style mounts, so copy() stays the fallback door.
+                    if (@link($srcPath, $dst) === false && !copy($srcPath, $dst)) {
+                        throw new \RuntimeException("Failed to stage frame {$index}: {$srcPath}");
                     }
                 }
                 $args = [

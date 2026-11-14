@@ -52,13 +52,32 @@ final class ByteAssertion implements Assertion
         );
     }
 
+    /**
+     * Slice size for the C-speed pre-scan in {@see self::firstDivergence()}.
+     */
+    private const DIVERGENCE_CHUNK = 65536;
+
     private function firstDivergence(string $a, string $b): int
     {
         $len = min(strlen($a), strlen($b));
-        for ($i = 0; $i < $len; $i++) {
-            if ($a[$i] !== $b[$i]) {
-                return $i;
+        // Chunked scan (PERF-10): the common prefix — megabytes on a long
+        // cassette's first, most informative failure — is skipped at C speed
+        // one 64 KiB substr_compare at a time, and only the diverging slice
+        // pays the userland byte walk. Returns the same offset the naive
+        // loop would, exactly.
+        for ($off = 0; $off < $len; $off += self::DIVERGENCE_CHUNK) {
+            $size = min(self::DIVERGENCE_CHUNK, $len - $off);
+            if (substr_compare($a, $b, $off, $size) === 0) {
+                continue;
             }
+            for ($i = $off; $i < $off + $size; $i++) {
+                if ($a[$i] !== $b[$i]) {
+                    return $i;
+                }
+            }
+            // substr_compare just said this slice differs, so the walk must
+            // find the byte; if it doesn't, the scan desynchronized.
+            throw new \LogicException('divergence scan desynchronized within a chunk');
         }
         return $len;
     }

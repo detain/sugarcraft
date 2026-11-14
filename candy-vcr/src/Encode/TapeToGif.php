@@ -256,6 +256,23 @@ final class TapeToGif
                     if ($written === false) {
                         throw new \RuntimeException("Failed to write PNG frame: {$framePath}");
                     }
+                    // GIF Graphic Control delay is 16-bit centiseconds: a hold
+                    // beyond 655.35s saturates, and a non-finite hold (a corrupted
+                    // tape clock reaching the encoder) must die named, not silently
+                    // cast into a bogus delay.
+                    $holdSeconds = $frameInfo['hold'];
+                    if (!is_finite($holdSeconds)) {
+                        throw new \RuntimeException("Non-finite frame hold duration at frame {$index} of {$tapePath}");
+                    }
+                    // Screenshot capture — confined to output directory for
+                    // safety. The SAME rasterized image is stored here before
+                    // it is destroyed: a second rasterize() per Screenshot
+                    // directive duplicated the canvas build, every tile blit
+                    // and the PNG encode for a byte-identical picture (PERF-11).
+                    if (($frameInfo['screenshotPath'] ?? null) !== null) {
+                        $confinedPath = $this->confineScreenshotPath($frameInfo['screenshotPath'], $outputDir);
+                        $this->writeImageAtomically($image, $confinedPath);
+                    }
                 } finally {
                     if ($image instanceof \Imagick) {
                         $image->clear();
@@ -265,30 +282,7 @@ final class TapeToGif
                 }
 
                 $pngPaths[] = $framePath;
-                // GIF Graphic Control delay is 16-bit centiseconds: a hold
-                // beyond 655.35s saturates, and a non-finite hold (a corrupted
-                // tape clock reaching the encoder) must die named, not silently
-                // cast into a bogus delay.
-                $holdSeconds = $frameInfo['hold'];
-                if (!is_finite($holdSeconds)) {
-                    throw new \RuntimeException("Non-finite frame hold duration at frame {$index} of {$tapePath}");
-                }
                 $frameHoldsMs[] = (int) round(min(655.35, max(0.0, $holdSeconds)) * 1000);
-
-                // Handle screenshot capture — confined to output directory for safety
-                if (($frameInfo['screenshotPath'] ?? null) !== null) {
-                    $confinedPath = $this->confineScreenshotPath($frameInfo['screenshotPath'], $outputDir);
-                    $screenshotImage = $rasterizer->rasterize($frameInfo['snapshot'], $cellW, $cellH, null, $renderCursor);
-                    try {
-                        $this->writeImageAtomically($screenshotImage, $confinedPath);
-                    } finally {
-                        if ($screenshotImage instanceof \Imagick) {
-                            $screenshotImage->clear();
-                        } else {
-                            imagedestroy($screenshotImage);
-                        }
-                    }
-                }
             }
 
             if ($pngPaths === []) {
