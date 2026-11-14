@@ -43,6 +43,7 @@
         "phpstan/phpstan-phpunit": "^2.0"
     },
     "suggest": {
+        "ext-pcntl": "Graceful signal handling on POSIX: SIGINT/SIGTERM/SIGHUP routed through the program's stop path, SIGWINCH resize callbacks, and Ctrl-Z suspend/resume. Without it these degrade silently (native Windows never has it); see README, Signals, raw TTY and terminal degradation.",
         "ext-ffi": "Required on Windows for raw TTY support (the sugar-pty termios backend).",
         "sugarcraft/sugar-colorprofile": "Single color-detection ladder; Util\\ColorProfile::detect() delegates to it when installed (CP-22). Not required: it depends on sugar-core."
     },

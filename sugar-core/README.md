@@ -203,7 +203,10 @@ $opts = (new ProgramOptionsBuilder())
   skin-toned emoji measures 4 cells instead of 2 — and the cell-budget invariants the TUI
   renderers rely on stop holding. It was a silent requirement before the 2026-08 hardening
   pass: the manifest omitted it while this list already named it.
-- `pcntl` (signal handling — POSIX only; not available on Windows)
+- `pcntl` — **suggested, not required, and declared as `ext-pcntl` in `composer.json`.** The
+  graceful signal surface is POSIX-only; without it SIGWINCH resize, Ctrl-Z suspend/resume and
+  the SIGINT/SIGTERM/SIGHUP stop path silently degrade (they are never *wrong*, just absent —
+  see **Terminal and platform capabilities** below).
 - `FFI` extension (required on Windows for raw TTY support)
 - `react/event-loop` ^1.6 (Composer)
 - `react/promise` ^3.3 (Composer) — the promise surface `Cmd` results and
@@ -222,6 +225,45 @@ $opts = (new ProgramOptionsBuilder())
 > Install note: sibling `sugarcraft/*` packages track `@dev` and the monorepo sets
 > `minimum-stability: dev` with `prefer-stable: true`. A consumer pinning stable releases
 > only should mirror that pair in its own root manifest or install fails to resolve.
+
+## Terminal and platform capabilities
+
+What the runtime can do depends on two axes: whether `ext-pcntl` is present,
+and which backend the platform is. This section is the single place the
+degradation legs are stated together (the code's own guards carry the
+per-site detail; findings sugar-core-028/031/034 are the audit trail).
+
+**`ext-pcntl` gates the signal surface — all of it, silently.** When pcntl
+is absent (`function_exists('pcntl_signal')` false — always true on native
+Windows, and true on a POSIX build configured `--disable-pcntl`), these
+behave as follows. Nothing throws; the capability is simply not there:
+
+| Capability | With pcntl | Without pcntl |
+| --- | --- | --- |
+| `Tty::onResize()` | installs a SIGWINCH handler, returns `true` | returns `false`; the caller keeps a fixed-size view until it re-queries |
+| `Tty::drainSignals()` | returns the dispatched bitmask | returns `false` — the documented sentinel (it is a public poll surface with no in-lib caller; the working delivery is the handler `onResize()` installs, dispatched by async signals or the tick's `pcntl_signal_dispatch()`) |
+| Ctrl-Z suspend / resume (`SIGTSTP`/`SIGCONT`) | full stop-and-restore cycle | **refused quietly** — `suspendProgram()` returns before stashing, because running half the cycle would tell the model it suspended when it never stopped |
+| graceful SIGINT/SIGTERM/SIGHUP teardown | `installSignalHandlers()` routes them to `stopProgram()`, so `run()`'s `finally` restores the terminal | the program relies on the stdin byte reader for Ctrl-C; a `kill` (default disposition) can still land mid-frame — the same stranding pcntl closes, reachable only by signals nobody routed |
+
+`installProgramSignal()` also never *guesses* a predecessor: on pcntl builds
+without `pcntl_signal_get_handler()` the prior handler is recorded as `null`
+and left in place at restore rather than overwritten with a fabricated
+`SIG_DFL` (RUN-13), so the library cannot clobber a signal answer it never
+read.
+
+**Windows is not a degraded POSIX; it is a different backend.** `Tty` picks
+`WindowsBackend` for a native `\` process (unless WSL is detected, which is
+a Linux kernel and takes the POSIX path) and `PosixBackend` under WSL,
+Mintty, Cygwin, and Git-Bash. The `who`-based size fabrication that once
+lived in `PosixBackend::size()`'s fallback is gone — a failed `stty` read
+now yields the documented `LAST_RESORT_SIZE` rather than three digits
+scraped off an unrelated session (sugar-core-058). The Windows raw-mode
+restore path carries a panic rescue seeded before the first mode change
+(sugar-core-059). The `exec`-capture limitation on Windows — `stream_select()`
+cannot watch `proc_open()` pipes, so the two streams are drained with
+blocking sequential reads and the wall deadline cannot preempt a blocked
+CRT read — is detailed in **Composing Cmds** below; it is called out here so
+the Windows story lives in one place.
 
 ## Environment variables
 
