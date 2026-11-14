@@ -64,9 +64,21 @@ final class Filter
         return isset($this->filters[$column]) && $this->filters[$column] !== '';
     }
 
+    /**
+     * The single activity truth: a filter entry counts only when its value
+     * is non-empty, matching {@see self::hasFilter()} polarity exactly.
+     * Storing '' via withFilter() is a neutral entry — kept for transport,
+     * never treated as active.
+     */
     public function isActive(): bool
     {
-        return count($this->filters) > 0;
+        foreach ($this->filters as $value) {
+            if ($value !== '') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function withFilter(string $column, string $value): self

@@ -17,6 +17,10 @@ final class Row
 
     /**
      * Get cell value by key.
+     *
+     * Returns the RAW stored value — typed cells (int, bool, float) come
+     * back without coercion. Stringification is a display-time job
+     * (renderers/Calc), never a transport cast on this accessor.
      */
     public function get(string $key): mixed
     {
