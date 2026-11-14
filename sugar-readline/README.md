@@ -46,7 +46,10 @@ keypresses through `sugar-input`'s `InputDriver`, repaints the prompt's
 `view()` after every change, and returns the prompt once it is submitted or
 aborted. `run()` paints to STDOUT when the output argument is omitted;
 pass your own stream handle to paint elsewhere, or an explicit `null` to advance
-state without writing anything (the headless shape the tests use). On a live
+state without writing anything (the headless shape the tests use). Each `run()`
+starts its repaint series from row 0 of the display — never write to the output
+stream while a run is in flight; between `run()`s you own the lines freely.
+On a live
 terminal, reach for `Readline::interactive()` instead of `run()`: it wraps
 the loop with the raw-mode flip and restore the key chords need (see
 "Terminal mode" below).

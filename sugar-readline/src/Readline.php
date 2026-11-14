@@ -83,16 +83,6 @@ final class Readline
     private ?string $dumbTerm = null;
 
     /**
-     * The STDIN pump this instance owns when constructed without an injected
-     * driver. It is created lazily on the first run() and REUSED by every
-     * later run() on the same instance: the stream decoder buffers whole
-     * reads, so throwing the driver away at a submit would discard the bytes
-     * that followed the Enter (piped multi-line sessions executed only the
-     * first line).
-     *
-     * @var resource|null
-     */
-    /**
      * Sentinel default of {@see run()}: OMITTING the output argument now
      * paints to STDOUT (finding 039 — the safest-looking call was the
      * broken one: a fresh user typed blind). An explicit `null` keeps the
@@ -104,12 +94,19 @@ final class Readline
     /** One-time steering notice for the new omitted-default behavior. */
     private static bool $paintDefaultNoted = false;
 
+    /**
+     * The php://stdin handle this instance owns when constructed without an
+     * injected driver. Created lazily inside the loop and closed when the
+     * run ends (finding 071 — it used to outlive every run, one leaked fd
+     * per reuse). Host-injected drivers are never touched: they belong to
+     * the caller, and their decoder buffers live reads across submits.
+     *
+     * @var resource|null
+     */
     private $ownedStream = null;
 
+    /** The pump built over {@see $ownedStream}; owned and closed together. */
     private ?StreamInputDriver $ownedDriver = null;
-
-    /** Once the owned pump has reported EOF, later nulls are final. */
-    private bool $ownedEofDelivered = false;
 
     /**
      * @param InputDriver|null $input       Null (default) opens a pump over
@@ -489,14 +486,21 @@ final class Readline
      * change. A plain StreamInputDriver only ever reports bytes.
      *
      * @param object        $prompt Object with handleKey(string): object method
-     * @param resource|null $output Output stream for repainting; null (the
-     *                              default) paints nothing — pass STDOUT to
-     *                              see the prompt.
+     * @param resource|null $output Output stream for repainting; omitting it
+     *                              paints to STDOUT, an explicit null paints
+     *                              nothing (headless driving).
      * @return object  The final prompt state after the user submits, aborts,
      *                 stop() fires, or the owned pump reaches EOF
      */
     public function run(object $prompt, mixed $output = self::PAINT_DEFAULT): object
     {
+        // Frame contract (finding 080): each run() starts its frame series
+        // from row 0 — a host that wrote to the same stream between submits
+        // would otherwise be stomped by a climb over its output. The owned
+        // stdin pump is deliberately NOT reset here: the pump-reuse law (see
+        // $ownedStream) keeps its decoder buffer across runs on one instance.
+        $this->lastPaintedRows = 0;
+
         if ($output === self::PAINT_DEFAULT) {
             // Paint-by-default (finding 039): stdout is the interactive
             // answer; headless drivers pass an explicit null.
@@ -549,7 +553,38 @@ final class Readline
             if ($bracketedPaste) {
                 fwrite($output, "\x1b[?2004l");
             }
+            // Release the lazily-owned stdin pump once the stream is at EOF
+            // (finding 071): a dead pump must not hold its descriptor past
+            // the run that drained it. An UN-drained owned pump stays alive
+            // on purpose — the pump-reuse law needs its decoder buffer for
+            // the next run(); __destruct is its final backstop.
+            if (\is_resource($this->ownedStream) && feof($this->ownedStream)) {
+                $this->closeOwnedPump();
+            }
         }
+    }
+
+    /**
+     * Free the lazily-owned stdin descriptor when the instance dies
+     * (finding 071): the fd is released at end of object life no matter how
+     * individual runs ended.
+     */
+    public function __destruct()
+    {
+        $this->closeOwnedPump();
+    }
+
+    /**
+     * Release the lazily-owned php://stdin pair. Idempotent; never touches a
+     * host-injected driver, whose lifetime belongs to the caller.
+     */
+    private function closeOwnedPump(): void
+    {
+        $this->ownedDriver = null;
+        if (\is_resource($this->ownedStream)) {
+            @\fclose($this->ownedStream);
+        }
+        $this->ownedStream = null;
     }
 
     /**
@@ -737,12 +772,12 @@ final class Readline
                 // a null after a delivered EOF is final — no data can follow.
                 // An injected driver reports null for EOF and live-empty
                 // alike, so it cannot be judged here.
-                if ($this->ownedStream !== null
-                    && ($this->ownedEofDelivered || feof($this->ownedStream))) {
-                    return $prompt;
-                }
+                // EOF honesty (finding 070): the guarantee rides feof alone.
+                // The old owned-EOF latch could never become true — its
+                // set-site sat unreachable behind this very return — so the
+                // dead flag and its dead assignment are gone.
                 if ($this->ownedStream !== null && feof($this->ownedStream)) {
-                    $this->ownedEofDelivered = true;
+                    return $prompt;
                 }
 
                 // No data this pass. Back off along the idle ladder instead
