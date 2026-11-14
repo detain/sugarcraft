@@ -27,6 +27,23 @@ final class ConfigFile
     /** Directory name under the XDG config home. */
     public const DIR_NAME = 'candy-top';
 
+    /**
+     * Pre-parse read ceiling, mirroring the sibling {@see \SugarCraft\Top\State\TreeStateFile::MAX_BYTES}
+     * (finding 155): a pathological config — appended to death by a broken
+     * hook, or a device node wearing the file's name — must never be read
+     * whole and parsed at launch. A real btop/candy-top config is a few
+     * hundred lines, orders of magnitude below this ceiling.
+     */
+    public const MAX_BYTES = 1048576;
+
+    /**
+     * Digest of the file bytes this instance last saw — at load or at a
+     * successful write — or null when it never read the file. The stale-save
+     * refusal in {@see write()} compares the current disk digest against it
+     * (finding 156).
+     */
+    private ?string $seenDigest = null;
+
     private function __construct(
         private readonly string $path,
     ) {
@@ -127,10 +144,22 @@ final class ConfigFile
             return new LoadResult($base, [], true);
         }
 
+        // Finding 155: the pre-parse size gate the load path never inherited
+        // from its sibling state file. filesize() cannot answer (the file
+        // vanished or the stat is refused between the is_file() above and
+        // here) takes the same refusal arm — nothing is read either way, so
+        // the warning is the honest umbrella, matching TreeStateFile's own
+        // false-or-over branch shape.
+        $size = @filesize($this->path);
+        if ($size === false || $size > self::MAX_BYTES) {
+            return new LoadResult($base, [Lang::t('config.warn.too_large', ['path' => $this->path])], false);
+        }
+
         $contents = @file_get_contents($this->path);
         if ($contents === false) {
             return new LoadResult($base, [Lang::t('config.warn.read_failed', ['path' => $this->path])], false);
         }
+        $this->seenDigest = hash('xxh128', $contents);
 
         return ConfigReader::parse($contents, $base);
     }
@@ -158,6 +187,24 @@ final class ConfigFile
         $target = $this->resolveTarget();
         if (is_file($target) && !is_writable($target)) {
             throw new \RuntimeException(Lang::t('config.warn.read_only', ['path' => $target]));
+        }
+
+        // Finding 156: this file is last-writer-wins — btop itself assumes a
+        // single writer, and two sessions clobbering each other's whole file
+        // is invisible to both. This instance remembers the bytes it read
+        // (or wrote); if the disk no longer answers that digest, another
+        // candy-top saved first and this save is refused honestly, riding
+        // the same failure channel any other write refusal takes (the App
+        // queues it and shows it). The window left between this check and
+        // the rename is the documented single-writer assumption: two saves
+        // microseconds apart land on one complete file or the other, never
+        // a torn one, and closing it fully would mean a lock file beside
+        // the user's config, which this write refuses to litter.
+        if ($this->seenDigest !== null && is_file($target)) {
+            $current = @file_get_contents($target);
+            if ($current !== false && hash('xxh128', $current) !== $this->seenDigest) {
+                throw new \RuntimeException(Lang::t('config.warn.stale_save', ['path' => $target]));
+            }
         }
 
         $dir = \dirname($target);
@@ -211,6 +258,9 @@ final class ConfigFile
             if (!@rename($tmp, $target)) {
                 throw $this->writeFailed('rename failed');
             }
+            // The bytes we just published are what this instance now saw —
+            // a save after a save must not flag its own earlier write.
+            $this->seenDigest = hash('xxh128', $payload);
         } catch (\Throwable $e) {
             if (\is_resource($handle)) {
                 fclose($handle);

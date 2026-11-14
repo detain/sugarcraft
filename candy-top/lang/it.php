@@ -132,6 +132,8 @@ return [
     'config.warn.read_only' => 'Il file di configurazione {path} è in sola lettura; le impostazioni non sono state salvate.',
     'config.warn.write_failed' => 'Impossibile scrivere il file di configurazione {path}: {reason}',
     'config.warn.read_failed' => 'Impossibile leggere il file di configurazione {path}',
+    'config.warn.too_large' => 'Il file di configurazione {path} supera 1 MiB e non è stato letto; sono in vigore i valori predefiniti.',
+    'config.warn.stale_save' => 'Un altro candy-top ha salvato il file di configurazione {path} dopo la lettura di questa istanza; le tue impostazioni non sono state salvate.',
     'config.warn.no_config_dir' => 'Impossibile determinare il percorso di configurazione: assicurarsi che `$XDG_CONFIG_HOME`, `$HOME`, `$APPDATA` o `$USERPROFILE` sia impostata',
 
     // ---- presets (btop presetsValid) ---------------------------------------
@@ -326,6 +328,7 @@ return [
     'cli.selfupdate.downgrade_refused' => "candy-top: downgrade rifiutato — questa installazione è {current}, l'ultima release è {latest}. (--rollback ripristina la copia conservata; nient'altro torna indietro.)",
     'cli.selfupdate.download_failed' => 'candy-top: impossibile scaricare {asset}: {reason}.',
     'cli.selfupdate.downloading' => 'candy-top: download di {asset} per {version} in corso; potrebbe volerci un momento.',
+    'cli.selfupdate.old_exists' => 'candy-top: l\'ancora di rollback {old} esiste già; un secondo swap ritirerebbe l\'unico punto di annullamento. Esegui self-update --rollback per tornarci, oppure rimuovilo deliberatamente se la copia in esecuzione è quella da mantenere.',
     'cli.selfupdate.windows_refused' => 'candy-top: l\'autoaggiornamento non può sostituire un phar in esecuzione su Windows: l\'immagine resta bloccata durante l\'esecuzione; scarica la nuova versione e sostituiscila da una shell chiusa.',
     'cli.selfupdate.empty_download' => 'candy-top: il download di {asset} non ha prodotto alcun byte.',
     'cli.selfupdate.fetch_failed' => "candy-top: impossibile leggere l'elenco delle release: {reason}.",

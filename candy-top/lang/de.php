@@ -132,6 +132,8 @@ return [
     'config.warn.read_only' => 'Konfigurationsdatei {path} ist schreibgeschützt; Einstellungen wurden nicht gespeichert.',
     'config.warn.write_failed' => 'Konfigurationsdatei {path} konnte nicht geschrieben werden: {reason}',
     'config.warn.read_failed' => 'Konfigurationsdatei {path} konnte nicht gelesen werden',
+    'config.warn.too_large' => 'Konfigurationsdatei {path} ist größer als 1 MiB und wurde nicht gelesen; es gelten die Standardwerte.',
+    'config.warn.stale_save' => 'Die Konfigurationsdatei {path} wurde nach dem Lesen dieser Instanz von einem anderen candy-top gespeichert; deine Einstellungen wurden nicht gespeichert.',
     'config.warn.no_config_dir' => 'Konfigurationspfad konnte nicht ermittelt werden: Stellen Sie sicher, dass `$XDG_CONFIG_HOME`, `$HOME`, `$APPDATA` oder `$USERPROFILE` gesetzt ist',
 
     // ---- presets (btop presetsValid) ---------------------------------------
@@ -326,6 +328,7 @@ return [
     'cli.selfupdate.downgrade_refused' => 'candy-top: Downgrade abgelehnt – diese Installation ist {current}, das neueste Release ist {latest}. (--rollback stellt die aufbewahrte Kopie wieder her; sonst geht nichts rückwärts.)',
     'cli.selfupdate.download_failed' => 'candy-top: {asset} konnte nicht heruntergeladen werden: {reason}.',
     'cli.selfupdate.downloading' => 'candy-top: {asset} für {version} wird heruntergeladen; das kann einen Moment dauern.',
+    'cli.selfupdate.old_exists' => 'candy-top: der Rollback-Anker {old} existiert bereits; ein zweiter Tausch würde den einzigen Rückholpunkt entwerten. Führe self-update --rollback aus, um zu ihm zurückzukehren, oder entferne ihn bewusst, wenn die laufende Kopie die bleibende ist.',
     'cli.selfupdate.windows_refused' => 'candy-top: Die Selbstaktualisierung kann eine laufende Phar unter Windows nicht ersetzen: Das Image bleibt während der Ausführung gesperrt; laden Sie die neue Version herunter und tauschen Sie sie aus einer beendeten Shell.',
     'cli.selfupdate.empty_download' => 'candy-top: Der Download von {asset} lieferte keine Bytes.',
     'cli.selfupdate.fetch_failed' => 'candy-top: Die Release-Liste konnte nicht gelesen werden: {reason}.',

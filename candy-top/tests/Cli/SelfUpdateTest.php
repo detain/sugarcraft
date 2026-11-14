@@ -341,6 +341,58 @@ final class SelfUpdateTest extends TestCase
         self::assertContains($exit, [SelfUpdate::EXIT_OK, SelfUpdate::EXIT_FAILURE]);
     }
 
+    public function testAStandingRollbackAnchorRefusesTheNextSwapBeforeFetching(): void
+    {
+        // Finding 157: a second swap over an un-rolled-back first one
+        // silently retires the only undo point, so the swap refuses while
+        // <phar>.old stands — before the fetch notice, which is the first
+        // byte of network work the verb can do, is ever printed.
+        $phar = $this->livePharPath();
+        file_put_contents($phar . '.old', 'YESTERDAYS-BYTES');
+        $this->resetErrorStream();
+
+        $exit = SelfUpdate::run(
+            [],
+            $this->fakeServerClient(),
+            $this->releasesUrl([$this->stageRelease('candy-top/v9.9.9', 'NEW')]),
+            $phar,
+            'v0.1.0',
+            '',
+            'Linux',
+        );
+
+        $text = $this->errorText();
+        self::assertSame(SelfUpdate::EXIT_FAILURE, $exit);
+        self::assertStringContainsString('rollback anchor', $text);
+        self::assertStringNotContainsString('downloading', $text);
+        self::assertSame('YESTERDAYS-BYTES', file_get_contents($phar . '.old'));
+    }
+
+    public function testCheckAnswersBesideAStandingAnchor(): void
+    {
+        // --check never touches the slot, so the anchor that dooms a swap
+        // says nothing about asking what is new; the refusal is scoped to
+        // the renaming verb, exactly like the Windows one.
+        $phar = $this->livePharPath();
+        file_put_contents($phar . '.old', 'YESTERDAYS-BYTES');
+        $this->resetErrorStream();
+
+        $exit = SelfUpdate::run(
+            ['--check'],
+            $this->fakeServerClient(),
+            $this->releasesUrl([$this->stageRelease('candy-top/v9.9.9', 'NEW')]),
+            $phar,
+            'v0.1.0',
+            '',
+            'Linux',
+        );
+
+        $text = $this->errorText();
+        self::assertStringContainsString('update available', $text);
+        self::assertStringNotContainsString('rollback anchor', $text);
+        self::assertSame(SelfUpdate::EXIT_FAILURE, $exit, 'a pending --check exits 1 as everywhere');
+    }
+
     public function testCheckDistinguishesAvailableFromUpToDateByExitCode(): void
     {
         $available = SelfUpdate::run(
@@ -1111,6 +1163,7 @@ final class SelfUpdateTest extends TestCase
 
         $this->resetErrorStream();
         self::assertNotFalse(\file_put_contents($this->livePharPath(), 'ORIGINAL'));
+        @unlink($this->livePharPath() . '.old'); // the (c) swap left its anchor; a fresh install is its absence (finding 157)
 
         // d. keyless state (the shape a build ships when the repo secret is
         // absent, simulated by injecting the empty key): a release that DOES
@@ -1130,6 +1183,7 @@ final class SelfUpdateTest extends TestCase
 
         $this->resetErrorStream();
         self::assertNotFalse(\file_put_contents($this->livePharPath(), 'ORIGINAL'));
+        @unlink($this->livePharPath() . '.old'); // same fresh-install shape before (e)
 
         // e. the valid signature under the matching key. With ext-sodium the
         // crypto decides: swap. Without it, verifyDetached's function_exists

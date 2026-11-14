@@ -148,6 +148,8 @@ return [
     'config.warn.read_only' => 'Config file {path} is read-only; settings were not saved.',
     'config.warn.write_failed' => 'Could not write config file {path}: {reason}',
     'config.warn.read_failed' => 'Could not read config file {path}',
+    'config.warn.too_large' => 'Config file {path} is larger than 1 MiB and was not read; defaults are in effect.',
+    'config.warn.stale_save' => 'Config file {path} was saved by another candy-top after this one read it; your settings were not saved.',
     'config.warn.no_config_dir' => 'Could not determine config path: Make sure `$XDG_CONFIG_HOME`, `$HOME`, `$APPDATA` or `$USERPROFILE` is set',
 
     // ---- presets (btop presetsValid) ---------------------------------------
@@ -342,6 +344,7 @@ return [
     'cli.selfupdate.downgrade_refused' => 'candy-top: refusing to downgrade — this install is {current}, the latest release is {latest}. (--rollback restores the kept copy; nothing else goes backwards.)',
     'cli.selfupdate.download_failed' => 'candy-top: could not download {asset}: {reason}.',
     'cli.selfupdate.downloading' => 'candy-top: downloading {asset} for {version}; this may take a moment.',
+    'cli.selfupdate.old_exists' => 'candy-top: the rollback anchor {old} already exists; a second swap would retire the only undo point. Run self-update --rollback to return to it, or remove it deliberately if the running copy is the one to keep.',
     'cli.selfupdate.windows_refused' => 'candy-top: self-update cannot replace a running phar on Windows: the image stays locked while it executes; download the new release and swap it from a stopped shell.',
     'cli.selfupdate.empty_download' => 'candy-top: the download of {asset} produced no bytes.',
     'cli.selfupdate.fetch_failed' => 'candy-top: could not read the release list: {reason}.',

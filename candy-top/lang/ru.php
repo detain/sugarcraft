@@ -132,6 +132,8 @@ return [
     'config.warn.read_only' => 'Файл конфигурации {path} доступен только для чтения; настройки не сохранены.',
     'config.warn.write_failed' => 'Не удалось записать файл конфигурации {path}: {reason}',
     'config.warn.read_failed' => 'Не удалось прочитать файл конфигурации {path}',
+    'config.warn.too_large' => 'Файл конфигурации {path} больше 1 MiB и не был прочитан; действуют значения по умолчанию.',
+    'config.warn.stale_save' => 'Другой candy-top сохранил файл конфигурации {path} после чтения этим экземпляром; ваши настройки не сохранены.',
     'config.warn.no_config_dir' => 'Не удалось определить путь конфигурации: убедитесь, что задана `$XDG_CONFIG_HOME`, `$HOME`, `$APPDATA` или `$USERPROFILE`',
 
     // ---- presets (btop presetsValid) ---------------------------------------
@@ -326,6 +328,7 @@ return [
     'cli.selfupdate.downgrade_refused' => 'candy-top: понижение версии отклонено — установлена версия {current}, последний релиз — {latest}. (--rollback восстанавливает сохранённую копию; иначе назад не возвращаются.)',
     'cli.selfupdate.download_failed' => 'candy-top: не удалось скачать {asset}: {reason}.',
     'cli.selfupdate.downloading' => 'candy-top: загрузка {asset} для {version}; это может занять некоторое время.',
+    'cli.selfupdate.old_exists' => 'candy-top: точка отката {old} уже существует; второе обновление лишит единственной возможности возврата. Выполните self-update --rollback для возврата или удалите её осознанно, если текущая копия — та, что нужно оставить.',
     'cli.selfupdate.windows_refused' => 'candy-top: автообновление не может заменить выполняемый phar в Windows: образ остаётся заблокированным во время выполнения; скачайте новый выпуск и замените файл из остановленной оболочки.',
     'cli.selfupdate.empty_download' => 'candy-top: при скачивании {asset} не получено ни одного байта.',
     'cli.selfupdate.fetch_failed' => 'candy-top: не удалось прочитать список релизов: {reason}.',

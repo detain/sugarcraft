@@ -132,6 +132,8 @@ return [
     'config.warn.read_only' => '설정 파일 {path}은(는) 읽기 전용이므로 설정이 저장되지 않았습니다.',
     'config.warn.write_failed' => '설정 파일 {path}을(를) 쓸 수 없습니다: {reason}',
     'config.warn.read_failed' => '설정 파일 {path}을(를) 읽을 수 없습니다',
+    'config.warn.too_large' => '구성 파일 {path}이(가) 1 MiB를 초과하여 읽히지 않았습니다. 기본값이 적용됩니다.',
+    'config.warn.stale_save' => '이 인스턴스가 읽은 후 다른 candy-top이 구성 파일 {path}을(를) 저장했습니다. 설정이 저장되지 않았습니다.',
     'config.warn.no_config_dir' => '설정 경로를 결정할 수 없습니다: `$XDG_CONFIG_HOME`, `$HOME`, `$APPDATA`, `$USERPROFILE` 중 하나가 설정되어 있는지 확인하세요',
 
     // ---- presets (btop presetsValid) ---------------------------------------
@@ -326,6 +328,7 @@ return [
     'cli.selfupdate.downgrade_refused' => 'candy-top: 다운그레이드를 거부합니다 — 현재 설치는 {current}, 최신 릴리스는 {latest}입니다. (--rollback은 보관된 사본을 복원하며, 그 외에는 이전 버전으로 돌아가지 않습니다.)',
     'cli.selfupdate.download_failed' => 'candy-top: {asset}을(를) 다운로드할 수 없습니다: {reason}.',
     'cli.selfupdate.downloading' => 'candy-top: {version}용 {asset}을(를) 다운로드하는 중입니다. 잠시 시간이 걸릴 수 있습니다.',
+    'cli.selfupdate.old_exists' => 'candy-top: 롤백 기준점 {old}이(가) 이미 있습니다. 두 번째 교체는 유일한 되돌림 지점을 없앱니다. rollback으로 돌아가거나 실행 중인 사본을 유지하려면 의도적으로 삭제하십시오.',
     'cli.selfupdate.windows_refused' => 'candy-top: 셀프 업데이트는 Windows에서 실행 중인 phar를 교체할 수 없습니다(실행 중에는 이미지가 잠겨 있습니다). 새 릴리스를 다운로드하여 종료된 셸에서 교체하십시오.',
     'cli.selfupdate.empty_download' => 'candy-top: {asset} 다운로드 결과가 0바이트입니다.',
     'cli.selfupdate.fetch_failed' => 'candy-top: 릴리스 목록을 읽을 수 없습니다: {reason}.',

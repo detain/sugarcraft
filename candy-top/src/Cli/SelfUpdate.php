@@ -94,7 +94,10 @@ use SugarCraft\Top\Support\Version;
  *
  * EXITS. 0: up to date (--check or not), a verified swap completed, a
  * rollback restored. 1: composer-mode refusal, an unwritable target, a
- * refused downgrade, a comparison that cannot be made, a fetch, hash or
+ * refused downgrade (also the Windows rename-verb refusal and the standing
+ * .old anchor refusal — both scoped to the renaming verbs, both answered
+ * before a byte is fetched), a
+ * comparison that cannot be made, a fetch, hash or
  * signature failure, --check finding an update available (that is the
  * scripted answer to "should I update?"). 2: usage errors (unknown operand,
  * `--channel=` with anything other than `stable` or `latest`, `--check`
@@ -353,6 +356,20 @@ final class SelfUpdate
         $old = $phar . '.old';
         if ($rollback) {
             return self::rollback($old, $phar);
+        }
+
+        // Finding 157: .old is the ONE undo point this verb keeps, and a
+        // second swap over an un-rolled-back first one silently retires it —
+        // --rollback would then restore last week's bytes while the user
+        // believes they are yesterday's (the rollback-chain corruption
+        // class). Refuse before a byte is fetched: the honest paths are
+        // --rollback first, or removing the anchor knowingly. Scoped to the
+        // renaming verb — --check reads nothing but the release feed and
+        // must keep answering beside a standing anchor.
+        if (!$check && is_file($old)) {
+            self::stderr(Lang::t('cli.selfupdate.old_exists', ['old' => $old]));
+
+            return self::EXIT_FAILURE;
         }
 
         $http ??= self::httpClient();

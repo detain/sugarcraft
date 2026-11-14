@@ -132,6 +132,8 @@ return [
     'config.warn.read_only' => 'Configuratiebestand {path} is alleen-lezen; instellingen zijn niet opgeslagen.',
     'config.warn.write_failed' => 'Kon configuratiebestand {path} niet schrijven: {reason}',
     'config.warn.read_failed' => 'Kon configuratiebestand {path} niet lezen',
+    'config.warn.too_large' => 'Het configuratiebestand {path} is groter dan 1 MiB en werd niet gelezen; de standaardwaarden zijn actief.',
+    'config.warn.stale_save' => 'Een andere candy-top heeft het configuratiebestand {path} opgeslagen nadat deze het las; uw instellingen zijn niet opgeslagen.',
     'config.warn.no_config_dir' => 'Kon het configuratiepad niet bepalen: zorg dat `$XDG_CONFIG_HOME`, `$HOME`, `$APPDATA` of `$USERPROFILE` is ingesteld',
 
     // ---- presets (btop presetsValid) ---------------------------------------
@@ -326,6 +328,7 @@ return [
     'cli.selfupdate.downgrade_refused' => 'candy-top: downgrade geweigerd — deze installatie is {current}, de nieuwste release is {latest}. (--rollback herstelt de bewaarde kopie; niets anders gaat terug.)',
     'cli.selfupdate.download_failed' => 'candy-top: kon {asset} niet downloaden: {reason}.',
     'cli.selfupdate.downloading' => 'candy-top: {asset} voor {version} wordt gedownload; dit kan even duren.',
+    'cli.selfupdate.old_exists' => 'candy-top: de rollback-anker {old} bestaat al; een tweede swap zou het enige ongedaanmakingspunt opheffen. Voer self-update --rollback uit om terug te gaan, of verwijder hem bewust als de draaiende kopie degene is die u wilt behouden.',
     'cli.selfupdate.windows_refused' => 'candy-top: self-update kan een draaiende phar op Windows niet vervangen: het image blijft vergrendeld tijdens uitvoer; download de nieuwe release en vervang deze vanuit een gestopte shell.',
     'cli.selfupdate.empty_download' => 'candy-top: de download van {asset} leverde geen bytes op.',
     'cli.selfupdate.fetch_failed' => 'candy-top: kon de releaselijst niet lezen: {reason}.',

@@ -146,6 +146,57 @@ final class ConfigFileTest extends TestCase
         $this->assertSame(2000, $result->config->updateMs());
     }
 
+    public function testAFileBeyondTheCeilingIsNeverParsed(): void
+    {
+        // Finding 155: the tree-state sibling refuses to hand a runaway
+        // file to its parser before a byte is read; config.conf now mirrors
+        // that posture — one warning line instead of a memory spike.
+        $path = $this->dir . '/huge.conf';
+        file_put_contents($path, "update_ms = 500\n" . str_repeat('x', ConfigFile::MAX_BYTES));
+
+        $result = ConfigFile::new($path)->load();
+
+        $this->assertCount(1, $result->warnings);
+        $this->assertStringContainsString('larger than 1 MiB', $result->warnings[0]);
+        $this->assertStringContainsString($path, $result->warnings[0]);
+        $this->assertSame(2000, $result->config->updateMs());
+        $this->assertFalse($result->needsRewrite, 'a file we never read is not ours to rewrite');
+    }
+
+    public function testASaveAfterAForeignEditIsRefusedAsStale(): void
+    {
+        // Finding 156: two candy-tops each holding a settings panel used to
+        // silently last-write-wins. The reader remembers the bytes it saw,
+        // and a save that no longer agrees with the file is refused loudly —
+        // App.php rides the refusal out through the S-X13 pendingWarning
+        // channel instead of losing it.
+        $path = $this->dir . '/config.conf';
+        $file = ConfigFile::new($path);
+        $file->write(Config::new()->with('update_ms', 500));
+        $file->load();
+
+        file_put_contents($path, "update_ms = 900\n");
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('saved by another candy-top');
+        $file->write(Config::new()->with('update_ms', 1200));
+    }
+
+    public function testRepeatedSavesByTheSameReaderAreNotStale(): void
+    {
+        // The digest updates with each own write: a panel toggling two
+        // settings back to back must not fight its own last rename.
+        $path = $this->dir . '/config.conf';
+        $file = ConfigFile::new($path);
+        $file->write(Config::new()->with('update_ms', 500));
+        $file->load();
+        $file->write(Config::new()->with('update_ms', 900));
+
+        $file->write(Config::new()->with('update_ms', 1200));
+
+        $this->assertSame(1200, ConfigFile::new($path)->load()->config->updateMs());
+    }
+
     public function testWriteCreatesDirectoryAndRoundTrips(): void
     {
         $file = ConfigFile::new(null, ['XDG_CONFIG_HOME' => $this->dir]);

@@ -132,6 +132,8 @@ return [
     'config.warn.read_only' => '配置文件 {path} 是只读的，设置未保存。',
     'config.warn.write_failed' => '无法写入配置文件 {path}：{reason}',
     'config.warn.read_failed' => '无法读取配置文件 {path}',
+    'config.warn.too_large' => '配置文件 {path} 超过 1 MiB，未被读取；正在使用默认值。',
+    'config.warn.stale_save' => '另一个 candy-top 在本实例读取后保存了配置文件 {path}；您的设置未被保存。',
     'config.warn.no_config_dir' => '无法确定配置路径：请确认已设置 `$XDG_CONFIG_HOME`、`$HOME`、`$APPDATA` 或 `$USERPROFILE`',
 
     // ---- presets (btop presetsValid) ---------------------------------------
@@ -326,6 +328,7 @@ return [
     'cli.selfupdate.downgrade_refused' => 'candy-top：拒绝降级 — 当前安装为 {current}，最新发布版本为 {latest}。（--rollback 会恢复保留的副本；其他方式都不会回退。）',
     'cli.selfupdate.download_failed' => 'candy-top：无法下载 {asset}：{reason}。',
     'cli.selfupdate.downloading' => 'candy-top：正在下载 {version} 的 {asset}，可能需要片刻时间。',
+    'cli.selfupdate.old_exists' => 'candy-top: 回滚锚点 {old} 已存在；再次替换将废弃唯一的撤销点。请运行 self-update --rollback 返回，或在确认保留当前副本后有意删除它。',
     'cli.selfupdate.windows_refused' => 'candy-top：自更新无法在 Windows 上替换正在运行的 phar：映像在执行期间保持锁定；请下载新版本并在已退出的 shell 中替换。',
     'cli.selfupdate.empty_download' => 'candy-top：{asset} 的下载内容为 0 字节。',
     'cli.selfupdate.fetch_failed' => 'candy-top：无法读取发布列表：{reason}。',

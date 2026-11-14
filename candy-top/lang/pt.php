@@ -132,6 +132,8 @@ return [
     'config.warn.read_only' => 'O ficheiro de configuração {path} é somente leitura; as configurações não foram guardadas.',
     'config.warn.write_failed' => 'Não foi possível gravar o ficheiro de configuração {path}: {reason}',
     'config.warn.read_failed' => 'Não foi possível ler o ficheiro de configuração {path}',
+    'config.warn.too_large' => 'O ficheiro de configuração {path} excede 1 MiB e não foi lido; os valores predefinidos estão em vigor.',
+    'config.warn.stale_save' => 'Outro candy-top guardou o ficheiro de configuração {path} depois de este o ler; as suas definições não foram guardadas.',
     'config.warn.no_config_dir' => 'Não foi possível determinar o caminho de configuração: verifique se `$XDG_CONFIG_HOME`, `$HOME`, `$APPDATA` ou `$USERPROFILE` está definida',
 
     // ---- presets (btop presetsValid) ---------------------------------------
@@ -326,6 +328,7 @@ return [
     'cli.selfupdate.downgrade_refused' => 'candy-top: downgrade recusado — esta instalação é {current}, a última versão é {latest}. (--rollback restaura a cópia guardada; nada mais volta atrás.)',
     'cli.selfupdate.download_failed' => 'candy-top: não foi possível transferir {asset}: {reason}.',
     'cli.selfupdate.downloading' => 'candy-top: a transferir {asset} para {version}; pode demorar um momento.',
+    'cli.selfupdate.old_exists' => 'candy-top: a âncora de retrocesso {old} já existe; uma segunda substituição anularia o único ponto de recuperação. Execute self-update --rollback para voltar a ela ou remova-a propositadamente se a cópia em execução for a que quer guardar.',
     'cli.selfupdate.windows_refused' => 'candy-top: a atualização automática não pode substituir um phar em execução no Windows: a imagem fica bloqueada durante a execução; transfira a nova versão e substitua-a a partir de uma shell terminada.',
     'cli.selfupdate.empty_download' => 'candy-top: o download de {asset} não produziu nenhum byte.',
     'cli.selfupdate.fetch_failed' => 'candy-top: não foi possível ler a lista de versões: {reason}.',

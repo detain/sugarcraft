@@ -132,6 +132,8 @@ return [
     'config.warn.read_only' => 'O arquivo de configuração {path} é somente leitura; as configurações não foram salvas.',
     'config.warn.write_failed' => 'Não foi possível gravar o arquivo de configuração {path}: {reason}',
     'config.warn.read_failed' => 'Não foi possível ler o arquivo de configuração {path}',
+    'config.warn.too_large' => 'O arquivo de configuração {path} é maior que 1 MiB e não foi lido; os padrões estão em vigor.',
+    'config.warn.stale_save' => 'Outro candy-top salvou o arquivo de configuração {path} depois que este o leu; suas configurações não foram salvas.',
     'config.warn.no_config_dir' => 'Não foi possível determinar o caminho de configuração: verifique se `$XDG_CONFIG_HOME`, `$HOME`, `$APPDATA` ou `$USERPROFILE` está definida',
 
     // ---- presets (btop presetsValid) ---------------------------------------
@@ -326,6 +328,7 @@ return [
     'cli.selfupdate.downgrade_refused' => 'candy-top: downgrade recusado — esta instalação é {current}, a última versão é {latest}. (--rollback restaura a cópia guardada; nada mais volta atrás.)',
     'cli.selfupdate.download_failed' => 'candy-top: não foi possível baixar {asset}: {reason}.',
     'cli.selfupdate.downloading' => 'candy-top: baixando {asset} para {version}; isso pode levar um momento.',
+    'cli.selfupdate.old_exists' => 'candy-top: a âncora de reversão {old} já existe; uma segunda substituição aposentaria o único ponto de desfazer. Execute self-update --rollback para retornar a ela ou remova-a deliberadamente se a cópia em execução for a que deseja manter.',
     'cli.selfupdate.windows_refused' => 'candy-top: a auto-atualização não pode substituir um phar em execução no Windows: a imagem fica bloqueada durante a execução; baixe a nova versão e substitua-a de um shell encerrado.',
     'cli.selfupdate.empty_download' => 'candy-top: o download de {asset} não produziu nenhum byte.',
     'cli.selfupdate.fetch_failed' => 'candy-top: não foi possível ler a lista de versões: {reason}.',

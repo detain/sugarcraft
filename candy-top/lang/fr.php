@@ -132,6 +132,8 @@ return [
     'config.warn.read_only' => "Le fichier de configuration {path} est en lecture seule ; les réglages n'ont pas été enregistrés.",
     'config.warn.write_failed' => "Impossible d'écrire le fichier de configuration {path} : {reason}",
     'config.warn.read_failed' => 'Impossible de lire le fichier de configuration {path}',
+    'config.warn.too_large' => 'Le fichier de configuration {path} dépasse 1 Mio et n\'a pas été lu ; les valeurs par défaut s\'appliquent.',
+    'config.warn.stale_save' => 'Un autre candy-top a enregistré le fichier de configuration {path} après la lecture de celui-ci ; vos paramètres n\'ont pas été enregistrés.',
     'config.warn.no_config_dir' => 'Impossible de déterminer le chemin de configuration : vérifier que `$XDG_CONFIG_HOME`, `$HOME`, `$APPDATA` ou `$USERPROFILE` est défini',
 
     // ---- presets (btop presetsValid) ---------------------------------------
@@ -326,6 +328,7 @@ return [
     'cli.selfupdate.downgrade_refused' => "candy-top : rétrogradation refusée — cette installation est en {current}, la dernière version est {latest}. (--rollback restaure la copie conservée ; rien d'autre ne revient en arrière.)",
     'cli.selfupdate.download_failed' => 'candy-top : impossible de télécharger {asset} : {reason}.',
     'cli.selfupdate.downloading' => 'candy-top : téléchargement de {asset} pour {version} ; cela peut prendre un moment.',
+    'cli.selfupdate.old_exists' => 'candy-top : l\'ancre de retour arrière {old} existe déjà ; un second remplacement détruirait le seul point d\'annulation. Exécutez self-update --rollback pour y revenir, ou supprimez-la délibérément si la copie en cours est celle à garder.',
     'cli.selfupdate.windows_refused' => 'candy-top : la mise à jour automatique ne peut pas remplacer un phar en cours d\'exécution sous Windows : l\'image reste verrouillée pendant son exécution ; téléchargez la nouvelle version et remplacez-la depuis un terminal arrêté.',
     'cli.selfupdate.empty_download' => "candy-top : le téléchargement de {asset} n'a produit aucun octet.",
     'cli.selfupdate.fetch_failed' => 'candy-top : impossible de lire la liste des versions : {reason}.',

@@ -132,6 +132,8 @@ return [
     'config.warn.read_only' => '設定ファイル {path} は読み取り専用のため、設定は保存されませんでした。',
     'config.warn.write_failed' => '設定ファイル {path} を書き込めませんでした: {reason}',
     'config.warn.read_failed' => '設定ファイル {path} を読み込めませんでした',
+    'config.warn.too_large' => '設定ファイル {path} は 1 MiB を超えており読み取られませんでした。既定値が適用されています。',
+    'config.warn.stale_save' => 'このインスタンスが読み取った後、別の candy-top が設定ファイル {path} を保存したため、設定は保存されませんでした。',
     'config.warn.no_config_dir' => '設定パスを特定できませんでした: `$XDG_CONFIG_HOME`、`$HOME`、`$APPDATA`、`$USERPROFILE` のいずれかが設定されているか確認してください',
 
     // ---- presets (btop presetsValid) ---------------------------------------
@@ -326,6 +328,7 @@ return [
     'cli.selfupdate.downgrade_refused' => 'candy-top: ダウングレードを拒否しました — このインストールは {current}、最新リリースは {latest} です。(--rollback は保持されたコピーを復元します。それ以外で戻ることはありません。)',
     'cli.selfupdate.download_failed' => 'candy-top: {asset} をダウンロードできませんでした: {reason}。',
     'cli.selfupdate.downloading' => 'candy-top: {version} 用の {asset} をダウンロードしています。しばらくかかる場合があります。',
+    'cli.selfupdate.old_exists' => 'candy-top: ロールバックの基準 {old} が既に存在します。2 回目の置換は唯一の取消点を失わせます。rollback で戻るか、実行中のコピーを維持する場合は意図的に削除してください。',
     'cli.selfupdate.windows_refused' => 'candy-top: 自己アップデートは Windows で実行中の phar を置き換えることができません（イメージは実行中ロックされたままです）。新しいリリースをダウンロードし、プロセスを終了させたシェルで置き換えてください。',
     'cli.selfupdate.empty_download' => 'candy-top: {asset} のダウンロードが 0 バイトでした。',
     'cli.selfupdate.fetch_failed' => 'candy-top: リリース一覧を読み込めませんでした: {reason}。',

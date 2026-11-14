@@ -132,6 +132,8 @@ return [
     'config.warn.read_only' => 'El archivo de configuración {path} es de solo lectura; no se guardaron los ajustes.',
     'config.warn.write_failed' => 'No se pudo escribir el archivo de configuración {path}: {reason}',
     'config.warn.read_failed' => 'No se pudo leer el archivo de configuración {path}',
+    'config.warn.too_large' => 'El archivo de configuración {path} supera 1 MiB y no se leyó; están vigentes los valores predeterminados.',
+    'config.warn.stale_save' => 'Otro candy-top guardó el archivo de configuración {path} después de que este lo leyera; tus ajustes no se guardaron.',
     'config.warn.no_config_dir' => 'No se pudo determinar la ruta de configuración: asegúrese de que `$XDG_CONFIG_HOME`, `$HOME`, `$APPDATA` o `$USERPROFILE` esté definida',
 
     // ---- presets (btop presetsValid) ---------------------------------------
@@ -326,6 +328,7 @@ return [
     'cli.selfupdate.downgrade_refused' => 'candy-top: se rechaza la degradación: esta instalación es {current}, la última versión es {latest}. (--rollback restaura la copia conservada; nada más retrocede.)',
     'cli.selfupdate.download_failed' => 'candy-top: no se pudo descargar {asset}: {reason}.',
     'cli.selfupdate.downloading' => 'candy-top: descargando {asset} para {version}; esto puede tardar un momento.',
+    'cli.selfupdate.old_exists' => 'candy-top: la ancora de reversión {old} ya existe; una segunda sustitución retiraría el único punto de deshacer. Ejecuta self-update --rollback para volver a ella o elimínala deliberadamente si la copia en ejecución es la que quieres conservar.',
     'cli.selfupdate.windows_refused' => 'candy-top: la autoactualización no puede reemplazar un phar en ejecución en Windows: la imagen permanece bloqueada mientras se ejecuta; descargue la nueva versión y sustitúyala desde un shell detenido.',
     'cli.selfupdate.empty_download' => 'candy-top: la descarga de {asset} no produjo ningún byte.',
     'cli.selfupdate.fetch_failed' => 'candy-top: no se pudo leer la lista de versiones: {reason}.',
