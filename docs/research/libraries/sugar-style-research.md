@@ -535,3 +535,35 @@ public static function hsl(float $hue, float $saturation, float $lightness): Col
 | Hyperlinks | ✓ | ✗ | ✓ | ✓ | ✗ | ✓ |
 | Transform hook | ✓ | ✗ | ✗ | ✗ | ✗ | ✓ |
 | Style inheritance | ✓ | ✓ (patch) | ✓ (+ op) | React props | ✗ | ✓ |
+
+## 2026-11 recheck (ST-42 errata pass)
+
+Several "missing" marks in this document predate the shipped surface and are
+stale against the current tree. Disk evidence, 2026-11-13:
+
+- **HSL color space** — shipped: `sugar-style/src/Hsl.php` (perceptual HSL
+  value object) and `sugar-core/src/Util/Color.php:264` `Color::hsl()`.
+  The §2 "HSL colors ✗" row, the §4 proposal "D. HSL Color Space" and its
+  roadmap entries (item 4, "HSL colors" priority list) are historical.
+- **Theme system** — shipped as `sugar-style/src/Theme.php` (the doc's
+  section text implies `src/Themes.php`, which never existed): named
+  factories `dark()/light()/dracula()/tokyoNight()/oneDark()/githubDark()/
+  solarizedDark()/solarizedLight()/ansi()/adaptive()`, `catalog()`,
+  `for(bool)`, `withStyle()/style()` slots. §6B "Theme system … Missing"
+  is stale.
+- **Spacing between items** — shipped: `Layout::joinHorizontalWithSpacing()`
+  (`Layout.php:103`) and `Layout::joinVerticalWithSpacing()` (`:192`), the
+  thin defaults delegating from `:182`. The §4 "Inter-item spacing in
+  Layout::joinHorizontal/joinVertical" proposal and roadmap item 3 are
+  historical.
+- **rapidBlink** — shipped: `Style::rapidBlink()` (`Style.php:521`, ctor
+  prop `:77`) as the doc's earlier notes expected it.
+- **Adaptive / complete colors, markup string, transform hook** (rows in
+  the §6B table): shipped eras — `AdaptiveColorTest`, `CompleteColorTest`,
+  `src/Markup.php`, `Style::transform()`-family pins exist in the suite;
+  the ✗/Missing verdicts in the comparison table no longer describe this
+  library.
+
+Table rows are left as written (the research snapshot is the historical
+record); this section is the correction of record. See `sugar-style/README.md`
+and `docs/MATCHUPS.md` for the current-capability truth.
