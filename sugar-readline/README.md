@@ -393,9 +393,9 @@ sequence a terminal can send.
 - `Key::Left` / `Key::Right` — move cursor (text input); Ctrl+B / Ctrl+F alias them on `TextPrompt`
 - `Key::Up` / `Key::Down` — navigate selection list / history / textarea line; also Ctrl+P / Ctrl+N on every text and list surface
 - `Key::Home` / `Key::End` — jump within the current line / list; also Ctrl+A / Ctrl+E on every text and list surface
-- `Key::Enter` — submit text or select current choice (in the textarea, Shift+Enter and Ctrl+J break a line instead — reported as chords on terminals that honor the pump's kitty-protocol push, and plain Enter submits where the wire never distinguishes them)
+- `Key::Enter` — submit text or select current choice (in the textarea, Shift+Enter, Alt+Enter and Ctrl+J break a line instead — reported as chords on terminals that honor the pump's kitty-protocol push, and plain Enter submits where the wire never distinguishes them; on the single-line prompts Alt+Enter submits like Enter, readline's accept-line law for the chord)
 - `Key::Space` — a second Enter in SelectionPrompt (submits the row under the cursor); toggles the mark in MultiSelectPrompt; toggles Yes/No in ConfirmationPrompt; inserts a literal space in text inputs
-- `Key::Tab` — autocomplete or toggle confirmation value; pressing Tab again cycles the matches (first Tab extends to their longest common prefix)
+- `Key::Tab` — autocomplete or toggle confirmation value; pressing Tab again cycles the matches (first Tab extends to their longest common prefix); `Key::ShiftTab` walks that cycle backwards, and on an empty buffer the first Tab paints a bounded candidate preview instead of committing one (press Tab again to enter the ring)
 - `y` / `n` (any case) — set Yes/No directly in ConfirmationPrompt (Enter still commits); there the Left/Right arrows alias to the same one-keystroke Yes/No picks
 - `ConfirmationPrompt::withAutoSubmit()` arms the immediate-answer reflex: y / n then selects AND submits in one press (arrows and the Space/Tab toggle stay browse-only); off by default, so the Enter-to-commit contract above is the shipped behaviour
 - `Key::Backspace` / `Key::Delete` — delete characters; Ctrl+H erases before the cursor (both the BS 0x08 and DEL 0x7F spellings bind to Backspace); Ctrl+D deletes under the cursor and, on an empty buffer, aborts (like GNU `delete-char-or-eof`)

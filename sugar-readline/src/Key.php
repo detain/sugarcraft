@@ -31,6 +31,12 @@ final class Key
     public const PageDown  = 'pagedown';
     public const Tab       = 'tab';
     public const Enter     = 'enter';
+    /** Shift+Tab as named by the wire decoders (kitty/modifyOtherKeys); cycles completions backwards. */
+    public const ShiftTab   = 'shift_tab';
+    /** Shift+Enter as named by the wire decoders; distinct from plain Enter only under kitty flags. */
+    public const ShiftEnter = 'shift_enter';
+    /** Alt+Enter as named by the wire decoders; multiline prompts insert a newline on it. */
+    public const AltEnter   = 'alt_enter';
     public const Backspace = 'backspace';
     public const Delete    = 'delete';
     public const Space     = 'space';

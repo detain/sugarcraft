@@ -238,7 +238,7 @@ final class TextareaPrompt implements PromptInterface, SizingInterface
             // Enter submits the conversation (a keyboard must be able to
             // finish it); a newline is an explicit chord.
             Key::Enter     => $this->submit(),
-            'shift_enter', Key::CtrlJ => $this->insertNewline(),
+            Key::ShiftEnter, Key::AltEnter, Key::CtrlJ => $this->insertNewline(),
             Key::CtrlU      => $this->killBeforeCursor(),
             Key::Space     => $this->handleChar(' '),
             Key::Escape, Key::CtrlC => $this->abort(),

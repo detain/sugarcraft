@@ -623,7 +623,8 @@ final class TextPrompt implements PromptInterface, SizingInterface
             Key::CtrlU     => $this->deleteAllBeforeCursor(),
             Key::CtrlK     => $this->deleteAllAfterCursor(),
             Key::Tab       => $this->applyCompletion(),
-            Key::Enter     => $this->submit(),
+            Key::ShiftTab  => $this->applyCompletionReverse(),
+            Key::Enter, Key::AltEnter => $this->submit(),
             Key::CtrlR => $this->startHistorySearch(SearchDirection::Reverse),
             Key::CtrlS => $this->startHistorySearch(SearchDirection::Forward),
             // Ctrl+Z / Ctrl+Y are the keyboard doors to the undo stack —
@@ -1490,6 +1491,33 @@ final class TextPrompt implements PromptInterface, SizingInterface
     {
         $char = mb_substr($buffer, $pos, 1, 'UTF-8');
         return $char !== '' && preg_match('/[a-zA-Z0-9_\p{L}]/u', $char) === 1;
+    }
+
+    /**
+     * Shift+Tab walks the completion ring backwards (finding 083): the
+     * chord is produced by Readline's symbolic naming, so it must have a
+     * consumer here rather than an orphan name. With no ring engaged it
+     * behaves like Tab — the fresh arm (LCP, preview, or first candidate)
+     * is direction-free.
+     */
+    private function applyCompletionReverse(): self
+    {
+        if (
+            $this->completionRing !== []
+            && $this->buffer === ($this->completionRing[$this->completionRingIndex] ?? null)
+        ) {
+            $clone = clone $this;
+            $count = count($this->completionRing);
+            $prev = ($this->completionRingIndex - 1 + $count) % $count;
+            $clone->buffer = $this->completionRing[$prev];
+            $clone->cursor = self::charCount($clone->buffer);
+            $clone->completionRingIndex = $prev;
+            $clone->error = '';
+            $clone->undoRunEnd = -1;
+            return $clone;
+        }
+
+        return $this->applyCompletion();
     }
 
     private function applyCompletion(): self
