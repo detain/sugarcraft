@@ -161,6 +161,16 @@ final class Diff
         return UnifiedFormat::write($this, $oldPath, $newPath);
     }
 
+    /**
+     * The patch text with caller-supplied header labels (no `a/`/`b/`
+     * prefix, no `/dev/null` substitution) — every label still passes the
+     * row-forgery guard. See {@see UnifiedFormat::writeWithLabels()}.
+     */
+    public function unifiedWithLabels(string $oldLabel, string $newLabel): string
+    {
+        return UnifiedFormat::writeWithLabels($this, $oldLabel, $newLabel);
+    }
+
     /** Every hunk's `@@` header and body without the `--- +++` file headers. */
     public function hunkText(): string
     {

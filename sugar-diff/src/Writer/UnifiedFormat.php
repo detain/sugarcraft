@@ -45,10 +45,6 @@ final class UnifiedFormat
      */
     public static function write(Diff $diff, string $oldPath, ?string $newPath = null): string
     {
-        if ($diff->hunks === []) {
-            return '';
-        }
-
         $options = $diff->options;
         $oldLabel = $options->devNullOnEmptySide && $diff->beforeCount === 0
             ? '/dev/null'
@@ -56,6 +52,25 @@ final class UnifiedFormat
         $newLabel = $options->devNullOnEmptySide && $diff->afterCount === 0
             ? '/dev/null'
             : 'b/' . ($newPath ?? $oldPath);
+
+        return self::writeWithLabels($diff, $oldLabel, $newLabel);
+    }
+
+    /**
+     * The same full patch text with CALLER-SUPPLIED header labels — the
+     * additive entry for consumers (candy-code's diff window) that hand the
+     * header their own file-ish names and must not go back to string
+     * building for it: the labels ship through `quotePath()` verbatim, so a
+     * hostile name can never forge a `+++ ` row (sugar-diff-003). No `a/`
+     * or `b/` prefix is forced and no `/dev/null` substitution happens —
+     * what you pass is what is quoted and emitted. Equal sides emit '' like
+     * {@see self::write()}.
+     */
+    public static function writeWithLabels(Diff $diff, string $oldLabel, string $newLabel): string
+    {
+        if ($diff->hunks === []) {
+            return '';
+        }
 
         return "--- " . self::quotePath($oldLabel) . "\n+++ " . self::quotePath($newLabel) . "\n"
             . self::hunksOnly($diff);

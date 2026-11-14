@@ -119,4 +119,40 @@ final class UnifiedFormatTest extends TestCase
     {
         $this->assertSame("\\ No newline at end of file\n", UnifiedFormat::NO_NEWLINE_ANNOTATION);
     }
+
+    public function testWriteWithLabelsShipsCallerLabelsVerbatim(): void
+    {
+        // sugar-diff-003: custom labels are honoured AS GIVEN — no forced
+        // a//b/, no /dev/null substitution — while the default path keeps
+        // prefixing exactly as before.
+        $diff = Diff::compute("a\n", "b\n");
+
+        $this->assertSame(
+            "--- old.txt\n+++ new.txt\n@@ -1 +1 @@\n-a\n+b\n",
+            UnifiedFormat::writeWithLabels($diff, 'old.txt', 'new.txt'),
+        );
+        $this->assertSame(
+            UnifiedFormat::writeWithLabels($diff, 'old.txt', 'new.txt'),
+            $diff->unifiedWithLabels('old.txt', 'new.txt'),
+        );
+        $this->assertSame(
+            "--- a/f\n+++ b/f\n@@ -1 +1 @@\n-a\n+b\n",
+            $diff->unified('f'),
+        );
+    }
+
+    public function testWriteWithLabelsQuotesHostileLabelsIntoOnePhysicalRow(): void
+    {
+        // The whole point of routing hand-built headers through the library:
+        // a label carrying newlines or control bytes can never split the
+        // header or forge its own '+++ ' row.
+        $diff = Diff::compute("a\n", "b\n");
+        $out = $diff->unifiedWithLabels("x\n+++ evil\n", "tail\x01byte");
+
+        $rows = explode("\n", $out);
+        $this->assertSame('--- "x\n+++ evil\n"', $rows[0]);
+        $this->assertSame('+++ "tail\001byte"', $rows[1]);
+
+        $this->assertSame('', Diff::compute("a\n", "a\n")->unifiedWithLabels('x', 'y'));
+    }
 }
