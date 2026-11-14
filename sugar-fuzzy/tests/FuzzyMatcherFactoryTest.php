@@ -122,4 +122,65 @@ final class FuzzyMatcherFactoryTest extends TestCase
         $this->assertFalse(\method_exists(FuzzyMatcherFactory::class, 'create'));
         $this->assertFalse(\method_exists(ScoringProfile::class, 'default'));
     }
+
+    #[Test]
+    public function testNamedPassesThroughFilteringShape(): void
+    {
+        // FUZZY-13 acceptance probe: the factory shape and the direct
+        // construction are the same matcher — byte-identical on the whole-query
+        // contract (partial hit 'ap' inside 'leopard' is rejected by both).
+        $viaFactory = FuzzyMatcherFactory::named('smith-waterman', requireFullQuery: true);
+        $direct = new SmithWatermanMatcher(requireFullQuery: true);
+
+        $this->assertEquals($direct, $viaFactory);
+        $this->assertNull($viaFactory->match('apr', 'leopard'));
+        $this->assertNotNull($direct->match('leopa', 'leopard'));
+        // Plain named() keeps partial alignment (all defaults byte-identical).
+        $this->assertNotNull(FuzzyMatcherFactory::named('smith-waterman')->match('apr', 'leopard'));
+    }
+
+    #[Test]
+    public function testNamedPassesThroughCapsAndSahilmCase(): void
+    {
+        $capped = FuzzyMatcherFactory::named('smith-waterman', maxQueryLength: 2);
+
+        // 'hello' truncated to 'he' exactly like the ctor route (over-length pin
+        // precedent in SmithWatermanMatcherTest): score 11 on 'hello'.
+        $this->assertSame(11, $capped->score('hello', 'hello'));
+
+        $caseSensitive = FuzzyMatcherFactory::named('sahilm', caseSensitive: true);
+
+        $this->assertInstanceOf(SahilmMatcher::class, $caseSensitive);
+        $this->assertTrue($caseSensitive->caseSensitive());
+        $this->assertNull($caseSensitive->match('F', 'foo'));
+    }
+
+    #[Test]
+    public function testNamedRejectsOptionsMismatchedToTheNamedType(): void
+    {
+        // Fail-fast law (FUZZY-13): silently ignoring a knob the named matcher
+        // does not have would build an un-tuned matcher and lie about it.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("requireFullQuery/maxQueryLength/maxCandidateLength are 'smith-waterman' options");
+        FuzzyMatcherFactory::named('sahilm', requireFullQuery: true);
+    }
+
+    #[Test]
+    public function testNamedRejectsCaseSensitiveOnSmithWaterman(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("caseSensitive is a 'sahilm' option");
+        FuzzyMatcherFactory::named('smith-waterman', caseSensitive: true);
+    }
+
+    #[Test]
+    public function testForFilteringPresetEqualsTheStrictConstructor(): void
+    {
+        // FUZZY-13 leg b: the three spellings of the filtering shape agree.
+        $this->assertEquals(
+            new SmithWatermanMatcher(requireFullQuery: true),
+            SmithWatermanMatcher::forFiltering(),
+        );
+        $this->assertNull(SmithWatermanMatcher::forFiltering()->match('apr', 'leopard'));
+    }
 }

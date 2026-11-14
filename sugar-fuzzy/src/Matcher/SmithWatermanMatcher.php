@@ -102,6 +102,24 @@ final class SmithWatermanMatcher implements FuzzyMatcher
     }
 
     /**
+     * The canonical filtering preset (FUZZY-13 leg b, finding sugar-fuzzy-007):
+     * local alignment scores partial hits, so a filter box would list candidates
+     * matching only a scattered subsequence; requireFullQuery keeps candidates
+     * whose alignment covers the WHOLE query — the shape command palettes want.
+     * Proof of demand: candy-code reaches this same construction from six sites
+     * (Commands/CommandRegistry.php:427, Chat.php:18606,
+     * Settings/SettingsSearch.php:68, Tui/SessionPicker.php:422,
+     * Attachments/MentionIndex.php:278 + :444 — cited as evidence only, no
+     * cross-lib edits here). Reachable both ways: `new SmithWatermanMatcher(
+     * requireFullQuery: true)`, `FuzzyMatcherFactory::named('smith-waterman',
+     * requireFullQuery: true)` and this preset are the same matcher.
+     */
+    public static function forFiltering(): self
+    {
+        return new self(requireFullQuery: true);
+    }
+
+    /**
      * The scoring profile in effect.
      */
     public function profile(): ScoringProfile
