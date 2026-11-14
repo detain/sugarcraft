@@ -6,6 +6,7 @@ namespace SugarCraft\Top\Collect\Process;
 
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
+use React\EventLoop\TimerInterface;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 
@@ -197,6 +198,11 @@ final class AsyncCommand
         // ready while empty, so the loop would spin on the callback); the
         // same callback runs off a short periodic timer there instead, and
         // drain() reads only what is waiting.
+        // The Windows arm at the bottom of this method reassigns this ref-box
+        // to a periodic timer; PHPStan only sees the null initialiser and the
+        // in-closure reset at the capture point, so the @var states the real
+        // runtime contract ($unwatch runs on both arms).
+        /** @var TimerInterface|null $windowsPoll */
         $windowsPoll = null;
         $unwatch = static function () use ($loop, $stdout, &$windowsPoll): void {
             if ($windowsPoll !== null) {

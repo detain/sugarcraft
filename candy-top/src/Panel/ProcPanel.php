@@ -1222,12 +1222,15 @@ final class ProcPanel implements Panel, ClickCapture
         if (!$shown) {
             return new PanelResult($this);
         }
-        $detailPid = $this->detail?->pid;
+        // Reaching this arm means $shown was true, and $shown (computed above)
+        // is `show_detailed && $this->detail !== null` — the detail box is
+        // provably open here, so its pid needs no null half.
+        $detailPid = $this->detail->pid;
         $panel = $this->mutate(['detail' => null]);
-        if ($config->bool('proc_follow_detailed') && $detailPid !== null && $this->followedPid === $detailPid) {
+        if ($config->bool('proc_follow_detailed') && $this->followedPid === $detailPid) {
             $panel = $panel->unfollowed();
         }
-        if ($config->bool('proc_follow_detailed') && $detailPid !== null) {
+        if ($config->bool('proc_follow_detailed')) {
             $panel = $panel->restored($detailPid, $this->after($config, ['show_detailed' => false]), $context);
         } elseif ($sel->lastSelected > 0) {
             $panel = $panel->mutate(['sel' => $sel->withSelected($sel->lastSelected)]);
