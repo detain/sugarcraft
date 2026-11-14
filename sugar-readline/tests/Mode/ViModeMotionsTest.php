@@ -136,13 +136,16 @@ final class ViModeMotionsTest extends TestCase
         $this->assertSame(0, $prompt->cursor(), 'the line-wise spelling anchors at the start of the line');
     }
 
-    public function testLowercaseVOpensVisualModeUnderTheCursor(): void
+    public function testLowercaseVIsUnbound(): void
     {
+        // Re-pinned by S-52 (G9 default): plain v no longer opens the
+        // motion-only visual scaffold; V keeps the line-wise spelling.
         $prompt = $this->moveToColumn($this->normalModePrompt('line text'), 3);
         $prompt = $prompt->handleKey('v');
 
-        $this->assertSame('visual', $this->viModeOf($prompt));
-        $this->assertSame(3, $prompt->cursor(), 'v must not move the caret — the D/V and d/v spellings differ');
+        $this->assertSame('normal', $this->viModeOf($prompt), 'plain v is unbound: no half-alive visual state');
+        $this->assertSame(3, $prompt->cursor(), 'the unbound chord must not move anything');
+        $this->assertSame('line text', $prompt->value());
     }
 
     // =========================================================================
@@ -172,6 +175,6 @@ final class ViModeMotionsTest extends TestCase
         $prop->setAccessible(true);
         /** @var ViMode $mode */
         $mode = $prop->getValue($prompt);
-        return $mode->viMode();
+        return $mode->viMode()->value;
     }
 }

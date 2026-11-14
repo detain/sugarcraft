@@ -455,12 +455,17 @@ its own state survives the prompt's immutable cloning.
   Ctrl+C still falls through to the prompt's abort binding; leave it detached
   if Escape-quit is what you want.
 - **`ViMode`** is a modal state machine (starts in insert; Escape → normal;
-  `v` → a visual mode that tracks motion only — selection is not yet rendered
-  or operated on). Pending motions like `dd`/`yy`/`cc` are supported. In
-  normal mode `j`/`k` walk history, `x` cuts the char under the cursor, `p`
+  `V` opens a line-wise visual mode — motion-only scaffold, selection not
+  yet rendered or operated on; plain `v` is deliberately unbound). Pending
+  motions like `dd`/`yy`/`cc` are supported. In
+  normal mode `j`/`k` walk history, `x` cuts the char under the cursor, `D`
+  cuts to end-of-line, `p`
   puts the unnamed register, `u` undoes the last edit, `Enter` submits the
   line, space moves right, and Ctrl+R/Ctrl+S start incremental search just
-  like in insert mode. It does
+  like in insert mode. On a hidden prompt the unnamed register never
+  captures the secret text — the same posture undo frames already take. The
+  current submode is readable as the public `ViModeState` enum via
+  `viMode()`. It does
   not hardcode vi bindings: normal/visual keys are mapped through sugar-forms'
   `VimKeyHandler`, which returns a `VimAction` enum case that ViMode then
   executes as TextPrompt operations. New vi bindings therefore belong in

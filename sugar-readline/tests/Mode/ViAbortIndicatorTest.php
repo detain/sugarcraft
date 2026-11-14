@@ -71,7 +71,7 @@ final class ViAbortIndicatorTest extends TestCase
         $prompt = TextPrompt::new('> ')
             ->withMode(new ViMode())
             ->handleKey(Key::Escape)
-            ->handleChar('v')
+            ->handleChar('V')
             ->handleKey(Key::CtrlC);
 
         $this->assertTrue($prompt->isAborted(), 'Ctrl+C aborts from visual mode too');
@@ -125,7 +125,7 @@ final class ViAbortIndicatorTest extends TestCase
                 ->handleKey(Key::Escape);
             $this->assertSame(">  \n--NORMAL--", $normal->view());
 
-            $visual = $normal->handleChar('v');
+            $visual = $normal->handleChar('V');
             $this->assertSame(">  \n--VISUAL--", $visual->view());
         } finally {
             if ($previous === false) {
@@ -148,7 +148,7 @@ final class ViAbortIndicatorTest extends TestCase
         $normal = $prompt->handleKey(Key::Escape);
         $this->assertStringContainsString('--NORMAL--', self::plain($normal->view()));
 
-        $visual = $normal->handleChar('v');
+        $visual = $normal->handleChar('V');
         $this->assertStringContainsString('--VISUAL--', self::plain($visual->view()));
 
         // Indicator is the LAST painted row.

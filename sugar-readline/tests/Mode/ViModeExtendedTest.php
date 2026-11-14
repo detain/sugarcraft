@@ -88,7 +88,7 @@ final class ViModeExtendedTest extends TestCase
     public function testVisualModeHMovement(): void
     {
         $prompt = $this->normalModeAt('abc', 0);
-        $prompt = $prompt->handleKey('v');
+        $prompt = $prompt->handleKey('V');
         $this->assertSame('visual', $this->getViMode($prompt));
 
         $result = $prompt->handleKey('h');
@@ -98,7 +98,7 @@ final class ViModeExtendedTest extends TestCase
     public function testVisualModeLMovement(): void
     {
         $prompt = $this->normalModeAt('abc', 0);
-        $prompt = $prompt->handleKey('v');
+        $prompt = $prompt->handleKey('V');
         $result = $prompt->handleKey('l');
         $this->assertSame('visual', $this->getViMode($result));
     }
@@ -106,7 +106,7 @@ final class ViModeExtendedTest extends TestCase
     public function testVisualModeBWordBackward(): void
     {
         $prompt = $this->normalModeAt('foo bar', 7);
-        $prompt = $prompt->handleKey('v');
+        $prompt = $prompt->handleKey('V');
         $result = $prompt->handleKey('b');
         $this->assertSame('visual', $this->getViMode($result));
     }
@@ -114,7 +114,7 @@ final class ViModeExtendedTest extends TestCase
     public function testVisualModeWWordForward(): void
     {
         $prompt = $this->normalModeAt('foo bar', 0);
-        $prompt = $prompt->handleKey('v');
+        $prompt = $prompt->handleKey('V');
         $result = $prompt->handleKey('w');
         $this->assertSame('visual', $this->getViMode($result));
     }
@@ -122,7 +122,7 @@ final class ViModeExtendedTest extends TestCase
     public function testVisualModeEscapeReturnsToNormal(): void
     {
         $prompt = $this->normalModeAt('abc', 0);
-        $prompt = $prompt->handleKey('v');
+        $prompt = $prompt->handleKey('V');
         $this->assertSame('visual', $this->getViMode($prompt));
 
         $result = $prompt->handleKey(Key::Escape);
@@ -132,7 +132,7 @@ final class ViModeExtendedTest extends TestCase
     public function testVisualModeDollarGoesToLineEnd(): void
     {
         $prompt = $this->normalModeAt('abc', 0);
-        $prompt = $prompt->handleKey('v');
+        $prompt = $prompt->handleKey('V');
         $result = $prompt->handleKey('$');
         $this->assertSame('visual', $this->getViMode($result));
     }
@@ -140,7 +140,7 @@ final class ViModeExtendedTest extends TestCase
     public function testVisualModeZeroGoesToLineStart(): void
     {
         $prompt = $this->normalModeAt('abc', 2);
-        $prompt = $prompt->handleKey('v');
+        $prompt = $prompt->handleKey('V');
         $result = $prompt->handleKey('0');
         $this->assertSame('visual', $this->getViMode($result));
     }
@@ -222,6 +222,6 @@ final class ViModeExtendedTest extends TestCase
         $prop->setAccessible(true);
         /** @var ViMode $mode */
         $mode = $prop->getValue($prompt);
-        return $mode->viMode();
+        return $mode->viMode()->value;
     }
 }

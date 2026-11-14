@@ -26,7 +26,7 @@ final class ViModeTest extends TestCase
     public function testStartsInInsertMode(): void
     {
         $vi = new ViMode();
-        $this->assertSame('insert', $vi->viMode());
+        $this->assertSame('insert', $vi->viMode()->value);
     }
 
     // =========================================================================
@@ -42,7 +42,7 @@ final class ViModeTest extends TestCase
         // Escape enters normal mode
         $result = $prompt->handleKey(Key::Escape);
         $mode = $this->getModeFromPrompt($result);
-        $this->assertSame('normal', $mode->viMode());
+        $this->assertSame('normal', $mode->viMode()->value);
     }
 
     public function testNormalIAEntersInsertMode(): void
@@ -55,7 +55,7 @@ final class ViModeTest extends TestCase
         $prompt = $prompt->handleKey(Key::Escape);
         $prompt = $prompt->handleKey('i');
         $mode = $this->getModeFromPrompt($prompt);
-        $this->assertSame('insert', $mode->viMode());
+        $this->assertSame('insert', $mode->viMode()->value);
     }
 
     // =========================================================================
@@ -181,7 +181,7 @@ final class ViModeTest extends TestCase
         // Escape enters normal mode
         $prompt = $prompt->handleKey(Key::Escape);
         $mode = $this->getModeFromPrompt($prompt);
-        $this->assertSame('normal', $mode->viMode());
+        $this->assertSame('normal', $mode->viMode()->value);
     }
 
     public function testInsertModeHandlesBackspace(): void
@@ -268,8 +268,9 @@ final class ViModeTest extends TestCase
         $prompt = $prompt->handleKey(Key::Escape);
         $this->assertSame('normal', $this->getViMode($prompt));
 
-        // v → visual mode
-        $prompt = $prompt->handleKey('v');
+        // V → visual mode (re-pinned by S-52, G9 default: plain v unbound,
+        // the line-wise V spelling carries the visual entry)
+        $prompt = $prompt->handleKey('V');
         $this->assertSame('visual', $this->getViMode($prompt));
     }
 
@@ -478,6 +479,6 @@ final class ViModeTest extends TestCase
 
     private function getViMode(TextPrompt $prompt): string
     {
-        return $this->getModeFromPrompt($prompt)->viMode();
+        return $this->getModeFromPrompt($prompt)->viMode()->value;
     }
 }

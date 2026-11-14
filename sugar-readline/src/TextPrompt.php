@@ -1000,6 +1000,12 @@ final class TextPrompt implements PromptInterface, SizingInterface
         return $this->cursor;
     }
 
+    /** Whether the buffer renders masked; secrets stay out of mode state too. */
+    public function isHidden(): bool
+    {
+        return $this->hidden;
+    }
+
     public function isSubmitted(): bool
     {
         return $this->submitted;
@@ -1137,9 +1143,9 @@ final class TextPrompt implements PromptInterface, SizingInterface
         // bottom status row, mirroring vim's own statusline.
         if ($this->modeIndicator && $this->mode instanceof ViMode) {
             $lines[] = Ansi::wrap(match ($this->mode->viMode()) {
-                'normal' => '--NORMAL--',
-                'visual' => '--VISUAL--',
-                default  => '--INSERT--',
+                ViModeState::Normal => '--NORMAL--',
+                ViModeState::Visual => '--VISUAL--',
+                default             => '--INSERT--',
             }, '2');
         }
 

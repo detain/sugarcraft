@@ -321,6 +321,6 @@ final class ViTextObjectTest extends TestCase
         $prop->setAccessible(true);
         /** @var ViMode $mode */
         $mode = $prop->getValue($prompt);
-        return $mode->viMode();
+        return $mode->viMode()->value;
     }
 }
