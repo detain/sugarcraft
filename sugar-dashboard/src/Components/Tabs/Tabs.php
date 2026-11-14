@@ -92,51 +92,88 @@ final class Tabs implements \SugarCraft\Dashboard\Foundation\SizedItem
 
     /**
      * Render the tab bar (label row).
+     *
+     * Finding sugar-dashboard-052: the underline carried a CONSTANT leading
+     * space, so every tab's dash painted at column 2 no matter where its
+     * label sat, and a bar with more (or longer) tabs than the allocation
+     * overflowed it unclipped. Offsets are now the cumulative cell widths
+     * (cell = label + 2 decoration columns: the brackets around the active
+     * tab, the flanking spaces of an inactive one), labels truncate to a
+     * per-tab cell budget through the canonical Width helper, and the dash
+     * covers the active cell exactly.
      */
     private function renderTabBar(int $selectedIndex): string
     {
-        $parts = [];
+        $count = count($this->tabs);
         $totalWidth = $this->width ?? 0;
+        $sepWidth = Width::string($this->separator);
+
+        $labels = [];
+        $cellWidths = [];
+        foreach ($this->tabs as $i => $tab) {
+            $labels[$i] = $tab['label'];
+            $cellWidths[$i] = Width::string($tab['label']) + 2;
+        }
+
+        // More tabs (or longer ones) than the allocation: every label gets
+        // the same cell budget so no tab is favored when the bar shrinks.
+        $natural = array_sum($cellWidths) + $sepWidth * ($count - 1);
+        if ($totalWidth > 0 && $natural > $totalWidth) {
+            $budget = max(1, intdiv(max(0, $totalWidth - $sepWidth * ($count - 1)), $count) - 2);
+            foreach ($labels as $i => $label) {
+                $labels[$i] = Width::truncateAnsi($label, $budget);
+                $cellWidths[$i] = Width::string($labels[$i]) + 2;
+            }
+        }
+
+        $parts = [];
+        $starts = [];
+        $cursor = 0;
 
         foreach ($this->tabs as $i => $tab) {
-            $label = $tab['label'];
-            $isActive = ($i === $selectedIndex);
-
-            $tabStr = $this->renderTabLabel($label, $isActive);
-            $parts[] = $tabStr;
+            $starts[$i] = $cursor;
+            $parts[] = $this->renderTabLabel($labels[$i], $i === $selectedIndex);
+            $cursor += $cellWidths[$i];
 
             // Add separator if not last tab
-            if ($i < count($this->tabs) - 1) {
+            if ($i < $count - 1) {
                 $sepColor = '';
                 if ($this->inactiveColor !== null) {
                     $sepColor = $this->inactiveColor->toFg(ColorMode::profile());
                 }
                 $parts[] = $sepColor . $this->separator . Ansi::reset();
+                $cursor += $sepWidth;
             }
         }
 
         $result = implode('', $parts);
 
-        // If we have a fixed width and it's wider, pad with spaces
+        // The allocation is the frame: clip residual overflow (widths so
+        // small that chrome alone exceeds them), then pad up.
         if ($totalWidth > 0) {
             $resultWidth = Width::string($result);
+            if ($resultWidth > $totalWidth) {
+                $result = Width::truncateAnsi($result, $totalWidth);
+                $resultWidth = Width::string($result);
+            }
             if ($resultWidth < $totalWidth) {
                 $result .= str_repeat(' ', $totalWidth - $resultWidth);
             }
         }
 
-        // Add active tab underline
+        // Add active tab underline at the active tab's start column.
         if ($this->activeChar !== '' && isset($this->tabs[$selectedIndex])) {
-            $activeLabel = $this->tabs[$selectedIndex]['label'];
-            // Find position of active tab in result to place underline
-            // For simplicity, add underline on its own line at the end of tab bar
             $result .= "\n";
-            $labelWidth = Width::string($activeLabel) + 3; // +3 for prefix/suffix
-            $prefix = ' ';
+            $offset = $starts[$selectedIndex];
+            $dashWidth = $cellWidths[$selectedIndex];
+            if ($totalWidth > 0) {
+                $offset = min($offset, max(0, $totalWidth - 1));
+                $dashWidth = max(1, min($dashWidth, $totalWidth - $offset));
+            }
             if ($this->activeColor !== null) {
                 $result .= $this->activeColor->toFg(ColorMode::profile());
             }
-            $result .= $prefix . str_repeat($this->activeChar, $labelWidth);
+            $result .= str_repeat(' ', $offset) . str_repeat($this->activeChar, $dashWidth);
             $result .= Ansi::reset();
         }
 
@@ -191,15 +228,16 @@ final class Tabs implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function innerSize(): array
     {
-        // Calculate width from tab labels
+        // Calculate width from tab labels: cell = label + 2 decoration
+        // columns (sugar-dashboard-052 alignment with renderTabBar - the
+        // old +3 over-counted every cell and added a separator after the
+        // LAST tab too).
         $width = 0;
-        foreach ($this->tabs as $tab) {
-            $labelWidth = Width::string($tab['label']);
-            // Account for brackets: [label] or ' label '
-            $width += $labelWidth + 3; // 3 for prefix/suffix/space
-            // Plus separator
-            if ($width > 0) {
-                $width += 1;
+        $last = count($this->tabs) - 1;
+        foreach ($this->tabs as $i => $tab) {
+            $width += Width::string($tab['label']) + 2;
+            if ($i < $last) {
+                $width += Width::string($this->separator);
             }
         }
 

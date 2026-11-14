@@ -419,4 +419,74 @@ final class TabsTest extends TestCase
         $rendered = $updated->render();
         $this->assertNotSame('', $rendered);
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Underline offset (finding sugar-dashboard-052)
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testUnderlineSitsAtActiveTabStartColumn(): void
+    {
+        // Colorless construction: raw byte offsets, no SGR arithmetic.
+        // Cells: Home=4+2, sep=1, About=5+2, sep=1, Contact=7+2.
+        // Active tab 2 therefore starts at column 6+1+7+1 = 15.
+        $tabs = new Tabs([
+            ['label' => 'Home', 'content' => Text::new('A')],
+            ['label' => 'About', 'content' => Text::new('B')],
+            ['label' => 'Contact', 'content' => Text::new('C')],
+        ], selectedIndex: 2);
+
+        $lines = explode("\n", $tabs->render());
+        $underline = $lines[1];
+
+        $leading = strlen($underline) - strlen(ltrim($underline, ' '));
+        $this->assertSame(15, $leading, 'dash must start at the active cell, not at column 2');
+        // Dash covers the active cell exactly: [Contact] = 7 + 2 columns.
+        $this->assertSame(9, substr_count($underline, '─'));
+
+        // Every layout must agree: active tab 0 has offset 0 and a
+        // [Home] cell of 4+2 dashes.
+        $first = new Tabs([
+            ['label' => 'Home', 'content' => Text::new('A')],
+            ['label' => 'About', 'content' => Text::new('B')],
+        ], selectedIndex: 0);
+        $firstLine = explode("\n", $first->render())[1];
+        $this->assertSame(0, strlen($firstLine) - strlen(ltrim($firstLine, ' ')));
+        $this->assertSame(6, substr_count($firstLine, '─'));
+
+        // Middle tab: Home cell (6) + separator (1) = column 7.
+        $middle = new Tabs([
+            ['label' => 'Home', 'content' => Text::new('A')],
+            ['label' => 'Settings', 'content' => Text::new('B')],
+            ['label' => 'Contact', 'content' => Text::new('C')],
+        ], selectedIndex: 1);
+        $middleLine = explode("\n", $middle->render())[1];
+        $this->assertSame(7, strlen($middleLine) - strlen(ltrim($middleLine, ' ')));
+        $this->assertSame(10, substr_count($middleLine, '─'));
+    }
+
+    public function testUnderlineTracksTruncatedOverflowLayout(): void
+    {
+        // Ten long tabs inside an 80-cell allocation: labels take an equal
+        // cell budget and nothing may escape the frame (finding 052: the
+        // old code overflowed the bar and the dash ignored the layout).
+        $tabs = [];
+        for ($i = 1; $i <= 10; $i++) {
+            $tabs[] = ['label' => "Overview-$i", 'content' => Text::new("content $i")];
+        }
+
+        $sized = (new Tabs($tabs, selectedIndex: 7))->setSize(80, 0);
+        $lines = explode("\n", $sized->render());
+
+        // Natural width would be 9*10+11 + 10*2 + 9 = 130 > 80: budget
+        // kicks in (label budget = intdiv(80-9, 10) - 2 = 5 cells).
+        $this->assertLessThanOrEqual(80, \SugarCraft\Core\Util\Width::string($lines[0]));
+        $underline = $lines[1];
+        $this->assertLessThanOrEqual(80, \SugarCraft\Core\Util\Width::string($underline));
+
+        // Every label got the same 5-cell budget -> cell 5+2=7, separator 1.
+        // Active tab 7 starts at 7*(7+1) = 56.
+        $leading = strlen($underline) - strlen(ltrim($underline, ' '));
+        $this->assertSame(56, $leading);
+        $this->assertSame(7, substr_count($underline, '─'));
+    }
 }
