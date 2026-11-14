@@ -369,7 +369,6 @@ final class SmithWatermanMatcherTest extends TestCase
 
         $this->assertSame($matcher->score('he', 'hello'), $score);
         $this->assertSame(11, $score);
-        $this->assertSame($matcher->match('hello', 'hello')?->score, $score);
         $this->assertSame([0, 1], $matcher->match('hello', 'hello')?->matchedIndices);
     }
 
@@ -383,7 +382,6 @@ final class SmithWatermanMatcherTest extends TestCase
 
         $this->assertSame($matcher->score('hello', 'he'), $score);
         $this->assertSame(11, $score);
-        $this->assertSame($matcher->match('hello', 'hello')?->score, $score);
         // Indices stay valid in the ORIGINAL haystack.
         $this->assertSame([0, 1], $matcher->match('hello', 'hello')?->matchedIndices);
     }
@@ -391,10 +389,24 @@ final class SmithWatermanMatcherTest extends TestCase
     #[Test]
     public function testScoreEquivalentToMatchScore(): void
     {
-        $matchResult = $this->matcher->match('ello', 'hello');
-        $scoreOnly = $this->matcher->score('ello', 'hello');
+        // FUZZY-08: the single API-level home of the score()==match()->score
+        // contract (formerly re-read thousands of times inside the RequireFullQuery
+        // fuzz loops and duplicated as delegation shadows in the over-length tests).
+        // Small representative matrix across both modes.
+        $strict = new SmithWatermanMatcher(requireFullQuery: true);
 
-        $this->assertSame($matchResult?->score ?? 0, $scoreOnly);
+        $pairs = [['ello', 'hello'], ['app', 'application'], ['xyz', 'hello'], ['a', 'Ba']];
+
+        foreach ([false, true] as $isStrict) {
+            $m = $isStrict ? $strict : $this->matcher;
+            foreach ($pairs as [$q, $c]) {
+                $this->assertSame(
+                    $m->match($q, $c)?->score ?? 0,
+                    $m->score($q, $c),
+                    ($isStrict ? 'strict' : 'plain') . " score()/match() duality on $q|\$c",
+                );
+            }
+        }
     }
 
     #[Test]

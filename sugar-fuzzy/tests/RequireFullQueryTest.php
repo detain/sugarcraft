@@ -232,7 +232,12 @@ final class RequireFullQueryTest extends TestCase
 
                 $this->assertNotNull($result, $label);
                 $this->assertCount(strlen($q), $result->matchedIndices, $label);
-                $this->assertSame($result->score, $strict->score($q, $c), $label);
+                // FUZZY-08 cure: the `assertSame($result->score, $strict->score($q,$c))`
+                // delegation re-read removed — under requireFullQuery score() literally
+                // calls match() (src :192-193), so this 4,500-fold loop could never
+                // fail it. The contract is asserted ONCE at the API level in
+                // SmithWatermanMatcherTest::testScoreEquivalentToMatchScore; the real
+                // oracle here stays below (brute force + placement re-score).
 
                 $unconstrained = $plain->match($q, $c);
                 if ($unconstrained !== null && count($unconstrained->matchedIndices) === strlen($q)) {
