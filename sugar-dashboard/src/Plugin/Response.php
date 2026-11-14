@@ -30,7 +30,7 @@ final class Response
      */
     public static function init(string $name, array $minSize, int $interval = 0): self
     {
-        return new self('init', [
+        return new self(Verb::Init->value, [
             'name' => $name,
             'minSize' => $minSize,
             'interval' => $interval,
@@ -44,7 +44,7 @@ final class Response
      */
     public static function update(array $state): self
     {
-        return new self('update', ['state' => $state]);
+        return new self(Verb::Update->value, ['state' => $state]);
     }
 
     /**
@@ -54,7 +54,7 @@ final class Response
      */
     public static function view(string $content): self
     {
-        return new self('view', ['content' => $content]);
+        return new self(Verb::View->value, ['content' => $content]);
     }
 
     /**
@@ -64,11 +64,8 @@ final class Response
      */
     public static function error(string $message): self
     {
-        return new self('error', ['message' => $message]);
+        return new self(Verb::Error->value, ['message' => $message]);
     }
-
-    /** Maximum number of raw bytes echoed back in a protocol-error message. */
-    private const ERROR_PREVIEW_BYTES = 120;
 
     /**
      * Create from JSON string.
@@ -85,20 +82,20 @@ final class Response
     {
         $data = json_decode($json, true);
         if (!is_array($data)) {
-            throw new \InvalidArgumentException('Invalid plugin JSON: ' . self::preview($json));
+            throw new \InvalidArgumentException('Invalid plugin JSON: ' . Wire::preview($json));
         }
 
-        $type = $data['type'] ?? 'unknown';
+        $type = $data['type'] ?? Verb::WIRE_MISSING;
         if (!is_string($type)) {
             throw new \InvalidArgumentException(
-                'Plugin response "type" must be a string, got ' . get_debug_type($type) . ': ' . self::preview($json)
+                'Plugin response "type" must be a string, got ' . get_debug_type($type) . ': ' . Wire::preview($json)
             );
         }
 
         $payload = $data['data'] ?? [];
         if (!is_array($payload)) {
             throw new \InvalidArgumentException(
-                'Plugin response "data" must be an object, got ' . get_debug_type($payload) . ': ' . self::preview($json)
+                'Plugin response "data" must be an object, got ' . get_debug_type($payload) . ': ' . Wire::preview($json)
             );
         }
 
@@ -125,18 +122,11 @@ final class Response
     }
 
     /**
-     * Printable, length-clipped rendering of an unparsable wire line.
+     * The parsed verb at the boundary; null for foreign/unknown labels,
+     * which still travel as strings so either side can quote them.
      */
-    private static function preview(string $json): string
+    public function verb(): ?Verb
     {
-        $trimmed = trim($json);
-        if (strlen($trimmed) > self::ERROR_PREVIEW_BYTES) {
-            $trimmed = substr($trimmed, 0, self::ERROR_PREVIEW_BYTES) . '...';
-        }
-
-        // Byte-wise: every non-printable (control bytes, ESC sequences,
-        // invalid UTF-8) becomes '?' so a refusal can never smuggle a
-        // terminal escape into whatever surface prints it.
-        return preg_replace('/[^\x20-\x7E]/', '?', $trimmed) ?? '';
+        return Verb::tryFrom($this->type);
     }
 }

@@ -175,12 +175,12 @@ final class ExternalModule implements LegacyModule
         }
         $response = $this->readResponse();
 
-        if ($response->type !== 'init') {
+        if ($response->verb() !== Verb::Init) {
             // A plugin that cannot answer its own handshake is disabled for
             // the session (its panel shows the reason) rather than throwing:
             // discovery auto-loads everything in the plugin directory, and
             // one broken binary must not brick the whole dashboard startup.
-            $this->disable("init refused: {$response->type}");
+            $this->disable('init refused: ' . $this->protocolRefusal($response));
             return [
                 'name' => $this->name(),
                 'minSize' => $this->minSize(),
@@ -189,7 +189,7 @@ final class ExternalModule implements LegacyModule
         }
 
         $this->interval = self::clampInterval($response->data['interval'] ?? 0);
-        $this->advertisedMinSize = self::clampMinSize($response->data['minSize'] ?? null);
+        $this->advertisedMinSize = Wire::clampMinSize($response->data['minSize'] ?? null);
 
         return [
             'name' => self::chromeLabel((string) ($response->data['name'] ?? $this->name)),
@@ -218,7 +218,7 @@ final class ExternalModule implements LegacyModule
         }
         $response = $this->readResponse();
 
-        if ($response->type === 'update') {
+        if ($response->verb() === Verb::Update) {
             $nextState = $response->data['state'] ?? $state;
             $nextState = is_array($nextState) ? self::sanitizeEncodedState($nextState) : $state;
             if ($this->pendingWidth !== null && $this->pendingHeight !== null
@@ -232,9 +232,10 @@ final class ExternalModule implements LegacyModule
 
         // Protocol error: unexpected response type or error from plugin.
         // Disable the plugin so a misbehaving subprocess cannot desync
-        // the dashboard loop; the reason is carried to view() rather than
-        // silently falling back to prior state.
-        $this->disable("unexpected response: {$response->type}");
+        // the dashboard loop; the reason — including the plugin's own
+        // error message — is carried to view() rather than silently
+        // falling back to prior state.
+        $this->disable($this->protocolRefusal($response));
         return $state;
     }
 
@@ -286,7 +287,7 @@ final class ExternalModule implements LegacyModule
         }
         $response = $this->readResponse();
 
-        if ($response->type === 'view') {
+        if ($response->verb() === Verb::View) {
             $this->viewCache = Sanitize::untrusted((string) ($response->data['content'] ?? ''));
             $this->renderedDims = $width . 'x' . $height;
             $this->renderedStateKey = self::stateKey($state);
@@ -295,7 +296,7 @@ final class ExternalModule implements LegacyModule
 
         // Protocol error — disable the plugin; the marker replaces the
         // stale/empty render so the panel is never silently blank.
-        $this->disable("unexpected response: {$response->type}");
+        $this->disable($this->protocolRefusal($response));
     }
 
     /** The panel text for a plugin that is no longer trusted: named, with its reason. */
@@ -840,25 +841,21 @@ final class ExternalModule implements LegacyModule
     }
 
     /**
-     * Validate and clamp a plugin-supplied minSize to a safe default.
-     * Must be a two-element array of positive integers; otherwise [30, 4].
+     * Name the plugin's refusal for the disabled-panel chrome.
+     *
+     * A type='error' reply is not a mystery to paper over — the plugin
+     * told us WHY (sugar-dashboard-103: a typo'd verb on the wire used
+     * to disable the panel with 'unexpected response: error', losing the
+     * message that explains the fix). The text is untrusted child bytes:
+     * printable-clipped through the shared wire budget.
      */
-    private static function clampMinSize(mixed $minSize): array
+    private function protocolRefusal(Response $response): string
     {
-        if (
-            is_array($minSize)
-            && count($minSize) === 2
-            && is_int($minSize[0] ?? null)
-            && is_int($minSize[1] ?? null)
-            && ($minSize[0] ?? 0) > 0
-            && ($minSize[1] ?? 0) > 0
-        ) {
-            return [
-                max(1, min((int) $minSize[0], 10000)),
-                max(1, min((int) $minSize[1], 1000)),
-            ];
+        if ($response->verb() === Verb::Error) {
+            return 'plugin error: ' . Wire::preview((string) ($response->data['message'] ?? ''));
         }
-        return [30, 4];
+
+        return "unexpected response: {$response->type}";
     }
 
     private function closeStderr(): void

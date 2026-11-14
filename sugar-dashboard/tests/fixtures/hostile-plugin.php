@@ -24,6 +24,10 @@
  *            probe for sugar-dashboard-203: the disable reason must carry
  *            the plugin's own last stderr line, not just our half of the
  *            failed conversation.
+ *  errormouth honest handshake; every later request earns a well-formed
+ *            error reply with a message (sugar-dashboard-103): the host's
+ *            disable reason must quote the plugin's words, not the bare
+ *            'error' verb.
  *  sizes     honest handshake carrying a real minSize and a long
  *            multi-byte name (sugar-dashboard-105): the host must keep the
  *            validated meta past init() and clip chrome on glyph
@@ -135,6 +139,26 @@ if ($mode === 'wept') {
         }
         fwrite(STDERR, 'config load failed: no such file /etc/wept.conf (request: ' . $type . ")\n");
         fwrite(STDOUT, json_encode(['type' => 'nonsense', 'data' => []]) . "\n");
+    }
+    exit(0);
+}
+
+if ($mode === 'errormouth') {
+    // sdx-103: honest handshake, then EVERY request earns a well-formed
+    // Verb::Error reply carrying a reason. An error answer is a story the
+    // host must quote, not a surprise to disable on — the panel reason
+    // must name the plugin's own message, never the bare 'error' type.
+    while (($line = fgets(STDIN)) !== false) {
+        $request = json_decode(trim($line), true);
+        $type = is_array($request) ? ($request['type'] ?? '') : '';
+        if ($type === 'init') {
+            greet();
+            continue;
+        }
+        fwrite(STDOUT, json_encode([
+            'type' => 'error',
+            'data' => ['message' => 'cannot render: plugin exhausted (request: ' . $type . ')'],
+        ]) . "\n");
     }
     exit(0);
 }

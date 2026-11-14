@@ -112,15 +112,17 @@ abstract class PluginSdk
      */
     private function handle(Request $request): Response
     {
-        return match ($request->type) {
-            'init' => $this->handleInit(),
-            'update' => $this->handleUpdate($request->data['state'] ?? []),
-            'view' => $this->handleView(
+        return match (Verb::tryFrom($request->type)) {
+            Verb::Init => $this->handleInit(),
+            Verb::Update => $this->handleUpdate($request->data['state'] ?? []),
+            Verb::View => $this->handleView(
                 $request->data['width'] ?? 80,
                 $request->data['height'] ?? 24,
                 $request->data['state'] ?? []
             ),
-            default => Response::error("Unknown request type: {$request->type}"),
+            // An unrecognised verb gets the plugin an error MESSAGE, not
+            // silence: the host quotes this text into the panel chrome.
+            default => Response::error("unknown request type: {$request->type}"),
         };
     }
 
@@ -132,22 +134,7 @@ abstract class PluginSdk
         $meta = $this->init();
         $interval = max(0, min((int) ($meta['interval'] ?? 0), 86400));
 
-        $minSize = $meta['minSize'] ?? null;
-        if (
-            is_array($minSize)
-            && count($minSize) === 2
-            && is_int($minSize[0] ?? null)
-            && is_int($minSize[1] ?? null)
-            && ($minSize[0] ?? 0) > 0
-            && ($minSize[1] ?? 0) > 0
-        ) {
-            $minSize = [
-                max(1, min((int) $minSize[0], 10000)),
-                max(1, min((int) $minSize[1], 1000)),
-            ];
-        } else {
-            $minSize = [30, 4];
-        }
+        $minSize = Wire::clampMinSize($meta['minSize'] ?? null);
 
         $this->interval = $interval;
         return Response::init(

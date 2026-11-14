@@ -26,7 +26,7 @@ final class Request
      */
     public static function init(): self
     {
-        return new self('init');
+        return new self(Verb::Init->value);
     }
 
     /**
@@ -36,7 +36,7 @@ final class Request
      */
     public static function update(array $state): self
     {
-        return new self('update', ['state' => $state]);
+        return new self(Verb::Update->value, ['state' => $state]);
     }
 
     /**
@@ -48,7 +48,7 @@ final class Request
      */
     public static function view(int $width, int $height, array $state): self
     {
-        return new self('view', [
+        return new self(Verb::View->value, [
             'width' => $width,
             'height' => $height,
             'state' => $state,
@@ -69,20 +69,20 @@ final class Request
     {
         $data = json_decode($json, true);
         if (!is_array($data)) {
-            throw new \InvalidArgumentException('Invalid plugin JSON: ' . self::preview($json));
+            throw new \InvalidArgumentException('Invalid plugin JSON: ' . Wire::preview($json));
         }
 
-        $type = $data['type'] ?? 'unknown';
+        $type = $data['type'] ?? Verb::WIRE_MISSING;
         if (!is_string($type)) {
             throw new \InvalidArgumentException(
-                'Plugin request "type" must be a string, got ' . get_debug_type($type) . ': ' . self::preview($json)
+                'Plugin request "type" must be a string, got ' . get_debug_type($type) . ': ' . Wire::preview($json)
             );
         }
 
         $payload = $data['data'] ?? [];
         if (!is_array($payload)) {
             throw new \InvalidArgumentException(
-                'Plugin request "data" must be an object, got ' . get_debug_type($payload) . ': ' . self::preview($json)
+                'Plugin request "data" must be an object, got ' . get_debug_type($payload) . ': ' . Wire::preview($json)
             );
         }
 
@@ -103,15 +103,11 @@ final class Request
     }
 
     /**
-     * Printable, length-clipped rendering of an unparsable wire line.
+     * The parsed verb at the boundary: null for foreign/unknown labels
+     * (which still travel as strings so the host can quote them).
      */
-    private static function preview(string $json): string
+    public function verb(): ?Verb
     {
-        $trimmed = trim($json);
-        if (strlen($trimmed) > 120) {
-            $trimmed = substr($trimmed, 0, 120) . '...';
-        }
-
-        return preg_replace('/[^\x20-\x7E]/', '?', $trimmed) ?? '';
+        return Verb::tryFrom($this->type);
     }
 }
