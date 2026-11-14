@@ -46,7 +46,7 @@ final class CsiHandlerImpl implements CsiHandler
 
     /**
      * Active OSC 8 hyperlink of the pen (ESC-2), written by
-     * {@see OscHandlerImpl::hyperlink()} through {@see setHyperlink()}.
+     * {@see PenForwardingOscHandler::hyperlink()} through {@see setHyperlink()}.
      *
      * Deliberately NOT part of the SGR reset (`CSI 0 m` keeps the link — xterm
      * scopes link state to the OSC 8 protocol itself, mirroring the emulator's
@@ -130,7 +130,7 @@ final class CsiHandlerImpl implements CsiHandler
 
     /**
      * Set the pen's active OSC 8 link ({@see $hyperlink}); null closes it.
-     * Called by {@see OscHandlerImpl} on every OSC 8 dispatch.
+     * Called by {@see PenForwardingOscHandler} on every OSC 8 dispatch.
      */
     public function setHyperlink(?Hyperlink $hyperlink): void
     {
