@@ -312,11 +312,14 @@ marker carries no color, so tab cycling stays visible under `NO_COLOR`,
 User-facing strings are internationalized via `SugarCraft\Git\Lang::t()`.
 All translatable strings live in `lang/en.php` under the `'git'` namespace.
 
-**Namespacing:** `Lang::t()` bakes the `git` namespace into every lookup, so a
-file key like `git.timeout` resolves through the core `T` registry as
-`git.git.timeout`. Always call through `SugarCraft\Git\Lang`; reaching for
-`T::translate('git.error')` directly misses the registered key and returns the
-raw string.
+**Namespacing:** Pass the `lang/en.php` key verbatim —
+`Lang::t('git.timeout')`. The facade bakes the library's `git` namespace into
+every lookup, so the core `T` registry sees `git.git.timeout`: namespace
+`git`, file key `git.timeout`. Two shapes miss and echo raw text instead of
+translating: `Lang::t('timeout')` asks for a file key `timeout` that the
+prefixed language file never registers, and `T::translate('git.error')`
+bypasses the facade and looks up a bare `error` in namespace `git`. Call
+through `SugarCraft\Git\Lang` and nothing else.
 
 **Available keys** (`lang/en.php` — an excerpt; the file is the full roster
 of 196 keys):
