@@ -97,6 +97,10 @@ final class Canvas implements SizedItem
 
     /**
      * Set the allocated dimensions for this canvas.
+     *
+     * Finding sugar-dashboard-079 (D-84): the allocation is now READ -
+     * render() clips/pads to exactly this box and innerSize() reports it
+     * (pixels in, pixels out). Unset, the natural constraints rule.
      */
     public function setSize(int $width, int $height): Sizer
     {
@@ -254,13 +258,28 @@ final class Canvas implements SizedItem
 
     /**
      * Render the canvas as a string.
+     *
+     * Finding sugar-dashboard-079 (D-84): the painter now reads its
+     * allocation. Output is clipped/padded to the setSize width x height
+     * (natural constraints when unset), defaultFg/defaultBg decorate
+     * non-blank glyph cells only (explicit per-pixel colors win), and a
+     * corrupt stored hex degrades honestly - the cell still paints, the
+     * old background catch no longer adds a phantom extra space column
+     * that broke the row-width contract (CALIBER no-swallow law).
      */
     public function render(): string
     {
+        $useW = $this->width ?? $this->widthConstraint;
+        $useH = $this->height ?? $this->heightConstraint;
         $output = '';
 
-        for ($y = 0; $y < $this->heightConstraint; $y++) {
-            for ($x = 0; $x < $this->widthConstraint; $x++) {
+        for ($y = 0; $y < $useH; $y++) {
+            for ($x = 0; $x < $useW; $x++) {
+                if ($y >= $this->heightConstraint || $x >= $this->widthConstraint) {
+                    $output .= ' '; // padding beyond the grid
+                    continue;
+                }
+
                 $pixel = $this->pixels[$y][$x];
                 $fgHex = $this->fgColors[$y][$x];
                 $bgHex = $this->bgColors[$y][$x];
@@ -272,32 +291,47 @@ final class Canvas implements SizedItem
 
                 $char = $pixel ?? ' ';
 
+                $bgColor = null;
                 if ($bgHex !== null) {
                     try {
                         $bgColor = Color::hex($bgHex);
-                        $output .= $bgColor->toBg(ColorMode::profile());
                     } catch (\Throwable) {
-                        $output .= ' ';
+                        // Finding 079 documented degradation: the corrupt
+                        // background is skipped, the cell still paints -
+                        // never a swallowed extra column.
+                        $bgColor = $pixel !== null ? $this->defaultBg : null;
                     }
+                } elseif ($pixel !== null && $this->defaultBg !== null) {
+                    $bgColor = $this->defaultBg;
+                }
+                if ($bgColor !== null) {
+                    $output .= $bgColor->toBg(ColorMode::profile());
                 }
 
+                $fgColor = null;
                 if ($fgHex !== null) {
                     try {
                         $fgColor = Color::hex($fgHex);
-                        $output .= $fgColor->toFg(ColorMode::profile());
                     } catch (\Throwable) {
-                        // use default
+                        // Corrupt foreground degrades to the default (or
+                        // nothing) - the cell still paints, honest swallow.
+                        $fgColor = $pixel !== null ? $this->defaultFg : null;
                     }
+                } elseif ($pixel !== null && $this->defaultFg !== null) {
+                    $fgColor = $this->defaultFg;
+                }
+                if ($fgColor !== null) {
+                    $output .= $fgColor->toFg(ColorMode::profile());
                 }
 
                 $output .= $char;
 
-                if ($fgHex !== null || $bgHex !== null) {
+                if ($fgColor !== null || $bgColor !== null) {
                     $output .= Ansi::reset();
                 }
             }
 
-            if ($y < $this->heightConstraint - 1) {
+            if ($y < $useH - 1) {
                 $output .= "\n";
             }
         }
@@ -306,13 +340,17 @@ final class Canvas implements SizedItem
     }
 
     /**
-     * Calculate the natural dimensions of this canvas.
+     * Calculate the dimensions this canvas paints.
+     *
+     * Finding sugar-dashboard-079 (D-84): the setSize allocation is
+     * reported when set - render() clips/pads to exactly this box, so
+     * stacking parents no longer measure a canvas they will never see.
      *
      * @return array{0:int,1:int} [width, height]
      */
     public function innerSize(): array
     {
-        return [$this->widthConstraint, $this->heightConstraint];
+        return [$this->width ?? $this->widthConstraint, $this->height ?? $this->heightConstraint];
     }
 
     // ─── Withers ──────────────────────────────────────────────────
@@ -322,12 +360,17 @@ final class Canvas implements SizedItem
      */
     public function withWidth(int $width): self
     {
-        return new self(
+        $next = new self(
             widthConstraint: $width,
             heightConstraint: $this->heightConstraint,
             defaultFg: $this->defaultFg,
             defaultBg: $this->defaultBg,
         );
+        // Finding 079 (D-84): carry the setSize allocation - the D-56/D-77
+        // allocation-drop class, screened here per the D-98 wither doctrine.
+        $next->width = $this->width;
+        $next->height = $this->height;
+        return $next;
     }
 
     /**
@@ -335,12 +378,15 @@ final class Canvas implements SizedItem
      */
     public function withHeight(int $height): self
     {
-        return new self(
+        $next = new self(
             widthConstraint: $this->widthConstraint,
             heightConstraint: $height,
             defaultFg: $this->defaultFg,
             defaultBg: $this->defaultBg,
         );
+        $next->width = $this->width;
+        $next->height = $this->height;
+        return $next;
     }
 
     /**
@@ -348,12 +394,15 @@ final class Canvas implements SizedItem
      */
     public function withDefaultFg(?Color $color): self
     {
-        return new self(
+        $next = new self(
             widthConstraint: $this->widthConstraint,
             heightConstraint: $this->heightConstraint,
             defaultFg: $color,
             defaultBg: $this->defaultBg,
         );
+        $next->width = $this->width;
+        $next->height = $this->height;
+        return $next;
     }
 
     /**
@@ -361,11 +410,14 @@ final class Canvas implements SizedItem
      */
     public function withDefaultBg(?Color $color): self
     {
-        return new self(
+        $next = new self(
             widthConstraint: $this->widthConstraint,
             heightConstraint: $this->heightConstraint,
             defaultFg: $this->defaultFg,
             defaultBg: $color,
         );
+        $next->width = $this->width;
+        $next->height = $this->height;
+        return $next;
     }
 }

@@ -6,6 +6,8 @@ namespace SugarCraft\Dashboard\Tests\Plot\Canvas;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 use SugarCraft\Dashboard\Plot\Canvas\Canvas;
 use SugarCraft\Dashboard\Plot\Canvas\DrawingOps;
 
@@ -209,5 +211,95 @@ final class CanvasTest extends TestCase
         $c = Canvas::new(10, 10);
         $c2 = $c->withDefaultBg(Color::hex('#0000FF'));
         $this->assertNotSame($c, $c2);
+    }
+
+    // ═════════════════════════════════════════════════════════════
+    // Allocation, defaults and honest degradation (finding 079, D-84)
+    // ═════════════════════════════════════════════════════════════
+
+    public function testRenderClipsToAllocation(): void
+    {
+        $lines = explode("\n", Canvas::new(6, 3)->setSize(4, 2)->render());
+        $this->assertCount(2, $lines, 'the allocation clips rows');
+        foreach ($lines as $line) {
+            $this->assertSame(4, Width::string($line), 'the allocation clips columns');
+        }
+    }
+
+    public function testRenderPadsBeyondTheGrid(): void
+    {
+        $lines = explode("\n", Canvas::new(3, 2)->setSize(5, 4)->render());
+        $this->assertCount(4, $lines, 'the allocation pads rows');
+        foreach ($lines as $line) {
+            $this->assertSame(5, Width::string($line), 'the allocation pads columns');
+        }
+    }
+
+    public function testInnerSizeReportsTheAllocation(): void
+    {
+        $this->assertSame([10, 5], Canvas::new(4, 3)->setSize(10, 5)->innerSize());
+        $this->assertSame([4, 3], Canvas::new(4, 3)->innerSize(), 'unset allocation falls back to the constraints');
+    }
+
+    public function testDefaultFgDecoratesGlyphCells(): void
+    {
+        $sgr = Color::ansi(1)->toFg(ColorMode::profile());
+        // setPixel stores colors as hex and the render path re-emits from
+        // the hex, so the explicit pin must be built the same way.
+        $explicit = Color::hex((string) Color::ansi(2)->toHex())->toFg(ColorMode::profile());
+        $canvas = Canvas::new(4, 2)
+            ->withDefaultFg(Color::ansi(1))
+            ->setPixel(0, 0, 'X')
+            ->setPixel(1, 0, 'Y', Color::ansi(2));
+        $render = $canvas->render();
+        $this->assertStringContainsString($sgr, $render, 'the default foreground paints glyph cells');
+        $this->assertStringContainsString($explicit, $render, 'an explicit pixel color wins over the default');
+        $first = explode("\n", $render)[0];
+        $this->assertStringStartsWith($sgr . 'X', $first, 'X carries the default');
+        $this->assertStringContainsString($explicit . 'Y', $first, 'Y carries the explicit color, after the default run');
+    }
+
+    public function testDefaultBgDecoratesOnlyGlyphCells(): void
+    {
+        $sgr = Color::hex('#112233')->toBg(ColorMode::profile());
+        $canvas = Canvas::new(3, 2)->withDefaultBg(Color::hex('#112233'))->setPixel(1, 0, 'X');
+        $lines = explode("\n", $canvas->render());
+        $this->assertStringContainsString($sgr, $lines[0], 'the default background paints the glyph cell');
+        $this->assertStringNotContainsString($sgr, $lines[1], 'blank cells stay plain - no wall of background color');
+    }
+
+    public function testCorruptColorDegradesWithoutPhantomColumn(): void
+    {
+        $canvas = Canvas::new(3, 1)->setPixel(0, 0, 'X');
+
+        $bg = new \ReflectionProperty(Canvas::class, 'bgColors');
+        $bg->setAccessible(true);
+        $bgCanvas = clone $canvas;
+        $bg->setValue($bgCanvas, [['bogus', null, null]]);
+        $line = explode("\n", $bgCanvas->render())[0];
+        $this->assertSame(3, Width::string($line), 'a corrupt background must not add a cell (the old phantom space)');
+        $this->assertStringContainsString('X', $line, 'the corrupt cell still paints');
+
+        $fg = new \ReflectionProperty(Canvas::class, 'fgColors');
+        $fg->setAccessible(true);
+        $fgCanvas = clone $canvas;
+        $fg->setValue($fgCanvas, [['bogus', null, null]]);
+        $line = explode("\n", $fgCanvas->render())[0];
+        $this->assertSame(3, Width::string($line), 'a corrupt foreground keeps the row geometry');
+        $this->assertStringContainsString('X', $line, 'the corrupt foreground falls back, not silently eats the glyph');
+    }
+
+    public function testWithersCarryTheAllocation(): void
+    {
+        $canvas = Canvas::new(4, 3)->setSize(9, 6);
+        $variants = [
+            $canvas->withWidth(5),
+            $canvas->withHeight(7),
+            $canvas->withDefaultFg(Color::hex('#010203')),
+            $canvas->withDefaultBg(Color::hex('#040506')),
+        ];
+        foreach ($variants as $i => $variant) {
+            $this->assertSame([9, 6], $variant->innerSize(), "wither #{$i} must carry the setSize allocation (D-56/D-77 drop class)");
+        }
     }
 }

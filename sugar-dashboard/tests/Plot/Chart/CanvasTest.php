@@ -304,7 +304,12 @@ final class CanvasTest extends TestCase
         $rendered = $canvas->render();
 
         $lines = explode("\n", $rendered);
-        $this->assertStringContainsString('     █', $lines[1]);
+        // D-84 DISCLOSED pin update (finding sugar-dashboard-079): the old
+        // expectation '     █' was the false witness for the defaultFg being
+        // accepted and never applied. Canvas::new() carries a defaultFg, so
+        // the glyph cell now arrives decorated - the cells still line up at
+        // column 5, the SGR simply precedes the rune.
+        $this->assertMatchesRegularExpression('/^     \x1b\[[0-9;]*m█/', $lines[1], 'five plain cells then the glyph decorated by the default foreground');
     }
 
     public function testRenderWithColor(): void
