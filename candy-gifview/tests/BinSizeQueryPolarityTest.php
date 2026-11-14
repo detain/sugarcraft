@@ -329,7 +329,7 @@ final class BinSizeQueryPolarityTest extends TestCase
     }
 
     /**
-     * gifview-008: the rows-2 viewport reserve, observable through a LIVE
+     * gifview-07 (finding candy-gifview-008): the rows-2 viewport reserve, observable through a LIVE
      * kernel size query — not just "greater than 0". The child answers
      * json_encode(viewportCells()) with fd 1 wired to the resized slave and
      * COLUMNS/LINES unset in its environment, so the probe leg (Tty facade)
