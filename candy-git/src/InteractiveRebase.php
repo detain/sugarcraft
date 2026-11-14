@@ -11,6 +11,9 @@ namespace SugarCraft\Git;
  * Parked per gate G1 (2026-11-14): the App refuses the mutating keys with the
  * preview-only notice; the model methods below stay as the building blocks for
  * the wire arm (temp todo + GIT_SEQUENCE_EDITOR) should the owner commission it.
+ * Wiring it needs a GitDriver execution method and an Enter arm; the completion,
+ * error and cancel plumbing that anticipated them is deleted as speculation
+ * (candy-git-029 part 3).
  *
  * Press 'i' to open, choose a commit count, read the todo, leave with Esc.
  *
@@ -24,7 +27,6 @@ final readonly class InteractiveRebase
      * @param int               $cursor      Current cursor
      * @param bool             $selectingN  Whether we're selecting number of commits
      * @param string           $countInput  The accumulated count being typed
-     * @param bool             $done        Whether the rebase is complete
      * @param string|null       $error       Error message if any
      */
     public function __construct(
@@ -32,7 +34,6 @@ final readonly class InteractiveRebase
         public int $cursor = 0,
         public bool $selectingN = true,
         public string $countInput = '',
-        public bool $done = false,
         public ?string $error = null,
     ) {}
 
@@ -74,7 +75,6 @@ final readonly class InteractiveRebase
             cursor: $this->cursor,
             selectingN: true,
             countInput: $this->countInput . $digit,
-            done: false,
             error: null,
         );
     }
@@ -88,7 +88,7 @@ final readonly class InteractiveRebase
     {
         $n = (int) $this->countInput;
         if ($n <= 0) {
-            return new self(commits: [], cursor: 0, selectingN: true, countInput: '', done: false, error: Lang::t('rebase_i.count_positive'));
+            return new self(commits: [], cursor: 0, selectingN: true, countInput: '', error: Lang::t('rebase_i.count_positive'));
         }
         $commits = array_slice($logCommits, 0, $n);
         return new self(
@@ -96,7 +96,6 @@ final readonly class InteractiveRebase
             cursor: 0,
             selectingN: false,
             countInput: '',
-            done: false,
             error: null,
         );
     }
@@ -109,7 +108,7 @@ final readonly class InteractiveRebase
         $count = count($this->commits);
         if ($count === 0) return $this;
         $newCursor = max(0, min($count - 1, $this->cursor + $dir));
-        return new self(commits: $this->commits, cursor: $newCursor, selectingN: false, countInput: '', done: $this->done, error: $this->error);
+        return new self(commits: $this->commits, cursor: $newCursor, selectingN: false, countInput: '', error: $this->error);
     }
 
     /**
@@ -135,7 +134,7 @@ final readonly class InteractiveRebase
         $newCommits = $this->commits;
         $newCommits[$this->cursor] = $current->withAction($nextAction);
 
-        return new self(commits: $newCommits, cursor: $this->cursor, selectingN: false, countInput: '', done: $this->done, error: $this->error);
+        return new self(commits: $newCommits, cursor: $this->cursor, selectingN: false, countInput: '', error: $this->error);
     }
 
     /**
@@ -147,44 +146,7 @@ final readonly class InteractiveRebase
         $newCommits = $this->commits;
         array_splice($newCommits, $this->cursor, 1);
         $newCursor = min($this->cursor, max(0, count($newCommits) - 1));
-        return new self(commits: $newCommits, cursor: $newCursor, selectingN: false, countInput: '', done: $this->done, error: $this->error);
+        return new self(commits: $newCommits, cursor: $newCursor, selectingN: false, countInput: '', error: $this->error);
     }
 
-    /**
-     * Mark rebase as complete.
-     *
-     * TODO: executeInteractiveRebase() — Interactive rebase execution is not yet
-     * wired into App::update(). This sets done=true but no GitDriver method exists
-     * to apply the built todo list. Full implementation requires:
-     * - GitDriver::interactiveRebase(list<RebaseCommit> $commits): void
-     * - Enter key binding in App.php to trigger execution when not selectingN
-     */
-    public function markDone(): self
-    {
-        return new self(commits: $this->commits, cursor: $this->cursor, selectingN: false, countInput: '', done: true, error: $this->error);
-    }
-
-    /**
-     * Mark an error.
-     */
-    public function withError(string $msg): self
-    {
-        return new self(commits: $this->commits, cursor: $this->cursor, selectingN: $this->selectingN, countInput: '', done: false, error: $msg);
-    }
-
-    /**
-     * Cancel and exit.
-     */
-    public function cancel(): self
-    {
-        return new self(commits: [], cursor: 0, selectingN: true, countInput: '', done: false, error: null);
-    }
-
-    /**
-     * Number of commits in the todo list.
-     */
-    public function count(): int
-    {
-        return count($this->commits);
-    }
 }

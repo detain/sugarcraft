@@ -17,7 +17,6 @@ final class InteractiveRebaseTest extends TestCase
         $this->assertTrue($ir->selectingN);
         $this->assertSame('', $ir->countInput);
         $this->assertSame([], $ir->commits);
-        $this->assertFalse($ir->done);
     }
 
     public function testWithCountDigitAppendsDigit(): void
@@ -155,30 +154,6 @@ final class InteractiveRebaseTest extends TestCase
         $dropped = $ir->dropCurrent();
         $this->assertCount(1, $dropped->commits);
         $this->assertSame(0, $dropped->cursor);
-    }
-
-    public function testMarkDoneSetsFlag(): void
-    {
-        $ir = new InteractiveRebase([], selectingN: false);
-        $done = $ir->markDone();
-        $this->assertTrue($done->done);
-    }
-
-    public function testWithErrorSetsError(): void
-    {
-        $ir = new InteractiveRebase([], selectingN: false);
-        $withError = $ir->withError('something went wrong');
-        $this->assertSame('something went wrong', $withError->error);
-    }
-
-    public function testCancelReturnsEmptyState(): void
-    {
-        $ir = new InteractiveRebase([], selectingN: false);
-        $cancelled = $ir->cancel();
-        $this->assertTrue($cancelled->selectingN);
-        $this->assertSame('', $cancelled->countInput);
-        $this->assertSame([], $cancelled->commits);
-        $this->assertFalse($cancelled->done);
     }
 
     public function testRebaseCommitWithAction(): void
