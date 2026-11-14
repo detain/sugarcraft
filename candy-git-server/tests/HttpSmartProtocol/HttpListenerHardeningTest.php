@@ -595,6 +595,83 @@ final class HttpListenerHardeningTest extends TestCase
         return $handle;
     }
 
+    public function testAnOversizedIncompleteHeadIsRefusedWith431AtTheSocket(): void
+    {
+        // (068) Mirror of the StatsServer 431 pin — StatsServerTest policed
+        // only StatsServer's own copy of the header cap, so deleting
+        // HttpListener's 431 branch kept the suite green. ~70 KB of header
+        // lines with no terminating blank line: the seat buffer must hit
+        // the cap and answer 431 rather than grow unbounded.
+        $head = "GET /any HTTP/1.1\r\nHost: x\r\n"
+            . \str_repeat("X-Pad: " . \str_repeat('a', 1024) . "\r\n", 70);
+        self::assertGreaterThan(65536, \strlen($head));
+        self::assertStringNotContainsString("\r\n\r\n", $head);
+
+        $loop = new StreamSelectLoop();
+        $this->loop = $loop;
+        $listener = new HttpListener(
+            $this->makeServer(null),
+            '127.0.0.1',
+            0,
+            $loop,
+            idleTimeoutSeconds: 60.0,
+            absoluteDeadlineSeconds: 60.0
+        );
+        $listener->start();
+        try {
+            $client = $this->connect($listener);
+            \fwrite($client, $head);
+            $response = $this->readResponse($loop, $client, 2.0);
+
+            self::assertStringStartsWith('HTTP/1.1 431 Request Header Fields Too Large', $response);
+            self::assertSame(0, $listener->activeConnectionCount(), 'the refused seat is freed');
+        } finally {
+            $listener->stop();
+        }
+    }
+
+    public function testStartingTwiceFailsLoudlyInsteadOfStackingWatchers(): void
+    {
+        // (068) The double-start guard: a second start() would bind a
+        // second listen socket and stack read/sweep watchers on a loop the
+        // object believes it owns once — deleting the throw was green.
+        $loop = new StreamSelectLoop();
+        $this->loop = $loop;
+        $listener = new HttpListener($this->makeServer(null), '127.0.0.1', 0, $loop);
+        $listener->start();
+        try {
+            self::expectException(\RuntimeException::class);
+            self::expectExceptionMessage('HttpListener is already running');
+            $listener->start();
+        } finally {
+            $listener->stop();
+        }
+    }
+
+    public function testABusyPortFailsFastWithABindError(): void
+    {
+        // (068) The bind-failure throw: a half-listening server is the
+        // scaffold sin this listener exists to keep out, so a collision
+        // must throw with the socket error attached. A raw listener jams a
+        // real kernel-assigned port, then an HttpListener is pointed at it
+        // (so_reuseaddr does not license two simultaneous listeners).
+        $loop = new StreamSelectLoop();
+        $this->loop = $loop;
+        $jam = @\stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        self::assertIsResource($jam, "jam socket failed: {$errstr}");
+        $addr = (string) \stream_socket_get_name($jam, false);
+        $port = (int) \substr($addr, (int) \strrpos($addr, ':') + 1);
+
+        $listener = new HttpListener($this->makeServer(null), '127.0.0.1', $port, $loop);
+        try {
+            self::expectException(\RuntimeException::class);
+            self::expectExceptionMessage('failed to bind');
+            $listener->start();
+        } finally {
+            @\fclose($jam);
+        }
+    }
+
     /**
      * Seat-pump plumbing for the 047 pins (same idioms as
      * SeatIdentityTest): a non-blocking socket pair whose far end is the

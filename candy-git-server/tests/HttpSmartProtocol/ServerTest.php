@@ -368,9 +368,11 @@ final class ServerTest extends TestCase
     // Error handling tests
     // -------------------------------------------------------------------------
 
-    public function testHandleRequestHandlesExceptionGracefully(): void
+    public function testHandleRequestOnAnUnregisteredRepoAnswers404(): void
     {
-        // Create a server with a config pointing to invalid path
+        // Honest name (069): this arm exercises the ROUTING miss, never an
+        // exception. The 500 fallbacks it used to claim are pinned by the
+        // two tests below.
         $server = new Server($this->config);
 
         // Without any registered repos, it should return 404
@@ -383,6 +385,72 @@ final class ServerTest extends TestCase
         );
 
         $this->assertSame(404, $result['status']);
+    }
+
+    public function testAFaultInsideRoutingFallsBackToTheServer500(): void
+    {
+        // (069) The generic catch in handleRequest turns any throw from
+        // route() into a 500 'Internal server error' plus an operator log
+        // line — until now that whole branch ran uncovered: deleting the
+        // catch would have kept the suite green. Injection is a real fault
+        // at a real seam: the LFS storage jail sits where the backend
+        // wants a directory, so publishing an uploaded object throws
+        // RuntimeException from LocalStorageBackend — and the boundary
+        // must answer 500 with the fixed body, never leak the throw.
+        $poison = $this->tmpDir . '/lfs';
+        \file_put_contents($poison, 'not-a-directory');
+
+        $server = new Server($this->config);
+        $server->registerRepo(Repo::new('fault.git', $this->tmpDir . '/faultrepo.git'));
+        $server->registerUser(User::new('boss')->withAdmin(true)->withPasswordHash(\password_hash('pw', \PASSWORD_DEFAULT)));
+
+        try {
+            $payload = 'hello-lfs';
+            $oid = \hash('sha256', $payload);
+            $result = $server->handleRequest(
+                'PUT',
+                "/fault.git/info/lfs/objects/{$oid}",
+                '',
+                ['Authorization' => 'Basic ' . \base64_encode('boss:pw')],
+                $payload
+            );
+
+            $this->assertSame(500, $result['status'], 'a throw from route() answers the fixed 500, not a frame dump');
+            $this->assertSame('Internal server error', $result['body']);
+        } finally {
+            @\unlink($poison);
+        }
+    }
+
+    public function testAReceivePackChildThatNeverAnswersIsA500(): void
+    {
+        // (069) The second 500 door: handleReceivePack reports a child
+        // that died without producing ANY in-band answer as
+        // 500 'Receive-pack failed' (an empty report-status is a lie).
+        // Drive it with a registered repo whose path is a plain directory
+        // — the real git receive-pack dies on it, stderr tail goes to the
+        // operator log, the client gets the bare failure status.
+        if (!\exec('git --version 2>/dev/null')) {
+            $this->markTestSkipped('the arm drives the real receive-pack child');
+        }
+
+        $bogus = $this->tmpDir . '/bogus.git';
+        \mkdir($bogus, 0755, true);
+
+        $server = new Server($this->config);
+        $server->registerRepo(Repo::new('bogus.git', $bogus));
+        $server->registerUser(User::new('boss')->withAdmin(true)->withPasswordHash(\password_hash('pw', \PASSWORD_DEFAULT)));
+
+        $result = $server->handleRequest(
+            'POST',
+            '/bogus.git/git-receive-pack',
+            '',
+            ['Authorization' => 'Basic ' . \base64_encode('boss:pw')],
+            '0000'
+        );
+
+        $this->assertSame(500, $result['status']);
+        $this->assertSame('Receive-pack failed', $result['body'], 'the empty-answer contract names its own failure, not a generic fault');
     }
 
     public function testHandleRequestResponseHasAllRequiredFields(): void
