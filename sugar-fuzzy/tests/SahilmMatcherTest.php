@@ -69,12 +69,16 @@ final class SahilmMatcherTest extends TestCase
 
         $results = $this->matcher->matchAll('app', $candidates);
 
-        $this->assertNotEmpty($results);
-        // Should be sorted by score descending
-        $resultCount = count($results);
-        for ($i = 1; $i < $resultCount; $i++) {
-            $this->assertGreaterThanOrEqual($results[$i]->score, $results[$i - 1]->score);
-        }
+        // FUZZY-09 cure (finding sugar-fuzzy-012): the old `>=` walk could not
+        // fail — all four matching candidates tie at 31 (apricot never matches
+        // 'app'), so ANY ordering of ties passed. Exact list pins both the
+        // surviving set and the documented tiebreak: haystack ascending.
+        $rows = array_map(
+            static fn (MatchResult $r): string => $r->haystack . '|' . $r->score,
+            $results,
+        );
+
+        $this->assertSame(['apple|31', 'applet|31', 'application|31', 'apply|31'], $rows);
     }
 
     #[Test]
@@ -94,8 +98,12 @@ final class SahilmMatcherTest extends TestCase
     }
 
     #[Test]
-    public function testFirstCharBonus(): void
+    public function testFirstCharMatchIsAnchoredAtTheLeadingIndex(): void
     {
+        // FUZZY-09 rename (finding sugar-fuzzy-012): the body pins the MATCH
+        // POSITION, not the score — the firstCharBonus weight is exercised
+        // numerically in SahilmScoringTest; 'Bonus' in a name that asserts
+        // indices only was a promise the body never kept.
         $result = $this->matcher->match('a', 'apple');
 
         $this->assertNotNull($result);
@@ -103,9 +111,10 @@ final class SahilmMatcherTest extends TestCase
     }
 
     #[Test]
-    public function testSeparatorBonus(): void
+    public function testSeparatorMatchIsAnchoredAtItsIndices(): void
     {
-        // 'bar' after separator should score well
+        // FUZZY-09 rename: placement only (bar past the underscore at 4-6);
+        // the separator weight's numeric contract lives in SahilmScoringTest.
         $result = $this->matcher->match('bar', 'foo_bar');
 
         $this->assertNotNull($result);

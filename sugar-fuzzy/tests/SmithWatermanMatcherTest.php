@@ -236,8 +236,16 @@ final class SmithWatermanMatcherTest extends TestCase
         $results = $this->matcher->matchAll('app', $candidates);
 
         $this->assertCount(2, $results);
-        // Same score, so sorted by candidate asc - 'app' comes first
-        $this->assertSame('app', $results[0]->haystack);
+        // FUZZY-09 cure: the name promises a tiebreak, so the FULL order is
+        // pinned (finding sugar-fuzzy-012: row 0 alone was meaningful — both
+        // score 19 — but 'applet','app' input order passed on a broken
+        // comparator for the rest of any longer list). Ties sort haystack asc.
+        $rows = array_map(
+            static fn (MatchResult $r): string => $r->haystack . '|' . $r->score,
+            $results,
+        );
+
+        $this->assertSame(['app|19', 'applet|19'], $rows);
     }
 
     #[Test]
