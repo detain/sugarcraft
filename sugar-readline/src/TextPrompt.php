@@ -23,7 +23,7 @@ use SugarCraft\Style\Style;
  *
  * @see https://github.com/erikgeiser/promptkit
  */
-final class TextPrompt
+final class TextPrompt implements PromptInterface, SizingInterface
 {
     /**
      * History search direction: toward older entries (readline Ctrl+R).

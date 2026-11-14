@@ -17,7 +17,7 @@ use SugarCraft\Style\Style;
  * one press (the gum-style reflex; arrows and the toggle stay browse-only).
  * {@see result()} is meaningful only after {@see isSubmitted()} returns true.
  */
-final class ConfirmationPrompt
+final class ConfirmationPrompt implements PromptInterface, SizingInterface
 {
     private bool $value;       // tracks current selection
     private bool $submitted = false;

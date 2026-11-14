@@ -21,7 +21,7 @@ use SugarCraft\Readline\Selection\SelectionEngine;
  * {@see SelectionPrompt}; this class adds the mark layer, the min/max
  * submit veto, and the ◉/○ row rendering.
  */
-final class MultiSelectPrompt
+final class MultiSelectPrompt implements PromptInterface, SizingInterface
 {
     use SelectionEngine;
 

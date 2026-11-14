@@ -22,7 +22,7 @@ use SugarCraft\Readline\Selection\SelectionEngine;
  * {@see MultiSelectPrompt}; this class adds only the submit veto and the
  * single-mark rendering.
  */
-final class SelectionPrompt
+final class SelectionPrompt implements PromptInterface, SizingInterface
 {
     use SelectionEngine;
 

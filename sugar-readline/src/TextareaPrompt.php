@@ -23,7 +23,7 @@ use SugarCraft\Style\Style;
  * never report modified keys, Shift+Enter and Ctrl+J send bare 0x0A/0x0D,
  * which decode as a plain Enter and submit. Wire pins: ReadlineWireChordTest.
  */
-final class TextareaPrompt
+final class TextareaPrompt implements PromptInterface, SizingInterface
 {
     /** @var list<string> */
     private array $lines = [''];

@@ -484,6 +484,29 @@ final class Readline
      */
     public function run(object $prompt, $output = null): object
     {
+        // Boundary check (finding 038): the pump used to duck-type every
+        // call, so a partial prompt object failed silently — no view()
+        // never painted, no handleKey() dropped controls, no
+        // isSubmitted()/isAborted() left the loop idling forever on an
+        // injected driver. Require the four driven methods up front and
+        // name whatever is missing. Optional surfaces (handleChar,
+        // insertPastedText, SizingInterface) keep their is_callable
+        // seams — those are honest feature probes, not failure masks.
+        $missing = [];
+        foreach (['view', 'handleKey', 'isSubmitted', 'isAborted'] as $required) {
+            if (!\method_exists($prompt, $required)) {
+                $missing[] = $required;
+            }
+        }
+        if ($missing !== []) {
+            throw new \InvalidArgumentException(
+                'SugarCraft\\Readline\\Readline::run(): prompt must provide '
+                . 'view(), handleKey(), isSubmitted(), isAborted() (' . PromptInterface::class . ');'
+                . ' missing: ' . implode(', ', $missing)
+                . ' — a partial prompt would otherwise fail silently inside the loop.'
+            );
+        }
+
         $this->adoptedCols = null;
         $this->adoptedRows = null;
         $this->dumbTerm = self::dumbTerminal($output);

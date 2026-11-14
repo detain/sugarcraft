@@ -199,6 +199,15 @@ final class PromptWidthClampTest extends TestCase
             {
                 return $this->submitted;
             }
+
+            // S-36 law: isAborted() joined the REQUIRED boundary set (its
+            // absence used to be a silent idling arm). This double keeps
+            // the width surface absent — the point of the test — while
+            // satisfying the four pump-driven methods.
+            public function isAborted(): bool
+            {
+                return false;
+            }
         };
 
         [$iw, $ir, $ow, $or] = $this->makePairs();
