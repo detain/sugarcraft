@@ -91,6 +91,35 @@ final class VStack implements \SugarCraft\Dashboard\Foundation\SizedItem
     }
 
     /**
+     * Size a child for this container's channels, preferring the child's
+     * own natural extent over a lying zero (finding sugar-dashboard-032;
+     * see Stack::sizedFor).
+     *
+     * @param \SugarCraft\Dashboard\Foundation\Sizer $item
+     * @return \SugarCraft\Dashboard\Foundation\Sizer
+     */
+    private function sizedFor(\SugarCraft\Dashboard\Foundation\Sizer $item, int $width, int $height): \SugarCraft\Dashboard\Foundation\Sizer
+    {
+        if ($width > 0 && $height > 0) {
+            return $item->setSize($width, $height);
+        }
+
+        if ($item instanceof \SugarCraft\Dashboard\Foundation\Measurable) {
+            $natural = $item->naturalExtent($width);
+        } elseif ($item instanceof \SugarCraft\Dashboard\Foundation\SizedItem) {
+            $inner = $item->innerSize();
+            $natural = $inner[0] > 0 ? $inner : [0, 0];
+        } else {
+            $natural = [0, 0];
+        }
+
+        return $item->setSize(
+            $width > 0 ? $width : $natural[0],
+            $height > 0 ? $height : $natural[1],
+        );
+    }
+
+    /**
      * Render the stack as a string.
      */
     public function render(): string
@@ -104,7 +133,9 @@ final class VStack implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         foreach ($this->items as $item) {
             if ($item instanceof \SugarCraft\Dashboard\Foundation\Sizer) {
-                $item = $item->setSize($useWidth, 0);
+                // No lying zeros down the unbudgeted channel (finding
+                // sugar-dashboard-032; see Stack::sizedFor for the rule).
+                $item = $this->sizedFor($item, $useWidth, 0);
             }
             $results[] = $this->alignLines($item->render(), $useWidth);
         }

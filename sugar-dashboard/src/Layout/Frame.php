@@ -27,7 +27,7 @@ use SugarCraft\Dashboard\Foundation\Theme;
  * Mirrors the frame concept from bubble-grid but adapted to PHP with
  * wither-style immutable setters.
  */
-final class Frame implements \SugarCraft\Dashboard\Foundation\SizedItem
+final class Frame implements \SugarCraft\Dashboard\Foundation\SizedItem, \SugarCraft\Dashboard\Foundation\Measurable
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -114,7 +114,13 @@ final class Frame implements \SugarCraft\Dashboard\Foundation\SizedItem
         $paddedStyle = Style::new()
             ->padding($paddingTop, $paddingRight, $paddingBottom, $paddingLeft)
             ->width($contentW)
-            ->height($contentH)
+            // Style::height is the OUTER row bound and padding eats rows
+            // inward (width is additive outward - asymmetric), so feeding
+            // the bare content height silently squeezed the padding ring
+            // out of the content's own rows: a frame no taller than its
+            // ring rendered blank chrome with the real content clipped
+            // (exposed by the 032 sizing change, same chrome family).
+            ->height($contentH + $paddingTop + $paddingBottom)
             ->verticalAlign($this->verticalAlign);
 
         $styledContent = $paddedStyle->render($this->renderContent($contentW, $contentH));
@@ -148,6 +154,30 @@ final class Frame implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Only subtract the frame border characters (2 cells each axis)
         return [max(0, $w - 2), max(0, $h - 2)];
+    }
+
+    /**
+     * Chrome-inclusive natural extent (Measurable, finding 032): the two
+     * border rows/columns plus the padding ring on top of whatever the
+     * content wants. Content is measured at its own natural render —
+     * allocation-free, so this never bounces off the raw-passthrough legs.
+     *
+     * @return array{0:int,1:int}
+     */
+    public function naturalExtent(int $width): array
+    {
+        [$paddingTop, $paddingRight, $paddingBottom, $paddingLeft] = $this->padding;
+        $lines = explode("\n", $this->content->render());
+
+        $naturalWidth = 0;
+        foreach ($lines as $line) {
+            $naturalWidth = max($naturalWidth, Width::string($line));
+        }
+
+        return [
+            $width > 0 ? $width : max(1, $naturalWidth + $paddingLeft + $paddingRight + 2),
+            max(1, count($lines) + $paddingTop + $paddingBottom + 2),
+        ];
     }
 
     /**

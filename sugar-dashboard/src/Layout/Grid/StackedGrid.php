@@ -234,9 +234,16 @@ final class StackedGrid implements \SugarCraft\Dashboard\Foundation\Sizer
             $itemHeight = $this->getItemNaturalHeight($item);
 
             if ($itemWithOpts->options->expandVertical) {
-                $itemHeight = $heightPerExpanding;
-                if ($i === count($items) - 1) {
-                    $itemHeight += $remainder;
+                // Only expand when the grid actually has height budget:
+                // a 0 from an unallocated frame used to overwrite the
+                // natural height and framed children then dropped their
+                // chrome through the raw-passthrough leg (finding
+                // sugar-dashboard-032, StackedGrid half).
+                if ($heightPerExpanding > 0) {
+                    $itemHeight = $heightPerExpanding;
+                    if ($i === count($items) - 1) {
+                        $itemHeight += $remainder;
+                    }
                 }
             }
 
@@ -305,6 +312,14 @@ final class StackedGrid implements \SugarCraft\Dashboard\Foundation\Sizer
     {
         if ($item instanceof self) {
             return $item->naturalColumnHeight();
+        }
+        if ($item instanceof \SugarCraft\Dashboard\Foundation\Measurable) {
+            // Chrome-inclusive natural height: counting newlines of the
+            // raw render of an UNALLOCATED framed box understates it by
+            // the whole chrome (the render falls through to bare content),
+            // so the layout budget forgot borders that do get painted
+            // once sized (finding sugar-dashboard-032).
+            return $item->naturalExtent(0)[1];
         }
         $lines = substr_count($item->render(), "\n") + 1;
         return max(1, $lines);

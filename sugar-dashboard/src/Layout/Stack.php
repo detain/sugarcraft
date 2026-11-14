@@ -75,8 +75,13 @@ final class Stack implements \SugarCraft\Dashboard\Foundation\SizedItem
         $renderedItems = [];
 
         foreach ($this->items as $item) {
-            if ($item instanceof \SugarCraft\Dashboard\Foundation\Sizer && $useWidth > 0) {
-                $item = $item->setSize($useWidth, 0);
+            if ($item instanceof \SugarCraft\Dashboard\Foundation\Sizer) {
+                // Finding sugar-dashboard-032: a raw 0 used to be sent for
+                // any channel the stack did not budget, and framed children
+                // read it as "unallocated" - dropping their chrome. sizedFor
+                // substitutes the child's measured natural extent instead;
+                // boxes with no natural answer still get the old zeros.
+                $item = $this->sizedFor($item, $useWidth, 0);
             }
             $renderedItems[] = $item->render();
         }
@@ -95,6 +100,35 @@ final class Stack implements \SugarCraft\Dashboard\Foundation\SizedItem
             return $this->width;
         }
         return 0; // Natural width
+    }
+
+    /**
+     * Size a child for this container's channels, preferring the child's
+     * own natural extent over a lying zero (finding sugar-dashboard-032).
+     *
+     * @template T of \SugarCraft\Dashboard\Foundation\Sizer
+     * @param T $item
+     * @return T|\SugarCraft\Dashboard\Foundation\Sizer
+     */
+    private function sizedFor(\SugarCraft\Dashboard\Foundation\Sizer $item, int $width, int $height): \SugarCraft\Dashboard\Foundation\Sizer
+    {
+        if ($width > 0 && $height > 0) {
+            return $item->setSize($width, $height);
+        }
+
+        if ($item instanceof \SugarCraft\Dashboard\Foundation\Measurable) {
+            $natural = $item->naturalExtent($width);
+        } elseif ($item instanceof \SugarCraft\Dashboard\Foundation\SizedItem) {
+            $inner = $item->innerSize();
+            $natural = $inner[0] > 0 ? $inner : [0, 0];
+        } else {
+            $natural = [0, 0];
+        }
+
+        return $item->setSize(
+            $width > 0 ? $width : $natural[0],
+            $height > 0 ? $height : $natural[1],
+        );
     }
 
     /**

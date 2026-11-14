@@ -25,7 +25,7 @@ use SugarCraft\Dashboard\Output\Truncate;
  * Mirrors window concepts from bubble-tea/lipgloss but adapted
  * to PHP with wither-style immutable setters.
  */
-final class Window implements \SugarCraft\Dashboard\Foundation\SizedItem
+final class Window implements \SugarCraft\Dashboard\Foundation\SizedItem, \SugarCraft\Dashboard\Foundation\Measurable
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -129,7 +129,9 @@ final class Window implements \SugarCraft\Dashboard\Foundation\SizedItem
         $paddedStyle = Style::new()
             ->padding($paddingTop, $paddingRight, $paddingBottom, $paddingLeft)
             ->width($contentW)
-            ->height($contentH + 1)  // +1 for title bar
+            // Outer-row bound includes the ring (see Frame::render - the
+            // asymmetric Style height, finding sugar-dashboard-032 family).
+            ->height($contentH + 1 + $paddingTop + $paddingBottom)  // +1 for title bar
             ->verticalAlign($this->verticalAlign);
 
         $paddedInner = $paddedStyle->render($innerContent);
@@ -280,6 +282,29 @@ final class Window implements \SugarCraft\Dashboard\Foundation\SizedItem
         $innerH = $h - 3 - $paddingTop - $paddingBottom;  // -3 for title bar, top border, bottom border
 
         return [max(0, $innerW), max(0, $innerH)];
+    }
+
+    /**
+     * Chrome-inclusive natural extent (Measurable, finding 032): borders,
+     * the title row and the padding ring on top of the content's own
+     * allocation-free render.
+     *
+     * @return array{0:int,1:int}
+     */
+    public function naturalExtent(int $width): array
+    {
+        [$paddingTop, $paddingRight, $paddingBottom, $paddingLeft] = $this->padding;
+        $lines = explode("\n", $this->content->render());
+
+        $naturalWidth = 0;
+        foreach ($lines as $line) {
+            $naturalWidth = max($naturalWidth, Width::string($line));
+        }
+
+        return [
+            $width > 0 ? $width : max(1, $naturalWidth + $paddingLeft + $paddingRight + 2),
+            max(1, count($lines) + $paddingTop + $paddingBottom + 3),
+        ];
     }
 
     // ─── Withers ──────────────────────────────────────────────────
