@@ -10,6 +10,7 @@ use React\Stream\ReadableStreamInterface;
 use SugarCraft\Async\CancellationToken;
 use SugarCraft\Async\OperationCancelledException;
 use SugarCraft\Vterm\Buffer\Buffer;
+use SugarCraft\Vterm\Cell;
 use SugarCraft\Vterm\Cursor\Cursor;
 use SugarCraft\AnsiParser\Parser\Parser;
 use SugarCraft\Vterm\Handler\ScreenHandler;
@@ -364,9 +365,37 @@ final class Terminal
         return $bytes;
     }
 
+    /**
+     * Full-screen snapshot.  Rebuilds a detached copy of the grid on every
+     * call — O(rows × cols) array wrappers (cells are shared readonly
+     * objects; the copy separates on write) — so a poll loop that only
+     * needs one row should use {@see rowCells()} instead.
+     */
     public function screen(): Screen
     {
         return Screen::fromBuffer($this->handler->buffer, $this->handler->scrollback);
+    }
+
+    /**
+     * Read one live cell without rebuilding the screen snapshot.
+     *
+     * Out-of-range coordinates return an empty cell, the Buffer policy.
+     */
+    public function cellAt(int $row, int $col): Cell
+    {
+        return $this->handler->buffer->cell($row, $col);
+    }
+
+    /**
+     * Read one live row by value without rebuilding the screen snapshot:
+     * streaming consumers (site-map diffs, scrollback pumps) never pay
+     * the full-screen rebuild of {@see screen()}.
+     *
+     * @return array<int, Cell>
+     */
+    public function rowCells(int $row): array
+    {
+        return $this->handler->buffer->row($row);
     }
 
     public function cursor(): Cursor

@@ -1774,15 +1774,15 @@ final class ScreenHandler implements SubparamsAwareHandler
     /**
      * Copy the row at the given absolute index as `array<int, Cell>`.
      *
+     * Buffer::row() hands the row over by value (copy-on-write, readonly
+     * cells), so the scrollback push pays one dispatch per row instead of
+     * one bounds-checked cell read per column.
+     *
      * @return array<int, Cell>
      */
     private function rowAt(int $row): array
     {
-        $cells = [];
-        for ($c = 0; $c < $this->buffer->cols; $c++) {
-            $cells[] = $this->buffer->cell($row, $c);
-        }
-        return $cells;
+        return $this->buffer->row($row);
     }
 
     /**

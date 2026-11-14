@@ -351,12 +351,37 @@ final class Buffer
     }
 
     /**
+     * Read a whole row by value.
+     *
+     * PHP arrays are copy-on-write and Cell is readonly, so handing back
+     * the internal row detaches it at the caller for free: writing to the
+     * returned array never touches the grid.  Out-of-range rows return a
+     * full row of empty cells — the same policy as cell().
+     *
+     * @return array<int, Cell>
+     */
+    public function row(int $row): array
+    {
+        if ($row < 0 || $row >= $this->rows) {
+            return array_fill(0, $this->cols, Cell::empty());
+        }
+
+        return $this->grid[$row];
+    }
+
+    /**
      * Copy the entire grid for snapshotting.
+     *
+     * Returning the array by value is already the copy: PHP separates on
+     * write (copy-on-write), and the Cell objects are readonly, so the
+     * previous per-cell identity closure only cost dispatches — it shared
+     * the exact same Cell instances.  One snapshot is O(rows) array
+     * wrappers, deep-copied once per call.
      *
      * @return array<int, array<int, Cell>>
      */
     public function copy(): array
     {
-        return array_map(fn (array $row) => array_map(fn (Cell $c) => $c, $row), $this->grid);
+        return $this->grid;
     }
 }

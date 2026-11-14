@@ -122,6 +122,42 @@ final class AllocationTest extends TestCase
         $this->assertSame(1, $distinct->count(), 'all empty slots must be one shared immutable Cell');
     }
 
+    public function testCopyAndRowDetachAtTheCallerViaCopyOnWrite(): void
+    {
+        // Buffer::copy()/row() hand out the grid by value: PHP separates on
+        // write and Cell is readonly, so a per-cell identity closure over
+        // the whole grid buys nothing.  This is the COW semantics pin —
+        // caller-side writes must never reach the grid, and later grid
+        // writes must never reach an earlier copy.
+        $buffer = new Buffer(4, 2);
+        $buffer->put(0, 0, new Cell(grapheme: 'A'));
+
+        $copy = $buffer->copy();
+        $row = $buffer->row(0);
+        $row[1] = new Cell(grapheme: 'Z');
+        $copy[1][0] = new Cell(grapheme: 'Z');
+        $copy[0][] = Cell::empty();
+
+        $this->assertSame(' ', $buffer->cell(0, 1)->grapheme, 'caller write must not reach the grid');
+        $this->assertSame(4, count($buffer->row(0)), 'grid rows must not grow from a copied row');
+
+        $buffer->put(0, 1, new Cell(grapheme: 'B'));
+        $this->assertSame(' ', $copy[0][1]->grapheme, 'grid write after the copy must not reach it');
+    }
+
+    public function testRowHonoursTheCellBoundsPolicy(): void
+    {
+        $buffer = new Buffer(3, 2);
+
+        foreach ([-1, 2, 7] as $y) {
+            $oob = $buffer->row($y);
+            $this->assertSame(3, count($oob), "out-of-range row {$y} returns a full empty row");
+            foreach ($oob as $cell) {
+                $this->assertSame(' ', $cell->grapheme);
+            }
+        }
+    }
+
     public function testWrittenCellsDoNotAccumulateAcrossRepeatedFeedOfTheSameStream(): void
     {
         // The exact per-cell object census, re-measured every cycle: one
