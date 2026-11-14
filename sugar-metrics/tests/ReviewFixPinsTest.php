@@ -14,6 +14,9 @@ use SugarCraft\Metrics\Backend\StatsdBackend;
 use SugarCraft\Metrics\Descriptor;
 use SugarCraft\Metrics\Instrument\AsyncCounter;
 use SugarCraft\Metrics\Instrument\AsyncGauge;
+use SugarCraft\Metrics\Instrument\Counter;
+use SugarCraft\Metrics\Instrument\Gauge;
+use SugarCraft\Metrics\Instrument\Histogram;
 use SugarCraft\Metrics\Instrument\UpDownCounter;
 use SugarCraft\Metrics\Middleware\SessionMetrics;
 use SugarCraft\Metrics\Registry;
@@ -554,5 +557,9 @@ final class ReviewFixPinsTest extends TestCase
         $this->assertInstanceOf(UpDownCounter::class, UpDownCounter::new($registry, 'uc'));
         $this->assertInstanceOf(AsyncCounter::class, AsyncCounter::new($registry, 'ac', 'help', static fn (): array => []));
         $this->assertInstanceOf(AsyncGauge::class, AsyncGauge::new($registry, 'ag', 'help', static fn (): array => []));
+        // sugar-metrics-021 symmetry trio (new public classes, house factory shape).
+        $this->assertInstanceOf(Counter::class, Counter::new($registry, 'c'));
+        $this->assertInstanceOf(Gauge::class, Gauge::new($registry, 'g'));
+        $this->assertInstanceOf(Histogram::class, Histogram::new($registry, 'h'));
     }
 }

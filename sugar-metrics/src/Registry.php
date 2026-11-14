@@ -292,6 +292,38 @@ final class Registry
     }
 
     /**
+     * Factory: create a new Counter instrument for repeated inc() calls.
+     * sugar-metrics-021 symmetry: the three most-used kinds are now as
+     * holdable as UpDownCounter/AsyncCounter/AsyncGauge.
+     *
+     * @param array<string,string> $tags Static tags applied on every inc() call.
+     */
+    public function newCounter(string $name, string $help = '', array $tags = []): Instrument\Counter
+    {
+        return new Instrument\Counter($this, $name, $help, $tags);
+    }
+
+    /**
+     * Factory: create a new Gauge instrument for repeated set() calls.
+     *
+     * @param array<string,string> $tags Static tags applied on every set() call.
+     */
+    public function newGauge(string $name, string $help = '', array $tags = []): Instrument\Gauge
+    {
+        return new Instrument\Gauge($this, $name, $help, $tags);
+    }
+
+    /**
+     * Factory: create a new Histogram instrument for repeated observe() calls.
+     *
+     * @param array<string,string> $tags Static tags applied on every observe() call.
+     */
+    public function newHistogram(string $name, string $help = '', array $tags = []): Instrument\Histogram
+    {
+        return new Instrument\Histogram($this, $name, $help, $tags);
+    }
+
+    /**
      * Factory: create a new UpDownCounter instrument for repeated add() calls.
      *
      * @param array<string,string> $tags Static tags applied on every add() call.

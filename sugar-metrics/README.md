@@ -37,10 +37,14 @@ A `Registry` is the application-facing facade; it forwards every emit to the con
 
 ## Instrument factory helpers
 
-The registry exposes dedicated factory methods that return instrument objects — useful when an instrument is held for repeated `add()` / `observe()` calls:
+The registry exposes dedicated factory methods that return instrument objects — useful when an instrument is held for repeated `inc()` / `set()` / `add()` / `observe()` calls. All six kinds are holdable (sugar-metrics-021): the sync trio `newCounter` / `newGauge` / `newHistogram` mirror the `newUpDownCounter` shape, and the async pair takes a callback:
 
 ```php
 $reg = Registry::new($backend);
+$hits = $reg->newCounter('http.requests', 'Requests served', ['route' => '/api']);
+$hits->inc();          // default step 1.0, static route tag rides
+// ... later, from anywhere holding $hits ...
+$hits->inc(1, ['status' => '500']);   // per-call tags merge on top
 $connCounter = $reg->newUpDownCounter('server.active_connections', 'Active server connections', ['host' => $host]);
 $connCounter->add(1);    // connection opened
 // ... later ...
@@ -278,7 +282,7 @@ Sixteen locales ship: `ar`, `cs`, `de`, `en`, `es`, `fr`, `it`, `ja`, `ko`, `nl`
 
 ## Status
 
-Feature-complete and in production use: UpDownCounter, AsyncCounter and AsyncGauge instrument kinds, Registry cardinality tracking with FIFO eviction and backend reclaim, exposition-integrity guards, fsync-before-rename durability, and five backends — `InMemory`, `JsonStream`, `Statsd`, `PrometheusFile` and `Multi`. 282 tests (1,532 assertions; ≈4 s baseline suite: Registry, each backend, SessionMetrics middleware, wire-format and tag-key collision pins, hex-level forgery pins, i18n locale parity across all 16 shipped locales, and example smoke checks).
+Feature-complete and in production use: UpDownCounter, AsyncCounter and AsyncGauge instrument kinds, Registry cardinality tracking with FIFO eviction and backend reclaim, exposition-integrity guards, fsync-before-rename durability, and five backends — `InMemory`, `JsonStream`, `Statsd`, `PrometheusFile` and `Multi`. 286 tests (1,554 assertions; ≈4 s baseline suite: Registry, each backend, SessionMetrics middleware, wire-format and tag-key collision pins, hex-level forgery pins, i18n locale parity across all 16 shipped locales, and example smoke checks).
 
 ## Breaking changes
 
