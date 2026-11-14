@@ -28,6 +28,7 @@ return [
     'status.cancelled' => 'キャンセルしました',
     'status.refreshed' => '更新しました',
     'status.unreadable' => '{dir} を読み込めません —前回の内容を表示しています',
+    'status.dir_too_large' => '{dir} は多すぎて一覧表示できません —前回の内容を表示しています',
     'status.copy_pending' => '{count} 件をコピー中…',
     'status.quit_armed'     => 'コピー {count} 件が実行中 — それでも終了するには q をもう一度押してください',
     'status.search_recursive_on' => '検索: 再帰的（もう一度 ^r = この階層のみ）',

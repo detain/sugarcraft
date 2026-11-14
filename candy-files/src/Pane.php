@@ -33,6 +33,11 @@ use SugarCraft\Core\Concerns\Mutable;
  * CF-22: a null listing is the lister saying "cannot read" — the
  * `readable` flag below carries that truth into the UI instead of
  * collapsing it to a fake empty directory.
+ *
+ * CF-13: a `false` listing is the lister saying "readable, but too many
+ * entries" — `readable = false` with `tooLarge = true` marks which door
+ * refused, so the status line tells the truth ("too many entries")
+ * instead of the unreadable lie, per the CF-22 no-lie law.
  */
 final class Pane
 {
@@ -55,6 +60,7 @@ final class Pane
         public readonly Sort $sort = Sort::NameAsc,
         public readonly bool $showHidden = false,
         public readonly bool $readable = true,
+        public readonly bool $tooLarge = false,
     ) {
         $this->entries = $entries;
         $this->selected = $selected;
@@ -67,16 +73,18 @@ final class Pane
      * CF-22: `$lister` answering null means "cannot read" — the pane is
      * built with only the escape route (the `..` sentinel when there is
      * one) and `readable = false`, so the UI can say unreadable instead
-     * of lying "empty".
+     * of lying "empty". CF-13: `false` means "too many entries" — the
+     * same fallback shape, additionally tagged `tooLarge` so the refusal
+     * names the real door.
      *
-     * @param \Closure(string): list<Entry>|null $lister
+     * @param \Closure(string): (list<Entry>|null|false) $lister
      */
     public static function open(string $cwd, \Closure $lister, Sort $sort = Sort::NameAsc, bool $showHidden = false): self
     {
         $listed = $lister($cwd);
-        if ($listed === null) {
+        if ($listed === null || $listed === false) {
             $fallback = $cwd !== '/' && $cwd !== '' ? [Entry::parent()] : [];
-            return new self($cwd, $fallback, 0, [], $sort, $showHidden, false);
+            return new self($cwd, $fallback, 0, [], $sort, $showHidden, false, $listed === false);
         }
         $entries = self::filterHidden($listed, $showHidden);
         if ($cwd !== '/' && $cwd !== '') {
@@ -94,8 +102,10 @@ final class Pane
      * REFUSED and this listing is retained with `readable = false` —
      * the pane never strands the user inside a directory it cannot
      * show, and the caller can name the refusal in the status line.
+     * CF-13: a `false` answer (too many entries) refuses the same way,
+     * additionally tagged `tooLarge` so the status names the real door.
      *
-     * @param \Closure(string): list<Entry>|null $lister
+     * @param \Closure(string): (list<Entry>|null|false) $lister
      */
     public function navigate(\Closure $lister): self
     {
@@ -108,7 +118,7 @@ final class Pane
             : self::join($this->cwd, $current->name);
         $moved = self::open($next, $lister, $this->sort, $this->showHidden);
         if (!$moved->readable) {
-            return $this->unreadable();
+            return $moved->tooLarge ? $this->tooLarge() : $this->unreadable();
         }
         return $moved;
     }
@@ -125,6 +135,18 @@ final class Pane
     }
 
     /**
+     * A copy of this pane carrying the same listing with the CF-13
+     * "too many entries" truth attached: `readable = false` (the same
+     * refusal shape CF-22 established — the listing shown IS the last
+     * honest read) plus `tooLarge`, so callers name the cap instead of
+     * wrongly blaming permissions.
+     */
+    public function tooLarge(): self
+    {
+        return $this->mutate(['readable' => false, 'tooLarge' => true]);
+    }
+
+    /**
      * Re-read this pane's directory IN PLACE, preserving the selection and
      * cursor where they still make sense: a selected name survives only if
      * the entry still exists, and the cursor stays on the entry it was on
@@ -137,8 +159,10 @@ final class Pane
      * CF-22: a null answer (the directory stopped answering — deleted,
      * unmounted, chmod'ed away under us) RETAINS this listing and marks
      * the pane unreadable, rather than serving a lying "empty" pane.
+     * CF-13: a `false` answer (the directory grew past the listing cap)
+     * likewise retains the listing and marks the pane `tooLarge`.
      *
-     * @param \Closure(string): list<Entry>|null $lister
+     * @param \Closure(string): (list<Entry>|null|false) $lister
      * @param bool|null $showHidden new hidden-visibility state (default: keep)
      */
     public function relist(\Closure $lister, ?bool $showHidden = null): self
@@ -147,6 +171,9 @@ final class Pane
         $listed = $lister($this->cwd);
         if ($listed === null) {
             return $this->unreadable();
+        }
+        if ($listed === false) {
+            return $this->tooLarge();
         }
         $entries = self::filterHidden($listed, $show);
         if ($this->cwd !== '/' && $this->cwd !== '') {

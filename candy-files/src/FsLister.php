@@ -20,6 +20,20 @@ namespace SugarCraft\Files;
  * a silent `[]` over a 0500 dir was the UI lying that a real listing
  * had succeeded. Callers must keep the two states apart.
  *
+ * CF-13 (closes 019): `false` is the third state — "readable, but too
+ * many entries to list" (over {@see self::MAX_LIST_ENTRIES}). The whole
+ * listing runs synchronously inside ONE loop callback (scandir, a lstat
+ * per entry, Entry builds, the sort), so an unbounded scan of a bloated
+ * directory (a host /tmp with 200k+ entries measured 4-40 s) starved the
+ * event loop: input went unread, `q` stopped answering and SIGINT/SIGTERM
+ * — handled cooperatively — never landed. The cap bites right after the
+ * readdir (before any per-entry syscall), bounding the worst case to the
+ * scandir itself. Like CF-22 this is a PARSE-DON'T-VALIDATE boundary
+ * promise: injected test listers keep the two-state contract (they never
+ * answer `false`), and every consumer of a real listing must keep the
+ * three states apart — `false` is not `null` ("cannot read") and never
+ * collapses to `[]`.
+ *
  * Consistency disclosure: size/mtime come from `lstat()` (the link's own
  * inode for symlinks), while `isDir` deliberately FOLLOWS the link so a
  * symlinked directory stays navigable. A symlink to a directory therefore
@@ -28,15 +42,35 @@ namespace SugarCraft\Files;
  */
 final class FsLister
 {
-    public static function lister(): \Closure
+    /**
+     * CF-13: hard ceiling on the raw entry count a single listing will
+     * process (`.dir`/`.parent` excluded). Above it the lister answers
+     * `false` and the pane refuses honestly instead of handing the event
+     * loop an unbounded scan+sort. POSIX-scoped like the rest of the
+     * live-FS layer (CF-53): the readdir guarantee below is Unix's.
+     */
+    public const MAX_LIST_ENTRIES = 10000;
+
+    /**
+     * @param int $maxEntries CF-13 ceiling seam (tests fabricate small caps)
+     * @return \Closure(string): (list<Entry>|null|false)
+     */
+    public static function lister(int $maxEntries = self::MAX_LIST_ENTRIES): \Closure
     {
-        return static function (string $path): ?array {
+        return static function (string $path) use ($maxEntries): array|false|null {
             if (!\is_dir($path)) {
                 return null;
             }
             $names = @\scandir($path);
             if ($names === false) {
                 return null;
+            }
+            // CF-13: refuse BEFORE the per-entry lstat/Entry-build/usort —
+            // scandir always carries the '.'/'..' pair, so the real count
+            // is count($names) - 2. Comparing here keeps the worst-case
+            // synchronous loop cost bounded to one readdir.
+            if (count($names) - 2 > $maxEntries) {
+                return false;
             }
             $out = [];
             foreach ($names as $name) {
@@ -119,8 +153,14 @@ final class FsLister
      * answers null again anyway) and self-invalidates the moment stat
      * returns.
      *
-     * @param \Closure(string): list<Entry>|null $lister
-     * @param (callable(string): ?int)|null      $mtime mtime seam for tests
+     * CF-13's `false` (too large) rides the cache as a plain stored
+     * value: an unchanged directory keeps answering `false` for free,
+     * and a directory whose entry set moved (mtime shift) re-lists, so
+     * shrinking below the cap recovers on the next read without any
+     * explicit invalidation.
+     *
+     * @param \Closure(string): (list<Entry>|null|false) $lister
+     * @param (callable(string): ?int)|null              $mtime mtime seam for tests
      */
     public static function memoize(\Closure $lister, ?callable $mtime = null): \Closure
     {
@@ -128,7 +168,7 @@ final class FsLister
     }
 
     /**
-     * @return array{0: \Closure(string): list<Entry>|null, 1: \Closure(string): void}
+     * @return array{0: \Closure(string): (list<Entry>|null|false), 1: \Closure(string): void}
      *         [memoized lister, slot invalidator]
      */
     public static function memo(\Closure $lister, ?callable $mtime = null): array
@@ -137,9 +177,9 @@ final class FsLister
             $m = @\filemtime($path);
             return $m === false ? null : $m;
         };
-        /** @var array<string, array{0: ?int, 1: list<Entry>|null}> $cache */
+        /** @var array<string, array{0: ?int, 1: list<Entry>|null|false}> $cache */
         $cache = [];
-        $read = static function (string $path) use ($lister, $stat, &$cache): ?array {
+        $read = static function (string $path) use ($lister, $stat, &$cache): array|false|null {
             $m = $stat($path);
             if (array_key_exists($path, $cache) && $cache[$path][0] === $m) {
                 [$cachedM, $cached] = $cache[$path];

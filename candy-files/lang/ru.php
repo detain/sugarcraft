@@ -28,6 +28,7 @@ return [
     'status.cancelled' => 'отменено',
     'status.refreshed' => 'обновлено',
     'status.unreadable' => 'не удаётся прочитать {dir} — показано прежнее содержимое',
+    'status.dir_too_large' => 'слишком много записей для вывода {dir} — показано прежнее содержимое',
     'status.copy_pending' => 'копирую {count} элементов…',
     'status.quit_armed'     => '{count} копирований ещё в процессе — нажмите q ещё раз, чтобы выйти всё равно',
     'status.search_recursive_on' => 'поиск: рекурсивно (^r снова = только здесь)',

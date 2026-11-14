@@ -28,6 +28,7 @@ return [
     'status.cancelled' => 'iptal edildi',
     'status.refreshed' => 'yenilendi',
     'status.unreadable' => '{dir} okunamıyor — önceki içerik gösteriliyor',
+    'status.dir_too_large' => '{dir} listelemeye giriş sayısı çok — önceki içerik gösteriliyor',
     'status.copy_pending' => '{count} öğe kopyalanıyor…',
     'status.quit_armed'     => '{count} kopyalama hâlâ sürüyor — yine de çıkmak için yeniden q tuşuna basın',
     'status.search_recursive_on' => 'arama: yinelenen (^r yeniden = yalnızca burada)',

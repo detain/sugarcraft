@@ -28,6 +28,7 @@ return [
     'status.cancelled' => 'تم الإلغاء',
     'status.refreshed' => 'تم التحديث',
     'status.unreadable' => 'لا يمكن قراءة {dir} — يتم عرض المحتويات السابقة',
+    'status.dir_too_large' => 'عدد كبير جدًا من العناصر لعرض {dir} — يتم عرض المحتويات السابقة',
     'status.copy_pending' => 'جارٍ نسخ {count} عناصر…',
     'status.quit_armed'     => 'لديك {count} عمليات نسخ قيد التنفيذ — اضغط q مجددًا للخروج رغم ذلك',
     'status.search_recursive_on' => 'البحث: تكراري (^r مرة أخرى = هنا فقط)',

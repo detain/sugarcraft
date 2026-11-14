@@ -28,6 +28,7 @@ return [
     'status.cancelled' => 'cancelado',
     'status.refreshed' => 'atualizado',
     'status.unreadable' => 'não é possível ler {dir} — a mostrar o conteúdo anterior',
+    'status.dir_too_large' => 'demasiadas entradas para listar {dir} — a mostrar o conteúdo anterior',
     'status.copy_pending' => 'copiando {count} entradas…',
     'status.quit_armed'     => '{count} cópias ainda em curso — prima novamente em q para sair mesmo assim',
     'status.search_recursive_on' => 'pesquisa: recursiva (^r de novo = só aqui)',

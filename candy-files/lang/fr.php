@@ -28,6 +28,7 @@ return [
     'status.cancelled' => 'annulé',
     'status.refreshed' => 'rafraîchi',
     'status.unreadable' => 'lecture impossible de {dir} — affichage du contenu précédent',
+    'status.dir_too_large' => 'trop d\'entrées pour lister {dir} — affichage du contenu précédent',
     'status.copy_pending' => 'copie de {count} entrées…',
     'status.quit_armed'     => '{count} copies toujours en cours — appuyez de nouveau sur q pour quitter malgré tout',
     'status.search_recursive_on' => 'recherche : récursive (^r à nouveau = ici seul)',

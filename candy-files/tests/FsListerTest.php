@@ -234,4 +234,83 @@ final class FsListerTest extends TestCase
         $this->assertSame(['n2'], array_map(static fn(Entry $e): string => $e->name, $memo('/s')));
         $this->assertSame(2, $calls, 'after a forget the same mtime must NOT answer from the memo');
     }
+
+    /**
+     * CF-13 (closes 019): a directory over the cap is refused with `false`
+     * BEFORE any per-entry lstat/Entry-build/usort — unbounded synchronous
+     * listing of a bloated directory (a 219k-entry host /tmp measured
+     * 4-40 s) starved the event loop and produced the finding's frozen
+     * q/SIGINT symptom.
+     */
+    public function testCapRefusesOverCapAndAllowsUpToCap(): void
+    {
+        for ($i = 0; $i < 6; $i++) {
+            file_put_contents($this->tmpDir . "/f$i", 'x');
+        }
+        $capped = FsLister::lister(maxEntries: 5);
+        $this->assertFalse($capped($this->tmpDir), 'six real entries over a cap of five: false, not a truncated lie');
+
+        unlink($this->tmpDir . '/f5');
+        $listed = $capped($this->tmpDir);
+        $this->assertIsArray($listed, 'exactly at the cap is still listable (the refusal starts one past it)');
+        $this->assertCount(5, $listed);
+    }
+
+    /** CF-13: the cap counts every name the readdir answers, dotfiles included. */
+    public function testCapCountsHiddenEntries(): void
+    {
+        foreach (['.hidden', 'a', 'b'] as $n) {
+            file_put_contents($this->tmpDir . "/$n", 'x');
+        }
+        $this->assertFalse(FsLister::lister(maxEntries: 2)($this->tmpDir));
+    }
+
+    /** CF-13: the shipped ceiling is part of the contract the status names. */
+    public function testDefaultCapIsTheDocumentedCeiling(): void
+    {
+        $this->assertSame(10000, FsLister::MAX_LIST_ENTRIES);
+    }
+
+    /**
+     * CF-13: the real-FS lister on the system root answers within a loop
+     * budget on every host — a bounded scandir (small root: a list; root
+     * over the cap: the fast false refusal). Before the cap this call
+     * could hold the event loop for multi-second stretches on a bloated
+     * box, which is the shape that starved input and signals.
+     */
+    public function testRealRootListingIsBounded(): void
+    {
+        $started = microtime(true);
+        $listed = (FsLister::lister())('/');
+        $elapsed = microtime(true) - $started;
+        $this->assertTrue(
+            is_array($listed) || $listed === false,
+            'a real listing answers a list or the too-large refusal',
+        );
+        $this->assertLessThan(1.5, $elapsed, 'one navigate must never starve the loop');
+    }
+
+    /**
+     * CF-13: the memo passes `false` through as a stored value — an
+     * unchanged over-cap directory re-answers from the cache (no repeat
+     * scan cost), and a moved mtime (entries removed) re-lists so the
+     * directory recovering under the cap heals without invalidation.
+     */
+    public function testMemoCachesTheTooLargeRefusalAndReListsOnMtimeMove(): void
+    {
+        $calls = 0;
+        $inner = function () use (&$calls): array|false|null {
+            $calls++;
+            return $calls === 1 ? false : [new Entry('n1', false, 1, 0)];
+        };
+        $mtime = 7;
+        [$memo, ] = FsLister::memo($inner, static function () use (&$mtime): int { return $mtime; });
+        $this->assertFalse($memo('/big'));
+        $this->assertFalse($memo('/big'));
+        $this->assertSame(1, $calls, 'an unchanged over-cap directory answers the cached refusal for free');
+        $mtime = 8;
+        $listed = $memo('/big');
+        $this->assertIsArray($listed, 'a moved mtime re-lists: shrinking below the cap recovers on the next read');
+        $this->assertSame(2, $calls);
+    }
 }

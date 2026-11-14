@@ -28,6 +28,7 @@ return [
     'status.cancelled' => 'geannuleerd',
     'status.refreshed' => 'ververst',
     'status.unreadable' => 'kan {dir} niet lezen — vorige inhoud wordt getoond',
+    'status.dir_too_large' => 'te veel items om {dir} te tonen — vorige inhoud wordt getoond',
     'status.copy_pending' => '{count} items worden gekopieerd…',
     'status.quit_armed'     => '{count} kopieertaken nog actief — druk opnieuw op q om toch af te sluiten',
     'status.search_recursive_on' => 'zoeken: recursief (^r opnieuw = alleen hier)',

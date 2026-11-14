@@ -28,6 +28,7 @@ return [
     'status.cancelled' => '已取消',
     'status.refreshed' => '已刷新',
     'status.unreadable' => '无法读取 {dir} — 显示之前的内容',
+    'status.dir_too_large' => '{dir} 条目过多无法列出 — 显示之前的内容',
     'status.copy_pending' => '正在复制 {count} 个条目…',
     'status.quit_armed'     => '仍有 {count} 个复制批次进行中 — 仍要退出请按 q',
     'status.search_recursive_on' => '搜索：递归（再按 ^r = 仅当前目录）',

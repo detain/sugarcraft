@@ -166,12 +166,16 @@ final class Archive
      * Wrap a lister so virtual archive paths answer from the index and
      * everything else falls through untouched.
      *
-     * @param \Closure(string): (list<Entry>|null) $inner
-     * @return \Closure(string): (list<Entry>|null)
+     * CF-13: the tri-state contract passes through verbatim — a `false`
+     * from $inner (too many entries) must not be narrowed away by the
+     * `?array` return type into a TypeError under strict_types.
+     *
+     * @param \Closure(string): (list<Entry>|null|false) $inner
+     * @return \Closure(string): (list<Entry>|null|false)
      */
     public static function lister(\Closure $inner): \Closure
     {
-        return static function (string $path) use ($inner): ?array {
+        return static function (string $path) use ($inner): array|false|null {
             $split = self::split($path);
             return $split === null ? $inner($path) : self::listing($split[0], $split[1]);
         };

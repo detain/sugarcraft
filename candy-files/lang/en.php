@@ -31,6 +31,7 @@ return [
     'status.cancelled'        => 'cancelled',
     'status.refreshed'        => 'refreshed',
     'status.unreadable' => 'cannot read {dir} — showing previous contents',
+    'status.dir_too_large' => 'too many entries to list {dir} — showing previous contents',
     'status.copy_pending'     => 'copying {count} entries…',
     'status.quit_armed'     => '{count} copy batches still in flight — press q again to quit anyway',
     'status.search_recursive_on' => 'search: recursive (^r again = here only)',

@@ -88,7 +88,7 @@ final class Manager implements Model
     /** CF-31: FIFO cap on the per-directory selection stash. */
     private const MAX_DIR_MARKS = 128;
 
-    /** @var \Closure(string): list<Entry>|null */
+    /** @var \Closure(string): (list<Entry>|null|false) */
     private readonly \Closure $lister;
 
     private const UNDO_LIMIT = 50;
@@ -114,7 +114,7 @@ final class Manager implements Model
     private static ?string $trashRoot = null;
 
     /**
-     * @param (\Closure(string): list<Entry>|null)|null $lister
+     * @param (\Closure(string): (list<Entry>|null|false))|null $lister
      * @param array<int,array{left:Pane,right:Pane,activeIdx:int}> $tabs
      * @param list<UndoAction> $undoStack Stack of undoable actions
      * @param list<UndoAction> $redoStack Stack of redoable actions (cleared on new action)
@@ -183,7 +183,7 @@ final class Manager implements Model
     }
 
     /**
-     * @param (\Closure(string): list<Entry>|null)|null $lister
+     * @param (\Closure(string): (list<Entry>|null|false))|null $lister
      */
     public static function start(string $leftCwd, string $rightCwd, ?\Closure $lister = null): self
     {
@@ -905,12 +905,16 @@ final class Manager implements Model
             // lister with null (missing/unreadable). The pane keeps its
             // last honest listing and the status names the door that
             // refused — silently swapping in a fake-empty pane was the old lie.
+            // CF-13 (closes 019): the same refusal shape for the `false`
+            // answer (too many entries to list), named with its own truth.
             $target = $active->currentEntry();
             $refused = $target === null ? $active->cwd : ($target->isParentSentinel()
                 ? Pane::parentPath($active->cwd)
                 : Pane::join($active->cwd, $target->name));
             return $this->withActivePane(fn(Pane $p) => $pane)
-                ->withStatus(Lang::t('status.unreadable', ['dir' => Entry::sanitizeName($refused)]));
+                ->withStatus($pane->tooLarge
+                    ? Lang::t('status.dir_too_large', ['dir' => Entry::sanitizeName($refused)])
+                    : Lang::t('status.unreadable', ['dir' => Entry::sanitizeName($refused)]));
         }
         // CF-31: a real move stashes the leaving marks and re-adopts the
         // targets own leftovers — goUp and back keeps the marks.
@@ -1562,8 +1566,12 @@ final class Manager implements Model
         // listing stays and the status names the door that shut.
         $parent = Pane::open($parentPath, $this->lister, $active->sort, $active->showHidden);
         if (!$parent->readable) {
-            return $this->withActivePane(fn(Pane $p) => $p->unreadable())
-                ->withStatus(Lang::t('status.unreadable', ['dir' => Entry::sanitizeName($parentPath)]));
+            // CF-13: the too-large refusal keeps the listing too, but must
+            // not borrow the unreadable wording.
+            return $this->withActivePane(fn(Pane $p) => $parent->tooLarge ? $p->tooLarge() : $p->unreadable())
+                ->withStatus($parent->tooLarge
+                    ? Lang::t('status.dir_too_large', ['dir' => Entry::sanitizeName($parentPath)])
+                    : Lang::t('status.unreadable', ['dir' => Entry::sanitizeName($parentPath)]));
         }
         // CF-33: leaving an archive's root lands on the archive file itself.
         $split = Archive::split($active->cwd);
@@ -1606,7 +1614,9 @@ final class Manager implements Model
         return $this->withActivePane(fn(Pane $p) => $pane)
             ->withStatus($pane->readable
                 ? Lang::t('status.refreshed')
-                : Lang::t('status.unreadable', ['dir' => Entry::sanitizeName($pane->cwd)]));
+                : ($pane->tooLarge
+                    ? Lang::t('status.dir_too_large', ['dir' => Entry::sanitizeName($pane->cwd)])
+                    : Lang::t('status.unreadable', ['dir' => Entry::sanitizeName($pane->cwd)])));
     }
 
     private function armDelete(): self
@@ -2055,8 +2065,12 @@ final class Manager implements Model
         // the pane retained. Failing loud here would crash the app on a
         // typo at a prompt; the honest state is a localized refusal.
         if (!$opened->readable) {
+            // CF-13: a readable-but-over-cap directory is refused through the
+            // same door with its own honest wording, not the unreadable one.
             return $this
-                ->withConfirm(ConfirmState::None, Lang::t('status.path_unreadable', ['path' => Entry::sanitizeName($full)]))
+                ->withConfirm(ConfirmState::None, $opened->tooLarge
+                    ? Lang::t('status.dir_too_large', ['dir' => Entry::sanitizeName($full)])
+                    : Lang::t('status.path_unreadable', ['path' => Entry::sanitizeName($full)]))
                 ->withInputBuffer(null);
         }
         return $this->transition($pane, $opened)

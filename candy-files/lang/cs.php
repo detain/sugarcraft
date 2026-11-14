@@ -28,6 +28,7 @@ return [
     'status.cancelled' => 'zrušeno',
     'status.refreshed' => 'obnoveno',
     'status.unreadable' => 'nelze číst {dir} — zobrazen předchozí obsah',
+    'status.dir_too_large' => 'příliš mnoho položek k vypsání {dir} — zobrazen předchozí obsah',
     'status.copy_pending' => 'kopírování {count} položek…',
     'status.quit_armed'     => '{count} kopírování stále probíhá — pro ukončení stiskněte znovu q',
     'status.search_recursive_on' => 'hledání: rekurzivní (^r znovu = jen zde)',

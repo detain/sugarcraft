@@ -28,6 +28,7 @@ return [
     'status.cancelled' => 'anulowano',
     'status.refreshed' => 'odświeżono',
     'status.unreadable' => 'nie można odczytać {dir} — wyświetlana poprzednia zawartość',
+    'status.dir_too_large' => 'za dużo wpisów do wyświetlenia {dir} — wyświetlana poprzednia zawartość',
     'status.copy_pending' => 'kopiowanie {count} wpisów…',
     'status.quit_armed'     => '{count} kopiowań wciąż w toku — naciśnij q ponownie, aby mimo to wyjść',
     'status.search_recursive_on' => 'szukaj: rekurencyjnie (^r ponownie = tylko tutaj)',
