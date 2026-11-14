@@ -246,13 +246,13 @@ nothing.
 | `git.listen_addr` | yes | `GitDaemon::serve()`/`serveAsync()` bind |
 | `git.max_timeout` | yes | smart-HTTP stateless git-child deadline |
 | `git.idle_timeout` | yes | `GitDaemon` idle connection timer |
-| `git.max_connections` | yes | `GitDaemon` capacity (eviction past the cap) |
+| `git.max_connections` | yes | `GitDaemon` capacity (newcomers refused past the cap — established transfers are never evicted) |
 | `git.allow_anonymous_read` | yes | the anonymous-read lever (default off) |
 | `http.listen_addr` | yes | **flags only** — `serve --http` binds `--http-host`/`--http-port`, never this key |
 | `http.public_url` | yes | LFS batch hrefs |
 | `http.tls_key_path`, `http.tls_cert_path` | yes | validation only — either one set refuses at load (`config.tls_not_supported`); the lib never terminates TLS |
 | `http.max_pack_bytes` | yes | the single request-body cap (pack POST + LFS object PUT) |
-| `http.user_trust_mode`, `http.trusted_proxies`, `http.auth_secret` | yes | header identity trust modes (see Authentication) |
+| `http.user_trust_mode`, `http.trusted_proxies`, `http.auth_secret` | yes | header identity trust modes (see HTTP Smart Protocol below and Deployment → Trust modes); `trusted_proxies` accepts exact IPv4/IPv6 addresses or CIDR ranges, given as a YAML list or a comma-separated string |
 | `lfs.enabled` | yes | the LFS route gate |
 | `lfs.ssh_enabled` | yes | **dead** |
 | `jobs.mirror_pull` | yes | `Jobs\MirrorPuller` schedule |
@@ -296,6 +296,10 @@ candy-git-server serve --http --repo-root /var/lib/candy-git-server/repositories
     --http-port 23232
 git clone http://localhost:23232/myrepo.git
 ```
+
+The `http://` above is loopback-only advice: credentials ride HTTP Basic,
+so anything past a trusted segment belongs behind the TLS-terminating
+proxy described under Deployment.
 
 `serve --http` flags: `--repo-root DIR` (required; every bare dir and every
 `<dir>/.git` under it is registered under its basename), `--http-port N`
@@ -348,11 +352,17 @@ git-shell gate: it parses a single
 `git-upload-pack`/`git-receive-pack <repo>` request, validates the repo name
 and the provided SSH public key against a `User`, and dispatches to
 `Git\UploadPack`/`Git\ReceivePack`, which delegate to the real git
-services over a bounded stdio pump — wired through host sshd today, clone
-and push both work end-to-end. It does not implement the SSH wire
+services over a bounded stdio pump. It does not implement the SSH wire
 protocol — it expects to run under the host's OpenSSH daemon via
 `ForceCommand`, and that deployment recipe is not shipped here (Known
-gaps).
+gaps); once wired through host sshd, clone and push both work
+end-to-end over the dispatcher.
+
+One behavior to know before you wire it: an authenticated **admin**
+pushing to a repo that is not in the jail yet does not get a refusal —
+the dispatcher CREATES the repo inside the configured jail, as a
+PRIVATE repo (the same marker-defaults-to-private posture as
+`repo create`; pinned by `tests/SSH/SSHServerTest.php`).
 
 ### See also — SSH middleware (sugar-ssh-server)
 
@@ -391,17 +401,27 @@ off), `git-receive-pack` requires `canWrite` (fail-closed false
 for anonymous callers, so the old unauthenticated receive-pack
 advertisement hole is gone). Authentication uses HTTP Basic auth or the
 paired `X-CandyGitServer-User` + `X-CandyGitServer-User-Sig` headers; the
-header path is governed by `http.user_trust_mode` — `proxy` trusts
-`X-CandyGitServer-User` only from peers listed in `http.trusted_proxies`,
-`token` trusts it only with an unexpired `X-CandyGitServer-User-Sig` HMAC
-verified against `http.auth_secret`, and `off` (the default) ignores the
-headers entirely; each mode needs its own lever, not all of them at once
-(Server.php). Deactivated
-(`isActive === false`) users authenticate to nothing on either path. Passwords are stored only as `password_hash` digests (cleartext never
+header path is governed by `http.user_trust_mode`, which selects exactly
+one of three postures — it is not a stack of settings to enable all at
+once. `off` (the default) ignores the identity headers entirely. `proxy`
+trusts `X-CandyGitServer-User` only from peers matching
+`http.trusted_proxies`. `token` trusts it only with an unexpired
+`X-CandyGitServer-User-Sig` HMAC verified against `http.auth_secret`,
+regardless of source address. Deactivated accounts cannot authenticate
+on either path. Each `trusted_proxies` entry is an exact IPv4/IPv6
+address or a CIDR range (`10.0.0.0/8`, `fd00::/8`), written as a YAML
+list or a single comma-separated string; peers outside every entry keep
+the anonymous posture — which under `proxy` mode means mysteriously
+unsigned requests, not an error. Passwords are stored only as
+`password_hash` digests (cleartext never
 touches disk), unauthenticated requests for gated content receive a real
 401 + `WWW-Authenticate` challenge, and proxy tokens carry an expiry
 (`user token` mints the `<expiry-unix>.<hex-hmac>` value the
-`X-CandyGitServer-User-Sig` header carries). Each request is logged
+`X-CandyGitServer-User-Sig` header carries). A `Server` built without an
+injected identity matrix answers its posture on its own; passing
+`AccessControl::instance()` opts an embedder into the process-global
+shared posture that the daemon and SSH transports consult (see
+Deployment). Each request is logged
 one-per-line to stderr for operators.
 
 ## Git Protocol (daemon class only — not assembled)
@@ -649,6 +669,135 @@ Collaborator lists persist in the repo's metadata plane (`repo collaborator
 `<data_path>/users.json`, and `serve --http` loads every stored account
 at launch.
 
+## Deployment
+
+`serve --http` is one foreground process. Its threat model has one
+load-bearing fact: **credentials travel as HTTP Basic** — base64, not
+encrypted — and the library never terminates TLS (`http.tls_key_path`
+and `http.tls_cert_path` refuse at config load, by design). The CLI
+default bind (`127.0.0.1`) keeps an untended start loopback-only, but
+that is a default, not a safety net: treat `http://` remotes as fit for
+loopback and nothing else. Any deployment where the client is beyond
+loopback or a trusted segment needs a TLS-terminating reverse proxy in
+front — the proxy is simultaneously the missing TLS story, the identity
+layer for `proxy` trust mode, and the reason the header-strip mandate
+below exists. Point `http.public_url` at the `https://` origin so LFS
+batch hrefs never downgrade a client to cleartext.
+
+### Ports
+
+The defaults are `23232` for `serve --http` (`--http-port`), `23233`
+for `stats.listen_addr`, `23231` inside the (currently dead) `ssh.*`
+scaffold, and `9418` for `git.listen_addr`. The 232xx trio is deliberate,
+not an accident of copy-paste: upstream soft-serve uses `8022`/`8080`,
+which read like privileged-era ports but are not — and a PHP server
+dropping privileges does better with defaults that cannot collide with
+anything a host already runs. Do not copy upstream tutorials' port
+numbers verbatim; here `23231` is the SSH slot and `23232` the HTTP
+slot.
+
+### systemd
+
+`serve --http` has **no reload path**: it arms only SIGINT and SIGTERM
+(when pcntl is loaded), so SIGHUP keeps its default disposition and
+KILLS the process. `systemctl reload` therefore has nothing sane to
+send — write no `ExecReload=` (the `ExecReload=/bin/kill -HUP
+$MAINPID` habit from other services stops this server), and treat a
+config change as a full restart. (The `GitDaemon` class, once you host
+it yourself, routes all three signals into its shutdown handler —
+SIGHUP stops it too; see the Git Protocol section.)
+
+```ini
+[Unit]
+Description=candy-git-server smart-HTTP listener
+After=network.target
+
+[Service]
+Type=simple
+User=candygit
+ExecStart=/usr/local/bin/candy-git-server serve --http \
+    --repo-root /var/lib/candy-git-server/repositories \
+    --http-port 23232 \
+    --config /var/lib/candy-git-server/config.yaml
+Restart=on-failure
+# no ExecReload: SIGHUP terminates (see above); change config => restart
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Containers: the image needs `ext-sockets` — the declared hard
+requirement: the daemon's blocking `serve()` binds through it, while
+the HTTP and stats listeners use plain streams — and `ext-pcntl` for
+the graceful SIGTERM stop shown above; minimal images such as
+`php:8.3-cli` ship neither, and without pcntl a supervisor's stop
+signal lands as the default-termination 130/143 exit instead of the
+clean 0.
+
+### nginx (TLS termination + git-friendly sizing)
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name git.example.com;
+    ssl_certificate     /etc/letsencrypt/live/git.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/git.example.com/privkey.pem;
+
+    # Must be >= http.max_pack_bytes (default 256 MiB) or nginx 413s
+    # the push before the server's own cap ever sees it.
+    client_max_body_size 256m;
+
+    location / {
+        proxy_pass http://127.0.0.1:23232;
+        proxy_set_header Host $host;
+
+        # The client must never assert its own identity: a header named
+        # in proxy_set_header REPLACES whatever arrived. Under `off` or
+        # `token` modes, blank the pair outright; under `proxy` mode,
+        # set it to the value YOUR auth layer resolved instead.
+        proxy_set_header X-CandyGitServer-User     "";
+        proxy_set_header X-CandyGitServer-User-Sig "";
+    }
+}
+```
+
+### Caddy
+
+```caddy
+git.example.com {
+    reverse_proxy 127.0.0.1:23232 {
+        # '-' prefix drops incoming copies of the identity headers.
+        header_up -X-CandyGitServer-User
+        header_up -X-CandyGitServer-User-Sig
+    }
+}
+```
+
+Caddy sends no body-size limit of its own, so `http.max_pack_bytes`
+remains the single cap; under nginx remember the `client_max_body_size`
+pairing above.
+
+### Trust modes and their threat models
+
+`http.user_trust_mode` picks exactly one posture. What each one means
+to an operator who might route around it:
+
+| mode | Who may assert an identity via headers | The attack that works anyway |
+|---|---|---|
+| `off` (default) | nobody — Basic auth only | header forgery gains nothing; nothing to strip |
+| `proxy` | any peer whose source IP matches a `trusted_proxies` entry | any host that can APPEAR as a listed IP (spoofing on a shared segment, or simply a client talking to the listener directly on it) may claim any username — the proxy must be the only route in, and it must replace the identity headers, never pass them |
+| `token` | anyone who can produce a valid unexpired HMAC — i.e. whoever holds `http.auth_secret` | a weak or leaked secret is a forge-every-identity skeleton key; mint it at full strength: `php -r "echo bin2hex(random_bytes(32));"` (the recipe the init skeleton's own comment carries) |
+
+`proxy` mode refuses everything while `http.trusted_proxies` matches
+nothing, so list the proxy's exact address or the whole CIDR it can
+come from (`10.0.0.0/8`, `fd00::/8`; YAML list or comma-string, IPv4
+and IPv6 alike — an entry is an exact address or a CIDR, and
+cross-family entries simply never match). When embedding the `Server`
+class directly: an instance built without an injected matrix keeps its
+own posture, while passing `AccessControl::instance()` shares one
+process-wide posture with the daemon and SSH transports — choose
+deliberately, the two worlds are not interchangeable.
+
 ## Known gaps — open work
 
 Re-derived 2026-11-03 against the live tree, after the review-driven
@@ -659,7 +808,8 @@ of the body, plaintext passwords replaced by `password_hash` digests,
 replayable proxy tokens replaced by expiring HMACs (with a mint command),
 401 + `WWW-Authenticate` challenges, LFS batch validation parity and
 atomic size-capped object storage, persisted accounts and repo
-visibility, the daemon's blocking loop / capacity eviction / pre-auth
+visibility, the daemon's blocking loop / capacity newcomer refusal /
+pre-auth
 caps, SSH services delegating to real git, argv-only bounded subprocesses
 everywhere, and the extension manifest. What remains open:
 
@@ -691,9 +841,13 @@ everywhere, and the extension manifest. What remains open:
    `lfs.enabled`, `jobs.mirror_pull`, `stats.listen_addr`.
 5. **No TLS termination.** `http.tls_key_path`/`http.tls_cert_path`
    refuse at config load (`config.tls_not_supported`) by design —
-   terminate HTTPS in a reverse proxy.
-6. **`SIGHUP` shuts down instead of reloading** — all three signals share
-   one handler.
+   terminate HTTPS in a reverse proxy (the recipe and its mandates live
+   under Deployment).
+6. **`SIGHUP` shuts down instead of reloading** — the `GitDaemon` class
+   routes all three signals into one shutdown handler, and
+   `serve --http` never arms SIGHUP at all, so it dies by the default
+   disposition. There is no reload path anywhere in this library;
+   restart to pick up config.
 7. **Locale coverage.** English is the reference; all 17 catalogues
    (including `zh-tw`) carry the same keys and placeholders, enforced by
    `tests/LangLocaleSelectionTest.php`. The translations are

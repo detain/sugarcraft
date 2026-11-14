@@ -1250,6 +1250,9 @@ final class Server
      * Match a bare IP against a single allowlist entry — an exact IP or a
      * `subnet/bits` CIDR range. Works for both IPv4 and IPv6 by comparing
      * the packed inet_pton() forms; a family mismatch never matches.
+     * The operator-facing shapes (YAML list or comma-separated string,
+     * exact or CIDR) and the per-mode threat model are documented in the
+     * README (Deployment → Trust modes).
      */
     private static function ipMatchesRange(string $ip, string $range): bool
     {
