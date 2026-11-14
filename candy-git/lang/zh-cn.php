@@ -12,6 +12,7 @@ return [
     'git.spawn_failed'        => 'git：启动失败：{reason}',
     'git.error'               => 'git: {stderr}',
     'git.timeout'             => 'git：命令在 {seconds}秒后超时',
+    'git.interrupted' => 'git: 命令被信号中断',
     'git.unsafe_path'         => 'git：不安全的 worktree 路径：{path}',
     'git.unsafe_merge_driver' => 'git：该仓库定义了无法安全禁用的合并驱动程序；已拒绝合并',
     'git.unsafe_filter_driver' => 'git：该仓库定义了过滤器驱动程序；严格过滤器模式已拒绝该命令',

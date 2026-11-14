@@ -12,6 +12,7 @@ return [
     'git.spawn_failed'        => 'git: nepodařilo se spustit: {reason}',
     'git.error'               => 'git: {stderr}',
     'git.timeout'             => 'git: časový limit překročen po {seconds}s',
+    'git.interrupted' => 'git: příkaz byl přerušen signálem',
     'git.unsafe_path'         => 'git: nezabezpečená cesta worktree: {path}',
     'git.unsafe_merge_driver' => 'git: repozitář definuje slučovací ovladač, který nelze bezpečně zakázat; slučování zamítnuto',
     'git.unsafe_filter_driver' => 'git: repozitář definuje filtrovací ovladač; přísný režim filtrů odmítl příkaz',

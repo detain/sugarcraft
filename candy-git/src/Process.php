@@ -38,6 +38,16 @@ final class Process
     private const CAPTURE_NOTICE = '[candy-git: output truncated at 4 MiB]';
 
     /**
+     * candy-git-006: an EINTR (stream_select() returning false) is almost
+     * always an ordinary SIGWINCH — the child is healthy and the deadline is
+     * not spent, so we keep waiting against the SAME absolute deadline. Only a
+     * signal storm that preempts the drain this many times in a row gives up
+     * and falls through the kill ladder with an honest `interrupted` marker;
+     * the cap keeps that pathological lane bounded instead of spinning forever.
+     */
+    private const MAX_CONSECUTIVE_EINTRS = 32;
+
+    /**
      * Environment handed to every child: the parent's environment plus
      * git-specific overrides. Each override closes a real way a repo- or
      * user-controlled setting could block or hijack a synchronous git call
@@ -73,7 +83,7 @@ final class Process
      * @param float        $timeout Seconds before the child is killed; <= 0 disables the timeout.
      * @param Platform|null $platform OS seam; null = the host. Windows takes the polled temp-file ladder.
      *
-     * @return array{stdout: string, stderr: string, exit: int, timedOut: bool}
+     * @return array{stdout: string, stderr: string, exit: int, timedOut: bool, interrupted: bool}
      */
     public static function run(array $argv, ?string $stdin = null, float $timeout = 30.0, ?Platform $platform = null): array
     {
@@ -122,6 +132,8 @@ final class Process
         $stderrTruncated = false;
         $timedOut    = false;
         $abandoned   = false; // loop stopped while the child may still be live (timeout or EINTR)
+        $interrupted = false; // candy-git-006: abandoned by a signal storm, not by the deadline
+        $intrCount   = 0;     // consecutive stream_select() === false results
         $deadline    = $timeout > 0 ? microtime(true) + $timeout : null;
 
         while ($open !== [] || $stdinHandle !== null) {
@@ -146,14 +158,21 @@ final class Process
                 $ready = @stream_select($read, $write, $except, $sec, $usec);
             }
 
-            // false = interrupted by a signal; stop draining and tear the child
-            // down through the same bounded ladder a timeout gets — an ordinary
-            // SIGWINCH (terminal resize) must never strand a live git child on
-            // a proc_close that would block until the child exits by itself.
+            // false = interrupted by a signal. An ordinary SIGWINCH (terminal
+            // resize) must NOT strand or kill a live child (candy-git-006):
+            // keep waiting against the same absolute deadline. The deadline
+            // check at the top of the loop still bounds the wait, and a storm
+            // of back-to-back EINTRs is capped (MAX_CONSECUTIVE_EINTRS) so the
+            // drain can never spin forever outside the budget.
             if ($ready === false) {
-                $abandoned = true;
-                break;
+                if (++$intrCount > self::MAX_CONSECUTIVE_EINTRS) {
+                    $interrupted = true;
+                    $abandoned   = true;
+                    break;
+                }
+                continue;
             }
+            $intrCount = 0;
             if ($ready === 0) {
                 $timedOut  = true;
                 $abandoned = true;
@@ -205,8 +224,35 @@ final class Process
             }
         }
 
+        // candy-git-007: pipe EOF is not child death. A child that redirects
+        // its own descriptors away (`sh -c 'exec >/dev/null 2>&1; sleep 4'`)
+        // closes our capture pipes at once while the process keeps living —
+        // without this re-check, the proc_close() below waits on it OUTSIDE
+        // the timeout budget. Spend whatever of the absolute deadline remains
+        // on bounded liveness polling; if the child outlives the budget it
+        // goes through the same SIGTERM->grace->SIGKILL ladder a timeout uses.
+        // ($deadline === null means the caller asked for no bound at all —
+        // there, the blocking proc_close is the honest documented behaviour.)
+        if (!$abandoned && $deadline !== null) {
+            while (proc_get_status($proc)['running']) {
+                if (microtime(true) >= $deadline) {
+                    $timedOut  = true;
+                    $abandoned = true;
+                    break;
+                }
+                usleep(10_000);
+            }
+        }
+
         if ($abandoned) {
             self::terminateBounded($proc, $platform);
+            // candy-git-092: never report a clean-looking shape for a child we
+            // stopped — re-read status after the ladder. SIGKILL is not
+            // ignorable, so a still-"running" answer here is a kernel reap lag;
+            // say so honestly on the marker instead of implying a full stop.
+            if (proc_get_status($proc)['running']) {
+                $interrupted = true;
+            }
         }
 
         if ($stdinHandle !== null) {
@@ -229,10 +275,11 @@ final class Process
         }
 
         return [
-            'stdout'   => $stdout,
-            'stderr'   => $stderr,
-            'exit'     => $exit,
-            'timedOut' => $timedOut,
+            'stdout'      => $stdout,
+            'stderr'      => $stderr,
+            'exit'        => $exit,
+            'timedOut'    => $timedOut,
+            'interrupted' => $interrupted,
         ];
     }
 
@@ -245,6 +292,13 @@ final class Process
      * ordering around pipe-EOF makes any single liveness read racy (measured
      * in this fleet: a one-shot can still say "running" seconds after death),
      * and the loop is bounded by the grace deadline either way.
+     *
+     * Honest limit (candy-git-092): the ladder reaches the DIRECT child only —
+     * proc_terminate() signals that one pid (POSIX), so a git helper or hook
+     * that outlives its parent keeps running (its pipes were already closed by
+     * us, so it can no longer block the drain). The caller re-reads status
+     * after every timedOut kill and marks the result honestly rather than
+     * implying the whole tree stopped.
      *
      * @param resource $proc
      */
@@ -293,7 +347,7 @@ final class Process
      *
      * @param list<string> $argv
      *
-     * @return array{stdout: string, stderr: string, exit: int, timedOut: bool}
+     * @return array{stdout: string, stderr: string, exit: int, timedOut: bool, interrupted: bool}
      */
     private static function runPolled(array $argv, ?string $stdin, float $timeout, Platform $platform): array
     {
@@ -361,10 +415,14 @@ final class Process
             return $data;
         };
         $result = [
-            'stdout'   => $read($outFile),
-            'stderr'   => $read($errFile),
-            'exit'     => $exit,
-            'timedOut' => $timedOut,
+            'stdout'      => $read($outFile),
+            'stderr'      => $read($errFile),
+            'exit'        => $exit,
+            'timedOut'    => $timedOut,
+            // The polled ladder has no select() to interrupt: a signal cannot
+            // strand this lane, only the deadline can. The key is present for
+            // shape parity with the POSIX return.
+            'interrupted' => false,
         ];
         $cleanup();
 

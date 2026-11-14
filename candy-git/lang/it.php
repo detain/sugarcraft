@@ -12,6 +12,7 @@ return [
     'git.spawn_failed'        => 'git: avvio non riuscito: {reason}',
     'git.error'               => 'git: {stderr}',
     'git.timeout'             => 'git: comando scaduto dopo {seconds}s',
+    'git.interrupted' => 'git: comando interrotto da un segnale',
     'git.unsafe_path'         => 'git: percorso worktree non sicuro: {path}',
     'git.unsafe_merge_driver' => 'git: il repository definisce un driver di merge che non può essere disattivato in modo sicuro; merge rifiutato',
     'git.unsafe_filter_driver' => 'git: il repository definisce un driver di filtro; la modalità filtro rigorosa ha rifiutato il comando',

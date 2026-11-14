@@ -12,6 +12,7 @@ return [
     'git.spawn_failed'        => 'git: starten mislukt: {reason}',
     'git.error'               => 'git: {stderr}',
     'git.timeout'             => 'git: opdracht verlopen na {seconds}s',
+    'git.interrupted' => 'git: opdracht onderbroken door een signaal',
     'git.unsafe_path'         => 'git: onveilig worktree-pad: {path}',
     'git.unsafe_merge_driver' => 'git: de repository definieert een merge-driver die niet veilig uitgeschakeld kan worden; merge geweigerd',
     'git.unsafe_filter_driver' => 'git: de repository definieert een filterdriver; de strikte filtermodus wees het commando af',

@@ -12,6 +12,7 @@ return [
     'git.spawn_failed'        => 'git: başlatma başarısız: {reason}',
     'git.error'               => 'git: {stderr}',
     'git.timeout'             => 'git: komut {seconds}s sonra zaman aşımına uğradı',
+    'git.interrupted' => 'git: komut bir sinyal tarafından kesintiye uğratıldı',
     'git.unsafe_path'         => 'git: güvensiz worktree yolu: {path}',
     'git.unsafe_merge_driver' => 'git: depo, güvenle devre dışı bırakılamayan bir birleştirme sürücüsü tanımlıyor; birleştirme reddedildi',
     'git.unsafe_filter_driver' => 'git: depo bir filtre sürücüsü tanımlıyor; katı filtre modu komutu reddetti',

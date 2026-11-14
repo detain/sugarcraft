@@ -12,6 +12,7 @@ return [
     'git.spawn_failed'        => 'git: nie udało się uruchomić: {reason}',
     'git.error'               => 'git: {stderr}',
     'git.timeout'             => 'git: przekroczono limit {seconds}s',
+    'git.interrupted' => 'git: polecenie zostało przerwane przez sygnał',
     'git.unsafe_path'         => 'git: niebezpieczna ścieżka worktree: {path}',
     'git.unsafe_merge_driver' => 'git: repozytorium definiuje sterownik scalania, którego nie można bezpiecznie wyłączyć; scalanie odrzucone',
     'git.unsafe_filter_driver' => 'git: repozytorium definiuje sterownik filtrowania; tryb ścisłych filtrów odrzucił polecenie',

@@ -1057,13 +1057,19 @@ final class Git implements GitDriver
     }
 
     /**
-     * @param array{stdout: string, stderr: string, exit: int, timedOut: bool} $result
+     * @param array{stdout: string, stderr: string, exit: int, timedOut: bool, interrupted: bool} $result
      * @throws \RuntimeException
      */
     private function assertNotTimedOut(array $result): void
     {
         if ($result['timedOut'] === TRUE) {
             throw new \RuntimeException(Lang::t('git.timeout', ['seconds' => (string) $this->timeout]));
+        }
+        // candy-git-006: a child we abandoned to a signal storm was killed,
+        // not merely late — say so with a distinct marker instead of letting a
+        // SIGTERM/SIGKILL exit code through as if it were a git failure.
+        if ($result['interrupted'] === TRUE) {
+            throw new \RuntimeException(Lang::t('git.interrupted'));
         }
     }
 }

@@ -12,6 +12,7 @@ return [
     'git.spawn_failed'        => 'git: 실행 실패: {reason}',
     'git.error'               => 'git: {stderr}',
     'git.timeout'             => 'git: 명령이 {seconds}초 후 시간 초과되었습니다',
+    'git.interrupted' => 'git: 명령이 신호에 의해 중단되었습니다',
     'git.unsafe_path'         => 'git: 안전하지 않은 worktree 경로: {path}',
     'git.unsafe_merge_driver' => 'git: 리포지토리가 안전하게 비활성화할 수 없는 병합 드라이버를 정의하여 병합을 거부했습니다',
     'git.unsafe_filter_driver' => 'git: 리포지토리가 필터 드라이버를 정의하여 엄격한 필터 모드에서 명령을 거부했습니다',

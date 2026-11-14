@@ -12,6 +12,7 @@ return [
     'git.spawn_failed'        => 'git: Start fehlgeschlagen: {reason}',
     'git.error'               => 'git: {stderr}',
     'git.timeout'             => 'git: Befehl nach {seconds}s abgelaufen',
+    'git.interrupted' => 'git: Befehl wurde durch ein Signal unterbrochen',
     'git.unsafe_path'         => 'git: unsicherer Worktree-Pfad: {path}',
     'git.unsafe_merge_driver' => 'git: Das Repository definiert einen Merge-Treiber, der nicht sicher deaktiviert werden kann; Merge abgelehnt',
     'git.unsafe_filter_driver' => 'git: Das Repository definiert einen Filter-Treiber; der strenge Filtermodus hat den Befehl abgelehnt',

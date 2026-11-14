@@ -13,6 +13,7 @@ return [
     'git.spawn_failed' => 'git: failed to spawn: {reason}',
     'git.error'        => 'git: {stderr}',
     'git.timeout'      => 'git: command timed out after {seconds}s',
+    'git.interrupted' => 'git: command was interrupted by a signal',
     'git.unsafe_path'  => 'git: unsafe worktree path: {path}',
     'git.unsafe_merge_driver' => 'git: the repository defines a merge driver that cannot be safely disabled; merge refused',
     'git.unsafe_filter_driver' => 'git: the repository defines a filter driver; strict filter mode refused the command',

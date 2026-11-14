@@ -12,6 +12,7 @@ return [
     'git.spawn_failed'        => 'git: 起動に失敗しました: {reason}',
     'git.error'               => 'git: {stderr}',
     'git.timeout'             => 'git: コマンドが {seconds}秒でタイムアウトしました',
+    'git.interrupted' => 'git: コマンドがシグナルによって中断されました',
     'git.unsafe_path'         => 'git: 安全でないworktreeパス: {path}',
     'git.unsafe_merge_driver' => 'git: このリポジトリは安全に無効化できないマージドライバーを定義しているため、マージを拒否しました',
     'git.unsafe_filter_driver' => 'git: このリポジトリはフィルタードライバーを定義しているため、厳格フィルターモードでコマンドを拒否しました',

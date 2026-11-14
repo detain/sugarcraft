@@ -12,6 +12,7 @@ return [
     'git.spawn_failed'        => 'git: не удалось запустить: {reason}',
     'git.error'               => 'git: {stderr}',
     'git.timeout'             => 'git: команда завершена по таймауту после {seconds}с',
+    'git.interrupted' => 'git: команда прервана сигналом',
     'git.unsafe_path'         => 'git: небезопасный путь worktree: {path}',
     'git.unsafe_merge_driver' => 'git: репозиторий определяет драйвер слияния, который нельзя безопасно отключить; слияние отклонено',
     'git.unsafe_filter_driver' => 'git: репозиторий определяет драйвер фильтра; строгий режим фильтров отклонил команду',

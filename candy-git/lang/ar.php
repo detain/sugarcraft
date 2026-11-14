@@ -12,6 +12,7 @@ return [
     'git.spawn_failed'        => 'git: فشل التشغيل: {reason}',
     'git.error'               => 'git: {stderr}',
     'git.timeout'             => 'git: انتهت مهلة الأمر بعد {seconds} ثانية',
+    'git.interrupted' => 'git: تمت مقاطعة الأمر بواسطة إشارة',
     'git.unsafe_path'         => 'git: مسار worktree غير آمن: {path}',
     'git.unsafe_merge_driver' => 'git:عرّف المستودع مشغّل دمج لا يمكن تعطيله بأمان؛ تم رفض الدمج',
     'git.unsafe_filter_driver' => 'git:عرّف المستودع مشغل مرشح؛ رفض الوضع الصارم للمرشحات الأمر',

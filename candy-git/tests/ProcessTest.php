@@ -233,4 +233,72 @@ final class ProcessTest extends TestCase
             $this->assertStringNotContainsString('install git', $e->getMessage());
         }
     }
+
+    /**
+     * candy-git-006: a SIGWINCH (terminal resize) landing while the child is
+     * live makes stream_select() return false — the old code treated that as
+     * abandon and tore down a perfectly healthy git call. The child raises the
+     * signal at its own parent here so the interrupt lands squarely inside the
+     * blocking select. After the fix the wait CONTINUES against the absolute
+     * deadline and the child answers in full.
+     */
+    public function testSigwinchDuringDrainDoesNotKillTheChild(): void
+    {
+        if (!extension_loaded('pcntl') || !defined('SIGWINCH')) {
+            $this->markTestSkipped('pcntl (SIGWINCH) required');
+        }
+
+        // A no-op handler must be installed for select() to see the EINTR at
+        // all: SIG_DFL/SIG_IGN dispositions for WINCH never interrupt it.
+        pcntl_signal(SIGWINCH, static function (): void {
+        });
+        try {
+            $r = Process::run(
+                ['sh', '-c', 'kill -WINCH $PPID 2>/dev/null; sleep 0.2; echo done'],
+                null,
+                10.0,
+            );
+        } finally {
+            pcntl_signal(SIGWINCH, SIG_DFL);
+        }
+
+        $this->assertFalse($r['timedOut'], 'an ordinary resize must not read as a timeout');
+        $this->assertFalse($r['interrupted'], 'a single EINTR must not abandon the drain');
+        $this->assertSame("done\n", $r['stdout']);
+        $this->assertSame(0, $r['exit']);
+    }
+
+    /**
+     * candy-git-007: closing the capture pipes is NOT the child exiting. This
+     * child detaches its own stdio and then sleeps 4s while our loop sees
+     * pipe-EOF immediately — the old code fell straight into a blocking
+     * proc_close() that waited out the full sleep OUTSIDE the timeout budget.
+     * After the fix the post-drain liveness poll spends the remaining budget,
+     * flags timedOut, and runs the bounded kill ladder.
+     */
+    public function testAliveChildAfterPipeEofIsKilledAtTheDeadline(): void
+    {
+        $start = microtime(true);
+        $r     = Process::run(['sh', '-c', 'exec >/dev/null 2>&1; sleep 4'], null, 0.5);
+        $elapsed = microtime(true) - $start;
+
+        $this->assertTrue($r['timedOut'], 'a child that outlives the budget after pipe-EOF must report timedOut');
+        $this->assertFalse($r['interrupted'], 'this is the deadline lane, not a signal storm');
+        $this->assertGreaterThanOrEqual(0.4, $elapsed, 'the full budget must be spent before the kill');
+        $this->assertLessThan(2.5, $elapsed, 'killed at deadline+grace, never left to finish the 4s sleep');
+    }
+
+    /** Healthy children on both ladders report neither marker. */
+    public function testNormalLanesCarryNoTimeoutOrInterruptedMarkers(): void
+    {
+        $posix = Process::run(['sh', '-c', 'echo hi'], null, 5.0);
+        $this->assertFalse($posix['timedOut']);
+        $this->assertFalse($posix['interrupted']);
+        $this->assertSame("hi\n", $posix['stdout']);
+
+        $polled = Process::run(['sh', '-c', 'echo hi'], null, 5.0, self::windowsLadder());
+        $this->assertFalse($polled['timedOut']);
+        $this->assertFalse($polled['interrupted']);
+        $this->assertSame("hi\n", $polled['stdout']);
+    }
 }

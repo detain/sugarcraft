@@ -12,6 +12,7 @@ return [
     'git.spawn_failed'        => 'git : échec du lancement: {reason}',
     'git.error'               => 'git: {stderr}',
     'git.timeout'             => 'git : commande expirée après {seconds}s',
+    'git.interrupted' => 'git : la commande a été interrompue par un signal',
     'git.unsafe_path'         => 'git : chemin de worktree non sûr : {path}',
     'git.unsafe_merge_driver' => 'git : le dépôt définit un pilote de fusion qui ne peut pas être désactivé sans risque ; fusion refusée',
     'git.unsafe_filter_driver' => 'git : le dépôt définit un pilote de filtre ; le mode filtre strict a refusé la commande',
