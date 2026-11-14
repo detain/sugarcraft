@@ -7,7 +7,10 @@ namespace SugarCraft\Dashboard\Tests\Components\Modal;
 use SugarCraft\Dashboard\Components\Modal\Modal;
 use SugarCraft\Dashboard\Foundation\Item;
 use SugarCraft\Dashboard\Foundation\Sizer;
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 use PHPUnit\Framework\TestCase;
 
 final class ModalTest extends TestCase
@@ -245,5 +248,92 @@ final class ModalTest extends TestCase
         $rendered = $modal->render();
 
         $this->assertStringContainsString('日本語コンテンツ', $rendered);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Cell-accurate frame assembly (D-67, findings 061/166 truth leg)
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testCJKContentRespectsTheCellBudget(): void
+    {
+        $modal = Modal::new(str_repeat('日', 20))->setSize(30, 10);
+        $rows = explode("\n", $modal->render());
+
+        // Ten allocation rows, each exactly thirty CELLS: the build loop
+        // truncates over-wide lines to the modal budget and pads by cells
+        // (byte str_pad let wide glyphs overrun the frame).
+        $this->assertCount(10, $rows);
+        foreach ($rows as $row) {
+            $this->assertSame(30, Width::string($row), 'every painted row is exactly the allocation');
+        }
+    }
+
+    public function testBorderColorOpensAndResetsInsideEveryFrameRow(): void
+    {
+        $modal = Modal::new('content')->withTitle('T')->setSize(40, 8);
+        // new() ships the default purple border; compute its SGR through
+        // the hex round trip (display-code instances resolve truecolor).
+        $sgr = Color::hex('#874BFD')->toFg(ColorMode::profile());
+
+        $seen = 0;
+        foreach (explode("\n", $modal->render()) as $row) {
+            if (!preg_match('/[┌┐└┘│]/u', $row)) {
+                continue;
+            }
+            $seen++;
+            $this->assertStringContainsString($sgr, $row, 'the border color opens INSIDE every frame row');
+            $this->assertStringEndsWith(Ansi::reset(), rtrim($row, ' '), 'and resets before the row ends');
+        }
+        $this->assertGreaterThan(2, $seen, 'frame rows were inspected');
+    }
+
+    public function testUncoloredBorderRowsCarryNoSgr(): void
+    {
+        $rendered = Modal::new('content')->withBorderColor(null)->setSize(40, 8)->render();
+
+        // The null border path emits no per-row styling; the single ESC
+        // occurrence is the pre-existing trailing reset the box always
+        // carried (kept byte-stable by D-67 on purpose).
+        $this->assertSame(1, substr_count($rendered, "\x1b"));
+        foreach (explode("\n", $rendered) as $row) {
+            if (preg_match('/[┌┐└┘│]/u', $row)) {
+                $this->assertFalse(str_starts_with($row, "\x1b"), 'uncolored frame rows open with the wall, not an SGR');
+            }
+        }
+    }
+
+    public function testOverflowKeepsTheFrameRowsAndDropsInterior(): void
+    {
+        $lines = [];
+        for ($i = 1; $i <= 10; $i++) {
+            $lines[] = "Row {$i} of tall content";
+        }
+        $modal = Modal::new(implode("\n", $lines))->withTitle('Headline')->setSize(40, 8);
+        $rendered = $modal->render();
+
+        // modalH(8) = 6: the box keeps its top border (with the title) and
+        // its bottom border, dropping interior content rows instead of the
+        // old array_shift loop that ate the top border and title first.
+        $this->assertStringContainsString('Headline', $rendered, 'the title row survives overflow');
+        $this->assertStringContainsString('┌', $rendered);
+        $this->assertStringContainsString('└', $rendered);
+        $this->assertStringContainsString('Row 1 of tall content', $rendered, 'the first interior rows are kept');
+        $this->assertStringNotContainsString('Row 10 of tall content', $rendered, 'the overflow tail is dropped');
+        $rows = explode("\n", $rendered);
+        $this->assertCount(8, $rows);
+        $boxRows = array_values(array_filter($rows, static fn(string $r): bool => (bool) preg_match('/[┌└│]/u', $r)));
+        $this->assertCount(6, $boxRows, 'the box occupies exactly modalH rows');
+    }
+
+    public function testWithersCarryTheSetSizeAllocation(): void
+    {
+        $modal = Modal::new('content')->setSize(50, 12)->withTitle('T')->withBorderColor(Color::hex('#FFFFFF'));
+
+        // D-56/D-77 allocation-drop class: every wither must preserve the
+        // stored allocation (innerSize answers modalW/modalH of the SET size,
+        // 50*0.8=40, 12*0.8=9), not the natural 40/10 fallback.
+        $this->assertSame([40, 9], $modal->innerSize());
+        $widths = array_map(static fn(string $r): int => Width::string($r), explode("\n", $modal->render()));
+        $this->assertSame(50, max($widths), 'the render still fills the fifty-cell allocation');
     }
 }

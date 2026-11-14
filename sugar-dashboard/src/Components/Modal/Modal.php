@@ -120,13 +120,17 @@ final class Modal implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         $result = '';
 
-        // Apply colors
-        if ($this->borderColor !== null) {
-            $result .= $this->borderColor->toFg(ColorMode::profile());
-        }
+        // Finding sugar-dashboard-061 (D-67): the border color opened ONCE
+        // for the whole box, so every pad row and frame row shared a single
+        // SGR span - a consumer slicing rows (overflow, scrollback capture)
+        // lost or smeared the color mid-box. The color now opens and resets
+        // INSIDE every painted frame row. An uncolored modal emits exactly
+        // the same bytes as before (both parts collapse to '').
+        $borderSgr = $this->borderColor !== null ? $this->borderColor->toFg(ColorMode::profile()) : '';
+        $rowEnd = $this->borderColor !== null ? Ansi::reset() : '';
 
         // Top border with title or centered
-        $result .= $tl;
+        $result .= $borderSgr . $tl;
         if ($this->title !== null) {
             // Finding sugar-dashboard-060 (D-66): the dash padding around an
             // embedded title was unclamped arithmetic - a long title (or a
@@ -156,23 +160,29 @@ final class Modal implements \SugarCraft\Dashboard\Foundation\SizedItem
             }
         } else {
             if ($this->showClose) {
-                $result .= str_repeat($h, max(0, $modalW - 4));
+                // Finding sugar-dashboard-166 (D-67): the dash run reserved a
+                // one-cell label no matter the real closeLabel, so any wider
+                // label pushed the frame row past the modal budget (and the
+                // build-loop truncation then ate the label's tail). Reserve
+                // the label's CELLS so the assembled row is exactly modalW.
+                $closeCells = Width::string($this->closeLabel);
+                $result .= str_repeat($h, max(0, $modalW - 4 - $closeCells));
                 $result .= ' ' . $this->closeLabel . ' ';
             } else {
                 $result .= str_repeat($h, max(0, $modalW - 2));
             }
         }
-        $result .= $tr . "\n";
+        $result .= $tr . $rowEnd . "\n";
 
         // Content lines
         $contentLines = $this->renderContentLines($modalW - 2);
         foreach ($contentLines as $line) {
-            $paddedLine = $v . $line . $v;
+            $paddedLine = $borderSgr . $v . $line . $v . $rowEnd;
             $result .= $paddedLine . "\n";
         }
 
         // Bottom border
-        $result .= $bl . str_repeat($h, $modalW - 2) . $br;
+        $result .= $borderSgr . $bl . str_repeat($h, $modalW - 2) . $br . $rowEnd;
 
         // Reset ANSI
         $result .= Ansi::reset();
@@ -184,9 +194,22 @@ final class Modal implements \SugarCraft\Dashboard\Foundation\SizedItem
             array_unshift($renderedLines, '');
             $renderedCount++;
         }
-        while ($renderedCount > $modalH) {
-            array_shift($renderedLines);
-            $renderedCount--;
+        if ($renderedCount > $modalH) {
+            // Finding sugar-dashboard-061 (D-67): the old array_shift loop
+            // ate the TOP BORDER - and with it the title - whenever content
+            // outgrew the modal box. Overflow now drops INTERIOR content
+            // rows (from the tail) and keeps both frame rows: the box stays
+            // a box. modalH has a floor of 5, so the modalH-2 interior
+            // budget is always >= 3 and count > modalH >= 5 guarantees the
+            // top/middle/bottom split exists.
+            $interior = array_slice($renderedLines, 1, -1);
+            $interior = array_slice($interior, 0, max(0, $modalH - 2));
+            $renderedLines = array_merge(
+                [$renderedLines[0]],
+                $interior,
+                [$renderedLines[$renderedCount - 1]]
+            );
+            $renderedCount = count($renderedLines);
         }
 
         // Build the full output with centering
@@ -197,6 +220,16 @@ final class Modal implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         foreach ($renderedLines as $line) {
             $lineWidth = Width::string($line);
+            // Finding sugar-dashboard-061 (D-67): this cell width was read
+            // and then DISCARDED - byte str_pad let a CJK row overrun the
+            // modal budget by one cell per wide glyph, desyncing every
+            // following column. Truncate over-wide rows to the cell budget
+            // first, then pad by cells (Width::padRight is ANSI-aware);
+            // ASCII rows stay byte-identical to the old str_pad.
+            if ($lineWidth > $modalW) {
+                $line = Width::truncateAnsi($line, $modalW);
+                $lineWidth = $modalW;
+            }
             // Finding sugar-dashboard-166 (D-66): with modalW at its 20-cell
             // floor inside an allocation narrower than 25, the centering
             // left pad and the residual gap both went negative - another
@@ -204,7 +237,7 @@ final class Modal implements \SugarCraft\Dashboard\Foundation\SizedItem
             // byte-identical. (Row-overflow TRUTH is D-67's cell budget leg.)
             $leftPad = max(0, (int) floor(($allocW - $modalW) / 2));
             $padding = str_repeat(' ', $leftPad);
-            $output[] = $padding . str_pad($line, $modalW, ' ') . str_repeat(' ', max(0, $allocW - $leftPad - $modalW));
+            $output[] = $padding . Width::padRight($line, $modalW) . str_repeat(' ', max(0, $allocW - $leftPad - $modalW));
         }
 
         $outputCount = count($output);
@@ -324,7 +357,7 @@ final class Modal implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withContent(\SugarCraft\Dashboard\Foundation\Item|string $content): self
     {
-        return new self(
+        $next = new self(
             content: $content,
             title: $this->title,
             borderColor: $this->borderColor,
@@ -333,6 +366,12 @@ final class Modal implements \SugarCraft\Dashboard\Foundation\SizedItem
             showClose: $this->showClose,
             closeLabel: $this->closeLabel,
         );
+        // Finding sugar-dashboard-166 (D-67): withers rebuilt through the
+        // constructor dropped the setSize allocation - the D-56/D-77
+        // allocation-drop class, screened here per the D-96/D-98 doctrine.
+        $next->width = $this->width;
+        $next->height = $this->height;
+        return $next;
     }
 
     /**
@@ -340,7 +379,7 @@ final class Modal implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withTitle(?string $title): self
     {
-        return new self(
+        $next = new self(
             content: $this->content,
             title: $title,
             borderColor: $this->borderColor,
@@ -349,6 +388,9 @@ final class Modal implements \SugarCraft\Dashboard\Foundation\SizedItem
             showClose: $this->showClose,
             closeLabel: $this->closeLabel,
         );
+        $next->width = $this->width; // D-67 allocation carry (finding 166)
+        $next->height = $this->height;
+        return $next;
     }
 
     /**
@@ -356,7 +398,7 @@ final class Modal implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withBorderColor(?Color $color): self
     {
-        return new self(
+        $next = new self(
             content: $this->content,
             title: $this->title,
             borderColor: $color,
@@ -365,6 +407,9 @@ final class Modal implements \SugarCraft\Dashboard\Foundation\SizedItem
             showClose: $this->showClose,
             closeLabel: $this->closeLabel,
         );
+        $next->width = $this->width; // D-67 allocation carry (finding 166)
+        $next->height = $this->height;
+        return $next;
     }
 
     /**
@@ -372,7 +417,7 @@ final class Modal implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withBgColor(?Color $color): self
     {
-        return new self(
+        $next = new self(
             content: $this->content,
             title: $this->title,
             borderColor: $this->borderColor,
@@ -381,6 +426,9 @@ final class Modal implements \SugarCraft\Dashboard\Foundation\SizedItem
             showClose: $this->showClose,
             closeLabel: $this->closeLabel,
         );
+        $next->width = $this->width; // D-67 allocation carry (finding 166)
+        $next->height = $this->height;
+        return $next;
     }
 
     /**
@@ -388,7 +436,7 @@ final class Modal implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withStyle(string $style): self
     {
-        return new self(
+        $next = new self(
             content: $this->content,
             title: $this->title,
             borderColor: $this->borderColor,
@@ -397,6 +445,9 @@ final class Modal implements \SugarCraft\Dashboard\Foundation\SizedItem
             showClose: $this->showClose,
             closeLabel: $this->closeLabel,
         );
+        $next->width = $this->width; // D-67 allocation carry (finding 166)
+        $next->height = $this->height;
+        return $next;
     }
 
     /**
@@ -404,7 +455,7 @@ final class Modal implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withShowClose(bool $show): self
     {
-        return new self(
+        $next = new self(
             content: $this->content,
             title: $this->title,
             borderColor: $this->borderColor,
@@ -413,6 +464,9 @@ final class Modal implements \SugarCraft\Dashboard\Foundation\SizedItem
             showClose: $show,
             closeLabel: $this->closeLabel,
         );
+        $next->width = $this->width; // D-67 allocation carry (finding 166)
+        $next->height = $this->height;
+        return $next;
     }
 
     /**
@@ -420,7 +474,7 @@ final class Modal implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withCloseLabel(string $label): self
     {
-        return new self(
+        $next = new self(
             content: $this->content,
             title: $this->title,
             borderColor: $this->borderColor,
@@ -429,5 +483,8 @@ final class Modal implements \SugarCraft\Dashboard\Foundation\SizedItem
             showClose: $this->showClose,
             closeLabel: $label,
         );
+        $next->width = $this->width; // D-67 allocation carry (finding 166)
+        $next->height = $this->height;
+        return $next;
     }
 }
