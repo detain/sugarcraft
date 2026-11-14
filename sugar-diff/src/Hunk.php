@@ -26,6 +26,11 @@ namespace SugarCraft\Diff;
  */
 final class Hunk
 {
+    /** Change-row totals, counted once at construction (sugar-diff-023). */
+    public readonly int $removedTotal;
+
+    public readonly int $addedTotal;
+
     /** @param list<Line> $lines */
     public function __construct(
         public readonly int $oldStart,
@@ -33,7 +38,19 @@ final class Hunk
         public readonly int $newStart,
         public readonly int $newLines,
         public readonly array $lines,
-    ) {}
+    ) {
+        $removed = 0;
+        $added = 0;
+        foreach ($lines as $line) {
+            if ($line->kind === LineKind::Delete) {
+                $removed++;
+            } elseif ($line->kind === LineKind::Insert) {
+                $added++;
+            }
+        }
+        $this->removedTotal = $removed;
+        $this->addedTotal = $added;
+    }
 
     /** The `@@ -a[,b] +c[,d] @@` header line, without its trailing newline. */
     public function header(): string
@@ -57,23 +74,15 @@ final class Hunk
         return $this->lines;
     }
 
-    /** How many `-` rows this hunk carries (deletions only — context excluded). */
+    /** How many `-` rows this hunk carries (deletions only — context excluded). O(1): counted at construction. */
     public function removedCount(): int
     {
-        return array_reduce(
-            $this->lines,
-            static fn (int $carry, Line $line): int => $carry + ($line->kind === LineKind::Delete ? 1 : 0),
-            0,
-        );
+        return $this->removedTotal;
     }
 
-    /** How many `+` rows this hunk carries (additions only — context excluded). */
+    /** How many `+` rows this hunk carries (additions only — context excluded). O(1): counted at construction. */
     public function addedCount(): int
     {
-        return array_reduce(
-            $this->lines,
-            static fn (int $carry, Line $line): int => $carry + ($line->kind === LineKind::Insert ? 1 : 0),
-            0,
-        );
+        return $this->addedTotal;
     }
 }
