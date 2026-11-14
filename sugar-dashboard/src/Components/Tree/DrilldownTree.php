@@ -6,6 +6,7 @@ namespace SugarCraft\Dashboard\Components\Tree;
 
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Dashboard\Components\Nav\Breadcrumb;
 use SugarCraft\Dashboard\Layout\StackLayout;
 use SugarCraft\Dashboard\Foundation\ColorMode;
@@ -315,13 +316,20 @@ final class DrilldownTree implements \SugarCraft\Dashboard\Foundation\SizedItem
             $breadcrumb = Breadcrumb::new($breadcrumbItems);
             $breadcrumb = $breadcrumb->withSeparator('›');
             $breadcrumbStr = $breadcrumb->setSize($useWidth - 2, 1)->render();
-            $result .= $v . mb_substr($breadcrumbStr, 0, $useWidth - 2) . $v . "\n";
+            // Cell math, not code points: the old mb_substr counted escapes and
+            // a short crumb left the right wall adrift (finding 048).
+            $breadcrumbStr = Width::padRight(Width::truncateAnsi($breadcrumbStr, $useWidth - 2), $useWidth - 2);
+            $result .= $v . $breadcrumbStr . $v . "\n";
         }
 
         // Render tree content
         $content = $this->renderNode($this->root, 0, $useWidth - 4);
         foreach (explode("\n", $content) as $line) {
-            $result .= $v . mb_substr(str_pad($line, $useWidth - 2), 0, $useWidth - 2) . $v . "\n";
+            // str_pad counted bytes and mb_substr counted code points; with SGR
+            // in the line both were wrong (finding 048 - escape bytes ate the
+            // budget and the sliced reset bled color past the wall).
+            $line = Width::padRight(Width::truncateAnsi($line, $useWidth - 2), $useWidth - 2);
+            $result .= $v . $line . $v . "\n";
         }
 
         // Bottom border
@@ -374,7 +382,10 @@ final class DrilldownTree implements \SugarCraft\Dashboard\Foundation\SizedItem
             $nodeLine .= Ansi::reset();
         }
 
-        $result .= mb_substr($nodeLine, 0, $maxWidth) . "\n";
+        // Cell-aware slice: mb_substr ate the budget with escape bytes and,
+        // when the cut landed inside a colored span, dropped the trailing
+        // reset so the color bled down the frame (finding 048).
+        $result .= Width::truncateAnsi($nodeLine, $maxWidth) . "\n";
 
         // Render children if expanded
         if ($this->expanded && !empty($node->children)) {

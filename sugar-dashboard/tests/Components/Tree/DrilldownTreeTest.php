@@ -220,4 +220,76 @@ final class DrilldownTreeTest extends TestCase
         $this->assertSame([], $original->navigationStack(), 'withPath must not touch the receiver');
         $this->assertSame(['child'], $changed->navigationStack());
     }
+
+    // ═══ D-31 / finding 048: cell math on the frame, not code points ═══
+
+    public function testStyledFrameLinesAllCarryTheSameCellWidth(): void
+    {
+        $child = new TreeNode(id: 'child', label: 'Child', value: 1.0);
+        $root = (new TreeNode(id: 'root', label: 'Root with an extremely long label that cannot possibly fit inside forty cells at all', value: 0.0))
+            ->withChildren([$child]);
+
+        $tree = DrilldownTree::new($root)
+            ->withNodeColor(Color::ansi(4))
+            ->withPath('child')
+            ->setSize(40, 10);
+
+        $lines = explode("\n", $tree->render());
+        $this->assertGreaterThan(3, count($lines));
+
+        foreach ($lines as $line) {
+            $this->assertSame(40, \SugarCraft\Core\Util\Width::string($line), 'line escapes or falls short of the 40-cell frame: ' . \SugarCraft\Core\Util\Width::string($line));
+        }
+
+        foreach (array_slice($lines, 1, -1) as $line) {
+            $this->assertStringEndsWith('│', $line);
+        }
+    }
+
+    public function testTruncatedStyledRowKeepsItsResetInsideTheFrame(): void
+    {
+        // The old mb_substr could slice inside a colored span and drop the
+        // trailing reset - the color then bled over the wall and past it.
+        $root = new TreeNode(id: 'root', label: str_repeat('wide', 30), value: 0.0);
+        $tree = DrilldownTree::new($root)->withNodeColor(Color::ansi(4))->setSize(40, 10);
+
+        $styled = null;
+        foreach (explode("\n", $tree->render()) as $line) {
+            if (str_contains($line, "\x1b[")) {
+                $styled = $line;
+                break;
+            }
+        }
+
+        $this->assertNotNull($styled, 'expected a styled row in a colored tree');
+        $this->assertStringNotContainsString("\x1b[", substr($styled, -1), 'nothing may trail the closing wall');
+        $this->assertStringEndsWith('│', $styled);
+        $this->assertStringContainsString("\x1b[0m", $styled, 'the reset must survive the cut inside the row');
+    }
+
+    public function testDoubleWidthLabelsStayInsideTheCellBudget(): void
+    {
+        // mb_substr counted code points, so CJK labels doubled past the wall.
+        $root = new TreeNode(id: 'root', label: str_repeat('中文标签', 12), value: 0.0);
+        $tree = DrilldownTree::new($root)->setSize(40, 8);
+
+        foreach (explode("\n", $tree->render()) as $line) {
+            $this->assertSame(40, \SugarCraft\Core\Util\Width::string($line));
+        }
+    }
+
+    public function testBreadcrumbRowIsPaddedUpToTheWalls(): void
+    {
+        $child = new TreeNode(id: 'child', label: 'Child', value: 1.0);
+        $root = (new TreeNode(id: 'root', label: 'Root', value: 0.0))->withChildren([$child]);
+        $tree = DrilldownTree::new($root)->withPath('child')->setSize(40, 10);
+
+        $lines = explode("\n", $tree->render());
+        $crumb = $lines[1];
+
+        $this->assertStringStartsWith('│', $crumb);
+        $this->assertStringEndsWith('│', $crumb);
+        $this->assertStringContainsString('child', strtolower($crumb));
+        $this->assertSame(40, \SugarCraft\Core\Util\Width::string($crumb), 'a short breadcrumb used to leave the right wall adrift');
+    }
 }
