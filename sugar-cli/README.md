@@ -17,14 +17,23 @@
 composer require sugarcraft/sugar-cli "@dev"
 ```
 
-> Install note: sibling `sugarcraft/*` packages track `@dev` and the monorepo sets
+> Install note: sibling `sugarcraft/*` packages track `dev-master` (the same
+> constraint sugar-cli's own manifest uses for its deps), and the monorepo sets
 > `minimum-stability: dev` with `prefer-stable: true`. A consumer pinning stable releases
 > only should mirror that pair in its own root manifest or install fails to resolve.
 
-sugar-cli — opinionated **CLI presentation helpers** that turn ordinary
-command-line output into something that matches the rest of the
-SugarCraft stack, for PHP 8.3+. sugar-cli is library-only — drop it into any
-Composer project, no Symfony Console requirement.
+Built on two siblings only: `sugarcraft/sugar-core` (the `ColorProfile`
+detection ladder and ANSI-aware width primitives) and `sugarcraft/sugar-style`
+(`Style` and `Border` value objects). In this monorepo it is consumed in-tree
+by `candy-code`'s help page (`candy-code/src/Cli/Help.php`, via `HelpText`)
+and `candy-sql`'s terminal chrome (`candy-sql/src/Terminal/BorderFrame.php`,
+via `Frame`).
+
+sugar-cli is **opinionated about pixels, silent about process**: CLI
+presentation helpers that turn ordinary command-line output into something
+that matches the rest of the SugarCraft stack, for PHP 8.3+. sugar-cli is
+library-only — drop it into any Composer project, no Symfony Console
+requirement.
 
 ```php
 <?php
@@ -39,7 +48,7 @@ echo StatusLine::warn('disk almost full'), "\n";
 echo StatusLine::error('connection refused'), "\n";
 ```
 
-## Components
+## Presenters
 
 - **`Theme`** — palette of `SugarCraft\Style\Style` objects keyed by status
   level (success / error / warn / info / prompt / accent / muted).
@@ -80,14 +89,23 @@ echo StatusLine::error('connection refused'), "\n";
 - **`StatusLine`** — `success` / `error` / `warn` / `info` / `prompt` static
   helpers returning a themed glyph + space + message. Only
   the glyph is styled; the space and the message itself stay plain. The severity
-  glyphs (✓ ✗ ⚠ ℹ and the prompt) are plain Unicode — they survive every
-  degraded profile, so a status line is never colour-only: screen readers and
-  log greps still see them. Every call takes a
+  glyphs (✓ ✗ ⚠ ℹ) are single-cell Unicode and the prompt is a plain
+  `?` — they survive every degraded profile, because the downgrade ladder
+  governs escape bytes only, never characters. A status line is therefore
+  never color-only: screen readers and log greps still see them (the UTF-8
+  assumption behind those characters is its own contract — see
+  Output assumptions below). Every call takes a
   trailing `int|AutoWidth|null $width` budget: an over-long message is
   clipped with `…` to fit (the glyph is never clipped; `null` renders the
-  full message).
+  full message). At a budget too small to fit glyph plus separator space,
+  the line collapses to the styled glyph alone — the message is gone, but
+  the status is still readable.
 - **`Banner`** — render a bordered title block with optional subtitle,
-  rounded by default. Useful for app intros / `--version` output.
+  rounded by default (a sugar-style `Border`; `Border::ascii()` is the
+  code-page-safe variant). Useful for app intros / `--version` output.
+  Unlike the other width-aware presenters, `Banner::title()` hard-cuts
+  its lines at the box edge — no `…` — because the border itself is the
+  truncation marker.
 - **`Logo`** — Unicode box-drawing text art: `Logo::sugarcraft()` (66
   cells wide, deliberately not clamped to the terminal) plus
   `Logo::fromAscii($art)` for custom multi-line art. All escape bytes —
@@ -100,8 +118,8 @@ echo StatusLine::error('connection refused'), "\n";
   rather than overflowing the line. Omitted `width` defaults to the
   terminal width (exported `COLUMNS`, else 80 cells). `null` opts out of
   the cap and the fill, not of the line: `header()`/`subHeader()` render
-  label plus a single trailing rune, and `rule()` renders a fixed
-  two-cell dash.
+  label plus a single trailing rune, and `rule()` renders two cells of
+  the rule rune (default `─`, U+2500).
 - **`Stage`** — per-line step renderers for progressive CLI output:
   `step()` (numbered), `subStep()`, and `subStepWithProgress()` (bar or
   spinner). Messages take the same width budget as `StatusLine` (tree
@@ -109,7 +127,14 @@ echo StatusLine::error('connection refused'), "\n";
   reserved before the message is measured). `subStepWithProgress()` also
   takes a trailing `?int $frame` to pin the spinner glyph whenever bytes
   must be deterministic (goldens, recorded sessions); omitted, it walks
-  the wall clock.
+  the wall clock. The stage glyphs are public constants — `Stage::GLYPH_ARROW`,
+  `Stage::GLYPH_BULLET`, `Stage::GLYPH_HASH` — and the spinner walks
+  `Stage::SPINNER_FRAMES` (ten braille frames); at a width too small to fit the
+  prefix, bar and suffix together, the bar is dropped and the line degrades to
+  the `subStep()` shape. Both counters are clamped before any drawing —
+  negatives floor to 0 and `$current` never exceeds `$total` — so a corrupt
+  counter yields a full bar, never a broken one: the presenter does not trust
+  caller math.
 - **`HelpText`** — `--help` page: `USAGE` (retitle via the `usageLabel`
   parameter), an optional description, and titled two-column
   `KEY  description` sections. `HelpText::render($usage, $sections,
@@ -124,7 +149,8 @@ echo StatusLine::error('connection refused'), "\n";
   section titles are never wrapped or cut — in stacked mode a very long
   key overflows the width on its own line, and in grid mode it widens
   the whole key column (pushing descriptions toward their one-cell wrap
-  floor), so keep keys short either way. `renderRows()` renders
+  floor), so keep keys short either way; the stacked continuation indent is
+  `HelpText::STACKED_INDENT` (6 cells). `renderRows()` renders
   just the key/description grid, and `renderPage()` renders a complete
   pre-composed page without re-wrapping it by default (`null`); pass an
   `int`/`AutoWidth` to word-wrap over-long rows.
@@ -161,6 +187,33 @@ echo StatusLine::error('connection refused'), "\n";
   its content; `HelpText::renderPage()` takes the full
   `int|AutoWidth|null` sentinel and `null` means never re-wrap.
 
+## Output assumptions
+
+**Charset.** The color ladder (see `Theme::detect()` above) governs escape
+bytes only — it says nothing about the character set. sugar-cli emits hard
+UTF-8: the severity glyphs (`✓ ✗ ⚠ ℹ`, plus the plain `?` prompt), the
+`─`/`▸`/`•`/`#` rules and stage glyphs, the braille spinner frames, and
+`Logo`'s box-drawing art are fixed bytes. WHEN THIS BITES: on a legacy
+code-page sink — CP437/CP850 consoles, or `LANG=C`/POSIX locales — those
+bytes corrupt no matter which profile the ladder chose. Remedies: pass a
+custom `$rune` to `Section`, pass `Border::ascii()` to `Banner`, or hand
+`Logo::fromAscii()` plain art. `Frame` and `StatusLine` carry no ASCII
+substitution: `Frame`'s box chrome and the status glyphs stay as emitted, so
+on such a terminal the degraded answer is `Theme::plain()` plus plain
+dash-ruled `Section` lines instead of a frame.
+
+**Motion.** sugar-cli never owns a redraw loop — the caller animates. To
+honor a user's reduced-motion preference, check
+`\SugarCraft\ColorProfile\Probe::reducedMotion()` (sugar-colorprofile) before
+scheduling spinner frames, and prefer the determinate progress bar, or pin
+`$frame` to keep output byte-stable without animation.
+
+**Overflow.** The cut policy is split by design. Budgeted text that gets
+wide — `Section` labels, `StatusLine`/`Stage` messages, `Frame` titles and
+body rows — is clipped with a trailing `…`. `Banner::title()` is the named
+exception: it hard-cuts at the box edge with no ellipsis, because the closed
+border *is* the truncation marker.
+
 ## What this is not
 
 sugar-cli is the **presentation half** of a CLI: it renders strings and
@@ -174,6 +227,14 @@ leaves every other decision to you.
 - **No interaction machinery.** Line editing and prompts live in
   `sugar-readline`; scripted TUI shells in `candy-scriptui`. This library
   only decorates the text you already decided to print.
+- **No bundled translations.** sugar-cli ships no language catalog: every
+  visible string is caller text, and the library's own characters (glyphs,
+  rules) are structure, not words. Localize in the app and pass translated
+  arguments in.
+- **No user configuration.** sugar-cli reads no config file and writes no
+  state — fang's `fang.json` user-theme loading is the application's job.
+  `Theme` is the persistence boundary: your chosen palette arrives as an
+  argument and never from disk.
 - **No shell-outs, and width never touches a device.** Width comes from
   the environment or an explicit parameter — see `AutoWidth` above; the
   library never issues a terminal ioctl to measure one. (Theme detection
