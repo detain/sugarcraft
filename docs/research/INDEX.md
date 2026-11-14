@@ -61,6 +61,7 @@ To implement an item:
 | **sugar-ssh-server** | [research/libraries/sugar-ssh-server-research.md](libraries/sugar-ssh-server-research.md) | SHIPPED 2026-11: 1. Context propagation, 2. Channel events, 3. Session metadata (+ auth trio, subsystem, async) — see the doc's Status correction |
 | **candy-ssh-launcher** | [research/libraries/candy-ssh-launcher-research.md](libraries/candy-ssh-launcher-research.md) | 1. proxy_jump, 2. SSH config import, 3. Identity files |
 | **sugar-quickpick** | [research/libraries/sugar-quickpick-research.md](libraries/sugar-quickpick-research.md) | 1. Item interface, 2. Filter injection, 3. Persistent history |
+| **candy-sql** | [research/apps/candy-sql-research.md](apps/candy-sql-research.md) | APP — moved out of libraries/ 2026-11 (SQL-O22); re-derived from code 2026-11-14; open gaps: DDL viewing, total row counts, external editor, undo/redo; star rows frozen at 2026-05 |
 
 ### Rendering & Media
 
@@ -91,7 +92,6 @@ To implement an item:
 | **candy-git** | [research/libraries/candy-git-research.md](libraries/candy-git-research.md) | 1. Context help, 2. Branch ops, 3. Diff panel |
 | **candy-code** | [research/libraries/candy-code-research.md](libraries/candy-code-research.md) | 1. Session persistence, 2. Streaming UI, 3. Context compaction |
 | **candy-mail** | [research/libraries/candy-mail-research.md](libraries/candy-mail-research.md) | 1. TUI infra, 2. Vim keys, 3. Mastodon API |
-| **candy-sql** | [research/libraries/candy-sql-research.md](libraries/candy-sql-research.md) | 1. Schema columns, 2. Pagination, 3. Cell editing |
 | **sugar-treelist** | [research/libraries/sugar-treelist-research.md](libraries/sugar-treelist-research.md) | 1. FilterFunc interface, 2. FuzzyMatch, 3. Match indices |
 | **super-candy** | [research/libraries/super-candy-research.md](libraries/super-candy-research.md) | 1. Copy/move, 2. Bookmarks, 3. Preview |
 | **candy-git-server** | [research/libraries/candy-git-server-research.md](libraries/candy-git-server-research.md) | 1. Interactive TUI, 2. Repo browser, 3. HTTP server |

@@ -1,8 +1,17 @@
 # candy-sql Research: SQLite Browser TUIs
 
-**Date:** 2026-05-13
-**Upstream:** jorgerojas26/lazysql (3,672 stars, Go/tview)
+**Date:** 2026-05-13 · **Refreshed:** 2026-11-14 (SQL-O22)
+**Upstream:** jorgerojas26/lazysql (3,672 stars, Go/tview) — see staleness note below
 **Context:** PHP 8.3+ SugarCraft monorepo, Charmbracelet-inspired TUI patterns
+
+> **STALENESS BANNER (SQL-O22 / once-029):** the star counts in §1 are a
+> frozen 2026-05 landscape — do NOT treat them as current; a 2026-11 re-
+> survey is a research task, not recorded here. Everything about CANDY-SQL
+> itself below was re-derived from the code on 2026-11-14, and future
+> reviews should re-derive from `README.md` + `src/` directly — this file
+> is a design antecedent, not the state authority (once-031). The file also
+> moved: candy-sql is an APP, so it now lives under `docs/research/apps/`
+> with its INDEX row following (it previously sat under `libraries/`).
 
 ---
 
@@ -26,83 +35,105 @@
 | **gobang** | 3,267 | ratatui | ✓ | Multi-DB (MySQL, PG, SQLite) |
 | **dbiewlite** | — | ratatui | ✓ | WASM, DuckDB, parquet |
 
-### 1.3 PHP Implementation (candy-sql)
+### 1.3 PHP Implementation (candy-sql) — re-derived 2026-11-14 from `src/`
 
 | Feature | Current State |
 |---------|---------------|
-| Schema browsing | Tables list only, no tree view |
-| Query execution | Ctrl+Enter runs SQL |
-| Result rendering | Fixed-width 12-char columns, 100 row limit |
-| Data editing | **Not implemented** |
-| Pagination | **Not implemented** |
-| History | Up/Down arrow cycling |
-| Favorites | Ctrl+F / Ctrl+Shift+F |
+| Schema browsing | `SchemaBrowser` sidebar + per-flavor `Schema\{Mysql,Postgres,Sqlite}SchemaProvider` exposing columns, indexes and FK relationships (`SchemaColumn`/`SchemaIndex`/`SchemaForeignKey`) |
+| Query execution | `Ctrl+R`/`Ctrl+E`/`Ctrl+Enter` (aliases share one arm), `Enter` stays a newline in the editor |
+| Parameter binding | `?` / `:name` prompts on the run path, driver-bound via `prepare`/`execute` (SQL-O23); bound runs skip the EXPLAIN route |
+| Result rendering | auto-sized columns, horizontal scroll with a cell cursor, JSON pretty-print, styled NULL token; `ResultTable::rows(limit, offset)` is a paging API (table preview pages 100-row windows via PgDn/PgUp, SQL-O11); the QUERY fetch stays capped at 100 rows (disclosed limitation) |
+| Data editing | cell edit (`e`), row insert (`o`), row delete (`D`) — confirm-then-write DML spine (`DmlBuilder`/`DmlRunner`, transactional, row-count verified) |
+| Transactions | `:tx` / `:tx commit` / `:tx rollback` colon commands on the sync session with a `[TX]` status badge (SQL-O12) |
+| History | ↑/↓ editor recall; PLUS a recorded status-history store with an in-app `H` trend reader (SQL-O13) |
+| Favorites | Ctrl+F / Ctrl+Shift+F, session state (no cross-restart persistence — disclosed) |
+| Async execution | ReactPHP transports with per-dispatch cancellation (`CancellableQuery`) and `Esc` cancel-in-flight (SQL-O08) |
+| Clipboard | `y` yanks the cell under the cursor via OSC 52 with a plain-text fallback for incapable TERMs (SQL-O20) |
+| Key help | `?` overlay generated from one machine-readable `App\KeyMap` roster, cross-checked against the README tables cell-for-cell (SQL-O21) |
+| i18n | 16 locales; locale-parity and no-raw-literals guards in CI |
 
 ---
 
 ## 2. Feature Comparison Matrix
 
+_Candy-sql columns re-derived from the code on 2026-11-14 (SQL-O22); the
+competitor columns remain the 2026-05 snapshot._
+
 ### 2.1 Schema Browsing
 
 | Feature | lazysql | termdbms | tursotui | candy-sql |
 |---------|---------|----------|----------|-------------|
-| Tree view (tables/views/indexes) | ✓ | Limited | ✓ | ✗ |
-| Column types | ✓ | ✓ | ✓ | ✗ |
-| FK relationships | ✓ | ✗ | ✓ | ✗ |
-| Row counts | ✓ | ✗ | ✓ | ✗ |
-| DDL viewing | ✓ | ✗ | ✓ | ✗ |
-| Search/filter | ✓ | ✓ | ✓ | ✗ |
+| Tree view (tables/views/indexes) | ✓ | Limited | ✓ | ✓ (`SchemaBrowser` + per-flavor providers) |
+| Column types | ✓ | ✓ | ✓ | ✓ (`SchemaColumn`) |
+| FK relationships | ✓ | ✗ | ✓ | ✓ (`SchemaForeignKey`, per-flavor providers) |
+| Row counts | ✓ | ✗ | ✓ | ✗ (no total-count display; windowed preview only) |
+| DDL viewing | ✓ | ✗ | ✓ | ✗ (scheduled: SQL-P row, not yet built) |
+| Search/filter | ✓ | ✓ | ✓ | ✓ (`/` filter line over table names, SQL-O10 era) |
 
-**candy-sql gap:** No schema tree, no column metadata, no relationships.
-
-**Specific improvement:** Add `PRAGMA table_info` and `PRAGMA foreign_key_list` queries to show column types and FKs in the rows pane header. Implement tree navigation for tables/views/indexes/triggers.
+**Status (2026-11):** schema tree, column/index/FK metadata and the filter line
+shipped; DDL viewing and a total-row-count display remain open gaps.
 
 ### 2.2 Query Execution
 
 | Feature | lazysql | termdbms | tursotui | candy-sql |
 |---------|---------|----------|----------|-------------|
 | SQL editor | ✓ | ✓ | ✓ | ✓ |
-| Ctrl+Enter execute | ✓ | ✗ | ✓ | ✓ |
+| Ctrl+Enter execute | ✓ | ✗ | ✓ | ✓ (plus Ctrl+R/Ctrl+E aliases) |
 | External editor | ✓ | ✗ | ✗ | ✗ |
-| Parameter binding | ✓ | ✗ | ✓ | ✗ |
-| Explain query | ✗ | ✗ | ✓ | ✗ |
-| Query history | ✓ | ✓ | ✓ | ✓ |
-| Saved queries/snippets | ✓ | ✓ | ✓ | ✗ |
+| Parameter binding | ✓ | ✗ | ✓ | ✓ (`?`/`:name` prompt → bound `prepare`/`execute`, SQL-O23) |
+| Explain query | ✗ | ✗ | ✓ | ✓ (per-flavor `Explain\*Provider` trio, SQL-O09) |
+| Query history | ✓ | ✓ | ✓ | ✓ (editor recall + recorded status-history `H` trend, SQL-O13) |
+| Saved queries/snippets | ✓ | ✓ | ✓ | ✓ session-scoped (favorites; no persistence — disclosed) |
 
-**candy-sql gap:** No saved queries/snippets. No explain plan.
-
-**Specific improvement:** Add snippet/favorites to query history. Implement `EXPLAIN QUERY PLAN` display.
+**Status (2026-11):** every Priority-2/4/5 recommendation from §4 has shipped;
+external-editor handoff remains the one open row.
 
 ### 2.3 Result Rendering
 
 | Feature | lazysql | termdbms | tursotui | candy-sql |
 |---------|---------|----------|----------|-------------|
-| Virtual scrolling | ✓ | Limited | ✓ | ✗ |
-| Horizontal scroll | ✓ | ✓ | ✓ | ✗ |
-| JSON pretty-print | ✓ | ✓ | ✓ | ✗ |
-| NULL visualization | ✓ | ✓ | ✓ | ✗ |
-| Type-aware display | ✓ | ✗ | ✓ | ✗ |
-| Copy cell | ✓ | ✓ | ✓ | ✗ |
-| Pagination | ✓ | ✓ | ✓ | ✗ |
-
-**candy-sql gap:** Fixed 100-row limit, no pagination, no horizontal scroll, no NULL/JSON formatting.
-
-**Specific improvement:** Implement OFFSET/LIMIT pagination with page navigation. Use `is_null` check and `json_decode` for pretty-printing.
+| Virtual scrolling | ✓ | Limited | ✓ | ✓ (viewport windowing in `ResultTable`) |
+| Horizontal scroll | ✓ | ✓ | ✓ | ✓ (cell cursor with scroll-follow) |
+| JSON pretty-print | ✓ | ✓ | ✓ | ✓ |
+| NULL visualization | ✓ | ✓ | ✓ | ✓ (styled NULL token) |
+| Type-aware display | ✓ | ✗ | ✓ | ✓ |
+| Copy cell | ✓ | ✓ | ✓ | ✓ (`y` → OSC 52 + plain fallback, SQL-O20) |
+| Pagination | ✓ | ✓ | ✓ | ✓ (100-row windows, PgDn/PgUp; QUERY fetch itself stays 100-capped — disclosed) |
 
 ### 2.4 Data Editing
 
 | Feature | lazysql | termdbms | tursotui | candy-sql |
 |---------|---------|----------|----------|-------------|
-| Cell edit | ✓ | ✓ | ✓ | ✗ |
-| Row insert | ✓ | ✓ | ✓ | ✗ |
-| Row delete | ✓ | ✓ | ✓ | ✗ |
-| Undo/redo | ✗ | ✓ | ✓ | ✗ |
-| CSV import | ✓ | ✓ | ✗ | ✓ |
-| CSV export | ✓ | ✓ | ✓ | ✓ |
+| Cell edit | ✓ | ✓ | ✓ | ✓ (`e`, confirm-then-write `DmlRunner`) |
+| Row insert | ✓ | ✓ | ✓ | ✓ (`o` column stepper) |
+| Row delete | ✓ | ✓ | ✓ | ✓ (`D`, DELETE preview + confirm) |
+| Undo/redo | ✗ | ✓ | ✓ | ✗ (staged commits on PerfSchema ≠ editor undo) |
+| CSV import | ✓ | ✓ | ✗ | ✓ (`i` file line, SQL-O07) |
+| CSV export | ✓ | ✓ | ✓ | ✓ (`x`/`Ctrl+S`, full-table streaming with COUNT verify) |
 
-**candy-sql gap:** No data editing at all. CSV import/export exists in Database class but not wired to UI.
+**Status (2026-11):** the DML spine is live and transactional; a cross-edit
+undo/redo stack is the remaining gap and is NOT scheduled.
 
-**Specific improvement:** Add cell-level editing mode. Wire CSV import/export to keyboard shortcuts.
+### 2.5 Where candy-sql now EXCEEDS lazysql (once-031 process ledger)
+
+Recorded so future reviews stop calling these "drift" — they are deliberate
+divergences from the 2026-05 baseline:
+
+- **Destructive-arm model:** `KILL`-style actions (`K`/`X` → `y`, `D` two-press,
+  `:tx rollback` re-arm) require an explicit second intent; any other key
+  cancels. lazysql fires writes on first press.
+- **CancellableQuery machinery:** async transports carry per-dispatch
+  cancellation tokens; `Esc` cancels an in-flight read (SQL-O08) — lazysql
+  has no cancel.
+- **CommitPlanner / ChangeTracker:** the Performance Schema page stages a
+  reviewable multi-change commit (show, then `c`/`y` to fire) instead of
+  writing on click.
+- **Colon transaction control** (`:tx …`) with a `[TX]` badge on a sync session.
+- **Generated key help:** the `?` overlay renders from `App\KeyMap`, which is
+  cross-checked against the README tables — a roster that cannot lie.
+- **16-locale i18n** with CI parity guards; upstream is English-only.
+- **Admin dashboard suite:** eight pages, alert dedupe, GTID editor, TLS gate,
+  reconnect circuit breaker — beyond the lazysql feature set entirely.
 
 ---
 
@@ -180,16 +211,17 @@ loop {
 ### 3.4 candy-sql (PHP/Charmbracelet ports)
 
 ```php
-// Current: BubbleTea-inspired Model
+// Current: BubbleTea-inspired Model, state split into seven readonly groups
 final class App implements Model
 {
     public function __construct(
-        public readonly Database $db,
-        public readonly array $tables = [],
-        public readonly int $tableCursor = 0,
-        public readonly ?string $selectedTable = null,
-        public readonly array $rows = [],
-        // ...
+        public readonly ConnectionState $connection,
+        public readonly BrowseState $browse,
+        public readonly QueryState $query,
+        public readonly UiState $ui,
+        public readonly AdminState $admin,
+        public readonly ExportState $io,
+        public readonly EditState $edit,
     ) {}
 
     public function update(Msg $msg): array { /* handle keys */ }
@@ -197,11 +229,18 @@ final class App implements Model
 }
 ```
 
-**Takeaway:** Immutable/fluent pattern. Pure renderer. Simple enum for pane state.
+**Takeaway:** Immutable/fluent pattern. Pure renderer. Enum for pane state;
+the 2026-05 single-bag constructor grew into seven named state groups so each
+prompt/overlay surface owns its own slot.
 
 ---
 
 ## 4. Prioritized Recommendations
+
+_Historical (2026-05): Priorities 1, 2, 3, 5, 6 and 7 below shipped (see §2
+for the per-feature status as re-derived on 2026-11-14); Priority 4 shipped
+as session-scoped favorites. Treat §4-§8 as the original plan-of-record, not
+a to-do list._
 
 ### Priority 1: Schema Browser (High Impact, Medium Effort)
 
