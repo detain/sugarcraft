@@ -143,9 +143,10 @@ implement the `Format` interface (`JsonlFormat`, `CompressedJsonlFormat`,
 `.tape` source and pick the right loader via
 `SugarCraft\Vcr\Format\CassetteLoader`: extension first, then content
 sniff (first non-blank non-comment line — `{` is JSON, a known tape
-directive keyword is a tape source). `.cas`/`.jsonl` files dispatch to
-`JsonlFormat` or `RelativeFormat` depending on whether the first event
-carries `t` or `dt`. Anything else throws `\InvalidArgumentException`.
+directive keyword is a tape source). `.cas`/`.jsonl` files dispatch on the
+first event line (line 2 of the file; line 1 is the header): a `dt` field
+selects `RelativeFormat`, anything else selects `JsonlFormat`. Anything else
+throws `\InvalidArgumentException`.
 
 **Tape vs cassette.** A `.tape` file (the VHS DSL) is compiled
 **through** the Lexer → Parser → Compiler pipeline before it becomes a
@@ -160,7 +161,7 @@ Cassettes support two timestamp modes:
 | Mode | Field | Use case |
 |------|-------|----------|
 | `absolute` (default) | `t` = seconds since cassette start | Playback timing |
-| `relative` | `dt` = interval since previous event (like asciinema v3) | Deterministic replay; easier manual editing |
+| `relative` | interval since previous event (like asciinema v3) — spelled `dt` by `RelativeFormat`, or carried in re-based `t` values by a relative-mode `JsonlFormat` file (see [`docs/CASSETTE.md`](docs/CASSETTE.md)) | Deterministic replay; easier manual editing |
 
 Select the mode at record time via the header you pass `Recorder::open()`:
 
@@ -269,7 +270,7 @@ The core types in `SugarCraft\Vcr\`:
 | `Event` | One recorded line. Fields: `t: float`, `kind: EventKind`, payload `array`. |
 | `EventKind` | Enum: `Resize`, `Input`, `Output`, `Quit`, `Snapshot`, `Hide`, `Show`. |
 | `Recorder` | Record-side. Construct via `Recorder::open($path, ?CassetteHeader $header = null)` — the cassette file is created and tightened to `0600` (owner-only) because cassettes can embed secrets; the header's `timestampMode` decides absolute vs relative. Methods: `withFormat(Format)` (confirms only — throws when the header is not relative), `withHook(Hook)`, `withIdleTrim($threshold, $compressedMax=0.5)`, `recordResize($cols, $rows)`, `recordInputBytes($bytes)`, `recordOutput($bytes)`, `recordQuit()`, `close()`, `captureWriteErrors(): int` (count of failed write/flush attempts — a non-zero total means the cassette is silently incomplete). Helpers `defaultHeader($cols, $rows, $runtime)`, `hooks(): HookRegistry` — `hookErrors(): list<string>` reports the `afterCapture()` hooks that threw during capture (recorded, never swallowed; the `record` command prints them as warnings). Env filtering is `RecordCommand::filteredHostEnv()` — see the [record options](#recording-commands). |
-| `Player` | Replay-side. Factories: `Player::open($path)` (a `.gz` name is routed straight to `CompressedJsonlFormat` without sniffing; any other name content-sniffs the second line — a `dt` field selects `RelativeFormat`, otherwise `JsonlFormat`, so for non-`.gz` names the extension is not consulted), `Player::loadAny($path)` (extension + content sniff via `CassetteLoader`, accepts `.tape` sources). Methods: `withIdleTrim(?float)`, `play(programFactory, ?assertion, speed, ?serializerRegistry, ?timeoutSeconds, skipFirstResize, ?matcher, ?idleThresholdSeconds, useRawTimestamps)`. Constants `SPEED_INSTANT`, `SPEED_REALTIME`, `INSTANT_YIELD_SECONDS`. |
+| `Player` | Replay-side. Factories: `Player::open($path)` (a `.gz` name is routed straight to `CompressedJsonlFormat` without sniffing; any other name content-sniffs the first event line (line 2 of the file; line 1 is the header) — a `dt` field selects `RelativeFormat`, otherwise `JsonlFormat`, so for non-`.gz` names the extension is not consulted), `Player::loadAny($path)` (extension + content sniff via `CassetteLoader`, accepts `.tape` sources). Methods: `withIdleTrim(?float)`, `play(programFactory, ?assertion, speed, ?serializerRegistry, ?timeoutSeconds, skipFirstResize, ?matcher, ?idleThresholdSeconds, useRawTimestamps)`. Constants `SPEED_INSTANT`, `SPEED_REALTIME`, `INSTANT_YIELD_SECONDS`. |
 | `Format\Format` (interface) | `write(Cassette, $path)`, `read($path): Cassette`, `encode(Cassette): string`, `decode(string): Cassette`. Implementations: `JsonlFormat` (default), `CompressedJsonlFormat`, `RelativeFormat`, `YamlFormat`. `AsciinemaFormat` is a read-only importer with `read()` only and implements nothing. |
 | `Format\CassetteLoader` | `load($path): Cassette` — auto-detects cassette vs tape source. `isTape($path): bool` — exposes the sniff. |
 | `ReplayResult` | DTO returned by `Player::play()`. `$ok: bool`, `$diff: string` (empty when `ok`; the assertion diff otherwise), `$eventCount`, `$inputCount`, `$resizeCount`, `$outputCount`, `$quitCount`, `$programQuitCleanly: bool`, `$undecodedInputCount` (input events whose `msg` envelope had no registered decoder and were skipped — `diffSummary()` prints it when non-zero); helper `diffSummary(): string`. |

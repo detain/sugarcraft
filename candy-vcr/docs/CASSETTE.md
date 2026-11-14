@@ -1,9 +1,13 @@
 # Cassette Format
 
 candy-vcr records PTY sessions as streaming JSONL (newline-delimited JSON).
-Each line is a self-contained event. The format is append-only and
-flushes after every event so a crash mid-recording does not lose the
-cassette.
+Each line is a self-contained event. The format is append-only: the
+`Recorder` streams a plain-JSONL cassette and flushes under coalescing doors
+(32 or more buffered events, 64 KiB or more buffered bytes, or a gap of more
+than 100 ms since the previous event — plus an unconditional drain at
+`close()`), so a crash mid-recording loses at most the unflushed tail, never
+the whole tape. A live session's bytes are visible in the file while it runs;
+idle stretches flush promptly.
 
 > **⚠ Security.** A cassette is *data*: replaying one never executes a
 > program. The `.tape` files that cassettes are compiled from are not —
@@ -62,17 +66,24 @@ The full set of kinds is the `EventKind` enum: `output`, `input`,
 Every event line contains at least one timestamp and `k` (event kind).
 Absolute-mode cassettes carry `t` (seconds since cassette start, ms
 precision); relative-mode cassettes (`"timestampMode":"relative"`,
-asciinema-cast style) carry `dt` (interval since the previous event)
-instead:
+asciinema-cast style) carry intervals-since-the-previous-event instead:
 
 ```jsonl
 {"dt":0.001,"k":"output","b":"\u001b[2J\u001b[H"}
 ```
 
+Two codecs spell that interval differently on the wire. `RelativeFormat`
+writes it under `dt`, as above. `JsonlFormat` writing a relative-mode
+cassette keeps the key `t` but its values are intervals — the header's
+`timestampMode` tells readers to re-accumulate. The content sniff keys on
+`dt` only: a relative-mode `JsonlFormat` file has no `dt` field and is
+identified by its header, not the sniff.
+
 `Player::open()` routes a name ending in `.gz` straight to the gzip codec
-(`CompressedJsonlFormat`) without sniffing; any other file is content-sniffed,
-and the `RelativeFormat` decoder is selected when the first event line shows
-`dt` — so for non-`.gz` names the extension is never consulted.
+(`CompressedJsonlFormat`) without sniffing; any other file is content-sniffed
+on the first event line (line 2 of the file; line 1 is the header) — a `dt`
+field selects `RelativeFormat`, anything else selects `JsonlFormat` — so for
+non-`.gz` names the extension is never consulted.
 
 ### `output` — terminal output bytes
 
@@ -83,7 +94,7 @@ and the `RelativeFormat` decoder is selected when the first event line shows
 | Field | Type | Description |
 |-------|------|-------------|
 | `t` | `float` | Compressed timestamp (seconds since cassette start). |
-| `tRaw` | `float` | Present only when idle-trim has been applied after a prior event gap exceeded the threshold. Carries the original wallclock-relative timestamp. |
+| `tRaw` | `float` | Original wallclock-relative timestamp. Present only on events that follow a trimmed idle gap — once `--idle-trim` has compressed a gap, every later event carries it (see the Dual-Timestamp section below). |
 | `k` | `"output"` | Kind discriminant. |
 | `b` | `string` | Output written to the PTY master. ANSI escape sequences survive intact (they are valid ASCII and JSON-escaped); the payload is JSON-encoded with `JSON_INVALID_UTF8_SUBSTITUTE`, so well-formed UTF-8 round-trips byte-exact but invalid bytes land as U+FFFD — lossy for 8-bit streams by design (the Recorder defers torn multibyte tails; base64 transport was declined). |
 
@@ -174,6 +185,27 @@ frame sequence.
 
 ---
 
+## Reserved `_` payload keys
+
+A payload key starting with `_` is reserved for migration metadata; candy-vcr's
+own recording writers never stamp one. The roster today is two keys, both
+introduced by `V1ToV2Migrator` (they belong to v2 — the recorder still writes
+v1, see the Header section):
+
+| Key | Content | Stamped on |
+|-----|---------|------------|
+| `_id` | Zero-based sequential integer, a stable event reference across migrations | every event |
+| `_enc` | Encoding marker, fixed value `"utf-8"` | `output` events only |
+
+v1 defined neither key, so a v1 payload that already carries one is
+**overwritten** by the stamp — never silently: `migrate` warns with the
+collision count (`V1ToV2Migrator::reservedKeyCollisions()`) before writing.
+The `diff` command strips `_id`/`_enc` from both sides by default so a
+migrated cassette compares clean against its original (pass `--strict` to
+keep them in the comparison).
+
+---
+
 ## Dual-Timestamp (`t` + `tRaw`) Format
 
 candy-vcr uses a **compressed timeline** by default: `t` is the number of
@@ -185,7 +217,7 @@ a second timestamp field:
 | Field | Meaning |
 |-------|---------|
 | `t` | Compressed (timeline-shifted) timestamp used by default replay. |
-| `tRaw` | Original wallclock-relative timestamp. Present only on events that follow a trimmed idle gap. |
+| `tRaw` | Original wallclock-relative timestamp. Present only on events that follow a trimmed idle gap — once a gap has been compressed, every later event carries it. |
 
 Replay with `--no-trim` (CLI) or `useRawTimestamps: true` (PHP API) to
 honour `tRaw` and restore the real inter-event cadence. This is useful
@@ -218,5 +250,7 @@ for demos and for reproducing race conditions where timing matters.
 
 Line 1: header with env captured.
 Lines 2–7: events with `t` timestamps.
-The `output` byte `\x1b[?1049h` is the alternate-screen enter (CSI ?1049h);
-the matching `\x1b[?1049l` appears when the program exits alternate screen.
+Escape bytes are written on the JSON wire as `\u001b` and named `ESC` in
+prose. The first `output` line's `ESC[?1049h` is the alternate-screen enter
+(CSI ?1049h); the matching `ESC[?1049l` appears when the program exits
+alternate screen.
