@@ -7,7 +7,7 @@ Output .vhs/inline-image.gif
 Set FontSize 14
 Set Width 900
 Set Height 600
-Set Theme "Dracula"
+Set Theme "TokyoNight"
 
 Type "php examples/inline-image.php examples/fixture-gradient.png 50"
 Enter
