@@ -3,29 +3,31 @@
 /**
  * 'ar' translations for sugar-readline.
  *
- * Keys ride lang/en.php verbatim; %d placeholders are contract.
- * '[y/n]' is key notation and stays untranslated; the English match-suffix
- * %s leg is dropped here (extra sprintf arguments are ignored) until S-10
- * replaces the morphology with full-string plural keys.
+ * Keys ride lang/en.php verbatim; the {placeholder} tokens are contract
+ * (LOCALES.md named-token law — values may reorder them, never rename
+ * them). '[y/n]' is key notation and stays untranslated.
  *
  * @return array<string, string>
  */
 
 declare(strict_types=1);
 
-return [
-    'confirm.yes' => 'نعم',
-    'confirm.no' => 'لا',
-    'confirm.hint' => '[y/n]',
-    'selection.filter_prefix' => '[مرشح] ',
-    'selection.match_count' => ' (%d مطابقة)',
-    'selection.no_matches' => '(لا مطابقات)',
-    'selection.page' => 'صفحة %d/%d',
-    'multiselect.selected' => '[تحديد متعدد] محدد: %d',
-    'multiselect.min' => ' (أدنى %d)',
-    'multiselect.max' => ' (أقصى %d)',
-    'text.invalid_input' => 'إدخال غير صالح',
-    'text.search_reverse' => 'بحث-i-عكسي',
-    'text.search_forward' => 'i-بحث',
-    'text.search_failed' => 'فشل ',
-];
+return array (
+  'confirm.hint' => '[y/n]',
+  'confirm.no' => 'لا',
+  'confirm.yes' => 'نعم',
+  'multiselect.hint' => '[تحديد متعدد] محدد: {count}',
+  'multiselect.hint_max' => '[تحديد متعدد] محدد: {count} (أقصى {max})',
+  'multiselect.hint_min' => '[تحديد متعدد] محدد: {count} (أدنى {min})',
+  'multiselect.hint_min_max' => '[تحديد متعدد] محدد: {count} (أدنى {min}) (أقصى {max})',
+  'selection.filter_prefix' => '[مرشح] ',
+  'selection.matches_one' => ' ({count} مطابقة)',
+  'selection.matches_other' => ' ({count} مطابقة)',
+  'selection.no_matches' => '(لا مطابقات)',
+  'selection.page' => 'صفحة {page}/{of}',
+  'text.invalid_input' => 'إدخال غير صالح',
+  'text.search_line_forward' => '{label}(i-بحث)`{query}\': ',
+  'text.search_line_forward_failed' => '{label}(فشل i-بحث)`{query}\': ',
+  'text.search_line_reverse' => '{label}(بحث-i-عكسي)`{query}\': ',
+  'text.search_line_reverse_failed' => '{label}(فشل بحث-i-عكسي)`{query}\': ',
+);

@@ -143,14 +143,24 @@ final class MultiSelectPrompt
         $bound = $this->displayWidth;
         $lines = [RowFit::row([[Ansi::sanitize($this->label), $this->labelStyle]], $bound)];
 
-        $hintSegments = [[sprintf(Lang::t('multiselect.selected'), count($this->marked)), null]];
-        if ($this->minSelect > 0) {
-            $hintSegments[] = [sprintf(Lang::t('multiselect.min'), $this->minSelect), null];
+        // Whole-sentence hint per LOCALES.md: the min/max arms are separate
+        // keys, not fragments concatenated onto a translated sentence
+        // (English word order must not leak into every locale).
+        $count = count($this->marked);
+        if ($this->minSelect > 0 && $this->maxSelect > 0) {
+            $hintKey = 'multiselect.hint_min_max';
+            $hintParams = ['count' => $count, 'min' => $this->minSelect, 'max' => $this->maxSelect];
+        } elseif ($this->minSelect > 0) {
+            $hintKey = 'multiselect.hint_min';
+            $hintParams = ['count' => $count, 'min' => $this->minSelect];
+        } elseif ($this->maxSelect > 0) {
+            $hintKey = 'multiselect.hint_max';
+            $hintParams = ['count' => $count, 'max' => $this->maxSelect];
+        } else {
+            $hintKey = 'multiselect.hint';
+            $hintParams = ['count' => $count];
         }
-        if ($this->maxSelect > 0) {
-            $hintSegments[] = [sprintf(Lang::t('multiselect.max'), $this->maxSelect), null];
-        }
-        $lines[] = RowFit::row($hintSegments, $bound);
+        $lines[] = RowFit::row([[Lang::t($hintKey, $hintParams), null]], $bound);
 
         $lines[] = $this->renderFilterBar();
 
@@ -169,7 +179,7 @@ final class MultiSelectPrompt
         }
 
         if ($this->totalPages() > 1) {
-            $lines[] = RowFit::row([[sprintf(Lang::t('selection.page'), $this->page + 1, $this->totalPages()), null]], $bound);
+            $lines[] = RowFit::row([[Lang::t('selection.page', ['page' => $this->page + 1, 'of' => $this->totalPages()]), null]], $bound);
         }
 
         return implode("\n", $lines);

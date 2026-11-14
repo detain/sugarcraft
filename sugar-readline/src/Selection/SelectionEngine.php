@@ -316,7 +316,10 @@ trait SelectionEngine
     {
         $segments = [[Lang::t('selection.filter_prefix') . Ansi::sanitize($this->filter), null]];
         if ($this->filter !== '') {
-            $segments[] = [sprintf(Lang::t('selection.match_count'), count($this->filtered), count($this->filtered) === 1 ? '' : 'es'), null];
+            $count = count($this->filtered);
+            // LOCALES.md plural policy: whole sentence per class, chosen at
+            // the call site; English rides zero through _other (' (0 matches)').
+            $segments[] = [Lang::t($count === 1 ? 'selection.matches_one' : 'selection.matches_other', ['count' => $count]), null];
         }
         return RowFit::row($segments, $this->displayWidth);
     }

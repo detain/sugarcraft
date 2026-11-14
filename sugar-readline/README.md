@@ -597,8 +597,14 @@ host that wants localized prompts supplies them pre-localized.
   `T::t('readline.confirm.yes', [], 'ja')`. Applications re-theme any string
   with `T::overrideNamespace('readline', $dir)`.
 - `'confirm.hint'` stays `[y/n]` in every locale: it names the literal keys
-  you press, not a word. The match-count line currently carries English
-  plural morphology; full per-language count keys are a known follow-up.
+  you press, not a word. Count chrome rides whole-sentence keys with named
+  `{placeholder}` tokens per the `LOCALES.md` plural policy —
+  `selection.matches_one`/`matches_other` are chosen at the call site and a
+  translation may reorder its tokens, never rename them.
+- The localized-usage story: the `examples/` ship baked-English prompts
+  (`'Enter your name: '` and friends) because caller-supplied labels are the
+  CORRECT layering — the host that needs a French session passes French
+  labels; the library translates only its own chrome.
 
 ## Accessor deprecation (2026-10-24)
 

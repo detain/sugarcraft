@@ -1,41 +1,55 @@
 <?php
 
-/**
- * English (default) translations for sugar-readline.
- *
- * Source of truth: every key starts here (LOCALES.md). The values are the
- * exact bytes the chrome rendered before i18n existed (S-09 law: zero
- * behavioural diff on the default locale).
- *
- * @return array<string, string>
- */
-
 declare(strict_types=1);
 
+/**
+ * sugar-readline English catalog — SOURCE OF TRUTH.
+ *
+ * Chrome strings only (see README "Internationalization"): labels, choices,
+ * and validator messages are host data and never ride this catalog.
+ *
+ * Values are the exact bytes the chrome rendered before i18n existed; the
+ * era-S-10 pass replaced English morphology splicing (' (%d match%s)' + an
+ * ''/'es' ternary), fragment concatenation (selected + min + max clauses),
+ * and the raw-concat search echo with whole-sentence keys and named
+ * {placeholder} tokens, per the LOCALES.md plural policy. Lookup follows the
+ * AGENTS.md law (exact locale → base language → en → raw key), so an unknown
+ * key surfaces visibly.
+ */
+
 return [
-    // ConfirmationPrompt answers and key hint. '[y/n]' names the literal
-    // keys, so it is key notation, not prose — translated files keep it.
-    'confirm.yes' => 'Yes',
-    'confirm.no'  => 'No',
+    // ConfirmationPrompt chrome. '[y/n]' is key notation, not prose: it
+    // rides verbatim across all locales (the bytes name actual keystrokes).
     'confirm.hint' => '[y/n]',
+    'confirm.no' => 'No',
+    'confirm.yes' => 'Yes',
 
-    // Selection filter bar (shared byte-for-byte by SelectionPrompt and
-    // MultiSelectPrompt via SelectionEngine::renderFilterBar()). The
-    // trailing space of filter_prefix and the leading space of match_count
-    // are part of the painted bytes.
+    // MultiSelectPrompt hint row — one whole sentence per min/max
+    // combination so word order stays the locale's own.
+    'multiselect.hint' => '[multi-select] selected: {count}',
+    'multiselect.hint_max' => '[multi-select] selected: {count} (max {max})',
+    'multiselect.hint_min' => '[multi-select] selected: {count} (min {min})',
+    'multiselect.hint_min_max' => '[multi-select] selected: {count} (min {min}) (max {max})',
+
+    // SelectionEngine filter bar / page footer. matches_one/_other are
+    // whole sentences chosen at the call site (LOCALES.md plural policy);
+    // zero rides _other exactly like English prose does (' (0 matches)').
     'selection.filter_prefix' => '[filter] ',
-    'selection.match_count'   => ' (%d match%s)',
-    'selection.no_matches'    => '(no matches)',
-    'selection.page'          => 'Page %d/%d',
-
-    // MultiSelectPrompt hint row segments.
-    'multiselect.selected' => '[multi-select] selected: %d',
-    'multiselect.min'      => ' (min %d)',
-    'multiselect.max'      => ' (max %d)',
+    'selection.matches_one' => ' ({count} match)',
+    'selection.matches_other' => ' ({count} matches)',
+    'selection.no_matches' => '(no matches)',
+    'selection.page' => 'Page {page}/{of}',
 
     // TextPrompt chrome.
-    'text.invalid_input'   => 'Invalid input',
-    'text.search_reverse'  => 'reverse-i-search',
-    'text.search_forward'  => 'i-search',
-    'text.search_failed'   => 'failed ',
+    'text.invalid_input' => 'Invalid input',
+
+    // Incremental-search echo line — the whole line is the unit so the
+    // failure wording and direction verb stay wherever the language needs
+    // them. {label} arrives pre-sanitized (or styled) from the call site;
+    // {query} is the search needle, kept intact through sanitize so users
+    // see exactly what they typed.
+    'text.search_line_forward' => '{label}(i-search)`{query}\': ',
+    'text.search_line_forward_failed' => '{label}(failed i-search)`{query}\': ',
+    'text.search_line_reverse' => '{label}(reverse-i-search)`{query}\': ',
+    'text.search_line_reverse_failed' => '{label}(failed reverse-i-search)`{query}\': ',
 ];

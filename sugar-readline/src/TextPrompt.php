@@ -1030,10 +1030,10 @@ final class TextPrompt
      */
     private function searchView(): string
     {
-        $direction = $this->searchDirection === self::SEARCH_REVERSE
-            ? Lang::t('text.search_reverse')
-            : Lang::t('text.search_forward');
-        $indicator = ($this->searchFailed ? Lang::t('text.search_failed') : '') . $direction;
+        // Whole-line key (LOCALES.md): direction + failure wording live in
+        // the sentence itself, not in fragments spliced around it here.
+        $lineKey = 'text.search_line_' . ($this->searchDirection === self::SEARCH_REVERSE ? 'reverse' : 'forward')
+            . ($this->searchFailed ? '_failed' : '');
         $labelRaw = Ansi::sanitize($this->label);
         $display = $this->hidden
             ? str_repeat($this->hideMask, self::charCount($this->buffer))
@@ -1054,11 +1054,10 @@ final class TextPrompt
         // on.
         $bound = $this->displayWidth;
         if ($bound !== null && $bound > 0) {
-            $head = $labelRaw . '(' . $indicator . ')`' . $query . "': ";
+            $head = Lang::t($lineKey, ['label' => $labelRaw, 'query' => $query]);
             $avail = $bound - Width::of($head) - 1;
             if ($avail >= 0) {
-                return Ansi::wrap($labelRaw, $this->labelStyle)
-                    . '(' . $indicator . ')`' . $query . "': "
+                return Lang::t($lineKey, ['label' => Ansi::wrap($labelRaw, $this->labelStyle), 'query' => $query])
                     . self::clipToCells($display, $avail)
                     . Ansi::wrap(' ', $this->cursorStyle);
             }
@@ -1066,8 +1065,7 @@ final class TextPrompt
                 . Ansi::wrap(' ', $this->cursorStyle);
         }
 
-        return Ansi::wrap($labelRaw, $this->labelStyle)
-            . '(' . $indicator . ')`' . $query . "': "
+        return Lang::t($lineKey, ['label' => Ansi::wrap($labelRaw, $this->labelStyle), 'query' => $query])
             . $display
             . Ansi::wrap(' ', $this->cursorStyle);
     }

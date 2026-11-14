@@ -25,16 +25,19 @@ final class LangFoundationTest extends TestCase
         'confirm.no' => 'No',
         'confirm.hint' => '[y/n]',
         'selection.filter_prefix' => '[filter] ',
-        'selection.match_count' => ' (%d match%s)',
+        'selection.matches_one' => ' ({count} match)',
+        'selection.matches_other' => ' ({count} matches)',
         'selection.no_matches' => '(no matches)',
-        'selection.page' => 'Page %d/%d',
-        'multiselect.selected' => '[multi-select] selected: %d',
-        'multiselect.min' => ' (min %d)',
-        'multiselect.max' => ' (max %d)',
+        'selection.page' => 'Page {page}/{of}',
+        'multiselect.hint' => '[multi-select] selected: {count}',
+        'multiselect.hint_min' => '[multi-select] selected: {count} (min {min})',
+        'multiselect.hint_max' => '[multi-select] selected: {count} (max {max})',
+        'multiselect.hint_min_max' => '[multi-select] selected: {count} (min {min}) (max {max})',
         'text.invalid_input' => 'Invalid input',
-        'text.search_reverse' => 'reverse-i-search',
-        'text.search_forward' => 'i-search',
-        'text.search_failed' => 'failed ',
+        'text.search_line_reverse' => '{label}(reverse-i-search)`{query}\': ',
+        'text.search_line_forward' => '{label}(i-search)`{query}\': ',
+        'text.search_line_reverse_failed' => '{label}(failed reverse-i-search)`{query}\': ',
+        'text.search_line_forward_failed' => '{label}(failed i-search)`{query}\': ',
     ];
 
     public static function tearDownAfterClass(): void
@@ -72,15 +75,26 @@ final class LangFoundationTest extends TestCase
 
     public function testPlaceholdersSurviveEveryLocaleValue(): void
     {
+        // Named-token contract (LOCALES.md law): a translation may REORDER
+        // {tokens}, never rename or drop them — every locale must carry the
+        // exact token set its en template uses, key by key.
         $dir = dirname(__DIR__) . '/lang';
+        $en = require $dir . '/en.php';
         foreach (glob($dir . '/*.php') as $file) {
             $values = require $file;
-            // %d is contract everywhere; %s may legitimately drop out of a
-            // translated match_count (extra sprintf args are ignored).
-            $this->assertStringContainsString('%d', $values['selection.page'], basename($file));
-            $this->assertStringContainsString('%d', $values['multiselect.selected'], basename($file));
-            $this->assertStringContainsString('%d', $values['multiselect.min'], basename($file));
-            $this->assertStringContainsString('%d', $values['multiselect.max'], basename($file));
+            foreach ($en as $key => $enValue) {
+                preg_match_all('/\{(\w+)\}/', $enValue, $m);
+                $expected = $m[1];
+                sort($expected);
+                preg_match_all('/\{(\w+)\}/', $values[$key], $ml);
+                $actual = $ml[1];
+                sort($actual);
+                $this->assertSame(
+                    $expected,
+                    $actual,
+                    basename($file) . ":{$key} token set must ride en.php verbatim"
+                );
+            }
         }
     }
 
@@ -116,7 +130,7 @@ final class LangFoundationTest extends TestCase
         T::setLocale('fr-fr');
         $this->assertSame('Oui', Lang::t('confirm.yes'), 'fr-fr falls back to fr.php');
         T::setLocale('pt-br');
-        $this->assertStringContainsString('seleção', Lang::t('multiselect.selected'), 'pt-br uses its own file');
+        $this->assertStringContainsString('seleção', Lang::t('multiselect.hint'), 'pt-br uses its own file');
     }
 
     public function testFilterBarBytesStableAcrossBothSurfacesUnderLocale(): void

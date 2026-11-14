@@ -98,7 +98,7 @@ final class SelectionPrompt
         }
 
         if ($this->totalPages() > 1) {
-            $lines[] = RowFit::row([[sprintf(Lang::t('selection.page'), $this->page + 1, $this->totalPages()), null]], $bound);
+            $lines[] = RowFit::row([[Lang::t('selection.page', ['page' => $this->page + 1, 'of' => $this->totalPages()]), null]], $bound);
         }
 
         return implode("\n", $lines);
