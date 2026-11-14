@@ -463,7 +463,10 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withDataPoints(array $dataPoints): self
     {
-        return new self(
+        // D-19: setSize holds the allocation outside the ctor (finding 016,
+        // leg 4/4 plot); rebuilds must re-apply it (and carry the render context)
+        // or the box and the delta channel are both forgotten.
+        $carried = new self(
             dataPoints: $dataPoints,
             type: $this->type,
             widthConstraint: $this->widthConstraint,
@@ -477,6 +480,13 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
             gridColor: $this->gridColor,
             labelColor: $this->labelColor,
         );
+        // the diff-emit context is the other off-ctor field; without the
+        // carry every wither-driven frame silently re-embeds the full box.
+        $carried->renderContext = $this->renderContext;
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -484,7 +494,7 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withType(ChartType $type): self
     {
-        return new self(
+        $carried = new self(
             dataPoints: $this->dataPoints,
             type: $type,
             widthConstraint: $this->widthConstraint,
@@ -498,6 +508,13 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
             gridColor: $this->gridColor,
             labelColor: $this->labelColor,
         );
+        // the diff-emit context is the other off-ctor field; without the
+        // carry every wither-driven frame silently re-embeds the full box.
+        $carried->renderContext = $this->renderContext;
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -505,7 +522,7 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withWidth(int $width): self
     {
-        return new self(
+        $carried = new self(
             dataPoints: $this->dataPoints,
             type: $this->type,
             widthConstraint: $width,
@@ -519,6 +536,13 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
             gridColor: $this->gridColor,
             labelColor: $this->labelColor,
         );
+        // the diff-emit context is the other off-ctor field; without the
+        // carry every wither-driven frame silently re-embeds the full box.
+        $carried->renderContext = $this->renderContext;
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -526,7 +550,7 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withHeight(int $height): self
     {
-        return new self(
+        $carried = new self(
             dataPoints: $this->dataPoints,
             type: $this->type,
             widthConstraint: $this->widthConstraint,
@@ -540,6 +564,13 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
             gridColor: $this->gridColor,
             labelColor: $this->labelColor,
         );
+        // the diff-emit context is the other off-ctor field; without the
+        // carry every wither-driven frame silently re-embeds the full box.
+        $carried->renderContext = $this->renderContext;
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -547,7 +578,7 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withGrid(bool $show): self
     {
-        return new self(
+        $carried = new self(
             dataPoints: $this->dataPoints,
             type: $this->type,
             widthConstraint: $this->widthConstraint,
@@ -561,6 +592,13 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
             gridColor: $this->gridColor,
             labelColor: $this->labelColor,
         );
+        // the diff-emit context is the other off-ctor field; without the
+        // carry every wither-driven frame silently re-embeds the full box.
+        $carried->renderContext = $this->renderContext;
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -568,7 +606,7 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withShowValues(bool $show): self
     {
-        return new self(
+        $carried = new self(
             dataPoints: $this->dataPoints,
             type: $this->type,
             widthConstraint: $this->widthConstraint,
@@ -582,6 +620,13 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
             gridColor: $this->gridColor,
             labelColor: $this->labelColor,
         );
+        // the diff-emit context is the other off-ctor field; without the
+        // carry every wither-driven frame silently re-embeds the full box.
+        $carried->renderContext = $this->renderContext;
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -589,7 +634,7 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withShowLabels(bool $show): self
     {
-        return new self(
+        $carried = new self(
             dataPoints: $this->dataPoints,
             type: $this->type,
             widthConstraint: $this->widthConstraint,
@@ -603,6 +648,13 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
             gridColor: $this->gridColor,
             labelColor: $this->labelColor,
         );
+        // the diff-emit context is the other off-ctor field; without the
+        // carry every wither-driven frame silently re-embeds the full box.
+        $carried->renderContext = $this->renderContext;
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -610,7 +662,7 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withXAxisLabel(?string $label): self
     {
-        return new self(
+        $carried = new self(
             dataPoints: $this->dataPoints,
             type: $this->type,
             widthConstraint: $this->widthConstraint,
@@ -624,6 +676,13 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
             gridColor: $this->gridColor,
             labelColor: $this->labelColor,
         );
+        // the diff-emit context is the other off-ctor field; without the
+        // carry every wither-driven frame silently re-embeds the full box.
+        $carried->renderContext = $this->renderContext;
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -631,7 +690,7 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withYAxisLabel(?string $label): self
     {
-        return new self(
+        $carried = new self(
             dataPoints: $this->dataPoints,
             type: $this->type,
             widthConstraint: $this->widthConstraint,
@@ -645,6 +704,13 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
             gridColor: $this->gridColor,
             labelColor: $this->labelColor,
         );
+        // the diff-emit context is the other off-ctor field; without the
+        // carry every wither-driven frame silently re-embeds the full box.
+        $carried->renderContext = $this->renderContext;
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -652,7 +718,7 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withColor(?Color $color): self
     {
-        return new self(
+        $carried = new self(
             dataPoints: $this->dataPoints,
             type: $this->type,
             widthConstraint: $this->widthConstraint,
@@ -666,6 +732,13 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
             gridColor: $this->gridColor,
             labelColor: $this->labelColor,
         );
+        // the diff-emit context is the other off-ctor field; without the
+        // carry every wither-driven frame silently re-embeds the full box.
+        $carried->renderContext = $this->renderContext;
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -673,7 +746,7 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withGridColor(?Color $color): self
     {
-        return new self(
+        $carried = new self(
             dataPoints: $this->dataPoints,
             type: $this->type,
             widthConstraint: $this->widthConstraint,
@@ -687,6 +760,13 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
             gridColor: $color,
             labelColor: $this->labelColor,
         );
+        // the diff-emit context is the other off-ctor field; without the
+        // carry every wither-driven frame silently re-embeds the full box.
+        $carried->renderContext = $this->renderContext;
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -694,7 +774,7 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withLabelColor(?Color $color): self
     {
-        return new self(
+        $carried = new self(
             dataPoints: $this->dataPoints,
             type: $this->type,
             widthConstraint: $this->widthConstraint,
@@ -708,6 +788,13 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
             gridColor: $this->gridColor,
             labelColor: $color,
         );
+        // the diff-emit context is the other off-ctor field; without the
+        // carry every wither-driven frame silently re-embeds the full box.
+        $carried->renderContext = $this->renderContext;
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
