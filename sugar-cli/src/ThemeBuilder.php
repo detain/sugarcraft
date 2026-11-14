@@ -47,18 +47,37 @@ final class ThemeBuilder
      * populated would silently render some lines unstyled, so a missing
      * style is an authoring error, not a default.
      *
+     * Building CLEARS the slate: a reused builder that kept the previous
+     * theme's slots would silently merge old styling into a half-specified
+     * new theme — wrong bytes with no error at any call site. After
+     * build() the next pass must re-set all seven slots (or hear the
+     * same authoring-error complaint a fresh builder makes).
+     *
      * @throws \InvalidArgumentException if any of the seven slots is still unset
      */
     public function build(): Theme
     {
+        // Snapshot, clear, then validate the snapshot: the throws below see
+        // exactly the caller's slots, while the object itself is left empty.
+        $success = $this->success;
+        $error   = $this->error;
+        $warn    = $this->warn;
+        $info    = $this->info;
+        $prompt  = $this->prompt;
+        $accent  = $this->accent;
+        $muted   = $this->muted;
+
+        $this->success = $this->error = $this->warn = $this->info = null;
+        $this->prompt = $this->accent = $this->muted = null;
+
         return new Theme(
-            success: $this->success ?? throw new \InvalidArgumentException('ThemeBuilder::build(): success style is required (all seven slots must be set).'),
-            error:   $this->error   ?? throw new \InvalidArgumentException('ThemeBuilder::build(): error style is required (all seven slots must be set).'),
-            warn:    $this->warn    ?? throw new \InvalidArgumentException('ThemeBuilder::build(): warn style is required (all seven slots must be set).'),
-            info:    $this->info    ?? throw new \InvalidArgumentException('ThemeBuilder::build(): info style is required (all seven slots must be set).'),
-            prompt:  $this->prompt  ?? throw new \InvalidArgumentException('ThemeBuilder::build(): prompt style is required (all seven slots must be set).'),
-            accent:  $this->accent  ?? throw new \InvalidArgumentException('ThemeBuilder::build(): accent style is required (all seven slots must be set).'),
-            muted:   $this->muted   ?? throw new \InvalidArgumentException('ThemeBuilder::build(): muted style is required (all seven slots must be set).'),
+            success: $success ?? throw new \InvalidArgumentException('ThemeBuilder::build(): success style is required (all seven slots must be set).'),
+            error:   $error   ?? throw new \InvalidArgumentException('ThemeBuilder::build(): error style is required (all seven slots must be set).'),
+            warn:    $warn    ?? throw new \InvalidArgumentException('ThemeBuilder::build(): warn style is required (all seven slots must be set).'),
+            info:    $info    ?? throw new \InvalidArgumentException('ThemeBuilder::build(): info style is required (all seven slots must be set).'),
+            prompt:  $prompt  ?? throw new \InvalidArgumentException('ThemeBuilder::build(): prompt style is required (all seven slots must be set).'),
+            accent:  $accent  ?? throw new \InvalidArgumentException('ThemeBuilder::build(): accent style is required (all seven slots must be set).'),
+            muted:   $muted   ?? throw new \InvalidArgumentException('ThemeBuilder::build(): muted style is required (all seven slots must be set).'),
         );
     }
 }

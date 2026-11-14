@@ -305,6 +305,41 @@ final class ThemeTest extends TestCase
         Theme::build()->success($s)->build();
     }
 
+    /**
+     * SC-TB1 (finding 037): build() clears the slate — a reused builder must
+     * not silently inherit the previous theme's slots. Old behaviour: the
+     * second build() happily returned theme #1's styling for every unset
+     * slot; now it throws exactly like a fresh builder with one slot set.
+     */
+    public function testBuilderSlotsAreClearedAfterBuild(): void
+    {
+        $s = Style::new();
+        $builder = Theme::build()
+            ->success($s)->error($s)->warn($s)->info($s)->prompt($s)->accent($s)->muted($s);
+        $this->assertInstanceOf(Theme::class, $builder->build());
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('success style is required');
+        $builder->build();
+    }
+
+    /** Full re-specification after a build works, and the first theme is untouched. */
+    public function testBuilderIsReusableAfterFullRespec(): void
+    {
+        $s    = Style::new();
+        $bold = Style::new()->bold();
+        $builder = Theme::build()
+            ->success($s)->error($s)->warn($s)->info($s)->prompt($s)->accent($s)->muted($s);
+        $first = $builder->build();
+
+        $second = $builder
+            ->success($bold)->error($s)->warn($s)->info($s)->prompt($s)->accent($s)->muted($s)
+            ->build();
+
+        $this->assertSame($bold, $second->success, 're-set slot wins');
+        $this->assertSame($s, $first->success, 'first theme not mutated');
+    }
+
     /** Nord theme is exercised via auto() and byName('nord') in other tests — do a direct slot check. */
     public function testNordThemeDirectly(): void
     {
