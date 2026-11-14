@@ -7,6 +7,8 @@ namespace SugarCraft\Readline;
 /**
  * Yes / No confirmation prompt.
  *
+ * Port-of-spirit (not literal) of erikgeiser/promptkit `confirmation`.
+ *
  * Selection and submission are decoupled by default: y / n / left / right /
  * tab / space change the selected value but do NOT auto-submit. Call
  * {@see submit()} (or feed {@see Key::Enter}) to commit. With

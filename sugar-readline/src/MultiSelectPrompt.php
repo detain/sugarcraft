@@ -7,6 +7,9 @@ namespace SugarCraft\Readline;
 use SugarCraft\Readline\Selection\SelectionEngine;
 
 /**
+ * Port-of-spirit (not literal) of erikgeiser/promptkit `selection` in
+ * multi-select mode.
+ *
  * Multi-choice selection prompt with cursor navigation, filter, pagination,
  * and minimum / maximum selection enforcement.
  *

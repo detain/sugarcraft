@@ -34,7 +34,11 @@ use SugarCraft\Core\Util\Tty;
  * Mouse / focus / paste events are dispatched to optional callbacks —
  * ignored when no handler is registered.
  *
- * @see Mirrors charmbracelet/bubbletea (input handling).
+ * Port-of-spirit (not literal) of erikgeiser/promptkit - the shared
+ * run-loop plumbing behind its prompts, over sugar-input's decoder. The
+ * declared antecedent family (composer description, docs/MATCHUPS.md upstream
+ * row); the earlier bubbletea cite was a ghost - bubbletea is a different
+ * ecosystem (charmbracelet's app framework) with no readline pump.
  */
 final class Readline
 {

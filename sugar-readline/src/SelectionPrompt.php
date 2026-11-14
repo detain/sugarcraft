@@ -7,6 +7,8 @@ namespace SugarCraft\Readline;
 use SugarCraft\Readline\Selection\SelectionEngine;
 
 /**
+ * Port-of-spirit (not literal) of erikgeiser/promptkit `selection`.
+ *
  * Single-choice selection prompt with case-insensitive substring filtering,
  * cursor navigation, and pagination.
  *
