@@ -382,4 +382,24 @@ final class UnifiedScanTest extends TestCase
         $this->assertSame($projected, UnifiedScan::fileHeaders($rows));
         $this->assertSame([true, true, true, true], array_slice($projected, 0, 4));
     }
+
+    public function testCombinedDiffRowsAreUnnumberedByDesign(): void
+    {
+        // sugar-diff-031: git's combined (--cc) grammar is out of scope — the
+        // @@@ header must NOT be mistaken for a hunk start, or a later
+        // marker-column "improvement" would silently start counting ' -x'
+        // rows as numbered deletes.
+        $combined = '@@@ -1,2 -1,4 +1,3 @@@';
+        $this->assertFalse(UnifiedScan::isHunkHeader($combined));
+
+        $rows = array_map(
+            static fn (ScannedLine $row): string => $row->kind->name,
+            UnifiedScan::lines([$combined, ' -x', '+-y', '++z']),
+        );
+        $this->assertSame(
+            ['OutsideHunk', 'OutsideHunk', 'OutsideHunk', 'OutsideHunk'],
+            $rows,
+        );
+        $this->assertSame([false, false, false, false], UnifiedScan::fileHeaders([$combined, ' -x', '+-y', '++z']));
+    }
 }
