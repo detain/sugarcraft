@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SugarTreelist — SugarCraft</title>
-<meta name="description" content="SugarTreelist: List view with box-drawing prefixes, cursor navigation, word-wrap, and live filtering.">
+<meta name="description" content="SugarTreelist: List view with box-drawing prefixes, cursor navigation, word-wrap, and live filtering (host-driven).">
 <meta property="og:title" content="SugarTreelist — SugarCraft">
 <meta property="og:description" content="List view with box-drawing prefixes, cursor navigation, word-wrap, and live filtering.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-treelist.png">
@@ -139,7 +139,7 @@
         <h2>SugarTreelist</h2>
         <p class="detail-sub">List view with box-drawing prefixes, cursor navigation, word-wrap, and live filtering</p>
         <div class="detail-meta">
-          <span class="tag-chip accent">inspired by <a href="https://github.com/treilik/bubblelister" style="color: inherit;">treilik/bubblelister</a></span>
+          <span class="tag-chip accent">port of <a href="https://github.com/charmbracelet/bubbles/tree/main/list" style="color: inherit;">charmbracelet/bubbles/list</a></span>
           <span class="tag-chip">tree</span><span class="tag-chip">list</span><span class="tag-chip">view</span><span class="tag-chip">navigation</span>
         </div>
       </div>
@@ -151,6 +151,7 @@
             <li class="toc-h3"><a href="#install">Install</a></li>
             <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
             <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#accessibility">Accessibility</a></li>
             <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
             <li class="toc-h3"><a href="#api">API</a></li>
             <li class="toc-h2"><a href="#demos">Demos.</a></li>
@@ -160,26 +161,29 @@
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">List view with customizable box-drawing prefixes, cursor navigation, word-wrap, and live filtering. It is a plain final class, not a TEA Model - render it from your host program's view() and feed it input there.</p>
+<p class="lede" style="margin-top: 28px;">List view with box-drawing prefixes, cursor navigation, word-wrap, and live filtering (host-driven). It is a plain final class, not a TEA Model - render it from your host program's view() and feed it input there.</p>
 
     <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-treelist</code></pre>
 
     <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code class="language-php">use SugarCraft\TreeList\{Model, StringItem, DefaultPrefixer};
+    <pre class="code"><code class="language-php">use SugarCraft\TreeList\Model;
 
 // Fluent setters return NEW Models - rebind. Data is immutable; view()
 // mutates the delta-render memo in place, and withoutFilter() with no filter
 // active is an identity return ($this, no clone).
-$model = Model::new()->setWidth(80)->setHeight(24);
-$model = $model->addItem(new StringItem('src/main.php'));
-$model = $model->addItem(new StringItem('src/Model.php'));
-$model = $model->addItem(new StringItem('tests/MainTest.php'));
-$model = $model->setPrefixer(new DefaultPrefixer());
+// Model::tree() = new() + the Default prefixer/suffixer pair; plain new()
+// stays deliberately undecorated, and withPrefixer()/withSuffixer() attach
+// one half at a time (the set* spellings are deprecated aliases).
+$model = Model::tree()
+    ->withWidth(80)
+    ->withHeight(24)
+    ->withItemsFromArray(['src/main.php', 'src/Model.php', 'tests/MainTest.php']);
 
 echo $model->view();
 // Renders the list with a ╭ ├ ╰ box-drawing gutter chosen by item position
-// (│ appears only as a wrap-continuation glyph) and a &gt; item &lt; cursor marker</code></pre>
+// (│ appears only as a wrap-continuation glyph), 1-based line numbers, and
+// the cursor line decorated with the &gt; … &lt; marker pair</code></pre>
 
     <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
@@ -192,12 +196,16 @@ echo $model->view();
             
     </div>
 
+    <h3 id="accessibility" style="margin-top: 40px;">Accessibility</h3>
+    <p>Guide the cursor with text, not color alone: keep a marker glyph (<code>$currentMarker</code>, or your suffixer's) so position survives monochrome terminals and screen readers — relying on <code>withCurrentStyle()</code>'s color by itself is a WCAG 1.4.1 (use of color) warning. <code>withLineStyle('')</code> + <code>withCurrentStyle('')</code> + <code>lines()</code> is the full plain-text mode: <code>lines()</code> never styles and never deltas, which makes it the right reader for assistive and scripted-output hosts.</p>
+    <p>The library emits no color of its own — every style is caller-supplied, so pass empty style strings to emit none; sugar-treelist neither reads nor acts on <code>NO_COLOR</code>. Item text all renders through the frame choke (<code>Model::sweepForFrame</code>), so content can forge neither a frame nor a click zone.</p>
+
     <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-treelist">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-treelist/blob/master/README.md">Full README</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-treelist/tree/master/examples">Runnable examples</a></li>
-      <li>Originally inspired by <a href="https://github.com/treilik/bubblelister">treilik/bubblelister</a> (Go); SugarCraft is developed as a native PHP project.</li>
+      <li>Primary design source <a href="https://github.com/charmbracelet/bubbles/tree/main/list">charmbracelet/bubbles/list</a> (Go) — the ported cursor/filter/render surface; naming and tree-gutter context from <a href="https://github.com/treilik/bubblelister">treilik/bubblelister</a>. SugarCraft is developed as a native PHP project.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
