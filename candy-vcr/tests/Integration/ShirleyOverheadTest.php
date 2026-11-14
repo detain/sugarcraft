@@ -9,6 +9,7 @@ use SugarCraft\Pty\Posix\PosixPump;
 use SugarCraft\Pty\PtySystemFactory;
 use SugarCraft\Pty\PumpOptions;
 use SugarCraft\Vcr\Recorder;
+use SugarCraft\Vcr\Tests\Support\RequiresWorkingPty;
 use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
@@ -35,6 +36,8 @@ use SugarCraft\Vcr\Tests\Support\Stream;
  */
 final class ShirleyOverheadTest extends TestCase
 {
+    use RequiresWorkingPty;
+
     /**
      * Hard ceiling on the recorder overhead ratio. Plan acceptance is
      * "≤ 2 %", but the assertion budget includes CI tolerance.
@@ -52,28 +55,45 @@ final class ShirleyOverheadTest extends TestCase
     /** Hard cap on the total integration runtime (seconds). */
     private const MAX_TOTAL_SEC = 45.0;
 
-    private function requirePtySyscalls(): void
+    private function requirePosixBench(): void
     {
+        // VCR-S45 (finding 049): adopt the shared two-phase gate instead
+        // of the hand-duplicated probe list. The old arms passed every
+        // probe on hosts whose pty-shim was actually dead, so the
+        // benchmark hard-FAILED where it should SKIP; the smoke-spawn
+        // phase now flushes that out first.
         if (PHP_OS_FAMILY === 'Windows') {
             $this->markTestSkipped('This benchmarks PosixPump, the POSIX record path; Windows records through WindowsRecordLoop.');
         }
-        if (!\extension_loaded('ffi')) {
-            $this->markTestSkipped('ext-ffi is required to exercise the libc PTY syscalls.');
-        }
-        if (!\is_readable('/dev/ptmx') || !\is_writable('/dev/ptmx')) {
-            $this->markTestSkipped('/dev/ptmx is unreadable/unwritable on this host.');
-        }
+        $this->requirePtySyscalls();
         if (!\is_executable('/bin/bash')) {
             $this->markTestSkipped('/bin/bash is not executable on this host.');
         }
-        if (!\extension_loaded('pcntl')) {
-            $this->markTestSkipped('ext-pcntl is required for controllingTerminal:true spawns.');
+    }
+
+    /**
+     * Acceptance pin for the gate adoption (finding 049): a not-ok
+     * shared probe must SKIP the benchmark with the probe's reason,
+     * never reach the timing code to hard-FAIL on a host whose
+     * pty-shim is dead.
+     */
+    public function testBrokenPtyProbeSkipsInsteadOfFailing(): void
+    {
+        $cache = new \ReflectionProperty(self::class, 'ptyProbeCache');
+        $cache->setValue(null, ['ok' => false, 'reason' => 'simulated dead shim']);
+        try {
+            $this->requirePosixBench();
+            $this->fail('requirePosixBench() must skip when the PTY gate reports not-ok');
+        } catch (\PHPUnit\Framework\SkippedWithMessageException $e) {
+            $this->assertStringContainsString('simulated dead shim', $e->getMessage());
+        } finally {
+            $cache->setValue(null, null);
         }
     }
 
     public function testRecorderOverheadOnSeq100k(): void
     {
-        $this->requirePtySyscalls();
+        $this->requirePosixBench();
 
         $start = \microtime(true);
 

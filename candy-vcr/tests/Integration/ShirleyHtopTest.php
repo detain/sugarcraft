@@ -9,6 +9,7 @@ use SugarCraft\Vcr\Cli\RecordCommand;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Format\JsonlFormat;
 use SugarCraft\Vcr\Support\Scalars;
+use SugarCraft\Vcr\Tests\Support\RequiresWorkingPty;
 use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
@@ -22,27 +23,26 @@ use SugarCraft\Vcr\Tests\Support\Stream;
  * immediately via -n 1 (one refresh, then quit) with no user
  * interaction required.
  *
- * Skipped when htop is not installed.
+ * Skipped when htop is not installed or when the host fails the shared
+ * working-PTY gate (probes + smoke spawn).
  */
 final class ShirleyHtopTest extends TestCase
 {
+    use RequiresWorkingPty;
+
     private const ALT_SCREEN_ENTER = "\x1b[?1049h";
     private const ALT_SCREEN_LEAVE  = "\x1b[?1049l";
 
     private function requireHtop(): void
     {
-        if (PHP_OS_FAMILY === 'Windows') {
-            $this->markTestSkipped('htop does not exist on Windows.');
-        }
-        if (!\extension_loaded('ffi')) {
-            $this->markTestSkipped('ext-ffi is required for PTY syscalls.');
-        }
-        if (!\is_readable('/dev/ptmx') || !\is_writable('/dev/ptmx')) {
-            $this->markTestSkipped('/dev/ptmx is unreadable/unwritable on this host.');
-        }
-        if (!\extension_loaded('pcntl')) {
-            $this->markTestSkipped('ext-pcntl is required for controllingTerminal:true spawns.');
-        }
+        // VCR-S45 (finding 049): the shared two-phase gate — device/
+        // extension probes AND the one-shot smoke spawn — replaces the
+        // hand-duplicated probe list, which let broken-PTY hosts (all
+        // probes green, shim dead) through to a hard FAIL. The binary
+        // arm stays local: htop just is not installed on many hosts,
+        // and on Windows it never is (findHtop returns null there and
+        // the skip names availability, not the platform).
+        $this->requirePtySyscalls();
         $htop = $this->findHtop();
         if ($htop === null) {
             $this->markTestSkipped('htop is not available on this host.');
@@ -69,6 +69,26 @@ final class ShirleyHtopTest extends TestCase
             return $which;
         }
         return null;
+    }
+
+    /**
+     * Acceptance pin for the gate adoption (finding 049): when the
+     * shared probe reports not-ok, the test SKIPS with the probe's
+     * reason — it never proceeds to a hard FAIL. The cache property is
+     * per-using-class (trait static), so this stays inside this file.
+     */
+    public function testBrokenPtyProbeSkipsInsteadOfFailing(): void
+    {
+        $cache = new \ReflectionProperty(self::class, 'ptyProbeCache');
+        $cache->setValue(null, ['ok' => false, 'reason' => 'simulated dead shim']);
+        try {
+            $this->requireHtop();
+            $this->fail('requireHtop() must skip when the PTY gate reports not-ok');
+        } catch (\PHPUnit\Framework\SkippedWithMessageException $e) {
+            $this->assertStringContainsString('simulated dead shim', $e->getMessage());
+        } finally {
+            $cache->setValue(null, null);
+        }
     }
 
     public function testRecordHtopAltScreenSequence(): void
