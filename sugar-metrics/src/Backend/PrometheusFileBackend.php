@@ -450,24 +450,31 @@ final class PrometheusFileBackend implements Backend
         // base-name scan cannot: a histogram's derived `*_bucket`/`*_count`/
         // `*_sum` lines colliding with real families of that derived name.
         // Fail loud, publish nothing.
+        // MET-SPLITKEY (048): split every key exactly ONCE per flush — the
+        // guard scan and the emit loops share one local [$family, $labels]
+        // map instead of each paying their own strpos + two substr per
+        // series. The map is flush-scoped (accumulators can gain series
+        // between writes), and bytes are unchanged by construction: splitKey
+        // is a pure function of the key.
+        $splits = [];
         $nonHistogramKindNames = [];
         foreach ($this->counters as $key => $_) {
-            $nonHistogramKindNames[self::splitKey($key)[0]] = 'counter';
+            $nonHistogramKindNames[($splits[$key] ??= self::splitKey($key))[0]] = 'counter';
         }
         foreach ($this->upDownCounters as $key => $_) {
-            $nonHistogramKindNames[self::splitKey($key)[0]] = 'up/down counter';
+            $nonHistogramKindNames[($splits[$key] ??= self::splitKey($key))[0]] = 'up/down counter';
         }
         foreach ($this->asyncCounters as $key => $_) {
-            $nonHistogramKindNames[self::splitKey($key)[0]] = 'async counter';
+            $nonHistogramKindNames[($splits[$key] ??= self::splitKey($key))[0]] = 'async counter';
         }
         foreach ($this->asyncGauges as $key => $_) {
-            $nonHistogramKindNames[self::splitKey($key)[0]] = 'async gauge';
+            $nonHistogramKindNames[($splits[$key] ??= self::splitKey($key))[0]] = 'async gauge';
         }
         foreach ($this->gauges as $key => $_) {
-            $nonHistogramKindNames[self::splitKey($key)[0]] = 'gauge';
+            $nonHistogramKindNames[($splits[$key] ??= self::splitKey($key))[0]] = 'gauge';
         }
         foreach ($this->histograms as $key => $_) {
-            $family = self::splitKey($key)[0];
+            $family = ($splits[$key] ??= self::splitKey($key))[0];
             if (isset($nonHistogramKindNames[$family])) {
                 throw new \RuntimeException(Lang::t('prom.two_kinds', [
                     'name' => Util::displaySafe($family),
@@ -492,32 +499,32 @@ final class PrometheusFileBackend implements Backend
         // dirty flags gate that write above (sugar-metrics-024) and are reset
         // here, on the path that actually published.
         foreach ($this->counters as $key => $val) {
-            [$name, $labels] = self::splitKey($key);
+            [$name, $labels] = $splits[$key] ?? self::splitKey($key);
             $guard($name, $labels);
             $body .= $this->headerFor($name, 'counter') . $this->metricLine($name, $labels, $val);
         }
         foreach ($this->upDownCounters as $key => $val) {
-            [$name, $labels] = self::splitKey($key);
+            [$name, $labels] = $splits[$key] ?? self::splitKey($key);
             $guard($name, $labels);
             $body .= $this->headerFor($name, 'gauge') . $this->metricLine($name, $labels, $val);
         }
         foreach ($this->asyncCounters as $key => $val) {
-            [$name, $labels] = self::splitKey($key);
+            [$name, $labels] = $splits[$key] ?? self::splitKey($key);
             $guard($name, $labels);
             $body .= $this->headerFor($name, 'counter') . $this->metricLine($name, $labels, $val);
         }
         foreach ($this->asyncGauges as $key => $val) {
-            [$name, $labels] = self::splitKey($key);
+            [$name, $labels] = $splits[$key] ?? self::splitKey($key);
             $guard($name, $labels);
             $body .= $this->headerFor($name, 'gauge') . $this->metricLine($name, $labels, $val);
         }
         foreach ($this->gauges as $key => $val) {
-            [$name, $labels] = self::splitKey($key);
+            [$name, $labels] = $splits[$key] ?? self::splitKey($key);
             $guard($name, $labels);
             $body .= $this->headerFor($name, 'gauge') . $this->metricLine($name, $labels, $val);
         }
         foreach ($this->histograms as $key => $h) {
-            [$name, $labels] = self::splitKey($key);
+            [$name, $labels] = $splits[$key] ?? self::splitKey($key);
             $body .= $this->headerFor($name, 'histogram');
             // Bucket lines carry a derived identity: the user `le` refusal
             // in histogram() plus the duplicate-series guard below keep the

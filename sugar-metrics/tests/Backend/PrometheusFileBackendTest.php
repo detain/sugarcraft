@@ -694,6 +694,27 @@ final class PrometheusFileBackendTest extends TestCase
     }
 
     /**
+     * sugar-metrics-048: flush() must split each key once, not twice. The
+     * guard scan and the emit loops share one flush-scoped [$family,
+     * $labels] map; the split-reuse is an allocation contract invisible to
+     * the exposition bytes, so it is pinned structurally on the flush()
+     * source (same technique as the staging-name pin above). Re-introducing
+     * a per-pass splitKey — the shape this finding removed — goes red here.
+     */
+    public function testFlushSplitsEachKeyOnceAndReusesAcrossBothPasses(): void
+    {
+        $method = new \ReflectionMethod(PrometheusFileBackend::class, 'flush');
+        $lines  = file((string) $method->getFileName());
+        self::assertIsArray($lines);
+        $body = implode('', array_slice($lines, $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1));
+
+        self::assertStringContainsString('$splits = [];', $body, 'the split map must be flush-scoped, never a property memo');
+        self::assertSame(6, substr_count($body, '($splits[$key] ??= self::splitKey($key))[0]'), 'all six guard loops must read through the shared split map');
+        self::assertSame(6, substr_count($body, '[$name, $labels] = $splits[$key] ?? self::splitKey($key);'), 'all six emit loops must reuse the split computed by the guard pass');
+        self::assertStringNotContainsString('self::splitKey($key)[0]', $body, 'the per-pass double split this finding removed must not return');
+    }
+
+    /**
      * End-to-end probe: two processes flushing the same path concurrently
      * must both succeed (zero child failure, zero parent throws), publish a
      * complete last-writer-wins snapshot, and leave no staging residue.
