@@ -26,10 +26,15 @@ output bytes into a `Terminal` instance.
 - [Architecture](#architecture)
 - [Two Terminal classes](#two-terminal-classes)
   - [Renderer value objects (vcr path)](#renderer-value-objects-vcr-path)
+  - [Parser handlers](#parser-handlers)
+  - [Snapshot](#snapshot)
 - [Parser state machine](#parser-state-machine)
 - [CSI coverage table](#csi-coverage-table)
+  - [DECSET/DECRST mode roster (emulator `ModeHandler`)](#decsetdecrst-mode-roster-emulator-modehandler)
+  - [Line rendition and character sets (`ESC` forms)](#line-rendition-and-character-sets-esc-forms)
 - [OSC coverage](#osc-coverage)
 - [SGR attributes](#sgr-attributes)
+  - [Accessibility (blink and motion)](#accessibility-blink-and-motion)
 - [Background Color Erase (BCE)](#background-color-erase-bce)
 - [Diff API](#diff-api)
 - [Auto-wrap (DECAWM)](#auto-wrap-decawm)
@@ -41,6 +46,7 @@ output bytes into a `Terminal` instance.
 - [Combining characters and wide characters](#combining-characters-and-wide-characters)
 - [Synchronized output (DEC 2026)](#synchronized-output-dec-2026)
 - [Theme catalog](#theme-catalog)
+  - [Theme accessors](#theme-accessors)
 - [Subsystems](#subsystems)
 - [Trust boundary and hostile input](#trust-boundary-and-hostile-input)
 - [Development](#development)
@@ -96,9 +102,14 @@ $cursor = $vt->cursor();
 echo "cursor at {$cursor->row},{$cursor->col}\n";
 ```
 
+The same flow, end to end and runnable, is `examples/feed-and-screenshot.php`
+(`php examples/feed-and-screenshot.php` — feeds a scripted stream and prints
+the resulting grid).
+
 `lines()` echoes the raw grid contents — on bytes from anywhere but your own
-program, read §Trust boundary and hostile input (below) before echoing that
-output anywhere.
+program, treat those bytes as hostile and read
+[Trust boundary and hostile input](#trust-boundary-and-hostile-input) before
+echoing that output anywhere.
 
 > **Captured-stream gotcha (ONLCR).** A real terminal writes line breaks as
 > `\r\n` because the tty layer (ONLCR) expands each `\n` on output. Feeding
@@ -114,9 +125,9 @@ output anywhere.
 | Layer | Class | Role |
 |---|---|---|
 | Facade | `Terminal\Terminal` | Owns a Parser + ScreenHandler; `feed()` drives bytes in |
-| Parser | `AnsiParser\Parser\Parser` | VT500 state machine (owned by **sugar-ansi-parser**; consumed via both facades — `src/Terminal/Terminal.php` and `src/Terminal.php`) — Paul-Williams algorithm, handles partial input, parses subparameters (`:`) |
-| Handler | `AnsiParser\Parser\CsiHandler` | CSI sequence handler contract (owned by sugar-ansi-parser) — vterm's `Parser\CsiHandlerImpl` implements it |
-| Handler | `AnsiParser\Parser\OscHandler` | OSC sequence handler contract (owned by sugar-ansi-parser) — vterm's `Parser\OscHandlerImpl` implements it |
+| Parser | `SugarCraft\AnsiParser\Parser\Parser` | VT500 state machine (owned by **sugar-ansi-parser**; consumed via both facades — `src/Terminal/Terminal.php` and `src/Terminal.php`) — Paul Williams state machine, handles partial input, parses subparameters (`:`) |
+| Handler | `SugarCraft\AnsiParser\Parser\CsiHandler` | CSI sequence handler contract (owned by sugar-ansi-parser) — vterm's `Parser\CsiHandlerImpl` implements it |
+| Handler | `SugarCraft\AnsiParser\Parser\OscHandler` | OSC sequence handler contract (owned by sugar-ansi-parser) — vterm's `Parser\OscHandlerImpl` implements it |
 | Handler | `Handler\ScreenHandler` | Dispatches parser actions to Buffer / Cursor / Sgr / Mode |
 | Screen | `Screen\Screen` | Immutable snapshot — grid copy + cloned ring, so later scrolling never retro-mutates a captured screen |
 | Buffer | `Buffer\Buffer` | Cell grid — `rows × cols` of styled grapheme cells |
@@ -140,13 +151,13 @@ The collision that actually bites is `Cursor`: root `SugarCraft\Vterm\Cursor`
 (the renderer value object — the one `Snapshot::$cursor` holds, a DISTINCT
 class) versus `SugarCraft\Vterm\Cursor\Cursor` (the emulator state class
 carrying the saved row/column pair and `save()`/`restore()`). `Cell` versus
-`Cell\Cell`, by contrast, is NOT a two-class collision — the namespaced name
+`Cell\Cell`, by contrast, is *not* a two-class collision — the namespaced name
 is a `class_alias` shim resolving to the canonical root `Cell`.
 
 | Class | Use case | Methods |
 |-------|----------|---------|
-| `SugarCraft\Vterm\Terminal\Terminal` | Full VT500 emulator — parses CSI/OSC/DCS, maintains Sgr/Mode/Hyperlink/Scrollback. | `new(cols, rows, ?scrollbackSize, ?buffer, ?cursor, ?mode, ?onFocusEvent)` factory — every param after `rows` is optional and named, so focus-event wiring or a pre-set DEC mode never needs positional fillers (`Terminal::new(cols: 80, rows: 24, scrollbackSize: 5000)`; the constructor behind it is `__construct(cols, rows, ?Buffer, ?Cursor, ?Mode, scrollbackSize = 1000, ?onFocusEvent)`, so direct `new Terminal(80, 24, 5000)` TypeErrors on `?Buffer`, not `?int`), `feed(bytes, ?respond)`, `feedAsync(bytes): PromiseInterface<string>`, `feedStream(ReadableStreamInterface, ?respond, ?cancellation): PromiseInterface<string>`, `replies()`, `flush()`, `screen()`, `cursor()`, `cols()`/`rows()` (live grid dimensions read straight from the handler buffer — current after a `resize()`, no `screen()` rebuild), `mode()`, `windowTitle()` (null until the first title), `palette()`, `clipboardEvents()` and `focusEvents()` (both drain-on-read), `resize(cols, rows)`, `isWrapPending()`, `bells(): int` (emulator-only, monotonic across RIS — see the §BEL note), `enableAltScreen()`/`disableAltScreen()`/`isAltScreen()`, plus `with*()` builders — `withTabStops`, `withScrollbackSize` and `withCellPixels` are supported API (`withCellPixels($widthPx, $heightPx)` sizes the advisory XTWINOPS 14t/16t replies), while `withBuffer`, `withCursor`, `withMode` and `withWindowTitle` carry an `@internal` mark in `src/Terminal/Terminal.php`: they are composition seams for tests and the parser path, not supported entry points. Grid intake is bounded by `MAX_COLS`/`MAX_ROWS` (4096 per axis) and `MAX_SCROLLBACK` (1 000 000 rows): `new`, `resize()` and `withScrollbackSize()` reject larger with `InvalidArgumentException` before allocating anything (see §Limits). `create()` is deprecated — use `new()`. |
-| `SugarCraft\Vterm\Terminal` (root) | Lightweight emulator used by candy-vcr's renderer — produces `Snapshot` value objects directly. | `new(cols, rows, ?Theme)` factory (e.g. `Terminal::new(80, 24, $theme)` or named `theme:`; the constructor behind it is `__construct(cols, rows, Buffer, Cursor, Parser, CsiHandlerImpl, OscHandlerImpl, ?Theme)` — five required injected collaborators, so a positional scrollback int like the full-path idiom `new(80, 24, 5000)` TypeErrors on `?Theme` here), `theme()`, `feed(bytes): self` (mutates in place, returns `$this`), `snapshot(float $time = 0.0): Snapshot` (deep-copies the grid), `revision(): int` (counts `feed()`/`flush()` calls only — a direct `grid()` mutation does not bump it), `cursor(): Cursor`, `grid(): Buffer` (the LIVE mutable grid — a borrow, not a snapshot: `put()` through it changes the frame invisibly to `revision()`), `windowTitle(): string` (empty until the first title), `isWrapPending(): bool`, `flush(): void` (drains the parser so trailing OSC side effects land before the next `snapshot()`). `enableAltScreen()`/`disableAltScreen()` exist for interface parity but ALWAYS throw `\LogicException` — alt-screen machinery lives only on the full `Terminal\Terminal`. |
+| `SugarCraft\Vterm\Terminal\Terminal` | Full VT500 emulator — parses CSI/OSC/DCS, maintains Sgr/Mode/Hyperlink/Scrollback. | `new(cols, rows, ?scrollbackSize, ?buffer, ?cursor, ?mode, ?onFocusEvent)` factory — every param after `rows` is optional and named, so focus-event wiring or a pre-set DEC mode never needs positional fillers, `feed(bytes, ?respond)`, `feedAsync(bytes): PromiseInterface<string>`, `feedStream(ReadableStreamInterface, ?respond, ?cancellation): PromiseInterface<string>`, `replies()`, `flush()`, `screen()`, `cursor()`, `cols()`/`rows()` (live grid dimensions read straight from the handler buffer — current after a `resize()`, no `screen()` rebuild), `mode()`, `windowTitle()` (null until the first title), `palette()`, `clipboardEvents()` and `focusEvents()` (both drain-on-read), `resize(cols, rows)`, `isWrapPending()`, `bells(): int` (emulator-only, monotonic across RIS), `enableAltScreen()`/`disableAltScreen()`/`isAltScreen()`, plus `with*()` builders — `withTabStops`, `withScrollbackSize` and `withCellPixels` are supported API (`withCellPixels($widthPx, $heightPx)` sizes the advisory XTWINOPS 14t/16t replies), while `withBuffer`, `withCursor`, `withMode` and `withWindowTitle` carry an `@internal` mark in `src/Terminal/Terminal.php`: they are composition seams for tests and the parser path, not supported entry points. Grid intake is bounded by `MAX_COLS`/`MAX_ROWS` (4096 per axis) and `MAX_SCROLLBACK` (1 000 000 rows): `new`, `resize()` and `withScrollbackSize()` reject larger with `InvalidArgumentException` before allocating anything (see the grid-ceiling bullets under [Trust boundary and hostile input](#trust-boundary-and-hostile-input)). `create()` is deprecated — use `new()`. |
+| `SugarCraft\Vterm\Terminal` (root) | Lightweight emulator used by candy-vcr's renderer — produces `Snapshot` value objects directly. | `new(cols, rows, ?Theme)` factory (e.g. `Terminal::new(80, 24, $theme)` or named `theme:`), `theme()`, `feed(bytes): self` (mutates in place, returns `$this`), `snapshot(float $time = 0.0): Snapshot` (deep-copies the grid), `revision(): int` (counts `feed()`/`flush()` calls only — a direct `grid()` mutation does not bump it), `cursor(): Cursor`, `grid(): Buffer` (the LIVE mutable grid — a borrow, not a snapshot: `put()` through it changes the frame invisibly to `revision()`), `windowTitle(): string` (empty until the first title), `isWrapPending(): bool`, `flush(): void` (drains the parser so trailing OSC side effects land before the next `snapshot()`). `enableAltScreen()`/`disableAltScreen()` exist for interface parity but always throw `\LogicException` — alt-screen machinery lives only on the full `Terminal\Terminal`. |
 
 Grid dimensions read live on both facades; only the shape differs: the root
 exposes public readonly properties (`$term->cols`, `$term->rows`), the full
@@ -162,7 +173,7 @@ $vt = $vt->feed("\x1b[1;1H\x1b[31mhello\x1b[0m");
 $snapshot = $vt->snapshot(time: 1.234);
 ```
 
-The root `Terminal` MUTATES in place — `feed()` writes into the terminal's
+The root `Terminal` *mutates in place* — `feed()` writes into the terminal's
 own grid and returns `$this` purely for chaining (it is not an immutable
 fluent builder). Frames are frozen explicitly: `snapshot()` deep-copies the
 grid, so a captured `Snapshot` never retro-mutates as later feeds land. The
@@ -171,10 +182,23 @@ triple internally. The full `Terminal\Terminal` also mutates in place
 (`feed(): void`) — it's optimised for byte-stream ingest rather than
 per-frame snapshots.
 
+Constructor-shape detail (the factories above wrap real constructors
+whose positional signatures differ from the named-arg idiom):
+
+- The emulator factory forwards to `__construct(cols, rows, ?Buffer, ?Cursor,
+  ?Mode, scrollbackSize = 1000, ?onFocusEvent)`, so a direct
+  `new Terminal(80, 24, 5000)` TypeErrors on `?Buffer`, not on `?int` —
+  positional fillers after `rows` must name their types, or use the factory.
+- The root facade forwards to `__construct(cols, rows, Buffer, Cursor, Parser,
+  CsiHandlerImpl, OscHandlerImpl, ?Theme)` — five required injected
+  collaborators — so the full-path idiom `new(80, 24, 5000)` TypeErrors on
+  `?Theme` here. `Terminal::new(80, 24, $theme)` or named `theme:` is the
+  supported shape.
+
 ### Renderer value objects (vcr path)
 
 The `SugarCraft\Vterm` root namespace provides the value objects behind the
-candy-vcr VHS renderer path. They are NOT a parallel simplified class set:
+candy-vcr VHS renderer path. They are *not* a parallel simplified class set:
 the grid and the cell are the one `Buffer\Buffer` and the one `Cell` SHARED
 by both engines — `Cell\Cell` is a `class_alias` shim over the canonical root
 `Cell` (the two names resolve to the same class after autoload; pinned by
@@ -188,7 +212,7 @@ use SugarCraft\Vterm\Buffer\Buffer;
 use SugarCraft\Vterm\Cell;
 use SugarCraft\Vterm\Cursor;
 
-// Cell — the ONE cell class for both engines: char/grapheme + palette fg (0-255) + bg (0-255)
+// Cell — the one cell class for both engines: char/grapheme + palette fg (0-255) + bg (0-255)
 // + attrs bitfield; the emulator payload fields (sgr/truecolour/hyperlink/rendition) default here
 $cell = new Cell(char: 'X', fg: 196, bg: 21, attrs: Cell::ATTR_BOLD);
 $cell = $cell->withFg(34);            // green foreground
@@ -221,7 +245,7 @@ $cursor = $cursor->shown();          // show cursor
 
 Each handler translates parser actions into handler state mutations:
 
-- `CursorHandler` — CUP, HVP, CUU/CUD/CUF/CUB, CR, LF/VT/FF, BS, RI, HOME, DECSC/USC
+- `CursorHandler` — CUP, HVP, CUU/CUD/CUF/CUB, CR, LF/VT/FF, BS, RI, HOME, DECSC/DECRC (`ESC 7` / `ESC 8`, sharing the general slot with the SCO `CSI s` / `CSI u` aliases)
 - `SgrHandler` — SGR sequences (colour + attributes)
 - `EraseHandler` — ED, EL, ECH
 - `ScrollHandler` — SU, SD, DECSTBM
@@ -274,7 +298,7 @@ the revision, so the counter tracks parser writes, not every borrow.
 
 The VT500 state machine is **not** in this package — it is owned by
 [sugar-ansi-parser](../sugar-ansi-parser/) as
-`SugarCraft\AnsiParser\Parser\Parser`, a Paul Williams machine
+`SugarCraft\AnsiParser\Parser\Parser`, a Paul Williams state machine
 ([reference](https://vt100.net/emu/dec_ansi_parser)) that drives a
 `AnsiParser\Parser\Handler` interface with parsed actions. sugar-vterm
 consumes it directly — both `Terminal\Terminal` and the root `Terminal`
@@ -328,7 +352,7 @@ implements the superset.
 | `F` | CPL | (Handler) | Cursor up N + column 0. |
 | `G` | CHA | (Handler) | Cursor to column N. |
 | `H` | CUP | `cup($row, $col)` | Move cursor to (row, col) 1-indexed. |
-| `I` | CHT | `cht($n=1)` | Cursor forward N tab stops (both engines walk the tab-stop table through the shared `TabHandler`: defaults every 8 columns from 8, clamped to the last column when no stop remains). Shadowed while `?1004 h` is set — the focus intercept consumes any `CSI Ps I` as focus-in before tab handling runs. |
+| `I` | CHT | `cht($n=1)` | Cursor forward N tab stops (both engines walk the tab-stop table through the shared `TabHandler`: defaults every 8 columns from 8, clamped to the last column when no stop remains). Shadowed while `?1004 h` is set — see the focus `I`/`O` rows under DECSET modes. |
 | `J` | ED | `ed($mode=0)` | Erase display: 0=cursor→end, 1=begin→cursor, 2=all, 3=all+scrollback (the emulator drains its scrollback ring and leaves the visible grid alone; the renderer has no ring and arms 0/1/2 only, so mode 3 is a no-op there). |
 | `K` | EL | `el($mode=0)` | Erase line: 0=cursor→eol, 1=bol→cursor, 2=full line. |
 | `L` | IL | `il($n=1)` | Insert N blank lines at cursor. |
@@ -341,7 +365,7 @@ implements the superset.
 | `d` | VPA | (Handler) | Cursor to row N. |
 | `f` | HVP | `hvp($row, $col)` | Same as CUP — move cursor to (row, col). |
 | `g` | TBC | `tbc($mode=0)` | Tab clear: 0=column, 3=all (both engines share the `TabHandler` clear semantics; unknown modes no-op). |
-| `h` | DECSET (private, `?`-prefixed only) | `decset($mode, $prefix)` | Set mode; bare SM without the `?` prefix is inert on both engines (the emulator gate and `CsiHandlerImpl::decset` refuse it). `?7 h` enables DECAWM, `?25 h` cursor visible (`?12 h` is xterm's blinking-text-cursor control, not a BCE gate — accepted and discarded by both engines), `?47/?1047/?1049 h` alt screen, `?1004 h` focus events, `?2026 h` synchronized output, `?6 h` DECOM, `?1000/?1001/?1002/?1003 h` mouse tracking, `?1005/?1006/?1015 h` mouse encoding, `?1048 h` cursor save/restore, `?2004 h` bracketed paste (the renderer's `decset` matches only `?7` and `?25` — every other mode named here is emulator-side state) — full roster below. |
+| `h` | DECSET (private, `?`-prefixed only) | `decset($mode, $prefix)` | Set mode; bare SM without the `?` prefix is inert on both engines (the emulator gate and `CsiHandlerImpl::decset` refuse it). `?7 h` enables DECAWM, `?25 h` cursor visible (`?12 h` accepted and discarded — xterm's blinking-cursor control, not a BCE gate; see [Background Color Erase (BCE)](#background-color-erase-bce)), `?47/?1047/?1049 h` alt screen, `?1004 h` focus events, `?2026 h` synchronized output, `?6 h` DECOM, `?1000/?1001/?1002/?1003 h` mouse tracking, `?1005/?1006/?1015 h` mouse encoding, `?1048 h` cursor save/restore, `?2004 h` bracketed paste (the renderer's `decset` matches only `?7` and `?25` — every other mode named here is emulator-side state) — full roster below. |
 | `l` | DECRST (private, `?`-prefixed only) | `decrst($mode, $prefix)` | Reset mode (mirror of `h`; bare RM without the prefix is inert). |
 | `m` | SGR | `sgr($params)` | Set graphic rendition. Subparam colons (`4:1`..`4:5`) parsed. |
 | `r` | DECSTBM | `decstbm($top, $bottom)` | Set scroll region rows (1-indexed). |
@@ -403,7 +427,7 @@ never encoded:
 | 1048 | Cursor save/restore only (`enterAltScreenCursorOnly`) — no buffer swap.  |
 | 1049 | Full alt screen (`enterAltScreen`): save cursor, switch, clear.          |
 | 2004 | `Mode::$bracketedPaste` — flags that paste arrives bracketed.            |
-| 2026 | `Mode::$syncUpdate` — synchronized output queue (16384-cell budget).     |
+| 2026 | `Mode::$syncUpdate` — synchronized output queue (16384-pending-mutations budget, see [Synchronized output (DEC 2026)](#synchronized-output-dec-2026)). |
 
 Mode 1 (DECCKM — application cursor keys) is intentionally unmodelled: it
 is absent from the roster above, and `?1 h`/`?1 l` are accepted and
@@ -430,7 +454,7 @@ emulator's `ScreenHandler`), and C0 controls (`\b \t \n
 CSI sequences are only half the picture; two `ESC` families change how
 glyphs are drawn and which glyphs a byte means:
 
-| Sequence | Name | Effect. |
+| Sequence | Name | Effect |
 |---|---|---|
 | `ESC # 3` | DECDHL top | Line renders as the top half of a double-height line. |
 | `ESC # 4` | DECDHL bottom | Line renders as the bottom half of a double-height line. |
@@ -452,7 +476,7 @@ SS2/SS3, and restores all four slots to ASCII on `RIS`, `DECSTR`, and
 multi-byte UTF-8 always passes through untranslated.
 `Charset\Charsets` carries the tables (ASCII `B`, DEC Special Graphics
 `0`, UK `A`, No-Break Space `U`) and the `translate()` entry point.
-`Mode::$altScreenVariant` (see Subsystems) is the third
+`Mode::$altScreenVariant` (see Subsystems) is another
 previously-undocumented surface: DECSET `47`/`1047` swap buffers
 without saving, `1048` saves only the cursor, and `1049` saves buffer +
 cursor + SGR with a full restore.
@@ -467,7 +491,10 @@ The default `OscHandlerImpl` (renderer path) implements:
 | `OSC 1;<name> BEL/ST` | `title($name)` | Set icon name — folded onto the same title channel; both engines route 0/1/2 into one slot and store no separate icon name. |
 | `OSC 2;<title> BEL/ST` | `title($title)` | Set window title. |
 | `OSC 8;<id>;<uri> BEL/ST` | `hyperlink($uri, $id)` | Begin/end hyperlink (OSC 8). Empty URI ends the link. |
-| `lastTitle()` | accessor | Most recent title set during the stream. |
+
+Both handler contracts also expose a `lastTitle()` accessor — the most recent
+title set during the stream (not a wire sequence, hence listed here rather
+than in the table).
 
 The full `Handler\OscHandler` (used by `SugarCraft\Vterm\Terminal\Terminal`)
 also handles palette **set** (`OSC 4` — writes only, no query reply;
@@ -526,7 +553,7 @@ Attribute bitfield exposed as `Cell::ATTR_*` constants:
 
 ### Accessibility (blink and motion)
 
-SGR `5` and `6` (slow/rapid blink) fold onto ONE `Sgr::$blink` bit, and
+SGR `5` and `6` (slow/rapid blink) fold onto a single `Sgr::$blink` bit, and
 only the emulator tracks it — the renderer path's cell attribute model
 carries no blink bit at all. DECSCUSR (`CSI <n> SP q`) records the
 blinking-versus-steady cursor shapes verbatim in the `CursorShape`
@@ -541,7 +568,7 @@ the VHS demo GIF loops regardless of viewer settings.
 
 On the DEC model, erase operations (`CSI K`, `CSI J`, `CSI X`) fill cleared
 cells with the current SGR background color instead of a plain blank cell —
-BCE is ALWAYS ON, there is no gate. DEC private mode 12 (`CSI ?12 h`) is
+BCE is *always on*, there is no gate. DEC private mode 12 (`CSI ?12 h`) is
 xterm's blinking-text-cursor control, not a BCE switch, and neither engine
 models it: it is accepted and discarded. BCE prevents "ghosting" in
 terminals with coloured backgrounds — the erased area retains its visual
@@ -606,13 +633,14 @@ $wrapped = $mode->withAutoWrap(true);
 ```
 
 When auto-wrap is **on** (the default, matching xterm/VT/ANSI.SYS), a grapheme landing in the
-rightmost column parks the cursor there arming a deferred (phantom)
+rightmost column parks the cursor there, arming a deferred (phantom)
 wrap; the next grapheme consumes it, moving to column 0 of the next row
 before writing — and if that row is within a scroll region the region
 scrolls up by one line, matching VT100 behaviour. When **off**, the
 cursor clamps at the rightmost column and subsequent graphemes overwrite
-it (the phantom flag is set by geometry alone, so a mid-stream `?7l` /
-`?7h` toggles like xterm).
+it (the phantom flag is set by geometry alone and consulted with the mode at
+the next write, so a mid-stream `?7l` / `?7h` toggle changes the pending
+wrap's outcome exactly as xterm's does — never at arming time).
 
 Scroll regions (DECSTBM, `CSI r`) and auto-wrap interact correctly:
 wrapping at the bottom of a scroll region triggers a scroll within that
@@ -680,7 +708,7 @@ use SugarCraft\Vterm\Terminal\Terminal;
 $vt = Terminal::new(cols: 80, rows: 24, scrollbackSize: 5000);
 
 // Retrospective change — the ring is replaced with a fresh one:
-// ALL accumulated history is dropped, on grow and on shrink alike.
+// All accumulated history is dropped, on grow and on shrink alike.
 $vt = $vt->withScrollbackSize(5000);
 ```
 
@@ -776,8 +804,10 @@ both a `Cursor` and a `Mode` into `ScreenHandler` is the one documented case
 where the pair is taken exactly as supplied — nothing reconciles a disagreeing
 pair there, which is why the two fields are guaranteed equal only for
 terminals the facade built itself. DECSTR
-resets it because xterm's soft reset shares RIS's cursor block and
-`InitCursorShape()` recomputes the style from resources, so a DECSCUSR setting
+resets it because xterm's soft reset shares RIS's cursor block, and RIS
+re-invokes `InitCursorShape()` — xterm's internal that re-derives the cursor
+style from the `cursorStyle` resource (the patch #411 cursor-style machinery)
+— so a DECSCUSR setting
 does not outlive a soft reset.
 
 ## Focus events (mode 1004)
@@ -815,7 +845,7 @@ pass an `onFocusEvent` callback to the constructor.
 - **Normal (width 1):** Written to a single cell.
 - **Combining mark (width 0):** Zero-width code points are not silently discarded.
   Attaching is driven by the sugar-core `Width::string` classification, not by
-  a fixed codepoint range: every zero-width code point (U+0300–U+036F plus the full
+  a fixed code point range: every zero-width code point (U+0300–U+036F plus the full
   U+1AB0–U+1AFF, U+1DC0–U+1DFF, U+20D0–U+20FF, U+FE00–U+FE0F, U+FE20–U+FE2F
   ranges, variation selectors, ZWJ/ZWNJ — anything `Width::string` scores 0)
   is attached to the preceding cell via `Cell::withCombining()` so the base
@@ -879,7 +909,7 @@ all-or-nothing is surrendered only under hostile pressure.
 use SugarCraft\Vterm\Theme;
 use SugarCraft\Vterm\Themes;
 
-// Tokyo Night — the standard theme of the monorepo's .tape demos
+// Tokyo Night — the standard of the monorepo's VHS demos
 $theme = Theme::tokyoNight();
 
 // Index into the 256-color palette
@@ -902,7 +932,7 @@ foreach (Themes::v1() as $name => $theme) {
 foreach (Themes::all() as $name => $theme) {
     echo "$name\n";
 }
-// TokyoNight, TokyoNightLight, TokyoNightStorm, Dracula, SolarizedDark
+// Same five names as above: every bundled theme is v1-ready
 ```
 
 Available themes:
@@ -938,7 +968,7 @@ Each subdirectory of `src/` owns a small piece of VT state:
 | `Buffer\Buffer` | Cell grid storage (`rows × cols` array of `Cell`). | `cell($row, $col)` (either coordinate out of bounds → `Cell::empty()`), `put($row, $col, $cell)` (out-of-grid writes silently ignored), `insertRows($count, $from, ?$top, ?$bottom)`, `deleteRows($count, $from, ?$top, ?$bottom)`, `dirtyRegion()`, `each(): Generator`, `copy(): array`, `clear(): self` (a NEW blank grid of the same size — the receiver is untouched and its dirty box resets; contrast `resize($cols, $rows): self`, which keeps in-bounds content), `equals(self $other): bool` (grid-for-grid comparison), `resize($cols, $rows): self` (refuses dims < 1, repairs wide pairs at the cut, marks the whole viewport dirty). Writes are split by intent: `put()` and the range operations mutate the receiver, while `resize()` and `clear()` return new grids. The silent out-of-bounds behaviour (`cell()` → `Cell::empty()`, out-of-grid `put()` ignored) is load-bearing, not an oversight: the emulator's scroll-region arithmetic reads and clips through these bounds-checked accesses and relies on them never throwing (the cross-lib throw-vs-silent note in `docs/MATCHUPS.md` resolves on the vterm side as documented behaviour). |
 | `Screen\Screen` | Immutable snapshot of Buffer + Scrollback — `fromBuffer()` copies the grid AND clones the ring, so captured screens keep the history they were born with; cell-level diff API. | `fromBuffer($buf, ?$scrollback)`, `lines()` (Generator: full-width rows, combining marks re-appended), `linesWithHistory()` (Generator: scrolled-off rows oldest-first, then visible), `cell($row, $col)` (out-of-bounds in EITHER coordinate returns `Cell::empty()`), `scrollback()` (`?Scrollback` — null when built via `fromBuffer($buf)` without a ring; the full `Terminal\Terminal::screen()` path always wires one), `diff($other)`. |
 | `Screen\Scrollback` | Ring buffer (default 1000 rows) for rows scrolled off the top. | `push($row)` (record a scrolled-off line, evicting the oldest at capacity), `count()`, `maxSize()`, `at($n)`, `all()`, `clear()` (drop every saved row — what `ED 3` calls). |
-| `Cell\Cell` | `class_alias` shim over the canonical root `SugarCraft\Vterm\Cell` — the ONE cell class for both engines (char + grapheme aliases, palette `fg`/`bg`, `attrs` bitfield, optional `Sgr`/truecolour/hyperlink/`Rendition`/combining payload). | Static `empty()`, `continuation($prev)`; `withFg($i)`, `withBg($i)`, `withAttrs($flags)`, `withFgTruecolor(?int)`, `withBgTruecolor(?int)`, `withRendition(Rendition)`, `withCombining($s)`; `sgr()`, `foreground()`/`background()` (`?Color`), `fgRgb()`/`bgRgb()` (`?array`), `colorSgr()`, `equals($other)`. |
+| `Cell\Cell` | `class_alias` shim over the canonical root `SugarCraft\Vterm\Cell` — the one cell class for both engines (char + grapheme aliases, palette `fg`/`bg`, `attrs` bitfield, optional `Sgr`/truecolour/hyperlink/`Rendition`/combining payload). | Static `empty()`, `continuation($prev)`; `withFg($i)`, `withBg($i)`, `withAttrs($flags)`, `withFgTruecolor(?int)`, `withBgTruecolor(?int)`, `withRendition(Rendition)`, `withCombining($s)`; `sgr()`, `foreground()`/`background()` (`?Color`), `fgRgb()`/`bgRgb()` (`?array`), `colorSgr()`, `equals($other)`. |
 | `Cursor\Cursor` | Position + visibility + shape + saved-state. | `withRow($r)`, `withCol($c)`, `withVisible($v)`, `withShape($s)`, `save()`, `restore()`, `equals()`. |
 | `Sgr\Sgr` | Pen state (fg, bg, attrs bitfield, underline style). | `empty()`, `withBold/Italic/Underline/Strikethrough/Blink/Reverse/Dim/Hidden($v)`, `withUnderlineStyle($style)`, `withForeground(?$color)`, `withBackground(?$color)`, `equals()`. |
 | `Sgr\UnderlineStyle` | Enum: `None`/`Single`/`Double`/`Curly`/`Dotted`/`Dashed`. | Backed int enum (`None`=0 … `Dashed`=5); `->value` is the CSI code (no `fromInt()`). |
@@ -977,7 +1007,7 @@ window titles and OSC 8 URIs riding on grid cells — are called out below):
 - **Clipboard / focus events** — OSC 52 and DEC 1004 are *self-armed* by the
   remote program (no capability negotiation), so both logs are 1024-entry
   drop-oldest rings. `clipboardEvents()` and `focusEvents()` drain-on-read.
-- **Synchronized output (DEC 2026) queue** — at most 16384 pending cell writes; past that the
+- **Synchronized output (DEC 2026) queue** — at most 16384 pending mutations; past that the
   queue partially replays to the grid. Atomicity is surrendered only under
   adversarial pressure, never silently dropped.
 - **Per-cell combining marks** — a cell accumulates at most
@@ -987,7 +1017,7 @@ window titles and OSC 8 URIs riding on grid cells — are called out below):
   full). The first marks retained are always kept; a bare-mark flood cannot
   grow any cell.
 - **Scrollback** — bounded ring (default 1000 rows); `withScrollbackSize()`
-  swaps in a FRESH ring on any size change, growing or shrinking — history
+  swaps in a *fresh* ring on any size change, growing or shrinking — history
   accumulated before the call is dropped, not trimmed (pinned by
   `ScrollbackTest::testWithScrollbackSizeReplacesRing`). The renderer path
   keeps no scrollback.
@@ -997,7 +1027,7 @@ window titles and OSC 8 URIs riding on grid cells — are called out below):
   onward propagation (`Sanitize::untrusted()` upstream) — or use the built-in
   sanitized accessor: `windowTitleSanitized()` on both facades routes the
   stored title through `OscHandler::sanitizeControl()`, which strips C0, DEL
-  and C1 codepoints (the parser already swallows ESC, NUL, TAB and CR/LF on
+  and C1 code points (the parser already swallows ESC, NUL, TAB and CR/LF on
   the way in; DEL and C1 — whose raw byte 0x9D is the 8-bit OSC introducer —
   survive verbatim) and can only ever shorten the string.
 - **Discarded without parsing** — DCS, SOS, PM and APC payloads; malformed
