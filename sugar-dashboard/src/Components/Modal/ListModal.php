@@ -51,7 +51,8 @@ final class ListModal implements Item, Sizer
     public function withOnEdit(callable $onEdit): self
     {
         // D-69 (finding 064): rebuild-through-new-self dropped the stored
-        // allocation (D-56/D-67/D-77 drop-class screened); carry it.
+        // allocation AND the cursor (D-56/D-67/D-77 drop-class screened);
+        // carry the whole internal state, not just the ctor args.
         $next = new self(
             items: $this->items,
             title: $this->title,
@@ -60,12 +61,13 @@ final class ListModal implements Item, Sizer
         );
         $next->width = $this->width;
         $next->height = $this->height;
+        $next->selectedIndex = $this->selectedIndex;
         return $next;
     }
 
     public function withOnDelete(callable $onDelete): self
     {
-        $next = new self( // D-69 allocation carry (finding 064)
+        $next = new self( // D-69 state carry (finding 064)
             items: $this->items,
             title: $this->title,
             onEdit: $this->onEdit,
@@ -73,6 +75,7 @@ final class ListModal implements Item, Sizer
         );
         $next->width = $this->width;
         $next->height = $this->height;
+        $next->selectedIndex = $this->selectedIndex;
         return $next;
     }
 
