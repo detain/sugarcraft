@@ -134,6 +134,52 @@ final class Help
     private static ?string $hostArchiveOverride = null;
 
     /**
+     * Finding 143: the probe resolves git from this fixed set of absolute
+     * install locations — never by bare name through the inherited PATH.
+     * A PATH steering the spawn at a shadowed `git` would answer the
+     * version probe with whatever that binary prints; with candidates, the
+     * only question asked is "is one of these canonical installs runnable".
+     * Order is the resolution: standard distro paths first, then the local
+     * admin prefixes (Linux `/usr/local`, Homebrew Intel + Apple Silicon,
+     * MacPorts) and the default Windows install; a first-party VCS install
+     * belongs to the machine, not to whichever shell launched it. The
+     * probe is still bounded and still refuses every way it can fail —
+     * no candidate, no repository, timeout, unexpected output — falling
+     * back to the Composer reference. Unresolvable answers `''`.
+     */
+    private const GIT_CANDIDATES = [
+        '/usr/bin/git',
+        '/bin/git',
+        '/usr/local/bin/git',
+        '/opt/homebrew/bin/git',
+        '/opt/local/bin/git',
+        'C:/Program Files/Git/cmd/git.exe',
+    ];
+
+    private static ?string $gitBinaryOverride = null;
+
+    /** Test seam (mirrors {@see pretendHostArchiveForTesting()}). */
+    public static function pretendGitBinaryForTesting(?string $path): void
+    {
+        self::$gitBinaryOverride = $path;
+    }
+
+    /** The first candidate that is a runnable absolute path, or ''. */
+    private static function resolveGit(): string
+    {
+        if (self::$gitBinaryOverride !== null) {
+            return self::$gitBinaryOverride;
+        }
+        foreach (self::GIT_CANDIDATES as $candidate) {
+            if (@is_executable($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return '';
+    }
+
+    /**
      * The filesystem path of the phar this process was launched from, or ''
      * when it was not launched from one.
      *
@@ -202,13 +248,20 @@ final class Help
             return null;
         }
 
-        $head = self::capture($real, self::GIT_PROBE_MAX_BYTES, self::GIT_PROBE_TIMEOUT_SECONDS, 'git', 'rev-parse', '--short', 'HEAD');
+        // One resolution for both probes: the fixed-candidate answer (finding
+        // 143) or an honest refusal that keeps the Composer reference.
+        $git = self::resolveGit();
+        if ($git === '') {
+            return null;
+        }
+
+        $head = self::capture($real, self::GIT_PROBE_MAX_BYTES, self::GIT_PROBE_TIMEOUT_SECONDS, $git, 'rev-parse', '--short', 'HEAD');
         $sha = \trim($head['stdout']);
         if ($head['exitCode'] !== 0 || $head['timedOut'] || \preg_match('/^[0-9a-f]{7,40}$/', $sha) !== 1) {
             return null;
         }
 
-        $status = self::capture($real, 64, self::GIT_PROBE_TIMEOUT_SECONDS, 'git', 'status', '--porcelain', '-uno');
+        $status = self::capture($real, 64, self::GIT_PROBE_TIMEOUT_SECONDS, $git, 'status', '--porcelain', '-uno');
 
         return [
             'sha' => $sha,
@@ -237,10 +290,12 @@ final class Help
     private static function capture(string $cwd, int $maxBytes, float $timeoutSeconds, string ...$args): array
     {
         $descriptors = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
-        $path = \getenv('PATH');
         $home = \getenv('HOME');
         $env = [
-            'PATH' => \is_string($path) ? $path : '/usr/bin:/bin',
+            // Finding 143: a fixed PATH, not the launcher's — the binary is
+            // already resolved by candidate, and a helper git shells out to
+            // should come from canonical system paths too.
+            'PATH' => '/usr/bin:/bin',
             'HOME' => \is_string($home) ? $home : '',
             'GIT_OPTIONAL_LOCKS' => '0',
             'GIT_TERMINAL_PROMPT' => '0',

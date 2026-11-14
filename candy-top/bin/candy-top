@@ -349,6 +349,9 @@ $program = new Program(
         // btop compiles a macOS/OpenBSD collector; candy-top ships none —
         // say so up front instead of painting a silent all-n/a monitor.
         unsupportedOs: $platform->isSupported() ? null : $platform->os,
+        // Finding 145: under euid 0 the kill/signal/renice actuators reach
+        // every PID, so boot says it too — same loud-honesty culture.
+        runningAsRoot: Platform::runningAsRoot(),
     ),
     App::programOptions($config, $ambient),
 );

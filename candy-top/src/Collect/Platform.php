@@ -77,6 +77,17 @@ final class Platform
         return strcasecmp($this->os, 'Linux') === 0 || $this->isFreeBsd();
     }
 
+    /**
+     * Effective uid 0 at launch (finding 145): the honest answer when
+     * ext-posix can give one. Without posix_geteuid there is no way to
+     * know — and no root-derived claim to make — so the advisory stays
+     * silent rather than guessing from cosmetic signals like $USER.
+     */
+    public static function runningAsRoot(): bool
+    {
+        return \function_exists('posix_geteuid') && \posix_geteuid() === 0;
+    }
+
     public function hostInfo(): HostInfo
     {
         return $this->isFreeBsd() ? FreeBsd\HostDetect::detect($this->probe()) : HostInfo::detect();

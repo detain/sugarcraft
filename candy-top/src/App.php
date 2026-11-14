@@ -270,6 +270,7 @@ final class App implements Model
         bool $writeNew = false,
         ?ThemeRegistry $catalog = null,
         ?string $unsupportedOs = null,
+        bool $runningAsRoot = false,
     ): self {
         $profile ??= self::profileFor($config);
 
@@ -287,9 +288,14 @@ final class App implements Model
             // The OS-boundary notice rides the stack from the first frame;
             // the push size rule cannot know the terminal yet (the first
             // WindowSizeMsg revalidates it, S-X01), so seed it unconstrained.
-            overlays: $unsupportedOs === null
-                ? null
-                : OverlayStack::new()->push(Menus::unsupported($unsupportedOs), PHP_INT_MAX, PHP_INT_MAX),
+            // Finding 145: on a supported host the root advisory takes the
+            // same seat; an unsupported host already has its notice, and one
+            // boot box is the rule (the OS answer is the bigger warning).
+            overlays: $unsupportedOs !== null
+                ? OverlayStack::new()->push(Menus::unsupported($unsupportedOs), PHP_INT_MAX, PHP_INT_MAX)
+                : ($runningAsRoot
+                    ? OverlayStack::new()->push(Menus::rootAdvisory(), PHP_INT_MAX, PHP_INT_MAX)
+                    : null),
         );
     }
 

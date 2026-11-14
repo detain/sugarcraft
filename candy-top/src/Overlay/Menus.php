@@ -91,6 +91,27 @@ final class Menus
     }
 
     /**
+     * Finding 145: candy-top's process controls (kill, signal, renice) are
+     * actuators on the OS, and under euid 0 they reach every PID on the
+     * machine — btop ships the same blunt warning for the same reason.
+     * Same always-shown Ok box as the OS notice; it is advisory, not a
+     * lockout (root is a legitimate way to run a monitor).
+     */
+    public static function rootAdvisory(): Overlay
+    {
+        return MsgBox::ok(
+            60,
+            Lang::t('overlay.title.warning'),
+            static fn (Ink $ink): array => [
+                MenuDraw::cut(Lang::t('app.root.running'), 54),
+                MenuDraw::cut(Lang::t('app.root.scope'), 54),
+                MenuDraw::cut(Lang::t('app.root.hedge'), 54),
+            ],
+            alwaysShown: true,
+        );
+    }
+
+    /**
      * btop Menu::sizeError: a 45-wide `error` box — "Terminal size too
      * small to display menu or box!". Shown when a box toggle (or a
      * shown_boxes write) would not fit, and in place of any menu the

@@ -142,8 +142,10 @@ final class ConfigFile
      * within a filesystem): a symlinked config.conf — the dotfiles-repo
      * setup — is followed and its target replaced, so the link survives
      * instead of being clobbered by a regular file. The temp inherits an
-     * existing file's permission bits, so a chmod'ed config keeps its mode.
-     * A read-only existing file is a deliberate "do not touch" and is
+     * existing file's permission bits, so a chmod'ed config keeps its mode;
+     * a FRESH config is forced 0600 (the private-state rule its 0700
+     * directory and the sibling TreeStateFile already keep). A read-only
+     * existing file is a deliberate "do not touch" and is
      * refused rather than replaced behind the user's back (rename would
      * succeed, since only the directory's write bit matters to it).
      * A directory this call creates is 0700, like btop's own state dirs.
@@ -175,6 +177,14 @@ final class ConfigFile
                 if ($mode !== false) {
                     @chmod($tmp, $mode & 0777);
                 }
+            } else {
+                // Finding 144: a fresh config used to carry the process umask
+                // (0644 on a normal host) while its directories are 0700 and
+                // the sibling TreeStateFile publishes 0600 through
+                // AtomicJsonFile. Same private-state rule: chmod the temp
+                // inode before the rename so the published file never flashes
+                // world-readable (best-effort, like the inheritance arm).
+                @chmod($tmp, 0600);
             }
             $payload = ConfigWriter::render($config);
             if (@fwrite($handle, $payload) !== \strlen($payload) || !fflush($handle)) {

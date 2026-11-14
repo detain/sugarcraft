@@ -186,6 +186,26 @@ final class ConfigFileTest extends TestCase
         $this->assertSame(0600, fileperms($path) & 0777);
     }
 
+    public function testWriteForcesAFreshConfigToOwnerOnly(): void
+    {
+        // Finding 144: a fresh config used to land 0644 under the default
+        // umask while its directory is 0700 and the sibling TreeStateFile
+        // publishes 0600 — one asymmetry too many for private state.
+        $path = $this->dir . '/fresh/config.conf';
+        ConfigFile::new($path)->write(Config::new());
+        clearstatcache();
+        $this->assertSame(0600, fileperms($path) & 0777, 'a fresh config never carries the world bits');
+
+        // The forced mode is fresh-only: a deliberately wide existing mode
+        // stays the user's own choice (the inheritance arm still wins).
+        $wide = $this->dir . '/wide.conf';
+        file_put_contents($wide, "old\n");
+        chmod($wide, 0644);
+        ConfigFile::new($wide)->write(Config::new());
+        clearstatcache();
+        $this->assertSame(0644, fileperms($wide) & 0777, 'an existing mode is inherited, not flattened');
+    }
+
     public function testWriteFailureLeavesOldFileIntact(): void
     {
         $path = $this->dir . '/config.conf';

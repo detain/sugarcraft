@@ -299,6 +299,55 @@ final class AppOverlayTest extends TestCase
         $this->assertNull($clean->overlay());
     }
 
+    public function testRunningAsRootBootsWithTheActuatorAdvisory(): void
+    {
+        // Finding 145: kill/signal/renice under euid 0 reach every PID on
+        // the machine, so the boot surface says it — its own always-shown
+        // Ok box, same culture as the OS notice.
+        $boot = static fn (bool $root, ?string $os = null): App => App::start(
+            self::config(),
+            ThemeConfig::new(),
+            self::host(),
+            Panels::placeholders(self::host(), self::config(), true),
+            static fn (): ClockTickMsg => new ClockTickMsg(1_700_000_000.0, 60.0),
+            ColorProfile::TrueColor,
+            unsupportedOs: $os,
+            runningAsRoot: $root,
+        );
+
+        $app = $boot(true);
+        [$app] = $app->update(new WindowSizeMsg(120, 40));
+        $box = $app->overlay();
+        $this->assertInstanceOf(MsgBox::class, $box);
+        $this->assertSame('warning', $box->title);
+        $text = implode("\n", $app->surface()?->plainLines() ?? []);
+        $this->assertStringContainsString('running as root', $text);
+        $this->assertStringContainsString('every PID', $text);
+
+        // Dismissed once, like the OS notice. Before dismissal it survives a
+        // size breach — the always-shown exemption (S-X01) keeps the truth
+        // up in place of the sizeError box.
+        [$app] = $app->update(self::keyMsg('enter'));
+        $this->assertNull($app->overlay());
+
+        $held = $boot(true);
+        [$held] = $held->update(new WindowSizeMsg(120, 40));
+        [$held] = $held->update(new WindowSizeMsg(40, 10));
+        $this->assertSame('warning', $held->overlay()?->title, 'the advisory is never displaced by the notice');
+
+        // A non-root boot stays silent, and the OS notice keeps precedence
+        // when both would speak — one boot box is the rule.
+        $quiet = $boot(false);
+        [$quiet] = $quiet->update(new WindowSizeMsg(120, 40));
+        $this->assertNull($quiet->overlay());
+
+        $both = $boot(true, 'Darwin');
+        [$both] = $both->update(new WindowSizeMsg(120, 40));
+        $text = implode("\n", $both->surface()?->plainLines() ?? []);
+        $this->assertStringContainsString('no collectors for Darwin', $text);
+        $this->assertStringNotContainsString('running as root', $text);
+    }
+
     public function testRefusedToggleOpensTheSizeErrorBox(): void
     {
         $app = self::app(70, 24, self::config(['shown_boxes' => 'cpu proc']));
