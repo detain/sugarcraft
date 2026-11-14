@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core;
 
+use SugarCraft\Core\Exception\ProgramException;
 use SugarCraft\Core\Exception\TerminalException;
 use SugarCraft\Core\Msg\ColorProfileMsg;
 use SugarCraft\Core\Msg\EnvMsg;
@@ -1478,9 +1479,13 @@ final class Program
             $cmd = is_array($req->command) ? $req->command : (string) $req->command;
             $proc = @proc_open($cmd, $descriptors, $pipes);
             if (!is_resource($proc)) {
-                throw new \RuntimeException(Lang::t('program.proc_open_failed', [
+                // sc-22 (sugar-core-023): named taxonomy type, same key and
+                // message as the bare \RuntimeException it replaces; the
+                // class extends \RuntimeException so existing catches at
+                // this site keep their meaning.
+                throw ProgramException::fromKey('program.proc_open_failed', [
                     'cmd' => is_array($cmd) ? implode(' ', $cmd) : $cmd,
-                ]));
+                ]);
             }
             if ($req->captureOutput === true) {
                 [$stdout, $stderr, $timedOut] = self::drainCapturedPipes($pipes[1] ?? null, $pipes[2] ?? null);

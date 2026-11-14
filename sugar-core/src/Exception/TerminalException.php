@@ -7,10 +7,15 @@ namespace SugarCraft\Core\Exception;
 use SugarCraft\Core\Lang;
 
 /**
- * Exception thrown for terminal-related errors.
+ * Exception carrying a terminal-layer fault.
  *
- * Covers TTY access failures, raw mode issues, PTY operations, and other
- * terminal-specific error conditions.
+ * This type travels as an {@see \SugarCraft\Core\Msg\ExceptionMsg}
+ * payload (`InputReader`'s incomplete-sequence overflow, `Program`'s
+ * bounded screen-stack refusal) rather than being thrown across the
+ * dispatch boundary, so it stays a domain exception under the
+ * family base — SPL-parenting law (sc-22) applies to types callers
+ * catch directly, not to payload discriminators matched via
+ * `instanceof`.
  */
 final class TerminalException extends Exception
 {

@@ -7,11 +7,19 @@ namespace SugarCraft\Core\Exception;
 use SugarCraft\Core\Lang;
 
 /**
- * Exception thrown when a runtime error occurs during program execution.
+ * SugarCraft-flavored `\RuntimeException` with i18n construction.
  *
- * Mirrors \RuntimeException but allows for SugarCraft i18n support.
+ * Mirrors \RuntimeException and extends it directly (sc-22 / finding
+ * sugar-core-042): the docblock claimed "mirrors" while the class
+ * descended from the domain base, so `catch (\RuntimeException)` —
+ * the idiom every caller of a runtime-faulting sugar-core call is
+ * entitled to write — missed it. `SemaphoreClosedException` is the
+ * precedent for the SPL parenting; this class now follows the same
+ * law. Consumer census at fix time: zero in-repo references to
+ * `SugarCraft\Core\Exception` outside sugar-core, so the re-parenting
+ * was free today when made.
  */
-final class RuntimeException extends Exception
+final class RuntimeException extends \RuntimeException
 {
     public function __construct(
         string $message = '',

@@ -9,10 +9,16 @@ use SugarCraft\Core\Lang;
 /**
  * Exception thrown for Program runtime errors.
  *
- * Covers init failures, update errors, cmd execution issues, and other
- * Program lifecycle error conditions.
+ * Covers init failures, cmd execution issues, and other Program
+ * lifecycle faults that are runtime (not logic) errors. Extends
+ * `\RuntimeException` on the `SemaphoreClosedException` law (sc-22 /
+ * findings sugar-core-042, sugar-core-023): its first wired site is
+ * the `proc_open` failure in `Program`'s command runner, which threw
+ * a bare `\RuntimeException` before — a named type that left the
+ * runtime catch lineage would have broken every caller already
+ * catching that site.
  */
-final class ProgramException extends Exception
+final class ProgramException extends \RuntimeException
 {
     public function __construct(
         string $message = '',

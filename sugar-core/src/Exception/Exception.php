@@ -4,13 +4,18 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core\Exception;
 
-use SugarCraft\Core\Lang;
-
 /**
- * Base exception for SugarCraft libraries.
+ * Base exception for SugarCraft domain errors.
  *
- * All library-specific exceptions should extend this class or one of its
- * subclasses to ensure consistent exception handling across the ecosystem.
+ * Library-specific *domain* exceptions extend this class; SPL-shaped
+ * mirrors (`RuntimeException`, `InvalidArgumentException`,
+ * `ProgramException`) extend their SPL counterparts instead, on the
+ * law `SemaphoreClosedException` documents: promoting a type out of
+ * the `\RuntimeException` lineage silently drops it out of every
+ * caller's existing `catch (\RuntimeException)`. An `instanceof
+ * Exception` check therefore identifies a domain-classified fault,
+ * not "some SugarCraft error" — use the SPL catch idiom (or
+ * `\Throwable`) for transport-level discrimination.
  */
 class Exception extends \Exception
 {

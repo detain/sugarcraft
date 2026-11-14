@@ -7,10 +7,16 @@ namespace SugarCraft\Core\Exception;
 use SugarCraft\Core\Lang;
 
 /**
- * Exception thrown for rendering-related errors.
+ * Exception for render-domain faults (SGR state machine errors, cell
+ * coordinate problems, frame-budget overflow).
  *
- * Covers SGR state machine errors, buffer overflows, cell coordinate
- * issues, and other renderer-specific error conditions.
+ * Domain exception under the family base; not thrown by sugar-core
+ * itself today (finding sugar-core-023 honesty note, sc-22): the
+ * render layer's current faults surface through their own guards, and
+ * this named type exists for consumers classifying render failures.
+ * If a render site ever adopts it, the SPL-parenting law in
+ * {@see \SugarCraft\Core\Exception\RuntimeException} governs whether
+ * it stays here or moves to the runtime lineage.
  */
 final class RenderException extends Exception
 {

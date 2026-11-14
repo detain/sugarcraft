@@ -7,11 +7,16 @@ namespace SugarCraft\Core\Exception;
 use SugarCraft\Core\Lang;
 
 /**
- * Exception thrown when an invalid argument is provided to a function.
+ * SugarCraft-flavored `\InvalidArgumentException` with i18n construction.
  *
- * Mirrors \InvalidArgumentException but allows for SugarCraft i18n support.
+ * Mirrors \InvalidArgumentException and extends it directly (sc-22 /
+ * finding sugar-core-042): callers legitimately write
+ * `catch (\InvalidArgumentException)` around programming-error faults;
+ * descending from the domain `\Exception` base hid this class from
+ * that idiom. SPL parenting follows the `SemaphoreClosedException`
+ * law (see {@see RuntimeException} for the census disclosure).
  */
-final class InvalidArgumentException extends Exception
+final class InvalidArgumentException extends \InvalidArgumentException
 {
     public function __construct(
         string $message = '',

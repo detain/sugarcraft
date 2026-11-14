@@ -17,6 +17,12 @@ use SugarCraft\Core\Msg;
  * code can use {@see modifiers()} to get the bundled
  * {@see Modifiers} value, or {@see text()} / {@see code()} as
  * v2-style aliases for `$rune` / `$type`.
+ *
+ * Intentionally non-final (sc-22 / finding sugar-core-043): the
+ * kitty-family event classes — {@see KeyPressMsg}, {@see KeyReleaseMsg},
+ * {@see KeyRepeatMsg} — extend it so legacy `instanceof KeyMsg`
+ * handlers keep matching every key event, with the subtype classes as
+ * the documented extension point for protocol-specific key events.
  */
 class KeyMsg implements Msg, Modifiable
 {
