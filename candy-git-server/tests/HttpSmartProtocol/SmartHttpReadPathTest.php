@@ -10,6 +10,7 @@ use SugarCraft\GitServer\Config;
 use SugarCraft\GitServer\Git\PktLine;
 use SugarCraft\GitServer\HttpSmartProtocol\Server;
 use SugarCraft\GitServer\Repo;
+use SugarCraft\GitServer\Tests\Support\GitBinary;
 use SugarCraft\GitServer\User;
 use SugarCraft\GitServer\Visibility;
 
@@ -79,9 +80,7 @@ final class SmartHttpReadPathTest extends TestCase
 
     private function requireGit(): void
     {
-        if (!\is_executable('/usr/bin/git')) {
-            self::markTestSkipped('smart-HTTP read-path pins require the git binary (host requirement, see README)');
-        }
+        GitBinary::require();
     }
 
     public function testAdvertisementCarriesServiceHeaderFlushAndCapabilitiedRefLine(): void

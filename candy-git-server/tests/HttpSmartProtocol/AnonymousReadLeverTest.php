@@ -9,6 +9,7 @@ use SugarCraft\GitServer\AccessControl;
 use SugarCraft\GitServer\Config;
 use SugarCraft\GitServer\HttpSmartProtocol\Server;
 use SugarCraft\GitServer\Repo;
+use SugarCraft\GitServer\Tests\Support\GitBinary;
 use SugarCraft\GitServer\User;
 use SugarCraft\GitServer\Visibility;
 
@@ -236,6 +237,9 @@ final class AnonymousReadLeverTest extends TestCase
 
     public function testAPermissiveGlobalLeverCannotPinAnIsolatedListenerOpen(): void
     {
+        // The open-posture arm serves a real upload-pack advertisement,
+        // so this fixture's own seat needs git (PATH-honest, finding 115).
+        GitBinary::require();
         $pubPath = $this->tmpDir . '/repos/iso.git';
         \mkdir($pubPath, 0755, true);
         \exec('git init --bare -q ' . \escapeshellarg($pubPath) . ' 2>/dev/null');
@@ -256,6 +260,7 @@ final class AnonymousReadLeverTest extends TestCase
 
     private function makeServer(): Server
     {
+        GitBinary::require();
         $pubPath = $this->tmpDir . '/repos/pub.git';
         \mkdir($pubPath, 0755, true);
 

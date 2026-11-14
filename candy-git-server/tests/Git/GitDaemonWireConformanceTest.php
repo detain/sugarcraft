@@ -6,6 +6,7 @@ namespace SugarCraft\GitServer\Tests\Git;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\GitServer\Git\GitDaemon;
+use SugarCraft\GitServer\Tests\Support\GitBinary;
 
 /**
  * End-to-end pins for the BLOCKING daemon transport — the code path the
@@ -74,9 +75,6 @@ final class GitDaemonWireConformanceTest extends TestCase
      */
     public function testAdvertisementMatchesTheRealBinaryByteForByte(): void
     {
-        if (!\is_executable('/usr/bin/git')) {
-            self::markTestSkipped('e2e pins require the system git binary (host requirement)');
-        }
         $port = $this->startDaemon(maxConnections: 4);
 
         $client = @\stream_socket_client("tcp://127.0.0.1:{$port}", $errno, $errstr, 3.0);
@@ -170,6 +168,11 @@ final class GitDaemonWireConformanceTest extends TestCase
 
     private function startDaemon(int $maxConnections, bool $seed = false): int
     {
+        // Every daemon-e2e seat here boots the child that seeds real git
+        // fixtures (finding 115: the gate belonged to the shared choke
+        // point, not to one method — the flood/capacity/transport arms
+        // used to run ungated and ERR on git-less hosts).
+        GitBinary::require();
         \file_put_contents(
             $this->tmpDir . '/config.yaml',
             "name: \"E2E\"\ngit: { listen_addr: \"127.0.0.1:0\", idle_timeout: 8, max_connections: {$maxConnections}, allow_anonymous_read: true }\n"

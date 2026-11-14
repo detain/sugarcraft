@@ -6,6 +6,7 @@ namespace SugarCraft\GitServer\Tests\SSH;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\GitServer\{AccessControl, Config, Repo, SSH\SSHServer, User};
+use SugarCraft\GitServer\Tests\Support\GitBinary;
 
 /**
  * @covers \SugarCraft\GitServer\SSH\SSHServer
@@ -264,6 +265,10 @@ final class SSHServerTest extends TestCase
     /** A registered, real-on-disk bare repo so the service never touches the shared default data dir. */
     private function registerBareRepo(string $name): Repo
     {
+        // PATH-honest gate (finding 115 audit): Repo::init() launches git,
+        // so every seat that seeds a real repo needs the binary — the skip
+        // belongs at this choke point.
+        GitBinary::require();
         $path = $this->tmpDir . '/repos/' . $name;
         $repo = Repo::new($name, $path)->init();
         $this->server->registerRepo($repo);
@@ -458,6 +463,7 @@ final class SSHServerTest extends TestCase
     /** Seed a bare repo with one real commit inside THIS fixture's jail. */
     private function seedPublicBare(string $name): string
     {
+        GitBinary::require();
         $rc = 0;
         $work = $this->tmpDir . '/' . $name . '-work';
         \mkdir($work, 0755, true);

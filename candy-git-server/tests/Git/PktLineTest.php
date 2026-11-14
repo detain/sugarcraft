@@ -7,13 +7,13 @@ namespace SugarCraft\GitServer\Tests\Git;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use SugarCraft\GitServer\Git\PktLine;
+use SugarCraft\GitServer\Tests\Support\GitBinary;
 
 use function array_pop;
 use function count;
 use function ctype_xdigit;
 use function exec;
 use function fclose;
-use function is_executable;
 use function pack;
 use function proc_close;
 use function proc_open;
@@ -175,9 +175,7 @@ final class PktLineTest extends TestCase
 
     public function testCodecAgreesWithWhatTheGitBinaryActuallyWrites(): void
     {
-        if (!is_executable('/usr/bin/git')) {
-            self::markTestSkipped('git binary required for the ground-truth pin; host requirement disclosed in README.');
-        }
+        GitBinary::require();
 
         $repo = $this->tmpDir . '/gt.git';
         $seed = $this->tmpDir . '/seed';

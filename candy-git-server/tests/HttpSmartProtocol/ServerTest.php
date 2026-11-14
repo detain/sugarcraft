@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\GitServer\Config;
 use SugarCraft\GitServer\HttpSmartProtocol\Server;
 use SugarCraft\GitServer\Repo;
+use SugarCraft\GitServer\Tests\Support\GitBinary;
 use SugarCraft\GitServer\User;
 
 /**
@@ -35,10 +36,13 @@ final class ServerTest extends TestCase
 
         $this->server = new Server($this->config);
 
-        // Create a test repo
+        // Create a test repo (PATH-resolved seed — finding 115: the bare
+        // exec's failure was silent, so this class must hold the same
+        // honest skip as the suites that spawn git children).
+        GitBinary::require();
         $repoPath = $this->tmpDir . '/testrepo.git';
         \mkdir($repoPath, 0755, true);
-        \exec("git init --bare " . \escapeshellarg($repoPath) . " 2>/dev/null");
+        \exec('git init --bare ' . \escapeshellarg($repoPath) . ' 2>/dev/null');
 
         $repo = Repo::new('testrepo.git', $repoPath)->withPublic(true);
         $this->server->registerRepo($repo);
@@ -240,8 +244,13 @@ final class ServerTest extends TestCase
             "want 1234567890123456789012345678901234567890\n\n"
         );
 
+        // Exact status (finding 114): the path routed to the upload-pack
+        // child and the raised lever let it through; the body is malformed
+        // for the wire so the child dies (exit 128, 'bad line length')
+        // and the response comes back empty at 200. A 403/404 here would
+        // mean routing or the lever broke — both are now visible.
         $this->assertArrayHasKey('status', $result);
-        $this->assertContains($result['status'], [200, 403, 404]);
+        $this->assertSame(200, $result['status']);
     }
 
     public function testHandleRequestRoutesToGitReceivePack(): void
@@ -305,7 +314,10 @@ final class ServerTest extends TestCase
             ''
         );
 
-        $this->assertNotSame(404, $result['status']);
+        // Exact status (finding 114): a registered PUBLIC repo with the
+        // lever raised answers the advertisement — 'not 404' would also
+        // pass if the lever regressed to a 401 challenge.
+        $this->assertSame(200, $result['status']);
     }
 
     public function testRegisterUserStoresUser(): void
@@ -322,7 +334,10 @@ final class ServerTest extends TestCase
             ''
         );
 
-        $this->assertNotSame(403, $result['status']);
+        // Exact status (finding 114): the public repo answers anonymously
+        // either way — registering the user does not change this response,
+        // so pin the single truth rather than 'not a specific denial'.
+        $this->assertSame(200, $result['status']);
     }
 
     // -------------------------------------------------------------------------
@@ -486,8 +501,9 @@ final class ServerTest extends TestCase
             ''
         );
 
-        // Should not be blocked by auth (repo is public by default)
-        $this->assertNotSame(403, $result['status']);
+        // Valid credentials authenticate; the public repo then answers —
+        // exact pin (finding 114), where 'not 403' passed even on a 401.
+        $this->assertSame(200, $result['status']);
     }
 
     public function testBasicAuthRejectsWrongPassword(): void
@@ -504,11 +520,14 @@ final class ServerTest extends TestCase
             ''
         );
 
-        // User should not be authenticated due to wrong password
-        // Since repo is public, the request still succeeds (public repo allows anonymous)
-        // The auth rejection only matters for private repos
-        // This test verifies the password check logic doesn't cause a false-positive auth
-        $this->assertNotSame(500, $result['status']);
+        // User should not be authenticated due to wrong password.
+        // Since the repo is public, the request still succeeds on the
+        // anonymous path — the auth rejection only bites private repos
+        // (pinned by testAnonymousReadIsFailClosedByDefault / lever
+        // tests). Exact pin per finding 114; the bcrypt-is-always-paid
+        // oracle for this refusal lives in
+        // testBasicAuthRefusalsAllPayABcryptVerify below.
+        $this->assertSame(200, $result['status']);
     }
 
     public function testHandleRequestAcceptsCandyGitServerUserHeader(): void
@@ -524,7 +543,11 @@ final class ServerTest extends TestCase
             ''
         );
 
-        $this->assertNotSame(403, $result['status']);
+        // trust mode is off by default, so the header is ignored and the
+        // public repo answers anonymously — exact pin (finding 114); the
+        // proxy-trust arm that honors this header is pinned by the
+        // user_trust_mode tests.
+        $this->assertSame(200, $result['status']);
     }
 
     // -------------------------------------------------------------------------

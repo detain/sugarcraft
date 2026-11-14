@@ -11,6 +11,7 @@ use SugarCraft\GitServer\Config;
 use SugarCraft\GitServer\Git\GitDaemon;
 use SugarCraft\GitServer\Repo;
 use SugarCraft\GitServer\Stats;
+use SugarCraft\GitServer\Tests\Support\GitBinary;
 
 /**
  * Async (event-loop) mode of the Git daemon — plan item 6.1.
@@ -76,6 +77,10 @@ final class GitDaemonAsyncTest extends TestCase
     /** Create a real git repo with one commit so refs()/branches() work. */
     private function createGitRepo(string $name): Repo
     {
+        // PATH-honest skip at the git choke point (finding 115): the
+        // fixture execs real git; without it every test in this file
+        // would fail on a git-less host instead of skipping.
+        GitBinary::require();
         $path = $this->tmpDir . '/repositories/' . $name;
         \mkdir($path, 0755, true);
         $escaped = \escapeshellarg($path);

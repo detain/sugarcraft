@@ -6,6 +6,7 @@ namespace SugarCraft\GitServer\Tests\HttpSmartProtocol;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\GitServer\Repo;
+use SugarCraft\GitServer\Tests\Support\GitBinary;
 use SugarCraft\GitServer\User;
 use SugarCraft\GitServer\UserStore;
 use SugarCraft\GitServer\Visibility;
@@ -62,9 +63,7 @@ final class BinServeLiveE2ETest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        if (!\is_executable('/usr/bin/git')) {
-            self::markTestSkipped('e2e pins require the system git binary (host requirement, see README)');
-        }
+        GitBinary::require();
 
         $this->tmpDir = \sys_get_temp_dir() . '/bin-serve-e2e-' . \uniqid();
         \mkdir($this->tmpDir . '/repositories', 0755, true);
@@ -425,7 +424,7 @@ final class BinServeLiveE2ETest extends TestCase
      */
     private function git(array $argv, bool $ok = false): array
     {
-        $cmd = ['timeout', '-s', 'KILL', (string) self::GIT_LEASH_SECONDS, '/usr/bin/git', ...$argv];
+        $cmd = ['timeout', '-s', 'KILL', (string) self::GIT_LEASH_SECONDS, GitBinary::require(), ...$argv];
         $proc = \proc_open($cmd, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
         self::assertNotFalse($proc, 'failed to spawn git fixture child');
         $out = (string) \stream_get_contents($pipes[1]);

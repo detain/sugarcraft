@@ -10,6 +10,7 @@ use SugarCraft\GitServer\Config;
 use SugarCraft\GitServer\HttpSmartProtocol\HttpListener;
 use SugarCraft\GitServer\HttpSmartProtocol\Server;
 use SugarCraft\GitServer\Repo;
+use SugarCraft\GitServer\Tests\Support\GitBinary;
 use SugarCraft\GitServer\Visibility;
 
 /**
@@ -22,7 +23,8 @@ use SugarCraft\GitServer\Visibility;
  * 127.0.0.1 on an ephemeral port; every child is reaped in a finally
  * (request-scoped discipline extended to the test side). Requires the git
  * binary — declared host requirement (README "Requirements"); the skip is
- * loud, and this box has git.
+ * loud and PATH-honest (finding 115: gates that hardcoded /usr/bin/git
+ * skipped this suite vacuously on nix-style hosts).
  *
  * @covers \SugarCraft\GitServer\HttpSmartProtocol\HttpListener
  * @covers \SugarCraft\GitServer\HttpSmartProtocol\Server
@@ -45,9 +47,7 @@ final class SmartHttpCloneTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        if (!\is_executable('/usr/bin/git')) {
-            self::markTestSkipped('e2e pins require the system git binary (host requirement, see README)');
-        }
+        GitBinary::require();
 
         // The clone fixture is a published repo, and these pins exercise the
         // real-git anonymous clone/fetch flow — the opt-in world of
@@ -231,7 +231,7 @@ final class SmartHttpCloneTest extends TestCase
      */
     private function git(array $argv, bool $ok = false): array
     {
-        $cmd = ['timeout', '-s', 'KILL', '30', '/usr/bin/git', ...$argv];
+        $cmd = ['timeout', '-s', 'KILL', '30', GitBinary::require(), ...$argv];
         $proc = \proc_open($cmd, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
         self::assertNotFalse($proc, 'failed to spawn git fixture child');
         $out = (string) \stream_get_contents($pipes[1]);

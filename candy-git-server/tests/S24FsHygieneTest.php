@@ -9,6 +9,7 @@ use SugarCraft\GitServer\Config;
 use SugarCraft\GitServer\Git\GitDaemon;
 use SugarCraft\GitServer\Repo;
 use SugarCraft\GitServer\Support\AtomicWriter;
+use SugarCraft\GitServer\Tests\Support\GitBinary;
 use SugarCraft\GitServer\Visibility;
 
 /**
@@ -143,9 +144,11 @@ final class S24FsHygieneTest extends TestCase
         // 042 fourth seat: the .git/description write in init went through
         // the same bare file_put_contents; the helper route must keep the
         // existing bytes contract (the 'Unnamed repository' default).
-        if (!\is_executable('/usr/bin/git')) {
-            $this->markTestSkipped('e2e pins require the system git binary');
-        }
+        // PATH-honest gate (finding 115): Repo::init() launches git through
+        // BoundedCommand, so the old skip was legitimate — but its
+        // hardcoded /usr/bin/git test skipped nix-style hosts where git
+        // IS on PATH. Same requirement, honest check now.
+        GitBinary::require();
         $path = $this->tmpDir . '/desc.git';
         Repo::new('desc', $path)->init();
 
