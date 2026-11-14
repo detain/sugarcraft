@@ -9,6 +9,7 @@ use SugarCraft\Cli\Internal\SafeText;
 use SugarCraft\Cli\Internal\WidthGuard;
 use SugarCraft\Cli\Internal\WidthProbe;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Style\Style;
 
 /**
  * Render a single styled "status line" — a glyph + space + message.
@@ -92,7 +93,7 @@ final class StatusLine
      *
      * @throws \InvalidArgumentException when the resolved $width is less than 1
      */
-    private static function format(string $glyph, string $message, \SugarCraft\Style\Style $style, int|AutoWidth|null $width): string
+    private static function format(string $glyph, string $message, Style $style, int|AutoWidth|null $width): string
     {
         $resolved = WidthProbe::resolve($width);
         WidthGuard::assert('StatusLine', $resolved, 'render the full message');

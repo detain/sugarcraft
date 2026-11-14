@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Cli;
 
+use SugarCraft\Cli\Internal\SafeText;
 use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
@@ -58,7 +59,7 @@ final class Logo
      */
     public static function fromAscii(string $ascii): self
     {
-        return new self(Internal\SafeText::page($ascii));
+        return new self(SafeText::page($ascii));
     }
 
     /**
