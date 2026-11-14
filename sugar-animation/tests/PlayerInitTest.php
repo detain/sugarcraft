@@ -125,4 +125,26 @@ final class PlayerInitTest extends TestCase
             'TickMsg must not advance index when paused');
         $this->assertNull($cmd);
     }
+
+    /**
+     * SA-P2 (audit 034/019): view() before the first WindowSizeMsg must
+     * render into the conservative 23-row box plus the status line, not the
+     * frame's native height — the pre-fix `Renderer::new()` fallback flooded
+     * a 40-row art onto a 24-row screen and the first real size message
+     * rearranged the whole layout.
+     */
+    public function testViewWithoutRendererSeedsTheConservativeBox(): void
+    {
+        $rows = [];
+        for ($i = 0; $i < 40; $i++) {
+            $rows[] = [[($i * 30) % 256, 0, 0]];
+        }
+        $tall = Frame::new($rows, delay: 10);
+
+        $out = (new Player([$tall]))->view();
+        $lines = explode("\n", rtrim($out, "\n"));
+
+        $this->assertCount(24, $lines, '23 clamped art rows + the status row');
+        $this->assertStringContainsString('frame 1/1', end($lines), 'the status line still rides along');
+    }
 }

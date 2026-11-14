@@ -255,7 +255,16 @@ final class Player implements Model
             return "(no frames)\n";
         }
         $frame = $this->frames[$this->index];
-        $renderer = $this->renderer ?? Renderer::new();
+        // SA-P2 (audit 034): no renderer yet means no WindowSizeMsg has ever
+        // landed — the pre-fix fallback rendered the frame at its NATIVE
+        // height into a terminal that cannot show it, so the first real size
+        // message rearranged the whole screen (finding 019's layout jump).
+        // Seed the classic conservative box instead: 80 columns, 24 rows
+        // minus the status line. Hosts with true adaptivity pass a renderer
+        // (Renderer::withAdaptiveSize(reservedRows: 1)) or receive the
+        // WindowSizeMsg itself; either way this default only shrinks, never
+        // outgrows, a real terminal.
+        $renderer = $this->renderer ?? Renderer::withConstraints(23, 80);
         $pic   = $renderer->renderFrame($frame, $this->preset);
         $total = count($this->frames);
         $status = sprintf(

@@ -84,12 +84,23 @@ final class Renderer
      *
      * @throws \RuntimeException if STDOUT is not a TTY
      */
-    public static function withAdaptiveSize(): self
+    public static function withAdaptiveSize(int $reservedRows = 0): self
     {
         // Descriptor 1, spelled as the literal. NOT `(int) STDOUT`, which is
         // the resource id 2 and names STDERR. See the doc-block above.
+        //
+        // SA-P2 (audit 019): $reservedRows lets the seed mirror Player's own
+        // WindowSizeMsg law — a host that paints a status line under the art
+        // passes 1 so the first frame already fits rows-1, instead of
+        // decoding to the full ioctl height and jumping when the first
+        // WindowSizeMsg lands. Default 0 keeps the pure-adaptive shape.
+        if ($reservedRows < 0) {
+            throw new \InvalidArgumentException(
+                'sugar-animation: Renderer::withAdaptiveSize() requires a non-negative reservedRows, got ' . $reservedRows,
+            );
+        }
         $size = PosixBackend::queryWinsize(1);
-        return new self($size['rows'], $size['cols']);
+        return new self(max(0, $size['rows'] - $reservedRows), $size['cols']);
     }
 
     /**

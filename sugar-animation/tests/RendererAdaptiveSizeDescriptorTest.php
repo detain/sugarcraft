@@ -117,6 +117,29 @@ final class RendererAdaptiveSizeDescriptorTest extends TestCase
     }
 
     /**
+     * SA-P2 (audit 019): the reservedRows parameter subtracts from the
+     * QUERIED height before construction — the seed-time mirror of Player's
+     * rows-1 WindowSizeMsg law, so a host painting a status line under the
+     * art can seed a first frame that already fits. Same two-pty
+     * arrangement as the guard; default-0 callers are unaffected.
+     */
+    public function testReservedRowsSubtractFromTheQueriedHeight(): void
+    {
+        $stdout = $this->pty(self::STDOUT_COLS, self::STDOUT_ROWS);
+        $stderr = $this->pty(self::STDERR_COLS, self::STDERR_ROWS);
+
+        $result = $this->runProbe([
+            0 => ['pipe', 'r'],
+            1 => ['file', $stdout->slave()->path(), 'w'],
+            2 => ['file', $stderr->slave()->path(), 'w'],
+        ], 1);
+
+        self::assertSame('ok', $result['result'], 'withAdaptiveSize(reservedRows: 1) threw: ' . ($result['message'] ?? ''));
+        self::assertSame(self::STDOUT_ROWS - 1, $result['rows'], 'the reserved row comes off the queried height');
+        self::assertSame(self::STDOUT_COLS, $result['cols'], 'reservedRows never touches the width');
+    }
+
+    /**
      * The reported symptom, reproduced: `php demo.php 2>err.log` on a live
      * terminal. The old body threw here; the fixed one answers.
      */
@@ -198,7 +221,7 @@ final class RendererAdaptiveSizeDescriptorTest extends TestCase
      * @param array<int, mixed> $spec
      * @return array<string, mixed>
      */
-    private function runProbe(array $spec): array
+    private function runProbe(array $spec, int $reservedRows = 0): array
     {
         self::assertFileExists(self::PROBE);
 
@@ -206,7 +229,7 @@ final class RendererAdaptiveSizeDescriptorTest extends TestCase
         self::assertIsString($resultFile);
         $this->artifacts[] = $resultFile;
 
-        $process = proc_open([\PHP_BINARY, self::PROBE, $resultFile], $spec, $pipes);
+        $process = proc_open([\PHP_BINARY, self::PROBE, $resultFile, (string) $reservedRows], $spec, $pipes);
         self::assertIsResource($process, 'could not start the probe child');
 
         foreach ($pipes as $pipe) {

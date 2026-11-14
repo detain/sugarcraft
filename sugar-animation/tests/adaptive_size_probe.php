@@ -39,7 +39,9 @@ $out = [
 ];
 
 try {
-    $renderer = Renderer::withAdaptiveSize();
+    // SA-P2 (audit 019): argv[2] = reservedRows, default 0 keeps the
+    // historical pure-adaptive probe shape.
+    $renderer = Renderer::withAdaptiveSize((int) ($argv[2] ?? 0));
 
     // The adaptive dimensions are private readonly state, and reading them
     // is the whole observation — the alternative, rendering an oversized
