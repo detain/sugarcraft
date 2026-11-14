@@ -30,6 +30,10 @@ final class GridTable implements Item, Sizer
     private BorderConfig $borderConfig;
     private int $frozenColumns = 0;
     private int $scrollTo = 0;
+    private ?int $explicitPerPage = null;
+
+    /** @var array<string, true> Column keys already warned about by sort() (D-51, finding 148). */
+    private static array $unsortableWarned = [];
 
     public function __construct(
         array $columns = [],
@@ -64,11 +68,16 @@ final class GridTable implements Item, Sizer
         $clone->width = $width;
         $clone->height = $height;
 
-        // Recalculate pagination based on available height
+        // Recalculate pagination based on available height. The allocation
+        // is the ceiling; an explicit withPerPage() wins below it (D-51,
+        // finding 144: this used to stomp any explicit page size).
         if ($height > 0) {
             $availableRows = $height - 2; // Account for header borders
             if ($availableRows > 0) {
-                $clone->pagination = $clone->pagination->withPerPage($availableRows);
+                $perPage = $this->explicitPerPage === null
+                    ? $availableRows
+                    : min($this->explicitPerPage, $availableRows);
+                $clone->pagination = $clone->pagination->withPerPage($perPage);
             }
         }
 
@@ -139,17 +148,62 @@ final class GridTable implements Item, Sizer
     }
 
     /**
+     * Return a new GridTable showing at most N rows per page.
+     *
+     * The explicit request survives later setSize() calls as long as the
+     * allocation fits it; when the frame is smaller, the allocation caps
+     * it (D-51, finding 144).
+     */
+    public function withPerPage(int $perPage): self
+    {
+        $clone = clone $this;
+        $clone->explicitPerPage = max(1, $perPage);
+        $available = $this->height === null ? 0 : $this->height - 2;
+        $effective = $available > 0
+            ? min($clone->explicitPerPage, $available)
+            : $clone->explicitPerPage;
+        $clone->pagination = $clone->pagination->withPerPage($effective);
+        return $clone;
+    }
+
+    /**
      * Return a new GridTable with sort applied to the given column.
      */
     public function sort(Column $column): self
     {
         if (!$column->sortable) {
+            $this->warnUnsortable($column->key);
             return $this;
         }
 
         $clone = clone $this;
         $clone->sortState = $this->sortState->toggle($column->key);
         return $clone;
+    }
+
+    /**
+     * One-shot notice when sort() is asked for a non-sortable column
+     * (D-51, finding 148): the refusal used to be silent, so a forgotten
+     * sortable flag looked exactly like a no-op sort. Latched once per
+     * key per process; Foundation\Notice is the [OG-3]-gated D-15
+     * mechanism this prefigures, not a dependency.
+     */
+    private function warnUnsortable(string $key): void
+    {
+        if (isset(self::$unsortableWarned[$key])) {
+            return;
+        }
+
+        self::$unsortableWarned[$key] = true;
+        trigger_error("GridTable: column '{$key}' is not sortable; sort() ignored.", E_USER_NOTICE);
+    }
+
+    /**
+     * @internal Test seam: clear the one-shot sort-refusal latch.
+     */
+    public static function resetUnsortableNotices(): void
+    {
+        self::$unsortableWarned = [];
     }
 
     /**
@@ -310,15 +364,15 @@ final class GridTable implements Item, Sizer
     }
 
     /**
-     * Get paginated rows.
+     * Get paginated rows for the given window.
      *
      * @param list<Row> $rows
      * @return list<Row>
      */
-    private function getPaginatedRows(array $rows): array
+    private function getPaginatedRows(array $rows, Pagination $pageable): array
     {
-        $offset = $this->pagination->offset();
-        $perPage = $this->pagination->perPage;
+        $offset = $pageable->offset();
+        $perPage = max(1, $pageable->perPage); // never negative-slice (D-51, finding 144)
 
         if ($offset >= count($rows)) {
             return [];
@@ -344,12 +398,19 @@ final class GridTable implements Item, Sizer
         $filtered = $this->getFilteredRows();
         $sorted = $this->getSortedRows($filtered);
 
-        // Update pagination with filtered count for proper clamping
+        // Clamp pagination against the FILTERED reality, not the raw row
+        // count: a page set before the filter shrank the set must land on
+        // a valid page instead of an empty offset (D-51, finding 044 — the
+        // dead $totalFiltered assignment this replaces promised exactly
+        // that and never delivered it).
         $totalFiltered = count($sorted);
-        $paginated = $this->getPaginatedRows($sorted);
+        $pageable = $this->pagination->withTotalRows($totalFiltered)->normalized();
+        $paginated = $this->getPaginatedRows($sorted, $pageable);
 
-        // Calculate column widths
-        $colWidths = Calc::calculateColumnWidths($paginated, $this->columns, $width);
+        // Column widths are computed from the whole filtered set so the
+        // geometry is stable across pages (D-51, finding 151: page-derived
+        // widths made every border jitter when paging).
+        $colWidths = Calc::calculateColumnWidths($sorted, $this->columns, $width);
 
         $lines = [];
 
@@ -375,6 +436,12 @@ final class GridTable implements Item, Sizer
             } else {
                 $lines[] = $this->renderRow($row, $colWidths);
             }
+        }
+
+        if ($totalFiltered === 0 && $this->filterText !== '') {
+            // D-15 policy route: announce the empty result inside the frame
+            // instead of emitting chrome over a silent void (D-51, finding 044).
+            $lines[] = $this->renderNoticeRow('no rows match filter', $colWidths);
         }
 
         // Footer separator
@@ -635,6 +702,29 @@ final class GridTable implements Item, Sizer
         }
 
         $line .= $c->rightJunction;
+
+        return $line;
+    }
+
+    /**
+     * Render a full-width announcement row: the message sits in the first
+     * cell, the remaining cells blank, walls and separators exactly like a
+     * data row so the frame geometry never changes around it.
+     *
+     * @param list<int> $colWidths
+     */
+    private function renderNoticeRow(string $message, array $colWidths): string
+    {
+        $c = $this->borderConfig->chars;
+
+        $line = $c->left;
+
+        foreach ($this->columns as $i => $column) {
+            $width = $colWidths[$i];
+            $text = $i === 0 ? $message : '';
+            $padded = str_pad(Calc::truncate($text, $width), $width, ' ');
+            $line .= $padded . $c->right;
+        }
 
         return $line;
     }

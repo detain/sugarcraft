@@ -67,11 +67,32 @@ final class Pagination
 
     /**
      * Create a new pagination with updated perPage.
+     *
+     * The window size is floored at 1: a zero or negative per-page used to
+     * pass through and make array_slice() tail-drop rows (D-51, finding 144).
      */
     public function withPerPage(int $perPage): self
     {
         return new self(
             page: $this->page,
+            perPage: max(1, $perPage),
+            totalRows: $this->totalRows,
+        );
+    }
+
+    /**
+     * Return this window with the page clamped into range for its own
+     * totalRows and perPage floored at 1. render() needs a window clamped
+     * against the filtered reality, which set-time clamping alone cannot
+     * provide (D-51, finding 044).
+     */
+    public function normalized(): self
+    {
+        $perPage = max(1, $this->perPage);
+        $max = $this->totalRows === 0 ? 1 : (int) ceil($this->totalRows / $perPage);
+
+        return new self(
+            page: max(1, min($this->page, $max)),
             perPage: $perPage,
             totalRows: $this->totalRows,
         );

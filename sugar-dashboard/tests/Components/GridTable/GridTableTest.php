@@ -112,14 +112,34 @@ final class GridTableTest extends TestCase
 
     public function testSortNonSortableColumnDoesNothing(): void
     {
+        // D-51 (finding 148): the refusal was silent; it is now a one-shot
+        // notice per column key, latched process-wide with a test seam.
+        GridTable::resetUnsortableNotices();
         $nameCol = Column::new('name', 'Name', sortable: false);
         $grid = GridTable::new(
             [$nameCol],
             [new Row(['name' => 'Alice'])],
         );
 
-        $grid = $grid->sort($nameCol);
+        $notices = [];
+        set_error_handler(static function (int $errno, string $message) use (&$notices): bool {
+            if ($errno === E_USER_NOTICE) {
+                $notices[] = $message;
+                return true;
+            }
+            return false;
+        });
+        try {
+            $grid = $grid->sort($nameCol);
+            $grid->sort($nameCol); // latched: the refusal must not shout twice
+        } finally {
+            restore_error_handler();
+        }
+
         $this->assertNull($grid->getSortState()->key);
+        $this->assertCount(1, $notices);
+        $this->assertStringContainsString('name', $notices[0]);
+        $this->assertStringContainsString('not sortable', $notices[0]);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -740,5 +760,145 @@ final class GridTableTest extends TestCase
 
         $swapped = $column->withRenderer('strrev');
         $this->assertInstanceOf(\Closure::class, $swapped->renderer);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // D-51: pagination honesty (findings 044, 144, 148, 151)
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testPageClampsAgainstFilteredCount(): void
+    {
+        // Finding 044: a page set before the filter shrank the set used to
+        // render an empty body (offset past the end, no re-clamp).
+        $col = Column::new('label', 'Label', filterable: true);
+        $rows = [];
+        for ($i = 0; $i < 50; $i++) {
+            $rows[] = new Row(['label' => $i < 4 ? 'zzA item ' . $i : 'plain ' . $i]);
+        }
+
+        $grid = GridTable::new([$col], $rows)->filter('zzA')->page(3);
+        $out = $grid->render();
+
+        // 4 matching rows fit page 1 after clamping; every one must show.
+        for ($i = 0; $i < 4; $i++) {
+            $this->assertStringContainsString('zzA item ' . $i, $out);
+        }
+        $this->assertStringNotContainsString('no rows match filter', $out);
+    }
+
+    public function testUnfilteredPageBeyondEndClampsToLastPage(): void
+    {
+        $col = Column::new('label', 'Label');
+        $rows = [];
+        for ($i = 0; $i < 50; $i++) {
+            $rows[] = new Row(['label' => 'row-' . $i]);
+        }
+
+        // perPage 20 default: page 99 clamps to page 3 (rows 40-49).
+        $out = GridTable::new([$col], $rows)->page(99)->render();
+        $this->assertStringContainsString('row-49', $out);
+        $this->assertStringContainsString('row-40', $out);
+        $this->assertStringNotContainsString('row-39', $out);
+    }
+
+    public function testEmptyFilterRendersNoticeRowInsideFrame(): void
+    {
+        $col = Column::new('label', 'Label', minWidth: 22, filterable: true);
+        $grid = GridTable::new([$col], [new Row(['label' => 'alpha'])])->filter('zzz-nothing');
+        $lines = explode("\n", $grid->render());
+
+        $notice = null;
+        foreach ($lines as $line) {
+            if (str_contains($line, 'no rows match filter')) {
+                $notice = $line;
+            }
+        }
+        $this->assertNotNull($notice, 'empty result must be announced, not silent chrome');
+
+        // Geometry: the notice row carries the same display width as the
+        // borders around it, and the footer separator stays suppressed
+        // (no real rows).
+        $target = mb_strlen($lines[0]);
+        $this->assertSame($target, mb_strlen((string) $notice));
+        $this->assertCount(5, $lines); // top, header, sep, notice, bottom
+    }
+
+    public function testColumnWidthsStableAcrossPages(): void
+    {
+        // Finding 151: widths used to come from the current page, so every
+        // border jumped between pages with differently-sized row subsets.
+        $col = Column::new('label', 'Label');
+        $rows = [];
+        for ($i = 0; $i < 6; $i++) {
+            $rows[] = new Row(['label' => 'short' . $i]);
+        }
+        $rows[] = new Row(['label' => 'a-very-long-tail-value']);
+        $rows[] = new Row(['label' => 'another-very-long-value']);
+
+        $grid = GridTable::new([$col], $rows)->withPerPage(5);
+        $page1 = explode("\n", $grid->page(1)->render());
+        $page2 = explode("\n", $grid->page(2)->render());
+
+        // Top borders byte-identical: width decided by the whole set, not the page.
+        $this->assertSame($page1[0], $page2[0]);
+        $this->assertStringContainsString('a-very-long-tail-value', $page2[3] . $page2[4] . $page2[5]);
+    }
+
+    public function testExplicitPerPageSurvivesAllocationCap(): void
+    {
+        // Finding 144: setSize() used to stomp any explicit page size.
+        $col = Column::new('label', 'Label');
+        $rows = [];
+        for ($i = 0; $i < 40; $i++) {
+            $rows[] = new Row(['label' => 'row-' . $i]);
+        }
+        $grid = GridTable::new([$col], $rows);
+
+        // Explicit below the cap wins.
+        $small = $grid->withPerPage(5)->setSize(40, 12);
+        $this->assertSame(5, $small->pagination()->perPage);
+        // Data lines = total lines - chrome (top, header, sep, footer sep, bottom).
+        $this->assertSame(5, substr_count(trim($small->page(1)->render()), "\n") - 4);
+
+        // Cap below the explicit clamps down (allocation is the ceiling).
+        $capped = $grid->withPerPage(50)->setSize(40, 12);
+        $this->assertSame(10, $capped->pagination()->perPage);
+
+        // No explicit: allocation alone decides, as before.
+        $plain = $grid->setSize(40, 12);
+        $this->assertSame(10, $plain->pagination()->perPage);
+    }
+
+    public function testPerPageZeroAndNegativeAreGuarded(): void
+    {
+        // Finding 144: zero/negative windows used to tail-drop via negative
+        // array_slice; they are now floored at 1 row.
+        $col = Column::new('label', 'Label');
+        $rows = [new Row(['label' => 'one']), new Row(['label' => 'two']), new Row(['label' => 'three'])];
+        $grid = GridTable::new([$col], $rows);
+
+        $floored = $grid->withPerPage(0);
+        $this->assertSame(1, $floored->pagination()->perPage);
+        $this->assertSame(1, substr_count(trim($floored->render()), "\n") - 4); // exactly one data row
+
+        $raw = new Pagination(page: 1, perPage: -5, totalRows: 3);
+        $normalized = $raw->normalized();
+        $this->assertSame(1, $normalized->perPage);
+        $this->assertSame(1, $normalized->page);
+
+        // A grid carrying the raw-negative window still renders from the top
+        // without dropping the tail slice.
+        $out = $grid->render();
+        $this->assertStringContainsString('one', $out);
+        $this->assertStringContainsString('three', $out);
+    }
+
+    public function testNormalizedClampsPageWithinFilteredWindow(): void
+    {
+        $p = new Pagination(page: 9, perPage: 10, totalRows: 0);
+        $this->assertSame(1, $p->normalized()->page, 'empty set clamps to page 1');
+
+        $q = (new Pagination(page: 4, perPage: 10, totalRows: 25))->withTotalRows(12);
+        $this->assertSame(2, $q->normalized()->page, 'clamps against the reduced total');
     }
 }
