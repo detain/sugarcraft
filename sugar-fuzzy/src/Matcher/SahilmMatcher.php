@@ -30,6 +30,17 @@ final class SahilmMatcher implements FuzzyMatcher
 {
     private const SEPARATOR_CHARS = ['_', '-', ' ', '.', '/', '\\', ':'];
 
+    /**
+     * Flipped {@see self::SEPARATOR_CHARS} for O(1) isset lookup (finding
+     * sugar-fuzzy-018: the in_array scan linearly walked 7 strings per
+     * matched char). Keep the two constants in sync — the list is the
+     * roster of record, the map is its index.
+     */
+    private const SEPARATOR_LOOKUP = [
+        '_' => true, '-' => true, ' ' => true, '.' => true,
+        '/' => true, '\\' => true, ':' => true,
+    ];
+
     private readonly bool $caseSensitive;
 
     private readonly SahilmScoring $scoring;
@@ -184,7 +195,7 @@ final class SahilmMatcher implements FuzzyMatcher
 
                 // Check for separator bonus (match after separator char)
                 if ($prevCharLower !== '') {
-                    if (in_array($prevCharLower, self::SEPARATOR_CHARS, true)) {
+                    if (isset(self::SEPARATOR_LOOKUP[$prevCharLower])) {
                         $charScore += $this->scoring->separatorBonus;
                     }
                     // CamelCase bonus - current is lowercase but prev was uppercase
@@ -228,6 +239,16 @@ final class SahilmMatcher implements FuzzyMatcher
 
     private function isLowerCase(string $char): bool
     {
+        // FUZZY-18 ASCII fast path (finding sugar-fuzzy-018): single-byte
+        // chars classify from ord() — identical verdicts to the mb
+        // round-trip below (a-z lower; every other ASCII byte is not,
+        // matching 'equals lower AND differs from upper'), at O(1).
+        if (strlen($char) === 1) {
+            $o = ord($char);
+            if ($o < 0x80) {
+                return $o >= 0x61 && $o <= 0x7A;
+            }
+        }
         // Round-trip: lowercase iff it equals mb_strtolower($char) and differs from
         // mb_strtoupper($char) (second clause excludes case-less chars like digits/CJK).
         return $char === mb_strtolower($char, 'UTF-8')
@@ -236,6 +257,12 @@ final class SahilmMatcher implements FuzzyMatcher
 
     private function isUpperCase(string $char): bool
     {
+        if (strlen($char) === 1) {
+            $o = ord($char);
+            if ($o < 0x80) {
+                return $o >= 0x41 && $o <= 0x5A;
+            }
+        }
         return $char === mb_strtoupper($char, 'UTF-8')
             && $char !== mb_strtolower($char, 'UTF-8');
     }

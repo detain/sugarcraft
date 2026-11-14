@@ -311,5 +311,18 @@ final class CodePointExpansionTest extends TestCase
         $this->assertSame(18, $this->sm->match('test', $candidate)?->score);
         $this->assertSame([7, 15, 16, 17], $this->sm->match('test', $candidate)?->matchedIndices);
     }
+
+    #[Test]
+    public function testNonAsciiUpperRoundTripClassifiesLikeAsciiCamel(): void
+    {
+        // FUZZY-18 tripwire: the ord() fast path must NOT change verdicts for
+        // multi-byte chars — 'É' has no ASCII byte form, so its camel bonus
+        // proves the mb round-trip arm of isUpperCase() still fires and agrees
+        // with the ASCII 'E' control (both score 12: base + camelBonus +
+        // lowerCaseBonus on the lowercase 't' after an uppercase char).
+        $this->assertSame(12, $this->sm->match('t', 'aEt')?->score);
+        $this->assertSame(12, $this->sm->match('t', 'aÉt')?->score);
+        $this->assertSame([2], $this->sm->match('t', 'aÉt')?->indices());
+    }
 }
 
