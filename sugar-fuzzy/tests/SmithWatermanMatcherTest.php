@@ -291,14 +291,18 @@ final class SmithWatermanMatcherTest extends TestCase
     #[Test]
     public function testMatchAllRespectsMinScore(): void
     {
-        // Build a list with varied scores
+        // FUZZY-05 cure: the old body was a bare `score >= 10` foreach — an
+        // over-pruning regression that dropped hello/hey too passed vacuously.
+        // Exact survivor list, GeneratorBytePinTest row shape.
         $candidates = ['hello', 'hey', 'h', 'xyz'];
         $results = $this->matcher->matchAll('he', $candidates, minScore: 10);
 
-        // All results should have score >= 10
-        foreach ($results as $result) {
-            $this->assertGreaterThanOrEqual(10, $result->score);
-        }
+        $rows = array_map(
+            static fn (MatchResult $r): string => sprintf('%s|%d|%s', $r->haystack, $r->score, json_encode($r->indices())),
+            $results,
+        );
+
+        $this->assertSame(['hello|11|[0,1]', 'hey|11|[0,1]'], $rows);
     }
 
     #[Test]
@@ -477,9 +481,14 @@ final class SmithWatermanMatcherTest extends TestCase
             $results[] = $result;
         }
 
-        foreach ($results as $result) {
-            $this->assertGreaterThanOrEqual(10, $result->score);
-        }
+        // FUZZY-05 cure (companion arm): exact survivor list, byte-identical to
+        // the array path above — the generator may drop or add at the threshold.
+        $rows = array_map(
+            static fn (MatchResult $r): string => sprintf('%s|%d|%s', $r->haystack, $r->score, json_encode($r->indices())),
+            $results,
+        );
+
+        $this->assertSame(['hello|11|[0,1]', 'hey|11|[0,1]'], $rows);
     }
 
     #[Test]
