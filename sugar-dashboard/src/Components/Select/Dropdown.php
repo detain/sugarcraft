@@ -14,15 +14,25 @@ use SugarCraft\Dashboard\Foundation\ColorMode;
  *
  * Features:
  * - Collapsed/expanded states
+ * - Trigger shows the current selection ("label: choice icon")
  * - Custom trigger and menu styling
  * - Navigation between items with keyboard
  * - Optional icons per item
+ * - Allocation-honoring setSize(): the trigger and every menu row are
+ *   cell-fitted to the allocated width, and an open list is windowed to
+ *   the allocated height with the selection kept visible
  *
  * Mirrors dropdown UI concepts adapted to PHP with
  * wither-style immutable setters.
  */
 final class Dropdown implements \SugarCraft\Dashboard\Foundation\SizedItem
 {
+    /** Placeholder painted on the trigger when there is nothing to select. */
+    private const NO_SELECTION = '— none —';
+
+    private ?int $allocatedWidth = null;
+    private ?int $allocatedHeight = null;
+
     /**
      * @param array<int, array{label: string, icon?: string}> $items
      */
@@ -58,10 +68,17 @@ final class Dropdown implements \SugarCraft\Dashboard\Foundation\SizedItem
 
     /**
      * Set the allocated dimensions for this dropdown.
+     *
+     * The allocation is stored and READ by render() and innerSize():
+     * non-positive dimensions mean "natural" (finding sugar-dashboard-050:
+     * this used to be a plain `clone $this` that dropped the channel).
      */
     public function setSize(int $width, int $height): \SugarCraft\Dashboard\Foundation\Sizer
     {
-        return clone $this;
+        $clone = clone $this;
+        $clone->allocatedWidth = $width > 0 ? $width : null;
+        $clone->allocatedHeight = $height > 0 ? $height : null;
+        return $clone;
     }
 
     /**
@@ -79,30 +96,47 @@ final class Dropdown implements \SugarCraft\Dashboard\Foundation\SizedItem
     }
 
     /**
-     * Render the dropdown trigger line.
+     * Render the dropdown trigger line: label, current selection, icon.
      */
     private function renderTrigger(): string
     {
         $icon = $this->expanded ? $this->collapseIcon : $this->expandIcon;
-        $content = $this->label . ' ' . $icon;
+        $content = $this->label . ': ' . ($this->selectedLabel() ?? self::NO_SELECTION) . ' ' . $icon;
 
-        if ($this->triggerColor !== null) {
-            return $this->triggerColor->toFg(ColorMode::profile()) . $content . Ansi::reset();
-        }
-
-        return $content;
+        return $this->fit($content, $this->triggerColor);
     }
 
     /**
-     * Render the dropdown menu items.
+     * The label of the selected item, or null when the list is empty.
+     */
+    private function selectedLabel(): ?string
+    {
+        if ($this->items === []) {
+            return null;
+        }
+
+        $safeIndex = max(0, min($this->selectedIndex, count($this->items) - 1));
+        return $this->items[$safeIndex]['label'] ?? null;
+    }
+
+    /**
+     * Render the visible window of the dropdown menu items.
      */
     private function renderMenu(): string
     {
-        $lines = [];
-        $safeIndex = max(0, min($this->selectedIndex, count($this->items) - 1));
+        $count = count($this->items);
+        $safeIndex = max(0, min($this->selectedIndex, $count - 1));
 
-        foreach ($this->items as $index => $item) {
-            $lines[] = $this->renderMenuItem($item, $index === $safeIndex);
+        // The trigger eats one row of the allocation; the list is windowed
+        // to the rest with the selection kept in view (ListComponent's
+        // slice-then-fit pattern).
+        $budget = $this->allocatedHeight !== null ? max(1, $this->allocatedHeight - 1) : $count;
+        $visible = min($count, $budget);
+        $top = max(0, min($safeIndex - intdiv($visible - 1, 2), $count - $visible));
+
+        $lines = [];
+        for ($index = $top; $index < $top + $visible; $index++) {
+            $lines[] = $this->renderMenuItem($this->items[$index], $index === $safeIndex);
         }
 
         $result = implode("\n", $lines);
@@ -125,24 +159,44 @@ final class Dropdown implements \SugarCraft\Dashboard\Foundation\SizedItem
         $content = $prefix . ' ' . $icon . ' ' . $label;
 
         if ($isSelected && $this->selectedItemColor !== null) {
-            return $this->selectedItemColor->toFg(ColorMode::profile()) . $content . Ansi::reset();
+            return $this->fit($content, $this->selectedItemColor);
         }
 
-        if ($this->menuColor !== null) {
-            return $this->menuColor->toFg(ColorMode::profile()) . $content . Ansi::reset();
+        return $this->fit($content, $this->menuColor);
+    }
+
+    /**
+     * Cell-fit one painted line to the allocated width, then color it.
+     */
+    private function fit(string $content, ?Color $color): string
+    {
+        if ($this->allocatedWidth !== null) {
+            $content = Width::padRight(
+                Width::truncateAnsi($content, $this->allocatedWidth),
+                $this->allocatedWidth,
+            );
         }
 
-        return $content;
+        if ($color === null) {
+            return $content;
+        }
+
+        return $color->toFg(ColorMode::profile()) . $content . Ansi::reset();
     }
 
     /**
      * Calculate the natural dimensions of this dropdown.
      *
+     * Reports the allocated size when one was given — the box a caller
+     * asked for is the box that will be painted.
+     *
      * @return array{0:int,1:int} [width, height]
      */
     public function innerSize(): array
     {
-        $triggerWidth = Width::string($this->label) + 1 + Width::string($this->expandIcon);
+        $triggerWidth = Width::string($this->label) + 2
+            + Width::string($this->selectedLabel() ?? self::NO_SELECTION)
+            + 1 + Width::string($this->expandIcon);
 
         $maxItemWidth = 0;
         foreach ($this->items as $item) {
@@ -155,7 +209,15 @@ final class Dropdown implements \SugarCraft\Dashboard\Foundation\SizedItem
         }
 
         $width = max($triggerWidth, $maxItemWidth);
-        $height = 1 + ($this->expanded ? count($this->items) : 0);
+        if ($this->allocatedWidth !== null) {
+            $width = $this->allocatedWidth;
+        }
+
+        $height = 1;
+        if ($this->expanded && $this->items !== []) {
+            $budget = $this->allocatedHeight !== null ? max(1, $this->allocatedHeight - 1) : count($this->items);
+            $height += min(count($this->items), $budget);
+        }
 
         return [$width, $height];
     }
@@ -163,11 +225,21 @@ final class Dropdown implements \SugarCraft\Dashboard\Foundation\SizedItem
     // ─── Withers ──────────────────────────────────────────────────
 
     /**
+     * Propagate the setSize() allocation through a freshly built carrier.
+     */
+    private function carryAllocation(self $next): self
+    {
+        $next->allocatedWidth = $this->allocatedWidth;
+        $next->allocatedHeight = $this->allocatedHeight;
+        return $next;
+    }
+
+    /**
      * Set the dropdown label.
      */
     public function withLabel(string $label): self
     {
-        return new self(
+        return $this->carryAllocation(new self(
             label: $label,
             items: $this->items,
             expanded: $this->expanded,
@@ -177,7 +249,7 @@ final class Dropdown implements \SugarCraft\Dashboard\Foundation\SizedItem
             selectedItemColor: $this->selectedItemColor,
             expandIcon: $this->expandIcon,
             collapseIcon: $this->collapseIcon,
-        );
+        ));
     }
 
     /**
@@ -187,7 +259,7 @@ final class Dropdown implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withItems(array $items): self
     {
-        return new self(
+        return $this->carryAllocation(new self(
             label: $this->label,
             items: $items,
             expanded: $this->expanded,
@@ -197,7 +269,7 @@ final class Dropdown implements \SugarCraft\Dashboard\Foundation\SizedItem
             selectedItemColor: $this->selectedItemColor,
             expandIcon: $this->expandIcon,
             collapseIcon: $this->collapseIcon,
-        );
+        ));
     }
 
     /**
@@ -205,7 +277,7 @@ final class Dropdown implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withExpanded(bool $expanded): self
     {
-        return new self(
+        return $this->carryAllocation(new self(
             label: $this->label,
             items: $this->items,
             expanded: $expanded,
@@ -215,7 +287,7 @@ final class Dropdown implements \SugarCraft\Dashboard\Foundation\SizedItem
             selectedItemColor: $this->selectedItemColor,
             expandIcon: $this->expandIcon,
             collapseIcon: $this->collapseIcon,
-        );
+        ));
     }
 
     /**
@@ -223,7 +295,7 @@ final class Dropdown implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withSelectedIndex(int $index): self
     {
-        return new self(
+        return $this->carryAllocation(new self(
             label: $this->label,
             items: $this->items,
             expanded: $this->expanded,
@@ -233,7 +305,7 @@ final class Dropdown implements \SugarCraft\Dashboard\Foundation\SizedItem
             selectedItemColor: $this->selectedItemColor,
             expandIcon: $this->expandIcon,
             collapseIcon: $this->collapseIcon,
-        );
+        ));
     }
 
     /**
@@ -241,7 +313,7 @@ final class Dropdown implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withTriggerColor(?Color $color): self
     {
-        return new self(
+        return $this->carryAllocation(new self(
             label: $this->label,
             items: $this->items,
             expanded: $this->expanded,
@@ -251,7 +323,7 @@ final class Dropdown implements \SugarCraft\Dashboard\Foundation\SizedItem
             selectedItemColor: $this->selectedItemColor,
             expandIcon: $this->expandIcon,
             collapseIcon: $this->collapseIcon,
-        );
+        ));
     }
 
     /**
@@ -259,7 +331,7 @@ final class Dropdown implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withMenuColor(?Color $color): self
     {
-        return new self(
+        return $this->carryAllocation(new self(
             label: $this->label,
             items: $this->items,
             expanded: $this->expanded,
@@ -269,7 +341,7 @@ final class Dropdown implements \SugarCraft\Dashboard\Foundation\SizedItem
             selectedItemColor: $this->selectedItemColor,
             expandIcon: $this->expandIcon,
             collapseIcon: $this->collapseIcon,
-        );
+        ));
     }
 
     /**
@@ -277,7 +349,7 @@ final class Dropdown implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withSelectedItemColor(?Color $color): self
     {
-        return new self(
+        return $this->carryAllocation(new self(
             label: $this->label,
             items: $this->items,
             expanded: $this->expanded,
@@ -287,7 +359,7 @@ final class Dropdown implements \SugarCraft\Dashboard\Foundation\SizedItem
             selectedItemColor: $color,
             expandIcon: $this->expandIcon,
             collapseIcon: $this->collapseIcon,
-        );
+        ));
     }
 
     /**
@@ -295,7 +367,7 @@ final class Dropdown implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withIcons(string $expand, string $collapse): self
     {
-        return new self(
+        return $this->carryAllocation(new self(
             label: $this->label,
             items: $this->items,
             expanded: $this->expanded,
@@ -305,6 +377,6 @@ final class Dropdown implements \SugarCraft\Dashboard\Foundation\SizedItem
             selectedItemColor: $this->selectedItemColor,
             expandIcon: $expand,
             collapseIcon: $collapse,
-        );
+        ));
     }
 }

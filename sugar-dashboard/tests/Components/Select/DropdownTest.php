@@ -90,9 +90,15 @@ final class DropdownTest extends TestCase
 
         $rendered = $dropdown->render();
 
-        // Should only show trigger, not items
+        // Collapsed shows ONE row: the trigger. D-56 (finding 050) put the
+        // current selection ON the trigger, so the selected label is
+        // present by design — the un-selected item must be absent, and so
+        // must the menu's selection marker.
         $this->assertStringContainsString('Menu', $rendered);
-        $this->assertStringNotContainsString('Item 1', $rendered);
+        $this->assertStringContainsString('Item 1', $rendered);
+        $this->assertStringNotContainsString('Item 2', $rendered);
+        $this->assertStringNotContainsString('▶', $rendered);
+        $this->assertSame(1, count(explode("\n", $rendered)));
     }
 
     public function testEmptyItemsRendersWithoutError(): void
@@ -304,5 +310,81 @@ final class DropdownTest extends TestCase
 
         $updated = $original->withItems([['label' => 'Only']]);
         $this->assertNotSame('', $updated->render());
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // D-56 (finding sugar-dashboard-050): selection on trigger,
+    // allocation stored AND read
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testClosedTriggerShowsTheSelectedOption(): void
+    {
+        $dropdown = Dropdown::new('Fruit', [
+            ['label' => 'Apple'],
+            ['label' => 'Pear'],
+        ])->withSelectedIndex(1);
+
+        $this->assertStringContainsString('Pear', $dropdown->render());
+    }
+
+    public function testClosedTriggerShowsNonePlaceholderWhenEmpty(): void
+    {
+        $dropdown = Dropdown::new('Fruit', []);
+
+        $this->assertStringContainsString('— none —', $dropdown->render());
+    }
+
+    public function testSetSizeStoresAllocationReadByInnerSize(): void
+    {
+        $natural = Dropdown::new('Menu', [['label' => 'Item 1']]);
+        $sized = $natural->setSize(9, 4);
+
+        $this->assertSame(9, $sized->innerSize()[0]);
+        $this->assertNotSame(9, $natural->innerSize()[0]);
+    }
+
+    public function testAllocationFitsEveryPaintedRowToTheWidth(): void
+    {
+        $dropdown = Dropdown::new('Menu', [
+            ['label' => 'An extremely long option label that overflows'],
+            ['label' => 'Short'],
+        ])
+            ->withExpanded(true)
+            ->withSelectedItemColor(null)
+            ->withMenuColor(null)
+            ->setSize(20, 0);
+
+        foreach (explode("\n", $dropdown->render()) as $row) {
+            $this->assertSame(20, \SugarCraft\Core\Util\Width::string($row), 'row escape: ' . $row);
+        }
+    }
+
+    public function testOpenListIsWindowedToTheAllocatedHeight(): void
+    {
+        $items = [];
+        for ($i = 1; $i <= 10; $i++) {
+            $items[] = ['label' => 'Opt ' . sprintf('%02d', $i)];
+        }
+
+        $dropdown = Dropdown::new('Menu', $items)
+            ->withExpanded(true)
+            ->withSelectedIndex(9)
+            ->setSize(0, 4);
+
+        $rows = explode("\n", $dropdown->render());
+        $this->assertCount(4, $rows);                          // trigger + 3 slots
+        $this->assertStringContainsString('Opt 10', $rows[3]); // selection visible at the edge
+        $this->assertStringNotContainsString('Opt 01', $dropdown->render());
+    }
+
+    public function testWithersCarryTheAllocation(): void
+    {
+        $sized = Dropdown::new('Menu', [['label' => 'Item']])->setSize(30, 5);
+
+        $this->assertSame(30, $sized->withLabel('Other')->innerSize()[0]);
+        $this->assertSame(30, $sized->withItems([['label' => 'X']])->innerSize()[0]);
+        $this->assertSame(30, $sized->withExpanded(true)->innerSize()[0]);
+        $this->assertSame(30, $sized->withSelectedIndex(0)->innerSize()[0]);
+        $this->assertSame(30, $sized->withIcons('v', '^')->innerSize()[0]);
     }
 }
