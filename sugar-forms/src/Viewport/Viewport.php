@@ -37,8 +37,17 @@ final class Viewport implements Model
      * Width scan (clamp() runs on every scroll/resize msg, scrollbar paint
      * reads it too). Only the X leg needed caching — totalLineCount() is
      * count($lines) so maxOffset() was already O(1); the plan's "both
-     * uncached" premise measured half-stale. Immutable view state ⇒ fresh
-     * copy() instance resets the memo structurally (Form::valuesMemo law).
+     * uncached" premise measured half-stale.
+     *
+     * candy-mdview-012 (MDV-S22): the memo is a pure function of
+     * (lines, width), so copies that receive NEITHER of those parameters
+     * carry the warmed value forward instead of structurally nulling it.
+     * Navigation keys, wheel notches and steps never touch lines or width,
+     * yet every one of them used to re-pay the full-document scan on its
+     * fresh copy (1.27 ms/keystroke measured at 140 KB, linear in document
+     * size). setContent / withSize / withWidth pass a changed fact and
+     * still fall through to the null default: invalidate exactly where the
+     * snapshot's geometry actually changes.
      */
     private ?int $maxXOffsetMemo = null;
 
@@ -576,7 +585,7 @@ final class Viewport implements Model
         ?int $scrollAnimFrame = null,
         ?Scrollbar $verticalScrollbar = null,
     ): self {
-        return new self(
+        $copy = new self(
             width:              $width             ?? $this->width,
             height:             $height            ?? $this->height,
             lines:              $lines             ?? $this->lines,
@@ -594,5 +603,12 @@ final class Viewport implements Model
             scrollAnimFrame:    $scrollAnimFrame   ?? $this->scrollAnimFrame,
             verticalScrollbar:  $verticalScrollbar ?? $this->verticalScrollbar,
         );
+        // candy-mdview-012 (MDV-S22): see the memo docblock — a copy that
+        // changed neither lines nor width keeps the scan answer valid.
+        if ($lines === null && $width === null) {
+            $copy->maxXOffsetMemo = $this->maxXOffsetMemo;
+        }
+
+        return $copy;
     }
 }

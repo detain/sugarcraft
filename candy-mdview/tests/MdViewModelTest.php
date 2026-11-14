@@ -566,4 +566,26 @@ final class MdViewModelTest extends TestCase
         // dropAnsi-then-clip is the plain column window [6, 36) at one step.
         $this->assertSame(substr(str_repeat('long ', 60), 6, 30), $frame[1], 'visible window is the exact scrolled slice');
     }
+
+    public function testNavigationBurstOnALargeDocumentStaysMemoFloor(): void
+    {
+        // candy-mdview-012 (MDV-S22) consumer guard: navigation copies never
+        // change lines or width, so the Viewport maxXOffset memo must ride
+        // every copy — without the carry each keystroke re-runs the
+        // O(total rendered lines) Width scan (1.27 ms/key measured at
+        // 140 KB, linear in document size). 400 down-keys on 5,000 lines
+        // cost ~0.6 s pre-fix and well under a frame's worth post-fix; the
+        // budget sits ~15x above the measured warm cost so machine load
+        // cannot flake it, yet a regression pays 5,000 Width::string calls
+        // per key and blows through it immediately.
+        $m = MdViewModel::fromContent($this->content(5000), 80, 24);
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j')); // warm the memo once
+        $start = \hrtime(true);
+        for ($key = 0; $key < 400; $key++) {
+            [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
+        }
+        $elapsed = (\hrtime(true) - $start) / 1e9;
+        $this->assertLessThan(0.25, $elapsed, sprintf('400 navigation keys took %.3fs — the width-scan memo died on a copy', $elapsed));
+        $this->assertSame(401, $m->viewport->yOffset(), 'the burst really scrolled the document');
+    }
 }

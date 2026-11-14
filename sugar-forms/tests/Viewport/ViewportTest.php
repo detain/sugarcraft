@@ -465,6 +465,29 @@ final class ViewportTest extends TestCase
         $this->assertStringContainsString('if ($this->maxXOffsetMemo !== null) {', $src);
         $this->assertStringContainsString('return $this->maxXOffsetMemo =', $src);
     }
+
+    public function testGeometryNeutralCopyCarriesTheWarmedMaxXOffsetMemo(): void
+    {
+        // candy-mdview-012 (MDV-S22): navigation/step copies change no line
+        // and no width, so the warmed scan answer must ride the copy; only
+        // copies that DO change a geometry fact (setContent / withSize)
+        // reset it. A carry-less copy() leaves the fresh null on the step
+        // leg red; an over-broad carry makes the two negatives red.
+        $memo = new \ReflectionProperty(Viewport::class, 'maxXOffsetMemo');
+
+        $warm = Viewport::new(10, 3)->setContent(str_repeat('x', 40))->scrollRight(1);
+        $this->assertSame(30, $memo->getValue($warm), 'scrollRight warms the memo via clamp()');
+
+        $this->assertSame(30, $memo->getValue($warm->withHorizontalStep(7)), 'a step copy carries the memo');
+        $this->assertSame(30, $memo->getValue($warm->setHeight(2)), 'a height-only copy carries the memo');
+        // Both legs below end in clamp(), so what must be observable on the
+        // result is the RECOMPUTED answer, never the stale carry: an
+        // unconditional carry would leave 30 on a width-30 or short-content
+        // snapshot (the original carry-less code recomputes to the same 10/0
+        // and passes too — these pin the over-invalidation boundary).
+        $this->assertSame(10, $memo->getValue($warm->withSize(30, 3)), 'a width change must recompute, not inherit');
+        $this->assertSame(0, $memo->getValue($warm->setContent('tiny')), 'fresh content must recompute, not inherit');
+    }
     public function testWheelMsgWithANonWheelButtonIsDroppedNotFatal(): void
     {
         // match() had no default arm: a hand-built wheel message carrying
