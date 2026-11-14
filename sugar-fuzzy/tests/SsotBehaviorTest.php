@@ -308,6 +308,55 @@ final class SsotBehaviorTest extends TestCase
         }
     }
 
+    #[Test]
+    public function testCeilingPruneBoundaryKeepsScoreEqualToCeiling(): void
+    {
+        // FUZZY-07(a) / finding sugar-fuzzy-014: the prune is `ceiling < minScore`;
+        // an off-by-one flip to `<=` was suite-invisible because nothing exercised
+        // ceiling === minScore. This row constructs the equality: with matchScore 8
+        // / adjacentBonus 0 a single-char match scores 8 === ceiling min(1,1) x 8,
+        // so at minScore 8 it MUST survive; the +1 row pins the legitimate drop.
+        $m = new SmithWatermanMatcher(ScoringProfile::new(matchScore: 8, adjacentBonus: 0));
+
+        $atCeiling = array_map(
+            static fn (MatchResult $r): string => $r->haystack . '|' . $r->score,
+            $m->matchAll('a', ['a'], minScore: 8),
+        );
+        $this->assertSame(['a|8'], $atCeiling, 'ceiling == minScore must not prune a candidate that reaches it');
+        $this->assertSame([], $m->matchAll('a', ['a'], minScore: 9), 'ceiling < minScore must prune');
+    }
+
+    #[Test]
+    public function testPostFilterPathAgreeWithPruneAroundFlooredScore(): void
+    {
+        // FUZZY-07(b) / finding sugar-fuzzy-027: compute() prunes by ceiling and
+        // matchAll() re-filters by `score >= minScore`; they can disagree only
+        // under an unsound profile. 'app'@'banana' scores 3 while its ceiling is
+        // 24, so minScore 4 exercises the RE-FILTER leg (ceiling keeps it, the
+        // filter drops it) — the sweep asserts pruned == full-compute-post-filter
+        // across and above the floored score so both legs run on one candidate set.
+        $candidates = ['apple', 'banana', 'cherry'];
+        $m = new SmithWatermanMatcher();
+
+        $reference = array_map(
+            static fn (MatchResult $r): string => $r->haystack . '|' . $r->score,
+            $m->matchAll('app', $candidates, minScore: 1),
+        );
+
+        foreach ([1, 2, 3, 4, 19, 20] as $minScore) {
+            $expected = array_values(array_filter(
+                $reference,
+                static fn (string $row): bool => (int) substr($row, (int) strrpos($row, '|') + 1) >= $minScore,
+            ));
+            $pruned = array_map(
+                static fn (MatchResult $r): string => $r->haystack . '|' . $r->score,
+                $m->matchAll('app', $candidates, minScore: $minScore),
+            );
+
+            $this->assertSame($expected, $pruned, "minScore $minScore: prune and post-filter must agree");
+        }
+    }
+
     // ---- Ceiling prune soundness + traceback honesty ----
 
     #[Test]
