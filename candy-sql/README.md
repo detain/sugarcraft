@@ -22,13 +22,41 @@ Terminal SQL client on the SugarCraft stack for PHP 8.3+ — MySQL, MariaDB, Pos
 composer require sugarcraft/candy-sql
 ```
 
+## Contents
+
+- [CLI usage](#cli-usage)
+- [Saved connections](#saved-connections)
+- [Terminals and non-tty use](#terminals-and-non-tty-use)
+- [Keys](#keys)
+- [Editing table data](#editing-table-data)
+- [Architecture](#architecture)
+- [Connection factory](#connection-factory)
+- [Schema introspection](#schema-introspection)
+- [Query plan viewer](#query-plan-viewer)
+- [Admin providers](#admin-providers)
+- [Result table](#result-table)
+- [Server Status page](#server-status-page)
+- [Performance Reports](#performance-reports)
+- [Performance Schema Setup](#performance-schema-setup)
+- [Alerting](#alerting)
+- [Resilience](#resilience)
+- [Status-Snapshot History (default-on in the launcher)](#status-snapshot-history-default-on-in-the-launcher)
+- [Accessor deprecation (2026-10-24)](#accessor-deprecation-2026-10-24)
+- [Internationalization](#internationalization)
+- [Accessibility](#accessibility)
+- [Known limitations](#known-limitations)
+- [Demos](#demos)
+- [DatabaseInterface](#databaseinterface)
+- [Test](#test)
+- [Credits & inspiration](#credits--inspiration)
+
 ## CLI usage
 
 First run, no database at hand: `php examples/play.php` seeds an in-memory
 SQLite instance (`users`/`posts`) and opens the Tables browser over it — the
 Admin dashboard belongs to MySQL/PostgreSQL servers (on SQLite the pane answers
 through the empty-context fallback documented under *Key routing*). Invoked with
-no arguments the launcher presents a picker of your saved connections when the
+no arguments, the launcher presents a picker of your saved connections when the
 stdout is a terminal and at least one entry exists (see
 [Saved connections](#saved-connections) below); in every other case it prints
 a one-line `USAGE:` reminder and exits 2;
@@ -128,7 +156,7 @@ the file is a hard refusal that says so. Without `pass-env`, the global
 The launcher is an interactive terminal program. With stdout not a
 terminal — a pipe, a redirect, CI capture — it dials the connection, then
 refuses with exit 2 and one honest line instead of streaming alt-screen
-and colour bytes forever. `--help`, `--version` and the input-refusal
+and color bytes forever. `--help`, `--version` and the input-refusal
 messages are plain text and unaffected. To drive candy-sql from a script,
 run it under a pty (`script -qec 'candy-sql app.sqlite' /dev/null`), or
 render headless from library code — `ResultTable::renderPlain()` and the
@@ -170,7 +198,7 @@ than spraying unreadable bytes.
 | `[p]`              | Pause/resume auto-refresh (global)              |
 | `[r]`              | Every admin page: drops the shared query cache so the next tick re-reads live data, and forwards the key — Dashboard resets its counters, Connections refreshes the processlist, the remaining pages just take the cache drop (SQL-O16 truth pass) |
 | `[j/k]` `[↑/↓]`    | Navigate rows down/up on the row-navigable pages (Variables, Connections, Reports, PerfSchema, Debug) |
-| `[e]`              | Edit selected variable — dynamic vars only (Variables page): type new value, [Enter] confirm → [Enter] execute or [Esc] cancel. The dialog spells out the three scopes `[p]` cycles: GLOBAL = runtime only (lost on restart), PERSIST = runtime + config file, PERSIST_ONLY = config file only (applies at next restart) |
+| `[e]`              | Edit selected variable — dynamic vars only (Variables page): type new value, [Enter] confirm → [Enter] execute or [Esc] cancel. The dialog spells out the three scopes that `[p]` cycles: GLOBAL = runtime only (lost on restart), PERSIST = runtime + config file, PERSIST_ONLY = config file only (applies at next restart) |
 | `[w]`              | Toggle read/write filter (Variables page)       |
 | `[s]`              | Focus search input (Variables page)              |
 | `[f]`              | Toggle hide-sleeping filter (Connections page)  |
@@ -196,10 +224,13 @@ it still never touches the filesystem by itself — but since SQL-O07 the TUI do
 `Ctrl+S`/`x` (export) and `i` (import) open a file line that reads and writes
 disk through the same `Db\Export\CsvExporter` API described under Exporters.
 
-The admin pages' own `Tab`/`Shift+Tab` tab-cycling handlers (Variables, Connections detail tabs, PerfSchema) and ConnectionsPage's `[1]`/`[2]`/`[3]` detail-tab shortcuts exist in the page code but are unreachable during normal app operation:
-`Tab` cycles the focus pane and the digits select admin pages, both at the app level — the pages' private handlers for those keys are therefore never reached except while a modal dialog is open, where App hands every key to the page instead (the dialog consumes or cancels it) rather than cycling panes or switching pages. Outside that window they are kept only for standalone (non-app) use. The live in-app substitutes are page-local keys App delegates: `h`/`l` (or the arrows) cycle PerfSchema tabs, and the PerfSchema Easy Setup actions run on the `[` / `]` / `.` bracket pair — the same convention the Reports page uses for its own navigation. Connections detail tabs have no reachable in-app chord at all — `K` and `X` arm kills, they never open details — so the `[1]`/`[2]`/`[3]` detail-tab shortcuts stay standalone-library surface only (SQL-O16: the old sentence sent users to keys that do the opposite).
+**Keys that do NOT work as labeled** — they exist in the page code, but the app never reaches them (the one exception: while a modal dialog is open, App hands every key to the page instead, and the dialog consumes or cancels it):
 
-> **Key routing** — `App::update()` consumes, in order: `Ctrl+C` (cancels a running query when one is in flight, quits when idle — SQL-O08 superseded the unconditional quit); on the Admin pane, every key goes to the page while it is modal (`PageBase::isModal()`: the variable-editor dialog, the GTID dialog, a pending kill confirmation, or a staged PerfSchema commit) and `Esc` goes to the page whenever it is present; `q`/`Esc` quit **only from the Tables and Rows browser panes** (in the Query pane `Esc` no longer discards a drafted query); `Tab` cycles the focus pane. In the Tables pane, `/` opens a live filter line over the table names — while it is open the line owns the keyboard (`Esc` abandons it and clears the filter instead of quitting, `q` is just a filter letter, arrows move the filtered cursor, Enter commits and loads) — and cursor movement never fetches: only Enter/Space loads the highlighted table's preview (SQL-O10; the old per-cursor preview round trip auto-floated every table on ERP-sized schemas). `PgDn`/`PgUp` walk that preview in 100-row server-side windows (SQL-O11) — forward only while the current page is full, and the status line counts 'page X (rows a–b)'. `Ctrl+S`/`x` (export) and `i` (import) open a file line (SQL-O07); while it is open the line owns the keyboard the same way the filter does — `Enter` is its only submit key, `Esc` closes it without quitting, `q` is a path letter — and the export half additionally refuses overwrite: an existing destination arms a `REPLACE …?` confirm that `Enter` accepts and any edit disarms. In the Query pane, `Ctrl+R`/`Ctrl+E` run the query (both also accept `Ctrl+Enter`) and every other key edits the buffer — except `Ctrl+Space`, which completes at the caret (SQL-O04): SQL keywords, table names after `FROM`/`JOIN`/`INTO`/`UPDATE`/`TABLE`, and columns in context — unqualified columns of the tables the current statement names, `alias.`/`table.` qualified columns (aliases resolved from `FROM t a` / `JOIN t AS a`), and the `INSERT INTO t (…)` column list — read lazily from the loaded schema; quoted identifiers and spellings that need quoting are handled per flavor, strings and comments never complete, and with no schema loaded every context falls back to the keyword roster. One candidate completes outright, a shared longest prefix advances in one press, otherwise the status line lists candidates; legacy terminals that report Ctrl+Space as a bare space just keep typing — except a leading `EXPLAIN`, which is answered with the `ExplainView` colour tree in the Rows pane (SQL-O09; an `ANALYZE` modifier is stripped because PostgreSQL's `EXPLAIN ANALYZE` would execute the statement) — except destructive statements (`DROP`/`TRUNCATE`/`DELETE`/`ALTER`/`RENAME`/`GRANT`/`REVOKE`), whose first press only arms a warning; a second consecutive run whose trimmed statement equals the staged SQL confirms, and any other query run or an edit whose trimmed text differs from the staged SQL disarms (a whitespace-only edit trims to the same statement and leaves the arm standing). On the Admin pane, `App::handleAdminKey()` then intercepts the page picker (`1`–`{n}`, `p`, `r`, `q`→return to Tables); `r` additionally forwards to the active page after dropping the shared `AdminQueryCache`. Pages listed in `RowNavigable` (Variables, Connections, Reports, PerfSchema, Debug) keep their own `j`/`k`/`↑`/`↓` row cursors; on non-row-navigable pages (ServerStatus, Dashboard) those same keys walk the sidebar. All remaining keys are delegated to the active page's `update()` method.
+- The admin pages' own `Tab`/`Shift+Tab` tab-cycling handlers (Variables, Connections detail tabs, PerfSchema): `Tab` cycles the focus pane at the app level. Kept for standalone (non-app) use only.
+- ConnectionsPage's `[1]`/`[2]`/`[3]` detail-tab shortcuts: the digits select admin pages at the app level, and `K`/`X` do not open details either — they arm kills, so the Connections detail tabs have **no** reachable in-app chord (SQL-O16: the old sentence here sent users to keys that do the opposite).
+- The live in-app substitutes are the page-local keys App does delegate: `h`/`l` (or the arrows) cycle PerfSchema tabs, and the PerfSchema Easy Setup actions run on the `[` / `]` / `.` bracket trio (once-038: three keys — not a "pair", a misnomer its code comment echoed) — the same convention the Reports page uses for its own navigation.
+
+> **Key routing** — the full `App::update()` dispatch order, arm semantics included, lives in [Architecture → Key routing](#key-routing).
 
 > **MySQL / PostgreSQL only** — the Admin pane needs server introspection data. On SQLite, `App::adminPage()` finds no context to serve and falls back to `EmptyServerContext`: the variable, status and plugins accessors return empty sets, `statusVariablesTs()` reports `0.0`, `wasReset()` reports `false`, `refresh()` is a no-op, and `connection()` throws `RuntimeException` (each leg pinned by `EmptyServerContextTest`). No context exposes a processlist accessor — those grids go through `Admin\Connections\ProcesslistProvider` — so run the admin panes against MySQL or PostgreSQL to see live content.
 
@@ -269,7 +300,7 @@ these tables.
 | `Db\PdoPreparedStatement` | `PreparedStatementInterface` via PDOStatement. Wraps any PDO driver statement in the neutral interface. All implementations (`MysqlDatabase`, `PostgresDatabase`, `SqliteDatabase`) return this wrapper from `prepare()`. |
 | `Pane`            | Enum for pane focus + `next()`.                                                              |
 | `App` (Model)      | Tables list, rows pane, in-progress SQL editor buffer, error string, status string.         |
-| `Renderer`        | Three rounded-border panes — tables, rows, query — with the focused pane's border hue swapped (#ff66aa → #00ffaa) and a bold ▶ marker on its frame title; the glyph is the colour-independent focus leg, surviving the NO_COLOR reduced profile where the hue swap collapses. |
+| `Renderer`        | Three rounded-border panes — tables, rows, query — with the focused pane's border hue swapped (#ff66aa → #00ffaa) and a bold ▶ marker on its frame title; the glyph is the color-independent focus leg, surviving the NO_COLOR reduced profile where the hue swap collapses. |
 | `SchemaBrowser`   | Schema introspection via strategy pattern — delegates to driver-specific `SchemaProviderInterface` implementation based on `Flavor`. |
 | `Schema\SchemaProviderInterface` | Interface for driver-specific schema introspection. Implement `tables()`, `columns()`, `indexes()`, `foreignKeys()`. |
 | `Schema\SqliteSchemaProvider` | `SchemaProviderInterface` via PRAGMA queries (tables, columns, indexes, foreign keys). |
@@ -278,7 +309,7 @@ these tables.
 
 | File              | Role                                                                                          |
 |-------------------|----------------------------------------------------------------------------------------------|
-| `ExplainView`     | Renders `EXPLAIN` output as a colour-coded ANSI tree. Uses strategy pattern — delegates to driver-specific `ExplainProviderInterface` based on `Flavor`. |
+| `ExplainView`     | Renders `EXPLAIN` output as a color-coded ANSI tree. Uses strategy pattern — delegates to driver-specific `ExplainProviderInterface` based on `Flavor`. |
 | `Explain\ExplainProviderInterface` | Interface for driver-specific EXPLAIN parsing. Implement `explain(string $sql): array` returning a list of explain rows; the connection handle is constructor-injected on the provider, never a parameter. |
 | `Explain\SqliteExplainProvider` | `ExplainProviderInterface` via `EXPLAIN QUERY PLAN`. Returns raw rows; tree-prefix (`|--`, `` `-- ``) depth parsing lives in `ExplainView::depthFromDetail()`. |
 | `Explain\MysqlExplainProvider` | `ExplainProviderInterface` via `EXPLAIN`. Returns `EXPLAIN` formatted rows with tag/parent/detail/indent. |
@@ -338,6 +369,30 @@ The PDO connection is the only stateful dependency; tests use a `:memory:` SQLit
 
 Multi-driver support is now available via `DatabaseInterface`. `CsvExporter` and `SqlExporter` provide driver-agnostic export.
 
+### Key routing
+
+`App::update()` consumes the keyboard in this order — each step sees only what the steps above it released (once-037: this contract used to be one 1,100-character semicolon wall):
+
+1. **Ctrl+C** — cancels a running query when one is in flight; quits when idle (SQL-O08 superseded the old unconditional quit).
+2. **Admin modals** — on the Admin pane, every key goes to the page while it is modal (`PageBase::isModal()`: the variable-editor dialog, the GTID dialog, a pending kill confirmation, or a staged PerfSchema commit); `Esc` goes to the page whenever it is present.
+3. **q/Esc** — quit **only from the Tables and Rows browser panes**. An in-flight cancel (step 1's arm) answers `Esc` before the pane chords do; in the Query pane `Esc` no longer discards a drafted query.
+4. **Tab** — cycles the focus pane.
+5. **Tables pane** — `/` opens a live filter line over the table names; while it is open the line owns the keyboard (`Esc` abandons it and clears the filter instead of quitting, `q` is just a filter letter, arrows move the filtered cursor, Enter commits and loads). Cursor movement never fetches: only Enter/Space loads the highlighted table's preview (SQL-O10; the old per-cursor preview round trip auto-floated every table on ERP-sized schemas). `PgDn`/`PgUp` walk that preview in 100-row server-side windows (SQL-O11) — forward only while the current page is full, and the status line counts 'page X (rows a–b)'.
+6. **Export/import lines** — `Ctrl+S`/`x` (export) and `i` (import) open a file line (SQL-O07); while it is open the line owns the keyboard the same way the filter does — `Enter` is its only submit key, `Esc` closes it without quitting, `q` is a path letter. The export half additionally refuses overwrite: an existing destination arms a `REPLACE …?` confirm that `Enter` accepts and any edit disarms.
+7. **Query pane** — `Ctrl+R`/`Ctrl+E` run the query (both also accept `Ctrl+Enter`) and every other key edits the buffer. `Ctrl+Space` completes at the caret (SQL-O04): SQL keywords; table names after `FROM`/`JOIN`/`INTO`/`UPDATE`/`TABLE`; columns in context — unqualified columns of the tables the current statement names, `alias.`/`table.` qualified columns (aliases resolved from `FROM t a` / `JOIN t AS a`), and the `INSERT INTO t (…)` column list — read lazily from the loaded schema; quoted identifiers and spellings that need quoting are handled per flavor, strings and comments never complete, and with no schema loaded every context falls back to the keyword roster. One candidate completes outright, a shared longest prefix advances in one press, otherwise the status line lists candidates; legacy terminals that report Ctrl+Space as a bare space just keep typing. A leading `EXPLAIN` is answered with the `ExplainView` color tree in the Rows pane (SQL-O09; an `ANALYZE` modifier is stripped because PostgreSQL's `EXPLAIN ANALYZE` would execute the statement).
+8. **Destructive statements** — the arm/disarm discipline is its own procedure (below).
+9. **Admin chords** — `App::handleAdminKey()` intercepts the page picker (`1`–`{n}`, `p`, `r`, `q`→return to Tables); `r` additionally forwards to the active page after dropping the shared `AdminQueryCache`.
+10. **Row-navigable pages** — pages listed in `RowNavigable` (Variables, Connections, Reports, PerfSchema, Debug) keep their own `j`/`k`/`↑`/`↓` row cursors; on non-row-navigable pages (ServerStatus, Dashboard) those same keys walk the sidebar.
+11. **Delegation** — all remaining keys go to the active page's `update()` method.
+
+**Arming a destructive run.** Statements matching `DROP`/`TRUNCATE`/`DELETE`/`ALTER`/`RENAME`/`GRANT`/`REVOKE` never execute on the first press:
+
+1. The first run-key press only arms a warning and stages the statement's trimmed SQL.
+2. A second consecutive run whose trimmed statement **equals the staged SQL** confirms and executes.
+3. Any other query run — or an edit whose trimmed text differs from the staged SQL — disarms the arm; a whitespace-only edit trims to the same statement and leaves the arm standing.
+
+`H` records no new rule here (it is step 11's page-less browser chord, SQL-O13), but `:tx rollback` (SQL-O12) reuses this exact two-press discipline.
+
 ## Connection factory
 
 `ConnectionFactory` provides four static methods for turning connection parameters into a usable connection — or into a value object that describes one:
@@ -380,7 +435,7 @@ $db = ConnectionFactory::fromPath('app.sqlite');   // -> SqliteDatabase
 
 ### DSN format
 
-```
+```text
 driver://[user][:pass]@host[:port]/dbname[?query]
 ```
 
@@ -450,7 +505,7 @@ Schema value objects (`SchemaTable`, `SchemaColumn`, `SchemaIndex`, `SchemaForei
 
 ## Query plan viewer
 
-`ExplainView` uses a strategy pattern based on `Flavor` to delegate EXPLAIN parsing to the appropriate `ExplainProviderInterface` implementation. Since SQL-O09 it also has a production route inside the TUI: a statement typed with a leading `EXPLAIN` in the Query editor is intercepted by `dispatchRunQuery()`, answered through `run()` + `render()` as a colour tree in the Rows pane (`ANALYZE`/`FORMAT` modifiers stripped — the inspector never executes what it inspects), and replaced by the next query run or table preview:
+`ExplainView` uses a strategy pattern based on `Flavor` to delegate EXPLAIN parsing to the appropriate `ExplainProviderInterface` implementation. Since SQL-O09 it also has a production route inside the TUI: a statement typed with a leading `EXPLAIN` in the Query editor is intercepted by `dispatchRunQuery()`, answered through `run()` + `render()` as a color tree in the Rows pane (`ANALYZE`/`FORMAT` modifiers stripped — the inspector never executes what it inspects), and replaced by the next query run or table preview:
 
 ```php
 use SugarCraft\Sql\ExplainView;
@@ -458,8 +513,8 @@ use SugarCraft\Sql\Db\DatabaseInterface;
 
 // run() takes a DatabaseInterface and detects the flavor/provider itself
 $view = ExplainView::run($db, 'SELECT * FROM users JOIN orders ON users.id = orders.user_id');
-echo $view->render();        // ANSI coloured tree
-print_r($view->toArray());   // JSON-serialisable structure
+echo $view->render();        // ANSI colored tree
+print_r($view->toArray());   // JSON-serializable structure
 ```
 
 Each detail line is classified by op type: `SEARCH` (cyan), `SCAN` (yellow), `USING` (green), `JOIN` (purple), `SUBQUERY` (pink), `COMPOUND` (orange).
@@ -507,7 +562,7 @@ $table = ResultTable::fromRows($rows)
     ->withJsonPretty(true)
     ->withNullToken('∅');
 
-echo $table->render();       // ANSI coloured
+echo $table->render();       // ANSI colored
 echo $table->renderPlain();  // plain text for copy/export
 
 if ($table->canScrollRight()) {
@@ -554,7 +609,7 @@ GTID dialog: press `[c]` to cycle through `OFF → OFF_PERMISSIVE → ON_PERMISS
 
 ## Performance Reports
 
-The Performance Reports pages (`[5]` Query Stats / `[7]` Table Stats in admin) displays data from MySQL's `sys` schema views — grouped by category (problems, schema, IO, memory, etc.). Report queries are fully asynchronous: `validate()` acquires the connection handle and calls `Catalog::load()` (file I/O) but issues no query, then `App` dispatches `ReloadReportMsg` after the admin data tick, queuing the report query via `AdminQueryCache` for the next event-loop tick. This means the page never blocks on a slow `SELECT * FROM sys.x$*` query, matching the non-blocking behaviour of processlist and replica pages.
+The Performance Reports pages (`[5]` Query Stats / `[7]` Table Stats in admin) display data from MySQL's `sys` schema views — grouped by category (problems, schema, IO, memory, etc.). Report queries are fully asynchronous: `validate()` acquires the connection handle and calls `Catalog::load()` (file I/O) but issues no query, then `App` dispatches `ReloadReportMsg` after the admin data tick, queuing the report query via `AdminQueryCache` for the next event-loop tick. This means the page never blocks on a slow `SELECT * FROM sys.x$*` query, matching the non-blocking behavior of processlist and replica pages.
 
 **Async flow:**
 1. `ReportsPage::validate()` — acquires the `$context->connection()` handle (handle only, no query issued) and loads `Catalog` from `data/sys_reports.json` (file I/O, always sync, never blocks)
@@ -930,6 +985,18 @@ Four tests hold the line: `tests/LocaleParityTest.php` (every locale has en's ke
 
 What stays English is not prose and is listed per file, with a dated rationale and an exact occurrence count, in `tests/Support/raw-literals-exempt.json`: SQL fragments, protocol and option tokens (`ssl-mode` spellings, `connections.json` field names), `serverVersion()` strings that `Flavor` parses back, server error substrings matched by the reconnect/processlist logic, programmer-error `LogicException`s, and the metric-widget captions. Captions are English identity tokens (counter ids and panel compositions key on them); what is drawn goes through `Widget::title()` / `Lang::caption()`, which look up `caption.*` keys in all 16 files. The one remaining English surface is the `bin/candy-sql` `--help` flag reference (a nowdoc, outside the census); the launcher's runtime messages are translated.
 
+## Accessibility
+
+What works today:
+
+- **Color is a signal nobody has to see.** The focus marker is the bold ▶ glyph on the pane's frame title, which survives the `NO_COLOR` reduced profile where the hue swap collapses; the legends and the `error:` word prefixes carry the same facts in text. `NO_COLOR`, `CLICOLOR` and `COLORTERM` are honored for *color only* through sugar-core's profile detection — alt-screen, cursor and paste-bracketing modes still go out (the non-tty contract lives under [Terminals and non-tty use](#terminals-and-non-tty-use)).
+- **Nothing on screen can paint the terminal.** Driver, server and cell-supplied strings pass through `CellValue::sanitize` before any line renders them.
+- **`[p]` (pause)** is the motion brake for the admin auto-refresh tick.
+
+What is not offered: no high-contrast mode, no reduced-motion toggle (the 2-second admin poll, loading spinner and Dashboard gauges keep running with no off switch), and no screen-reader pass — the truecolor borders, `│`/`─` grids and four simultaneous panes are a visual layout.
+
+Plain-text alternative: embed the library instead of driving the TUI — `ResultTable::renderPlain()` is the escape-sequence-free grid, and every surface has the headless API demonstrated under `examples/`.
+
 ## Known limitations
 
 Pre-1.0 gaps to be aware of, mostly on the async (ReactPHP) query path:
@@ -1012,7 +1079,7 @@ Pre-1.0 gaps to be aware of, mostly on the async (ReactPHP) query path:
   handle that drops stays dropped until the process relaunches.
 - **One connection per process.** The TUI runs on a single pooled
   connection; `DatabaseInterface::databases()` has no UI caller, and admin
-  fetches, queries, and page drains all serialise onto that one handle.
+  fetches, queries, and page drains all serialize onto that one handle.
 - **Sync and async runs behave differently on success.** A synchronous
   (SQLite/TLS-verified MySQL) run clears the editor once results land, while
   an async run preserves the drafted SQL so it can be edited and re-run.

@@ -414,7 +414,7 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
             return [$this->withRevert(), null];
         }
 
-        // Easy Setup actions on the [ ] . bracket pair — the Reports-page
+        // Easy Setup actions on the [ ] . bracket trio — the Reports-page
         // convention. They replaced the digits 1/2/3, which App always
         // intercepts as the admin pane picker before any page sees them
         // (review M2); the bracket keys are otherwise unused here, so the
