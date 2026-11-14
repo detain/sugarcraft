@@ -143,7 +143,23 @@ if ($vendorMode === 'published') {
     // Scoped pathspec: only paths under THIS package count toward dirtiness —
     // unrelated monorepo activity must not veto a clean package release.
     $porcelain = (string) @shell_exec('git -C ' . escapeshellarg($package) . ' status --porcelain -- . 2>&1');
-    if ($headRef === '' || str_contains($headRef, 'fatal:') || str_contains($porcelain, 'fatal:')) {
+    // A truthful answer has a shape. A branch ref is a single line and git's
+    // ref rules exclude ':' from names; a porcelain record always opens with
+    // its XY status columns (or a '#'/'' line). Shell-level complaints —
+    // "sh: 1: git: not found" on PATH-less invocations, cmd.exe's "git is
+    // not recognized" — contain ':' or lack the columns, and must read as
+    // git being unable to answer, not as one path dirty on a branch named
+    // after the error message.
+    $headRefSane = $headRef !== '' && str_contains($headRef, ':') === false && str_contains($headRef, "\n") === false;
+    $porcelainSane = true;
+    foreach (explode("\n", $porcelain) as $line) {
+        if ($line === '' || preg_match('/\A(?:[#!]|[ MARCDTUAX?!]{1,2} )/', $line) === 1) {
+            continue;
+        }
+        $porcelainSane = false;
+        break;
+    }
+    if (!$headRefSane || !$porcelainSane) {
         fwrite(STDERR, "build-phar: refusing to build — the source tree's integrity cannot be verified with git (no repository, git unavailable, or git refused to answer). Commit the tree, or pass --vendor=monorepo to build from working-tree state deliberately (dev-only; never for a published artifact).\n");
         exit(2);
     }

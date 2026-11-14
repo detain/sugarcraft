@@ -125,6 +125,10 @@ final class PharBuildScriptTest extends TestCase
 
         // candy-image-029: the integrity read counts only this package's paths.
         self::assertStringContainsString("' status --porcelain -- . 2>&1'", $build);
+        // The answers are SHAPE-checked, not just fatal-checked: shell-level
+        // complaints ("sh: 1: git: not found") contain ':' and would otherwise
+        // pose as a branch name / dirty path in the refusal.
+        self::assertStringContainsString("[ MARCDTUAX?!]{1,2} ", $build);
         // candy-image-053: no git question may swallow its stderr any more —
         // both stamping calls ask with 2>&1, like Guard 2's do.
         self::assertStringContainsString("' rev-parse HEAD 2>&1'", $build);
@@ -135,17 +139,43 @@ final class PharBuildScriptTest extends TestCase
         self::assertStringContainsString('WARNING — git', $build);
     }
 
+    public function testUnanswerableGitRefusesAsUnverifiableNotAsDirtiness(): void
+    {
+        if (DIRECTORY_SEPARATOR === '\\') {
+            self::markTestSkipped('PATH-shadowing probe is POSIX-shaped; this package does not run on Windows CI.');
+        }
+        $emptyBin = sys_get_temp_dir() . '/candy-image-empty-bin';
+        if (!is_dir($emptyBin) && !@mkdir($emptyBin, 0o700, true) && !is_dir($emptyBin)) {
+            self::markTestSkipped("cannot create {$emptyBin}");
+        }
+
+        // phar.readonly is opened so the run reaches Guard 2 at all; git is
+        // then unreachable by PATH, and Guard 2's promise (unverifiable tree,
+        // never a waved-through or misdiagnosed build) is what gets tested.
+        [$rc, $err] = $this->runBuildScript(
+            ['--out=' . $emptyBin . '/probe.phar'],
+            ['PATH=' . $emptyBin],
+            ['-d', 'phar.readonly=0'],
+        );
+
+        self::assertSame(2, $rc);
+        self::assertStringContainsString('integrity cannot be verified', $err);
+        self::assertStringNotContainsString('dirty source tree', $err);
+    }
+
     /**
      * Run the build script as a child with the given extra arguments.
      *
-     * @param list<string> $extraArgs
+     * @param list<string>     $extraArgs
+     * @param list<string>     $env      full child environment (name=value), or [] to inherit
+     * @param list<string>     $phpArgs  flags placed before the script path (e.g. -d ...)
      *
      * @return array{0:int,1:string} exit code and captured stderr
      */
-    private function runBuildScript(array $extraArgs): array
+    private function runBuildScript(array $extraArgs, array $env = [], array $phpArgs = []): array
     {
-        $command = array_merge([PHP_BINARY, self::APP_ROOT . '/tools/build-phar.php'], $extraArgs);
-        $process = proc_open($command, [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, self::APP_ROOT);
+        $command = array_merge([PHP_BINARY], $phpArgs, [self::APP_ROOT . '/tools/build-phar.php'], $extraArgs);
+        $process = proc_open($command, [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, self::APP_ROOT, $env === [] ? null : $env);
         self::assertIsResource($process, 'build script must be launchable');
         fclose($pipes[0]);
         $stdout = (string) stream_get_contents($pipes[1]);
