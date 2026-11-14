@@ -8,7 +8,7 @@ declare(strict_types=1);
  * Run: php examples/multi-select.php
  */
 
-require_once __DIR__ . '/../vendor/autoload.php';
+require __DIR__ . '/../vendor/autoload.php';
 
 use SugarCraft\Readline\{Key, MultiSelectPrompt};
 
@@ -29,8 +29,9 @@ $p = $p->handleKey(Key::Space)
        ->handleKey(Key::Down)->handleKey(Key::Space)
        ->handleKey(Key::Enter);
 
-echo "Result: ";
-var_dump($p->selectedValues());
+echo "Result:\n";
+print_r($p->selectedValues());
+echo "\n";
 
 // With min/max constraints.
 echo "\n=== With min/max constraints ===\n\n";
@@ -47,6 +48,6 @@ $p2 = $p2->handleKey(Key::Space)
          ->handleKey(Key::Down)->handleKey(Key::Space)
          ->handleKey(Key::Enter);
 
-echo "Result: ";
-var_dump($p2->selectedValues());
+echo "Result:\n";
+print_r($p2->selectedValues());
 echo "\n";

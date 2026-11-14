@@ -3,7 +3,11 @@
 declare(strict_types=1);
 
 /**
- * SugarReadline — interactive prompts demo (no real TTY input).
+ * SugarReadline — scripted walkthrough of every prompt form.
+ *
+ * Every keypress is pre-fed through handleChar()/handleKey(); nothing reads
+ * STDIN, so the demo runs identically on a pipe, in CI, or on a terminal.
+ * (For a real TTY loop see interactive.php.)
  *
  * Run: php examples/basic.php
  */
@@ -36,7 +40,7 @@ $s = $s->withFilter('er');
 echo "After filter 'er':\n" . $s->view() . "\n\n";
 
 $s = $s->handleKey(Key::Down)->submit();
-echo "Selected: " . $s->selectedValue() . "\n\n";
+echo "Selected (after filter 'er', cursor moved Down once): " . $s->selectedValue() . "\n\n";
 
 // ---- Confirmation Prompt ----
 echo "=== Confirmation Prompt ===\n";
