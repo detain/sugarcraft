@@ -61,6 +61,15 @@ final class Bresenham
      */
     public static function circleArc(int $cx, int $cy, int $radius, int $octant = 0): array
     {
+        // getOctantPoints indexes 1..8 (0 means every mirror); anything
+        // outside that range used to read an undefined array key - a
+        // silent warning under loose runs, a fatal under failOnWarning.
+        if ($octant < 0 || $octant > 8) {
+            throw new \InvalidArgumentException(
+                "Circle octant must be 0 (whole circle) or 1..8, got {$octant}",
+            );
+        }
+
         if ($radius <= 0) {
             return [new CanvasPoint($cx, $cy)];
         }
