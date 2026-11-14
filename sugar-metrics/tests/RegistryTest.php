@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Metrics\Tests;
 
 use SugarCraft\Metrics\Backend\InMemoryBackend;
+use SugarCraft\Metrics\Backend\PrometheusFileBackend;
 use SugarCraft\Metrics\Descriptor;
 use SugarCraft\Metrics\Instrument\AsyncCounter;
 use SugarCraft\Metrics\Instrument\AsyncGauge;
@@ -289,5 +290,73 @@ final class RegistryTest extends TestCase
         $r = new Registry(new InMemoryBackend());
         $stop = $r->time('elapsed');
         $this->assertGreaterThanOrEqual(0.0, $stop());
+    }
+
+    /**
+     * sugar-metrics-003 (with -037 note): a withTags() child inherits the
+     * parent's descriptor ledger (snapshot, value-copied), so a clashing
+     * re-registration on the child throws instead of silently
+     * last-writer-winning the shared backend's TYPE/HELP. The DM-OPS-02
+     * half: TYPE/HELP is backend-global — the child's emissions carry the
+     * parent's metadata without any pointless per-child re-registration.
+     */
+    public function testWithTagsChildInheritsLedgerAndRefusesClashingReRegistration(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'metrics-wt');
+        $this->assertIsString($path);
+        $b = new PrometheusFileBackend($path);
+        $r = Registry::new($b);
+        $r->register(new Descriptor('m', 'parent help', 'gauge', ['route']));
+        $child = $r->withTags(['user' => 'bob']);
+        try {
+            $child->register(new Descriptor('m', 'clashing help', 'gauge', ['route']));
+            $this->fail('a clashing re-registration on a withTags() child must throw');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('m', $e->getMessage());
+        }
+        // A kind switch is refused by the same inherited table.
+        try {
+            $child->register(new Descriptor('m', 'parent help', 'counter', ['route']));
+            $this->fail('a kind-switch re-registration on a child must throw');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('m', $e->getMessage());
+        }
+        // Identical re-registration stays an idempotent no-op.
+        $child->register(new Descriptor('m', 'parent help', 'gauge', ['route']));
+        // Emissions ride the parent's metadata: the child never registered,
+        // yet its exposition carries the TYPE/HELP lines.
+        $child->gauge('m', 3, ['route' => '/x']);
+        $b->flush();
+        $body = (string) file_get_contents($path);
+        $this->assertStringContainsString('# TYPE m gauge', $body);
+        $this->assertStringContainsString('# HELP m parent help', $body);
+        @unlink($path);
+    }
+
+    /**
+     * sugar-metrics-003: inheritance is one-way and snapshot-at-creation —
+     * a child registration never writes through to the parent ledger, a
+     * parent registration after the split never back-fills an existing
+     * child, and a fresh child takes the parent's current whole ledger.
+     */
+    public function testWithTagsDescriptorInheritanceIsOneWaySnapshot(): void
+    {
+        $b = new InMemoryBackend();
+        $r = Registry::new($b);
+        $child = $r->withTags(['user' => 'bob']);
+        $child->register(new Descriptor('z', 'child help', 'gauge'));
+        // The parent ledger saw no write-through: this is not a conflict there.
+        $r->register(new Descriptor('z', 'parent help', 'gauge'));
+        $r->register(new Descriptor('late', 'after the split', 'gauge'));
+        // The earlier child never sees it (no retroactive back-fill).
+        $child->register(new Descriptor('late', 'after the split', 'gauge'));
+        // A fresh child inherits the whole current ledger.
+        $fresh = $r->withTags([]);
+        try {
+            $fresh->register(new Descriptor('late', 'clashing', 'gauge'));
+            $this->fail('a fresh child must inherit the parent ledger at split time');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('late', $e->getMessage());
+        }
     }
 }

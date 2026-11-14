@@ -29,8 +29,15 @@ use SugarCraft\Metrics\Instrument\UpDownCounter;
  * pre-tagged — useful for SSH session middleware that wants to
  * stamp every metric with `user`/`client_addr` without threading
  * those tags through every call site. A child carries its OWN
- * cardinality budget and does not inherit registered descriptors
- * (register on each instance whose emissions need the TYPE/HELP).
+ * cardinality budget but inherits a snapshot of the parent's descriptor
+ * ledger (sugar-metrics-003): the per-instance map governs only
+ * register()-conflict detection, while TYPE/HELP is backend-global —
+ * a descriptor registered on ANY instance takes effect for every
+ * instance sharing the backend, so re-registering through a child is
+ * unnecessary, and a clashing re-registration there now throws
+ * instead of silently overwriting the shared family metadata.
+ * Inheritance is one-way and snapshot-at-creation: registrations made
+ * on either instance after the split do not surface on the other.
  *
  * When a metric accumulates too many unique label-value
  * combinations (cardinality explosion), the oldest combination
@@ -81,6 +88,8 @@ final class Registry
 
     /**
      * @param array<string,string> $defaultTags
+     * @param array<string,Descriptor> $descriptors ledger snapshot inherited from a parent registry
+     *        (see {@see self::withTags()}); a fresh registry starts with an empty one.
      */
     /**
      * House-idiom factory (sugar-metrics-014): `Registry::new($backend)`.
@@ -96,6 +105,7 @@ final class Registry
         private readonly Backend $backend,
         array $defaultTags = [],
         int $cardinalityLimit = 10000,
+        array $descriptors = [],
     ) {
         if ($cardinalityLimit < 1) {
             // A limit of 0 or less would evict every series the moment it
@@ -107,6 +117,10 @@ final class Registry
         $this->defaultTags = $defaultTags;
         $this->defaultTagsKey = Util::tagKey($defaultTags);
         $this->cardinalityLimit = $cardinalityLimit;
+        // Snapshot of the parent's ledger (sugar-metrics-003): children do
+        // not write through — the value-copy semantics of PHP arrays make
+        // that structural here.
+        $this->descriptors = $descriptors;
     }
 
     /** The per-metric label-combination budget (constructor argument). */
@@ -329,7 +343,15 @@ final class Registry
      */
     public function withTags(array $tags): self
     {
-        return new self($this->backend, array_merge($this->defaultTags, $tags), $this->cardinalityLimit);
+        // sugar-metrics-037: deliberate deviation from the house mutate()
+        // idiom — the child must re-run the constructor's validation
+        // (cardinality floor, default-tag key precomputation), so the ctor
+        // call IS the clone seam here; a field-copying mutate() would skip
+        // it. The parent's descriptor ledger rides along as a value copy
+        // (sugar-metrics-003): re-registering a clashing name on the child
+        // now throws instead of silently overwriting the shared backend's
+        // TYPE/HELP.
+        return new self($this->backend, array_merge($this->defaultTags, $tags), $this->cardinalityLimit, $this->descriptors);
     }
 
     public function backend(): Backend
