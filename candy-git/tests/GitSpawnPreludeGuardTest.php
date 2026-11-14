@@ -40,7 +40,9 @@ use SugarCraft\Git\Git;
 final class GitSpawnPreludeGuardTest extends TestCase
 {
     /** Every Process::run() spawn site in src/ (recursively), by design. */
-    private const EXPECTED_SPAWN_SITES = 6;
+    // CG-02 adds Git::hasAnyCommits() — the unborn-HEAD probe (candy-git-026) —
+    // adjudicated into the roster through the same gitBase() funnel.
+    private const EXPECTED_SPAWN_SITES = 7;
 
     public function testEveryGitSpawnIsAssembledFromThePreludeFunnel(): void
     {

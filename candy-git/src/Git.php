@@ -164,16 +164,41 @@ final class Git implements GitDriver
 
     public function log(int $limit = 25): array
     {
+        if (!$this->hasAnyCommits()) {
+            return [];
+        }
+        // Subject is free-form text and may itself contain tabs, so it must
+        // be the LAST %x09 field: explode's limit-4 then leaves a tab-bearing
+        // subject whole in $subject instead of leaking its tail into author
+        // (candy-git-017/026).
         $out = $this->run([
-            'log', '--pretty=format:%h%x09%s%x09%an%x09%ar', "-n{$limit}",
+            'log', '--pretty=format:%h%x09%an%x09%ar%x09%s', "-n{$limit}",
         ]);
         $rows = [];
         foreach ($out as $line) {
             if ($line === '') continue;
-            [$sha, $subject, $author, $ago] = array_pad(explode("\t", $line, 4), 4, '');
+            [$sha, $author, $ago, $subject] = array_pad(explode("\t", $line, 4), 4, '');
             $rows[] = compact('sha', 'subject', 'author', 'ago');
         }
         return $rows;
+    }
+
+    /**
+     * An unborn-HEAD repo answers `git log` with exit 128 and a fatal — for
+     * the history pane that is an empty history, not a failure. The probe
+     * rides the same trust funnel as every other child; its exit code is
+     * locale-stable (unlike matching the fatal text), so the two states stay
+     * distinguishable without swallowing genuine errors (candy-git-026).
+     */
+    private function hasAnyCommits(): bool
+    {
+        $r = Process::run(
+            array_merge(self::gitBase($this->cwd), ['rev-parse', '--verify', '--quiet', 'HEAD']),
+            null,
+            $this->timeout,
+        );
+
+        return $r['exit'] === 0;
     }
 
     public function stage(string $path): void

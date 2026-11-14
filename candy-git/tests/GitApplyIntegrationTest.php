@@ -49,8 +49,23 @@ final class GitApplyIntegrationTest extends TestCase
         $this->assertStringContainsString('--- a/file.txt', $patch);
         $this->assertStringContainsString('+++ b/file.txt', $patch);
         $git->stagePatch('file.txt', $patch);
-        $stagedDiff = $git->diff('file.txt');
-        $this->assertNotEmpty($stagedDiff, 'hunk should be staged');
+        // Fail-able leg (candy-git-072): the old assertNotEmpty over this same
+        // unstaged call could never fail — run() answers a drained diff as
+        // [''], which is a NON-EMPTY ARRAY. The honest contract is: the
+        // unstaged diff drains to empty content, the cached diff gains the
+        // hunk, and the worktree bytes stay untouched by a --cached apply.
+        $this->assertSame(
+            '',
+            implode("\n", $git->diff('file.txt')),
+            'unstaged diff must drain to empty once the only hunk is staged',
+        );
+        $cached = implode("\n", $git->diff('file.txt', true));
+        $this->assertStringContainsString('+line 2 modified', $cached, 'cached diff must carry the staged hunk');
+        $this->assertStringContainsString(
+            "line 2 modified\n",
+            (string) file_get_contents($this->cwd . '/file.txt'),
+            'a --cached apply never rewrites worktree bytes',
+        );
     }
 
     public function testCurrentHunkPatchIncludesFileHeader(): void
