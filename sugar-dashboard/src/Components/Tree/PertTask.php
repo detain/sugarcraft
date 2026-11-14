@@ -39,13 +39,19 @@ final class PertTask
      */
     public function withColor(?Color $color): self
     {
-        return new self(
+        $copy = new self(
             id: $this->id,
             name: $this->name,
             duration: $this->duration,
             color: $color,
             status: $this->status,
         );
+        // color is the promoted readonly slot, so the clone door is shut
+        // here; the rebuild must still carry the dependency list (D-143:
+        // a dropped dependency silently un-schedules the task in the CPM
+        // pass, PERT.php:202-279).
+        $copy->dependencies = $this->dependencies;
+        return $copy;
     }
 
     /**
@@ -63,12 +69,14 @@ final class PertTask
      */
     public function withDuration(int $duration): self
     {
-        return new self(
+        $copy = new self(
             id: $this->id,
             name: $this->name,
             duration: $duration,
             color: $this->color,
             status: $this->status,
         );
+        $copy->dependencies = $this->dependencies;
+        return $copy;
     }
 }
