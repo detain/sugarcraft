@@ -78,6 +78,16 @@ final class HistoryRecorder implements StatusSnapshotProviderInterface
         return $this->store->prune($cutoff);
     }
 
+    /**
+     * SQL-O13: the read side of the store this recorder writes. Until now
+     * the full query API had zero production readers — every disk write paid
+     * for a file the user could not interpret in-app.
+     */
+    public function historyQuery(): HistoryQuery
+    {
+        return new HistoryQuery($this->store);
+    }
+
     // -------------------------------------------------------------------------
     // StatusSnapshotProviderInterface
     // -------------------------------------------------------------------------

@@ -28,6 +28,9 @@
 # ignore.count red at HEAD while this lane gated SQL-O08. Re-censused at 9;
 # the SQL-O08 cancel arms add nothing (their slot-1 literal is null, which
 # Closure|null accepts), so the pin now matches the live count.
+# SQL-O13 (2026-11-13): the `H` history-trend arm adds one direct
+# array{App, Cmd|null} return to update(); same documented contract mismatch,
+# re-censused at 10.
 parameters:
 	ignoreErrors:
 		-
@@ -129,7 +132,7 @@ parameters:
 		-
 			message: '#^Method SugarCraft\\Sql\\App\:\:update\(\) should return array\{SugarCraft\\Core\\Model, Closure\|null\} but returns array\{SugarCraft\\Sql\\App, SugarCraft\\Core\\Cmd\|null\}\.$#'
 			identifier: return.type
-			count: 9
+			count: 10
 			path: src/App.php
 
 		-

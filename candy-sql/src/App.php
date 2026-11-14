@@ -431,10 +431,18 @@ final class App implements Model
         if (($msg->type === KeyType::PageDown || $msg->type === KeyType::PageUp)
             && ($this->ui->pane === Pane::Tables || $this->ui->pane === Pane::Rows)
             && $this->browse->selectedTable !== null
-            && $this->browse->selectedTable !== '(query)'
+            && !$this->browse->holdsSyntheticResult()
             && !$this->browse->rowsLoading
             && !$this->browse->filterMode) {
             return $this->beginPageShift($msg->type === KeyType::PageDown);
+        }
+        // SQL-O13: `H` (shifted h — the Query editor keeps lowercase, and an
+        // open filter line owns the keyboard) reads the recorded status
+        // history as a trend folded into the Rows pane.
+        if (!$msg->ctrl && $msg->type === KeyType::Char && $msg->rune === 'H'
+            && !$this->browse->filterMode
+            && ($this->ui->pane === Pane::Tables || $this->ui->pane === Pane::Rows || $this->ui->pane === Pane::Admin)) {
+            return $this->historyTrend();
         }
         if ($this->ui->pane === Pane::Query) {
             if (($msg->ctrl && ($msg->rune === 'r' || $msg->rune === 'e'))
@@ -734,7 +742,7 @@ final class App implements Model
             return $refuse('edit.refuse_readonly');
         }
         $table = $this->browse->selectedTable;
-        if ($table === null || $table === '(query)' || $this->query->plan !== null) {
+        if ($table === null || $this->browse->holdsSyntheticResult() || $this->query->plan !== null) {
             return $refuse('edit.refuse_no_table');
         }
         if ($this->browse->rowsLoading) {
@@ -1308,7 +1316,7 @@ final class App implements Model
             }
             return $this->mutate([
                 'browse' => $this->browse
-                    ->withSelectedTable('(query)')
+                    ->withSelectedTable(BrowseState::SENTINEL_QUERY)
                     ->withRows($rows)
                     ->withRowCursor(0)->withColCursor(0)
                     // Query results render through ResultTable (horizontal scroll,
@@ -1323,6 +1331,119 @@ final class App implements Model
                 'ui' => $this->ui->withError($e->getMessage())->withStatus(null),
             ]);
         }
+    }
+
+    /**
+     * SQL-O13: window and shape of the `H` history reader. The retention
+     * bound landed with SQL-P02 is what makes a window read cheap; the row
+     * cap keeps the pane a trend, not a dump.
+     */
+    private const HISTORY_TREND_WINDOW = 900.0;
+    private const HISTORY_TREND_MAX_ROWS = 30;
+
+    /**
+     * Curated counters rendered as per-second rates and instant gauges.
+     * MySQL-family names first (Questions is the once-014 headline), PG
+     * equivalents second; a key absent (or non-numeric) anywhere in the
+     * window drops its column rather than rendering a half-truth.
+     */
+    private const HISTORY_RATE_COUNTERS = ['Questions', 'Com_select', 'Slow_queries', 'xact_commit', 'xact_rollback'];
+    private const HISTORY_GAUGES = ['Threads_connected', 'numbackends'];
+
+    /**
+     * SQL-O13: fold the recorded status-history stream into the Rows pane.
+     * The store had a full query API with ZERO production readers — disk
+     * writes paying for a file the user could not interpret in-app ("when
+     * did Questions spike?"). The trend rides the same synthetic-result seam
+     * a query answer uses (one object, no new chrome), and reads the store
+     * fresh at press time. A session with no recorder (SQLite records
+     * nothing — the once-034 truth) answers with the named note, never a
+     * silent empty pane.
+     *
+     * @return array{self, ?Cmd}
+     */
+    private function historyTrend(): array
+    {
+        $recorder = $this->admin->historyRecorder;
+        if ($recorder === null) {
+            return [$this->mutate(['ui' => $this->ui->withError(null)->withStatus(Lang::t('history.none'))]), null];
+        }
+        $minutes = (string) (int) round(self::HISTORY_TREND_WINDOW / 60);
+        try {
+            $samples = $recorder->historyQuery()->querySince(microtime(true) - self::HISTORY_TREND_WINDOW);
+        } catch (\Throwable $e) {
+            return [$this->mutate(['ui' => $this->ui->withError(Lang::t('history.unreadable', ['message' => $e->getMessage()]))->withStatus(null)]), null];
+        }
+        if (count($samples) < 2) {
+            // One sample carries no delta; a rate needs two boundaries.
+            return [$this->mutate(['ui' => $this->ui->withError(null)->withStatus(Lang::t('history.empty', ['minutes' => $minutes]))]), null];
+        }
+
+        $rows = self::trendRows($samples);
+        return [$this->mutate([
+            'browse' => $this->browse
+                ->withSelectedTable(BrowseState::SENTINEL_HISTORY)
+                ->withRows($rows)
+                ->withRowCursor(0)->withColCursor(0)
+                ->withRowsLoading(false)
+                ->withResultTable(ResultTable::fromRows($rows)),
+            'ui' => $this->ui->withError(null)->withStatus(Lang::t('history.status', [
+                'samples' => (string) count($rows),
+                'minutes' => $minutes,
+            ])),
+        ]), null];
+    }
+
+    /**
+     * Display rows for the newest tail of the window: one row per interval,
+     * Time + a per-second rate per curated cumulative counter + the instant
+     * gauges. A counter reset between samples shows as a negative rate —
+     * the driver's own truth, honestly surfaced (server restarts do this).
+     *
+     * @param array<StatusSnapshot> $samples ascending by timestamp
+     * @return list<array<string, string>>
+     */
+    private static function trendRows(array $samples): array
+    {
+        $tail = array_slice($samples, -self::HISTORY_TREND_MAX_ROWS - 1);
+        $rateKeys = array_values(array_filter(
+            self::HISTORY_RATE_COUNTERS,
+            static fn (string $key): bool => self::numericAcross($tail, $key),
+        ));
+        $gaugeKeys = array_values(array_filter(
+            self::HISTORY_GAUGES,
+            static fn (string $key): bool => self::numericAcross($tail, $key),
+        ));
+
+        $rows = [];
+        for ($i = 1; $i < count($tail); $i++) {
+            $current = $tail[$i];
+            $previous = $tail[$i - 1];
+            $elapsed = $current->ts - $previous->ts;
+            if ($elapsed <= 0.0) {
+                continue;
+            }
+            $row = ['Time' => date('H:i:s', (int) $current->ts)];
+            foreach ($rateKeys as $key) {
+                $row[$key . '/s'] = sprintf('%.2f', ((float) $current->int($key) - (float) $previous->int($key)) / $elapsed);
+            }
+            foreach ($gaugeKeys as $key) {
+                $row[$key] = (string) $current->int($key);
+            }
+            $rows[] = $row;
+        }
+        return $rows;
+    }
+
+    /** @param array<StatusSnapshot> $samples */
+    private static function numericAcross(array $samples, string $key): bool
+    {
+        foreach ($samples as $snapshot) {
+            if ($snapshot->int($key) === null) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -1601,7 +1722,7 @@ final class App implements Model
         $source = CancellationSource::new();
         $loading = $this->mutate([
             'browse' => $this->browse
-                ->withSelectedTable('(query)')
+                ->withSelectedTable(BrowseState::SENTINEL_QUERY)
                 ->withRows([])
                 ->withRowCursor(0)->withColCursor(0)
                 ->withResultTable(null)

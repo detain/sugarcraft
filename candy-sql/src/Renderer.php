@@ -175,7 +175,7 @@ final class Renderer
         if ($a->ui->pane === Pane::Query) {
             $help = Style::new()->foreground(Color::hex('#7d6e98'))
                 ->render(Lang::t('ui.help.query'));
-        } elseif ($a->ui->pane === Pane::Rows && $a->browse->selectedTable !== null && $a->browse->selectedTable !== '(query)') {
+        } elseif ($a->ui->pane === Pane::Rows && $a->browse->selectedTable !== null && !$a->browse->holdsSyntheticResult()) {
             // SQL-O03: the edit chords are advertised where they act.
             $help = Style::new()->foreground(Color::hex('#7d6e98'))
                 ->render(Lang::t('ui.help.rows'));

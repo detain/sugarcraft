@@ -14,6 +14,16 @@ use SugarCraft\Sql\ResultTable;
  */
 final class BrowseState
 {
+    /**
+     * Synthetic selection names marking "the Rows pane holds a computed
+     * result, not a table preview": a query answer (SQL-C/O family folds) or
+     * the recorded-history trend (SQL-O13). They can never collide with a
+     * real table name, so the page-shift, edit and reload guards treat them
+     * through one predicate.
+     */
+    public const SENTINEL_QUERY = '(query)';
+    public const SENTINEL_HISTORY = '(history)';
+
     use Mutable;
 
     /**
@@ -98,6 +108,13 @@ final class BrowseState
     public function withSelectedTable(?string $selectedTable): self
     {
         return $this->mutate(['selectedTable' => $selectedTable]);
+    }
+
+    /** The Rows pane shows a computed result (query answer / history trend), not a table preview. */
+    public function holdsSyntheticResult(): bool
+    {
+        return $this->selectedTable === self::SENTINEL_QUERY
+            || $this->selectedTable === self::SENTINEL_HISTORY;
     }
 
     /** @param list<array<string,mixed>> $rows */
