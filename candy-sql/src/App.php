@@ -289,6 +289,12 @@ final class App implements Model
             && ($msg instanceof KeyMsg || $msg instanceof PasteMsg)) {
             return $this->handleParamKey($msg);
         }
+        // SQL-O21: while the `?` overlay is open the next key CLOSES it and
+        // is swallowed (btop's contract) — including Ctrl+C, which must not
+        // quit through the help screen.
+        if ($this->ui->helpOverlay && ($msg instanceof KeyMsg || $msg instanceof PasteMsg)) {
+            return [$this->mutate(['ui' => $this->ui->withHelpOverlay(false)]), null];
+        }
         if ($msg instanceof PasteMsg) {
             // D-M13: bracketed paste (enabled by bin) arrives as a PasteMsg,
             // which the sugar-forms TextArea already understands — it inserts
@@ -460,6 +466,18 @@ final class App implements Model
             && !$this->browse->filterMode
             && ($this->ui->pane === Pane::Tables || $this->ui->pane === Pane::Rows || $this->ui->pane === Pane::Admin)) {
             return $this->historyTrend();
+        }
+        // SQL-O21 (once-028): `?` toggles the key-help overlay in every pane
+        // EXCEPT the Query editor, where '?' is a typeable rune (and the
+        // SQL-O23 placeholder mark). The overlay is generated from KeyMap at
+        // render time, so it can never advertise a stale roster; an open '/'
+        // filter line keeps priority exactly like the H chord above.
+        if (!$msg->ctrl
+            && $msg->type === KeyType::Char
+            && $msg->rune === '?'
+            && !$this->browse->filterMode
+            && $this->ui->pane !== Pane::Query) {
+            return [$this->mutate(['ui' => $this->ui->withHelpOverlay(true)->withError(null)]), null];
         }
         if ($this->ui->pane === Pane::Query) {
             if (($msg->ctrl && ($msg->rune === 'r' || $msg->rune === 'e'))

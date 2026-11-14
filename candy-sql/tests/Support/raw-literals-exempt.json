@@ -225,6 +225,24 @@
             "import-table": 1
         }
     },
+    "App/KeyMap.php": {
+        "reason": "SQL-O21 key roster: the cells are README key-table symbols with English pane-scope annotations, byte-mirrored so the overlay and the human table cannot diverge; translatable text rides the help.* descriptions.",
+        "dated": "2026-11-14",
+        "literals": {
+            "↑/↓ (query pane)": 1,
+            "e (Rows pane)": 1,
+            "o (Rows pane)": 1,
+            "D (Rows pane)": 1,
+            "y (Rows pane)": 1,
+            "Enter / Space (Tables pane)": 1,
+            "Enter (query pane)": 1,
+            "x / i (Tables or Rows pane)": 1,
+            "H (Tables, Rows or Admin pane)": 1,
+            ":tx … (query pane, run with the run keys)": 1,
+            "run with ? / :name placeholders in the statement (query pane)": 1,
+            "? (Tables, Rows or Admin pane)": 1
+        }
+    },
     "Db/ConnectionConfig.php": {
         "reason": "libpq ssl-mode spellings (protocol tokens).",
         "dated": "2026-11-13",

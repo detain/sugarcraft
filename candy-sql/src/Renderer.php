@@ -14,6 +14,7 @@ use SugarCraft\Sql\Admin\AdminPane;
 use SugarCraft\Sql\Admin\AdminSection;
 use SugarCraft\Sql\App\EditState;
 use SugarCraft\Sql\App\ExportState;
+use SugarCraft\Sql\App\KeyMap;
 use SugarCraft\Sql\Db\DmlStatement;
 use SugarCraft\Sql\Terminal\BorderFrame;
 use SugarCraft\Style\Border;
@@ -137,6 +138,13 @@ final class Renderer
     {
         $size = self::terminalSize();
         $cols = $size['cols'];
+
+        // SQL-O21 (once-028): the `?` overlay replaces the whole body — it
+        // is generated from KeyMap at render time, so the roster it shows is
+        // the roster the tests prove against the live arms.
+        if ($a->ui->helpOverlay) {
+            return BorderFrame::wrap($a, self::helpOverlay($a));
+        }
 
         // Admin pane uses a left sidebar layout instead of the 3-pane browser
         if ($a->ui->pane === Pane::Admin) {
@@ -567,5 +575,37 @@ final class Renderer
             'total' => (string) count($prompt->labels),
             'value' => CellValue::sanitize($prompt->buffer),
         ]);
+    }
+
+    /**
+     * SQL-O21: the `?` key-help overlay — per-pane rows straight from
+     * {@see KeyMap}, so the overlay, the legends and the README's tables all
+     * describe one roster.
+     */
+    private static function helpOverlay(App $a): string
+    {
+        $rows = KeyMap::rowsFor($a->ui->pane);
+        $width = 0;
+        foreach ($rows as $row) {
+            $width = max($width, mb_strlen($row['cell']));
+        }
+        $paneName = trim(Lang::t(match ($a->ui->pane) {
+            Pane::Rows => 'ui.title.rows',
+            Pane::Query => 'ui.title.query',
+            Pane::Admin => 'ui.title.admin',
+            default => 'ui.title.tables',
+        }));
+        $lines = [Style::new()->bold()->foreground(Color::hex('#6ee7b7'))
+            ->render(Lang::t('help.title', ['pane' => $paneName]))];
+        foreach ($rows as $row) {
+            $lines[] = ' ' . Style::new()->foreground(Color::hex('#8caaee'))
+                ->render(mb_str_pad($row['cell'], $width))
+                . Style::new()->foreground(Color::hex('#c9d7f1'))
+                ->render('  ' . CellValue::sanitize(Lang::t($row['text'])));
+        }
+        $lines[] = ' ' . Style::new()->italic()->foreground(Color::hex('#7d6e98'))
+            ->render(Lang::t('help.close'));
+
+        return implode("\n", $lines);
     }
 }

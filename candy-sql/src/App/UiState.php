@@ -40,6 +40,11 @@ final class UiState
          * badge rides this flag and the commit/rollback legs gate on it.
          */
         public readonly bool $txOpen = false,
+        /**
+         * SQL-O21 (once-028): the `?` overlay is open. Rendered from
+         * {@see KeyMap} for the focused pane; the next key closes it.
+         */
+        public readonly bool $helpOverlay = false,
     ) {}
 
     public static function new(): self
@@ -75,5 +80,11 @@ final class UiState
     public function withTxOpen(bool $open): self
     {
         return $this->mutate(['txOpen' => $open]);
+    }
+
+    /** SQL-O21: open/close the `?` key-help overlay. */
+    public function withHelpOverlay(bool $open): self
+    {
+        return $this->mutate(['helpOverlay' => $open]);
     }
 }
