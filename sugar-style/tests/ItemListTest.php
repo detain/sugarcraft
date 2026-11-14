@@ -203,8 +203,64 @@ final class ItemListTest extends TestCase
         $out = ItemList::new('a', 'b', 'c')
             ->enumerator(Enumerator::tree())
             ->render();
-        // Intermediate items use ├─; the last uses └─.
-        $this->assertStringContainsString('├─', $out);
-        $this->assertStringContainsString('└─', $out);
+        // Intermediate items use ├─; the last uses └─ — byte-exact rows,
+        // not containsString existence (finding 041: alias factories
+        // carry parity pins, ST-26).
+        $this->assertSame("├─ a\n├─ b\n└─ c", $out);
+    }
+
+    public function testAsteriskEnumeratorByteExact(): void
+    {
+        $out = ItemList::new()
+            ->items(['Apple', 'Banana'])
+            ->enumerator(Enumerator::asterisk())
+            ->render();
+        $this->assertSame("* Apple\n* Banana", $out);
+    }
+
+    public function testDecimalEnumeratorByteExact(): void
+    {
+        $out = ItemList::new()
+            ->items(['a', 'b'])
+            ->enumerator(Enumerator::decimal())
+            ->render();
+        $this->assertSame("1. a\n2. b", $out);
+    }
+
+    public function testDecimalIsAnAliasForArabic(): void
+    {
+        // lipgloss parity alias (Enumerator::decimal() returns arabic());
+        // the alias must render identically across the marker-width
+        // boundary, or a caller swapping the name silently changes bytes.
+        $items = array_fill(0, 12, 'x');
+        $arabic = ItemList::new()->items($items)->enumerator(Enumerator::arabic())->render();
+        $decimal = ItemList::new()->items($items)->enumerator(Enumerator::decimal())->render();
+        $this->assertSame($arabic, $decimal);
+    }
+
+    public function testCustomIndentAppliesToNestedSublists(): void
+    {
+        // indent() is the sublist-body prefix (outer marker indent is
+        // separate); a custom multi-byte rune must ride every sub line.
+        $sub = ItemList::new()->items(['inner1', 'inner2']);
+        $out = ItemList::new()
+            ->item('outer')
+            ->item($sub)
+            ->item('after')
+            ->indent('··')
+            ->render();
+        $this->assertSame(
+            "- outer\n  ··- inner1\n  ··- inner2\n- after",
+            $out,
+        );
+    }
+
+    public function testDefaultIndentIsTwoSpaces(): void
+    {
+        // Pair pin for the custom-indent leg: the default '  ' plus the
+        // 2-space marker indent yields four leading spaces on sub lines.
+        $sub = ItemList::new()->items(['inner']);
+        $out = ItemList::new()->item('outer')->item($sub)->render();
+        $this->assertSame("- outer\n    - inner", $out);
     }
 }
