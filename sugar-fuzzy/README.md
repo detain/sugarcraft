@@ -68,8 +68,9 @@ $segments = $highlighter->segments($result);
 ```
 
 Both construction idioms below build the same object: `new SmithWatermanMatcher(...)`
-passes constructor arguments explicitly, while `SmithWatermanMatcher::new()` is the
-house zero-argument factory mirroring upstream. Each example sticks to one idiom.
+passes constructor arguments explicitly, while `SmithWatermanMatcher::new()` is
+the house factory accepting the same options as the constructor (a zero-argument
+call is just all-defaults). Each example sticks to one idiom.
 
 **Rank contract.** `matchAll()` (and `matchAllGenerator()`, same output) order
 results by score descending, then by haystack ascending as the tiebreak — both
@@ -87,6 +88,8 @@ is the canonical preset.
 ## Scoring profiles
 
 The Smith-Waterman scoring weights are injectable via an immutable `ScoringProfile`.
+Every weight is an `int`: passing a float raises a `TypeError` for `strict_types`
+callers and silently truncates (with a deprecation notice) for the rest.
 The **default** profile is bit-equivalent to the historical hard-coded constants
 for ASCII input, so passing no profile (or `ScoringProfile::canonical()`) preserves existing ASCII output byte-for-byte — the two
 documented deviations are listed under "Canonical matcher & consumer migration":
@@ -100,6 +103,11 @@ $lenient = new SmithWatermanMatcher(ScoringProfile::lenient()); // lower rewards
 $custom  = new SmithWatermanMatcher(
     ScoringProfile::canonical()->withAdjacentBonus(8)
 );
+// Or name exactly the weights you care about; omitted slots keep the defaults
+// (matchScore 3, mismatchPenalty −3, gapOpen −5, gapExtend −1, adjacentBonus 5):
+$flat    = new SmithWatermanMatcher(
+    ScoringProfile::new(matchScore: 5, gapOpen: -4, gapExtend: -1, adjacentBonus: 8)
+);
 ```
 
 | Weight            | canonical | strict | lenient |
@@ -109,6 +117,8 @@ $custom  = new SmithWatermanMatcher(
 | `gapOpen`         |      −5 |     −6 |      −3 |
 | `gapExtend`       |      −1 |     −2 |      −1 |
 | `adjacentBonus`   |       5 |      6 |       3 |
+
+All five weights are integers.
 
 ## Full-query mode
 
@@ -172,7 +182,7 @@ input source is untrusted.
 `SahilmMatcher`'s bonuses are injectable via the immutable `SahilmScoring`; the
 canonical weights (the default) are the constants this port has always
 used — the bonus shape mirrors sahilm/fuzzy, the values are pinned by the
-characterization suites:
+characterization suites, and all six weights are integers:
 
 ```php
 use SugarCraft\Fuzzy\Matcher\SahilmMatcher;
@@ -190,6 +200,14 @@ $tuned = new SahilmMatcher(scoring: SahilmScoring::canonical()->withFirstCharBon
 | `camelBonus`       |        10 |
 | `firstCharBonus`   |        15 |
 | `lowerCaseBonus`   |         1 |
+
+**Case sensitivity.** Matching folds case by default; `new SahilmMatcher(caseSensitive: true)`
+compares the original characters — `match('g', 'GHI')` scores 16 by default and is `null`
+case-sensitively. Either mode computes the bonuses from the CANDIDATE's original character
+case — never the folded comparison text, and never the query's case: `match('g', 'GHI')`
+earns 16 (the `G` gets no lower-case bonus) while `match('G', 'ghi')` earns 17 (the lowercase
+`g` does). `caseSensitive()` and `scoring()` read the configuration in effect;
+`withCaseSensitive()` and `withScoring()` return copies with one slot replaced.
 
 Note on thresholds: `match()` treats a non-positive score as no match and
 returns `null`, while `matchAll()` filters only by `$minScore` (default 1).
@@ -220,6 +238,7 @@ final class MatchResult
     public readonly string $haystack;       // Matched candidate
     public readonly int $score;             // Higher = better match
     public readonly array $matchedIndices;  // @deprecated read via indices() — 0-based CODE-POINT indices into the original haystack (not byte offsets)
+    public readonly int|string|null $candidateKey; // The key this candidate had in an ARRAY batch input (matchAll()/matchAllGenerator()); null on single-pair and non-array routes
 
     public function indices(): array;       // canonical accessor: the same list<int> — quickpick-style consumers use this spelling
     public function isMatched(): bool;      // score > 0
@@ -248,6 +267,24 @@ The interface is shared, the **behavior is not interchangeable**: Sahilm matches
 only when the whole query appears in order — equivalent to Smith-Waterman
 full-query mode permanently on — so a call-site swap silently changes scattered
 partial queries from a scored hit to `null`.
+
+## Inspection
+
+Each matcher exposes the configuration it is running with, so UI chrome and
+diagnostics can read state instead of recomputing it. `SmithWatermanMatcher`:
+`profile()`, `maxQueryLength()`, `maxCandidateLength()`, `requiresFullQuery()`.
+`SahilmMatcher`: `caseSensitive()`, `scoring()`. All are bare getters; the
+configuration itself is immutable and changes only through the constructor or
+the `with*()` copy doors. Matching itself is reached uniformly through
+`FuzzyMatcher`: `match()`, `score()` (the same number
+`match($query, $candidate)?->score ?? 0` would give, without the traceback),
+`matchAll()` and `matchAllGenerator()`.
+
+`MatchResultSorter::sort()` and `MatchResultSorter::sortAndSlice()` are the
+ranking engine behind `matchAll()` — **supported public API**, reusable by
+callers who rank their own `MatchResult` lists. The contract they implement is
+the Rank contract above (score descending, haystack ascending as tiebreak,
+ties stable; a negative or `null` limit means unlimited).
 
 ## Algorithm Differences
 
