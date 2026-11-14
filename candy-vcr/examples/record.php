@@ -8,6 +8,9 @@ declare(strict_types=1);
  * Usage:
  *   php examples/record.php /tmp/session.cas
  *
+ * With no argument the cassette lands under the SYSTEM TEMP dir, never
+ * in the checkout — running the examples must leave `git status` clean.
+ *
  * The recorded cassette can then be inspected with:
  *   bin/candy-vcr inspect /tmp/session.cas
  * or replayed back to stdout:
@@ -24,7 +27,7 @@ use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Core\Subscriptions;
 use SugarCraft\Vcr\Recorder;
 
-$path = $argv[1] ?? __DIR__ . '/cassettes/recorded.cas';
+$path = $argv[1] ?? (sys_get_temp_dir() . '/candy-vcr-example-recorded.cas');
 
 final class CounterModel implements Model
 {

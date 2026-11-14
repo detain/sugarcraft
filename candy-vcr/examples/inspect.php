@@ -49,7 +49,15 @@ foreach ($cassette->events as $event) {
             break;
         case 'input':
             if (isset($event->payload['msg'])) {
-                $decoded = $registry->decode($event->payload['msg']);
+                // VCR-S41 made a claimed-but-malformed envelope a named
+                // refusal instead of an escaped \ValueError; the tape is
+                // still somebody's data, so the example prints '@?' for
+                // it and keeps walking the events instead of dying.
+                try {
+                    $decoded = $registry->decode($event->payload['msg']);
+                } catch (\UnexpectedValueException) {
+                    $decoded = null;
+                }
                 echo $decoded ? '@' . $decoded::class : '@?', "\n";
             } else {
                 echo strlen((string) ($event->payload['b'] ?? '')), " bytes\n";
