@@ -111,18 +111,47 @@ final readonly class HistoryEntry
      * above: record the origin, and when none is known (detached HEAD)
      * refuse the undo honestly instead of guessing a way back.
      */
-    public static function createBranch(string $name, string $from): self
+    public static function createBranch(string $name, string $from, string $base = ''): self
     {
         if ($from === '') {
-            return new self('createBranch', ['name' => $name, 'from' => ''], self::UNRECOVERABLE_INVERSE, []);
+            return new self('createBranch', ['name' => $name, 'from' => '', 'base' => $base], self::UNRECOVERABLE_INVERSE, []);
         }
 
         return new self(
             'createBranch',
-            ['name' => $name, 'from' => $from],
+            ['name' => $name, 'from' => $from, 'base' => $base],
             'removeBranch',
             ['name' => $name, 'from' => $from],
         );
+    }
+
+    /**
+     * Convenience factory for reverting a commit (candy-git-015).
+     *
+     * UNRECOVERABLE by design: a revert stacks an inverse commit on HEAD.
+     * Undoing that would rewrite published history (the amend/force-push
+     * lesson), and re-running the same revert as a redo only stacks twice -
+     * git answers a re-applied revert with a conflict, so even redo is the
+     * users business, not ours to promise. The entry exists so the action
+     * is at least named in the history roster.
+     */
+    public static function revert(string $sha): self
+    {
+        return new self('revert', ['sha' => $sha], self::UNRECOVERABLE_INVERSE, []);
+    }
+
+    /**
+     * Convenience factory for resetting HEAD hard (candy-git-015).
+     *
+     * UNRECOVERABLE by design: moving HEAD back to the pre-reset commit
+     * would need the old HEAD sha, which this model never records (the
+     * reflog is outside the apps knowledge), and the --hard half already
+     * destroyed uncommitted bytes no command can recreate. Both losses
+     * are the reason the UI arms the gesture twice.
+     */
+    public static function resetHard(string $sha): self
+    {
+        return new self('resetHard', ['sha' => $sha], self::UNRECOVERABLE_INVERSE, []);
     }
 
     /**

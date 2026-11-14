@@ -91,7 +91,7 @@ final class HistoryEntryTest extends TestCase
         $entry = HistoryEntry::createBranch('new-feature', 'main');
 
         $this->assertSame('createBranch', $entry->op);
-        $this->assertSame(['name' => 'new-feature', 'from' => 'main'], $entry->args);
+        $this->assertSame(['name' => 'new-feature', 'from' => 'main', 'base' => ''], $entry->args);
         // candy-git-016: the inverse is the PAIRED walk-home-then-delete,
         // not a bare deleteBranch (git refuses that while the fresh branch
         // is current — every undo of `n` used to fail).
@@ -106,6 +106,40 @@ final class HistoryEntryTest extends TestCase
         $entry = HistoryEntry::createBranch('new-feature', '');
 
         $this->assertSame('createBranch', $entry->op);
+        $this->assertSame(HistoryEntry::UNRECOVERABLE_INVERSE, $entry->inverseOp);
+    }
+
+    public function testCreateBranchStoresTheBaseForTheRedoPath(): void
+    {
+        // candy-git-018: a branch cut from a log commit must RE-CUT from
+        // that same base on redo, not silently drift to the current HEAD.
+        $entry = HistoryEntry::createBranch('nb', 'main', 'abc123');
+
+        $this->assertSame(['name' => 'nb', 'from' => 'main', 'base' => 'abc123'], $entry->args);
+        $this->assertSame('removeBranch', $entry->inverseOp);
+        $this->assertSame(['name' => 'nb', 'from' => 'main'], $entry->inverseArgs, 'the inverse is the paired home-then-delete walk');
+    }
+
+    public function testRevertFactoryRefusesUndo(): void
+    {
+        // Undoing a revert means rewriting published history; the model
+        // says so instead of pretending it can.
+        $entry = HistoryEntry::revert('abc1234');
+
+        $this->assertSame('revert', $entry->op);
+        $this->assertSame(['sha' => 'abc1234'], $entry->args);
+        $this->assertSame(HistoryEntry::UNRECOVERABLE_INVERSE, $entry->inverseOp);
+        $this->assertSame([], $entry->inverseArgs);
+    }
+
+    public function testResetHardFactoryRefusesUndo(): void
+    {
+        // The pre-reset HEAD was never recorded and --hard already ate the
+        // uncommitted bytes: this is the amend reflog lesson again.
+        $entry = HistoryEntry::resetHard('def5678');
+
+        $this->assertSame('resetHard', $entry->op);
+        $this->assertSame(['sha' => 'def5678'], $entry->args);
         $this->assertSame(HistoryEntry::UNRECOVERABLE_INVERSE, $entry->inverseOp);
     }
 

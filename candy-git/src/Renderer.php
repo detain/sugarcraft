@@ -189,8 +189,13 @@ final class Renderer
 
         $branchBar = '';
         if ($a->collectingBranchName) {
+            // A base captured from a log row changes the question the bar
+            // asks (candy-git-038): both keys stay literal for LangCoverageTest.
+            $branchPrompt = $a->pendingBranchBase !== null
+                ? Lang::t('branch.prompt_from', ['sha' => $a->pendingBranchBase])
+                : Lang::t('branch.prompt');
             $branchBar = "\n " . Style::new()->foreground(Color::hex('#fde68a'))
-                ->render(self::barLine(Lang::t('branch.prompt'), self::sanitize($a->branchName), $a->barWidth()));
+                ->render(self::barLine($branchPrompt, self::sanitize($a->branchName), $a->barWidth()));
         }
 
         $mergeBar = '';
@@ -369,7 +374,13 @@ final class Renderer
         }
         foreach (array_slice($a->log, $start, $shown, true) as $i => $entry) {
             $subject = self::sanitize($entry['subject']);
-            $subjectMax = $a->logSubjectWidth();
+            // Author and relative age were parsed from git and never shown
+            // (candy-git-015). They ride the same physical row as a muted
+            // tail; the subject budget shrinks to keep the row inside it.
+            $author = self::sanitize((string) ($entry['author'] ?? ''));
+            $ago    = self::sanitize((string) ($entry['ago'] ?? ''));
+            $meta   = $author === '' && $ago === '' ? '' : '  ·  ' . $author . ($ago === '' ? '' : '  ·  ' . $ago);
+            $subjectMax = $a->logSubjectWidth() - ($meta === '' ? 0 : Width::of($meta));
             // Cell-width aware: mb_strlen counts codepoints, so CJK subjects
             // (double-width) overran the pane budget.
             if (Width::of($subject) > $subjectMax) {
@@ -384,10 +395,11 @@ final class Renderer
                 // segment; the log row adopts the same shape.
                 $line = Style::new()->foreground(Color::hex('#fde68a'))->reverse()->render((string) $entry['sha'])
                     . Style::new()->reverse()->render('  ')
-                    . Style::new()->reverse()->render($subject);
+                    . Style::new()->reverse()->render($subject . $meta);
             } else {
                 $line = Style::new()->foreground(Color::hex('#fde68a'))->render((string) $entry['sha'])
-                    . '  ' . $subject;
+                    . '  ' . $subject
+                    . Style::new()->foreground(Color::hex('#7d8bb3'))->render($meta);
             }
             $rows[] = $line;
         }
@@ -614,9 +626,11 @@ final class Renderer
         $titleBox = self::overlayWidth($a, 72);
         $lines[] = Style::new()->bold()->foreground(Color::hex('#fde68a'))
             ->render(Lang::t('ui.diff_prefix') . self::truncate(self::sanitize($dv->path), max(6, $titleBox - 10))
-                . ' ' . ($dv->cached
-                    ? Lang::t('diff.side_staged')
-                    : Lang::t('diff.side_worktree')));
+                . ' ' . ($dv->readOnly
+                    ? Lang::t('diff.side_commit')
+                    : ($dv->cached
+                        ? Lang::t('diff.side_staged')
+                        : Lang::t('diff.side_worktree'))));
 
         // Syntax pass: accent recognised-language tokens inside diff
         // bodies. '' language (or an unaccentable line) keeps the plain
@@ -722,9 +736,11 @@ final class Renderer
         }
 
         $hint = Style::new()->foreground(Color::hex('#7d6e98'))
-            ->render($dv->cached
-                ? Lang::t('diff.navigation_hint_cached')
-                : Lang::t('diff.navigation_hint'));
+            ->render($dv->readOnly
+                ? Lang::t('diff.details_hint')
+                : ($dv->cached
+                    ? Lang::t('diff.navigation_hint_cached')
+                    : Lang::t('diff.navigation_hint')));
 
         $border = Border::rounded();
         $box = Style::new()

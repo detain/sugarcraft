@@ -93,6 +93,28 @@ final class GitGuardTest extends TestCase
         $git->stashApply('--invalid');
     }
 
+    /** CG-18: the details surface refuses dash refs before git ever sees them. */
+    public function testCommitDetailsRejectsLeadingDashRef(): void
+    {
+        $git = new Git($this->cwd);
+        $this->expectException(\RuntimeException::class);
+        $git->commitDetails('--invalid');
+    }
+
+    public function testRevertRejectsLeadingDashRef(): void
+    {
+        $git = new Git($this->cwd);
+        $this->expectException(\RuntimeException::class);
+        $git->revert('--invalid');
+    }
+
+    public function testResetHardRejectsLeadingDashRef(): void
+    {
+        $git = new Git($this->cwd);
+        $this->expectException(\RuntimeException::class);
+        $git->resetHard('--invalid');
+    }
+
     /** CG-16: pop composes apply/drop, and apply's guard runs before any argv. */
     public function testStashPopRejectsLeadingDashRef(): void
     {

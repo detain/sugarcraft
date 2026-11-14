@@ -98,7 +98,10 @@ final class RendererTest extends TestCase
             public function lastCommitMessage(): string { return ""; }
             public function stagePatch(string $path, string $hunk): void {}
             public function unstagePatch(string $path, string $hunk): void {}
-            public function createBranch(string $name): void {}
+            public function createBranch(string $name, ?string $from = null): void {}
+            public function commitDetails(string $ref): array { return []; }
+            public function revert(string $ref): void {}
+            public function resetHard(string $ref): void {}
             public function deleteBranch(string $_name): void {}
             public function restoreBranch(string $_name, string $_sha): void {}
             public function merge(string $branch): void {}
@@ -167,7 +170,10 @@ final class RendererTest extends TestCase
             public function lastCommitMessage(): string { return ""; }
             public function stagePatch(string $path, string $hunk): void {}
             public function unstagePatch(string $path, string $hunk): void {}
-            public function createBranch(string $name): void {}
+            public function createBranch(string $name, ?string $from = null): void {}
+            public function commitDetails(string $ref): array { return []; }
+            public function revert(string $ref): void {}
+            public function resetHard(string $ref): void {}
             public function deleteBranch(string $_name): void {}
             public function restoreBranch(string $_name, string $_sha): void {}
             public function merge(string $branch): void {}
@@ -554,7 +560,10 @@ final class RendererTest extends TestCase
             public function lastCommitMessage(): string { return ""; }
             public function stagePatch(string $path, string $hunk): void {}
             public function unstagePatch(string $path, string $hunk): void {}
-            public function createBranch(string $name): void {}
+            public function createBranch(string $name, ?string $from = null): void {}
+            public function commitDetails(string $ref): array { return []; }
+            public function revert(string $ref): void {}
+            public function resetHard(string $ref): void {}
             public function deleteBranch(string $_name): void {}
             public function restoreBranch(string $_name, string $_sha): void {}
             public function merge(string $branch): void {}
@@ -890,5 +899,66 @@ final class RendererTest extends TestCase
         $this->assertStringContainsString('…', $row);
         $this->assertMatchesRegularExpression('/_\z/', $row, 'barWidth 18: prompt 8 + ellipsis + 8 tail + caret = 18');
         $this->assertLessThanOrEqual(18, Width::of('branch name: ' . $row));
+    }
+
+    // ---- CG-18: log meta, sealed selection band, commit view (candy-git-015) ----
+
+    /** @return array<int, array{sha:string,subject:string,author:string,ago:string}> */
+    private static function logWithMeta(): array
+    {
+        return [
+            ['sha' => 'abc1', 'subject' => 'first commit', 'author' => 'Joe', 'ago' => '5m ago'],
+            ['sha' => 'def2', 'subject' => 'second commit', 'author' => 'Ann', 'ago' => '2m ago'],
+        ];
+    }
+
+    public function testTheLogRowRendersAuthorAndAge(): void
+    {
+        $a = new App(new FixtureGit([], [], []), log: self::logWithMeta(), pane: Pane::Log, logCursor: 1, width: 80, height: 24);
+        $plain = preg_replace('/\x1b\[[0-9;]*m/', '', Renderer::render($a));
+        $this->assertStringContainsString('Ann', $plain, 'author/ago were fetched and never shown (candy-git-015)');
+        $this->assertStringContainsString('2m ago', $plain);
+        $this->assertStringContainsString('second commit', $plain);
+    }
+
+    public function testTheSelectedLogBandStaysSealedAroundTheMeta(): void
+    {
+        $a = new App(new FixtureGit([], [], []), log: self::logWithMeta(), pane: Pane::Log, logCursor: 0, width: 80, height: 24);
+        $frame = Renderer::render($a);
+        // one reverse run carries subject AND meta: no interior reset may
+        // re-open the band (the CG-09 law, extended to the new tail)
+        $this->assertMatchesRegularExpression('/\x1b\[7m[^]*Joe/', $frame);
+        $this->assertStringNotContainsString("\x1b[0mJoe", $frame);
+        $this->assertStringNotContainsString("\x1b[0m5m ago", $frame);
+    }
+
+    public function testTheCommitViewTitlesItsChipAndHintsItsKeys(): void
+    {
+        $lines = [
+            'commit abc10123456789abcdef0123456789abcdef01234567',
+            'Author: Joe Huss <detain@interserver.net>',
+            '',
+            '    first commit',
+            'diff --git a/f.php b/f.php',
+            '@@ -0,0 +1 @@',
+            '+hello',
+        ];
+        $dv = DiffViewer::fromCommitDetails('abc1', $lines);
+        $a = new App(new FixtureGit([], [], []), diffViewer: $dv, width: 80, height: 24);
+        $plain = preg_replace('/\x1b\[[0-9;]*m/', '', Renderer::render($a));
+        $title = [];
+        self::assertMatchesRegularExpression('/(?m)^.*diff: abc1.*$/', $plain);
+        preg_match('/(?m)^(.*diff: abc1.*)$/', $plain, $title);
+        $this->assertStringContainsString('commit', $title[1], 'the side chip names the view');
+        $this->assertStringNotContainsString('worktree', $title[1]);
+        $this->assertStringContainsString('r: revert', $plain);
+        $this->assertStringNotContainsString('space: stage', $plain, 'the read-only view must not advertise staging');
+    }
+
+    public function testTheBranchBarNamesTheCapturedBase(): void
+    {
+        $a = new App(new FixtureGit([], [], []), collectingBranchName: true, branchName: 'x', pendingBranchBase: 'abc1', width: 80, height: 24);
+        $plain = preg_replace('/\x1b\[[0-9;]*m/', '', Renderer::render($a));
+        $this->assertStringContainsString('new branch from abc1: x_', $plain);
     }
 }

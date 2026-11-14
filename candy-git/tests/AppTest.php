@@ -34,6 +34,7 @@ final class FixtureGit implements GitDriver
     public array $stagePatches = [];
     /** @var array<string, string> path => hunk patch */
     public array $unstagePatches = [];
+    /** @var list<array{name:string,from:?string}> */
     public array $branchCreations = [];
     public array $branchDeletions = [];
     /** @var list<array{name:string,sha:string}> */
@@ -105,7 +106,16 @@ final class FixtureGit implements GitDriver
     public function stagePatch(string $path, string $hunk): void { $this->maybeThrow('stagePatch'); $this->stagePatches[$path] = $hunk; }
     public function unstageAll(): void { $this->maybeThrow('unstageAll'); $this->unstageAllCalled = true; }
     public function unstagePatch(string $path, string $hunk): void { $this->maybeThrow('unstagePatch'); $this->unstagePatches[$path] = $hunk; }
-    public function createBranch(string $name): void { $this->maybeThrow('createBranch'); $this->branchCreations[] = $name; }
+    public function createBranch(string $name, ?string $from = null): void { $this->maybeThrow('createBranch'); $this->branchCreations[] = ['name' => $name, 'from' => $from]; }
+    /** @var list<string> refs passed to revert() */
+    public array $reverts = [];
+    /** @var list<string> refs passed to resetHard() */
+    public array $resetHards = [];
+    /** @var list<string> lines returned by commitDetails() */
+    public array $commitDetailsResult = [];
+    public function commitDetails(string $ref): array { $this->maybeThrow('commitDetails'); return $this->commitDetailsResult; }
+    public function revert(string $ref): void { $this->maybeThrow('revert'); $this->reverts[] = $ref; }
+    public function resetHard(string $ref): void { $this->maybeThrow('resetHard'); $this->resetHards[] = $ref; }
     public function deleteBranch(string $name): void { $this->maybeThrow('deleteBranch'); $this->branchDeletions[] = $name; }
     public function restoreBranch(string $name, string $sha): void { $this->maybeThrow('restoreBranch'); $this->restoredBranches[] = ['name' => $name, 'sha' => $sha]; }
     public function merge(string $branch): void { $this->maybeThrow('merge'); $this->merges[] = $branch; }
@@ -564,7 +574,7 @@ final class AppTest extends TestCase
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'e'));
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'a'));
         [$a, ] = $a->update(new KeyMsg(KeyType::Enter, ''));
-        $this->assertSame(['fea'], $g->branchCreations);
+        $this->assertSame([['name' => 'fea', 'from' => null]], $g->branchCreations);
         $this->assertFalse($a->collectingBranchName);
     }
 
@@ -912,7 +922,7 @@ final class AppTest extends TestCase
             [$a, ] = $a->update(new KeyMsg(KeyType::Char, $ch));
         }
         [$a, ] = $a->update(new KeyMsg(KeyType::Enter, ''));
-        $this->assertSame(['fea'], $g->branchCreations);
+        $this->assertSame([['name' => 'fea', 'from' => null]], $g->branchCreations);
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'u'));  // undo
         // Paired inverse: back to the origin main FIRST, then delete.
         $this->assertSame(['main'], $g->checkouts);
@@ -933,7 +943,7 @@ final class AppTest extends TestCase
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'n'));
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'f'));
         [$a, ] = $a->update(new KeyMsg(KeyType::Enter, ''));
-        $this->assertSame(['f'], $g->branchCreations);
+        $this->assertSame([['name' => 'f', 'from' => null]], $g->branchCreations);
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'u'));
         $this->assertStringContainsString('cannot undo', (string) $a->error);
         $this->assertSame([], $g->checkouts);
@@ -1675,5 +1685,158 @@ final class AppTest extends TestCase
         $this->assertNotNull($a->error);
         $this->assertStringContainsString('no hunks', $a->error);
         $this->assertNotNull($a->diffViewer, 'the refusal keeps the viewer open for esc');
+    }
+
+    // ---- CG-18: commit details overlay + cursor prefills (candy-git-015, candy-git-038) ----
+
+    /** @return list<string> a canned git show --stat --format=full --patch body */
+    private static function detailsFixture(string $sha): array
+    {
+        return [
+            'commit ' . $sha . '0123456789abcdef0123456789abcdef01234567',
+            'Author: Joe Huss <detain@interserver.net>',
+            'Commit: Joe Huss <detain@interserver.net>',
+            '',
+            '    first commit',
+            '---',
+            ' f.php | 1 +',
+            ' 1 file changed, 1 insertion(+)',
+            '',
+            'diff --git a/f.php b/f.php',
+            'index 111..222 100644',
+            '--- a/f.php',
+            '+++ b/f.php',
+            '@@ -0,0 +1 @@',
+            '+hello',
+        ];
+    }
+
+    private function toLogPane(FixtureGit $g): App
+    {
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab));
+        return $a;
+    }
+
+    public function testEnterOnALogRowOpensTheCommitDetailsViewer(): void
+    {
+        $g = $this->git();
+        $g->commitDetailsResult = self::detailsFixture('abc1');
+        $a = $this->toLogPane($g);
+        $this->assertSame(Pane::Log, $a->pane);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter));
+        $this->assertNotNull($a->diffViewer);
+        $this->assertTrue($a->diffViewer->readOnly, 'log rows open the read-only commit view (candy-git-015)');
+        $this->assertSame('abc1', $a->diffViewer->commitSha);
+        $this->assertSame('abc1', $a->diffViewer->path);
+    }
+
+    public function testSpaceIsInertInsideTheCommitDetailsViewer(): void
+    {
+        $g = $this->git();
+        $g->commitDetailsResult = self::detailsFixture('abc1');
+        $a = $this->toLogPane($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Space, ''));
+        $this->assertSame([], $g->stagePatches);
+        $this->assertNull($a->successMessage, 'Space must not stage inside the commit view');
+        $this->assertSame([], $g->unstagePatches);
+        $this->assertNotNull($a->diffViewer);
+    }
+
+    public function testRevertArmsFromTheDetailsViewerThenStacksTheInverse(): void
+    {
+        $g = $this->git();
+        $g->commitDetailsResult = self::detailsFixture('abc1');
+        $a = $this->toLogPane($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'r'));
+        $this->assertSame('revert:abc1', $a->pendingConfirm);
+        $this->assertStringContainsString('press r again', (string) $a->notice);
+        $this->assertSame([], $g->reverts);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'r'));
+        $this->assertSame(['abc1'], $g->reverts);
+        $this->assertNull($a->pendingConfirm);
+        $this->assertSame('reverted abc1', $a->successMessage);
+        $this->assertNotNull($a->diffViewer, 'the details view survives its own execute');
+        [$a, ] = $a->update(new KeyMsg(KeyType::Escape));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'u'));
+        $this->assertStringContainsString('revert', (string) $a->error);
+        $this->assertFalse($g->resetCalled, 'the unrecoverable entry is refused, never silently popped');
+    }
+
+    public function testResetHardArmsFromTheDetailsViewerThenMovesHead(): void
+    {
+        $g = $this->git();
+        $g->commitDetailsResult = self::detailsFixture('abc1');
+        $a = $this->toLogPane($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'R'));
+        $this->assertSame('resethard:abc1', $a->pendingConfirm);
+        $this->assertStringContainsString('press R again', (string) $a->notice);
+        $this->assertSame([], $g->resetHards);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'R'));
+        $this->assertSame(['abc1'], $g->resetHards);
+        $this->assertNull($a->pendingConfirm);
+        $this->assertSame('reset hard onto abc1', $a->successMessage);
+    }
+
+    public function testVFromTheDetailsViewerSeedsTheCherryPickCollector(): void
+    {
+        $g = $this->git();
+        $g->commitDetailsResult = self::detailsFixture('abc1');
+        $a = $this->toLogPane($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'v'));
+        $this->assertNull($a->diffViewer, 'the overlay hands off to the collector');
+        $this->assertNotNull($a->cherryPick);
+        $this->assertTrue($a->cherryPick->collecting);
+        $this->assertSame('abc1', $a->cherryPick->commitRef, 'the visible sha is carried, not retyped (candy-git-038)');
+    }
+
+    public function testBranchFromALogRowCarriesTheBaseCommit(): void
+    {
+        $g = $this->git();
+        $a = $this->toLogPane($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'n'));
+        $this->assertTrue($a->collectingBranchName);
+        $this->assertSame('abc1', $a->pendingBranchBase);
+        foreach (['n', 'e', 'w', 'b'] as $ch) {
+            [$a, ] = $a->update(new KeyMsg(KeyType::Char, $ch));
+        }
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter));
+        $this->assertSame([['name' => 'newb', 'from' => 'abc1']], $g->branchCreations);
+        $this->assertNull($a->pendingBranchBase, 'the base dies with the collector');
+    }
+
+    public function testBranchFromTheStatusPaneStillStartsAtHead(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'n'));
+        $this->assertNull($a->pendingBranchBase);
+        foreach (['x'] as $ch) {
+            [$a, ] = $a->update(new KeyMsg(KeyType::Char, $ch));
+        }
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter));
+        $this->assertSame([['name' => 'x', 'from' => null]], $g->branchCreations);
+    }
+
+    public function testMergeCollectorSeedsFromTheBranchesCursor(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'M'));
+        $this->assertSame('', $a->mergeTarget, 'status pane has no branch under the cursor');
+        [$a, ] = $a->update(new KeyMsg(KeyType::Escape));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'M'));
+        $this->assertSame('', $a->mergeTarget, 'the current branch is not a merge seed');
+        [$a, ] = $a->update(new KeyMsg(KeyType::Escape));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'j'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'M'));
+        $this->assertTrue($a->collectingMergeTarget);
+        $this->assertSame('feature', $a->mergeTarget);
     }
 }

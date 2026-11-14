@@ -30,6 +30,13 @@ final readonly class DiffViewer
      *                             display anchor, separate from the hunk
      *                             cursor (candy-git-045: hunk-only navigation
      *                             stranded any hunk taller than the screen).
+     * @param bool         $readOnly The commit-details view (candy-git-015):
+     *                             bytes for the log pane's Enter overlay that
+     *                             must never be staged — Space is inert on it.
+     * @param string       $commitSha The commit this display belongs to,
+     *                             empty on file diffs; the revert/reset/v
+     *                             prefill reads it INSTEAD of asking the user
+     *                             to retype what is on screen.
      */
     public function __construct(
         public array $lines,
@@ -39,7 +46,43 @@ final readonly class DiffViewer
         public array $header,
         public bool $cached = false,
         public int $scrollOffset = 0,
+        public bool $readOnly = false,
+        public string $commitSha = '',
     ) {}
+
+    /**
+     * Build the read-only commit display from `git show --stat --format=full
+     * --patch --no-color` output (candy-git-015). The @@ scan still runs: the
+     * patch half of the blob carries hunks, and j/k navigation stays honest
+     * about what is on screen — but readOnly locks the staging lane shut.
+     *
+     * @param list<string> $lines
+     */
+    public static function fromCommitDetails(string $sha, array $lines): self
+    {
+        $hunkStarts = [];
+        $header = [];
+        $inHeader = true;
+        foreach ($lines as $i => $line) {
+            if (str_starts_with($line, '@@') === true) {
+                $inHeader = false;
+                $hunkStarts[] = $i;
+            } elseif ($inHeader === true) {
+                $header[] = $line;
+            }
+        }
+        $cursor = $hunkStarts[0] ?? 0;
+
+        return new self(
+            lines: $lines,
+            hunkCursor: $cursor,
+            path: $sha,
+            hunkStarts: $hunkStarts,
+            header: $header,
+            readOnly: true,
+            commitSha: $sha,
+        );
+    }
 
     /**
      * Build a DiffViewer from raw `git diff --no-color -- <path>` output.
@@ -130,7 +173,7 @@ final readonly class DiffViewer
     public function withHunkIndex(int $index): self
     {
         if ($this->hunkStarts === []) {
-            return new self(lines: $this->lines, hunkCursor: 0, path: $this->path, hunkStarts: [], header: $this->header, cached: $this->cached, scrollOffset: 0);
+            return new self(lines: $this->lines, hunkCursor: 0, path: $this->path, hunkStarts: [], header: $this->header, cached: $this->cached, scrollOffset: 0, readOnly: $this->readOnly, commitSha: $this->commitSha);
         }
         $max = count($this->hunkStarts) - 1;
         $newIdx = max(0, min($index, $max >= 0 ? $max : 0));
@@ -144,6 +187,8 @@ final readonly class DiffViewer
             hunkStarts: $this->hunkStarts,
             header: $this->header,
             cached: $this->cached,
+            readOnly: $this->readOnly,
+            commitSha: $this->commitSha,
             // Jumping to a hunk brings it into view (candy-git-045: the
             // scroll window follows selection; scrolling never moves
             // selection).
@@ -163,6 +208,8 @@ final readonly class DiffViewer
             hunkStarts: $this->hunkStarts,
             header: $this->header,
             cached: $this->cached,
+            readOnly: $this->readOnly,
+            commitSha: $this->commitSha,
             scrollOffset: max(0, min($offset, $max)),
         );
     }

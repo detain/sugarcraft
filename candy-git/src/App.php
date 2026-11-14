@@ -59,7 +59,7 @@ final class App implements Model
         public readonly string $commitMessage = '',
         /** While the collector is open: it rewrites the last commit ('A' prefill) rather than starting a new one. */
         public readonly bool $commitAmend = false,
-        /** Diff viewer overlay (opened with 'Enter' on a status file; 'd' discards, and also closes the open viewer). */
+        /** Diff viewer overlay (opened with 'Enter' on a status file or a log commit - the latter read-only; 'd' closes it). */
         public readonly ?DiffViewer $diffViewer = null,
         /** Whether the app is collecting a branch name character-by-character. */
         public readonly bool $collectingBranchName = false,
@@ -102,6 +102,12 @@ final class App implements Model
         public readonly ?Worktrees $worktrees = null,
         /** Interactive rebase overlay (shown when 'i' is pressed). */
         public readonly ?InteractiveRebase $interactiveRebase = null,
+        /**
+         * Base commit captured when the branch collector was opened from a log
+         * row (candy-git-038). Null means the HEAD default; executeCreateBranch
+         * threads it to createBranch and then clears it.
+         */
+        public readonly ?string $pendingBranchBase = null,
         /** Terminal width in columns, from the latest WindowSizeMsg (null until first resize). */
         public readonly ?int $width = null,
         /** Terminal height in rows, from the latest WindowSizeMsg (null until first resize). */
@@ -399,7 +405,25 @@ final class App implements Model
         if ($this->diffViewer !== null) {
             $dv = $this->diffViewer;
             if ($msg->type === KeyType::Escape || ($msg->type === KeyType::Char && $msg->rune === 'd')) {
-                return [$this->withDiffViewer(null), null];
+                // Closing takes any live arm with it (candy-git-011 law: the
+                // armed gesture dies with the surface that offered it).
+                return [$this->clearConfirm()->withDiffViewer(null), null];
+            }
+            // Read-only commit view (candy-git-015): staging is inert here,
+            // the keys are the history actions the log never had.
+            if ($dv->readOnly && $msg->type === KeyType::Space) {
+                    return [$this, null];
+                }
+                if ($dv->readOnly && $msg->type === KeyType::Char) {
+                return match ($msg->rune) {
+                    'r' => [$this->executeRevert($dv->commitSha), null],
+                    'R' => [$this->executeResetHard($dv->commitSha), null],
+                    'v' => $dv->commitSha === ''
+                        ? [$this, null]
+                        : [$this->withDiffViewer(null)->withCherryPick(CherryPick::collecting()->withCommitRef($dv->commitSha)), null],
+                    ' ' => [$this, null],
+                    default => [$this, null],
+                };
             }
             if ($msg->type === KeyType::Space) {
                 return [$dv->cached ? $this->unstageCurrentHunk() : $this->stageCurrentHunk(), null];
@@ -472,6 +496,12 @@ final class App implements Model
         }
         if ($msg->type === KeyType::Enter && $this->pane === Pane::Status) {
             return [$this->showDiff(), null];
+        }
+        // The log pane acts on what it shows (candy-git-015): Enter opens the
+        // full commit display read-only, and revert/reset/cherry-pick ride
+        // inside it on the commit sha already on screen - never retyped.
+        if ($msg->type === KeyType::Enter && $this->pane === Pane::Log) {
+            return [$this->openCommitDetails(), null];
         }
         // Remotes: f fetch, p pull, P push (candy-git-005). Repo-wide verbs,
         // every one armed for a second confirming press — a push is visible
@@ -971,6 +1001,8 @@ final class App implements Model
         bool $worktreesSet = false,
         ?InteractiveRebase $interactiveRebase = null,
         bool $interactiveRebaseSet = false,
+        ?string $pendingBranchBase = null,
+        bool $pendingBranchBaseSet = false,
         ?int $width = null,
         ?int $height = null,
     ): self {
@@ -1014,6 +1046,7 @@ final class App implements Model
             cherryPick: $cherryPickSet ? $cherryPick : ($cherryPick ?? $this->cherryPick),
             worktrees: $worktreesSet ? $worktrees : ($worktrees ?? $this->worktrees),
             interactiveRebase: $interactiveRebaseSet ? $interactiveRebase : ($interactiveRebase ?? $this->interactiveRebase),
+            pendingBranchBase: $pendingBranchBaseSet ? $pendingBranchBase : ($pendingBranchBase ?? $this->pendingBranchBase),
             width: $width ?? $this->width,
             height: $height ?? $this->height,
         );
@@ -1445,12 +1478,27 @@ final class App implements Model
     /** Open inline branch name collection. */
     private function startCreateBranch(): self
     {
-        return $this->withBranchCollection(true, '');
+        // From a log row, `n` branches from THAT commit (candy-git-038);
+        // from anywhere else it keeps the HEAD default.
+        $base = null;
+        if ($this->pane === Pane::Log) {
+            $row = $this->log[$this->logCursor] ?? null;
+            if (is_array($row) && isset($row['sha']) && is_string($row['sha'])) {
+                $base = $row['sha'];
+            }
+        }
+
+        return $this->withAll(
+            collectingBranchName: true,
+            branchName: '',
+            pendingBranchBase: $base,
+            pendingBranchBaseSet: true,
+        );
     }
 
     private function withBranchCollection(bool $collecting, string $name): self
     {
-        return $this->withAll(collectingBranchName: $collecting, branchName: $name);
+        return $this->withAll(collectingBranchName: $collecting, branchName: $name, pendingBranchBase: null, pendingBranchBaseSet: true);
     }
 
     private function withBranchName(string $name): self
@@ -1468,9 +1516,9 @@ final class App implements Model
         // inverse has to know which branch to walk back to.
         $from = $this->currentBranchName();
         try {
-            $this->git->createBranch($this->branchName);
+            $this->git->createBranch($this->branchName, $this->pendingBranchBase);
             return $this
-                ->withAll(history: $this->requireHistory()->push(HistoryEntry::createBranch($this->branchName, $from)))
+                ->withAll(history: $this->requireHistory()->push(HistoryEntry::createBranch($this->branchName, $from, (string) ($this->pendingBranchBase ?? ''))))
                 ->withBranchCollection(false, '')
                 ->refresh();
         } catch (\RuntimeException $e) {
@@ -1556,7 +1604,7 @@ final class App implements Model
                 'commit' => $this->git->commit($args['message'] ?? ''),
                 'reset' => $this->git->reset(),
                 'amend' => $this->git->amend(),
-                'createBranch' => $this->git->createBranch($args['name']),
+                'createBranch' => $this->git->createBranch($args['name'], ($args['base'] ?? '') !== '' ? (string) $args['base'] : null),
                 'removeBranch' => $this->undoCreateBranch($args),
                 'deleteBranch' => $this->git->deleteBranch($args['name']),
                 'restoreBranch' => $this->git->restoreBranch($args['name'], $args['sha']),
@@ -1566,6 +1614,8 @@ final class App implements Model
                 'unstagePatch' => $this->git->unstagePatch($args['path'], $args['hunk']),
                 'merge' => $this->git->merge($args['branch']),
                 'abort' => $this->git->rebaseAbort(),
+                'revert' => $this->git->revert($args['sha']),
+                'resetHard' => $this->git->resetHard($args['sha']),
                 // Belt to executeUndo's peek: if a refuse-shaped inverse ever
                 // reaches here (via a future caller), fail loud, never silent.
                 HistoryEntry::UNRECOVERABLE_INVERSE => throw new \RuntimeException(
@@ -1667,7 +1717,26 @@ final class App implements Model
     /** Start collecting merge target branch name. */
     private function startMerge(): self
     {
-        return $this->withMergeCollection(true, '');
+        // `M` with the cursor on a local branch row merges THAT branch
+        // (candy-git-038): the buffer opens seeded, still editable. The
+        // current branch and remote-tracking rows seed nothing - merging
+        // into yourself is nonsense and the tracking ref is not a checkout
+        // target this menu should imply.
+        $seed = '';
+        if ($this->pane === Pane::Branches) {
+            $row = $this->branches[$this->branchesCursor] ?? null;
+            if (
+                is_array($row)
+                && empty($row['current'])
+                && empty($row['remote'])
+                && isset($row['name'])
+                && is_string($row['name'])
+            ) {
+                $seed = $row['name'];
+            }
+        }
+
+        return $this->withMergeCollection(true, $seed);
     }
 
     private function withMergeCollection(bool $collecting, string $target): self
@@ -1957,7 +2026,74 @@ final class App implements Model
 
     private function startCherryPick(): self
     {
-        return $this->withCherryPick(CherryPick::collecting());
+        // From the log the visible sha IS the seed (candy-git-038); the
+        // buffer stays editable so the user can still aim elsewhere.
+        $row  = $this->pane === Pane::Log ? ($this->log[$this->logCursor] ?? null) : null;
+        $seed = is_array($row) && isset($row['sha']) && is_string($row['sha']) ? $row['sha'] : '';
+
+        return $this->withCherryPick($seed !== ''
+            ? CherryPick::collecting()->withCommitRef($seed)
+            : CherryPick::collecting());
+    }
+
+    /**
+     * Open the read-only commit display for the log cursor row
+     * (candy-git-015): full message, stat, and patch from `git show`,
+     * windowed by the same scroll machinery as a file diff.
+     */
+    private function openCommitDetails(): self
+    {
+        $row = $this->log[$this->logCursor] ?? null;
+        if (!is_array($row) || !isset($row['sha']) || !is_string($row['sha']) || $row['sha'] === '') {
+            return $this;
+        }
+        try {
+            $lines = $this->git->commitDetails($row['sha']);
+        } catch (\RuntimeException $e) {
+            return $this->withError($e->getMessage());
+        }
+
+        return $this->withDiffViewer(DiffViewer::fromCommitDetails($row['sha'], $lines));
+    }
+
+    /** Revert the displayed commit - armed, press r twice (candy-git-015). */
+    private function executeRevert(string $sha): self
+    {
+        $arm = 'revert:' . $sha;
+        if ($this->pendingConfirm !== $arm) {
+            return $this->armConfirm($arm, Lang::t('confirm.revert', ['sha' => $sha]));
+        }
+        $base = $this->clearConfirm();
+        try {
+            $this->git->revert($sha);
+        } catch (\RuntimeException $e) {
+            return $base->withError($e->getMessage());
+        }
+
+        return $base
+            ->withAll(history: $this->requireHistory()->push(HistoryEntry::revert($sha)))
+            ->refresh()
+            ->withAll(successMessage: Lang::t('revert.done', ['sha' => $sha]));
+    }
+
+    /** Move HEAD onto the displayed commit - armed twice (candy-git-015). */
+    private function executeResetHard(string $sha): self
+    {
+        $arm = 'resethard:' . $sha;
+        if ($this->pendingConfirm !== $arm) {
+            return $this->armConfirm($arm, Lang::t('confirm.reset_hard', ['sha' => $sha]));
+        }
+        $base = $this->clearConfirm();
+        try {
+            $this->git->resetHard($sha);
+        } catch (\RuntimeException $e) {
+            return $base->withError($e->getMessage());
+        }
+
+        return $base
+            ->withAll(history: $this->requireHistory()->push(HistoryEntry::resetHard($sha)))
+            ->refresh()
+            ->withAll(successMessage: Lang::t('reset.done', ['sha' => $sha]));
     }
 
     /** Explicit-set cherryPick swap — the null argument MEANS "close the overlay",

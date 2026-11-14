@@ -96,7 +96,10 @@ final class RendererSanitizeTest extends TestCase
         // injected cursor-home sequence and the bell.
         $this->assertStringNotContainsString("\x1b[1;1H", $out);
         $this->assertStringNotContainsString("\x07", $out);
-        $this->assertStringContainsString('posessed', $out);
+        // The subject shares its row with the new author/ago meta
+        // (candy-git-015), so the budget may clip the residue - what must
+        // survive is the SANITIZED text, never the injection.
+        $this->assertStringContainsString('posess', $out);
     }
 
     /**

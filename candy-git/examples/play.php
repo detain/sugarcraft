@@ -55,7 +55,10 @@ $fixture = new class implements GitDriver {
     public function stagePatch(string $path, string $hunk): void {}
     public function unstageAll(): void {}
     public function unstagePatch(string $path, string $hunk): void {}
-    public function createBranch(string $name): void {}
+    public function createBranch(string $name, ?string $from = null): void {}
+    public function commitDetails(string $ref): array { return []; }
+    public function revert(string $ref): void {}
+    public function resetHard(string $ref): void {}
     public function deleteBranch(string $name): void {}
     public function restoreBranch(string $name, string $sha): void {}
     public function merge(string $branch): void {}

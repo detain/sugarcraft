@@ -94,6 +94,7 @@ return [
 
     // Branch creation
     'branch.prompt'         => 'branch name: ',
+    'branch.prompt_from'    => 'new branch from {sha}: ',
     'branch.empty_name'     => 'branch: name cannot be empty',
 
     // Diff viewer
@@ -104,6 +105,8 @@ return [
     'diff.navigation_hint_cached' => 'j/k: scroll  ·  [ ]: hunk  ·  space: unstage  ·  esc: close',
     'diff.side_staged'      => 'staged',
     'diff.side_worktree'    => 'worktree',
+    'diff.side_commit'      => 'commit',
+    'diff.details_hint'     => 'j/k: scroll  ·  [ ]: hunk  ·  r: revert  ·  R: reset  ·  v: cherry-pick  ·  esc: close',
 
     // Undo/Redo
     'history.nothing_to_undo' => 'nothing to undo',
@@ -125,6 +128,8 @@ return [
     'history.op.merge'        => 'merge',
     'history.op.amend'        => 'amend',
     'history.op.reset'        => 'reset',
+    'history.op.revert'       => 'revert',
+    'history.op.resetHard'    => 'reset --hard',
     'history.unavailable'     => 'history: unavailable (app constructed without a HistoryManager)',
     'history.cannot_undo'     => 'history: cannot undo {op} — the data it would restore is gone',
     'history.unknown_op'      => 'history: unknown operation {op}',
@@ -149,6 +154,10 @@ return [
     'confirm.fetch'           => 'fetch: press f again to fetch from the remote',
     'confirm.pull'            => 'pull: press p again to pull from the remote',
     'confirm.push'            => 'push: press P again to push to the remote (visible to others)',
+    'confirm.revert'          => 'revert {sha}: press r again to stack the inverse commit on HEAD',
+    'confirm.reset_hard'      => 'reset --hard {sha}: press R again - HEAD moves and uncommitted changes are destroyed',
+    'revert.done'             => 'reverted {sha}',
+    'reset.done'              => 'reset hard onto {sha}',
 
     // Notice lane (amber confirmation/hint state, candy-git-047)
     'notice.collect_hint'   => 'enter confirms · esc cancels',

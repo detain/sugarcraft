@@ -69,7 +69,8 @@ own git config.
 
 candy-git v1 covers the local-repository loop: status / stage / unstage /
 discard, branches (checkout, create, delete — with remote-tracking branches
-listed and their divergence badged), log, the diff viewer, commit and
+listed and their divergence badged), log (with a read-only commit details view and
+armed revert / reset --hard on it), the diff viewer, commit and
 amend, merge, cherry-pick, the sequencer menu (continue / abort / skip), stash
 create / apply / pop / drop, worktrees (list / add / remove), an interactive-rebase todo
 preview, the remote trio (fetch / pull / push, each behind an armed confirm),
@@ -95,13 +96,14 @@ remotes cannot stall rendering) remains the v2 direction.
 | `a` (status pane)        | Stage all files                                         |
 | `d` (status pane)        | Discard changes to the highlighted file (press twice)    |
 | `Enter` (status pane)    | Open diff viewer for the highlighted file              |
+| `Enter` (log pane)       | Open the commit under the cursor — a read-only details view of `git show --stat --format=full --patch` |
 | `f` (press twice)        | Fetch from the remote                                  |
 | `p` (press twice)        | Pull from the remote                                   |
 | `P` (press twice)        | Push to the remote — the first push of an untracked branch bootstraps `origin` with `--set-upstream`; refuses on detached HEAD |
 | `Space` (branches pane)  | Checkout branch                                         |
 | `c`                      | Commit — the message collector owns the keyboard: `Tab` inserts a newline (subject+body are typable, and pastes keep their line structure), `Enter` commits, `Esc` cancels |
 | `A`                      | Amend the last commit — opens the collector pre-filled with its message; editing it rewrites HEAD, submitting unchanged is the old keep-the-message amend |
-| `n`                      | Create and switch to a new branch                        |
+| `n`                      | Create and switch to a new branch — opened while the log pane is focused, the branch starts at THAT commit (the collector says so: `new branch from <sha>:`) |
 | `u`                      | Undo last operation — undoing a commit resets the boundary and re-arms the collector with the typed message (nothing authored is lost) |
 | `Ctrl+r`                 | Redo last undone operation                             |
 | `D` (branches pane)      | Delete the selected branch (press twice) — refuses to delete the current branch |
@@ -111,10 +113,10 @@ per-branch divergence badges (`[↑2 ↓1]`, `[!]` for a vanished upstream). Spa
 on one DWIMs the way git does: `--track` creates a local branch of that name,
 or — when the local already exists — checks it out. They are read-only for
 `D`: the branch family manages locals.
-| `M`                      | Merge — prompt for a branch/ref to merge into current (free text; the selected row is never read) |
+| `M`                      | Merge — prompt for a branch/ref to merge into current, seeded with the branch under the cursor when the branches pane has a non-current row selected (still editable) |
 | `r`                      | Open the sequencer menu (continue / abort; skip on a rebase) — when stopped only: opens while a rebase, cherry-pick, or conflicted merge is pending; on an idle repo it reports "no rebase in progress" |
 | `S`                      | Open stash manager (create / apply / pop / drop; push takes an optional message, `u` includes untracked; pop and drop ask twice; the overlay stays open after apply so it remains usable) |
-| `V`                      | Cherry-pick — type a commit ref and press Enter       |
+| `V`                      | Cherry-pick — type a commit ref and press Enter; from the log pane or the commit details view the ref is pre-filled from the cursor |
 | `w` (branches pane)     | Open worktrees manager (list / add / remove) — path collection refuses option-injection and `..` traversal; it does not jail the destination inside the repository |
 | `i`                      | Interactive rebase todo list — preview only; the todo is not yet executed |
 | `R`                      | Refresh from disk                                       |
@@ -149,6 +151,24 @@ leading `…`, so the caret and the text you just typed are always visible.
 The overlay title carries a side chip — `worktree` for the unstaged diff,
 `staged` for the index diff opened from a staged-only row — so `Space`
 can never act on a side you are not looking at.
+
+### Commit details keys
+
+Opened by `Enter` on a log row. It is the same window machinery over a
+`git show` blob — scrolling is read-only, and the mutating keys act on
+the commit under the cursor instead of asking you to retype it:
+
+| Key              | Action                          |
+|------------------|--------------------------------|
+| `j/k`            | Scroll one line                 |
+| `[` / `]`        | Previous / next hunk            |
+| `PageUp/PageDown`| Scroll a screenful of lines     |
+| `Home/End`       | First / last hunk               |
+| `r` (press twice)| Revert the commit — stacks an inverse commit on HEAD (undo refuses: rewriting published history is the user's business) |
+| `R` (press twice)| Reset --hard onto the commit — HEAD moves and uncommitted changes are destroyed (undo refuses: the pre-reset HEAD was never recorded) |
+| `v`              | Cherry-pick this commit — closes the view with the ref pre-filled |
+| `Space`          | Inert — the commit view never stages anything |
+| `Esc` / `d`      | Close                           |
 
 ### Overlay keys
 
@@ -278,7 +298,7 @@ file key like `git.timeout` resolves through the core `T` registry as
 raw string.
 
 **Available keys** (`lang/en.php` — an excerpt; the file is the full roster
-of 176 keys):
+of 185 keys):
 
 | Key                    | Default string                                                    | Parameters  |
 |------------------------|-------------------------------------------------------------------|------------|

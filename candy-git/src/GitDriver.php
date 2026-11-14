@@ -99,8 +99,28 @@ interface GitDriver
      */
     public function unstagePatch(string $path, string $hunk): void;
 
-    /** Create and switch to a new branch. */
-    public function createBranch(string $name): void;
+    /**
+     * Create and switch to a new branch.
+     * @param string|null $from start point (candy-git-038: `n` from the log
+     * pane branches from the selected commit); null/empty keeps the HEAD default
+     */
+    public function createBranch(string $name, ?string $from = null): void;
+
+    /**
+     * Full commit display — headers, message, stat summary and patch.
+     * Feeds the log pane's read-only details overlay (candy-git-015).
+     * @return list<string>
+     */
+    public function commitDetails(string $ref): array;
+
+    /** Invert a commit onto HEAD as a new commit (`revert --no-edit`). */
+    public function revert(string $ref): void;
+
+    /**
+     * Move HEAD to a ref and overwrite the worktree (`reset --hard`).
+     * Destructive by definition — the UI arms it.
+     */
+    public function resetHard(string $ref): void;
 
     /** Delete a branch (safe, -d flag). */
     public function deleteBranch(string $name): void;

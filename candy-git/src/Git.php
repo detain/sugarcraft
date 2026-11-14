@@ -382,10 +382,53 @@ final class Git implements GitDriver
         $this->runPatch($path, $hunk, ['apply', '--cached', '--unidiff-zero', '-']);
     }
 
-    public function createBranch(string $name): void
+    public function createBranch(string $name, ?string $from = null): void
     {
         $this->guardRef($name);
-        $this->run(['checkout', '-b', $name]);
+        $args = ['checkout', '-b', $name];
+        // candy-git-038: `n` from the log pane branches from the selected
+        // commit rather than HEAD. Empty/null start point keeps the old
+        // HEAD-shaped argv byte-for-byte.
+        if ($from !== null && $from !== '') {
+            $this->guardRef($from);
+            $args[] = $from;
+        }
+        $this->run($args);
+    }
+
+    /**
+     * Full commit display: headers, message, stat summary and the patch in
+     * one stdout slice (`show --stat --format=full --patch`). Feeds the log
+     * pane's read-only details overlay (candy-git-015). --no-color keeps the
+     * ANSI channel ours alone.
+     *
+     * @return list<string>
+     */
+    public function commitDetails(string $ref): array
+    {
+        $this->guardRef($ref);
+
+        return $this->run(['show', '--stat', '--format=full', '--patch', '--no-color', $ref]);
+    }
+
+    /**
+     * Invert a commit onto HEAD as a new commit (`revert --no-edit` — the
+     * message is git's own, no editor is ever asked for).
+     */
+    public function revert(string $ref): void
+    {
+        $this->guardRef($ref);
+        $this->run(['revert', '--no-edit', $ref]);
+    }
+
+    /**
+     * Move HEAD to a ref and make the worktree match, discarding uncommitted
+     * bytes (`reset --hard`). Destructive by definition — the UI arms it.
+     */
+    public function resetHard(string $ref): void
+    {
+        $this->guardRef($ref);
+        $this->run(['reset', '--hard', $ref]);
     }
 
     public function deleteBranch(string $name): void
@@ -738,6 +781,7 @@ final class Git implements GitDriver
         'pull'            => null,   // fetch + merge in one verb (candy-git-005)
         'rebase'          => ['--continue', '--skip'],
         'cherry-pick'     => ['__not_abort__'],
+        'revert'          => ['__not_abort__'], // 3-way merge of the inverted diff (candy-git-015)
         'stash'           => ['apply', 'pop'],
     ];
 
@@ -773,6 +817,7 @@ final class Git implements GitDriver
         'pull'        => null,
         'restore'     => null,
         'reset'       => null,
+        'revert'      => null, // rewrites the worktree through merge machinery (candy-git-015)
         'merge'       => null,
         'cherry-pick' => ['__not_abort__'],
         'rebase'      => ['__not_abort__'],

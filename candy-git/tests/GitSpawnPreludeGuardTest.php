@@ -135,7 +135,7 @@ final class GitSpawnPreludeGuardTest extends TestCase
         // Losing any entry reopens a merge-driver door on that path.
         // CG-06: pull is merge-capable through its merge leg (fetch then
         // merge into the worktree) — same door, same table.
-        self::assertSame(['merge', 'pull', 'rebase', 'cherry-pick', 'stash'], array_keys($table));
+        self::assertSame(['merge', 'pull', 'rebase', 'cherry-pick', 'revert', 'stash'], array_keys($table));
         self::assertContains('--continue', $table['rebase']);
         self::assertContains('--skip', $table['rebase']);
         self::assertContains('apply', $table['stash']);
@@ -155,7 +155,7 @@ final class GitSpawnPreludeGuardTest extends TestCase
         // cherry-pick, rebase, stash apply/pop, worktree add), with the
         // head-level conservative overs disclosed in the table's docblock.
         self::assertSame(
-            ['add', 'checkout', 'commit', 'diff', 'pull', 'restore', 'reset', 'merge', 'cherry-pick', 'rebase', 'stash', 'worktree'],
+            ['add', 'checkout', 'commit', 'diff', 'pull', 'restore', 'reset', 'revert', 'merge', 'cherry-pick', 'rebase', 'stash', 'worktree'],
             array_keys($table),
         );
         self::assertSame(['__not_abort__'], $table['cherry-pick']);
