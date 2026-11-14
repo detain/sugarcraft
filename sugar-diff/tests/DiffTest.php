@@ -338,6 +338,28 @@ final class DiffTest extends TestCase
         $this->assertStringContainsString(" x = 1;\n", $diff->unified('f'));
     }
 
+    /**
+     * sugar-diff-015: the fold is Unicode-aware (Diff.php:446 `/u`), as the
+     * option docs promise — U+00A0 (Zs) and U+2028 (Zl) are whitespace to it.
+     * Dropping the `/u` modifier (or rewriting trim() over the fold) turns
+     * both arms red; mutation-sanity re-checked in the landing step.
+     */
+    public function testIgnoreWhitespaceFoldsUnicodeSeparatorsNotJustAsciiSpace(): void
+    {
+        $options = DiffOptions::new()->withIgnoreWhitespace();
+
+        $this->assertTrue(
+            Diff::compute("a\u{00A0}b\n", "a b\n", $options)->isEmpty(),
+            'U+00A0 no-break space must fold to the same fingerprint as an ASCII space',
+        );
+        $this->assertTrue(
+            Diff::compute("a\u{2028}b\n", "a b\n", $options)->isEmpty(),
+            'U+2028 line separator must fold under the Unicode-aware pattern',
+        );
+        // And without the option they stay distinct changes.
+        $this->assertFalse(Diff::compute("a\u{00A0}b\n", "a b\n")->isEmpty());
+    }
+
     public function testIgnoreWhitespaceFoldsInvalidUtf8ByteWiseInsteadOfCollapsingToEmpty(): void
     {
         // Review probe: preg_replace('/\s+/u', ...) returns NULL when the
