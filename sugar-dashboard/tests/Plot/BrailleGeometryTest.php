@@ -113,7 +113,11 @@ final class BrailleGeometryTest extends TestCase
 
         // Point at (0,2) - middle-left pixel of cell (0,0)
         $canvas2 = $canvas->setPoint(0, 2);
-        $this->assertSame(0x02, $canvas2->getCell(0, 0) & 0x02, 'Pixel (0,2) should set middle-left dot');
+        // Disclosed flip (finding sugar-dashboard-077): pixel row 2 of a
+        // braille cell is dot 3 = bit 0x04; the old 0x02 pin encoded the
+        // doubled eight-row table that made lower-half pixels carry the
+        // wrong cell's dots.
+        $this->assertSame(0x04, $canvas2->getCell(0, 0) & 0x04, 'Pixel (0,2) should set the third-row left dot');
     }
 
     /**

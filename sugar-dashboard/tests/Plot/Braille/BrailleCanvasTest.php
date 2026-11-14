@@ -282,14 +282,49 @@ final class BrailleCanvasTest extends TestCase
     public function testMultipleSetPointOnSameCellAccumulates(): void
     {
         $canvas = BrailleCanvas::new(10, 10);
-        $canvas = $canvas->setPoint(0, 0); // bit 0x01
-        $canvas = $canvas->setPoint(0, 1); // bit 0x01 (same cell)
-        $canvas = $canvas->setPoint(0, 2); // bit 0x02
-        $canvas = $canvas->setPoint(0, 3); // bit 0x02
+        $canvas = $canvas->setPoint(0, 0); // bit 0x01 (dot 1)
+        $canvas = $canvas->setPoint(0, 1); // bit 0x02 (dot 2)
+        $canvas = $canvas->setPoint(0, 2); // bit 0x04 (dot 3)
+        $canvas = $canvas->setPoint(0, 3); // bit 0x40 (dot 7)
 
         $bits = $canvas->getCell(0, 0);
-        // Should have accumulated bits from same cell
-        $this->assertSame(0x01 | 0x02, $bits);
+        // Standard braille: a full left column of one cell carries dots
+        // 1+2+3+7 (finding sugar-dashboard-076: the doubling table used to
+        // fold rows 0/1 and 2/3 onto the SAME dots, so this accumulated to
+        // 0x03 - two dots, not four. Pin flipped, disclosed.)
+        $this->assertSame(0x01 | 0x02 | 0x04 | 0x40, $bits);
+    }
+
+    public function testVerticalStrokeFillsEachStackedCellNotTheNeighbours(): void
+    {
+        // Finding sugar-dashboard-076 acceptance: a full-height left column
+        // over eight pixel rows spans TWO cells and must paint the complete
+        // dot column (1+2+3+7) in EACH cell. The doubled table smeared the
+        // lower half onto the upper cell's dots instead.
+        $canvas = BrailleCanvas::new(10, 10);
+        for ($y = 0; $y < 8; $y++) {
+            $canvas = $canvas->setPoint(0, $y);
+        }
+
+        $this->assertSame(0x47, $canvas->getCell(0, 0), 'upper cell carries dots 1+2+3+7');
+        $this->assertSame(0x47, $canvas->getCell(0, 1), 'lower cell carries the same full column');
+    }
+
+    public function testColoredAndPlainCanvasesPaintTheSameCells(): void
+    {
+        // Width parity (finding sugar-dashboard-076 canvas leg, closed via
+        // the D-92 uncolored-branch cure, pinned here so it cannot regress):
+        // color changes SGR bytes only - never the painted cell runes.
+        $plain = BrailleCanvas::new(10, 10);
+        $colored = BrailleCanvas::new(10, 10);
+        $red = \SugarCraft\Core\Util\Color::hex('#FF0000');
+        for ($y = 0; $y < 6; $y++) {
+            $plain = $plain->setPoint(2, $y);
+            $colored = $colored->setPoint(2, $y, $red);
+        }
+
+        $strip = static fn(string $s): string => (string) preg_replace('/\x1b\[[0-9;]*m/', '', $s);
+        $this->assertSame($strip($plain->render()), $strip($colored->render()));
     }
 
     public function testGetCellOutOfBoundsReturnsZero(): void

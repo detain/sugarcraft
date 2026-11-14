@@ -16,29 +16,25 @@ namespace SugarCraft\Dashboard\Plot\Braille;
 final class BrailleMatrix
 {
     /**
-     * 2x4 lookup table for braille dot positions (8 rows = 2 braille cells vertically).
-     * Index: [row % 8][column % 2]
-     * Value: bitmask for that dot position
+     * 2x4 lookup table for braille dot positions.
      *
-     * Braille cell dot layout (each cell is 2 cols x 4 rows):
-     *   (0,0) (1,0)  <- row 0: left=0x01, right=0x08
-     *   (0,1) (1,1)  <- row 1: same as row 0
-     *   (0,2) (1,2)  <- row 2: left=0x02, right=0x10
-     *   (0,3) (1,3)  <- row 3: same as row 2
-     *   (0,4) (1,4)  <- row 4: left=0x04, right=0x20
-     *   (0,5) (1,5)  <- row 5: same as row 4
-     *   (0,6) (1,6)  <- row 6: left=0x40, right=0x80
-     *   (0,7) (1,7)  <- row 7: same as row 6
+     * Index: [row % 4][column % 2] - a braille CELL is 4 pixel rows tall
+     * (finding sugar-dashboard-076: the table used to double every row to
+     * fake 8 rows and dotBit indexed it `% 8`, so pixels in the lower half
+     * of one cell carried dot bits that belong to a DIFFERENT dot row -
+     * cellY() has always mapped rows four at a time).
+     *
+     * Standard braille dot layout (left column dots 1-2-3-7, right 4-5-6-8):
+     *   row 0: left=0x01, right=0x08
+     *   row 1: left=0x02, right=0x10
+     *   row 2: left=0x04, right=0x20
+     *   row 3: left=0x40, right=0x80
      */
     private const BRAILLE = [
-        [0x01, 0x08],  // row 0: top-left, top-right
-        [0x01, 0x08],  // row 1: same as row 0
-        [0x02, 0x10],  // row 2
-        [0x02, 0x10],  // row 3: same as row 2
-        [0x04, 0x20],  // row 4
-        [0x04, 0x20],  // row 5: same as row 4
-        [0x40, 0x80],  // row 6
-        [0x40, 0x80],  // row 7: same as row 6
+        [0x01, 0x08],  // row 0: dots 1 / 4
+        [0x02, 0x10],  // row 1: dots 2 / 5
+        [0x04, 0x20],  // row 2: dots 3 / 6
+        [0x40, 0x80],  // row 3: dots 7 / 8
     ];
 
     /**
@@ -73,7 +69,7 @@ final class BrailleMatrix
      */
     public static function dotBit(int $pixelX, int $pixelY): int
     {
-        $row = $pixelY % 8;
+        $row = $pixelY % 4;
         $col = $pixelX % 2;
         return self::BRAILLE[$row][$col];
     }

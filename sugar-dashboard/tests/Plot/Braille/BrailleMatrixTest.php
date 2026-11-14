@@ -44,27 +44,31 @@ final class BrailleMatrixTest extends TestCase
 
     public function testDotBitReturnsCorrectBits(): void
     {
-        // BRAILLE lookup table:
-        // [0x01, 0x08]  // rows 0, 1: left column dots
-        // [0x02, 0x10]  // rows 2, 3
-        // [0x04, 0x20]  // rows 4, 5
-        // [0x40, 0x80]  // rows 6, 7
+        // BRAILLE lookup table (finding sugar-dashboard-077, disclosed flip):
+        // a braille CELL is FOUR pixel rows tall - the old fake eight-row
+        // doubling made lower-half pixels carry the wrong cell's dots.
+        // [0x01, 0x08]  // row 0: dots 1 / 4
+        // [0x02, 0x10]  // row 1: dots 2 / 5
+        // [0x04, 0x20]  // row 2: dots 3 / 6
+        // [0x40, 0x80]  // row 3: dots 7 / 8
 
-        // Top-left dot (row 0, col 0)
+        // Top-left dot (dot 1)
         $this->assertSame(0x01, BrailleMatrix::dotBit(0, 0));
-        // Top-right dot (row 0, col 1)
+        // Top-right dot (dot 4)
         $this->assertSame(0x08, BrailleMatrix::dotBit(1, 0));
-        // Second row left (row 1, col 0)
-        $this->assertSame(0x01, BrailleMatrix::dotBit(0, 1));
-        // Third row left (row 2, col 0)
-        $this->assertSame(0x02, BrailleMatrix::dotBit(0, 2));
-        // Fourth row right (row 3, col 1)
-        $this->assertSame(0x10, BrailleMatrix::dotBit(1, 3));
-        // Fifth row left (row 4, col 0)
-        $this->assertSame(0x04, BrailleMatrix::dotBit(0, 4));
-        // Bottom-left (row 6, col 0)
-        $this->assertSame(0x40, BrailleMatrix::dotBit(0, 6));
-        // Bottom-right (row 7, col 1)
+        // Second row left (dot 2) - old table pinned 0x01 here
+        $this->assertSame(0x02, BrailleMatrix::dotBit(0, 1));
+        // Third row left (dot 3) - old table pinned 0x02 here
+        $this->assertSame(0x04, BrailleMatrix::dotBit(0, 2));
+        // Third row right (dot 6)
+        $this->assertSame(0x20, BrailleMatrix::dotBit(1, 2));
+        // Bottom row left (dot 7) - old table pinned 0x04 here
+        $this->assertSame(0x40, BrailleMatrix::dotBit(0, 3));
+        // Bottom row right (dot 8) - old table pinned 0x10 here
+        $this->assertSame(0x80, BrailleMatrix::dotBit(1, 3));
+        // Pixel row 4 wraps into the next cell: dot 1 again
+        $this->assertSame(0x01, BrailleMatrix::dotBit(0, 4));
+        // Pixel row 7 wraps to cell row 3 right: dot 8
         $this->assertSame(0x80, BrailleMatrix::dotBit(1, 7));
     }
 
