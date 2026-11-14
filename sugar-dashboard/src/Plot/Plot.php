@@ -57,8 +57,22 @@ final class Plot implements SizedItem, Drawable
 
     // ─── Mode ─────────────────────────────────────────────────────
 
+    /**
+     * Set the plot mode.
+     *
+     * Throws on anything outside the documented vocabulary: the old code
+     * stored unknown strings silently and the renderer's `=== MODE_LINE`
+     * test quietly drew the scatter path, so a typo became an invisible
+     * mode change (finding sugar-dashboard-195). Absent mode still
+     * defaults to line via the property initializer.
+     */
     public function withMode(string $mode): self
     {
+        if ($mode !== self::MODE_LINE && $mode !== self::MODE_SCATTER) {
+            throw new \InvalidArgumentException(
+                'Unknown plot mode "' . $mode . '"; valid modes: ' . self::MODE_LINE . ', ' . self::MODE_SCATTER . '.'
+            );
+        }
         $clone = clone $this;
         $clone->mode = $mode;
         return $clone;

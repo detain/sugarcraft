@@ -272,6 +272,28 @@ final class PlotTest extends TestCase
         $this->assertNotSame($original, $updated);
     }
 
+    public function testWithModeAcceptsBothDocumentedModes(): void
+    {
+        $plot = Plot::new();
+        $this->assertNotSame($plot, $plot->withMode(Plot::MODE_LINE));
+        $this->assertNotSame($plot, $plot->withMode(Plot::MODE_SCATTER));
+    }
+
+    public function testWithModeThrowsOnUnknownVocabularyListingValidSet(): void
+    {
+        // finding sugar-dashboard-195: unknown strings used to fall through
+        // silently to the scatter path; a typo must fail loud at the boundary.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/line/');
+        Plot::new()->withMode('bar-chart');
+    }
+
+    public function testWithModeRejectsCaseAndWhitespaceVariants(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Plot::new()->withMode('Line');
+    }
+
     public function testWithShowAxesReturnsNewInstance(): void
     {
         $original = Plot::new();
