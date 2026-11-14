@@ -411,29 +411,28 @@ final class Readline
      * null' are distinguishable. The loop repaints after each state change
      * whenever the prompt exposes a view() method.
      *
-     * Terminal mode contract: run() does not touch termios. In a cooked
-     * (default) TTY the line discipline owns Enter/Backspace/arrows and
-     * echoes typed characters itself, so multi-key chords (arrows, Ctrl
-     * combos, vi/emacs bindings) only work on a real terminal after the
-     * CALLER puts the TTY in raw mode — the switch is
-     * `stty -icanon -echo -isig -ixon min 1 time 0`: `-isig` MUST be off,
-     * otherwise Ctrl+C (and Ctrl+\\ / Ctrl+Z) are intercepted by the
-     * discipline as signals BEFORE the library ever sees them, a SIGINT
-     * death skips the caller's restore, and the shell is left in a broken
-     * cooked state. With ISIG off, ctrl_c arrives as a key the prompt
-     * handles as an abort. `-ixon` MUST be off for the same reason on the
-     * output side: with flow control enabled the discipline swallows
-     * Ctrl+S (0x13, XOFF) as a stop-output request instead of letting
-     * forward history search open, and the terminal freezes until Ctrl+Q
-     * (0x11, XON) resumes it. Restore the saved state on EVERY exit path —
-     * capture `$saved=$(stty -g)` before the switch and run `stty "$saved"`
-     * in a finally block. examples/interactive.php shows the guarded recipe;
-     * sugar-pty's FFI makeRaw() is turnkey for the whole switch; sugar-core
-     * \Util\RawMode now switches flow control off (`-ixon`) too, so Ctrl+S
-     * arrives there, but leaves signal handling ON (no -isig at this
-     * release), so ctrl_c arrives as SIGINT, not as an abort key. Piped or
-     * socket input (tests, scripted drives) needs no such setup — there is
-     * no discipline to fight.
+     * Terminal mode contract: run() does not touch termios. The ritual and
+     * each flag's WHY are documented once, in README.md ("Terminal mode
+     * (raw vs cooked)") and in {@see self::interactive()}, which ships that
+     * recipe (stream_isatty guard, `stty -g` snapshot, finally-restore,
+     * shutdown backstop). A host driving run() over a real TTY must do the
+     * same steps itself:
+     *  1. Flip the terminal raw before the loop -
+     *     `stty -icanon -echo -isig -ixon min 1 time 0`. `-isig` and
+     *     `-ixon` are not optional: left on, Ctrl+C dies as SIGINT before
+     *     any restore runs and Ctrl+S freezes output as XOFF, so those
+     *     chords never reach the prompt (full mechanics in the README
+     *     section cited above).
+     *  2. Capture `stty -g` BEFORE the flip and restore it in a finally
+     *     block - every exit path, never `stty sane`.
+     *  3. sugar-pty's FFI makeRaw() is turnkey for the whole switch;
+     *     sugar-core \Util\RawMode covers the `-ixon` half only and
+     *     deliberately leaves signal handling ON, so ctrl_c arrives there
+     *     as SIGINT, not as an abort key.
+     * Piped or socket input (tests, scripted drives) needs no such setup:
+     * there is no line discipline to fight. The guarded example of this
+     * contract is {@see self::interactive()} itself;
+     * examples/interactive.php now simply calls it.
      *
      * While running, bracketed paste mode (DEC private mode 2004) is enabled
      * on the output terminal so pastes arrive as a single PasteEvent instead
@@ -472,11 +471,13 @@ final class Readline
      * and a successive run() on the same Readline continues draining them
      * (this is what makes `printf 'a\nb\n' | php app.php` feed both prompts);
      * once EOF has been observed, later run() calls see it immediately.
-     * An INJECTED driver cannot be distinguished:
-     * the sugar-input InputDriver contract reports null for both EOF and
-     * momentarily-live-empty reads, so an injected stream at EOF keeps the
-     * pump idling until stop() or an abort key. Pass a driver you control,
-     * or call stop() from the producer side.
+     * A null from an INJECTED driver, by contrast, cannot be told apart
+     * from a merely quiet read: the sugar-input InputDriver contract
+     * reports null both for a true end-of-file and for a live stream that
+     * has no bytes right now, so an injected stream at EOF keeps the pump
+     * idling until stop() or an abort key. Pass a driver you control (one
+     * whose EOF you can signal by other means), or call stop() from the
+     * producer side.
      *
      * Resize handling: when the driver yields a sugar-input ResizeEvent
      * (any host or composite driver that turns SIGWINCH into events —
