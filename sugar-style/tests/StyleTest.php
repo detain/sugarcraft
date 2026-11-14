@@ -846,6 +846,28 @@ final class StyleTest extends TestCase
         fclose($stream);
     }
 
+    /**
+     * ST-27: the write accounting must be cursor accounting too — after
+     * fprint the stream position sits directly behind the payload, and
+     * the returned count equals the advance. That is what makes the
+     * AGENTS slice idiom (ftell/fseek/stream_get_contents) usable on a
+     * shared stream without a rewind; two appends then read back as two
+     * independently rendered payloads (fprint never inserts separators).
+     */
+    public function testFprintLeavesTheCursorAfterThePayload(): void
+    {
+        $stream = fopen('php://memory', 'w+');
+        $style  = Style::new()->bold();
+        $first  = $style->fprint($stream, 'one');
+        $second = $style->fprint($stream, 'two');
+        $this->assertSame(11, $first);
+        $this->assertSame(11, $second);
+        $this->assertSame($first + $second, ftell($stream), 'the accounted return must equal the cursor advance');
+        fseek($stream, 0);
+        $this->assertSame("\x1b[1mone\x1b[0m\x1b[1mtwo\x1b[0m", stream_get_contents($stream));
+        fclose($stream);
+    }
+
     public function testInheritPropagatesCompleteColor(): void
     {
         $parent = Style::new()->foregroundComplete(

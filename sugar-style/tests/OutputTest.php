@@ -10,6 +10,8 @@ use PHPUnit\Framework\TestCase;
 
 final class OutputTest extends TestCase
 {
+    private ?string $scratchDir = null;
+
     public function testSprintConcatenatesWithSpaces(): void
     {
         $this->assertSame('hello world',     Output::sprint('hello', 'world'));
@@ -111,6 +113,109 @@ final class OutputTest extends TestCase
                 'cannot write: stream is not a valid stream resource',
                 $e->getMessage(),
             );
+        }
+    }
+
+    // ---- ST-27: the STDOUT routes of print/println -----------------------
+    //
+    // fwrite(STDOUT) lands on the file descriptor, so an output buffer
+    // in-process cannot see it — the honest capture is a child process
+    // with its streams redirected (same idiom as ReadmeSnippetsTest).
+    // The child echoes its int return on STDERR so the byte accounting
+    // is asserted against the exact same payload the STDOUT file carries.
+
+    public function testPrintWritesTheJoinedPayloadWithNoNewline(): void
+    {
+        [$payload, $count] = $this->runWriterScript('\\SugarCraft\\Style\\Output::print("hello", "world")');
+        $this->assertSame('hello world', $payload, 'print must add nothing — not even a newline');
+        $this->assertSame(11, $count, 'the return must equal the bytes that landed');
+    }
+
+    public function testPrintlnEmitsExactlyOneTrailingNewline(): void
+    {
+        [$payload, $count] = $this->runWriterScript('\\SugarCraft\\Style\\Output::println("a", "b", "c")');
+        $this->assertSame("a b c\n", $payload);
+        $this->assertSame(6, $count);
+        // The zero-argument edge: a lone line break, exactly one byte.
+        [$bare, $bareCount] = $this->runWriterScript('\\SugarCraft\\Style\\Output::println()');
+        $this->assertSame("\n", $bare, 'println() is one newline, never two');
+        $this->assertSame(1, $bareCount);
+    }
+
+    public function testStylePrintRoutesRenderedBytesToStdout(): void
+    {
+        [$payload, $count] = $this->runWriterScript('\\SugarCraft\\Style\\Style::new()->bold()->print("hi")');
+        $this->assertSame("\x1b[1mhi\x1b[0m", $payload);
+        $this->assertSame(10, $count);
+    }
+
+    public function testStylePrintlnRoutesRenderedBytesPlusOneNewline(): void
+    {
+        [$payload, $count] = $this->runWriterScript('\\SugarCraft\\Style\\Style::new()->bold()->println("hi")');
+        $this->assertSame("\x1b[1mhi\x1b[0m\n", $payload);
+        $this->assertSame(11, $count, 'the newline is inside the accounted write');
+    }
+
+    public function testSuccessiveStylePrintCallsConcatenateWithoutSeparators(): void
+    {
+        $script = '(function () { $s = \\SugarCraft\\Style\\Style::new()->bold(); '
+            . 'return $s->print("x") + $s->print("y"); })()';
+        [$payload, $count] = $this->runWriterScript($script);
+        $this->assertSame("\x1b[1mx\x1b[0m\x1b[1my\x1b[0m", $payload, 'print never separates its calls');
+        $this->assertSame(18, $count);
+    }
+
+    /**
+     * Evaluate one expression in a child PHP process with STDOUT/STDERR
+     * redirected to files; the expression's int return is echoed on
+     * STDERR by the generated harness.
+     *
+     * @return array{0:string, 1:int} [exact STDOUT bytes, STDERR as int]
+     */
+    private function runWriterScript(string $expression): array
+    {
+        $dir = $this->scratchDir();
+        $path = $dir . '/writer-' . substr(md5($expression), 0, 12) . '.php';
+        $out  = $path . '.out';
+        $err  = $path . '.err';
+        $autoload = var_export(realpath(__DIR__ . '/../vendor/autoload.php'), true);
+        file_put_contents(
+            $path,
+            "<?php\ndeclare(strict_types=1);\nrequire {$autoload};\n"
+            . 'fwrite(STDERR, (string) (' . $expression . '));' . "\n",
+        );
+        $status = 0;
+        exec(
+            escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($path)
+            . ' 1>' . escapeshellarg($out) . ' 2>' . escapeshellarg($err),
+            $lines,
+            $status,
+        );
+        $this->assertSame(0, $status, 'writer script died: ' . (string) file_get_contents($err));
+
+        return [(string) file_get_contents($out), (int) file_get_contents($err)];
+    }
+
+    private function scratchDir(): string
+    {
+        if ($this->scratchDir === null) {
+            $this->scratchDir = sys_get_temp_dir() . '/style-output-' . getmypid() . '-' . spl_object_id($this);
+            if (!is_dir($this->scratchDir) && !mkdir($this->scratchDir, 0700) && !is_dir($this->scratchDir)) {
+                $this->fail('could not create scratch dir ' . $this->scratchDir);
+            }
+        }
+
+        return $this->scratchDir;
+    }
+
+    public static function tearDownAfterClass(): void
+    {
+        $marker = sys_get_temp_dir() . '/style-output-' . getmypid() . '-';
+        foreach (glob($marker . '*') ?: [] as $dir) {
+            foreach (glob($dir . '/' . chr(42)) ?: [] as $leftover) {
+                @unlink($leftover);
+            }
+            @rmdir($dir);
         }
     }
 }
