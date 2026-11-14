@@ -321,13 +321,20 @@ final class GridLayout implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withItem(\SugarCraft\Dashboard\Foundation\Item $item): self
     {
-        return new self(
+        // D-16: dims live outside the ctor (setSize), so every rebuild
+        // must re-apply them — the Bar.php in-lib exemplar. Without this
+        // the wither silently dropped the allocation and render collapsed.
+        $grid = new self(
             items: [...$this->items, $item],
             columns: $this->columns,
             rows: $this->rows,
             columnGap: $this->columnGap,
             rowGap: $this->rowGap,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $grid->setSize($this->width, $this->height);
+        }
+        return $grid;
     }
 
     /**
@@ -337,13 +344,17 @@ final class GridLayout implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withItems(array $items): self
     {
-        return new self(
+        $grid = new self(
             items: $items,
             columns: $this->columns,
             rows: $this->rows,
             columnGap: $this->columnGap,
             rowGap: $this->rowGap,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $grid->setSize($this->width, $this->height);
+        }
+        return $grid;
     }
 
     /**
@@ -351,13 +362,17 @@ final class GridLayout implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withColumns(int $columns): self
     {
-        return new self(
+        $grid = new self(
             items: $this->items,
             columns: max(1, $columns),
             rows: $this->rows,
             columnGap: $this->columnGap,
             rowGap: $this->rowGap,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $grid->setSize($this->width, $this->height);
+        }
+        return $grid;
     }
 
     /**
@@ -365,13 +380,17 @@ final class GridLayout implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withRows(int $rows): self
     {
-        return new self(
+        $grid = new self(
             items: $this->items,
             columns: $this->columns,
             rows: max(0, $rows),
             columnGap: $this->columnGap,
             rowGap: $this->rowGap,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $grid->setSize($this->width, $this->height);
+        }
+        return $grid;
     }
 
     /**
@@ -379,13 +398,17 @@ final class GridLayout implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withColumnGap(int $gap): self
     {
-        return new self(
+        $grid = new self(
             items: $this->items,
             columns: $this->columns,
             rows: $this->rows,
             columnGap: max(0, $gap),
             rowGap: $this->rowGap,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $grid->setSize($this->width, $this->height);
+        }
+        return $grid;
     }
 
     /**
@@ -393,13 +416,17 @@ final class GridLayout implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withRowGap(int $gap): self
     {
-        return new self(
+        $grid = new self(
             items: $this->items,
             columns: $this->columns,
             rows: $this->rows,
             columnGap: $this->columnGap,
             rowGap: max(0, $gap),
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $grid->setSize($this->width, $this->height);
+        }
+        return $grid;
     }
 
     /**
@@ -407,13 +434,17 @@ final class GridLayout implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withGap(int $gap): self
     {
-        return new self(
+        $grid = new self(
             items: $this->items,
             columns: $this->columns,
             rows: $this->rows,
             columnGap: max(0, $gap),
             rowGap: max(0, $gap),
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $grid->setSize($this->width, $this->height);
+        }
+        return $grid;
     }
 
     /**
@@ -430,12 +461,16 @@ final class GridLayout implements \SugarCraft\Dashboard\Foundation\SizedItem
             }
         }
 
-        return new self(
+        $grid = new self(
             items: $themedItems,
             columns: $this->columns,
             rows: $this->rows,
             columnGap: $this->columnGap,
             rowGap: $this->rowGap,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $grid->setSize($this->width, $this->height);
+        }
+        return $grid;
     }
 }

@@ -199,10 +199,17 @@ final class RatioGrid implements Item, SizedItem
         }
         $grid[$row][$col] = $item;
 
-        return new self(
+        // D-16: the box is owned by setSize, not the ctor — re-apply it
+        // or a single cell edit wipes the whole allocation and the grid
+        // renders empty.
+        $layout = new self(
             grid: $grid,
             colDefinitions: $this->colDefinitions,
             rowDefinitions: $this->rowDefinitions,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $layout->setSize($this->width, $this->height);
+        }
+        return $layout;
     }
 }

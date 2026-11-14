@@ -187,46 +187,64 @@ final class TileLayout implements Item, SizedItem
      */
     public function withTiles(array $tiles): self
     {
-        return new self(
+        // D-16: allocation lives outside the ctor; every rebuild must
+        // re-apply setSize or the tiled layout silently forgets its box.
+        $layout = new self(
             name: $this->name,
             direction: $this->direction,
             tiles: $tiles,
             baseSize: $this->baseSize,
             gap: $this->gap,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $layout->setSize($this->width, $this->height);
+        }
+        return $layout;
     }
 
     public function withDirection(Direction $direction): self
     {
-        return new self(
+        $layout = new self(
             name: $this->name,
             direction: $direction,
             tiles: $this->tiles,
             baseSize: $this->baseSize,
             gap: $this->gap,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $layout->setSize($this->width, $this->height);
+        }
+        return $layout;
     }
 
     public function withTile(Tile $tile): self
     {
-        return new self(
+        $layout = new self(
             name: $this->name,
             direction: $this->direction,
             tiles: [...$this->tiles, $tile],
             baseSize: $this->baseSize,
             gap: $this->gap,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $layout->setSize($this->width, $this->height);
+        }
+        return $layout;
     }
 
     public function withGap(int $gap): self
     {
-        return new self(
+        $layout = new self(
             name: $this->name,
             direction: $this->direction,
             tiles: $this->tiles,
             baseSize: $this->baseSize,
             gap: $gap,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $layout->setSize($this->width, $this->height);
+        }
+        return $layout;
     }
 
     /**
@@ -251,12 +269,16 @@ final class TileLayout implements Item, SizedItem
             }
         }
 
-        return new self(
+        $layout = new self(
             name: $this->name,
             direction: $this->direction,
             tiles: $themedTiles,
             baseSize: $this->baseSize,
             gap: $this->gap,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $layout->setSize($this->width, $this->height);
+        }
+        return $layout;
     }
 }
