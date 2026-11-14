@@ -121,6 +121,16 @@ final class TextPrompt
     private int $completionRingIndex = -1;
 
     /**
+     * Bounded candidate preview armed by Tab on an empty buffer (finding 085).
+     * It replaces the old auto-commit of an arbitrary first candidate: the
+     * first Tab lists candidates under the prompt, the next Tab advances into
+     * the ring and the cycling arm takes over from there. The flag is cleared
+     * by the advance and by withCompletions(), and the row paints only while
+     * the buffer is still empty, so no keystroke can strand a stale preview.
+     */
+    private ?string $completionHint = null;
+
+    /**
      * History store consulted by ↑/↓ navigation: the LIVE handle the
      * caller passed to withHistory(). Navigation state lives on the prompt
      * ({@see $historyPosition}), never in the store's own cursor, so every
@@ -219,6 +229,8 @@ final class TextPrompt
     {
         $clone = clone $this;
         $clone->completions = array_values($completions);
+        // A new candidate set invalidates any armed empty-buffer preview.
+        $clone->completionHint = null;
         return $clone;
     }
 
@@ -1018,6 +1030,18 @@ final class TextPrompt
             );
         }
 
+        // Tab-armed candidate preview (finding 085): painted only while the
+        // buffer is still empty; advancing into the ring clears the flag.
+        if (!$this->hidden && $this->buffer === '' && $this->completionHint !== null) {
+            $preview = Ansi::sanitize($this->completionHint);
+            if ($tailCells === null || $tailCells >= 1) {
+                $lines[] = $pad . Ansi::wrap(
+                    $tailCells !== null ? self::clipToCells($preview, $tailCells) : $preview,
+                    $this->completionStyle,
+                );
+            }
+        }
+
         // Optional vi submode indicator (off by default): without it a
         // keyboard-only or screen-reader user in normal mode sees a dead
         // prompt with no clue why typing does nothing. Painted as a dim
@@ -1378,6 +1402,29 @@ final class TextPrompt
             $clone->cursor = self::charCount($common);
             $clone->completionRingIndex = -1;
         } else {
+            if ($prefix === '') {
+                // Finding 085: Tab on an empty buffer used to commit
+                // candidates[0] wholesale — one keystroke inserting an
+                // arbitrary first match with no menu. First Tab arms the
+                // bounded preview; the next Tab advances into the ring.
+                // A hidden prompt cannot paint the preview, so it keeps the
+                // plain commit rather than swallowing a key invisibly.
+                if (!$this->hidden && $this->completionHint !== null) {
+                    $clone->buffer = $candidates[0];
+                    $clone->cursor = self::charCount($clone->buffer);
+                    $clone->completionRingIndex = 0;
+                    $clone->completionHint = null;
+                    $clone->error = '';
+                    $clone->undoRunEnd = -1;
+                    return $clone;
+                }
+                if (!$this->hidden) {
+                    $clone->completionRing = $candidates;
+                    $clone->completionRingIndex = -1;
+                    $clone->completionHint = self::completionPreview($candidates);
+                    return $clone;
+                }
+            }
             $clone->buffer = $candidates[0];
             $clone->cursor = self::charCount($clone->buffer);
             $clone->completionRingIndex = 0;
@@ -1404,6 +1451,23 @@ final class TextPrompt
             $common = implode('', array_slice($chars, 0, $i));
         }
         return $common;
+    }
+
+    /**
+     * Bounded single-line preview of completion candidates: the first few
+     * names plus an overflow count (finding 085).
+     *
+     * @param non-empty-list<string> $candidates
+     */
+    private static function completionPreview(array $candidates): string
+    {
+        $shown = array_slice($candidates, 0, 4);
+        $text = implode('   ', $shown);
+        $rest = count($candidates) - count($shown);
+        if ($rest > 0) {
+            $text .= '   +' . $rest;
+        }
+        return $text;
     }
 
     private static function charCount(string $s): int
