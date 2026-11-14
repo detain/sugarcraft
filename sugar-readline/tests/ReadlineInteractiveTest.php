@@ -9,7 +9,7 @@ use SugarCraft\Readline\Readline;
 
 /**
  * S-06 (finding 005): Readline::interactive() encapsulates the raw-mode
- * ritual the README Quick Start never used to run — chords must work
+ * ritual the README Quick start never used to run — chords must work
  * quickstart-as-written on a TTY, and the whole flip must stay a no-op on
  * non-TTY hosts (pipes, CI, tests).
  *

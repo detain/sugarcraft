@@ -365,7 +365,7 @@ final class ViMode implements ModeInterface
             ->handleKeyDirect(Key::Right)
             ->handleKeyDirect(Key::Backspace);
 
-        // The buffer shrank under the cursor: vim keeps x's cursor ON the
+        // The buffer shrank under the cursor: vim keeps x's cursor on the
         // last remaining character, never stranded past end-of-line.
         return $this
             ->withRegister(self::registerCapture($prompt, $deleted))
@@ -670,7 +670,7 @@ final class ViMode implements ModeInterface
     }
 
     /**
-     * Vi normal mode rests the cursor ON the last character, never past it
+     * Vi normal mode rests the cursor on the last character, never past it
      * (unlike readline End, which sits after it). Pull back one column when
      * the cursor overshoots a non-empty buffer.
      */

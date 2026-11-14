@@ -17,14 +17,14 @@ sugar-readline — an interactive line-editing prompt library for terminal UIs o
 - **TextPrompt** — single-line input with validation, autocomplete, hidden/password mode, char limit, default value, history navigation, and an optional display-width viewport
 - **SelectionPrompt** — filtered list with type-to-filter, cursor navigation and pagination
 - **MultiSelectPrompt** — filtered multi-choice with min/max enforcement and FIFO rollover at the cap
-- **Dynamic choice lists** — `withChoices($choices, $preserveCursor = true)` on both list prompts replaces the options at runtime: the active filter re-applies to the new list, the cursor/page are kept (clamped to what survives) or homed on request, and — on the multi-select — marks reset, because they are indexed by the old choice list
+- **Dynamic choice lists** — `withChoices($choices, $preserveCursor = true)` on both list prompts replaces the options at runtime, re-applying the active filter and keeping (clamped to what survives) or homing the cursor on request
 - **ConfirmationPrompt** — Yes/No with customisable labels: choose with arrows/Tab/Space or pick directly with `y`/`n` (one keystroke to set), commit with Enter
-- **TextareaPrompt** — multi-line text input with line/column cursor and optional max-line cap; Enter submits, Shift+Enter and Ctrl+J break lines — the pump pushes the kitty keyboard protocol so capable terminals report those chords; on wires that never report modified keys both send a bare Enter byte and submit
-- **Immutable state** — every input-handling method returns a new instance; `view()` returns the ANSI string while each prompt exposes its own data accessor (`value()` on TextPrompt/TextareaPrompt, `selectedValue()` on SelectionPrompt, `selectedValues()` on MultiSelectPrompt, `result()` on ConfirmationPrompt), and the `Readline` pump owns all terminal writes
-- **Vim keybindings** — vi-mode (Insert/Normal, plus a motion-only Visual scaffold); `ViMode` delegates its key-to-operation mapping to `VimKeyHandler` in `sugar-forms` — the same handler that the `sugar-forms` widgets drive and whose widgets `sugar-widgets` re-exports through its `class_alias` facade; new bindings in the `VimAction` enum land in `sugar-forms` and benefit all three libs. Includes text objects: `ci"`, `di(`, `da{`, `yiw` and friends, with a working unnamed register (`x`/`dd`/`yy`/text-object yanks feed `p`)
+- **TextareaPrompt** — multi-line text input with line/column cursor and optional max-line cap; Enter submits and Shift+Enter, Alt+Enter or Ctrl+J break lines
+- **Immutable state** — every input-handling method returns a new instance and `view()` returns the ANSI string; the answer rides a per-shape accessor (`value()`/`selectedValue()`/`selectedValues()`/`result()`), and the `Readline` pump owns all terminal writes
+- **Vim keybindings** — `ViMode` (Insert/Normal, plus a motion-only Visual scaffold) maps keys through `VimKeyHandler` in `sugar-forms` — shared with the sugar-forms widgets — with text objects (`ci"`, `di(`, `da{`, `yiw`) and a working unnamed register (`x`/`dd`/`yy`/text-object yanks feed `p`)
 - **NO_COLOR respected** — when the `NO_COLOR` environment variable is set to a non-empty value, every decoration (colour and style alike) falls away and prompts print as plain text
 - **Translated chrome** — filter bar, page footer, Yes/No, the search indicator and the default validation message ride a `lang/` catalog (namespace `readline`); your labels, choices and validator messages stay opaque (see Internationalization)
-- **Capability gating** — the pump asks the terminal before it speaks. On a real TTY every frame repaints with cursor escapes (`\r`, cursor-up `CSI nA`, clear-below `CSI 0J`); under `TERM=dumb` or an unrecognised terminal class the private-mode pushes (bracketed paste, kitty keyboard) are skipped and frames paint as plain text on fresh lines — no escape noise on assistive or dumb surfaces. Non-TTY sinks (log files, `php://memory`) keep the escape frames because they *are* the recording, but Ctrl+L clears below there instead of wiping the screen with `CSI 2J CSI H`, so captured streams stay parseable. For fully escape-free output in your own tests, drive the prompts as pure state machines (see the Quick Start's terminal-free shape)
+- **Capability gating** — the pump probes the terminal before it speaks: dumb or unrecognized surfaces get plain-text frames with no private-mode pushes, and non-TTY sinks keep escape frames because they *are* the recording (full discipline under Terminal mode)
 
 ## Install
 
@@ -38,7 +38,7 @@ filter. Working from a checkout of this library? Run `composer install`
 inside `sugar-readline/` before executing the `examples/` scripts; they
 boot from `vendor/autoload.php`.
 
-## Quick Start
+## Quick start
 
 Each prompt is a pure state machine: feed it key characters and it returns a
 new prompt. `Readline` is the terminal loop that does the feeding — it reads
@@ -81,7 +81,7 @@ never emit cursor escapes themselves — only `Readline`'s repaint loop does —
 so a host that feeds keys and renders `view()` through its own output channel
 gets identical state without the cursor traffic.
 
-### Text Prompt
+### Text prompt
 
 ```php
 use SugarCraft\Readline\Readline;
@@ -126,7 +126,7 @@ instance:
   (512-state) snapshot stack fed automatically as you type and edit, driven
   by Ctrl+Z/Ctrl+Y (or vi `u` in normal mode).
 
-### Selection Prompt
+### Selection prompt
 
 Type to filter the list as you go; Backspace edits the filter, Ctrl+U clears
 it, and Space acts on the row under the cursor — a second Enter in
@@ -147,7 +147,7 @@ $result = Readline::fromStdin()->run(
 echo $result->value;      // 'Banana' after typing 'an' + Enter
 ```
 
-### Multi-Select Prompt
+### Multi-select prompt
 
 ```php
 use SugarCraft\Readline\Readline;
@@ -161,7 +161,10 @@ $result = Readline::fromStdin()->run(
 print_r($result->value);  // ['A', 'B'] after Space + navigation + Enter
 ```
 
-### Textarea Prompt
+`withChoices()` resets the marks: they are indexed by the old choice list,
+so a swapped-in set starts unmarked.
+
+### Textarea prompt
 
 ```php
 use SugarCraft\Readline\Readline;
@@ -187,7 +190,7 @@ Enter — and submit. When a `maxLines`
 cap is reached, further line breaks are silently refused wherever the cursor
 sits and text accumulates on the line under the cursor.
 
-### Confirmation Prompt
+### Confirmation prompt
 
 ```php
 use SugarCraft\Readline\Readline;
@@ -208,7 +211,7 @@ opt-in: when armed, a `y` or `n` press selects and submits in one keystroke
 The feature defaults off, so the Enter-to-commit contract above is shipped
 behaviour.
 
-### Custom Key Handlers
+### Custom key handlers
 
 `onKey()` registers additional handlers; it **adds** to the keymap rather
 than replacing it, and registering the same key twice keeps the latest
@@ -354,7 +357,7 @@ store the string to replay it on another platform.
 `sugar-pty`'s FFI `Termios::makeRaw()` (`cfmakeraw`) clears signal generation
 and delivers the same transition. `sugar-core`'s
 `SugarCraft\Core\Util\RawMode` delivers the same flow-control half — it
-runs `-ixon` — but deliberately leaves signal generation ON: Ctrl+C
+runs `-ixon` — but deliberately leaves signal generation on: Ctrl+C
 raises SIGINT there, and the abort chords documented below remain the
 stty `-isig` recipe's contract; only that recipe — shipped as
 `Readline::interactive()` with the `stream_isatty` guard, finally-restore and
@@ -362,7 +365,18 @@ shutdown backstop built in — delivers them.
 Over a pipe or socket (no tty at all) no stty is needed — the bytes
 arrive as written, which is exactly how the test-suite drives chords.
 
-## Input Driver
+Escape discipline: on a real TTY every frame repaints with cursor escapes
+(`\r`, cursor-up `CSI nA`, clear-below `CSI 0J`); under `TERM=dumb` or an
+unrecognized terminal class the private-mode pushes (bracketed paste, kitty
+keyboard) are skipped and frames paint as plain text on fresh lines — no
+escape noise on assistive or dumb surfaces. Non-TTY sinks (log files,
+`php://memory`) keep the escape frames because they *are* the recording, but
+Ctrl+L clears below there instead of wiping the screen with `CSI 2J CSI H`, so
+captured streams stay parseable. For fully escape-free output in your own
+tests, drive the prompts as pure state machines (see the Quick start's
+terminal-free shape).
+
+## Input driver
 
 `Readline` accepts an optional `SugarCraft\Input\InputDriver` to control where input comes from. `new Readline()` and `Readline::fromStdin()` both open `php://stdin` themselves — with that default pump the loop also detects a true EOF (see below). For testing, inject a driver over a fixture stream:
 
@@ -382,7 +396,7 @@ An injected driver is reported "no event yet" and "stream ended" by the same
 keeps idling until the prompt ends or `stop()` is called — close or drain the
 fixture stream and arm `stop()` from your test when it runs dry.
 
-## Key Bindings
+## Key bindings
 
 Bindings fire from both spellings: raw control bytes off a live stream and
 symbolic key names (`Key::` constants or plain strings like `'ctrl_a'`) are
@@ -397,7 +411,7 @@ sequence a terminal can send.
 - `Key::Space` — a second Enter in SelectionPrompt (submits the row under the cursor); toggles the mark in MultiSelectPrompt; toggles Yes/No in ConfirmationPrompt; inserts a literal space in text inputs
 - `Key::Tab` — autocomplete or toggle confirmation value; pressing Tab again cycles the matches (first Tab extends to their longest common prefix); `Key::ShiftTab` walks that cycle backwards, and on an empty buffer the first Tab paints a bounded candidate preview instead of committing one (press Tab again to enter the ring)
 - `y` / `n` (any case) — set Yes/No directly in ConfirmationPrompt (Enter still commits); there the Left/Right arrows alias to the same one-keystroke Yes/No picks
-- `ConfirmationPrompt::withAutoSubmit()` arms the immediate-answer reflex: y / n then selects AND submits in one press (arrows and the Space/Tab toggle stay browse-only); off by default, so the Enter-to-commit contract above is the shipped behaviour
+- `ConfirmationPrompt::withAutoSubmit()` arms the immediate-answer reflex: y/n then **selects and submits** in one press (arrows and the Space/Tab toggle stay browse-only); off by default, so the Enter-to-commit contract above is the shipped behaviour
 - `Key::Backspace` / `Key::Delete` — delete characters; Ctrl+H erases before the cursor (both the BS 0x08 and DEL 0x7F spellings bind to Backspace); Ctrl+D deletes under the cursor and, on an empty buffer, aborts (like GNU `delete-char-or-eof`)
 - `Key::CtrlU` / `Key::CtrlK` — delete to start / end of line; Ctrl+W deletes the previous word
 - `Key::CtrlR` / `Key::CtrlS` — reverse / forward incremental history search; without the `-ixon` recipe (see *Terminal mode* above) the discipline intercepts Ctrl+S as XOFF and freezes output instead of opening forward search — Ctrl+Q (XON) unfreezes it
@@ -470,7 +484,7 @@ its own state survives the prompt's immutable cloning.
   `VimKeyHandler`, which returns a `VimAction` enum case that ViMode then
   executes as TextPrompt operations. New vi bindings therefore belong in
   sugar-forms (`VimAction` + `VimKeyHandler`), not in ViMode's branching.
-  In normal mode the cursor rests ON the last character (vi semantics), so
+  In normal mode the cursor rests **on** the last character (vi semantics), so
   `$` and Escape-at-end land on — not after — the final char.
 
   Normal mode supports **vi text objects**: an operator (`c` change, `d`
@@ -604,7 +618,7 @@ prompt with a history attached — so the search line masks the typed query
 exactly like the buffer, character for character, with the same mask glyph;
 what you type as a query never appears in clear text.
 
-## Submit / Abort Semantics
+## Submit/abort semantics
 
 Each prompt is a state machine with three states: pending, submitted, aborted.
 
