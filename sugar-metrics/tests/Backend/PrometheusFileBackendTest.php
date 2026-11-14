@@ -174,6 +174,28 @@ final class PrometheusFileBackendTest extends TestCase
         $this->assertStringContainsString('hits{a="2"} 2', $content);
     }
 
+    public function testDoubleFlushIsIdempotentAndGaugeReplacementIsLastWriteWins(): void
+    {
+        // Finding 039: nothing pinned that a SECOND flush publishes no duplicate
+        // '# TYPE' header (a duplicate is an unparseable exposition — node_exporter
+        // rejects the WHOLE file), nor that the Prometheus gauge path REPLACES
+        // ($this->gauges[$key] = $value) instead of accumulating: a += regression
+        // would keep 'queue_depth 17' green while the value line quietly doubles.
+        // Written to hold in both flush eras: pre-MET-DIRTYGATE the second flush
+        // rewrites byte-identical content, post-gate it is skipped — the published
+        // file must carry exactly one header and the last gauge value either way.
+        $b = new PrometheusFileBackend($this->path);
+        $b->gauge('queue_depth', 4);
+        $b->gauge('queue_depth', 17);
+        $b->flush();
+        $b->flush();
+
+        $content = (string) file_get_contents($this->path);
+        $this->assertSame(1, substr_count($content, '# TYPE queue_depth gauge'));
+        $this->assertSame(1, substr_count($content, "queue_depth 17\n"));
+        $this->assertStringNotContainsString('queue_depth 4', $content);
+    }
+
     public function testRegisteredDescriptorEmitsHelpBeforeSamples(): void
     {
         $b = new PrometheusFileBackend($this->path);
