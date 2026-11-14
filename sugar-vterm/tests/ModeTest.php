@@ -38,7 +38,7 @@ final class ModeTest extends TestCase
     public function testDefaultValues(): void
     {
         $m = new Mode();
-        $this->assertFalse($m->altScreen);
+        $this->assertFalse($m->isAltScreen());
         $this->assertTrue($m->cursorVisible);
         $this->assertFalse($m->bracketedPaste);
         $this->assertSame(MouseEncoding::Default, $m->mouseEncoding);
@@ -49,10 +49,28 @@ final class ModeTest extends TestCase
         $this->assertFalse($m->mouseExtended);
     }
 
+    /**
+     * vterm-07 pin: the bool half-state is gone — the ctor cannot mint an
+     * (altScreen=true, ALT_NONE) pair, and isAltScreen() derives from the
+     * variant alone.
+     */
+    public function testAltScreenHalfStateUnrepresentable(): void
+    {
+        $params = array_map(
+            static fn (\ReflectionParameter $p): string => $p->getName(),
+            (new \ReflectionMethod(Mode::class, '__construct'))->getParameters(),
+        );
+        $this->assertNotContains('altScreen', $params);
+        $this->assertFalse((new Mode(altScreenVariant: Mode::ALT_NONE))->isAltScreen());
+        $this->assertTrue((new Mode(altScreenVariant: Mode::ALT_NO_SAVE))->isAltScreen());
+        $this->assertTrue((new Mode(altScreenVariant: Mode::ALT_CURSOR_ONLY))->isAltScreen());
+        $this->assertTrue((new Mode(altScreenVariant: Mode::ALT_FULL))->isAltScreen());
+    }
+
     public function testWithAltScreen(): void
     {
         $m = (new Mode())->withAltScreen(true);
-        $this->assertTrue($m->altScreen);
+        $this->assertTrue($m->isAltScreen());
     }
 
     public function testWithCursorVisible(): void
@@ -92,7 +110,7 @@ final class ModeTest extends TestCase
     {
         $m = new Mode();
         $this->assertSame(Mode::ALT_NONE, $m->altScreenVariant);
-        $this->assertFalse($m->altScreen);
+        $this->assertFalse($m->isAltScreen());
         $this->assertFalse($m->isAltScreen());
     }
 
@@ -100,7 +118,7 @@ final class ModeTest extends TestCase
     {
         $m = (new Mode())->withAltScreenVariant(Mode::ALT_NO_SAVE);
         $this->assertSame(Mode::ALT_NO_SAVE, $m->altScreenVariant);
-        $this->assertTrue($m->altScreen);
+        $this->assertTrue($m->isAltScreen());
         $this->assertTrue($m->isAltScreen());
     }
 
@@ -108,7 +126,7 @@ final class ModeTest extends TestCase
     {
         $m = (new Mode())->withAltScreenVariant(Mode::ALT_CURSOR_ONLY);
         $this->assertSame(Mode::ALT_CURSOR_ONLY, $m->altScreenVariant);
-        $this->assertTrue($m->altScreen);
+        $this->assertTrue($m->isAltScreen());
         $this->assertTrue($m->isAltScreen());
     }
 
@@ -116,17 +134,17 @@ final class ModeTest extends TestCase
     {
         $m = (new Mode())->withAltScreenVariant(Mode::ALT_FULL);
         $this->assertSame(Mode::ALT_FULL, $m->altScreenVariant);
-        $this->assertTrue($m->altScreen);
+        $this->assertTrue($m->isAltScreen());
         $this->assertTrue($m->isAltScreen());
     }
 
     public function testWithAltScreenVariantNoneClearsAltScreen(): void
     {
         $m = (new Mode())->withAltScreenVariant(Mode::ALT_FULL);
-        $this->assertTrue($m->altScreen);
+        $this->assertTrue($m->isAltScreen());
         $m = $m->withAltScreenVariant(Mode::ALT_NONE);
         $this->assertSame(Mode::ALT_NONE, $m->altScreenVariant);
-        $this->assertFalse($m->altScreen);
+        $this->assertFalse($m->isAltScreen());
         $this->assertFalse($m->isAltScreen());
     }
 
@@ -134,11 +152,11 @@ final class ModeTest extends TestCase
     {
         $m = (new Mode())->withAltScreen(true);
         $this->assertSame(Mode::ALT_FULL, $m->altScreenVariant);
-        $this->assertTrue($m->altScreen);
+        $this->assertTrue($m->isAltScreen());
 
         $m = $m->withAltScreen(false);
         $this->assertSame(Mode::ALT_NONE, $m->altScreenVariant);
-        $this->assertFalse($m->altScreen);
+        $this->assertFalse($m->isAltScreen());
     }
 
     public function testIsAltScreenReturnsTrueWhenVariantActive(): void

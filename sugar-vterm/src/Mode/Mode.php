@@ -32,7 +32,6 @@ final readonly class Mode
     public const int ALT_FULL = 3;
 
     public function __construct(
-        public bool $altScreen = false,
         public bool $cursorVisible = true,
         public bool $bracketedPaste = false,
         public MouseEncoding $mouseEncoding = MouseEncoding::Default,
@@ -97,12 +96,11 @@ final readonly class Mode
      * per-setter named-arg block. Mode fields are never nullable, so the
      * plain `??` fallback is total.
      *
-     * @param array{altScreen?:bool, cursorVisible?:bool, bracketedPaste?:bool, mouseEncoding?:MouseEncoding, mouseAny?:bool, mouseHighlights?:bool, mouseCellMotion?:bool, syncUpdate?:bool, mouseExtended?:bool, altScreenVariant?:int, autoWrap?:bool, originMode?:bool, cursorShape?:int, reportFocusEvents?:bool} $changes
+     * @param array{cursorVisible?:bool, bracketedPaste?:bool, mouseEncoding?:MouseEncoding, mouseAny?:bool, mouseHighlights?:bool, mouseCellMotion?:bool, syncUpdate?:bool, mouseExtended?:bool, altScreenVariant?:int, autoWrap?:bool, originMode?:bool, cursorShape?:int, reportFocusEvents?:bool} $changes
      */
     private function mutate(array $changes): self
     {
         return new self(
-            altScreen: $changes['altScreen'] ?? $this->altScreen,
             cursorVisible: $changes['cursorVisible'] ?? $this->cursorVisible,
             bracketedPaste: $changes['bracketedPaste'] ?? $this->bracketedPaste,
             mouseEncoding: $changes['mouseEncoding'] ?? $this->mouseEncoding,
@@ -121,10 +119,7 @@ final readonly class Mode
 
     public function withAltScreen(bool $v): self
     {
-        return $this->mutate([
-            'altScreen' => $v,
-            'altScreenVariant' => $v ? self::ALT_FULL : self::ALT_NONE,
-        ]);
+        return $this->mutate(['altScreenVariant' => $v ? self::ALT_FULL : self::ALT_NONE]);
     }
 
     /**
@@ -134,14 +129,15 @@ final readonly class Mode
      */
     public function withAltScreenVariant(int $variant): self
     {
-        return $this->mutate([
-            'altScreenVariant' => $variant,
-            'altScreen' => $variant !== self::ALT_NONE,
-        ]);
+        return $this->mutate(['altScreenVariant' => $variant]);
     }
 
     /**
      * Returns true if any alt screen variant is active (variant != ALT_NONE).
+     *
+     * vterm-07: the alt-screen boolean is fully derived from the variant —
+     * an inconsistent (altScreen=true, ALT_NONE) pair is no longer a state
+     * the value object can represent.
      */
     public function isAltScreen(): bool
     {
@@ -254,8 +250,7 @@ final readonly class Mode
 
     public function equals(self $other): bool
     {
-        return $this->altScreen === $other->altScreen
-            && $this->cursorVisible === $other->cursorVisible
+        return $this->cursorVisible === $other->cursorVisible
             && $this->bracketedPaste === $other->bracketedPaste
             && $this->mouseEncoding === $other->mouseEncoding
             && $this->mouseAny === $other->mouseAny

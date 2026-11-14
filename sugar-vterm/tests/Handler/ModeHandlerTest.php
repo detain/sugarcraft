@@ -158,7 +158,7 @@ final class ModeHandlerTest extends TestCase
 
         (new ModeHandler())->apply([1049], true, $h);
 
-        $this->assertTrue($h->mode->altScreen);
+        $this->assertTrue($h->mode->isAltScreen());
         // Active buffer is fresh and blank.
         $this->assertSame(' ', $h->buffer->cell(0, 0)->grapheme);
         $this->assertSame(0, $h->cursor->row);
@@ -182,7 +182,7 @@ final class ModeHandlerTest extends TestCase
 
         $mh->apply([1049], false, $h);
 
-        $this->assertFalse($h->mode->altScreen);
+        $this->assertFalse($h->mode->isAltScreen());
         $this->assertSame('A', $h->buffer->cell(0, 0)->grapheme);
         $this->assertSame(1, $h->cursor->row);
         $this->assertSame(2, $h->cursor->col);
