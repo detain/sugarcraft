@@ -19,12 +19,14 @@ use SugarCraft\Readline\TextPrompt;
  * Submodes:
  * - insert: default; ESC enters normal mode; typing inserts characters via TextPrompt
  * - normal: h/l/0/$/b/w move cursor; j/k step history; i/a/A/I switch to
- *   insert mode; x deletes and p puts via the unnamed register; u undoes;
+ *   insert mode; x deletes and p puts via the unnamed register; D deletes to
+ *   end-of-line; u undoes;
  *   Enter submits; dd deletes line; yy yanks it;
  *   text objects c/d/y + i/a + target (ci" di( da{ yiw ...) via sugar-forms TextObject;
  *   Ctrl+C aborts, and `Q` aborts when no operator is half-typed (Escape
  *   never aborts — it only switches submodes)
- * - visual: v from normal; movement keys reposition the cursor, but the
+ * - visual: v from normal (V drops the cursor to column zero first — the
+ *   line-wise spelling); movement keys reposition the cursor, but the
  *   selection itself is neither rendered nor operated on yet (motion-only
  *   scaffold — there is no d/y-over-selection yet); Ctrl+C aborts
  *
@@ -216,8 +218,6 @@ final class ViMode implements ModeInterface
      */
     private function consumeAction(TextPrompt $prompt, VimAction $action, string $originalKey): TextPrompt
     {
-        $nextMode = $this->viMode;
-
         return match (true) {
             // State transitions
             $action === VimAction::EnterNormalMode
@@ -226,8 +226,13 @@ final class ViMode implements ModeInterface
             $action === VimAction::EnterInsertMode
                 => $this->handleEnterInsertMode($prompt, $originalKey),
 
+            // V (originalKey threaded case-first, like A/I) opens the line:
+            // the cursor drops to column zero where a line selection would
+            // anchor; v keeps it under the cursor as in vim.
             $action === VimAction::EnterVisualMode
-                => $this->withViMode(self::VI_MODE_VISUAL)->attachTo($prompt),
+                => $originalKey === 'V'
+                    ? $this->withViMode(self::VI_MODE_VISUAL)->attachTo($prompt->handleKeyDirect(Key::Home))
+                    : $this->withViMode(self::VI_MODE_VISUAL)->attachTo($prompt),
 
             // Cursor movements
             $action === VimAction::CursorLeft
@@ -288,8 +293,12 @@ final class ViMode implements ModeInterface
 
             // Delete motions
             $action === VimAction::DeleteLine
-                => $this->withViMode(self::VI_MODE_NORMAL)
-                    ->withPendingMotion('d')->attachTo($prompt),
+                => $originalKey === 'D'
+                    // D deletes from the cursor to the end of the line right
+                    // here; only the lowercase d arms a pending motion.
+                    ? $this->deleteToLineEnd($prompt)
+                    : $this->withViMode(self::VI_MODE_NORMAL)
+                        ->withPendingMotion('d')->attachTo($prompt),
 
             // Yank line (yy) — pending motion
             $action === VimAction::YankLine
@@ -343,10 +352,38 @@ final class ViMode implements ModeInterface
             ->handleKeyDirect(Key::Right)
             ->handleKeyDirect(Key::Backspace);
 
+        // The buffer shrank under the cursor: vim keeps x's cursor ON the
+        // last remaining character, never stranded past end-of-line.
         return $this
             ->withRegister($deleted)
             ->withViMode(self::VI_MODE_NORMAL)
-            ->attachTo($after);
+            ->attachTo($this->clampToLastChar($after));
+    }
+
+    /**
+     * D: delete the text under the cursor to the end of the line into the
+     * register, then clamp like x — the line's last character stays live.
+     * A cursor at end-of-line deletes nothing (same law as x).
+     */
+    private function deleteToLineEnd(TextPrompt $prompt): TextPrompt
+    {
+        $value = $prompt->value();
+        $length = mb_strlen($value, 'UTF-8');
+        $cursor = $prompt->cursor();
+        if ($cursor >= $length) {
+            return $this->withViMode(self::VI_MODE_NORMAL)->attachTo($prompt);
+        }
+
+        $deleted = mb_substr($value, $cursor, $length - $cursor, 'UTF-8');
+        $after = $this->moveCursorTo($prompt, $length);
+        for ($i = $length - $cursor; $i > 0; $i--) {
+            $after = $after->handleKeyDirect(Key::Backspace);
+        }
+
+        return $this
+            ->withRegister($deleted)
+            ->withViMode(self::VI_MODE_NORMAL)
+            ->attachTo($this->clampToLastChar($after));
     }
 
     /** p: put the register after the cursor as literal text. */

@@ -331,7 +331,10 @@ final class ViModeTest extends TestCase
         $prompt = $prompt->handleKey('x');
 
         $this->assertSame('ab', $prompt->value());
-        $this->assertSame(2, $prompt->cursor());
+        // Re-pinned by S-51 (finding 076): the old expectation 2 was the
+        // cursor stranded past end-of-line after the buffer shrank; vim
+        // keeps x's caret on the last surviving character.
+        $this->assertSame(1, $prompt->cursor());
         $this->assertSame('normal', $this->getViMode($prompt));
         $this->assertSame('c', $this->getModeFromPrompt($prompt)->register());
     }
