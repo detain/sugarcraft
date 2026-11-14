@@ -424,6 +424,14 @@ final class App implements Model
             && ($msg->rune === 'e' || $msg->rune === 'o' || $msg->rune === 'D')) {
             return $this->openEdit($msg->rune);
         }
+        // SQL-O20 (once-027): `y` yanks the cell under the Rows-pane cursor —
+        // the cell, not the row, the same resolution the edit chords use.
+        if ($this->ui->pane === Pane::Rows
+            && !$msg->ctrl
+            && $msg->type === KeyType::Char
+            && $msg->rune === 'y') {
+            return $this->yankCell();
+        }
         // SQL-O11: PgDn/PgUp page the TABLE PREVIEW (the browse window), in
         // either browser pane. A query-pane result is a full buffer, not a
         // preview — the sentinel selection '(query)' marks exactly that case
@@ -818,6 +826,51 @@ final class App implements Model
             ),
             'ui' => $this->ui->withError(null)->withStatus(null),
         ]), null];
+    }
+
+    /**
+     * SQL-O20 (once-027): yank the cell under the Rows-pane cursor.
+     *
+     * Two honest layers (the shape candy-files' CF-50 clipboard leg shipped):
+     * a TERM that cannot carry OSC 52 (dumb, the Linux console, an unset
+     * TERM) never sees the bytes — they would print as garbage — and the
+     * status line shows the cell's plain text instead, the same stringification
+     * the edit chords display; everywhere else the OSC 52 frame goes out and
+     * the status says so plainly, because tmux defaults and many emulators
+     * drop the write without telling the application. The payload is size-
+     * checked against the core emitter's own cap before the Cmd is built —
+     * Ansi::setClipboard throws on over-long payloads and a key press must
+     * never fatal the app. The yanked content is the CELL, never the row.
+     *
+     * @return array{0:self, 1:?\Closure}
+     */
+    private function yankCell(): array
+    {
+        $status = fn (string $key, array $params = []): array => [$this->mutate([
+            'ui' => $this->ui->withError(null)->withStatus(Lang::t($key, $params)),
+        ]), null];
+
+        $row = $this->browse->rows[$this->browse->rowCursor] ?? null;
+        if ($row === null) {
+            return $status('yank.refuse_no_cell');
+        }
+        $cols = array_map('strval', array_keys($row));
+        $column = $cols[min($this->browse->colCursor, max(0, count($cols) - 1))] ?? '';
+        $raw = $row[$column] ?? null;
+        $text = $raw === null ? '' : (is_scalar($raw) ? (string) $raw : (string) json_encode($raw));
+
+        $term = strtolower((string) getenv('TERM'));
+        if ($term === '' || $term === 'dumb' || $term === 'linux') {
+            return $raw === null
+                ? $status('yank.plain_null')
+                : $status('yank.plain', ['text' => $text]);
+        }
+        if (strlen($text) > \SugarCraft\Core\Util\Ansi::MAX_CLIPBOARD_BYTES) {
+            return $status('yank.too_big', ['bytes' => (string) strlen($text)]);
+        }
+        return [$this->mutate([
+            'ui' => $this->ui->withError(null)->withStatus(Lang::t('yank.osc52')),
+        ]), Cmd::setClipboard($text)];
     }
 
     /**

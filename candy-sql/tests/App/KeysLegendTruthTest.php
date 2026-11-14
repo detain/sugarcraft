@@ -55,6 +55,7 @@ final class KeysLegendTruthTest extends TestCase
         $view = $this->app(Pane::Tables, (new BrowseState())->withTables(['users', 'posts']))->view();
         $this->assertStringContainsString(Lang::t('bar.load'), $view, 'Enter is armed in Tables');
         $this->assertStringContainsString('enter  load table', $view);
+        $this->assertStringNotContainsString('y  yank', $view, 'y is handled in the Rows pane only');
     }
 
     public function testTheRowsPaneLegendAdvertisesTheRowCursorAndDropsTheLoadPromise(): void
@@ -63,6 +64,7 @@ final class KeysLegendTruthTest extends TestCase
         $view = $this->app(Pane::Rows, $browse)->view();
         $this->assertStringContainsString('j/k  row', $view, 'the row cursor was always armed but never advertised');
         $this->assertStringContainsString('e  edit', $view);
+        $this->assertStringContainsString('y  yank', $view, 'SQL-O20 armed y where rows live - the legend follows');
         $this->assertStringNotContainsString(Lang::t('bar.load'), $view, 'no Enter arm exists in the Rows pane');
         $this->assertStringNotContainsString('enter  load table', $view);
     }
@@ -81,6 +83,7 @@ final class KeysLegendTruthTest extends TestCase
         $browse = $this->browseWith([['id' => '1', 'name' => 'ada']], BrowseState::SENTINEL_QUERY);
         $view = $this->app(Pane::Rows, $browse)->view();
         $this->assertStringContainsString('h/l  cell', $view, 'the cell cursor is armed over a result');
+        $this->assertStringContainsString('y  yank', $view, 'yank reads synthetic-result cells too');
         $this->assertStringContainsString('x  export', $view);
         $this->assertStringNotContainsString('e  edit', $view, 'openEdit refuses a synthetic result');
         $this->assertStringNotContainsString('enter  load table', $view);
@@ -113,6 +116,7 @@ final class KeysLegendTruthTest extends TestCase
         $view = $this->app(Pane::Query)->view();
         $this->assertStringContainsString('ctrl+enter', $view, 'once-033: the alias was armed but never advertised here');
         $this->assertStringContainsString('cancel running', $view, 'SQL-O08 superseded the unconditional-quit prose');
+        $this->assertStringNotContainsString('y  yank', $view, 'the yank is Rows-pane only - other legends must not promise it');
     }
 
     public function testTheAdminLegendCarriesTheCacheDropResetAndModalCancelTruth(): void

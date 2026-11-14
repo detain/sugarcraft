@@ -148,6 +148,7 @@ than spraying unreadable bytes.
 | `e` (Rows pane)    | Edit the cell under the cursor — table preview only; shows the `UPDATE`, writes on `Enter` (see *Editing table data*) |
 | `o` (Rows pane)    | Insert a row: `Enter` steps through the columns (empty = `DEFAULT`), then confirm |
 | `D` (Rows pane)    | Delete the row under the cursor — shows the `DELETE`, writes on `Enter` |
+| `y` (Rows pane)    | Yank the cell under the cursor (not the row) to the terminal clipboard via OSC 52; a TERM that cannot carry the sequence (dumb / Linux console / unset) never sees the bytes and the status line prints the cell's plain text instead (SQL-O20) |
 | `Enter` / `Space` (Tables pane) | Load the highlighted table into the rows pane; the Rows pane arms no Enter/Space at all (SQL-O16 — the legends list only keys an arm consumes) |
 | `Enter` (query pane) | Insert a newline in the editor — run with `Ctrl+R`/`Ctrl+E`/`Ctrl+Enter` (`App::beginRunQuery`) |
 | `Ctrl+R`           | Run the SQL in the query pane                   |
