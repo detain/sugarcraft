@@ -30,6 +30,50 @@ use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Core\SubscriptionCapable;
 
+/**
+ * Job-control precondition for the stop family (CI F16, dated 2026-11-15).
+ *
+ * The stop under test is a GROUP stop: a SIGTSTP delivered with SIG_DFL
+ * disposition halts the process only while its process group is NOT
+ * orphaned — POSIX discards group-stop signals (TSTP/TTIN/TTOU) against
+ * an orphaned group, and SIGSTOP is the sole exempt stop. GitHub runners
+ * execute the suite inside a group whose spawning wrapper is gone: that
+ * is precisely an orphan, and the leg reds there with the trace
+ * `raise:12s=S kill-pid:9s=S kill-group:9s=S` — reproduced LOCALLY
+ * byte-identical by running the suite under `setsid -f` (which orphans
+ * phpunit's group before a single test starts). The alternative suspect
+ * — the harness inheriting SIG_IGN for TSTP — was measured dead on
+ * arrival: Program installs its own handler at run() and suspendProgram
+ * re-arms SIG_DFL explicitly, so an inherited ignore is overwritten
+ * before any raise; that emu stays green.
+ *
+ * A real Ctrl-Z never meets an orphan: the job-control shell setpgid's
+ * every job, and the shell stays alive in the session OUTSIDE the job's
+ * group — that is what makes the group stop legal. The rig restores
+ * exactly that precondition for itself: setpgid(0, 0) moves THIS child
+ * into a fresh group of one, whose member's parent (the test suite) is
+ * alive and in the same session — the non-orphan shape the contract has
+ * always assumed. The Program's suspend machinery stays the untouched
+ * code under test; this is the terminal environment, not the mechanism.
+ *
+ * Linux + usable FFI only (the CI class this answers is Linux-runner;
+ * PHP has no setpgid() binding, and libc's is three letters of cdef).
+ * A child that cannot re-home reports WHY on the marker stream, so a CI
+ * red names its own class instead of inviting another round of theory.
+ */
+$pgidReport = 'pgid=inherited-orphan-risk(ffi-path-unavailable)';
+if (\PHP_OS_FAMILY === 'Linux' && \extension_loaded('ffi')) {
+    try {
+        $libc = \FFI::cdef('int setpgid(int pid, int pgid);', 'libc.so.6');
+        $pgidReport = $libc->setpgid(0, 0) === 0
+            ? 'pgid=rehomed-to-' . (\function_exists('posix_getpgid') ? (string) \posix_getpgid(0) : 'fresh')
+            : 'pgid=SETPGID-FAILED';
+    } catch (\Throwable $e) {
+        $pgidReport = 'pgid=FFI-ERROR:' . $e->getMessage();
+    }
+}
+\fwrite(STDOUT, 'RIG:' . $pgidReport . "\n");
+
 final class SuspendChildModel implements Model
 {
     use SubscriptionCapable;

@@ -29,12 +29,12 @@ final class SuspendResumeTest extends TestCase
         // sees neither half of the suspend pair.
         $this->skipWithoutPcntlTools();
 
-        [$proc, $toChild, $markers] = $this->startChild(filter: false, noPcntl: true);
+        [$proc, $toChild, $markers, $stderr] = $this->startChild(filter: false, noPcntl: true);
         \fwrite($toChild, 'z');
         // Never give it a way to suspend: drive the EOF-quit arm (sc-05) and
         // watch the state across the whole exit so a stop would surface.
         $neverStopped = true;
-        $exitCode = $this->finishChild($proc, $toChild, $markers, $neverStopped);
+        $exitCode = $this->finishChild($proc, $toChild, $markers, $stderr, $neverStopped);
 
         $seen = $this->markerCounts();
         $this->assertTrue($neverStopped, 'a no-pcntl build cannot stop and must not try');
@@ -47,8 +47,8 @@ final class SuspendResumeTest extends TestCase
     {
         $this->skipWithoutPcntlTools();
 
-        [$proc, $toChild, $markers] = $this->startChild(filter: false);
-        $this->driveStopAndDoubleCont($proc, $toChild, $markers);
+        [$proc, $toChild, $markers, $stderr] = $this->startChild(filter: false);
+        $this->driveStopAndDoubleCont($proc, $toChild, $markers, $stderr);
 
         $seen = $this->markerCounts();
         $this->assertSame(1, $seen[SuspendMsg::class] ?? 0, 'the model stash sees SuspendMsg once');
@@ -62,8 +62,8 @@ final class SuspendResumeTest extends TestCase
         // being suspended. Runtime bookkeeping is not a filtered key event.
         $this->skipWithoutPcntlTools();
 
-        [$proc, $toChild, $markers] = $this->startChild(filter: true);
-        $this->driveStopAndDoubleCont($proc, $toChild, $markers);
+        [$proc, $toChild, $markers, $stderr] = $this->startChild(filter: true);
+        $this->driveStopAndDoubleCont($proc, $toChild, $markers, $stderr);
 
         $seen = $this->markerCounts();
         $this->assertSame(1, $seen[SuspendMsg::class] ?? 0, 'the stash reaches the model regardless of the user filter');
@@ -80,7 +80,7 @@ final class SuspendResumeTest extends TestCase
     }
 
     /**
-     * @return array{0: resource, 1: resource, 2: resource} proc, stdin-writer, marker stream
+     * @return array{0: resource, 1: resource, 2: resource, 3: resource} proc, stdin-writer, marker stream, stderr stream
      */
     private function startChild(bool $filter, bool $noPcntl = false): array
     {
@@ -122,12 +122,20 @@ final class SuspendResumeTest extends TestCase
      * stop, wake it with two back-to-back SIGCONTs (the double-CONT shape
      * the latch must collapse to at most one Resume), then collect the run.
      */
-    private function driveStopAndDoubleCont($proc, $toChild, $markers): void
+    private function driveStopAndDoubleCont($proc, $toChild, $markers, $stderr): void
     {
         $pid = \proc_get_status($proc)['pid'];
         \fwrite($toChild, 'z');
 
         [$state, $trace] = $this->awaitRealStop($pid);
+        if (!\in_array($state, ['T', 't'], true)) {
+            // Fail-loud keeps its teeth (never a silent skip of the crown
+            // test), but the red now carries the kernel's own answer: state,
+            // pgrp/sid, the decoded SIGTSTP disposition, and everything the
+            // child streamed so far (CI F16 — one failed leg must NAME its
+            // class instead of inviting another theory round).
+            $trace .= ' ' . $this->forensicSnapshot($pid, $markers, $stderr);
+        }
         $this->assertContains(
             $state,
             ['T', 't'],
@@ -144,7 +152,7 @@ final class SuspendResumeTest extends TestCase
         \fwrite($toChild, 'q');
 
         $neverStopped = true; // irrelevant here — the stop already proved above
-        $exitCode = $this->finishChild($proc, $toChild, $markers, $neverStopped, allowStopped: true);
+        $exitCode = $this->finishChild($proc, $toChild, $markers, $stderr, $neverStopped, allowStopped: true);
         $this->assertSame(0, $exitCode, 'the resumed child exits cleanly through Cmd::quit()');
     }
 
@@ -227,11 +235,74 @@ final class SuspendResumeTest extends TestCase
     }
 
     /**
+     * Read-only kernel answer about a child whose stop rounds all failed
+     * (CI F16, dated 2026-11-15): live state, pgrp/sid shape, the /proc
+     * signal masks decoded FOR SIGTSTP specifically (bit 20-1 — the exact
+     * discard classes: BLOCKED stays pending forever, IGNORE kills the
+     * self-raise, DEFAULT-in-an-orphaned-group is what GitHub runners
+     * hit), plus bounded tails of both child streams so the marker that
+     * did or did not arrive is itself evidence.
+     *
+     * Never throws: a half-dead child must not turn the round-trace red
+     * into a diagnostics red; whatever cannot be read answers '?'.
+     */
+    private function forensicSnapshot(int $pid, $markers, $stderr): string
+    {
+        $state = '?';
+        $pgrp  = '?';
+        $sid   = '?';
+        $stat  = @\file_get_contents("/proc/$pid/stat");
+        if (\is_string($stat)) {
+            $rest    = \substr($stat, (int) \strrpos($stat, ')') + 2);
+            $fields  = \explode(' ', $rest);
+            $state   = $fields[0] ?? '?';
+            $pgrp    = isset($fields[2]) ? (int) $fields[2] : '?';
+            $sid     = isset($fields[3]) ? (int) $fields[3] : '?';
+        }
+
+        $tstp = 'unreadable';
+        $masks = @\file_get_contents("/proc/$pid/status");
+        if (\is_string($masks)) {
+            $masks = (int) \preg_match_all('/^Sig(?:Blk|Ign|Cgt):\s+([0-9a-f]+)$/mi', $masks, $bits) === 3
+                ? \array_map('hexdec', $bits[1])
+                : null;
+            if (\is_array($masks)) {
+                [$blk, $ign, $cgt] = $masks;
+                $bit  = 1 << (20 - 1); // SIGTSTP == 20 on Linux
+                $tstp = ($blk & $bit) !== 0 ? 'BLOCKED'
+                    : (($ign & $bit) !== 0 ? 'IGNORE'
+                    : (($cgt & $bit) !== 0 ? 'CAUGHT(Program handler)' : 'DEFAULT'));
+            }
+        }
+
+        $shape = \is_int($pgrp) && $pgrp === $pid ? 'group-leader' : 'inherited-group';
+
+        return 'diag[state=' . $state
+            . ' pgrp=' . $pgrp . '/' . $shape
+            . ' sid=' . $sid
+            . ' tstp=' . $tstp
+            . ' markers=' . $this->streamTail($markers)
+            . ' stderr=' . $this->streamTail($stderr)
+            . ']';
+    }
+
+    private function streamTail($stream, int $limit = 160): string
+    {
+        if (!\is_resource($stream)) {
+            return "'<closed>'";
+        }
+        $chunk = @\fread($stream, 8192);
+        $text  = \is_string($chunk) ? $chunk : '';
+
+        return "'" . \str_replace("\n", ' | ', \substr($text, -$limit)) . "'";
+    }
+
+    /**
      * Drain markers until the child closes its end, then reap. Polls /proc so
      * a stop at any point is noticed (the no-pcntl legs assert it never
      * happens).
      */
-    private function finishChild($proc, $toChild, $markers, bool &$neverStopped, bool $allowStopped = false): int
+    private function finishChild($proc, $toChild, $markers, $stderr, bool &$neverStopped, bool $allowStopped = false): int
     {
         // Closing the child's stdin here serves BOTH shapes: the no-pcntl
         // leg needs the EOF-quit (sc-05) to end the run, and the stop legs
@@ -263,6 +334,7 @@ final class SuspendResumeTest extends TestCase
         $buffer .= (string) \stream_get_contents($markers);
 
         \fclose($markers);
+        \fclose($stderr); // the render stream was never parsed; closing it here is the harness's own child-lifetime hygiene
         $status = \proc_get_status($proc);
         if ($status['running'] ?? false) {
             \proc_terminate($proc, SIGKILL);
