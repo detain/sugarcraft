@@ -32,12 +32,11 @@ final class DrilldownTree implements \SugarCraft\Dashboard\Foundation\SizedItem
     private ?int $height = null;
 
     private TreeNode $root;
-    private string $currentPath = '';
     private bool $showValues = true;
     private bool $showIcons = true;
     private bool $expanded = true;
 
-    /** @var list<string> Navigation stack of expanded node IDs */
+    /** @var list<string> Navigation stack of expanded node IDs - the ONE source of truth */
     private array $navigationStack = [];
 
     /** @var callable|null Called when entering a node: callable(string $nodeId): void */
@@ -94,11 +93,21 @@ final class DrilldownTree implements \SugarCraft\Dashboard\Foundation\SizedItem
 
     /**
      * Set the current drill-down path.
+     *
+     * D-54 (finding sugar-dashboard-047): there is ONE navigation source of
+     * truth now - the stack the breadcrumb reads. withPath resolves the full
+     * ancestor chain by exact node id and installs it, so breadcrumb and
+     * highlight always move together (pushNode/popNode already moved only the
+     * stack while the highlight rode a separate string). An unknown id clears
+     * the path instead of lighting a prefix-shadow.
      */
     public function withPath(string $path): self
     {
         $clone = clone $this;
-        $clone->currentPath = $path;
+        $chain = $path === '' ? [] : $this->findChainTo($this->root, $path);
+        // Drop the root: the stack lists drilled nodes below the surface view,
+        // exactly what pushNode appends.
+        $clone->navigationStack = $chain === null ? [] : array_slice($chain, 1);
         return $clone;
     }
 
@@ -245,6 +254,41 @@ final class DrilldownTree implements \SugarCraft\Dashboard\Foundation\SizedItem
     }
 
     /**
+     * Ids on the current path: root whenever drilled, plus every stacked id.
+     *
+     * @param string $id
+     */
+    private function isOnCurrentPath(string $id): bool
+    {
+        if ($this->navigationStack === []) {
+            return false;
+        }
+
+        return $id === $this->root->id || in_array($id, $this->navigationStack, true);
+    }
+
+    /**
+     * Exact-id DFS from this node to the target, as the id chain it sits on.
+     *
+     * @return list<string>|null null when the id is not in the tree
+     */
+    private function findChainTo(TreeNode $node, string $id): ?array
+    {
+        if ($node->id === $id) {
+            return [$node->id];
+        }
+
+        foreach ($node->children as $child) {
+            $sub = $this->findChainTo($child, $id);
+            if ($sub !== null) {
+                return array_merge([$node->id], $sub);
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Render the drill-down tree as a string.
      */
     public function render(): string
@@ -296,8 +340,10 @@ final class DrilldownTree implements \SugarCraft\Dashboard\Foundation\SizedItem
         $nodeColor = $this->nodeColor ?? Color::hex('#89B4FA');
         $textColor = $this->textColor ?? Color::hex('#CDD6F4');
 
-        // Determine if this node is in the current path
-        $isSelected = $this->currentPath !== '' && str_starts_with($this->currentPath, $node->id);
+        // Determine if this node is on the current path - exact ids from the
+        // one navigation stack (finding sugar-dashboard-047: the old
+        // str_starts_with test lit every sibling whose id was a string prefix).
+        $isSelected = $this->isOnCurrentPath($node->id);
 
         if ($isSelected && $this->selectedColor !== null) {
             $color = $this->selectedColor;
@@ -311,7 +357,13 @@ final class DrilldownTree implements \SugarCraft\Dashboard\Foundation\SizedItem
             $nodeLine .= '├─ ';
         }
 
-        $icon = $this->showIcons ? ($this->expanded && !empty($node->children) ? '▼ ' : '▶ ') : '';
+        // Children-aware marker: a leaf carries no arrow at all (finding
+        // sugar-dashboard-047 - the else arm hung '▶ ' on every childless row
+        // because it tested the global expanded flag, not the node).
+        $icon = '';
+        if ($this->showIcons && $node->children !== []) {
+            $icon = $this->expanded ? '▼ ' : '▶ ';
+        }
         $valueStr = $this->showValues ? ' (' . sprintf('%.1f', $node->value) . ')' : '';
 
         if ($color !== null) {
