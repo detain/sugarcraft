@@ -10,6 +10,8 @@ declare(strict_types=1);
  *
  * Run it as:
  *   php -d phar.readonly=0 tools/build-phar.php [--out dist/candy-image.phar] [--gz]
+ *   (--out must keep the .phar suffix: the shipped bin stub resolves the
+ *   bundled vendor by that suffix alone, so a suffixless name is refused.)
  *
  * `-d phar.readonly=0` is BUILD-ONLY, never a runtime requirement: the app
  * never mutates its own archive, so the shipped php.ini default of On is
@@ -106,13 +108,24 @@ foreach (array_slice($argv, 1) as $arg) {
     if (str_starts_with($arg, '--vendor=')) {
         $candidate = substr($arg, 9);
         if ($candidate !== 'published' && $candidate !== 'monorepo') {
-            fwrite(STDERR, "build-phar: --vendor={$candidate} is not a mode (expected published or monorepo).\n");
+            fwrite(STDERR, "build-phar: --vendor={$candidate} is not a valid mode (expected published or monorepo).\n");
             exit(2);
         }
         $vendorMode = $candidate;
         continue;
     }
-    fwrite(STDERR, "build-phar: unrecognized option {$arg} (usage: php -d phar.readonly=0 tools/build-phar.php [--out=PATH] [--gz] [--version=X] [--vendor=published|monorepo])\n");
+    fwrite(STDERR, "build-phar: unrecognized option {$arg} (usage: php -d phar.readonly=0 tools/build-phar.php [--out=PATH.phar] [--gz] [--version=X] [--vendor=published|monorepo])\n");
+    exit(2);
+}
+
+// Fail-fast on a suffixless artifact name: the bin stub resolves the bundled
+// vendor purely by the '.phar' suffix on __FILE__ (bin/candy-image autoload
+// guard) — an artifact named without it would boot against the WORKING-TREE
+// vendor while still claiming the tag metadata baked inside. Refused above
+// every guard, mirroring the unknown-option ordering, so a typo can neither
+// start a half-build nor reach the disk.
+if (!str_ends_with($outArg, '.phar')) {
+    fwrite(STDERR, "build-phar: --out must name a .phar file (got {$outArg}) — the bin stub only finds the bundled vendor by the .phar suffix; a suffixless artifact would run working-tree code while claiming release metadata.\n");
     exit(2);
 }
 
@@ -127,7 +140,9 @@ if (ini_get('phar.readonly') !== '' && filter_var(ini_get('phar.readonly'), FILT
 // git reads as an unverifiable tree — refused, not waved through.
 if ($vendorMode === 'published') {
     $headRef = trim((string) @shell_exec('git -C ' . escapeshellarg($package) . ' rev-parse --abbrev-ref HEAD 2>&1'));
-    $porcelain = (string) @shell_exec('git -C ' . escapeshellarg($package) . ' status --porcelain 2>&1');
+    // Scoped pathspec: only paths under THIS package count toward dirtiness —
+    // unrelated monorepo activity must not veto a clean package release.
+    $porcelain = (string) @shell_exec('git -C ' . escapeshellarg($package) . ' status --porcelain -- . 2>&1');
     if ($headRef === '' || str_contains($headRef, 'fatal:') || str_contains($porcelain, 'fatal:')) {
         fwrite(STDERR, "build-phar: refusing to build — the source tree's integrity cannot be verified with git (no repository, git unavailable, or git refused to answer). Commit the tree, or pass --vendor=monorepo to build from working-tree state deliberately (dev-only; never for a published artifact).\n");
         exit(2);
@@ -276,10 +291,38 @@ if ($version === null) {
     // onto a candy-image artifact. No candy-image tag reachable =>
     // dev-build, which Version::fromPharMetadata() refuses to read as a
     // version.
-    $described = @shell_exec('git -C ' . escapeshellarg($package) . ' describe --tags --abbrev=0 --match ' . escapeshellarg('candy-image/v*') . ' 2>/dev/null');
-    $version = is_string($described) && trim($described) !== '' ? trim($described) : 'dev-build';
+    //
+    // Asked with 2>&1 (stderr captured, never swallowed to a null file): a
+    // git that cannot answer — missing
+    // binary, cmd.exe mangling, non-repository — must not bake a silent
+    // dev-build stamp. 'No names found' is the one legitimate absence arm
+    // (the package may predate its first tag); anything else is loud.
+    $described = trim((string) @shell_exec('git -C ' . escapeshellarg($package) . ' describe --tags --abbrev=0 --match ' . escapeshellarg('candy-image/v*') . ' 2>&1'));
+    if ($described !== '' && !str_contains($described, ':') && !str_contains($described, "\n")) {
+        // A single colon-free line is the tag name (git tag rules exclude
+        // ':' and newlines, so no error prose can masquerade as a tag).
+        $version = $described;
+    } elseif (str_contains($described, 'No names found')) {
+        $version = 'dev-build';
+    } elseif ($vendorMode === 'published') {
+        fwrite(STDERR, sprintf("build-phar: refusing to stamp the artifact — git describe could not answer (%s). A published build must know its tag; fix the checkout or pass --version=X explicitly.\n", $described === '' ? 'no output' : $described));
+        exit(2);
+    } else {
+        $version = 'dev-build';
+        fwrite(STDERR, sprintf("build-phar: WARNING — git describe could not answer (%s); stamping dev-build into a --vendor=monorepo artifact. Never publish this build.\n", $described === '' ? 'no output' : $described));
+    }
 }
-$commit = trim((string) @shell_exec('git -C ' . escapeshellarg($package) . ' rev-parse HEAD 2>/dev/null'));
+// Commit stamp: a 40-hex answer is the only accepted shape; anything else is
+// loud (refused for published artifacts, warned for dev-only monorepo ones).
+$commit = trim((string) @shell_exec('git -C ' . escapeshellarg($package) . ' rev-parse HEAD 2>&1'));
+if (preg_match('/\A[0-9a-f]{40}\z/', $commit) !== 1) {
+    if ($vendorMode === 'published') {
+        fwrite(STDERR, sprintf("build-phar: refusing to stamp the artifact — git rev-parse HEAD did not return a commit (%s). A published build must carry its commit; run the build where git can answer.\n", $commit === '' ? 'no output' : $commit));
+        exit(2);
+    }
+    fwrite(STDERR, sprintf("build-phar: WARNING — git rev-parse HEAD did not return a commit (%s); the monorepo artifact is stamped commit=null. Never publish this build.\n", $commit === '' ? 'no output' : $commit));
+    $commit = '';
+}
 
 // Reproducibility: honor SOURCE_DATE_EPOCH so a release workflow can export
 // the tag's commit date and get a byte-stable built_at; unset, the wall clock

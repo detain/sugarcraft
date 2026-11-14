@@ -10,7 +10,7 @@ use PHPUnit\Framework\TestCase;
  * A light net for the phar packaging surface (lane PHE). It deliberately does
  * NOT build an archive inside the suite — a real build needs a clean published
  * vendor/ and writes to disk, neither of which belongs in a unit run. What it
- * pins is the three laws that, if broken, would make a published .phar silently
+ * pins is the laws that, if broken, would make a published .phar silently
  * misbehave:
  *
  *  1. the bin is a valid archive stub (shebang + open tag) and carries an
@@ -22,7 +22,14 @@ use PHPUnit\Framework\TestCase;
  *  3. the version SOURCE agrees: the build stamps metadata['version'] and the
  *     runtime Support\Version reader consumes exactly that field, wired through
  *     Cli::runningVersion() so --version tells the truth inside an archive
- *     (the DST-1 lesson — InstalledVersions lies under a frozen vendor/).
+ *     (the DST-1 lesson — InstalledVersions lies under a frozen vendor/);
+ *  4. the argv surface keeps its fail-fast ordering (candy-image-013/021):
+ *     a suffixless --out is refused before any guard or write, and the
+ *     --vendor grammar is byte-pinned;
+ *  5. every git question the build asks captures stderr (candy-image-029/053):
+ *     the integrity porcelain read is scoped to this package, and the stamping
+ *     describe/rev-parse calls run with 2>&1 so an unanswerable git reads as
+ *     a loud failure, never a silent dev-build bake.
  */
 final class PharBuildScriptTest extends TestCase
 {
@@ -86,5 +93,69 @@ final class PharBuildScriptTest extends TestCase
         self::assertStringContainsString('Support\\Version::resolve', $cli);
         self::assertStringContainsString('self::runningVersion()', $cli);
         self::assertStringContainsString("'candy-image ' . self::runningVersion()", $cli);
+    }
+
+    public function testSuffixlessOutIsRefusedBeforeAnyGuardOrWrite(): void
+    {
+        [$rc, $err] = $this->runBuildScript(['--out=/tmp/candy-image-suffix-probe']);
+
+        self::assertSame(2, $rc, 'a suffixless --out must exit 2');
+        self::assertStringContainsString('must name a .phar file', $err);
+        // Ordering pin: the refusal must come from the argv surface, above
+        // Guard 1 — if the readonly message showed instead, a typo could
+        // still be steered past the fail-fast chain.
+        self::assertStringNotContainsString('phar.readonly', $err);
+        clearstatcache();
+        self::assertFalse(is_file('/tmp/candy-image-suffix-probe'), 'refused --out must never touch the disk');
+    }
+
+    public function testVendorModeRefusalGrammarIsBytePinned(): void
+    {
+        $build = $this->readAppFile('tools/build-phar.php');
+        self::assertStringContainsString('--vendor={$candidate} is not a valid mode (expected published or monorepo).', $build);
+
+        [$rc, $err] = $this->runBuildScript(['--vendor=bogus']);
+        self::assertSame(2, $rc);
+        self::assertStringContainsString('--vendor=bogus is not a valid mode (expected published or monorepo).', $err);
+    }
+
+    public function testGitQuestionsCaptureStderrAndScopeThePorcelainRead(): void
+    {
+        $build = $this->readAppFile('tools/build-phar.php');
+
+        // candy-image-029: the integrity read counts only this package's paths.
+        self::assertStringContainsString("' status --porcelain -- . 2>&1'", $build);
+        // candy-image-053: no git question may swallow its stderr any more —
+        // both stamping calls ask with 2>&1, like Guard 2's do.
+        self::assertStringContainsString("' rev-parse HEAD 2>&1'", $build);
+        self::assertMatchesRegularExpression("/describe --tags[^\n]*2>&1/", $build);
+        self::assertStringNotContainsString('2>/dev/null', $build);
+        // And an unanswerable git is loud in both modes (refuse / warn).
+        self::assertStringContainsString('refusing to stamp the artifact', $build);
+        self::assertStringContainsString('WARNING — git', $build);
+    }
+
+    /**
+     * Run the build script as a child with the given extra arguments.
+     *
+     * @param list<string> $extraArgs
+     *
+     * @return array{0:int,1:string} exit code and captured stderr
+     */
+    private function runBuildScript(array $extraArgs): array
+    {
+        $command = array_merge([PHP_BINARY, self::APP_ROOT . '/tools/build-phar.php'], $extraArgs);
+        $process = proc_open($command, [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, self::APP_ROOT);
+        self::assertIsResource($process, 'build script must be launchable');
+        fclose($pipes[0]);
+        $stdout = (string) stream_get_contents($pipes[1]);
+        $stderr = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $rc = proc_close($process);
+        // Failures below should show why: attach child output to the message.
+        self::assertSame('', $stdout, "unexpected stdout from @{$rc}: {$stdout}|{$stderr}");
+
+        return [$rc, $stderr];
     }
 }
