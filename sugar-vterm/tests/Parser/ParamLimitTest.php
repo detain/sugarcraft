@@ -219,4 +219,50 @@ final class ParamLimitTest extends TestCase
             'emulator facade accumulates titles past the 64 KiB ceiling'
         );
     }
+
+    /**
+     * Hostile-shape pin (vterm-21): `X` + `CSI 65535 b` on the default 80x24
+     * renderer. The replay is clamped to one screen-full, so the operation is
+     * exactly 1 + 80*24 = 1921 writes: one row scrolls off the top and the
+     * fresh bottom row holds a single X at column 1 (1841 printables). An
+     * unclamped replay churns 65535 writes and ends with the grid fully
+     * painted — the state below is clamp-sensitive, not a mere completion
+     * check. The structural leg additionally pins the ceiling expression.
+     */
+    public function testHostileRepCompletesWithScreenFullWrites(): void
+    {
+        $t = RootTerminal::new();
+        $t->feed('X' . "\x1b[65535b");
+
+        $xCells = 0;
+        foreach ($t->grid()->each() as $entry) {
+            if ($entry['cell']->char === 'X') {
+                $xCells++;
+            }
+        }
+        $this->assertSame(80 * 24 - 80 + 1, $xCells, 'clamped rep writes one screen-full plus the initial X; one row scrolls off');
+        $this->assertSame(23, $t->cursor()->row, 'cursor lands on the bottom row');
+        $this->assertSame(1, $t->cursor()->col, 'cursor lands one past the single write on the fresh row');
+    }
+
+    /**
+     * Structural ceiling pin (vterm-21): the REP loop count is clamped with
+     * the screen-full formula. The state leg above already reddens when the
+     * min() is dropped (the full-paint end-state diverges from the bounded
+     * one), but an implementation could widen or move the ceiling while
+     * keeping that shape — pin the expression itself, like ModeTest pins the
+     * mutate() list.
+     */
+    public function testRepLoopIsStructurallyClampedToScreenCapacity(): void
+    {
+        $file = (new \ReflectionMethod(\SugarCraft\Vterm\Parser\CsiHandlerImpl::class, 'rep'))->getFileName();
+        $this->assertIsString($file);
+        $source = \file_get_contents($file);
+        $this->assertIsString($source);
+        $this->assertStringContainsString(
+            'min(max(1, $count), $this->grid->cols * $this->grid->rows)',
+            $source,
+            'rep() must clamp its iteration count to one screen-full'
+        );
+    }
 }

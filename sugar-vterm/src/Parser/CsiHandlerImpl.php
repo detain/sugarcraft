@@ -978,7 +978,12 @@ final class CsiHandlerImpl implements CsiHandler
 
     /**
      * REP — Repeat (CSI b). Replay the last printed graphic grapheme $count
-     * times. No-op when nothing printable has been emitted yet.
+     * times, bounded to one screen-full: a REPeat never legitimately writes
+     * more than {@see Buffer} capacity ($cols * $rows) printables, so
+     * `CSI 65535 b` on an 80x24 grid costs at most 1920 writes. The ceiling
+     * bounds hostile work; an unbounded replay would keep scrolling the same
+     * screen rewrite after rewrite.
+     * No-op when nothing printable has been emitted yet.
      */
     public function rep(int $count = 1): void
     {
@@ -986,7 +991,7 @@ final class CsiHandlerImpl implements CsiHandler
             return;
         }
         $grapheme = $this->lastPrintable;
-        $count = max(1, $count);
+        $count = min(max(1, $count), $this->grid->cols * $this->grid->rows);
         for ($i = 0; $i < $count; $i++) {
             $this->printable($grapheme);
         }
