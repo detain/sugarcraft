@@ -969,12 +969,27 @@ final class PrometheusFileBackend implements Backend
      * bytes — a raw [\x80-\x9F] class shreds valid multi-byte text).
      * Assumes the spec escapes were applied FIRST, so no byte this
      * touches carries escape meaning.
+     *
+     * After the control pass the string is REPAIRED, never rejected
+     * (sugar-metrics-031): the exposition format mandates UTF-8, and one
+     * invalid byte (a latin-1 username, a truncated sequence) is enough
+     * for a strict textfile consumer to reject the whole file — the same
+     * all-series blackout the format guards exist to prevent. Malformed
+     * bytes become U+FFFD, the same visible-stand-in policy sugar-core
+     * Sanitize::repairUtf8 applies; well-formed UTF-8 passes byte-identical.
      */
     private static function sweepControl(string $s): string
     {
         // 0x0A is already the "\\n" sequence by now; the C0 class still
         // names it for belt-and-braces against callers bypassing escape*().
-        return (string) \preg_replace('/[\x00-\x1F\x7F]|\xC2[\x80-\x9F]/', '_', $s);
+        $s = (string) \preg_replace('/[\x00-\x1F\x7F]|\xC2[\x80-\x9F]/', '_', $s);
+        if (!\mb_check_encoding($s, 'UTF-8')) {
+            $prev = \mb_substitute_character();
+            \mb_substitute_character(0xFFFD);
+            $s = (string) \mb_convert_encoding($s, 'UTF-8', 'UTF-8');
+            \mb_substitute_character($prev);
+        }
+        return $s;
     }
 
     /**

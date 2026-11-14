@@ -172,8 +172,10 @@ final class StatsdBackend implements Backend
         // a `:` inside the metric name or a tag key re-splits what follows
         // it. Every token reaching the socket is flattened at this one
         // chokepoint, so hostile tag payloads can never split or fake a
-        // packet. See wireToken()/wireName()/wireTagKey() for the exact
-        // per-position separator alphabets.
+        // packet — for line framing the sweep covers both byte-level new
+        // lines and the Unicode LINE/PARAGRAPH SEPARATORS a UTF-8-decoding
+        // line splitter would honour (063). See wireToken()/wireName()/
+        // wireTagKey() for the exact per-position separator alphabets.
         $line = self::wireName($name) . ':' . self::wireToken($valueStr) . '|' . $kind;
         if ($tags !== [] && $this->dogstatsd) {
             $parts = [];
@@ -215,22 +217,28 @@ final class StatsdBackend implements Backend
     /**
      * Flatten a wire token: control bytes (NUL-US, DEL), the C1 codepoints
      * U+0080-U+009F, the field separator `|`, the DogStatsD tag-pair
-     * separator `,` and the classic StatsD packet separator SPACE all
-     * become `_`. Ordinary letters/digits/punctuation the grammar has no
-     * use for are untouched, so well-formed payloads stay byte-identical.
+     * separator `,`, the classic StatsD packet separator SPACE and the
+     * Unicode LINE/PARAGRAPH SEPARATORS U+2028/U+2029 all become `_`.
+     * Ordinary letters/digits/punctuation the grammar has no use for are
+     * untouched, so well-formed payloads stay byte-identical.
      *
      * The sweep is BYTE-oriented (no /u): a byte class `[\x80-\x9F]` would
      * shred valid UTF-8 (emoji `U+1F600` = F0 9F 98 80 contains 9F), so C1
      * is matched in its UTF-8 encoding `C2 80..9F` instead — the only byte
      * sequence that legitimately denotes a C1 codepoint. C0/DEL bytes can
      * never appear inside a valid multi-byte sequence (every continuation
-     * byte is >= 0x80), so matching them raw is lossless for UTF-8 text
-     * and still refuses hostile raw streams (which simply keep their
-     * stray high bytes — harmless to the grammar).
+     * byte is >= 0x80), so matching them raw is lossless for UTF-8 text.
+     * U+2028/U+2029 join the sweep by the same argument (sugar-metrics-063):
+     * their canonical spellings `E2 80 A8`/`E2 80 A9` are matched whole, so
+     * a collector that decodes UTF-8 and then splits lines (Python
+     * `str.splitlines()`, several JVM/JS stacks) still sees exactly one
+     * packet per datagram. High bytes outside these named grammars keep
+     * their raw bytes — inert to the Go datagram-per-metric agent, which
+     * frames on the datagram boundary, not on content bytes.
      */
     private static function wireToken(string $token): string
     {
-        return (string) \preg_replace('/[\x00-\x1F\x7F|, ]|\xC2[\x80-\x9F]/', '_', $token);
+        return (string) \preg_replace('/[\x00-\x1F\x7F|, ]|\xC2[\x80-\x9F]|\xE2\x80[\xA8\xA9]/', '_', $token);
     }
 
     /**

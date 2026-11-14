@@ -325,6 +325,31 @@ final class PrometheusFileBackendTest extends TestCase
         $this->assertStringNotContainsString('keep_me', (string) file_get_contents($this->path));
     }
 
+    public function testInvalidUtf8IsRepairedToReplacementCharNotRejected(): void
+    {
+        // finding 031: the exposition mandates UTF-8 and one invalid byte —
+        // a latin-1 username (byte E9), a truncated sequence — was enough
+        // for a strict textfile consumer to reject the WHOLE file, the same
+        // all-series blackout the format guards exist to prevent. The sweep
+        // now repairs: flush() succeeds, every published byte is valid
+        // UTF-8 with U+FFFD standing where corruption was, and healthy
+        // well-formed series pass byte-identical (losslessness guard).
+        $b = new PrometheusFileBackend($this->path);
+        $b->gauge('ok', 1.0, ['user' => "caf\xe9"]);            // latin-1 é: invalid lead byte
+        $b->gauge('cut', 2.0, ['who' => "caf\xc3"]);           // truncated 2-byte é lead
+        $b->gauge('fine', 3.0, ['who' => 'naïve']);       // valid UTF-8 sibling
+        $b->describe(new Descriptor('helpy', "latin-\xe9 reader", 'gauge'));
+        $b->flush();
+
+        $body = (string) file_get_contents($this->path);
+        $this->assertTrue(mb_check_encoding($body, 'UTF-8'), 'published exposition carries invalid UTF-8');
+        $this->assertStringContainsString('ok{user="caf' . "\u{FFFD}" . '"} 1', $body);
+        $this->assertStringContainsString('cut{who="caf' . "\u{FFFD}" . '"} 2', $body);
+        $this->assertStringNotContainsString("\xe9", $body);
+        $this->assertStringContainsString('fine{who="naïve"} 3', $body);
+        $this->assertStringContainsString('# HELP helpy latin-' . "\u{FFFD}" . ' reader', $body);
+    }
+
     public function testFlushOfNonFiniteGaugeSpellsCanonicalTokenNotSignFlippedInf(): void
     {
         // finding 018: sprintf('%.6f', -INF) renders "INF" — a falling

@@ -265,6 +265,33 @@ final class StatsdBackendTest extends TestCase
         fclose($sock);
     }
 
+    public function testWireFoldsUnicodeSeparatorsAndKeepsValidMultibyteRaw(): void
+    {
+        // finding 063: the sweep named only byte-level framing bytes, so
+        // U+2028 (LINE SEPARATOR) / U+2029 (PARAGRAPH SEPARATOR) rode raw —
+        // a collector that decodes UTF-8 and then splits lines (Python
+        // str.splitlines(), several JVM/JS stacks) saw two forged packets
+        // from one datagram. They now fold like the rest of the alphabet,
+        // and the losslessness guard runs alongside: valid multi-byte text
+        // the grammar has no use for keeps its bytes.
+        $sock = fopen('php://memory', 'w+');
+        $b = new StatsdBackend(existingSocket: $sock);
+        $b->counter("ok\u{2028}na\u{2029}me", 1.0, ['k' => "a\u{2028}b"]);
+        rewind($sock);
+        $wire = trim((string) stream_get_contents($sock));
+        $this->assertStringNotContainsString("\xE2\x80\xA8", $wire);
+        $this->assertStringNotContainsString("\xE2\x80\xA9", $wire);
+        $this->assertSame('ok_na_me:1|c|#k:a_b', $wire);
+        fclose($sock);
+
+        $sock = fopen('php://memory', 'w+');
+        $b = new StatsdBackend(existingSocket: $sock);
+        $b->counter('café😀', 2.0, ['who' => 'naïve']);
+        rewind($sock);
+        $this->assertSame("café😀:2|c|#who:naïve", trim((string) stream_get_contents($sock)));
+        fclose($sock);
+    }
+
     public function testDestructorClosesOwnedSocket(): void
     {
         // Hermetic: claim a free ephemeral UDP port on loopback and release
