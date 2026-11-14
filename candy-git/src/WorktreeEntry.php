@@ -7,16 +7,15 @@ namespace SugarCraft\Git;
 /**
  * Represents a single git worktree.
  *
- * Mirrors jesseduffield/lazygit worktree list — the path, branch and HEAD
- * record parsed out of `git worktree list --porcelain`.
+ * Mirrors jesseduffield/lazygit worktree list — the path, branch and
+ * detached record parsed out of `git worktree list --porcelain`.
  */
 final readonly class WorktreeEntry
 {
     public function __construct(
         public readonly string $path,
         public readonly string $branch,
-        public readonly bool $isBare,
-        public readonly string $HEAD,
+        public readonly bool $detached = false,
     ) {}
 
     /**
@@ -28,13 +27,19 @@ final readonly class WorktreeEntry
      *   branch refs/heads/main
      *   bare
      *
+     * The consumed columns are path, branch and detached (candy-git-082):
+     * HEAD and bare are skipped on purpose — the overlay shows neither, and
+     * a bare repository can never be the working directory this app drives.
+     * The parser still walks over unknown/extra fields without choking, so
+     * future git columns cannot break the list.
+     *
      * @param list<string> $lines Raw output lines from `git worktree list --porcelain`
      * @return list<WorktreeEntry>
      */
     public static function fromGitOutput(array $lines): array
     {
         $worktrees = [];
-        $pending = ['path' => '', 'HEAD' => '', 'branch' => '', 'isBare' => false];
+        $pending = ['path' => '', 'branch' => '', 'detached' => false];
 
         foreach ($lines as $line) {
             if ($line === '') {
@@ -43,10 +48,9 @@ final readonly class WorktreeEntry
                     $worktrees[] = new self(
                         path: $pending['path'],
                         branch: $pending['branch'],
-                        isBare: $pending['isBare'],
-                        HEAD: $pending['HEAD'],
+                        detached: $pending['detached'],
                     );
-                    $pending = ['path' => '', 'HEAD' => '', 'branch' => '', 'isBare' => false];
+                    $pending = ['path' => '', 'branch' => '', 'detached' => false];
                 }
                 continue;
             }
@@ -55,8 +59,6 @@ final readonly class WorktreeEntry
                 // Porcelain is verbatim — a path may legitimately end in a
                 // space, so substr() without trim().
                 $pending['path'] = substr($line, 9);
-            } elseif (str_starts_with($line, 'HEAD ') === true) {
-                $pending['HEAD'] = trim(substr($line, 5));
             } elseif (str_starts_with($line, 'branch ') === true) {
                 $branch = trim(substr($line, 7));
                 // Strip "refs/heads/" prefix to get short name
@@ -64,11 +66,14 @@ final readonly class WorktreeEntry
                     $branch = substr($branch, 11);
                 }
                 $pending['branch'] = $branch;
-            } elseif ($line === 'bare') {
-                $pending['isBare'] = true;
-            } elseif (str_starts_with($line, 'detached')) {
+            } elseif ($line === 'detached') {
+                // git's own word for "this HEAD points at a sha, not a
+                // branch" — surface it (candy-git-082) rather than leaving
+                // the entry to look like a nameless branch.
                 $pending['branch'] = '';
+                $pending['detached'] = true;
             }
+            // 'HEAD …' and 'bare' lines: skipped columns (see class docblock).
         }
 
         // Flush final record (no trailing blank line)
@@ -76,8 +81,7 @@ final readonly class WorktreeEntry
             $worktrees[] = new self(
                 path: $pending['path'],
                 branch: $pending['branch'],
-                isBare: $pending['isBare'],
-                HEAD: $pending['HEAD'],
+                detached: $pending['detached'],
             );
         }
 

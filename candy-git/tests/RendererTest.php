@@ -360,14 +360,32 @@ final class RendererTest extends TestCase
     public function testRenderWorktreeOverlayWithEntries(): void
     {
         $g = new FixtureGit([], [], []);
+        // Branch deliberately NOT named main: the badge must be proven as
+        // the badge, not as a branch word that happens to match.
         $entries = [
-            new \SugarCraft\Git\WorktreeEntry('/path/one', 'main', false, 'abc1234'),
+            new \SugarCraft\Git\WorktreeEntry('/path/one', 'trunk'),
         ];
         $wt = new \SugarCraft\Git\Worktrees($entries);
         $a = new \SugarCraft\Git\App($g, worktrees: $wt);
         $out = \SugarCraft\Git\Renderer::render($a);
         $this->assertStringContainsString('worktrees', $out);
         $this->assertStringContainsString('/path/one', $out);
+        $plain = (string) preg_replace('/\x1b\[[0-9;]*m/', '', $out);
+        $this->assertStringContainsString('(main)', $plain, 'row 0 always carries the main badge (candy-git-089)');
+    }
+
+    public function testRenderWorktreeOverlayShowsDetachedBadge(): void
+    {
+        $g = new FixtureGit([], [], []);
+        $entries = [
+            new \SugarCraft\Git\WorktreeEntry('/path/one', 'main'),
+            new \SugarCraft\Git\WorktreeEntry('/path/two', '', true),
+        ];
+        $wt = new \SugarCraft\Git\Worktrees($entries);
+        $a = new \SugarCraft\Git\App($g, worktrees: $wt);
+        $plain = (string) preg_replace('/\x1b\[[0-9;]*m/', '', \SugarCraft\Git\Renderer::render($a));
+        $this->assertStringContainsString('/path/two', $plain);
+        $this->assertStringContainsString('(detached)', $plain, 'the surfaced state replaces the old blank branch column (candy-git-082)');
     }
 
     public function testRenderWorktreeOverlayAddingState(): void

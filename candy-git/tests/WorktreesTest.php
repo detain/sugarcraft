@@ -26,16 +26,17 @@ final class WorktreesTest extends TestCase
         $this->assertCount(2, $entries);
         $this->assertSame('/path/one', $entries[0]->path);
         $this->assertSame('main', $entries[0]->branch);
-        $this->assertSame('abc1234', $entries[0]->HEAD);
-        $this->assertFalse($entries[0]->isBare);
+        $this->assertFalse($entries[0]->detached);
         $this->assertSame('/path/two', $entries[1]->path);
         $this->assertSame('', $entries[1]->branch);
-        $this->assertSame('def5678', $entries[1]->HEAD);
-        $this->assertFalse($entries[1]->isBare);
+        $this->assertTrue($entries[1]->detached, 'the detached line is the column that gets surfaced (candy-git-082)');
     }
 
-    public function testWorktreeEntryFromGitOutputHandlesBare(): void
+    public function testWorktreeEntryFromGitOutputToleratesBare(): void
     {
+        // A bare record carries no branch and no detached flag: the row
+        // parses, the consumed columns stay empty, and the parser never
+        // chokes on fields the UI dropped (candy-git-082).
         $lines = [
             'worktree /path/bare',
             'HEAD abc1234',
@@ -44,7 +45,9 @@ final class WorktreesTest extends TestCase
         ];
         $entries = WorktreeEntry::fromGitOutput($lines);
         $this->assertCount(1, $entries);
-        $this->assertTrue($entries[0]->isBare);
+        $this->assertSame('/path/bare', $entries[0]->path);
+        $this->assertSame('', $entries[0]->branch);
+        $this->assertFalse($entries[0]->detached);
     }
 
     public function testWorktreesFromGitOutputWithEmptyLines(): void
@@ -56,8 +59,8 @@ final class WorktreesTest extends TestCase
     public function testWithCursorNavigates(): void
     {
         $entries = [
-            new WorktreeEntry('/path/one', 'main', false, 'abc1234'),
-            new WorktreeEntry('/path/two', 'feature', false, 'def5678'),
+            new WorktreeEntry('/path/one', 'main'),
+            new WorktreeEntry('/path/two', 'feature'),
         ];
         $wt = new Worktrees($entries, cursor: 0);
 
@@ -122,8 +125,8 @@ final class WorktreesTest extends TestCase
     public function testCurrentReturnsSelectedEntry(): void
     {
         $entries = [
-            new WorktreeEntry('/path/one', 'main', false, 'abc1234'),
-            new WorktreeEntry('/path/two', 'feature', false, 'def5678'),
+            new WorktreeEntry('/path/one', 'main'),
+            new WorktreeEntry('/path/two', 'feature'),
         ];
         $wt = new Worktrees($entries, cursor: 0);
         $this->assertSame($entries[0], $wt->current());

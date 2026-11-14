@@ -1115,6 +1115,15 @@ final class Renderer
                     $line = self::truncate(self::sanitize($entry->path), $inner);
                     if ($entry->branch !== '') {
                         $line .= ' (' . self::sanitize($entry->branch) . ')';
+                    } elseif ($entry->detached) {
+                        // candy-git-082: detached is a state worth naming,
+                        // not a blank column to guess at.
+                        $line .= ' (' . Lang::t('worktree.detached') . ')';
+                    }
+                    if ($i === 0) {
+                        // The refusal seat for d on row 0 explains itself
+                        // when the row is labeled (candy-git-089).
+                        $line .= ' (' . Lang::t('worktree.main') . ')';
                     }
                     $st = Style::new()->foreground(Color::hex('#c5b6dd'));
                     if ($i === $wt->cursor) {

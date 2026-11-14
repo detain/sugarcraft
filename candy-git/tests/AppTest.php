@@ -1604,6 +1604,32 @@ final class AppTest extends TestCase
     }
 
     /**
+     * candy-git-089: the main worktree (porcelain row 0) is not removable -
+     * the d key refuses it outright instead of arming a confirm that git
+     * itself would fail. A non-main row still arms.
+     */
+    public function testMainWorktreeRemoveIsRefusedAndOtherRowsStillArm(): void
+    {
+        $g = $this->git();
+        $g->worktreeListResult = [
+            new \SugarCraft\Git\WorktreeEntry('/repo', 'main'),
+            new \SugarCraft\Git\WorktreeEntry('/repo/.wt/feature', 'feature'),
+        ];
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));   // -> branches
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'w')); // open worktrees
+        $this->assertNotNull($a->worktrees);
+
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd')); // cursor on main row
+        $this->assertFalse($a->worktrees->removing, 'row 0 must never enter the remove arm');
+        $this->assertStringContainsString('the main worktree cannot be removed', (string) $a->error);
+
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'j'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
+        $this->assertTrue($a->worktrees->removing, 'a non-main row arms as before');
+    }
+
+    /**
      * Audit #13: the per-overlay Escape arms were dead code (the global
      * block closes overlays first). Deleting them must not change behaviour:
      * Escape while adding a worktree still tears down the WHOLE overlay —

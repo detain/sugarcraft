@@ -30,16 +30,13 @@ final class WorktreesPorcelainTest extends TestCase
         $this->assertCount(3, $entries);
         $this->assertSame('/home/user/project', $entries[0]->path);
         $this->assertSame('main', $entries[0]->branch);
-        $this->assertSame('a1b2c3d', $entries[0]->HEAD);
-        $this->assertFalse($entries[0]->isBare);
+        $this->assertFalse($entries[0]->detached);
         $this->assertSame('/home/user/project-feature', $entries[1]->path);
         $this->assertSame('feature/widget', $entries[1]->branch);
-        $this->assertSame('e4f5g6h', $entries[1]->HEAD);
-        $this->assertFalse($entries[1]->isBare);
+        $this->assertFalse($entries[1]->detached);
         $this->assertSame('/home/user/project-detached', $entries[2]->path);
         $this->assertSame('', $entries[2]->branch);
-        $this->assertSame('i7j8k9l', $entries[2]->HEAD);
-        $this->assertFalse($entries[2]->isBare);
+        $this->assertTrue($entries[2]->detached, 'the detached record surfaces its state where the dead HEAD column used to be parsed (candy-git-082)');
     }
 
     public function testParsesBareWorktree(): void
@@ -53,8 +50,8 @@ final class WorktreesPorcelainTest extends TestCase
         $entries = Worktrees::fromGitOutput($lines);
         $this->assertCount(1, $entries);
         $this->assertSame('/srv/git/bare-repo', $entries[0]->path);
-        $this->assertSame('abc1234', $entries[0]->HEAD);
-        $this->assertTrue($entries[0]->isBare);
+        $this->assertSame('', $entries[0]->branch);
+        $this->assertFalse($entries[0]->detached, 'bare is parsed-and-discarded: the row must not choke the parser (candy-git-082)');
     }
 
     public function testHandlesEmptyOutput(): void

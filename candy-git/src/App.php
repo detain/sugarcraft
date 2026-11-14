@@ -394,6 +394,14 @@ final class App implements Model
                 return [$this->withWorktrees($this->worktrees->startAdding()), null];
             }
             if ($msg->type === KeyType::Char && $msg->rune === 'd' && $this->worktrees->removing === false) {
+                // candy-git-089: git's porcelain list always leads with the
+                // main worktree, and it is not removable - git itself
+                // refuses. Saying so here beats arming a confirm that can
+                // only fail safely by accident.
+                if ($this->worktrees->count() > 0 && $this->worktrees->cursor === 0) {
+                    return [$this->withError(Lang::t('worktree.remove_main')), null];
+                }
+
                 return [$this->withWorktrees($this->worktrees->startRemoving()), null];
             }
             if ($msg->type === KeyType::Up || ($msg->type === KeyType::Char && $msg->rune === 'k')) {
