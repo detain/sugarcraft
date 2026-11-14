@@ -38,10 +38,13 @@ final class PerformanceTest extends TestCase
         $result = $matcher->match($query, $longCandidate);
         $elapsed = microtime(true) - $start;
 
-        // Smoke test: result must be non-null and have valid indices
+        // FUZZY-11 cure: the old trio re-read the null-continue guard (any
+        // non-null result has non-empty indices and score > 0 by construction).
+        // Exact pin instead — 'app' against 'abcdefghij'x200 can only match the
+        // leading 'a' (score 3 = one matchScore hit), indices [0].
         $this->assertNotNull($result, 'Long candidate should produce a match');
-        $this->assertNotEmpty($result->indices());
-        $this->assertGreaterThan(0, $result->score);
+        $this->assertSame(3, $result->score);
+        $this->assertSame([0], $result->matchedIndices);
 
         // Tripwire (fenced, FUZZY-10): suspect O(n³) mb_substr re-introduction.
         $this->assertWithinPerfBudget($elapsed, 'SmithWaterman match on 2000-char string');
@@ -60,10 +63,13 @@ final class PerformanceTest extends TestCase
         $result = $this->sm->match($query, $longCandidate);
         $elapsed = microtime(true) - $start;
 
-        // Smoke test: result must be non-null and have valid indices
+        // FUZZY-11 cure: exact pin replaces the guard re-read — 'abcd' is a
+        // prefix of the repeated pattern, scoring first-char 10 + 3 x (match 1
+        // + adjacency 8) + separator... pinned at its measured truth (38) with
+        // indices [0,1,2,3].
         $this->assertNotNull($result, 'Long candidate should produce a match');
-        $this->assertNotEmpty($result->indices());
-        $this->assertGreaterThan(0, $result->score);
+        $this->assertSame(38, $result->score);
+        $this->assertSame([0, 1, 2, 3], $result->matchedIndices);
 
         // Tripwire (fenced, FUZZY-10).
         $this->assertWithinPerfBudget($elapsed, 'SahilmMatcher match on 2000-char string');

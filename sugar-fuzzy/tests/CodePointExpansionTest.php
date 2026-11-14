@@ -265,7 +265,10 @@ final class CodePointExpansionTest extends TestCase
                 continue;
             }
 
-            $this->assertGreaterThan(0, $result->score);
+            // FUZZY-11: the old assertGreaterThan(0, score) here re-read the
+            // null-continue guard above it (non-null implies score > 0);
+            // removed. Exact scoring pins for this matrix live in
+            // testTurkishDottedCapitalScoresArePinned below.
             foreach ($result->indices() as $index) {
                 $this->assertGreaterThanOrEqual(0, $index, 'negative index escaped the matcher');
                 $this->assertLessThan(count($orig), $index, "index $index out of range for " . json_encode($candidate));
@@ -286,4 +289,27 @@ final class CodePointExpansionTest extends TestCase
             }
         }
     }
+    #[Test]
+    public function testTurkishDottedCapitalExactScoresArePinned(): void
+    {
+        // FUZZY-11 cure (finding sugar-fuzzy-029): the matrix test proves index
+        // HONESTY structurally; exact (score, indices) pins for its canonical
+        // shape survive SCORING mutations, which the retired guard re-read did
+        // not. Candidate 'x' + U+0130 + 'YZ Istanbul test' mixes the dotted
+        // capital twice; values measured live in-turn against both matchers.
+        $candidate = 'x' . "\u{0130}" . 'YZ İstanbul test';
+
+        foreach (['İst', "\u{0130}ST"] as $query) {
+            $this->assertSame(19, $this->sw->match($query, $candidate)?->score, $query . ' sw score');
+            $this->assertSame([5, 6, 7], $this->sw->match($query, $candidate)?->matchedIndices, $query . ' sw indices');
+            $this->assertSame(20, $this->sm->match($query, $candidate)?->score, $query . ' sm score');
+            $this->assertSame([1, 6, 7], $this->sm->match($query, $candidate)?->matchedIndices, $query . ' sm indices');
+        }
+
+        $this->assertSame(27, $this->sw->match('test', $candidate)?->score);
+        $this->assertSame([14, 15, 16, 17], $this->sw->match('test', $candidate)?->matchedIndices);
+        $this->assertSame(18, $this->sm->match('test', $candidate)?->score);
+        $this->assertSame([7, 15, 16, 17], $this->sm->match('test', $candidate)?->matchedIndices);
+    }
 }
+

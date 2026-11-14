@@ -44,7 +44,18 @@ final class SahilmMatcherGeneratorTest extends TestCase
         $eager = $this->matcher->matchAll('app', $candidates);
         $lazy = iterator_to_array($this->matcher->matchAllGenerator('app', $candidates), false);
 
+        // FUZZY-11: kept as the deliberate eager==lazy anti-drift pin — today the
+        // generator is a literal foreach over matchAll, so the comparison is
+        // self-evident; it earns its place if a lazy rewrite ever decouples them.
         $this->assertEquals($eager, $lazy);
+
+        // Exact-list leg (finding sugar-fuzzy-029): a lazy rewrite that changes
+        // the ORDER of the four 31-point ties must fail against an independent
+        // truth, not just against its own sibling. Tiebreak: haystack ascending.
+        $this->assertSame(
+            ['apple|31', 'applet|31', 'application|31', 'apply|31'],
+            array_map(static fn ($r): string => $r->haystack . '|' . $r->score, $lazy),
+        );
     }
 
     #[Test]
