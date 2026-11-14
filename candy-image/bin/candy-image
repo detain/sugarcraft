@@ -36,6 +36,14 @@ declare(strict_types=1);
     exit(1);
 })();
 
+// Locale before the first message is formatted — the --help text and every
+// flag/format refusal land in the user's language (sugar-core documents
+// T::setLocale(T::detect()) at startup). detect() answers 'en' when the
+// environment is silent, so a package shipping only lang/en.php behaves
+// byte-identically to the pre-wiring shape; machine-facing output (the
+// --version line, --dump-detect labels) is deliberately never translated.
+\SugarCraft\Core\I18n\T::setLocale(\SugarCraft\Core\I18n\T::detect());
+
 // Two-line shim by design: every branch lives in Cli::main() so the argv
 // handling, format refusal, decode failures, and viewport sizing are
 // testable in-process.

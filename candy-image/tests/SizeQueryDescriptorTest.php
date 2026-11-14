@@ -86,6 +86,42 @@ final class SizeQueryDescriptorTest extends TestCase
         $this->assertStringContainsString('SugarCraft\\CandyImage\\Cli::main($argv ?? [], STDOUT, STDERR)', $bin);
         $this->assertStringNotContainsString('fromFile', $bin, 'the bin stays a shim: no logic outside Cli');
         $this->assertStringContainsString('cannot find composer autoload.php', $bin);
+        // IMG-13 (candy-image-018): the environment locale is wired at startup
+        // — one line above main, the gifview twin's shape.
+        $this->assertStringContainsString('T::setLocale(', $bin);
+        $this->assertStringContainsString('T::detect()', $bin);
+    }
+
+    /**
+     * A German environment must not crash or half-translate: with no de.php
+     * shipped yet, the lookup falls back to 'en' and the bytes are the
+     * silent-env bytes (the wiring's tolerance, pinned end-to-end).
+     */
+    public function testAGermanEnvironmentFallsBackToEnglishByteIdentically(): void
+    {
+        $help = static function (array $env): string {
+            $process = proc_open(
+                [PHP_BINARY, self::BIN, '--help'],
+                [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+                $pipes,
+                dirname(__DIR__),
+                $env,
+            );
+            self::assertIsResource($process);
+            fclose($pipes[0]);
+            $out = (string) stream_get_contents($pipes[1]);
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            self::assertSame(0, proc_close($process));
+
+            return $out;
+        };
+
+        $base = $help(['PATH' => '/usr/bin:/bin']);
+        $german = $help(['PATH' => '/usr/bin:/bin', 'LANG' => 'de_DE.UTF-8', 'LC_ALL' => 'de_DE.UTF-8']);
+
+        self::assertStringContainsString('usage: candy-image', $base);
+        self::assertSame($base, $german, 'without lang/de.php the detected locale must resolve to the English catalog, byte for byte');
     }
 
     /**

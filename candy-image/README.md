@@ -188,8 +188,10 @@ you**:
 The user-facing CLI strings — usage, flag/value/format refusals, notices —
 ship through the sugar-core i18n lookup from `lang/en.php` (the unique
 `candy-image` namespace — `T::register()` is first-wins, so this app must
-never bake the sibling sugar-image library's `image`); additional locales
-follow the repo's add-locale flow. Machine-
-facing output deliberately stays English: the `--dump-detect` report labels
+never bake the sibling sugar-image library's `image`). The bin activates the
+environment's locale at startup (`T::setLocale(T::detect())`), so an
+additional locale authored through the repo's add-locale flow is read on the
+very next run — no further wiring needed. Machine-facing output deliberately
+stays English: the `--dump-detect` report labels
 and the `--version` line are fixed-format diagnostics meant to be pasted
 verbatim into bug reports, not translatable prose.
