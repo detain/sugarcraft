@@ -94,6 +94,7 @@ final class JsonableSerializerTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('cannot allow unknown class');
+        /** @phpstan-ignore-next-line — intentional bad type */
         (new JsonableSerializer())->allow('No\\Such\\Class');
     }
 

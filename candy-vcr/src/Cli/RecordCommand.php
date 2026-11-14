@@ -796,7 +796,7 @@ final class RecordCommand implements DocumentedCommand
             // Value screen (finding 029): the name can be as innocent as
             // `DATABASE_URL` — a credential-shaped VALUE still leaks. The
             // over-strip ruling governs: the var goes, not just the URL.
-            if (!$captureAll && \is_string($v) && $v !== '' && \preg_match(self::CREDENTIAL_VALUE_REGEX, $v) === 1) {
+            if (!$captureAll && $v !== '' && \preg_match(self::CREDENTIAL_VALUE_REGEX, $v) === 1) {
                 continue;
             }
             $kept[$k] = $v;
