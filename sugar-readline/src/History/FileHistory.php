@@ -37,9 +37,16 @@ namespace SugarCraft\Readline\History;
  * consequence of adopting the format).
  *
  * Symlink policy: the history path must be a regular file. A symlink at it
- * is refused at construction and re-checked under the write lock —
- * otherwise pointing the history file at, say, `~/.bashrc` would append
- * attacker-chosen lines into it and chmod it to 0600.
+ * is refused at construction, re-checked under the write lock, and — on
+ * every locked open — proven inert afterwards: the handle is fstat'd for
+ * regular-file type and inode-matched against the path's lstat, so a swap
+ * planted between check and open cannot be written through. The lock
+ * sidecar <path>.lock gets the same refusal before its first open and is
+ * mode-set via fchmod on the handle, never via a followable path chmod.
+ * The lock-free readers (load(), peekLastOnDisk()) refuse a visible
+ * symlink but cannot close the check-to-open race — their exposure is a
+ * read-through disclosure of one inode swap behind, which is the lesser
+ * half of the old write-side hazard and is the deliberate asymmetry.
  *
  * Write failures (lock or temp file unavailable) throw RuntimeException;
  * queued entries are then lost loudly rather than silently. The automatic
@@ -103,10 +110,58 @@ final class FileHistory extends InMemoryHistory
      */
     private function refuseSymlink(): void
     {
-        \clearstatcache(true, $this->filePath);
-        if (\is_link($this->filePath)) {
-            throw new \RuntimeException('sugar-readline: refusing symlinked history file ' . $this->filePath);
+        $this->refuseSymlinkAt($this->filePath, 'history file');
+    }
+
+    /**
+     * Symlink refusal for any FileHistory-touched path — the history file
+     * itself and the <path>.lock sidecar both get checked BEFORE the first
+     * open, so neither fopen nor chmod ever acts through a planted link.
+     */
+    private function refuseSymlinkAt(string $path, string $what): void
+    {
+        \clearstatcache(true, $path);
+        if (\is_link($path)) {
+            throw new \RuntimeException('sugar-readline: refusing symlinked ' . $what . ' ' . $path);
         }
+    }
+
+    /**
+     * Open the history file and prove the handle is the checked path.
+     *
+     * refuseSymlinkAt ran under the write lock, but check and open are not
+     * one syscall: a directory-writer can swap the path to a symlink in the
+     * window. After opening we verify (a) the fd resolves to a regular file
+     * — a fifo or device behind a swap can never be written through — and
+     * (b) the path's own lstat inode equals the fd's inode, which fails
+     * exactly when the current path component is a symlink (lstat sees the
+     * link, fstat sees the followed target). Legitimate rewrites create a
+     * new inode via temp+rename, but those all serialize under the same
+     * write lock we already hold, so the identity check cannot false-fire
+     * here — do NOT use this helper on the lock-free read paths.
+     *
+     * @return resource
+     */
+    private function openVerified(string $mode)
+    {
+        $fp = \fopen($this->filePath, $mode);
+        if ($fp === false) {
+            throw new \RuntimeException('sugar-readline: cannot open history file ' . $this->filePath);
+        }
+        $stat = \fstat($fp);
+        // (mode & S_IFMT) === S_IFREG via octal literals: this PHP build
+        // ships no S_IF* constants (checked at lane time).
+        if ($stat === false || (((int) $stat['mode']) & 0170000) !== 0100000) {
+            \fclose($fp);
+            throw new \RuntimeException('sugar-readline: history path is not a regular file (opened through a swap?): ' . $this->filePath);
+        }
+        \clearstatcache(true, $this->filePath);
+        $link = \lstat($this->filePath);
+        if ($link === false || (int) $link['ino'] !== (int) $stat['ino']) {
+            \fclose($fp);
+            throw new \RuntimeException('sugar-readline: history path changed under us (possible symlink swap): ' . $this->filePath);
+        }
+        return $fp;
     }
 
     public function __destruct()
@@ -252,8 +307,8 @@ final class FileHistory extends InMemoryHistory
             // so an in-place append preserves those perms; re-assert defensively in
             // case it was re-created since construction.
             if (file_exists($this->filePath)) {
-                $fp = fopen($this->filePath, 'a+');
-                if ($fp !== false) {
+                $fp = $this->openVerified('a+');
+                {
                     if (!flock($fp, LOCK_EX)) {
                         fclose($fp);
                         throw new \RuntimeException('sugar-readline: cannot acquire append lock on ' . $this->filePath);
@@ -314,7 +369,9 @@ final class FileHistory extends InMemoryHistory
         }
         // Copy existing content to temp file (already in escaped on-disk form).
         if (file_exists($this->filePath)) {
-            $existing = file_get_contents($this->filePath);
+            $rp = $this->openVerified('r');
+            $existing = stream_get_contents($rp);
+            fclose($rp);
             if ($existing !== false && $existing !== '') {
                 fwrite($fp, $existing);
                 // Ensure file ends with newline before appending.
@@ -357,11 +414,35 @@ final class FileHistory extends InMemoryHistory
     private function withWriteLock(\Closure $work): void
     {
         $lockPath = $this->filePath . '.lock';
+        // The sidecar is attacker-visible too: refuse a planted symlink
+        // BEFORE the first open, and set the mode on the HANDLE — a path
+        // chmod would flip a swap target's permissions (finding 012: the
+        // old fopen('c') + chmod pair followed links and bricked victims).
+        $this->refuseSymlinkAt($lockPath, 'history lock');
+        // fchmod() is unavailable on this PHP build, so the sidecar is born
+        // owner-only under a 0077 umask instead of being chmod'd after the
+        // fact — creation under the mask never acts through a path.
+        $umask = \umask(0077);
         $lock = @fopen($lockPath, 'c');
+        \umask($umask);
         if ($lock === false) {
             throw new \RuntimeException('sugar-readline: cannot open history write lock ' . $lockPath);
         }
-        chmod($lockPath, 0600); // hygiene only — the inode never holds content
+        // Identity proof before any path-based chmod: lstat names the path
+        // itself (a symlink carries its own inode), so an inode match means
+        // the path still resolves to exactly the handle we opened — the
+        // chmod cannot flip a swapped-in victim's mode. Pre-0077-era
+        // sidecars are migrated here; freshly born ones re-assert. (This
+        // build's linkinfo() returns the parent directory's inode — a trap;
+        // lstat is the primitive that behaves.)
+        \clearstatcache(true, $lockPath);
+        $lockStat = \fstat($lock);
+        $pathStat = \lstat($lockPath);
+        if ($lockStat === false || $pathStat === false || (int) $pathStat['ino'] !== (int) $lockStat['ino']) {
+            \fclose($lock);
+            throw new \RuntimeException('sugar-readline: history lock changed under us (possible symlink swap): ' . $lockPath);
+        }
+        \chmod($lockPath, 0600); // hygiene only — the inode never holds content
         if (!flock($lock, LOCK_EX)) {
             fclose($lock);
             throw new \RuntimeException('sugar-readline: cannot acquire history write lock ' . $lockPath);
@@ -388,7 +469,9 @@ final class FileHistory extends InMemoryHistory
             // Existing file lines (oldest-first, decoded).
             $existing = [];
             if (file_exists($this->filePath)) {
-                $raw = file_get_contents($this->filePath);
+                $rp = $this->openVerified('r');
+                $raw = stream_get_contents($rp);
+                fclose($rp);
                 if ($raw !== false && $raw !== '') {
                     foreach (explode("\n", $raw) as $fileLine) {
                         $decoded = self::unescapeLine(rtrim($fileLine, "\r"));
@@ -511,6 +594,12 @@ final class FileHistory extends InMemoryHistory
             return;
         }
 
+        // Read parity (finding 061): every entry point refuses a planted
+        // symlink before touching it — disclosure through an unguarded
+        // reader is still a leak. No inode identity check here: lock-free
+        // readers legitimately observe temp+rename rewrites.
+        $this->refuseSymlink();
+
         $fp = fopen($this->filePath, 'r');
         if ($fp === false) {
             return;
@@ -573,6 +662,9 @@ final class FileHistory extends InMemoryHistory
         if (!file_exists($this->filePath)) {
             return null;
         }
+
+        // Read parity with load() — see finding 061 note there.
+        $this->refuseSymlink();
 
         $fp = fopen($this->filePath, 'r');
         if ($fp === false) {
