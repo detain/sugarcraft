@@ -15,7 +15,13 @@ declare(strict_types=1);
 // candidates are preserved verbatim for every non-archive run.
 // ---------------------------------------------------------------------------
 (static function (): void {
-    $archive = str_ends_with(__FILE__, '.phar')
+    // strtolower: Windows/macOS filesystems are case-insensitive by default,
+    // so a renamed candy-image.PHAR is just as much the archive — the suffix
+    // identity test must not be case-sensitive (candy-image-052). Phar::running
+    // cannot rescue a fall-through here: in stub context it answers '' (the
+    // file's own measured law above), so the old case-sensitive test died on
+    // 'cannot find composer autoload.php' for the uppercase spelling.
+    $archive = str_ends_with(strtolower(__FILE__), '.phar')
         ? 'phar://' . __FILE__
         : (\Phar::running(false) !== '' ? 'phar://' . \Phar::running(false) : '');
     $candidates = $archive !== ''

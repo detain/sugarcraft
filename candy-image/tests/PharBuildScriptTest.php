@@ -57,6 +57,9 @@ final class PharBuildScriptTest extends TestCase
         // The autoload guard must resolve BOTH phar identities, not just one.
         self::assertStringContainsString('phar://', $bin);
         self::assertStringContainsString('Phar::running', $bin);
+        // candy-image-052: the suffix identity test is case-insensitive (the
+        // behavioural proof below mints real uppercase archives).
+        self::assertStringContainsString('strtolower(__FILE__)', $bin);
         // A bare '/x.phar/entry' path fails is_file in PHP 8.3 — the guard must
         // never probe one, it must prefix with the phar:// stream instead.
         self::assertStringNotContainsString('.phar/vendor', $bin);
@@ -223,6 +226,126 @@ final class PharBuildScriptTest extends TestCase
         self::assertSame(0, $rc);
         self::assertSame('', $err, 'help is a success print, never an error');
         self::assertStringContainsString('usage: candy-image', $out);
+    }
+
+    /**
+     * candy-image-052 end-to-end: the archive-identity probe used to be a
+     * case-sensitive suffix test while Windows/macOS filesystems are
+     * case-insensitive. Mint a real archive whose stub is the VERBATIM bin
+     * bytes and whose bundled vendor/autoload.php is a fake marker class,
+     * then run it through both the lowercase and uppercase spellings — the
+     * archive's own vendor must load (the stub context answers
+     * Phar::running('') so a missed identity test cannot fall back to a
+     * working-tree vendor). This is the phar-runtime leg the review lanes
+     * could never verify from source text alone.
+     */
+    public function testCaseVariantArchiveSuffixesLoadTheBundledAutoloader(): void
+    {
+        $fake = sys_get_temp_dir() . '/candy-image-test-fakeautoload-' . bin2hex(random_bytes(6)) . '.php';
+        $lower = sys_get_temp_dir() . '/candy-image-test-case-' . bin2hex(random_bytes(6)) . '.phar';
+        $upper = sys_get_temp_dir() . '/candy-image-test-case-' . bin2hex(random_bytes(6)) . '.PHAR';
+
+        $marker = <<<'PHP'
+<?php
+declare(strict_types=1);
+namespace SugarCraft\Core\I18n;
+class T
+{
+    public static function detect(): string { return 'en'; }
+    public static function setLocale(string $locale): void {}
+}
+namespace SugarCraft\CandyImage;
+class Cli
+{
+    public static function main(array $argv, mixed $stdout, mixed $stderr): int
+    {
+        \fwrite(STDOUT, "BUNDLED-AUTOLOAD-OK\n");
+        return 0;
+    }
+}
+
+PHP;
+        self::assertNotFalse(file_put_contents($fake, $marker));
+
+        try {
+            self::mintArchiveWithRealBinStub($lower, $fake);
+            self::assertTrue(rename($lower, $upper), 'the uppercase archive must exist');
+            self::assertTrue(copy($upper, $lower), 'the lowercase control archive must exist');
+
+            foreach (['uppercase' => $upper, 'lowercase' => $lower] as $label => $path) {
+                [$rc, $out, $err] = self::runArchive($path);
+                self::assertSame(0, $rc, "archive run ({$label}) stderr: {$err}");
+                self::assertStringContainsString('BUNDLED-AUTOLOAD-OK', $out, "the bundled vendor must answer for the {$label} spelling");
+                self::assertStringNotContainsString('cannot find composer autoload', $err);
+            }
+        } finally {
+            @unlink($fake);
+            @unlink($lower);
+            @unlink($upper);
+        }
+    }
+
+    /** Mint at $out: stub = verbatim bin bytes, vendor/autoload.php = $fake. */
+    private static function mintArchiveWithRealBinStub(string $out, string $fake): void
+    {
+        $code = '$p = new Phar(getenv("CIIMG_ARC_OUT"));'
+            . '$p->setStub(file_get_contents(getenv("CIIMG_ARC_BIN"))."\n__HALT_COMPILER();");'
+            . '$p->addFromString("vendor/autoload.php", file_get_contents(getenv("CIIMG_ARC_FAKE")));';
+        $env = [
+            'CIIMG_ARC_OUT' => $out,
+            'CIIMG_ARC_BIN' => self::APP_ROOT . '/bin/candy-image',
+            'CIIMG_ARC_FAKE' => $fake,
+        ];
+
+        $process = proc_open(
+            [PHP_BINARY, '-d', 'phar.readonly=0', '-r', $code],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            self::APP_ROOT,
+            $env + self::inheritedEnv(),
+        );
+        self::assertIsResource($process);
+        fclose($pipes[0]);
+        $stderr = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        self::assertSame(0, proc_close($process), "mint child failed: {$stderr}");
+        self::assertFileExists($out);
+    }
+
+    /**
+     * @return array{0:int,1:string,2:string}
+     */
+    private static function runArchive(string $archive): array
+    {
+        $process = proc_open(
+            [PHP_BINARY, $archive, '--version'],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            self::APP_ROOT,
+            self::inheritedEnv(),
+        );
+        self::assertIsResource($process);
+        fclose($pipes[0]);
+        $stdout = (string) stream_get_contents($pipes[1]);
+        $stderr = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+
+        return [proc_close($process), $stdout, $stderr];
+    }
+
+    /** @return array<string,string> */
+    private static function inheritedEnv(): array
+    {
+        $env = [];
+        foreach ($_ENV + $_SERVER as $key => $value) {
+            if (is_string($key) && is_string($value)) {
+                $env[$key] = $value;
+            }
+        }
+
+        return $env;
     }
 
     /**
