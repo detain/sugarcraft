@@ -13,6 +13,7 @@ use SugarCraft\Vterm\Buffer\Buffer;
 use SugarCraft\Vterm\Cell;
 use SugarCraft\Vterm\Cursor\Cursor;
 use SugarCraft\AnsiParser\Parser\Parser;
+use SugarCraft\Vterm\Handler\OscHandler;
 use SugarCraft\Vterm\Handler\ScreenHandler;
 use SugarCraft\Vterm\Mode\Mode;
 use SugarCraft\Vterm\Msg\FocusInMsg;
@@ -452,6 +453,17 @@ final class Terminal
     public function windowTitle(): ?string
     {
         return $this->handler->windowTitle;
+    }
+
+    /**
+     * The window title with control bytes neutralized — the safe form for
+     * display or onward propagation ({@see OscHandler::sanitizeControl()}).
+     * {@see self::windowTitle()} keeps the stored-verbatim contract.
+     */
+    public function windowTitleSanitized(): ?string
+    {
+        $title = $this->handler->windowTitle;
+        return $title === null ? null : OscHandler::sanitizeControl($title);
     }
 
     /** @return array<int, \SugarCraft\Vterm\Color\Color> Indexed palette overrides set via OSC 4. */

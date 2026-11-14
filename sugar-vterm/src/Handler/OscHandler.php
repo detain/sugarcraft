@@ -174,4 +174,27 @@ final class OscHandler
             'payload' => $payload,
         ]);
     }
+
+    /**
+     * Neutralize control bytes in a stored OSC payload for display or onward
+     * propagation — the escape hatch referenced by the SECURITY NOTE above.
+     * The parser already swallows ESC, NUL, TAB and CR/LF while collecting
+     * OSC strings, but DEL (0x7F) and C1 codepoints (U+0080-U+009F — whose
+     * raw bytes include the 8-bit OSC introducer 0x9D) survive verbatim into
+     * titles and payloads, and a title can also arrive via
+     * {@see \SugarCraft\Vterm\Terminal\Terminal::withWindowTitle()} without
+     * passing through any parser at all. This strips U+0000-U+001F and
+     * U+007F-U+009F; everything else is kept, so the result is always no
+     * longer than the input. In byte mode (payload failed UTF-8 validation)
+     * bytes 0x80-0x9F are dropped whole — corrupt input is neutralized, not
+     * rescued, and lone continuation bytes there are indistinguishable from
+     * C1 controls.
+     */
+    public static function sanitizeControl(string $raw): string
+    {
+        if (preg_match('//u', $raw) === 1) {
+            return preg_replace('/[\x00-\x1F\x7F-\x9F]/u', '', $raw) ?? '';
+        }
+        return preg_replace('/[\x00-\x1F\x7F-\x9F]/', '', $raw) ?? '';
+    }
 }

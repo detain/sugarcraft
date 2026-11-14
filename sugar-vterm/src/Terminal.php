@@ -7,6 +7,7 @@ namespace SugarCraft\Vterm;
 use SugarCraft\AnsiParser\Parser\HandlerAdapter;
 use SugarCraft\AnsiParser\Parser\Parser;
 use SugarCraft\Vterm\Buffer\Buffer;
+use SugarCraft\Vterm\Handler\OscHandler;
 use SugarCraft\Vterm\Parser\CsiHandlerImpl;
 use SugarCraft\Vterm\Parser\PenForwardingOscHandler;
 use SugarCraft\Vterm\Parser\RendererHandler;
@@ -194,6 +195,16 @@ final class Terminal
     public function windowTitle(): string
     {
         return $this->osc->lastTitle();
+    }
+
+    /**
+     * The last OSC title with control bytes neutralized — the safe form for
+     * display or onward propagation ({@see OscHandler::sanitizeControl()}).
+     * {@see self::windowTitle()} keeps the stored-verbatim contract.
+     */
+    public function windowTitleSanitized(): string
+    {
+        return OscHandler::sanitizeControl($this->osc->lastTitle());
     }
 
     private function syncState(): void

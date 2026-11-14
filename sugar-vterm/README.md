@@ -972,8 +972,14 @@ window titles and OSC 8 URIs riding on grid cells — are called out below):
   `ScrollbackTest::testWithScrollbackSizeReplacesRing`). The renderer path
   keeps no scrollback.
 - **Stored strings are attacker text** — window titles, OSC 8 hyperlinks and
-  OSC 52 payloads are kept VERBATIM; consumers must sanitise before display
-  or onward propagation (`Sanitize::untrusted()` upstream).
+  OSC 52 payloads are kept VERBATIM (each bounded by the 64 KiB
+  `MAX_STRING_BUFFER` cap above); consumers must sanitize before display or
+  onward propagation (`Sanitize::untrusted()` upstream) — or use the built-in
+  sanitized accessor: `windowTitleSanitized()` on both facades routes the
+  stored title through `OscHandler::sanitizeControl()`, which strips C0, DEL
+  and C1 codepoints (the parser already swallows ESC, NUL, TAB and CR/LF on
+  the way in; DEL and C1 — whose raw byte 0x9D is the 8-bit OSC introducer —
+  survive verbatim) and can only ever shorten the string.
 - **Discarded without parsing** — DCS, SOS, PM and APC payloads; malformed
   UTF-8 bytes (the upstream tokenizer emits no print event for them, so the
   grid only ever holds decoded graphemes).
