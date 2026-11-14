@@ -170,14 +170,57 @@ final class GoldenSnapshotTest extends TestCase
     /// ------------------------------------------------------------
 
     /**
-     * Run an example file at the given dimensions and return its stdout.
+     * The single subprocess core every example leg shares (finding #116).
+     *
+     * Honest capture: stdout and stderr are collected on SEPARATE pipes, and
+     * the process exit status comes from proc_close()'s return — never
+     * discarded. The old smoke leg threw stderr away and ignored the exit
+     * code, so an example that died with rc=255 still read as green; that
+     * rc=0-blindness is exactly the 001/010/115 hide-class this row retires.
+     *
+     * @return array{out: string, err: string, rc: int}
      */
-    private static function runExample(string $slug, int $width, int $height): string
+    private static function executePhp(string $phpFile, ?array $env = null): array
+    {
+        $spec = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+
+        $proc = proc_open([PHP_BINARY, $phpFile], $spec, $pipes, null, $env ?? array_merge(getenv(), ['COLUMNS' => '80', 'LINES' => '24']));
+        if ($proc === false) {
+            return ['out' => '', 'err' => 'proc_open failed', 'rc' => -1];
+        }
+
+        // Closing stdin gives every event-loop example an EOF and lets it exit;
+        // disk-probed at this writing: all 152 pipe-executable examples
+        // terminate rc 0 under this contract (run-all/generate-all are meta,
+        // dashboard-live is TTY-guarded and rides the PtyProbe leg instead).
+        fclose($pipes[0]);
+
+        $out = (string) stream_get_contents($pipes[1]);
+        fclose($pipes[1]);
+        $err = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[2]);
+
+        $rc = proc_close($proc);
+
+        return ['out' => $out, 'err' => $err, 'rc' => $rc];
+    }
+
+    /**
+     * Run an example file at the given dimensions and return its captured bytes.
+     *
+     * @return array{merged: string, err: string, rc: int} merged is stdout+err
+     *                                                          in legacy order
+     */
+    private static function runExample(string $slug, int $width, int $height): array
     {
         $file = self::EXAMPLES_DIR . "/{$slug}.php";
 
         if (!file_exists($file)) {
-            return '';
+            return ['merged' => '', 'err' => '', 'rc' => 0];
         }
 
         $content = file_get_contents($file);
@@ -197,29 +240,9 @@ final class GoldenSnapshotTest extends TestCase
                 'LINES'   => (string) $height,
             ]);
 
-            $spec = [
-                0 => ['pipe', 'r'],
-                1 => ['pipe', 'w'],
-                2 => ['pipe', 'w'],
-            ];
+            $result = self::executePhp($tmpFile, $fullEnv);
 
-            $proc = proc_open([PHP_BINARY, $tmpFile], $spec, $pipes, null, $fullEnv);
-
-            if ($proc === false) {
-                return '';
-            }
-
-            fclose($pipes[0]);
-
-            $output = stream_get_contents($pipes[1]);
-            fclose($pipes[1]);
-
-            $stderr = stream_get_contents($pipes[2]);
-            fclose($pipes[2]);
-
-            proc_close($proc);
-
-            return ($output ?? '') . ($stderr ?? '');
+            return ['merged' => $result['out'] . $result['err'], 'err' => $result['err'], 'rc' => $result['rc']];
         } finally {
             if (file_exists($tmpFile)) {
                 unlink($tmpFile);
@@ -271,9 +294,17 @@ final class GoldenSnapshotTest extends TestCase
 
         $goldenOutput = rtrim($actualOutput, "\n");
 
-        // Run the example at target dimensions
-        $currentOutput = self::runExample($slug, $width, $height);
-        $currentOutput = rtrim($currentOutput, "\n");
+        // Run the example at target dimensions. A non-zero exit is a hard red
+        // before any byte compare: the merged golden bytes could still match a
+        // historical clean run's prefix (finding #116 rc=0-blindness).
+        $run = self::runExample($slug, $width, $height);
+        $this->assertSame(
+            0,
+            $run['rc'],
+            "Example {$slug} at {$dimLabel} exited {$run['rc']}; stderr: {$run['err']}"
+        );
+
+        $currentOutput = rtrim($run['merged'], "\n");
 
         if (self::$regenerate) {
             // Write current output as new golden
@@ -373,60 +404,56 @@ final class GoldenSnapshotTest extends TestCase
         );
     }
 
+    /// ------------------------------------------------------------
+    // Honest smoke sweep (finding #116)
+    /// ------------------------------------------------------------
+
+    /** @var list<string> meta runners and the TTY-guarded flagship, each guarded elsewhere or unrunnable by pipe */
+    private const SMOKE_EXCLUDED = ['run-all', 'generate-all', 'dashboard-live'];
+
     /**
-     * Smoke test: verify a few examples render without crashing.
+     * Every shipped example, once, minus the meta runners and the TTY-guarded
+     * flagship (examples/dashboard-live.php prints its isatty refusal on a
+     * pipe by design — its real guard is the PtyProbe leg in
+     * Tests\Examples\DashboardLivePtySmokeTest).
      *
-     * This runs outside the golden comparison to catch obvious regressions.
+     * @return iterable<string, array{0: string}>
      */
-    public function testExamplesRenderWithoutError(): void
+    public static function provideSmokeExamples(): iterable
     {
-        $smokeExamples = [
-            ['alert', 80, 24],
-            ['spinner', 80, 24],
-            ['text', 80, 24],
-            ['card', 80, 24],
-            ['badge', 80, 24],
-        ];
-
-        foreach ($smokeExamples as [$slug, $width, $height]) {
-            $file = self::EXAMPLES_DIR . "/{$slug}.php";
-
-            if (!file_exists($file)) {
+        foreach (glob(self::EXAMPLES_DIR . '/*.php') ?: [] as $file) {
+            $slug = basename($file, '.php');
+            if (in_array($slug, self::SMOKE_EXCLUDED, true)) {
                 continue;
             }
-
-            $content = file_get_contents($file);
-            $patchedContent = self::patchExample($content, $width, $height);
-
-            $tmpFile = sys_get_temp_dir() . '/golden_smoke_' . $slug . '_' . getmypid() . '.php';
-
-            try {
-                file_put_contents($tmpFile, $patchedContent);
-
-                $spec = [
-                    0 => ['pipe', 'r'],
-                    1 => ['pipe', 'w'],
-                    2 => ['pipe', 'w'],
-                ];
-
-                $proc = proc_open([PHP_BINARY, $tmpFile], $spec, $pipes);
-                if ($proc === false) {
-                    continue;
-                }
-
-                fclose($pipes[0]);
-                $output = stream_get_contents($pipes[1]);
-                fclose($pipes[1]);
-                fclose($pipes[2]);
-                proc_close($proc);
-
-                $this->assertNotNull($output, "Example {$slug} produced null output");
-                $this->assertIsString($output, "Example {$slug} output is not a string");
-            } finally {
-                if (file_exists($tmpFile)) {
-                    unlink($tmpFile);
-                }
-            }
+            yield $slug => [$slug];
         }
+    }
+
+    /**
+     * Non-empty stdout, empty stderr, exit zero — per example, on a pipe.
+     *
+     * @dataProvider provideSmokeExamples
+     *
+     * The retired leg this replaces ran five hard-coded slugs, discarded
+     * proc_close's exit code, threw stderr down a closed pipe, and asserted
+     * only that stream_get_contents returned a string — vacuously true even
+     * for a fataling example. The class of failure findings 001/010/115 all
+     * hid behind: a shared data provider now walks EVERY shipped example.
+     * (The golden legs already double-pin the byte-frozen set, now with an
+     * honest rc assert; this sweep additionally reaches the non-deterministic
+     * and interactive demos the golden set skips, and its stderr-empty arm
+     * catches fatals the merged golden bytes smear.)
+     */
+    public function testEveryExampleProducesHonestOutput(string $slug): void
+    {
+        $run = self::executePhp(self::EXAMPLES_DIR . "/{$slug}.php");
+
+        $this->assertSame(0, $run['rc'], "example/{$slug}.php exited {$run['rc']}; stderr: {$run['err']}");
+        $this->assertSame('', $run['err'], "example/{$slug}.php wrote to stderr: " . substr($run['err'], 0, 400));
+        // Liveness bar, not content bar: examples/spacer.php renders pure
+        // whitespace BY DESIGN (914 blank bytes), so the honest assertion is
+        // 'produced bytes', not 'produced ink' — content is the golden legs' job.
+        $this->assertNotSame('', $run['out'], "example/{$slug}.php produced empty stdout");
     }
 }
