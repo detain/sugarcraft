@@ -77,12 +77,30 @@ final class ImageSourceSsrfIpTest extends TestCase
      */
     public static function embeddedAddressMatrix(): array
     {
+        // The 'nat64 public' verdict follows the host's filter_var reserved
+        // table, not src: PHP's SSRF hardening added 64:ff9b::/96 to the
+        // NO_RES_RANGE set, so on newer hosts the OUTER spelling is refused
+        // whatever the embedded quad says, while older tables keep it public
+        // and the row remains the genuine unwrap pin. Probe with the guard's
+        // exact tail-filter call so the battery is honest on either arm
+        // (CI ubuntu-26.04 drift, 2026-11-13, jobs 81240709/83122655/81601034
+        // — 'verdict drifted' true and 'over-blocked'). The unwrap leg itself
+        // is pinned host-independently by
+        // testNat64TailQuadIsUnwrappedRegardlessOfTheHostFilterTable below,
+        // which is what keeps a deleted NAT64 candidate leg visible even on
+        // hosts where the outer reservation makes every matrix row vacuous.
+        $nat64OuterReserved = filter_var(
+            '64:ff9b::8.8.8.8',
+            FILTER_VALIDATE_IP,
+            FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE,
+        ) === false;
+
         return [
             // NAT64 well-known 64:ff9b::/96 — a private v4 is refused.
             'nat64 loopback' => ['64:ff9b::7f00:1', true],
             'nat64 rfc1918' => ['64:ff9b::10.0.0.1', true],
             'nat64 metadata' => ['64:ff9b::169.254.169.254', true],
-            'nat64 public' => ['64:ff9b::8.8.8.8', false],
+            'nat64 public' => ['64:ff9b::8.8.8.8', $nat64OuterReserved],
             // 6to4 2002::/16 — the embedded v4 lives right after 2002.
             '6to4 loopback' => ['2002:7f00:1::', true],
             '6to4 rfc1918' => ['2002:0a00:0001::', true],
@@ -138,6 +156,23 @@ final class ImageSourceSsrfIpTest extends TestCase
         // or either Teredo spelling — and the unrelated v6 ranges keep
         // their pre-finding semantics untouched.
         self::assertEmbeddedAddressMatrix(self::embeddedAddressMatrix());
+    }
+
+    public function testNat64TailQuadIsUnwrappedRegardlessOfTheHostFilterTable(): void
+    {
+        // Host-independent companion to the probe-driven 'nat64 public' row:
+        // the byte math of the unwrap leg is pure src (no filter_var tail
+        // verdict involved), so pinning the candidate extraction directly
+        // keeps a NAT64-candidate regression RED on every host — including
+        // ones whose reserved table swallows the whole /96 and would make
+        // each gate-level row pass vacuously (see embeddedAddressMatrix()).
+        $packed = inet_pton('64:ff9b::8.8.8.8');
+        $this->assertIsString($packed);
+
+        $unwrap = new \ReflectionMethod(ImageSource::class, 'embeddedV4Candidates');
+        $unwrap->setAccessible(true);
+
+        $this->assertSame(['8.8.8.8'], $unwrap->invoke(null, $packed));
     }
 
     public function testEmbeddedPrivateAddressesAreRefusedEndToEnd(): void
