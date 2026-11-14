@@ -88,28 +88,28 @@ $prompt = Readline::fromStdin()->run(
 // 'Alice' after typing + Tab + Enter
 ```
 
-The remaining prompt surface (all fluent, all returning new instances):
-`withValidator(callable)` gates `submit()` on a rule — the gate is
-falsy-only: `withValidator(fn (string $v): bool => $v !== '')` rejects the
-empty buffer, but any truthy return accepts, even an error string, and a
-throwing validator is never caught, so its exception escapes `submit()`,
-`handleKey()` and `run()` — signal rejection by returning `false`, `''` or
-`null`, never by throwing — `withCharLimit(int)`
-caps the buffer, `withHidden()` masks input (secrets) and disables history
-pushes and completion echoes — the masked frame renders one glyph per typed
-character (`*` by default; the setter's `$mask` argument changes the glyph),
-so assistive output perceives the length of what is typed but never its
-content; when even a growing mask run is unwanted, drive the prompt through
-the pure state-machine API and render whatever subset you choose,
-`withAutoSuggest(bool)` proposes the most
-recent matching history entry as a dim row under the prompt (on by default
-whenever history is attached — the setter's practical use is turning it off,
-and the proposal scans the whole history on each repaint), and
-`withUndoManager(manager)`
-attaches an `UndoManager` — an immutable bounded (512-state) snapshot stack
-fed automatically as you type and edit, driven by Ctrl+Z/Ctrl+Y (or vi `u`
-in normal mode). `ConfirmationPrompt::withHint(string)` paints a hint row
-(e.g. "Press Enter to confirm") under the Yes/No choice.
+The remaining prompt surface is all fluent — every setter returns a new
+instance:
+
+- `withValidator(callable)` gates `submit()` on a rule. The gate is
+  falsy-only: any truthy return accepts, even an error string. Signal
+  rejection by returning `false`, `''` or `null` — never by throwing: a
+  throwing validator is not caught, and its exception escapes `submit()`,
+  `handleKey()` and `run()`.
+- `withCharLimit(int)` caps the buffer.
+- `withHidden()` masks input (for secrets) and disables history pushes and
+  completion echoes. The masked frame renders one glyph per typed character
+  (`*` by default; the setter's `$mask` argument changes the glyph), so
+  assistive output perceives the length of what is typed but never its
+  content. When even a growing mask run is unwanted, drive the prompt
+  through the pure state-machine API and render whatever subset you choose.
+- `withAutoSuggest(bool)` proposes the most recent matching history entry as
+  a dim row under the prompt. It is on by default whenever history is
+  attached — the setter's practical use is turning it off — and the proposal
+  scans the whole history on each repaint.
+- `withUndoManager(manager)` attaches an `UndoManager`: an immutable bounded
+  (512-state) snapshot stack fed automatically as you type and edit, driven
+  by Ctrl+Z/Ctrl+Y (or vi `u` in normal mode).
 
 ### Selection Prompt
 
@@ -184,6 +184,9 @@ $result = Readline::fromStdin()->run(
 );
 echo $result->result() ? 'yes' : 'no';  // 'yes' or 'no'
 ```
+
+`ConfirmationPrompt::withHint(string)` paints a hint row (e.g. "Press
+Enter to confirm") under the Yes/No choice.
 
 ### Custom Key Handlers
 
