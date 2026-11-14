@@ -250,8 +250,12 @@ final class Player
             // 'undecoded' counts Input events that reached no message at the
             // program (envelope refused by the registry, or a payload with
             // neither form the Player can consume). It is a subset of
-            // 'input', never a fifth event kind.
+            // 'input', never a fifth event kind. 'undecodedAt' names the
+            // 1-based event ordinals and reasons so a caller's stderr can
+            // point at the offending tape lines (finding 035) — the loop
+            // never dies on a bad envelope.
             $tally = ['input' => 0, 'resize' => 0, 'output' => 0, 'quit' => 0, 'undecoded' => 0];
+            $undecodedAt = [];
             $expectedOutput = '';
             $programQuitCleanly = false;
             // Track whether the first resize has been seen (and possibly
@@ -276,6 +280,7 @@ final class Player
                 $idleThreshold,
                 $useRawTimestamps,
                 &$tally,
+                &$undecodedAt,
                 &$expectedOutput,
                 &$programQuitCleanly,
                 &$firstResizeSkipped,
@@ -317,7 +322,9 @@ final class Player
                             $events[$i],
                             $program,
                             $registry,
+                            $i + 1,
                             $tally,
+                            $undecodedAt,
                             $expectedOutput,
                             $programQuitCleanly,
                             $firstResizeSkipped,
@@ -337,7 +344,9 @@ final class Player
                     $event,
                     $program,
                     $registry,
+                    $i,
                     $tally,
+                    $undecodedAt,
                     $expectedOutput,
                     $programQuitCleanly,
                     $firstResizeSkipped,
@@ -393,6 +402,7 @@ final class Player
                 quitCount: $tally['quit'],
                 programQuitCleanly: $programQuitCleanly,
                 undecodedInputCount: $tally['undecoded'],
+                undecodedInputAt: $undecodedAt,
             );
         } finally {
             // Keep: ephemeral pipe teardown after their contents were
@@ -438,7 +448,9 @@ final class Player
         Event $event,
         Program $program,
         Registry $registry,
+        int $ordinal,
         array &$tally,
+        array &$undecodedAt,
         string &$expectedOutput,
         bool &$programQuitCleanly,
         bool &$firstResizeSkipped,
@@ -447,7 +459,9 @@ final class Player
             $event,
             $program,
             $registry,
+            $ordinal,
             $tally,
+            $undecodedAt,
             $expectedOutput,
             $programQuitCleanly,
             $firstResizeSkipped,
@@ -458,19 +472,24 @@ final class Player
      * Build the closure that runs when the loop fires this event's
      * scheduled timer. Tally counters and `expectedOutput` are passed
      * by reference so the closure mutates the outer aggregate state.
+     * `$ordinal` is the event's 1-based position — the number a refusal
+     * note is tagged with so stderr can name the tape line.
      *
      * @param array{input:int,resize:int,output:int,quit:int,undecoded:int} $tally
+     * @param list<string> $undecodedAt
      */
     private function dispatchEvent(
         Event $event,
         Program $program,
         Registry $registry,
+        int $ordinal,
         array &$tally,
+        array &$undecodedAt,
         string &$expectedOutput,
         bool &$programQuitCleanly,
         bool &$firstResizeSkipped,
     ): \Closure {
-        return function () use ($event, $program, $registry, &$tally, &$expectedOutput, &$programQuitCleanly, &$firstResizeSkipped): void {
+        return function () use ($event, $program, $registry, $ordinal, &$tally, &$undecodedAt, &$expectedOutput, &$programQuitCleanly, &$firstResizeSkipped): void {
             switch ($event->kind) {
                 case EventKind::Resize:
                     $tally['resize']++;
@@ -494,11 +513,23 @@ final class Player
                     /** @var array<string, mixed>|null $envelope — a JSON-object envelope is string-keyed by construction. */
                     $envelope = $event->payload['msg'] ?? null;
                     if (is_array($envelope)) {
-                        $msg = $registry->decode($envelope);
+                        try {
+                            $msg = $registry->decode($envelope);
+                            $reason = $msg === null ? 'no registered serializer claims the envelope' : null;
+                        } catch (\UnexpectedValueException $e) {
+                            // A claimed envelope with an unbuildable field
+                            // (finding 035): count the refusal and keep the
+                            // timer alive — Registry::decode has normalised
+                            // the raw \ValueError/\InvalidArgumentException
+                            // families into this one named exception.
+                            $msg = null;
+                            $reason = $e->getMessage();
+                        }
                         if ($msg !== null) {
                             $program->send($msg);
                         } else {
                             $tally['undecoded']++;
+                            $undecodedAt[] = "event on line {$ordinal}: {$reason}";
                         }
                     } elseif (isset($event->payload['b']) && is_string($event->payload['b'])) {
                         // Raw-byte input (un-enveloped form): re-parse via a fresh
@@ -520,9 +551,11 @@ final class Player
                         }
                         if ($parsed === []) {
                             $tally['undecoded']++;
+                            $undecodedAt[] = "event on line {$ordinal}: raw bytes parsed to no message";
                         }
                     } else {
                         $tally['undecoded']++;
+                        $undecodedAt[] = "event on line {$ordinal}: payload carries neither an envelope nor a byte string";
                     }
                     break;
 

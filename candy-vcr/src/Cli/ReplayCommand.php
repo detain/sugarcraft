@@ -44,7 +44,10 @@ use SugarCraft\Vcr\Support\Scalars;
  *
  * No Program is involved — this just plays back what was recorded.
  * For round-trip-replay-into-a-fresh-Program use the
- * {@see \SugarCraft\Vcr\Player} class from PHP code.
+ * {@see \SugarCraft\Vcr\Player} class from PHP code. Envelope decoding
+ * lives there: a malformed message envelope is counted into the Player's
+ * undecoded tally (named 'event on line N' on the result summary) and
+ * the replay runs on — it never kills the loop (finding 035).
  *
  * A finished replay reports where it got to (events streamed, output bytes,
  * virtual time) on stderr — never on stdout, because with a piped stdout the

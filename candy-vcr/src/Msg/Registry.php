@@ -73,13 +73,29 @@ final class Registry
      * Decode an envelope back into a Msg. Returns null if no
      * registered serializer claims the envelope's `@type`.
      *
+     * A serializer that CLAIMS an envelope but cannot build a Msg from
+     * its fields (bad enum value, wrong scalar shape, rejected
+     * constructor args) surfaces that as one named
+     * {@see \UnexpectedValueException} tagged with the `@type` — the
+     * caller decides whether a refusal is fatal; the Player counts it
+     * (finding 035).
+     *
      * @param array<string, mixed> $envelope
+     * @throws \UnexpectedValueException When a claiming serializer refuses the envelope's fields.
      */
     public function decode(array $envelope): ?Msg
     {
         foreach ($this->serializers as $s) {
             if ($s->canDecode($envelope)) {
-                return $s->decode($envelope);
+                try {
+                    return $s->decode($envelope);
+                } catch (\InvalidArgumentException | \UnexpectedValueException | \ValueError $e) {
+                    $tag = is_string($envelope['@type'] ?? null) ? $envelope['@type'] : 'untyped';
+                    throw new \UnexpectedValueException(
+                        "envelope '{$tag}' refused: " . $e->getMessage(),
+                        previous: $e,
+                    );
+                }
             }
         }
         return null;

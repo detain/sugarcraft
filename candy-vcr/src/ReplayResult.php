@@ -18,6 +18,11 @@ namespace SugarCraft\Vcr;
  * registry refused the envelope, or the payload carried neither a
  * msg envelope nor a raw-byte string). Silent intake is what this
  * counts, so it surfaces in the summary whenever it is non-zero.
+ *
+ * `undecodedInputAt` names those events — one note per refusal in
+ * tape order, tagged 'event on line N' (finding 035) — so a failing
+ * replay can point at the offending cassette lines instead of only
+ * counting them.
  */
 final readonly class ReplayResult
 {
@@ -31,6 +36,7 @@ final readonly class ReplayResult
         public int $quitCount,
         public bool $programQuitCleanly,
         public int $undecodedInputCount = 0,
+        public array $undecodedInputAt = [],
     ) {
     }
 
@@ -53,6 +59,7 @@ final readonly class ReplayResult
                     ' — %d input event(s) produced no decodable message and were skipped',
                     $this->undecodedInputCount,
                 );
+                $summary .= $this->undecodedAtPhrase();
             }
             return $summary;
         }
@@ -62,6 +69,25 @@ final readonly class ReplayResult
             $this->eventCount,
             $clean,
             $this->diff,
-        );
+        ) . $this->undecodedAtPhrase();
+    }
+
+    /**
+     * Names up to five refused events (tape order) so stderr points at
+     * the cassette lines, not just the count; long runs collapse to a
+     * '+N more' tail. Empty when no notes were carried (finding 035).
+     */
+    private function undecodedAtPhrase(): string
+    {
+        if ($this->undecodedInputAt === []) {
+            return '';
+        }
+        $shown = array_slice($this->undecodedInputAt, 0, 5);
+        $phrase = ' (' . implode('; ', $shown);
+        $rest = count($this->undecodedInputAt) - count($shown);
+        if ($rest > 0) {
+            $phrase .= sprintf('; +%d more', $rest);
+        }
+        return $phrase . ')';
     }
 }

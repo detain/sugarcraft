@@ -68,7 +68,7 @@ final class BuiltinSerializer implements MsgSerializer
                     'shift' => $m->shift,
                 ],
                 'decode' => static fn (array $e): KeyMsg => new KeyMsg(
-                    type: KeyType::from(Scalars::string($e['type'] ?? '', 'KeyMsg type')),
+                    type: self::enumCase(KeyType::class, $e['type'] ?? '', 'KeyMsg type'),
                     rune: Scalars::string($e['rune'] ?? '', 'KeyMsg rune'),
                     alt: (bool) ($e['alt'] ?? false),
                     ctrl: (bool) ($e['ctrl'] ?? false),
@@ -260,12 +260,35 @@ final class BuiltinSerializer implements MsgSerializer
             'decode' => static fn (array $e) => new $class(
                 x: Scalars::int($e['x'] ?? 0, "{$tag} x"),
                 y: Scalars::int($e['y'] ?? 0, "{$tag} y"),
-                button: MouseButton::from(Scalars::string($e['button'] ?? '', "{$tag} button")),
-                action: MouseAction::from(Scalars::string($e['action'] ?? '', "{$tag} action")),
+                button: self::enumCase(MouseButton::class, $e['button'] ?? '', "{$tag} button"),
+                action: self::enumCase(MouseAction::class, $e['action'] ?? '', "{$tag} action"),
                 shift: (bool) ($e['shift'] ?? false),
                 alt: (bool) ($e['alt'] ?? false),
                 ctrl: (bool) ($e['ctrl'] ?? false),
             ),
         ];
+    }
+
+    /**
+     * Validate-then-construct for backed enum fields (finding 035). A
+     * cassette field naming no case is a DATA fault — `Enum::from()` would
+     * escape as an anonymous-looking \ValueError that crashes whoever is
+     * mid-cassette. Throws a named UnexpectedValueException carrying the
+     * field, the offending value and the enum so the Player can count the
+     * refusal into its undecoded tally instead of dying on the timer.
+     *
+     * @template T of \BackedEnum
+     * @param class-string<T> $enumClass
+     * @return T
+     */
+    private static function enumCase(string $enumClass, mixed $raw, string $where): \BackedEnum
+    {
+        $value = Scalars::string($raw, $where);
+        $case = $enumClass::tryFrom($value);
+        if ($case === null) {
+            $named = (new \ReflectionClass($enumClass))->getShortName();
+            throw new \UnexpectedValueException("{$where} '{$value}' is not a valid {$named} case");
+        }
+        return $case;
     }
 }
