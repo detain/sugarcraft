@@ -31,6 +31,9 @@ final class TextareaPrompt
     private string $labelStyle  = '1;36';
     private string $cursorStyle = '7';
 
+    /** @var int|null Display bound in cells; null = unset (width-adoption eligible), 0 = explicit unbounded. */
+    private ?int $displayWidth = null;
+
     public function __construct(private readonly string $label) {}
 
     public static function new(string $label): self
@@ -209,21 +212,46 @@ final class TextareaPrompt
 
     public function view(): string
     {
-        $out = [Ansi::wrap(Ansi::sanitize($this->label), $this->labelStyle)];
+        $bound = $this->displayWidth;
+        $out = [RowFit::row([[Ansi::sanitize($this->label), $this->labelStyle]], $bound)];
         foreach ($this->lines as $i => $text) {
             $text = Ansi::sanitize($text);
             if ($i !== $this->line) {
-                $out[] = $text;
+                $out[] = RowFit::row([[$text, null]], $bound);
                 continue;
             }
             $before = self::sliceChars($text, 0, $this->col);
             $under  = self::sliceChars($text, $this->col, 1);
             $after  = self::sliceChars($text, $this->col + 1);
-            $out[]  = $before
-                    . Ansi::wrap($under === '' ? ' ' : $under, $this->cursorStyle)
-                    . $after;
+            $out[]  = RowFit::row([
+                [$before, null],
+                [$under === '' ? ' ' : $under, $this->cursorStyle],
+                [$after, null],
+            ], $bound);
         }
         return implode("\n", $out);
+    }
+
+    /**
+     * Bound the rendered lines to $cells display columns (CJK/emoji aware).
+     * Mirrors {@see TextPrompt::withDisplayWidth()}: pass 0 to opt out
+     * (lines paint unbounded), pass null to leave the bound unset — the
+     * only state {@see Readline::run()} will auto-adopt a width into.
+     * Long lines are right-clipped with the shared `…` budget; keeping the
+     * cursor column inside the window on such lines is the cell-aware
+     * cursor model's job (S-24 tracks it separately).
+     */
+    public function withDisplayWidth(?int $cells): self
+    {
+        $clone = clone $this;
+        $clone->displayWidth = $cells === null ? null : max(0, $cells);
+        return $clone;
+    }
+
+    /** Current display viewport width in cells; null = unset (adoption-eligible), 0 = explicit unbounded. */
+    public function displayWidth(): ?int
+    {
+        return $this->displayWidth;
     }
 
     // -------------------------------------------------------------------------

@@ -24,6 +24,9 @@ final class ConfirmationPrompt
     private string $labelStyle    = '1;36';
     private string $selectedStyle = '1;32';
 
+    /** @var int|null Display bound in cells; null = unset (width-adoption eligible), 0 = explicit unbounded. */
+    private ?int $displayWidth = null;
+
     public function __construct(private readonly string $label, bool $defaultValue = false)
     {
         $this->value = $defaultValue;
@@ -128,14 +131,42 @@ final class ConfirmationPrompt
     public function view(): string
     {
         $yes = $this->value
-            ? Ansi::wrap('[' . Ansi::sanitize($this->confirmLabel) . ']', $this->selectedStyle)
-            : ' ' . Ansi::sanitize($this->confirmLabel) . ' ';
+            ? ['[' . Ansi::sanitize($this->confirmLabel) . ']', $this->selectedStyle]
+            : [' ' . Ansi::sanitize($this->confirmLabel) . ' ', null];
         $no  = !$this->value
-            ? Ansi::wrap('[' . Ansi::sanitize($this->cancelLabel) . ']', $this->selectedStyle)
-            : ' ' . Ansi::sanitize($this->cancelLabel) . ' ';
+            ? ['[' . Ansi::sanitize($this->cancelLabel) . ']', $this->selectedStyle]
+            : [' ' . Ansi::sanitize($this->cancelLabel) . ' ', null];
 
-        return Ansi::wrap(Ansi::sanitize($this->label), $this->labelStyle)
-             . ' ' . $yes . ' / ' . $no . ' ' . Ansi::sanitize($this->hint);
+        return RowFit::row([
+            [Ansi::sanitize($this->label), $this->labelStyle],
+            [' ', null],
+            $yes,
+            [' / ', null],
+            $no,
+            [' ', null],
+            [Ansi::sanitize($this->hint), null],
+        ], $this->displayWidth);
+    }
+
+    /**
+     * Bound the rendered row to $cells display columns (CJK/emoji aware).
+     * Mirrors {@see TextPrompt::withDisplayWidth()}: pass 0 to opt out
+     * (row paints unbounded), pass null to leave the bound unset — the
+     * only state {@see Readline::run()} will auto-adopt a width into.
+     * When the budget ends mid-row the trailing segments (the hint last)
+     * are dropped rather than wrapped.
+     */
+    public function withDisplayWidth(?int $cells): self
+    {
+        $clone = clone $this;
+        $clone->displayWidth = $cells === null ? null : max(0, $cells);
+        return $clone;
+    }
+
+    /** Current display viewport width in cells; null = unset (adoption-eligible), 0 = explicit unbounded. */
+    public function displayWidth(): ?int
+    {
+        return $this->displayWidth;
     }
 
     private function select(bool $value): self

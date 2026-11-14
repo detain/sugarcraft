@@ -927,23 +927,7 @@ final class TextPrompt
      */
     private static function clipToCells(string $text, int $cells): string
     {
-        if ($cells < 1) {
-            return '';
-        }
-        if (Width::of($text) <= $cells) {
-            return $text;
-        }
-        $out = '';
-        $used = 0;
-        foreach (mb_str_split($text, 1, 'UTF-8') as $ch) {
-            $w = max(1, Width::of($ch));
-            if ($used + $w > $cells - 1) {
-                break;
-            }
-            $out .= $ch;
-            $used += $w;
-        }
-        return $out . '…';
+        return RowFit::clip($text, $cells);
     }
 
     /**

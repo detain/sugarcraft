@@ -400,6 +400,8 @@ final class Readline
      * always wins — a non-zero bound clips and an explicit 0 renders
      * unbounded — and only the unset state (null) is eligible for
      * adoption, so custom prompt shapes pass their width through as given.
+     * All five shipped prompts implement the pair (S-03); the is_callable
+     * guard remains as the BC seam for foreign prompt objects.
      *
      * The adopted value comes from {@see resolveColumns()}: `COLUMNS`
      * precedence first (headless/CI control), then a TTY `TIOCGWINSZ` probe

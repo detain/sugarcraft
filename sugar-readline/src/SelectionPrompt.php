@@ -28,6 +28,9 @@ final class SelectionPrompt
     private bool $submitted  = false;
     private bool $aborted    = false;
 
+    /** @var int|null Display bound in cells; null = unset (width-adoption eligible), 0 = explicit unbounded. */
+    private ?int $displayWidth = null;
+
     private string $cursorStyle = '7';     // reverse
     private string $labelStyle  = '1;36';  // bold cyan
 
@@ -69,6 +72,25 @@ final class SelectionPrompt
         $clone->cursor = 0;
         $clone->page   = 0;
         return $clone;
+    }
+
+    /**
+     * Bound the rendered rows to $cells display columns (CJK/emoji aware).
+     * Mirrors {@see TextPrompt::withDisplayWidth()}: pass 0 to opt out
+     * (rows paint unbounded), pass null to leave the bound unset — the
+     * only state {@see Readline::run()} will auto-adopt a width into.
+     */
+    public function withDisplayWidth(?int $cells): self
+    {
+        $clone = clone $this;
+        $clone->displayWidth = $cells === null ? null : max(0, $cells);
+        return $clone;
+    }
+
+    /** Current display viewport width in cells; null = unset (adoption-eligible), 0 = explicit unbounded. */
+    public function displayWidth(): ?int
+    {
+        return $this->displayWidth;
     }
 
     // -------------------------------------------------------------------------
@@ -191,16 +213,17 @@ final class SelectionPrompt
 
     public function view(): string
     {
-        $lines = [Ansi::wrap(Ansi::sanitize($this->label), $this->labelStyle)];
+        $bound = $this->displayWidth;
+        $lines = [RowFit::row([[Ansi::sanitize($this->label), $this->labelStyle]], $bound)];
 
-        $bar = '[filter] ' . Ansi::sanitize($this->filter);
+        $barSegments = [['[filter] ' . Ansi::sanitize($this->filter), null]];
         if ($this->filter !== '') {
-            $bar .= sprintf(' (%d match%s)', count($this->filtered), count($this->filtered) === 1 ? '' : 'es');
+            $barSegments[] = [sprintf(' (%d match%s)', count($this->filtered), count($this->filtered) === 1 ? '' : 'es'), null];
         }
-        $lines[] = $bar;
+        $lines[] = RowFit::row($barSegments, $bound);
 
         if ($this->filtered === []) {
-            $lines[] = '(no matches)';
+            $lines[] = RowFit::row([['(no matches)', null]], $bound);
             return implode("\n", $lines);
         }
 
@@ -209,15 +232,12 @@ final class SelectionPrompt
         for ($i = $offset; $i < $end; $i++) {
             $value  = Ansi::sanitize($this->choices[$this->filtered[$i]]);
             $marker = $i === $this->cursor ? '❯ ' : '  ';
-            $line   = $marker . $value;
-            if ($i === $this->cursor) {
-                $line = Ansi::wrap($line, $this->cursorStyle);
-            }
-            $lines[] = $line;
+            $style  = $i === $this->cursor ? $this->cursorStyle : null;
+            $lines[] = RowFit::row([[$marker . $value, $style]], $bound);
         }
 
         if ($this->totalPages() > 1) {
-            $lines[] = sprintf('Page %d/%d', $this->page + 1, $this->totalPages());
+            $lines[] = RowFit::row([[sprintf('Page %d/%d', $this->page + 1, $this->totalPages()), null]], $bound);
         }
 
         return implode("\n", $lines);
