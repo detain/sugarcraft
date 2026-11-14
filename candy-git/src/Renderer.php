@@ -189,12 +189,21 @@ final class Renderer
             $rows[] = self::scrollHint(Lang::t('viewport.above', ['n' => $above]));
         }
         foreach (array_slice($a->branches, $start, $shown, true) as $i => $b) {
-            $marker = $b['current'] ? '* ' : '  ';
-            $line   = $marker . self::truncate(self::sanitize($b['name']), $a->branchNameWidth());
+            $remote = $b['remote'] ?? false;
+            $marker = $b['current'] ? '* ' : ($remote ? '~ ' : '  ');
+            // Divergence badge rides %(upstream:track) counts, never git's
+            // English words: glyphs only, so no locale fan-out and the
+            // header summary keeps its monopoly on prose (candy-git-037).
+            $badge = self::trackBadge($b);
+            $gap   = $badge === '' ? 0 : 1 + Width::of($badge);
+            $line  = $marker . self::truncate(self::sanitize($b['name']), max(1, $a->branchNameWidth() - $gap))
+                . ($badge === '' ? '' : ' ' . $badge);
             $st = Style::new();
             $st = $b['current']
                 ? $st->bold()->foreground(Color::hex('#fde68a'))
-                : $st->foreground(Color::hex('#c5b6dd'));
+                : ($remote
+                    ? $st->foreground(Color::hex('#7d8bb3'))
+                    : $st->foreground(Color::hex('#c5b6dd')));
             if ($a->pane === Pane::Branches && $i === $a->branchesCursor) {
                 $st = $st->reverse();
             }
@@ -207,6 +216,37 @@ final class Renderer
             $rows[] = self::scrollHint(Lang::t('viewport.below', ['n' => $below]));
         }
         return self::frame($a, Pane::Branches, Lang::t('ui.pane.branches'), implode("\n", $rows), $a->paneWidth());
+    }
+
+    /**
+     * Compact divergence badge from branches() counts: `[↑2 ↓1]` for ahead and
+     * behind, single arrow for one-sided, `[!]` when the upstream vanished.
+     * Empty string for untracked or level branches. Glyphs only by design —
+     * the badge needs no locale fan-out (candy-git-037).
+     *
+     * @param array<string, mixed> $b
+     */
+    private static function trackBadge(array $b): string
+    {
+        if ($b['remote'] ?? false) {
+            return '';
+        }
+        if ($b['gone'] ?? false) {
+            return '[!]';
+        }
+        $ahead  = $b['ahead'] ?? null;
+        $behind = $b['behind'] ?? null;
+        if ($ahead === null && $behind === null) {
+            return '';
+        }
+        $parts = [];
+        if ($ahead !== null && $ahead > 0) {
+            $parts[] = '↑' . $ahead;
+        }
+        if ($behind !== null && $behind > 0) {
+            $parts[] = '↓' . $behind;
+        }
+        return $parts === [] ? '' : '[' . implode(' ', $parts) . ']';
     }
 
     private static function logPane(App $a): string

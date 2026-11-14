@@ -95,6 +95,7 @@ return [
     'history.cannot_undo'     => 'historie: {op} nelze vrátit — data jsou navždy ztracena',
     'history.unknown_op'      => 'historie: neznámá operace {op}',
     'branch.delete_current'   => 'aktuální větev nelze smazat',
+    'branch.delete_remote'    => 'mazání: vzdálené sledované větve jsou jen pro čtení',
     'branch.deleted'          => 'větev {name} smazána',
     'branch.delete_no_select' => 'mazání: nevybrána žádná větev',
     'merge.prompt'            => 'merge: ',

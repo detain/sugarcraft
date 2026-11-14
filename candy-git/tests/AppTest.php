@@ -20,6 +20,7 @@ final class FixtureGit implements GitDriver
     public array $stages = [];
     public array $unstages = [];
     public array $checkouts = [];
+    public array $remoteCheckouts = [];
     public array $commits = [];
     public bool $stageAllCalled = false;
     public bool $unstageAllCalled = false;
@@ -88,6 +89,7 @@ final class FixtureGit implements GitDriver
     public function stage(string $path): void   { $this->maybeThrow('stage'); $this->stages[]   = $path; }
     public function unstage(string $path): void { $this->maybeThrow('unstage'); $this->unstages[] = $path; }
     public function checkout(string $branch): void { $this->maybeThrow('checkout'); $this->checkouts[] = $branch; }
+    public function checkoutRemote(string $remoteBranch): void { $this->maybeThrow('checkoutRemote'); $this->remoteCheckouts[] = $remoteBranch; }
     public function commit(string $message): void  { $this->maybeThrow('commit'); $this->commits[] = $message; }
     public function stageAll(): void             { $this->maybeThrow('stageAll'); $this->stageAllCalled = true; }
     public function diff(string $path, bool $cached = false): array { $this->maybeThrow('diff'); $this->diffRequests[] = [$path, $cached]; return $this->diffs; }
@@ -269,6 +271,76 @@ final class AppTest extends TestCase
         // Try Space while in Status pane
         [$a, ] = $a->update(new KeyMsg(KeyType::Space, ''));
         $this->assertSame([], $g->checkouts);
+    }
+
+    public function testSpaceOnRemoteRowTracksLocally(): void
+    {
+        $g = $this->git();
+        // main is current; cursor 1 is a remote-tracking row (candy-git-037).
+        $g->branchRows = [
+            ['name' => 'main', 'sha' => 'abc1', 'current' => true, 'remote' => false, 'ahead' => null, 'behind' => null, 'gone' => false],
+            ['name' => 'origin/feature', 'sha' => 'def2', 'current' => false, 'remote' => true, 'ahead' => null, 'behind' => null, 'gone' => false],
+        ];
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));   // → branches
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'j'));  // → origin/feature
+        [$a, ] = $a->update(new KeyMsg(KeyType::Space, ''));
+        $this->assertSame(['origin/feature'], $g->remoteCheckouts, 'DWIM must ride --track');
+        $this->assertSame([], $g->checkouts, 'a remote ref must never be checked out detached');
+    }
+
+    public function testSpaceOnRemoteRowFallsBackToExistingLocal(): void
+    {
+        $g = $this->git();
+        $g->branchRows = [
+            ['name' => 'main', 'sha' => 'abc1', 'current' => true, 'remote' => false, 'ahead' => null, 'behind' => null, 'gone' => false],
+            ['name' => 'origin/feature', 'sha' => 'def2', 'current' => false, 'remote' => true, 'ahead' => null, 'behind' => null, 'gone' => false],
+        ];
+        // `--track` refuses when the local branch already exists; the DWIM
+        // leg then plain-checks-out the short name. (The fixture throws
+        // before recording, so the attempt is proven by the leg that lands.)
+        $g->throwOn['checkoutRemote'] = new \RuntimeException('fatal: a branch named \'feature\' already exists');
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'j'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Space, ''));
+        $this->assertSame(['feature'], $g->checkouts, 'fallback must check out the local short name');
+        $this->assertSame([], $g->branchDeletions);
+    }
+
+    public function testFailedRemoteDwimLandsInTheErrorLane(): void
+    {
+        $g = $this->git();
+        $g->branchRows = [
+            ['name' => 'main', 'sha' => 'abc1', 'current' => true, 'remote' => false, 'ahead' => null, 'behind' => null, 'gone' => false],
+            ['name' => 'origin/feature', 'sha' => 'def2', 'current' => false, 'remote' => true, 'ahead' => null, 'behind' => null, 'gone' => false],
+        ];
+        $g->throwOn['checkoutRemote'] = new \RuntimeException('track failed');
+        $g->throwOn['checkout']       = new \RuntimeException('checkout failed');
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'j'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Space, ''));
+        // Both legs refused: the SECOND error is what surfaced — it names the
+        // reason the branch switch did not happen, which is the user's question.
+        $this->assertStringContainsString('checkout failed', $a->error ?? '');
+        $this->assertNull($a->pendingConfirm);
+    }
+
+    public function testDeleteRefusesRemoteRowWithoutArming(): void
+    {
+        $g = $this->git();
+        $g->branchRows = [
+            ['name' => 'main', 'sha' => 'abc1', 'current' => true, 'remote' => false, 'ahead' => null, 'behind' => null, 'gone' => false],
+            ['name' => 'origin/feature', 'sha' => 'def2', 'current' => false, 'remote' => true, 'ahead' => null, 'behind' => null, 'gone' => false],
+        ];
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'j'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'D'));
+        $this->assertSame([], $g->branchDeletions);
+        $this->assertNull($a->pendingConfirm, 'a read-only row must not reach the arm');
+        $this->assertStringContainsString('read-only', $a->error ?? '');
     }
 
     public function testCommitKeyStartsMessageCollection(): void

@@ -207,4 +207,78 @@ final class RemoteVerbsIntegrationTest extends TestCase
         self::assertSame($before, $this->originSha('refs/heads/master'));
         self::assertNull($this->originSha('refs/heads/orphan'));
     }
+
+    /**
+     * candy-git-037: after CG-06 the same bare origin answers branches() with
+     * locals AND remote-tracking rows, ahead/behind counts parsed out of
+     * %(upstream:track), and a `[gone]` upstream surfaced as a flag — proving
+     * the flat refname parse against real git rather than fixture argv.
+     */
+    public function testBranchesAnswerWithRemoteRowsAndParsedDivergence(): void
+    {
+        // A tracks origin/master at seed, commits one: ahead 1, behind 0.
+        $this->commitIn($this->cwd, 'ahead.txt', 'one ahead');
+        $rows  = $this->git->branches();
+        $local = null;
+        $remoteSeen = false;
+        foreach ($rows as $r) {
+            if ($r['name'] === 'master') { $local = $r; }
+            if ($r['name'] === 'origin/master') { $remoteSeen = true; }
+        }
+        self::assertNotNull($local, 'local master must be listed');
+        self::assertFalse($local['remote']);
+        self::assertTrue($local['current']);
+        self::assertSame(1, $local['ahead']);
+        self::assertNull($local['behind']);
+        self::assertFalse($local['gone']);
+        self::assertTrue($remoteSeen, 'remote-tracking master must be listed beside the local');
+        // Same branch behind: pull-free, reset origin by pushing elsewhere and
+        // checking out stale — instead assert behind on a second clone.
+        $b = $this->base . '/b';
+        exec('git clone ' . escapeshellarg($this->origin) . ' ' . escapeshellarg($b) . ' 2>/dev/null');
+        $this->git->push(); // A's ahead commit reaches origin
+        // behind compares the local branch against its tracking ref, so B
+        // must fetch first — a clone alone still agrees with itself.
+        (new Git($b))->fetch();
+        $bRows = (new Git($b))->branches();
+        $bMaster = null;
+        foreach ($bRows as $r) {
+            if ($r['name'] === 'master' && !$r['remote']) { $bMaster = $r; }
+        }
+        self::assertNotNull($bMaster);
+        self::assertSame(1, $bMaster['behind'], 'second clone lags the pushed commit');
+        self::assertNull($bMaster['ahead']);
+    }
+
+    public function testBranchesFlagAGoneUpstream(): void
+    {
+        $this->git->createBranch('vanished');
+        $this->commitIn($this->cwd, 'v.txt', 'work on vanished');
+        $this->git->push(); // bootstraps upstream origin/vanished
+        exec('git -C ' . escapeshellarg($this->cwd) . ' update-ref -d refs/remotes/origin/vanished 2>/dev/null');
+        $found = null;
+        foreach ($this->git->branches() as $r) {
+            if ($r['name'] === 'vanished') { $found = $r; }
+        }
+        self::assertNotNull($found);
+        self::assertTrue($found['gone'], 'a vanished upstream must surface as gone, not as silence');
+    }
+
+    public function testCheckoutRemoteDwimsALocalTrackingBranch(): void
+    {
+        $this->git->createBranch('dwim');
+        $this->commitIn($this->cwd, 'd.txt', 'work on dwim');
+        $this->git->push();
+        exec('git -C ' . escapeshellarg($this->cwd) . ' checkout master 2>/dev/null');
+        exec('git -C ' . escapeshellarg($this->cwd) . ' branch -D dwim 2>/dev/null');
+        $this->git->checkoutRemote('origin/dwim');
+        // Local branch recreated from the remote ref and tracking it.
+        self::assertSame('origin', trim((string) shell_exec('git -C ' . escapeshellarg($this->cwd) . ' config --get branch.dwim.remote 2>/dev/null')));
+        self::assertSame('refs/heads/dwim', trim((string) shell_exec('git -C ' . escapeshellarg($this->cwd) . ' config --get branch.dwim.merge 2>/dev/null')));
+        $current = null;
+        foreach ($this->git->branches() as $r) {
+            if ($r['current']) { $current = $r['name']; }
+        }
+        self::assertSame('dwim', $current, 'DWIM lands on the local branch, never a detached HEAD');
+    }
 }

@@ -95,6 +95,7 @@ return [
     'history.cannot_undo'     => 'история: нельзя отменить {op} — восстанавливаемые данные утрачены',
     'history.unknown_op'      => 'история: неизвестная операция {op}',
     'branch.delete_current'   => 'нельзя удалить текущую ветку',
+    'branch.delete_remote'    => 'удаление: отслеживаемые удалённые ветки доступны только для чтения',
     'branch.deleted'          => 'ветка {name} удалена',
     'branch.delete_no_select' => 'удаление: ветка не выбрана',
     'merge.prompt'            => 'merge: ',

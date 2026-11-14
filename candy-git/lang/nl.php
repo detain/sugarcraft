@@ -95,6 +95,7 @@ return [
     'history.cannot_undo'     => 'geschiedenis: kan {op} niet ongedaan maken — de data is verloren',
     'history.unknown_op'      => 'geschiedenis: onbekende bewerking {op}',
     'branch.delete_current'   => 'huidige branch kan niet verwijderd worden',
+    'branch.delete_remote'    => 'verwijderen: extern bijgehouden branches zijn alleen-lezen',
     'branch.deleted'          => 'branch {name} verwijderd',
     'branch.delete_no_select' => 'verwijderen: geen branch geselecteerd',
     'merge.prompt'            => 'merge: ',

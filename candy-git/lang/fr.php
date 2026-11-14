@@ -95,6 +95,7 @@ return [
     'history.cannot_undo'     => 'historique : impossible d’annuler {op} — les données à restaurer sont perdues',
     'history.unknown_op'      => 'historique : opération inconnue {op}',
     'branch.delete_current'   => 'impossible de supprimer la branche courante',
+    'branch.delete_remote'    => 'suppression : les branches de suivi distant sont en lecture seule',
     'branch.deleted'          => 'branche {name} supprimée',
     'branch.delete_no_select' => 'suppression : aucune branche sélectionnée',
     'merge.prompt'            => 'fusion : ',

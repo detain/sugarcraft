@@ -60,7 +60,8 @@ own git config.
 ## Scope (v1)
 
 candy-git v1 covers the local-repository loop: status / stage / unstage /
-discard, branches (checkout, create, delete), log, the diff viewer, commit and
+discard, branches (checkout, create, delete — with remote-tracking branches
+listed and their divergence badged), log, the diff viewer, commit and
 amend, merge, cherry-pick, the sequencer menu (continue / abort / skip), stash
 list / apply / drop, worktrees (list / add / remove), an interactive-rebase todo
 preview, the remote trio (fetch / pull / push, each behind an armed confirm),
@@ -96,6 +97,12 @@ remotes cannot stall rendering) remains the v2 direction.
 | `u`                      | Undo last operation                                    |
 | `Ctrl+r`                 | Redo last undone operation                             |
 | `D` (branches pane)      | Delete the selected branch (press twice) — refuses to delete the current branch |
+
+Remote-tracking branches (`~ origin/feature`) are listed under the locals with
+per-branch divergence badges (`[↑2 ↓1]`, `[!]` for a vanished upstream). Space
+on one DWIMs the way git does: `--track` creates a local branch of that name,
+or — when the local already exists — checks it out. They are read-only for
+`D`: the branch family manages locals.
 | `M`                      | Merge — prompt for a branch/ref to merge into current (free text; the selected row is never read) |
 | `r`                      | Open rebase menu (continue / abort / skip) — when in progress only: opens while a rebase or cherry-pick has stopped; on an idle repo it reports "no rebase in progress" |
 | `S`                      | Open stash manager (list / apply / drop; drop asks twice)   |
@@ -243,7 +250,7 @@ file key like `git.timeout` resolves through the core `T` registry as
 raw string.
 
 **Available keys** (`lang/en.php` — an excerpt; the file is the full roster
-of 148 keys):
+of 149 keys):
 
 | Key                    | Default string                                                    | Parameters  |
 |------------------------|-------------------------------------------------------------------|------------|

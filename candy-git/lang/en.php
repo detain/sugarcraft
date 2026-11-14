@@ -118,6 +118,7 @@ return [
 
     // Branch delete
     'branch.delete_current'  => 'cannot delete current branch',
+    'branch.delete_remote'   => 'delete: remote-tracking branches are read-only',
     'branch.deleted'         => 'deleted branch {name}',
     'branch.delete_no_select'=> 'delete: no branch selected',
 

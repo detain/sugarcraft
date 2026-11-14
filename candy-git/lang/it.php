@@ -95,6 +95,7 @@ return [
     'history.cannot_undo'     => 'cronologia: impossibile annullare {op} — i dati da ripristinare sono persi',
     'history.unknown_op'      => 'cronologia: operazione sconosciuta {op}',
     'branch.delete_current'   => 'impossibile eliminare il ramo corrente',
+    'branch.delete_remote'    => 'eliminazione: i rami di tracciamento remoto sono in sola lettura',
     'branch.deleted'          => 'ramo {name} eliminato',
     'branch.delete_no_select' => 'eliminazione: nessun ramo selezionato',
     'merge.prompt'            => 'merge: ',

@@ -95,6 +95,7 @@ return [
     'history.cannot_undo'     => '历史：无法撤销 {op} — 将要恢复的数据已丢失',
     'history.unknown_op'      => '历史：未知操作 {op}',
     'branch.delete_current'   => '无法删除当前分支',
+    'branch.delete_remote'    => '删除：远程跟踪分支为只读',
     'branch.deleted'          => '已删除分支 {name}',
     'branch.delete_no_select' => '删除：未选择分支',
     'merge.prompt'            => '合并： ',

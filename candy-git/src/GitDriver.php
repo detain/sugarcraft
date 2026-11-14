@@ -34,7 +34,7 @@ interface GitDriver
     public function status(): array;
 
     /**
-     * @return list<array{name: string, sha: string, current: bool}>
+     * @return list<array{name: string, sha: string, current: bool, remote: bool, ahead: ?int, behind: ?int, gone: bool}>
      */
     public function branches(): array;
 
@@ -48,6 +48,12 @@ interface GitDriver
     public function unstage(string $path): void;
 
     public function checkout(string $branch): void;
+
+    /**
+     * Check out a remote-tracking branch (`origin/feature`) as a local branch
+     * tracking it — the DWIM leg of the branches-pane Space key (candy-git-037).
+     */
+    public function checkoutRemote(string $remoteBranch): void;
 
     public function commit(string $message): void;
 

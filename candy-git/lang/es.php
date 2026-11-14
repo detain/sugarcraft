@@ -95,6 +95,7 @@ return [
     'history.cannot_undo'     => 'historial: no se puede deshacer {op} — los datos que restauraría se perdieron',
     'history.unknown_op'      => 'historial: operación desconocida {op}',
     'branch.delete_current'   => 'no se puede eliminar la rama actual',
+    'branch.delete_remote'    => 'eliminar: las ramas de seguimiento remoto son de solo lectura',
     'branch.deleted'          => 'rama {name} eliminada',
     'branch.delete_no_select' => 'eliminar: ninguna rama seleccionada',
     'merge.prompt'            => 'merge: ',

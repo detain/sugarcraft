@@ -95,6 +95,7 @@ return [
     'history.cannot_undo'     => 'verlauf: {op} kann nicht rückgängig gemacht werden — die wiederherzustellenden daten sind verloren',
     'history.unknown_op'      => 'verlauf: unbekannter vorgang {op}',
     'branch.delete_current'   => 'aktueller zweig kann nicht gelöscht werden',
+    'branch.delete_remote'    => 'löschen: remote-verfolgte zweige sind schreibgeschützt',
     'branch.deleted'          => 'zweig {name} gelöscht',
     'branch.delete_no_select' => 'löschen: kein zweig ausgewählt',
     'merge.prompt'            => 'merge: ',

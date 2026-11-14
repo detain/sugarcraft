@@ -95,6 +95,7 @@ return [
     'history.cannot_undo'     => 'historia: nie można cofnąć {op} — dane są bezpowrotnie utracone',
     'history.unknown_op'      => 'historia: nieznana operacja {op}',
     'branch.delete_current'   => 'nie można usunąć bieżącej gałęzi',
+    'branch.delete_remote'    => 'usuwanie: gałęzie śledzące zdalne są tylko do odczytu',
     'branch.deleted'          => 'usunięto gałąź {name}',
     'branch.delete_no_select' => 'usunięcie: nie wybrano gałęzi',
     'merge.prompt'            => 'merge: ',

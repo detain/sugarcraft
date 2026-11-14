@@ -95,6 +95,7 @@ return [
     'history.cannot_undo'     => 'السجل: لا يمكن التراجع عن {op} — البيانات المستعادة مفقودة',
     'history.unknown_op'      => 'السجل: عملية غير معروفة {op}',
     'branch.delete_current'   => 'لا يمكن حذف الفرع الحالي',
+    'branch.delete_remote'    => 'الحذف: فروع المتابعة عن بعد للقراءة فقط',
     'branch.deleted'          => 'تم حذف الفرع {name}',
     'branch.delete_no_select' => 'حذف: لم يُحدد فرع',
     'merge.prompt'            => 'دمج: ',

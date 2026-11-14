@@ -950,11 +950,37 @@ final class App implements Model
         // leaving — the inverse needs an origin to return to.
         $from = $this->currentBranchName();
         try {
-            $this->git->checkout($branch['name']);
-            return $this->withAll(history: $this->requireHistory()->push(HistoryEntry::checkout($from, (string) $branch['name'])))->refresh();
+            $name = (string) $branch['name'];
+            if ($branch['remote'] ?? false) {
+                // DWIM (candy-git-037): Space on `origin/feature` should land
+                // on a local `feature` tracking it — `checkout --track` for
+                // a fresh branch, or a plain checkout when the local already
+                // exists (git refuses --track then). The history names the
+                // local branch either way, because that is what HEAD moved to.
+                $local = self::localNameOf((string) $name);
+                try {
+                    $this->git->checkoutRemote($name);
+                } catch (\RuntimeException) {
+                    $this->git->checkout($local);
+                }
+                return $this->withAll(history: $this->requireHistory()->push(HistoryEntry::checkout($from, $local)))->refresh();
+            }
+            $this->git->checkout($name);
+            return $this->withAll(history: $this->requireHistory()->push(HistoryEntry::checkout($from, $name)))->refresh();
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
         }
+    }
+
+    /**
+     * Strip the remote name from a remote-tracking ref: `origin/feature` and
+     * `origin/feat/x` both DWIM to a local `feature` / `feat/x` — only the
+     * first path element is the remote.
+     */
+    private static function localNameOf(string $remoteBranch): string
+    {
+        $slash = strpos($remoteBranch, '/');
+        return $slash === false ? $remoteBranch : substr($remoteBranch, $slash + 1);
     }
 
     /**
@@ -1255,6 +1281,11 @@ final class App implements Model
         }
         if ($branch['current'] ?? false) {
             return $this->withError(Lang::t('branch.delete_current'));
+        }
+        if ($branch['remote'] ?? false) {
+            // A remote-tracking ref is not ours to delete; the branch family
+            // only manages locals (candy-git-037).
+            return $this->withError(Lang::t('branch.delete_remote'));
         }
         // Branch deletion needs the same armed second press as discard.
         $arm = 'branch:' . $branch['name'];

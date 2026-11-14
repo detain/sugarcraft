@@ -95,6 +95,7 @@ return [
     'history.cannot_undo'     => 'histórico: não é possível desfazer {op} — os dados perdidos sumiram',
     'history.unknown_op'      => 'histórico: operação desconhecida {op}',
     'branch.delete_current'   => 'não é possível excluir o ramo atual',
+    'branch.delete_remote'    => 'eliminar: ramos de acompanhamento remoto só de leitura',
     'branch.deleted'          => 'ramo {name} excluído',
     'branch.delete_no_select' => 'excluir: nenhum ramo selecionado',
     'merge.prompt'            => 'merge: ',

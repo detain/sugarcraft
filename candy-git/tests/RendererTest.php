@@ -86,6 +86,7 @@ final class RendererTest extends TestCase
             public function stage(string $path): void {}
             public function unstage(string $path): void {}
             public function checkout(string $branch): void {}
+            public function checkoutRemote(string $remoteBranch): void {}
             public function commit(string $_message): void {}
             public function stageAll(): void {}
             public function unstageAll(): void {}
@@ -149,6 +150,7 @@ final class RendererTest extends TestCase
             public function stage(string $path): void {}
             public function unstage(string $path): void {}
             public function checkout(string $branch): void {}
+            public function checkoutRemote(string $remoteBranch): void {}
             public function commit(string $_message): void {}
             public function stageAll(): void {}
             public function unstageAll(): void {}
@@ -401,6 +403,7 @@ final class RendererTest extends TestCase
             public function stage(string $path): void {}
             public function unstage(string $path): void {}
             public function checkout(string $branch): void {}
+            public function checkoutRemote(string $remoteBranch): void {}
             public function commit(string $_message): void {}
             public function stageAll(): void {}
             public function unstageAll(): void {}
@@ -497,5 +500,32 @@ final class RendererTest extends TestCase
     public function testTheFocusMarkerIsSingleWidth(): void
     {
         $this->assertSame(1, Width::of(Renderer::FOCUS_MARKER));
+    }
+
+    /**
+     * candy-git-037: the branches pane carries remote-tracking rows and
+     * per-row divergence badges. Two locals + two remotes render both, with
+     * `*` for the current local, `~` for remotes, `[↑n ↓m]` from the parsed
+     * upstream:track counts, `[!]` for a vanished upstream, and no badge
+     * where there is no divergence.
+     */
+    public function testBranchesPaneRendersRemotesAndBadges(): void
+    {
+        $g = $this->git();
+        $g->branchRows = [
+            ['name' => 'main',    'sha' => 'abc1', 'current' => true,  'remote' => false, 'ahead' => 2,    'behind' => 1,    'gone' => false],
+            ['name' => 'orphan',  'sha' => 'def2', 'current' => false, 'remote' => false, 'ahead' => null, 'behind' => null, 'gone' => true],
+            ['name' => 'origin/main',    'sha' => 'abc1', 'current' => false, 'remote' => true, 'ahead' => null, 'behind' => null, 'gone' => false],
+            ['name' => 'origin/feature', 'sha' => 'ghi3', 'current' => false, 'remote' => true, 'ahead' => null, 'behind' => null, 'gone' => false],
+        ];
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
+        $out = Renderer::render($a);
+        $this->assertStringContainsString('main [↑2 ↓1]', $out);
+        $this->assertStringContainsString('orphan [!]', $out);
+        $this->assertStringContainsString('~ origin/main', $out);
+        $this->assertStringContainsString('~ origin/feature', $out);
+        $this->assertStringNotContainsString('~ origin/main [', $out, 'remote rows carry no upstream badge');
+        $this->assertStringNotContainsString('ahead', substr($out, strpos($out, 'branches')), 'badges never ship English words (branches pane onward)');
     }
 }

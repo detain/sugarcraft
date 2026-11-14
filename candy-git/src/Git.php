@@ -147,17 +147,45 @@ final class Git implements GitDriver
         // bytes (git log's pretty-format %x09 style is a different grammar),
         // so the name/sha split below never fired. The tab must be a real
         // byte in the argument: double-quoted PHP supplies it (candy-git-001).
+        //
+        // The full %(refname) is parsed rather than %(refname:short) because a
+        // local `feature/x` and a remote `origin/feature/x` both shorten to
+        // ambiguous shapes, while the refs/heads vs refs/remotes prefix is a
+        // total discriminator. %(upstream:track) carries the divergence the
+        // header already shows (`[ahead 2, behind 1]`, `[gone]`, …) and is
+        // parsed into counts so the renderer never ships English words in a
+        // badge. Remotes sort after locals by refname, giving the pane its
+        // section grouping for free (candy-git-037).
         $out = $this->run([
-            'for-each-ref', "--format=%(HEAD) %(refname:short)\t%(objectname:short)",
-            'refs/heads',
+            'for-each-ref', "--format=%(HEAD) %(refname)\t%(objectname:short)\t%(upstream:track)",
+            'refs/heads', 'refs/remotes',
         ]);
         $rows = [];
         foreach ($out as $line) {
             if ($line === '') continue;
             $head    = str_starts_with($line, '*');
             $payload = ltrim(substr($line, 2));
-            [$name, $sha] = array_pad(explode("\t", $payload, 2), 2, '');
-            $rows[] = ['name' => $name, 'sha' => $sha, 'current' => $head];
+            [$refname, $sha, $track] = array_pad(explode("\t", $payload, 3), 3, '');
+            if (str_starts_with($refname, 'refs/heads/')) {
+                $name   = substr($refname, strlen('refs/heads/'));
+                $remote = false;
+            } elseif (str_starts_with($refname, 'refs/remotes/')) {
+                $name   = substr($refname, strlen('refs/remotes/'));
+                $remote = true;
+            } else {
+                continue;
+            }
+            $ahead  = preg_match('/\bahead (\d+)/', $track, $m) === 1 ? (int) $m[1] : null;
+            $behind = preg_match('/\bbehind (\d+)/', $track, $m) === 1 ? (int) $m[1] : null;
+            $rows[] = [
+                'name'   => $name,
+                'sha'    => $sha,
+                'current'=> $head,
+                'remote' => $remote,
+                'ahead'  => $remote ? null : $ahead,
+                'behind' => $remote ? null : $behind,
+                'gone'   => !$remote && str_contains($track, 'gone'),
+            ];
         }
         return $rows;
     }
@@ -252,6 +280,18 @@ final class Git implements GitDriver
         // 'main' did not match" so branch switching (Space on the branches
         // pane) could never succeed. guardRef already refuses leading-dash refs.
         $this->run(['checkout', $branch]);
+    }
+
+    /**
+     * DWIM checkout of a remote-tracking branch: `--track origin/feature`
+     * creates (or re-attaches) the local `feature` with `origin/feature` as
+     * its upstream, instead of the detached HEAD a plain checkout of a remote
+     * ref would give (candy-git-037).
+     */
+    public function checkoutRemote(string $remoteBranch): void
+    {
+        $this->guardRef($remoteBranch);
+        $this->run(['checkout', '--track', $remoteBranch]);
     }
 
     public function commit(string $message): void

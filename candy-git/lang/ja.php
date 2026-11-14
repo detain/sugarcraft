@@ -95,6 +95,7 @@ return [
     'history.cannot_undo'     => '履歴: {op} は元に戻せません — 復元対象のデータは失われています',
     'history.unknown_op'      => '履歴: 不明な操作 {op}',
     'branch.delete_current'   => '現在のブランチは削除できません',
+    'branch.delete_remote'    => '削除: リモート追跡ブランチは読み取り専用です',
     'branch.deleted'          => 'ブランチ {name} を削除しました',
     'branch.delete_no_select' => '削除: ブランチが選択されていません',
     'merge.prompt'            => 'マージ: ',

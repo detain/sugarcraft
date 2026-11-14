@@ -95,6 +95,7 @@ return [
     'history.cannot_undo'     => 'geçmiş: {op} geri alınamıyor — geri getireceği veriler kayboldu',
     'history.unknown_op'      => 'geçmiş: bilinmeyen işlem {op}',
     'branch.delete_current'   => 'geçerli dal silinemez',
+    'branch.delete_remote'    => 'silme: uzaktan izlenen dallar salt okunurdur',
     'branch.deleted'          => '{name} dalı silindi',
     'branch.delete_no_select' => 'sil: dal seçilmedi',
     'merge.prompt'            => 'merge: ',

@@ -95,6 +95,7 @@ return [
     'history.cannot_undo'     => '히스토리: {op} 실행 취소 불가 — 복원할 데이터가 소실되었습니다',
     'history.unknown_op'      => '히스토리: 알 수 없는 작업 {op}',
     'branch.delete_current'   => '현재 브랜치는 삭제할 수 없습니다',
+    'branch.delete_remote'    => '삭제: 원격 추적 브랜치는 읽기 전용입니다',
     'branch.deleted'          => '브랜치 {name} 삭제됨',
     'branch.delete_no_select' => '삭제: 선택된 브랜치 없음',
     'merge.prompt'            => '병합: ',
