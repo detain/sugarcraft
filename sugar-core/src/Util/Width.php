@@ -122,6 +122,32 @@ final class Width
     public const TAB_WIDTH = 4;
 
     /**
+     * Last key measured by {@see string()}, its exact width, and whether
+     * that key carries an ESC byte — the extension door's slot (F15c). A
+     * streaming caller that re-asks for the same logical line with bytes
+     * appended (the preview-ladder shape sugar-markdown's open section
+     * produces every frame, and every TEA app previewing a growing line)
+     * is answered `lastWidth + compute(tail)`, which is exact whenever the
+     * seam provably splits nothing: both seam bytes are printable ASCII
+     * (0x20-0x7E — no cluster and no \r\n pair can span them) and the
+     * previous key is ESC-free (so no ANSI sequence is open across the
+     * seam either). One slot, one string of overhead; no new cache to
+     * bound. WHY THE DOOR EXISTS AT ALL: sc-36's 1 MiB byte budget is
+     * load-bearing (the burst-eviction pin defends it), but a growing-key
+     * working set that crosses the budget re-purges the keys the warm run
+     * needs, turning the ladder's per-frame whole-line re-ask into an
+     * O(length) recompute every time — measured 3.22x against the
+     * markdown preview ladder's 2.5x law. The door answers the growing
+     * ask in O(delta) WITHOUT touching the budget, the count cap, or any
+     * memo-store path except where a fresh width would have been computed.
+     */
+    private static ?string $extendKey = null;
+
+    private static int $extendWidth = 0;
+
+    private static bool $extendKeyHasEsc = false;
+
+    /**
      * Cell width of a string after stripping ANSI sequences.
      */
     public static function string(string $s): int
@@ -131,7 +157,10 @@ final class Width
         if (isset(self::$memo[$s])) {
             return self::$memo[$s];
         }
-        $width = self::compute($s);
+        $width = self::extend($s) ?? self::compute($s);
+        self::$extendKey = $s;
+        self::$extendWidth = $width;
+        self::$extendKeyHasEsc = \strpos($s, "\x1b") !== false;
         while (self::$memo !== []
             && (\count(self::$memo) >= self::MEMO_MAX
                 || self::$memoBytes + \strlen($s) > self::MEMO_MAX_BYTES)
@@ -146,6 +175,36 @@ final class Width
         }
         self::$memoBytes += \strlen($s);
         return self::$memo[$s] = $width;
+    }
+
+    /**
+     * Extension door (F15c): answer the width of `$s = $extendKey . tail`
+     * as `extendWidth + compute(tail)` when the seam is provably inert
+     * (see the slot docblock), else null so the caller pays the full
+     * cluster walk. The printable-ASCII seam bound is CONSERVATIVE by
+     * posture: the differential fuzz battery could not construct a
+     * divergence without it (this width model is additively coincidental
+     * even at \r\n/mark seams), but a coincidence a fuzzer failed to
+     * reach is not a proof the door can spend — the O(1) range gate stays.
+     */
+    private static function extend(string $s): ?int
+    {
+        $last = self::$extendKey;
+        if ($last === null || $last === '' || self::$extendKeyHasEsc
+            || \strlen($s) < \strlen($last) || !\str_starts_with($s, $last)
+        ) {
+            return null;
+        }
+        $tail = \substr($s, \strlen($last));
+        if ($tail === '') {
+            return self::$extendWidth;
+        }
+        $seamLeft  = \ord($last[\strlen($last) - 1]);
+        $seamRight = \ord($tail[0]);
+        if ($seamLeft < 0x20 || $seamLeft > 0x7E || $seamRight < 0x20 || $seamRight > 0x7E) {
+            return null;
+        }
+        return self::$extendWidth + self::compute($tail);
     }
 
     /**

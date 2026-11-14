@@ -1024,6 +1024,82 @@ final class WidthTest extends TestCase
     }
 
     /**
+     * F15c (the sc-36 byte-budget/working-set interplay cure): the
+     * extension door must NEVER answer differently from a cold cluster
+     * walk. Streaming a growing key prefix-by-prefix — the preview-ladder
+     * shape that took the 2.5x law to 3.22x on the runners — through the
+     * PUBLIC path has to match `compute()` on each whole prefix across
+     * every seam class the exactness argument leans on: printable-ASCII
+     * seams (served in O(delta)), ESC-open keys, non-printable seam bytes
+     * (refused), and a foreign-key interleave that strands the slot
+     * mid-chain (refused on prefix). Truth is the assertion; which arm
+     * produced the number is the door's own business.
+     */
+    public function testExtensionDoorStreamingChainMatchesColdComputeAtEverySeam(): void
+    {
+        $compute = new \ReflectionMethod(Width::class, 'compute');
+        $compute->setAccessible(true);
+
+        $chains = [
+            'ascii-grow'      => ['tok1 ', 'tok2 ', 'tok3'],
+            'wide-tail'       => ['a ', "\u{4e2d}\u{4e2d}", 'b'],
+            'zwj-family-tail' => ['base ', "\u{1f468}\u{200d}\u{1f469}\u{200d}\u{1f467}", ' x'],
+            'combining-lead'  => ['e', "\u{0301}x", ' y'],
+            'esc-open-key'    => ["\x1b[31m", 'red', "\x1b[0m!"],
+            'crlf-tab-seam'   => ["line\r\n", 'next ', "\tTAIL"],
+            'nul-del-seam'    => ["\x00a", "\x7f", 'ok'],
+        ];
+
+        foreach ($chains as $label => $tails) {
+            $this->resetWidthCaches();
+            $prefix = '';
+            foreach ($tails as $i => $tail) {
+                $prefix .= $tail;
+                $cold = $compute->invoke(null, $prefix);
+                $this->assertSame(
+                    $cold,
+                    Width::string($prefix),
+                    "$label: streamed prefix #$i must equal the cold cluster walk",
+                );
+            }
+            // A foreign key strands the slot; resuming the chain on longer
+            // bytes must still answer exactly (prefix-match refusal path).
+            Width::string('a completely foreign revisit-key');
+            $grown = $prefix . ' more';
+            $this->assertSame(
+                $compute->invoke(null, $grown),
+                Width::string($grown),
+                "$label: chain resumed after a foreign key must equal the cold walk",
+            );
+        }
+
+        $this->resetWidthCaches();
+    }
+
+    /**
+     * Put every Width static back to factory state (the door slot is new
+     * state in the sc-36 memo's neighbourhood, so the burst test's
+     * hygiene pattern extends to it — a leaked slot must never make one
+     * test's answer depend on another's order).
+     */
+    private function resetWidthCaches(): void
+    {
+        $memo       = new \ReflectionProperty(Width::class, 'memo');
+        $bytes      = new \ReflectionProperty(Width::class, 'memoBytes');
+        $key        = new \ReflectionProperty(Width::class, 'extendKey');
+        $width      = new \ReflectionProperty(Width::class, 'extendWidth');
+        $hasEsc     = new \ReflectionProperty(Width::class, 'extendKeyHasEsc');
+        foreach ([$memo, $bytes, $key, $width, $hasEsc] as $p) {
+            $p->setAccessible(true);
+        }
+        $memo->setValue(null, []);
+        $bytes->setValue(null, 0);
+        $key->setValue(null, null);
+        $width->setValue(null, 0);
+        $hasEsc->setValue(null, false);
+    }
+
+    /**
      * sc-36: the truncate early door and the cursor walk must be
      * byte-identical to the old materialising loop at every seam — door hit,
      * door-miss by tab, over-budget walk, and the CJK overshoot where the
