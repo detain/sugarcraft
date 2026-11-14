@@ -7,6 +7,7 @@ namespace SugarCraft\Fuzzy\Tests;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use SugarCraft\Fuzzy\Matcher\SahilmMatcher;
+use SugarCraft\Fuzzy\SahilmScoring;
 use SugarCraft\Fuzzy\MatchResult;
 use PHPUnit\Framework\TestCase;
 
@@ -291,6 +292,33 @@ final class SahilmMatcherTest extends TestCase
         $this->assertSame(12, $accented->score);
         $this->assertSame(2, $plain->score);
         $this->assertGreaterThan($plain->score, $accented->score);
+    }
+
+    #[Test]
+    public function testCamelBonusIsTheCanonicalAsciiPin(): void
+    {
+        // sugar-fuzzy-004 cure: camelBonus was the coverage hole behind the #96/#97/#98
+        // oracle sweep — corrupting it to 0 (or to the separator weight) failed NO test
+        // except the confounded +90 re-read in SahilmScoringTest. The triple below pins
+        // the canonical ASCII hump-END case ('a' after 'B' in 'Ba') at camel weights
+        // 0 / 10 (canonical) / 100: the char scores bare matchScore 1 + lowerCaseBonus 1
+        // = 2, and the camel grant rides on top. Zeroing camelBonus reddens the 10 row;
+        // retuning it to any other value reddens the 10 and 100 rows — a live tripwire,
+        // which is also what FUZZY-26's direction decision must break when it lands.
+        foreach ([0, 10, 100] as $camelWeight) {
+            $tuned = new SahilmMatcher(false, SahilmScoring::canonical()->withCamelBonus($camelWeight));
+
+            $this->assertSame(
+                2 + $camelWeight,
+                $tuned->match('a', 'Ba')?->score,
+                "camelBonus $camelWeight must score 'a'@'Ba' at " . (2 + $camelWeight),
+            );
+        }
+
+        // Direction control: the hump START is inert under the current rule — 'b'
+        // matching the uppercase 'B' of 'fooBar' earns bare matchScore 1 only
+        // (no camel, no lowercase bonus; the #97 pair pins the same leg).
+        $this->assertSame(1, $this->matcher->match('b', 'fooBar')?->score);
     }
 
     #[Test]
