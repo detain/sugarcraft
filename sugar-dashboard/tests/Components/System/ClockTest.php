@@ -209,6 +209,77 @@ final class ClockTest extends TestCase
         $this->assertNotSame($original, $updated);
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // D-80: default matches the factory promise; render() is golden-able
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * An unambiguous afternoon instant, built in the same default timezone
+     * the component's date() leg reads - so the expected faces hold on any
+     * host. (13:47:22)
+     */
+    private static function promiseNoon(): int
+    {
+        return (int) strtotime('2026-05-13 13:47:22');
+    }
+
+    /** The midnight-hour leg of the 12-hour converter. (00:05:09) */
+    private static function promiseMidnight(): int
+    {
+        return (int) strtotime('2026-05-13 00:05:09');
+    }
+
+    public function testDefaultFaceIsTwentyFourHourLikeTheFactoryClaims(): void
+    {
+        // Clock::new() docblock promises "24-hour with seconds"; the knob
+        // to get AM/PM is with24Hour(false), not a surprise default.
+        $rendered = (new Clock(true, true, false, null))->render(self::promiseNoon());
+
+        $this->assertSame('13:47:22', $rendered);
+    }
+
+    public function testRenderIsDeterministicThroughTheNowSeam(): void
+    {
+        // Two renders of the same fixed instant cannot disagree, and the
+        // factory default now agrees with the docblock (finding 075).
+        $first = Clock::new()->render(self::promiseNoon());
+        $second = Clock::new()->render(self::promiseNoon());
+
+        $this->assertSame($first, $second);
+        $this->assertStringContainsString('13:47:22', $first);
+        $this->assertDoesNotMatchRegularExpression('/(AM|PM)/', $first);
+    }
+
+    public function testSeamPaintsTwelveHourAmPmFaceAtTheSameInstant(): void
+    {
+        // The seam drives BOTH faces: same instant, honest 12-hour form,
+        // including the 0 -> 12 AM boundary no live clock test can hit.
+        $pm = (new Clock(false, true, false, null))->render(self::promiseNoon());
+        $midnight = (new Clock(false, true, false, null))->render(self::promiseMidnight());
+
+        $this->assertSame('01:47:22 PM', $pm);
+        $this->assertSame('12:05:09 AM', $midnight);
+    }
+
+    public function testSeamDrivesTheDateLegToo(): void
+    {
+        // The date column used to read the wall clock even when render()
+        // was handed an instant - the whole row now comes from $now.
+        $clock = (new Clock(true, true, true, null));
+
+        $this->assertSame('13:47:22  Wed, May 13', $clock->render(self::promiseNoon()));
+    }
+
+    public function testFactoryPromiseProbe(): void
+    {
+        // Probe of acceptance: the twentyFourHour() factory and the default
+        // face are the same output for the same instant.
+        $this->assertSame(
+            Clock::twentyFourHour()->render(self::promiseNoon()),
+            Clock::new()->render(self::promiseNoon()),
+        );
+    }
+
     public function testSetSizeReturnsNewInstance(): void
     {
         $original = Clock::new();

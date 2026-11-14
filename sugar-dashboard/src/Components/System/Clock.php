@@ -12,7 +12,10 @@ use SugarCraft\Dashboard\Foundation\ColorMode;
  * A digital clock display component.
  *
  * Shows the current time in various formats (12h/24h).
- * Updates on each render call based on system time.
+ * Updates on each render call based on system time — unless the caller
+ * hands render() an explicit timestamp, which makes the painted string
+ * a pure function of that instant (the seam golden tests and VHS tapes
+ * need; finding sugar-dashboard-075).
  *
  * Mirrors clock display concepts adapted to PHP with wither-style immutable setters.
  */
@@ -30,11 +33,16 @@ final class Clock implements \SugarCraft\Dashboard\Foundation\SizedItem
 
     /**
      * Create a new clock with default styling (24-hour with seconds).
+     *
+     * The docblock was the promise; the code used to build a 12-hour face
+     * behind it (finding sugar-dashboard-075). The 24-hour default stands —
+     * the format knob is with24Hour(), and a 12-hour face still gets its
+     * AM/PM badge.
      */
     public static function new(): self
     {
         return new self(
-            use24Hour: false,
+            use24Hour: true,
             showSeconds: true,
             showDate: false,
             color: Color::hex('#874BFD'),
@@ -67,10 +75,14 @@ final class Clock implements \SugarCraft\Dashboard\Foundation\SizedItem
 
     /**
      * Render the clock showing current time.
+     *
+     * Pass $now (epoch seconds) to paint a specific instant instead of
+     * reading the wall clock — the determinism seam of finding 075. The
+     * date leg honours the same instant.
      */
-    public function render(): string
+    public function render(?int $now = null): string
     {
-        $time = time();
+        $time = $now ?? time();
         $hour = (int) date('H', $time);
         $minute = (int) date('i', $time);
         $second = (int) date('s', $time);
@@ -94,7 +106,7 @@ final class Clock implements \SugarCraft\Dashboard\Foundation\SizedItem
         }
 
         if ($this->showDate) {
-            $dateStr = date('D, M j');
+            $dateStr = date('D, M j', $time);
             $timeStr .= '  ' . $dateStr;
         }
 
