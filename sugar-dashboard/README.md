@@ -783,7 +783,7 @@ in the same namespace are its value parts.
 
 | Type | Description | Key Methods |
 |------|-------------|-------------|
-| `Registry` | Static register/get/list/reset for modules; auto-wraps `LegacyModule` via `LegacyModuleAdapter` |
+| `Registry` | Instance store for module constructors — the host owns one and passes it around; `register`/`get`/`has`/`list`/`reset` are instance methods, so two registries never share a namespace (the old class-level statics made `reset()` a global mutation with order-dependent callers). Auto-wraps `LegacyModule` via `LegacyModuleAdapter` |
 
 ## Plugin Namespace (Plugin System)
 
@@ -889,6 +889,12 @@ in the same namespace are its value parts.
 ## Modules Namespace (Built-in Modules)
 
 All built-in modules extend `BaseModule` and use `withState()` for immutable state updates.
+
+> **Per-instance names.** Every built-in takes an optional `name:` ctor
+> knob; unset it keeps the type name (`'clock'`), set it gives this
+> instance its own identity (`'clock-berlin'`). Ticks are addressed to the
+> instance's name, and the module registry keys on it — so hosting two
+> clocks side by side just means naming them apart.
 
 > **Requirements & environment.** `SystemModule`, `UptimeModule` and friends read
 > Linux interfaces — `/proc/stat`, `/proc/meminfo`, `/proc/cpuinfo` —

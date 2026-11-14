@@ -9,11 +9,15 @@ use SugarCraft\Dashboard\Module\LegacyModuleAdapter;
 use SugarCraft\Dashboard\Module\Module;
 
 /**
- * Static registry for module constructors.
+ * Instance registry for module constructors.
  *
- * Provides a central registration point for module types that can be
+ * Provides a registration point for module types that can be
  * instantiated by name. Used by the plugin system to dynamically
- * create modules.
+ * create modules. The host owns a Registry and hands it to whoever
+ * needs to look modules up — the store used to be class-level statics,
+ * so `reset()` was a global mutation and two test files (or two
+ * dashboards in one process) silently shared one namespace with
+ * order-dependent failures (finding sugar-dashboard-211).
  *
  * Accepts both new-style Module constructors and legacy LegacyModule
  * constructors. A legacy constructor is wrapped at instantiation time
@@ -25,7 +29,7 @@ use SugarCraft\Dashboard\Module\Module;
 final class Registry
 {
     /** @var array<string, callable(): Module> */
-    private static array $registry = [];
+    private array $constructors = [];
 
     /**
      * Register a module constructor.
@@ -34,9 +38,9 @@ final class Registry
      * @param callable(): Module|LegacyModule $constructor Closure that creates the module
      * @throws \RuntimeException If a module with this name is already registered
      */
-    public static function register(string $name, callable $constructor): void
+    public function register(string $name, callable $constructor): void
     {
-        if (isset(self::$registry[$name])) {
+        if (isset($this->constructors[$name])) {
             throw new \RuntimeException("Module '{$name}' is already registered");
         }
 
@@ -45,7 +49,7 @@ final class Registry
         // used to CALL the constructor purely to inspect its type,
         // which spawned plugin children that were immediately
         // discarded — leaked process plus file descriptors.)
-        self::$registry[$name] = static function () use ($constructor): Module {
+        $this->constructors[$name] = static function () use ($constructor): Module {
             $module = $constructor();
 
             return $module instanceof Module
@@ -61,20 +65,20 @@ final class Registry
      * @return callable(): Module
      * @throws \RuntimeException If no module with this name is registered
      */
-    public static function get(string $name): callable
+    public function get(string $name): callable
     {
-        if (!isset(self::$registry[$name])) {
+        if (!isset($this->constructors[$name])) {
             throw new \RuntimeException("Module '{$name}' is not registered");
         }
-        return self::$registry[$name];
+        return $this->constructors[$name];
     }
 
     /**
      * Check if a module is registered.
      */
-    public static function has(string $name): bool
+    public function has(string $name): bool
     {
-        return isset(self::$registry[$name]);
+        return isset($this->constructors[$name]);
     }
 
     /**
@@ -82,16 +86,20 @@ final class Registry
      *
      * @return list<string>
      */
-    public static function list(): array
+    public function list(): array
     {
-        return array_keys(self::$registry);
+        return array_keys($this->constructors);
     }
 
     /**
-     * Reset the registry (useful for testing).
+     * Empty this registry (host teardown; scratch registries in tests).
+     *
+     * Instance-scoped: clearing one registry cannot disturb another,
+     * which is the point of finding sugar-dashboard-211 — the old
+     * class-level reset() coupled every caller in the process.
      */
-    public static function reset(): void
+    public function reset(): void
     {
-        self::$registry = [];
+        $this->constructors = [];
     }
 }

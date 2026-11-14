@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Module;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Subscriptions;
+use SugarCraft\Dashboard\Msg\TickMsg;
 
 /**
  * Abstract base class for modules with default behaviour.
@@ -47,6 +48,17 @@ abstract class BaseModule implements Module
      * and the cadence would never fire.
      */
     private ?Subscriptions $tickSubscriptionCache = null;
+
+    /**
+     * Memoised tick message producer (finding sugar-dashboard-087 era law:
+     * the tick is addressed to THIS module's name). Kept per instance — a
+     * function-local `static` memo bakes the first instance's name into
+     * every sibling of the type, which is exactly what per-instance
+     * naming (the `name:` ctor knob) forbids. Clones share the handle
+     * (PHP clones copy object references), so what the core reconciler
+     * diffs keeps a stable producer object id across the clone lineage.
+     */
+    private ?\Closure $tickMessageMemo = null;
 
     /**
      * True once a host consulted subscriptions() on THIS instance — the
@@ -132,22 +144,28 @@ abstract class BaseModule implements Module
     }
 
     /**
-     * Producer that mints this module's tick marker message. Override
-     * together with {@see self::tickIntervalSeconds()}; memoise the
-     * closure in a function-local `static` so every call returns the
-     * same object (cadence stability — see the class docblock).
+     * Producer that mints this module's tick marker message, addressed to
+     * this instance's own name (finding sugar-dashboard-087: it used to be
+     * a per-type literal in every subclass, so a second named instance of
+     * a type would have been deaf to its own ticks). The closure is
+     * memoised per instance so every call returns the same object (cadence
+     * stability — see the class docblock). A module that overrides
+     * {@see self::tickIntervalSeconds()} inherits this producer; one that
+     * never ticks is harmless either way because both call sites gate on
+     * the interval first.
      *
      * @return null|\Closure(): Msg
      */
     protected function tickProducer(): ?\Closure
     {
-        return null;
+        return $this->tickMessageMemo ??= fn(): Msg => TickMsg::for($this->name());
     }
 
     /**
-     * Subscription id for the tick arm. Unique per module name — the
-     * core reconciler refuses duplicate ids across the model tree, and
-     * module names are already a registry-unique identifier.
+     * Subscription id for the tick arm. The core reconciler refuses
+     * duplicate ids across the model tree, and instance names are the
+     * unique key — hosting two instances of one type means naming them
+     * apart through the `name:` ctor knob (finding sugar-dashboard-087).
      */
     protected function tickSubscriptionId(): string
     {

@@ -10,10 +10,11 @@ use SugarCraft\Dashboard\Module\BaseModule;
 use SugarCraft\Dashboard\Module\Module;
 use SugarCraft\Dashboard\Modules\Clock\ClockModule;
 use SugarCraft\Dashboard\Modules\Generic\GenericModule;
-use SugarCraft\Dashboard\Modules\Generic\TickMsg;
 use SugarCraft\Dashboard\Modules\System\SystemModule;
 use SugarCraft\Dashboard\Modules\Uptime\TickMsg as UptimeTickMsg;
 use SugarCraft\Dashboard\Modules\Uptime\UptimeModule;
+use SugarCraft\Dashboard\Msg\TickMsg;
+use SugarCraft\Dashboard\Registry\Registry;
 
 /**
  * Conformance test verifying every built-in module satisfies Module.
@@ -32,7 +33,9 @@ final class ModuleSpecConformanceTest extends TestCase
         yield 'ClockModule' => ['clock', new ClockModule()];
         yield 'ClockModule with date' => ['clock-date', new ClockModule(showDate: true)];
         yield 'ClockModule with timezone' => ['clock-utc', new ClockModule(timezone: 'UTC')];
+        yield 'ClockModule named' => ['clock-berlin', new ClockModule(name: 'clock-berlin')];
         yield 'SystemModule' => ['system', new SystemModule()];
+        yield 'SystemModule named' => ['system-rack2', new SystemModule(name: 'system-rack2')];
         yield 'UptimeModule' => ['uptime', new UptimeModule()];
         yield 'GenericModule' => ['generic', new GenericModule('echo hello')];
     }
@@ -193,6 +196,85 @@ final class ModuleSpecConformanceTest extends TestCase
             $cataloged,
             'README Modules catalog and src/Modules/ must list the same namespaces',
         );
+    }
+
+    // ─── D-99 (findings 087 + 211): per-instance names ───────────────────
+
+    /**
+     * The 087 fix proper: a built-in's name is its own, not its type's
+     * constant. Default stays the type name; the ctor knob overrides it.
+     */
+    public function testNameCtorKnobOverridesTypeDefault(): void
+    {
+        $this->assertSame('clock', (new ClockModule())->name());
+        $this->assertSame('clock-berlin', (new ClockModule(name: 'clock-berlin'))->name());
+        $this->assertSame('uptime', (new UptimeModule())->name());
+        $this->assertSame('uptime-2', (new UptimeModule(name: 'uptime-2'))->name());
+    }
+
+    /**
+     * The name must survive the clone lineage — withTime()/withState()
+     * carriers carry it, so a ticked clock-berlin is still clock-berlin
+     * (an unforwarded ctor arg would surface here as 'clock').
+     */
+    public function testNamedInstanceKeepsItsNameAcrossUpdates(): void
+    {
+        $named = new ClockModule(name: 'clock-berlin');
+        [$next] = $named->update(new TickMsg());
+        $this->assertSame('clock-berlin', $next->name());
+    }
+
+    /**
+     * The producer used to be a per-type literal memoised in a
+     * function-local static: a second named instance would have minted
+     * ticks addressed to the default name and starved itself. The
+     * instance's producer must address the instance's own name.
+     */
+    public function testTickProducerAddressesThisInstanceName(): void
+    {
+        $named = new ClockModule(name: 'clock-berlin');
+        $method = new \ReflectionMethod($named, 'tickProducer');
+        $method->setAccessible(true);
+        $produce = $method->invoke($named);
+        $msg = $produce();
+
+        $this->assertInstanceOf(TickMsg::class, $msg);
+        $this->assertTrue($msg->isFor('clock-berlin'), "producer must address 'clock-berlin'");
+        $this->assertFalse($msg->isFor('clock'), 'an addressed tick must not serve a sibling name');
+
+        // Memoisation law (cadence stability): same object on repeat
+        // calls, and clones share the handle — the reconciler diffs it
+        // by object id.
+        $this->assertSame($produce, $method->invoke($named));
+        $clone = clone $named;
+        $this->assertSame($produce, $method->invoke($clone));
+    }
+
+    /**
+     * The acceptance composition from the finding: two instances of one
+     * type coexist side by side — distinct names, distinct tick routing,
+     * one registry holding both without a panic.
+     */
+    public function testTwoNamedInstancesCoexistAndRegister(): void
+    {
+        $berlin = new ClockModule(timezone: 'Europe/Berlin', name: 'clock-berlin');
+        $local = new ClockModule();
+
+        $this->assertNotSame($berlin->name(), $local->name());
+
+        $registry = new Registry();
+        $registry->register('clock', static fn(): Module => new ClockModule());
+        $registry->register('clock-berlin', static fn(): Module => new ClockModule(timezone: 'Europe/Berlin', name: 'clock-berlin'));
+
+        $this->assertSame('clock', ($registry->get('clock'))()->name());
+        $this->assertSame('clock-berlin', ($registry->get('clock-berlin'))()->name());
+        $this->assertSame(['clock', 'clock-berlin'], $registry->list());
+
+        // Independent refresh: the addressed tick drives only its module.
+        $berlinTick = TickMsg::for('clock-berlin');
+        [$berlinNext, $berlinCmd] = $berlin->update($berlinTick);
+        $this->assertSame('clock-berlin', $berlinNext->name());
+        $this->assertNotNull($berlinCmd, 'the addressed tick must keep the cadence alive');
     }
 
     private function assertNullOrIsCallable(mixed $value, string $message = ''): void

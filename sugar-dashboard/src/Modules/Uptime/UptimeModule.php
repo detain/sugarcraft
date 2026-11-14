@@ -23,9 +23,14 @@ final class UptimeModule extends BaseModule
 
     private static int $sampleCount = 0;
 
+    public function __construct(
+        private readonly ?string $name = null,
+    ) {
+    }
+
     public function name(): string
     {
-        return 'uptime';
+        return $this->name ?? 'uptime';
     }
 
     public function init(): ?\Closure
@@ -48,12 +53,6 @@ final class UptimeModule extends BaseModule
     protected function tickIntervalSeconds(): ?float
     {
         return self::TICK_INTERVAL;
-    }
-
-    protected function tickProducer(): ?\Closure
-    {
-        static $produce = null;
-        return $produce ??= static fn(): Msg => TickMsg::for('uptime');
     }
 
     public function view(): string

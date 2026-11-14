@@ -40,12 +40,13 @@ final class GenericModule extends BaseModule
     public function __construct(
         private readonly string|array $command,
         private readonly int $intervalSeconds = 5,
+        private readonly ?string $name = null,
     ) {
     }
 
     public function name(): string
     {
-        return 'generic';
+        return $this->name ?? 'generic';
     }
 
     public function init(): ?\Closure
@@ -66,12 +67,6 @@ final class GenericModule extends BaseModule
     protected function tickIntervalSeconds(): ?float
     {
         return (float) $this->intervalSeconds;
-    }
-
-    protected function tickProducer(): ?\Closure
-    {
-        static $produce = null;
-        return $produce ??= static fn(): Msg => TickMsg::for('generic');
     }
 
     public function view(): string

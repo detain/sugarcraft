@@ -36,7 +36,10 @@ use SugarCraft\Core\Model;
 interface Module extends Model
 {
     /**
-     * Get the module's unique name.
+     * The module's instance name. Two modules of the same type coexist
+     * by being named apart (the built-ins take a `name:` ctor knob);
+     * hosts key ticks, subscriptions and registry slots on it, so it
+     * must be unique among the modules one host runs.
      */
     public function name(): string;
 

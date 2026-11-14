@@ -24,13 +24,14 @@ final class ClockModule extends BaseModule
     public function __construct(
         private readonly bool $showDate = false,
         private readonly ?string $timezone = null,
+        private readonly ?string $name = null,
     ) {
         $this->time = $this->createTime();
     }
 
     public function name(): string
     {
-        return 'clock';
+        return $this->name ?? 'clock';
     }
 
     public function init(): ?\Closure
@@ -53,12 +54,6 @@ final class ClockModule extends BaseModule
     protected function tickIntervalSeconds(): ?float
     {
         return 1.0;
-    }
-
-    protected function tickProducer(): ?\Closure
-    {
-        static $produce = null;
-        return $produce ??= static fn(): Msg => TickMsg::for('clock');
     }
 
     public function view(): string

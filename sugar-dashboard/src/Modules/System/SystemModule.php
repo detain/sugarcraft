@@ -53,12 +53,13 @@ final class SystemModule extends BaseModule
      */
     public function __construct(
         private readonly float $refreshSeconds = self::TICK_INTERVAL,
+        private readonly ?string $name = null,
     ) {
     }
 
     public function name(): string
     {
-        return 'system';
+        return $this->name ?? 'system';
     }
 
     public function init(): ?\Closure
@@ -83,12 +84,6 @@ final class SystemModule extends BaseModule
     protected function tickIntervalSeconds(): ?float
     {
         return $this->refreshSeconds;
-    }
-
-    protected function tickProducer(): ?\Closure
-    {
-        static $produce = null;
-        return $produce ??= static fn(): Msg => TickMsg::for('system');
     }
 
     public function view(): string

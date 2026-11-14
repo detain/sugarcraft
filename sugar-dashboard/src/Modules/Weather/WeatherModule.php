@@ -42,6 +42,7 @@ class WeatherModule extends BaseModule
         private readonly string $location = 'auto',
         private readonly float $tickSeconds = self::TICK_INTERVAL,
         private readonly int $ttlSeconds = self::TTL_SECONDS,
+        private readonly ?string $name = null,
     ) {
         $this->current = null;
         $this->lastFetch = new \DateTimeImmutable('@0');
@@ -49,7 +50,7 @@ class WeatherModule extends BaseModule
 
     public function name(): string
     {
-        return 'weather';
+        return $this->name ?? 'weather';
     }
 
     public function init(): ?\Closure
@@ -59,7 +60,7 @@ class WeatherModule extends BaseModule
         // freshly launched dashboard showed no weather for a full
         // interval even when a perfectly good cache file was on disk.
         return Cmd::batch(
-            Cmd::send(TickMsg::for('weather')),
+            Cmd::send(TickMsg::for($this->name())),
             $this->makeTickCmd(),
         );
     }
@@ -227,12 +228,6 @@ class WeatherModule extends BaseModule
     protected function tickIntervalSeconds(): ?float
     {
         return $this->tickSeconds;
-    }
-
-    protected function tickProducer(): ?\Closure
-    {
-        static $produce = null;
-        return $produce ??= static fn(): Msg => TickMsg::for('weather');
     }
 
     private function loadCache(): ?WeatherSnapshot

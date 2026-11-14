@@ -11,25 +11,33 @@ use SugarCraft\Dashboard\Module\LegacyModuleAdapter;
 use SugarCraft\Dashboard\Module\Module;
 use SugarCraft\Dashboard\Registry\Registry;
 
+/**
+ * Registry is an INSTANCE store (finding sugar-dashboard-211): it used to
+ * be class-level statics, so tests coupling through a shared namespace and
+ * a global reset() were order-dependent by construction. Every test here
+ * owns its own Registry — that ownership is part of the pin.
+ */
 final class RegistryTest extends TestCase
 {
-    protected function setUp(): void
+    private function namedModuleCtor(string $name): \Closure
     {
-        parent::setUp();
-        Registry::reset();
+        return function () use ($name): Module {
+            return new class($name) extends BaseModule {
+                public function __construct(private readonly string $moduleName)
+                {
+                }
+
+                public function name(): string { return $this->moduleName; }
+                public function view(): string { return ''; }
+            };
+        };
     }
 
     public function testRegisterAndGet(): void
     {
-        $constructor = function(): Module {
-            return new class extends BaseModule {
-                public function name(): string { return 'test'; }
-                public function view(): string { return ''; }
-            };
-        };
-
-        Registry::register('test-module', $constructor);
-        $retrieved = Registry::get('test-module');
+        $registry = new Registry();
+        $registry->register('test-module', $this->namedModuleCtor('test'));
+        $retrieved = $registry->get('test-module');
 
         // get() hands back a deferred wrapper, not the registered closure
         // itself: the old Registry probed the constructor at registration
@@ -44,8 +52,9 @@ final class RegistryTest extends TestCase
 
     public function testRegistrationPerformsNoConstruction(): void
     {
+        $registry = new Registry();
         $constructions = 0;
-        $constructor = function() use (&$constructions): Module {
+        $constructor = function () use (&$constructions): Module {
             $constructions++;
             return new class extends BaseModule {
                 public function name(): string { return 'counted'; }
@@ -53,10 +62,10 @@ final class RegistryTest extends TestCase
             };
         };
 
-        Registry::register('counted', $constructor);
+        $registry->register('counted', $constructor);
         $this->assertSame(0, $constructions, 'registering must not construct — registration-time probing spawned real plugin children');
 
-        $retrieved = Registry::get('counted');
+        $retrieved = $registry->get('counted');
         $this->assertSame(0, $constructions, 'get() itself stays side-effect free too');
 
         $first = $retrieved();
@@ -66,8 +75,9 @@ final class RegistryTest extends TestCase
 
     public function testLegacyModulesWrapOnInvoke(): void
     {
+        $registry = new Registry();
         $constructions = 0;
-        $constructor = function() use (&$constructions): LegacyModule {
+        $constructor = function () use (&$constructions): LegacyModule {
             $constructions++;
             return new class implements LegacyModule {
                 public function name(): string { return 'old-style'; }
@@ -78,50 +88,46 @@ final class RegistryTest extends TestCase
             };
         };
 
-        Registry::register('old', $constructor);
+        $registry->register('old', $constructor);
         $this->assertSame(0, $constructions);
 
-        $module = (Registry::get('old'))();
+        $module = ($registry->get('old'))();
         $this->assertInstanceOf(LegacyModuleAdapter::class, $module);
         $this->assertSame('old-style', $module->name());
     }
 
     public function testRegisterDuplicatePanics(): void
     {
-        $constructor = function(): Module {
-            return new class extends BaseModule {
-                public function name(): string { return 'test'; }
-                public function view(): string { return ''; }
-            };
-        };
-
-        Registry::register('duplicate-module', $constructor);
+        $registry = new Registry();
+        $constructor = $this->namedModuleCtor('test');
+        $registry->register('duplicate-module', $constructor);
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage("Module 'duplicate-module' is already registered");
 
-        Registry::register('duplicate-module', $constructor);
+        $registry->register('duplicate-module', $constructor);
     }
 
     public function testListReturnsAll(): void
     {
-        $ctor1 = function(): Module {
+        $registry = new Registry();
+        $ctor1 = function (): Module {
             return new class extends BaseModule {
                 public function name(): string { return 'module1'; }
                 public function view(): string { return ''; }
             };
         };
-        $ctor2 = function(): Module {
+        $ctor2 = function (): Module {
             return new class extends BaseModule {
                 public function name(): string { return 'module2'; }
                 public function view(): string { return ''; }
             };
         };
 
-        Registry::register('module-a', $ctor1);
-        Registry::register('module-b', $ctor2);
+        $registry->register('module-a', $ctor1);
+        $registry->register('module-b', $ctor2);
 
-        $list = Registry::list();
+        $list = $registry->list();
 
         $this->assertContains('module-a', $list);
         $this->assertContains('module-b', $list);
@@ -130,19 +136,35 @@ final class RegistryTest extends TestCase
 
     public function testResetClearsAll(): void
     {
-        $constructor = function(): Module {
-            return new class extends BaseModule {
-                public function name(): string { return 'test'; }
-                public function view(): string { return ''; }
-            };
-        };
+        $registry = new Registry();
+        $registry->register('reset-test', $this->namedModuleCtor('test'));
+        $this->assertTrue($registry->has('reset-test'));
 
-        Registry::register('reset-test', $constructor);
-        $this->assertTrue(Registry::has('reset-test'));
+        $registry->reset();
 
-        Registry::reset();
+        $this->assertFalse($registry->has('reset-test'));
+        $this->assertEmpty($registry->list());
+    }
 
-        $this->assertFalse(Registry::has('reset-test'));
-        $this->assertEmpty(Registry::list());
+    /**
+     * The 211 pin: registries never share a namespace. The same name can
+     * live in two hosts side by side, and one host's reset cannot empty
+     * another's — order coupling is structurally gone (this whole file
+     * needs no setUp reset and survives --order-by=random unchanged).
+     */
+    public function testRegistriesDoNotShareState(): void
+    {
+        $a = new Registry();
+        $b = new Registry();
+
+        $a->register('clock', $this->namedModuleCtor('a'));
+        $b->register('clock', $this->namedModuleCtor('b'));
+
+        $this->assertSame('a', ($a->get('clock'))()->name());
+        $this->assertSame('b', ($b->get('clock'))()->name());
+
+        $b->reset();
+        $this->assertTrue($a->has('clock'), 'resetting one registry must not touch another');
+        $this->assertFalse($b->has('clock'));
     }
 }
