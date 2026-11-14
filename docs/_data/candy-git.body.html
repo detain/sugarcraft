@@ -26,7 +26,7 @@ $git = new Git(getcwd());
       <div class="feature"><strong>Stash</strong><span><code>S</code> creates, applies, pops and drops stash entries via <code>git stash</code>.</span></div>
       <div class="feature"><strong>Branch create / delete</strong><span><code>n</code> creates a branch, <code>D</code> deletes one; <code>space</code> checks out.</span></div>
       <div class="feature"><strong>Worktrees</strong><span><code>w</code> lists worktrees and adds new ones via <code>git worktree</code>.</span></div>
-      <div class="feature"><strong>Merge / rebase / cherry-pick</strong><span><code>M</code> merges, <code>r</code> rebases, <code>i</code> drives interactive rebase, <code>V</code> cherry-picks.</span></div>
+      <div class="feature"><strong>Merge / rebase / cherry-pick</strong><span><code>M</code> merges, <code>r</code> opens the sequencer menu (continue / abort; skip on a rebase) when stopped, <code>V</code> cherry-picks a typed ref, and <code>i</code> previews the interactive-rebase todo — the mutating rebase keys are parked and refuse with a notice.</span></div>
       <div class="feature"><strong>Undo / redo</strong><span><code>u</code> / <code>Ctrl+r</code> step back and forward through <code>HistoryManager</code> (capped at <code>MAX_HISTORY = 100</code> entries).</span></div>
       <div class="feature"><strong>Pluggable driver</strong><span><code>GitDriver</code> interface lets tests inject a fixture-backed driver without staging real repos.</span></div>
       <div class="feature"><strong>Refresh on demand</strong><span><code>R</code> reloads from disk; cursors are clamped if the row count shrinks.</span></div>
@@ -40,7 +40,7 @@ $git = new Git(getcwd());
     <p>User-facing strings use <code>SugarCraft\Git\Lang::t()</code>. The keys live in <code>lang/en.php</code> with the <code>git</code> prefix inside the file — pass the file key verbatim: <code>Lang::t('git.timeout')</code>. The facade bakes the library namespace into every lookup, so the core registry sees <code>git.git.timeout</code>: namespace <code>git</code>, file key <code>git.timeout</code>. <code>Lang::t('timeout')</code> does NOT resolve — it asks for a file key the prefixed file never registers, and echoes the raw string back. Always call through <code>SugarCraft\Git\Lang</code>, never the raw registry.</p>
     <table class="api-table">
 <tr><th>Key</th><th>Default</th><th>Parameters</th></tr>
-<tr><td>git.spawn_failed</td><td>git: failed to spawn</td><td>—</td></tr>
+<tr><td>git.spawn_failed</td><td>git: failed to spawn: {reason}</td><td>{reason}</td></tr>
 <tr><td>git.error</td><td>git: {stderr}</td><td>{stderr}</td></tr>
 <tr><td>git.timeout</td><td>git: command timed out after {seconds}s</td><td>{seconds}</td></tr>
 <tr><td>cli.not_a_repo</td><td>candy-git: not a git repository: {cwd}</td><td>{cwd}</td></tr>
@@ -48,9 +48,9 @@ $git = new Git(getcwd());
 <tr><td>status.clean</td><td>clean working tree</td><td>—</td></tr>
 <tr><td>branches.empty</td><td>(no branches)</td><td>—</td></tr>
 <tr><td>log.empty</td><td>(empty log)</td><td>—</td></tr>
-<tr><td>help.keyhints</td><td>S  stash  ·  V  cherry-pick  ·  i  rebase-i  ·  w  worktrees  ·  tab  switch pane  ·  j/k  move  ·  s  stage/unstage  ·  a  stage all  ·  d  discard  ·  P  diff  ·  space  checkout  ·  c  commit  ·  A  amend  ·  n  new branch  ·  R  refresh  ·  u  undo  ·  M  merge  ·  r  rebase  ·  ?  help  ·  q  quit</td><td>—</td></tr>
+<tr><td>help.keyhints</td><td>S  stash  ·  V  cherry-pick  ·  i  rebase-i  ·  w  worktrees  ·  tab  switch pane  ·  j/k  move  ·  s  stage/unstage  ·  a  stage all  ·  d  discard  ·  enter  diff  ·  f  fetch  ·  p  pull  ·  P  push  ·  space  checkout  ·  c  commit  ·  A  amend  ·  n  new branch  ·  R  refresh  ·  u  undo  ·  M  merge  ·  r  rebase  ·  ?  help  ·  q  quit</td><td>—</td></tr>
 </table>
-    <p>The table above is an excerpt; <code>lang/en.php</code> is the full roster of 137 keys. To localize, copy <code>lang/en.php</code> to <code>lang/&lt;code&gt;.php</code> and translate the values.</p>
+    <p>The table above is an excerpt; <code>lang/en.php</code> is the full roster of 201 keys. To localize, copy <code>lang/en.php</code> to <code>lang/&lt;code&gt;.php</code> and translate the values.</p>
     <p>The <code>cli.not_a_repo</code> refusal fires when <code>git rev-parse --absolute-git-dir</code> fails for the working directory — linked worktrees, where <code>.git</code> is a file rather than a directory, are accepted.</p>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
