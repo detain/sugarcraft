@@ -89,14 +89,14 @@ final class ReadlineResizeTest extends TestCase
             $this->assertSame(20, $final->displayWidth(), 'unset bound follows the resize');
             // The post-resize frame must be a full repaint: clear + home,
             // then a climb-free erase (lastPaintedRows was reset).
-            $this->assertMatchesRegularExpression('/\x1b\[2J\x1b\[H\r\x1b\[0J/', $captured, 'resize forces a cleared full repaint');
+            $this->assertMatchesRegularExpression('/\x1b\[0J\r\x1b\[0J/', $captured, 'resize forces a cleared full repaint');
             // And the clipped tail proves the new bound reached view(), not
             // just the accessor: a 30-cell buffer inside 20 columns cannot
             // print in full.
             $this->assertStringContainsString('…', $captured);
             // Every repaint AFTER the resize marker must be clipped to the
             // new bound: no frame past the clear may print the full 30-run.
-            $afterResize = substr($captured, strpos($captured, "\x1b[2J"));
+            $afterResize = substr($captured, strpos($captured, "\x1b[0J\r\x1b[0J"));
             $this->assertStringNotContainsString(str_repeat('x', 30), $afterResize, 'post-resize frames must not run the over-long buffer unclipped');
         } finally {
             if ($prevC === false) {

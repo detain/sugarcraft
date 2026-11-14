@@ -73,6 +73,12 @@ final class Readline
     private ?int $adoptedRows = null;
 
     /**
+     * Escape-unsafe TTY class for the current run - see dumbTerminal().
+     * Null outside run() and for every sink that needs no gating.
+     */
+    private ?string $dumbTerm = null;
+
+    /**
      * The STDIN pump this instance owns when constructed without an injected
      * driver. It is created lazily on the first run() and REUSED by every
      * later run() on the same instance: the stream decoder buffers whole
@@ -476,10 +482,11 @@ final class Readline
     {
         $this->adoptedCols = null;
         $this->adoptedRows = null;
+        $this->dumbTerm = self::dumbTerminal($output);
         $prompt = $this->fitPromptToWidth($prompt, $output);
         $prompt = $this->fitPromptToHeight($prompt, $output);
-        $bracketedPaste = $this->enableBracketedPaste($output);
-        $kittyKeyboard = $this->enableKittyKeyboard($output);
+        $bracketedPaste = $this->enableBracketedPaste($output, $this->dumbTerm);
+        $kittyKeyboard = $this->enableKittyKeyboard($output, $this->dumbTerm);
         try {
             return $this->runLoop($prompt, $output);
         } finally {
@@ -850,8 +857,58 @@ final class Readline
      *
      * @return bool True when the mode was enabled (caller must disable on exit).
      */
-    private function enableBracketedPaste(mixed $output): bool
+    /**
+     * Classify the output sink for escape-sequence safety (finding 023).
+     *
+     * A TTY whose TERM is 'dumb', unset, or names no known
+     * escape-consuming family cannot be trusted to act on CSIs - the
+     * pump skips mode pushes and paints plain line frames there instead
+     * of filling the screen with noise. Non-TTY sinks deliberately
+     * return null: their repaint frames ARE the log artifact (that is
+     * how hosts assert on them); only the whole-scene clear is
+     * re-classed for them, at clearDisplay(). The 'dumb' vs 'unknown'
+     * label exists only for the one-time STDERR warning.
+     */
+    private static function dumbTerminal($output): ?string
     {
+        if (!\is_resource($output) || !stream_isatty($output)) {
+            return null;
+        }
+
+        $term = \getenv('TERM');
+        if ($term === false || trim($term) === '' || strtolower(trim($term)) === 'dumb') {
+            return 'dumb';
+        }
+
+        $term = strtolower($term);
+        foreach (['xterm', 'screen', 'tmux', 'vt100', 'vt220', 'linux', 'rxvt', 'ansi', 'konsole', 'alacritty', 'kitty', 'st'] as $family) {
+            if (str_contains($term, $family)) {
+                return null;
+            }
+        }
+
+        return 'unknown';
+    }
+
+    /**
+     * The view with every SGR/CSI sequence stripped - the dumb-terminal
+     * frame body (finding 023). Lone escape prefixes and OSC payloads
+     * drop too; there is no smart reflow, just escape hygiene.
+     */
+    private static function plainView(string $view): string
+    {
+        $pattern = '/\x1b\][^\x07]*(?:\x07|\x1b\\\\)|\x1b\[[0-9;?]*[ -\/]*[@-~]|\x1b[=>\(][^\x1b]?|\x1b/';
+
+        return (string) preg_replace($pattern, '', $view);
+    }
+
+    private function enableBracketedPaste(mixed $output, ?string $dumb = null): bool
+    {
+        // A dumb/unknown TTY cannot be trusted with DEC-private mode
+        // pushes; the pops stay equally unwritten (flags remain false).
+        if ($dumb !== null) {
+            return false;
+        }
         if (!\is_resource($output) || !stream_isatty($output)) {
             return false;
         }
@@ -873,8 +930,13 @@ final class Readline
      *
      * @return bool True when the flag was pushed (caller must pop on exit).
      */
-    private function enableKittyKeyboard(mixed $output): bool
+    private function enableKittyKeyboard(mixed $output, ?string $dumb = null): bool
     {
+        // A dumb/unknown TTY cannot be trusted with DEC-private mode
+        // pushes; the pops stay equally unwritten (flags remain false).
+        if ($dumb !== null) {
+            return false;
+        }
         if (!\is_resource($output) || !stream_isatty($output)) {
             return false;
         }
@@ -907,6 +969,15 @@ final class Readline
         if ($view === '') {
             return;
         }
+        if ($this->dumbTerm !== null) {
+            // Plain-text frames (finding 023): strip every SGR/CSI the
+            // view carries and paint on fresh lines - no \r, no climb,
+            // no clear-below. A dumb terminal cannot act on those, and
+            // emitting them is precisely the pile-up noise.
+            $this->lastPaintedRows = 0;
+            \fwrite($output, self::plainView($view) . "\n");
+            return;
+        }
         $sequence = "\r";
         if ($this->lastPaintedRows > 0) {
             $sequence .= "\x1b[" . $this->lastPaintedRows . "A";
@@ -925,6 +996,19 @@ final class Readline
     {
         $this->lastPaintedRows = 0;
         if (!\is_resource($output)) {
+            return;
+        }
+        if ($this->dumbTerm !== null) {
+            // Same class as the repaint gate: a scene clear is exactly
+            // the escape a dumb terminal cannot act on (finding 023).
+            return;
+        }
+        if (!stream_isatty($output)) {
+            // Finding 093: a log sink (php://memory, a file) is not a
+            // screen - a whole-scene wipe mid-stream is junk bytes in
+            // the artifact. Clear-below keeps the erased-below
+            // semantics without the home jump.
+            \fwrite($output, "\x1b[0J");
             return;
         }
         fwrite($output, "\x1b[2J\x1b[H");
