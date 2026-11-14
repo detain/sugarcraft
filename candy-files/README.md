@@ -19,6 +19,15 @@ Prompts are localized: the executable activates a detected language from
 confirmation gate honors the affirmative its prompt teaches — `y` always
 works, and a German `(j/n)` answers to `j`.
 
+Platform scope (CF-53, closes 093): the live-FS layer is built, tested and
+CI-verified on POSIX. It still launches on Windows best-effort — the
+`Support\Home` cascade (CF-18) and the CJK-codepage chrome tier are
+Windows-aware — but Windows path semantics (`..` at a drive root,
+drive-relative paths like `C:notes`, the `desktop.ini`/`Thumbs.db`
+hidden-attribute inversion) are deliberately out of scope, and the app is
+not wired into the `WINDOWS_LIBS`/`MACOS_LIBS` CI rosters: the runners are
+a platform workstream, never a lib-lane default.
+
 ```
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓  ┌──────────────────────────────────────────┐
 ┃ /home/alice  [name-asc]                  ┃  │ /var/log  [mtime-desc]                   ┃
