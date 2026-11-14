@@ -10,7 +10,7 @@
 [![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
-![VHS recording: candy-image rendering a sample image through the terminal-image protocol ladder](.vhs/candy-image.gif)
+![VHS recording: candy-image rendering a synthetic sample as a quarter-block grid, followed by a --dump-detect report](.vhs/candy-image.gif)
 
 Terminal image viewer for PHP 8.3+ — the **chafa-independent** front end
 built on [`sugarcraft/sugar-image`](../sugar-image/). Point it at an image
