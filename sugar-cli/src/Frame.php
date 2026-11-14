@@ -141,7 +141,13 @@ final class Frame
         // Clamping up keeps every emitted line exactly max($cols, 4) wide.
         $cols = max(4, $cols);
         $inner = max(0, $cols - 2);
-        $contentHeight = max(0, $rows - self::OVERHEAD);
+        // Finding 049: a title-less frame folds its title slot away — the
+        // chrome is OVERHEAD - 1 rows and the freed row goes to content.
+        // The rows floor (throw) still speaks the full OVERHEAD contract:
+        // callers who size the terminal once must not re-derive it per title.
+        $hasTitle      = $this->title !== '';
+        $overhead      = $hasTitle ? self::OVERHEAD : self::OVERHEAD - 1;
+        $contentHeight = max(0, $rows - $overhead);
 
         // Normalise the body to EXACTLY $contentHeight rows: hard-truncate the
         // overflow (a frame taller than the terminal scrolls the alt-screen and
@@ -150,7 +156,8 @@ final class Frame
         // the explode above already consumed the body's newlines as layout):
         // SGR survives, every other escape/control byte is dropped.
         $contentLines = explode("\n", $body, $contentHeight + 1);
-        if (count($contentLines) > $contentHeight) {
+        $droppedRows  = count($contentLines) > $contentHeight;
+        if ($droppedRows) {
             // Bounded split (finding 012): with a limit the final element
             // carries every remaining line, so `count() > $contentHeight`
             // stays true here exactly as it did with the full split — the
@@ -163,18 +170,31 @@ final class Frame
         foreach ($contentLines as $i => $line) {
             $contentLines[$i] = Internal\SafeText::styledLine($line);
         }
+        if ($droppedRows && $contentHeight > 0) {
+            // Finding 048: dropped rows leave a silent signal — the last
+            // visible row gains the house ellipsis so the reader knows the
+            // body continued. Row count stays exactly $contentHeight.
+            $last = $contentHeight - 1;
+            $contentLines[$last] =
+                Width::truncateAnsi($contentLines[$last], max(0, $inner - 1)) . '…';
+        }
+        foreach ($contentLines as $i => $line) {
+            $contentLines[$i] = self::closeOpenRun($line);
+        }
 
         $bar = $this->borderStyle->render('║');
 
         $lines = [];
         $lines[] = $this->rule('╔', '╗', $inner);
-        $lines[] = $bar . self::padCenter($this->title, $inner) . $bar;
+        if ($hasTitle) {
+            $lines[] = $bar . self::padCenter(self::closeOpenRun($this->title), $inner) . $bar;
+        }
         $lines[] = $this->rule('╠', '╣', $inner);
         foreach ($contentLines as $line) {
             $lines[] = $bar . self::padRight($line, $inner) . $bar;
         }
         $lines[] = $this->rule('╠', '╣', $inner);
-        $lines[] = $bar . self::padRight($this->status, $inner) . $bar;
+        $lines[] = $bar . self::padRight(self::closeOpenRun($this->status), $inner) . $bar;
         $lines[] = $this->rule('╚', '╝', $inner);
 
         return implode("\n", $lines);
@@ -221,6 +241,31 @@ final class Frame
         $right = $pad - $left;
 
         return str_repeat(' ', $left) . $s . str_repeat(' ', $right);
+    }
+
+    /**
+     * Defense against unclosed SGR runs (finding 052): a row whose last SGR
+     * introducer never met a reset would paint the padding and both border
+     * caps with its colors. When the final SGR sequence is not a reset, one
+     * is appended — a byte-level no-op on closed runs, so the chrome layout
+     * is untouched. This is a positional check, not open/close parity:
+     * nested-but-closed runs like `\x1b[1m…\x1b[31m…\x1b[0m` (odd openers,
+     * already safe) pass through, while anything ending mid-run gets closed.
+     */
+    private static function closeOpenRun(string $s): string
+    {
+        if ($s === '' || !preg_match_all('/\x1b\[([0-9;]*)m/', $s, $matches, PREG_SET_ORDER)) {
+            return $s;  // no SGR at all — nothing to close
+        }
+        $last = end($matches)[1];
+        // Only the canonical full resets (\x1b[m, \x1b[0m) count as closed;
+        // anything else — including exotic `31;0` orders or truecolor
+        // sequences ending in a literal 0 channel — gets the redundant reset,
+        // which costs 4 bytes and can never misrender.
+        if ($last === '' || $last === '0') {
+            return $s;
+        }
+        return $s . Ansi::reset();
     }
 
     /**

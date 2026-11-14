@@ -115,9 +115,11 @@ final class FrameTest extends TestCase
         $lines = explode("\n", $out);
 
         self::assertCount(24, $lines);
-        // 24 rows - 6 overhead = 18 content rows; rows 0..17 fit, row 18+ dropped.
+        // Untitled frame (SC-F3/049): chrome is 5 rows, so 19 content rows —
+        // rows 0..18 fit (18 with the drop-signal ellipsis), row19+ dropped.
+        self::assertStringContainsString('row18', $out);
         self::assertStringContainsString('row17', $out);
-        self::assertStringNotContainsString('row18', $out);
+        self::assertStringNotContainsString('row19', $out);
         self::assertStringNotContainsString('row99', $out);
     }
 
@@ -128,8 +130,8 @@ final class FrameTest extends TestCase
         $out  = Frame::new()->render($body, 80, 24);
 
         self::assertCount(24, explode("\n", $out));
-        self::assertStringContainsString('row17', $out);
-        self::assertStringNotContainsString('row18', $out);
+        self::assertStringContainsString('row18', $out);
+        self::assertStringNotContainsString('row19', $out);
         self::assertStringNotContainsString('row4999', $out);
     }
 
@@ -364,5 +366,68 @@ final class FrameTest extends TestCase
         // while the OSC-8 hyperlink payload (including its URL) is stripped.
         self::assertStringContainsString('b(Bcd', $out, 'visible body text survives its escorts');
         self::assertStringNotContainsString('http://evil', $out);
+    }
+    /** Finding 048: dropped rows leave a visible signal on the last row. */
+    public function testDroppedRowsSignalWithEllipsisOnLastVisibleRow(): void
+    {
+        $body  = implode("\n", array_map(static fn (int $i): string => "row$i", range(0, 99)));
+        $out   = Frame::new()->withTitle('T')->render($body, 80, 24);
+        $lines = explode("\n", $out);
+
+        self::assertCount(24, $lines);
+        // Titled chrome is 6 rows: 18 content rows, last visible is row17 —
+        // now carrying the drop-signal ellipsis.
+        self::assertStringContainsString('row17…', $lines[20]);
+        self::assertStringNotContainsString('row19', $out);
+
+        // No drops: no signal anywhere.
+        $exact = implode("\n", array_map(static fn (int $i): string => "row$i", range(0, 17)));
+        self::assertStringNotContainsString('row17…', Frame::new()->withTitle('T')->render($exact, 80, 24));
+    }
+
+    /**
+     * Finding 049: an empty sanitized title folds the title slot away —
+     * chrome 5, one more content row, line count still exactly $rows.
+     */
+    public function testUntitledFrameFoldsTheTitleRowIntoContent(): void
+    {
+        $five = "r0\nr1\nr2\nr3\nr4";
+        $un   = explode("\n", Frame::new()->render($five, 40, 10));
+        $ti   = explode("\n", Frame::new()->withTitle('T')->render($five, 40, 10));
+
+        self::assertCount(10, $un, 'line count is constant per frame');
+        self::assertCount(10, $ti);
+        // Untitled: top rule, divider, then straight into 5 content rows…
+        self::assertSame($ti[0], $un[0], 'the plain top rule is identical chrome');
+        self::assertSame($ti[2], $un[1], 'the header divider follows immediately');
+        self::assertStringContainsString('r0', $un[2]);
+        // …so five rows fit untitled (no signal) but drop one titled (signal).
+        self::assertStringNotContainsString('…', implode("\n", $un));
+        self::assertStringContainsString('r3…', $ti[6], 'titled frame drops r4 and signals');
+        // A title that sanitizes to empty takes the same door.
+        self::assertSame($un, explode("\n", Frame::new()->withTitle("\x07")->render($five, 40, 10)));
+    }
+
+    /** Finding 052: an unclosed SGR run is reset before padding is laid. */
+    public function testUnclosedSgrRunIsClosedBeforePadding(): void
+    {
+        $line = explode("\n", Frame::new()->withTitle('T')->render("x\x1b[31m", 20, 10))[3];
+        self::assertStringContainsString("\x1b[31m\x1b[0m", $line, 'the guard closes the run');
+        self::assertSame(20, Width::string($line), 'cell geometry is unchanged');
+
+        // A closed run gains nothing (no double reset at the seam).
+        $closed = explode("\n", Frame::new()->withTitle('T')->render("x\x1b[31my\x1b[0m", 20, 10))[3];
+        self::assertStringNotContainsString("\x1b[0m\x1b[0m", $closed);
+
+        // Chrome rows are untouched either way.
+        $body = "a\x1b[31m\nb";
+        $out  = explode("\n", Frame::new()->withTitle('T')->render($body, 20, 10));
+        self::assertCount(10, $out);
+        self::assertStringNotContainsString("\x1b[31m", $out[0], 'the unclosed run never paints the top chrome');
+        self::assertSame(
+            explode("\n", Frame::new()->withTitle('T')->render('plain', 20, 10))[0],
+            $out[0],
+            'chrome bytes are identical between closed and open body runs'
+        );
     }
 }
