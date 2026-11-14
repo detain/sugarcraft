@@ -149,6 +149,11 @@ final class HostInfo
      */
     public static function hasSensors(Paths $paths): bool
     {
+        // S-X17 rider (disclose, like the loop-thread IO arms): this sample
+        // runs synchronously once at detection (HostInfo::detect -> boot).
+        // The refresh cadence behind it is S-C01's throttled Temp probe
+        // (landed daabc7dca), so the startup call is the one-time cost of
+        // the same bounded walk, not an extra cadence seat.
         [$snapshot] = Temp::new($paths)->sample();
 
         return $snapshot->sensors !== [];

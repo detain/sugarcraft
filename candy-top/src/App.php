@@ -1750,6 +1750,15 @@ final class App implements Model
     /**
      * The Cmd writing the current config atomically ({@see ConfigFile::write()});
      * answers {@see ConfigSavedMsg}. Null without a file.
+     *
+     * Finding 147 (measure/disclose, the GPU-precedent rule): this runs on
+     * the loop thread, so the write is a bounded frame hitch. Measured here
+     * (PHP 8.3.6, ext-fsync host FS): write() min 6.1 / median 6.4 / p95 7.7 ms
+     * at n=40; a spinning-disk host pays its fsync, so treat tens of ms as
+     * the honest ceiling. Deliberately synchronous: durability before the
+     * ConfigSavedMsg verdict (and before quit) is the whole point — btop's
+     * clean_quit keeps the same ordering, and routing the write through a
+     * child would answer the msg before the bytes are on disk.
      */
     public function saveCmd(): ?\Closure
     {
@@ -1773,6 +1782,14 @@ final class App implements Model
     /**
      * `ctrl+r` (btop SIGUSR2): read config.conf over the current values and
      * rescan the themes, inside the Cmd.
+     *
+     * Finding 147 (measure/disclose): the load + fresh {@see ThemeRegistry}
+     * scan run on the loop thread too. Measured here (n=20): rescan of the
+     * system theme dirs min 0.4 / median 0.5 / max 1.5 ms; the file load is
+     * the same sub-millisecond read it has always been. ctrl+r is a manual,
+     * once-per-reload gesture — a single ~ms hitch on the exact key the user
+     * pressed to ask for work is honest UI, and answering ConfigLoadedMsg
+     * before the rescan finished would paint a stale menu.
      */
     public function reloadCmd(): \Closure
     {

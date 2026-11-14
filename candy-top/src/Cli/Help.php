@@ -342,7 +342,20 @@ final class Help
                 $except = null;
                 $ready = @\stream_select($read, $write, $except, (int) $remaining, (int) (($remaining - (int) $remaining) * 1_000_000));
                 if ($ready === false) {
-                    break; // interrupted; drain what arrived, judge below
+                    // Finding 146: false is an interruption (a signal landing
+                    // mid-select) or a select error — never a verdict that the
+                    // child is done. The old break dropped through to
+                    // proc_close, which waits for the child WITHOUT the clock:
+                    // a wedged git turned --version into a wedged candy-top.
+                    // Re-ask the wall clock and continue: the next iteration
+                    // either reads what arrived or the deadline arm below
+                    // takes over and the TERM→KILL escalation runs.
+                    if ($deadline - \microtime(true) <= 0.0) {
+                        $timedOut = true;
+                        break;
+                    }
+                    \usleep(1_000); // a permanently-failing select stays bounded, not a spin
+                    continue;
                 }
                 foreach ($read as $stream) {
                     $chunk = \fread($stream, 8192);

@@ -84,6 +84,43 @@ final class HelpGitProbeTest extends TestCase
         $this->assertEveryCandidateIsAbsolute($candidates);
     }
 
+    public function testASignaledSelectInterruptCannotOutliveTheDeadline(): void
+    {
+        // Finding 146: stream_select returning false (a signal landing
+        // mid-select) used to break the drain loop with no verdict and drop
+        // through to proc_close — which waits on the child WITHOUT the
+        // clock, so a wedged git wedged --version behind it. The interrupt
+        // now re-asks the wall clock: past the deadline the TERM→KILL
+        // escalation runs and the probe answers on its own schedule.
+        if (\PHP_OS_FAMILY === 'Windows' || !\function_exists('pcntl_signal') || !\function_exists('pcntl_async_signals')) {
+            $this->markTestSkipped('the interrupt arm needs POSIX ext-pcntl');
+        }
+
+        // A child that answers only after the probe's 2.0 s budget is long
+        // spent: correct behaviour kills it at ~2.5 s, the old bug waits its
+        // full 6 s in proc_close.
+        $this->assertNotFalse(\file_put_contents($this->script, "#!/bin/sh\nsleep 6\nprintf 'abcdef1\\n'\nexit 0\n"));
+        $this->assertNotFalse(\chmod($this->script, 0755));
+        Help::pretendGitBinaryForTesting($this->script);
+
+        pcntl_async_signals(true);
+        $previous = pcntl_signal_get_handler(SIGALRM);
+        pcntl_signal(SIGALRM, static function (int $signal): void {});
+        pcntl_alarm(1); // interrupt the select while the sleeper is silent
+        $start = \microtime(true);
+        $version = Help::versionString();
+        $elapsed = \microtime(true) - $start;
+        pcntl_alarm(0);
+        pcntl_signal(SIGALRM, $previous);
+
+        $this->assertLessThan(
+            4.0,
+            $elapsed,
+            \sprintf('the probe answered in %.2f s — proc_close waited on the child (finding 146 wedge)', $elapsed),
+        );
+        $this->assertStringNotContainsString('abcdef1', $version, 'a timed-out interrupt never answers the version');
+    }
+
     /** @param list<string> $candidates */
     private function assertEveryCandidateIsAbsolute(array $candidates): void
     {
