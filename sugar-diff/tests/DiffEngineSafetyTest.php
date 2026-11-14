@@ -47,6 +47,38 @@ final class DiffEngineSafetyTest extends TestCase
         self::assertFalse($diff->degraded);
     }
 
+    /**
+     * sugar-diff-005: a one-sided middle is linear work — the cell budget is
+     * the guard on the quadratic table, and it must not label untouched input
+     * "degraded" (the `$oldMid !== []` / `$newMid !== []` conjuncts in
+     * Diff::diffLines). Deleting either conjunct turns one of these two arms
+     * red (mutation-proven in-step); the byte bodies pin the same outputs
+     * were already correct, now they are enforced.
+     */
+    public function test_a_pure_insert_middle_never_degrades_even_at_a_zero_budget(): void
+    {
+        $diff = Diff::compute(
+            "a\nb\n",
+            "x\na\nb\n",
+            DiffOptions::new()->withMaxLcsCells(0)->withContextLines(0),
+        );
+
+        self::assertFalse($diff->degraded, 'an insertion-only middle allocates no quadratic table');
+        self::assertSame("@@ -0,0 +1 @@\n+x\n", $diff->hunkText(), 'minimal single-hunk byte body');
+    }
+
+    public function test_a_pure_delete_middle_never_degrades_even_at_a_zero_budget(): void
+    {
+        $diff = Diff::compute(
+            "x\na\nb\n",
+            "a\nb\n",
+            DiffOptions::new()->withMaxLcsCells(0)->withContextLines(0),
+        );
+
+        self::assertFalse($diff->degraded, 'a deletion-only middle allocates no quadratic table');
+        self::assertSame("@@ -1 +0,0 @@\n-x\n", $diff->hunkText(), 'minimal single-hunk byte body');
+    }
+
     public function test_the_default_path_is_not_degraded(): void
     {
         self::assertFalse(Diff::compute("a\nb\n", "a\nc\n")->degraded);
