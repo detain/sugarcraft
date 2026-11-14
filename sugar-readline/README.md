@@ -338,9 +338,15 @@ unguarded recipe with piped stdin and `stty` errors "Inappropriate ioctl for
 device" on every call — the captured state is empty and the restore degrades
 to a usage dump (`interactive()` carries this guard; so did the hand-rolled
 ritual `examples/interactive.php` used to run before the entry point existed).
-`stty` is also POSIX-only — there is no such command on Windows, where
-`interactive()` is a documented no-op today (a loud console-API warning is
-planned there).
+`stty` is also POSIX-only — there is no such command on Windows, and
+sugar-readline deliberately carries no Windows raw-mode path: sugar-pty is
+NOT a dependency of this library (check its composer.json `require`). On a
+Windows console `interactive()` therefore warns once to STDERR and proceeds
+cooked — arrows and Ctrl chords reach the prompt only after the console
+discipline has had its say. A host that wants real raw input there owns the
+flip out-of-tree (a console-API layer, sugar-pty's ConPty stack if it is
+already a dependency of the host app, …) and drives `run()` the way
+`interactive()` drives it around stty.
 
 `-isig` matters: with signals left enabled, Ctrl+C raises SIGINT, which
 kills the process **before** the `finally` restore runs — the shell is then

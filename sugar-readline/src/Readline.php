@@ -140,6 +140,9 @@ final class Readline
     /** @var bool True while this process holds an unrestored raw-mode flip. */
     private static bool $rawOwned = false;
 
+    /** One-time STDERR steer for the Windows cooked reality (finding 094). */
+    private static bool $winRawNoted = false;
+
     /** @var string The stty `-g` snapshot exitRawMode() hands back. */
     private static string $rawSaved = '';
 
@@ -174,8 +177,11 @@ final class Readline
      *    handler): the snapshot is restored on the way out regardless.
      *
      * Nesting is safe: only the outermost call owns the flip. On Windows —
-     * where there is no stty — this is a documented no-op for now; the
-     * console-API path and its loud warning are S-61's.
+     * no stty, and sugar-pty is not a dependency — no raw-mode path exists
+     * in this dep tree at all: the first interactive() call on a real
+     * console warns loudly to STDERR and proceeds cooked (finding 094);
+     * hosts that need chords there bring their own console-API flip
+     * out-of-tree and drive run() directly.
      *
      * @param object    $prompt   Object with a handleKey(string): object method.
      * @param resource|null $output Paint stream (e.g. STDOUT); null paints nothing.
@@ -203,8 +209,20 @@ final class Readline
         if (self::$rawOwned) {
             return; // Outer call owns the flip; never snapshot an already-raw device.
         }
-        if (PHP_OS_FAMILY === 'Windows' || !stream_isatty(STDIN)) {
-            // Windows: no stty — documented no-op until S-61's console path.
+        if (!stream_isatty(STDIN)) {
+            return; // Piped or CI host: no device to flip, EOF rules the loop.
+        }
+        if (PHP_OS_FAMILY === 'Windows') {
+            // No stty on Windows, and sugar-pty is deliberately NOT a
+            // dependency: no raw-mode path exists in this dep tree. A silent
+            // skip here is how demos used to eat chords unnoticed (finding
+            // 094) — say it once per process, loudly, and proceed cooked.
+            // Out-of-tree option: a host that owns a console-API flip can
+            // wrap run() the way interactive() wraps the stty recipe.
+            if (!self::$winRawNoted) {
+                self::$winRawNoted = true;
+                fwrite(STDERR, "sugar-readline: no raw-mode path on Windows; the console line discipline will eat arrows and Ctrl chords — use Readline::run() through your own raw flip or accept cooked input\n");
+            }
             return;
         }
         $saved = self::stty(['-g']);

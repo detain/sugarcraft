@@ -67,7 +67,7 @@ final class ReadlineInteractiveTest extends TestCase
      * Feed shell-quoted octal bytes (e.g. '\003') to a `script`-allocated
      * pts running the interactive child in one mode; return the session.
      */
-    private static function drivePty(string $mode, string $octalFeed): string
+    private static function drivePty(string $mode, string $octalFeed, string $envPrefix = 'env -u COLUMNS -u LINES'): string
     {
         if (PHP_OS_FAMILY !== 'Linux') {
             self::markTestSkipped('util-linux script(1) harness is Linux-shaped here');
@@ -88,7 +88,7 @@ final class ReadlineInteractiveTest extends TestCase
         // device before the byte arrives — then hold the master open through
         // processing. Feeding instantly would raise SIGINT against the still
         // canonical discipline even when interactive() works correctly.
-        $command = '{ sleep 1; printf \'' . $octalFeed . '\'; sleep 2; } | timeout 30 script -q -e -c ' . escapeshellarg('env -u COLUMNS -u LINES ' . $inner)
+        $command = '{ sleep 1; printf \'' . $octalFeed . '\'; sleep 2; } | timeout 30 script -q -e -c ' . escapeshellarg($envPrefix . ' ' . $inner)
             . ' ' . escapeshellarg($session) . ' >/dev/null 2>&1';
 
         try {
@@ -108,6 +108,61 @@ final class ReadlineInteractiveTest extends TestCase
         } finally {
             @unlink($session);
         }
+    }
+
+    /**
+     * S-61 (finding 094): on a real TTY whose stty is absent, the POSIX
+     * branch must not skip silently — the cooked fallback is only honest
+     * when it announces itself. PATH=/nonexistent removes stty from a pts
+     * session; the child still takes line-buffered input (canonical mode
+     * flushes on Enter), so the prompt submits and the warning rides the
+     * same transcript.
+     */
+    public function testSttyAbsenceOnATtyWarnsAndProceedsCooked(): void
+    {
+        $session = self::drivePty(
+            'interactive',
+            'hi\\015',
+            'env -u COLUMNS -u LINES PATH=/nonexistent',
+        );
+
+        self::assertStringContainsString(
+            'stty unavailable',
+            $session,
+            'a TTY whose stty yields nothing must warn on STDERR: ' . self::visible($session),
+        );
+        self::assertStringContainsString(
+            'PROBE submitted=true',
+            $session,
+            'the warning steers; it must not abort the run — cooked input still submits: ' . self::visible($session),
+        );
+    }
+
+    /**
+     * S-61 (finding 094), Windows half: PHP_OS_FAMILY is a compile-time
+     * constant here, so the branch is unreachable on this Linux harness —
+     * pinned structurally instead (the S-45 flock-seam precedent): the
+     * guard must warn once, never skip quietly.
+     */
+    public function testWindowsRawGuardWarnsLoudlyOnce(): void
+    {
+        $src = (string) file_get_contents(dirname(__DIR__) . '/src/Readline.php');
+        $start = strpos($src, "if (PHP_OS_FAMILY === 'Windows') {");
+        self::assertIsInt($start, 'the Windows guard branch must exist in enterRawMode()');
+        $end = strpos($src, "\n        }", $start);
+        self::assertIsInt($end, 'the Windows guard branch must close');
+        $branch = substr($src, $start, $end - $start);
+
+        self::assertSame(
+            1,
+            substr_count($branch, 'fwrite(STDERR'),
+            'the Windows no-raw-path reality must be announced exactly once per branch, not skipped in silence',
+        );
+        self::assertStringContainsString(
+            'if (!self::$winRawNoted)',
+            $branch,
+            'the single warning must sit behind the once-flag (no per-iteration spam)',
+        );
     }
 
     private static function runChild(string $command): string
