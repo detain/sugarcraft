@@ -63,6 +63,22 @@ final class SizeQueryDescriptorTest extends TestCase
         );
     }
 
+    public function testTheQueryIsGuardedByAThrowableCatch(): void
+    {
+        // IMG-01 (candy-image-001): queryWinsize throws by contract
+        // (fd-not-tty, rc!=0) and Libc::lib() throws before it on Windows
+        // and FFI-less builds. Raw, each one exits 255 through this frame
+        // and breaches the documented 0/1/2 table — the catch rung is the
+        // difference between a degraded box size and a dead viewer.
+        $cli = (self::scanTargets())['src/Cli.php'];
+
+        $this->assertMatchesRegularExpression(
+            '/try \{[\s\S]{0,80}PosixBackend::queryWinsize\(1\)[\s\S]{0,220}\} catch \((\\\\)Throwable\)/',
+            $cli,
+            'the size query must sit inside a try whose catch swallows \\Throwable and falls through the ladder',
+        );
+    }
+
     public function testTheBinDelegatesEverythingToCli(): void
     {
         $bin = (self::scanTargets())['bin/candy-image'];

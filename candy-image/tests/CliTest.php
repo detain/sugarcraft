@@ -16,6 +16,7 @@ namespace SugarCraft\CandyImage\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\CandyImage\Cli;
+use SugarCraft\Core\Util\Tty\PosixBackend;
 use SugarCraft\Image\Detect;
 use SugarCraft\Image\Renderer\SymbolMapRenderer;
 
@@ -497,5 +498,105 @@ final class CliTest extends TestCase
         [$exit, , $err] = self::drive(['--size=200000x12', 'x.png']);
         $this->assertSame(Cli::EXIT_USAGE, $exit);
         $this->assertStringContainsString('invalid value', $err);
+    }
+
+    /**
+     * IMG-01 (candy-image-001) — the viewport ladder below the guarded size
+     * ioctl. The phpunit run always pipes STDOUT, so the ioctl arm cannot be
+     * entered in-process; what IS reachable is every rung the throw falls
+     * through to, which is the exact rescue path Windows/FFI-less/BSD hosts
+     * take when the query throws before this fix turned them into exit 255.
+     *
+     * @return array{string|false, string|false}
+     */
+    private function stashColumnsLines(): array
+    {
+        $stashed = [getenv('COLUMNS'), getenv('LINES')];
+        putenv('COLUMNS');
+        putenv('LINES');
+
+        return $stashed;
+    }
+
+    /** @param array{string|false, string|false} $stashed */
+    private function restoreColumnsLines(array $stashed): void
+    {
+        [$columns, $lines] = $stashed;
+        putenv($columns === false ? 'COLUMNS' : 'COLUMNS=' . $columns);
+        putenv($lines === false ? 'LINES' : 'LINES=' . $lines);
+    }
+
+    public function testViewportFallsBackToFixedCellsWhenNoSignalExists(): void
+    {
+        $stashed = $this->stashColumnsLines();
+        try {
+            // Pipe STDOUT (phpunit), no env: rung 3 of the ladder.
+            $this->assertSame(
+                [Cli::FALLBACK_CELLS_W, Cli::FALLBACK_CELLS_H],
+                Cli::viewportCells(),
+                'the documented 60x24 fallback answers when neither ioctl nor env speaks',
+            );
+        } finally {
+            $this->restoreColumnsLines($stashed);
+        }
+    }
+
+    public function testViewportPrefersColumnsLinesOverTheFixedFallback(): void
+    {
+        $stashed = $this->stashColumnsLines();
+        putenv('COLUMNS=123');
+        putenv('LINES=45');
+        try {
+            // The rows-1 status allowance is the animate path's contract on
+            // every live-geometry rung, env-derived included.
+            $this->assertSame([123, 44], Cli::viewportCells());
+        } finally {
+            $this->restoreColumnsLines($stashed);
+        }
+    }
+
+    public function testViewportIgnoresHalfAColumnsLinesPair(): void
+    {
+        $stashed = $this->stashColumnsLines();
+        putenv('COLUMNS=123');
+        putenv('LINES=0');
+        try {
+            $this->assertSame(
+                [Cli::FALLBACK_CELLS_W, Cli::FALLBACK_CELLS_H],
+                Cli::viewportCells(),
+                'a zero or missing leg means the pair speaks nothing — never a half-trusted box',
+            );
+        } finally {
+            $this->restoreColumnsLines($stashed);
+        }
+    }
+
+    public function testTheGuardedQueryIsARealThrowSourceAndNeverEscapesTheLadder(): void
+    {
+        $stashed = $this->stashColumnsLines();
+        try {
+            // The hazard is not hypothetical: the callee documents its throw
+            // (fd-not-tty here; Windows/FFI-less hosts throw deeper inside it)
+            // and it fires raw...
+            $threw = false;
+            try {
+                PosixBackend::queryWinsize(1);
+            } catch (\Throwable) {
+                $threw = true;
+            }
+            $this->assertTrue($threw, 'PosixBackend::queryWinsize(1) must throw on the piped phpunit STDOUT — the guard covers a live hazard');
+
+            // ...yet the app surface never lets it escape: cells land finite.
+            $cells = Cli::viewportCells();
+            $this->assertGreaterThan(0, $cells[0]);
+            $this->assertGreaterThan(0, $cells[1]);
+
+            // A full main() run exits in {0,1,2} — never 255 — with the
+            // ladder answering for the box.
+            [$exit] = self::drive(['/nonexistent/candy-image-absent.png']);
+            $this->assertContains($exit, [Cli::EXIT_OK, Cli::EXIT_USAGE, Cli::EXIT_INPUT]);
+        } finally {
+            $this->restoreColumnsLines($stashed);
+        }
     }
 }

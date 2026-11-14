@@ -556,8 +556,17 @@ final class Cli
 
     /**
      * Size the render box to the terminal viewport (cols, rows-1 status
-     * allowance for the animate path). Falls back to 60x24 when STDOUT is
-     * not a tty (e.g. piped/CI).
+     * allowance for the animate path). The ladder mirrors sugar-core's
+     * PosixBackend::size(): size ioctl on a live tty, then COLUMNS/LINES,
+     * then the fixed 60x24 fallback (piped/CI carries no signal).
+     *
+     * The ioctl is guarded, not raw: PosixBackend::queryWinsize() throws
+     * by contract (fd-not-tty, rc!=0/EBADF race), and Libc::lib() throws
+     * before it ever reaches the kernel on Windows and on PHP builds
+     * without ext-ffi. Unguarded, every one of those exits 255 through
+     * this frame and breaches the documented 0/1/2 contract — on Windows
+     * that killed 100% of runs. The catch turns each platform death into
+     * the next rung.
      *
      * Descriptor 1 is spelled as the literal — casting the STDOUT constant
      * to int yields the resource id, which names STDERR on a CLI process.
@@ -568,9 +577,20 @@ final class Cli
     public static function viewportCells(): array
     {
         if (\is_resource(\STDOUT) && stream_isatty(STDOUT)) {
-            $size = PosixBackend::queryWinsize(1);
+            try {
+                $size = PosixBackend::queryWinsize(1);
+                if ($size['cols'] > 0 && $size['rows'] > 0) {
+                    return [$size['cols'], max(1, $size['rows'] - 1)];
+                }
+            } catch (\Throwable) {
+                // No geometry from the kernel — fall through the ladder.
+            }
+        }
 
-            return [$size['cols'], max(1, $size['rows'] - 1)];
+        $cols = (int) (getenv('COLUMNS') ?: 0);
+        $rows = (int) (getenv('LINES') ?: 0);
+        if ($cols > 0 && $rows > 0) {
+            return [$cols, max(1, $rows - 1)];
         }
 
         return [self::FALLBACK_CELLS_W, self::FALLBACK_CELLS_H];
