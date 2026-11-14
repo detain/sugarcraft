@@ -398,6 +398,11 @@ never encoded:
 | 2004 | `Mode::$bracketedPaste` — flags that paste arrives bracketed.            |
 | 2026 | `Mode::$syncUpdate` — synchronized output queue (16384-cell budget).     |
 
+Mode 1 (DECCKM — application cursor keys) is intentionally unmodelled: it
+is absent from the roster above, and `?1 h`/`?1 l` are accepted and
+discarded by both engines (no consumer in this repository reads a keyboard
+transmit state).
+
 Modes 1005/1006/1015 are independent flags (xterm switches each one on its
 own): the reporting dialect a consumer should use is
 `Mode::effectiveMouseEncoding()`, which resolves the set flags by xterm's
@@ -458,11 +463,16 @@ The default `OscHandlerImpl` (renderer path) implements:
 | `lastTitle()` | accessor | Most recent title set during the stream. |
 
 The full `Handler\OscHandler` (used by `SugarCraft\Vterm\Terminal\Terminal`)
-also handles palette **set** (`OSC 4` — writes only, no query reply) and
+also handles palette **set** (`OSC 4` — writes only, no query reply;
+consumers that need `OSC 4`/`10`/`11`/`104` replies maintain their own
+palette above the library) and
 clipboard get/set requests (`OSC 52`). The OSC 52 log is a bounded ring:
 a remote program can arm OSC 52 itself, so past 1024 entries the oldest
 event is dropped. Drain it with `Terminal::clipboardEvents()`, which
-returns and clears the backlog (like `replies()`). `OSC 10`/`OSC 11`
+returns and clears the backlog (like `replies()`). A read request is
+recorded, never answered: the library owns no output channel, so emitting
+the reply (`OSC 52 ; p ; <base64> ST`) is the consumer's duty on the host
+it mirrors. `OSC 10`/`OSC 11`
 (default foreground/background query and set) are discarded — the
 emulator keeps no host-window or default-colour state. Focus and
 mode-query events are CSI-driven, not OSC: see the focus-reporting and

@@ -117,7 +117,10 @@ final class Terminal
 
     /**
      * Drain the queued terminal→host replies (DA1/DA2, DECRPM, CPR,
-     * XTWINOPS …) in request order.
+     * XTWINOPS …) in request order. OSC-sourced requests are NOT in this
+     * queue: an OSC 52 read is recorded in the clipboard event log and the
+     * palette query forms are ignored — this library never answers them
+     * itself, see {@see self::clipboardEvents()}.
      *
      * @return list<string>
      */
@@ -410,6 +413,12 @@ final class Terminal
      * a hostile program can arm OSC 52 itself, so backlog is capped rather
      * than grown. Consumers needing every event live should poll after each
      * feed. Payload and selection fields are UNTRUSTED remote output.
+     *
+     * `read` entries are requests, not deliveries: this library never
+     * answers an OSC 52 query itself (it owns no output channel) — emitting
+     * `OSC 52 ; p ; <base64> ST` back to the requesting program is the
+     * consumer's duty on the host it mirrors. Same contract for the
+     * write-only palette (`OSC 4`/`10`/`11`/`104` query forms are ignored).
      *
      * @return list<array{kind: string, selection: string, payload?: string}>
      */

@@ -14,6 +14,9 @@ use SugarCraft\Vterm\Hyperlink\Hyperlink;
  *
  * - `0`, `1`, `2`  set window title (icon name folds into the same slot)
  * - `4`            palette set: `OSC 4 ; idx ; rgb:RRRR/GGGG/BBBB [; idx ; rgb:...]`
+ *                  (write-only: `OSC 4`/`10`/`11`/`104` QUERY forms get no
+ *                  reply — the palette has no in-lib read channel, so
+ *                  consumers that need replies implement them here)
  * - `8`            hyperlink open / close: `OSC 8 ; params ; URI` (empty URI closes)
  * - `52`           clipboard write or read request
  *
@@ -147,6 +150,11 @@ final class OscHandler
      * so the event log is a bounded ring (ScreenHandler::MAX_EVENTS,
      * drop-oldest) reached only through
      * {@see ScreenHandler::recordClipboardEvent()}.
+     *
+     * Read requests are RECORDED, never answered: this library has no
+     * output channel of its own, so emitting the reply
+     * (`OSC 52 ; p ; <base64> ST`) is the consumer's duty on the host it
+     * mirrors — the query contract is implemented above the library.
      */
     private function clipboard(string $rest, ScreenHandler $h): void
     {
