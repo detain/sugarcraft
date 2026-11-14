@@ -14,6 +14,36 @@ use PHPUnit\Framework\TestCase;
 final class WizardTest extends TestCase
 {
     // ═══════════════════════════════════════════════════════════════
+    // D-150 (finding 168): boundary validation, no render-time fatals
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testNonStepEntryThrowsAtConstruction(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('wizard step 0 must be a');
+        new Wizard(['plain string title']);
+    }
+
+    public function testGoodStepsAfterBadEntryStillNameTheOffender(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('step 1');
+        new Wizard([WizardStep::new('One'), 42]);
+    }
+
+    public function testConstructionNormalisesMapKeyedStepsToAList(): void
+    {
+        $wizard = new Wizard(['a' => WizardStep::new('One'), 'b' => WizardStep::new('Two')]);
+        $this->assertNotSame('', $wizard->render());
+    }
+
+    public function testConnectorMathCarriesNoDeadIndexParameterOrFalsePromise(): void
+    {
+        $method = new \ReflectionMethod(Wizard::class, 'calculateConnectorLength');
+        $params = array_map(static fn (\ReflectionParameter $p): string => $p->getName(), $method->getParameters());
+        $this->assertSame(['maxWidth', 'stepCount'], $params);
+    }
+    // ═══════════════════════════════════════════════════════════════
     // Interface conformance
     // ═══════════════════════════════════════════════════════════════
 

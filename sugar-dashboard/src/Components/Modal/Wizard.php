@@ -29,9 +29,14 @@ final class Wizard implements \SugarCraft\Dashboard\Foundation\SizedItem
     private ?int $width = null;
     private ?int $height = null;
 
-    /** @var WizardStep[] */
+    /** @var list<WizardStep> */
     private array $steps;
 
+    /**
+     * @param list<WizardStep> $steps Validated at this boundary: a mixed
+     *     array used to sail through and fatal at first render when the
+     *     label loop touched `$step->title` on a plain string.
+     */
     public function __construct(
         array $steps = [],
         private readonly int $currentStep = 0,
@@ -43,7 +48,18 @@ final class Wizard implements \SugarCraft\Dashboard\Foundation\SizedItem
         private readonly string $upcomingChar = '○',
         private readonly string $connectorChar = '─',
     ) {
-        $this->steps = $steps;
+        foreach ($steps as $index => $step) {
+            if (!$step instanceof WizardStep) {
+                throw new \InvalidArgumentException(sprintf(
+                    'wizard step %d must be a %s, got %s',
+                    $index,
+                    WizardStep::class,
+                    get_debug_type($step),
+                ));
+            }
+        }
+
+        $this->steps = array_values($steps);
     }
 
     /**
@@ -93,12 +109,6 @@ final class Wizard implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         $maxWidth = $this->width ?? 80;
         $lines = [];
-
-        // Calculate available width per step
-        $stepCount = count($this->steps);
-        if ($stepCount === 0) {
-            return '';
-        }
 
         // Render the progress indicator line
         $progressLine = $this->renderProgressLine($maxWidth);
@@ -164,7 +174,7 @@ final class Wizard implements \SugarCraft\Dashboard\Foundation\SizedItem
             // Add connector to next step (except for last step)
             if ($i < $stepCount - 1) {
                 // Calculate connector length based on remaining width
-                $connectorLen = $this->calculateConnectorLength($maxWidth, $stepCount, $i);
+                $connectorLen = $this->calculateConnectorLength($maxWidth, $stepCount);
                 if ($connectorLen > 0) {
                     if ($isCompleted || $isCurrent) {
                         $connectorColor = $isCompleted ? $this->completedColor : $this->currentColor;
@@ -187,25 +197,24 @@ final class Wizard implements \SugarCraft\Dashboard\Foundation\SizedItem
     }
 
     /**
-     * Calculate connector length based on position and available width.
+     * Calculate connector length for the given width budget.
+     *
+     * The distribution is even: every connector gets the same share of the
+     * space left after the one-cell indicators, floored at 1. (The old
+     * signature carried a $stepIndex parameter and promised extra space to
+     * earlier connectors - neither was ever real: the returned length never
+     * consulted the index.)
      */
-    private function calculateConnectorLength(int $maxWidth, int $stepCount, int $stepIndex): int
+    private function calculateConnectorLength(int $maxWidth, int $stepCount): int
     {
-        // Base calculation: total width minus step indicators, divided among connectors
-        $minStepWidth = 3; // Minimum space for each step indicator
-        $totalStepIndicators = $stepCount * 1; // Each indicator is 1 char
-        $availableForConnectors = $maxWidth - $totalStepIndicators;
+        $availableForConnectors = $maxWidth - $stepCount; // Each indicator is 1 char
         $connectorCount = $stepCount - 1;
 
         if ($connectorCount <= 0 || $availableForConnectors <= 0) {
             return max(0, $availableForConnectors);
         }
 
-        // Distribute remaining space among connectors
-        $baseLength = (int) floor($availableForConnectors / $connectorCount);
-
-        // Give extra space to earlier connectors for better visual balance
-        return max(1, $baseLength);
+        return max(1, (int) floor($availableForConnectors / $connectorCount));
     }
 
     /**
@@ -250,7 +259,7 @@ final class Wizard implements \SugarCraft\Dashboard\Foundation\SizedItem
 
             // Add spacing for next step
             if ($i < $stepCount - 1) {
-                $connectorLen = $this->calculateConnectorLength($maxWidth, $stepCount, $i);
+                $connectorLen = $this->calculateConnectorLength($maxWidth, $stepCount);
                 $spacing = max(1, $connectorLen - strlen((string)($i + 1)) + 1);
                 $result .= str_repeat(' ', $spacing);
             }
@@ -272,7 +281,7 @@ final class Wizard implements \SugarCraft\Dashboard\Foundation\SizedItem
         $offset = 0;
         for ($i = 0; $i < $stepIndex; $i++) {
             $stepLen = 1; // step number
-            $connectorLen = $this->calculateConnectorLength($maxWidth, $stepCount, $i);
+            $connectorLen = $this->calculateConnectorLength($maxWidth, $stepCount);
             $offset += $stepLen + $connectorLen;
         }
 
