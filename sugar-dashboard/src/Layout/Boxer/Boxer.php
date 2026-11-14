@@ -8,6 +8,7 @@ use SugarCraft\Dashboard\Foundation\Drawable;
 use SugarCraft\Dashboard\Foundation\Item;
 use SugarCraft\Dashboard\Foundation\Sizer;
 use SugarCraft\Dashboard\Foundation\Theme;
+use SugarCraft\Dashboard\Layout\Support\PersistState;
 use SugarCraft\Dashboard\State\Persistence;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
@@ -178,7 +179,11 @@ final class Boxer implements Item, Sizer
     public function setSize(int $width, int $height): Sizer
     {
         if ($width <= 0 || $height <= 0) {
-            return new self($this->root, $this->modelMap, 0, 0);
+            // Finding sugar-dashboard-121: the degenerate set used to carry the
+            // previous pass's node sizes into the zero-sized boxer, so a
+            // later re-read saw stale geometry. Collapse the whole subtree
+            // through the public update path instead.
+            return new self($this->root->updateSizeRecursive(0, 0), $this->modelMap, 0, 0);
         }
 
         if ($width === $this->width && $height === $this->height) {
@@ -188,11 +193,18 @@ final class Boxer implements Item, Sizer
         // Update sizes in the tree
         $newRoot = $this->root->updateSizeRecursive($width, $height);
 
-        // If model items are Sizers, propagate size to them
+        // If model items are Sizers, propagate size to them.
+        // Finding sugar-dashboard-121: the lookup used to walk the OLD tree
+        // while the fresh geometry lives on $newRoot, so every model
+        // received last pass's dimensions. One DFS indexes the sized tree;
+        // a repeated setSize then costs O(1) per address instead of O(tree)
+        // per address.
+        $nodeByAddress = $this->indexTree($newRoot);
+
         $newModelMap = [];
         foreach ($this->modelMap as $addr => $item) {
             $addrStr = (string) $addr;
-            $node = $this->findNode($this->root, $addrStr);
+            $node = $nodeByAddress[$addrStr] ?? null;
             $newModelMap[$addrStr] = $item;
             if ($item instanceof Sizer && $node !== null) {
                 $newModelMap[$addrStr] = $item->setSize($node->width(), $node->height());
@@ -200,6 +212,21 @@ final class Boxer implements Item, Sizer
         }
 
         return new self($newRoot, $newModelMap, $width, $height);
+    }
+
+    /**
+     * Index every node of a tree by address in one DFS pass.
+     *
+     * @return array<string, Node>
+     */
+    private function indexTree(Node $node): array
+    {
+        $map = [$node->address() => $node];
+        foreach ($node->children() as $child) {
+            $map += $this->indexTree($child);
+        }
+
+        return $map;
     }
 
     /**
@@ -344,40 +371,7 @@ final class Boxer implements Item, Sizer
 
     // ─── Persistence ─────────────────────────────────────────────
 
-    /**
-     * Persist boxer layout addresses to disk.
-     *
-     * Note: Item content in modelMap is not directly serializable.
-     * Callers should persist any collapsed-panel identifiers (addresses)
-     * through this hook; the modelMap items themselves must be re-built
-     * by the application on restore.
-     *
-     * @param list<string> $collapsedAddresses Addresses of collapsed panels.
-     */
-    public function persistState(Persistence $persistence, string $path, array $collapsedAddresses = []): void
-    {
-        $persistence->save($path, [
-            'collapsedAddresses' => $collapsedAddresses,
-        ]);
-    }
-
-    /**
-     * Restore boxer state from disk.
-     *
-     * Returns the persisted collapsed-addresses list so callers can
-     * rebuild the modelMap appropriately.
-     *
-     * @return list<string> Addresses that were collapsed.
-     */
-    public function restoreState(Persistence $persistence, string $path): array
-    {
-        $data = $persistence->load($path);
-        if ($data === null) {
-            return [];
-        }
-
-        return $data['collapsedAddresses'] ?? [];
-    }
+    use PersistState;
 
     /**
      * Apply a theme, fanning it down to any theme-aware children.

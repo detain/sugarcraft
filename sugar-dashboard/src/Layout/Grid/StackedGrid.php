@@ -9,6 +9,7 @@ use SugarCraft\Dashboard\Output\Truncate;
 use SugarCraft\Dashboard\Foundation\Drawable;
 use SugarCraft\Dashboard\Foundation\Theme;
 use SugarCraft\Dashboard\Layout\Breakpoint;
+use SugarCraft\Dashboard\Layout\Support\PersistState;
 use SugarCraft\Dashboard\State\Persistence;
 use SugarCraft\Style\Layout;
 use SugarCraft\Style\Position;
@@ -350,36 +351,7 @@ final class StackedGrid implements \SugarCraft\Dashboard\Foundation\Sizer
 
     // ─── Persistence ─────────────────────────────────────────────
 
-    /**
-     * Persist stacked grid state to disk.
-     *
-     * Note: Item content is not directly serializable. Callers should
-     * persist collapsed panel identifiers through this hook; items must
-     * be re-built by the application on restore.
-     *
-     * @param list<string> $collapsedAddresses Addresses of collapsed panels.
-     */
-    public function persistState(Persistence $persistence, string $path, array $collapsedAddresses = []): void
-    {
-        $persistence->save($path, [
-            'collapsedAddresses' => $collapsedAddresses,
-        ]);
-    }
-
-    /**
-     * Restore stacked grid state from disk.
-     *
-     * @return list<string> Addresses that were collapsed.
-     */
-    public function restoreState(Persistence $persistence, string $path): array
-    {
-        $data = $persistence->load($path);
-        if ($data === null) {
-            return [];
-        }
-
-        return $data['collapsedAddresses'] ?? [];
-    }
+    use PersistState;
 
     /**
      * Apply a theme, fanning it down to any theme-aware children.
