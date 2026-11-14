@@ -232,4 +232,24 @@ final class NodeTest extends TestCase
         $this->assertSame(0, $collapsed->getWidth());
     }
 
+    /**
+     * D-157: setSize writes the clone, which froze once width/height joined
+     * the class's readonly posture; the rebuild-through-ctor shape is the
+     * contract now.
+     */
+    public function testSetSizeRebuildsThroughTheConstructorAndIsFullyImmutable(): void
+    {
+        $node = (new Node([Node::leaf('0')], true))->setSize(40, 12);
+
+        foreach (['width', 'height'] as $field) {
+            $property = new \ReflectionProperty(Node::class, $field);
+            $this->assertTrue($property->isReadOnly(), $field . ' must be readonly');
+        }
+
+        $this->assertSame(0, Node::leaf('0')->getWidth());
+        $this->assertSame(40, $node->getWidth());
+        $this->assertSame(12, $node->getHeight());
+        $this->assertSame($node, $node->setSize(40, 12), 'equal size keeps identity');
+    }
+
 }

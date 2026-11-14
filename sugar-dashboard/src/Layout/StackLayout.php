@@ -59,7 +59,11 @@ final class StackLayout implements Item, SizedItem
             foreach ($this->items as $item) {
                 $lines[] = $item->render();
             }
-            return implode(str_repeat("\n", max(1, $this->spacing)), $lines);
+            // D-157 (finding 219): one newline always separates two painted
+            // blobs; $spacing then adds its blank rows on top, matching the
+            // vertical path (old max(1, spacing) silently swallowed every
+            // blank row past the first).
+            return implode(str_repeat("\n", 1 + max(0, $this->spacing)), $lines);
         }
 
         if ($this->direction === LayoutDirection::Vertical) {
@@ -172,7 +176,9 @@ final class StackLayout implements Item, SizedItem
     {
         return new self(
             items: $this->items,
-            spacing: $spacing,
+            // D-157: the house clamp every sibling (HStack/VStack/Stack)
+            // already applies — a negative gap is no gap.
+            spacing: max(0, $spacing),
             direction: $this->direction,
         );
     }

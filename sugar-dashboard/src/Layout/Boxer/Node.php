@@ -38,8 +38,11 @@ final class Node implements Item
         private readonly ?\Closure $sizeFunc = null,
         private readonly bool $noBorder = false,
         private readonly string $address = '',
-        private int $width = 0,
-        private int $height = 0,
+        // D-157: the last two open promoted fields on an otherwise-readonly
+        // value tree; setSize now rebuilds through the ctor like every
+        // sibling wither instead of writing the clone.
+        private readonly int $width = 0,
+        private readonly int $height = 0,
     ) {}
 
     // ─── Factory Methods ───────────────────────────────────────────
@@ -195,10 +198,15 @@ final class Node implements Item
             return $this;
         }
 
-        $clone = clone $this;
-        $clone->width = $width;
-        $clone->height = $height;
-        return $clone;
+        return new self(
+            children: $this->children,
+            verticalStacked: $this->verticalStacked,
+            sizeFunc: $this->sizeFunc,
+            noBorder: $this->noBorder,
+            address: $this->address,
+            width: $width,
+            height: $height,
+        );
     }
 
     // ─── Tree Operations ───────────────────────────────────────────

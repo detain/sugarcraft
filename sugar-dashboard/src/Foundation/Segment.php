@@ -47,7 +47,10 @@ final class Segment implements \SugarCraft\Dashboard\Foundation\SizedItem
         '-' => [false, false, false, false, false, false, true],  // G only
         ' ' => [false, false, false, false, false, false, false], // all off
         '°' => [true,  true,  false, false, false, true,  false], // A,B,F (degree)
-        '³' => [false, true,  true,  false, false, true,  true],  // B,C,F,G (superscript 3)
+        // D-157 (finding 219): a superscript three is drawn with the three
+        // family (A,B,C,D,G); the old B,C,F,G entry lit an unrelated segment
+        // set that no seven-segment font spells as '3'.
+        '³' => [true,  true,  true,  true,  false, false, true],   // A,B,C,D,G (superscript 3)
         // D-50 (finding 040) dropped two dead roster entries: the
         // two-character key 'C2' can never match the one-character
         // mb_str_split() walker, and '.' was an all-off entry that

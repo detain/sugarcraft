@@ -402,11 +402,20 @@ final class Layout implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     private function alignVertical(array $lines, int $childHeight, int $layoutHeight, VAlign $align): array
     {
-        $result = [];
-        $padding = max(0, $layoutHeight - count($lines));
+        // D-157 (finding 219): $childHeight is the single height authority.
+        // The old body measured the slack against count($lines) while the
+        // content loop emitted $childHeight rows, so a child that painted
+        // fewer (or more) lines than it had been allotted shifted off its
+        // requested alignment. Normalize first, then split the slack.
+        $content = array_fill(0, $childHeight, '');
+        $take = min($childHeight, count($lines));
+        for ($i = 0; $i < $take; $i++) {
+            $content[$i] = $lines[$i];
+        }
 
+        $padding = max(0, $layoutHeight - $childHeight);
         if ($padding === 0) {
-            return $lines;
+            return $content;
         }
 
         $top = match ($align) {
@@ -415,24 +424,11 @@ final class Layout implements \SugarCraft\Dashboard\Foundation\SizedItem
             VAlign::Middle => (int) floor($padding / 2),
         };
 
-        // Add top padding
-        for ($i = 0; $i < $top; $i++) {
-            $result[] = '';
-        }
-
-        // Add content lines
-        for ($i = 0; $i < $childHeight; $i++) {
-            $result[] = $lines[$i] ?? '';
-        }
-
-        // Add bottom padding
-        $resultCount = count($result);
-        while ($resultCount < $layoutHeight) {
-            $result[] = '';
-            $resultCount++;
-        }
-
-        return $result;
+        return array_merge(
+            array_fill(0, $top, ''),
+            $content,
+            array_fill(0, $padding - $top, ''),
+        );
     }
 
     /**

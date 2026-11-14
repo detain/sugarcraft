@@ -264,4 +264,17 @@ final class SegmentTest extends TestCase
         $this->assertNotSame($s1, $s2);
         $this->assertNotSame($s2, $s3);
     }
+
+    /**
+     * D-157 (finding 219): the superscript three shares the three pattern —
+     * the old B,C,F,G entry lit a segment family no seven-segment digit
+     * spells as '3'.
+     */
+    public function testSuperscriptThreeFollowsTheThreeFamily(): void
+    {
+        $this->assertSame(
+            Segment::new('3')->render(),
+            Segment::new('³')->render(),
+        );
+    }
 }

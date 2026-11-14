@@ -158,6 +158,12 @@ final class KeyMap implements \SugarCraft\Dashboard\Foundation\SizedItem
      * in the class docblock) — the old foreach-over-roster shape implied
      * iteration that could never reach entry two.
      *
+     * L-74 (D-157) contract, stated plainly: when an action runs, slot 0 is
+     * the action's NEW CONTENT item — the KeyMap wrapper (and all bindings)
+     * is NOT re-attached. The caller owns the map for the frame's lifetime
+     * and keeps it while replacing content; the unhandled leg returns this
+     * map unchanged so the two legs stay usable through one list().
+     *
      * @return array{0:Item, 1:bool} [new content, whether a key was handled]
      */
     public function handle(Key $key): array

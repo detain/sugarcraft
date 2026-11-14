@@ -305,4 +305,33 @@ final class LayoutTest extends TestCase
         // Should still render
         $this->assertNotSame('', $layout->render());
     }
+
+    /**
+     * D-157 (finding 219): alignVertical must treat the allotted height, not
+     * the painted line count, as the single height authority — the old body
+     * mixed both, shifting short-painting children off their requested
+     * alignment and leaking surplus rows into the slack split.
+     */
+    public function testAlignVerticalUsesAllottedHeightAsSingleAuthority(): void
+    {
+        $layout = new Layout([new Text('x')], LayoutDirection::Vertical, 0, HAlign::Left, VAlign::Bottom, 10, 6);
+        $method = new \ReflectionMethod(Layout::class, 'alignVertical');
+
+        // Child allotted 4 rows but painted 2: Bottom pushes the whole slot
+        // to the layout's bottom edge; lines fill the slot from its own top
+        // (paint order), so 'a'/'b' ride at the slot's start rows.
+        $under = $method->invoke($layout, ['a', 'b'], 4, 6, VAlign::Bottom);
+        $this->assertCount(6, $under);
+        $this->assertSame(['', '', 'a', 'b', '', ''], $under);
+
+        // Child painted 3 rows but allotted 2: surplus rows are dropped,
+        // alignment is computed from the allotment.
+        $over = $method->invoke($layout, ['a', 'b', 'c'], 2, 5, VAlign::Bottom);
+        $this->assertCount(5, $over);
+        $this->assertSame(['', '', '', 'a', 'b'], $over);
+
+        // Matched inputs keep the historical positions.
+        $matched = $method->invoke($layout, ['a', 'b'], 2, 5, VAlign::Middle);
+        $this->assertSame(['', 'a', 'b', '', ''], $matched);
+    }
 }
