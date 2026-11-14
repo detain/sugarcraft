@@ -21,10 +21,12 @@ use SugarCraft\Readline\TextPrompt;
  * - normal: h/l/0/$/b/w move cursor; j/k step history; i/a/A/I switch to
  *   insert mode; x deletes and p puts via the unnamed register; u undoes;
  *   Enter submits; dd deletes line; yy yanks it;
- *   text objects c/d/y + i/a + target (ci" di( da{ yiw ...) via sugar-forms TextObject
+ *   text objects c/d/y + i/a + target (ci" di( da{ yiw ...) via sugar-forms TextObject;
+ *   Ctrl+C aborts, and `Q` aborts when no operator is half-typed (Escape
+ *   never aborts — it only switches submodes)
  * - visual: v from normal; movement keys reposition the cursor, but the
  *   selection itself is neither rendered nor operated on yet (motion-only
- *   scaffold — there is no d/y-over-selection yet)
+ *   scaffold — there is no d/y-over-selection yet); Ctrl+C aborts
  *
  * Uses VimKeyHandler from sugar-forms for key-to-action mapping.
  *
@@ -124,6 +126,14 @@ final class ViMode implements ModeInterface
 
     private function handleNormalMode(TextPrompt $prompt, string $key): TextPrompt
     {
+        // Abort arms: Ctrl+C always, and `Q` — vim's hard-quit — when no
+        // operator is half-typed. Before these arms normal mode had NO
+        // reachable abort: normalizeKey maps neither, and an unmapped key
+        // swallowed into a state-only return (Escape only leaves insert).
+        if ($key === Key::CtrlC || ($this->pendingMotion === null && $key === 'Q')) {
+            return $this->attachTo($prompt->abort());
+        }
+
         // Handle pending motion (e.g. 'd' was pressed, waiting for second 'd')
         if ($this->pendingMotion !== null) {
             return $this->resolvePendingMotion($prompt, $key);
@@ -362,6 +372,13 @@ final class ViMode implements ModeInterface
         // Escape cancels visual mode back to normal
         if ($key === Key::Escape) {
             return $this->withViMode(self::VI_MODE_NORMAL)->attachTo($prompt);
+        }
+
+        // Ctrl+C aborts from visual as well as normal: without this arm
+        // normalizeKey never mapped it, so the key was swallowed into a
+        // state-only return.
+        if ($key === Key::CtrlC) {
+            return $this->attachTo($prompt->abort());
         }
 
         // Normalize key for VimKeyHandler

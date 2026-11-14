@@ -372,7 +372,7 @@ sequence a terminal can send.
 - Ctrl+Z / Ctrl+Y — undo / redo the last edit run (a run of consecutive typing collapses into one undo step)
 - Ctrl+L — `Readline` clears the screen and repaints the prompt
 - `Key::PageUp` / `Key::PageDown` — jump the selection list by one page
-- `Key::Escape` / `Key::CtrlC` — abort. On a real tty the Ctrl+C chord requires the `-isig` recipe above — with signal generation still on, 0x03 raises SIGINT before the prompt sees it. Inside an attached `EmacsMode`, Escape is the meta prefix instead (a second Escape cancels it); use Ctrl+C to abort there. While an incremental history search is active, Ctrl+C is reclaimed by the search: it cancels back to the pre-search line rather than aborting.
+- `Key::Escape` / `Key::CtrlC` — abort. On a real tty the Ctrl+C chord requires the `-isig` recipe above — with signal generation still on, 0x03 raises SIGINT before the prompt sees it. Inside an attached `EmacsMode`, Escape is the meta prefix instead (a second Escape cancels it); use Ctrl+C to abort there. Inside an attached `ViMode`, Escape only switches submodes (insert→normal, visual→normal) and never aborts; Ctrl+C aborts from every submode, and bare `Q` additionally aborts from normal mode. While an incremental history search is active, Ctrl+C is reclaimed by the search: it cancels back to the pre-search line rather than aborting.
 
 Not every `Ctrl+X` shown has a matching `Key::` constant — there is no
 `Key::CtrlD`, `CtrlL`, `CtrlZ` or `CtrlY`, for example. Those bindings are
@@ -456,12 +456,14 @@ With no mode attached, `TextPrompt` still carries the default GNU-readline
 movement chords (Ctrl+A/E/B/F/P/N) plus arrows, Home/End, space,
 Ctrl+U/K/W/D/H/R/S, Ctrl+Z/Ctrl+Y undo/redo, Ctrl+L screen clear (via
 `Readline`), Tab completion with match cycling, and Escape/Ctrl+C abort.
-Attached modes carry their own state, and `view()` never paints it:
-`mode()` returns the `ModeInterface` object (or null), and the vi submode
-string sits one hop behind it at `mode()?->viMode()` — an accessor only
-`ViMode` defines (`EmacsMode` has no submodes). The prompt renders
-identically across vi submodes, so a host that needs a visible
-`--NORMAL--` marker must read the submode and paint it itself.
+Attached modes carry their own state: `mode()` returns the `ModeInterface`
+object (or null), and the vi submode string sits one hop behind it at
+`mode()?->viMode()` — an accessor only `ViMode` defines (`EmacsMode` has no
+submodes). By default `view()` never paints that state, so the prompt
+renders identically across vi submodes; pass `withModeIndicator()` to make
+`view()` append a dim bottom row reading `--NORMAL--`, `--VISUAL--` or
+`--INSERT--` under a `ViMode`. Hosts that want a custom status line can
+still read the submode and paint it themselves.
 
 ### Incremental history search
 

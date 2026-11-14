@@ -7,6 +7,7 @@ namespace SugarCraft\Readline;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Readline\History\HistoryInterface;
 use SugarCraft\Readline\Mode\ModeInterface;
+use SugarCraft\Readline\Mode\ViMode;
 
 /**
  * Single-line text input with cursor, optional validation, auto-completion,
@@ -120,6 +121,9 @@ final class TextPrompt
     /** Active key-binding mode (vi or emacs), or null for default bindings. */
     private ?ModeInterface $mode = null;
 
+    /** Paint the vi submode indicator row in view(); off by default (BC). */
+    private bool $modeIndicator = false;
+
     /** Undo/redo manager for buffer changes. */
     private ?UndoManager $undoManager = null;
 
@@ -224,10 +228,32 @@ final class TextPrompt
         return $clone;
     }
 
+    /**
+     * Attach a key-binding mode (ViMode or EmacsMode), replacing the
+     * default keymap's Escape-to-abort: in `EmacsMode` Escape arms the
+     * meta prefix (a second Escape cancels it), and in `ViMode` Escape
+     * only switches submodes — it never aborts. Both modes still abort on
+     * Ctrl+C (vi additionally aborts on `Q` in normal mode), but callers
+     * who want the plain Escape-abort affordance should leave the mode
+     * unattached.
+     */
     public function withMode(ModeInterface $mode): self
     {
         $clone = clone $this;
         $clone->mode = $mode;
+        return $clone;
+    }
+
+    /**
+     * Paint the vi submode (`--NORMAL--` / `--VISUAL--` / `--INSERT--`) as
+     * a dim bottom row of view() when a {@see ViMode} is attached, so the
+     * current input state is legible without host-side rendering. Off by
+     * default; without a vi mode attached it paints nothing.
+     */
+    public function withModeIndicator(bool $enabled = true): self
+    {
+        $clone = clone $this;
+        $clone->modeIndicator = $enabled;
         return $clone;
     }
 
@@ -915,6 +941,18 @@ final class TextPrompt
                 $tailCells !== null ? self::clipToCells($autoSuggestText, $tailCells) : $autoSuggestText,
                 '2', // dim style
             );
+        }
+
+        // Optional vi submode indicator (off by default): without it a
+        // keyboard-only or screen-reader user in normal mode sees a dead
+        // prompt with no clue why typing does nothing. Painted as a dim
+        // bottom status row, mirroring vim's own statusline.
+        if ($this->modeIndicator && $this->mode instanceof ViMode) {
+            $lines[] = Ansi::wrap(match ($this->mode->viMode()) {
+                'normal' => '--NORMAL--',
+                'visual' => '--VISUAL--',
+                default  => '--INSERT--',
+            }, '2');
         }
 
         return implode("\n", $lines);
