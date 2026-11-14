@@ -78,7 +78,7 @@ final class DetectTerminfoTest extends TestCase
         $keys = [
             'TMUX', 'TERM', 'TERM_PROGRAM', 'KITTY_WINDOW_ID', 'XTERM_VERSION',
             'LC_TERMINAL', 'PATH', 'NO_COLOR', 'CLICOLOR', 'CLICOLOR_FORCE',
-            'TERMINFO',
+            'TERMINFO', 'COLORTERM', 'FORCE_COLOR',
         ];
         foreach ($keys as $key) {
             $this->savedEnv[$key] = getenv($key);
@@ -90,6 +90,23 @@ final class DetectTerminfoTest extends TestCase
 
         putenv('TERM=susetm');
         $_ENV['TERM'] = 'susetm';
+        // Arm the env-phase lift EXPLICITLY (2026-11-14, F17 ciwatch-1115).
+        // Every double below constructs with TerminalProbe([]) — and [] is
+        // NOT hermetic: the constructor rule resolves an empty map to the
+        // ambient snapshot. sugar-colorprofile's CP-10 floors an
+        // unrecognised TERM — this rig's 'susetm' — onto the ascii rung, and
+        // that verdict GATES Phase 2 (checkTerminfo) inside runProbe, so on a
+        // clean CI runner the canned sixl text never reaches the real matcher
+        // and all six PROMOTE rows of the name-position test read false
+        // (run 43553284139, jobs 132322073983/132323577227/132322397310,
+        // 'false is identical to true'). This devbox was green on the very
+        // same head only because its shell exports COLORTERM=truecolor — an
+        // inherited rung, not an intended premise. Arming the lift here makes
+        // Phase 2 reachable on EVERY host and the pins stop depending on the
+        // developer's terminal; FORCE_COLOR is scrubbed above so no other
+        // ambient rung can swing the same door.
+        putenv('COLORTERM=truecolor');
+        $_ENV['COLORTERM'] = 'truecolor';
         Detect::reset();
         Detect::clearTmuxTermFeaturesOverride();
         Detect::clearTerminfoSixelOverride();
@@ -302,15 +319,18 @@ final class DetectTerminfoTest extends TestCase
         string $entryLine,
         bool $expectPromote,
     ): void {
-        // Capability gate (2026-11-13, same skip shape as the fixture test
-        // below): the promote legs require the REAL roster gate to answer —
-        // TerminalProbe's unfakeable InfocmpBinary::path() step fails CLOSED
-        // before the (faked) exec on any host without a packaged infocmp at
-        // its absolute candidates, so the canned sixl text never reaches the
-        // matcher and all six PROMOTE rows read as false negatives there.
-        // That is exactly the CI ubuntu-26.04 host-data drift (jobs
-        // 81240709/83122655/81601034, 'false is identical to true'); it says
-        // nothing about src, so skip rather than bend the pins.
+        // Capability gate: the promote legs require the REAL roster gate to
+        // answer — TerminalProbe's unfakeable InfocmpBinary::path() step fails
+        // CLOSED before the (faked) exec on any host without a packaged infocmp
+        // at its absolute candidates (PATH-hijack posture, so the seam cannot
+        // restore the arm), and the canned sixl text would never reach the
+        // matcher there. Dated 2026-11-13 for binary-less hosts. Erratum
+        // (2026-11-14): when this first shipped, the ubuntu-26.04 CI reds it
+        // cited (jobs 81240709/83122655/81601034) were attributed to this gate;
+        // the runners DO carry /usr/bin/infocmp — the true cause was CP-10's
+        // ascii floor gating Phase 2 before the binary was ever consulted,
+        // cured by the explicit COLORTERM arm in setUp. The skip stays: it is
+        // still the honest answer on a genuinely binary-less machine.
         if (InfocmpBinary::path() === null) {
             $this->markTestSkipped('the InfocmpBinary gate finds no packaged infocmp on this machine');
         }

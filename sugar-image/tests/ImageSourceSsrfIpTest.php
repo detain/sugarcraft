@@ -77,20 +77,29 @@ final class ImageSourceSsrfIpTest extends TestCase
      */
     public static function embeddedAddressMatrix(): array
     {
-        // The 'nat64 public' verdict follows the host's filter_var reserved
-        // table, not src: PHP's SSRF hardening added 64:ff9b::/96 to the
-        // NO_RES_RANGE set, so on newer hosts the OUTER spelling is refused
-        // whatever the embedded quad says, while older tables keep it public
-        // and the row remains the genuine unwrap pin. Probe with the guard's
-        // exact tail-filter call so the battery is honest on either arm
-        // (CI ubuntu-26.04 drift, 2026-11-13, jobs 81240709/83122655/81601034
-        // — 'verdict drifted' true and 'over-blocked'). The unwrap leg itself
-        // is pinned host-independently by
-        // testNat64TailQuadIsUnwrappedRegardlessOfTheHostFilterTable below,
-        // which is what keeps a deleted NAT64 candidate leg visible even on
-        // hosts where the outer reservation makes every matrix row vacuous.
+        // The 'nat64 public' and 'mapped public' verdicts follow the host's
+        // filter_var reserved table, not src: PHP's SSRF hardening added
+        // 64:ff9b::/96, and RFC 6890 calls ::ffff:0:0/96 (IPv4-mapped)
+        // reserved, so on newer hosts the OUTER spelling is refused whatever
+        // the embedded quad says, while older tables keep it public and the
+        // row remains the genuine unwrap pin. Probe with the guard's exact
+        // tail-filter call — the same final filter_var the src verdict ends
+        // on once the public tail candidate clears — so the battery is honest
+        // on either arm (NAT64: CI drift 2026-11-13, jobs
+        // 81240709/83122655/81601034; mapped: run 43553284139, jobs
+        // 132322073983/132323577227/132322397310 — '::ffff:8.8.8.8 (mapped
+        // public) verdict drifted' true and 'over-blocked'). The unwrap legs
+        // themselves are pinned host-independently by the two companion tests
+        // below, which is what keeps a deleted NAT64- or mapped-candidate leg
+        // visible even on hosts whose reserved table swallows the whole outer
+        // /96 and would make each gate-level row pass vacuously.
         $nat64OuterReserved = filter_var(
             '64:ff9b::8.8.8.8',
+            FILTER_VALIDATE_IP,
+            FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE,
+        ) === false;
+        $mappedOuterReserved = filter_var(
+            '::ffff:8.8.8.8',
             FILTER_VALIDATE_IP,
             FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE,
         ) === false;
@@ -115,7 +124,7 @@ final class ImageSourceSsrfIpTest extends TestCase
             'teredo naive public' => ['2001::808:808', false],
             // The family the guard already knew about.
             'mapped loopback' => ['::ffff:127.0.0.1', true],
-            'mapped public' => ['::ffff:8.8.8.8', false],
+            'mapped public' => ['::ffff:8.8.8.8', $mappedOuterReserved],
             // Semantics the finding must NOT disturb.
             'unspecified' => ['::', true],
             'v6 loopback' => ['::1', true],
@@ -167,6 +176,26 @@ final class ImageSourceSsrfIpTest extends TestCase
         // ones whose reserved table swallows the whole /96 and would make
         // each gate-level row pass vacuously (see embeddedAddressMatrix()).
         $packed = inet_pton('64:ff9b::8.8.8.8');
+        $this->assertIsString($packed);
+
+        $unwrap = new \ReflectionMethod(ImageSource::class, 'embeddedV4Candidates');
+        $unwrap->setAccessible(true);
+
+        $this->assertSame(['8.8.8.8'], $unwrap->invoke(null, $packed));
+    }
+
+    public function testMappedTailQuadIsUnwrappedRegardlessOfTheHostFilterTable(): void
+    {
+        // Mapped-family companion to the NAT64 pin above (2026-11-14, F17):
+        // hosts whose reserved table refuses ::ffff:0:0/96 outright (RFC 6890
+        // calls IPv4-mapped reserved — the same SSRF-hardening family as the
+        // 64:ff9b::/96 leg) block EVERY mapped row at the outer spelling, so
+        // the gate-level battery can no longer witness a deleted ::ffff
+        // candidate leg there. The byte math pinned below is pure src (no
+        // filter_var verdict involved), so a regression in the mapped
+        // str_starts_with leg reddens HERE on every host — including the CI
+        // arms where each outer-reserved matrix row is vacuous.
+        $packed = inet_pton('::ffff:8.8.8.8');
         $this->assertIsString($packed);
 
         $unwrap = new \ReflectionMethod(ImageSource::class, 'embeddedV4Candidates');
