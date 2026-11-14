@@ -251,6 +251,16 @@ and pass the result to `withDisplayWidth()`. An
 explicit width always survives: a non-zero bound is kept as given, and an
 explicit `0` is honoured as a deliberate unbounded choice, never
 overwritten by adoption.
+The same adoption exists vertically: the list prompts (`SelectionPrompt`,
+`MultiSelectPrompt`) and `TextareaPrompt` accept `withViewportRows($rows)`
+/ `viewportRows()`, and an unset state adopts the terminal's row count the
+same way — `LINES` first, then the `TIOCGWINSZ` probe of the output stream.
+Choices-per-page shrink to fit (label, filter bar and page footer stay
+visible); the textarea windows its lines around the cursor with `…`
+indicator rows. On tiny terminals (under 5 rows) the indicators are gated
+off and a page floors at one choice — the frame never renders empty, but
+it may exceed such a screen by a row or two; size the terminal up or pass
+`withViewportRows(0)` to opt out.
 Multi-line textarea output and wrapped labels can still exceed the window —
 long **prompts** (labels) are the host's layout responsibility either way.
 

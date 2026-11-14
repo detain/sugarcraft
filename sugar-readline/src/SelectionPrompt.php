@@ -31,6 +31,9 @@ final class SelectionPrompt
     /** @var int|null Display bound in cells; null = unset (width-adoption eligible), 0 = explicit unbounded. */
     private ?int $displayWidth = null;
 
+    /** @var int|null Terminal row budget; null = unset (height-adoption eligible), 0 = explicit unbounded. */
+    private ?int $viewportRows = null;
+
     private string $cursorStyle = '7';     // reverse
     private string $labelStyle  = '1;36';  // bold cyan
 
@@ -91,6 +94,38 @@ final class SelectionPrompt
     public function displayWidth(): ?int
     {
         return $this->displayWidth;
+    }
+
+    /**
+     * Bound the painted height to $rows terminal rows. The list chrome
+     * (label + filter bar + page footer) is reserved, so at most
+     * `max(1, $rows - 3)` choices paint per page. Pass 0 or null for an
+     * unbounded page; null is the adoption-eligible state that
+     * {@see Readline::run()} fills from the terminal row count. A terminal
+     * shorter than the chrome is gated: the page still shows one choice
+     * (never an empty frame) and relies on paging.
+     */
+    public function withViewportRows(?int $rows): self
+    {
+        $clone = clone $this;
+        $clone->viewportRows = $rows === null ? null : max(0, $rows);
+        $clone->reclampPage();
+        return $clone;
+    }
+
+    /** Current row budget; null = unset (adoption-eligible), 0 = explicit unbounded. */
+    public function viewportRows(): ?int
+    {
+        return $this->viewportRows;
+    }
+
+    /** Effective choices-per-page after the height clamp. */
+    private function effectivePageSize(): int
+    {
+        if ($this->viewportRows === null || $this->viewportRows <= 0) {
+            return $this->pageSize;
+        }
+        return max(1, min($this->pageSize, $this->viewportRows - 3));
     }
 
     // -------------------------------------------------------------------------
@@ -196,14 +231,14 @@ final class SelectionPrompt
 
     public function totalPages(): int
     {
-        return max(1, (int) ceil(count($this->filtered) / $this->pageSize));
+        return max(1, (int) ceil(count($this->filtered) / $this->effectivePageSize()));
     }
 
     /** @return list<string> The slice of filtered choices on the current page. */
     public function currentPageItems(): array
     {
-        $offset = $this->page * $this->pageSize;
-        $slice  = array_slice($this->filtered, $offset, $this->pageSize);
+        $offset = $this->page * $this->effectivePageSize();
+        $slice  = array_slice($this->filtered, $offset, $this->effectivePageSize());
         return array_map(fn(int $i): string => $this->choices[$i], $slice);
     }
 
@@ -227,8 +262,8 @@ final class SelectionPrompt
             return implode("\n", $lines);
         }
 
-        $offset = $this->page * $this->pageSize;
-        $end    = min($offset + $this->pageSize, count($this->filtered));
+        $offset = $this->page * $this->effectivePageSize();
+        $end    = min($offset + $this->effectivePageSize(), count($this->filtered));
         for ($i = $offset; $i < $end; $i++) {
             $value  = Ansi::sanitize($this->choices[$this->filtered[$i]]);
             $marker = $i === $this->cursor ? '❯ ' : '  ';
@@ -264,7 +299,7 @@ final class SelectionPrompt
         }
         $clone = clone $this;
         $clone->cursor = $clamped;
-        $clone->page   = intdiv($clamped, $clone->pageSize);
+        $clone->page   = intdiv($clamped, $clone->effectivePageSize());
         return $clone;
     }
 
@@ -279,8 +314,8 @@ final class SelectionPrompt
         $clone = clone $this;
         $clone->page   = $clamped;
         $clone->cursor = max(
-            $clamped * $clone->pageSize,
-            min(($clamped + 1) * $clone->pageSize - 1, count($clone->filtered) - 1),
+            $clamped * $clone->effectivePageSize(),
+            min(($clamped + 1) * $clone->effectivePageSize() - 1, count($clone->filtered) - 1),
         );
         return $clone;
     }
@@ -296,7 +331,7 @@ final class SelectionPrompt
         }
         $this->cursor = max(0, min($count - 1, $this->cursor));
         // Re-derive page from cursor (consistent with moveCursorTo)
-        $this->page = intdiv($this->cursor, $this->pageSize);
+        $this->page = intdiv($this->cursor, $this->effectivePageSize());
         // Finally clamp page to valid range
         $this->page = min($this->page, max(0, $this->totalPages() - 1));
     }

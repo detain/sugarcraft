@@ -325,6 +325,7 @@ final class Readline
     public function run(object $prompt, $output = null): object
     {
         $prompt = $this->fitPromptToWidth($prompt, $output);
+        $prompt = $this->fitPromptToHeight($prompt, $output);
         $bracketedPaste = $this->enableBracketedPaste($output);
         $kittyKeyboard = $this->enableKittyKeyboard($output);
         try {
@@ -418,6 +419,67 @@ final class Readline
         $columns = $this->resolveColumns($output, $columnsOverride);
 
         return $columns > 0 ? $prompt->withDisplayWidth($columns) : $prompt;
+    }
+
+    /**
+     * Resolve the terminal row count for height clamping — the vertical
+     * twin of {@see resolveColumns()}.
+     *
+     * Precedence: `$rowsOverride` (test/resize seam) > strict positive
+     * `LINES` env > `TIOCGWINSZ` probe of a TTY output > `0` (unknown,
+     * render unbounded). A short terminal must never receive more painted
+     * rows than it has: `CSI nA` can only climb visible rows, so a frame
+     * taller than the screen scrolls and every later erase maths desyncs
+     * into residue.
+     *
+     * @param resource|null $output        Stream to probe when non-TTY-less.
+     * @param int|null      $rowsOverride  Test seam; null = normal resolution.
+     */
+    private function resolveRows($output, ?int $rowsOverride = null): int
+    {
+        if ($rowsOverride !== null) {
+            return $rowsOverride;
+        }
+
+        $env = getenv('LINES');
+        if ($env !== false && $env !== '' && preg_match('/^\d+$/', $env) === 1) {
+            $rows = (int) $env;
+            if ($rows > 0) {
+                return $rows;
+            }
+        }
+
+        if (is_resource($output) && stream_isatty($output)) {
+            try {
+                $size = (new Tty($output))->size();
+                if (isset($size['rows']) && $size['rows'] > 0) {
+                    return (int) $size['rows'];
+                }
+            } catch (\Throwable $e) {
+                // Fall through to the unbounded default.
+            }
+        }
+
+        return 0;
+    }
+
+    /**
+     * Give height-aware prompts the terminal's row budget when they have
+     * not chosen one (see each prompt's withViewportRows() for the derived
+     * clamp). All three list/text prompts implement the pair; the
+     * is_callable guard stays the BC seam for foreign prompt objects.
+     */
+    private function fitPromptToHeight(object $prompt, $output = null, ?int $rowsOverride = null): object
+    {
+        if (!is_callable([$prompt, 'withViewportRows'])
+            || !is_callable([$prompt, 'viewportRows'])
+            || $prompt->viewportRows() !== null) {
+            return $prompt;
+        }
+
+        $rows = $this->resolveRows($output, $rowsOverride);
+
+        return $rows > 0 ? $prompt->withViewportRows($rows) : $prompt;
     }
 
     /**

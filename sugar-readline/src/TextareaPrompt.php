@@ -34,6 +34,9 @@ final class TextareaPrompt
     /** @var int|null Display bound in cells; null = unset (width-adoption eligible), 0 = explicit unbounded. */
     private ?int $displayWidth = null;
 
+    /** @var int|null Terminal row budget; null = unset (height-adoption eligible), 0 = explicit unbounded. */
+    private ?int $viewportRows = null;
+
     public function __construct(private readonly string $label) {}
 
     public static function new(string $label): self
@@ -214,8 +217,14 @@ final class TextareaPrompt
     {
         $bound = $this->displayWidth;
         $out = [RowFit::row([[Ansi::sanitize($this->label), $this->labelStyle]], $bound)];
-        foreach ($this->lines as $i => $text) {
-            $text = Ansi::sanitize($text);
+
+        [$first, $limit, $showIndicators] = $this->paintWindow();
+        $last = min(count($this->lines), $first + $limit);
+        if ($showIndicators && $first > 0) {
+            $out[] = RowFit::row([['…', null]], $bound);
+        }
+        for ($i = $first; $i < $last; $i++) {
+            $text = Ansi::sanitize($this->lines[$i]);
             if ($i !== $this->line) {
                 $out[] = RowFit::row([[$text, null]], $bound);
                 continue;
@@ -229,7 +238,65 @@ final class TextareaPrompt
                 [$after, null],
             ], $bound);
         }
+        if ($showIndicators && $last < count($this->lines)) {
+            $out[] = RowFit::row([['…', null]], $bound);
+        }
         return implode("\n", $out);
+    }
+
+    /**
+     * Which lines the frame paints: [first, count, indicators?].
+     *
+     * The budget is rows minus the label and (when both ends are cut) the
+     * two `…` indicator rows — hence rows-3 when indicators are allowed.
+     * Below 5 rows there is no room to hint at hidden lines without
+     * eating the body, so indicators are gated off and the window is a
+     * single line around the cursor (tiny-terminal gate, documented in
+     * the README).
+     *
+     * @return array{0:int,1:int,2:bool}
+     */
+    private function paintWindow(): array
+    {
+        $rows = $this->viewportRows;
+        $total = count($this->lines);
+        if ($rows === null || $rows <= 0 || $total <= 1) {
+            return [0, max(1, $total), false];
+        }
+
+        $bodyCap = max(1, $rows - 3);
+        $indicators = $rows >= 5;
+
+        $first = min($this->line, max(0, $total - $bodyCap));
+        if ($this->line >= $first + $bodyCap) {
+            $first = $this->line - $bodyCap + 1;
+        }
+        $first = max(0, min($first, $total - 1));
+
+        if ($total <= $bodyCap) {
+            return [0, $total, false];
+        }
+
+        return [$first, $bodyCap, $indicators];
+    }
+
+    /**
+     * Bound the painted height to $rows terminal rows (label and scroll
+     * indicators included in the budget). Mirrors the width surface: 0 or
+     * null renders every line unbounded, null being the adoption-eligible
+     * state {@see Readline::run()} fills from the terminal row count.
+     */
+    public function withViewportRows(?int $rows): self
+    {
+        $clone = clone $this;
+        $clone->viewportRows = $rows === null ? null : max(0, $rows);
+        return $clone;
+    }
+
+    /** Current row budget; null = unset (adoption-eligible), 0 = explicit unbounded. */
+    public function viewportRows(): ?int
+    {
+        return $this->viewportRows;
     }
 
     /**
