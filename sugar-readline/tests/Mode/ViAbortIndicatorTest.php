@@ -99,7 +99,7 @@ final class ViAbortIndicatorTest extends TestCase
         fclose($pair[1]);
 
         $prompt = TextPrompt::new('> ')->withMode(new ViMode());
-        $final = (new Readline(new StreamInputDriver($pair[0])))->run($prompt, null);
+        $final = (new Readline(new StreamInputDriver($pair[0])))->run($prompt, null)->prompt;
         fclose($pair[0]);
 
         $this->assertTrue($final->isAborted(), 'ESC then Ctrl+C through the pump aborts the vi prompt');

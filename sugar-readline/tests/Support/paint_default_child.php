@@ -31,4 +31,4 @@ $second = $mode === 'null'
     ? $readline->run(TextPrompt::new('b: '), null)
     : $readline->run(TextPrompt::new('b: '));
 
-echo 'DONE|' . $first->value() . '|' . $second->value() . "\n";
+echo 'DONE|' . $first->value . '|' . $second->value . "\n";

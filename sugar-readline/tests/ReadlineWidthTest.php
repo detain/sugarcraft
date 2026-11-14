@@ -31,7 +31,7 @@ final class ReadlineWidthTest extends TestCase
     {
         fwrite($inWrite, $input);
         $driver = new StreamInputDriver($inRead);
-        $final = (new Readline($driver))->run($prompt, $outWrite);
+        $final = (new Readline($driver))->run($prompt, $outWrite)->prompt;
 
         stream_set_blocking($outRead, false);
         $captured = '';

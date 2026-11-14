@@ -124,7 +124,7 @@ final class PromptHeightClampTest extends TestCase
             fwrite($iw, "\r");
             fclose($iw);
             $driver = new StreamInputDriver($ir);
-            $final = (new Readline($driver))->run(SelectionPrompt::new('> ', self::choices(12)), $ow);
+            $final = (new Readline($driver))->run(SelectionPrompt::new('> ', self::choices(12)), $ow)->prompt;
             $this->assertSame(8, $final->viewportRows(), 'unset budget adopts LINES on the height path');
             $this->assertSame(3, $final->totalPages());
         } finally {
@@ -158,7 +158,7 @@ final class PromptHeightClampTest extends TestCase
             fwrite($iw, $input);
             fclose($iw);
             $driver = new StreamInputDriver($ir);
-            $final = (new Readline($driver))->run(SelectionPrompt::new('> ', self::choices(12)), $ow);
+            $final = (new Readline($driver))->run(SelectionPrompt::new('> ', self::choices(12)), $ow)->prompt;
             $this->assertSame(8, $final->viewportRows());
 
             fclose($ow);

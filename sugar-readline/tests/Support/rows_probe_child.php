@@ -36,6 +36,6 @@ if ($rows !== 12) {
 $prompt = (new Readline())->run(
     SelectionPrompt::new('> ', array_map(static fn(int $i): string => "choice-{$i}", range(1, 30))),
     STDOUT
-);
+)->prompt;
 
 echo 'ROWS=' . var_export($prompt->viewportRows(), true) . "\n";

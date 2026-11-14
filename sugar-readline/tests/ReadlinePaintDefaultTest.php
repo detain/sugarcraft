@@ -49,7 +49,7 @@ final class ReadlinePaintDefaultTest extends TestCase
         [$w, $r] = $pair;
         \fwrite($w, "hi\r");
         \fclose($w);
-        $final = (new Readline(new StreamInputDriver($r)))->run(new TextPrompt('> '), null);
+        $final = (new Readline(new StreamInputDriver($r)))->run(new TextPrompt('> '), null)->prompt;
         \fclose($r);
         self::assertTrue($final->isSubmitted());
         self::assertSame('hi', $final->value());

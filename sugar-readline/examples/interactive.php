@@ -54,20 +54,20 @@ $readline = Readline::fromStdin()
 $prompt = TextPrompt::new('> ')->withHistory($history);
 
 while (true) {
-    $prompt = Readline::interactive($prompt, STDOUT, $readline);
+    $result = Readline::interactive($prompt, STDOUT, $readline);
 
-    if ($prompt->isAborted()) {
+    if ($result->aborted) {
         echo "\n[aborted — empty input]\n";
         break;
     }
 
-    if (!$prompt->isSubmitted()) {
+    if (!$result->submitted) {
         // True EOF: the owned pump has nothing left to read.
         echo "\n[end of input]\n";
         break;
     }
 
-    $value = $prompt->value();
+    $value = $result->value;
     echo "\n[submitted: '$value']\n";
 
     if ($value === 'quit') {

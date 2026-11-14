@@ -20,6 +20,6 @@ if (!stream_isatty(STDOUT)) {
     exit(0);
 }
 
-$prompt = (new Readline())->run(TextPrompt::new('> '), STDOUT);
+$prompt = (new Readline())->run(TextPrompt::new('> '), STDOUT)->prompt;
 
 echo 'FINAL submitted=' . var_export($prompt->isSubmitted(), true) . "\n";

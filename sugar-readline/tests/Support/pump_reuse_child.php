@@ -28,9 +28,9 @@ $readline = new Readline(null, static function (): never {
     exit(7);
 });
 
-$first = $readline->run(TextPrompt::new('a: '), null);
-$second = $readline->run(TextPrompt::new('b: '), null);
-$third = $readline->run(TextPrompt::new('c: '), null);
+$first = $readline->run(TextPrompt::new('a: '), null)->prompt;
+$second = $readline->run(TextPrompt::new('b: '), null)->prompt;
+$third = $readline->run(TextPrompt::new('c: '), null)->prompt;
 
 echo 'GOT|' . $first->value() . '|' . $second->value() . '|' . $third->value() . '|'
     . ($first->isSubmitted() && $second->isSubmitted() ? 'submitted=y' : 'submitted=n')

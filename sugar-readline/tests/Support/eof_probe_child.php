@@ -20,7 +20,7 @@ $readline = new Readline(null, static function (): never {
     exit(7);
 });
 
-$prompt = $readline->run(TextPrompt::new('> '), null);
+$prompt = $readline->run(TextPrompt::new('> '), null)->prompt;
 
 echo 'RETURNED submitted=' . var_export($prompt->isSubmitted(), true)
     . ' aborted=' . var_export($prompt->isAborted(), true) . "\n";

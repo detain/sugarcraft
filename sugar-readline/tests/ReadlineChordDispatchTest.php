@@ -43,7 +43,7 @@ final class ReadlineChordDispatchTest extends TestCase
         fclose($pair[1]);
 
         $readline = new Readline(new StreamInputDriver($pair[0]));
-        $final = $readline->run($prompt ?? TextPrompt::new('> '), $output);
+        $final = $readline->run($prompt ?? TextPrompt::new('> '), $output)->prompt;
         fclose($pair[0]);
 
         $this->assertInstanceOf(TextPrompt::class, $final);
@@ -256,7 +256,7 @@ final class ReadlineChordDispatchTest extends TestCase
             ->onKey('escape', static function () use (&$fired): void {
                 $fired = true;
             });
-        $final = $readline->run(TextPrompt::new('> '), null);
+        $final = $readline->run(TextPrompt::new('> '), null)->prompt;
 
         fclose($pair[0]);
         $this->assertTrue($fired, "onKey('escape') must reach the ESC dispatch (name normalized at registration)");
@@ -276,7 +276,7 @@ final class ReadlineChordDispatchTest extends TestCase
 
         $output = fopen('php://memory', 'w+');
         $readline = new Readline(new StreamInputDriver($pair[0]));
-        $final = $readline->run(TextPrompt::new('> '), $output);
+        $final = $readline->run(TextPrompt::new('> '), $output)->prompt;
 
         fclose($pair[0]);
         rewind($output);
@@ -354,7 +354,7 @@ final class ReadlineChordDispatchTest extends TestCase
         $readline = new Readline(new StreamInputDriver($pair[0]));
         $prompt = SelectionPrompt::new('Fruit: ', ['Apple', 'Banana', 'Cherry']);
         /** @var SelectionPrompt $final */
-        $final = $readline->run($prompt, null);
+        $final = $readline->run($prompt, null)->prompt;
 
         fclose($pair[0]);
         $this->assertTrue($final->isSubmitted());
@@ -369,7 +369,7 @@ final class ReadlineChordDispatchTest extends TestCase
 
         $readline = new Readline(new StreamInputDriver($pair[0]));
         /** @var SelectionPrompt $final */
-        $final = $readline->run(SelectionPrompt::new('Fruit: ', ['Apple', 'Banana', 'Cherry']));
+        $final = $readline->run(SelectionPrompt::new('Fruit: ', ['Apple', 'Banana', 'Cherry']))->prompt;
 
         fclose($pair[0]);
         $this->assertTrue($final->isSubmitted());
@@ -403,7 +403,7 @@ final class ReadlineChordDispatchTest extends TestCase
                 }
             },
         );
-        $final = $readline->run(TextPrompt::new('> '), null);
+        $final = $readline->run(TextPrompt::new('> '), null)->prompt;
         fclose($pair[0]);
 
         $this->assertSame('z', $final->value(), 'bytes before the EOF must still be delivered');

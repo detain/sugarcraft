@@ -36,10 +36,10 @@ if ($mode === 'cooked') {
     exit(0);
 }
 
-$prompt = Readline::interactive(new TextPrompt('> '), STDOUT, $readline);
+$result = Readline::interactive(new TextPrompt('> '), STDOUT, $readline);
 
-echo 'PROBE submitted=' . var_export($prompt->isSubmitted(), true)
-    . ' aborted=' . var_export($prompt->isAborted(), true) . "\n";
+echo 'PROBE submitted=' . var_export($result->submitted, true)
+    . ' aborted=' . var_export($result->aborted, true) . "\n";
 
 $after = trim((string) shell_exec('stty -a 2>/dev/null'));
 $canonical = str_contains($after, 'icanon') && !str_contains($after, '-icanon');

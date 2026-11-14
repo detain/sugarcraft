@@ -33,6 +33,6 @@ if ($cols !== 37) {
     exit(0);
 }
 
-$prompt = (new Readline())->run(TextPrompt::new('> '), STDOUT);
+$prompt = (new Readline())->run(TextPrompt::new('> '), STDOUT)->prompt;
 
 echo 'WIDTH=' . var_export($prompt->displayWidth(), true) . "\n";

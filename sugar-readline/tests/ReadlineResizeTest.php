@@ -46,7 +46,7 @@ final class ReadlineResizeTest extends TestCase
     /** @return array{0:array<Event|null>} */
     private function runCapture(array $events, object $prompt, $sink, $cap): array
     {
-        $final = (new Readline($this->scriptedDriver($events)))->run($prompt, $sink);
+        $final = (new Readline($this->scriptedDriver($events)))->run($prompt, $sink)->prompt;
 
         stream_set_blocking($cap, false);
         $captured = '';
@@ -186,7 +186,7 @@ final class ReadlineResizeTest extends TestCase
         try {
             fwrite($pair[1], "hi\r");
             $driver = new StreamInputDriver($pair[0]);
-            $final = (new Readline($driver))->run(new TextPrompt('> '), $sink);
+            $final = (new Readline($driver))->run(new TextPrompt('> '), $sink)->prompt;
             $this->assertSame(40, $final->displayWidth());
             stream_set_blocking($cap, false);
             $captured = (string) stream_get_contents($cap);

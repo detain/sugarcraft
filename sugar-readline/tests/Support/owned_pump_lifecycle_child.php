@@ -32,12 +32,12 @@ $readline = new Readline(null, static function (): never {
 });
 
 if ($mode === 'queued') {
-    $first = $readline->run(TextPrompt::new('A'), null);
+    $first = $readline->run(TextPrompt::new('A'), null)->prompt;
     echo 'P1|' . $first->value() . "\n";
-    $second = $readline->run(TextPrompt::new('B'), null);
+    $second = $readline->run(TextPrompt::new('B'), null)->prompt;
     echo 'P2|' . $second->value() . "\n";
 } else {
-    $prompt = $readline->run(TextPrompt::new('A'), null);
+    $prompt = $readline->run(TextPrompt::new('A'), null)->prompt;
     echo 'P1|' . $prompt->value() . "\n";
 }
 

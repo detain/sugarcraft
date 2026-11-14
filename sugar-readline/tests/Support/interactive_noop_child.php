@@ -24,5 +24,5 @@ $prompt = Readline::interactive(new TextPrompt('> '), null, new Readline($driver
 $owned = (new ReflectionClass(Readline::class))->getStaticPropertyValue('rawOwned');
 
 echo 'OWNED=' . var_export($owned, true)
-    . ' SUBMITTED=' . var_export($prompt->isSubmitted(), true)
-    . ' VALUE=' . var_export($prompt->value(), true) . "\n";
+    . ' SUBMITTED=' . var_export($prompt->submitted, true)
+    . ' VALUE=' . var_export($prompt->value, true) . "\n";

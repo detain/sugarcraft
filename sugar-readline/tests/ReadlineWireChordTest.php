@@ -40,7 +40,7 @@ final class ReadlineWireChordTest extends TestCase
         fclose($pair[1]);
 
         $readline = new Readline(new StreamInputDriver($pair[0]));
-        $final = $readline->run($prompt ?? TextareaPrompt::new('> '), $output);
+        $final = $readline->run($prompt ?? TextareaPrompt::new('> '), $output)->prompt;
         fclose($pair[0]);
 
         $this->assertInstanceOf(TextareaPrompt::class, $final);

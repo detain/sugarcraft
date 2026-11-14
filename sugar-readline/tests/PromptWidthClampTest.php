@@ -160,7 +160,7 @@ final class PromptWidthClampTest extends TestCase
                 fwrite($iw, "\r");
                 fclose($iw);
                 $driver = new StreamInputDriver($ir);
-                $final = (new Readline($driver))->run($prompt, $ow);
+                $final = (new Readline($driver))->run($prompt, $ow)->prompt;
                 $this->assertSame(32, $final->displayWidth(), "{$name} must adopt COLUMNS via run()");
                 fclose($ir);
                 fclose($ow);
@@ -217,7 +217,7 @@ final class PromptWidthClampTest extends TestCase
             fwrite($iw, "\r");
             fclose($iw);
             $driver = new StreamInputDriver($ir);
-            $final = (new Readline($driver))->run($prompt, $ow);
+            $final = (new Readline($driver))->run($prompt, $ow)->prompt;
             $this->assertTrue($final->submitted);
             $this->assertFalse(method_exists($prompt, 'displayWidth'));
         } finally {
@@ -250,7 +250,7 @@ final class PromptWidthClampTest extends TestCase
             // First choice contains the filter as a prefix so every keystroke
             // keeps at least one match (a 0-match filter vetoes submit()).
             $prompt = SelectionPrompt::new('> ', [self::LONG_FILTER . '-tail', self::LONG_CHOICE])->withDisplayWidth(40);
-            $final = (new Readline($driver))->run($prompt, $ow);
+            $final = (new Readline($driver))->run($prompt, $ow)->prompt;
             $this->assertSame(40, $final->displayWidth());
 
             fclose($ow);

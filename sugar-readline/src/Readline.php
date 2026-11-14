@@ -185,9 +185,9 @@ final class Readline
      *                            (and its already-decoded trailing bytes, see
      *                            run()) survives between iterations. Null
      *                            builds a fromStdin().
-     * @return object The final prompt state, exactly as run() returns it.
+     * @return ReadlineResult The final outcome, exactly as run() returns it.
      */
-    public static function interactive(object $prompt, $output = null, ?self $readline = null): object
+    public static function interactive(object $prompt, $output = null, ?self $readline = null): ReadlineResult
     {
         self::enterRawMode();
         try {
@@ -359,7 +359,9 @@ final class Readline
      *
      * The flag LATCHES: stop() is one-shot per instance — a stopped
      * instance never polls again, and there is no resume. Construct a
-     * fresh Readline to restart prompting.
+     * fresh Readline to restart prompting. The latch is visible rather
+     * than folklore (finding 081): every run() after stop() returns a
+     * ReadlineResult with stopped=true and reads no input.
      */
     public function stop(): void
     {
@@ -489,10 +491,11 @@ final class Readline
      * @param resource|null $output Output stream for repainting; omitting it
      *                              paints to STDOUT, an explicit null paints
      *                              nothing (headless driving).
-     * @return object  The final prompt state after the user submits, aborts,
-     *                 stop() fires, or the owned pump reaches EOF
+     * @return ReadlineResult The typed outcome (finding 081): submitted,
+     *                        aborted, the stop() latch, the answer value and
+     *                        the final prompt state.
      */
-    public function run(object $prompt, mixed $output = self::PAINT_DEFAULT): object
+    public function run(object $prompt, mixed $output = self::PAINT_DEFAULT): ReadlineResult
     {
         // Frame contract (finding 080): each run() starts its frame series
         // from row 0 — a host that wrote to the same stream between submits
@@ -543,7 +546,7 @@ final class Readline
         $bracketedPaste = $this->enableBracketedPaste($output, $this->dumbTerm);
         $kittyKeyboard = $this->enableKittyKeyboard($output, $this->dumbTerm);
         try {
-            return $this->runLoop($prompt, $output);
+            return ReadlineResult::fromPrompt($this->runLoop($prompt, $output), $this->stopped);
         } finally {
             // LIFO teardown: the kitty flag was the last layer pushed, so it
             // pops first — same exit-path discipline as the paste restore.

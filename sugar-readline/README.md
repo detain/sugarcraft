@@ -43,8 +43,9 @@ boot from `vendor/autoload.php`.
 Each prompt is a pure state machine: feed it key characters and it returns a
 new prompt. `Readline` is the terminal loop that does the feeding — it reads
 keypresses through `sugar-input`'s `InputDriver`, repaints the prompt's
-`view()` after every change, and returns the prompt once it is submitted or
-aborted. `run()` paints to STDOUT when the output argument is omitted;
+`view()` after every change, and returns a typed `ReadlineResult` once the prompt
+is submitted or aborted: `submitted`, `aborted`, `stopped` (the one-shot `stop()`
+latch), `value` (the answer) and `prompt` (the final state machine). `run()` paints to STDOUT when the output argument is omitted;
 pass your own stream handle to paint elsewhere, or an explicit `null` to advance
 state without writing anything (the headless shape the tests use). Each `run()`
 starts its repaint series from row 0 of the display — never write to the output
@@ -58,10 +59,10 @@ the loop with the raw-mode flip and restore the key chords need (see
 use SugarCraft\Readline\Readline;
 use SugarCraft\Readline\TextPrompt;
 
-$prompt = Readline::interactive(TextPrompt::new('Enter your name: '), STDOUT);
+$result = Readline::interactive(TextPrompt::new('Enter your name: '), STDOUT);
 
-if ($prompt->isSubmitted()) {
-    echo $prompt->value() . "\n";
+if ($result->submitted) {
+    echo $result->value . "\n";
 }
 ```
 
@@ -86,13 +87,13 @@ gets identical state without the cursor traffic.
 use SugarCraft\Readline\Readline;
 use SugarCraft\Readline\TextPrompt;
 
-$prompt = Readline::fromStdin()->run(
+$result = Readline::fromStdin()->run(
     TextPrompt::new('Enter your name: ')
         ->withDefault('Anonymous')
         ->withCompletions(['Alice', 'Bob', 'Carol']),
     STDOUT
 );
-// 'Alice' after typing + Tab + Enter
+echo $result->value;  // 'Alice' after typing + Tab + Enter
 ```
 
 The remaining prompt surface is all fluent — every setter returns a new
@@ -143,7 +144,7 @@ $result = Readline::fromStdin()->run(
     SelectionPrompt::new('Choose a fruit:', ['Apple', 'Banana', 'Cherry', 'Date']),
     STDOUT
 );
-echo $result->selectedValue();  // 'Banana' after typing 'an' + Enter
+echo $result->value;      // 'Banana' after typing 'an' + Enter
 ```
 
 ### Multi-Select Prompt
@@ -157,7 +158,7 @@ $result = Readline::fromStdin()->run(
         ->withMinSelections(1),
     STDOUT
 );
-print_r($result->selectedValues());  // ['A', 'B'] after Space + navigation + Enter
+print_r($result->value);  // ['A', 'B'] after Space + navigation + Enter
 ```
 
 ### Textarea Prompt
@@ -170,7 +171,7 @@ $result = Readline::fromStdin()->run(
     TextareaPrompt::new('Describe:')->withMaxLines(5),
     STDOUT
 );
-print_r($result->lines());  // edited multi-line text
+print_r($result->prompt->lines());  // edited multi-line text
 ```
 
 `TextareaPrompt::new()` takes only the label — a textarea has no choices.
@@ -196,7 +197,7 @@ $result = Readline::fromStdin()->run(
     ConfirmationPrompt::new('Delete file?'),
     STDOUT
 );
-echo $result->result() ? 'yes' : 'no';  // 'yes' or 'no'
+echo $result->value ? 'yes' : 'no';  // 'yes' or 'no'
 ```
 
 `ConfirmationPrompt::withHint(string)` paints a hint row (e.g. "Press
@@ -222,7 +223,7 @@ $result = Readline::fromStdin()
     ->onKey('ctrl_u', fn($event) => print("cleared\n"))
     ->run(TextPrompt::new('> '), STDOUT);
 
-echo $result->value();
+echo $result->value;
 ```
 
 `onMouse()`, `onFocus()` and `onPaste()` register the same way for mouse
@@ -317,7 +318,7 @@ if ($isTty) {
     shell_exec('stty -icanon -echo -isig -ixon min 1 time 0');
 }
 try {
-    $prompt = Readline::fromStdin()->run(TextPrompt::new('> '), STDOUT);
+    $result = Readline::fromStdin()->run(TextPrompt::new('> '), STDOUT);
 } finally {
     if ($isTty && $saved !== '') {
         shell_exec('stty ' . escapeshellarg($saved));
@@ -373,7 +374,7 @@ fwrite($pair[1], "hello\x0d");   // \x0d = Enter
 fclose($pair[1]);
 $readline = new Readline(new SugarCraft\Input\Driver\StreamInputDriver($pair[0]));
 $result = $readline->run(TextPrompt::new('> '));
-// $result->value() === 'hello'
+// $result->value === 'hello'
 ```
 
 An injected driver is reported "no event yet" and "stream ended" by the same
@@ -605,7 +606,7 @@ Each prompt is a state machine with three states: pending, submitted, aborted.
 - `submit()` finalises the prompt; for `MultiSelectPrompt` it only succeeds when `canSubmit()` is true.
 - `abort()` (or feeding `Key::Escape` / `Key::CtrlC` on the default bindings; inside an attached `EmacsMode`, Ctrl+C) discards the prompt; `value()` / `selectedValues()` then return empty. The Ctrl+C chord on a live tty requires the `-isig` raw-mode recipe above — with signals on it is a SIGINT death, not an abort. During an active incremental history search these keys cancel the search back to the original line instead — abort resumes ownership on the next keypress.
 - `isSubmitted()` / `isAborted()` report status. `currentValue()` (Confirmation) always reflects the current choice, submitted or not. `selectedValue()` (Selection) tracks the cursor while one exists, but returns `null` after an abort and whenever the filter matches no choice — with no cursor to point at, there is no value to report, submitted state or not.
-- True end-of-input: when `Readline` owns the stdin pump and the stream reaches EOF after the decoder drains, `run()` returns the prompt in its current state — neither submitted nor aborted. The pump is per-`Readline`-instance, **not** per-`run()`: calling `run()` again feeds the next prompt from wherever the stream stands, so `printf 'a\nb\n' | php app.php` drives two successive prompts with `a` and `b`; once EOF is seen it stays seen. Injected drivers report EOF and "nothing yet" identically, so they cannot trigger this exit; end those loops by submitting, aborting, or `stop()`.
+- True end-of-input: when `Readline` owns the stdin pump and the stream reaches EOF after the decoder drains, `run()` returns a result with neither `submitted` nor `aborted` set, carrying the prompt's last state. The pump is per-`Readline`-instance, **not** per-`run()`: calling `run()` again feeds the next prompt from wherever the stream stands, so `printf 'a\nb\n' | php app.php` drives two successive prompts with `a` and `b`; once EOF is seen it stays seen. Injected drivers report EOF and "nothing yet" identically, so they cannot trigger this exit; end those loops by submitting, aborting, or `stop()`.
 - `stop()` requests the loop exit; it lands within one idle poll interval (capped at 20 ms) **when the driver's read is non-blocking** (`min 1 time 0`, or an injected driver that returns `null` promptly). A driver blocking in `read()` is not interrupted — the stop takes effect on the first pass after it wakes.
 
 ## Internationalization
