@@ -854,6 +854,52 @@ final class CliTest extends TestCase
         );
     }
 
+    /**
+     * IMG-15 (candy-image-025): the env line must carry the whole roster
+     * the chain consults, with absent/empty distinguished.
+     */
+    public function testDumpDetectPrintsTheFullEvidenceTable(): void
+    {
+        putenv('WEZTERM_EXECUTABLE=/probe/wezterm-bin');
+        putenv('LC_TERMINAL=');
+
+        try {
+            [$exit, $out] = self::drive(['--dump-detect']);
+        } finally {
+            putenv('WEZTERM_EXECUTABLE');
+            putenv('LC_TERMINAL');
+        }
+
+        $this->assertSame(Cli::EXIT_OK, $exit);
+        $this->assertStringContainsString('env: TERM=', $out);
+        $this->assertStringContainsString('TERM_PROGRAM=', $out, 'emulator-family evidence must travel with the diagnostic');
+        $this->assertStringContainsString('TMUX=', $out);
+        $this->assertStringContainsString('ComSpec=', $out);
+        $this->assertStringContainsString('WEZTERM_EXECUTABLE=/probe/wezterm-bin', $out, 'a present variable must print its value verbatim');
+        $this->assertStringContainsString('LC_TERMINAL=(empty)', $out, 'set-but-empty must not blur into unset');
+        $this->assertMatchesRegularExpression('/env: [^\n]*(\(?unset\)?|\(?empty\)?)/', $out, 'absent roster entries must be visible as (unset)');
+    }
+
+    /**
+     * IMG-15 (candy-image-032): a silently-echoing terminal leaves the
+     * DA1 reply as '' — that must not read as an answer.
+     */
+    public function testDumpDetectReadsASilentDa1EchoAsNone(): void
+    {
+        $reply = new \ReflectionProperty(Detect::class, 'lastDa1Reply');
+        $reply->setAccessible(true);
+        $reply->setValue(null, '');
+
+        try {
+            [$exit, $out] = self::drive(['--dump-detect']);
+        } finally {
+            Detect::reset();
+        }
+
+        $this->assertSame(Cli::EXIT_OK, $exit);
+        $this->assertStringContainsString('da1-reply: (none)', $out, 'an empty echo is not an answer');
+    }
+
     private function armConsoleCodepage(Kernel32Interface $kernel32): ?callable
     {
         $method = new \ReflectionMethod(Cli::class, 'armConsoleCodepage');

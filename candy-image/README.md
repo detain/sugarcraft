@@ -50,6 +50,25 @@ host-independent) apply to the embedded `fromString` route.
 `--animate` plays animated **GIF** only: the sugar-animation decoder rejects
 non-GIF bytes outright.
 
+## Environment
+
+Detection reads the environment before it queries the terminal: sugar-image's
+`TermDb` matches the roster in `TermDb::ENV_KEYS` (`TERM`, `TERM_PROGRAM`
+and `TERM_PROGRAM_VERSION`, `TMUX`, `LC_TERMINAL`, the kitty/XTERM/Konsole/
+VTE/MLterm/Ghostty/WezTerm/Windows-Terminal markers, `ComSpec`) innermost
+first, and `Detect::probe()` layers live queries and the tmux passthrough
+decision on top. `--dump-detect` prints exactly which of those inputs were
+present, so the dump — not a guess at your wrapper — says what the chain saw.
+
+Three operator knobs sit under the stack (owned by sugar-pty):
+`SUGARCRAFT_LIBC` pins which C library the FFI bindings load (the musl/Alpine
+escape hatch — note it feeds `FFI::cdef` directly, so treat it as trusted
+input, not user input), `SUGARCRAFT_PTY_BACKEND` selects the pty backend
+(`auto`/`posix-ffi`/`conpty`), and `SUGARCRAFT_TERMIOS=stty` chooses the
+`stty(1)` termios path over the FFI one. When a default behaves oddly under an
+unusual wrapper, unsetting these is the first move — the dump's `mux=`/
+`tmux=` fields show what changed once you do.
+
 ## Install
 
 **Requirements.** PHP 8.3+ and `ext-gd` are enforced on every channel:
@@ -103,7 +122,7 @@ the asset for verification.
 | `--animate`             | Animated-GIF pass-through into sugar-animation's `Player` (alternate screen). Pause, frame-stepping and the solid/density preset toggle ride this viewer's wired `Player` (Keys below); frame-rate, speed and watch-mode flags (`--fps`/`--speed`/`--duration`/`--watch`) live in `candy-gifview`. Combining it with the render dials `--format`/`--scale`/`--symbols`/`--canvas`/`--work` is refused (exit 1) — the animation path speaks none of them and would silently drop them; `--width`/`--height`/`--size` are honored. A run with both stdin and stdout redirected is refused too (exit 1): the player is interactive, and with no terminal to steer it the loop would spin forever. |
 | `--passthrough=V`       | tmux `allow-passthrough` transaction: `auto` (default) or `none`. |
 | `--polite`              | Accepted no-op for chafa muscle-memory — this viewer always renders inline and synchronously. The value slot accepts `on`/`off` (the bare flag and `--polite=` spell the empty value); any other value is refused (exit 1). |
-| `--dump-detect`         | Print the resolved terminal state. When set, the file path is optional — the dump prints the version banner and a single env line carrying `TERM` and `COLORTERM`, then the detection report (TermDb chain/claims/passthrough/mux fields, Detect capabilities sixel/kitty/iterm2/halfblock/chafa/tmux and summary, cell pixel size, default fg/bg, DA1 reply, `auto()` selection, tmux transaction, palette report). The dump happens *before* the file argument is required, so a supplied path is ignored, and it exits 0. |
+| `--dump-detect`         | Print the resolved terminal state. When set, the file path is optional — the dump prints the version banner and the full evidence table the detection chain consulted (every `TermDb::ENV_KEYS` roster entry — TERM, TERM_PROGRAM, TMUX, emulator-version variables, ComSpec — each `(unset)`/`(empty)`/value), then the detection report (TermDb chain/claims/passthrough/mux fields, Detect capabilities sixel/kitty/iterm2/halfblock/chafa/tmux and summary, cell pixel size, default fg/bg, DA1 reply (`(none)` also when the terminal only echoed the query silently), `auto()` selection, tmux transaction, palette report). The dump happens *before* the file argument is required, so a supplied path is ignored, and it exits 0. |
 | `--version` / `--help` (`-h`) | Print the version / usage and exit 0.         |
 
 ## Chafa flag-compat map (what this base honors and why)

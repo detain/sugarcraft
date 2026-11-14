@@ -469,8 +469,19 @@ final class Cli
         };
 
         $write('candy-image ' . self::runningVersion() . ' — terminal detection dump');
-        $write('env: TERM=' . (getenv('TERM') !== false && getenv('TERM') !== '' ? getenv('TERM') : '(unset)')
-            . '  COLORTERM=' . (getenv('COLORTERM') !== false && getenv('COLORTERM') !== '' ? getenv('COLORTERM') : '(unset)'));
+        // The whole evidence roster the detection chain consults, not the
+        // old hand-picked TERM/COLORTERM pair: on cmd/PowerShell hosts TERM
+        // is absent, under tmux the inner TERM lies, and the emulator
+        // families that actually need this diagnostic (kitty, WezTerm, VTE,
+        // Ghostty…) signal through their own variables (candy-image-025).
+        // Absent-versus-empty is kept distinct — `(empty)` is itself a
+        // finding (some wrappers blank TERM rather than unset it).
+        $envParts = [];
+        foreach (TermDb::ENV_KEYS as $envKey) {
+            $envValue = \getenv($envKey);
+            $envParts[] = $envKey . '=' . ($envValue === false ? '(unset)' : ($envValue === '' ? '(empty)' : $envValue));
+        }
+        $write('env: ' . implode('  ', $envParts));
 
         $info = TermDb::matchChain(TermDb::snapshotEnv());
         $passthrough = [];
@@ -496,7 +507,10 @@ final class Cli
         $write('default-fg: ' . ($cap->defaultFg ?? '(unknown)') . '  default-bg: ' . ($cap->defaultBg ?? '(unknown)'));
 
         $da1 = Detect::lastDa1Reply();
-        $write('da1-reply: ' . ($da1 === null ? '(none)' : str_replace("\x1b", 'ESC', $da1)));
+        // A silently-echoing terminal leaves '' here — not null — and a
+        // bare `da1-reply:` would read as "answered" while nothing was
+        // (candy-image-032). The empty string joins the null arm's '(none)'.
+        $write('da1-reply: ' . ($da1 === null || $da1 === '' ? '(none)' : str_replace("\x1b", 'ESC', $da1)));
 
         $mosaic = Mosaic::auto();
         $write('auto: protocol=' . $mosaic->protocol() . '  mode=' . ($mosaic->modeDetail() ?? '-'));
