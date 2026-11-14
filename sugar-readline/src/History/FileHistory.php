@@ -23,7 +23,12 @@ use SugarCraft\Readline\Lang;
  *
  * Permissions: the history file and its sidecar are kept at 0600. An
  * existing file whose mode cannot be tightened (e.g. foreign-owned) is a
- * construction error — history can contain secrets.
+ * construction error — history can contain secrets. On Windows PHP's
+ * chmod maps only the read-only bit, so the 0600 there is a silent lie;
+ * that platform's arm enforces an owner-only NTFS grant through icacls,
+ * and when icacls cannot run the store degrades LOUDLY — a one-time
+ * error_log disclosure that the mode is advisory on that host — rather
+ * than claiming a protection it did not set (finding 021).
  *
  * Deduplication is stricter than HistoryInterface's "differs from the last
  * entry" floor: a line already present anywhere in the retained history is
@@ -84,7 +89,13 @@ use SugarCraft\Readline\Lang;
  * crash fragment and drops it rather than accepting it as an entry. The
  * rename swap itself is not journaled from PHP: a crash landing exactly
  * across the switch can roll the file back to its previous version,
- * never surface a torn line as history.
+ * never surface a torn line as history. When the swap's rename() is
+ * refused — a transient AV/indexer hold on Windows, or a tempDir on
+ * another filesystem (EXDEV) — the writer retries once and then copies
+ * the content onto the target under the still-held sidecar lock: other
+ * writers cannot interleave, but the copy is not rename-atomic, so a
+ * reader landing mid-copy can see a mixed old/new file — a rare,
+ * disclosed degradation chosen over losing the write (finding 022).
  *
  * A failed LOCK_SH on the read paths (finding 068) means the filesystem
  * cannot do advisory locks at all - an active writer makes the blocking
@@ -169,7 +180,7 @@ final class FileHistory extends InMemoryHistory
                 throw new \RuntimeException('sugar-readline: ' . Lang::t('history.create_failed', ['path' => $this->filePath]));
             }
         }
-        if (!chmod($this->filePath, 0600)) {
+        if (!self::protectContent($this->filePath)) {
             throw new \RuntimeException('sugar-readline: ' . Lang::t('history.chmod_failed', ['path' => $this->filePath]));
         }
         $this->load();
@@ -585,7 +596,7 @@ final class FileHistory extends InMemoryHistory
                         }
                         flock($fp, LOCK_UN);
                         fclose($fp);
-                        chmod($this->filePath, 0600);
+                        self::protectContent($this->filePath);
                         return;
                     }
                     // Missing trailing newline — release and fall through to
@@ -615,7 +626,7 @@ final class FileHistory extends InMemoryHistory
         }
         // Restrict perms before writing so history content is never exposed,
         // even briefly, on any platform/umask (tempnam is 0600 on POSIX only).
-        chmod($tempFile, 0600);
+        self::protectContent($tempFile);
         $fp = fopen($tempFile, 'w');
         if ($fp === false) {
             @unlink($tempFile);
@@ -665,16 +676,14 @@ final class FileHistory extends InMemoryHistory
         self::syncHandle($fp); // durability before the rename swap (finding 064)
         flock($fp, LOCK_UN);
         fclose($fp);
-        // rename() can fail when tempDir and the history file sit on
-        // different filesystems (EXDEV — tempnam() falls back to the system
-        // temp dir when its first choice is unwritable) or the destination
-        // mount is read-only. The write is then refused loudly, never half-
-        // done: the temp file is cleaned up before the throw.
-        if (!@rename($tempFile, $this->filePath)) {
+        // Swap ladder (finding 022): rename, retry-once, copy-under-lock.
+        // A refused write stays loud and never half-done: the temp file is
+        // cleaned up before the throw.
+        if (!$this->swapIntoPlace($tempFile)) {
             @unlink($tempFile);
             throw new \RuntimeException('sugar-readline: ' . Lang::t('history.replace_failed', ['path' => $this->filePath]));
         }
-        chmod($this->filePath, 0600);
+        self::protectContent($this->filePath);
     }
 
     /**
@@ -829,7 +838,7 @@ final class FileHistory extends InMemoryHistory
         if ($tempFile === false) {
             throw new \RuntimeException('sugar-readline: ' . Lang::t('history.temp_create_failed', ['dir' => $this->tempDir]));
         }
-        chmod($tempFile, 0600);
+        self::protectContent($tempFile);
         $fp = fopen($tempFile, 'w');
         if ($fp === false) {
             @unlink($tempFile);
@@ -850,15 +859,125 @@ final class FileHistory extends InMemoryHistory
         self::syncHandle($fp); // durability before the rename swap (finding 064)
         flock($fp, LOCK_UN);
         fclose($fp);
-        if (!@rename($tempFile, $this->filePath)) {
+        if (!$this->swapIntoPlace($tempFile)) {
             @unlink($tempFile);
             throw new \RuntimeException('sugar-readline: ' . Lang::t('history.replace_failed', ['path' => $this->filePath]));
         }
         // A symlink planted at the destination between rename and chmod would
         // send the chmod to its target; refuse rather than follow.
         if (!is_link($this->filePath)) {
-            chmod($this->filePath, 0600);
+            self::protectContent($this->filePath);
         }
+    }
+
+    /**
+     * Enforce the 0600 promise honestly on every platform (finding 021).
+     *
+     * PHP's chmod on Windows maps only the read-only bit — it returns true
+     * while the NTFS ACL keeps whatever the creator granted, so a bare chmod
+     * there silently lies about history-file secrecy. The Windows arm asks
+     * icacls for an owner-only grant; when exec/icacls cannot run the store
+     * degrades LOUDLY (one-time error_log disclosure, README History section)
+     * rather than failing the write path or claiming a protection it did not
+     * set. Returns false only when the plain chmod itself was refused.
+     */
+    private static function protectContent(string $path): bool
+    {
+        if (!\chmod($path, 0600)) {
+            return false;
+        }
+        if (\PHP_OS_FAMILY === 'Windows') {
+            self::windowsOwnerOnlyGrant($path);
+        }
+        return true;
+    }
+
+    /** @var string|null One-time ACL-decline disclosure state (finding 021). */
+    private static ?string $aclDeclineNote = null;
+
+    /**
+     * Best-effort owner-only NTFS grant via icacls; discloses once when it
+     * cannot run (finding 021). Linux never reaches this arm — the disclosure
+     * child in tests/Support/ exercises the decline path by reflection.
+     */
+    private static function windowsOwnerOnlyGrant(string $path): void
+    {
+        $who = \getenv('USERNAME') !== false ? \getenv('USERNAME') : \getenv('USER');
+        if (\function_exists('exec') && $who !== false && $who !== null && $who !== '') {
+            $out = [];
+            $rc = 1;
+            @\exec(
+                'icacls ' . \escapeshellarg($path)
+                . ' /inheritance:r /grant:r ' . \escapeshellarg($who . ':F')
+                . ' /quiet',
+                $out,
+                $rc
+            );
+            if ($rc === 0) {
+                return;
+            }
+        }
+        if (self::$aclDeclineNote === null) {
+            self::$aclDeclineNote = 'sugar-readline: Windows history ACL enforcement unavailable; '
+                . '0600 is advisory on this host (see the README History section)';
+            \error_log(self::$aclDeclineNote);
+        }
+    }
+
+    /**
+     * Test seam (finding 022): a callable replacing the rename primitive
+     * inside swapIntoPlace(). Pass null to restore the real rename().
+     */
+    private static $renameSeam = null;
+
+    /** @internal Test seam for the swap ladder — see $renameSeam docs. */
+    public static function armRenameSeamForTests(?callable $seam): void
+    {
+        self::$renameSeam = $seam;
+    }
+
+    /**
+     * Swap a finished temp file onto the history path (finding 022). The
+     * caller holds the sidecar write lock, so this ladder is writer-serialised:
+     * rename (the atomic inode swap); on refusal, one retry after a short beat
+     * (a Windows AV/indexer hold is transient); then a content copy onto the
+     * target (which also covers EXDEV when tempDir sits on another filesystem).
+     * The copy is not rename-atomic — a reader landing mid-copy can see a
+     * mixed old/new file, a rare disclosed degradation chosen over losing the
+     * write. True on success; false only when every rung failed.
+     */
+    private function swapIntoPlace(string $tempFile): bool
+    {
+        $rename = self::$renameSeam;
+        if ($rename === null) {
+            $rename = static fn (string $from, string $to): bool => \rename($from, $to);
+        }
+        if (@$rename($tempFile, $this->filePath)) {
+            return true;
+        }
+        \usleep(50_000); // 50 ms: enough for a transient destination hold
+        if (@$rename($tempFile, $this->filePath)) {
+            return true;
+        }
+        $src = @fopen($tempFile, 'rb');
+        if ($src === false) {
+            return false;
+        }
+        $dst = @fopen($this->filePath, 'wb');
+        if ($dst === false) {
+            fclose($src);
+            return false;
+        }
+        $copied = @stream_copy_to_stream($src, $dst);
+        \fflush($dst);
+        self::syncHandle($dst);
+        fclose($src);
+        fclose($dst);
+        if ($copied === false) {
+            return false;
+        }
+        @unlink($tempFile);
+        return true;
     }
 
     /**
@@ -1192,15 +1311,15 @@ final class FileHistory extends InMemoryHistory
             if ($tempFile === false) {
                 throw new \RuntimeException('sugar-readline: ' . Lang::t('history.clear_temp_failed', ['dir' => $this->tempDir]));
             }
-            chmod($tempFile, 0600);
+            self::protectContent($tempFile);
             file_put_contents($tempFile, '');
-            if (!@rename($tempFile, $this->filePath)) {
+            if (!$this->swapIntoPlace($tempFile)) {
                 @unlink($tempFile);
                 throw new \RuntimeException('sugar-readline: ' . Lang::t('history.replace_failed', ['path' => $this->filePath]));
             }
             // Defensive: if the destination pre-existed with looser perms, the
             // rename inherits the temp file's 0600, but re-assert to be safe.
-            chmod($this->filePath, 0600);
+            self::protectContent($this->filePath);
         });
         parent::clear();
         // Drop queued-but-unwritten entries too — they were cleared with the rest.

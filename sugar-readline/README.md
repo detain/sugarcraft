@@ -643,6 +643,16 @@ only. The automatic flush in `__destruct` cannot throw usefully: it degrades
 to an `error_log` line, and with `deferWrites` any entries still queued are
 lost at exit.
 
+**Note:** the `0600` promise on Windows rides `icacls` — PHP's `chmod` there
+maps only the read-only bit and returns true regardless. When `icacls`
+cannot run, the store logs a one-time disclosure that permissions are
+advisory on that host. Swap contention: when renaming over the destination
+is refused — a transient AV/indexer hold on Windows, or a `tempDir` on a
+different filesystem (EXDEV) — the writer retries once and then copies the
+content onto the target under the still-held sidecar lock. The copy cannot
+interleave with other writers, but it is not rename-atomic: a reader landing
+mid-copy can briefly see a mixed old/new file.
+
 The writers `fsync` the content bytes before releasing the lock (where PHP exposes
 `fsync`), so a process death cannot leave a half-flushed tail; a crash
 straddling the rename swap can roll the file back to the previous version but
