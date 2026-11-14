@@ -198,10 +198,12 @@ final class SahilmMatcher implements FuzzyMatcher
             return null;
         }
 
-        // The candidate side keeps its own per-char folded split for the same
-        // U+0130 index-alignment reason as the query (see prepareQuery()).
-        $cLow = $this->caseSensitive ? mb_str_split($candidate, 1, 'UTF-8') : CharFold::foldSplit($candidate);
+        // The candidate is split ONCE (finding sugar-fuzzy-041: it was
+        // mb_str_split twice — once for the comparison side, once for $cOrig).
+        // Case-sensitive mode needs the original chars for both, so the two
+        // slots alias the single list; both are read-only from here on.
         $cOrig = mb_str_split($candidate, 1, 'UTF-8');
+        $cLow = $this->caseSensitive ? $cOrig : CharFold::foldSplit($candidate);
 
         $indices = [];
         $score = 0;

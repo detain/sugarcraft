@@ -65,12 +65,17 @@ final class CharFold
             return str_split(strtolower($string));
         }
 
-        $folded = [];
-        foreach (mb_str_split($string, 1, 'UTF-8') as $char) {
-            $folded[] = self::fold($char);
+        // In-place fold: one array allocation for the whole non-ASCII branch
+        // (finding sugar-fuzzy-040: this used to copy into a second $folded[]
+        // list). foreach-by-value snapshots the original chars, and the writes
+        // address the same indices, so the list contract holds element-for-
+        // element — order and 1:1 code-point alignment unchanged.
+        $chars = mb_str_split($string, 1, 'UTF-8');
+        foreach ($chars as $i => $char) {
+            $chars[$i] = self::fold($char);
         }
 
-        return $folded;
+        return $chars;
     }
 
     /**
