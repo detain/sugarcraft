@@ -53,4 +53,32 @@ final class MultiBackendExceptionTest extends TestCase
         $this->assertNull($e->getPrevious());
         $this->assertStringContainsString('0 child backend(s) failed', $e->getMessage());
     }
+
+    /**
+     * sugar-metrics-020: the Util::displaySafe sweep of child messages is
+     * the only behaviour of this class beyond list storage, and every prior
+     * test fed it clean strings. A hostile third-party backend interpolating
+     * raw control bytes into its message must not steer the host TUI when
+     * the aggregate is printed verbatim — while errors() still hands back
+     * the ORIGINAL Throwables (the sweep happens at aggregation, not at
+     * storage, so programmatic inspection stays lossless).
+     */
+    public function testHostileChildMessagesAreSweptAtAggregationNotAtStorage(): void
+    {
+        $hostile = new \RuntimeException("udp failed\x1b[2J\n/home/metrics\x07\x7f");
+        $e = new MultiBackendException([$hostile]);
+        $msg = $e->getMessage();
+        // CSI clears, bell and DEL are erased; the newline (a legal display
+        // byte, see Util::displaySafe) survives — the swept form is exact:
+        $this->assertSame(
+            'MultiBackend: 1 child backend(s) failed. Errors: udp failed' . "\n" . '/home/metrics',
+            $msg,
+        );
+        $this->assertStringNotContainsString("\x1b", $msg);
+        $this->assertStringNotContainsString("\x07", $msg);
+        $this->assertStringNotContainsString("\x7f", $msg);
+        // Sweep-at-aggregation: the stored Throwable is byte-for-byte intact.
+        $this->assertSame([$hostile], $e->errors());
+        $this->assertSame("udp failed\x1b[2J\n/home/metrics\x07\x7f", $e->errors()[0]->getMessage());
+    }
 }

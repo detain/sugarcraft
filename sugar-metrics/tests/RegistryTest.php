@@ -308,19 +308,27 @@ final class RegistryTest extends TestCase
         $r = Registry::new($b);
         $r->register(new Descriptor('m', 'parent help', 'gauge', ['route']));
         $child = $r->withTags(['user' => 'bob']);
+        $conflict = null;
         try {
             $child->register(new Descriptor('m', 'clashing help', 'gauge', ['route']));
-            $this->fail('a clashing re-registration on a withTags() child must throw');
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('m', $e->getMessage());
+            $conflict = $e;
         }
+        // sugar-metrics-020 sweep: the old fail()-inside-try form had a
+        // needle ('m') that occurs in its own fail message, so a swallowed
+        // throw could still pass vacuously. Capture-flag with a contentful
+        // needle that the guard's real message must carry.
+        self::assertNotNull($conflict, 'a clashing re-registration on a withTags() child must throw');
+        $this->assertStringContainsString('"m" is already registered', $conflict->getMessage());
         // A kind switch is refused by the same inherited table.
+        $switch = null;
         try {
             $child->register(new Descriptor('m', 'parent help', 'counter', ['route']));
-            $this->fail('a kind-switch re-registration on a child must throw');
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('m', $e->getMessage());
+            $switch = $e;
         }
+        self::assertNotNull($switch, 'a kind-switch re-registration on a child must throw');
+        $this->assertStringContainsString('cannot re-register as counter', $switch->getMessage());
         // Identical re-registration stays an idempotent no-op.
         $child->register(new Descriptor('m', 'parent help', 'gauge', ['route']));
         // Emissions ride the parent's metadata: the child never registered,

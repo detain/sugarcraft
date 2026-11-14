@@ -43,14 +43,20 @@ final class SessionMetricsTest extends TestCase
         $b = new InMemoryBackend();
         $r = new Registry($b);
         $mw = new SessionMetrics($r);
+        $propagated = null;
         try {
             $mw->handle(Context::background(), $this->session(), function (): void {
                 throw new \RuntimeException('boom');
             });
-            $this->fail('expected exception to propagate');
-        } catch (\RuntimeException) {
-            // expected
+        } catch (\RuntimeException $e) {
+            $propagated = $e;
         }
+        // sugar-metrics-020 sweep: capture-flag, not fail()-inside-try —
+        // fail() throws AssertionFailedError (extends RuntimeException) and
+        // an empty catch swallowed it, so a no-rethrow mutation passed
+        // vacuously. Propagation is now asserted explicitly.
+        self::assertNotNull($propagated, 'the session throwable must propagate to the caller');
+        $this->assertSame('boom', $propagated->getMessage());
         $errs = $b->counterValue('ssh.session.error', [
             'user' => 'alice', 'term' => 'xterm-256color', 'exception' => \RuntimeException::class,
         ]);
@@ -192,14 +198,19 @@ final class SessionMetricsTest extends TestCase
         $b = new InMemoryBackend();
         $r = new Registry($b);
         $mw = new SessionMetrics($r, fn(Session $_s): array => ['exception' => 'forged']);
+        $propagated = null;
         try {
             $mw->handle(Context::background(), $this->session(), function (): void {
                 throw new \RuntimeException('boom');
             });
-            $this->fail('expected exception to propagate');
-        } catch (\RuntimeException) {
-            // expected
+        } catch (\RuntimeException $e) {
+            $propagated = $e;
         }
+        // sugar-metrics-020 sweep: fail()-inside-try with an empty catch is
+        // vacuous (AssertionFailedError extends RuntimeException); capture
+        // and assert propagation explicitly instead.
+        self::assertNotNull($propagated, 'the session throwable must propagate to the caller');
+        $this->assertSame('boom', $propagated->getMessage());
         $this->assertSame(1.0, $b->counterValue('ssh.session.error', [
             'user' => 'alice', 'term' => 'xterm-256color', 'exception' => 'RuntimeException',
         ]));
