@@ -171,7 +171,9 @@ final class RegistryTest extends TestCase
         $this->assertInstanceOf(KeyMsg::class, $decoded);
         $this->assertSame('q', $decoded->rune);
 
-        // Jsonable: user-defined Msg
+        // Jsonable: user-defined Msg — the decode side is allow-listed
+        // (finding 034), so the host opts its class in through the registry.
+        $r->allow(UserJsonableMsg::class);
         $user = new UserJsonableMsg(name: 'r', count: 1);
         $envelope = $r->encode($user);
         $this->assertNotNull($envelope);

@@ -1192,10 +1192,16 @@ Invalid PCRE patterns throw `\InvalidArgumentException` at construction.
   `\JsonSerializable`. Tag is the FQCN; `data` is the
   `jsonSerialize()` result. Round-trip works when the constructor's
   parameter names match the keys returned by `jsonSerialize()`.
+  Encoding is unconditional; DECODING is allow-listed — a cassette names
+  a class in your process, so the catch-all only instantiates classes
+  the host opted in with `$registry->allow(MyMsg::class)` (and even then
+  only after `data` keys are validated against the real constructor
+  signature). Un-allowed envelopes decode to `null`.
 
 ```php
 use SugarCraft\Vcr\Msg\Registry;
 $registry = Registry::default();
+$registry->allow(MyUserMsg::class);  // opt user classes in for decoding
 $envelope = $registry->encode($msg);  // ['@type' => 'KeyMsg', …] or null
 $decoded  = $registry->decode($envelope);  // Msg|null
 ```

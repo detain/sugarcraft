@@ -14,7 +14,9 @@ use SugarCraft\Core\Msg;
  * Use {@see default()} for a registry pre-loaded with the
  * {@see BuiltinSerializer} (sugar-core Msgs) and the
  * {@see JsonableSerializer} catch-all (user Msgs implementing
- * `\JsonSerializable`). Order is priority: the first serializer that
+ * `\JsonSerializable`). The catch-all's DECODE side is allow-listed —
+ * name a user class through {@see allow()} or its envelopes are refused
+ * (finding 034). Order is priority: the first serializer that
  * claims a Msg / envelope wins. {@see register()} therefore lands a
  * custom serializer *behind* the catch-all — use {@see registerFirst()}
  * when a custom serializer has to outrank what `default()` already
@@ -86,7 +88,8 @@ final class Registry
     /**
      * Default registry: `BuiltinSerializer` first (specific sugar-core
      * Msgs), then `JsonableSerializer` (catch-all for user Msgs
-     * implementing `\JsonSerializable`). Order is priority, so anything
+     * implementing `\JsonSerializable` — DECODE side allow-listed, see
+     * {@see allow()}). Order is priority, so anything
      * {@see register()} appends lands after both — reach for
      * {@see registerFirst()} to give a custom codec precedence over the
      * catch-all.
@@ -96,5 +99,25 @@ final class Registry
         return (new self())
             ->register(new BuiltinSerializer())
             ->register(new JsonableSerializer());
+    }
+
+    /**
+     * The host's opt-in door for user Msg classes: forwards to the
+     * registered {@see JsonableSerializer}'s allow list (finding 034 —
+     * the catch-all decodes only what was named here). When no catch-all
+     * is registered, one configured for these classes is appended.
+     *
+     * @param class-string ...$classes
+     */
+    public function allow(string ...$classes): self
+    {
+        foreach ($this->serializers as $serializer) {
+            if ($serializer instanceof JsonableSerializer) {
+                $serializer->allow(...$classes);
+                return $this;
+            }
+        }
+
+        return $this->register((new JsonableSerializer())->allow(...$classes));
     }
 }

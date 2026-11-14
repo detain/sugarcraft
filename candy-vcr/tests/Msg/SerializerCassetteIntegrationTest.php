@@ -81,7 +81,7 @@ final class SerializerCassetteIntegrationTest extends TestCase
 
     public function testUserJsonableMsgEnvelopeRoundTrips(): void
     {
-        $registry = Registry::default();
+        $registry = Registry::default()->allow(UserJsonableMsg::class);
         $original = new UserJsonableMsg(name: 'tap', count: 42);
 
         $envelope = $registry->encode($original);
