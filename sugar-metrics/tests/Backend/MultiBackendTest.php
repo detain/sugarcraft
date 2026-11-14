@@ -429,4 +429,26 @@ final class MultiBackendTest extends TestCase
 
         $this->assertSame(4.0, $inMemory->asyncGaugeValue('heap'));
     }
+
+    /**
+     * sugar-metrics-027: the fanout hot path must not allocate a closure
+     * per emit. Structural pin over the source text: no verb may hand
+     * fanout() an arrow/function closure, and the discriminator match
+     * dispatch must exist. (Behavior pins for byte-delegation are the
+     * existing "reaches all children" suite — same calls, same throws.)
+     */
+    public function testFanoutDispatchesByDiscriminatorAndNeverAllocatesPerCallClosure(): void
+    {
+        $src = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Backend/MultiBackend.php');
+        // No fanout() call site passes a closure any more.
+        $this->assertStringNotContainsString('$this->fanout(fn(', $src);
+        $this->assertStringNotContainsString('function (Backend $b)', $src);
+        $this->assertStringNotContainsString('fn(Backend $b)', $src);
+        // The match-dispatch seam exists and covers all ten verbs.
+        $this->assertStringContainsString('private function dispatch(Backend $b, string $op, array $args): void', $src);
+        $this->assertStringContainsString('match ($op)', $src);
+        foreach (['OP_COUNTER', 'OP_GAUGE', 'OP_HISTOGRAM', 'OP_UP_DOWN_COUNTER', 'OP_ASYNC_COUNTER', 'OP_ASYNC_GAUGE', 'OP_DESCRIBE', 'OP_REMOVE', 'OP_CLEAR', 'OP_FLUSH'] as $const) {
+            $this->assertMatchesRegularExpression('/private const ' . $const . ' =/', $src);
+        }
+    }
 }
