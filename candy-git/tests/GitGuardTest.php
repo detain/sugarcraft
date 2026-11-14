@@ -123,6 +123,56 @@ final class GitGuardTest extends TestCase
         $git->stashPop('--drop');
     }
 
+    // -- candy-git-035: the untracked file lanes keep the same refusals ----
+
+    public function testUntrackedDiffRejectsEscapingAndAbsolutePaths(): void
+    {
+        $git = new Git($this->cwd);
+        foreach (['../outside.txt', '/etc/passwd', ''] as $bad) {
+            try {
+                $git->untrackedDiff($bad);
+                $this->fail('rejected nothing for ' . var_export($bad, true));
+            } catch (\RuntimeException $e) {
+                $this->assertStringContainsString('unsafe', $e->getMessage());
+            }
+        }
+    }
+
+    public function testDeleteUntrackedRejectsEscapingAndAbsolutePaths(): void
+    {
+        $git = new Git($this->cwd);
+        foreach (['../victim.txt', '/etc/hostname', ''] as $bad) {
+            try {
+                $git->deleteUntracked($bad);
+                $this->fail('deleted nothing for ' . var_export($bad, true));
+            } catch (\RuntimeException $e) {
+                $this->assertStringContainsString('unsafe', $e->getMessage());
+            }
+        }
+    }
+
+    public function testUntrackedDiffShapesMatchGitAndHonourTheExecutableBit(): void
+    {
+        file_put_contents($this->cwd . '/plain.txt', "aaa\nbbb");
+        $git   = new Git($this->cwd);
+        $lines = $git->untrackedDiff('plain.txt');
+        $this->assertContains('new file mode 100644', $lines);
+        $this->assertContains('@@ -0,0 +1,2 @@', $lines);
+        $this->assertContains('+aaa', $lines);
+        $this->assertContains('+bbb', $lines);
+        $this->assertContains('\\ No newline at end of file', $lines);
+
+        chmod($this->cwd . '/plain.txt', 0o755);
+        $this->assertContains('new file mode 100755', $git->untrackedDiff('plain.txt'));
+    }
+
+    public function testUntrackedDiffOfAMissingFileThrows(): void
+    {
+        $git = new Git($this->cwd);
+        $this->expectException(\RuntimeException::class);
+        $git->untrackedDiff('gone.txt');
+    }
+
     public function testWorktreeAddRejectsLeadingDashPath(): void
     {
         $git = new Git($this->cwd);

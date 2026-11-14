@@ -29,6 +29,10 @@ final class FixtureGit implements GitDriver
     /** @var list<array{0:string,1:bool}> path + cached flag per diff() request */
     public array $diffRequests = [];
     public array $discards = [];
+    public array $deletes = [];
+    /** @var list<string> canned output for untrackedDiff()
+     */
+    public array $untrackedDiffResult = [];
     public bool $amendCalled = false;
     /** @var array<string, string> path => hunk patch */
     public array $stagePatches = [];
@@ -96,6 +100,14 @@ final class FixtureGit implements GitDriver
     public function stageAll(): void             { $this->maybeThrow('stageAll'); $this->stageAllCalled = true; }
     public function diff(string $path, bool $cached = false): array { $this->maybeThrow('diff'); $this->diffRequests[] = [$path, $cached]; return $this->diffs; }
     public function discard(string $path): void   { $this->maybeThrow('discard'); $this->discards[] = $path; }
+    public function untrackedDiff(string $path): array
+    {
+        $this->maybeThrow('untrackedDiff');
+
+        return $this->untrackedDiffResult;
+    }
+
+    public function deleteUntracked(string $path): void { $this->maybeThrow('deleteUntracked'); $this->deletes[] = $path; }
     public function amend(): void                 { $this->maybeThrow('amend'); $this->amendCalled = true; }
     public bool $amendWithCalled = false;
     /** @var list<string> messages passed to amendWith() */
@@ -1838,5 +1850,107 @@ final class AppTest extends TestCase
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'M'));
         $this->assertTrue($a->collectingMergeTarget);
         $this->assertSame('feature', $a->mergeTarget);
+    }
+
+    // -- candy-git-035: untracked rows are reviewable and deletable --------
+
+    private static function untrackedGit(): FixtureGit
+    {
+        $g = new FixtureGit(
+            statusRows: [['index_status' => '?', 'work_status' => '?', 'path' => 'new/F.php']],
+            branchRows: [],
+            logRows: [],
+        );
+        $g->untrackedDiffResult = [
+            'diff --git a/new/F.php b/new/F.php',
+            'new file mode 100644',
+            '--- /dev/null',
+            '+++ b/new/F.php',
+            '@@ -0,0 +1,2 @@',
+            '+one',
+            '+two',
+        ];
+
+        return $g;
+    }
+
+    public function testEnterOnAnUntrackedRowShowsTheAllAdditionsDiff(): void
+    {
+        $g    = self::untrackedGit();
+        [$a, ] = App::start($g)->update(new KeyMsg(KeyType::Enter));
+
+        // The lesson of candy-git-035: git diff answers NOTHING for a ??
+        // row, so the viewer must never ask it - the diff is synthesized.
+        $this->assertSame([], $g->diffRequests);
+        $this->assertNotNull($a->diffViewer);
+        $this->assertFalse($a->diffViewer->cached);
+        $this->assertContains('+one', $a->diffViewer->lines);
+        $this->assertContains('+two', $a->diffViewer->lines);
+    }
+
+    public function testSpaceStagesTheSyntheticDiffThroughTheNormalLane(): void
+    {
+        $g     = self::untrackedGit();
+        $start = App::start($g);
+        [$a, ] = $start->update(new KeyMsg(KeyType::Enter));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Space));
+
+        // A +lines block IS a partial add: the regular apply --cached lane
+        // takes the synthetic hunk with no special casing.
+        $this->assertArrayHasKey('new/F.php', $g->stagePatches);
+        $this->assertStringContainsString('+one', $g->stagePatches['new/F.php']);
+    }
+
+    public function testDOnAnUntrackedRowWarnsAboutTheDisk(): void
+    {
+        $g     = self::untrackedGit();
+        $start = App::start($g);
+        [$a, ] = $start->update(new KeyMsg(KeyType::Char, 'd'));
+
+        $this->assertSame('discard:new/F.php', $a->pendingConfirm);
+        $this->assertStringContainsString('remove it from disk', (string) $a->notice);
+        $this->assertSame([], $g->deletes);
+        $this->assertSame([], $g->discards);
+    }
+
+    public function testSecondDUnlinksInsteadOfRestoring(): void
+    {
+        $g     = self::untrackedGit();
+        $start = App::start($g);
+        [$a, ] = $start->update(new KeyMsg(KeyType::Char, 'd'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
+
+        // git restore cannot touch ?? paths - the second press is a true
+        // unlink, and git->discard must never be reached for them.
+        $this->assertSame(['new/F.php'], $g->deletes);
+        $this->assertSame([], $g->discards);
+        $this->assertNull($a->pendingConfirm);
+        $this->assertSame('deleted new/F.php', $a->successMessage);
+    }
+
+    public function testDeletingAnUntrackedFileRefusesUndo(): void
+    {
+        $g     = self::untrackedGit();
+        $start = App::start($g);
+        [$a, ] = $start->update(new KeyMsg(KeyType::Char, 'd'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'u'));
+
+        // The bytes were never in git objects; undo would lie.
+        $this->assertStringContainsString('delete untracked', (string) $a->error);
+        $this->assertFalse($g->resetCalled);
+        $this->assertSame(['new/F.php'], $g->deletes); // the refusal never re-runs the delete
+    }
+
+    public function testTrackedRowsStillDiscardThroughTheGitLane(): void
+    {
+        $g     = $this->git();
+        $start = App::start($g);
+        [$a, ] = $start->update(new KeyMsg(KeyType::Char, 'd'));
+
+        $this->assertStringContainsString('press d again to discard', (string) $a->notice);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
+        $this->assertSame(['src/A.php'], $g->discards);
+        $this->assertSame([], $g->deletes);
     }
 }

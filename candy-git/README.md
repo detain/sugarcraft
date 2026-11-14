@@ -94,8 +94,8 @@ remotes cannot stall rendering) remains the v2 direction.
 | `Home/End`               | Jump the cursor to the first / last entry               |
 | `s` (status pane)        | Stage / unstage the highlighted entry — on conflicted or untracked rows the first press stages (there is no staged side to reverse) |
 | `a` (status pane)        | Stage all files                                         |
-| `d` (status pane)        | Discard changes to the highlighted file (press twice)    |
-| `Enter` (status pane)    | Open diff viewer for the highlighted file              |
+| `d` (status pane)        | Discard changes to the highlighted file (press twice) — on an untracked row it **deletes the file from disk** (press twice; unrecoverable) |
+| `Enter` (status pane)    | Open diff viewer for the highlighted file — untracked rows open as an all-additions diff (git's own new-file shape), stageable hunk by hunk |
 | `Enter` (log pane)       | Open the commit under the cursor — a read-only details view of `git show --stat --format=full --patch` |
 | `f` (press twice)        | Fetch from the remote                                  |
 | `p` (press twice)        | Pull from the remote                                   |
@@ -298,7 +298,7 @@ file key like `git.timeout` resolves through the core `T` registry as
 raw string.
 
 **Available keys** (`lang/en.php` — an excerpt; the file is the full roster
-of 185 keys):
+of 190 keys):
 
 | Key                    | Default string                                                    | Parameters  |
 |------------------------|-------------------------------------------------------------------|------------|

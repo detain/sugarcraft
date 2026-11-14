@@ -17,6 +17,8 @@ return [
     'git.unsafe_path'  => 'git: unsafe worktree path: {path}',
     'git.unsafe_merge_driver' => 'git: the repository defines a merge driver that cannot be safely disabled; merge refused',
     'git.unsafe_filter_driver' => 'git: the repository defines a filter driver; strict filter mode refused the command',
+    'git.untracked_missing' => 'git: untracked file could not be read: {path}',
+    'git.delete_failed'     => 'git: could not delete file: {path}',
 
     // CLI errors
     'cli.not_a_repo'   => 'candy-git: not a git repository: {cwd}',
@@ -116,6 +118,7 @@ return [
     'history.op.stage'        => 'stage',
     'history.op.unstage'      => 'unstage',
     'history.op.discard'      => 'discard',
+    'history.op.deleteUntracked' => 'delete untracked',
     'history.op.commit'       => 'commit',
     'history.op.checkout'     => 'branch switch',
     'history.op.createBranch' => 'branch creation',
@@ -147,6 +150,8 @@ return [
     'merge.conflict'          => 'could not merge {branch}: unresolved conflicts',
     'merge.sequence_success'  => 'merge: {action}',
     'confirm.discard'         => 'discard {path}: press d again to discard (unrecoverable)',
+    'confirm.discard_untracked' => 'delete {path}: press d again to remove it from disk (unrecoverable)',
+    'discard.deleted'           => 'deleted {path}',
     'confirm.delete_branch'   => 'delete branch {name}: press D again to delete',
     'confirm.stash_drop'      => 'drop stash {ref}: press d again to drop (unrecoverable)',
     'confirm.stash_pop'       => 'pop stash {ref}: press p again to apply and drop it',

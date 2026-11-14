@@ -57,6 +57,16 @@ final readonly class HistoryEntry
     }
 
     /**
+     * Deleting an untracked file destroyed bytes no git object ever
+     * held - the inverse would need a backup that does not exist
+     * (candy-git-035), so it joins the refuse-undo lane with discard.
+     */
+    public static function deleteUntracked(string $path): self
+    {
+        return new self('deleteUntracked', ['path' => $path], self::UNRECOVERABLE_INVERSE, []);
+    }
+
+    /**
      * Convenience factory for checkout (branch switch) operations.
      *
      * Records the ORIGIN branch so the inverse returns there: the old

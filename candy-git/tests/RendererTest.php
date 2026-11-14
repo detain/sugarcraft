@@ -93,6 +93,8 @@ final class RendererTest extends TestCase
             public function unstageAll(): void {}
             public function diff(string $path, bool $cached = false): array { return []; }
             public function discard(string $path): void {}
+            public function untrackedDiff(string $path): array { return []; }
+            public function deleteUntracked(string $path): void {}
             public function amend(): void {}
             public function amendWith(string $message): void {}
             public function lastCommitMessage(): string { return ""; }
@@ -165,6 +167,8 @@ final class RendererTest extends TestCase
             public function unstageAll(): void {}
             public function diff(string $path, bool $cached = false): array { return []; }
             public function discard(string $path): void {}
+            public function untrackedDiff(string $path): array { return []; }
+            public function deleteUntracked(string $path): void {}
             public function amend(): void {}
             public function amendWith(string $message): void {}
             public function lastCommitMessage(): string { return ""; }
@@ -555,6 +559,8 @@ final class RendererTest extends TestCase
             public function unstageAll(): void {}
             public function diff(string $path, bool $cached = false): array { return []; }
             public function discard(string $path): void {}
+            public function untrackedDiff(string $path): array { return []; }
+            public function deleteUntracked(string $path): void {}
             public function amend(): void {}
             public function amendWith(string $message): void {}
             public function lastCommitMessage(): string { return ""; }
@@ -960,5 +966,26 @@ final class RendererTest extends TestCase
         $a = new App(new FixtureGit([], [], []), collectingBranchName: true, branchName: 'x', pendingBranchBase: 'abc1', width: 80, height: 24);
         $plain = preg_replace('/\x1b\[[0-9;]*m/', '', Renderer::render($a));
         $this->assertStringContainsString('new branch from abc1: x_', $plain);
+    }
+
+    // -- candy-git-035: the untracked synthetic diff renders like any diff --
+
+    public function testTheUntrackedViewerFramesEveryAddedLine(): void
+    {
+        $dv = DiffViewer::fromRawDiff('new/F.php', [
+            'diff --git a/new/F.php b/new/F.php',
+            'new file mode 100644',
+            '--- /dev/null',
+            '+++ b/new/F.php',
+            '@@ -0,0 +1,2 @@',
+            '+one',
+            '+two',
+        ]);
+        $a     = new App(new FixtureGit([], [], []), diffViewer: $dv, width: 80, height: 24);
+        $plain = preg_replace('/\x1b\[[0-9;]*m/', '', Renderer::render($a));
+
+        $this->assertStringContainsString('+one', $plain);
+        $this->assertStringContainsString('+two', $plain);
+        $this->assertStringContainsString('new/F.php', $plain);
     }
 }

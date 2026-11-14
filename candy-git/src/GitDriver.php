@@ -69,6 +69,22 @@ interface GitDriver
     /** Discard working-tree changes for a file (git restore --worktree <path>). */
     public function discard(string $path): void;
 
+    /**
+     * The all-additions diff of an untracked path (candy-git-035: a
+     * plain diff is empty for ?? rows, so the review action opened a
+     * blank box). Read from the file, never spawned.
+     *
+     * @return list<string>
+     */
+    public function untrackedDiff(string $path): array;
+
+    /**
+     * Remove an untracked file from disk - the armed d on a ?? row.
+     * git restore cannot touch untracked paths, so this is a true,
+     * unrecoverable unlink (candy-git-035).
+     */
+    public function deleteUntracked(string $path): void;
+
     /** Amend the last commit without changing its message (--no-edit). */
     public function amend(): void;
 

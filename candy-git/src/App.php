@@ -1118,14 +1118,37 @@ final class App implements Model
         // Discarding worktree bytes is unrecoverable - git has no
         // undo for it either. One press arms (naming the target), the same
         // press on the same target executes; Escape cancels.
+        $untracked = ($row['index_status'] ?? '') === '?'
+            && ($row['work_status'] ?? '') === '?';
         $arm = 'discard:' . $row['path'];
         if ($this->pendingConfirm !== $arm) {
-            return $this->armConfirm($arm, Lang::t('confirm.discard', ['path' => (string) $row['path']]));
+            // An untracked row's d never reaches git restore (it would
+            // answer pathspec-did-not-match - a guaranteed error on the
+            // routine junk-file cleanup, candy-git-035). It unlinks the
+            // file, so the warning says DISK, not git-soup.
+            $warning = $untracked
+                ? Lang::t('confirm.discard_untracked', ['path' => (string) $row['path']])
+                : Lang::t('confirm.discard', ['path' => (string) $row['path']]);
+
+            return $this->armConfirm($arm, $warning);
         }
         $base = $this->clearConfirm();
         try {
-            $this->git->discard($row['path']);
-            return $base->withAll(history: $base->requireHistory()->push(HistoryEntry::discard($row['path'])))->refresh();
+            if ($untracked) {
+                $this->git->deleteUntracked($row['path']);
+            } else {
+                $this->git->discard($row['path']);
+            }
+
+            $entry = $untracked
+                ? HistoryEntry::deleteUntracked($row['path'])
+                : HistoryEntry::discard($row['path']);
+
+            $done = $base->withAll(history: $base->requireHistory()->push($entry))->refresh();
+
+            return $untracked
+                ? $done->withAll(successMessage: Lang::t('discard.deleted', ['path' => (string) $row['path']]))
+                : $done;
         } catch (\RuntimeException $e) {
             return $base->withError($e->getMessage());
         }
@@ -1318,7 +1341,17 @@ final class App implements Model
             $cached = ($row['index_status'] ?? ' ') !== ' '
                 && ($row['index_status'] ?? ' ') !== '?'
                 && ($row['work_status'] ?? ' ') === ' ';
-            $lines = $this->git->diff($row['path'], $cached);
+            // A ?? row has no git diff at all - plain git diff -- path
+            // answers with nothing, which rendered as an empty box on
+            // the most routine review action there is (candy-git-035).
+            // It shows as git's own new-file patch instead: every line
+            // an addition, stageable hunk by hunk exactly like any other
+            // diff (apply --cached of a +lines block IS a partial add).
+            $untracked = ($row['index_status'] ?? '') === '?'
+                && ($row['work_status'] ?? '') === '?';
+            $lines = $untracked
+                ? $this->git->untrackedDiff($row['path'])
+                : $this->git->diff($row['path'], $cached);
             // The side must ride the viewer, not just the request: a staged
             // row's viewer showing --cached bytes while Space re-staged them
             // was the candy-git-034 trap.
@@ -1600,6 +1633,7 @@ final class App implements Model
                 'stage' => $this->git->stage($args['path']),
                 'unstage' => $this->git->unstage($args['path']),
                 'discard' => $this->git->discard($args['path']),
+            'deleteUntracked' => $this->git->deleteUntracked($args['path']),
                 'checkout' => $this->git->checkout($args['branch']),
                 'commit' => $this->git->commit($args['message'] ?? ''),
                 'reset' => $this->git->reset(),

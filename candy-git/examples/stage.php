@@ -82,6 +82,8 @@ $fixture = new class implements GitDriver {
     public function stageAll(): void {}
     public function diff(string $path, bool $cached = false): array { return []; }
     public function discard(string $path): void {}
+    public function untrackedDiff(string $path): array { return []; }
+    public function deleteUntracked(string $path): void {}
     public function amend(): void {}
     public function amendWith(string $message): void {}
     public function lastCommitMessage(): string { return ""; }

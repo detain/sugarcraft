@@ -343,6 +343,80 @@ final class Git implements GitDriver
         $this->run(['restore', '--worktree', '--', $path]);
     }
 
+    /**
+     * The diff of an untracked path: every line as an addition. Plain
+     * `git diff` emits nothing for `??` rows, so the routine "what is
+     * this new file" action opened an empty box (candy-git-035). The
+     * shape is git's own new-file patch (byte-verified against
+     * `git diff --no-index -- /dev/null <path>`), built from a file
+     * read - not a spawn - so hosts without /dev/null are unaffected
+     * and the spawn census does not move.
+     *
+     * @return list<string>
+     */
+    public function untrackedDiff(string $path): array
+    {
+        $file  = $this->insideWorktree($path);
+        // Fresh stat every call: the TUI is one long-lived process, and a
+        // chmod from another terminal must not read stale (candy-git-035).
+        clearstatcache(true, $file);
+        $lines = is_file($file) ? file($file) : false;
+        if ($lines === false) {
+            throw new \RuntimeException(Lang::t('git.untracked_missing', ['path' => $path]));
+        }
+
+        $mode = (fileperms($file) & 0o111) !== 0 ? '100755' : '100644';
+        $out  = [
+            'diff --git a/' . $path . ' b/' . $path,
+            'new file mode ' . $mode,
+            '--- /dev/null',
+            '+++ b/' . $path,
+        ];
+
+        foreach ($lines as $line) {
+            if (str_contains($line, "\0")) {
+                // Same sentence git prints for a new binary file; no
+                // hunk means the viewer offers nothing to stage.
+                $out[] = 'Binary files /dev/null and b/' . $path . ' differ';
+
+                return $out;
+            }
+        }
+
+        if ($lines === []) {
+            return $out; // empty file: git lists the creation, no @@ block
+        }
+
+        $out[]    = '@@ -0,0 +1,' . count($lines) . ' @@';
+        $last     = count($lines) - 1;
+        foreach ($lines as $i => $line) {
+            $out[] = '+' . rtrim($line, "\r\n");
+            if ($i === $last && !str_ends_with($line, "\n")) {
+                $out[] = '\\ No newline at end of file';
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Delete an untracked file from disk. git has no restore verb for
+     * `??` paths (`git restore` answers pathspec-did-not-match), so an
+     * armed d on an untracked row is a true unlink - unrecoverable,
+     * which is why the UI asks twice (candy-git-035).
+     */
+    public function deleteUntracked(string $path): void
+    {
+        $file = $this->insideWorktree($path);
+        if (!is_file($file)) {
+            throw new \RuntimeException(Lang::t('git.untracked_missing', ['path' => $path]));
+        }
+
+        if (!@unlink($file)) {
+            throw new \RuntimeException(Lang::t('git.delete_failed', ['path' => $path]));
+        }
+    }
+
     public function amend(): void
     {
         $this->run(['commit', '--amend', '--no-edit']);
@@ -701,6 +775,40 @@ final class Git implements GitDriver
      *
      * @throws \RuntimeException (see {@see self::guardRef()} on the type)
      */
+    /**
+     * Resolve a porcelain-supplied path INSIDE the worktree for file
+     * operations that bypass git (and so get no pathspec guard from
+     * git). Stricter than guardWorktreePath, which lets an explicit
+     * absolute target through for worktree-add: untracked rows are
+     * worktree-relative by definition, and anything pointing outside
+     * is refused as unsafe.
+     */
+    private function insideWorktree(string $path): string
+    {
+        $this->guardRef($path);
+        if (
+            $path === ''
+            || str_contains($path, "\0")
+            || str_starts_with($path, '/')
+            || (bool) preg_match('#^[A-Za-z]:[\\\\/]#', $path) // Windows drive-letter root
+        ) {
+            throw new \RuntimeException(Lang::t('git.unsafe_path', ['path' => $path]));
+        }
+
+        foreach (preg_split('#[\\\\/]#', $path) as $segment) {
+            if ($segment === '..') {
+                throw new \RuntimeException(Lang::t('git.unsafe_path', ['path' => $path]));
+            }
+        }
+
+        $base = realpath($this->cwd);
+        if ($base === false) {
+            throw new \RuntimeException(Lang::t('git.unsafe_path', ['path' => $path]));
+        }
+
+        return $base . '/' . $path;
+    }
+
     private function guardWorktreePath(string $path): string
     {
         $this->guardRef($path);

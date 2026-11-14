@@ -143,6 +143,17 @@ final class HistoryEntryTest extends TestCase
         $this->assertSame(HistoryEntry::UNRECOVERABLE_INVERSE, $entry->inverseOp);
     }
 
+    public function testDeleteUntrackedFactoryRefusesUndo(): void
+    {
+        // Untracked bytes were never in a git object - undo would lie
+        // (candy-git-035), the same refusal lane as discard and amend.
+        $entry = HistoryEntry::deleteUntracked('junk.tmp');
+
+        $this->assertSame('deleteUntracked', $entry->op);
+        $this->assertSame(['path' => 'junk.tmp'], $entry->args);
+        $this->assertSame(HistoryEntry::UNRECOVERABLE_INVERSE, $entry->inverseOp);
+    }
+
     public function testStageAllFactoryCreatesCorrectEntry(): void
     {
         $entry = HistoryEntry::stageAll();
