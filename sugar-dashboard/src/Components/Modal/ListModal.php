@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dashboard\Components\Modal;
 
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Dashboard\Foundation\Item;
 use SugarCraft\Dashboard\Foundation\Sizer;
 
@@ -49,22 +50,30 @@ final class ListModal implements Item, Sizer
 
     public function withOnEdit(callable $onEdit): self
     {
-        return new self(
+        // D-69 (finding 064): rebuild-through-new-self dropped the stored
+        // allocation (D-56/D-67/D-77 drop-class screened); carry it.
+        $next = new self(
             items: $this->items,
             title: $this->title,
             onEdit: $onEdit,
             onDelete: $this->onDelete,
         );
+        $next->width = $this->width;
+        $next->height = $this->height;
+        return $next;
     }
 
     public function withOnDelete(callable $onDelete): self
     {
-        return new self(
+        $next = new self( // D-69 allocation carry (finding 064)
             items: $this->items,
             title: $this->title,
             onEdit: $this->onEdit,
             onDelete: $onDelete,
         );
+        $next->width = $this->width;
+        $next->height = $this->height;
+        return $next;
     }
 
     public function setSize(int $width, int $height): Sizer
@@ -75,11 +84,24 @@ final class ListModal implements Item, Sizer
         return $clone;
     }
 
+    /**
+     * Render the list, honoring the allocated box (finding sugar-dashboard-
+     * 064: setSize used to be stored and never read).
+     *
+     * With no positive allocation the plain-list bytes are exactly what the
+     * class always emitted. With a height budget the items window around a
+     * valid selection (header rows are subtracted first; a selection past
+     * the end shows no cursor and never crashes); with a width budget every
+     * emitted row is cell-truncated to it, unpadded.
+     */
     public function render(): string
     {
-        $result = '';
+        $allocW = $this->width !== null && $this->width > 0 ? $this->width : 0;
+        $allocH = $this->height !== null && $this->height > 0 ? $this->height : 0;
+
+        $lines = [];
         if ($this->title !== null) {
-            $result .= $this->title . "\n";
+            $lines[] = $this->title;
         }
 
         // Render hints if edit/delete are enabled
@@ -90,14 +112,40 @@ final class ListModal implements Item, Sizer
         if ($this->onDelete !== null) {
             $hints[] = '[D]elete';
         }
-        if (!empty($hints)) {
-            $result .= implode(' ', $hints) . "\n";
+        if ($hints !== []) {
+            $lines[] = implode(' ', $hints);
         }
 
-        foreach ($this->items as $i => $item) {
-            $prefix = ($this->selectedIndex === $i) ? '> ' : '  ';
-            $result .= $prefix . $item . "\n";
+        $count = count($this->items);
+        if ($allocH > 0) {
+            $budget = max(1, $allocH - count($lines));
+            $visible = min($budget, $count);
+            $hasCursor = $this->selectedIndex !== null
+                && $this->selectedIndex >= 0
+                && $this->selectedIndex < $count;
+            $top = 0;
+            if ($visible > 0) {
+                $top = $hasCursor
+                    ? max(0, min($this->selectedIndex - intdiv($visible - 1, 2), $count - $visible))
+                    : 0;
+            }
+            for ($i = $top; $i < $top + $visible; $i++) {
+                $lines[] = ($this->selectedIndex === $i ? '> ' : '  ') . $this->items[$i];
+            }
+        } else {
+            foreach ($this->items as $i => $item) {
+                $prefix = ($this->selectedIndex === $i) ? '> ' : '  ';
+                $lines[] = $prefix . $item;
+            }
         }
-        return rtrim($result, "\n");
+
+        if ($allocW > 0) {
+            $lines = array_map(
+                static fn(string $line): string => Width::truncateAnsi($line, $allocW),
+                $lines,
+            );
+        }
+
+        return implode("\n", $lines);
     }
 }
