@@ -684,6 +684,90 @@ final class WorkerPoolTest extends TestCase
         $pool->stop();
     }
 
+    /**
+     * sc-31 (sugar-core-012): the stats leg of the suite — internal
+     * bookkeeping must match what the ledger actually saw. Six jobs
+     * dispatched against a two-slot pool is two workers and six unique
+     * monotonic job ids, no more, no less: every job settles exactly once,
+     * pending/queue drain to empty, and the counters are never rewound or
+     * over-inflated (idle workers are REUSED, so the spawn count stays at
+     * the concurrency ceiling — sc-30's pruning contract keeps it honest).
+     */
+    public function testLedgerCountersMatchLedgeredOperations(): void
+    {
+        $pool = new WorkerPool($this->loop, 2);
+        $settled = 0;
+        $seen = [];
+
+        for ($i = 0; $i < 6; $i++) {
+            $pool->dispatch([WorkerPoolTasks::class, 'pi'])
+                ->then(function (WorkerResultMsg $msg) use (&$settled, &$seen): void {
+                    $settled++;
+                    $seen[$msg->workerId] = true;
+                    if ($settled === 6) {
+                        $this->loop->stop();
+                    }
+                })
+                ->catch(function (\Throwable $e): void {
+                    $this->loop->stop();
+                    $this->fail('ledger job rejected: ' . $e->getMessage());
+                });
+        }
+
+        $this->loop->addTimer(20.0, function (): void {
+            $this->loop->stop();
+            $this->fail('ledger drain timed out');
+        });
+        $this->spinLoop();
+
+        $jobCounter = (new \ReflectionProperty(WorkerPool::class, 'jobCounter'))->getValue($pool);
+        $workerCounter = (new \ReflectionProperty(WorkerPool::class, 'workerCounter'))->getValue($pool);
+        $pending = (new \ReflectionProperty(WorkerPool::class, 'pending'))->getValue($pool);
+        $queue = (new \ReflectionProperty(WorkerPool::class, 'queue'))->getValue($pool);
+        $workers = (new \ReflectionProperty(WorkerPool::class, 'workers'))->getValue($pool);
+
+        $this->assertSame(6, $settled, 'every dispatched job settles exactly once');
+        $this->assertSame(6, $jobCounter, 'job ids are one monotonic counter: 6 jobs, 6 ids');
+        $this->assertSame(2, $workerCounter, 'two slots serve six jobs: workers are reused, never re-spawned per job');
+        $this->assertSame([], $pending, 'a drained pool holds no deferred');
+        $this->assertSame([], $queue, 'a drained pool holds no queued work');
+        $this->assertCount(2, $workers, 'the live worker set matches the spawn count');
+        $this->assertCount(2, $seen, 'results came from the two pooled workers only');
+
+        $pool->stop();
+        $this->assertSame([], (new \ReflectionProperty(WorkerPool::class, 'workers'))->getValue($pool),
+            'stop() empties the worker ledger');
+    }
+
+    /**
+     * sc-31 (sugar-core-012): stop() idempotence. The first stop pays the
+     * bounded reap ladder and rejects the in-flight job exactly once; a
+     * second stop on the stopped pool must be a NO-OP — no second ladder
+     * (that was the sc-32 serial-wait disease), no second rejection, no
+     * throw. The destructor runs stop() too, so every real shutdown is
+     * exactly this second call.
+     */
+    public function testStopIsIdempotentAndRejectsEachJobOnce(): void
+    {
+        $pool = new WorkerPool($this->loop, 1);
+        $rejections = 0;
+        $pool->dispatch([WorkerPoolTasks::class, 'pi'])
+            ->then(null, function (\Throwable $e) use (&$rejections): void {
+                $rejections++;
+            });
+
+        $pool->stop();
+        $this->assertSame(1, $rejections, 'the unsettled job is rejected once by the first stop');
+
+        $started = microtime(true);
+        $pool->stop();
+        $elapsed = microtime(true) - $started;
+
+        $this->assertSame(1, $rejections, 'a second stop must not re-reject anything');
+        $this->assertLessThan(0.5, $elapsed, 'the second stop runs no reap ladder on an empty pool');
+        $this->assertSame([], (new \ReflectionProperty(WorkerPool::class, 'pending'))->getValue($pool));
+    }
+
     private function spinLoop(): void
     {
         $this->loop->run();
