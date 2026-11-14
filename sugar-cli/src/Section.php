@@ -43,7 +43,8 @@ final class Section
      *                     by the rune width), so the lead never exceeds
      *                     `$leftPad` cells. Negatives floor to 0.
      *
-     * @throws \InvalidArgumentException when `$width` is less than 1
+     * @throws \InvalidArgumentException when `$width` is less than 1, or when
+     *                     `$rune` sanitizes to an empty string
      */
     public static function header(
         string $label,
@@ -57,6 +58,9 @@ final class Section
         $theme   ??= Theme::detect();
         $label   = SafeText::line($label);  // neutralize escape/control injection
         $rune    = SafeText::line($rune);   // the fill rune is caller display text too
+        if ($rune === '') {
+            throw new \InvalidArgumentException('Section::header(): $rune sanitized to an empty string — pass a visible fill rune.');
+        }
         $runeW   = max(1, Width::string($rune));  // cell width of the fill rune
         // $leftPad is a cell budget (finding 010): a multi-cell rune takes
         // whole runes out of it, exactly like the trailing fill below.
@@ -82,12 +86,14 @@ final class Section
      * a custom fill rune (measured in cells for multi-cell glyphs).
      *
      * Length: with an explicit `$width` the rule is as many whole runes as
-     * fit in `$width` cells — so a multi-cell rune wider than the width
-     * yields an empty string. With `$width` null the budget is 2 cells: two
+     * fit in `$width` cells — a multi-cell rune wider than the width renders
+     * as one truncated cell (the `…` marker), never as an empty string. With
+     * `$width` null the budget is 2 cells: two
      * single-cell runes (one 2-cell rune), unlike header() with null width,
      * which ends after a single trailing rune.
      *
-     * @throws \InvalidArgumentException when `$width` is less than 1
+     * @throws \InvalidArgumentException when `$width` is less than 1, or when
+     *                     `$rune` sanitizes to an empty string
      */
     public static function rule(
         ?Theme $theme = null,
@@ -98,9 +104,15 @@ final class Section
         self::assertWidth($width);
         $theme  ??= Theme::detect();
         $rune   = SafeText::line($rune);
+        if ($rune === '') {
+            throw new \InvalidArgumentException('Section::rule(): $rune sanitized to an empty string — pass a visible fill rune.');
+        }
         $runeW  = max(1, Width::string($rune));
         $repeat = intdiv($width ?? 2, $runeW);
-        $bare   = str_repeat($rune, $repeat);
+        $bare   = $repeat > 0
+            ? str_repeat($rune, $repeat)
+            : Width::clipCells($rune, 1);  // a 0-cell budget renders as one
+            // truncation-marker cell, never as a vanished rule (finding 031)
         return $theme->muted->render($bare);
     }
 
@@ -127,7 +139,8 @@ final class Section
      *                          {@see WidthProbe}.
      * @param string $rune      divider rune between label and end fill
      *
-     * @throws \InvalidArgumentException when `$width` is less than 1
+     * @throws \InvalidArgumentException when `$width` is less than 1, or when
+     *                     `$rune` sanitizes to an empty string
      */
     public static function subHeader(
         string $label,
@@ -141,6 +154,9 @@ final class Section
         $theme  ??= Theme::detect();
         $label  = SafeText::line($label);  // neutralize escape/control injection
         $rune   = SafeText::line($rune);   // the divider rune is caller display text too
+        if ($rune === '') {
+            throw new \InvalidArgumentException('Section::subHeader(): $rune sanitized to an empty string — pass a visible divider rune.');
+        }
         $runeW  = max(1, Width::string($rune));
         $indent = max(0, $indent);
         if ($width === null) {

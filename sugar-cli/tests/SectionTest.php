@@ -270,7 +270,10 @@ final class SectionTest extends TestCase
     {
         // Widths below 1 now throw (testRuleWidthBelowOneThrows) instead of
         // clamping to a single rune, so this contract starts at width 1.
-        $this->assertSame('', Section::rule(Theme::plain(), 1, '漢'));
+        // A rune that cannot fit the budget renders as one truncated cell
+        // (the `…` marker), not as a vanished rule (finding 031).
+        $this->assertSame('…', Section::rule(Theme::plain(), 1, '漢'));
+        $this->assertSame(1, Width::string(Section::rule(Theme::plain(), 1, '漢')));
         $this->assertSame('──', Section::rule(Theme::plain(), null));
         $this->assertSame('漢', Section::rule(Theme::plain(), null, '漢'));
     }
@@ -292,11 +295,33 @@ final class SectionTest extends TestCase
         $this->assertSame('----', $rule);
     }
 
-    /** An empty rune string renders without crash (min-1 width guard inside). */
-    public function testEmptyRuneRendersWithoutCrash(): void
+    /** A rune that sanitizes to '' is a fail-loud authoring error at all three sites (finding 031). */
+    public function testEmptyRuneThrowsAtEveryEntry(): void
     {
-        $out = Section::header('A', Theme::plain(), width: 10, rune: '');
-        $this->assertLessThanOrEqual(10, Width::string($out));
-        $this->assertStringContainsString('A', $out);
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Section::header(): $rune sanitized to an empty string');
+        Section::header('A', Theme::plain(), width: 10, rune: '');
+    }
+
+    public function testEmptyRuneThrowsInRule(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Section::rule(): $rune sanitized to an empty string');
+        Section::rule(Theme::plain(), 8, '');
+    }
+
+    public function testEmptyRuneThrowsInSubHeader(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Section::subHeader(): $rune sanitized to an empty string');
+        Section::subHeader('A', Theme::plain(), width: 10, rune: '');
+    }
+
+    /** Escape-only input is empty after SafeText — same door, not a silent fallback. */
+    public function testEscapeOnlyRuneThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Section::rule(): $rune sanitized to an empty string');
+        Section::rule(Theme::plain(), 8, "\x1b[31m");
     }
 }
