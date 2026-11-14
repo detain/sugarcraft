@@ -9,6 +9,9 @@ use SugarCraft\Metrics\Instrument\AsyncGauge;
 use SugarCraft\Metrics\Instrument\UpDownCounter;
 
 /**
+ * Mirrors charmbracelet/promwish Registry (NewRegistry / MustRegister
+ * family) — descriptor registration and emit forwarding.
+ *
  * Application-facing facade. Hand a {@see Backend} in, then call
  * {@see counter()} / {@see gauge()} / {@see histogram()} from
  * application code; the registry forwards each call to the

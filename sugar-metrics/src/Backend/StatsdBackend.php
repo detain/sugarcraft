@@ -10,6 +10,9 @@ use SugarCraft\Metrics\Descriptor;
 use SugarCraft\Metrics\Util;
 
 /**
+ * Mirrors charmbracelet/promwish statsd reporter family (the
+ * WithStatsd option and its wire formatter).
+ *
  * UDP StatsD emitter (etsy / DogStatsD wire format).
  *
  * Each metric is one UDP datagram:

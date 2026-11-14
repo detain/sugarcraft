@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Metrics\Instrument;
 
-use SugarCraft\Metrics\Backend;
 use SugarCraft\Metrics\Registry;
 
 /**

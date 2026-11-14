@@ -10,6 +10,10 @@ use SugarCraft\SshServer\Middleware;
 use SugarCraft\SshServer\Session;
 
 /**
+ * Mirrors charmbracelet/promwish middleware option (the
+ * InstrumentHandler pattern): wraps a handler to emit telemetry
+ * around each invocation.
+ *
  * SugarSshServer middleware that emits session telemetry.
  *
  * Per session:

@@ -13,7 +13,8 @@
         "counter",
         "histogram",
         "ssh",
-        "wish"
+        "wish",
+        "promwish"
     ],
     "homepage": "https://github.com/sugarcraft/sugar-metrics",
     "authors": [

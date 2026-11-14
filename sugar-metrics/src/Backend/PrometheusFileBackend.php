@@ -10,6 +10,9 @@ use SugarCraft\Metrics\Descriptor;
 use SugarCraft\Metrics\Util;
 
 /**
+ * Mirrors charmbracelet/promwish textfile collector output path
+ * (the node_exporter --collector.textfile.directory pattern).
+ *
  * Atomically rewrites a Prometheus textfile-collector file
  * containing the current state of all metrics. Designed for the
  * "node_exporter --collector.textfile.directory" pattern: short-
