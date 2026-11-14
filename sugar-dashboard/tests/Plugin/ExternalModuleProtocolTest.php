@@ -244,4 +244,27 @@ final class ExternalModuleProtocolTest extends TestCase
         $this->assertIsString($error);
         $this->assertStringContainsString('/etc/wept.conf (request: update)', $error, 'the stored reason holds the full stderr line');
     }
+
+    public function testAdvertisedMinSizeSurvivesInitAndChromeClipsOnGlyphBoundaries(): void
+    {
+        // sugar-dashboard-105: init() validated the plugin's minSize into its
+        // return array and then THREW THE ANSWER AWAY — minSize() kept
+        // answering the hardcoded placeholder forever — and the chrome clip
+        // was a byte substr() that split multi-byte clusters mid-glyph.
+        // First-frame order probe: the layout may ask before the handshake.
+        $module = $this->module('sizes', 'sized');
+        $this->assertSame([30, 4], $module->minSize(), 'pre-handshake advertises the placeholder budget');
+
+        $meta = $module->init();
+        $this->assertSame([77, 23], $meta['minSize'], 'the validated reply reaches the caller');
+        $this->assertSame([77, 23], $module->minSize(), 'and is kept, not dropped');
+
+        $name = (string) $meta['name'];
+        $this->assertTrue(
+            mb_check_encoding($name, 'UTF-8'),
+            'a cell-budgeted clip never paints a broken cluster (' . bin2hex((string) substr($name, -2)) . ')'
+        );
+        $this->assertStringEndsWith('...', $name, 'the long name really was clipped');
+        $this->assertLessThanOrEqual(67, \SugarCraft\Core\Util\Width::of($name), 'chrome stays inside the cell budget plus the ellipsis');
+    }
 }

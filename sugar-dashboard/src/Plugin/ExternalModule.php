@@ -9,6 +9,7 @@ use SugarCraft\Core\Util\Executable\Locator;
 use SugarCraft\Core\Util\Proc\BoundedShutdown;
 use SugarCraft\Dashboard\Module\LegacyModule;
 use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\Core\Util\Width;
 
 /**
  * Wraps an external binary as a Module.
@@ -72,8 +73,8 @@ final class ExternalModule implements LegacyModule
     /** Longest stderr line quoted into a disable reason before the tail clip. */
     private const STDERR_LINE_VISIBLE_BYTES = 96;
 
-    /** Longest plugin-supplied label allowed into chrome (name header/panel title). */
-    private const MAX_LABEL_BYTES = 64;
+    /** Longest plugin-supplied label allowed into chrome, in display cells (name header/panel title). */
+    private const MAX_LABEL_CELLS = 64;
 
     /** Bound on a single stdin write: a plugin that never reads is disabled, not waited on forever. */
     private const WRITE_TIMEOUT_SECS = 5;
@@ -82,6 +83,16 @@ final class ExternalModule implements LegacyModule
 
     /** Why the plugin was disabled this session, if it was (surfaced through view()). */
     private ?string $lastError = null;
+
+    /**
+     * Minimum grid the plugin advertised (sugar-dashboard-105). Before the
+     * handshake lands — or if it never does — this is the placeholder budget
+     * minSize() has always returned: advertise first, draw after, and the
+     * validated reply REPLACES the placeholder instead of being dropped.
+     *
+     * @var array{int,int}
+     */
+    private array $advertisedMinSize = [30, 4];
 
     /**
      * Last rendered frame, plus what it was rendered for. The cache is keyed
@@ -178,10 +189,11 @@ final class ExternalModule implements LegacyModule
         }
 
         $this->interval = self::clampInterval($response->data['interval'] ?? 0);
+        $this->advertisedMinSize = self::clampMinSize($response->data['minSize'] ?? null);
 
         return [
             'name' => self::chromeLabel((string) ($response->data['name'] ?? $this->name)),
-            'minSize' => self::clampMinSize($response->data['minSize'] ?? null),
+            'minSize' => $this->advertisedMinSize,
             'interval' => $this->interval,
         ];
     }
@@ -300,10 +312,14 @@ final class ExternalModule implements LegacyModule
 
     /**
      * {@inheritdoc}
+     *
+     * The advertised budget, not a constant: the value the plugin validated
+     * at handshake (sugar-dashboard-105), or the placeholder the panel
+     * started with before there was a handshake to trust.
      */
     public function minSize(): array
     {
-        return [30, 4];
+        return $this->advertisedMinSize;
     }
 
     /**
@@ -638,7 +654,9 @@ final class ExternalModule implements LegacyModule
         $newline = strrpos($tail, "\n");
         $line = trim((string) substr($tail, $newline === false ? 0 : $newline + 1));
         if (strlen($line) > self::STDERR_LINE_VISIBLE_BYTES) {
-            $line = substr($line, 0, self::STDERR_LINE_VISIBLE_BYTES) . '...';
+            // mb_strcut: a byte budget that never splits a multi-byte
+            // cluster (sugar-dashboard-105's rule for every display string).
+            $line = mb_strcut($line, 0, self::STDERR_LINE_VISIBLE_BYTES) . '...';
         }
 
         return $line;
@@ -762,14 +780,19 @@ final class ExternalModule implements LegacyModule
      * CR reflow and zone sentinels stripped, invisible formatting marked,
      * length clipped. Plugin names and error texts are authored by another
      * process — they are untrusted input.
+     *
+     * The clip counts DISPLAY CELLS, not bytes (sugar-dashboard-105): the
+     * old substr() cut through multi-byte clusters mid-glyph and painted
+     * the broken tail bytes into the terminal chrome. Width::truncate walks
+     * grapheme clusters, so a clip inside a wide glyph either keeps the
+     * whole cluster or drops it — never a fragment.
      */
     private static function chromeLabel(string $label): string
     {
         $clean = Sanitize::stripZoneSentinels(Sanitize::untrustedForDisplay($label));
-        if (strlen($clean) > self::MAX_LABEL_BYTES) {
-            $clean = substr($clean, 0, self::MAX_LABEL_BYTES) . '...';
-        }
-        return $clean;
+        $clipped = Width::truncate($clean, self::MAX_LABEL_CELLS);
+
+        return $clipped === $clean ? $clean : $clipped . '...';
     }
 
     /**

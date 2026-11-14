@@ -24,6 +24,10 @@
  *            probe for sugar-dashboard-203: the disable reason must carry
  *            the plugin's own last stderr line, not just our half of the
  *            failed conversation.
+ *  sizes     honest handshake carrying a real minSize and a long
+ *            multi-byte name (sugar-dashboard-105): the host must keep the
+ *            validated meta past init() and clip chrome on glyph
+ *            boundaries.
  *  surrogate honest handshake; every update reply carries the ASCII
  *            \ud800 ESCAPE form — the finding's literal probe vector,
  *            likewise refused at decode on supported PHP.
@@ -83,6 +87,35 @@ if ($mode === 'counter') {
                 'type' => 'view',
                 'data' => ['content' => 'render #' . $renders . ' tick:' . ($data['state']['tick'] ?? 0)],
             ]) . "\n");
+        }
+    }
+    exit(0);
+}
+
+if ($mode === 'sizes') {
+    // sdx-105: advertises a real minimum and a long multi-byte name, so
+    // the host must both KEEP the validated meta and clip on glyph
+    // boundaries — a byte substr() would paint a broken cluster.
+    while (($line = fgets(STDIN)) !== false) {
+        $request = json_decode(trim($line), true);
+        $type = is_array($request) ? ($request['type'] ?? '') : '';
+        if ($type === 'init') {
+            fwrite(STDOUT, json_encode([
+                'type' => 'init',
+                'data' => [
+                    'minSize' => [77, 23],
+                    'interval' => 0,
+                    'name' => 'Ünïcødéパネルプラグイン' . str_repeat('幅広のなまえ', 12),
+                ],
+            ]) . "\n");
+            continue;
+        }
+        if ($type === 'update') {
+            fwrite(STDOUT, json_encode(['type' => 'update', 'data' => ['state' => $request['data']['state'] ?? []]]) . "\n");
+            continue;
+        }
+        if ($type === 'view') {
+            fwrite(STDOUT, json_encode(['type' => 'view', 'data' => ['content' => 'sized']]) . "\n");
         }
     }
     exit(0);
