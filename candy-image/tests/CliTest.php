@@ -251,6 +251,7 @@ final class CliTest extends TestCase
             $previous = $factor;
         }
         $this->assertNull(Cli::workDialToFactor('1.5'), 'the non-integer collapse spelling is refused');
+        $this->assertNull(Cli::workDialToFactor("9\n"), 'a newline-tailed dial is refused (\\z, candy-image-034)');
 
         // The endpoints land on the renderer's documented rungs.
         $this->assertSame(1, SymbolMapRenderer::candidateLimit(Cli::workDialToFactor('1')));
@@ -345,12 +346,20 @@ final class CliTest extends TestCase
 
     public function testWidthRejectsNonPositiveAndFractionalValues(): void
     {
-        foreach (['0', 'abc', '-4', '8.5'] as $raw) {
+        foreach (['0', 'abc', '-4', '8.5', "12\n"] as $raw) {
             [$exit, , $err] = self::drive(['--width=' . $raw, 'x.png']);
 
             $this->assertSame(Cli::EXIT_USAGE, $exit, $raw);
             $this->assertStringContainsString('invalid value', $err, $raw);
         }
+
+        // candy-image-034: $ matched before a trailing newline, so a
+        // shell-mangled --height=9\n parsed where the docblock promised
+        // refusal; \z closes the hole on every numeric leg.
+        [$exit, , $err] = self::drive(['--height=' . "9\n", 'x.png']);
+
+        $this->assertSame(Cli::EXIT_USAGE, $exit);
+        $this->assertStringContainsString('invalid value', $err);
     }
 
     public function testSizeBoxMustBeAPositivePairAndConflictsWithExplicitLegs(): void
@@ -360,7 +369,7 @@ final class CliTest extends TestCase
         $this->assertSame(Cli::EXIT_INPUT, $exit);
         $this->assertNotSame('', $err, 'the missing file is reported by the decode stage');
 
-        foreach (['40', '0x12', '12x0', 'axb'] as $raw) {
+        foreach (['40', '0x12', '12x0', 'axb', "40x12\n"] as $raw) {
             [$exit, , $err] = self::drive(['--size=' . $raw, 'x.png']);
 
             $this->assertSame(Cli::EXIT_USAGE, $exit, $raw);

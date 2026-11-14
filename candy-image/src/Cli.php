@@ -641,7 +641,8 @@ final class Cli
      */
     public static function workDialToFactor(string $raw): ?float
     {
-        if (preg_match('/^\d+$/', $raw) !== 1) {
+        // \z keeps a newline-tailed value out of the dial (candy-image-034).
+        if (preg_match('/\A\d+\z/', $raw) !== 1) {
             return null;
         }
         $step = (int) $raw;
@@ -655,11 +656,12 @@ final class Cli
     /**
      * Parse a positive cell count for --width/--height; anything else
      * (non-numeric, zero, negative, fractional, beyond MAX_CELL_DIM)
-     * refuses with null.
+     * refuses with null. \z (not $) ends the match: a trailing newline
+     * would otherwise sail through the $ anchor (candy-image-034).
      */
     private static function parseCells(string $raw): ?int
     {
-        if (preg_match('/^\d+$/', $raw) !== 1) {
+        if (preg_match('/\A\d+\z/', $raw) !== 1) {
             return null;
         }
         $value = (int) $raw;
@@ -675,7 +677,7 @@ final class Cli
      */
     private static function parseSize(string $raw): ?array
     {
-        if (preg_match('/^(\d+)x(\d+)$/', $raw, $m) !== 1) {
+        if (preg_match('/\A(\d+)x(\d+)\z/', $raw, $m) !== 1) {
             return null;
         }
         $w = (int) $m[1];
