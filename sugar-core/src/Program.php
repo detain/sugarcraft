@@ -143,6 +143,12 @@ final class Program
      * installing the second deafened the first, and cancelling one sibling
      * restored the pre-first handler over the survivor's head.
      *
+     * The `callable|int|string|array|null` shape is PHP's own signal()
+     * displaced-handler union, not a user-facing key parameter — finding
+     * sugar-core-039's R-19 "int|string key params unchecked" leg was
+     * written against this union read as input (sc-26 census: no public
+     * Program method takes an int|string key today).
+     *
      * @var array<int, array{prev: callable|int|string|array|null, subs: list<Subscription>}>
      */
     private array $signalSubscriptions = [];

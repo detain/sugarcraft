@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 /**
  * sugar-core/src/Keys/KeyBindings.php
  *
@@ -28,8 +30,6 @@
  * context-dependent action is normal keyboard design (space can begin one
  * screen and hard-drop another).
  */
-
-declare(strict_types=1);
 
 namespace SugarCraft\Core\Keys;
 

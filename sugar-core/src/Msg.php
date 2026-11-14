@@ -16,6 +16,14 @@ namespace SugarCraft\Core;
  * `$rune`, `$alt`, `$ctrl`, `$shift` and `string()`; {@see Msg\MouseMsg}
  * carries `$x`, `$y`, `$button`, `$action`; {@see Msg\WindowSizeMsg}
  * carries `$cols`, `$rows`). The README's Message catalogue indexes them.
+ *
+ * Factory exemption (sc-26 / finding sugar-core-039, DX-19 census: zero
+ * `::new()` across src/Msg + src/Exception): upstream
+ * charmbracelet/bubbletea declares these messages as bare struct types with
+ * no constructor functions (`type SuspendMsg struct{}` — callers compose the
+ * literal), so `new <Msg>(...)` is the faithful mirror and no `::new()`
+ * counterpart exists to mirror. AGENTS' "factories mirror upstream" therefore
+ * exempts this family wholesale, per-file, by this dated note.
  */
 interface Msg
 {

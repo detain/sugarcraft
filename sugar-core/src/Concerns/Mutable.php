@@ -23,6 +23,15 @@ namespace SugarCraft\Core\Concerns;
  * For classes with sentinel-bool nullable fields that need the
  *   mutate(field: $val, fieldSet: true, propsAdded: ['field'])
  *   pattern, override mutate() in that class specifically.
+ *
+ * Consumer roster (sc-26 / finding sugar-core-039 census): zero in-lib
+ * consumers — sugar-core's own carriers promote readonly ctor properties or
+ * hand-roll `mutate()`. The trait is exported for downstream carriers,
+ * which is its only job: the repo-wide census at fix time found the
+ * `candy-code` carrier family (Board/Teammate/Chat/Context + Format
+ * classes) as the live riders, per the AGENTS "carriers with >=7 positional
+ * fields use sugar-core Concerns\Mutable" law. Deleting it here would
+ * fatal those consumers; keeping it documented is the ship-default.
  */
 trait Mutable
 {

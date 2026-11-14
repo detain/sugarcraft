@@ -16,6 +16,12 @@ namespace SugarCraft\Core\Exception;
  * Exception` check therefore identifies a domain-classified fault,
  * not "some SugarCraft error" — use the SPL catch idiom (or
  * `\Throwable`) for transport-level discrimination.
+ *
+ * Factory exemption (sc-26 / finding sugar-core-039): the upstream is Go,
+ * where errors are values, not a constructed class family — there is no
+ * `NewX()` counterpart to mirror, so `::new()` factories are exempt across
+ * `src/Exception` by this dated note; `fromKey()` is the SugarCraft-side
+ * i18n constructor instead.
  */
 class Exception extends \Exception
 {
