@@ -71,6 +71,12 @@ after `"9"`, not lexicographically before it). Perfect ties — equal score and
 equal haystack — keep their input order (`usort` is stable as of PHP 8.0).
 `limit: 0` yields no results; a negative `limit` is treated as unlimited.
 
+**Empty-query contract.** An empty query matches NOTHING: `match('', $x)` →
+`null`, `matchAll('', $xs)` → `[]` in both matchers. Filter UIs that show all
+candidates when the box is empty must guard the empty string themselves; for
+whole-query filtering on non-empty input, `SmithWatermanMatcher::forFiltering()`
+is the canonical preset.
+
 ## Scoring profiles
 
 The Smith-Waterman scoring weights are injectable via an immutable `ScoringProfile`.

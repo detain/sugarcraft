@@ -32,6 +32,14 @@ final class FuzzyMatcherFactory
      * fast, never build a silently-un-tuned matcher). Every parameter is
      * defaulted, so all pre-existing calls stay byte-identical.
      *
+     * NOT INTERCHANGEABLE (finding sugar-fuzzy-015): 'smith-waterman' returns
+     * PARTIAL alignments, is capped at query 128 / candidate 1000 by default,
+     * and can score a query that never fully appears; 'sahilm' is linear-time,
+     * uncapped, and requires every query char in the candidate. Naming a
+     * different type behind this factory changes what a filter lists — pass
+     * requireFullQuery: true to bring 'smith-waterman' closest to the Sahilm
+     * whole-query contract. See {@see SmithWatermanMatcher::forFiltering()}.
+     *
      * @param string                           $type                'smith-waterman' or 'sahilm'
      * @param ScoringProfile|SahilmScoring|null $scoring             Optional weights for that matcher
      * @param bool                             $requireFullQuery    'smith-waterman' only: reject partial alignments

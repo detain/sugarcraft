@@ -14,9 +14,23 @@ namespace SugarCraft\Fuzzy;
  * The key feature: ranked matches WITH scored matched character indices,
  * so UI filter highlighting becomes possible.
  *
- * Mirrors the `Candidate` (string + score + matched rune positions) shape of
- * the upstream `sahilm/fuzzy` (Go) recorded in docs/MATCHUPS.md, combined with
- * the internal Smith-Waterman port; used by bubble tea-style filter models.
+ * Mirrors the `Match` (String + Score + MatchedIndexes) shape of the upstream
+ * `sahilm/fuzzy` (Go) recorded in docs/MATCHUPS.md, combined with the internal
+ * Smith-Waterman port; used by bubble tea-style filter models. (FUZZY-14 /
+ * finding sugar-fuzzy-025: this citation once named `Candidate` — a
+ * charmbracelet-side type the upstream never exports from sahilm/fuzzy; the
+ * Go library's own symbols are `Match`/`Matches`.)
+ *
+ * MATCHERS ARE NOT INTERCHANGEABLE (finding sugar-fuzzy-015): SahilmMatcher is
+ * linear-time, uncapped, and full-query by construction — every query
+ * character must appear in the candidate. SmithWatermanMatcher performs local
+ * alignment with DoS caps (query 128 / candidate 1000 by default, both
+ * constructor-tunable) and happily returns PARTIAL alignments that score the
+ * best contiguous-ish subsequence. Swapping one for the other behind this
+ * interface changes what a filter box lists: partial-query hits become null on
+ * the Sahilm side, and long-candidate hits become invisible past the
+ * Smith-Waterman caps. Choose deliberately; see the README's two algorithm
+ * sections.
  *
  * @see https://github.com/sahilm/fuzzy
  * @see https://github.com/charmbracelet/bubbletea
@@ -25,6 +39,12 @@ interface FuzzyMatcher
 {
     /**
      * Match a single candidate against the query.
+     *
+     * An EMPTY QUERY MATCHES NOTHING: `match('', $anything)` returns null.
+     * Filter UIs that want "show all on empty input" must guard the empty
+     * query themselves before calling in (finding sugar-fuzzy-007; the
+     * complementary canonical shape for non-empty filtering is
+     * {@see Matcher\SmithWatermanMatcher::forFiltering()}).
      *
      * @param string $query     The search query (needle)
      * @param string $candidate The candidate string to score (haystack)
@@ -35,11 +55,13 @@ interface FuzzyMatcher
     /**
      * Match a query against an iterable of candidates, returning ranked results.
      *
-     * Results are sorted by score descending, then by candidate ascending as tiebreak.
+     * Results are sorted by score descending, then by haystack (candidate)
+     * ascending as tiebreak.
      * Only returns candidates with a score >= $minScore (default 1, i.e. > 0).
+     * An EMPTY QUERY MATCHES NOTHING: `matchAll('', ...)` returns [].
      *
      * @param string    $query      The search query
-     * @param iterable<string> $candidates Candidate strings to score
+     * @param iterable<string> $candidates candidate strings to score
      * @param int|null  $limit      Maximum number of results to return (null = unlimited)
      * @param int       $minScore   Minimum score threshold (default 1; scores are integers so >= 1 ≡ > 0)
      * @return array<MatchResult> Ranked match results
@@ -59,7 +81,7 @@ interface FuzzyMatcher
      * is identical to {@see self::matchAll()}.
      *
      * @param string    $query      The search query
-     * @param iterable<string> $candidates Candidate strings to score
+     * @param iterable<string> $candidates candidate strings to score
      * @param int|null  $limit      Maximum number of results to return (null = unlimited)
      * @param int       $minScore   Minimum score threshold (default 1; scores are integers so >= 1 ≡ > 0)
      * @return \Generator<MatchResult> Yields MatchResult in ranked order
