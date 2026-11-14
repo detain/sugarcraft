@@ -294,6 +294,49 @@ final class PlotTest extends TestCase
         Plot::new()->withMode('Line');
     }
 
+    // ─── D-93 (finding sugar-dashboard-185): range footguns ───────
+
+    public function testWithMinValueAboveCurrentMaxThrows(): void
+    {
+        // Plot::new() defaults to the 0..100 auto window; 150 inverts it.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/exceeds current maximum/');
+        Plot::new()->withMinValue(150.0);
+    }
+
+    public function testWithMaxValueBelowCurrentMinThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/below current minimum/');
+        Plot::new()->withMinValue(50.0)->withMaxValue(20.0);
+    }
+
+    public function testManualRangeSurvivesWithData(): void
+    {
+        // The auto-rescale used to clobber the explicit window: labels jumped
+        // to the data-derived K scale after withData.
+        $plot = Plot::new([0.0, 5.0, 10.0], 40, 12)
+            ->withMinValue(0.0)
+            ->withMaxValue(10.0)
+            ->withData([0.0, 1000.0, 2000.0]);
+
+        $rendered = $plot->render();
+
+        $this->assertStringNotContainsString('2.0K', $rendered);
+        $this->assertStringNotContainsString('1.0K', $rendered);
+        $this->assertStringContainsString('10', $rendered);
+    }
+
+    public function testAutoRangeStillFollowsDataWhenNoManualWindow(): void
+    {
+        // Guard against the manual flag leaking into the default path.
+        $rendered = Plot::new([0.0, 5.0, 10.0], 40, 12)
+            ->withData([0.0, 1000.0, 2000.0])
+            ->render();
+
+        $this->assertStringContainsString('2.0K', $rendered);
+    }
+
     public function testWithShowAxesReturnsNewInstance(): void
     {
         $original = Plot::new();

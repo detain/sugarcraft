@@ -68,6 +68,28 @@ final class GraphTest extends TestCase
         $this->assertInstanceOf(Graph::class, $result);
     }
 
+    // ─── D-93 (finding sugar-dashboard-185): range footguns ───────
+
+    public function testWithValueRangeRejectsInvertedWindow(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/inverted/');
+        Graph::new()->withValueRange(100, 0);
+    }
+
+    public function testManualWindowSurvivesLaterSeries(): void
+    {
+        // The auto-rescale used to run inside withSeries and overwrite the
+        // explicit window (including its +10% max padding arithmetic).
+        $graph = Graph::new()->withValueRange(0, 10)->withSeries('a', [0, 500, 1000]);
+
+        $ref = new \ReflectionProperty(Graph::class, 'maxValue');
+        $this->assertSame(10.0, $ref->getValue($graph));
+
+        $auto = Graph::new()->withSeries('a', [0, 500, 1000]);
+        $this->assertEqualsWithDelta(1100.0, $ref->getValue($auto), 0.001);
+    }
+
     public function testWithShowGrid(): void
     {
         $graph = Graph::new();

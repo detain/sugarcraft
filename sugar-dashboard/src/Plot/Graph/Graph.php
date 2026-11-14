@@ -36,6 +36,7 @@ final class Graph implements \SugarCraft\Dashboard\Foundation\SizedItem
 
     private ?float $minValue = null;
     private ?float $maxValue = null;
+    private bool $manualRange = false;
     private bool $showGrid = true;
     private bool $showLegend = true;
 
@@ -125,12 +126,23 @@ final class Graph implements \SugarCraft\Dashboard\Foundation\SizedItem
 
     /**
      * Set fixed min/max values.
+     *
+     * Rejects an inverted window at the boundary (finding sugar-dashboard-185:
+     * it used to store min>max silently and paint a flipped axis), and the
+     * explicit window now survives later withSeries() calls, which previously
+     * clobbered it via the auto-rescale.
      */
     public function withValueRange(float $min, float $max): self
     {
+        if ($min > $max) {
+            throw new \InvalidArgumentException(
+                'Graph value range is inverted: min ' . $min . ' exceeds max ' . $max . '.'
+            );
+        }
         $clone = clone $this;
         $clone->minValue = $min;
         $clone->maxValue = $max;
+        $clone->manualRange = true;
         return $clone;
     }
 
@@ -159,6 +171,12 @@ final class Graph implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     private function recalculateMinMax(): void
     {
+        // An explicit withValueRange() window is authoritative: later series
+        // must not auto-rescale it away (finding sugar-dashboard-185).
+        if ($this->manualRange) {
+            return;
+        }
+
         $allData = $this->data;
         foreach ($this->series as $s) {
             $allData = array_merge($allData, $s['data']);

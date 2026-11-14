@@ -37,6 +37,7 @@ final class Plot implements SizedItem, Drawable
     private array $data = [];
     private float $minValue = 0;
     private float $maxValue = 100;
+    private bool $manualRange = false;
     private int $width = 80;
     private int $height = 24;
     private ?Rect $rect = null;
@@ -103,21 +104,37 @@ final class Plot implements SizedItem, Drawable
     {
         $clone = clone $this;
         $clone->data = $data;
-        $clone->computeValueRange();
+        // An explicit manual range survives data replacement
+        // (finding sugar-dashboard-185: auto-scale used to clobber it).
+        if (!$clone->manualRange) {
+            $clone->computeValueRange();
+        }
         return $clone;
     }
 
     public function withMinValue(float $min): self
     {
+        if ($min > $this->maxValue) {
+            throw new \InvalidArgumentException(
+                'Plot minimum ' . $min . ' exceeds current maximum ' . $this->maxValue . '; set the maximum first.'
+            );
+        }
         $clone = clone $this;
         $clone->minValue = $min;
+        $clone->manualRange = true;
         return $clone;
     }
 
     public function withMaxValue(float $max): self
     {
+        if ($max < $this->minValue) {
+            throw new \InvalidArgumentException(
+                'Plot maximum ' . $max . ' is below current minimum ' . $this->minValue . '; set the minimum first.'
+            );
+        }
         $clone = clone $this;
         $clone->maxValue = $max;
+        $clone->manualRange = true;
         return $clone;
     }
 
