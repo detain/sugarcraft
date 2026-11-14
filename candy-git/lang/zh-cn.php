@@ -185,6 +185,8 @@ return [
     'stash.pop'               => '弹出 (应用 + 丢弃)',
     'stash.prompt'            => '储藏信息: ',
     'stash.prompt_untracked'  => '储藏信息 (+未跟踪): ',
+    'stash.filter'            => '过滤贮藏',
+    'stash.filter_prompt'     => '筛选: ',
     'cherry_pick.prompt'      => '拣选： ',
     'cherry_pick.empty_ref'   => '拣选：需要提交引用',
     'cherry_pick.success'     => '已拣选 {ref}',

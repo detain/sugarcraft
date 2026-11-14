@@ -185,6 +185,8 @@ return [
     'stash.pop'               => 'ポップ (適用 + 削除)',
     'stash.prompt'            => 'スタッシュメッセージ: ',
     'stash.prompt_untracked'  => 'スタッシュメッセージ (未追跡含む): ',
+    'stash.filter'            => 'スタッシュをフィルタ',
+    'stash.filter_prompt'     => 'フィルター: ',
     'cherry_pick.prompt'      => 'チェリーピック: ',
     'cherry_pick.empty_ref'   => 'チェリーピック: コミットrefが必要です',
     'cherry_pick.success'     => '{ref} をチェリーピックしました',

@@ -185,6 +185,8 @@ return [
     'stash.pop'               => '팝 (적용 + 폐기)',
     'stash.prompt'            => '스태시 메시지: ',
     'stash.prompt_untracked'  => '스태시 메시지 (추적 외 포함): ',
+    'stash.filter'            => '스테시 필터',
+    'stash.filter_prompt'     => '필터: ',
     'cherry_pick.prompt'      => '체리픽: ',
     'cherry_pick.empty_ref'   => '체리픽: 커밋 ref 필요',
     'cherry_pick.success'     => '{ref} 체리픽됨',

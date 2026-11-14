@@ -96,6 +96,14 @@ final class App implements Model
         public readonly string $stashMessage = '',
         /** The open collection was started by 'u': the push will include untracked files (-u). */
         public readonly bool $stashUntracked = false,
+        /**
+         * candy-git-029 (part 2): the stash overlay's '/' search. While the
+         * bar is open the typed query narrows live; Enter commits the filter
+         * (the list is replaced by the matches), Escape cancels it. Any
+         * action that rebuilds the list restores the full view.
+         */
+        public readonly bool $stashFiltering = false,
+        public readonly string $stashFilterQuery = '',
         /** Cherry-pick state (shown when 'V' is pressed). */
         public readonly ?CherryPick $cherryPick = null,
         /** Worktrees manager overlay (shown when 'w' is pressed in branches pane). */
@@ -181,6 +189,11 @@ final class App implements Model
                 // it lives inside stays open (candy-git-014).
                 return [$this->withStashCollection(false, ''), null];
             }
+            if ($this->stashFiltering) {
+                // Escape cancels a live filter, keeping the overlay (and the
+                // un-narrowed list) open (candy-git-029).
+                return [$this->withAll(stashFiltering: false, stashFilterQuery: ''), null];
+            }
             if ($this->stashManager !== null) {
                 return [$this->withStashManager(null), null];
             }
@@ -229,6 +242,26 @@ final class App implements Model
                     return [$this->withAll(stashMessage: $edited), null];
                 }
                 return [$this, null];
+            }
+            if ($this->stashFiltering) {
+                // The search bar owns the keyboard while it is open: typing
+                // edits the query live, Enter commits the narrowing, and
+                // everything else is swallowed (candy-git-029). Escape is
+                // handled by the global chain above (it cancels, no narrow).
+                if ($msg->type === KeyType::Enter) {
+                    $q = $this->stashFilterQuery;
+
+                    return [$this->withStashManager($q === '' ? $this->stashManager : $this->stashManager->fuzzyFilter($q)), null];
+                }
+                $edited = self::editBuffer($this->stashFilterQuery, $msg);
+                if ($edited !== null) {
+                    return [$this->withAll(stashFilterQuery: $edited), null];
+                }
+
+                return [$this, null];
+            }
+            if ($msg->type === KeyType::Char && $msg->rune === '/') {
+                return [$this->withAll(stashFiltering: true, stashFilterQuery: ''), null];
             }
             if ($msg->type === KeyType::Char && $msg->rune === 'a') {
                 return [$this->executeStashApply(), null];
@@ -603,6 +636,7 @@ final class App implements Model
         if ($this->collectingBranchName)    { $used++; }
         if ($this->collectingMergeTarget)   { $used++; }
         if ($this->collectingStash)         { $used++; }
+        if ($this->stashFiltering)          { $used++; } // candy-git-029 filter bar
         if ($this->cherryPick !== null && $this->cherryPick->collecting) { $used++; }
         if ($this->cursorTarget() !== null)               { $used++; } // candy-git-022 modeline row
         return max(1, $this->height - $used);
@@ -748,6 +782,7 @@ final class App implements Model
             || $this->collectingBranchName
             || $this->collectingMergeTarget
             || $this->collectingStash
+            || $this->stashFiltering
             || ($this->cherryPick !== null && $this->cherryPick->collecting)
             || ($this->worktrees !== null && $this->worktrees->adding);
     }
@@ -995,6 +1030,8 @@ final class App implements Model
         ?bool $collectingStash = null,
         ?string $stashMessage = null,
         ?bool $stashUntracked = null,
+        ?bool $stashFiltering = null,
+        ?string $stashFilterQuery = null,
         ?CherryPick $cherryPick = null,
         bool $cherryPickSet = false,
         ?Worktrees $worktrees = null,
@@ -1043,6 +1080,8 @@ final class App implements Model
             collectingStash: $collectingStash ?? $this->collectingStash,
             stashMessage: $stashMessage ?? $this->stashMessage,
             stashUntracked: $stashUntracked ?? $this->stashUntracked,
+            stashFiltering: $stashFiltering ?? $this->stashFiltering,
+            stashFilterQuery: $stashFilterQuery ?? $this->stashFilterQuery,
             cherryPick: $cherryPickSet ? $cherryPick : ($cherryPick ?? $this->cherryPick),
             worktrees: $worktreesSet ? $worktrees : ($worktrees ?? $this->worktrees),
             interactiveRebase: $interactiveRebaseSet ? $interactiveRebase : ($interactiveRebase ?? $this->interactiveRebase),
@@ -2013,6 +2052,8 @@ final class App implements Model
             successMessage: $this->successMessage,
             stashManager: $sm,
             stashManagerSet: true,
+            stashFiltering: false,
+            stashFilterQuery: '',
         );
     }
 

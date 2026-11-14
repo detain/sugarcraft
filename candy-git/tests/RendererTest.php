@@ -1022,4 +1022,25 @@ final class RendererTest extends TestCase
         $this->assertStringContainsString('tail truncated at 4 MiB', $plain);
         $this->assertStringNotContainsString(Process::CAPTURE_NOTICE, $plain, 'the raw notice stays out of the frame');
     }
+
+    // ---- candy-git-029 (part 2): stash filter bar ----
+
+    public function testTheStashFilterBarShowsTheLiveQuery(): void
+    {
+        $sm = new \SugarCraft\Git\StashManager([
+            new \SugarCraft\Git\StashEntry(0, 'aaaa1111', 'main', 'login form fix'),
+        ]);
+        $app = new App(
+            $this->git(),
+            stashManager: $sm,
+            stashFiltering: true,
+            stashFilterQuery: 'login',
+            width: 80,
+            height: 24,
+        );
+        $plain = preg_replace('/\x1b\[[0-9;]*m/', '', Renderer::render($app));
+        $this->assertStringContainsString('filter: login_', $plain);
+        $this->assertStringContainsString('filter stashes', $plain, 'the footer names the affordance even while the bar is open');
+        $this->assertMatchesRegularExpression('/\/ {2}filter stashes/', $plain, 'the footer key itself is the slash');
+    }
 }

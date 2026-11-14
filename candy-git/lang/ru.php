@@ -185,6 +185,8 @@ return [
     'stash.pop'               => 'pop (применить + удалить)',
     'stash.prompt'            => 'сообщение stash: ',
     'stash.prompt_untracked'  => 'сообщение stash (+неотслеживаемые): ',
+    'stash.filter'            => 'фильтровать стэши',
+    'stash.filter_prompt'     => 'фильтр: ',
     'cherry_pick.prompt'      => 'cherry-pick: ',
     'cherry_pick.empty_ref'   => 'cherry-pick: нужен ref коммита',
     'cherry_pick.success'     => '{ref} применён (cherry-pick)',

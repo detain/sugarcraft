@@ -208,6 +208,13 @@ final class Renderer
         // green like a write, the untracked prompt is a distinct key so
         // -u is visible in the bar itself, not only in the chosen verb.
         $stashBar = '';
+        $stashFilterBar = '';
+        if ($a->stashFiltering) {
+            // candy-git-029: the '/' search bar. Amber like the other text
+            // buffers; the tail window keeps the just-typed query visible.
+            $stashFilterBar = "\n " . Style::new()->foreground(Color::hex('#fde68a'))
+                ->render(self::barLine(Lang::t('stash.filter_prompt'), self::sanitize($a->stashFilterQuery), $a->barWidth()));
+        }
         if ($a->collectingStash) {
             $stashBar = "\n " . Style::new()->foreground(Color::hex('#6ee7b7'))
                 ->render(self::barLine(Lang::t($a->stashUntracked ? 'stash.prompt_untracked' : 'stash.prompt'), self::sanitize($a->stashMessage), $a->barWidth()));
@@ -249,7 +256,7 @@ final class Renderer
             $interactiveRebaseOverlay = self::interactiveRebaseOverlay($a);
         }
 
-        $frame = $header . "\n" . $body . "\n " . $help . $err . $notice . $success . $cursor . $commitBar . $branchBar . $mergeBar . $stashBar . $diffOverlay . $rebaseOverlay . $stashOverlay . $cherryPickBar . $worktreeOverlay . $interactiveRebaseOverlay . $overlay;
+        $frame = $header . "\n" . $body . "\n " . $help . $err . $notice . $success . $cursor . $commitBar . $branchBar . $mergeBar . $stashBar . $stashFilterBar . $diffOverlay . $rebaseOverlay . $stashOverlay . $cherryPickBar . $worktreeOverlay . $interactiveRebaseOverlay . $overlay;
 
         // Hard ceiling: whatever the per-pane budgets missed, the frame never
         // ships more rows than the terminal has. The trailing empty
@@ -832,7 +839,8 @@ final class Renderer
         ];
 
         // Window the entries list to the terminal height
-        // (12 = title, blanks, and the fixed action footer: s/u/p/a/d/j-k/esc)
+        // (13 = title, blanks, and the fixed action footer: s/u/p/a/d//j-k/esc;
+        // candy-git-029 added the '/' row)
         // and clip lines to the box width.
         $boxW = self::overlayWidth($a, 64);
         $inner = max(10, $boxW - 5);
@@ -840,7 +848,7 @@ final class Renderer
             $lines[] = Style::new()->foreground(Color::hex('#7d6e98'))->render(Lang::t('stash.empty'));
         } else {
             [$start, $shown, $above, $below] = self::rowWindow(
-                count($sm->stashes), $sm->cursor, max(1, $a->overlayBodyRows() - 12)
+                count($sm->stashes), $sm->cursor, max(1, $a->overlayBodyRows() - 13)
             );
             if ($above > 0) {
                 $lines[] = self::scrollHint(Lang::t('viewport.above', ['n' => $above]));
@@ -864,6 +872,7 @@ final class Renderer
         $lines[] = '  ' . Style::new()->foreground(Color::hex('#fde68a'))->render('p') . '  ' . Lang::t('stash.pop');
         $lines[] = '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('a') . '  ' . Lang::t('stash.apply');
         $lines[] = '  ' . Style::new()->foreground(Color::hex('#ff5f87'))->render('d') . '  ' . Lang::t('stash.drop');
+        $lines[] = '  ' . Style::new()->foreground(Color::hex('#fde68a'))->render('/') . '  ' . Lang::t('stash.filter');
         $lines[] = '  ' . Style::new()->foreground(Color::hex('#7d6e98'))->render('j/k') . '  ' . Lang::t('help.move_cursor');
         $lines[] = '  ' . Style::new()->foreground(Color::hex('#7d6e98'))->render('esc') . '  ' . Lang::t('help.close_help');
 

@@ -216,6 +216,8 @@ return [
     'stash.pop'              => 'pop (apply + drop)',
     'stash.prompt'           => 'stash message: ',
     'stash.prompt_untracked' => 'stash message (+untracked): ',
+    'stash.filter'            => 'filter stashes',
+    'stash.filter_prompt'     => 'filter: ',
 
     // Cherry-pick
     'cherry_pick.prompt'      => 'cherry-pick: ',

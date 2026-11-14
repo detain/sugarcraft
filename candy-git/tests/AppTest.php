@@ -1428,6 +1428,117 @@ final class AppTest extends TestCase
         $this->assertStringContainsString('cannot undo', (string) $a->error);
     }
 
+    // ---- candy-git-029 (part 2): the stash overlay '/' filter ----
+
+    private function stashFilterGit(): FixtureGit
+    {
+        $g = $this->git();
+        $g->stashListResult = [
+            new \SugarCraft\Git\StashEntry(0, 'aaaa1111', 'main', 'login form fix'),
+            new \SugarCraft\Git\StashEntry(1, 'bbbb2222', 'develop', 'db migration notes'),
+        ];
+
+        return $g;
+    }
+
+    public function testSlashOpensTheLiveFilterBar(): void
+    {
+        $a = App::start($this->stashFilterGit());
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'S'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, '/'));
+        $this->assertTrue($a->stashFiltering);
+        $this->assertTrue($a->isTyping(), 'the search bar owns the keyboard');
+        $this->assertNull($a->cursorTarget(), 'the buffer owns the caret lane');
+    }
+
+    public function testTypingEditsTheQueryWithoutTouchingTheList(): void
+    {
+        $a = App::start($this->stashFilterGit());
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'S'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, '/'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'l'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'o'));
+        $this->assertSame('lo', $a->stashFilterQuery);
+        $this->assertCount(2, $a->stashManager->stashes, 'narrowing only commits with Enter');
+    }
+
+    public function testEnterCommitsTheNarrowing(): void
+    {
+        $a = App::start($this->stashFilterGit());
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'S'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, '/'));
+        foreach (['l', 'o', 'g', 'i', 'n'] as $ch) {
+            [$a, ] = $a->update(new KeyMsg(KeyType::Char, $ch));
+        }
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter));
+        $this->assertFalse($a->stashFiltering);
+        $this->assertSame('', $a->stashFilterQuery);
+        // Local alignment keeps weak false positives (the unit tests document
+        // it) - what Enter commits is the RANKING: best match on top.
+        $this->assertSame('login form fix', $a->stashManager->stashes[0]->message);
+    }
+
+    public function testEscapeCancelsTheFilterWithoutNarrowing(): void
+    {
+        $a = App::start($this->stashFilterGit());
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'S'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, '/'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'x'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Escape, ''));
+        $this->assertFalse($a->stashFiltering);
+        $this->assertSame('', $a->stashFilterQuery);
+        $this->assertNotNull($a->stashManager, 'Escape backs out of the bar, not the overlay');
+        $this->assertCount(2, $a->stashManager->stashes);
+    }
+
+    public function testCommittedActionsCarryTheOriginalRef(): void
+    {
+        // The narrowed view must not re-number reality: acting on the one
+        // visible entry uses its ORIGINAL stash@{N}, not its row index.
+        $a = App::start($this->stashFilterGit());
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'S'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, '/'));
+        foreach (['m', 'i', 'g', 'r'] as $ch) {
+            [$a, ] = $a->update(new KeyMsg(KeyType::Char, $ch));
+        }
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter));
+        $this->assertSame('db migration notes', $a->stashManager->stashes[0]->message, 'the ranked view puts the real match under the cursor');
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
+        $this->assertSame('stash:stash@{1}', $a->pendingConfirm);
+    }
+
+    public function testReopeningTheOverlayRestoresTheFullListing(): void
+    {
+        $g = $this->stashFilterGit();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'S'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, '/'));
+        foreach (['m', 'i', 'g', 'r'] as $ch) {
+            [$a, ] = $a->update(new KeyMsg(KeyType::Char, $ch));
+        }
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'a'));
+        $this->assertSame(['stash@{1}'], $g->stashApplies, 'the action hit the ranked top entry');
+        // Apply does not re-list (the list did not change); closing the
+        // overlay and opening it again fetches fresh from git, which restores
+        // git's own order and forgets the ranking.
+        [$a, ] = $a->update(new KeyMsg(KeyType::Escape, ''));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'S'));
+        $this->assertSame('login form fix', $a->stashManager->stashes[0]->message, 'the fresh listing came from git, not the ranked copy');
+    }
+
+    public function testTheOpenFilterSwallowsActionKeys(): void
+    {
+        $g = $this->stashFilterGit();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'S'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, '/'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'a'));
+        $this->assertSame('a', $a->stashFilterQuery, 'typing an action letter into the bar is typing');
+        $this->assertFalse($a->collectingStash);
+        $this->assertSame([], $g->stashApplies);
+    }
+
     public function testVKeyStartsCherryPickCollection(): void
     {
         $g = $this->git();

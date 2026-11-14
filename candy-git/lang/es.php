@@ -185,6 +185,8 @@ return [
     'stash.pop'               => 'pop (aplicar + descartar)',
     'stash.prompt'            => 'mensaje del stash: ',
     'stash.prompt_untracked'  => 'mensaje del stash (+sin seguimiento): ',
+    'stash.filter'            => 'filtrar stashes',
+    'stash.filter_prompt'     => 'filtro: ',
     'cherry_pick.prompt'      => 'cherry-pick: ',
     'cherry_pick.empty_ref'   => 'cherry-pick: se requiere ref de commit',
     'cherry_pick.success'     => '{ref} aplicado (cherry-pick)',

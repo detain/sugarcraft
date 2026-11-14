@@ -185,6 +185,8 @@ return [
     'stash.pop'               => 'pop (zastosuj + usuń)',
     'stash.prompt'            => 'wiadomość stashu: ',
     'stash.prompt_untracked'  => 'wiadomość stashu (+nieśledzone): ',
+    'stash.filter'            => 'filtruj stashy',
+    'stash.filter_prompt'     => 'filtr: ',
     'cherry_pick.prompt'      => 'cherry-pick: ',
     'cherry_pick.empty_ref'   => 'cherry-pick: wymagany ref commitu',
     'cherry_pick.success'     => 'zastosowano {ref} (cherry-pick)',

@@ -185,6 +185,8 @@ return [
     'stash.pop'               => 'pop (uygula + sil)',
     'stash.prompt'            => 'stash mesajı: ',
     'stash.prompt_untracked'  => 'stash mesajı (+izlenmeyen): ',
+    'stash.filter'            => 'stashleri filtrele',
+    'stash.filter_prompt'     => 'filtre: ',
     'cherry_pick.prompt'      => 'cherry-pick: ',
     'cherry_pick.empty_ref'   => 'cherry-pick: commit ref gerekli',
     'cherry_pick.success'     => '{ref} cherry-pick edildi',

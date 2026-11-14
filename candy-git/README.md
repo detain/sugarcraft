@@ -198,13 +198,22 @@ merge has stopped; the prompt names the armed operation:
 | `a`              | Apply the selected stash (the overlay stays open) |
 | `p`              | Pop the selected stash — apply then drop (press twice) |
 | `d`              | Drop the selected stash (press twice; `u` from the main view restores it) |
-| `Esc`            | Back out of the message buffer, then close      |
+| `/`              | Filter the list — type to narrow live, `Enter` commits the narrowing, `Esc` cancels it |
+| `Esc`            | Back out of the message buffer, cancel a live filter, then close |
 
 A drop captures the entry's sha and reflog subject first — if either
 capture fails the drop is refused outright — so `u` (global undo) can put the
 entry back with its message intact. It lands at the TOP of the list, not at
 its old position; say `git stash store` to your colleagues, that is the
 plumbing underneath.
+
+The `/` filter ranks entries with the sugar-fuzzy Smith-Waterman matcher and
+commits as a narrowing of what is on screen: while the bar is open every key
+edits the query (action letters included), and the list only changes shape on
+`Enter`. Narrowed entries keep their real `stash@{N}` refs — dropping the one
+visible match of a renumbered view acts on the right stash — and the next
+action that re-lists from git restores the full view. `Esc` before `Enter`
+throws the query away untouched.
 
 **Worktrees** (`w`):
 
@@ -310,7 +319,7 @@ file key like `git.timeout` resolves through the core `T` registry as
 raw string.
 
 **Available keys** (`lang/en.php` — an excerpt; the file is the full roster
-of 194 keys):
+of 196 keys):
 
 | Key                    | Default string                                                    | Parameters  |
 |------------------------|-------------------------------------------------------------------|------------|

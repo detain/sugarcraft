@@ -185,6 +185,8 @@ return [
     'stash.pop'               => 'استرجاع (تطبيق + حذف)',
     'stash.prompt'            => 'رسالة المخزن: ',
     'stash.prompt_untracked'  => 'رسالة المخزن (+غير المتتبَّعة): ',
+    'stash.filter'            => 'تصفية المخابئ',
+    'stash.filter_prompt'     => 'تصفية: ',
     'cherry_pick.prompt'      => 'اختيار-التزام: ',
     'cherry_pick.empty_ref'   => 'اختيار-التزام: مرجع الالتزام مطلوب',
     'cherry_pick.success'     => 'تم تطبيق {ref}',

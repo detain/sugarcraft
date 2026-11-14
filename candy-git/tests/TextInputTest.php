@@ -375,4 +375,14 @@ final class TextInputTest extends TestCase
         [$a, ] = $a->update(new KeyMsg(KeyType::Backspace));
         self::assertSame('', $a->branchName, 'then the whole cluster goes');
     }
+
+    public function testTypedControlIsRefusedInsideTheStashFilterBar(): void
+    {
+        $a = $this->type($this->type($this->app(), 'S'), '/');
+        self::assertTrue($a->stashFiltering);
+        $a = $this->type($a, "\x07");
+        self::assertSame('', $a->stashFilterQuery, 'a bell is not search text');
+        $a = $this->type($a, 'lo');
+        self::assertSame('lo', $a->stashFilterQuery);
+    }
 }

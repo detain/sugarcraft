@@ -185,6 +185,8 @@ return [
     'stash.pop'               => 'holen (anwenden + verwerfen)',
     'stash.prompt'            => 'Stash-Nachricht: ',
     'stash.prompt_untracked'  => 'Stash-Nachricht (+unversionierte): ',
+    'stash.filter'            => 'Stashes filtern',
+    'stash.filter_prompt'     => 'Filter: ',
     'cherry_pick.prompt'      => 'cherry-pick: ',
     'cherry_pick.empty_ref'   => 'cherry-pick: commit-ref erforderlich',
     'cherry_pick.success'     => '{ref} gecherry-pickt',

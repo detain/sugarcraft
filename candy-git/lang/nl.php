@@ -185,6 +185,8 @@ return [
     'stash.pop'               => 'pop (toepassen + verwijderen)',
     'stash.prompt'            => 'stash-bericht: ',
     'stash.prompt_untracked'  => 'stash-bericht (+niet-getraceerde): ',
+    'stash.filter'            => 'stashjes filteren',
+    'stash.filter_prompt'     => 'filter: ',
     'cherry_pick.prompt'      => 'cherry-pick: ',
     'cherry_pick.empty_ref'   => 'cherry-pick: commit-ref vereist',
     'cherry_pick.success'     => '{ref} gecherry-pickt',

@@ -185,6 +185,8 @@ return [
     'stash.pop'               => 'pop (pouzit + zahodit)',
     'stash.prompt'            => 'zprava stashu: ',
     'stash.prompt_untracked'  => 'zprava stashu (+nesledovane): ',
+    'stash.filter'            => 'filtrovat stashes',
+    'stash.filter_prompt'     => 'filtr: ',
     'cherry_pick.prompt'      => 'cherry-pick: ',
     'cherry_pick.empty_ref'   => 'cherry-pick: vyžadován ref commitu',
     'cherry_pick.success'     => '{ref} cherry-picked',
