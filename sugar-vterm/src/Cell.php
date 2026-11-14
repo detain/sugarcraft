@@ -37,6 +37,17 @@ use SugarCraft\Vterm\Sgr\Sgr;
  */
 final readonly class Cell
 {
+    /**
+     * Per-cell ceiling on accumulated zero-width combining marks
+     * (audit sugar-vterm-025). A hostile stream can flood marks onto one
+     * host cell, so both engines — the emulator's {@see withCombining()}
+     * ring and the renderer's mark-in-`char` append — share THIS one bound
+     * and silently drop overflow, mirroring how the reply/clipboard rings
+     * degrade under pressure. Held as a constant on the Cell because the
+     * Cell is the storage the ceiling protects.
+     */
+    public const MAX_COMBINING_PER_CELL = 32;
+
     public const ATTR_BOLD = 1 << 0;
     public const ATTR_ITALIC = 1 << 1;
     public const ATTR_UNDERLINE = 1 << 2;
@@ -58,7 +69,7 @@ final readonly class Cell
      * @param Rendition          $rendition   Line width/height state stamped by `ESC # 3`–`ESC # 6`.
      * @param bool               $continuation Second column of a wide glyph.
      * @param Hyperlink|null     $hyperlink   Active OSC 8 hyperlink.
-     * @param string             $combining    Trailing zero-width marks for the base grapheme — the set is whatever sugar-core `Width::string` scores 0 (combining diacritics, variation selectors, joiners), not a fixed U+0300–U+036F range.
+     * @param string             $combining    Trailing zero-width marks for the base grapheme — the set is whatever sugar-core `Width::string` scores 0 (combining diacritics, variation selectors, joiners), not a fixed U+0300–U+036F range; capped at {@see self::MAX_COMBINING_PER_CELL} marks via {@see withCombining()}.
      * @param string|null        $grapheme     Emulator-named constructor of {@see $char}.
      */
     public function __construct(
@@ -173,12 +184,56 @@ final readonly class Cell
     }
 
     /**
-     * Return a new Cell with additional combining marks appended.
-     * Mirrors charmbracelet/x/vt Cell::WithCombining.
+     * Return a new Cell with additional combining marks appended, capped at
+     * {@see MAX_COMBINING_PER_CELL} marks per cell: once the ceiling is
+     * reached the overflow marks are silently dropped (the appended burst is
+     * truncated to whatever budget remains), so a hostile mark flood can
+     * never grow a cell unboundedly. The FIRST marks are always the retained
+     * ones. Mirrors charmbracelet/x/vt Cell::WithCombining plus the xterm
+     * per-cell combining-limit idea.
      */
     public function withCombining(string $combining): self
     {
+        $budget = self::MAX_COMBINING_PER_CELL - self::codepointCount($this->combining);
+        if ($budget <= 0) {
+            return $this;
+        }
+
+        $marks = self::codepoints($combining);
+        if (\count($marks) > $budget) {
+            $combining = implode('', \array_slice($marks, 0, $budget));
+        }
+
         return $this->mutate(['combining' => $this->combining . $combining]);
+    }
+
+    /**
+     * The Unicode codepoints of $text as an array (empty string = none).
+     * Shared counting primitive for the per-cell combining ceiling.
+     *
+     * Defensive by contract: mark strings ride untrusted parser events, so
+     * a sequence that fails strict UTF-8 splitting is counted BYTE-wise
+     * (str_split fallback). The over-count only drops marks marginally
+     * earlier — the ceiling stays a ceiling, and no hostile byte can make
+     * the counter itself fatal.
+     *
+     * @return list<string>
+     */
+    public static function codepoints(string $text): array
+    {
+        if ($text === '') {
+            return [];
+        }
+
+        $parts = preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY);
+
+        return $parts === false ? str_split($text) : $parts;
+    }
+
+    /** Number of Unicode codepoints in $text — {@see codepoints()} sized. */
+    public static function codepointCount(string $text): int
+    {
+        return \count(self::codepoints($text));
     }
 
     public function sgr(): Sgr

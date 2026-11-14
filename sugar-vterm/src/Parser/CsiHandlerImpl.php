@@ -204,6 +204,15 @@ final class CsiHandlerImpl implements CsiHandler
                 if ($prev->continuation) {
                     return;
                 }
+                // Per-cell combining ceiling (audit sugar-vterm-025): the
+                // renderer appends marks into the cell's display string, so
+                // the held-mark count is that string's codepoints minus the
+                // one base beneath them. Overflow is silently dropped, the
+                // shared Cell::MAX_COMBINING_PER_CELL bound the emulator's
+                // Cell::withCombining enforces on its own storage.
+                if (Cell::codepointCount($prev->char) - 1 >= Cell::MAX_COMBINING_PER_CELL) {
+                    return;
+                }
                 $updated = new Cell(
                     char: $prev->char . $grapheme,
                     fg: $this->fg,

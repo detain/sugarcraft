@@ -945,6 +945,12 @@ window titles and OSC 8 URIs riding on grid cells — are called out below):
 - **Synchronized output (DEC 2026) queue** — at most 16384 pending cell writes; past that the
   queue partially replays to the grid. Atomicity is surrendered only under
   adversarial pressure, never silently dropped.
+- **Per-cell combining marks** — a cell accumulates at most
+  `Cell::MAX_COMBINING_PER_CELL` (32) zero-width marks, the same bound in
+  both engines (the emulator's `Cell::withCombining()` truncates the burst to
+  the remaining budget; the renderer's mark append drops whole marks once
+  full). The first marks retained are always kept; a bare-mark flood cannot
+  grow any cell.
 - **Scrollback** — bounded ring (default 1000 rows); `withScrollbackSize()`
   swaps in a FRESH ring on any size change, growing or shrinking — history
   accumulated before the call is dropped, not trimmed (pinned by

@@ -74,6 +74,10 @@ final class EngineDifferentialTest extends TestCase
             'decawm wrap' => [str_repeat('x', 25)],
             'combining mark' => ["e\xcc\x81x"],
             'mark over wide tail' => ["漢\xcc\x81done"],
+            // vterm-14: the per-cell combining ceiling is the SAME bound in
+            // both engines — past 32 marks the flood must degrade to
+            // identical capped state, not a divergence.
+            'combining flood capped' => ["e" . str_repeat("\xcc\x81", 40) . "x"],
             'backspace then write' => ["ab\x1b[Dc"],
             'origin clamp' => ["\x1b[99;99Hcorner"],
             'ht to next stop' => ["a\tb"],

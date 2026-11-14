@@ -9,9 +9,12 @@ use ReflectionClass;
 use ReflectionProperty;
 use SugarCraft\AnsiParser\Parser\Parser;
 use SugarCraft\Vterm\Buffer\Buffer;
+use SugarCraft\Vterm\Cell;
 use SugarCraft\Vterm\Handler\ScreenHandler;
 use SugarCraft\Vterm\Msg\FocusInMsg;
 use SugarCraft\AnsiParser\Parser\DebugHandler;
+use SugarCraft\Vterm\Screen\Screen;
+use SugarCraft\Vterm\Terminal as RendererTerminal;
 use SugarCraft\Vterm\Terminal\Terminal as FullTerminal;
 
 /**
@@ -161,5 +164,36 @@ final class EventLogCeilingsTest extends TestCase
         // Drop-oldest: the very first recorded row was evicted.
         self::assertSame('x', $d->log[0]['detail']);
         self::assertSame([], $d->filter('execute'));
+    }
+
+    public function testCombiningMarkFloodStaysAtThePerCellCeiling(): void
+    {
+        // audit sugar-vterm-025 (vterm-14): a bare-mark flood onto one host
+        // cell — 600 KiB of marks — cannot grow the cell. The FIRST marks
+        // win (grave burst retained to the ceiling, the acute burst after it
+        // entirely dropped), in BOTH engines, and the dropped marks never
+        // touch the cursor.
+        $grave = "\xcc\x80"; // U+0300 COMBINING GRAVE ACCENT
+        $acute = "\xcc\x81"; // U+0301 COMBINING ACUTE ACCENT
+        $bytes = 'e' . str_repeat($grave, 200_000) . str_repeat($acute, 100);
+
+        $emulator = FullTerminal::new(20, 5);
+        $emulator->feed($bytes);
+        self::assertSame(
+            str_repeat($grave, Cell::MAX_COMBINING_PER_CELL),
+            $emulator->screen()->cell(0, 0)->combining,
+            'emulator cell must retain exactly the first MAX_COMBINING_PER_CELL marks',
+        );
+        self::assertSame(1, $emulator->cursor()->col, 'dropped marks must not move the cursor');
+
+        $renderer = RendererTerminal::new(20, 5);
+        $renderer->feed($bytes);
+        $host = Screen::fromBuffer($renderer->snapshot()->grid)->cell(0, 0);
+        self::assertSame(
+            'e' . str_repeat($grave, Cell::MAX_COMBINING_PER_CELL),
+            $host->char,
+            'renderer display string must cap at the same shared ceiling',
+        );
+        self::assertSame(1, $renderer->cursor()->col, 'dropped marks must not move the renderer cursor');
     }
 }
