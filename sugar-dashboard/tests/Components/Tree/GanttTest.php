@@ -132,4 +132,36 @@ final class GanttTest extends TestCase
         $rendered = $gantt->render();
         $this->assertSame('', $rendered);
     }
+    // ═══════════════════════════════════════════════════════════════
+    // D-144: overflow honesty
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testOverflowingTasksPayABudgetSlotForTheNotice(): void
+    {
+        $gantt = Gantt::new()->setSize(70, 10);
+        for ($i = 1; $i <= 100; $i++) {
+            $gantt = $gantt->addTask("Task " . $i, $i % 20, 3);
+        }
+        $rendered = $gantt->render();
+
+        // Budget 6 content rows: five tasks plus one notice row.
+        $this->assertCount(10, explode("
+", $rendered));
+        $this->assertStringContainsString("↓ 95 more tasks", $rendered);
+        $this->assertStringContainsString("Task 5", $rendered);
+        $this->assertStringNotContainsString("Task 6", $rendered);
+    }
+
+    public function testTasksThatFitExactlyCarryNoNotice(): void
+    {
+        $gantt = Gantt::new()->setSize(70, 8); // budget = 4
+        for ($i = 1; $i <= 4; $i++) {
+            $gantt = $gantt->addTask("T" . $i, $i, 2);
+        }
+        $rendered = $gantt->render();
+
+        $this->assertStringNotContainsString("more tasks", $rendered);
+        $this->assertCount(8, explode("
+", $rendered));
+    }
 }

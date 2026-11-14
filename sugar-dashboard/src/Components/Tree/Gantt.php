@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Components\Tree;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Core\Util\Width;
 
 /**
  * A Gantt chart component for project scheduling visualization.
@@ -178,11 +179,25 @@ final class Gantt implements \SugarCraft\Dashboard\Foundation\SizedItem
         $result .= $v . str_repeat('─', $nameWidth);
         $result .= $v . str_repeat('─', $chartWidth) . $v . "\n";
 
-        // Task rows
-        $visibleTasks = array_slice($this->tasks, 0, $useHeight - 4);
+        // Task rows (D-144): the budget no longer swallows tasks in
+        // silence. When they overflow, one visible slot pays for a
+        // '↓ n more tasks' notice row — and n counts the tasks actually
+        // hidden BEHIND that notice row, not the raw budget remainder.
+        $budget = $useHeight - 4;
+        $taskCount = count($this->tasks);
+        $overflows = $taskCount > $budget;
+        $visibleCount = $overflows ? max(0, $budget - 1) : $budget;
+        $hidden = $overflows ? $taskCount - $visibleCount : 0;
+        $visibleTasks = array_slice($this->tasks, 0, $visibleCount);
         foreach ($visibleTasks as $task) {
             $result .= $v . str_pad(mb_substr($task->name, 0, $nameWidth - 1), $nameWidth);
             $result .= $v . $this->renderTaskBar($task, $chartWidth) . $v . "\n";
+        }
+
+        if ($hidden > 0) {
+            $notice = Width::truncate('↓ ' . $hidden . ' more tasks', $nameWidth);
+            $result .= $v . Width::padRight($notice, $nameWidth);
+            $result .= $v . str_repeat(' ', $chartWidth) . $v . "\n";
         }
 
         // Bottom border
