@@ -174,8 +174,15 @@ final class StatsdBackend implements Backend
         // chokepoint, so hostile tag payloads can never split or fake a
         // packet — for line framing the sweep covers both byte-level new
         // lines and the Unicode LINE/PARAGRAPH SEPARATORS a UTF-8-decoding
-        // line splitter would honour (063). See wireToken()/wireName()/
-        // wireTagKey() for the exact per-position separator alphabets.
+        // line splitter would honour (063). The sweep is argued complete
+        // against the four grammars a Datadog-tagged agent dispatches on
+        // this port: plain metric lines (`{name}:{value}|{kind}`, colon
+        // folded in names and keys), DogStatsD tag segments (`#k:v,...`,
+        // comma and pipe folded), the event grammar `_e{<l1>,<l2>}:...` and
+        // the service-check grammar `_sc{<check>}:<status>|...` — the last
+        // two are prefix-dispatched and need no banned byte, so braces fold
+        // in wireName (052). See wireToken()/wireName()/wireTagKey() for
+        // the exact per-position separator alphabets.
         $line = self::wireName($name) . ':' . self::wireToken($valueStr) . '|' . $kind;
         if ($tags !== [] && $this->dogstatsd) {
             $parts = [];
@@ -208,10 +215,23 @@ final class StatsdBackend implements Backend
      * `ev_il:x_steal` misparses the value). Colons are legal in Prometheus
      * recording-rule names, so this is a wire-format rule, not a charset
      * rule; the file backend keeps colons.
+     *
+     * Braces fold here too (sugar-metrics-052): DogStatsD agents
+     * demultiplex the statsd port BY LINE PREFIX, and the service-check
+     * grammar `_sc{<check>}:<status>|...` needs no byte the sweep bans —
+     * a raw-brace name `gauge('_sc{dead.mans.switch}', 0.0)` used to emit
+     * the exact bytes of a parseable OK-service-check with a fully
+     * attacker-influenced name (gauge values 0-3 reach all four statuses).
+     * Folding `{`/`}` kills the dispatch prefix at the source; the event
+     * grammar `_e{<l1>,<l2>}:...` was previously defeated only by the
+     * incidental comma fold, and is now closed by braces directly. Braces
+     * are not legal in Prometheus names and meaningless in names on this
+     * wire, so every well-formed emission stays byte-identical. Tag
+     * positions keep braces raw (harmless inside the `#k:v` grammar).
      */
     private static function wireName(string $name): string
     {
-        return \str_replace(':', '_', self::wireToken($name));
+        return \str_replace([':', '{', '}'], '_', self::wireToken($name));
     }
 
     /**

@@ -292,6 +292,43 @@ final class StatsdBackendTest extends TestCase
         fclose($sock);
     }
 
+    public function testBracesFoldInNamesSoDispatchPrefixesCannotBeForged(): void
+    {
+        // finding 052: DogStatsD agents demultiplex the port BY LINE PREFIX,
+        // and the service-check grammar `_sc{<check>}:<status>|...` needs no
+        // byte the old sweep banned — gauge('_sc{dead.mans.switch}', 0.0)
+        // emitted the exact bytes of a parseable OK-service-check with a
+        // fully attacker-influenced name. Braces now fold at the name
+        // position: the prefix never forms, while dots (idiomatic names)
+        // and the tag grammar stay byte-identical.
+        $sock = fopen('php://memory', 'w+');
+        $b = new StatsdBackend(existingSocket: $sock);
+        $b->gauge('_sc{dead.mans.switch}', 0.0);
+        rewind($sock);
+        $wire = trim((string) stream_get_contents($sock));
+        $this->assertSame('_sc_dead.mans.switch_:0|g', $wire);
+        $this->assertStringStartsWith('_sc_', $wire); // never the raw prefix
+        fclose($sock);
+
+        // The event grammar `_e{<l1>,<l2>}:...` was defeated only by the
+        // incidental comma fold; braces close it directly.
+        $sock = fopen('php://memory', 'w+');
+        $b = new StatsdBackend(existingSocket: $sock);
+        $b->counter('_e{99,1}', 1.0);
+        rewind($sock);
+        $this->assertSame('_e_99_1_:1|c', trim((string) stream_get_contents($sock)));
+        fclose($sock);
+
+        // Byte-neutrality for well-formed traffic: no legal Prometheus name
+        // contains braces, so ordinary names and tag positions are untouched.
+        $sock = fopen('php://memory', 'w+');
+        $b = new StatsdBackend(existingSocket: $sock);
+        $b->counter('http.requests_total', 1.0, ['route' => '/a{b}c']);
+        rewind($sock);
+        $this->assertSame('http.requests_total:1|c|#route:/a{b}c', trim((string) stream_get_contents($sock)));
+        fclose($sock);
+    }
+
     public function testDestructorClosesOwnedSocket(): void
     {
         // Hermetic: claim a free ephemeral UDP port on loopback and release
