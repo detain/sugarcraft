@@ -20,7 +20,7 @@ final readonly class StashEntry
      * Format for display in the stash list.
      *
      * Empty fields (the `On <branch>: <msg>` form carries no sha) collapse
-     * instead of leaving a double space (audit #15).
+     * instead of leaving a double space.
      */
     public function displayLine(): string
     {

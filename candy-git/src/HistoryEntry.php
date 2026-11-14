@@ -72,7 +72,7 @@ final readonly class HistoryEntry
      * Records the ORIGIN branch so the inverse returns there: the old
      * one-argument shape stored only the destination and its "inverse"
      * re-checked-out the same branch — a no-op that reported "undone"
-     * (audit A2). When no origin is known (detached HEAD, branch list
+     * . When no origin is known (detached HEAD, branch list
      * empty), the entry refuses undo rather than guessing.
      */
     public static function checkout(string $from, string $to): self
@@ -240,7 +240,7 @@ final readonly class HistoryEntry
      * Stores the branch tip sha so the inverse can restore the branch AT
      * that commit: the old inverse was 'createBranch', which runs
      * `git checkout -b` — recreating the name at HEAD (wrong commit) and
-     * yanking the working tree onto it (audit A2). Without a sha (fixture
+     * yanking the working tree onto it. Without a sha (fixture
      * rows, stripped branch lists) the entry refuses undo.
      */
     /**

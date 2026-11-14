@@ -72,7 +72,7 @@ final class Git implements GitDriver
     /** Hard mode: refuse (typed) instead of announce (sticky) filter-capable commands. */
     public readonly bool $strictFilters;
 
-    /** @var string lane-set key of the last emitted notice ('' = never) — re-announces when the set changes (m1) */
+    /** @var string lane-set key of the last emitted notice ('' = never) — re-announces when the set changes */
     private string $filterNoticeKey = '';
 
     public function __construct(
@@ -163,7 +163,7 @@ final class Git implements GitDriver
             // the whole "old -> new" string as the path and corrupts every
             // downstream stage/discard/diff on the file. The split is
             // quote-aware and both halves are C-unescaped so unicode and
-            // quote-bearing names survive the round-trip (audit #3).
+            // quote-bearing names survive the round-trip.
             if ($index === 'R' || $index === 'C' || $work === 'R' || $work === 'C') {
                 $parts = self::splitRename($field);
                 if ($parts !== null) {
@@ -615,7 +615,7 @@ final class Git implements GitDriver
     {
         // Same option-injection door as every other ref-taking method: an
         // unguarded leading dash reaches `git branch -d -sneaky` and git
-        // parses it as flags (audit A9).
+        // parses it as flags.
         $this->guardRef($name);
         $this->run(['branch', '-d', $name]);
     }
@@ -625,7 +625,7 @@ final class Git implements GitDriver
      *
      * `git branch <name> <sha>` creates the ref without moving HEAD —
      * unlike createBranch's `checkout -b`, restoring a branch must never
-     * switch the user's working tree (audit A2).
+     * switch the user's working tree.
      */
     public function restoreBranch(string $name, string $sha): void
     {
@@ -873,8 +873,9 @@ final class Git implements GitDriver
      *
      * Rebase, cherry-pick, and merge conflicts all leave state files in the
      * git directory and all share the same continue/abort need; the [c]/[a]
-     * menu must know which operation it is resuming (audit A5 — cherryPick-
-     * Continue/Abort had zero callers and conflicted cherry-picks wedged).
+     * menu must know which operation it is resuming: cherry-pick continuation
+     * once had zero callers, and a conflicted cherry-pick wedged with no way
+     * forward.
      *
      * @return string 'rebase' | 'cherry' | 'merge' | ''
      */
@@ -904,7 +905,7 @@ final class Git implements GitDriver
      * funnels git failures through one `catch (\RuntimeException)` lane, and a
      * guard refusal is exactly such a failure — a sibling that threw another
      * Exception type would crash the TUI instead of showing an error row
-     * (audit K4). The type now matches what {@see self::run()} throws.
+     * The type now matches what {@see self::run()} throws.
      *
      * @throws \RuntimeException
      */
@@ -999,7 +1000,7 @@ final class Git implements GitDriver
      * C-style-quotes every path containing non-ASCII bytes
      * (`"caf\303\251.txt"`), the app feeds that escaped literal back into
      * stage/discard/diff as an argument, and every operation on a unicode
-     * filename fails (audit candy-git #3). Paths containing `"` or `\`
+     * filename fails. Paths containing `"` or `\`
      * stay quoted regardless — see {@see self::unquotePath()}.
      *
      * `-c core.fsmonitor=false` is a TRUST-BOUNDARY override, ordered on the
@@ -1202,7 +1203,7 @@ final class Git implements GitDriver
     }
 
     /**
-     * VALUE-GRANULAR filter-channel scan (round-2 review C1): the detection
+     * VALUE-GRANULAR filter-channel scan: the detection
      * works on WHOLE config values from `git config --list -z --show-origin`,
      * never on printed lines — a multi-line (embedded-newline) value that
      * merely STARTS like the operator's own driver is the shadow-attack
@@ -1335,7 +1336,7 @@ final class Git implements GitDriver
      * lanes. Two emitter shapes exist across git builds: the measured 2.43
      * layout (origin is its OWN NUL record, entry follows as "key\nvalue")
      * and the single-field layout ("file:ORIGIN\tkey[\nvalue]" in one NUL
-     * record). PB-GIT-16 (m23): lanes must be recorded from BOTH shapes —
+     * record). Lanes must be recorded from BOTH shapes —
      * the pre-fix single-field branch gated on the record NOT containing
      * 'filter.' while its recording condition required the key to START
      * with it, mutually excluding the two halves and silently dropping
@@ -1356,7 +1357,7 @@ final class Git implements GitDriver
             if ($tab !== false && str_starts_with($record, 'file:')) {
                 // Single-field shape "file:ORIGIN\tkey[\nvalue]" (one possible
                 // emitter layout): the KEY after the tab decides what it is.
-                // PB-GIT-16 (m23): the pre-fix extra gate demanded the record
+                // The pre-fix extra gate demanded the record
                 // lack 'filter.' while the record condition demanded the key
                 // start with it - mutually exclusive, so every filter lane in
                 // this shape fell through UNRECORDED (no notice, no strict

@@ -158,7 +158,6 @@ final readonly class InteractiveRebase
      * to apply the built todo list. Full implementation requires:
      * - GitDriver::interactiveRebase(list<RebaseCommit> $commits): void
      * - Enter key binding in App.php to trigger execution when not selectingN
-     * See: findings/plan_candy-git.md §4.1 (Option B)
      */
     public function markDone(): self
     {

@@ -29,7 +29,7 @@ final readonly class StashManager
     /**
      * Build a StashManager from raw `git stash list` output.
      *
-     * The three real shapes git emits (audit #15):
+     * The three real shapes git emits:
      *   stash@{0}: WIP on main: abc1234 Last commit subject
      *   stash@{0}: index on main: abc1234 Last commit subject
      *   stash@{0}: On main: hand-written stash message   (no sha here)

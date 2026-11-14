@@ -959,7 +959,7 @@ final class App implements Model
         if ($msg->type === KeyType::Char && $msg->rune !== '') {
             // !== 0, not === 1: a lone continuation byte makes preg_match return
             // FALSE, and FALSE must also be refused — the same fail-closed rule
-            // that governs Renderer::sanitize (audit #7).
+            // that governs Renderer::sanitize.
             if (preg_match('/[^\P{C}\n]/u', $msg->rune) !== 0) {
                 return null;
             }
@@ -1137,6 +1137,16 @@ final class App implements Model
 
     /**
      * Helper to construct new App with multiple fields updated atomically.
+     *
+     * Set-sentinel idiom (candy-git-064): most parameters keep the current
+     * value when left null (`?? $this->x`), which cannot express "set this
+     * property TO null". The overlay members that legitimately close —
+     * diffViewer, stashManager, cherryPick, worktrees, interactiveRebase —
+     * therefore pair a bool `...Set` flag: pass the flag alongside the value
+     * and the assignment happens unconditionally, from this one site. The
+     * error/success/notice lanes deliberately stay outside the idiom: they
+     * persist across navigation and clear only when an action acks them
+     * (candy-git-047/098), so their parameters are plain pass-throughs.
      */
     private function withAll(
         ?array $status = null,
@@ -1606,11 +1616,7 @@ final class App implements Model
         }
     }
 
-    /** Explicit-set diffViewer swap — the null argument MEANS "close the overlay",
-     * which withAll's `?? $this->diffViewer` keep-existing fallthrough cannot express
-     * unaided, hence the diffViewerSet sentinel (single construction site).
-     * error/successMessage ride through unchanged, matching the old full-arg bypass.
-     */
+    /** Explicit-set diffViewer swap (null closes the overlay); set-sentinel idiom documented at withAll (candy-git-064). */
     private function withDiffViewer(?DiffViewer $dv): self
     {
         return $this->withAll(
@@ -2212,11 +2218,7 @@ final class App implements Model
         }
     }
 
-    /** Explicit-set stashManager swap — the null argument MEANS "close the overlay",
-     * which withAll's `?? $this->stashManager` keep-existing fallthrough cannot express
-     * unaided, hence the stashManagerSet sentinel (single construction site).
-     * error/successMessage ride through unchanged, matching the old full-arg bypass.
-     */
+    /** Explicit-set stashManager swap (null closes the overlay); set-sentinel idiom documented at withAll (candy-git-064). */
     private function withStashManager(?StashManager $sm): self
     {
         return $this->withAll(
@@ -2435,11 +2437,7 @@ final class App implements Model
             ->withAll(successMessage: Lang::t('reset.done', ['sha' => $sha]));
     }
 
-    /** Explicit-set cherryPick swap — the null argument MEANS "close the overlay",
-     * which withAll's `?? $this->cherryPick` keep-existing fallthrough cannot express
-     * unaided, hence the cherryPickSet sentinel (single construction site).
-     * error/successMessage ride through unchanged, matching the old full-arg bypass.
-     */
+    /** Explicit-set cherryPick swap (null closes the overlay); set-sentinel idiom documented at withAll (candy-git-064). */
     private function withCherryPick(?CherryPick $cp): self
     {
         return $this->withAll(
@@ -2482,11 +2480,7 @@ final class App implements Model
         }
     }
 
-    /** Explicit-set worktrees swap — the null argument MEANS "close the overlay",
-     * which withAll's `?? $this->worktrees` keep-existing fallthrough cannot express
-     * unaided, hence the worktreesSet sentinel (single construction site).
-     * error/successMessage ride through unchanged, matching the old full-arg bypass.
-     */
+    /** Explicit-set worktrees swap (null closes the overlay); set-sentinel idiom documented at withAll (candy-git-064). */
     private function withWorktrees(?Worktrees $wt): self
     {
         return $this->withAll(
@@ -2547,11 +2541,7 @@ final class App implements Model
         return $this->withInteractiveRebase(InteractiveRebase::selectingN());
     }
 
-    /** Explicit-set interactiveRebase swap — the null argument MEANS "close the overlay",
-     * which withAll's `?? $this->interactiveRebase` keep-existing fallthrough cannot express
-     * unaided, hence the interactiveRebaseSet sentinel (single construction site).
-     * error/successMessage ride through unchanged, matching the old full-arg bypass.
-     */
+    /** Explicit-set interactiveRebase swap (null closes the overlay); set-sentinel idiom documented at withAll (candy-git-064). */
     private function withInteractiveRebase(?InteractiveRebase $ir): self
     {
         return $this->withAll(

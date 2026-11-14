@@ -22,7 +22,7 @@ use SugarCraft\Style\Style;
 final class Renderer
 {
     /**
-     * Non-color focus channel (PB-GIT-15): prepended to the focused pane's
+     * Non-color focus channel: prepended to the focused pane's
      * title. U+25B8 is a single-width glyph here (never in an emoji-presentation
      * or wide East-Asian range) and carries no SGR, so it survives NO_COLOR,
      * TERM=dumb, and ASCII-palette degradation. Deliberately not a lang key —
@@ -571,7 +571,7 @@ final class Renderer
         $st = Style::new()->border($border)->padding(0, 1)->width($width);
         if ($a->pane === $p) {
             $st = $st->borderForeground(Color::hex('#ff5f87'));
-            // PB-GIT-15 (M8): focus is a dual channel — the accent border plus
+            // Focus is a dual channel — the accent border plus
             // a text marker, so pane focus stays legible under NO_COLOR,
             // TERM=dumb, an ASCII palette, or any color-stripping path.
             $title = self::FOCUS_PREFIX . $title;
