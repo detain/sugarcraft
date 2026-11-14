@@ -2297,4 +2297,82 @@ final class AppTest extends TestCase
         $this->assertStringContainsString('tail truncated', (string) $a->error);
         $this->assertNull($a->pendingConfirm, 'the refusal is not an arm');
     }
+
+    // ------------------------------------------------------------------
+    // CG-27: help is modal, ? toggles, s keeps to its pane, ? stacks.
+    // ------------------------------------------------------------------
+
+    public function testHelpIsModalNothingBehindTheBoxStages(): void
+    {
+        // candy-git-027: help used to leak every verb through itself -
+        // '?' then 'a' staged the whole tree behind the covering box.
+        $g = $this->git();
+        [$a] = App::start($g)->update(new KeyMsg(KeyType::Char, '?'));
+        $this->assertTrue($a->showHelp);
+        [$a] = $a->update(new KeyMsg(KeyType::Char, 'a'));
+        $this->assertTrue($a->showHelp, 'help is still up');
+        $this->assertFalse($g->stageAllCalled, 'the covered stage-all must not fire');
+
+        [$a] = $a->update(new KeyMsg(KeyType::Char, 'c'));
+        $this->assertFalse($a->collectingCommit, 'nor may a collector open behind help');
+    }
+
+    public function testQuestionMarkClosesTheHelpOverlayItself(): void
+    {
+        // candy-git-049: the README always promised the ? toggle; the arm
+        // only ever re-opened the screen.
+        [$a] = App::start($this->git())->update(new KeyMsg(KeyType::Char, '?'));
+        $this->assertTrue($a->showHelp);
+        [$a] = $a->update(new KeyMsg(KeyType::Char, '?'));
+        $this->assertFalse($a->showHelp, 'pressing ? on help dismisses it');
+    }
+
+    public function testStageKeyStaysOnTheStatusPane(): void
+    {
+        // candy-git-048: s was scoped to the status pane in the README but
+        // fired from any focus, silently touching the status-cursor row
+        // while the user browsed branches.
+        $g = $this->git();
+        [$a] = App::start($g)->update(new KeyMsg(KeyType::Tab));
+        $this->assertSame(Pane::Branches, $a->pane);
+        [$a] = $a->update(new KeyMsg(KeyType::Char, 's'));
+        $this->assertSame([], $g->stages, 'off-pane s must stage nothing');
+        $this->assertSame([], $g->unstages);
+        $this->assertNull($a->error, 'and it refuses silently, not with a scold');
+
+        [$a] = $a->update(new KeyMsg(KeyType::Tab));
+        $this->assertSame(Pane::Log, $a->pane, 'the gate holds on the log pane too');
+        [$a] = $a->update(new KeyMsg(KeyType::Char, 's'));
+        $this->assertSame([], $g->stages + $g->unstages);
+
+        [$a] = $a->update(new KeyMsg(KeyType::Tab));
+        [$a] = $a->update(new KeyMsg(KeyType::Char, 's'));
+        $this->assertSame(Pane::Status, $a->pane);
+        $this->assertNotSame([], $g->stages + $g->unstages, 'on-pane s still works');
+    }
+
+    public function testHelpStacksOverTheStashOverlayAndPeelsOff(): void
+    {
+        // candy-git-078: ? used to be swallowed by every other overlay,
+        // locking the key-hungry user out of the manual. Now help opens on
+        // top and closing it leaves the overlay exactly where it was.
+        [$a] = App::start($this->git())->update(new KeyMsg(KeyType::Char, 'S'));
+        $this->assertNotNull($a->stashManager);
+        [$a] = $a->update(new KeyMsg(KeyType::Char, '?'));
+        $this->assertTrue($a->showHelp, 'help reaches into the overlay stack');
+        [$a] = $a->update(new KeyMsg(KeyType::Char, '?'));
+        $this->assertFalse($a->showHelp);
+        $this->assertNotNull($a->stashManager, 'the stash overlay survived the detour');
+    }
+
+    public function testHelpStacksOverTheDiffViewer(): void
+    {
+        [$a] = App::start($this->git())->update(new KeyMsg(KeyType::Enter));
+        $this->assertNotNull($a->diffViewer);
+        [$a] = $a->update(new KeyMsg(KeyType::Char, '?'));
+        $this->assertTrue($a->showHelp);
+        [$a] = $a->update(new KeyMsg(KeyType::Escape));
+        $this->assertFalse($a->showHelp, 'Esc peels help, not the viewer under it');
+        $this->assertNotNull($a->diffViewer);
+    }
 }

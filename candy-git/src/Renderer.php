@@ -588,6 +588,7 @@ final class Renderer
             '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('i') . '  ' . Lang::t('help.interactive_rebase'),
             '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('M') . '  ' . Lang::t('help.merge'),
             '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('r') . '  ' . Lang::t('help.rebase'),
+            '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('ctrl+c') . '  ' . Lang::t('help.ctrl_c'),
             '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('esc') . '  ' . Lang::t('help.close_help'),
             '',
             Style::new()->foreground(Color::hex('#c5b6dd'))->render(Lang::t('help.pane_navigation')),
@@ -601,12 +602,18 @@ final class Renderer
                 Style::new()->foreground(Color::hex('#c5b6dd'))->render(Lang::t('help.pane_status')),
                 '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('s') . '  ' . Lang::t('help.stage_single'),
                 '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('a') . '  ' . Lang::t('help.stage_all'),
+                '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('??') . '  ' . Lang::t('help.porcelain_legend'),
             ]);
         } elseif ($a->pane === Pane::Branches) {
             $lines = array_merge($lines, [
                 Style::new()->foreground(Color::hex('#c5b6dd'))->render(Lang::t('help.pane_branches')),
                 '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('space') . '  ' . Lang::t('help.checkout'),
                 '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('D') . '  ' . Lang::t('help.delete_branch'),
+            ]);
+        } elseif ($a->pane === Pane::Log) {
+            $lines = array_merge($lines, [
+                Style::new()->foreground(Color::hex('#c5b6dd'))->render(Lang::t('help.pane_log')),
+                '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('enter') . '  ' . Lang::t('help.log_details'),
             ]);
         }
 

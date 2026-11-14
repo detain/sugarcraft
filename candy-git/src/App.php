@@ -209,6 +209,20 @@ final class App implements Model
             return [$this, Cmd::quit()];
         }
 
+        // candy-git-027: help is MODAL. Every other overlay owned an
+        // early-return block; help did not, so '?' then 'a' staged
+        // everything behind the covering box (PHP-GIT-005 reproduced).
+        // While it is open only '?' dismisses it - the rest of the keyboard
+        // is swallowed, because mutating git state the user cannot see is
+        // never the bargain a help screen makes.
+        if ($this->showHelp) {
+            if ($msg->type === KeyType::Char && $msg->rune === '?') {
+                return [$this->withShowHelp(false), null];
+            }
+
+            return [$this, null];
+        }
+
         // During commit message collection
         if ($this->collectingCommit) {
             if ($msg->type === KeyType::Enter) {
@@ -231,6 +245,12 @@ final class App implements Model
 
         // Stash manager overlay (Escape closes it via the global block above)
         if ($this->stashManager !== null) {
+            // candy-git-078: `?` reaches the help overlay from inside every
+            // non-collecting overlay; closing help leaves this one standing.
+            if ($msg->type === KeyType::Char && $msg->rune === '?' && $this->isTyping() === FALSE) {
+                return [$this->withShowHelp(true), null];
+            }
+            
             if ($this->collectingStash) {
                 // A message buffer owns the keyboard: Enter pushes, edit
                 // keys type, everything else is swallowed (candy-git-014).
@@ -303,6 +323,12 @@ final class App implements Model
         // block above — even mid-add; the old per-branch cancelAdding arms
         // sat behind that block and were unreachable).
         if ($this->worktrees !== null) {
+            // candy-git-078: `?` reaches the help overlay from inside every
+            // non-collecting overlay; closing help leaves this one standing.
+            if ($msg->type === KeyType::Char && $msg->rune === '?' && $this->isTyping() === FALSE) {
+                return [$this->withShowHelp(true), null];
+            }
+            
             // When adding, Enter confirms and text edits (Char/Space/Backspace) append to the active field;
             // Tab switches which field that is (CG-24, candy-git-030: the branch slot had no input path).
             if ($this->worktrees->adding === TRUE) {
@@ -344,6 +370,12 @@ final class App implements Model
 
         // Interactive rebase overlay (Escape closes it via the global block above)
         if ($this->interactiveRebase !== null) {
+            // candy-git-078: `?` reaches the help overlay from inside every
+            // non-collecting overlay; closing help leaves this one standing.
+            if ($msg->type === KeyType::Char && $msg->rune === '?' && $this->isTyping() === FALSE) {
+                return [$this->withShowHelp(true), null];
+            }
+            
             // Selecting N: enter digit
             if ($this->interactiveRebase->selectingN) {
                 if ($msg->type === KeyType::Enter) {
@@ -406,6 +438,12 @@ final class App implements Model
         // (a stopped merge drives c/a; skip is a rebase-only notion, so the
         // row for it is only offered while kind is 'rebase').
         if ($this->showRebaseMenu) {
+            // candy-git-078: `?` reaches the help overlay from inside every
+            // non-collecting overlay; closing help leaves this one standing.
+            if ($msg->type === KeyType::Char && $msg->rune === '?' && $this->isTyping() === FALSE) {
+                return [$this->withShowHelp(true), null];
+            }
+            
             $kind = $this->rebaseMenuKind;
             if ($msg->type === KeyType::Char && $msg->rune === 'c') {
                 return [match ($kind) {
@@ -437,6 +475,13 @@ final class App implements Model
         // readable to its last row; [ ] hop hunks; page keys page lines.
         if ($this->diffViewer !== null) {
             $dv = $this->diffViewer;
+            // candy-git-078: `?` reaches the help overlay from inside every
+            // non-collecting overlay; closing help leaves this one standing.
+            if ($msg->type === KeyType::Char && $msg->rune === '?' && $this->isTyping() === FALSE) {
+                return [$this->withShowHelp(true), null];
+            }
+            
+
             if ($msg->type === KeyType::Escape || ($msg->type === KeyType::Char && $msg->rune === 'd')) {
                 // Closing takes any live arm with it (candy-git-011 law: the
                 // armed gesture dies with the surface that offered it).
@@ -512,7 +557,11 @@ final class App implements Model
             || $msg->type === KeyType::Home || $msg->type === KeyType::End) {
             return [$this->viewportKey($msg->type), null];
         }
-        if ($msg->type === KeyType::Char && $msg->rune === 's') {
+        // candy-git-048: the README scoped `s` to the status pane from day
+        // one; the code fired it from any focus, so browsing branches could
+        // silently stage the status-cursor row. Gate it to match the doc -
+        // stage/unstage is a file-pane verb, full stop.
+        if ($msg->type === KeyType::Char && $msg->rune === 's' && $this->pane === Pane::Status) {
             return [$this->toggleStage(), null];
         }
         if ($msg->type === KeyType::Char && $msg->rune === 'a' && $this->pane === Pane::Status) {

@@ -236,11 +236,15 @@ throws the query away untouched.
 | `d`              | Parked — refused with the preview-only notice (rows are never dropped) |
 | `Esc`            | Close                                           |
 
-**Help (`?`):** context-sensitive — it covers the general keys plus the
-Status and Branches panes, and closes the help overlay itself when pressed
-while help is open. `?` is not delivered to the global handler while another
-overlay (sequencer menu, stash, worktrees, cherry-pick, interactive rebase,
-diff viewer, or a text buffer) is open — close that layer first.
+**Help (`?`):** context-sensitive — it covers the general keys (including
+`ctrl+c`, which closes the topmost layer or quits), the Status pane with its
+porcelain `XY` legend, and the Branches and Log panes. Help is modal: while
+it is open the rest of the keyboard is swallowed, and `?` closes it again.
+It is also reachable from inside the other overlays (sequencer menu, stash,
+worktrees, interactive rebase, diff viewer) — press `?` there to read the
+keys, dismiss help, and the overlay underneath is exactly as you left it.
+Text buffers keep the keyboard: while a collector is open, `?` types a
+question mark.
 
 ## Accessibility
 
@@ -322,7 +326,7 @@ bypasses the facade and looks up a bare `error` in namespace `git`. Call
 through `SugarCraft\Git\Lang` and nothing else.
 
 **Available keys** (`lang/en.php` — an excerpt; the file is the full roster
-of 196 keys):
+of 200 keys):
 
 | Key                    | Default string                                                    | Parameters  |
 |------------------------|-------------------------------------------------------------------|------------|

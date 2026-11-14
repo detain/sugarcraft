@@ -1043,4 +1043,25 @@ final class RendererTest extends TestCase
         $this->assertStringContainsString('filter stashes', $plain, 'the footer names the affordance even while the bar is open');
         $this->assertMatchesRegularExpression('/\/ {2}filter stashes/', $plain, 'the footer key itself is the slash');
     }
+
+    public function testTheHelpOverlayListsCtrlCAndThePorcelainLegend(): void
+    {
+        // candy-git-142 + candy-git-096: Ctrl+C was a first-class closer
+        // the manual never named, and the XY porcelain pairs had no legend
+        // anywhere in the app.
+        $app = new App($this->git(), pane: Pane::Status, showHelp: true, width: 80, height: 70);
+        $plain = preg_replace('/\x1b\[[0-9;]*m/', '', Renderer::render($app));
+        $this->assertStringContainsString('ctrl+c  close overlay / quit', $plain);
+        $this->assertStringContainsString('??  X=index Y=worktree; ?? new MM both UU conf', $plain);
+    }
+
+    public function testTheHelpOverlayGainsTheLogSection(): void
+    {
+        // candy-git-078: the log pane had actions since CG-18 but no help
+        // section; the box claimed context for panes that had none.
+        $app = new App($this->git(), pane: Pane::Log, showHelp: true, width: 80, height: 70);
+        $plain = preg_replace('/\x1b\[[0-9;]*m/', '', Renderer::render($app));
+        $this->assertStringContainsString('Log pane:', $plain);
+        $this->assertStringContainsString('enter  open commit details', $plain);
+    }
 }
