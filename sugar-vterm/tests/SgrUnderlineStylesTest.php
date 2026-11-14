@@ -16,6 +16,7 @@ use SugarCraft\Vterm\Sgr\UnderlineStyle;
  */
 final class SgrUnderlineStylesTest extends TestCase
 {
+    /** @param list<int> $params */
     private function apply(array $params, ?Sgr $start = null): Sgr
     {
         return (new SgrHandler())->apply($params, $start ?? Sgr::empty());

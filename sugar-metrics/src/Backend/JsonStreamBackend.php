@@ -17,6 +17,23 @@ use SugarCraft\Metrics\Util;
  *
  * Each line shape:
  *   `{"ts":"2026-05-02T16:30:00+00:00","kind":"counter","name":"x","value":1,"tags":{...}}`
+ *
+ * Multi-writer contract (sugar-metrics-009): when the backend opened
+ * its own stream (a path target or the php://stderr default), each
+ * emit takes `flock(LOCK_EX)`, writes the whole record, flushes inside
+ * the lock window, then unlocks — so records are line-atomic even when
+ * one exceeds the 8 KB stream buffer (tag arrays are unbounded at this
+ * API; only SessionMetrics clamps them). Concurrent appenders that
+ * bypass this class (foreign writers on the same file) are outside its
+ * reach; an injected stream resource is written exactly as given — no
+ * lock, no forced flush — because the backend cannot claim a locking
+ * contract over a handle it does not own.
+ *
+ * A short write quarantines its torn record with one best-effort
+ * `@fwrite("\n")` before the throw/drop, so a failure truncates only
+ * itself, never every successor line after it. The quarantine is
+ * best-effort: if the stream still refuses progress the newline is
+ * lost and the splice risk returns — bounded, disclosed residual.
  */
 final class JsonStreamBackend implements Backend
 {
@@ -26,7 +43,22 @@ final class JsonStreamBackend implements Backend
     private bool $throwOnError;
 
     /**
-     * @param resource|string|null $target
+     * Preallocated record (sugar-metrics-047): the five slots are
+     * overwritten per emit instead of rebuilding the array, so
+     * json_encode() re-walks a stable shape. Tags ride as a plain array
+     * with JSON_FORCE_OBJECT on the encode, which renders them byte-
+     * identical to the old `(object)` cast (including numeric-looking
+     * keys and the empty case) without the per-record cast rehash.
+     *
+     * @var array{ts:string,kind:string,name:string,value:float|string,tags:array<array-key,string>}
+     */
+    private array $record = ['ts' => '', 'kind' => '', 'name' => '', 'value' => 0.0, 'tags' => []];
+
+    /**
+     * @param resource|string|null $target A path or the php://stderr default
+     *        is opened (and exclusively locked per record) by this backend;
+     *        an injected resource is written as-is — no lock, no forced
+     *        flush (see class docblock, multi-writer contract).
      * @param bool $throwOnError If false, silently drop metrics on partial write failure.
      */
     /**
@@ -126,18 +158,15 @@ final class JsonStreamBackend implements Backend
      */
     private function emit(string $kind, string $name, float $value, array $tags): void
     {
-        $record = [
-            // Acceptable for a diagnostic backend; not cached across events.
-            'ts'    => gmdate('c'),
-            'kind'  => $kind,
-            'name'  => $name,
-            // JSON has no literal for ±Inf/NaN — json_encode() returns false
-            // for those floats. Render them as the canonical string tokens so
-            // one poisoned reading cannot silently swallow the record.
-            'value' => Util::nonFiniteToken($value) ?? $value,
-            'tags'  => (object) $tags,
-        ];
-        $line = json_encode($record, JSON_UNESCAPED_SLASHES);
+        $this->record['ts'] = gmdate('c');   // per-record date; acceptable for a diagnostic backend
+        $this->record['kind'] = $kind;
+        $this->record['name'] = $name;
+        // JSON has no literal for ±Inf/NaN — json_encode() returns false
+        // for those floats. Render them as the canonical string tokens so
+        // one poisoned reading cannot silently swallow the record.
+        $this->record['value'] = Util::nonFiniteToken($value) ?? $value;
+        $this->record['tags'] = $tags;
+        $line = json_encode($this->record, JSON_UNESCAPED_SLASHES | JSON_FORCE_OBJECT);
         if ($line === false) {
             // Remaining encode failures are hostile-input territory
             // (non-UTF-8 names/tags): the throwOnError contract says a
@@ -148,8 +177,30 @@ final class JsonStreamBackend implements Backend
             }
             return;
         }
+        // Line-atomicity on owned streams (sugar-metrics-009): exclusive
+        // lock, full write, and flush share one lock window, so no other
+        // appending process can splice between the chunks of a record
+        // that outruns the stream buffer. Best-effort everywhere: a
+        // filesystem without flock support simply proceeds.
+        $locked = $this->owns && @flock($this->stream, LOCK_EX);
         $written = @fwrite($this->stream, $line . "\n");
-        if ($written === false || $written < strlen($line) + 1) {
+        $short = $written === false || $written < strlen($line) + 1;
+        if ($short) {
+            // Quarantine the torn record (sugar-metrics-009a): one
+            // terminating newline, best-effort, still inside the lock
+            // window, so successors start on their own lines even if this
+            // record died mid-write. The docblocks used to name only the
+            // failed record; without this attempt every LATER record
+            // fuses onto the tear permanently. If the quarantine itself
+            // refuses progress the splice risk returns — bounded, disclosed.
+            @fwrite($this->stream, "\n");
+        } elseif ($this->owns) {
+            @fflush($this->stream); // drain the buffer inside the same window
+        }
+        if ($locked) {
+            @flock($this->stream, LOCK_UN);
+        }
+        if ($short) {
             if ($this->throwOnError) {
                 throw new \RuntimeException(Lang::t('jsonstream.write_failed', ['name' => Util::displaySafe($name)]));
             }

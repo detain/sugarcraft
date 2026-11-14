@@ -21,6 +21,7 @@ final class RenditionTest extends TestCase
         $this->assertCount(4, Rendition::cases());
     }
 
+    /** @return array<string, array{0: Rendition, 1: int}> */
     public static function valueProvider(): array
     {
         return [
@@ -39,6 +40,7 @@ final class RenditionTest extends TestCase
         $this->assertSame($rendition, Rendition::tryFrom($value));
     }
 
+    /** @return array<string, array{0: Rendition, 1: bool}> */
     public static function doubleHeightProvider(): array
     {
         return [

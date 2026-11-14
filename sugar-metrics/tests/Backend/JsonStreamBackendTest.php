@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Metrics\Tests\Backend;
 
 use SugarCraft\Metrics\Backend\JsonStreamBackend;
+use SugarCraft\Metrics\Tests\Support\ShortWriteStream;
 use PHPUnit\Framework\TestCase;
 
 final class JsonStreamBackendTest extends TestCase
@@ -209,17 +210,25 @@ final class JsonStreamBackendTest extends TestCase
         fclose($stream);
     }
 
-    public function testThrowOnErrorFalseSilentlyDropsPartialWrites(): void
+    public function testThrowOnErrorFalseSilentlyDropsTheShortWrittenRecord(): void
     {
-        // A stream with a limited write buffer — use a pipe with a small buffer
-        // by passing throwOnError=false, then try to write to a stream that is full.
-        // Using a memory stream that is actually writable — the non-throwing
-        // path is tested by construction: throwOnError=false never throws.
-        $stream = fopen('php://memory', 'w+');
+        // The old arm wrote a FULL record to php://memory and congratulated
+        // itself on not throwing — the silent-drop branch never ran. Now the
+        // fault seam really truncates the write: silent mode must neither
+        // throw nor poison the successor line.
+        ShortWriteStream::register();
+        ShortWriteStream::arm(120);
+        $stream = fopen('metrics-shortwrite://x', 'w');
         $b = new JsonStreamBackend($stream, throwOnError: false);
-        $b->counter('x', 1); // Must not throw even though we don't test the "partial write" path.
-        $this->assertTrue(true);
+        $b->counter('torn', 1.0, ['route' => '/a/very/long/path/making/the/record/comfortably/exceed/the/fault']);
+        $b->counter('second', 2.0);
         fclose($stream);
+        $lines = explode("\n", ShortWriteStream::$buf);
+        $this->assertCount(3, $lines, 'torn record, quarantined successor, trailing empty');
+        $this->assertNull(json_decode($lines[0], true), 'the first 120 bytes are a torn record by construction');
+        $decoded = json_decode((string) $lines[1], true);
+        $this->assertIsArray($decoded, 'the successor must stand on its own line after quarantine');
+        $this->assertSame('second', $decoded['name']);
     }
 
     public function testDestructorClosesOwnedStream(): void
@@ -237,14 +246,144 @@ final class JsonStreamBackendTest extends TestCase
 
     public function testJsonEncodeFailureIsHandledGracefully(): void
     {
-        // When json_encode returns false, emit() returns early without throwing.
-        // This is hard to trigger directly with valid data, so we test via the
-        // throwOnError=false path: a failed write is detected, and when throwOnError
-        // is false it silently returns.
+        // Invalid UTF-8 makes json_encode() return false — the old arm never
+        // reached that branch (it wrote a healthy record instead). Silent
+        // mode now really runs the encode-failure drop: nothing reaches the
+        // stream and nothing throws.
         $stream = fopen('php://memory', 'w+');
         $b = new JsonStreamBackend($stream, throwOnError: false);
-        $b->counter('test', 1.0);
-        $this->assertTrue(true); // If we get here without exception, the path is covered.
+        $b->counter("host\xFFle", 1.0);
+        rewind($stream);
+        $this->assertSame('', (string) stream_get_contents($stream), 'a record that cannot encode must not be written');
         fclose($stream);
+
+        // Loud mode refuses the same record instead of dropping it silently.
+        $stream = fopen('php://memory', 'w+');
+        $b = new JsonStreamBackend($stream, throwOnError: true);
+        $message = null;
+        try {
+            $b->counter("host\xFFle", 1.0);
+        } catch (\RuntimeException $e) {
+            $message = $e->getMessage();
+        }
+        rewind($stream);
+        $this->assertNotNull($message, 'loud mode must report the unencodable record');
+        $this->assertSame('', (string) stream_get_contents($stream), 'the refusal happens before any write');
+        fclose($stream);
+    }
+
+    public function testShortWriteQuarantinesTheTornRecordSoSuccessorsStandAlone(): void
+    {
+        // sugar-metrics-009(a): the pre-fix branch only throw/returned, so
+        // the half-written line stayed un-terminated and EVERY later record
+        // spliced onto the tear — one failure corrupted the file from that
+        // offset on, in a stream whose contract is "every event gets a fresh
+        // line". The fault seam truncates the write mid-record (120 bytes
+        // accepted, retry hard-blocked, then capacity returns); loud mode
+        // must refuse the record AND quarantine the tear with a newline.
+        ShortWriteStream::register();
+        ShortWriteStream::arm(120);
+        $stream = fopen('metrics-shortwrite://x', 'w');
+        $b = new JsonStreamBackend($stream);
+        $message = null;
+        try {
+            $b->counter('torn', 1.0, ['route' => '/a/very/long/path/making/the/record/comfortably/exceed/the/fault']);
+        } catch (\RuntimeException $e) {
+            $message = $e->getMessage();
+        }
+        $this->assertNotNull($message, 'short write must refuse in loud mode');
+        $this->assertStringContainsString('torn', $message);
+        $b->counter('second', 2.0);
+        fclose($stream);
+
+        $lines = explode("\n", ShortWriteStream::$buf);
+        $this->assertSame(120, strlen($lines[0]), 'exactly the faulted prefix, nothing past the block');
+        $this->assertTrue(str_starts_with($lines[0], '{"ts":"'));
+        $this->assertNull(json_decode($lines[0], true), 'the torn line is invalid JSON by construction');
+        $decoded = json_decode((string) $lines[1], true);
+        $this->assertIsArray($decoded, 'the quarantined successor must parse on its OWN line');
+        $this->assertSame('second', $decoded['name']);
+        $this->assertSame('', $lines[2], 'trailing newline keeps the file record-framed');
+    }
+
+    public function testTagsRenderByteIdenticalToTheHistoricObjectCast(): void
+    {
+        // sugar-metrics-047 replaced the per-record (object) $tags cast with
+        // JSON_FORCE_OBJECT; every tags shape must render byte-identical,
+        // including the two that a plain json_encode($tags) would change:
+        // the empty map and numeric-looking keys.
+        $stream = fopen('php://memory', 'w+');
+        $b = new JsonStreamBackend($stream);
+        $b->counter('empty', 1.0, []);
+        $b->counter('numkey', 1.0, ['0' => 'a']);
+        $b->counter('slashes', 1.0, ['route' => '/x']);
+        rewind($stream);
+        $body = (string) stream_get_contents($stream);
+        fclose($stream);
+        $this->assertStringContainsString('"tags":{}}', $body, 'empty tags stay an object, never []');
+        $this->assertStringContainsString('"tags":{"0":"a"}}', $body, 'numeric-looking keys stay keys, never a list');
+        $this->assertStringContainsString('"tags":{"route":"/x"}}', $body, 'slashes stay unescaped as before');
+    }
+
+    public function testOwnedEmitHoldsTheLockAcrossWriteFlushAndQuarantine(): void
+    {
+        // sugar-metrics-009(b): record-level flock + flush inside ONE lock
+        // window on owned streams; injected resources take no lock (we
+        // cannot claim a contract we do not own). Structural pin on the
+        // emit() body — the two-process test below shows the wire result.
+        $src = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Backend/JsonStreamBackend.php');
+        $from = (int) strpos($src, 'private function emit(');
+        $body = substr($src, $from, (int) strrpos($src, '}') - $from);
+        $this->assertStringContainsString('$this->owns && @flock($this->stream, LOCK_EX)', $body);
+        $this->assertStringContainsString('@fwrite($this->stream, "\\n");', $body, 'the quarantine newline must be attempted');
+        $this->assertStringContainsString('@fflush($this->stream);', $body, 'owned records flush inside the lock window');
+        $this->assertStringContainsString('@flock($this->stream, LOCK_UN)', $body);
+        $this->assertLessThan(
+            (int) strpos($body, '@flock($this->stream, LOCK_UN)'),
+            (int) strpos($body, '@fwrite($this->stream, "\\n");'),
+            'quarantine belongs inside the lock window, after the short write'
+        );
+        $this->assertStringNotContainsString('flock($this->stream, LOCK_EX)', str_replace('$this->owns && @flock($this->stream, LOCK_EX)', '', $body), 'the lock may only be taken behind the owns guard');
+    }
+
+    public function testTwoOwnedProcessesAppendLineCleanRecords(): void
+    {
+        // sugar-metrics-009(b) wire result: two processes appending records
+        // LARGER than the 8 KB stream buffer (multi-write(2) per flush —
+        // the exact splice window) must still produce a file where every
+        // line parses. Sibling shape of the Prometheus two-process test.
+        $path = sys_get_temp_dir() . '/sugar-metrics-js-2proc-' . uniqid() . '.ndjson';
+        $child = escapeshellarg(dirname(__DIR__, 2) . '/tests/Support/jsonstream-append-child.php');
+        $autoload = escapeshellarg(dirname(__DIR__, 2) . '/vendor/autoload.php');
+        $handles = [];
+        try {
+            foreach (['a', 'b'] as $tag) {
+                $proc = proc_open(
+                    PHP_BINARY . ' ' . $child . ' ' . $autoload . ' ' . escapeshellarg($path) . ' ' . $tag,
+                    [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+                    $pipes
+                );
+                $this->assertIsResource($proc);
+                fclose($pipes[0]);
+                fclose($pipes[1]);
+                fclose($pipes[2]);
+                $handles[] = $proc;
+            }
+            foreach ($handles as $proc) {
+                $this->assertSame(0, proc_close($proc), 'append child must exit clean');
+            }
+            $lines = array_values(array_filter(explode("\n", (string) file_get_contents($path))));
+            $this->assertCount(50, $lines, 'both processes contribute all 25 records');
+            $tags = [];
+            foreach ($lines as $line) {
+                $decoded = json_decode($line, true);
+                $this->assertIsArray($decoded, 'no line may splice or tear: ' . substr($line, 0, 60));
+                $tags[] = (string) $decoded['name'];
+            }
+            $this->assertSame(25, count(array_filter($tags, static fn(string $t): bool => $t === 'proc_a')));
+            $this->assertSame(25, count(array_filter($tags, static fn(string $t): bool => $t === 'proc_b')));
+        } finally {
+            @unlink($path);
+        }
     }
 }

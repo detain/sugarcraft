@@ -115,7 +115,7 @@ final class OscHandlerTest extends TestCase
     {
         $h = $this->newHandler();
         $this->apply('8;id=anchor1;https://example.com#x', $h);
-        $this->assertSame('anchor1', $h->currentHyperlink->id);
+        $this->assertSame('anchor1', $h->currentHyperlink?->id);
         $this->assertSame('https://example.com#x', $h->currentHyperlink->uri);
     }
 

@@ -34,7 +34,7 @@ final class EraseHandler
      * @param list<int> $params
      * @param Sgr|null $sgr Current SGR pen; used to carry forward the
      *   background color when filling erased cells (BCE).
-     * @param array<int, array{row: int, col: int, cell: Cell}>|null $pending
+     * @param list<array{row: int, col: int, cell: Cell}>|null $pending
      *   When non-null, mutations are appended here instead of written to buffer.
      */
     public function apply(int $final, array $params, Buffer $buffer, Cursor $cursor, ?Sgr $sgr = null, ?array &$pending = null): void
@@ -51,6 +51,10 @@ final class EraseHandler
         };
     }
 
+    /**
+     * @param list<array{row: int, col: int, cell: Cell}>|null $pending
+     *   Synchronized-output queue; see {@see self::apply()}.
+     */
     private function eraseInLine(Buffer $buf, Cursor $cur, int $mode, ?Sgr $sgr, ?array &$pending): void
     {
         if ($cur->row < 0 || $cur->row >= $buf->rows) {
@@ -64,6 +68,10 @@ final class EraseHandler
         };
     }
 
+    /**
+     * @param list<array{row: int, col: int, cell: Cell}>|null $pending
+     *   Synchronized-output queue; see {@see self::apply()}.
+     */
     private function eraseInDisplay(Buffer $buf, Cursor $cur, int $mode, ?Sgr $sgr, ?array &$pending): void
     {
         switch ($mode) {
@@ -91,12 +99,20 @@ final class EraseHandler
         }
     }
 
+    /**
+     * @param list<array{row: int, col: int, cell: Cell}>|null $pending
+     *   Synchronized-output queue; see {@see self::apply()}.
+     */
     private function eraseChars(Buffer $buf, Cursor $cur, int $count, ?Sgr $sgr, ?array &$pending): void
     {
         $end = min($buf->cols - 1, $cur->col + $count - 1);
         $this->fillRow($buf, $cur->row, $cur->col, $end, $sgr, $pending);
     }
 
+    /**
+     * @param list<array{row: int, col: int, cell: Cell}>|null $pending
+     *   Synchronized-output queue; see {@see self::apply()}.
+     */
     private function deleteChars(Buffer $buf, Cursor $cur, int $count, ?Sgr $sgr, ?array &$pending): void
     {
         if ($cur->row < 0 || $cur->row >= $buf->rows) {
@@ -123,6 +139,10 @@ final class EraseHandler
         }
     }
 
+    /**
+     * @param list<array{row: int, col: int, cell: Cell}>|null $pending
+     *   Synchronized-output queue; see {@see self::apply()}.
+     */
     private function insertChars(Buffer $buf, Cursor $cur, int $count, ?Sgr $sgr, ?array &$pending): void
     {
         if ($cur->row < 0 || $cur->row >= $buf->rows) {
@@ -175,7 +195,7 @@ final class EraseHandler
      * classic mis-render the VT500 §BCE / xterm `bce` option warns about
      * ("erase colour is the background colour attribute").
      *
-     * @param array<int, array{row: int, col: int, cell: Cell}>|null $pending
+     * @param list<array{row: int, col: int, cell: Cell}>|null $pending
      *   When non-null, mutations are queued instead of applied.
      */
     private function fillRow(Buffer $buf, int $row, int $start, int $end, ?Sgr $sgr, ?array &$pending): void
@@ -197,7 +217,7 @@ final class EraseHandler
      * Write to the buffer directly, or queue into $pending when
      * synchronized-output (DEC 2026) mode defers mutations.
      *
-     * @param array<int, array{row: int, col: int, cell: Cell}>|null $pending
+     * @param list<array{row: int, col: int, cell: Cell}>|null $pending
      */
     private function putOrQueue(Buffer $buf, int $row, int $col, Cell $cell, ?array &$pending): void
     {

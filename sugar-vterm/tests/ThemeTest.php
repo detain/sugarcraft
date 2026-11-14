@@ -355,6 +355,7 @@ final class ThemeTest extends TestCase
         ];
 
         foreach ($themes as $name => $theme) {
+            /** @var array<int, int> $palette */
             $palette = $paletteRef->getValue($theme);
             $this->assertCount(256, $palette, $name);
             $this->assertSame(range(0, 255), array_keys($palette), $name);
@@ -407,7 +408,9 @@ final class ThemeTest extends TestCase
     public function testExtendedPaletteMemoReturnsIdenticalArrayEveryCall(): void
     {
         $a = new \ReflectionMethod(Theme::class, 'extendedPalette');
+        /** @var array<int, int> $first */
         $first = $a->invoke(null);
+        /** @var array<int, int> $second */
         $second = $a->invoke(null);
 
         $this->assertSame($first, $second);
@@ -419,6 +422,7 @@ final class ThemeTest extends TestCase
         // inside the method slice). Kill the memo and compute-again-per-call
         // stays behaviourally green — only this pin catches the regression.
         $lines = file((string) $a->getFileName());
+        $this->assertIsArray($lines, 'Theme source readable for the memo census');
         $body = implode('', array_slice($lines, $a->getStartLine() - 1, $a->getEndLine() - $a->getStartLine() + 1));
         $this->assertSame(1, substr_count($body, 'static $extended'));
     }

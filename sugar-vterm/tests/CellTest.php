@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Vterm\Tests;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Vterm\Cell\Cell;
+use SugarCraft\Vterm\Cell;
 use SugarCraft\Vterm\Color\Color;
 use SugarCraft\Vterm\Hyperlink\Hyperlink;
 use SugarCraft\Vterm\Sgr\Sgr;
@@ -65,7 +65,7 @@ final class CellTest extends TestCase
     public function testSgrFallsBackToEmpty(): void
     {
         $c = new Cell(grapheme: 'A');
-        $this->assertSame(Sgr::class, $c->sgr()::class);
+        $this->assertEquals(new Sgr(), $c->sgr(), 'a cell minted without a pen falls back to the default Sgr');
     }
 
     public function testForeground(): void

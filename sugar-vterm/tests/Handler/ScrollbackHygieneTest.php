@@ -42,9 +42,10 @@ final class ScrollbackHygieneTest extends TestCase
     }
 
     /** Render one stored scrollback row (a list of Cells) as plain text. */
-    private function rowText(array $row): string
+    /** @param array<int, Cell>|null $row */
+    private function rowText(?array $row): string
     {
-        return implode('', array_map(static fn (Cell $c): string => $c->grapheme, $row));
+        return $row === null ? '<missing>' : implode('', array_map(static fn (Cell $c): string => $c->grapheme, $row));
     }
 
     // ─── Positive control: full-screen scroll still feeds the ring ──────────

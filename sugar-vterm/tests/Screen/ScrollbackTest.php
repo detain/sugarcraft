@@ -184,11 +184,11 @@ final class ScrollbackTest extends TestCase
             $term->feed(sprintf('L%02d', $n) . "\r\n");
         }
         // Rows L01-L03 scrolled off the 4-row screen into the default ring.
-        $this->assertSame(3, $term->screen()->scrollback()->count());
+        $this->assertSame(3, $term->screen()->scrollback()?->count() ?? -1);
 
         $grown = $term->withScrollbackSize(500);
 
-        $this->assertSame(500, $grown->screen()->scrollback()->maxSize());
+        $this->assertSame(500, $grown->screen()->scrollback()?->maxSize() ?? -1);
         $this->assertSame(0, $grown->screen()->scrollback()->count(), 'the swapped ring starts empty — history is not carried over');
         $this->assertSame(3, $term->screen()->scrollback()->count(), 'the original terminal keeps its ring');
     }
@@ -284,6 +284,7 @@ final class ScrollbackTest extends TestCase
         // First screen snapshot
         $screen1 = $term->screen();
         $sb1 = $screen1->scrollback();
+        $this->assertNotNull($sb1);
         $count1 = $sb1->count();
 
         // Feed 100 more lines
@@ -294,6 +295,7 @@ final class ScrollbackTest extends TestCase
         // Second screen snapshot
         $screen2 = $term->screen();
         $sb2 = $screen2->scrollback();
+        $this->assertNotNull($sb2);
         $count2 = $sb2->count();
 
         // Scrollback grew as more content was added
@@ -318,9 +320,17 @@ final class ScrollbackTest extends TestCase
         ];
     }
 
-    /** Convert a row (array<int, Cell>) to a string of graphemes. */
-    private function rowToString(array $row): string
+    /**
+     * Convert a row (array<int, Cell>) to a string of graphemes.
+     *
+     * @param array<int, Cell>|null $row  (at() is nullable — a missing row renders as a sentinel below)
+     */
+    private function rowToString(?array $row): string
     {
+        if ($row === null) {
+            return '<missing>';
+        }
+
         $s = '';
         foreach ($row as $cell) {
             $s .= $cell->grapheme;

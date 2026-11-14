@@ -53,7 +53,7 @@ final class SaveRestoreSlotsTest extends TestCase
         $this->assertSame(6, $h->cursor->col, 'position restored');
         $this->assertNotNull($h->sgr->foreground, 'rendition restored');
         $this->assertTrue($h->sgr->foreground->equals(Color::indexed16(1)), 'red fg back');
-        $this->assertTrue($h->sgr->background->equals(Color::indexed16(4)), 'blue bg back');
+        $this->assertTrue($h->sgr->background?->equals(Color::indexed16(4)) ?? false, 'blue bg back');
         $this->assertSame('0', $h->charsets[0], 'G0 designation restored');
         $this->assertSame(0, $h->gl, 'GL invocation restored');
         $this->assertTrue($h->mode->originMode, 'DECOM restored');
@@ -71,7 +71,7 @@ final class SaveRestoreSlotsTest extends TestCase
 
         $this->assertSame(2, $h->cursor->row);
         $this->assertSame(1, $h->cursor->col);
-        $this->assertTrue($h->sgr->background->equals(Color::indexed16(6)), 'bg pen restored by CSI u');
+        $this->assertTrue($h->sgr->background?->equals(Color::indexed16(6)) ?? false, 'bg pen restored by CSI u');
         $this->assertFalse($h->sgr->bold, 'bold stays off (never set)');
         $this->assertSame('0', $h->charsets[0], 'charset restored by CSI u');
     }
@@ -92,7 +92,7 @@ final class SaveRestoreSlotsTest extends TestCase
         $h = $this->feed("\x1b[1;31m\x1b(0\x1b[?6h\x1b[2;4H\x1b8");
         $this->assertSame(1, $h->cursor->row, 'position untouched');
         $this->assertSame(3, $h->cursor->col, 'position untouched');
-        $this->assertTrue($h->sgr->foreground->equals(Color::indexed16(1)), 'pen untouched');
+        $this->assertTrue($h->sgr->foreground?->equals(Color::indexed16(1)) ?? false, 'pen untouched');
         $this->assertSame('0', $h->charsets[0], 'designation untouched');
         $this->assertTrue($h->mode->originMode, 'DECOM untouched');
     }
@@ -121,7 +121,7 @@ final class SaveRestoreSlotsTest extends TestCase
 
         $this->assertSame(3, $h->cursor->row, 'general slot survived the alt round-trip');
         $this->assertSame(5, $h->cursor->col, 'general slot survived the alt round-trip');
-        $this->assertTrue($h->sgr->background->equals(Color::indexed16(6)), 'general pen restored');
+        $this->assertTrue($h->sgr->background?->equals(Color::indexed16(6)) ?? false, 'general pen restored');
     }
 
     public function testGeneralSaveInsideAltScreenDoesNotClobberAuxRestore(): void
@@ -137,7 +137,7 @@ final class SaveRestoreSlotsTest extends TestCase
 
         $this->assertSame(0, $h->cursor->row, 'AUX cursor restored, not the in-alt DECSC');
         $this->assertSame(2, $h->cursor->col);
-        $this->assertTrue($h->sgr->background->equals(Color::indexed16(2)), 'AUX pen restored');
+        $this->assertTrue($h->sgr->background?->equals(Color::indexed16(2)) ?? false, 'AUX pen restored');
     }
 
     public function testAltScreenAuxSaveSnapshotsCharsetsAndOrigin(): void

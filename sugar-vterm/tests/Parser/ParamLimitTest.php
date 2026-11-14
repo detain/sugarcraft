@@ -41,7 +41,10 @@ final class ParamLimitTest extends TestCase
         $csiEntries = $h->filter('csi');
         $this->assertCount(1, $csiEntries);
 
-        $params = $csiEntries[0]['detail']['params'];
+        $detail = $csiEntries[0]['detail'] ?? [];
+        $this->assertIsArray($detail, 'csi event carries a structured detail');
+        $params = $detail['params'] ?? [];
+        $this->assertIsArray($params);
         $this->assertLessThanOrEqual(32, count($params));
     }
 
@@ -59,7 +62,10 @@ final class ParamLimitTest extends TestCase
         $csiEntries = $h->filter('csi');
         $this->assertCount(1, $csiEntries);
 
-        $params = $csiEntries[0]['detail']['params'];
+        $detail = $csiEntries[0]['detail'] ?? [];
+        $this->assertIsArray($detail, 'csi event carries a structured detail');
+        $params = $detail['params'] ?? [];
+        $this->assertIsArray($params);
         $this->assertLessThanOrEqual(32, count($params));
     }
 
@@ -77,7 +83,10 @@ final class ParamLimitTest extends TestCase
         $csiEntries = $h->filter('csi');
         $this->assertCount(1, $csiEntries);
 
-        $params = $csiEntries[0]['detail']['params'];
+        $detail = $csiEntries[0]['detail'] ?? [];
+        $this->assertIsArray($detail, 'csi event carries a structured detail');
+        $params = $detail['params'] ?? [];
+        $this->assertIsArray($params);
         $this->assertCount(1, $params);
         $this->assertLessThanOrEqual(65535, $params[0]);
     }
@@ -96,7 +105,10 @@ final class ParamLimitTest extends TestCase
         $csiEntries = $h->filter('csi');
         $this->assertCount(1, $csiEntries);
 
-        $params = $csiEntries[0]['detail']['params'];
+        $detail = $csiEntries[0]['detail'] ?? [];
+        $this->assertIsArray($detail, 'csi event carries a structured detail');
+        $params = $detail['params'] ?? [];
+        $this->assertIsArray($params);
         $this->assertSame([38, 5, 196], $params);
     }
 
@@ -114,7 +126,10 @@ final class ParamLimitTest extends TestCase
         $csiEntries = $h->filter('csi');
         $this->assertCount(1, $csiEntries);
 
-        $params = $csiEntries[0]['detail']['params'];
+        $detail = $csiEntries[0]['detail'] ?? [];
+        $this->assertIsArray($detail, 'csi event carries a structured detail');
+        $params = $detail['params'] ?? [];
+        $this->assertIsArray($params);
         $this->assertSame([38, 2, 255, 128, 0], $params);
     }
 
@@ -134,6 +149,7 @@ final class ParamLimitTest extends TestCase
         $this->assertCount(1, $oscEntries);
 
         $data = $oscEntries[0]['detail'];
+        $this->assertIsString($data, 'osc event detail is the payload string');
         // After the cap, the payload should be at most MAX_STRING_BYTES
         $payloadLen = strlen($data) - strlen('52;c;'); // subtract the command prefix
         $this->assertLessThanOrEqual(1_048_576, $payloadLen);
@@ -194,7 +210,9 @@ final class ParamLimitTest extends TestCase
 
         $oscEntries = $h->filter('osc');
         $this->assertCount(1, $oscEntries);
-        $payloadLen = strlen($oscEntries[0]['detail']) - strlen('52;c;');
+        $payload = $oscEntries[0]['detail'];
+        $this->assertIsString($payload);
+        $payloadLen = strlen($payload) - strlen('52;c;');
         $this->assertLessThanOrEqual(
             65_536,
             $payloadLen,

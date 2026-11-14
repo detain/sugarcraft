@@ -65,7 +65,9 @@ final class PenForwardingOscHandlerTest extends TestCase
         $osc = new PenForwardingOscHandler($csi);
 
         $osc->hyperlink('https://example.com', 'x');
-        $this->assertTrue((new Hyperlink('x', 'https://example.com'))->equals($csi->hyperlink()));
+        $link = $csi->hyperlink();
+        $this->assertNotNull($link, 'pen-forwarding OSC 8 installs the link on the CSI pen');
+        $this->assertTrue((new Hyperlink('x', 'https://example.com'))->equals($link));
 
         $osc->hyperlink('', '');
         $this->assertNull($csi->hyperlink());

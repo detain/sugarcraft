@@ -28,6 +28,7 @@ final class ScrollHandlerTest extends TestCase
         return $s;
     }
 
+    /** @param array<int, string> $rows */
     private function fillBuffer(Buffer $buf, array $rows): void
     {
         foreach ($rows as $r => $text) {

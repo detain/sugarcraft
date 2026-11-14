@@ -55,7 +55,11 @@ final class ScreenHandler implements SubparamsAwareHandler
     /** @var array<int, bool> Active tab stops, keyed by column. */
     public array $tabStops;
 
-    /** Focus events recorded when DECSET 1004 is active (CSI I / CSI O). */
+    /**
+     * Focus events recorded when DECSET 1004 is active (CSI I / CSI O).
+     *
+     * @var list<FocusInMsg|FocusOutMsg>
+     */
     public array $focusEvents = [];
 
     /**
@@ -271,7 +275,7 @@ final class ScreenHandler implements SubparamsAwareHandler
      * alt-slot save lingers after exit), the in-alt save is discarded when
      * the alt screen dies — same hygiene as the alt buffer itself.
      *
-     * @var null|array{0: ?Sgr, 1: ?array, 2: ?int, 3: ?bool}
+     * @var null|array{0: ?Sgr, 1: array{0: string, 1: string, 2: string, 3: string}|null, 2: ?int, 3: ?bool}
      */
     private ?array $parkedGeneral = null;
 
@@ -579,7 +583,13 @@ final class ScreenHandler implements SubparamsAwareHandler
                 // flush. Queue-ordering is preserved relative to queued
                 // putCell/attachCombiningChar mutations.
                 if ($this->mode->syncUpdate) {
-                    $this->eraseHandler->apply($final, $params, $this->buffer, $this->cursor, $this->sgr, $this->pendingMutations);
+                    // By-reference queue hand: passed through a local so
+                    // phpstan models the append-only write-back at its true
+                    // (list) shape; the ?? fold is dead in practice —
+                    // EraseHandler only appends, never nulls the queue.
+                    $pending = $this->pendingMutations;
+                    $this->eraseHandler->apply($final, $params, $this->buffer, $this->cursor, $this->sgr, $pending);
+                    $this->pendingMutations = $pending ?? $this->pendingMutations;
                     // Erases append through EraseHandler's own hand, past the
                     // queueMutation() choke — enforce the ceiling here too.
                     // A hostile ED-3/DCH storm lands a partial flush instead
@@ -1143,7 +1153,9 @@ final class ScreenHandler implements SubparamsAwareHandler
      * bound; focus messages carry no payload, so the count cap alone binds
      * that log.
      *
-     * @param array<array-key, mixed> $log
+     * @template T of mixed
+     * @param list<T> $log
+     * @param T $event
      */
     private function pushEvent(array &$log, mixed $event): void
     {
@@ -1943,11 +1955,18 @@ final class ScreenHandler implements SubparamsAwareHandler
      */
     public function leaveAltScreen(): void
     {
-        if ($this->mode->altScreenVariant !== Mode::ALT_FULL || $this->savedBuffer === null) {
+        if ($this->mode->altScreenVariant !== Mode::ALT_FULL) {
+            return;
+        }
+        // Local capture: the unpark call below would invalidate phpstan's
+        // property narrowing (conservative method-call reset); the saved
+        // Buffer itself is immutable state, reading it before is identical.
+        $savedBuffer = $this->savedBuffer;
+        if ($savedBuffer === null) {
             return;
         }
         $this->unparkGeneralCompanions();
-        $this->buffer = $this->savedBuffer;
+        $this->buffer = $savedBuffer;
         $this->cursor = $this->savedCursor ?? $this->cursor;
         $this->sgr = $this->savedSgr ?? Sgr::empty();
         $this->wrapPending = $this->savedWrapPending ?? false;
@@ -2041,11 +2060,16 @@ final class ScreenHandler implements SubparamsAwareHandler
      */
     public function leaveAltScreenCursorOnly(): void
     {
-        if ($this->mode->altScreenVariant !== Mode::ALT_CURSOR_ONLY || $this->savedCursor === null) {
+        if ($this->mode->altScreenVariant !== Mode::ALT_CURSOR_ONLY) {
+            return;
+        }
+        // Local capture (same narrowing law as leaveAltScreen()).
+        $savedCursor = $this->savedCursor;
+        if ($savedCursor === null) {
             return;
         }
         $this->unparkGeneralCompanions();
-        $this->cursor = $this->savedCursor;
+        $this->cursor = $savedCursor;
         $this->wrapPending = $this->savedWrapPending ?? false;
         $this->savedCursor = null;
         $this->savedWrapPending = null;

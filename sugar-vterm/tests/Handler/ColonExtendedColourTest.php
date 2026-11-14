@@ -85,9 +85,9 @@ final class ColonExtendedColourTest extends TestCase
         $this->assertColonMatchesSemicolon("\x1b[38;2;255;0;0m", "\x1b[38:2::255:0:0m", 'foreground');
         $h = $this->sgrAfter("\x1b[38:2::255:0:0m");
         $this->assertSame([255, 0, 0], [
-            $h->sgr->foreground->red(),
-            $h->sgr->foreground->green(),
-            $h->sgr->foreground->blue(),
+            $h->sgr->foreground?->red(),
+            $h->sgr->foreground?->green(),
+            $h->sgr->foreground?->blue(),
         ], 'and specifically red');
     }
 
@@ -125,8 +125,10 @@ final class ColonExtendedColourTest extends TestCase
             $viaColon = $this->sgrAfter($seq);
             $this->assertTrue($viaColon->sgr->bold, "58 colon group ({$tag}) must not replay a reset over bold");
             $this->assertNotNull($viaColon->sgr->foreground, "58 colon group ({$tag}) must not disturb the fg");
+            $semicolonFg = $viaSemicolon->sgr->foreground;
+            $this->assertNotNull($semicolonFg, "58 semicolon form must paint the fg ({$tag})");
             $this->assertTrue(
-                $viaColon->sgr->foreground->equals($viaSemicolon->sgr->foreground),
+                $viaColon->sgr->foreground->equals($semicolonFg),
                 "58 colon ({$tag}) must match the semicolon form's pen"
             );
         }

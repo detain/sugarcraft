@@ -42,12 +42,15 @@ final class EventLogCeilingsTest extends TestCase
     {
         $prop = new ReflectionProperty(ScreenHandler::class, 'pendingMutations');
 
-        return \count($prop->getValue($h));
+        return \count((array) $prop->getValue($h));
     }
 
     private function syncMutationCap(): int
     {
-        return (new ReflectionClass(ScreenHandler::class))->getConstant('MAX_SYNC_MUTATIONS');
+        $cap = (new \ReflectionClass(ScreenHandler::class))->getConstant('MAX_SYNC_MUTATIONS');
+        $this->assertIsInt($cap, 'the sync-mutation ceiling is an int constant');
+
+        return $cap;
     }
 
     public function testClipboardRingStopsAtTheEventCap(): void
@@ -63,7 +66,7 @@ final class EventLogCeilingsTest extends TestCase
         self::assertCount(self::EVENTS_CAP, $events);
         // Drop-OLDEST: the newest write is still present.
         self::assertSame('write', $events[self::EVENTS_CAP - 1]['kind']);
-        self::assertSame('AAA', $events[self::EVENTS_CAP - 1]['payload']);
+        self::assertSame('AAA', $events[self::EVENTS_CAP - 1]['payload'] ?? null, 'newest write keeps its payload');
     }
 
     public function testClipboardFacadeDrainClearsTheLog(): void

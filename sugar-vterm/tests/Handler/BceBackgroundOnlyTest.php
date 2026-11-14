@@ -43,7 +43,7 @@ final class BceBackgroundOnlyTest extends TestCase
         $blank = $buf->cell(0, 0);
         $this->assertSame(' ', $blank->grapheme);
         $this->assertNotNull($blank->background(), 'erased cell carries the pen background');
-        $this->assertTrue($blank->background()->equals(Color::indexed16(2)));
+        $this->assertTrue($blank->background()->equals(Color::indexed16(2)), 'erased cell carries the pen background');
         $this->assertFalse($blank->sgr()->bold, 'bold must not bleed into erased blanks');
         $this->assertFalse($blank->sgr()->underline, 'underline must not bleed into erased cells');
         $this->assertTrue($blank->foreground() === null || $blank->foreground()->equals(Color::indexed16(7)), 'foreground back to default');
@@ -56,7 +56,7 @@ final class BceBackgroundOnlyTest extends TestCase
         $cleared = $h->buffer->cell(0, 0);
 
         $this->assertSame(' ', $cleared->grapheme);
-        $this->assertTrue($cleared->background()->equals(Color::indexed16(2)), 'green bg survives the erase');
+        $this->assertTrue($cleared->background()?->equals(Color::indexed16(2)) ?? false, 'green bg survives the erase');
         $this->assertFalse($cleared->sgr()->bold, 'the blanks are not bold');
         $this->assertNull($cleared->foreground(), 'no red ghost in the erased field');
     }
@@ -66,7 +66,7 @@ final class BceBackgroundOnlyTest extends TestCase
         $h = $this->feed("\x1b[31;44mabcd\x1b[1;1H\x1b[0K");
         $cleared = $h->buffer->cell(0, 1);
         $this->assertSame(' ', $cleared->grapheme);
-        $this->assertTrue($cleared->background()->equals(Color::indexed16(4)));
+        $this->assertTrue($cleared->background()?->equals(Color::indexed16(4)) ?? false);
         $this->assertNull($cleared->foreground());
     }
 
@@ -97,7 +97,7 @@ final class BceBackgroundOnlyTest extends TestCase
         $this->assertSame('EF', $h->buffer->cell(0, 2)->grapheme . $h->buffer->cell(0, 3)->grapheme, 'shift happened');
         $gap = $h->buffer->cell(0, 6);
         $this->assertSame(' ', $gap->grapheme);
-        $this->assertTrue($gap->background()->equals(Color::indexed16(6)), 'DCH gap is cyan (bg-only)');
+        $this->assertTrue($gap->background()?->equals(Color::indexed16(6)) ?? false, 'DCH gap is cyan (bg-only)');
         $this->assertNull($gap->foreground(), 'no red ghost in the DCH gap');
     }
 
@@ -106,7 +106,7 @@ final class BceBackgroundOnlyTest extends TestCase
         $h = $this->feed("\x1b[46mAB\x1b[H\x1b[2@");
         $gap = $h->buffer->cell(0, 0);
         $this->assertSame(' ', $gap->grapheme);
-        $this->assertTrue($gap->background()->equals(Color::indexed16(6)), 'ICH blanks are cyan');
+        $this->assertTrue($gap->background()?->equals(Color::indexed16(6)) ?? false, 'ICH blanks are cyan');
         $this->assertSame('A', $h->buffer->cell(0, 2)->grapheme, 'shift still happens');
     }
 }

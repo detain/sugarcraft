@@ -18,7 +18,7 @@ use SugarCraft\Vterm\Cell;
  */
 final readonly class Screen
 {
-    /** @param array<int, array<int, Cell>> */
+    /** @param array<int, array<int, Cell>> $grid */
     public function __construct(
         private array $grid,
         public readonly int $cols,

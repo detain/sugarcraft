@@ -11,6 +11,7 @@ use SugarCraft\Vterm\Sgr\Sgr;
 
 final class SgrHandlerTest extends TestCase
 {
+    /** @param list<int> $params */
     private function apply(array $params, ?Sgr $start = null): Sgr
     {
         return (new SgrHandler())->apply($params, $start ?? Sgr::empty());
@@ -123,7 +124,7 @@ final class SgrHandlerTest extends TestCase
     public function testBrightForegroundMapsTo816(): void
     {
         $sgr = $this->apply([91]); // bright red
-        $this->assertSame(1, $sgr->foreground->kind);
+        $this->assertSame(1, $sgr->foreground?->kind);
         $this->assertSame(9, $sgr->foreground->value);
     }
 
@@ -137,42 +138,42 @@ final class SgrHandlerTest extends TestCase
     public function testBackground16Color(): void
     {
         $sgr = $this->apply([42]); // green
-        $this->assertSame(1, $sgr->background->kind);
+        $this->assertSame(1, $sgr->background?->kind);
         $this->assertSame(2, $sgr->background->value);
     }
 
     public function testBrightBackgroundMapsTo816(): void
     {
         $sgr = $this->apply([105]); // bright magenta
-        $this->assertSame(1, $sgr->background->kind);
+        $this->assertSame(1, $sgr->background?->kind);
         $this->assertSame(13, $sgr->background->value);
     }
 
     public function testForeground256Color(): void
     {
         $sgr = $this->apply([38, 5, 196]);
-        $this->assertSame(2, $sgr->foreground->kind);
+        $this->assertSame(2, $sgr->foreground?->kind);
         $this->assertSame(196, $sgr->foreground->value);
     }
 
     public function testBackground256Color(): void
     {
         $sgr = $this->apply([48, 5, 17]);
-        $this->assertSame(2, $sgr->background->kind);
+        $this->assertSame(2, $sgr->background?->kind);
         $this->assertSame(17, $sgr->background->value);
     }
 
     public function testForegroundTruecolor(): void
     {
         $sgr = $this->apply([38, 2, 255, 128, 0]);
-        $this->assertSame(3, $sgr->foreground->kind);
+        $this->assertSame(3, $sgr->foreground?->kind);
         $this->assertSame((255 << 16) | (128 << 8) | 0, $sgr->foreground->value);
     }
 
     public function testBackgroundTruecolor(): void
     {
         $sgr = $this->apply([48, 2, 0, 0, 255]);
-        $this->assertSame(3, $sgr->background->kind);
+        $this->assertSame(3, $sgr->background?->kind);
         $this->assertSame(255, $sgr->background->value);
     }
 
@@ -180,7 +181,7 @@ final class SgrHandlerTest extends TestCase
     {
         $sgr = $this->apply([1, 31]);
         $this->assertTrue($sgr->bold);
-        $this->assertSame(1, $sgr->foreground->value);
+        $this->assertSame(1, $sgr->foreground?->value);
     }
 
     public function testTruecolorOutOfRangeIgnoredWholeForm(): void

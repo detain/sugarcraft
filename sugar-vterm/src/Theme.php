@@ -78,6 +78,7 @@ final class Theme
      */
     private static function extendedPalette(): array
     {
+        /** @var array<int, int>|null $extended */
         static $extended = null;
         if ($extended !== null) {
             return $extended;
@@ -152,14 +153,14 @@ final class Theme
                 0x21222c,
                 // slots 1-8: the seven Dracula named colours sugar-vterm overlaps —
                 // re-sourced from sugar-core's Palettes SSOT (string→int).
-                hexdec(ltrim(Palettes::DRACULA['red'], '#')),
-                hexdec(ltrim(Palettes::DRACULA['green'], '#')),
-                hexdec(ltrim(Palettes::DRACULA['yellow'], '#')),
-                hexdec(ltrim(Palettes::DRACULA['comment'], '#')),
-                hexdec(ltrim(Palettes::DRACULA['pink'], '#')),
-                hexdec(ltrim(Palettes::DRACULA['cyan'], '#')),
-                hexdec(ltrim(Palettes::DRACULA['foreground'], '#')),
-                hexdec(ltrim(Palettes::DRACULA['comment'], '#')),
+                (int) hexdec(ltrim(Palettes::DRACULA['red'], '#')),
+                (int) hexdec(ltrim(Palettes::DRACULA['green'], '#')),
+                (int) hexdec(ltrim(Palettes::DRACULA['yellow'], '#')),
+                (int) hexdec(ltrim(Palettes::DRACULA['comment'], '#')),
+                (int) hexdec(ltrim(Palettes::DRACULA['pink'], '#')),
+                (int) hexdec(ltrim(Palettes::DRACULA['cyan'], '#')),
+                (int) hexdec(ltrim(Palettes::DRACULA['foreground'], '#')),
+                (int) hexdec(ltrim(Palettes::DRACULA['comment'], '#')),
                 // slots 9-15: bright ANSI variants absent from the Dracula named
                 // set — intentionally stay lib-local.
                 0xff6e6e,

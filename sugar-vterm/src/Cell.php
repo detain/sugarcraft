@@ -103,6 +103,7 @@ final readonly class Cell
      */
     public static function empty(): self
     {
+        /** @var self|null $empty */
         static $empty = null;
 
         return $empty ??= new self();
@@ -348,7 +349,10 @@ final readonly class Cell
     }
 
     /**
-     * @param array{0: int, 1: int, 2: int}|null $rgb
+     * Extracts `[r, g, b]` from a packed renderer slot or an emulator
+     * kind-3 {@see Color}; null when neither carries a truecolour.
+     *
+     * @return array{0: int, 1: int, 2: int}|null
      */
     private static function rgbOf(?int $packed, ?Color $color): ?array
     {

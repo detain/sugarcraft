@@ -82,7 +82,7 @@ final class OscHandler
         }
         // CSS-style: #RRGGBB
         if (preg_match('/^#([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})$/', $spec, $m)) {
-            return Color::truecolor(hexdec($m[1]), hexdec($m[2]), hexdec($m[3]));
+            return Color::truecolor((int) hexdec($m[1]), (int) hexdec($m[2]), (int) hexdec($m[3]));
         }
         return null;
     }

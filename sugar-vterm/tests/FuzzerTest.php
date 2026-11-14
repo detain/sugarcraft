@@ -25,6 +25,7 @@ use SugarCraft\Vterm\Terminal\Terminal;
 final class FuzzerTest extends TestCase
 {
     /** Deterministic RNG so a failure can be reproduced from a single seed. */
+    /** @return \Generator<int, int> */
     private function rng(int $seed): \Generator
     {
         mt_srand($seed);

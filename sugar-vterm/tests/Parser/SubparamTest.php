@@ -25,6 +25,10 @@ final class SubparamTest extends TestCase
         return $h;
     }
 
+    /**
+     * @param list<int> $params
+     * @return array{type: string, detail: array{final: int, params: list<int>, prefix: int, intermediate: int}}
+     */
     private static function csi(int $final, array $params = [], int $prefix = 0, int $intermediate = 0): array
     {
         return ['type' => 'csi', 'detail' => [

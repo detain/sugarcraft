@@ -1020,6 +1020,7 @@ final class CsiHandlerImplTest extends TestCase
         // is the dead allocation this row removed.
         $ref = new \ReflectionMethod(CsiHandlerImpl::class, 'sgr');
         $lines = file((string) $ref->getFileName());
+        $this->assertIsArray($lines, 'renderer source readable for the allocation census');
         $body = implode('', array_slice($lines, $ref->getStartLine() - 1, $ref->getEndLine() - $ref->getStartLine() + 1));
         $this->assertStringNotContainsString('array_map(', $body);
         $this->assertStringNotContainsString('array_values(', $body);

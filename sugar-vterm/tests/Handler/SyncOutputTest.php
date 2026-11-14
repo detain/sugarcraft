@@ -62,7 +62,7 @@ final class SyncOutputTest extends TestCase
         // Buffer should NOT be updated yet.
         $this->assertSame(' ', $h->buffer->cell(0, 0)->grapheme);
         // But mutation should be in pending queue.
-        $this->assertCount(1, $this->prop($h, 'pendingMutations'));
+        $this->assertCount(1, (array) $this->prop($h, 'pendingMutations'));
     }
 
     public function testFlushPendingMutationsAppliesAllQueued(): void
@@ -75,25 +75,25 @@ final class SyncOutputTest extends TestCase
         $this->assertSame(' ', $h->buffer->cell(0, 0)->grapheme);
         $this->assertSame(' ', $h->buffer->cell(0, 1)->grapheme);
         $this->assertSame(' ', $h->buffer->cell(1, 5)->grapheme);
-        $this->assertCount(3, $this->prop($h, 'pendingMutations'));
+        $this->assertCount(3, (array) $this->prop($h, 'pendingMutations'));
 
         $this->invoke($h, 'flushPendingMutations');
 
         $this->assertSame('A', $h->buffer->cell(0, 0)->grapheme);
         $this->assertSame('B', $h->buffer->cell(0, 1)->grapheme);
         $this->assertSame('C', $h->buffer->cell(1, 5)->grapheme);
-        $this->assertCount(0, $this->prop($h, 'pendingMutations'));
+        $this->assertCount(0, (array) $this->prop($h, 'pendingMutations'));
     }
 
     public function testFlushPendingMutationsClearsQueue(): void
     {
         $h = $this->makeHandler((new Mode())->withSyncUpdate(true));
         $this->invoke($h, 'putCell', 0, 0, new Cell(grapheme: 'X'));
-        $this->assertCount(1, $this->prop($h, 'pendingMutations'));
+        $this->assertCount(1, (array) $this->prop($h, 'pendingMutations'));
 
         $this->invoke($h, 'flushPendingMutations');
 
-        $this->assertCount(0, $this->prop($h, 'pendingMutations'));
+        $this->assertCount(0, (array) $this->prop($h, 'pendingMutations'));
     }
 
     // ─── printChar respects sync mode ────────────────────────────────────────
@@ -106,7 +106,7 @@ final class SyncOutputTest extends TestCase
 
         $this->assertSame(' ', $h->buffer->cell(0, 0)->grapheme);
         $this->assertSame(' ', $h->buffer->cell(0, 1)->grapheme);
-        $this->assertCount(2, $this->prop($h, 'pendingMutations'));
+        $this->assertCount(2, (array) $this->prop($h, 'pendingMutations'));
     }
 
     public function testPrintCharFlushesOnModeDisable(): void
@@ -158,7 +158,7 @@ final class SyncOutputTest extends TestCase
         $h->printChar('A');
         $h->printChar('B');
         $h->printChar('C');
-        $this->assertCount(3, $this->prop($h, 'pendingMutations'));
+        $this->assertCount(3, (array) $this->prop($h, 'pendingMutations'));
 
         // With sync mode on, the buffer is NOT modified immediately.
         // (It would only change after flush on mode disable.)

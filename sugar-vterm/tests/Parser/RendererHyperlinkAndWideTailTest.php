@@ -28,7 +28,7 @@ final class RendererHyperlinkAndWideTailTest extends TestCase
         $this->assertNotNull($link, 'printed cell carries the open link');
         $this->assertSame('https://example.com', $link->uri);
         $this->assertSame('a', $link->id);
-        $this->assertTrue($t->grid()->cell(0, 1)->hyperlink->equals($link), 'second char same link');
+        $this->assertTrue($t->grid()->cell(0, 1)->hyperlink?->equals($link) ?? false, 'second char same link');
         $this->assertNull($t->grid()->cell(0, 2)->hyperlink, 'close after OSC 8;; drops the link');
     }
 

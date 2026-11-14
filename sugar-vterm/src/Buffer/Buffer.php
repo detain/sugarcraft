@@ -63,6 +63,8 @@ final class Buffer
      * 320x120 grid allocates 38400 array slots but exactly one cell object
      * (~6 MB saved on the hot emulator resize path). Written slots replace
      * the shared reference with their own immutable value.
+     *
+     * @return array<int, array<int, Cell>>
      */
     private function makeGrid(int $cols, int $rows): array
     {

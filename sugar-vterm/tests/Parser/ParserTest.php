@@ -19,6 +19,10 @@ final class ParserTest extends TestCase
         return $h;
     }
 
+    /**
+     * @param list<int> $params
+     * @return array{type: string, detail: array{final: int, params: list<int>, prefix: int, intermediate: int}}
+     */
     private static function csi(int $final, array $params = [], int $prefix = 0, int $intermediate = 0): array
     {
         return ['type' => 'csi', 'detail' => [
@@ -29,11 +33,16 @@ final class ParserTest extends TestCase
         ]];
     }
 
+    /** @return array{type: string, detail: array{final: int, intermediate: int}} */
     private static function esc(int $final, int $intermediate = 0): array
     {
         return ['type' => 'esc', 'detail' => ['final' => $final, 'intermediate' => $intermediate]];
     }
 
+    /**
+     * @param list<int> $params
+     * @return array{type: string, detail: array{final: int, params: list<int>, prefix: int, intermediate: int, data: string}}
+     */
     private static function dcs(int $final, array $params, int $prefix, int $intermediate, string $data): array
     {
         return ['type' => 'dcs', 'detail' => [

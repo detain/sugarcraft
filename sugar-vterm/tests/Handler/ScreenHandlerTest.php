@@ -97,10 +97,14 @@ final class ScreenHandlerTest extends TestCase
     public function testCsiMUpdatesPenAndPaintsCells(): void
     {
         $h = $this->feed("\x1b[1;31mAB\x1b[0mC");
-        $this->assertTrue($h->buffer->cell(0, 0)->sgr->bold);
-        $this->assertSame(1, $h->buffer->cell(0, 0)->sgr->foreground->value);
+        $pen = $h->buffer->cell(0, 0)->sgr;
+        $this->assertNotNull($pen, 'painted cell carries the pen');
+        $this->assertTrue($pen->bold);
+        $this->assertSame(1, $pen->foreground?->value);
         // After CSI 0 m the pen resets, so 'C' has no fg/bold.
-        $this->assertFalse($h->buffer->cell(0, 2)->sgr->bold);
+        $rest = $h->buffer->cell(0, 2)->sgr;
+        $this->assertNotNull($rest, 'reset cell still carries a (reset) pen');
+        $this->assertFalse($rest->bold);
     }
 
     // ─── Cursor moves through CSI dispatch ─────────────────────────────────
