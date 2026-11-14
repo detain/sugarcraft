@@ -251,6 +251,50 @@ final class UnifiedScanTest extends TestCase
         $this->assertFalse($line->fileHeader);
     }
 
+    /**
+     * sugar-diff-018: the documented fourth-field default (ScannedLine.php:33)
+     * — a 2-arg-era construction is an unattributed row, not a context row.
+     */
+    public function testScannedLineDefaultsToOutsideHunkWithoutTheKindArgument(): void
+    {
+        $line = new ScannedLine(3, null, false);
+
+        $this->assertSame(ScanRowKind::OutsideHunk, $line->kind);
+    }
+
+    /**
+     * sugar-diff-019: rowsOf()'s terminator rule — a trailing newline ends
+     * the last row, it does not add an empty one. These are the shapes the
+     * writer pairs against; each was fuzz-true, none was pinned.
+     */
+    public function testRowsOfFollowsTheTerminatorNotAnExtraEmptyRow(): void
+    {
+        $this->assertSame([], UnifiedScan::rowsOf(''));
+        $this->assertSame([''], UnifiedScan::rowsOf("\n"));
+        $this->assertSame(['a', ''], UnifiedScan::rowsOf("a\n\n"));
+        $this->assertSame(['a', 'b'], UnifiedScan::rowsOf("a\nb\n"));
+        $this->assertSame(['a', 'b'], UnifiedScan::rowsOf("a\nb"));
+    }
+
+    /**
+     * sugar-diff-019: the renderer contract — every row rowsOf() yields is
+     * numbered by lines() count-for-count (the writer's index alignment with
+     * the split patch text depends on it, and nothing pinned it).
+     */
+    public function testLinesNumberRowsOfOutputCountForCount(): void
+    {
+        $patch = "@@ -1,3 +1,4 @@\n a\n-b\n+B\n c\n+D\n"
+            . "@@ -10 +11 @@\n-x\n+y\n";
+        $rows = UnifiedScan::rowsOf($patch);
+        $scanned = UnifiedScan::lines($patch);
+
+        $this->assertCount(count($rows), $scanned, 'one scanned row per rowsOf() row');
+        $this->assertSame(['@@ -10 +11 @@'], array_slice($rows, 6, 1), 'the second hunk header lands where the walk saw it');
+        // kinds are the observable alignment between the two splits.
+        $kinds = array_map(static fn (ScannedLine $l): string => $l->kind->name, $scanned);
+        $this->assertSame(['HunkHeader', 'Context', 'Delete', 'Insert', 'Context', 'Insert', 'HunkHeader', 'Delete', 'Insert'], $kinds);
+    }
+
     public function testThePublishedHunkHeaderPredicateRecognisesEveryShapeTheWalkRecognises(): void
     {
         // The unbounded \d+ is deliberate (see MAX_LINE_NUMBER_DIGITS):
