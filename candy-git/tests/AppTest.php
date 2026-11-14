@@ -95,6 +95,12 @@ final class FixtureGit implements GitDriver
     public function diff(string $path, bool $cached = false): array { $this->maybeThrow('diff'); $this->diffRequests[] = [$path, $cached]; return $this->diffs; }
     public function discard(string $path): void   { $this->maybeThrow('discard'); $this->discards[] = $path; }
     public function amend(): void                 { $this->maybeThrow('amend'); $this->amendCalled = true; }
+    public bool $amendWithCalled = false;
+    /** @var list<string> messages passed to amendWith() */
+    public array $amendWiths = [];
+    public string $lastCommitMessageReturn = 'feat: original';
+    public function amendWith(string $message): void { $this->maybeThrow('amendWith'); $this->amendWithCalled = true; $this->amendWiths[] = $message; }
+    public function lastCommitMessage(): string { $this->maybeThrow('lastCommitMessage'); return $this->lastCommitMessageReturn; }
     public function stagePatch(string $path, string $hunk): void { $this->maybeThrow('stagePatch'); $this->stagePatches[$path] = $hunk; }
     public function unstageAll(): void { $this->maybeThrow('unstageAll'); $this->unstageAllCalled = true; }
     public function unstagePatch(string $path, string $hunk): void { $this->maybeThrow('unstagePatch'); $this->unstagePatches[$path] = $hunk; }
@@ -423,13 +429,103 @@ final class AppTest extends TestCase
         $this->assertNull($a->diffViewer);
     }
 
-    public function testAmendKeyCallsAmendOnGit(): void
+    public function testAmendKeyOpensTheCollectorPrefilled(): void
     {
         $g = $this->git();
         $a = App::start($g);
-        $this->assertFalse($g->amendCalled);
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'A'));
-        $this->assertTrue($g->amendCalled);
+        // candy-git-013: 'A' no longer fires a blind --no-edit amend; the
+        // collector opens pre-filled so the message is editable at all.
+        // (Intentional re-point of the frozen 'A amends immediately' pin.)
+        $this->assertFalse($g->amendCalled);
+        $this->assertTrue($a->collectingCommit);
+        $this->assertTrue($a->commitAmend);
+        $this->assertSame('feat: original', $a->commitMessage);
+        // Submitting the buffer unchanged reproduces the old keypress
+        // exactly — same bytes, now expressed through -m.
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter));
+        $this->assertSame(['feat: original'], $g->amendWiths);
+        $this->assertFalse($a->collectingCommit);
+        $this->assertFalse($a->commitAmend);
+        $this->assertCount(1, $a->history->undoStack);
+    }
+
+    public function testAmendOnEmptyRepoLandsInTheErrorLaneWithoutOpening(): void
+    {
+        $g = $this->git();
+        $g->throwOn['lastCommitMessage'] = new \RuntimeException('cannot do it');
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'A'));
+        $this->assertNotNull($a->error);
+        $this->assertFalse($a->collectingCommit);
+    }
+
+    public function testAmendModeDiesWithTheCollector(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'A'));   // pre-filled amend
+        [$a, ] = $a->update(new KeyMsg(KeyType::Escape, ''));  // abandon it
+        $this->assertFalse($a->collectingCommit);
+        $this->assertFalse($a->commitAmend);
+        // The next collector is a plain commit: a stale amend flag must never
+        // rewrite HEAD by accident (candy-git-013).
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'c'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'x'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter));
+        $this->assertSame(['x'], $g->commits);
+        $this->assertSame([], $g->amendWiths);
+    }
+
+    public function testTabAddsLinesAndEnterCommitsTheWholeMessage(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'c'));   // open collector
+        foreach (['s', 'u', 'b'] as $rune) {
+            [$a, ] = $a->update(new KeyMsg(KeyType::Char, $rune));
+        }
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab));          // newline chord (candy-git-013)
+        foreach (['b', 'o', 'd', 'y'] as $rune) {
+            [$a, ] = $a->update(new KeyMsg(KeyType::Char, $rune));
+        }
+        self::assertSame("sub\nbody", $a->commitMessage);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter));        // commits full message
+        self::assertSame(["sub\nbody"], $g->commits);
+        self::assertFalse($a->collectingCommit);
+    }
+
+    public function testTabDuringCommitCollectionDoesNotCyclePanes(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        self::assertSame(Pane::Status, $a->pane);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'c'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab));
+        // The collector owns Tab: the pane underneath stays put.
+        self::assertSame(Pane::Status, $a->pane);
+        self::assertSame("\n", $a->commitMessage);
+    }
+
+    public function testUndoOfCommitReSeedsTheCollectorWithTheTypedMessage(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'c'));
+        foreach (['m', 's', 'g'] as $rune) {
+            [$a, ] = $a->update(new KeyMsg(KeyType::Char, $rune));
+        }
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter));        // commit 'msg'
+        self::assertSame(['msg'], $g->commits);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'u'));    // undo
+        // candy-git-043: the boundary is reset AND the authored message rides
+        // back into the collector instead of being silently dropped.
+        self::assertTrue($g->resetCalled);
+        self::assertTrue($a->collectingCommit);
+        self::assertSame('msg', $a->commitMessage);
+        // Escape closes it like any collector — the arm is advisory, not a trap.
+        [$a, ] = $a->update(new KeyMsg(KeyType::Escape, ''));
+        self::assertFalse($a->collectingCommit);
     }
 
     public function testCreateBranchKeyStartsCollection(): void
@@ -606,8 +702,9 @@ final class AppTest extends TestCase
     {
         $g = $this->git();
         $a = App::start($g);
-        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'A'));   // amend
-        $this->assertTrue($g->amendCalled);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'A'));   // pre-filled collector
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter));        // submit the amend
+        $this->assertTrue($g->amendWithCalled);
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'u'));
         $this->assertNotNull($a->error);
         $this->assertStringContainsString('cannot undo', $a->error);

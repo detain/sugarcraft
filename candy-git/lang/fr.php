@@ -68,6 +68,7 @@ return [
     'help.push'               => 'envoyer au remote (deux appuis)',
     'checkout.no_branch'      => 'checkout : aucune branche sélectionnée',
     'commit.prompt'           => 'message de commit : ',
+    'commit.prompt_amend'    => 'message de amend : ',
     'commit.empty_message'    => 'commit : le message ne peut pas être vide',
     'branch.prompt'           => 'nom de branche : ',
     'branch.empty_name'       => 'branche : le nom ne peut pas être vide',
@@ -112,6 +113,7 @@ return [
     'confirm.push'            => 'push : appuyez de nouveau sur P pour envoyer vers le remote (visible par les autres)',
     // Notice lane (amber confirmation/hint state, candy-git-047)
     'notice.collect_hint' => 'Entrée confirme · Échap annule',
+    'notice.commit_hint' => 'Entrée valide le commit · Tab nouvelle ligne · Échap annule',
 
 
     // Remotes (fetch / pull / push)

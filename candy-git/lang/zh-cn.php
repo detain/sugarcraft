@@ -68,6 +68,7 @@ return [
     'help.push'               => '推送到远程（按两次）',
     'checkout.no_branch'      => '检出：未选择分支',
     'commit.prompt'           => '提交信息： ',
+    'commit.prompt_amend'    => ' amend 信息： ',
     'commit.empty_message'    => '提交：信息不能为空',
     'branch.prompt'           => '分支名称： ',
     'branch.empty_name'       => '分支：名称不能为空',
@@ -112,6 +113,7 @@ return [
     'confirm.push'            => '推送：再次按 P 推送到远程（其他人可见）',
     // Notice lane (amber confirmation/hint state, candy-git-047)
     'notice.collect_hint' => 'Enter 确认 · Esc 取消',
+    'notice.commit_hint' => 'Enter 提交 · Tab 换行 · Esc 取消',
 
 
     // Remotes (fetch / pull / push)

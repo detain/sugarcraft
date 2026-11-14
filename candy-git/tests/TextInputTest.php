@@ -102,10 +102,23 @@ final class TextInputTest extends TestCase
         self::assertTrue($a->collectingCommit);
     }
 
-    public function testPasteLandsInCommitBufferFlattenedToOneLine(): void
+    public function testPasteKeepsNewlinesInCommitBuffer(): void
     {
+        // candy-git-013: the commit buffer is multi-line — a pasted
+        // paragraph keeps its shape (tab still flattens; newlines ride).
+        // (Intentional re-point of the frozen paste-flattens-everything pin
+        // for the commit collector; the one-line buffers keep flattening.)
         $a = $this->commitCollector()->update(new PasteMsg("fix: qux\nsecond\ttabbed"))[0];
-        self::assertSame('fix: qux second tabbed', $a->commitMessage);
+        self::assertSame("fix: qux\nsecond tabbed", $a->commitMessage);
+        self::assertTrue($a->collectingCommit);
+    }
+
+    public function testPasteWithControlBytesIsRefusedWholeForCommitBuffer(): void
+    {
+        // fail-closed envelope: one stray control byte poisons the whole
+        // paste for the commit buffer too (same class as the typed gate).
+        $a = $this->commitCollector()->update(new PasteMsg("ok\n\x07bad"))[0];
+        self::assertSame('', $a->commitMessage);
         self::assertTrue($a->collectingCommit);
     }
 

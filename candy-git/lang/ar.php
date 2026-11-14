@@ -68,6 +68,7 @@ return [
     'help.push'               => 'الدفع إلى البعيد (اضغط مرتين)',
     'checkout.no_branch'      => 'تحويل: لم يُحدد فرع',
     'commit.prompt'           => 'رسالة الالتزام: ',
+    'commit.prompt_amend'    => 'رسالة التعديل: ',
     'commit.empty_message'    => 'التزام: لا يمكن أن تكون الرسالة فارغة',
     'branch.prompt'           => 'اسم الفرع: ',
     'branch.empty_name'       => 'فرع: لا يمكن أن يكون الاسم فارغًا',
@@ -112,6 +113,7 @@ return [
     'confirm.push'            => 'دفع: اضغط P مجددًا للدفع إلى المستودع البعيد (مرئي للآخرين)',
     // Notice lane (amber confirmation/hint state, candy-git-047)
     'notice.collect_hint' => 'Enter للتأكيد · Esc للإلغاء',
+    'notice.commit_hint' => 'Enter للحفظ · Tab سطر جديد · Esc للإلغاء',
 
 
     // Remotes (fetch / pull / push)

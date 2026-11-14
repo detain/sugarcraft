@@ -68,6 +68,7 @@ return [
     'help.push'               => 'hacer push al remoto (dos pulsaciones)',
     'checkout.no_branch'      => 'checkout: ninguna rama seleccionada',
     'commit.prompt'           => 'mensaje de commit: ',
+    'commit.prompt_amend'    => 'mensaje de amend: ',
     'commit.empty_message'    => 'commit: el mensaje no puede estar vacío',
     'branch.prompt'           => 'nombre de rama: ',
     'branch.empty_name'       => 'rama: el nombre no puede estar vacío',
@@ -112,6 +113,7 @@ return [
     'confirm.push'            => 'push: pulsa P de nuevo para hacer push al remoto (visible para otros)',
     // Notice lane (amber confirmation/hint state, candy-git-047)
     'notice.collect_hint' => 'Intro confirma · Esc cancela',
+    'notice.commit_hint' => 'Intro commitea · Tab nueva línea · Esc cancela',
 
 
     // Remotes (fetch / pull / push)

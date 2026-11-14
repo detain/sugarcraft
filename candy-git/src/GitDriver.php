@@ -73,6 +73,18 @@ interface GitDriver
     public function amend(): void;
 
     /**
+     * Rewrite the last commit with a new message (candy-git-013: the
+     * pre-filled amend collector submits through here).
+     */
+    public function amendWith(string $message): void;
+
+    /**
+     * The last commit's raw message (body included), used to pre-fill the
+     * amend collector. Throws when there is no HEAD yet.
+     */
+    public function lastCommitMessage(): string;
+
+    /**
      * Stage a single hunk via git apply --cached.
      * @param string $hunk The hunk patch text (unified diff format)
      */

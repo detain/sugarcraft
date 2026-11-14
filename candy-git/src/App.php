@@ -52,10 +52,12 @@ final class App implements Model
         public readonly ?string $error = null,
         /** Whether the help overlay is currently displayed. */
         public readonly bool $showHelp = false,
-        /** Whether the app is collecting a commit message character-by-character. */
+        /** Whether the app is collecting a commit message (Tab adds lines, Enter commits). */
         public readonly bool $collectingCommit = false,
-        /** The accumulated commit message while collectingCommit is true. */
+        /** The accumulated commit message (newlines included) while collectingCommit is true. */
         public readonly string $commitMessage = '',
+        /** While the collector is open: it rewrites the last commit ('A' prefill) rather than starting a new one. */
+        public readonly bool $commitAmend = false,
         /** Diff viewer overlay (opened with 'Enter' on a status file; 'd' discards, and also closes the open viewer). */
         public readonly ?DiffViewer $diffViewer = null,
         /** Whether the app is collecting a branch name character-by-character. */
@@ -180,6 +182,14 @@ final class App implements Model
         if ($this->collectingCommit) {
             if ($msg->type === KeyType::Enter) {
                 return [$this->executeCommit(), null];
+            }
+            if ($msg->type === KeyType::Tab) {
+                // candy-git-013: Tab inserts a newline here instead of being
+                // swallowed — the collector owns the keyboard, so the one key
+                // the user cannot get any other way (Enter commits, and every
+                // terminal sends CR for Ctrl+Enter) is exactly the one worth
+                // borrowing. Subject+body+bullets become typable.
+                return [$this->withCommitMessage($this->commitMessage . "\n"), null];
             }
             $edited = self::editBuffer($this->commitMessage, $msg);
             if ($edited !== null) {
@@ -430,7 +440,7 @@ final class App implements Model
             return [$this->handleRemote('push'), null];
         }
         if ($msg->type === KeyType::Char && $msg->rune === 'A') {
-            return [$this->amendCommit(), null];
+            return [$this->startAmend(), null];
         }
         if ($msg->type === KeyType::Char && $msg->rune === 'n') {
             return [$this->startCreateBranch(), null];
@@ -663,7 +673,11 @@ final class App implements Model
     {
         $text = self::flattenPaste($msg->content);
         if ($this->collectingCommit) {
-            return [$this->withCommitMessage($this->commitMessage . $text), null];
+            // The commit buffer is multi-line by design (candy-git-013): a
+            // pasted paragraph keeps its shape. Paste bytes never dispatch
+            // keys, so an embedded newline cannot smuggle an Enter — the
+            // flattening was only ever for one-line buffers.
+            return [$this->withCommitMessage($this->commitMessage . self::commitPasteText($msg->content)), null];
         }
         if ($this->cherryPick !== null && $this->cherryPick->collecting) {
             return [$this->withCherryPick($this->cherryPick->withCommitRef($this->cherryPick->commitRef . $text)), null];
@@ -689,6 +703,25 @@ final class App implements Model
     private static function flattenPaste(string $content): string
     {
         return preg_replace('/[\r\n\t]+/', ' ', $content) ?? '';
+    }
+
+    /**
+     * Prepare pasted text for the (multi-line) commit buffer: newlines are
+     * kept so a pasted paragraph preserves its shape (the flattening was
+     * only ever needed for the one-line buffers). Paste bytes never
+     * dispatch as keys, so an embedded newline cannot trigger a commit
+     * (candy-git-013). Anything besides newline in the envelope is the
+     * same fail-closed category-C refusal the typed gate enforces: the
+     * whole paste is refused rather than half-trusted.
+     */
+    private static function commitPasteText(string $content): string
+    {
+        $normalized = str_replace(["\r\n", "\r"], "\n", $content);
+        $tabsOut    = str_replace("\t", ' ', $normalized);
+
+        // Refuse the whole envelope if any category-C byte other than newline
+        // survives (fail-closed, matching the typed gate in editBuffer).
+        return preg_match('/[^\P{C}\n]/u', $tabsOut) !== 0 ? '' : $tabsOut;
     }
 
     private function withSize(int $width, int $height): self
@@ -733,7 +766,11 @@ final class App implements Model
 
     private function withCommitCollection(bool $collecting, string $message): self
     {
-        return $this->withAll(collectingCommit: $collecting, commitMessage: $message);
+        // Opening or closing the buffer always leaves amend mode behind it:
+        // the next commit starts fresh, and a stale amend flag must never
+        // rewrite HEAD again by accident (candy-git-013). startAmend
+        // re-raises the flag explicitly on top of this call.
+        return $this->withAll(collectingCommit: $collecting, commitMessage: $message, commitAmend: false);
     }
 
     private function withCommitMessage(string $msg): self
@@ -767,6 +804,7 @@ final class App implements Model
         ?bool $showHelp = null,
         ?bool $collectingCommit = null,
         ?string $commitMessage = null,
+        ?bool $commitAmend = null,
         ?DiffViewer $diffViewer = null,
         bool $diffViewerSet = false,
         ?bool $collectingBranchName = null,
@@ -805,6 +843,7 @@ final class App implements Model
             showHelp: $showHelp ?? $this->showHelp,
             collectingCommit: $collectingCommit ?? $this->collectingCommit,
             commitMessage: $commitMessage ?? $this->commitMessage,
+            commitAmend: $commitAmend ?? $this->commitAmend,
             diffViewer: $diffViewerSet ? $diffViewer : ($diffViewer ?? $this->diffViewer),
             collectingBranchName: $collectingBranchName ?? $this->collectingBranchName,
             branchName: $branchName ?? $this->branchName,
@@ -1052,14 +1091,26 @@ final class App implements Model
         return $this->withCommitCollection(true, '');
     }
 
-    /** Calls GitDriver::commit() with the accumulated message, then exits collection mode and refreshes. */
+    /** Calls GitDriver::commit() (or the amend leg) with the accumulated message, then exits collection mode and refreshes. */
     private function executeCommit(): self
     {
         if ($this->commitMessage === '') {
             return $this->withError(Lang::t('commit.empty_message'));
         }
         try {
+            if ($this->commitAmend) {
+                // A pre-filled collector rewrites HEAD with the edited bytes
+                // (candy-git-013); submitting it untouched is the old
+                // --no-edit keypress, expressed through -m.
+                $this->git->amendWith($this->commitMessage);
+
+                return $this
+                    ->withAll(history: $this->requireHistory()->push(HistoryEntry::amend()), commitAmend: false)
+                    ->withCommitCollection(false, '')
+                    ->refresh();
+            }
             $this->git->commit($this->commitMessage);
+
             return $this
                 ->withAll(history: $this->requireHistory()->push(HistoryEntry::commit($this->commitMessage)))
                 ->withCommitCollection(false, '')
@@ -1150,15 +1201,21 @@ final class App implements Model
         }
     }
 
-    /** Amend the last commit without changing its message. */
-    private function amendCommit(): self
+    /**
+     * Open the commit collector PRE-FILLED with the last commit's full
+     * message, in amend mode (candy-git-013, GAP-13: 'A' amended --no-edit
+     * on the spot and the message could never be edited at all). Submitting
+     * the buffer unchanged reproduces the old keypress exactly.
+     */
+    private function startAmend(): self
     {
         try {
-            $this->git->amend();
-            return $this->withAll(history: $this->requireHistory()->push(HistoryEntry::amend()))->refresh();
+            $message = $this->git->lastCommitMessage();
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
         }
+
+        return $this->withCommitCollection(true, $message)->withAll(commitAmend: true);
     }
 
     /** Open inline branch name collection. */
@@ -1300,7 +1357,16 @@ final class App implements Model
             if ($newHistory !== null) {
                 $refreshed = $refreshed->withAll(history: $newHistory);
             }
-            return $refreshed->withAll(successMessage: $msg);
+            $result = $refreshed->withAll(successMessage: $msg);
+            if (!$forward && $entry->op === 'commit') {
+                // candy-git-043: undoing a commit reset the boundary and
+                // used to drop the typed message with it — the collector is
+                // the only authoring path, so re-arm it with the exact bytes
+                // the history entry captured.
+                $result = $result->withCommitCollection(true, (string) ($entry->args['message'] ?? ''));
+            }
+
+            return $result;
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
         }

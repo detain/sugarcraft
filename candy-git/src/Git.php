@@ -348,6 +348,35 @@ final class Git implements GitDriver
         $this->run(['commit', '--amend', '--no-edit']);
     }
 
+    /**
+     * Rewrite the last commit with a new message in one step — what editing
+     * the pre-filled collector submits (candy-git-013: amend was a blind
+     * --no-edit keypress because there was no way to author a message here).
+     *
+     * Mirrors charmbracelet/git commit --amend -m <message>.
+     */
+    public function amendWith(string $message): void
+    {
+        $this->run(['commit', '--amend', '-m', $message]);
+    }
+
+    /**
+     * The raw message of the last commit, body included (%B), used to
+     * pre-fill the amend collector. The trailing newline git appends after
+     * the body is trimmed; blank lines inside the message are kept whole.
+     *
+     * Mirrors charmbracelet/git log -1 --pretty=%B.
+     *
+     * @throws \RuntimeException when HEAD does not exist yet (empty repo) —
+     *         the honest localized git.error from run().
+     */
+    public function lastCommitMessage(): string
+    {
+        // run() hands back split lines; the message rejoins them exactly —
+        // blank lines inside the body are content, not padding.
+        return implode("\n", $this->run(['log', '-1', '--pretty=%B']));
+    }
+
     public function stagePatch(string $path, string $hunk): void
     {
         $this->runPatch($path, $hunk, ['apply', '--cached', '--unidiff-zero', '-']);

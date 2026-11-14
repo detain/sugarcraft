@@ -68,6 +68,7 @@ return [
     'help.push'               => 'odeslani do remote (dvakrat)',
     'checkout.no_branch'      => 'checkout: nevybrána žádná větev',
     'commit.prompt'           => 'zpráva commitu: ',
+    'commit.prompt_amend'    => 'zpráva úpravy: ',
     'commit.empty_message'    => 'commit: zpráva nesmí být prázdná',
     'branch.prompt'           => 'název větve: ',
     'branch.empty_name'       => 'větev: název nesmí být prázdný',
@@ -112,6 +113,7 @@ return [
     'confirm.push'            => 'push: stisknete znovu P pro odeslani do remote (viditelne ostatnim)',
     // Notice lane (amber confirmation/hint state, candy-git-047)
     'notice.collect_hint' => 'Enter potvrzuje · Esc ruší',
+    'notice.commit_hint' => 'Enter odesílá · Tab nový řádek · Esc ruší',
 
 
     // Remotes (fetch / pull / push)

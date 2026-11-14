@@ -68,6 +68,7 @@ return [
     'help.push'               => 'wysłanie do remote (dwa naciśnięcia)',
     'checkout.no_branch'      => 'checkout: nie wybrano gałęzi',
     'commit.prompt'           => 'komunikat commitu: ',
+    'commit.prompt_amend'    => 'komunikat amend: ',
     'commit.empty_message'    => 'commit: komunikat nie może być pusty',
     'branch.prompt'           => 'nazwa gałęzi: ',
     'branch.empty_name'       => 'gałąź: nazwa nie może być pusta',
@@ -112,6 +113,7 @@ return [
     'confirm.push'            => 'push: naciśnij ponownie P, aby wysłać do remote (widoczne dla innych)',
     // Notice lane (amber confirmation/hint state, candy-git-047)
     'notice.collect_hint' => 'Enter zatwierdza · Esc anuluje',
+    'notice.commit_hint' => 'Enter zatwierdza commit · Tab nowy wiersz · Esc anuluje',
 
 
     // Remotes (fetch / pull / push)

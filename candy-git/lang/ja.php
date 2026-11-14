@@ -68,6 +68,7 @@ return [
     'help.push'               => 'リモートへプッシュ（2回押下）',
     'checkout.no_branch'      => 'チェックアウト: ブランチが選択されていません',
     'commit.prompt'           => 'コミットメッセージ: ',
+    'commit.prompt_amend'    => ' amend メッセージ: ',
     'commit.empty_message'    => 'コミット: メッセージは空にできません',
     'branch.prompt'           => 'ブランチ名: ',
     'branch.empty_name'       => 'ブランチ: 名前は空にできません',
@@ -112,6 +113,7 @@ return [
     'confirm.push'            => 'プッシュ: P をもう一度押すとリモートへプッシュします（他者に公開されます）',
     // Notice lane (amber confirmation/hint state, candy-git-047)
     'notice.collect_hint' => 'Enter で確定 · Esc でキャンセル',
+    'notice.commit_hint' => 'Enter でコミット · Tab で改行 · Esc でキャンセル',
 
 
     // Remotes (fetch / pull / push)

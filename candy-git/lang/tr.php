@@ -68,6 +68,7 @@ return [
     'help.push'               => 'uzağa gönder (iki kez bas)',
     'checkout.no_branch'      => 'checkout: dal seçilmedi',
     'commit.prompt'           => 'commit mesajı: ',
+    'commit.prompt_amend'    => 'amend mesajı: ',
     'commit.empty_message'    => 'commit: mesaj boş olamaz',
     'branch.prompt'           => 'dal adı: ',
     'branch.empty_name'       => 'dal: ad boş olamaz',
@@ -112,6 +113,7 @@ return [
     'confirm.push'            => 'gönder: uzağa göndermek için P tuşuna tekrar basın (başkaları görür)',
     // Notice lane (amber confirmation/hint state, candy-git-047)
     'notice.collect_hint' => 'Enter onaylar · Esc iptal eder',
+    'notice.commit_hint' => 'Enter commit yapar · Tab yeni satır · Esc iptal eder',
 
 
     // Remotes (fetch / pull / push)

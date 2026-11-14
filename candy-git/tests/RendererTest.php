@@ -93,6 +93,8 @@ final class RendererTest extends TestCase
             public function diff(string $path, bool $cached = false): array { return []; }
             public function discard(string $path): void {}
             public function amend(): void {}
+            public function amendWith(string $message): void {}
+            public function lastCommitMessage(): string { return ""; }
             public function stagePatch(string $path, string $hunk): void {}
             public function unstagePatch(string $path, string $hunk): void {}
             public function createBranch(string $name): void {}
@@ -159,6 +161,8 @@ final class RendererTest extends TestCase
             public function diff(string $path, bool $cached = false): array { return []; }
             public function discard(string $path): void {}
             public function amend(): void {}
+            public function amendWith(string $message): void {}
+            public function lastCommitMessage(): string { return ""; }
             public function stagePatch(string $path, string $hunk): void {}
             public function unstagePatch(string $path, string $hunk): void {}
             public function createBranch(string $name): void {}
@@ -447,6 +451,8 @@ final class RendererTest extends TestCase
             public function diff(string $path, bool $cached = false): array { return []; }
             public function discard(string $path): void {}
             public function amend(): void {}
+            public function amendWith(string $message): void {}
+            public function lastCommitMessage(): string { return ""; }
             public function stagePatch(string $path, string $hunk): void {}
             public function unstagePatch(string $path, string $hunk): void {}
             public function createBranch(string $name): void {}
@@ -582,16 +588,64 @@ final class RendererTest extends TestCase
     public function testCollectorHintRidesTheNoticeLane(): void
     {
         // candy-git-106: one confirmation grammar — the collector gets the
-        // same amber instruction lane the destructive arms use.
-        $a = new App($this->git(), collectingCommit: true, commitMessage: 'wip', width: 80, height: 24);
+        // same amber instruction lane the destructive arms use. Sampled on
+        // the branch bar since CG-15 gave the commit collector its own
+        // (different) hint — see testCommitCollectorShowsTheCommitHint.
+        $a = new App($this->git(), collectingBranchName: true, branchName: 'wip', width: 80, height: 24);
         $out = Renderer::render($a);
 
         $this->assertStringContainsString('enter confirms · esc cancels', $out);
     }
 
+    public function testCommitCollectorShowsTheCommitHint(): void
+    {
+        // candy-git-013: Enter commits here, so the generic hint would lie
+        // about the newline chord; the commit collector names the real keys.
+        $a = new App($this->git(), collectingCommit: true, commitMessage: 'wip', width: 80, height: 24);
+        $out = Renderer::render($a);
+
+        $this->assertStringContainsString('enter commits · tab newline · esc cancels', $out);
+        $this->assertStringNotContainsString('enter confirms', $out);
+    }
+
+    public function testCommitBarPreviewsMultiLineMessageOnOneRow(): void
+    {
+        // candy-git-013: the body must not smash the layout — first line plus
+        // an arrow glyph counting the lines below it.
+        $a = new App(
+            $this->git(),
+            collectingCommit: true,
+            commitMessage: "subject line\nbody one\nbody two",
+            width: 80,
+            height: 24,
+        );
+        $out = Renderer::render($a);
+        $plain = (string) preg_replace('/\x1b\[[0-9;]*m/', '', $out);
+
+        $this->assertStringContainsString('commit message: subject line ↵2', $plain);
+        // The folded rows never reach the frame verbatim.
+        $this->assertStringNotContainsString('body one', $plain);
+    }
+
+    public function testAmendCollectorAsksForItsRewriteInItsOwnPrompt(): void
+    {
+        $a = new App(
+            $this->git(),
+            collectingCommit: true,
+            commitAmend: true,
+            commitMessage: 'feat: original',
+            width: 80,
+            height: 24,
+        );
+        $out = Renderer::render($a);
+        $plain = (string) preg_replace('/\x1b\[[0-9;]*m/', '', $out);
+
+        $this->assertStringContainsString('amend message: feat: original', $plain);
+    }
+
     public function testArmNoticeWinsOverTheCollectorHint(): void
     {
-        $a = new App($this->git(), collectingCommit: true, notice: 'press d again to discard src/A.php', width: 80, height: 24);
+        $a = new App($this->git(), collectingBranchName: true, branchName: 'wip', notice: 'press d again to discard src/A.php', width: 80, height: 24);
         $out = Renderer::render($a);
 
         $this->assertStringContainsString('press d again to discard', $out);

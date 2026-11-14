@@ -68,6 +68,7 @@ return [
     'help.push'               => 'naar remote pushen (twee keer drukken)',
     'checkout.no_branch'      => 'checkout: geen branch geselecteerd',
     'commit.prompt'           => 'commit-bericht: ',
+    'commit.prompt_amend'    => 'amend-bericht: ',
     'commit.empty_message'    => 'commit: bericht mag niet leeg zijn',
     'branch.prompt'           => 'branch-naam: ',
     'branch.empty_name'       => 'branch: naam mag niet leeg zijn',
@@ -112,6 +113,7 @@ return [
     'confirm.push'            => 'push: druk nogmaals op P om naar de remote te pushen (zichtbaar voor anderen)',
     // Notice lane (amber confirmation/hint state, candy-git-047)
     'notice.collect_hint' => 'Enter bevestigt · Esc annuleert',
+    'notice.commit_hint' => 'Enter bevestigt commit · Tab nieuwe regel · Esc annuleert',
 
 
     // Remotes (fetch / pull / push)

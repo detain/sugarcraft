@@ -83,6 +83,7 @@ return [
 
     // Commit
     'commit.prompt'         => 'commit message: ',
+    'commit.prompt_amend'   => 'amend message: ',
     'commit.empty_message'  => 'commit: message cannot be empty',
 
     // Branch creation
@@ -138,6 +139,7 @@ return [
 
     // Notice lane (amber confirmation/hint state, candy-git-047)
     'notice.collect_hint'   => 'enter confirms · esc cancels',
+    'notice.commit_hint'    => 'enter commits · tab newline · esc cancels',
 
     // Remotes (fetch / pull / push)
     'remote.detached'       => 'cannot push: detached HEAD — check out a branch first',

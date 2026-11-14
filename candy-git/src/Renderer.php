@@ -54,7 +54,31 @@ final class Renderer
             return $a->notice;
         }
 
-        return $a->isTyping() ? Lang::t('notice.collect_hint') : null;
+        if (!$a->isTyping()) {
+            return null;
+        }
+
+        // The commit collector must say so: Enter commits there, so the
+        // generic 'enter confirms' hint would lie about the newline chord
+        // (candy-git-013).
+        return $a->collectingCommit
+            ? Lang::t('notice.commit_hint')
+            : Lang::t('notice.collect_hint');
+    }
+
+    /**
+     * The one-row preview of a possibly multi-line commit message (CG-15):
+     * first line verbatim, then an arrow glyph counting the lines below it.
+     * Body text stays in the buffer — it cannot smash the frame layout.
+     */
+    private static function commitPreview(string $message): string
+    {
+        $lines = explode("\n", $message);
+        if (count($lines) <= 1) {
+            return $message;
+        }
+
+        return $lines[0] . ' ↵' . (count($lines) - 1) . ' ';
     }
 
     /**
@@ -138,8 +162,14 @@ final class Renderer
 
         $commitBar = '';
         if ($a->collectingCommit) {
+            // candy-git-013: multi-line buffer, single-row preview; the amend
+            // prefill asks for its rewrite honestly in its own prompt.
             $commitBar = "\n " . Style::new()->foreground(Color::hex('#6ee7b7'))
-                ->render(self::truncate(Lang::t('commit.prompt') . self::sanitize($a->commitMessage) . '_', $a->barWidth()));
+                ->render(self::truncate(
+                    Lang::t($a->commitAmend ? 'commit.prompt_amend' : 'commit.prompt')
+                    . self::sanitize(self::commitPreview($a->commitMessage)) . '_',
+                    $a->barWidth()
+                ));
         }
 
         $branchBar = '';

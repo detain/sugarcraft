@@ -91,10 +91,10 @@ remotes cannot stall rendering) remains the v2 direction.
 | `p` (press twice)        | Pull from the remote                                   |
 | `P` (press twice)        | Push to the remote — the first push of an untracked branch bootstraps `origin` with `--set-upstream`; refuses on detached HEAD |
 | `Space` (branches pane)  | Checkout branch                                         |
-| `c`                      | Commit (type message, Enter to confirm, Esc to cancel) |
-| `A`                      | Amend last commit                                        |
+| `c`                      | Commit — the message collector owns the keyboard: `Tab` inserts a newline (subject+body are typable, and pastes keep their line structure), `Enter` commits, `Esc` cancels |
+| `A`                      | Amend the last commit — opens the collector pre-filled with its message; editing it rewrites HEAD, submitting unchanged is the old keep-the-message amend |
 | `n`                      | Create and switch to a new branch                        |
-| `u`                      | Undo last operation                                    |
+| `u`                      | Undo last operation — undoing a commit resets the boundary and re-arms the collector with the typed message (nothing authored is lost) |
 | `Ctrl+r`                 | Redo last undone operation                             |
 | `D` (branches pane)      | Delete the selected branch (press twice) — refuses to delete the current branch |
 
@@ -250,7 +250,7 @@ file key like `git.timeout` resolves through the core `T` registry as
 raw string.
 
 **Available keys** (`lang/en.php` — an excerpt; the file is the full roster
-of 152 keys):
+of 154 keys):
 
 | Key                    | Default string                                                    | Parameters  |
 |------------------------|-------------------------------------------------------------------|------------|

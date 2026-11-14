@@ -68,6 +68,7 @@ return [
     'help.push'               => '원격 푸시(두 번 누름)',
     'checkout.no_branch'      => '체크아웃: 선택된 브랜치 없음',
     'commit.prompt'           => '커밋 메시지: ',
+    'commit.prompt_amend'    => ' amend 메시지: ',
     'commit.empty_message'    => '커밋: 메시지는 비워둘 수 없습니다',
     'branch.prompt'           => '브랜치 이름: ',
     'branch.empty_name'       => '브랜치: 이름은 비워둘 수 없습니다',
@@ -112,6 +113,7 @@ return [
     'confirm.push'            => '푸시: P를 다시 누르면 원격으로 푸시합니다(다른 사용자에게 노출됨)',
     // Notice lane (amber confirmation/hint state, candy-git-047)
     'notice.collect_hint' => 'Enter 확인 · Esc 취소',
+    'notice.commit_hint' => 'Enter 커밋 · Tab 줄바꿈 · Esc 취소',
 
 
     // Remotes (fetch / pull / push)

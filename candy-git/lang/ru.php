@@ -68,6 +68,7 @@ return [
     'help.push'               => 'push на remote (два нажатия)',
     'checkout.no_branch'      => 'checkout: ветка не выбрана',
     'commit.prompt'           => 'сообщение коммита: ',
+    'commit.prompt_amend'    => 'сообщение amend: ',
     'commit.empty_message'    => 'commit: сообщение не может быть пустым',
     'branch.prompt'           => 'имя ветки: ',
     'branch.empty_name'       => 'ветка: имя не может быть пустым',
@@ -112,6 +113,7 @@ return [
     'confirm.push'            => 'push: нажмите P ещё раз, чтобы сделать push на remote (увидят другие)',
     // Notice lane (amber confirmation/hint state, candy-git-047)
     'notice.collect_hint' => 'Enter подтверждает · Esc отменяет',
+    'notice.commit_hint' => 'Enter коммитит · Tab новая строка · Esc отменяет',
 
 
     // Remotes (fetch / pull / push)

@@ -68,6 +68,7 @@ return [
     'help.push'               => 'zum Remote pushen (zweimal drücken)',
     'checkout.no_branch'      => 'checkout: kein zweig ausgewählt',
     'commit.prompt'           => 'commit-message: ',
+    'commit.prompt_amend'    => 'amend-nachricht: ',
     'commit.empty_message'    => 'commit: message darf nicht leer sein',
     'branch.prompt'           => 'zweigname: ',
     'branch.empty_name'       => 'zweig: name darf nicht leer sein',
@@ -112,6 +113,7 @@ return [
     'confirm.push'            => 'push: erneut P drücken, um zum Remote zu pushen (für andere sichtbar)',
     // Notice lane (amber confirmation/hint state, candy-git-047)
     'notice.collect_hint' => 'Enter bestätigt · Esc bricht ab',
+    'notice.commit_hint' => 'Enter committet · Tab neue Zeile · Esc bricht ab',
 
 
     // Remotes (fetch / pull / push)
