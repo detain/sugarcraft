@@ -45,6 +45,9 @@ use SugarCraft\Readline\TextPrompt;
  */
 final class EmacsMode implements ModeInterface
 {
+    /** Whether the meta (Escape) prefix is currently armed. */
+    private bool $altPrefix = false;
+
     public function __construct()
     {
     }
@@ -145,8 +148,6 @@ final class EmacsMode implements ModeInterface
     // -------------------------------------------------------------------------
     // Alt-prefix (Escape) handling
     // -------------------------------------------------------------------------
-
-    private bool $altPrefix = false;
 
     private function isAltPrefix(): bool
     {

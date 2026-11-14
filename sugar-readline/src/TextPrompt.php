@@ -88,7 +88,7 @@ final class TextPrompt
     private array $completions = [];
 
     /** @var (callable(string): bool)|null */
-    private $_validator = null;
+    private $validator = null;
 
     private string $labelStyle      = '1;36';   // bold cyan
     private string $cursorStyle     = '7';      // reverse
@@ -122,7 +122,7 @@ final class TextPrompt
 
     /**
      * History store consulted by ↑/↓ navigation. Navigation state lives on
-     * the prompt ({@see $_historyPosition}), never in the store's own cursor,
+     * the prompt ({@see $historyPosition}), never in the store's own cursor,
      * so clones may share the store without drifting.
      */
     private ?HistoryInterface $history = null;
@@ -138,13 +138,13 @@ final class TextPrompt
      * Navigation cursor into history: -1 = live buffer (no history entry selected).
      * 0 = most recent entry, higher = older entries.
      */
-    private int $_historyPosition = -1;
+    private int $historyPosition = -1;
 
     /**
      * Saved buffer captured when history navigation begins, so it can be
      * restored when the user navigates past the oldest entry.
      */
-    private ?string $_bufferBeforeHistory = null;
+    private ?string $bufferBeforeHistory = null;
 
     /** Active key-binding mode (vi or emacs), or null for default bindings. */
     private ?ModeInterface $mode = null;
@@ -240,7 +240,7 @@ final class TextPrompt
     public function withValidator(callable $fn): self
     {
         $clone = clone $this;
-        $clone->_validator = $fn;
+        $clone->validator = $fn;
         return $clone;
     }
 
@@ -383,7 +383,7 @@ final class TextPrompt
 
         $clone = clone $this;
         // The history store is shared across clones on purpose: navigation
-        // state lives in $_historyPosition and search() is read-only, so
+        // state lives in $historyPosition and search() is read-only, so
         // there is nothing per-instance to isolate here (cloning the store
         // on every keystroke only threw away its write-side caches).
         // Consecutive inserts share ONE undo snapshot (pushUndoOn folds the
@@ -398,8 +398,8 @@ final class TextPrompt
         $clone->undoRunEnd = $clone->cursor;
         $clone->error = '';
         // Reset history navigation so ↑ goes back to the start of history.
-        $clone->_historyPosition = -1;
-        $clone->_bufferBeforeHistory = null;
+        $clone->historyPosition = -1;
+        $clone->bufferBeforeHistory = null;
         return $clone;
     }
 
@@ -449,8 +449,8 @@ final class TextPrompt
                        . self::sliceChars($clone->buffer, $clone->cursor);
         $clone->cursor += self::charCount($clean);
         $clone->error = '';
-        $clone->_historyPosition = -1;
-        $clone->_bufferBeforeHistory = null;
+        $clone->historyPosition = -1;
+        $clone->bufferBeforeHistory = null;
         return $clone;
     }
 
@@ -549,8 +549,8 @@ final class TextPrompt
             return $this;
         }
         $clone = clone $this;
-        if ($clone->_validator !== null) {
-            $rejection = self::validatorRejection($clone->_validator, $clone->buffer);
+        if ($clone->validator !== null) {
+            $rejection = self::validatorRejection($clone->validator, $clone->buffer);
             if ($rejection !== null) {
                 $clone->error = $rejection;
                 return $clone;
@@ -649,7 +649,7 @@ final class TextPrompt
     /**
      * Navigate history with ↑ (previous) or ↓ (next) keys.
      *
-     * $_historyPosition is the authoritative index into the newest-first
+     * $historyPosition is the authoritative index into the newest-first
      * entry list (-1 = live buffer). The store is consulted through the
      * read-only search() with an empty query — it never uses the store's
      * own cursor, and the store is never cloned/reset per keystroke (that
@@ -667,38 +667,38 @@ final class TextPrompt
         $clone->undoRunEnd = -1;
 
         if ($key === Key::Up) {
-            $target = $clone->_historyPosition === -1 ? 0 : $clone->_historyPosition + 1;
-            if ($clone->_historyPosition === -1 && $clone->buffer !== '') {
+            $target = $clone->historyPosition === -1 ? 0 : $clone->historyPosition + 1;
+            if ($clone->historyPosition === -1 && $clone->buffer !== '') {
                 // Starting navigation from a live buffer: remember it so ↓
                 // at the newest entry can restore what was typed.
-                $clone->_bufferBeforeHistory = $clone->buffer;
+                $clone->bufferBeforeHistory = $clone->buffer;
             }
             $found = $clone->history->search('', $target, SearchDirection::Reverse);
             if ($found === null) {
                 // Already at the oldest entry — stay put, like GNU readline.
                 return $clone;
             }
-            $clone->_historyPosition = $target;
+            $clone->historyPosition = $target;
             $clone->buffer = $found->entry;
             $clone->cursor = self::charCount($found->entry);
             return $clone;
         }
 
         // Key::Down
-        if ($clone->_historyPosition === -1) {
+        if ($clone->historyPosition === -1) {
             // Already at live buffer — nothing to navigate.
             return $clone;
         }
-        $target = $clone->_historyPosition - 1;
+        $target = $clone->historyPosition - 1;
         $found = $target >= 0 ? $clone->history->search('', $target, SearchDirection::Forward) : null;
         if ($found === null) {
             // Stepping past the newest entry returns the saved buffer.
-            $clone->buffer = $clone->_bufferBeforeHistory ?? '';
+            $clone->buffer = $clone->bufferBeforeHistory ?? '';
             $clone->cursor = self::charCount($clone->buffer);
-            $clone->_historyPosition = -1;
-            $clone->_bufferBeforeHistory = null;
+            $clone->historyPosition = -1;
+            $clone->bufferBeforeHistory = null;
         } else {
-            $clone->_historyPosition = $target;
+            $clone->historyPosition = $target;
             $clone->buffer = $found->entry;
             $clone->cursor = self::charCount($found->entry);
         }
