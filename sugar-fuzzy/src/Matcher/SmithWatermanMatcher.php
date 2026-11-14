@@ -273,6 +273,10 @@ final class SmithWatermanMatcher implements FuzzyMatcher
     /**
      * Match a query against an iterable of candidates, returning ranked results.
      *
+     * Array inputs carry each candidate's key onto its result via
+     * {@see MatchResult::$candidateKey} (finding sugar-fuzzy-021); non-array
+     * iterables get null there, as their keys are iterator-defined.
+     *
      * @param string    $query      The search query
      * @param iterable<string> $candidates Candidate strings to score
      * @param int|null  $limit      Maximum number of results to return (null = unlimited)
@@ -290,13 +294,14 @@ final class SmithWatermanMatcher implements FuzzyMatcher
             return [];
         }
 
+        $isArray = is_array($candidates);
         $results = [];
-        foreach ($candidates as $candidate) {
+        foreach ($candidates as $key => $candidate) {
             $prepared = $this->prepareCandidate($preparedQuery, $candidate);
             if ($prepared === null) {
                 continue;
             }
-            $result = $this->computePrepared($prepared, $query, $candidate, $minScore);
+            $result = $this->computePrepared($prepared, $query, $candidate, $minScore, $isArray ? $key : null);
             if ($result !== null && $result->score >= $minScore) {
                 $results[] = $result;
             }
@@ -369,7 +374,7 @@ final class SmithWatermanMatcher implements FuzzyMatcher
      * {@see self::prepareQuery()}, so a filter over N candidates pays the fold
      * and the flip once instead of N times.
      */
-    private function computePrepared(array $prepared, string $query, string $candidate, ?int $minScore): ?MatchResult
+    private function computePrepared(array $prepared, string $query, string $candidate, ?int $minScore, int|string|null $candidateKey = null): ?MatchResult
     {
         [$q, $c] = $prepared;
 
@@ -415,6 +420,7 @@ final class SmithWatermanMatcher implements FuzzyMatcher
             haystack: $candidate,
             score: $maxScore,
             matchedIndices: $indices,
+            candidateKey: $candidateKey,
         );
     }
 

@@ -53,7 +53,20 @@ final class RequireFullQueryTest extends TestCase
 
         foreach ($kept as $result) {
             $this->assertCount(3, $result->matchedIndices);
-            $this->assertEquals($default->match('app', $result->haystack), $result);
+            // Object-equality against the single-pair route held until
+            // FUZZY-25 (finding sugar-fuzzy-021): batch results now CARRY the
+            // array input key, which the `match()` route leaves null. Compare
+            // the fields this test is actually about, and pin the carry here
+            // too while we're at it.
+            $single = $default->match('app', $result->haystack);
+            $this->assertNotNull($single);
+            $this->assertSame($single->score, $result->score);
+            $this->assertSame($single->matchedIndices, $result->matchedIndices);
+            $this->assertSame(
+                array_search($result->haystack, $candidates, true),
+                $result->candidateKey,
+            );
+            $this->assertNotSame($single, $result); // differs only by candidateKey
             $this->assertSame($result->score, $strict->score('app', $result->haystack));
         }
 

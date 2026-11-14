@@ -508,4 +508,19 @@ final class SahilmMatcherTest extends TestCase
         $this->assertNull($sensitive->match('g', 'GHI'));
         $this->assertNotNull($folded->match('g', 'GHI'));
     }
+
+    #[Test]
+    public function testMatchAllCarriesArrayInputKeysOntoResults(): void
+    {
+        // Finding sugar-fuzzy-021, same contract as SmithWatermanMatcher.
+        $results = $this->matcher->matchAll('he', ['one' => 'hello', 'two' => 'hey', 'three' => 'xyz']);
+
+        $this->assertNotEmpty($results);
+        foreach ($results as $result) {
+            $this->assertArrayHasKey($result->candidateKey, ['one' => 'hello', 'two' => 'hey', 'three' => 'xyz']);
+        }
+        $keys = array_map(static fn (MatchResult $r): int|string => $r->candidateKey, $results);
+        sort($keys);
+        $this->assertSame(['one', 'two'], $keys); // 'xyz' never matches 'he'
+    }
 }

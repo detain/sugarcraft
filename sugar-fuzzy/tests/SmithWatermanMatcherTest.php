@@ -570,4 +570,48 @@ final class SmithWatermanMatcherTest extends TestCase
         $this->assertSame(2, $capped->maxQueryLength());
         $this->assertNotSame($plain->match('gst', 'git status')?->score, $capped->match('gst', 'git status')?->score);
     }
+
+    #[Test]
+    public function testMatchAllCarriesArrayInputKeysOntoResults(): void
+    {
+        // Finding sugar-fuzzy-021: the batch key is the only field that maps a
+        // result back to the caller's record — duplicate haystacks included.
+        $candidates = ['a' => 'apple', 'b' => 'application', 'c' => 'apple'];
+
+        $results = $this->matcher->matchAll('app', $candidates);
+
+        $this->assertNotEmpty($results);
+        foreach ($results as $result) {
+            $this->assertArrayHasKey($result->candidateKey, $candidates);
+            $this->assertSame($result->haystack, $candidates[$result->candidateKey]);
+        }
+        $keys = array_map(static fn (MatchResult $r): int|string => $r->candidateKey, $results);
+        sort($keys);
+        $this->assertSame(['a', 'b', 'c'], $keys);
+    }
+
+    #[Test]
+    public function testMatchAllOnNonArrayIterableLeavesCandidateKeyNull(): void
+    {
+        $gen = (static function (): \Generator {
+            yield 'x' => 'apple';
+            yield 'y' => 'application';
+        })();
+
+        foreach ($this->matcher->matchAll('app', $gen) as $result) {
+            $this->assertNull($result->candidateKey);
+        }
+    }
+
+    #[Test]
+    public function testGeneratorFormCarriesTheSameKeys(): void
+    {
+        $results = [];
+        foreach ($this->matcher->matchAllGenerator('app', ['k1' => 'apple']) as $result) {
+            $results[] = $result;
+        }
+
+        $this->assertCount(1, $results);
+        $this->assertSame('k1', $results[0]->candidateKey);
+    }
 }

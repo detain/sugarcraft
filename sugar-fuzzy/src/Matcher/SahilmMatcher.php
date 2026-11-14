@@ -152,9 +152,13 @@ final class SahilmMatcher implements FuzzyMatcher
             return [];
         }
 
+        // Array inputs carry each candidate's key onto its result via
+        // MatchResult::$candidateKey (finding sugar-fuzzy-021); non-array
+        // iterables get null there.
+        $isArray = is_array($candidates);
         $results = [];
-        foreach ($candidates as $candidate) {
-            $result = $this->compute($query, $candidate, $preparedQuery);
+        foreach ($candidates as $key => $candidate) {
+            $result = $this->compute($query, $candidate, $preparedQuery, $isArray ? $key : null);
             if ($result !== null && $result->score >= $minScore) {
                 $results[] = $result;
             }
@@ -217,8 +221,10 @@ final class SahilmMatcher implements FuzzyMatcher
      * @param array{0: list<string>, 1: int}|null $preparedQuery Batch-resolved query side
      *                                                           ({@see self::prepareQuery()});
      *                                                           resolved inline for single-pair callers
+     * @param int|string|null $candidateKey Batch input key to carry onto the
+     *                                      result (finding sugar-fuzzy-021); null for single-pair routes
      */
-    private function compute(string $query, string $candidate, ?array $preparedQuery = null): ?MatchResult
+    private function compute(string $query, string $candidate, ?array $preparedQuery = null, int|string|null $candidateKey = null): ?MatchResult
     {
         $preparedQuery ??= $this->prepareQuery($query);
         if ($preparedQuery === null) {
@@ -303,6 +309,7 @@ final class SahilmMatcher implements FuzzyMatcher
             haystack: $candidate,
             score: $score,
             matchedIndices: $indices,
+            candidateKey: $candidateKey,
         );
     }
 

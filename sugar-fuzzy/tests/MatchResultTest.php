@@ -79,4 +79,16 @@ final class MatchResultTest extends TestCase
         // Original should be unchanged
         $this->assertSame([0, 1, 2], $result->indices());
     }
+
+    #[Test]
+    public function testCandidateKeyDefaultsToNullAndCarriesWhenGiven(): void
+    {
+        // Finding sugar-fuzzy-021: the new slot is appended with a default, so
+        // every historical positional construction must stay byte-identical.
+        $legacy = new MatchResult('foo', 'foobar', 10, [0, 1, 2]);
+        $keyed = new MatchResult('foo', 'foobar', 10, [0, 1, 2], 'settings.theme');
+
+        $this->assertNull($legacy->candidateKey);
+        $this->assertSame('settings.theme', $keyed->candidateKey);
+    }
 }

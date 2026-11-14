@@ -41,7 +41,9 @@ $score = $matcher->score('foo', 'foobar'); // 19
 // Match against multiple candidates (sorted by score desc)
 $candidates = ['apple', 'applet', 'application', 'apricot'];
 $results = $matcher->matchAll('app', $candidates);
-// Returns array of MatchResult sorted by score
+// Returns array of MatchResult sorted by score; with an array input every
+// result also carries ->candidateKey, the key its candidate had in the input
+// (null for single matches and non-array iterables)
 
 // The generator form yields the same ranked output — note it drains and sorts
 // the whole candidate list before the first yield (ranking is global), so it

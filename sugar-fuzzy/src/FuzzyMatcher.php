@@ -59,6 +59,10 @@ interface FuzzyMatcher
      * ascending as tiebreak.
      * Only returns candidates with a score >= $minScore (default 1, i.e. > 0).
      * An EMPTY QUERY MATCHES NOTHING: `matchAll('', ...)` returns [].
+     * ARRAY INPUTS CARRY KEYS: when $candidates is an array, each result's
+     * {@see MatchResult::$candidateKey} is the key that candidate had in the
+     * input (finding sugar-fuzzy-021); non-array iterables yield null there,
+     * as do the single-pair `match()`/`score()` routes.
      *
      * @param string    $query      The search query
      * @param iterable<string> $candidates candidate strings to score

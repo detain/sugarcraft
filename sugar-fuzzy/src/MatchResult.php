@@ -36,6 +36,17 @@ final class MatchResult
          * @var list<int> 0-based CODE-POINT indices into the ORIGINAL haystack
          */
         public readonly array $matchedIndices,
+        /**
+         * Finding sugar-fuzzy-021: the KEY the candidate had in a batch input.
+         * `matchAll()`/`matchAllGenerator()` carry it from ARRAY inputs (a list
+         * gives 0..n-1; a hash map gives its own keys — the one field that
+         * disambiguates two candidates with identical text); every other route
+         * — single-pair `match()`/`score()`, non-array iterables whose keys are
+         * iterator-defined, and construction outside the matchers — leaves it
+         * null. App-side stores can therefore resolve a hit back to its record
+         * without rebuilding a haystack→key map.
+         */
+        public readonly int|string|null $candidateKey = null,
     ) {}
 
     /**
