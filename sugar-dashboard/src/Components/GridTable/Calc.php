@@ -57,12 +57,16 @@ final class Calc
         $totalMin = array_sum($minWidths);
         $numCols = count($columns);
 
-        // If we have enough space for minimums, distribute extra space
-        if ($totalMin >= $availableWidth) {
-            // Cannot satisfy minimums - return minimums and let caller handle overflow
-            return $minWidths;
+        // The minimums overflow the budget: fail toward FIT, not overflow
+        // (finding sugar-dashboard-046 - the old branch returned the minimums
+        // and the single caller never handled them, so the frame grew past its
+        // allocation). Shrink proportionally so the result sums to exactly the
+        // budget; one cell per column is the floor.
+        if ($totalMin > $availableWidth) {
+            return self::shrinkToFit($minWidths, $availableWidth);
         }
 
+        // If we have enough space for minimums, distribute extra space
         $extra = $availableWidth - $totalMin;
         $widths = $minWidths;
 
@@ -88,6 +92,69 @@ final class Calc
         }
 
         return $widths;
+    }
+
+    /**
+     * Scale minimum widths down until they sum to exactly the budget.
+     *
+     * Largest-remainder rounding keeps the split proportional; the max(1,…)
+     * floor can overshoot after flooring, which is shaved back off the widest
+     * columns. A budget below the column count cannot seat one cell per column
+     * — every column then gets its single cell and the sum says so.
+     *
+     * @param array<int, int> $minWidths
+     * @return array<int, int>
+     */
+    private static function shrinkToFit(array $minWidths, int $budget): array
+    {
+        $numCols = count($minWidths);
+
+        if ($budget <= 0) {
+            return $minWidths;
+        }
+
+        if ($budget < $numCols) {
+            return array_fill(0, $numCols, 1);
+        }
+
+        $totalMin = array_sum($minWidths);
+        $scaled = [];
+        $remainders = [];
+
+        foreach ($minWidths as $i => $w) {
+            $exact = $w * $budget / $totalMin;
+            $scaled[$i] = max(1, (int) floor($exact));
+            $remainders[$i] = $exact - floor($exact);
+        }
+
+        $diff = $budget - array_sum($scaled);
+
+        if ($diff > 0) {
+            arsort($remainders);
+            foreach ($remainders as $i => $_remainder) {
+                if ($diff <= 0) {
+                    break;
+                }
+                $scaled[$i]++;
+                $diff--;
+            }
+        } elseif ($diff < 0) {
+            $excess = -$diff;
+            $order = array_keys($scaled);
+            usort($order, fn(int $a, int $b): int => $scaled[$b] <=> $scaled[$a]);
+            foreach ($order as $i) {
+                if ($excess <= 0) {
+                    break;
+                }
+                $take = min($excess, $scaled[$i] - 1);
+                if ($take > 0) {
+                    $scaled[$i] -= $take;
+                    $excess -= $take;
+                }
+            }
+        }
+
+        return $scaled;
     }
 
     /**

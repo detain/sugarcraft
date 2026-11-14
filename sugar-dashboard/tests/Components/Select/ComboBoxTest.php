@@ -404,4 +404,45 @@ final class ComboBoxTest extends TestCase
             $this->assertCount(6, explode("\n", $wither($sized)->render()));
         }
     }
+
+    public function testAllocatedComboboxEllipsisesLongContentInsteadOfOverflowing(): void
+    {
+        // The no-compress cliff (finding 046): render used to paint natural
+        // content width regardless of setSize, so the results box grew past
+        // whatever the layout handed it.
+        $combobox = ComboBox::new('Search for a fruit please', [
+            ['label' => 'Extremely Long Option Name That Will Not Fit'],
+            ['label' => 'Nope, This One Is Even Longer Than The First'],
+        ])->setSize(12, 5);
+
+        foreach (explode("\n", $combobox->render()) as $line) {
+            $plain = $this->stripAnsi($line);
+            $this->assertLessThanOrEqual(12, mb_strlen($plain), 'line escapes the 12-cell allocation: ' . $plain);
+        }
+
+        $this->assertStringContainsString('…', $this->stripAnsi($combobox->render()));
+    }
+
+    public function testUnallocatedComboboxKeepsItsNaturalWidth(): void
+    {
+        // No setSize, no clipping - innerSize is the contract and Boxer asks.
+        $long = 'Extremely Long Option Name That Will Not Fit';
+        $combobox = ComboBox::new('Find...', [['label' => $long]]);
+
+        $rendered = $combobox->render();
+
+        $this->assertStringContainsString($long, $this->stripAnsi($rendered));
+        $this->assertStringNotContainsString('…', $this->stripAnsi($rendered));
+    }
+
+    public function testAllocatedComboboxQueryLineStaysInsideBudget(): void
+    {
+        $combobox = ComboBox::new('Find...', [
+            ['label' => 'Ant'],
+        ])->withQuery('a really long typed query nobody can see anyway')->setSize(10, 3);
+
+        $input = explode("\n", $combobox->render())[0];
+
+        $this->assertLessThanOrEqual(10, mb_strlen($this->stripAnsi($input)));
+    }
 }

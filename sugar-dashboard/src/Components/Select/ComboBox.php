@@ -9,6 +9,7 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Dashboard\Foundation\ColorMode;
 use SugarCraft\Dashboard\Support\ListWindow;
+use SugarCraft\Dashboard\Components\GridTable\Calc;
 
 /**
  * A combobox component with search filtering.
@@ -105,6 +106,7 @@ final class ComboBox implements \SugarCraft\Dashboard\Foundation\SizedItem
     {
         $queryDisplay = !empty($this->query) ? $this->query : $this->placeholder;
         $prefix = '🔍 ';
+        $queryDisplay = $this->clipToAllocation($queryDisplay, Width::string($prefix));
         $content = $prefix . $queryDisplay;
 
         if (!empty($this->query) && $this->inputColor !== null) {
@@ -170,7 +172,7 @@ final class ComboBox implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     private function renderResultItem(array $option, bool $isSelected): string
     {
-        $label = $option['label'];
+        $label = $this->clipToAllocation($option['label'], 2);
         $prefix = $isSelected ? '▶' : ' ';
 
         // Highlight matching portion of label if query exists
@@ -254,6 +256,24 @@ final class ComboBox implements \SugarCraft\Dashboard\Foundation\SizedItem
         $height = 1 + $this->visibleResultCount($filtered);
 
         return [$width, $height];
+    }
+
+    /**
+     * Clip plain text to the horizontal allocation, if there is one.
+     *
+     * Unallocated the combobox keeps its natural width (Boxer asks innerSize
+     * for it); once setSize speaks, render stays inside the budget and long
+     * content ellipsises instead of overflowing the box (finding
+     * sugar-dashboard-046, the no-compress cliff — the same fail-toward-FIT
+     * rule GridTable columns get through Calc).
+     */
+    private function clipToAllocation(string $text, int $chrome): string
+    {
+        if ($this->width === null || $this->width <= 0) {
+            return $text;
+        }
+
+        return Calc::truncate($text, max(1, $this->width - $chrome));
     }
 
     // ─── Withers ──────────────────────────────────────────────────

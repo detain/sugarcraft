@@ -954,4 +954,81 @@ final class GridTableTest extends TestCase
         $this->assertSame(6, $grid->pagination()->perPage, 'budget leaves room for exactly 6 data rows');
         $this->assertCount($height, explode("\n", $grid->page(1)->render()), 'rows + chrome == allocation');
     }
+
+    public function testColumnMinimumsThatOverflowShrinkToExactBudget(): void
+    {
+        // The old Calc returned the minimums untouched when they exceeded the
+        // budget and the single caller never handled it - the frame grew past
+        // its allocation (finding 046). Shrink-to-fit lands the sum exactly.
+        $cols = [
+            Column::new('a', 'Alpha-column'),
+            Column::new('b', 'Bravo-column'),
+            Column::new('c', 'Charlie-column'),
+        ];
+        $rows = [new Row(['a' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'b' => 'bbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'c' => 'cccccccccccccccccccccccccccc'])];
+
+        $widths = Calc::calculateColumnWidths($rows, $cols, 30);
+
+        $this->assertSame(30, array_sum($widths), 'over-subscribed minimums shrink to the exact budget');
+        $this->assertCount(3, $widths);
+        foreach ($widths as $w) {
+            $this->assertGreaterThanOrEqual(1, $w, 'every column keeps at least one cell');
+        }
+    }
+
+    public function testOverflowShrinkKeepsProportionalityOrder(): void
+    {
+        // The wide column must not end up narrower than the narrow ones.
+        $cols = [
+            Column::new('a', 'A'),
+            Column::new('b', 'B'),
+        ];
+        $rows = [new Row(['a' => str_repeat('x', 100), 'b' => 'short'])];
+
+        $widths = Calc::calculateColumnWidths($rows, $cols, 20);
+
+        $this->assertSame(20, array_sum($widths));
+        $this->assertGreaterThan($widths[1], $widths[0], 'wide content keeps the larger share after shrinking');
+    }
+
+    public function testBudgetBelowColumnCountSeatsOneCellEach(): void
+    {
+        // Degenerate allocation: 1 cell per column is the floor, documented.
+        $cols = [Column::new('a', 'AAA'), Column::new('b', 'BBB'), Column::new('c', 'CCC')];
+        $rows = [new Row(['a' => 'aaa', 'b' => 'bbb', 'c' => 'ccc'])];
+
+        $widths = Calc::calculateColumnWidths($rows, $cols, 2);
+
+        $this->assertSame([1, 1, 1], $widths);
+    }
+
+    public function testMinimumsThatExactlyFitTheBudgetAreNotShrunk(): void
+    {
+        // Regression guard on the >= to > branch change.
+        $cols = [Column::new('a', 'AB'), Column::new('b', 'CD')];
+        $rows = [new Row(['a' => 'a', 'b' => 'b'])];
+
+        // label is the wider contributor: min widths are 2 and 2 -> sum 4.
+        $widths = Calc::calculateColumnWidths($rows, $cols, 4);
+
+        $this->assertSame([2, 2], $widths);
+    }
+
+    public function testOverflowingGridFrameLinesAreAllTheSameWidth(): void
+    {
+        $cols = [
+            Column::new('a', 'Alpha-column'),
+            Column::new('b', 'Bravo-column'),
+        ];
+        $rows = [];
+        for ($i = 0; $i < 6; $i++) {
+            $rows[] = new Row(['a' => 'value-a-' . $i, 'b' => 'value-b-' . $i]);
+        }
+
+        $grid = GridTable::new($cols, $rows)->setSize(20, 8);
+        $lines = explode("\n", $grid->render());
+
+        $widths = array_map('mb_strlen', $lines);
+        $this->assertSame(min($widths), max($widths), 'no line may exceed the allocation: ' . json_encode($widths));
+    }
 }
