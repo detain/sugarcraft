@@ -32,7 +32,7 @@ final class Sidebar implements \SugarCraft\Dashboard\Foundation\SizedItem
     private ?int $height = null;
 
     /**
-     * @param list<array{label: string, icon?: string, href?: string, isActive?: bool, isDivider?: bool}> $items
+     * @param list<array{label: string, icon?: string, isActive?: bool, isDivider?: bool}> $items
      */
     public function __construct(
         private readonly array $items = [],
@@ -98,18 +98,10 @@ final class Sidebar implements \SugarCraft\Dashboard\Foundation\SizedItem
         $useWidth = max(3, $useWidth);
         $useHeight = $this->height ?? 24;
 
-        $result = '';
-
-        // Background color if set
-        if ($this->bgColor !== null) {
-            $result .= $this->bgColor->toBg(ColorMode::profile());
-        }
-
-        // Border color if set
-        if ($this->borderColor !== null) {
-            $result .= $this->borderColor->toFg(ColorMode::profile());
-        }
-
+        // No pre-border color preamble any more (D-136): the old $result
+        // block collected bg/border SGR codes that never reached the output
+        // (the return is built purely from $lines through the border pass),
+        // so it was dead weight that READ like live styling.
         $lines = [];
 
         // Border budget is known BEFORE content (D-165): outer useWidth =
@@ -160,9 +152,6 @@ final class Sidebar implements \SugarCraft\Dashboard\Foundation\SizedItem
             $lineCount++;
         }
 
-        // Reset ANSI
-        $result .= Ansi::reset();
-
         // Apply background to all lines if set
         if ($this->bgColor !== null) {
             $bgPrefix = $this->bgColor->toBg(ColorMode::profile());
@@ -194,6 +183,12 @@ final class Sidebar implements \SugarCraft\Dashboard\Foundation\SizedItem
 
     /**
      * Calculate the natural width based on item labels.
+     *
+     * The per-item text selection MIRRORS render() (D-136): a collapsed
+     * sidebar carries icons in the list, so its natural width budgets the
+     * icon column — not the full label that collapsed mode never paints.
+     * The +4 is the marker column, the gutter space, and the two border
+     * cells; the floor of 10 is the shipped minimum width.
      */
     private function calculateNaturalWidth(): int
     {
@@ -209,7 +204,9 @@ final class Sidebar implements \SugarCraft\Dashboard\Foundation\SizedItem
             }
             $label = $item['label'];
             $icon = $item['icon'] ?? '';
-            $text = $icon !== '' ? $icon . ' ' . $label : $label;
+            $text = $this->collapsed && $icon !== ''
+                ? $icon
+                : ($icon !== '' ? $icon . ' ' . $label : $label);
             $width = max($width, Width::string($text) + 4);
         }
 
@@ -239,7 +236,7 @@ final class Sidebar implements \SugarCraft\Dashboard\Foundation\SizedItem
     /**
      * Set the sidebar items.
      *
-     * @param list<array{label: string, icon?: string, href?: string, isActive?: bool, isDivider?: bool}> $items
+     * @param list<array{label: string, icon?: string, isActive?: bool, isDivider?: bool}> $items
      */
     public function withItems(array $items): self
     {

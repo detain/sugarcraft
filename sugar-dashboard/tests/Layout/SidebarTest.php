@@ -170,6 +170,31 @@ final class SidebarTest extends TestCase
         $this->assertStringContainsString('⌂', $rendered);
     }
 
+    public function testCollapsedNaturalWidthBudgetsIconsNotLabels(): void
+    {
+        $items = [
+            ['label' => 'Network Status', 'icon' => 'N'],
+            ['label' => 'Disk Throughput', 'icon' => 'D'],
+        ];
+        $open = Sidebar::new($items);
+        $collapsed = $open->withCollapsed(true);
+
+        // Expanded: the longest item line 'D Disk Throughput' (17 cells)
+        // plus marker, gutter and two border cells.
+        $this->assertSame(21, $open->innerSize()[0]);
+
+        // Collapsed honors the flag in the SIZE MATH (D-136): the icon
+        // column alone (1 + 4) sits under the shipped minimum width of 10,
+        // so the floor governs — labels no longer inflate the budget.
+        $this->assertSame(10, $collapsed->innerSize()[0]);
+        $this->assertStringNotContainsString('Network Status', $collapsed->render());
+
+        // Every row paints exactly the collapsed budget, border to border.
+        foreach (explode("\n", $collapsed->render()) as $line) {
+            $this->assertSame(10, Width::string($line), 'row: ' . $line);
+        }
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // Color handling
     // ═══════════════════════════════════════════════════════════════
