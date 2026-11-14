@@ -124,9 +124,12 @@ final class JsonStreamBackend implements Backend
         // No-op: JSON stream is a diagnostic format; TYPE/HELP are unnecessary.
     }
 
-    // Flush ensures the stream buffer is drained to the underlying resource.
-    // In throwOnError mode a failed fflush is reported like a failed write —
-    // the old bare call could not throw despite the class contract.
+    // Flush drains the stream buffer to the underlying resource — meaningful
+    // for file/stderr targets. The throw below is an unreachable-but-loud
+    // safety net (sugar-metrics-041): no stream reachable through the public
+    // API reliably fails fflush() while is_resource() stays true; the write
+    // path owns every real failure. Pinned by JsonStreamBackendTest's closed-
+    // stream probes.
     public function flush(): void
     {
         if (is_resource($this->stream) && @fflush($this->stream) === false && $this->throwOnError) {

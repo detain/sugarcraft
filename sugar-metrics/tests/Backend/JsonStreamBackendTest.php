@@ -418,4 +418,21 @@ final class JsonStreamBackendTest extends TestCase
             @unlink($path);
         }
     }
+
+    public function testFlushOnAClosedInjectedStreamIsQuietInBothPostures(): void
+    {
+        // sugar-metrics-041: mirror of the StatsD closed-socket probe. The
+        // stream is closed AFTER construction (the door validates the live
+        // resource), so flush() sees a dead handle: the is_resource guard
+        // short-circuits in BOTH postures — the loud throw is the documented
+        // unreachable-but-loud safety net, not a behavior callers depend on.
+        $stream = fopen('php://memory', 'w');
+        $silent = new JsonStreamBackend($stream, throwOnError: false);
+        $loud = new JsonStreamBackend($stream, throwOnError: true);
+        fclose($stream);
+        $silent->flush();
+        $loud->flush();
+        $src = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Backend/JsonStreamBackend.php');
+        $this->assertStringContainsString('unreachable-but-loud', $src);
+    }
 }

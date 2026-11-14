@@ -54,6 +54,12 @@ final class StatsdBackend implements Backend
 
     /**
      * @param resource|null $existingSocket If provided, used directly (e.g. for tests).
+     * @param float $timeout Bounds the socket CONNECT only. There is no UDP
+     *        handshake, and PHP applies this timeout to connect(), not to the
+     *        blocking gethostbyname() beneath a named host — a blackholed
+     *        resolver can stall construction past this bound (sugar-metrics-064).
+     *        Hard-wall deployments pass an IP literal or a pre-resolved
+     *        $existingSocket.
      */
     /**
      * House-idiom factory (sugar-metrics-014): `StatsdBackend::new()`.
@@ -133,9 +139,13 @@ final class StatsdBackend implements Backend
         // No-op: StatsD wire format does not support TYPE/HELP declarations.
     }
 
-    // StatsD emits immediately via UDP; flush ensures the socket buffer is
-    // drained. A failed flush is loud when the backend was built with
-    // failSilently: false — same contract as the write path.
+    // UDP streams are unbuffered: fflush() here is a deliberate no-op on the
+    // wire (sugar-metrics-064), kept to honor the Backend contract and to
+    // mirror the remove()/describe() no-op honesty. The throw below is an
+    // unreachable-but-loud safety net (sugar-metrics-041): no stream
+    // reachable through the public API fails fflush() while is_resource()
+    // stays true, so fwrite() already owns every real send failure. It is
+    // pinned by StatsdBackendTest flush probes on closed sockets.
     public function flush(): void
     {
         if (is_resource($this->sock) && @fflush($this->sock) === false && $this->failSilently === false) {

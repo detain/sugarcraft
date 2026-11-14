@@ -464,4 +464,34 @@ final class StatsdBackendTest extends TestCase
         ));
         self::assertStringNotContainsString("sprintf('%.6", $code, 'bare locale-aware sprintf must not return (comment lines exempt)');
     }
+
+    public function testFlushOnAClosedSocketIsQuietInBothPosturesAndTheLoudThrowIsADocumentedSafetyNet(): void
+    {
+        // sugar-metrics-041 + 064: injection validates at the door, so the
+        // socket is closed AFTER construction — flush then sees a dead
+        // handle. is_resource() short-circuits in BOTH postures: the loud
+        // branch never fires on a non-resource handle (it is unreachable-
+        // but-loud by design; fwrite owns real send failures on live ones).
+        $sock = fopen('php://memory', 'w');
+        $silent = new StatsdBackend(existingSocket: $sock, failSilently: true);
+        $loud = new StatsdBackend(existingSocket: $sock, failSilently: false);
+        fclose($sock);
+        $silent->flush();
+        $loud->flush();
+        // A live socket flushes clean in loud mode (the no-op really is a
+        // no-op on a healthy UDP-equivalent stream).
+        $live = fopen('php://memory', 'w');
+        $b = new StatsdBackend(existingSocket: $live, failSilently: false);
+        $b->counter('x', 1);
+        $b->flush();
+        $this->assertStringContainsString('x:1|c', trim((string) stream_get_contents($live, 1024, 0)));
+        fclose($live);
+        // Wording-drift guards for the pre-made honesty decisions.
+        $src = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Backend/StatsdBackend.php');
+        $this->assertStringContainsString('unreachable-but-loud', $src);
+        $this->assertStringContainsString('deliberate no-op', $src);
+        $this->assertStringContainsString('gethostbyname()', $src);
+        $readme = (string) file_get_contents(dirname(__DIR__, 2) . '/README.md');
+        $this->assertStringContainsString('gethostbyname()', $readme);
+    }
 }
