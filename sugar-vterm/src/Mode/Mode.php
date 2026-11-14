@@ -88,24 +88,43 @@ final readonly class Mode
     ) {
     }
 
-    public function withAltScreen(bool $v): self
+    /**
+     * Rebuild the snapshot with single-field overrides (house mutate model,
+     * see {@see \SugarCraft\Vterm\Cell::mutate()}).
+     *
+     * Every with*() below routes through this one ctor-arg list: a future
+     * 15th field is added ONCE here and can no longer be forgotten in a
+     * per-setter named-arg block. Mode fields are never nullable, so the
+     * plain `??` fallback is total.
+     *
+     * @param array{altScreen?:bool, cursorVisible?:bool, bracketedPaste?:bool, mouseEncoding?:MouseEncoding, mouseAny?:bool, mouseHighlights?:bool, mouseCellMotion?:bool, syncUpdate?:bool, mouseExtended?:bool, altScreenVariant?:int, autoWrap?:bool, originMode?:bool, cursorShape?:int, reportFocusEvents?:bool} $changes
+     */
+    private function mutate(array $changes): self
     {
         return new self(
-            altScreen: $v,
-            cursorVisible: $this->cursorVisible,
-            bracketedPaste: $this->bracketedPaste,
-            mouseEncoding: $this->mouseEncoding,
-            mouseAny: $this->mouseAny,
-            mouseHighlights: $this->mouseHighlights,
-            mouseCellMotion: $this->mouseCellMotion,
-            syncUpdate: $this->syncUpdate,
-            mouseExtended: $this->mouseExtended,
-            altScreenVariant: $v ? self::ALT_FULL : self::ALT_NONE,
-            autoWrap: $this->autoWrap,
-            originMode: $this->originMode,
-            cursorShape: $this->cursorShape,
-            reportFocusEvents: $this->reportFocusEvents,
+            altScreen: $changes['altScreen'] ?? $this->altScreen,
+            cursorVisible: $changes['cursorVisible'] ?? $this->cursorVisible,
+            bracketedPaste: $changes['bracketedPaste'] ?? $this->bracketedPaste,
+            mouseEncoding: $changes['mouseEncoding'] ?? $this->mouseEncoding,
+            mouseAny: $changes['mouseAny'] ?? $this->mouseAny,
+            mouseHighlights: $changes['mouseHighlights'] ?? $this->mouseHighlights,
+            mouseCellMotion: $changes['mouseCellMotion'] ?? $this->mouseCellMotion,
+            syncUpdate: $changes['syncUpdate'] ?? $this->syncUpdate,
+            mouseExtended: $changes['mouseExtended'] ?? $this->mouseExtended,
+            altScreenVariant: $changes['altScreenVariant'] ?? $this->altScreenVariant,
+            autoWrap: $changes['autoWrap'] ?? $this->autoWrap,
+            originMode: $changes['originMode'] ?? $this->originMode,
+            cursorShape: $changes['cursorShape'] ?? $this->cursorShape,
+            reportFocusEvents: $changes['reportFocusEvents'] ?? $this->reportFocusEvents,
         );
+    }
+
+    public function withAltScreen(bool $v): self
+    {
+        return $this->mutate([
+            'altScreen' => $v,
+            'altScreenVariant' => $v ? self::ALT_FULL : self::ALT_NONE,
+        ]);
     }
 
     /**
@@ -115,22 +134,10 @@ final readonly class Mode
      */
     public function withAltScreenVariant(int $variant): self
     {
-        return new self(
-            altScreen: $variant !== self::ALT_NONE,
-            cursorVisible: $this->cursorVisible,
-            bracketedPaste: $this->bracketedPaste,
-            mouseEncoding: $this->mouseEncoding,
-            mouseAny: $this->mouseAny,
-            mouseHighlights: $this->mouseHighlights,
-            mouseCellMotion: $this->mouseCellMotion,
-            syncUpdate: $this->syncUpdate,
-            mouseExtended: $this->mouseExtended,
-            altScreenVariant: $variant,
-            autoWrap: $this->autoWrap,
-            originMode: $this->originMode,
-            cursorShape: $this->cursorShape,
-            reportFocusEvents: $this->reportFocusEvents,
-        );
+        return $this->mutate([
+            'altScreenVariant' => $variant,
+            'altScreen' => $variant !== self::ALT_NONE,
+        ]);
     }
 
     /**
@@ -143,22 +150,7 @@ final readonly class Mode
 
     public function withCursorVisible(bool $v): self
     {
-        return new self(
-            altScreen: $this->altScreen,
-            cursorVisible: $v,
-            bracketedPaste: $this->bracketedPaste,
-            mouseEncoding: $this->mouseEncoding,
-            mouseAny: $this->mouseAny,
-            mouseHighlights: $this->mouseHighlights,
-            mouseCellMotion: $this->mouseCellMotion,
-            syncUpdate: $this->syncUpdate,
-            mouseExtended: $this->mouseExtended,
-            altScreenVariant: $this->altScreenVariant,
-            autoWrap: $this->autoWrap,
-            originMode: $this->originMode,
-            cursorShape: $this->cursorShape,
-            reportFocusEvents: $this->reportFocusEvents,
-        );
+        return $this->mutate(['cursorVisible' => $v]);
     }
 
     /**
@@ -171,102 +163,27 @@ final readonly class Mode
      */
     public function withMouseEncoding(MouseEncoding $v): self
     {
-        return new self(
-            altScreen: $this->altScreen,
-            cursorVisible: $this->cursorVisible,
-            bracketedPaste: $this->bracketedPaste,
-            mouseEncoding: $v,
-            mouseAny: $this->mouseAny,
-            mouseHighlights: $this->mouseHighlights,
-            mouseCellMotion: $this->mouseCellMotion,
-            syncUpdate: $this->syncUpdate,
-            mouseExtended: $this->mouseExtended,
-            altScreenVariant: $this->altScreenVariant,
-            autoWrap: $this->autoWrap,
-            originMode: $this->originMode,
-            cursorShape: $this->cursorShape,
-            reportFocusEvents: $this->reportFocusEvents,
-        );
+        return $this->mutate(['mouseEncoding' => $v]);
     }
 
     public function withMouseHighlights(bool $v = true): self
     {
-        return new self(
-            altScreen: $this->altScreen,
-            cursorVisible: $this->cursorVisible,
-            bracketedPaste: $this->bracketedPaste,
-            mouseEncoding: $this->mouseEncoding,
-            mouseAny: $this->mouseAny,
-            mouseHighlights: $v,
-            mouseCellMotion: $this->mouseCellMotion,
-            syncUpdate: $this->syncUpdate,
-            mouseExtended: $this->mouseExtended,
-            altScreenVariant: $this->altScreenVariant,
-            autoWrap: $this->autoWrap,
-            originMode: $this->originMode,
-            cursorShape: $this->cursorShape,
-            reportFocusEvents: $this->reportFocusEvents,
-        );
+        return $this->mutate(['mouseHighlights' => $v]);
     }
 
     public function withMouseAny(bool $v): self
     {
-        return new self(
-            altScreen: $this->altScreen,
-            cursorVisible: $this->cursorVisible,
-            bracketedPaste: $this->bracketedPaste,
-            mouseEncoding: $this->mouseEncoding,
-            mouseAny: $v,
-            mouseHighlights: $this->mouseHighlights,
-            mouseCellMotion: $this->mouseCellMotion,
-            syncUpdate: $this->syncUpdate,
-            mouseExtended: $this->mouseExtended,
-            altScreenVariant: $this->altScreenVariant,
-            autoWrap: $this->autoWrap,
-            originMode: $this->originMode,
-            cursorShape: $this->cursorShape,
-            reportFocusEvents: $this->reportFocusEvents,
-        );
+        return $this->mutate(['mouseAny' => $v]);
     }
 
     public function withMouseCellMotion(bool $v): self
     {
-        return new self(
-            altScreen: $this->altScreen,
-            cursorVisible: $this->cursorVisible,
-            bracketedPaste: $this->bracketedPaste,
-            mouseEncoding: $this->mouseEncoding,
-            mouseAny: $this->mouseAny,
-            mouseHighlights: $this->mouseHighlights,
-            mouseCellMotion: $v,
-            syncUpdate: $this->syncUpdate,
-            mouseExtended: $this->mouseExtended,
-            altScreenVariant: $this->altScreenVariant,
-            autoWrap: $this->autoWrap,
-            originMode: $this->originMode,
-            cursorShape: $this->cursorShape,
-            reportFocusEvents: $this->reportFocusEvents,
-        );
+        return $this->mutate(['mouseCellMotion' => $v]);
     }
 
     public function withMouseExtended(bool $v): self
     {
-        return new self(
-            altScreen: $this->altScreen,
-            cursorVisible: $this->cursorVisible,
-            bracketedPaste: $this->bracketedPaste,
-            mouseEncoding: $this->mouseEncoding,
-            mouseAny: $this->mouseAny,
-            mouseHighlights: $this->mouseHighlights,
-            mouseCellMotion: $this->mouseCellMotion,
-            syncUpdate: $this->syncUpdate,
-            mouseExtended: $v,
-            altScreenVariant: $this->altScreenVariant,
-            autoWrap: $this->autoWrap,
-            originMode: $this->originMode,
-            cursorShape: $this->cursorShape,
-            reportFocusEvents: $this->reportFocusEvents,
-        );
+        return $this->mutate(['mouseExtended' => $v]);
     }
 
     /**
@@ -287,42 +204,12 @@ final readonly class Mode
 
     public function withBracketedPaste(bool $v): self
     {
-        return new self(
-            altScreen: $this->altScreen,
-            cursorVisible: $this->cursorVisible,
-            bracketedPaste: $v,
-            mouseEncoding: $this->mouseEncoding,
-            mouseAny: $this->mouseAny,
-            mouseHighlights: $this->mouseHighlights,
-            mouseCellMotion: $this->mouseCellMotion,
-            syncUpdate: $this->syncUpdate,
-            mouseExtended: $this->mouseExtended,
-            altScreenVariant: $this->altScreenVariant,
-            autoWrap: $this->autoWrap,
-            originMode: $this->originMode,
-            cursorShape: $this->cursorShape,
-            reportFocusEvents: $this->reportFocusEvents,
-        );
+        return $this->mutate(['bracketedPaste' => $v]);
     }
 
     public function withSyncUpdate(bool $v): self
     {
-        return new self(
-            altScreen: $this->altScreen,
-            cursorVisible: $this->cursorVisible,
-            bracketedPaste: $this->bracketedPaste,
-            mouseEncoding: $this->mouseEncoding,
-            mouseAny: $this->mouseAny,
-            mouseHighlights: $this->mouseHighlights,
-            mouseCellMotion: $this->mouseCellMotion,
-            syncUpdate: $v,
-            mouseExtended: $this->mouseExtended,
-            altScreenVariant: $this->altScreenVariant,
-            autoWrap: $this->autoWrap,
-            originMode: $this->originMode,
-            cursorShape: $this->cursorShape,
-            reportFocusEvents: $this->reportFocusEvents,
-        );
+        return $this->mutate(['syncUpdate' => $v]);
     }
 
     /**
@@ -332,22 +219,7 @@ final readonly class Mode
      */
     public function withAutoWrap(bool $v): self
     {
-        return new self(
-            altScreen: $this->altScreen,
-            cursorVisible: $this->cursorVisible,
-            bracketedPaste: $this->bracketedPaste,
-            mouseEncoding: $this->mouseEncoding,
-            mouseAny: $this->mouseAny,
-            mouseHighlights: $this->mouseHighlights,
-            mouseCellMotion: $this->mouseCellMotion,
-            syncUpdate: $this->syncUpdate,
-            mouseExtended: $this->mouseExtended,
-            altScreenVariant: $this->altScreenVariant,
-            autoWrap: $v,
-            originMode: $this->originMode,
-            cursorShape: $this->cursorShape,
-            reportFocusEvents: $this->reportFocusEvents,
-        );
+        return $this->mutate(['autoWrap' => $v]);
     }
 
     /**
@@ -357,22 +229,7 @@ final readonly class Mode
      */
     public function withOriginMode(bool $v): self
     {
-        return new self(
-            altScreen: $this->altScreen,
-            cursorVisible: $this->cursorVisible,
-            bracketedPaste: $this->bracketedPaste,
-            mouseEncoding: $this->mouseEncoding,
-            mouseAny: $this->mouseAny,
-            mouseHighlights: $this->mouseHighlights,
-            mouseCellMotion: $this->mouseCellMotion,
-            syncUpdate: $this->syncUpdate,
-            mouseExtended: $this->mouseExtended,
-            altScreenVariant: $this->altScreenVariant,
-            autoWrap: $this->autoWrap,
-            originMode: $v,
-            cursorShape: $this->cursorShape,
-            reportFocusEvents: $this->reportFocusEvents,
-        );
+        return $this->mutate(['originMode' => $v]);
     }
 
     /**
@@ -382,22 +239,7 @@ final readonly class Mode
      */
     public function withCursorShape(int $v): self
     {
-        return new self(
-            altScreen: $this->altScreen,
-            cursorVisible: $this->cursorVisible,
-            bracketedPaste: $this->bracketedPaste,
-            mouseEncoding: $this->mouseEncoding,
-            mouseAny: $this->mouseAny,
-            mouseHighlights: $this->mouseHighlights,
-            mouseCellMotion: $this->mouseCellMotion,
-            syncUpdate: $this->syncUpdate,
-            mouseExtended: $this->mouseExtended,
-            altScreenVariant: $this->altScreenVariant,
-            autoWrap: $this->autoWrap,
-            originMode: $this->originMode,
-            cursorShape: $v,
-            reportFocusEvents: $this->reportFocusEvents,
-        );
+        return $this->mutate(['cursorShape' => $v]);
     }
 
     /**
@@ -407,22 +249,7 @@ final readonly class Mode
      */
     public function withReportFocusEvents(bool $v): self
     {
-        return new self(
-            altScreen: $this->altScreen,
-            cursorVisible: $this->cursorVisible,
-            bracketedPaste: $this->bracketedPaste,
-            mouseEncoding: $this->mouseEncoding,
-            mouseAny: $this->mouseAny,
-            mouseHighlights: $this->mouseHighlights,
-            mouseCellMotion: $this->mouseCellMotion,
-            syncUpdate: $this->syncUpdate,
-            mouseExtended: $this->mouseExtended,
-            altScreenVariant: $this->altScreenVariant,
-            autoWrap: $this->autoWrap,
-            originMode: $this->originMode,
-            cursorShape: $this->cursorShape,
-            reportFocusEvents: $v,
-        );
+        return $this->mutate(['reportFocusEvents' => $v]);
     }
 
     public function equals(self $other): bool

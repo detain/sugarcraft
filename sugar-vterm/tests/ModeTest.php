@@ -10,6 +10,31 @@ use SugarCraft\Vterm\Mode\MouseEncoding;
 
 final class ModeTest extends TestCase
 {
+    /**
+     * vterm-06 structural pin: the with*() builders must route through the
+     * single mutate() ctor-arg list. A 15th field added to the ctor is then
+     * impossible to forget in a per-setter named-arg block — the mutate
+     * override line is its only seat.
+     */
+    public function testBuildersRouteThroughSingleMutateList(): void
+    {
+        $src = (string) file_get_contents(__DIR__ . '/../src/Mode/Mode.php');
+        $this->assertSame(
+            1,
+            substr_count($src, 'new self('),
+            'only mutate() may hand the ctor its named-arg list',
+        );
+        $ctor = (new \ReflectionMethod(Mode::class, '__construct'))->getParameters();
+        foreach ($ctor as $param) {
+            $name = $param->getName();
+            $this->assertStringContainsString(
+                "\$changes['{$name}'] ?? \$this->{$name}",
+                $src,
+                "mutate() must carry a fallback line for every ctor field ({$name})",
+            );
+        }
+    }
+
     public function testDefaultValues(): void
     {
         $m = new Mode();
