@@ -14,6 +14,10 @@ namespace SugarCraft\CandyImage\Support;
  * compiled-in fallback (Cli::VERSION). The `candy-image/` tag prefix and an
  * optional leading `v` are stripped so the caller always sees bare X.Y.Z —
  * candy-image's --version line prints the bare value with no banner prefix.
+ * A recognised `dev-*` stamp survives verbatim: the rolling-dev channel ships
+ * those, and dropping them would make a dev phar impersonate the stable
+ * number (candy-gifview's reader carries the same arm; this port had dropped
+ * it, so phar-dev.yml's `dev-<shortsha>` never surfaced through --version).
  */
 final class Version
 {
@@ -22,6 +26,15 @@ final class Version
 
     /** A bare, comparable release once TAG_PREFIX and `v` are removed. */
     private const COMPARABLE = '/^\d+\.\d+\.\d+$/';
+
+    /**
+     * A development stamp: both the CI dev channel and a local build write
+     * 'dev-<7-hex>' ('dev-build' when git cannot answer; a pasted full
+     * 40-hex HEAD also parses). These are NOT releases — they must
+     * self-report verbatim so a dev phar never silently impersonates the
+     * stable version the compiled-in fallback would print.
+     */
+    private const DEV = '/^dev-(?:[0-9a-f]{7,40}|build)$/';
 
     private function __construct()
     {
@@ -43,7 +56,8 @@ final class Version
     /**
      * Read and normalize the version stamp inside an archive, or null when the
      * path is empty, is not a file, is not a readable phar, or its stamp does
-     * not parse as a comparable release. Every failure mode falls back to null
+     * not parse as either a comparable release or a recognized development
+     * identity. Every failure mode falls back to null
      * rather than throwing — a corrupt archive must not crash --version.
      */
     public static function fromPharMetadata(string $archivePath): ?string
@@ -71,6 +85,10 @@ final class Version
             $stamped = substr($stamped, 1);
         }
 
-        return preg_match(self::COMPARABLE, $stamped) === 1 ? $stamped : null;
+        if (preg_match(self::COMPARABLE, $stamped) === 1) {
+            return $stamped;
+        }
+
+        return preg_match(self::DEV, $stamped) === 1 ? $stamped : null;
     }
 }
