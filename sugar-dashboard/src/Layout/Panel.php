@@ -114,13 +114,20 @@ final class Panel implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         $result = '';
 
-        // Apply border color if set
+        // Finding sugar-dashboard-135: the border SGR used to be emitted once
+        // before the top row, so every wall painted after the content's own
+        // color reset went out in the terminal default. Each frame row now
+        // carries the border color itself; uncolored panels pass through
+        // byte-identical.
+        $borderFg = '';
+        $rowEnd = '';
         if ($this->borderColor !== null) {
-            $result .= $this->borderColor->toFg(ColorMode::profile());
+            $borderFg = $this->borderColor->toFg(ColorMode::profile());
+            $rowEnd = Ansi::reset();
         }
 
         // Top border with title or header
-        $result .= $tl;
+        $result .= $borderFg . $tl;
         if ($this->title !== null) {
             $title = $this->title;
             $titleWidth = Width::string($title);
@@ -139,9 +146,7 @@ final class Panel implements \SugarCraft\Dashboard\Foundation\SizedItem
                 $result .= $this->titleColor->toFg(ColorMode::profile());
             }
             $result .= $title;
-            if ($this->borderColor !== null) {
-                $result .= $this->borderColor->toFg(ColorMode::profile());
-            }
+            $result .= $borderFg;
             $result .= str_repeat($h, $rightPad);
         } elseif ($this->header !== null) {
             $headerStr = $this->header instanceof \SugarCraft\Dashboard\Foundation\Item ? $this->header->render() : $this->header;
@@ -154,31 +159,29 @@ final class Panel implements \SugarCraft\Dashboard\Foundation\SizedItem
             $leftPad = (int) floor($paddingWidth / 2);
             $rightPad = $paddingWidth - $leftPad;
 
-            $result .= str_repeat($h, $leftPad) . $headerStr . str_repeat($h, $rightPad);
+            $result .= str_repeat($h, $leftPad) . $headerStr . $borderFg . str_repeat($h, $rightPad);
         } else {
             $result .= str_repeat($h, $useWidth - 2);
         }
-        $result .= $tr . "\n";
+        $result .= $tr . $rowEnd . "\n";
 
         // Content area
         $contentLines = $this->renderContentLines($useWidth - 2);
         foreach ($contentLines as $line) {
-            $paddedLine = $v . $line . $v;
-            $result .= $paddedLine . "\n";
+            $result .= $borderFg . $v . $line . $borderFg . $v . $rowEnd . "\n";
         }
 
         // Footer
         if ($this->footer !== null) {
-            $result .= $bl . str_repeat($h, $useWidth - 2) . $br . "\n";
+            $result .= $borderFg . $bl . str_repeat($h, $useWidth - 2) . $br . $rowEnd . "\n";
             $footerLines = $this->renderContentLines($useWidth - 2, $this->footer);
             foreach ($footerLines as $line) {
-                $paddedLine = $v . $line . $v;
-                $result .= $paddedLine . "\n";
+                $result .= $borderFg . $v . $line . $borderFg . $v . $rowEnd . "\n";
             }
         }
 
         // Bottom border
-        $result .= $bl . str_repeat($h, $useWidth - 2) . $br;
+        $result .= $borderFg . $bl . str_repeat($h, $useWidth - 2) . $br;
 
         // Reset ANSI
         $result .= Ansi::reset();
@@ -248,6 +251,10 @@ final class Panel implements \SugarCraft\Dashboard\Foundation\SizedItem
     /**
      * Wrap text to fit within a given width.
      *
+     * Content newlines are verbatim content (finding sugar-dashboard-135):
+     * each source line wraps on its own and survives as its own painted
+     * row. The old preg_split('/\s+/') glued every paragraph together.
+     *
      * @return list<string>
      */
     private function wrapText(string $text, int $width): array
@@ -261,29 +268,38 @@ final class Panel implements \SugarCraft\Dashboard\Foundation\SizedItem
         }
 
         $result = [];
-        $words = preg_split('/\s+/', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [];
-        $currentLine = '';
-        $currentWidth = 0;
 
-        foreach ($words as $word) {
-            $wordWidth = Width::string($word);
+        foreach (explode("\n", $text) as $sourceLine) {
+            $words = preg_split('/\s+/', $sourceLine, -1, PREG_SPLIT_NO_EMPTY) ?: [];
 
-            if ($currentWidth > 0 && $currentWidth + 1 + $wordWidth > $width) {
-                $result[] = $currentLine;
-                $currentLine = $word;
-                $currentWidth = $wordWidth;
-            } else {
-                if ($currentLine !== '') {
-                    $currentLine .= ' ';
-                    $currentWidth++;
-                }
-                $currentLine .= $word;
-                $currentWidth += $wordWidth;
+            if ($words === []) {
+                $result[] = ''; // blank source line stays a blank painted row
+                continue;
             }
-        }
 
-        if ($currentLine !== '') {
-            $result[] = $currentLine;
+            $currentLine = '';
+            $currentWidth = 0;
+
+            foreach ($words as $word) {
+                $wordWidth = Width::string($word);
+
+                if ($currentWidth > 0 && $currentWidth + 1 + $wordWidth > $width) {
+                    $result[] = $currentLine;
+                    $currentLine = $word;
+                    $currentWidth = $wordWidth;
+                } else {
+                    if ($currentLine !== '') {
+                        $currentLine .= ' ';
+                        $currentWidth++;
+                    }
+                    $currentLine .= $word;
+                    $currentWidth += $wordWidth;
+                }
+            }
+
+            if ($currentLine !== '') {
+                $result[] = $currentLine;
+            }
         }
 
         return $result === [] ? [''] : $result;

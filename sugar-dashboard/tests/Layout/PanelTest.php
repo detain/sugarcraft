@@ -9,6 +9,7 @@ use SugarCraft\Dashboard\Foundation\Item;
 use SugarCraft\Dashboard\Foundation\Sizer;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 use PHPUnit\Framework\TestCase;
 
 final class PanelTest extends TestCase
@@ -283,6 +284,50 @@ final class PanelTest extends TestCase
 
         foreach (explode("\n", $rendered) as $line) {
             $this->assertSame(10, Width::string($line));
+        }
+    }
+
+    public function testContentNewlinesSurviveAsPaintedRows(): void
+    {
+        $panel = Panel::new("alpha\n\nomega")->withBorderColor(null)->setSize(10, 6);
+
+        $rows = explode("\n", $panel->render());
+
+        // top border, alpha, blank source row, omega, bottom border
+        $this->assertCount(5, $rows);
+        $this->assertSame('│alpha   │', $rows[1]);
+        $this->assertSame('│        │', $rows[2]);
+        $this->assertSame('│omega   │', $rows[3]);
+        $this->assertSame([10, 5], $panel->innerSize());
+    }
+
+    public function testEachSourceLineWrapsOnItsOwn(): void
+    {
+        $panel = Panel::new("aaa bbb\nccc ddd")->withBorderColor(null)->setSize(8, 6);
+
+        $content = array_map(
+            static fn(string $row): string => trim(str_replace('│', '', $row)),
+            array_slice(explode("\n", $panel->render()), 1, -1)
+        );
+
+        // Each 7-cell source line wraps inside the 6-cell interior; neither
+        // line may bleed into the other's rows (the old \s+ split glued them).
+        $this->assertSame(['aaa', 'bbb', 'ccc', 'ddd'], $content);
+    }
+
+    public function testBorderColorPaintsEveryFrameRow(): void
+    {
+        $color = Color::ansi(9);
+        $sgr = $color->toFg(ColorMode::profile());
+        $rendered = Panel::new("x\ny")->withBorderColor($color)->render();
+
+        foreach (explode("\n", $rendered) as $row) {
+            $this->assertStringContainsString($sgr, $row, 'every frame row must carry the border color');
+        }
+
+        $uncolored = Panel::new("x\ny")->withBorderColor(null)->render();
+        foreach (explode("\n", $uncolored) as $row) {
+            $this->assertMatchesRegularExpression('/^(┌|│|└)/u', $row, 'uncolored walls stay bare');
         }
     }
 
