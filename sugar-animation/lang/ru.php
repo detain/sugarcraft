@@ -26,4 +26,12 @@ return [
     'artlibrary.cannot_list'     => 'sugar-animation: не удаётся получить список каталога: {dir}',
     'ansiart.cannot_read'        => 'sugar-animation: не удаётся прочитать файл арта: {path}',
     'ansiart.read_failed'        => 'sugar-animation: сбой чтения файла арта: {path}',
+    'player.status' => 'Кадр {current}/{total}  ·  {preset}  ·  {state}',
+    'player.hint' => 'Пробел пауза   {arrows} Шаг   d Пресет   q Выход',
+    'player.no_frames' => '(нет кадров)',
+    'player.quit_hint' => 'q Выход',
+    'player.playing' => 'воспроизведение',
+    'player.paused' => 'пауза',
+    'player.preset.solid' => 'Сплошной',
+    'player.preset.density' => 'Плотность',
 ];

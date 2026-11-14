@@ -38,7 +38,7 @@ candy-gifview my-animation.gif density # ASCII luminance ramp
 
 - PHP 8.3+ (`declare(strict_types=1)` codebase, sugar-core TEA stack).
 - `ext-gd` for the GIF path only. Without it every `Decoder` entry point throws a loud `RuntimeException` ("sugar-animation: …") — the `.ansi` playback side (AnsiArt/ArtLibrary/ArtLoop) never touches GD.
-- The cell grid is fixed at decode time: resizing the terminal clips the already-decoded art, it never re-scales. The Player's status line is not width-clamped, so playback looks its best at 82+ columns; headless decoders should size the grid to their host surface with that in mind.
+- The cell grid is fixed at decode time: resizing the terminal clips the already-decoded art, it never re-scales. The Player's status overlay is width-clamped to the renderer's column budget — progressively: ASCII arrows below 82 columns, then the hint tail dropped, then the core truncated — so narrow terminals stop wrapping. Playback still looks its best at 82+ columns, where the full arrowed hint fits untouched; headless decoders should size the grid to their host surface with that in mind.
 
 ## Player keys
 
@@ -64,7 +64,7 @@ The library does not consult `REDUCE_MOTION` (or the GNOME `gtk-enable-animation
 
 ## Localization
 
-Refusal and decode errors route through sugar-core `Lang` in the `sugar-animation: …` voice, with translations shipped for every locale in `lang/` (see the repo's `LOCALES.md`). The Player's one-line status overlay is currently English-only; i18n-ing it is a tracked follow-up.
+Refusal and decode errors route through sugar-core `Lang` in the `sugar-animation: …` voice, with translations shipped for every locale in `lang/` (see the repo's `LOCALES.md`). The Player's one-line status overlay is localized too — counter, preset name, playback state and the hint tail all ride `Lang` keys (`player.*`), which `LangTest`'s key-parity census keeps present in every locale; the only locale-independent parts are the literal key names the overlay advertises (`space`, `d`, `q`) and the clamp itself.
 
 ## ANSI art playback (AnsiArt / ArtLibrary / ArtLoop)
 

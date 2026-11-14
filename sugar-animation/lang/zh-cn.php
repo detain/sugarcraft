@@ -26,4 +26,12 @@ return [
     'artlibrary.cannot_list'     => 'sugar-animation: 无法列出目录：{dir}',
     'ansiart.cannot_read'        => 'sugar-animation: 无法读取艺术文件：{path}',
     'ansiart.read_failed'        => 'sugar-animation: 读取艺术文件失败：{path}',
+    'player.status' => '帧 {current}/{total}  ·  {preset}  ·  {state}',
+    'player.hint' => '空格 暂停   {arrows} 单帧   d 预设   q 退出',
+    'player.no_frames' => '(无帧)',
+    'player.quit_hint' => 'q 退出',
+    'player.playing' => '播放中',
+    'player.paused' => '已暂停',
+    'player.preset.solid' => '实心',
+    'player.preset.density' => '密度',
 ];

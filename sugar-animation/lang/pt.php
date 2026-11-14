@@ -26,4 +26,12 @@ return [
     'artlibrary.cannot_list'     => 'sugar-animation: não é possível listar o diretório: {dir}',
     'ansiart.cannot_read'        => 'sugar-animation: não é possível ler o ficheiro de arte: {path}',
     'ansiart.read_failed'        => 'sugar-animation: falha ao ler o ficheiro de arte: {path}',
+    'player.status' => 'Quadro {current}/{total}  ·  {preset}  ·  {state}',
+    'player.hint' => 'Espaço pausa   {arrows} Passo   d Predefinição   q Sair',
+    'player.no_frames' => '(sem quadros)',
+    'player.quit_hint' => 'q Sair',
+    'player.playing' => 'a reproduzir',
+    'player.paused' => 'em pausa',
+    'player.preset.solid' => 'Sólido',
+    'player.preset.density' => 'Densidade',
 ];

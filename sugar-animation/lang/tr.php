@@ -26,4 +26,12 @@ return [
     'artlibrary.cannot_list'     => 'sugar-animation: dizin listelenemiyor: {dir}',
     'ansiart.cannot_read'        => 'sugar-animation: sanat dosyası okunamıyor: {path}',
     'ansiart.read_failed'        => 'sugar-animation: sanat dosyası okunamadı: {path}',
+    'player.status' => 'Kare {current}/{total}  ·  {preset}  ·  {state}',
+    'player.hint' => 'Boşluk duraklat   {arrows} Adım   d Ön ayar   q Çık',
+    'player.no_frames' => '(kare yok)',
+    'player.quit_hint' => 'q Çık',
+    'player.playing' => 'oynatılıyor',
+    'player.paused' => 'duraklatıldı',
+    'player.preset.solid' => 'Dolu',
+    'player.preset.density' => 'Yoğunluk',
 ];

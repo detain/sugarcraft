@@ -26,4 +26,12 @@ return [
     'artlibrary.cannot_list'     => 'sugar-animation: تعذّر سرد محتوى الدليل: {dir}',
     'ansiart.cannot_read'        => 'sugar-animation: تعذّرت قراءة ملف الفن: {path}',
     'ansiart.read_failed'        => 'sugar-animation: فشلت قراءة ملف الفن: {path}',
+    'player.status' => 'لقطة {current}/{total}  ·  {preset}  ·  {state}',
+    'player.hint' => 'مسافة إيقاف   {arrows} خطوة   d نمط   q خروج',
+    'player.no_frames' => '(لا توجد لقطات)',
+    'player.quit_hint' => 'q خروج',
+    'player.playing' => 'قيد التشغيل',
+    'player.paused' => 'متوقف مؤقتًا',
+    'player.preset.solid' => 'صلب',
+    'player.preset.density' => 'كثافة',
 ];

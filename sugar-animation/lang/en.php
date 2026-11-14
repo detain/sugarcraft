@@ -26,4 +26,12 @@ return [
     'artlibrary.cannot_list'     => 'sugar-animation: cannot list directory: {dir}',
     'ansiart.cannot_read'        => 'sugar-animation: cannot read art file: {path}',
     'ansiart.read_failed'        => 'sugar-animation: failed to read art file: {path}',
+    'player.status' => 'frame {current}/{total}  ·  {preset}  ·  {state}',
+    'player.hint' => 'space pause   {arrows} step   d preset   q quit',
+    'player.no_frames' => '(no frames)',
+    'player.quit_hint' => 'q quit',
+    'player.playing' => 'playing',
+    'player.paused' => 'paused',
+    'player.preset.solid' => 'solid',
+    'player.preset.density' => 'density',
 ];

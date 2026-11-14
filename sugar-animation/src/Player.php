@@ -11,6 +11,7 @@ use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
+use SugarCraft\Core\Util\Width;
 
 /**
  * E-03: GIF player as a SugarCraft Model driven by an ABSOLUTE schedule.
@@ -60,7 +61,9 @@ use SugarCraft\Core\Msg\WindowSizeMsg;
  * destroy-and-recreate parity chicle reaches by literally destroying the
  * media loader between files.
  *
- * Keys: space — pause/resume.  ←/→ — manual step.  q/esc — quit.
+ * Keys: space — pause/resume.  ←/→ — manual step.  d — toggle preset.
+ * q / Esc / Ctrl+C — quit (SA-P1, audit 047: the full bound set, mirroring
+ * the README table — update() honors every row of it).
  */
 final class Player implements Model
 {
@@ -104,6 +107,25 @@ final class Player implements Model
      * coarse-mtime check would miss.
      */
     public const WATCH_POLL_SECONDS = 0.01;
+
+    /**
+     * SA-P1 (audit 013): the separator between the status core and the
+     * key-hint tail. Three cells — a real gap, not a word boundary, so the
+     * tail can be dropped without the core reading cramped.
+     */
+    private const STATUS_GAP = '   ';
+
+    /**
+     * SA-P1 (audit 013): column floor at or above which the status line
+     * keeps its U+2190/U+2192 arrows. Those arrows — like the U+00B7
+     * separators — are East-Asian-Ambiguous: sugar-core Width counts each
+     * as one cell, but a wide-ambiguous terminal renders it as two, so the
+     * English line measured ~76 cells here can reach 82 rendered. Below the
+     * floor the hint tail swaps to pure-ASCII arrows (width 1 on every
+     * honest terminal) before any abbreviation rung is taken — the
+     * advertised 82+ "best at" width from the README.
+     */
+    private const STATUS_UNICODE_FLOOR = 82;
 
     /**
      * The four seam parameters — `$now`, `$anchor`, `$lapsCarried`, `$watch` —
@@ -251,10 +273,6 @@ final class Player implements Model
 
     public function view(): string
     {
-        if ($this->frames === []) {
-            return "(no frames)\n";
-        }
-        $frame = $this->frames[$this->index];
         // SA-P2 (audit 034): no renderer yet means no WindowSizeMsg has ever
         // landed — the pre-fix fallback rendered the frame at its NATIVE
         // height into a terminal that cannot show it, so the first real size
@@ -265,14 +283,78 @@ final class Player implements Model
         // WindowSizeMsg itself; either way this default only shrinks, never
         // outgrows, a real terminal.
         $renderer = $this->renderer ?? Renderer::withConstraints(23, 80);
+        $budget   = $renderer->cols();
+        if ($this->frames === []) {
+            // SA-P1 (audit 020): the empty state rides the same Lang voice
+            // and the same clamp, composed WITH its quit-hint tail — space
+            // and step do nothing without frames, so only the way out is
+            // advertised.
+            return $this->fitTail(
+                Lang::t('player.no_frames'),
+                Lang::t('player.quit_hint'),
+                $budget,
+            ) . "\n";
+        }
+        $frame = $this->frames[$this->index];
         $pic   = $renderer->renderFrame($frame, $this->preset);
-        $total = count($this->frames);
-        $status = sprintf(
-            "frame %d/%d  ·  %s  ·  %s   space pause   ←/→ step   d preset   q quit",
-            $this->index + 1, $total, $this->preset,
-            $this->paused ? 'paused' : 'playing',
-        );
-        return $pic . "\n" . $status . "\n";
+
+        return $pic . "\n" . $this->statusLine($budget) . "\n";
+    }
+
+    /**
+     * SA-P1 (audits 009/013): the one-line status overlay — counter,
+     * preset, playback state, key hints — built from Lang keys and clamped
+     * against the renderer's column budget. Narrow terminals take
+     * progressive abbreviation, not mid-word cuts: at or above the unicode
+     * floor the full arrowed hint; then the ASCII-arrow hint; then the
+     * hint tail dropped entirely; truncation only as the last resort.
+     *
+     * @param ?int $budget columns available, null = unconstrained host.
+     */
+    private function statusLine(?int $budget): string
+    {
+        $core = Lang::t('player.status', [
+            'current' => $this->index + 1,
+            'total'   => count($this->frames),
+            // renderFrame treats everything that is not the density preset
+            // as solid, so naming the non-density value "solid" tells the
+            // truth of what is on screen even for a host that stored an
+            // arbitrary string before SA-R1's enum lands.
+            'preset'  => Lang::t($this->preset === Renderer::PRESET_DENSITY ? 'player.preset.density' : 'player.preset.solid'),
+            'state'   => Lang::t($this->paused ? 'player.paused' : 'player.playing'),
+        ]);
+        $unicode = $core . self::STATUS_GAP . Lang::t('player.hint', ['arrows' => '←/→']);
+        if ($budget === null || ($budget >= self::STATUS_UNICODE_FLOOR && Width::string($unicode) <= $budget)) {
+            return $unicode;
+        }
+        $ascii = $core . self::STATUS_GAP . Lang::t('player.hint', ['arrows' => '<->']);
+        if (Width::string($ascii) <= $budget) {
+            return $ascii;
+        }
+        if (Width::string($core) <= $budget) {
+            return $core;
+        }
+
+        return Width::truncate($core, $budget);
+    }
+
+    /**
+     * SA-P1 (audit 020): head plus an optional tail, dropped or truncated
+     * to the budget the same progressive way the status line is built.
+     *
+     * @param ?int $budget columns available, null = unconstrained host.
+     */
+    private function fitTail(string $head, string $tail, ?int $budget): string
+    {
+        $full = $head . self::STATUS_GAP . $tail;
+        if ($budget === null || Width::string($full) <= $budget) {
+            return $full;
+        }
+        if (Width::string($head) <= $budget) {
+            return $head;
+        }
+
+        return Width::truncate($head, $budget);
     }
 
     /**

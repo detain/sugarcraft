@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Animation\Tests;
 
+use SugarCraft\Core\I18n\T;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Animation\Frame;
 use SugarCraft\Animation\Player;
 use SugarCraft\Animation\Renderer;
@@ -193,5 +195,207 @@ final class PlayerTest extends TestCase
         $this->assertInstanceOf(\SugarCraft\Core\TickRequest::class, $tickRequest2);
         $this->assertEqualsWithDelta(0.2, $tickRequest2->seconds, 0.001,
             'The wrapped arrival (frame 0) arms frame 0\'s delay (20cs)');
+    }
+
+    // ---------------------------------------------------------------- SA-P1
+
+    private function statusLocalePinFrames(): array
+    {
+        return $this->frames(2);
+    }
+
+    private function statusOf(string $view): string
+    {
+        $lines = explode("\n", $view);
+
+        return (string) ($lines[count($lines) - 2] ?? '');
+    }
+
+    /**
+     * SA-P1 (audits 009/020): the overlay is no longer hardcoded English —
+     * it routes through Lang, so a non-English locale renders its own
+     * frame counter, preset word and state word, with no English bleed.
+     */
+    public function testStatusOverlayIsLocalized(): void
+    {
+        $prior = T::locale();
+        T::setLocale('de');
+        try {
+            $view = (new Player($this->statusLocalePinFrames(), renderer: Renderer::withConstraints(5, 200)))->view();
+            $this->assertStringContainsString('Bild 1/2', $view, 'the frame count rides the German key');
+            $this->assertStringContainsString('Fläche', $view, 'the preset name is the German one');
+            $this->assertStringContainsString('läuft', $view, 'the state word is the German one');
+            $this->assertStringNotContainsString('frame 1/2', $view, 'no English bleeds through the overlay');
+        } finally {
+            T::setLocale($prior);
+        }
+    }
+
+    /**
+     * SA-P1 (audit 013): the Player pauses into a translated state word too,
+     * proving the paused/playing keys are wired through Lang, not just the
+     * playing default.
+     */
+    public function testPausedStateWordIsLocalized(): void
+    {
+        $prior = T::locale();
+        T::setLocale('de');
+        try {
+            [$paused, ] = (new Player($this->statusLocalePinFrames()))->update(new KeyMsg(KeyType::Space, ''));
+            $view = $paused->view();
+            $this->assertStringContainsString('pausiert', $view, 'the paused overlay translates too');
+        } finally {
+            T::setLocale($prior);
+        }
+    }
+
+    /**
+     * SA-P1 (audit 013): the empty state is localized AND still advertises
+     * the only key that does anything without frames — the way out.
+     */
+    public function testEmptyStateLocalizedWithQuitHint(): void
+    {
+        $prior = T::locale();
+        T::setLocale('de');
+        try {
+            $view = (new Player([], renderer: Renderer::withConstraints(5, 200)))->view();
+            $this->assertStringContainsString('(keine Bilder)', $view, 'the empty state uses the German key');
+            $this->assertStringContainsString('Beenden', $view, 'the empty state keeps advertising the quit chord');
+            $this->assertStringNotContainsString('no frames', $view, 'no English bleed');
+        } finally {
+            T::setLocale($prior);
+        }
+    }
+
+    /**
+     * SA-P1 (audit 013): the status line is now width-clamped. At the
+     * 82-column floor the full arrowed hint survives; below it the tail
+     * progressively abbreviates. Across every budget from 20 to 120 the
+     * English overlay never grows wider than its budget.
+     *
+     * @dataProvider narrowBudgetProvider
+     */
+    public function testStatusNeverExceedsColumnBudget(int $cols): void
+    {
+        $prior = T::locale();
+        T::setLocale('en');
+        try {
+            $view = (new Player($this->statusLocalePinFrames(), renderer: Renderer::withConstraints(5, $cols)))->view();
+            foreach (explode("\n", $view) as $row) {
+                $this->assertLessThanOrEqual(
+                    $cols,
+                    Width::string($row),
+                    "a {$cols}-col terminal must not wrap; row was: " . var_export($row, true),
+                );
+            }
+        } finally {
+            T::setLocale($prior);
+        }
+    }
+
+    /**
+     * @return array<string, array{0:int}>
+     */
+    public static function narrowBudgetProvider(): array
+    {
+        $cases = [];
+        foreach ([20, 24, 30, 40, 60, 75, 76, 81, 82, 100, 120] as $cols) {
+            $cases['cols-' . $cols] = [$cols];
+        }
+
+        return $cases;
+    }
+
+    /**
+     * SA-P1 (audit 013): a CJK locale counts two cells per glyph, so the
+     * clamp is cell-based, not byte-based — a 40-col terminal must never see
+     * a wrapped Chinese status line.
+     */
+    public function testClampIsCellBasedNotByteBased(): void
+    {
+        $prior = T::locale();
+        T::setLocale('zh-cn');
+        try {
+            foreach ([24, 30, 40] as $cols) {
+                $view = (new Player($this->statusLocalePinFrames(), renderer: Renderer::withConstraints(5, $cols)))->view();
+                foreach (explode("\n", $view) as $row) {
+                    $this->assertLessThanOrEqual(
+                        $cols,
+                        Width::string($row),
+                        "zh-cn at {$cols} cols wrapped: " . var_export($row, true),
+                    );
+                }
+            }
+        } finally {
+            T::setLocale($prior);
+        }
+    }
+
+    /**
+     * SA-P1 (audit 013): the progressive-abbreviation rungs are wired in the
+     * right order. At the floor the hint is present; at an honest medium
+     * width the hint tail drops to the core alone (still no arrows, still no
+     * truncation ellipsis); at a brutal width the core itself truncates.
+     */
+    public function testHintTailAbbreviatesProgressively(): void
+    {
+        $prior = T::locale();
+        T::setLocale('en');
+        try {
+            // Medium width: 40 cols. Full hint (76) and its ASCII twin do not
+            // fit, so the tail is dropped — but the core (31) fits whole, so
+            // no words are clipped.
+            $medium = $this->statusOf((new Player($this->statusLocalePinFrames(), renderer: Renderer::withConstraints(5, 40)))->view());
+            $this->assertStringContainsString('frame 1/2', $medium, 'the core is intact at medium width');
+            $this->assertStringContainsString('playing', $medium, 'the state word survives — nothing is chopped');
+            $this->assertStringNotContainsString('step', $medium, 'the hint tail is gone');
+            $this->assertStringNotContainsString('…', $medium, 'not truncated, just abbreviated');
+
+            // Brutal width: 20 cols. Even the core (31) no longer fits, so it
+            // is truncated to the budget.
+            $brutal = $this->statusOf((new Player($this->statusLocalePinFrames(), renderer: Renderer::withConstraints(5, 20)))->view());
+            $this->assertLessThanOrEqual(20, Width::string($brutal), 'the last rung truncates to the budget');
+        } finally {
+            T::setLocale($prior);
+        }
+    }
+
+    /**
+     * SA-P1 (audit 013): at or above the floor the full arrowed hint rides;
+     * below it the East-Asian-Ambiguous arrows never reach a narrow terminal
+     * that could render them double-wide.
+     */
+    public function testArrowTailFollowsUnicodeFloor(): void
+    {
+        $prior = T::locale();
+        T::setLocale('en');
+        try {
+            $wide = $this->statusOf((new Player($this->statusLocalePinFrames(), renderer: Renderer::withConstraints(5, 82)))->view());
+            $this->assertStringContainsString('←/→', $wide, 'at the floor the unicode arrows are kept');
+
+            $justBelow = $this->statusOf((new Player($this->statusLocalePinFrames(), renderer: Renderer::withConstraints(5, 81)))->view());
+            $this->assertStringContainsString('<->', $justBelow, 'below the floor the ASCII twin rides');
+            $this->assertStringNotContainsString('←', $justBelow, 'no double-wide risk below the floor');
+        } finally {
+            T::setLocale($prior);
+        }
+    }
+
+    /**
+     * SA-P1 (audit 013): the empty-state overlay honors the budget too — the
+     * quit tail is dropped when the line would not fit, never allowed to
+     * wrap on a narrow host.
+     */
+    public function testEmptyStateRespectsBudget(): void
+    {
+        $prior = T::locale();
+        T::setLocale('en');
+        try {
+            $view = (new Player([], renderer: Renderer::withConstraints(5, 16)))->view();
+            $this->assertLessThanOrEqual(16, Width::string(rtrim($view, "\n")), 'the empty overlay is clamped');
+            $this->assertStringNotContainsString('quit', $view, 'the tail is dropped when it will not fit');
+        } finally {
+            T::setLocale($prior);
+        }
     }
 }

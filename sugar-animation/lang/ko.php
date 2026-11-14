@@ -26,4 +26,12 @@ return [
     'artlibrary.cannot_list'     => 'sugar-animation: 디렉터리를 나열할 수 없습니다: {dir}',
     'ansiart.cannot_read'        => 'sugar-animation: 아트 파일을 읽을 수 없습니다: {path}',
     'ansiart.read_failed'        => 'sugar-animation: 아트 파일 읽기 실패: {path}',
+    'player.status' => '프레임 {current}/{total}  ·  {preset}  ·  {state}',
+    'player.hint' => '스페이스 일시정지   {arrows} 한 칸   d 프리셋   q 종료',
+    'player.no_frames' => '(프레임 없음)',
+    'player.quit_hint' => 'q 종료',
+    'player.playing' => '재생 중',
+    'player.paused' => '일시정지됨',
+    'player.preset.solid' => '단색',
+    'player.preset.density' => '밀도',
 ];

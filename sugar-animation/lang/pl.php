@@ -26,4 +26,12 @@ return [
     'artlibrary.cannot_list'     => 'sugar-animation: nie można wyświetlić zawartości katalogu: {dir}',
     'ansiart.cannot_read'        => 'sugar-animation: nie można odczytać pliku sztuki: {path}',
     'ansiart.read_failed'        => 'sugar-animation: odczyt pliku sztuki nie powiódł się: {path}',
+    'player.status' => 'Klatka {current}/{total}  ·  {preset}  ·  {state}',
+    'player.hint' => 'Spacja pauza   {arrows} Krok   d Preset   q Wyjdź',
+    'player.no_frames' => '(brak klatek)',
+    'player.quit_hint' => 'q Wyjdź',
+    'player.playing' => 'odtwarza',
+    'player.paused' => 'wstrzymana',
+    'player.preset.solid' => 'Pełny',
+    'player.preset.density' => 'Gęstość',
 ];

@@ -26,4 +26,12 @@ return [
     'artlibrary.cannot_list'     => 'sugar-animation：ディレクトリを一覧できません：{dir}',
     'ansiart.cannot_read'        => 'sugar-animation：アートファイルを読み込めません：{path}',
     'ansiart.read_failed'        => 'sugar-animation：アートファイルの読み込みに失敗しました：{path}',
+    'player.status' => 'フレーム {current}/{total}  ·  {preset}  ·  {state}',
+    'player.hint' => 'スペース 一時停止   {arrows} 1コマ   d プリセット   q 終了',
+    'player.no_frames' => '(フレームなし)',
+    'player.quit_hint' => 'q 終了',
+    'player.playing' => '再生中',
+    'player.paused' => '一時停止中',
+    'player.preset.solid' => 'ベタ',
+    'player.preset.density' => '密度',
 ];

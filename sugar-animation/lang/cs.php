@@ -26,4 +26,12 @@ return [
     'artlibrary.cannot_list'     => 'sugar-animation: adresář nelze vypsat: {dir}',
     'ansiart.cannot_read'        => 'sugar-animation: soubor umění nelze přečíst: {path}',
     'ansiart.read_failed'        => 'sugar-animation: přečtení souboru umění selhalo: {path}',
+    'player.status' => 'Snímek {current}/{total}  ·  {preset}  ·  {state}',
+    'player.hint' => 'Mezera pauza   {arrows} Krok   d Předvolba   q Konec',
+    'player.no_frames' => '(žádné snímky)',
+    'player.quit_hint' => 'q Konec',
+    'player.playing' => 'přehrává',
+    'player.paused' => 'pozastaveno',
+    'player.preset.solid' => 'Plný',
+    'player.preset.density' => 'Hustota',
 ];

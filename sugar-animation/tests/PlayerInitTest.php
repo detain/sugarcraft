@@ -99,6 +99,13 @@ final class PlayerInitTest extends TestCase
     /**
      * Player::view() output must include a status line even when the renderer
      * is constrained and clamps the output — the status line is always appended.
+     *
+     * Re-pinned by SA-P1 (audit 013): the overlay now clamps to the renderer's
+     * budget, so at a 2-column budget the full English text is legitimately
+     * gone — what must survive is the presence of the row and its fit to the
+     * budget. The intact text is then pinned at a width the core fits. (The
+     * truncated two-cell rendering happens to spell "fr" — it is the first
+     * two cells of the English line, not the French locale.)
      */
     public function testViewAlwaysIncludesStatusLine(): void
     {
@@ -107,9 +114,14 @@ final class PlayerInitTest extends TestCase
         $p = new Player([$f], renderer: $r);
         $view = $p->view();
 
-        // Status line contains "frame 1/1" and "solid" and "playing".
-        $this->assertStringContainsString('frame 1/1', $view);
-        $this->assertStringContainsString('playing', $view);
+        $lines  = explode("\n", rtrim($view, "\n"));
+        $status = (string) end($lines);
+        $this->assertNotSame('', $status, 'a status row is emitted even at a 2-col budget');
+        $this->assertLessThanOrEqual(2, \SugarCraft\Core\Util\Width::string($status), 'and never exceeds the budget');
+
+        $roomy = (new Player([$f], renderer: Renderer::withConstraints(1, 40)))->view();
+        $this->assertStringContainsString('frame 1/1', $roomy);
+        $this->assertStringContainsString('playing', $roomy);
     }
 
     /**

@@ -26,4 +26,12 @@ return [
     'artlibrary.cannot_list'     => 'sugar-animation: kan map niet oplijsten: {dir}',
     'ansiart.cannot_read'        => 'sugar-animation: kan kunstbestand niet lezen: {path}',
     'ansiart.read_failed'        => 'sugar-animation: lezen van kunstbestand mislukt: {path}',
+    'player.status' => 'Kader {current}/{total}  ·  {preset}  ·  {state}',
+    'player.hint' => 'Spatie pauze   {arrows} Stap   d Voorkeuze   q Afsluiten',
+    'player.no_frames' => '(geen frames)',
+    'player.quit_hint' => 'q Afsluiten',
+    'player.playing' => 'speelt af',
+    'player.paused' => 'gepauzeerd',
+    'player.preset.solid' => 'Vlak',
+    'player.preset.density' => 'Dichtheid',
 ];

@@ -26,4 +26,12 @@ return [
     'artlibrary.cannot_list'     => 'sugar-animation : impossible de lister le répertoire : {dir}',
     'ansiart.cannot_read'        => 'sugar-animation : impossible de lire le fichier d\'art : {path}',
     'ansiart.read_failed'        => 'sugar-animation : échec de la lecture du fichier d\'art : {path}',
+    'player.status' => 'Image {current}/{total}  ·  {preset}  ·  {state}',
+    'player.hint' => 'Espace pause   {arrows} Pas   d Préréglage   q Quitter',
+    'player.no_frames' => '(aucune image)',
+    'player.quit_hint' => 'q Quitter',
+    'player.playing' => 'lecture',
+    'player.paused' => 'en pause',
+    'player.preset.solid' => 'Plein',
+    'player.preset.density' => 'Densité',
 ];

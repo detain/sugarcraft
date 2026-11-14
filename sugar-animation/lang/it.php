@@ -26,4 +26,12 @@ return [
     'artlibrary.cannot_list'     => 'sugar-animation: impossibile elencare la directory: {dir}',
     'ansiart.cannot_read'        => 'sugar-animation: impossibile leggere il file d\'arte: {path}',
     'ansiart.read_failed'        => 'sugar-animation: lettura del file d\'arte fallita: {path}',
+    'player.status' => 'Fotogramma {current}/{total}  ·  {preset}  ·  {state}',
+    'player.hint' => 'Spazio pausa   {arrows} Passo   d Predefiniti   q Esci',
+    'player.no_frames' => '(nessun fotogramma)',
+    'player.quit_hint' => 'q Esci',
+    'player.playing' => 'riproduzione',
+    'player.paused' => 'in pausa',
+    'player.preset.solid' => 'Pieno',
+    'player.preset.density' => 'Densità',
 ];
