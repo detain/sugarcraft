@@ -186,12 +186,17 @@ explicit ISO-8859-style charset) the same row is written in pure ASCII:
 | `←` / `h`, `→` / `l` | scroll horizontally (no-wrap mode) |
 | `r` | force a reload of the watched file (unmodified only) |
 | `q` / `Esc` / `Ctrl+C` | exit (`Shift+q`, `Alt+q` and `Ctrl+q` do not) |
+| `?` | show or hide a one-row strip condensing the keys above (unmodified only) |
 
 Only an unmodified `q` quits. The scroll letter keys are the exception: they
 are matched on their rune alone, so they fire even with modifiers held —
 which is why `Ctrl+B` and `Alt+j` share the table rows above with plain `b`
 and `j`, while `Ctrl+U` / `Ctrl+D` are distinct bindings, the deliberate
-half-page chords.
+half-page chords. Unmodified `?` toggles a one-row help strip that carries
+these chords in condensed form — while shown it replaces the first body row,
+so the frame never grows; it degrades through shorter tiers on narrow boxes
+so `? toggle` always survives, and on locales that do not declare UTF-8 it
+is written in pure ASCII.
 
 When the pager is opened on a file (not stdin) it **auto-reloads**: a fixed
 0.5 s tick runs one non-blocking (mtime, size) probe through
