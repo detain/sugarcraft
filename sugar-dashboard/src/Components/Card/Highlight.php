@@ -51,6 +51,33 @@ final class Highlight implements \SugarCraft\Dashboard\Foundation\SizedItem
     public const THEME_GITHUB = 'github';
     public const THEME_DRACULA = 'dracula';
 
+    /**
+     * Per-language word vocabularies (finding sugar-dashboard-170: these
+     * used to be rebuilt as array literals on EVERY highlighted line, and
+     * the merged alternation was recompiled per line too). Order is part of
+     * the alternation bytes and must not drift.
+     */
+    private const PHP_KEYWORDS = ['echo', 'return', 'if', 'else', 'elseif', 'foreach', 'for', 'while', 'do', 'switch', 'case', 'break', 'continue', 'function', 'class', 'interface', 'trait', 'extends', 'implements', 'public', 'private', 'protected', 'static', 'final', 'abstract', 'const', 'var', 'new', 'try', 'catch', 'throw', 'finally', 'use', 'namespace', 'include', 'require', 'include_once', 'require_once', 'instanceof', 'as', 'match', 'fn', 'yield', 'await', 'async'];
+    private const PHP_BUILTINS = ['array', 'string', 'int', 'float', 'bool', 'void', 'null', 'true', 'false', 'self', 'parent', 'this', 'mixed', 'never'];
+    private const JS_KEYWORDS = ['const', 'let', 'var', 'function', 'return', 'if', 'else', 'for', 'while', 'do', 'switch', 'case', 'break', 'continue', 'class', 'extends', 'new', 'this', 'super', 'import', 'export', 'from', 'default', 'async', 'await', 'try', 'catch', 'throw', 'finally', 'throw', 'typeof', 'instanceof', 'in', 'of', 'delete', 'void', 'null', 'undefined', 'true', 'false'];
+    private const JS_BUILTINS = ['console', 'Array', 'Object', 'String', 'Number', 'Boolean', 'Function', 'Symbol', 'Map', 'Set', 'WeakMap', 'WeakSet', 'Promise', 'Proxy', 'Reflect', 'JSON', 'Math', 'Date', 'RegExp', 'Error'];
+    private const PYTHON_KEYWORDS = ['def', 'class', 'return', 'if', 'elif', 'else', 'for', 'while', 'try', 'except', 'finally', 'with', 'as', 'import', 'from', 'pass', 'break', 'continue', 'raise', 'lambda', 'yield', 'global', 'nonlocal', 'assert', 'async', 'await', 'True', 'False', 'None', 'and', 'or', 'not', 'in', 'is'];
+    private const PYTHON_BUILTINS = ['print', 'len', 'range', 'str', 'int', 'float', 'list', 'dict', 'set', 'tuple', 'bool', 'bytes', 'bytearray', 'memoryview', 'type', 'isinstance', 'issubclass', 'hasattr', 'getattr', 'setattr', 'delattr', 'callable', 'super', 'property', 'staticmethod', 'classmethod', 'map', 'filter', 'zip', 'enumerate', 'sorted', 'reversed', 'open', 'input', 'repr', 'format', 'chr', 'ord', 'hex', 'oct', 'bin', 'pow', 'abs', 'divmod', 'round', 'min', 'max', 'sum', 'all', 'any'];
+    private const BASH_KEYWORDS = ['if', 'then', 'else', 'elif', 'fi', 'case', 'esac', 'for', 'while', 'do', 'done', 'in', 'function', 'select', 'time', 'coproc', 'until', 'return', 'exit', 'break', 'continue', 'local', 'declare', 'typeset', 'readonly', 'export', 'unset', 'shift', 'set', 'source', 'alias', 'unalias'];
+    private const BASH_BUILTINS = ['echo', 'printf', 'read', 'cd', 'pwd', 'ls', 'cp', 'mv', 'rm', 'mkdir', 'rmdir', 'touch', 'cat', 'grep', 'sed', 'awk', 'find', 'sort', 'uniq', 'wc', 'head', 'tail', 'cut', 'tr', 'tee', 'chmod', 'chown', 'chgrp', 'sudo', 'su', 'ssh', 'scp', 'rsync', 'curl', 'wget', 'tar', 'gzip', 'gunzip', 'zip', 'unzip', 'diff', 'patch', 'make', 'gcc', 'g++', 'python', 'python3', 'node', 'npm', 'git', 'docker', 'kubectl'];
+
+    /**
+     * Compiled word rules (pattern + lower-cased keyword set) keyed by
+     * vocabulary slot (finding sugar-dashboard-170: the merged alternation
+     * was a pure function of the vocabulary, so rebuilding it per line -
+     * and running an in_array(array_map(mb_strtolower(...))) per match -
+     * was waste). Shared class-wide on purpose; see wordRules().
+     */
+    private static array $wordPatternCache = [];
+
+    /** @internal test seam - counts actual pattern compilations. */
+    private static int $wordPatternBuilds = 0;
+
     public function __construct(
         private readonly string $code,
         private readonly string $language = self::LANG_TEXT,
@@ -259,11 +286,7 @@ final class Highlight implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     private function highlightPhp(string $line, array $theme): string
     {
-        // Keywords
-        $keywords = ['echo', 'return', 'if', 'else', 'elseif', 'foreach', 'for', 'while', 'do', 'switch', 'case', 'break', 'continue', 'function', 'class', 'interface', 'trait', 'extends', 'implements', 'public', 'private', 'protected', 'static', 'final', 'abstract', 'const', 'var', 'new', 'try', 'catch', 'throw', 'finally', 'use', 'namespace', 'include', 'require', 'include_once', 'require_once', 'instanceof', 'as', 'match', 'fn', 'yield', 'await', 'async'];
-        $builtins = ['array', 'string', 'int', 'float', 'bool', 'void', 'null', 'true', 'false', 'self', 'parent', 'this', 'mixed', 'never'];
-
-        return $this->highlightGeneric($line, $theme, $keywords, $builtins);
+        return $this->highlightGeneric($line, $theme, self::PHP_KEYWORDS, self::PHP_BUILTINS, self::LANG_PHP);
     }
 
     /**
@@ -271,10 +294,8 @@ final class Highlight implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     private function highlightJs(string $line, array $theme): string
     {
-        $keywords = ['const', 'let', 'var', 'function', 'return', 'if', 'else', 'for', 'while', 'do', 'switch', 'case', 'break', 'continue', 'class', 'extends', 'new', 'this', 'super', 'import', 'export', 'from', 'default', 'async', 'await', 'try', 'catch', 'throw', 'finally', 'throw', 'typeof', 'instanceof', 'in', 'of', 'delete', 'void', 'null', 'undefined', 'true', 'false'];
-        $builtins = ['console', 'Array', 'Object', 'String', 'Number', 'Boolean', 'Function', 'Symbol', 'Map', 'Set', 'WeakMap', 'WeakSet', 'Promise', 'Proxy', 'Reflect', 'JSON', 'Math', 'Date', 'RegExp', 'Error'];
-
-        return $this->highlightGeneric($line, $theme, $keywords, $builtins);
+        // LANG_TS shares this slot: one compiled pattern serves both spellings.
+        return $this->highlightGeneric($line, $theme, self::JS_KEYWORDS, self::JS_BUILTINS, self::LANG_JS);
     }
 
     /**
@@ -282,10 +303,7 @@ final class Highlight implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     private function highlightPython(string $line, array $theme): string
     {
-        $keywords = ['def', 'class', 'return', 'if', 'elif', 'else', 'for', 'while', 'try', 'except', 'finally', 'with', 'as', 'import', 'from', 'pass', 'break', 'continue', 'raise', 'lambda', 'yield', 'global', 'nonlocal', 'assert', 'async', 'await', 'True', 'False', 'None', 'and', 'or', 'not', 'in', 'is'];
-        $builtins = ['print', 'len', 'range', 'str', 'int', 'float', 'list', 'dict', 'set', 'tuple', 'bool', 'bytes', 'bytearray', 'memoryview', 'type', 'isinstance', 'issubclass', 'hasattr', 'getattr', 'setattr', 'delattr', 'callable', 'super', 'property', 'staticmethod', 'classmethod', 'map', 'filter', 'zip', 'enumerate', 'sorted', 'reversed', 'open', 'input', 'repr', 'format', 'chr', 'ord', 'hex', 'oct', 'bin', 'pow', 'abs', 'divmod', 'round', 'min', 'max', 'sum', 'all', 'any'];
-
-        return $this->highlightGeneric($line, $theme, $keywords, $builtins);
+        return $this->highlightGeneric($line, $theme, self::PYTHON_KEYWORDS, self::PYTHON_BUILTINS, self::LANG_PYTHON);
     }
 
     /**
@@ -293,10 +311,7 @@ final class Highlight implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     private function highlightBash(string $line, array $theme): string
     {
-        $keywords = ['if', 'then', 'else', 'elif', 'fi', 'case', 'esac', 'for', 'while', 'do', 'done', 'in', 'function', 'select', 'time', 'coproc', 'until', 'return', 'exit', 'break', 'continue', 'local', 'declare', 'typeset', 'readonly', 'export', 'unset', 'shift', 'set', 'source', 'alias', 'unalias'];
-        $builtins = ['echo', 'printf', 'read', 'cd', 'pwd', 'ls', 'cp', 'mv', 'rm', 'mkdir', 'rmdir', 'touch', 'cat', 'grep', 'sed', 'awk', 'find', 'sort', 'uniq', 'wc', 'head', 'tail', 'cut', 'tr', 'tee', 'chmod', 'chown', 'chgrp', 'sudo', 'su', 'ssh', 'scp', 'rsync', 'curl', 'wget', 'tar', 'gzip', 'gunzip', 'zip', 'unzip', 'diff', 'patch', 'make', 'gcc', 'g++', 'python', 'python3', 'node', 'npm', 'git', 'docker', 'kubectl'];
-
-        return $this->highlightGeneric($line, $theme, $keywords, $builtins);
+        return $this->highlightGeneric($line, $theme, self::BASH_KEYWORDS, self::BASH_BUILTINS, self::LANG_BASH);
     }
 
     /**
@@ -422,7 +437,7 @@ final class Highlight implements \SugarCraft\Dashboard\Foundation\SizedItem
     /**
      * Generic syntax highlighting for keyword-based languages.
      */
-    private function highlightGeneric(string $line, array $theme, array $keywords, array $builtins): string
+    private function highlightGeneric(string $line, array $theme, array $keywords, array $builtins, string $cacheSlot): string
     {
         // Comments (# or //)
         if (preg_match('/^(\s*)(#|\/\/)/', $line)) {
@@ -450,17 +465,39 @@ final class Highlight implements \SugarCraft\Dashboard\Foundation\SizedItem
             $line
         ) ?? $line;
 
-        // Keywords and builtins (word boundaries)
-        $allWords = array_merge($keywords, $builtins);
+        // Keywords and builtins (word boundaries). The alternation and the
+        // lower-cased keyword set are compiled once per vocabulary slot
+        // (finding sugar-dashboard-170), not once per line/match.
+        [$pattern, $keywordSet] = self::wordRules($cacheSlot, $keywords, $builtins);
+
         $line = preg_replace_callback(
-            '/\b(' . implode('|', array_map('preg_quote', $allWords)) . ')\b/i',
-            fn(array $matches) => in_array(mb_strtolower($matches[0]), array_map('mb_strtolower', $keywords), true)
+            $pattern,
+            fn(array $matches): string => isset($keywordSet[mb_strtolower($matches[0])])
                 ? $theme['keyword']->toFg(ColorMode::profile()) . $matches[0] . Ansi::reset()
                 : $theme['builtin']->toFg(ColorMode::profile()) . $matches[0] . Ansi::reset(),
             $line
         ) ?? $line;
 
         return $line;
+    }
+
+    /**
+     * Compile (once per slot) the merged word-boundary alternation paired
+     * with the lower-cased keyword lookup set. The vocabularies are private
+     * consts, so a cached entry can never go stale.
+     *
+     * @return array{0:string,1:array<string,true>}
+     */
+    private static function wordRules(string $cacheSlot, array $keywords, array $builtins): array
+    {
+        if (isset(self::$wordPatternCache[$cacheSlot])) {
+            return self::$wordPatternCache[$cacheSlot];
+        }
+        self::$wordPatternBuilds++;
+        return self::$wordPatternCache[$cacheSlot] = [
+            '/\b(' . implode('|', array_map('preg_quote', array_merge($keywords, $builtins))) . ')\b/i',
+            array_fill_keys(array_map('mb_strtolower', $keywords), true),
+        ];
     }
 
     /**

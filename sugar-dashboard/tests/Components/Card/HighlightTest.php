@@ -330,4 +330,66 @@ final class HighlightTest extends TestCase
 
         $this->assertStringContainsString('plain text', $rendered);
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    // D-151: per-slot word-rule compilation (finding sugar-dashboard-170)
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testWordRulesAreCachedByIdentityPerSlot(): void
+    {
+        $consts = (new \ReflectionClass(Highlight::class))->getConstants();
+        $method = new \ReflectionMethod(Highlight::class, 'wordRules');
+        $method->setAccessible(true);
+
+        $first = $method->invoke(null, 'php', $consts['PHP_KEYWORDS'], $consts['PHP_BUILTINS']);
+        $second = $method->invoke(null, 'php', $consts['PHP_KEYWORDS'], $consts['PHP_BUILTINS']);
+
+        // The cached tuple is returned by identity - never recompiled per line.
+        $this->assertSame($first, $second);
+        $this->assertSame($first[0], $second[0]);
+    }
+
+    public function testWordPatternBuiltExactlyOncePerSlot(): void
+    {
+        $code = "<?php\n\$x = 1;\nif (\$x) { echo \"y\"; }\nreturn array_map('strlen', \$x);\n";
+
+        $languages = [
+            Highlight::LANG_PHP => $code,
+            Highlight::LANG_JS => "const x = 1;\nif (x) { console.log('y'); }\nreturn new Array();\n",
+            Highlight::LANG_PYTHON => "def f(x):\n    if x:\n        print('y')\n    return len(x)\n",
+            Highlight::LANG_BASH => "#!/bin/bash\nif [ -f x ]; then echo y; fi\ndone\ndot\ngrep sed\n",
+        ];
+        foreach ($languages as $language => $block) {
+            foreach (range(1, 8) as $ignored) {
+                (new Highlight($block, $language))->render();
+            }
+        }
+
+        $builds = (new \ReflectionClass(Highlight::class))->getStaticPropertyValue('wordPatternBuilds');
+        // Four vocabulary slots exist at all; 32 deep multi-line renders must
+        // never compile a pattern more than once per slot.
+        $this->assertSame(4, $builds);
+    }
+
+    public function testKeywordSetDiscriminatesBuiltinsWithoutLinearScan(): void
+    {
+        $consts = (new \ReflectionClass(Highlight::class))->getConstants();
+        $method = new \ReflectionMethod(Highlight::class, 'wordRules');
+        $method->setAccessible(true);
+
+        [$pattern, $keywordSet] = $method->invoke(null, 'php', $consts['PHP_KEYWORDS'], $consts['PHP_BUILTINS']);
+
+        // 'echo' is a keyword, 'array' a builtin: both hit the alternation,
+        // only the keyword rides the lower-cased set (the flip that replaces
+        // the old per-match in_array(array_map(mb_strtolower(...)))).
+        $this->assertSame(1, preg_match($pattern, 'echo'));
+        $this->assertSame(1, preg_match($pattern, 'array'));
+        $this->assertArrayHasKey('echo', $keywordSet);
+        $this->assertArrayNotHasKey('array', $keywordSet);
+
+        // Word-boundary integrity: 'done' must not serve 'do', 'dot' neither.
+        $this->assertFalse(isset($keywordSet['done']));
+        $this->assertSame(0, preg_match('/\b(do)\b/', 'dot'));
+        $this->assertSame(1, preg_match('/\b(done)\b/', 'done'));
+    }
 }
