@@ -197,6 +197,45 @@ final class GenericModuleTest extends TestCase
         $this->assertStringContainsString('to-stderr', $view);
     }
 
+    public function testOwnStderrRedirectIsHonouredVerbatim(): void
+    {
+        // sugar-dashboard-200: the old `2>&1` append landed AFTER the
+        // user's own redirect, and last-redirect-wins meant a deliberate
+        // `2>/dev/null` was silently overridden. The string form must
+        // reach sh -c untouched.
+        $code = 'fwrite(STDERR, "rawr-leak\n"); echo "ok-112\n";';
+        $command = sprintf('%s -r %s 2>/dev/null', escapeshellarg(PHP_BINARY), escapeshellarg($code));
+
+        $module = new GenericModule($command);
+        [$nextModule] = $module->update(new TickMsg());
+        $view = $nextModule->view();
+
+        $this->assertStringContainsString('ok-112', $view);
+        $this->assertStringNotContainsString('rawr-leak', $view, "the command's own 2>/dev/null must survive");
+    }
+
+    public function testFileRedirectIsNotCorruptedByMergedStderr(): void
+    {
+        // The same string surgery poured stderr INTO `> file` targets,
+        // corrupting data on disk. With the command verbatim, the file
+        // gets only stdout and stderr rides BoundedCommand's own pipe.
+        $target = tempnam(sys_get_temp_dir(), 'd112');
+        self::assertNotFalse($target);
+
+        try {
+            $code = 'fwrite(STDERR, "spill\n");';
+            $command = sprintf('%s -r %s > %s', escapeshellarg(PHP_BINARY), escapeshellarg($code), escapeshellarg($target));
+
+            $module = new GenericModule($command);
+            [$nextModule] = $module->update(new TickMsg());
+
+            $this->assertStringContainsString('spill', $nextModule->view(), 'stderr still surfaces via the err pipe');
+            $this->assertSame('', (string) file_get_contents($target), 'the redirect target must not receive stderr');
+        } finally {
+            @unlink($target);
+        }
+    }
+
     public function testIntervalIsUsedInTick(): void
     {
         $module = new GenericModule('echo test', 10);
