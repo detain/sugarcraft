@@ -149,6 +149,12 @@ final class PrometheusFileBackend implements Backend
     /** @var array<string,string> First raw name claiming each descriptor key — the describe() twin of {@see $rawFacts}. */
     private array $rawDescriptors = [];
 
+    /** @var array<string,string> sugar-metrics-015: raw metric name → sanitized token (pure fold, memoized per instance). */
+    private array $nameTokens = [];
+
+    /** @var array<string,string> sugar-metrics-015: raw label key → sanitized token (pure fold; the histogram `le` gate and the storage-key build share it, collapsing the 025 double-pay). */
+    private array $labelTokens = [];
+
     /** @var array<string,array<string,true>> Insertion-ordered key index per sanitized family — makes the series cap O(1). */
     private array $familyKeys = [];
 
@@ -241,8 +247,11 @@ final class PrometheusFileBackend implements Backend
         // The bucket lines carry a reserved `le` label; a user tag that
         // sanitizes to `le` would ride the block twice (and the second
         // occurrence wins in some parsers) — refuse at the door.
+        // sugar-metrics-025: the check now rides the shared per-key memo
+        // the storage-key build fills, so this loop is hash lookups on the
+        // steady path instead of a fresh preg sweep per observation.
         foreach ($tags as $k => $_) {
-            if (self::sanitizeKey((string) $k) === 'le') {
+            if (($this->labelTokens[(string) $k] ??= self::sanitizeKey((string) $k)) === 'le') {
                 throw new \RuntimeException(Lang::t('prom.reserved_label', ['name' => Util::displaySafe($name)]));
             }
         }
@@ -670,7 +679,7 @@ final class PrometheusFileBackend implements Backend
      */
     public function remove(string $name, array $tags = []): void
     {
-        $key = self::storageKey($name, $tags);
+        $key = $this->storageKey($name, $tags);
         if (isset($this->rawFacts[$key])) {
             // The reclaim path guards the fold exactly like the write path:
             // reaching an occupied key under a DIFFERENT raw identity is
@@ -716,6 +725,11 @@ final class PrometheusFileBackend implements Backend
      */
     public function clear(): void
     {
+        // sugar-metrics-015: the per-token fold caches are pure functions
+        // of their raws, but they ride the instance lifetime — drop them
+        // with the ledger so a cleared backend grows nothing.
+        $this->nameTokens = [];
+        $this->labelTokens = [];
         $this->counters = [];
         $this->gauges = [];
         $this->histograms = [];
@@ -743,7 +757,7 @@ final class PrometheusFileBackend implements Backend
      */
     private function key(string $name, array $tags): string
     {
-        $key = self::storageKey($name, $tags);
+        $key = $this->storageKey($name, $tags);
         if (isset($this->rawFacts[$key])) {
             $this->refuseImpostor($name, $tags, $key);
             return $key;
@@ -819,9 +833,20 @@ final class PrometheusFileBackend implements Backend
      *
      * @param array<string,string> $tags
      */
-    private static function storageKey(string $name, array $tags): string
+    private function storageKey(string $name, array $tags): string
     {
-        $sanitized = self::sanitizeName($name);
+        // sugar-metrics-015: both sweep families are PURE per-token folds —
+        // a metric name or a label key derives the same sanitized token on
+        // every emit for the instance lifetime, so each folds memoizes.
+        // Per-emit work that genuinely depends on the (variable) tag
+        // VALUES — escapeLabel sweeps and the ksort/implode join — stays
+        // in-line. A poisoned token is a deterministic function of its
+        // raw, so the cached '' below still trips the 054 refusals on
+        // every attempt; nothing state-dependent is cached, which removes
+        // the stale-memo class entirely. clear() drops the caches with
+        // the ledger; growth is bounded by distinct names / label keys,
+        // the same axes the exposition ledger already retains per family.
+        $sanitized = $this->nameTokens[$name] ??= self::sanitizeName($name);
         // sugar-metrics-054: a name or label key that sanitizes to '' would
         // publish `# TYPE  counter` / ` 5` — node_exporter rejects the ENTIRE
         // file on that parse error, and rewrite-whole-on-flush makes the
@@ -837,7 +862,7 @@ final class PrometheusFileBackend implements Backend
         ksort($sorted);
         $parts = [];
         foreach ($sorted as $k => $v) {
-            $labelKey = self::sanitizeKey((string) $k);
+            $labelKey = $this->labelTokens[(string) $k] ??= self::sanitizeKey((string) $k);
             if ($labelKey === '') {
                 throw new \RuntimeException(Lang::t('prom.label_key_empty', [
                     'key'  => Util::displaySafe((string) $k),

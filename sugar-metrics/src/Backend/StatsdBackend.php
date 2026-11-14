@@ -36,9 +36,18 @@ use SugarCraft\Metrics\Util;
  */
 final class StatsdBackend implements Backend
 {
+    /** Bounded-retention ceiling for the two per-token fold caches below (sugar-metrics-015). */
+    private const WIRE_MEMO_LIMIT = 1024;
+
     /** @var resource */
     private $sock;
     private bool $owns = false;
+
+    /** @var array<string,string> raw metric name → wireName fold (sugar-metrics-015; see sendRaw for the retention note). */
+    private array $wireNames = [];
+
+    /** @var array<string,string> raw tag key → wireTagKey fold (sugar-metrics-015). */
+    private array $wireTagKeys = [];
 
     /** `host:port` (or `resource` for injected sockets) — appears in refusal messages so the operator can locate the dead sink. */
     private readonly string $endpointLabel;
@@ -145,11 +154,13 @@ final class StatsdBackend implements Backend
     }
 
     /**
-     * StatsD is fire-and-forget; there is nothing to clear.
+     * StatsD is fire-and-forget; the only retained state is the bounded
+     * per-token fold cache (sugar-metrics-015), dropped here with the call.
      */
     public function clear(): void
     {
-        // No-op: StatsD has no local state to reset.
+        $this->wireNames = [];
+        $this->wireTagKeys = [];
     }
 
     /**
@@ -183,13 +194,24 @@ final class StatsdBackend implements Backend
         // two are prefix-dispatched and need no banned byte, so braces fold
         // in wireName (052). See wireToken()/wireName()/wireTagKey() for
         // the exact per-position separator alphabets.
-        $line = self::wireName($name) . ':' . self::wireToken($valueStr) . '|' . $kind;
+        $line = ($this->wireNames[$name] ??= self::wireName($name)) . ':' . self::wireToken($valueStr) . '|' . $kind;
         if ($tags !== [] && $this->dogstatsd) {
+            // sugar-metrics-015: the name and tag-KEY sweeps are pure
+            // per-token folds and memoized; the VALUE sweep rides every
+            // emit because values vary and are unbounded. This backend was
+            // fire-and-forget, so the two caches are its only retained
+            // state — bounded by WIRE_MEMO_LIMIT, dropped wholesale when
+            // full (the folds are deterministic, so eviction can never
+            // change a byte on the wire).
             $parts = [];
             foreach ($tags as $k => $v) {
-                $parts[] = self::wireTagKey($k) . ':' . self::wireToken($v);
+                $parts[] = ($this->wireTagKeys[$k] ??= self::wireTagKey($k)) . ':' . self::wireToken($v);
             }
             $line .= '|#' . implode(',', $parts);
+        }
+        if (count($this->wireNames) > self::WIRE_MEMO_LIMIT || count($this->wireTagKeys) > self::WIRE_MEMO_LIMIT) {
+            $this->wireNames = [];
+            $this->wireTagKeys = [];
         }
         $bytes = strlen($line);
         if ($this->failSilently) {

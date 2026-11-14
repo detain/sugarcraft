@@ -959,4 +959,59 @@ final class PrometheusFileBackendTest extends TestCase
         unset($b);
         @unlink($path);
     }
+
+    public function testPerTokenFoldMemoIsByteIdenticalToTheColdPath(): void
+    {
+        // sugar-metrics-015: the name/label-key memos must return exactly
+        // what the cold sweep produces — a warm repeat of one gauge emits
+        // the same exposition bytes as a cold single-shot backend.
+        $pathA = $this->tempPromPath();
+        $pathB = $this->tempPromPath();
+        try {
+            $a = new PrometheusFileBackend($pathA);
+            $a->gauge('g.name', 1.5, ['route' => '/x']);
+            $a->gauge('g.name', 1.5, ['route' => '/x']);  // memo-hot
+            $a->gauge('other_name', 2.0, ['route' => '/x']);
+            $a->flush();
+            $b = new PrometheusFileBackend($pathB);
+            $b->gauge('g.name', 1.5, ['route' => '/x']);
+            $b->gauge('other_name', 2.0, ['route' => '/x']);
+            $b->flush();
+            self::assertStringEqualsFile($pathB, (string) file_get_contents($pathA));
+            // The memo engaged: one slot per distinct raw token, byte-equal
+            // to the pure functions' cold output.
+            $ref = new \ReflectionProperty(PrometheusFileBackend::class, 'nameTokens');
+            $names = $ref->getValue($a);
+            self::assertSame(['g.name' => 'g_name', 'other_name' => 'other_name'], $names);
+            $refL = new \ReflectionProperty(PrometheusFileBackend::class, 'labelTokens');
+            self::assertSame(['route' => 'route'], $refL->getValue($a));
+        } finally {
+            @unlink($pathA);
+            @unlink($pathB);
+            foreach ([[$pathA], [$pathB]] as $p) {
+                foreach (array_merge(glob($p[0] . '.*.tmp') ?: [], glob($p[0] . '.tmp.*') ?: []) as $leaked) {
+                    @unlink($leaked);
+                }
+            }
+        }
+    }
+
+    public function testPoisonedFoldRefusesOnEveryAttemptNeverRidesTheMemo(): void
+    {
+        // 054 refusals must survive memoization: an empty-name emit throws,
+        // and throws AGAIN on the second attempt (a cached rejection would
+        // read as acceptance on the re-emit path).
+        $b = new PrometheusFileBackend($this->tempPromPath());
+        foreach ([1, 2] as $attempt) {
+            $msg = null;
+            try {
+                $b->counter('', 5.0);
+            } catch (\RuntimeException $e) {
+                $msg = $e->getMessage();
+            }
+            self::assertNotNull($msg, "attempt {$attempt}: empty name must keep refusing");
+        }
+        $ref = new \ReflectionProperty(PrometheusFileBackend::class, 'nameTokens');
+        self::assertSame(['' => ''], $ref->getValue($b), 'the fold cache holds the deterministic empty token; the throw lives at the call site');
+    }
 }

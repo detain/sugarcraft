@@ -60,6 +60,9 @@ final class InMemoryBackend implements Backend
      */
     private array $seriesOrder = [];
 
+    /** @var array<string,string> sugar-metrics-015: raw metric name → nameToken fold (pure per-name memo, rides clear()). */
+    private array $nameTokens = [];
+
     /**
      * @param int $maxSamplesPerKey Upper bound on retained histogram samples
      *                              per (name, tags) series. Must be >= 1.
@@ -268,6 +271,9 @@ final class InMemoryBackend implements Backend
      */
     public function clear(): void
     {
+        // sugar-metrics-015: the fold memo is pure, but it rides the
+        // instance — drop it with the ledger.
+        $this->nameTokens = [];
         $this->counters = [];
         $this->gauges = [];
         $this->histograms = [];
@@ -322,7 +328,13 @@ final class InMemoryBackend implements Backend
      */
     private function key(string $name, array $tags): string
     {
-        $token = Util::nameToken($name);
+        // sugar-metrics-015: the name segment is a pure per-name fold and
+        // metric names are process-lifetime constants — memoized. The tag
+        // segment must run per emit anyway: it indexes the accumulator
+        // arrays. The cache rides the instance lifetime (clear() drops it);
+        // it stores one short string per distinct raw name, the same axis
+        // the accumulator keys already cover.
+        $token = $this->nameTokens[$name] ??= Util::nameToken($name);
         if ($tags === []) {
             return $token;
         }

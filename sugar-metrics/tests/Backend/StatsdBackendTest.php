@@ -329,6 +329,49 @@ final class StatsdBackendTest extends TestCase
         fclose($sock);
     }
 
+    public function testWireFoldMemoStaysBoundedAndByteStableAcrossTheCap(): void
+    {
+        // sugar-metrics-015: the name/tag-key fold caches are StatsD's only
+        // retained state and reset wholesale at WIRE_MEMO_LIMIT. A flood of
+        // distinct names past the cap must (a) keep the cache bounded and
+        // (b) still emit byte-exact packets for a name seen only after the
+        // reset (re-derived cold).
+        $limit = (new \ReflectionClass(StatsdBackend::class))->getConstant('WIRE_MEMO_LIMIT');
+        $this->assertIsInt($limit);
+
+        $sock = fopen('php://memory', 'w+');
+        $b = new StatsdBackend(existingSocket: $sock);
+        for ($i = 0; $i < $limit + 5; $i++) {
+            $b->counter('flood_' . $i, 1.0);
+        }
+        $nameMemo = (new \ReflectionProperty(StatsdBackend::class, 'wireNames'))->getValue($b);
+        $this->assertLessThanOrEqual($limit, count($nameMemo), 'fold cache never grows past the ceiling');
+
+        // Byte-exactness once the caches have been reset past the ceiling:
+        // every packet rode the wire correctly (the wire is not memo state,
+        // it is what the sweep emitted), while the NAME cache was dropped
+        // wholesale — early names are gone from it, recent names refilled.
+        rewind($sock);
+        $bytes = (string) stream_get_contents($sock);
+        $this->assertStringContainsString('flood_0:1|c', $bytes);
+        $this->assertStringContainsString('flood_1028:1|c', $bytes);
+        $nameMemoAfter = (new \ReflectionProperty(StatsdBackend::class, 'wireNames'))->getValue($b);
+        $this->assertArrayNotHasKey('flood_0', $nameMemoAfter, 'cache was dropped wholesale at the cap');
+        $this->assertArrayHasKey('flood_1028', $nameMemoAfter);
+        fclose($sock);
+
+        // A fresh backend re-derives the fold cold and emits byte-identical
+        // (the wire sweep folds `:` — dots/dashes ride raw by design).
+        $sock2 = fopen('php://memory', 'w+');
+        $b2 = new StatsdBackend(existingSocket: $sock2);
+        $b2->counter('a:b', 2.0);
+        rewind($sock2);
+        $this->assertSame('a_b:2|c', trim((string) stream_get_contents($sock2)));
+        $memo2 = (new \ReflectionProperty(StatsdBackend::class, 'wireNames'))->getValue($b2);
+        $this->assertSame(['a:b' => 'a_b'], $memo2);
+        fclose($sock2);
+    }
+
     public function testDestructorClosesOwnedSocket(): void
     {
         // Hermetic: claim a free ephemeral UDP port on loopback and release

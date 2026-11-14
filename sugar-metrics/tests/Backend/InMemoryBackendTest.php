@@ -250,4 +250,23 @@ final class InMemoryBackendTest extends TestCase
         $this->assertIsArray($b->asyncCounters());
         $this->assertIsArray($b->asyncGauges());
     }
+
+    public function testNameTokenMemoRidesTheColdFoldAndDropsOnClear(): void
+    {
+        // sugar-metrics-015: the key() name segment memoizes the pure
+        // per-name fold — adversarial names must still land on the same
+        // escaped token the cold sweep produces (the MEMORYFOLD pins are
+        // the byte contract; this proves the memo holds exactly that fold
+        // and clear() returns the cache to zero).
+        $b = new InMemoryBackend();
+        $b->gauge('x', 1.0, ['k' => 'v']);
+        $b->gauge('x', 2.0, ['k' => 'v']); // memo-hot
+        $b->gauge('x|y=1', 3.0);
+        self::assertSame(2.0, $b->gaugeValue('x', ['k' => 'v']));
+        self::assertSame(3.0, $b->gaugeValue('x|y=1'));
+        $ref = new \ReflectionProperty(InMemoryBackend::class, 'nameTokens');
+        self::assertSame(['x' => 'x', 'x|y=1' => 'x\|y\=1'], $ref->getValue($b));
+        $b->clear();
+        self::assertSame([], $ref->getValue($b));
+    }
 }

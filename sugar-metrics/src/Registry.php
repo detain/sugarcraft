@@ -186,14 +186,18 @@ final class Registry
         // the stored total backwards and (on the textfile backend) emit a
         // COUNTER sample that violates its own TYPE. Refuse the misuse.
         $this->refuseNegative($name, $value, 'counter');
-        $this->backend->counter($name, $value, $this->mergeTags($tags));
-        $this->trackCardinality($name, $tags);
+        // sugar-metrics-015: merge once — the backend verb and the
+        // cardinality tracker must ride the SAME merged array.
+        $merged = $this->mergeTags($tags);
+        $this->backend->counter($name, $value, $merged);
+        $this->trackCardinality($name, $merged, $tags === []);
     }
 
     public function gauge(string $name, float $value, array $tags = []): void
     {
-        $this->backend->gauge($name, $value, $this->mergeTags($tags));
-        $this->trackCardinality($name, $tags);
+        $merged = $this->mergeTags($tags);
+        $this->backend->gauge($name, $value, $merged);
+        $this->trackCardinality($name, $merged, $tags === []);
     }
 
     public function histogram(string $name, float $value, array $tags = []): void
@@ -203,8 +207,9 @@ final class Registry
         // boundary and would be counted ONLY by +Inf — a sum that moves
         // while no visible bucket does. Refuse at the door.
         $this->refuseNegative($name, $value, 'histogram');
-        $this->backend->histogram($name, $value, $this->mergeTags($tags));
-        $this->trackCardinality($name, $tags);
+        $merged = $this->mergeTags($tags);
+        $this->backend->histogram($name, $value, $merged);
+        $this->trackCardinality($name, $merged, $tags === []);
     }
 
     /**
@@ -228,8 +233,9 @@ final class Registry
      */
     public function upDownCounter(string $name, float $amount, array $tags = []): void
     {
-        $this->backend->upDownCounter($name, $amount, $this->mergeTags($tags));
-        $this->trackCardinality($name, $tags);
+        $merged = $this->mergeTags($tags);
+        $this->backend->upDownCounter($name, $amount, $merged);
+        $this->trackCardinality($name, $merged, $tags === []);
     }
 
     /**
@@ -239,8 +245,9 @@ final class Registry
      */
     public function asyncCounter(string $name, float $value, array $tags = []): void
     {
-        $this->backend->asyncCounter($name, $value, $this->mergeTags($tags));
-        $this->trackCardinality($name, $tags);
+        $merged = $this->mergeTags($tags);
+        $this->backend->asyncCounter($name, $value, $merged);
+        $this->trackCardinality($name, $merged, $tags === []);
     }
 
     /**
@@ -250,8 +257,9 @@ final class Registry
      */
     public function asyncGauge(string $name, float $value, array $tags = []): void
     {
-        $this->backend->asyncGauge($name, $value, $this->mergeTags($tags));
-        $this->trackCardinality($name, $tags);
+        $merged = $this->mergeTags($tags);
+        $this->backend->asyncGauge($name, $value, $merged);
+        $this->trackCardinality($name, $merged, $tags === []);
     }
 
     /**
@@ -420,25 +428,24 @@ final class Registry
      * first-seen combination regardless of heat; hot-series loss under
      * churn is by design (008; mirrors InMemoryBackend::retainSeries()).
      *
+     * `$merged` is the ALREADY-MERGED tag set the emit verb handed the
+     * backend (sugar-metrics-015 — one array_merge per emit, not two;
+     * passing call-site tags here would key the tracker under a different
+     * label set than the backend stores). `$mergedIsDefaults` is true for
+     * the no-tags emit, the fast path that reuses the precomputed default
+     * key instead of re-sorting/joining the default tags every call.
+     *
      * Eviction also removes the evicted series from the backend, so a
      * flood of unique tag combinations can't grow backend memory without
      * bound — the cache is capped, but the backend is not. The merged tags
      * are stored as the cache value precisely so the backend key can be
      * rebuilt at eviction time.
      *
-     * @param array<string,string> $tags
+     * @param array<string,string> $merged
      */
-    private function trackCardinality(string $name, array $tags): void
+    private function trackCardinality(string $name, array $merged, bool $mergedIsDefaults = false): void
     {
-        // Fast path for the no-tags emit: reuse the precomputed default key
-        // instead of re-sorting/joining the default tags every call.
-        if ($tags === []) {
-            $merged = $this->defaultTags;
-            $key = $this->defaultTagsKey;
-        } else {
-            $merged = array_merge($this->defaultTags, $tags);
-            $key = $this->tagKey($merged);
-        }
+        $key = $mergedIsDefaults ? $this->defaultTagsKey : $this->tagKey($merged);
         if (isset($this->labelValueCache[$name][$key])) {
             return;
         }
