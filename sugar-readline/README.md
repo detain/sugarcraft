@@ -92,10 +92,13 @@ $prompt = Readline::fromStdin()->run(
 The remaining prompt surface is all fluent — every setter returns a new
 instance:
 
-- `withValidator(callable)` gates `submit()` on a rule. The gate is
-  falsy-only: any truthy return accepts, even an error string. Signal
-  rejection by returning `false`, `''` or `null` — never by throwing: a
-  throwing validator is not caught, and its exception escapes `submit()`,
+- `withValidator(callable)` gates `submit()` on a rule that can say why.
+  Return `true` (or any truthy non-string) to accept; return a non-empty
+  string to reject and paint **that string** as the error row (sanitized,
+  cell-clipped to the display width); return `false`, `''` or `null` to
+  reject with the default `Invalid input`. Rejection still never travels by
+  throwing — but a throwing validator is now caught: its exception is
+  contained as a default-message rejection instead of escaping `submit()`,
   `handleKey()` and `run()`.
 - `withCharLimit(int)` caps the buffer.
 - `withHidden()` masks input (for secrets) and disables history pushes and

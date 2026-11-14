@@ -44,6 +44,9 @@ final class TextPrompt
     /** History search direction: toward newer entries (readline Ctrl+S). */
     public const SEARCH_FORWARD = -1;
 
+    /** Default rejection painted when a validator says no without a reason. */
+    private const INVALID_INPUT = 'Invalid input';
+
     /** Text typed by the user. The label is rendered separately by {@see view()}. */
     private string $buffer = '';
 
@@ -193,7 +196,22 @@ final class TextPrompt
         return $clone;
     }
 
-    /** @param callable(string): bool $fn  Receives the user input; return false to reject. */
+    /**
+     * Gate `submit()` on a rule that can tell the user WHY.
+     *
+     * The callable receives the buffer and answers with:
+     *  - `true` (or any truthy non-string) — accept;
+     *  - `false`, `''` or any falsy value — reject with the default
+     *    `Invalid input` message;
+     *  - a non-empty string — reject and paint THAT string as the error
+     *    row (sanitized, cell-clipped to the display width).
+     *
+     * Rejection still never happens by throwing — but a throwing validator
+     * is now also caught: the exception is contained as a default-message
+     * rejection instead of escaping `submit()`, `handleKey()` and `run()`.
+     *
+     * @param callable(string): bool|string $fn
+     */
     public function withValidator(callable $fn): self
     {
         $clone = clone $this;
@@ -506,9 +524,12 @@ final class TextPrompt
             return $this;
         }
         $clone = clone $this;
-        if ($clone->_validator !== null && !($clone->_validator)($clone->buffer)) {
-            $clone->error = 'Invalid input';
-            return $clone;
+        if ($clone->_validator !== null) {
+            $rejection = self::validatorRejection($clone->_validator, $clone->buffer);
+            if ($rejection !== null) {
+                $clone->error = $rejection;
+                return $clone;
+            }
         }
         // Push to the ORIGINAL history so the caller's reference is updated.
         // Hidden (password) prompts never persist their input: the secret
@@ -519,6 +540,31 @@ final class TextPrompt
         $clone->submitted = true;
         $clone->error     = '';
         return $clone;
+    }
+
+    /**
+     * Interpret a validator verdict as the rejection message to paint
+     * (null = accepted). A validator that throws is contained: the
+     * exception becomes the default rejection rather than escaping the
+     * key loop (rejection still never travels by throw — see withValidator).
+     */
+    private static function validatorRejection(callable $validator, string $buffer): ?string
+    {
+        try {
+            $verdict = $validator($buffer);
+        } catch (\Throwable) {
+            return self::INVALID_INPUT;
+        }
+
+        if ($verdict === true) {
+            return null;
+        }
+
+        if (is_string($verdict)) {
+            return $verdict === '' ? self::INVALID_INPUT : $verdict;
+        }
+
+        return $verdict ? null : self::INVALID_INPUT;
     }
 
     public function abort(): self
@@ -903,7 +949,7 @@ final class TextPrompt
         $lines = [$line];
 
         if ($this->error !== '') {
-            $lines[] = Ansi::wrap(Ansi::sanitize($this->error), $this->errorStyle);
+            $lines[] = RowFit::row([[Ansi::sanitize($this->error), $this->errorStyle]], $this->displayWidth);
         }
 
         // Auxiliary rows (completion hint, fish-style autosuggest) sit under
