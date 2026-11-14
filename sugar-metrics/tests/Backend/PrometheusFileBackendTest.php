@@ -272,6 +272,25 @@ final class PrometheusFileBackendTest extends TestCase
         $this->assertStringContainsString('always_on 1', $content);
     }
 
+    public function testFlushOfNonFiniteGaugeSpellsCanonicalTokenNotSignFlippedInf(): void
+    {
+        // finding 018: sprintf('%.6f', -INF) renders "INF" — a falling
+        // gauge would publish a wrong-signed reading the parser accepts,
+        // silently inverting the alarm. The textfile fmt() routes through
+        // Util::nonFiniteToken first; pin the exact sample line.
+        $b = new PrometheusFileBackend($this->path);
+        $b->gauge('t', -\INF);
+        $b->flush();
+        $lines = explode("\n", (string) file_get_contents($this->path));
+        $this->assertContains('t -Inf', $lines);
+        $this->assertNotContains('t INF', $lines);
+
+        $b2 = new PrometheusFileBackend($this->path);
+        $b2->gauge('u', \INF);
+        $b2->flush();
+        $this->assertContains('u +Inf', explode("\n", (string) file_get_contents($this->path)));
+    }
+
     public function testHistogramWithTagsEmitsAllBucketLines(): void
     {
         $b = new PrometheusFileBackend($this->path);

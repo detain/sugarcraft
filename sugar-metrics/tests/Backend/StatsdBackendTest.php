@@ -231,8 +231,37 @@ final class StatsdBackendTest extends TestCase
         $b->counter('big', 1e15);
         rewind($sock);
         $payload = (string) stream_get_contents($sock);
-        // Large values render as float even if they are whole numbers.
-        $this->assertStringContainsString('|c', $payload);
+        // finding 018: the old assertion only looked for '|c' — vacuous
+        // (a %.12g garbage regression stayed green). Byte-exact instead:
+        // abs >= 1e15 routes through %.6e even when the value is whole.
+        $this->assertSame('big:1.000000e+15|c', trim($payload));
+        fclose($sock);
+    }
+
+    public function testFmtRoutesNonFiniteAndSubMicrosecondValuesThroughSharedTable(): void
+    {
+        // finding 018: docblocks promise every StatsD value passes
+        // Util::nonFiniteToken/needsExponentForm before %.6f ever sees it.
+        // Pin the wire bytes each way the render can rot.
+        $sock = fopen('php://memory', 'w+');
+        $b = new StatsdBackend(existingSocket: $sock);
+        $b->counter('neg', -\INF);
+        rewind($sock);
+        $this->assertSame('neg:-Inf|c', trim((string) stream_get_contents($sock)));
+        fclose($sock);
+
+        $sock = fopen('php://memory', 'w+');
+        $b = new StatsdBackend(existingSocket: $sock);
+        $b->counter('nn', NAN);
+        rewind($sock);
+        $this->assertSame('nn:NaN|c', trim((string) stream_get_contents($sock)));
+        fclose($sock);
+
+        $sock = fopen('php://memory', 'w+');
+        $b = new StatsdBackend(existingSocket: $sock);
+        $b->counter('tiny', 5e-7);
+        rewind($sock);
+        $this->assertSame('tiny:5.000000e-7|c', trim((string) stream_get_contents($sock)));
         fclose($sock);
     }
 

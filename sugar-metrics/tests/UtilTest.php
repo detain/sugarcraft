@@ -61,6 +61,36 @@ final class UtilTest extends TestCase
         $this->assertSame('a\\=b=c', Util::tagKey(['a=b' => 'c']));
     }
 
+    public function testNonFiniteTokenSpellsSpecialsCanonically(): void
+    {
+        // finding 018: sprintf('%.6f', -INF) is "INF" — the sign flips and
+        // no line backend may ship that. The shared table is the one
+        // source of truth; pin every branch byte-exactly.
+        $this->assertSame('NaN', Util::nonFiniteToken(NAN));
+        $this->assertSame('+Inf', Util::nonFiniteToken(\INF));
+        $this->assertSame('-Inf', Util::nonFiniteToken(-\INF));
+        $this->assertNull(Util::nonFiniteToken(0.0));
+        $this->assertNull(Util::nonFiniteToken(-0.0));
+        $this->assertNull(Util::nonFiniteToken(1e15));
+        $this->assertNull(Util::nonFiniteToken(9.9e-7));
+    }
+
+    public function testNeedsExponentFormBoundaries(): void
+    {
+        // The two "fixed six decimals would lie" regions: at or past 1e15
+        // (%.6f prints six digits of noise) and sub-microsecond magnitudes
+        // (%.6f collapses them to 0.000000). Zero is deliberately exempt —
+        // rendering it in exponent form would be the uglier lie.
+        $this->assertTrue(Util::needsExponentForm(1e15));
+        $this->assertTrue(Util::needsExponentForm(-1e15));
+        $this->assertTrue(Util::needsExponentForm(1e16));
+        $this->assertTrue(Util::needsExponentForm(9.9e-7));
+        $this->assertTrue(Util::needsExponentForm(-9.9e-7));
+        $this->assertFalse(Util::needsExponentForm(0.0));
+        $this->assertFalse(Util::needsExponentForm(1e-6));
+        $this->assertFalse(Util::needsExponentForm(999999999999999.0));
+    }
+
     public function testTagKeyEscapesBackslashSoItCannotUnEscapeSeparators(): void
     {
         // The escape character itself must be escaped (first): value 'a\'
