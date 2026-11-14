@@ -691,6 +691,99 @@ final class StyleTest extends TestCase
         $this->assertSame("\x1b[38;2;0;255;0mhi\x1b[0m", $s->render('hi'));
     }
 
+    // ---- backgroundComplete Theme-SSOT mirror pins (finding 009, ST-24) --
+    //
+    // The background side of the complete-colour contract, mirroring the
+    // foreground pins above across the tiers, the concrete-precedence door,
+    // the unset-clears-the-triple gate, and inherit/patch propagation —
+    // all read through ST-02's final resolution semantics (render collapses
+    // on its own; propsSet['bg'] is the veto that makes unsetBackground
+    // clear all three slots).
+
+    public function testBackgroundCompletePicksEachTier(): void
+    {
+        $triple = [
+            Color::hex('#ff0000'),
+            Color::ansi256(202),
+            Color::ansi(1),
+        ];
+        $tc = Style::new()->colorProfile(ColorProfile::TrueColor)->backgroundComplete(...$triple);
+        $t256 = Style::new()->colorProfile(ColorProfile::Ansi256)->backgroundComplete(...$triple);
+        $t16 = Style::new()->colorProfile(ColorProfile::Ansi)->backgroundComplete(...$triple);
+        $this->assertSame("\x1b[48;2;255;0;0mhi\x1b[0m", $tc->render('hi'));
+        $this->assertSame("\x1b[48;5;202mhi\x1b[0m", $t256->render('hi'));
+        $this->assertSame("\x1b[41mhi\x1b[0m", $t16->render('hi'));
+        // resolveProfile materialises the same pick the auto-collapse paints.
+        $this->assertSame($tc->render('hi'), $tc->resolveProfile()->render('hi'));
+    }
+
+    public function testExplicitBackgroundStillWinsOverUnresolvedComplete(): void
+    {
+        // Mirror of testExplicitForegroundStillWinsOverUnresolvedComplete:
+        // the concrete slot is set first, the complete triple second, and
+        // concrete still paints (propsSet['bg'] vetoes the collapse).
+        $s = Style::new()
+            ->background(Color::hex('#00ff00'))
+            ->backgroundComplete(Color::hex('#ff0000'), Color::ansi256(202), Color::ansi(1));
+        $this->assertSame("\x1b[48;2;0;255;0mhi\x1b[0m", $s->render('hi'));
+    }
+
+    public function testUnsetBackgroundFallsBackToTheCompleteTriple(): void
+    {
+        // Truth-pin (finding 009 leg, ST-24): the unset door is
+        // revert-to-base, not clear-everything. unsetBackground() nulls the
+        // concrete slot AND drops 'bg' from propsSet (withUnsetProp), so
+        // the auto-collapse gate at the render door re-materialises the
+        // complete triple — same shape as the adaptive pair the BC test at
+        // the top of this family proves (unsetForeground on a resolved
+        // adaptive pair re-opens the refusal). resolveProfile-then-unset
+        // behaves identically: materialising a pick does not consume the
+        // triple. If the owner rules that unset on a complete style must
+        // clear all three slots (2.0 candidate), flip this dated arm.
+        $s = Style::new()
+            ->colorProfile(ColorProfile::Ansi)
+            ->backgroundComplete(Color::hex('#ff0000'), Color::ansi256(202), Color::ansi(1))
+            ->unsetBackground();
+        $this->assertSame("\x1b[41mhi\x1b[0m", $s->render('hi'));
+        $r = Style::new()
+            ->colorProfile(ColorProfile::Ansi)
+            ->backgroundComplete(Color::hex('#ff0000'), Color::ansi256(202), Color::ansi(1))
+            ->resolveProfile()
+            ->unsetBackground();
+        $this->assertSame("\x1b[41mhi\x1b[0m", $r->render('hi'));
+    }
+
+    public function testInheritPropagatesCompleteBackground(): void
+    {
+        $parent = Style::new()->backgroundComplete(
+            Color::hex('#0000ff'),
+            Color::ansi256(21),
+            Color::ansi(4),
+        );
+        $child  = Style::new()->bold();
+        $merged = $child->inherit($parent)
+            ->colorProfile(ColorProfile::TrueColor)
+            ->resolveProfile();
+        $this->assertSame("\x1b[1m\x1b[48;2;0;0;255mhi\x1b[0m", $merged->render('hi'));
+    }
+
+    public function testBackgroundCompleteThroughPatch(): void
+    {
+        // Skip leg: a patcher that never touched bg must not squash the
+        // receiver's triple (the $applied gate consults propsSet, not the
+        // ctor default). Override leg: a patcher with a concrete bg wins.
+        $target = Style::new()->backgroundComplete(
+            Color::hex('#ff0000'),
+            Color::ansi256(202),
+            Color::ansi(1),
+        );
+        $skipped = $target->patch(Style::new()->bold());
+        $this->assertSame($target->render('hi'), str_replace("\x1b[1m", '', $skipped->render('hi')));
+        $green = Style::new()->background(Color::hex('#00ff00'));
+        $over  = $target->patch(Style::new()->background(Color::hex('#00ff00')));
+        $this->assertSame($green->render('hi'), $over->render('hi'));
+    }
+
     public function testCompleteAdaptiveColorPicksByBgAndProfile(): void
     {
         $light = new CompleteColor(
