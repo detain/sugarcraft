@@ -36,6 +36,12 @@ final class Section
      *                     trailing rune. Omitted (or `AutoWidth::Auto`)
      *                     resolves to the terminal width, falling back to 80
      *                     cells — see {@see WidthProbe}.
+     * @param int $leftPad      lead margin in CELLS of the fill rune (default
+     *                     2) — the same unit as the trailing fill and
+     *                     {@see subHeader()}'s `$indent`: a multi-cell rune
+     *                     is consumed as whole runes (the cell budget divided
+     *                     by the rune width), so the lead never exceeds
+     *                     `$leftPad` cells. Negatives floor to 0.
      *
      * @throws \InvalidArgumentException when `$width` is less than 1
      */
@@ -52,14 +58,16 @@ final class Section
         $label   = SafeText::line($label);  // neutralize escape/control injection
         $rune    = SafeText::line($rune);   // the fill rune is caller display text too
         $runeW   = max(1, Width::string($rune));  // cell width of the fill rune
-        // $leftPad is a rune count (not cell count) — each rune repeats once
-        $leadRunes = max(0, $leftPad);
+        // $leftPad is a cell budget (finding 010): a multi-cell rune takes
+        // whole runes out of it, exactly like the trailing fill below.
+        $leadCells = max(0, $leftPad);
         if ($width !== null) {
-            // A lead wider than the whole line keeps only the runes that fit.
+            // A lead wider than the whole line is cut to fit.
             // Inside this guard $width is >= 1 — assertWidth() refused anything
             // smaller — so no floor is needed here.
-            $leadRunes = min($leadRunes, intdiv($width, $runeW));
+            $leadCells = min($leadCells, $width);
         }
+        $leadRunes = intdiv($leadCells, $runeW);
         $left = str_repeat($rune, $leadRunes);
         if ($width === null) {
             return $left . self::labelOut($label, $theme) . $rune;  // one trailing rune (may exceed for multi-cell runes)
@@ -99,8 +107,9 @@ final class Section
     /**
      * Render an indented section divider for sub-sections.
      *
-     * Unlike {@see header()} which uses a left-pad rune count, subHeader()
-     * uses a fixed left-margin of spaces (default 4 cells) followed by
+     * Unlike {@see header()} which uses a lead of fill runes, subHeader()
+     * uses a fixed left-margin of spaces (default 4 cells — the same cell
+     * unit header()'s `$leftPad` now shares) followed by
      * a lighter divider rune (`·` by default). This visually nests the
      * section under a parent {@see header()} or {@see rule()}.
      *

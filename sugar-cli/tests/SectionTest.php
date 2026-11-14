@@ -55,15 +55,29 @@ final class SectionTest extends TestCase
     /** Multi-cell runes must never overshoot the requested width. */
     public function testMultiCellRuneNeverOvershoots(): void
     {
-        // '──' is a 2-cell rune; leftPad=2 means 2 runes = 4 cells.
-        // With label ' X ' (3 cells) + fill, total is 19 (not 20 — the
-        // 2-cell rune cannot fill the last slot exactly). The important
-        // guarantee is that it never EXCEEDS 20.
+        // '──' is a 2-cell rune; leftPad=2 is a CELL budget, so the lead is
+        // one whole rune (2 cells) — never two runes/4 cells (finding 010).
+        // With label ' X ' (3 cells) + fill, the total never EXCEEDS 20; the
+        // exact landing can leave a partial cell that the fill cannot take.
         $out = Section::header('X', Theme::plain(), leftPad: 2, width: 20, rune: '──');
         $this->assertLessThanOrEqual(20, Width::string($out));
+        $this->assertSame('── ', mb_substr($out, 0, 3));   // 2-cell lead (2 codepoints), then label pad
         // Verify exact width for a single-cell rune case (leftPad=2, rune='─')
         $out2 = Section::header('X', Theme::plain(), leftPad: 2, width: 20, rune: '─');
         $this->assertSame(20, Width::string($out2));
+    }
+
+    /** header()'s $leftPad and subHeader()'s $indent are the same CELL unit (010). */
+    public function testHeaderLeadAndSubHeaderIndentAgreeInCells(): void
+    {
+        $h = Section::header('S', Theme::plain(), leftPad: 4, width: 40, rune: '──');
+        $s = Section::subHeader('S', Theme::plain(), indent: 4, width: 40, rune: '──');
+        // 4 nominal cells each: header spends two whole 2-cell runes then the
+        // label pad (a third rune would overshoot the budget), subHeader four
+        // spaces. Rune-count semantics (leftPad=4 -> 4 runes = 8 cells) die here.
+        $this->assertSame('──── ', mb_substr($h, 0, 5));
+        $this->assertSame('    ', mb_substr($s, 0, 4));
+        $this->assertSame(Width::string(mb_substr($h, 0, 4)), Width::string(mb_substr($s, 0, 4)));
     }
 
     /** rule() applies the theme's muted style (emits SGR for non-plain themes). */
