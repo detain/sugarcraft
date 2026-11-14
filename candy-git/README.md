@@ -69,7 +69,8 @@ own git config.
 
 candy-git v1 covers the local-repository loop: status / stage / unstage /
 discard, branches (checkout, create, delete — with remote-tracking branches
-listed and their divergence badged), log (with a read-only commit details view and
+listed and their divergence badged), log (fetched in 20-commit pages that deepen
+as the cursor walks off the bottom, with a read-only commit details view and
 armed revert / reset --hard on it), the diff viewer, commit and
 amend, merge, cherry-pick, the sequencer menu (continue / abort / skip), stash
 create / apply / pop / drop, worktrees (list / add / remove), an interactive-rebase todo
@@ -101,11 +102,11 @@ remotes cannot stall rendering) remains the v2 direction.
 | `p` (press twice)        | Pull from the remote                                   |
 | `P` (press twice)        | Push to the remote — the first push of an untracked branch bootstraps `origin` with `--set-upstream`; refuses on detached HEAD |
 | `Space` (branches pane)  | Checkout branch                                         |
-| `c`                      | Commit — the message collector owns the keyboard: `Tab` inserts a newline (subject+body are typable, and pastes keep their line structure), `Enter` commits, `Esc` cancels |
+| `c`                      | Commit — the message collector owns the keyboard: `Tab` inserts a newline (subject+body are typable, and pastes keep their line structure), `Enter` commits, `Esc` cancels. Commits ONLY what you staged — unstaged edits stay in the work tree (stage first with `s` / `a`) |
 | `A`                      | Amend the last commit — opens the collector pre-filled with its message; editing it rewrites HEAD, submitting unchanged is the old keep-the-message amend |
 | `n`                      | Create and switch to a new branch — opened while the log pane is focused, the branch starts at THAT commit (the collector says so: `new branch from <sha>:`) |
-| `u`                      | Undo last operation — undoing a commit resets the boundary and re-arms the collector with the typed message (nothing authored is lost); undoing stage-all restores the exact prior selection, and refuses when a file was partially staged (its staged version lived only in the index) |
-| `Ctrl+r`                 | Redo last undone operation                             |
+| `u`                      | Undo last operation — undoing a commit resets the boundary and re-arms the collector with the typed message (nothing authored is lost); undoing stage-all restores the exact prior selection, and refuses when a file was partially staged (its staged version lived only in the index). Remembers the last 100 operations — older ones fall off the lane silently — and refuses outright where the inverse would lie: discard, untracked-file delete, amend, merge, revert, and reset --hard, plus the conditional ones: a checkout with no origin to return to, a branch delete whose prior SHA was not recorded, and the partial-stage-all above |
+| `Ctrl+r`                 | Redo last undone operation (same 100-entry lane; a fresh operation clears it) |
 | `D` (branches pane)      | Delete the selected branch (press twice) — refuses to delete the current branch |
 
 Remote-tracking branches (`~ origin/feature`) are listed under the locals with
@@ -120,10 +121,23 @@ or — when the local already exists — checks it out. They are read-only for
 | `w` (branches pane)     | Open worktrees manager (list / add / remove) — path collection refuses option-injection and `..` traversal; it does not jail the destination inside the repository |
 | `i`                      | Interactive rebase todo list — preview only; the todo is not yet executed |
 | `R`                      | Refresh from disk                                       |
-| `?`                      | Context-sensitive help                                  |
+| `?`                      | Context-sensitive help — lists the general keys and the focused pane's verbs; the Log pane is deliberately not listed (its actions live inside the read-only commit details view) |
 | `q`                      | Quit — while an overlay is open it closes the innermost one (same chain as `Esc`), and while typing in a text buffer `q` is just a letter |
-| `Ctrl+C`                 | Quit — the same chord as `q` |
+| `Ctrl+C`                 | Quit — the same chord as `q` while idle; while a text buffer owns the keyboard it rides the `Esc` chain instead and CANCELS the innermost overlay (a half-typed commit draft is dropped — `q` would only have typed a letter) |
 | `Esc`                    | Cancel the innermost overlay/collection; quits when nothing is open    |
+
+### Signed commits
+
+When the repository resolves `commit.gpgsign` to true (and `gpg.format` is not
+`ssh`), `c` / `A` sign through gpg-agent's **pinentry** — which prompts on the
+terminal directly, an input channel the app's stdin isolation cannot fence:
+the prompt paints over the interface and candy-git sees nothing while it
+waits. The collector's amber lane warns about this before you type. Unlock
+your key first; if the wait outlives the 120-second mutating budget the child
+is terminated mid-signature, the commit fails, and your message survives in
+the still-open collector. SSH-format signing (`gpg.format=ssh`) is exempt —
+it rides an ssh-agent socket you unlocked outside the app already. Retiring
+this into a suspend-the-UI flow is the async work tracked as candy-git-010.
 
 ### Text-entry keys
 
