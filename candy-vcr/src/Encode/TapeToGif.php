@@ -59,6 +59,12 @@ final class TapeToGif
     private array $renderWarnings = [];
 
     /**
+     * The live frame stream of the current render, kept so its exec→echo
+     * fallback notices reach {@see self::warnings()} too (VCR-COPY-05).
+     */
+    private ?FrameStream $lastFrameStream = null;
+
+    /**
      * The single fps precedence ladder (finding 008): explicit caller/CLI
      * value → tape `Set Framerate` → the 30.0 house default. Public so the
      * door is testable without rendering pixels, and any second render path
@@ -114,6 +120,7 @@ final class TapeToGif
         // Render-time notices (the .gif swap from finding 009) are per-run;
         // the pipeline instance is reused across batch renders.
         $this->renderWarnings = [];
+        $this->lastFrameStream = null;
         $cliTheme = $options['theme'] ?? null;
 
         // Size law (finding 032): refuse by name BEFORE slurping — a stat is
@@ -181,6 +188,7 @@ final class TapeToGif
             ($options['maxFrames'] ?? null) !== null ? (int) $options['maxFrames'] : null,
             ($options['maxRuntimeSeconds'] ?? null) !== null ? (float) $options['maxRuntimeSeconds'] : null,
         );
+        $this->lastFrameStream = $frameStream;
 
         // Same cell metrics the Compiler used to derive cols/rows, so the canvas
         // (cols * cellW) x (rows * cellH) lands within one cell of the tape's
@@ -308,7 +316,11 @@ final class TapeToGif
      */
     public function warnings(): array
     {
-        return array_merge($this->compiler->warnings(), $this->renderWarnings);
+        return array_merge(
+            $this->compiler->warnings(),
+            $this->renderWarnings,
+            $this->lastFrameStream?->warnings() ?? [],
+        );
     }
 
     /**
@@ -584,7 +596,7 @@ final class TapeToGif
                 if ($strict) {
                     throw $e;
                 }
-                error_log('candy-vcr: ' . $e->getMessage() . ', falling back to TokyoNight');
+                $this->renderWarnings[] = $e->getMessage() . ', falling back to TokyoNight';
                 return Theme::tokyoNight();
             }
         }
@@ -603,11 +615,13 @@ final class TapeToGif
     {
         if ($strict) {
             throw new \InvalidArgumentException(
-                "Unknown theme '{$name}' (known: TokyoNight, TokyoNightLight, TokyoNightStorm, Dracula, SolarizedDark)",
+                "unknown theme '{$name}' (known: TokyoNight, TokyoNightLight, TokyoNightStorm, Dracula, SolarizedDark)",
             );
         }
-        // Non-strict: warn and fall back to TokyoNight
-        error_log("candy-vcr: unknown theme '{$name}', falling back to TokyoNight");
+        // Non-strict: warn through the collector and fall back to TokyoNight
+        // (VCR-COPY-05: no raw error_log — every notice shares the CLI's
+        // styled `Warning:` voice and the same casing dialect).
+        $this->renderWarnings[] = "unknown theme '{$name}', falling back to TokyoNight";
         return Theme::tokyoNight();
     }
 

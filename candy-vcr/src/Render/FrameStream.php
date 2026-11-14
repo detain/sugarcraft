@@ -87,6 +87,13 @@ final class FrameStream implements \IteratorAggregate
     private bool $execEof = false;
 
     /**
+     * @var list<string>
+     *
+     * @see self::warnings()
+     */
+    private array $fallbackWarnings = [];
+
+    /**
      * Hard ceiling on emitted frames (overridable per render via the
      * `maxFrames` option). A degenerate tape must die loudly on this number,
      * never loop until the harness timeout-kills it (finding 001).
@@ -661,11 +668,24 @@ final class FrameStream implements \IteratorAggregate
     }
 
     /**
-     * Surface an exec→echo fallback without aborting the render. error_log() goes
-     * to stderr, matching how TapeToGif reports an unknown theme.
+     * Collected non-fatal render notices (VCR-COPY-05). The exec→echo
+     * fallback used to hit error_log() raw — mid-stream, unstyled, and
+     * invisible to a caller that swapped STDOUT for a memory stream. It
+     * now rides the warnings channel TapeToGif merges into its own
+     * `Warning:` voice for every consumer that reads them.
+     *
+     * @return list<string>
+     */
+    public function warnings(): array
+    {
+        return $this->fallbackWarnings;
+    }
+
+    /**
+     * Surface an exec→echo fallback without aborting the render.
      */
     private function warnExecFallback(string $reason): void
     {
-        error_log("candy-vcr: Set Shell requested but exec mode unavailable ({$reason}); rendering keystrokes only.");
+        $this->fallbackWarnings[] = "Set Shell requested but exec mode unavailable ({$reason}); rendering keystrokes only";
     }
 }

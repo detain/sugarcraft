@@ -142,7 +142,9 @@ final class JsonThemeTest extends TestCase
         }
 
         // Lax mode keeps the legacy TokyoNight fallback, but the degradation
-        // is LOUD: the warning names the failure and lands on the log.
+        // is LOUD: the warning names the failure and rides the same
+        // warnings() channel every other render notice shares (VCR-COPY-05)
+        // — it no longer bypasses into raw error_log().
         $log = tempnam(sys_get_temp_dir(), 'vcr-theme-log');
         self::assertIsString($log);
         $previous = ini_set('error_log', $log);
@@ -157,9 +159,11 @@ final class JsonThemeTest extends TestCase
         }
 
         self::assertSame(Theme::tokyoNight()->color(0), $theme->color(0), 'lax mode keeps the legacy fallback');
-        $written = (string) file_get_contents($log);
+        $warnings = $pipeline->warnings();
+        self::assertNotEmpty($warnings, 'the lax fallback must leave a warning on the channel');
+        self::assertStringContainsString('is not a #RRGGBB colour', $warnings[0]);
+        self::assertStringContainsString('falling back to TokyoNight', $warnings[0]);
+        self::assertSame('', (string) file_get_contents($log), 'the notice must not bypass into error_log');
         @unlink($log);
-        self::assertStringContainsString('is not a #RRGGBB colour', $written);
-        self::assertStringContainsString('falling back to TokyoNight', $written);
     }
 }

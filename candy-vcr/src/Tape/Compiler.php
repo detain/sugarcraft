@@ -157,12 +157,12 @@ final class Compiler
         foreach ($ast as $node) {
             if ($node instanceof ParseError) {
                 if ($strict) {
-                    throw new \RuntimeException("Parse error at line {$node->line}: {$node->message}");
+                    throw new \RuntimeException("Parse error on line {$node->line}: {$node->message}");
                 }
                 // Non-strict still records the problem (finding 005's silence
                 // close): a skipped unknown directive is a loud diagnostic,
                 // not a vanishing keystroke.
-                $this->recordDropped("Parse error at line {$node->line}: {$node->message}");
+                $this->recordDropped("Parse error on line {$node->line}: {$node->message}");
                 continue;
             }
             $this->compileNode($node);
@@ -371,7 +371,7 @@ final class Compiler
 
         $this->reportCompileProblem(
             "Wait {$node->pattern} is a condition wait; the record-side compiler cannot match output, "
-            . 'so it emits no event and advances no clock (render-side pattern waiting is the open seam)',
+            . 'so it emits no event and advances no clock — use a duration like Wait 2s instead',
         );
     }
 
@@ -1026,7 +1026,7 @@ final class Compiler
             foreach ($subResult['errors'] as $subError) {
                 $this->recordDropped(
                     'Source include ' . ($realPath !== false ? $realPath : $fullPath)
-                    . ": parse error at line {$subError->line}: {$subError->message}",
+                    . ": parse error on line {$subError->line}: {$subError->message}",
                 );
             }
             foreach ($subResult['ast'] as $subNode) {

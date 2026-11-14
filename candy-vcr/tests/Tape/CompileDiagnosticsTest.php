@@ -67,7 +67,7 @@ final class CompileDiagnosticsTest extends TestCase
 
         $this->assertCount(1, $compiler->droppedDiagnostics());
         $this->assertStringContainsString('Unknown directive: sleep', $compiler->droppedDiagnostics()[0]);
-        $this->assertStringContainsString('Parse error at line 2', $compiler->warnings()[0]);
+        $this->assertStringContainsString('Parse error on line 2', $compiler->warnings()[0]);
         $this->assertSame('ok', $this->typedBytes($cassette), 'the valid directive still compiled');
     }
 
