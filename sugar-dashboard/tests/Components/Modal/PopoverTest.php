@@ -9,6 +9,7 @@ use SugarCraft\Dashboard\Foundation\Item;
 use SugarCraft\Dashboard\Foundation\Sizer;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Width;
 use PHPUnit\Framework\TestCase;
 
 final class PopoverTest extends TestCase
@@ -332,5 +333,79 @@ final class PopoverTest extends TestCase
         $rendered = $popover->render();
 
         $this->assertStringContainsString('Test & <Tag> "Quote"', $rendered);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Frame geometry (finding sugar-dashboard-072)
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * Every painted frame row of an arrow-less popover, measured in cells.
+     *
+     * @return list<int>
+     */
+    private function frameRowWidths(Popover $popover): array
+    {
+        $widths = [];
+        foreach (explode("\n", $popover->render()) as $row) {
+            $widths[] = Width::string($row);
+        }
+
+        return $widths;
+    }
+
+    public function testEveryFrameRowIsExactlyTheAllocation(): void
+    {
+        $popover = Popover::new('Status', 'hello world')
+            ->setSize(30, 8)
+            ->withShowArrow(false);
+
+        $widths = $this->frameRowWidths($popover);
+
+        $this->assertNotEmpty($widths);
+        foreach ($widths as $index => $width) {
+            $this->assertSame(30, $width, 'row ' . $index . ' drifted from the allocation');
+        }
+    }
+
+    public function testTitleWithinOneCellOfTheInteriorKeepsBoxIntact(): void
+    {
+        // Interior text column is useWidth - 4 = 26 at 30 wide.
+        foreach ([25, 26, 27] as $titleLength) {
+            $popover = Popover::new(str_repeat('x', $titleLength), 'body')
+                ->setSize(30, 8)
+                ->withShowArrow(false);
+
+            foreach ($this->frameRowWidths($popover) as $index => $width) {
+                $this->assertSame(30, $width, 'title length ' . $titleLength . ', row ' . $index);
+            }
+        }
+    }
+
+    public function testOverlongTitleIsCellTruncated(): void
+    {
+        $popover = Popover::new(str_repeat('x', 40), 'body')
+            ->setSize(30, 8)
+            ->withShowArrow(false);
+
+        $titleRow = explode("\n", $popover->render())[1];
+        $plain = preg_replace('/\x1b\[[0-9;]*m/', '', $titleRow);
+
+        // The interior text column is exactly 26 cells, so the painted title
+        // inside '│ ' ... ' │' cannot exceed the frame.
+        $this->assertSame(30, Width::string($titleRow));
+        $this->assertStringStartsWith('│ ', $plain);
+        $this->assertStringEndsWith(' │', $plain);
+    }
+
+    public function testOverlongWordInContentIsClippedToInterior(): void
+    {
+        $popover = Popover::new('T', str_repeat('W', 60))
+            ->setSize(20, 6)
+            ->withShowArrow(false);
+
+        foreach ($this->frameRowWidths($popover) as $index => $width) {
+            $this->assertSame(20, $width, 'row ' . $index . ' overflowed the frame');
+        }
     }
 }

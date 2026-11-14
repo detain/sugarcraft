@@ -127,8 +127,12 @@ final class Popover implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Title bar (if present)
         if ($this->title !== '') {
-            $titleContent = '│ ' . $this->title . ' │';
-            $titleWidth = Width::string($titleContent);
+            // Finding sugar-dashboard-072: the measured title width used to be
+            // discarded - the row was neither truncated nor padded, so a long
+            // title burst the box and a short one left a ragged row. The cell
+            // count of every painted row is now exactly $useWidth.
+            $textWidth = max(0, $contentWidth);
+            $titleText = Width::padRight(Width::truncateAnsi($this->title, $textWidth), $textWidth);
 
             if ($this->titleColor !== null) {
                 $result .= $this->titleColor->toFg(ColorMode::profile());
@@ -136,7 +140,7 @@ final class Popover implements \SugarCraft\Dashboard\Foundation\SizedItem
             if ($this->backgroundColor !== null) {
                 $result .= $this->backgroundColor->toBg(ColorMode::profile());
             }
-            $result .= $titleContent . "\n";
+            $result .= '│ ' . $titleText . ' │' . "\n";
         }
 
         // Content area
@@ -168,9 +172,14 @@ final class Popover implements \SugarCraft\Dashboard\Foundation\SizedItem
         $lines = $this->wrapText($this->content, $width);
 
         foreach ($lines as $line) {
+            // A single over-long word cannot wrap; clip it so the frame
+            // geometry invariant (every row exactly useWidth cells) holds.
+            $line = Width::truncateAnsi($line, max(0, $width));
             $lineWidth = Width::string($line);
             $padding = $width - $lineWidth;
-            $result .= '│' . $line . str_repeat(' ', max(0, $padding)) . '│' . "\n";
+            // Same fix family: the side gaps now match the title row and the
+            // frame math, so the row lands on exactly useWidth cells.
+            $result .= '│ ' . $line . str_repeat(' ', max(0, $padding)) . ' │' . "\n";
         }
 
         return $result;
@@ -262,7 +271,7 @@ final class Popover implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withTitle(string $title): self
     {
-        return new self(
+        $next = new self(
             title: $title,
             content: $this->content,
             borderColor: $this->borderColor,
@@ -270,6 +279,11 @@ final class Popover implements \SugarCraft\Dashboard\Foundation\SizedItem
             titleColor: $this->titleColor,
             showArrow: $this->showArrow,
         );
+        // Finding sugar-dashboard-072 exposed that these rebuilds used to drop
+        // the width/height allocation: a wither must only change its own knob.
+        $next->width = $this->width;
+        $next->height = $this->height;
+        return $next;
     }
 
     /**
@@ -277,7 +291,7 @@ final class Popover implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withContent(string $content): self
     {
-        return new self(
+        $next = new self(
             title: $this->title,
             content: $content,
             borderColor: $this->borderColor,
@@ -285,6 +299,9 @@ final class Popover implements \SugarCraft\Dashboard\Foundation\SizedItem
             titleColor: $this->titleColor,
             showArrow: $this->showArrow,
         );
+        $next->width = $this->width;
+        $next->height = $this->height;
+        return $next;
     }
 
     /**
@@ -292,7 +309,7 @@ final class Popover implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withBorderColor(?Color $color): self
     {
-        return new self(
+        $next = new self(
             title: $this->title,
             content: $this->content,
             borderColor: $color,
@@ -300,6 +317,9 @@ final class Popover implements \SugarCraft\Dashboard\Foundation\SizedItem
             titleColor: $this->titleColor,
             showArrow: $this->showArrow,
         );
+        $next->width = $this->width;
+        $next->height = $this->height;
+        return $next;
     }
 
     /**
@@ -307,7 +327,7 @@ final class Popover implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withBackgroundColor(?Color $color): self
     {
-        return new self(
+        $next = new self(
             title: $this->title,
             content: $this->content,
             borderColor: $this->borderColor,
@@ -315,6 +335,9 @@ final class Popover implements \SugarCraft\Dashboard\Foundation\SizedItem
             titleColor: $this->titleColor,
             showArrow: $this->showArrow,
         );
+        $next->width = $this->width;
+        $next->height = $this->height;
+        return $next;
     }
 
     /**
@@ -322,7 +345,7 @@ final class Popover implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withTitleColor(?Color $color): self
     {
-        return new self(
+        $next = new self(
             title: $this->title,
             content: $this->content,
             borderColor: $this->borderColor,
@@ -330,6 +353,9 @@ final class Popover implements \SugarCraft\Dashboard\Foundation\SizedItem
             titleColor: $color,
             showArrow: $this->showArrow,
         );
+        $next->width = $this->width;
+        $next->height = $this->height;
+        return $next;
     }
 
     /**
@@ -337,7 +363,7 @@ final class Popover implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withShowArrow(bool $show): self
     {
-        return new self(
+        $next = new self(
             title: $this->title,
             content: $this->content,
             borderColor: $this->borderColor,
@@ -345,5 +371,8 @@ final class Popover implements \SugarCraft\Dashboard\Foundation\SizedItem
             titleColor: $this->titleColor,
             showArrow: $show,
         );
+        $next->width = $this->width;
+        $next->height = $this->height;
+        return $next;
     }
 }
