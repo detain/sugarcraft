@@ -689,14 +689,15 @@ final class TextPrompt
         if ($this->undoManager === null || !$this->undoManager->canUndo()) {
             return $this;
         }
-        [$newManager, $restored, $ok] = $this->undoManager->undo($this->buffer);
+        [$newManager, $frame, $ok] = $this->undoManager->undo(self::undoFrame($this->buffer, $this->cursor));
         if (!$ok) {
             return $this;
         }
+        [$text, $caret] = self::decodeUndoFrame($frame);
         $clone = clone $this;
         $clone->undoManager = $newManager;
-        $clone->buffer = $restored;
-        $clone->cursor = self::charCount($restored);
+        $clone->buffer = $text;
+        $clone->cursor = $caret;
         $clone->undoRunEnd = -1;
         $clone->error = '';
         return $clone;
@@ -707,14 +708,15 @@ final class TextPrompt
         if ($this->undoManager === null || !$this->undoManager->canRedo()) {
             return $this;
         }
-        [$newManager, $restored, $ok] = $this->undoManager->redo($this->buffer);
+        [$newManager, $frame, $ok] = $this->undoManager->redo(self::undoFrame($this->buffer, $this->cursor));
         if (!$ok) {
             return $this;
         }
+        [$text, $caret] = self::decodeUndoFrame($frame);
         $clone = clone $this;
         $clone->undoManager = $newManager;
-        $clone->buffer = $restored;
-        $clone->cursor = self::charCount($restored);
+        $clone->buffer = $text;
+        $clone->cursor = $caret;
         $clone->undoRunEnd = -1;
         $clone->error = '';
         return $clone;
@@ -1186,9 +1188,9 @@ final class TextPrompt
     // -------------------------------------------------------------------------
 
     /**
-     * Record the pre-edit buffer on the undo stack — suppressed entirely on
-     * hidden prompts so secrets never enter undo state (and through it,
-     * snapshots of the prompt object).
+     * Record the pre-edit (buffer, caret) frame on the undo stack —
+     * suppressed entirely on hidden prompts so secrets never enter undo
+     * state (and through it, snapshots of the prompt object).
      *
      * Passing $insertRun folds a consecutive typing run into ONE snapshot:
      * while the caret sits exactly where the previous inserted character
@@ -1203,8 +1205,44 @@ final class TextPrompt
         if ($insertRun && $this->undoRunEnd === $clone->cursor) {
             return; // run already snapshotted at its start
         }
-        $clone->undoManager = $clone->undoManager->push($clone->buffer);
+        $clone->undoManager = $clone->undoManager->push(self::undoFrame($clone->buffer, $clone->cursor));
         $clone->undoRunEnd = -1;
+    }
+
+    /**
+     * Encode an undo frame: the buffer plus the caret position at the
+     * moment of the snapshot (finding 086). Undoing restores both, so an
+     * edit run does not leave the cursor stranded at end-of-text.
+     */
+    private static function undoFrame(string $buffer, int $cursor): string
+    {
+        return (string) \json_encode([$buffer, $cursor], \JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * Decode an undo frame into [text, caret] with the caret clamped into
+     * the restored text. A frame that is not an encoded pair — a raw
+     * string a host pushed into a seeded UndoManager, or any legacy
+     * text-only snapshot — decodes to the old law: that text, caret at
+     * end.
+     *
+     * @return array{0: string, 1: int}
+     */
+    private static function decodeUndoFrame(string $frame): array
+    {
+        $decoded = \json_decode($frame, true);
+        if (
+            !\is_array($decoded)
+            || \count($decoded) !== 2
+            || !\is_string($decoded[0])
+            || !\is_int($decoded[1])
+        ) {
+            return [$frame, self::charCount($frame)];
+        }
+
+        $text  = $decoded[0];
+        $caret = \max(0, \min($decoded[1], self::charCount($text)));
+        return [$text, $caret];
     }
 
     /**
