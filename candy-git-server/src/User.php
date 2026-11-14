@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\GitServer;
 
+use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\GitServer\Lang;
 use SugarCraft\GitServer\Support\BoundedCommand;
 
@@ -12,10 +13,20 @@ use SugarCraft\GitServer\Support\BoundedCommand;
  *
  * Port of charmbracelet/soft-serve User.
  *
+ * S48 (finding 065, 2026-11-15): the fluent withers used to hand-carry
+ * every positional argument into `new self(...)` — five fields sit below
+ * the >=7 rule line, but this class carries the incident history that
+ * line exists for (withActive once wrote into the isAdmin slot), so the
+ * whole setter family rides the shared Concerns\Mutable mutate().
+ * Naming only what changes makes the positional class of bug
+ * unrepresentable. Not an exemption: a routing.
+ *
  * @see https://github.com/charmbracelet/soft-serve
  */
 final class User
 {
+    use Mutable;
+
     public readonly string $username;
     public readonly bool $isAdmin;
     public readonly bool $isActive;
@@ -53,28 +64,29 @@ final class User
 
     public function withUsername(string $u): self
     {
-        return new self($u, $this->isAdmin, $this->isActive, $this->authorizedKeys, $this->passwordHash);
+        return $this->mutate(['username' => $u]);
     }
 
     public function withAdmin(bool $v = true): self
     {
-        return new self($this->username, $v, $this->isActive, $this->authorizedKeys, $this->passwordHash);
+        return $this->mutate(['isAdmin' => $v]);
     }
 
     public function withActive(bool $v = true): self
     {
-        // The constructor order is
-        // (username, isAdmin, isActive, keys) — this setter used to
-        // write $v into the isAdmin slot, so 'deactivating' a user stripped
-        // admin and left the account ACTIVE. A trust gate on isActive cannot
-        // exist while this flips the wrong field.
-        return new self($this->username, $this->isAdmin, $v, $this->authorizedKeys, $this->passwordHash);
+        // This setter used to write $v into the isAdmin slot — the old
+        // positional thread (username, isAdmin, isActive, keys, hash)
+        // made the swap silent, and 'deactivating' a user stripped admin
+        // while leaving the account ACTIVE. Since S48 the thread is gone:
+        // mutate() names the field, so the wrong-slot class of bug cannot
+        // be written here again. The isActive trust gate stands on this.
+        return $this->mutate(['isActive' => $v]);
     }
 
     /** Attach a password_hash() digest (the only password form the store keeps). */
     public function withPasswordHash(?string $hash): self
     {
-        return new self($this->username, $this->isAdmin, $this->isActive, $this->authorizedKeys, $hash);
+        return $this->mutate(['passwordHash' => $hash]);
     }
 
     /**
@@ -144,9 +156,7 @@ final class User
 
     public function withAuthorizedKeys(string $keys): self
     {
-        $clone = clone $this;
-        $clone->authorizedKeys = $keys;
-        return $clone;
+        return $this->mutate(['authorizedKeys' => $keys]);
     }
 
     /**
@@ -186,9 +196,7 @@ final class User
             $keys[] = $line;
         }
 
-        $clone = clone $this;
-        $clone->authorizedKeys = \implode("\n", $keys);
-        return $clone;
+        return $this->mutate(['authorizedKeys' => \implode("\n", $keys)]);
     }
 
     /**

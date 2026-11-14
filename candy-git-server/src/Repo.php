@@ -13,6 +13,15 @@ use SugarCraft\GitServer\Support\BoundedCommand;
  *
  * Port of charmbracelet/soft-serve Repo.
  *
+ * S48 (finding 065, 2026-11-15): eight positional ctor fields is past
+ * the >=7 line, so every with*() setter routes through ONE class-local
+ * mutate() (below, in Builder) instead of hand-threading eight
+ * arguments. The shape is the override Concerns\Mutable itself
+ * documents for a derived property: isPublic is computed by the ctor
+ * from visibility, so the bare trait's get_object_vars() splat would
+ * pass an unknown named parameter; the local mutate drops the derived
+ * flag before the rebuild and the ctor re-derives it.
+ *
  * @see https://github.com/charmbracelet/soft-serve
  */
 final class Repo
@@ -410,16 +419,13 @@ final class Repo
     {
         $meta = self::readMeta($this->gitDir());
 
-        return (new self(
-            $this->name,
-            $this->path,
-            $meta['description'],
-            $this->visibility,
-            $meta['allowPush'],
-            $meta['mirrorFrom'],
-            $meta['highlightLanguage'],
-            $meta['collaborators'],
-        ));
+        return $this->mutate([
+            'description'       => $meta['description'],
+            'allowPush'         => $meta['allowPush'],
+            'mirrorFrom'        => $meta['mirrorFrom'],
+            'highlightLanguage' => $meta['highlightLanguage'],
+            'collaborators'     => $meta['collaborators'],
+        ]);
     }
 
     /**
@@ -446,14 +452,30 @@ final class Repo
     // -------------------------------------------------------------------------
     // Builder
     // -------------------------------------------------------------------------
+
+    /**
+     * The single immutable rebuild behind every with*() setter (S48).
+     * Class-local rather than the bare Concerns\Mutable trait because
+     * isPublic is derived: see the class docblock.
+     *
+     * @param array<string, mixed> $changes
+     */
+    private function mutate(array $changes): self
+    {
+        $vars = \get_object_vars($this);
+        unset($vars['isPublic']);
+
+        return new self(...\array_merge($vars, $changes));
+    }
+
     public function withDescription(string $d): self
     {
-        return new self($this->name, $this->path, $d, $this->visibility, $this->allowPush, $this->mirrorFrom, $this->highlightLanguage, $this->collaborators);
+        return $this->mutate(['description' => $d]);
     }
 
     public function withVisibility(Visibility $v): self
     {
-        return new self($this->name, $this->path, $this->description, $v, $this->allowPush, $this->mirrorFrom, $this->highlightLanguage, $this->collaborators);
+        return $this->mutate(['visibility' => $v]);
     }
 
     /**
@@ -488,34 +510,32 @@ final class Repo
 
     public function withAllowPush(bool $v = true): self
     {
-        return new self($this->name, $this->path, $this->description, $this->visibility, $v, $this->mirrorFrom, $this->highlightLanguage, $this->collaborators);
+        return $this->mutate(['allowPush' => $v]);
     }
 
     public function withMirrorFrom(?string $url): self
     {
-        return new self($this->name, $this->path, $this->description, $this->visibility, $this->allowPush, $url, $this->highlightLanguage, $this->collaborators);
+        return $this->mutate(['mirrorFrom' => $url]);
     }
 
     public function withHighlightLanguage(string $lang): self
     {
-        return new self($this->name, $this->path, $this->description, $this->visibility, $this->allowPush, $this->mirrorFrom, $lang, $this->collaborators);
+        return $this->mutate(['highlightLanguage' => $lang]);
     }
 
     public function addCollaborator(string $username): self
     {
         if (\in_array($username, $this->collaborators, true)) return $this;
-        $clone = clone $this;
-        $clone->collaborators[] = $username;
-        return $clone;
+        $collaborators = $this->collaborators;
+        $collaborators[] = $username;
+        return $this->mutate(['collaborators' => $collaborators]);
     }
 
     public function removeCollaborator(string $username): self
     {
-        $clone = clone $this;
-        $clone->collaborators = \array_values(
-            \array_filter($clone->collaborators, fn($u) => $u !== $username)
-        );
-        return $clone;
+        return $this->mutate(['collaborators' => \array_values(
+            \array_filter($this->collaborators, fn($u) => $u !== $username)
+        )]);
     }
 
     // -------------------------------------------------------------------------

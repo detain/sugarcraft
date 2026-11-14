@@ -7,6 +7,7 @@ namespace SugarCraft\GitServer\LFS;
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
 use React\Promise\PromiseInterface;
+use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\GitServer\Support\PromisePool;
 use SugarCraft\GitServer\{AccessControl, Repo, Stats, User};
 
@@ -27,10 +28,20 @@ use function React\Promise\resolve;
  *
  * Port of charmbracelet/soft-serve LFSHandler.
  *
+ * S48 (finding 065, 2026-11-15): nine positional ctor fields is past
+ * the >=7 line, so the with*() setters ride Concerns\Mutable's mutate()
+ * instead of hand-threading nine named arguments. The trait's
+ * get_object_vars() splat is safe here — declared properties and ctor
+ * parameters match exactly — and re-entering resolved values through
+ * the ctor is idempotent (?? re-defaults a present instance to itself,
+ * the max(1,...) clamp re-passes its own output).
+ *
  * @see https://github.com/charmbracelet/soft-serve
  */
 final class LFSHandler
 {
+    use Mutable;
+
     private Repo $repo;
     private ?User $user;
     private ?LFSStorageBackendInterface $storageBackend;
@@ -100,17 +111,7 @@ final class LFSHandler
      */
     public function withStorageBackend(LFSStorageBackendInterface $backend): self
     {
-        return new self(
-            repo: $this->repo,
-            user: $this->user,
-            lfsPath: $this->lfsPath,
-            storageBackend: $backend,
-            concurrentTransfers: $this->concurrentTransfers,
-            stats: $this->stats,
-            maxObjectBytes: $this->maxObjectBytes,
-            publicBaseUrl: $this->publicBaseUrl,
-            accessControl: $this->accessControl,
-        );
+        return $this->mutate(['storageBackend' => $backend]);
     }
 
     /**
@@ -118,17 +119,7 @@ final class LFSHandler
      */
     public function withConcurrentTransfers(int $count): self
     {
-        return new self(
-            repo: $this->repo,
-            user: $this->user,
-            lfsPath: $this->lfsPath,
-            storageBackend: $this->storageBackend,
-            concurrentTransfers: $count,
-            stats: $this->stats,
-            maxObjectBytes: $this->maxObjectBytes,
-            publicBaseUrl: $this->publicBaseUrl,
-            accessControl: $this->accessControl,
-        );
+        return $this->mutate(['concurrentTransfers' => $count]);
     }
 
     // -------------------------------------------------------------------------
