@@ -71,11 +71,28 @@ final class Terminal
     }
 
     /**
-     * Canonical factory — mirrors the constructor params directly.
+     * Canonical factory — mirrors the constructor params directly, all
+     * optional and defaulted: focus-event wiring and a pre-set DEC mode
+     * (or injected buffer/cursor) never require positional fillers.
      */
-    public static function new(int $cols = 80, int $rows = 24, ?int $scrollbackSize = null): self
-    {
-        return new self($cols, $rows, null, null, null, $scrollbackSize ?? 1000);
+    public static function new(
+        int $cols = 80,
+        int $rows = 24,
+        ?int $scrollbackSize = null,
+        ?Buffer $buffer = null,
+        ?Cursor $cursor = null,
+        ?Mode $mode = null,
+        ?\Closure $onFocusEvent = null,
+    ): self {
+        return new self(
+            $cols,
+            $rows,
+            $buffer,
+            $cursor,
+            $mode,
+            $scrollbackSize ?? 1000,
+            $onFocusEvent,
+        );
     }
 
     /**
@@ -504,6 +521,22 @@ final class Terminal
         // active one, or leaving DEC 1049 later would restore a stale-size
         // grid into a resized terminal (real terminals resize both).
         $this->handler->resizeBuffers($cols, $rows);
+    }
+
+    /**
+     * Live grid width, read straight from the handler's buffer — the
+     * current value after a {@see self::resize()}, not the constructor
+     * echo, and without the O(rows × cols) rebuild a screen() costs.
+     */
+    public function cols(): int
+    {
+        return $this->handler->buffer->cols;
+    }
+
+    /** Live grid height; same direct-read contract as {@see self::cols()}. */
+    public function rows(): int
+    {
+        return $this->handler->buffer->rows;
     }
 
     /**
