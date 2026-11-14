@@ -21,6 +21,7 @@ return [
     'descriptor.help_empty'           => 'nápověva deskriptoru nesmí být prázdná',
     'descriptor.help_invalid'         => 'nápověva deskriptoru nesmí obsahovat řídicí znaky',
     'descriptor.label_empty'          => 'klíče štítků deskriptoru musí být neprázdné řetězce',
+    'descriptor.label_invalid'        => 'klíč štítku deskriptoru není platný název štítku Prometheus: {key}',
     'descriptor.name_empty'           => 'název deskriptoru nesmí být prázdný',
     'descriptor.name_invalid'         => 'název deskriptoru není platný název metriky Prometheus: {name}',
     'descriptor.type_invalid'         => 'typ deskriptoru musi být jedním z counter, gauge, histogram, summary: {type}',

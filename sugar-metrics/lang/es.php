@@ -21,6 +21,7 @@ return [
     'descriptor.help_empty'           => 'la ayuda del descriptor no debe estar vacía',
     'descriptor.help_invalid'         => 'la ayuda del descriptor no debe contener caracteres de control',
     'descriptor.label_empty'          => 'las claves de etiqueta del descriptor deben ser cadenas no vacías',
+    'descriptor.label_invalid'        => 'la clave de etiqueta del descriptor no es un nombre de etiqueta Prometheus válido: {key}',
     'descriptor.name_empty'           => 'el nombre del descriptor no debe estar vacío',
     'descriptor.name_invalid'         => 'el nombre del descriptor no es un nombre de métrica Prometheus válido: {name}',
     'descriptor.type_invalid'         => 'el tipo del descriptor debe ser uno de counter, gauge, histogram, summary: {type}',

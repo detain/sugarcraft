@@ -21,6 +21,7 @@ return [
     'descriptor.help_empty'           => 'يجب ألا يكون نص المساعدة للموصِّف فارغًا',
     'descriptor.help_invalid'         => 'يجب ألا يحتوي نص المساعدة للموصِّف على محارف تحكم',
     'descriptor.label_empty'          => 'يجب أن تكون مفاتيح وسوم الموصِّف سلاسل غير فارغة',
+    'descriptor.label_invalid'        => 'مفتاح وسم الموصِّف ليس اسم وسم Prometheus صالحًا: {key}',
     'descriptor.name_empty'           => 'يجب ألا يكون اسم الموصِّف فارغًا',
     'descriptor.name_invalid'         => 'اسم الموصِّف ليس اسم مقياس Prometheus صالحًا: {name}',
     'descriptor.type_invalid'         => 'يجب أن يكون نوع الوصف أحد counter أو gauge أو histogram أو summary: {type}',

@@ -21,6 +21,7 @@ return [
     'descriptor.help_empty'           => 'a ajuda do descritor não pode estar vazia',
     'descriptor.help_invalid'         => 'a ajuda do descritor não pode conter caracteres de controle',
     'descriptor.label_empty'          => 'as chaves de etiqueta do descritor devem ser strings não vazias',
+    'descriptor.label_invalid'        => 'a chave de etiqueta do descritor não é um nome de etiqueta Prometheus válido: {key}',
     'descriptor.name_empty'           => 'o nome do descritor não pode estar vazio',
     'descriptor.name_invalid'         => 'o nome do descritor não é um nome de métrica Prometheus válido: {name}',
     'descriptor.type_invalid'         => 'o tipo do descritor deve ser um entre counter, gauge, histogram, summary: {type}',

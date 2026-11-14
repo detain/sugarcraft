@@ -21,6 +21,7 @@ return [
     'descriptor.help_empty'           => 'описание дескриптора не должно быть пустым',
     'descriptor.help_invalid'         => 'описание дескриптора не должно содержать управляющие символы',
     'descriptor.label_empty'          => 'ключи меток дескриптора должны быть непустыми строками',
+    'descriptor.label_invalid'        => 'ключ метки дескриптора не является допустимым именем метки Prometheus: {key}',
     'descriptor.name_empty'           => 'имя дескриптора не должно быть пустым',
     'descriptor.name_invalid'         => 'имя дескриптора не является допустимым именем метрики Prometheus: {name}',
     'descriptor.type_invalid'         => 'тип дескриптора должен быть одним из counter, gauge, histogram, summary: {type}',

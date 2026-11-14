@@ -21,6 +21,7 @@ return [
     'descriptor.help_empty'           => 'Hilfe des Deskriptors darf nicht leer sein',
     'descriptor.help_invalid'         => 'Hilfe des Deskriptors darf keine Steuerzeichen enthalten',
     'descriptor.label_empty'          => 'Deskriptor-Labelschlüssel müssen nicht leere Strings sein',
+    'descriptor.label_invalid'        => 'Deskriptor-Labelschlüssel ist kein gültiger Prometheus-Labelname: {key}',
     'descriptor.name_empty'           => 'Name des Deskriptors darf nicht leer sein',
     'descriptor.name_invalid'         => 'Deskriptor-Name ist kein gültiger Prometheus-Metrikname: {name}',
     'descriptor.type_invalid'         => 'Der Deskriptor-Typ muss einer von counter, gauge, histogram, summary sein: {type}',

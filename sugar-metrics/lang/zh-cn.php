@@ -21,6 +21,7 @@ return [
     'descriptor.help_empty'           => '描述符 help 不能为空',
     'descriptor.help_invalid'         => '描述符 help 不能包含控制字符',
     'descriptor.label_empty'          => '描述符标签键必须为非空字符串',
+    'descriptor.label_invalid'        => '描述符标签键不是有效的 Prometheus 标签名称：{key}',
     'descriptor.name_empty'           => '描述符名称不能为空',
     'descriptor.name_invalid'         => '描述符名称不是有效的 Prometheus 指标名称：{name}',
     'descriptor.type_invalid'         => '描述符类型必须是 counter、gauge、histogram、summary 之一：{type}',

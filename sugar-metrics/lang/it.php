@@ -21,6 +21,7 @@ return [
     'descriptor.help_empty'           => 'la guida del descrittore non deve essere vuota',
     'descriptor.help_invalid'         => 'la guida del descrittore non deve contenere caratteri di controllo',
     'descriptor.label_empty'          => 'le chiavi di etichetta del descrittore devono essere stringhe non vuote',
+    'descriptor.label_invalid'        => 'la chiave di etichetta del descrittore non è un nome di etichetta Prometheus valido: {key}',
     'descriptor.name_empty'           => 'il nome del descrittore non deve essere vuoto',
     'descriptor.name_invalid'         => 'il nome del descrittore non è un nome metrica Prometheus valido: {name}',
     'descriptor.type_invalid'         => 'il tipo del descrittore deve essere uno tra counter, gauge, histogram, summary: {type}',

@@ -21,6 +21,7 @@ return [
     'descriptor.help_empty'           => 'hulptekst van descriptor mag niet leeg zijn',
     'descriptor.help_invalid'         => 'hulptekst van descriptor mag geen stuurcodes bevatten',
     'descriptor.label_empty'          => 'labelsleutels van descriptor moeten niet-lege strings zijn',
+    'descriptor.label_invalid'        => 'labelsleutel van descriptor is geen geldige Prometheus-labelnaam: {key}',
     'descriptor.name_empty'           => 'naam van descriptor mag niet leeg zijn',
     'descriptor.name_invalid'         => 'descriptornaam is geen geldige Prometheus-metriknaam: {name}',
     'descriptor.type_invalid'         => 'het descriptor-type moet een zijn van counter, gauge, histogram, summary: {type}',

@@ -21,6 +21,7 @@ return [
     'descriptor.help_empty'           => '설명자 help는 비어 있을 수 없습니다',
     'descriptor.help_invalid'         => '설명자 help에 제어 문자를 포함할 수 없습니다',
     'descriptor.label_empty'          => '설명자 레이블 키는 비어 있지 않은 문자열이어야 합니다',
+    'descriptor.label_invalid'        => '설명자 레이블 키가 유효한 Prometheus 레이블 이름이 아닙니다: {key}',
     'descriptor.name_empty'           => '설명자 이름은 비어 있을 수 없습니다',
     'descriptor.name_invalid'         => '설명자 이름이 유효한 Prometheus 메트릭 이름이 아닙니다: {name}',
     'descriptor.type_invalid'         => '기술자 유형은 counter, gauge, histogram, summary 중 하나여야 합니다: {type}',

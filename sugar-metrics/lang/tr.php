@@ -21,6 +21,7 @@ return [
     'descriptor.help_empty'           => 'tanımlayıcı yardımı boş olmamalıdır',
     'descriptor.help_invalid'         => 'tanımlayıcı yardımı denetim karakterleri içermemelidir',
     'descriptor.label_empty'          => 'tanımlayıcı etiket anahtarları boş olmayan dizeler olmalıdır',
+    'descriptor.label_invalid'        => 'tanımlayıcı etiket anahtarı geçerli bir Prometheus etiket adı değil: {key}',
     'descriptor.name_empty'           => 'tanımlayıcı adı boş olmamalıdır',
     'descriptor.name_invalid'         => 'tanımlayıcı adı geçerli bir Prometheus metrik adı değil: {name}',
     'descriptor.type_invalid'         => 'tanimlayici turi counter, gauge, histogram, summary deerlerinden biri olmalidr: {type}',

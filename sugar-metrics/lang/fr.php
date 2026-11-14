@@ -21,6 +21,7 @@ return [
     'descriptor.help_empty'           => 'l\'aide du descripteur ne doit pas être vide',
     'descriptor.help_invalid'         => 'l\'aide du descripteur ne doit pas contenir de caractères de contrôle',
     'descriptor.label_empty'          => 'les clés d\'étiquette du descripteur doivent être des chaînes non vides',
+    'descriptor.label_invalid'        => 'la clé de libellé du descripteur est un nom de libellé Prometheus invalide : {key}',
     'descriptor.name_empty'           => 'le nom du descripteur ne doit pas être vide',
     'descriptor.name_invalid'         => 'le nom du descripteur est un nom de métrique Prometheus invalide : {name}',
     'descriptor.type_invalid'         => 'le type du descripteur doit être l\'un de counter, gauge, histogram, summary : {type}',

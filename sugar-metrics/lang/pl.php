@@ -21,6 +21,7 @@ return [
     'descriptor.help_empty'           => 'opis deskryptora nie może być pusty',
     'descriptor.help_invalid'         => 'opis deskryptora nie może zawierać znaków sterujących',
     'descriptor.label_empty'          => 'klucze etykiet deskryptora muszą być niepustymi ciągami',
+    'descriptor.label_invalid'        => 'klucz etykiety deskryptora nie jest prawidłową nazwą etykiety Prometheus: {key}',
     'descriptor.name_empty'           => 'nazwa deskryptora nie może być pusta',
     'descriptor.name_invalid'         => 'nazwa deskryptora nie jest prawidłową nazwą metryki Prometheus: {name}',
     'descriptor.type_invalid'         => 'typ deskryptora musi by jednym z counter, gauge, histogram, summary: {type}',

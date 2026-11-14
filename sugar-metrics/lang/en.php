@@ -21,6 +21,7 @@ return [
     'descriptor.help_empty'           => 'descriptor help must not be empty',
     'descriptor.help_invalid'         => 'descriptor help must not contain control characters',
     'descriptor.label_empty'          => 'descriptor label keys must be non-empty strings',
+    'descriptor.label_invalid'        => 'descriptor label key is not a valid Prometheus label name: {key}',
     'descriptor.name_empty'           => 'descriptor name must not be empty',
     'descriptor.name_invalid'         => 'descriptor name is not a valid Prometheus metric name: {name}',
     'descriptor.type_invalid'         => 'descriptor type must be one of counter, gauge, histogram, summary: {type}',

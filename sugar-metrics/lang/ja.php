@@ -21,6 +21,7 @@ return [
     'descriptor.help_empty'           => 'ディスクリプタの help は空にできません',
     'descriptor.help_invalid'         => 'ディスクリプタの help に制御文字を含めることはできません',
     'descriptor.label_empty'          => 'ディスクリプタのラベルキーは空でない文字列でなければなりません',
+    'descriptor.label_invalid'        => 'ディスクリプタのラベルキーは有効な Prometheus ラベル名ではありません：{key}',
     'descriptor.name_empty'           => 'ディスクリプタ名は空にできません',
     'descriptor.name_invalid'         => 'ディスクリプタ名は有効な Prometheus メトリクス名ではありません：{name}',
     'descriptor.type_invalid'         => 'ディスクリプターの型は counter、gauge、histogram、summary のいずれかでなければなりません: {type}',

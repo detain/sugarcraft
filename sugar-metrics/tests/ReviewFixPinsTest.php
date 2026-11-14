@@ -375,4 +375,32 @@ final class ReviewFixPinsTest extends TestCase
         $this->assertStringContainsString('\\0', $withNul);
         $this->assertNotSame($withNul, $literal, 'NUL must escape distinctly from the literal backslash-0');
     }
+
+    // ------------------------------------------------------------ Descriptor
+
+    public function testDescriptorNameRefusesTrailingNewlineUnderDAnchor(): void
+    {
+        // MET-NAMEGATE (053): a bare $ matches before a trailing newline;
+        // "foo\n" would then ride the exposition line and fork a second one.
+        $this->expectException(\InvalidArgumentException::class);
+        new Descriptor("foo\n", 'help', 'counter');
+    }
+
+    public function testDescriptorLabelKeysEnforcePrometheusLabelCharset(): void
+    {
+        // MET-NAMEGATE (006): colons belong to metric names, not label
+        // names; a bad key must throw naming the offending key displaySafe'd.
+        foreach (['1foo', 'a-b', 'user name', 'a:b', "k\n"] as $bad) {
+            try {
+                new Descriptor('foo', 'help', 'counter', [$bad]);
+                $this->fail('label key ' . Util::displaySafe($bad) . ' should have been refused');
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString(Util::displaySafe($bad), $e->getMessage());
+            }
+        }
+        // Controls: legal label names — including the histogram-reserved
+        // 'le', whose refusal stays an emit-side concern — stay accepted.
+        $d = new Descriptor('foo', 'help', 'counter', ['le', 'method', '_x9']);
+        $this->assertSame(['le', 'method', '_x9'], $d->labelKeys);
+    }
 }

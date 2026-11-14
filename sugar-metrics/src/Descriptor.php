@@ -37,8 +37,10 @@ final class Descriptor
         }
         // The name rides the exposition line unescaped; without this
         // charset check a help/name built from user input could inject
-        // a whole second TYPE line.
-        if (preg_match('/^[a-zA-Z_:][a-zA-Z0-9_:]*$/', $name) !== 1) {
+        // a whole second TYPE line. The /D anchor matters: a bare $ also
+        // matches before a trailing newline, so "foo\n" would pass while
+        // still forking an extra line in the published exposition.
+        if (preg_match('/^[a-zA-Z_:][a-zA-Z0-9_:]*$/D', $name) !== 1) {
             throw new \InvalidArgumentException(Lang::t('descriptor.name_invalid', ['name' => Util::displaySafe($name)]));
         }
         if ($help === '') {
@@ -53,6 +55,12 @@ final class Descriptor
         foreach ($labelKeys as $k) {
             if (is_string($k) === false || $k === '') {
                 throw new \InvalidArgumentException(Lang::t('descriptor.label_empty'));
+            }
+            // Label names are stricter than metric names: the colon is
+            // legal in a metric name but NOT in a label name, and label
+            // keys ride the exposition line unescaped just like the name.
+            if (preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*$/D', $k) !== 1) {
+                throw new \InvalidArgumentException(Lang::t('descriptor.label_invalid', ['key' => Util::displaySafe($k)]));
             }
         }
     }
