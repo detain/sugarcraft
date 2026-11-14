@@ -430,4 +430,105 @@ final class AnsiArtTest extends TestCase
             @unlink($path);
         }
     }
+
+    // ---------------------------------------------------------------- SA-A1
+
+    /**
+     * SA-A1 (-031): hostile ESC[-led sequences must be consumed as whole
+     * sequences. The widened ECMA-48 grammars carry parameter/intermediate
+     * interleaving, and an unclassifiable `ESC[` run is consumed through its
+     * first final byte (or end of row) — in no case may a sequence body
+     * re-enter the model as phantom glyph cells.
+     */
+    public function testHostileCsiSequencesAreConsumedWholeNotLeakedAsGlyphs(): void
+    {
+        $cases = [
+            // Out-of-range colour triple with a NEGATIVE component: the
+            // '-' (0x2D) used to break the narrow parameter class and leak
+            // the remainder as ~15 glyph cells; now one SGR run, clamped.
+            "\x1b[38;2;999;-5;300m" => "\x1b[38;2;255;5;255m",
+            // ECMA-48 intermediate interleaved with parameters: consumed as
+            // SGR 1;5 with the space ignored, exactly like a terminal.
+            "\x1b[1 ;5m"            => "\x1b[1;5m",
+            // A stray DEL mid-sequence matches no grammar at all; the CSI
+            // fallback consumes it through the 'm' final — dropped, state
+            // untouched.
+            "\x1b[1\x7f2m"          => '',
+        ];
+        foreach ($cases as $seq => $expectSgr) {
+            $art = AnsiArt::fromString('A' . $seq . 'B');
+            $row = $art->frameCells(0)[0];
+            self::assertSame(
+                ['A', 'B'],
+                array_map(static fn (AnsiCell $c): string => $c->glyph, $row),
+                "sequence {$seq} yields its two glyph cells and nothing else",
+            );
+            self::assertSame('', $row[0]->sgr, 'the run before the sequence stays default');
+            self::assertSame($expectSgr, $row[1]->sgr, "the sequence resolves to {$expectSgr} for the cell after it");
+        }
+    }
+
+    /**
+     * SA-A1 (-031): the consume-through-final rule is scoped to the row —
+     * an unterminated CSI swallows the remainder of ITS row, and the next
+     * row still parses (frames are row-delimited before escape grammar is).
+     */
+    public function testUnterminatedCsiSwallowsOnlyItsOwnRow(): void
+    {
+        $art = AnsiArt::fromString("A\x1b[1\nB");
+        $rows = $art->frameCells(0);
+        self::assertCount(2, $rows);
+        self::assertSame(['A'], array_map(static fn (AnsiCell $c): string => $c->glyph, $rows[0]));
+        self::assertSame(['B'], array_map(static fn (AnsiCell $c): string => $c->glyph, $rows[1]));
+    }
+
+    /**
+     * SA-A1 (-014): the cell budget is the value the README documents — a
+     * silent widening or narrowing reddens here instead of loosening the
+     * bomb guard at runtime.
+     */
+    public function testTheCellBudgetIsPinnedAtItsDocumentedValue(): void
+    {
+        self::assertSame(200_000, AnsiArt::MAX_CELLS);
+    }
+
+    /**
+     * SA-A1 (-014): an input whose expansion crosses the cell budget is
+     * refused MID-WALK — the probe is a bounded-memory proof: the refusal
+     * must arrive while residency still sits near the cap, not after the
+     * grid has materialised (pre-fix, 8 MB here grew to 1.24 GB of cells).
+     */
+    public function testExpandingInputIsRefusedMidWalkWithinABoundedMemoryEnvelope(): void
+    {
+        $bytes = str_repeat(str_repeat('A', 1000) . "\n", intdiv(AnsiArt::MAX_CELLS, 1000) + 1);
+        $before = memory_get_usage();
+        try {
+            AnsiArt::fromString($bytes);
+            self::fail('expected the cell budget to refuse the expansion mid-walk');
+        } catch (RuntimeException $e) {
+            $growth = memory_get_usage() - $before;
+            self::assertSame(
+                'sugar-animation: .ansi input too large (maximum ' . AnsiArt::MAX_CELLS . ')',
+                $e->getMessage(),
+            );
+            // The 200k-cell refusal costs well under a fifth of the 1.24 GB
+            // the guard prevents; an unbounded walk cannot pass this door.
+            self::assertLessThan(150 * 1024 * 1024, $growth, 'the walk refuses before the grid multiplies');
+        }
+    }
+
+    /**
+     * SA-A1 (-014): the resident-bytes ceiling the class README promises for
+     * fromString is enforced before the walk — skipping fromFile() cannot
+     * steer around the line.
+     */
+    public function testTheByteCeilingIsEnforcedOnResidentStringInput(): void
+    {
+        $bytes = str_repeat('A', Decoder::MAX_INPUT_BYTES + 1);
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage(
+            'sugar-animation: .ansi input too large (maximum ' . Decoder::humanBytes(Decoder::MAX_INPUT_BYTES) . ')'
+        );
+        AnsiArt::fromString($bytes);
+    }
 }

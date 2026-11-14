@@ -34,4 +34,5 @@ return [
     'player.paused' => 'pozastaveno',
     'player.preset.solid' => 'Plný',
     'player.preset.density' => 'Hustota',
+    'ansiart.too_large' => 'sugar-animation: vstup .ansi je příliš velký (maximálně {max})',
 ];

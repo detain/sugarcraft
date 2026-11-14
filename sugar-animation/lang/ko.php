@@ -34,4 +34,5 @@ return [
     'player.paused' => '일시정지됨',
     'player.preset.solid' => '단색',
     'player.preset.density' => '밀도',
+    'ansiart.too_large' => 'sugar-animation: .ansi 입력이 너무 큽니다 (최대 {max})',
 ];

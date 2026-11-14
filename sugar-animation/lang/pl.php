@@ -34,4 +34,5 @@ return [
     'player.paused' => 'wstrzymana',
     'player.preset.solid' => 'Pełny',
     'player.preset.density' => 'Gęstość',
+    'ansiart.too_large' => 'sugar-animation: dane wejściowe .ansi są zbyt duże (maksymalnie {max})',
 ];

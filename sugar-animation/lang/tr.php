@@ -34,4 +34,5 @@ return [
     'player.paused' => 'duraklatıldı',
     'player.preset.solid' => 'Dolu',
     'player.preset.density' => 'Yoğunluk',
+    'ansiart.too_large' => 'sugar-animation: .ansi girdisi çok büyük (en fazla {max})',
 ];

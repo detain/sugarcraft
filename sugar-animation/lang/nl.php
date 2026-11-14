@@ -34,4 +34,5 @@ return [
     'player.paused' => 'gepauzeerd',
     'player.preset.solid' => 'Vlak',
     'player.preset.density' => 'Dichtheid',
+    'ansiart.too_large' => 'sugar-animation: .ansi-invoer te groot (maximaal {max})',
 ];

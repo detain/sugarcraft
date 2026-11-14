@@ -34,4 +34,5 @@ return [
     'player.paused' => 'متوقف مؤقتًا',
     'player.preset.solid' => 'صلب',
     'player.preset.density' => 'كثافة',
+    'ansiart.too_large' => 'sugar-animation: إدخال .ansi كبير جدًا (الحد الأقصى {max})',
 ];

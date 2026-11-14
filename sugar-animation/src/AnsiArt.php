@@ -35,12 +35,24 @@ use RuntimeException;
  * cannot honour must not leak into the model as a phantom glyph. Unknown CSI
  * sequences are dropped across the FULL ECMA-48 final-byte range (0x40-0x7E)
  * except SGR `m` — including finals like `[ \ ] ^ _ ` { | } ~ that older
- * narrow classes let through as glyph cells. Residual known limit: an OSC
+ * narrow classes let through as glyph cells. SA-A1 (-031) closed the
+ * intermediate-byte hole: the SGR and CSI scans carry ECMA-48 intermediates
+ * (0x20-0x2F) interleaved with parameters, so a sequence like `ESC[1 ;5m`
+ * is consumed as ONE sequence (its intermediates ignored, exactly like a
+ * terminal) instead of leaking its body as glyph cells, and an `ESC[`-led
+ * run that matches no grammar is still consumed through its first final
+ * byte (or to end of row when none arrives). Residual known limit: an OSC
  * string carrying a bare ESC inside its payload (before any BEL/ST
  * terminator) is truncated at the orphan-ESC skip boundary, so its remaining
  * printable tail can re-enter as glyph cells. Dropped
  * bytes are documented per site below. Unknown or truncated SGR parameters
  * are ignored gracefully and never corrupt the cumulative state.
+ *
+ * Parsing is bounded (SA-A1, -014): bytes handed to {@see self::fromString()}
+ * may not exceed {@see Decoder::MAX_INPUT_BYTES} (the file path already reads
+ * no further), and the walk refuses mid-parse once a document would spend
+ * {@see self::MAX_CELLS} cells — .ansi input expands into retained cell
+ * objects, so the cap is what keeps an 8 MB bomb from becoming a GB grid.
  *
  * Deliberately NOT done: grapheme clustering. The corpus is strictly
  * codepoint-per-cell (box-drawing, half/full blocks, and ASCII), and the
@@ -55,14 +67,47 @@ final class AnsiArt
     /** Cursor-up + carriage-return header introducing each redraw frame. */
     private const FRAME_HEADER = '/\A\x1b\[(\d+)A\r/';
 
+    /**
+     * Upper bound on cells a parsed document may hold, counted across every
+     * row of every frame (SA-A1, -014). .ansi bytes EXPAND into retained
+     * cell objects at dozens of bytes of residency per input byte (QA
+     * measured 1.24 GB of grid from an 8 MB file), so the walk counts cells
+     * as it emits them and refuses mid-parse past the cap instead of
+     * materialising the bomb. 200,000 leaves ~4x headroom over the largest
+     * real document (the 214-file candy-top logo corpus peaks at 48,906
+     * cells) while the worst-case residency stays bounded at roughly
+     * 120 MB — the .ansi sibling of {@see Decoder::MAX_CELLS}'s grid cap.
+     */
+    public const MAX_CELLS = 200_000;
+
+    /**
+     * Attribute name -> SGR code in canonical (ascending) serialisation
+     * order; the single source for {@see self::canonicalSgr()}'s ladder.
+     */
+    private const ATTR_CODES = [
+        'bold' => 1, 'dim' => 2, 'italic' => 3, 'underline' => 4,
+        'blink' => 5, 'reverse' => 7, 'hidden' => 8, 'strikethrough' => 9,
+    ];
+
     /** Lookahead split point between frames (the cursor-up+CR full-redraw convention). */
     private const FRAME_SPLIT = '/(?=\x1b\[\d+A\r)/';
 
-    /** An SGR sequence: ESC [ <parameter bytes> m (';' is inside \x30-\x3f). */
-    private const SGR_AT = '/\G\x1b\[([\x30-\x3f]*)m/';
+    /**
+     * An SGR sequence: ESC [ <parameter bytes> m. SA-A1 (-031): the scan
+     * class is widened to 0x20-0x3F so ECMA-48 intermediate bytes (0x20-0x2F)
+     * interleaved with parameters (`ESC[1 ;5m`) still reach the SGR path as
+     * a whole sequence; {@see self::applySgr()} strips them before parsing
+     * codes, so a terminal-ignorable intermediate never reaches the code
+     * table and — crucially — the sequence body never leaks as glyph cells.
+     */
+    private const SGR_AT = '/\G\x1b\[([\x20-\x3f]*)m/';
 
-    /** Any other CSI sequence (final byte in the ECMA-48 range 0x40-0x7E, except SGR `m`) — dropped. */
-    private const OTHER_CSI_AT = '/\G\x1b\[[\x30-\x3f]*[\x40-\x6c\x6e-\x7e]/';
+    /**
+     * Any other CSI sequence (interleaved parameter/intermediate bytes, then
+     * a final byte in the ECMA-48 range 0x40-0x7E except SGR `m`, which is
+     * matched above) — dropped.
+     */
+    private const OTHER_CSI_AT = '/\G\x1b\[[\x20-\x3f]*[\x40-\x6c\x6e-\x7e]/';
 
     /**
      * A complete OSC string (ESC ] … terminated by BEL or ST) — dropped.
@@ -84,11 +129,23 @@ final class AnsiArt
 
     /**
      * @throws InvalidArgumentException when the bytes hold no renderable rows
+     * @throws RuntimeException when the input crosses a documented cap: the
+     *         resident-bytes ceiling ({@see Decoder::MAX_INPUT_BYTES}, the
+     *         same gate the file entry applies) or the cell budget
+     *         ({@see self::MAX_CELLS}, refused mid-walk)
      */
     public static function fromString(string $bytes): self
     {
         if ($bytes === '') {
             throw new InvalidArgumentException('AnsiArt: empty byte string, nothing to parse');
+        }
+
+        // SA-A1 (-014): the caps the class README promises for bytes handed
+        // in directly — they are already resident, but the walk ceiling is
+        // enforced before the first split so the line can never be steered
+        // around by skipping fromFile().
+        if (strlen($bytes) > Decoder::MAX_INPUT_BYTES) {
+            throw new RuntimeException(Lang::t('ansiart.too_large', ['max' => Decoder::humanBytes(Decoder::MAX_INPUT_BYTES)]));
         }
 
         // The cursor-hide/show pairs carry no per-cell meaning once we model
@@ -103,6 +160,8 @@ final class AnsiArt
 
         $frames = [];
         $width = 0;
+        // SA-A1 (-014): cells emitted by the whole walk, bounded by MAX_CELLS.
+        $cellsSeen = 0;
         // One SGR cursor for the whole document: a terminal that receives
         // `\r` + cursor-up to start a redraw frame does NOT reset its colors.
         $sgrCursor = self::defaultSgrState();
@@ -114,7 +173,7 @@ final class AnsiArt
             if (preg_match(self::FRAME_HEADER, $chunk, $header) === 1) {
                 $chunk = substr($chunk, strlen($header[0]));
             }
-            $frame = self::parseFrame($chunk, $width, $sgrCursor);
+            $frame = self::parseFrame($chunk, $width, $sgrCursor, $cellsSeen);
             if ($frame === []) {
                 continue; // keep only frames that render >=1 row
             }
@@ -128,6 +187,12 @@ final class AnsiArt
         }
 
         return new self($frames, $width, count($frames[0]));
+    }
+
+    /** SA-A1 (-014): the one voice both parse caps refuse with. */
+    private static function cellBudgetExceeded(): RuntimeException
+    {
+        return new RuntimeException(Lang::t('ansiart.too_large', ['max' => (string) self::MAX_CELLS]));
     }
 
     /**
@@ -246,9 +311,11 @@ final class AnsiArt
      *
      * @param int<0,max> $width in/out: max row cell-count seen so far
      * @param array $sgrCursor in/out: document-wide cumulative SGR state
+     * @param int<0,max> $cellsSeen in/out: cells emitted by the walk so far,
+     *        bounded by {@see self::MAX_CELLS} (SA-A1, -014)
      * @return list<list<AnsiCell>>
      */
-    private static function parseFrame(string $body, int &$width, array &$sgrCursor): array
+    private static function parseFrame(string $body, int &$width, array &$sgrCursor, int &$cellsSeen): array
     {
         $lines = explode("\n", $body);
         // A trailing newline terminates the last row; it is not itself a row.
@@ -258,7 +325,7 @@ final class AnsiArt
 
         $frame = [];
         foreach ($lines as $line) {
-            $cells = self::tokenizeRow($line, $sgrCursor);
+            $cells = self::tokenizeRow($line, $sgrCursor, $cellsSeen);
             $count = count($cells);
             if ($count > $width) {
                 $width = $count;
@@ -277,13 +344,22 @@ final class AnsiArt
      * bare `ESC[m` reset the cursor to default, whose canonical form is ''.
      *
      * @param array $sgrCursor in/out: cumulative ECMA-48 SGR state
+     * @param int<0,max> $cellsSeen in/out: cells emitted by the walk so far
+     *        (SA-A1, -014: refused mid-row once the budget would be spent)
      * @return list<AnsiCell>
      */
-    private static function tokenizeRow(string $line, array &$sgrCursor): array
+    private static function tokenizeRow(string $line, array &$sgrCursor, int &$cellsSeen): array
     {
         $cells = [];
         $offset = 0;
         $length = strlen($line);
+
+        // SA-A1 (-014): the budget can already be exhausted by earlier rows
+        // of this or a prior frame; bail before touching this row so the
+        // mid-walk refusal never pays for another split.
+        if ($cellsSeen >= self::MAX_CELLS) {
+            throw self::cellBudgetExceeded();
+        }
 
         while ($offset < $length) {
             if ($line[$offset] === "\x1b") {
@@ -299,6 +375,23 @@ final class AnsiArt
                 }
                 if (preg_match(self::OTHER_CSI_AT, $line, $matched, 0, $offset) === 1) {
                     $offset += strlen($matched[0]); // unknown CSI: dropped, see class docblock
+                    continue;
+                }
+                // SA-A1 (-031): a CSI we could not classify at all — an
+                // intermediate-then-nonfinal body the widened grammars still
+                // reject (e.g. a stray DEL mid-sequence). Consume the whole
+                // sequence through its first ECMA-48 final byte (0x40-0x7E),
+                // or to the end of the row when it never terminates, so a
+                // malformed `ESC[` body can never leak as glyph cells. Only
+                // `ESC[`-led runs take this path — a bare orphan ESC keeps its
+                // one-byte skip (the corpus `\x1bA` still yields cell `A`).
+                if ($offset + 1 < $length && $line[$offset + 1] === '[') {
+                    $final = [];
+                    if (preg_match('/[\x40-\x7e]/', $line, $final, PREG_OFFSET_CAPTURE, $offset + 2) === 1) {
+                        $offset = $final[0][1] + 1; // consumed through the final byte
+                    } else {
+                        $offset = $length;         // unterminated CSI: the rest of the row is sequence body
+                    }
                     continue;
                 }
                 // Anything else ESC-led (orphan ESC, unterminated OSC tail) is
@@ -317,6 +410,13 @@ final class AnsiArt
             foreach (mb_str_split($run) as $glyph) {
                 if ($glyph === "\r") {
                     continue; // stray CR inside a body row: no cell position to honour
+                }
+                // SA-A1 (-014): count the cell as it is emitted — the walk
+                // refuses the moment the document would spend its budget,
+                // so a small expanding input never materialises a GB grid.
+                $cellsSeen++;
+                if ($cellsSeen > self::MAX_CELLS) {
+                    throw self::cellBudgetExceeded();
                 }
                 $cells[] = AnsiCell::new($glyph, $resolved);
             }
@@ -357,6 +457,20 @@ final class AnsiArt
      */
     private static function applySgr(array $state, string $params): array
     {
+        // SA-A1 (-031): the SGR scan class carries ECMA-48 intermediates
+        // (0x20-0x2F) interleaved with parameters; terminals ignore them in
+        // an SGR run, so drop them before parsing codes — a stray intermediate
+        // must never be mistaken for (or glued onto) a numeric parameter.
+        if ($params !== '' && $params !== '0') {
+            $codes = '';
+            for ($i = 0, $len = strlen($params); $i < $len; $i++) {
+                if (ord($params[$i]) >= 0x30) {
+                    $codes .= $params[$i];
+                }
+            }
+            $params = $codes;
+        }
+
         // '' and '0' (and any run starting with an omitted param) reset first.
         if ($params === '' || $params === '0') {
             return self::defaultSgrState();
@@ -528,11 +642,10 @@ final class AnsiArt
     private static function canonicalSgr(array $state): string
     {
         $segments = [];
-        $attrCodes = [
-            'bold' => 1, 'dim' => 2, 'italic' => 3, 'underline' => 4,
-            'blink' => 5, 'reverse' => 7, 'hidden' => 8, 'strikethrough' => 9,
-        ];
-        foreach ($attrCodes as $attr => $code) {
+        // SA-A1 (PERF-ANIM-11 fold): the attribute map is constant — hoisted
+        // out of this per-run hot path so canonicalisation allocates nothing
+        // per call for the ladder itself.
+        foreach (self::ATTR_CODES as $attr => $code) {
             if ($state['attrs'][$attr]) {
                 $segments[] = (string) $code;
             }
