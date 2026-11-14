@@ -190,11 +190,12 @@ echo StatusLine::error('connection refused'), "\n";
   renders without a cap. The `Auto` resolution reads the exported
   `COLUMNS` only: bash keeps `COLUMNS` private and never re-exports it on
   resize, so under bash a stale (or absent) value is expected — zsh and
-  fish export and refresh it. Most presenters default to `Auto`; the two
-  opt-outs have different shapes. `Banner::title()` takes a plain `?int`
-  (`AutoWidth::Auto` is a `TypeError` there) and `null` sizes the box to
-  its content; `HelpText::renderPage()` takes the full
-  `int|AutoWidth|null` sentinel and `null` means never re-wrap.
+  fish export and refresh it. Most presenters default to `Auto`; two
+  keep a `null` default and say so differently: `Banner::title()` is
+  `int|AutoWidth|null` too — terminal sizing on request — but there `null`
+  (the default) sizes the box to its content, because a banner is not
+  terminal-sized unless asked; and `HelpText::renderPage()` defaults to
+  `null`, which means never re-wrap an already-authored page.
 
 ## Output assumptions
 

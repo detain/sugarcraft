@@ -6,6 +6,7 @@ namespace SugarCraft\Cli;
 
 use SugarCraft\Cli\Internal\SafeText;
 use SugarCraft\Cli\Internal\WidthGuard;
+use SugarCraft\Cli\Internal\WidthProbe;
 use SugarCraft\Style\Border;
 use SugarCraft\Style\Style;
 
@@ -27,22 +28,31 @@ use SugarCraft\Style\Style;
 final class Banner
 {
     /**
-     * @param ?int $width  fixed INNER content width in cells (the room inside
-     *                     the padding and the border), i.e.
+     * @param int|AutoWidth|null $width  fixed INNER content width in cells (the
+     *                     room inside the padding and the border), i.e.
      *                     {@see Style::width()}'s semantics: each display line
      *                     is cut to it before the box is laid — a hard cut with
      *                     no ellipsis, unlike a Section label — so the bordered
      *                     block never exceeds `$width` plus the padding and
-     *                     border. null — the default, and the shape every
+     *                     border. `AutoWidth::Auto` asks the terminal through
+     *                     the shared WidthProbe chain (exported `COLUMNS`, else
+     *                     80 cells), like every other width-aware presenter.
+     *                     null — the default, and the shape every
      *                     existing caller uses — lets the box size itself to
-     *                     its content.
+     *                     its content: a banner is not terminal-sized unless
+     *                     asked, so the probe never runs on that path.
      *
      * @throws \InvalidArgumentException when `$width` is less than 1
      */
-    public static function title(string $title, string $subtitle = '', ?Theme $theme = null, ?Border $border = null, ?int $width = null): string
+    public static function title(string $title, string $subtitle = '', ?Theme $theme = null, ?Border $border = null, int|AutoWidth|null $width = null): string
     {
         $theme  ??= Theme::detect();
         $border ??= Border::rounded();
+
+        // AutoWidth::Auto joins the terminal-sizing shape the sibling presenters
+        // use; `null` (the default) keeps its own meaning — the box sizes to its
+        // content and the probe is never consulted on that path.
+        $width = WidthProbe::resolve($width);
 
         // Style::width() would accept 0 and render a box with no room for the
         // title; the presenters agree that a width below 1 is a mistake.

@@ -15,15 +15,16 @@ namespace SugarCraft\Cli;
  * each presenter's own unbounded meaning. `AutoWidth::Auto` may also be
  * passed explicitly — it behaves exactly like omitting the argument, which
  * is useful when a caller wants to stay auto while naming later parameters.
- * Two surfaces deliberately stay outside that shape: {@see Banner::title()}
- * takes a plain `?int` (null sizes the box to its content, and a banner is
- * not terminal-sized), and {@see HelpText::renderPage()} defaults to null —
- * never re-wrap an already-authored page — for the reasons documented there.
+ * {@see HelpText::renderPage()} is the one surface outside that shape: it
+ * defaults to null — never re-wrap an already-authored page — for the
+ * reasons documented there.
  *
  * It is a dedicated type rather than a magic integer because a sentinel
  * number would collide with the argument's own contract: 0 is an authoring
  * error that must throw, and `null` already means "unbounded" — neither can
- * double as "ask the terminal".
+ * double as "ask the terminal". {@see Banner::title()} accepts the same
+ * argument, but `null` — not `Auto` — is its default there: a banner sizes
+ * itself to its content unless it asks the terminal.
  */
 enum AutoWidth
 {

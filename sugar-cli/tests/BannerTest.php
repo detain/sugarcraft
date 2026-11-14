@@ -5,13 +5,17 @@ declare(strict_types=1);
 namespace SugarCraft\Cli\Tests;
 
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Cli\AutoWidth;
 use SugarCraft\Cli\Banner;
 use SugarCraft\Cli\Theme;
+use SugarCraft\Cli\Tests\Support\SandboxTerminalColumns;
 use SugarCraft\Style\Border;
 use PHPUnit\Framework\TestCase;
 
 final class BannerTest extends TestCase
 {
+    use SandboxTerminalColumns;
+
     public function testTitleOnlyRendersInRoundedBox(): void
     {
         $out = Banner::title('CandyApp', '', Theme::plain());
@@ -130,5 +134,52 @@ final class BannerTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Banner width must be at least 1 cell');
         Banner::title('App', '', Theme::plain(), null, 0);
+    }
+
+    /**
+     * AutoWidth::Auto is the shared terminal-sizing leg: under a pinned
+     * COLUMNS it must be byte-identical to that explicit int (same probe the
+     * sibling presenters route through).
+     */
+    public function testAutoWidthMatchesPinnedColumns(): void
+    {
+        $this->pinTerminalColumns(30);
+        try {
+            $this->assertSame(
+                Banner::title('LongTitleHere', 'sub', Theme::plain(), null, 30),
+                Banner::title('LongTitleHere', 'sub', Theme::plain(), null, AutoWidth::Auto),
+            );
+        } finally {
+            $this->restoreTerminalColumns();
+        }
+    }
+
+    /** With no credible COLUMNS anywhere, Auto falls back to 80 cells. */
+    public function testAutoWidthFallsBackToEightyCells(): void
+    {
+        $this->sandboxTerminalColumns();
+        try {
+            $this->assertSame(
+                Banner::title('t', '', Theme::plain(), null, 80),
+                Banner::title('t', '', Theme::plain(), null, AutoWidth::Auto),
+            );
+        } finally {
+            $this->restoreTerminalColumns();
+        }
+    }
+
+    /**
+     * The null default never consults the probe: even with a terminal width
+     * pinned, the box keeps sizing to its content (and outgrows the pin).
+     */
+    public function testNullPathIgnoresTheTerminalWidth(): void
+    {
+        $this->pinTerminalColumns(30);
+        try {
+            $out = Banner::title(str_repeat('x', 40), '', Theme::plain());
+            $this->assertSame(40 + 4 + 2, Width::string(explode("\n", $out)[1]), 'content-sized, not probe-sized');
+        } finally {
+            $this->restoreTerminalColumns();
+        }
     }
 }
