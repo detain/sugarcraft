@@ -82,6 +82,13 @@ final class Border
         }
     }
 
+    /**
+     * Rounded arcs squared off for embedded junctions — btop always embeds
+     * with square junctions even on rounded boxes (ST-35: hoisted from the
+     * per-call literal in {@see embedJunctions()} to a class const).
+     */
+    private const SQUARE_JUNCTIONS = ['╭' => '┌', '╮' => '┐', '╰' => '└', '╯' => '┘'];
+
     public static function normal(): self
     {
         return new self(
@@ -262,10 +269,9 @@ final class Border
      */
     public function embedJunctions(bool $bottom = false): array
     {
-        $square = ['╭' => '┌', '╮' => '┐', '╰' => '└', '╯' => '┘'];
         return $bottom
-            ? [$square[$this->bottomRight] ?? $this->bottomRight, $square[$this->bottomLeft] ?? $this->bottomLeft]
-            : [$square[$this->topRight] ?? $this->topRight, $square[$this->topLeft] ?? $this->topLeft];
+            ? [self::SQUARE_JUNCTIONS[$this->bottomRight] ?? $this->bottomRight, self::SQUARE_JUNCTIONS[$this->bottomLeft] ?? $this->bottomLeft]
+            : [self::SQUARE_JUNCTIONS[$this->topRight] ?? $this->topRight, self::SQUARE_JUNCTIONS[$this->topLeft] ?? $this->topLeft];
     }
 
     /**

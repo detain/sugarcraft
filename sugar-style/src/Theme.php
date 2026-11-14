@@ -30,6 +30,33 @@ final class Theme
     private static array $adaptiveMemo = [];
 
     /**
+     * Per-name memo for the zero-arg named theme constructors (ST-35,
+     * finding 065). The family is a fixed roster — dark/light/dracula/
+     * tokyoNight/oneDark/githubDark/solarizedDark/solarizedLight/ansi —
+     * so the cache cannot grow past its nine keys and needs no eviction.
+     * Sharing instances is sound because Theme is a final readonly value
+     * object: every `with*()` copy builds a fresh instance and nothing can
+     * mutate a cached one. {@see Theme::for()} and the adaptive fallback
+     * path pick through the memoized ctors, so they benefit without keying
+     * here. Reset seam follows the
+     * {@see \SugarCraft\Constraints\SolverFactory::resetEnvironmentResolutionForTesting()}
+     * and sugar-style Renderer ST-20 precedent.
+     *
+     * @var array<string, self>
+     */
+    private static array $ctorMemo = [];
+
+    /**
+     * Test seam: drop the named-ctor memo so the next read rebuilds.
+     *
+     * @internal for cache-invalidation pins only (StyleSgrCacheTest family).
+     */
+    public static function resetNamedCtorMemoForTesting(): void
+    {
+        self::$ctorMemo = [];
+    }
+
+    /**
      * @param Color $foreground  Primary text colour
      * @param Color $background  Canvas colour
      * @param Color $primary     Main interactive / brand colour
@@ -68,6 +95,11 @@ final class Theme
     /** Mirrors charmbracelet/lipgloss.Theme.dark(). */
     public static function dark(): self
     {
+        return self::$ctorMemo["dark"] ??= self::buildDark();
+    }
+
+    private static function buildDark(): self
+    {
         return new self(
             foreground:  Color::hex('#c5c9d4'),
             background:  Color::hex('#0e0e14'),
@@ -87,6 +119,11 @@ final class Theme
 
     /** Mirrors charmbracelet/lipgloss.Theme.light(). */
     public static function light(): self
+    {
+        return self::$ctorMemo["light"] ??= self::buildLight();
+    }
+
+    private static function buildLight(): self
     {
         return new self(
             foreground:  Color::hex('#383a42'),
@@ -108,6 +145,11 @@ final class Theme
     /** Mirrors charmbracelet/lipgloss.Theme.dracula(). */
     public static function dracula(): self
     {
+        return self::$ctorMemo["dracula"] ??= self::buildDracula();
+    }
+
+    private static function buildDracula(): self
+    {
         return new self(
             foreground:  Color::hex(Palettes::DRACULA['foreground']),
             background:  Color::hex(Palettes::DRACULA['background']),
@@ -127,6 +169,11 @@ final class Theme
 
     /** Mirrors charmbracelet/lipgloss.Theme.tokyoNight(). */
     public static function tokyoNight(): self
+    {
+        return self::$ctorMemo["tokyoNight"] ??= self::buildTokyoNight();
+    }
+
+    private static function buildTokyoNight(): self
     {
         return new self(
             foreground:  Color::hex('#c0caf5'),
@@ -148,6 +195,11 @@ final class Theme
     /** Mirrors charmbracelet/lipgloss.Theme.oneDark(). */
     public static function oneDark(): self
     {
+        return self::$ctorMemo["oneDark"] ??= self::buildOneDark();
+    }
+
+    private static function buildOneDark(): self
+    {
         return new self(
             foreground:  Color::hex(Palettes::ONE_DARK['foreground']),
             background:  Color::hex(Palettes::ONE_DARK['background']),
@@ -167,6 +219,11 @@ final class Theme
 
     /** Mirrors charmbracelet/lipgloss.Theme.githubDark(). */
     public static function githubDark(): self
+    {
+        return self::$ctorMemo["githubDark"] ??= self::buildGithubDark();
+    }
+
+    private static function buildGithubDark(): self
     {
         return new self(
             foreground:  Color::hex(Palettes::GITHUB_DARK['foreground']),
@@ -191,6 +248,11 @@ final class Theme
      */
     public static function solarizedDark(): self
     {
+        return self::$ctorMemo["solarizedDark"] ??= self::buildSolarizedDark();
+    }
+
+    private static function buildSolarizedDark(): self
+    {
         return new self(
             foreground:  Color::hex('#839496'),
             background:  Color::hex('#002b36'),
@@ -214,6 +276,11 @@ final class Theme
      */
     public static function solarizedLight(): self
     {
+        return self::$ctorMemo["solarizedLight"] ??= self::buildSolarizedLight();
+    }
+
+    private static function buildSolarizedLight(): self
+    {
         return new self(
             foreground:  Color::hex('#657b83'),
             background:   Color::hex('#fdf6e3'),
@@ -236,6 +303,11 @@ final class Theme
      * charmbracelet/lipgloss.Theme.ansi().
      */
     public static function ansi(): self
+    {
+        return self::$ctorMemo["ansi"] ??= self::buildAnsi();
+    }
+
+    private static function buildAnsi(): self
     {
         return new self(
             foreground:  Color::ansi(7),   // white

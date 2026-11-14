@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace SugarCraft\Style\Tests;
 
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Align;
 use SugarCraft\Style\Border;
 use SugarCraft\Style\Border\TitleAnchor;
 use SugarCraft\Style\Style;
+use SugarCraft\Style\Theme;
 use SugarCraft\Style\UnderlineStyle;
 use PHPUnit\Framework\TestCase;
 
@@ -238,5 +240,53 @@ final class StyleSgrCacheTest extends TestCase
         // The copy is byte-identical, so a carried-over memo stays correct.
         $this->assertSame($expected, $copy->render('copytest'));
         $this->assertSame($expected, $orig->render('copytest'));
+    }
+
+    /**
+     * ST-35 (findings 060-065) caching edges. The Theme named-constructor
+     * memo returns the SAME readonly instance per ctor; the wither door and
+     * the reset seam still build fresh copies. The padBlank lazy build, the
+     * embed-fit width cache and the resolve single-mutate fold are byte-
+     * pinned by the 4,424-case era corpus (every fill/fit/veto arm hit); a
+     * couple of sharp edges are pinned directly below.
+     */
+    public function testThemeNamedCtorsMemoizeToTheSameInstance(): void
+    {
+        foreach (['dark', 'light', 'dracula', 'tokyoNight', 'oneDark', 'githubDark', 'solarizedDark', 'solarizedLight', 'ansi'] as $name) {
+            $this->assertSame(Theme::{$name}(), Theme::{$name}(), "named ctor {$name}() must return the memoized instance");
+        }
+    }
+
+    public function testThemeWitherCopiesStayIndependentOfTheMemo(): void
+    {
+        $dark  = Theme::dark();
+        $share = Theme::dark(); // same memo instance the wither must NOT mutate
+        $tweaked = $dark->withForeground(Color::hex('#123456'));
+
+        $this->assertNotSame($dark, $tweaked);
+        $this->assertNotSame($share, $tweaked);
+        $this->assertSame(Color::hex('#123456')->toHex(), $tweaked->foreground->toHex());
+        $this->assertSame($dark->foreground->toHex(), Theme::dark()->foreground->toHex(), 'the memo must stay unpolluted');
+    }
+
+    public function testThemeMemoResetSeamForcesFreshConstruction(): void
+    {
+        $before = Theme::dracula();
+        Theme::resetNamedCtorMemoForTesting();
+        $after = Theme::dracula();
+
+        $this->assertNotSame($before, $after);
+        $this->assertSame($before->primary->toHex(), $after->primary->toHex());
+        $this->assertSame($before->border->toHex(), $after->border->toHex());
+        $this->assertSame($after, Theme::dracula(), 'the seam rebuilds then re-memoizes');
+    }
+
+    public function testBorderTitleCachesDisplayWidthAtConstruction(): void
+    {
+        $text  = "a\x1b[31mbcdef\x1b[0m";
+        $title = new Border\BorderTitle($text, TitleAnchor::TopLeft);
+
+        $this->assertSame(Width::string($text), $title->textWidth);
+        $this->assertSame(6, $title->textWidth, 'ANSI bytes must not count toward width');
     }
 }

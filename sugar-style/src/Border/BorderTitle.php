@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Style\Border;
 
+use SugarCraft\Core\Util\Width;
+
 /**
  * A single title entry on a border.
  *
@@ -17,6 +19,13 @@ namespace SugarCraft\Style\Border;
  */
 final readonly class BorderTitle
 {
+    /**
+     * Display width of `$text` (ANSI-aware) computed ONCE at title-attach
+     * time — the same choke where the border validates rune widths — so
+     * embed fitting skips a per-render re-measure (ST-35, finding 062).
+     */
+    public readonly int $textWidth;
+
     public function __construct(
         public string $text,
         public TitleAnchor $anchor,
@@ -24,5 +33,7 @@ final readonly class BorderTitle
         public bool $embedded = false,
         public ?string $open = null,
         public ?string $close = null,
-    ) {}
+    ) {
+        $this->textWidth = Width::string($text);
+    }
 }

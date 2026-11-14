@@ -468,16 +468,26 @@ final class Style
      */
     public function resolveAdaptive(bool $isDark): self
     {
-        $next = $this;
         $hasFg = isset($this->propsSet['fg']);
         $hasBg = isset($this->propsSet['bg']);
-        if ($this->fgAdaptive !== null && !$hasFg) {
-            $next = $next->foreground($this->fgAdaptive->pick($isDark));
+        $pickFg = $this->fgAdaptive !== null && !$hasFg;
+        $pickBg = $this->bgAdaptive !== null && !$hasBg;
+        // ST-35 (finding 064): same single-mutate fold as resolveProfile() —
+        // disjoint slots, ORed propsAdded, byte-identical to the chain.
+        if ($pickFg && $pickBg) {
+            return $this->with(
+                fg: $this->fgAdaptive->pick($isDark), fgSet: true,
+                bg: $this->bgAdaptive->pick($isDark), bgSet: true,
+                propsAdded: ['fg', 'bg'],
+            );
         }
-        if ($this->bgAdaptive !== null && !$hasBg) {
-            $next = $next->background($this->bgAdaptive->pick($isDark));
+        if ($pickFg) {
+            return $this->foreground($this->fgAdaptive->pick($isDark));
         }
-        return $next;
+        if ($pickBg) {
+            return $this->background($this->bgAdaptive->pick($isDark));
+        }
+        return $this;
     }
 
     /**
@@ -492,16 +502,30 @@ final class Style
      */
     public function resolveProfile(): self
     {
-        $next = $this;
         $hasFg = isset($this->propsSet['fg']);
         $hasBg = isset($this->propsSet['bg']);
-        if ($this->fgComplete !== null && !$hasFg) {
-            $next = $next->foreground($this->fgComplete->pick($this->profile));
+        $pickFg = $this->fgComplete !== null && !$hasFg;
+        $pickBg = $this->bgComplete !== null && !$hasBg;
+        // ST-35 (finding 064): single-mutate fold — when both complete slots
+        // need a pick, one with() pass replaces two, halving the
+        // intermediate instance. The two picks write disjoint slots and the
+        // with() choke ORs propsAdded, so the result is byte-identical to
+        // the two-step chain and ST-02's auto-collapse semantics are
+        // untouched.
+        if ($pickFg && $pickBg) {
+            return $this->with(
+                fg: $this->fgComplete->pick($this->profile), fgSet: true,
+                bg: $this->bgComplete->pick($this->profile), bgSet: true,
+                propsAdded: ['fg', 'bg'],
+            );
         }
-        if ($this->bgComplete !== null && !$hasBg) {
-            $next = $next->background($this->bgComplete->pick($this->profile));
+        if ($pickFg) {
+            return $this->foreground($this->fgComplete->pick($this->profile));
         }
-        return $next;
+        if ($pickBg) {
+            return $this->background($this->bgComplete->pick($this->profile));
+        }
+        return $this;
     }
     /** Toggle bold (SGR 1). */
     public function bold(bool $on = true): self          { return $this->with(bold: $on, propsAdded: ['bold']); }
@@ -1266,7 +1290,14 @@ final class Style
         // A value-probed prop that was skipped (null in $other) must not
         // carry $other's sentinel over: the receiver's value survived, so
         // the receiver's own sentinel (or its absence) is the truth.
-        $skipped = array_keys(array_filter([
+        // ST-35 (finding 061): the skip set was a list built through
+        // array_filter + array_keys and consulted with a linear in_array per
+        // incoming prop — O(n·m) churn on every patch(). As a direct assoc
+        // map the lookup is O(1) and the two throwaway passes disappear;
+        // semantics are identical because propsSet keys outside this map are
+        // absent (merge proceeds) while map entries are exactly the former
+        // true-value subset.
+        $skipped = [
             'fg'         => $mergedFg === null,
             'bg'         => $mergedBg === null,
             'fgAdaptive' => $mergedFgAdaptive === null,
@@ -1289,10 +1320,10 @@ final class Style
             // mistake the receiver's surviving colour for an explicit
             // child-set and refuse the parent's.
             'underlineColor' => $mergedUnderlineColor === null,
-        ]));
+        ];
         $newProps = $this->propsSet;
         foreach ($other->propsSet as $p => $v) {
-            if (!in_array($p, $skipped, true)) {
+            if (!($skipped[$p] ?? false)) {
                 $newProps[$p] = $v;
             }
         }
@@ -1454,13 +1485,25 @@ final class Style
         //    content itself is styled.
         $padCh = $this->paddingChar !== '' ? $this->paddingChar : ' ';
         $contentWidth = $pL + $innerWidth + $pR;
-        $padBlank = $this->colorWhitespace
-            ? $sgr . str_repeat($padCh, $contentWidth) . $reset
-            : str_repeat($padCh, $contentWidth);
+        // ST-35 (finding 060): the blank pad row is built lazily — with no
+        // vertical padding and no height short enough to need one, the
+        // str_repeat + SGR wrap never costs anything. Byte-identical: every
+        // consumer below materialises through the same closure, and vfit's
+        // truncate arm (count > height) never reads its $blank at all, so
+        // passing '' there is unobservable.
+        $padBlank = null;
+        $padRow = function () use (&$padBlank, $sgr, $reset, $padCh, $contentWidth): string {
+            return $padBlank ??= $this->colorWhitespace
+                ? $sgr . str_repeat($padCh, $contentWidth) . $reset
+                : str_repeat($padCh, $contentWidth);
+        };
 
         $body = [];
-        for ($i = 0; $i < $pT; $i++) {
-            $body[] = $padBlank;
+        if ($pT > 0) {
+            $blank = $padRow();
+            for ($i = 0; $i < $pT; $i++) {
+                $body[] = $blank;
+            }
         }
         foreach ($aligned as [$fillL, $l, $fillR]) {
             if ($this->colorWhitespace) {
@@ -1470,15 +1513,18 @@ final class Style
                 $body[] = str_repeat($padCh, $pL) . $fillL . $styled . $fillR . str_repeat($padCh, $pR);
             }
         }
-        for ($i = 0; $i < $pB; $i++) {
-            $body[] = $padBlank;
+        if ($pB > 0) {
+            $blank = $padRow();
+            for ($i = 0; $i < $pB; $i++) {
+                $body[] = $blank;
+            }
         }
 
         // 5. Fixed height: anchor body per alignV, padding above/below with
         //    styled blank rows. If body already exceeds the height, truncate
         //    consistently with the anchor.
         if ($this->height !== null) {
-            $body = $this->vfit($body, $this->height, $padBlank);
+            $body = $this->vfit($body, $this->height, count($body) < $this->height ? $padRow() : '');
         }
         // MaxHeight caps without padding shorter content.
         if ($this->maxHeight !== null && count($body) > $this->maxHeight) {
@@ -1965,13 +2011,17 @@ final class Style
             if ($textBudget < 1) {
                 break;
             }
-            $text = self::fitWithEllipsis($title->text, $textBudget);
+            // ST-35 (finding 062): the attach-time cached text width decides
+            // the no-shrink case without an ANSI walk; when a shrink happens
+            // the fitted piece is measured fresh exactly as before.
+            $fits = $title->textWidth <= $textBudget;
+            $text = $fits ? $title->text : self::fitWithEllipsis($title->text, $textBudget);
             $piece = $titleSgr . $text . $titleReset;
             if ($title->embedded) {
                 $piece = ($title->open ?? $junctions[0]) . $piece . ($title->close ?? $junctions[1]);
             }
             $rendered .= $sep . $piece;
-            $remaining -= $sepWidth + $overhead + Width::string($text);
+            $remaining -= $sepWidth + $overhead + ($fits ? $title->textWidth : Width::string($text));
             $previous = $title;
         }
         if ($rendered === '') {
