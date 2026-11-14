@@ -131,6 +131,9 @@ final class PrometheusFileBackend implements Backend
     private array $dirtyUpDownCounters = [];
     /** @var array<string,bool> Dirty flags per async-counter key. */
     private array $dirtyAsyncCounters = [];
+    /** @var bool exposition changed outside the per-series dirty arrays —
+     * descriptor registration or series reclaim (flush-gate input, 024) */
+    private bool $dirtyExposition = false;
     /** @var array<string,bool> Dirty flags per async-gauge key. */
     private array $dirtyAsyncGauges = [];
 
@@ -392,10 +395,33 @@ final class PrometheusFileBackend implements Backend
         // Store keyed by sanitized name so flush() can look up by the same key
         // that is used when emitting TYPE/HELP headers.
         $this->descriptors[$sanitized] = $descriptor;
+        // A freshly declared family changes the exposition even with no
+        // samples, so it is dirty for the flush gate (sugar-metrics-024).
+        $this->dirtyExposition = true;
     }
 
     public function flush(): void
     {
+        // The dirty flags gate the write (sugar-metrics-024): a timer-flushed
+        // idle process used to pay a rebuild + fsync + atomic rename of
+        // byte-identical content on every tick because nothing read the flags
+        // it maintained. An idle flush now returns untouched when nothing has
+        // changed since the last write AND the published file still exists —
+        // its disappearance is the consumer's reset signal, and the next
+        // flush republishes the full state even with no new emits. A backend
+        // that recorded nothing still publishes once (file-missing leg), so
+        // the file always materialises for watching collectors.
+        if (\file_exists($this->path)
+            && !$this->dirtyExposition
+            && $this->dirtyCounters === []
+            && $this->dirtyGauges === []
+            && $this->dirtyHistograms === []
+            && $this->dirtyUpDownCounters === []
+            && $this->dirtyAsyncCounters === []
+            && $this->dirtyAsyncGauges === []) {
+            return;
+        }
+
         $body = '';
 
         // Reset per-flush emission tracking.
@@ -452,10 +478,10 @@ final class PrometheusFileBackend implements Backend
             $seen[$id] = true;
         };
 
-        // The textfile is rewritten whole on every flush, so each series is
-        // emitted exactly once from its accumulator (insertion order); the
-        // dirty flags only exist so remove()/clear() semantics stay honest
-        // and are reset after the body is built.
+        // The textfile is rewritten whole on every WRITE, so each series is
+        // emitted exactly once from its accumulator (insertion order). The
+        // dirty flags gate that write above (sugar-metrics-024) and are reset
+        // here, on the path that actually published.
         foreach ($this->counters as $key => $val) {
             [$name, $labels] = self::splitKey($key);
             $guard($name, $labels);
@@ -518,6 +544,7 @@ final class PrometheusFileBackend implements Backend
         $this->dirtyUpDownCounters = [];
         $this->dirtyAsyncCounters = [];
         $this->dirtyAsyncGauges = [];
+        $this->dirtyExposition = false;
 
         // Staging lifecycle (sugar-metrics-028/029/055/056/057 — one sweep):
         //  * name: `<path>.<pid>-<entropy>.tmp` — ending in `.tmp` is node_exporter's
@@ -674,6 +701,10 @@ final class PrometheusFileBackend implements Backend
             $this->asyncGauges[$key], $this->dirtyAsyncGauges[$key],
         );
         $this->evictSideTables($key);
+        // Reclaim changes what the next exposition must say (the series
+        // disappears) — the per-key dirty unsets above are no longer
+        // sufficient for the flush gate (sugar-metrics-024).
+        $this->dirtyExposition = true;
     }
 
     /**
@@ -697,6 +728,9 @@ final class PrometheusFileBackend implements Backend
         $this->dirtyUpDownCounters = [];
         $this->dirtyAsyncCounters = [];
         $this->dirtyAsyncGauges = [];
+        // The cleared state must reach the file even under the flush gate —
+        // every per-key flag was just emptied (sugar-metrics-024).
+        $this->dirtyExposition = true;
         $this->descriptors = [];
         $this->rawFacts = [];
         $this->rawDescriptors = [];

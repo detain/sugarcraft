@@ -263,20 +263,66 @@ final class PrometheusFileBackendTest extends TestCase
         }
     }
 
-    public function testFlushWithNonDirtyMetricsStillEmitsThem(): void
+    public function testIdleFlushSkipsTheRewriteButDeletedFileRepublishesState(): void
     {
+        // MET-DIRTYGATE supersession (disclosed): this seat previously ran
+        // testFlushWithNonDirtyMetricsStillEmitsThem, which truncated the
+        // published file behind the backend's back and expected the next idle
+        // flush to rewrite it — pinning the very defect finding 024 names
+        // (flags maintained, never read). The class is the file's only
+        // writer (MET-STAGING doctrine), so external mutation is out of the
+        // contract. The honest re-materialisation signal is file DELETION
+        // (node_exporter one-shot flows), which the gate still honours.
         $b = new PrometheusFileBackend($this->path);
         $b->counter('always_on', 1.0);
         $b->flush();
+        $text = (string) file_get_contents($this->path);
+        self::assertStringContainsString('always_on 1', $text);
 
-        // Modify directly to simulate a non-dirty metric (another process wrote to same file).
-        // After first flush the dirty flag is cleared.
-        // Now call flush again with no new data — the metric should still be emitted.
-        file_put_contents($this->path, '');
+        // Idle flush touches NOTHING: a distinctive future mtime survives
+        // (any rebuild/rename would re-stamp it with the clock).
+        $sentinel = time() + 1000;
+        touch($this->path, $sentinel);
+        $b->flush();
+        $this->assertSame($sentinel, filemtime($this->path), 'idle flush rewrote the published file');
+        $this->assertStringContainsString('always_on 1', (string) file_get_contents($this->path));
+
+        // Consumer removes the file → the next flush republishes the full
+        // state even though nothing emitted since.
+        unlink($this->path);
+        $b->flush();
+        $this->assertStringEqualsFile($this->path, $text);
+    }
+
+    public function testIdleFlushStillHonoursDescriptorRemoveAndClearSignals(): void
+    {
+        // The flush gate (sugar-metrics-024) reads a general exposition-dirty
+        // flag beside the per-series ones, because these three events change
+        // the body without touching any series dirty bit.
+        $b = new PrometheusFileBackend($this->path);
+        $b->counter('keep_me', 2.0);
+        $b->gauge('drop_me', 3.0);
         $b->flush();
 
+        // (a) remove() reclaims a series and clears its per-key dirty bit —
+        // the general flag must carry the event or the stale line survives.
+        $b->remove('drop_me');
+        $b->flush();
         $content = (string) file_get_contents($this->path);
-        $this->assertStringContainsString('always_on 1', $content);
+        $this->assertStringNotContainsString('drop_me', $content);
+        $this->assertStringContainsString('keep_me 2', $content);
+
+        // (b) describe() of a never-sampled family declares HELP/TYPE with no
+        // series dirt at all.
+        $b->describe(new Descriptor('idle_family', 'declared while idle', 'gauge'));
+        $b->flush();
+        $this->assertStringContainsString('# TYPE idle_family gauge', (string) file_get_contents($this->path));
+
+        // (c) clear() empties everything; the next flush must publish the
+        // empty state rather than skip into a stale file.
+        $b->clear();
+        $b->flush();
+        $this->assertStringNotContainsString('keep_me', (string) file_get_contents($this->path));
     }
 
     public function testFlushOfNonFiniteGaugeSpellsCanonicalTokenNotSignFlippedInf(): void
