@@ -10,6 +10,7 @@ use SugarCraft\Dashboard\Foundation\Item;
 use SugarCraft\Dashboard\Foundation\Sizer;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Width;
 use PHPUnit\Framework\TestCase;
 
 final class TreeTest extends TestCase
@@ -310,6 +311,76 @@ final class TreeTest extends TestCase
 
         // Root + Child = 2 lines
         $this->assertSame(2, $h);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // D-140: id-keyed state and drawing-aware measurement
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testSameLabelNodesToggleIndependentlyById(): void
+    {
+        $tree = Tree::new([
+            TreeNode::withId('sec-a', 'Details')->withChildren([
+                TreeNode::withId('sec-a-1', 'Alpha'),
+            ]),
+            TreeNode::withId('sec-b', 'Details')->withChildren([
+                TreeNode::withId('sec-b-1', 'Beta'),
+            ]),
+        ]);
+
+        $collapsed = $tree->withNodeCollapsed('sec-a', true);
+        $rendered = $collapsed->render();
+
+        // Exactly one ' [+]' marker: only the addressed node collapsed.
+        $this->assertSame(1, substr_count($rendered, '[+]'));
+        // sec-a's child is hidden, sec-b's child still paints.
+        $this->assertStringNotContainsString('Alpha', $rendered);
+        $this->assertStringContainsString('Beta', $rendered);
+
+        // The untouched tree keeps both expanded (immutability).
+        $this->assertSame(0, substr_count($tree->render(), '[+]'));
+    }
+
+    public function testIdlessNodesKeepLegacyLabelToggle(): void
+    {
+        $tree = Tree::new([
+            TreeNode::new('Details')->withChildren([TreeNode::new('One')]),
+            TreeNode::new('Other')->withChildren([TreeNode::new('Two')]),
+        ]);
+
+        $collapsed = $tree->withNodeCollapsed('Details', true);
+
+        // Legacy contract: id-less nodes answer to their label; 'Other'
+        // is untouched and its child keeps painting.
+        $this->assertSame(1, substr_count($collapsed->render(), '[+]'));
+        $this->assertStringNotContainsString('One', $collapsed->render());
+        $this->assertStringContainsString('Two', $collapsed->render());
+    }
+
+    public function testMeasureFollowsConfiguredBranchDrawing(): void
+    {
+        $nodes = [
+            TreeNode::withId('r', 'Root')->withChildren([
+                TreeNode::withId('c', 'Child')->withChildren([
+                    TreeNode::withId('g', 'Grandchild'),
+                ]),
+                TreeNode::withId('l', 'Last')->withCollapsed(true),
+            ]),
+        ];
+
+        $drawings = [
+            'default 3-cell' => Tree::new($nodes),
+            'custom 2-cell' => (new Tree($nodes))
+                ->withBranchChars('|-', '`->'),
+            'plain box' => new Tree($nodes, showLines: true, branchChar: '++', endChar: '--', verticalChar: '!!', spaceChar: '  '),
+        ];
+
+        foreach ($drawings as $case => $tree) {
+            $width = $tree->innerSize()[0];
+            $lines = explode("\n", $tree->render());
+            $painted = max(array_map(static fn (string $l): int => Width::string($l), $lines));
+            $this->assertSame($width, $painted, "size math must agree with painted rows: {$case}");
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════
