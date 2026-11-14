@@ -277,7 +277,11 @@ final class RegistryTest extends TestCase
         // system clock step-back between them yields a negative elapsed,
         // which histogram() refuses — thrown from inside the caller's
         // finally arm, masking the original exception. Pin the shape at
-        // the source (clock injection is not on the library's seam set).
+        // the source. This is the JUSTIFIED no-seam exception accepted by
+        // sugar-metrics-038/MET-SEAMS: the clock source is not injectable
+        // through any public surface, so no behavior probe can observe it;
+        // every other prose-pin named by that finding was replaced by a
+        // seam instead of kept.
         $src = (string) file_get_contents(__DIR__ . '/../src/Registry.php');
         $matched = preg_match('/public function time\(.*?\n    \}\n/s', $src, $m);
         $this->assertSame(1, $matched, 'time() vanished — clock-shape pin needs re-aiming');

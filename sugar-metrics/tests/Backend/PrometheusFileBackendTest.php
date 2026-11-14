@@ -465,6 +465,48 @@ final class PrometheusFileBackendTest extends TestCase
         $this->assertStringNotContainsString('route="/a"', $content);
         $this->assertStringContainsString('hits{route="/b"} 2', $content);
         $this->assertStringContainsString('hits{route="/c"} 3', $content);
+
+        // sugar-metrics-038 (MET-SEAMS): public accumulation + eviction
+        // probes replace the old ensureSpace() source-regex pin. Family
+        // size stays at the cap under flooding, FIFO order is observable
+        // through the exposition bytes, and nothing torn survives — the
+        // behavior the in-place index rewrite exists to keep.
+        $familyLines = static function (string $body, string $family): array {
+            $keep = [];
+            foreach (explode("\n", $body) as $line) {
+                if (str_starts_with($line, $family . '{')) {
+                    $keep[] = $line;
+                }
+            }
+            return $keep;
+        };
+        $lines2 = $familyLines($content, 'hits');
+        $this->assertCount(2, $lines2, 'a bounded family publishes exactly cap series');
+        $this->assertSame(2, count(array_filter($lines2, static fn(string $l): bool => (bool) preg_match('/^\S+ \d+(\.\d+)?$/', $l))), 'every published series line stays whole');
+
+        $b2 = new PrometheusFileBackend($this->path, null, 3);
+        foreach (['/a', '/b', '/c', '/d', '/e', '/f'] as $i => $route) {
+            $b2->counter('jobs', (float) ($i + 1), ['route' => $route]);
+        }
+        $b2->flush();
+        $content2 = (string) file_get_contents($this->path);
+        $lines2 = $familyLines($content2, 'jobs');
+        $this->assertCount(3, $lines2, 'six distinct series into a cap-3 family publish exactly three');
+        foreach (['/a', '/b', '/c'] as $route) {
+            $this->assertStringNotContainsString($route, $content2, 'the three oldest must be evicted');
+        }
+        foreach (['/d', '/e', '/f'] as $i => $route) {
+            $this->assertStringContainsString('jobs{route="' . $route . '"} ' . (string) ($i + 4), $content2, 'the three newest must survive with their values');
+        }
+        // Eviction order survives a whole-replace flush: the family ledger
+        // is positional FIFO, so one more series drops /d — not /f — and
+        // re-publishes the survivors from the accumulator.
+        $b2->counter('jobs', 7.0, ['route' => '/g']);
+        $b2->flush();
+        $content3 = (string) file_get_contents($this->path);
+        $this->assertCount(3, $familyLines($content3, 'jobs'), 'the cap still bounds the family after a second flush');
+        $this->assertStringNotContainsString('route="/d"', $content3, 'the fourth series was the next in line to evict');
+        $this->assertStringContainsString('jobs{route="/g"} 7', $content3, 'the newest series publishes with its value');
     }
 
     public function testZeroOrNegativeFamilyCapIsRefused(): void
@@ -669,37 +711,25 @@ final class PrometheusFileBackendTest extends TestCase
         $this->assertStringContainsString('described_metric{tag="v"} 2', $content);
     }
 
-    /**
-     * Structural pin (MET-STAGING doctrine, sugar-metrics-028/055/057): the
-     * staging name must END in `.tmp` (node_exporter's version-independent
-     * ignore rule), be created `x+` (O_EXCL — a `c+` open republished planted
-     * bytes verbatim), derive entropy from random_int (a clock-derived
-     * `uniqid` name is predictable), carry the writer pid, and lock nothing
-     * (the per-writer-unique name makes a staging flock unfalsifiable — the
-     * old prose sold it as a concurrency defence that never defended).
-     */
-    public function testFlushStagesIntoAPerWriterUniqueTmpName(): void
-    {
-        $method = new \ReflectionMethod(PrometheusFileBackend::class, 'flush');
-        $lines  = file((string) $method->getFileName());
-        self::assertIsArray($lines);
-        $body = implode('', array_slice($lines, $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1));
-
-        self::assertStringContainsString(". '.tmp'", $body, 'the staging name must end in .tmp');
-        self::assertStringContainsString("'x+'", $body, 'staging must be an exclusive create — c+ republished planted bytes');
-        self::assertStringContainsString('getmypid()', $body, 'the staging name must carry the writer pid');
-        self::assertStringNotContainsString('uniqid(', $body, 'the staging name must not ride the clock');
-        self::assertStringNotContainsString('flock(', $body, 'rename(2) carries the publish guarantee; a staging flock is unfalsifiable here');
-        self::assertStringNotContainsString("\$this->path . '.tmp';", $body, 'a fixed shared staging name re-introduces the rename race');
-    }
+    // sugar-metrics-038 (MET-SEAMS): the staging-name source-regex twin was
+    // deleted here. Its six string needles (". '.tmp'", "'x+'", getmypid(),
+    // absent uniqid/flock/fixed-name) each restate implementation prose that
+    // reddens on harmless refactors while green-lighting matched-substring
+    // behavior changes. The behavior they gestured at is carried by seams:
+    // testConcurrentFlushesFromTwoProcessesPublishCleanly (rename race =>
+    // child failure + residue fail), testStaleStagingResidueIsSweptAndFresh-
+    // ResidueIsKept, and testPlantedStagingClutterNeverWedgesOrPoisonsThePub-
+    // lish (x+ exclusivity under planted names).
 
     /**
      * sugar-metrics-048: flush() must split each key once, not twice. The
      * guard scan and the emit loops share one flush-scoped [$family,
      * $labels] map; the split-reuse is an allocation contract invisible to
      * the exposition bytes, so it is pinned structurally on the flush()
-     * source (same technique as the staging-name pin above). Re-introducing
-     * a per-pass splitKey — the shape this finding removed — goes red here.
+     * source — a no-seam exception in the sugar-metrics-038 sense (like the
+     * hrtime pin in RegistryTest), not a prose test: it asserts an alloca-
+     * tion shape no public probe can observe. Re-introducing a per-pass
+     * splitKey — the shape this finding removed — goes red here.
      */
     public function testFlushSplitsEachKeyOnceAndReusesAcrossBothPasses(): void
     {
@@ -765,26 +795,6 @@ final class PrometheusFileBackendTest extends TestCase
         foreach (array_merge(glob($this->path . '.*.tmp') ?: [], glob($this->path . '.tmp.*') ?: []) as $leaked) {
             self::fail('unique staging file leaked to disk: ' . $leaked);
         }
-    }
-
-    public function testEnsureSpaceWritesTheFamilyIndexInPlaceNoPerFamilyCopy(): void
-    {
-        // MT-8 perf shape: a new-series write used to read the WHOLE family
-        // key index into a local, mutate it, and reassign it. Copy-on-write
-        // separation made every new series O(series-in-family) — with the
-        // default cap of 10 000 that is a multi-kilobyte hash-table copy per
-        // write. ensureSpace must now address $this->familyKeys[$family]
-        // directly, so adding a series does O(1) work in family size.
-        $src = (string) file_get_contents(
-            __DIR__ . '/../../src/Backend/PrometheusFileBackend.php'
-        );
-        $matched = preg_match('/private function ensureSpace.*?\n    \}\n/s', $src, $m);
-        $this->assertSame(1, $matched, 'ensureSpace() vanished — perf-shape pin needs re-aiming');
-        $slice = $m[0];
-        $this->assertStringNotContainsString('?? []', $slice);
-        $this->assertStringNotContainsString('$index[', $slice);
-        $this->assertStringNotContainsString('$index =', $slice);
-        $this->assertStringContainsString('$this->familyKeys[$family][$key] = true;', $slice);
     }
 
     /**
