@@ -302,6 +302,19 @@ final class DetectTerminfoTest extends TestCase
         string $entryLine,
         bool $expectPromote,
     ): void {
+        // Capability gate (2026-11-13, same skip shape as the fixture test
+        // below): the promote legs require the REAL roster gate to answer —
+        // TerminalProbe's unfakeable InfocmpBinary::path() step fails CLOSED
+        // before the (faked) exec on any host without a packaged infocmp at
+        // its absolute candidates, so the canned sixl text never reaches the
+        // matcher and all six PROMOTE rows read as false negatives there.
+        // That is exactly the CI ubuntu-26.04 host-data drift (jobs
+        // 81240709/83122655/81601034, 'false is identical to true'); it says
+        // nothing about src, so skip rather than bend the pins.
+        if (InfocmpBinary::path() === null) {
+            $this->markTestSkipped('the InfocmpBinary gate finds no packaged infocmp on this machine');
+        }
+
         $pair = $this->createStreamPair();
         Detect::setProbeStdin($pair['read']);
         // A no-sixel DA1 reply is preloaded either way: on a PROMOTE row the
