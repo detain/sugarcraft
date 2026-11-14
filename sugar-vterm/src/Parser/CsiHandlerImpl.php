@@ -779,10 +779,11 @@ final class CsiHandlerImpl implements CsiHandler
         if ($bottom > $this->grid->rows) {
             $bottom = $this->grid->rows;
         }
-        if ($top > $bottom) {
+        // Same/inverted rows are an INVALID region (xterm): ignored whole,
+        // no one-row region, no home.
+        if ($top >= $bottom) {
             return;
         }
-
         $this->scrollTop = $top - 1;
         $this->scrollBottom = $bottom - 1;
 
@@ -790,7 +791,7 @@ final class CsiHandlerImpl implements CsiHandler
         // ScreenHandler::setScrollRegion parity, w4-vt): page home (0,0) —
         // the renderer models no DECOM, so there is no origin-adjusted
         // variant — and the phantom cell is dropped with the move. An
-        // invalid (top > bottom) region took the early return and stays put.
+        // invalid (top >= bottom) region took the early return and stays put.
         $this->cursor = $this->cursor->at(0, 0);
         $this->wrapPending = false;
     }

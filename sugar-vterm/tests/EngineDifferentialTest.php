@@ -79,6 +79,12 @@ final class EngineDifferentialTest extends TestCase
             'mark over wide tail' => ["漢\xcc\x81done"],
             'backspace then write' => ["ab\x1b[Dc"],
             'origin clamp' => ["\x1b[99;99Hcorner"],
+            // DECSTBM invalidities: same-row and inverted regions are
+            // ignored whole in both engines (xterm) — no one-row region,
+            // no home. Divergence here would mean one engine accepted the
+            // degenerate margins.
+            'decstbm same-row' => ["top\r\nmid\r\nbot\x1b[5;5r\x1b[5;1HZ"],
+            'decstbm inverted' => ["top\r\nmid\r\nbot\x1b[5;4r\x1b[5;1HZ"],
             'reset then type' => ["\x1bcafter reset"],
         ];
     }

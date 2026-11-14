@@ -838,6 +838,27 @@ final class CsiHandlerImplTest extends TestCase
         $this->assertSame(4, $csi->cursor()->col, 'clamped to buffer right edge');
     }
 
+    public function testSameRowDecstbmIsIgnoredLikeXterm(): void
+    {
+        // top == bottom is an INVALID region (xterm): no home, no one-row
+        // scroll area. If it were accepted as rows 5..5, a bottom LF would
+        // leave row 0 untouched; the full-screen region scrolls it away.
+        $csi = new CsiHandlerImpl(new Buffer(5, 5), new Cursor(), $this->theme);
+        $csi->printable('top');
+        $csi->cup(4, 4);
+        $csi->decstbm(5, 5);
+        $this->assertSame(3, $csi->cursor()->row, 'ignored DECSTBM must not home');
+        $this->assertSame(3, $csi->cursor()->col);
+
+        $csi->cup(5, 1);
+        $csi->printable('x');
+        $csi->lf();
+        // Full-screen region scrolling: row 0 ('top') shifts out and row 4
+        // blanks. A one-row region (5..5) would have left 'top' in place.
+        $this->assertSame(' ', $csi->grid()->cell(0, 0)->char, 'full region still live — row 0 scrolled out');
+        $this->assertSame(' ', $csi->grid()->cell(4, 0)->char, 'bottom line blanked by the region scroll');
+    }
+
     public function testExtremeCupThenPrintLeavesLastRowIntact(): void
     {
         // The curated-parity repro: CUP beyond both margins then one glyph.

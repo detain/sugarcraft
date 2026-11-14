@@ -983,7 +983,10 @@ final class ScreenHandler implements SubparamsAwareHandler
         if ($bottom > $this->buffer->rows) {
             $bottom = $this->buffer->rows;
         }
-        if ($top > $bottom) {
+        // xterm treats same/inverted rows as an INVALID region — ignored
+        // whole (no one-row region, no home). top == bottom is not a legal
+        // scroll region.
+        if ($top >= $bottom) {
             return; // Invalid; ignore.
         }
 

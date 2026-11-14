@@ -67,6 +67,18 @@ final class DecstbmHomeTest extends TestCase
         $this->assertSame(4, $h->scrollRegionBottom);
     }
 
+    public function testSameRowRegionIsInvalidAndDoesNotHome(): void
+    {
+        // xterm treats top == bottom as an invalid region too — ignored
+        // whole, NOT accepted as a one-row region (which would home the
+        // cursor and shrink the scroll area).
+        $h = $this->feed("\x1b[4;4H\x1b[5;5r");
+        $this->assertSame(3, $h->cursor->row, 'same-row DECSTBM must not home');
+        $this->assertSame(3, $h->cursor->col);
+        $this->assertSame(0, $h->scrollRegionTop, 'full-screen region must survive');
+        $this->assertSame(4, $h->scrollRegionBottom);
+    }
+
     public function testDecstbmDropsPhantomWrap(): void
     {
         // Print exactly to the right margin to arm the phantom, home via
