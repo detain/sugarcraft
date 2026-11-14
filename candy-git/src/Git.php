@@ -524,6 +524,34 @@ final class Git implements GitDriver
         $this->run(['stash', 'drop', $stashRef]);
     }
 
+    public function stashPush(?string $message, bool $keepIndex = false, bool $includeUntracked = false): void
+    {
+        // An empty buffer is indistinguishable from "no message" at this
+        // boundary; git's own WIP decoration is the honest answer either way.
+        $args = ['stash', 'push'];
+        if ($message !== null && $message !== '') {
+            $args[] = '-m';
+            $args[] = $message;
+        }
+        if ($keepIndex) {
+            $args[] = '--keep-index';
+        }
+        if ($includeUntracked) {
+            $args[] = '-u';
+        }
+        $this->run($args);
+    }
+
+    public function stashPop(string $stashRef): void
+    {
+        // Composed apply-then-drop (candy-git-014): both legs ride the
+        // existing guarded verbs, so a conflicted apply throws before the
+        // drop and the entry survives for a retry — the same contract git's
+        // own pop offers, without a third argv shape in the dispatch tables.
+        $this->stashApply($stashRef);
+        $this->stashDrop($stashRef);
+    }
+
     public function cherryPick(string $commit): void
     {
         $this->guardRef($commit);

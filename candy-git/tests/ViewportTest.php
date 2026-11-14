@@ -255,12 +255,16 @@ final class ViewportTest extends TestCase
             $entries[] = new StashEntry($i, sprintf('sha%02d', $i), 'main', 'stash message number ' . $i);
         }
         $git = new FixtureGit([], [], []);
-        $app = new App($git, stashManager: new StashManager($entries, 0), width: 80, height: 20);
+        // CG-16 disclosed re-pin: the footer grew three rows (s/u/p join a/d),
+        // so the entry window needs a 26-row screen (was 20) before the
+        // '+n below' indicator survives rowWindow's no-budget special cases.
+        // The windowing contract itself is unchanged.
+        $app = new App($git, stashManager: new StashManager($entries, 0), width: 80, height: 26);
         $view = $app->view();
 
         self::assertStringContainsString('stash@{0}', $view);
         self::assertStringNotContainsString('stash@{24}', $view);
         self::assertStringContainsString('below', $view);
-        self::assertLessThanOrEqual(20, count(explode("\n", rtrim($view, "\n"))));
+        self::assertLessThanOrEqual(26, count(explode("\n", rtrim($view, "\n"))));
     }
 }

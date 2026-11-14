@@ -133,6 +133,7 @@ return [
     'confirm.discard'         => 'discard {path}: press d again to discard (unrecoverable)',
     'confirm.delete_branch'   => 'delete branch {name}: press D again to delete',
     'confirm.stash_drop'      => 'drop stash {ref}: press d again to drop (unrecoverable)',
+    'confirm.stash_pop'       => 'pop stash {ref}: press p again to apply and drop it',
     'confirm.fetch'           => 'fetch: press f again to fetch from the remote',
     'confirm.pull'            => 'pull: press p again to pull from the remote',
     'confirm.push'            => 'push: press P again to push to the remote (visible to others)',
@@ -177,6 +178,13 @@ return [
     'stash.drop'             => 'drop stash',
     'stash.applied'          => 'applied {ref}',
     'stash.dropped'          => 'dropped {ref}',
+    'stash.pushed'           => 'stashed',
+    'stash.popped'           => 'popped {ref}',
+    'stash.push'             => 'stash changes',
+    'stash.push_untracked'   => 'stash incl. untracked',
+    'stash.pop'              => 'pop (apply + drop)',
+    'stash.prompt'           => 'stash message: ',
+    'stash.prompt_untracked' => 'stash message (+untracked): ',
 
     // Cherry-pick
     'cherry_pick.prompt'      => 'cherry-pick: ',

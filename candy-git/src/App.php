@@ -89,6 +89,12 @@ final class App implements Model
         public readonly ?HistoryManager $history = null,
         /** Stash manager overlay (shown when 'S' is pressed). */
         public readonly ?StashManager $stashManager = null,
+        /** While true the stash overlay owns a one-line message buffer for the next push (candy-git-014). */
+        public readonly bool $collectingStash = false,
+        /** The accumulated stash message while collectingStash is true (empty = git's own WIP decoration). */
+        public readonly string $stashMessage = '',
+        /** The open collection was started by 'u': the push will include untracked files (-u). */
+        public readonly bool $stashUntracked = false,
         /** Cherry-pick state (shown when 'V' is pressed). */
         public readonly ?CherryPick $cherryPick = null,
         /** Worktrees manager overlay (shown when 'w' is pressed in branches pane). */
@@ -163,6 +169,11 @@ final class App implements Model
             if ($this->showRebaseMenu) {
                 return [$this->withRebaseMenu(false), null];
             }
+            if ($this->collectingStash) {
+                // Esc backs out of the message buffer first — the overlay
+                // it lives inside stays open (candy-git-014).
+                return [$this->withStashCollection(false, ''), null];
+            }
             if ($this->stashManager !== null) {
                 return [$this->withStashManager(null), null];
             }
@@ -200,8 +211,29 @@ final class App implements Model
 
         // Stash manager overlay (Escape closes it via the global block above)
         if ($this->stashManager !== null) {
+            if ($this->collectingStash) {
+                // A message buffer owns the keyboard: Enter pushes, edit
+                // keys type, everything else is swallowed (candy-git-014).
+                if ($msg->type === KeyType::Enter) {
+                    return [$this->executeStashPush(), null];
+                }
+                $edited = self::editBuffer($this->stashMessage, $msg);
+                if ($edited !== null) {
+                    return [$this->withAll(stashMessage: $edited), null];
+                }
+                return [$this, null];
+            }
             if ($msg->type === KeyType::Char && $msg->rune === 'a') {
                 return [$this->executeStashApply(), null];
+            }
+            if ($msg->type === KeyType::Char && $msg->rune === 'p') {
+                return [$this->executeStashPop(), null];
+            }
+            if ($msg->type === KeyType::Char && $msg->rune === 's') {
+                return [$this->startStashPush(false), null];
+            }
+            if ($msg->type === KeyType::Char && $msg->rune === 'u') {
+                return [$this->startStashPush(true), null];
             }
             if ($msg->type === KeyType::Char && $msg->rune === 'd') {
                 return [$this->executeStashDrop(), null];
@@ -525,6 +557,7 @@ final class App implements Model
         if ($this->collectingCommit)        { $used++; }
         if ($this->collectingBranchName)    { $used++; }
         if ($this->collectingMergeTarget)   { $used++; }
+        if ($this->collectingStash)         { $used++; }
         if ($this->cherryPick !== null && $this->cherryPick->collecting) { $used++; }
         return max(1, $this->height - $used);
     }
@@ -622,6 +655,7 @@ final class App implements Model
         return $this->collectingCommit
             || $this->collectingBranchName
             || $this->collectingMergeTarget
+            || $this->collectingStash
             || ($this->cherryPick !== null && $this->cherryPick->collecting)
             || ($this->worktrees !== null && $this->worktrees->adding);
     }
@@ -820,6 +854,9 @@ final class App implements Model
         ?string $notice = null,
         ?StashManager $stashManager = null,
         bool $stashManagerSet = false,
+        ?bool $collectingStash = null,
+        ?string $stashMessage = null,
+        ?bool $stashUntracked = null,
         ?CherryPick $cherryPick = null,
         bool $cherryPickSet = false,
         ?Worktrees $worktrees = null,
@@ -863,6 +900,9 @@ final class App implements Model
             pendingConfirm: $pendingConfirmSet ? $pendingConfirm : null,
             notice: $notice,
             stashManager: $stashManagerSet ? $stashManager : ($stashManager ?? $this->stashManager),
+            collectingStash: $collectingStash ?? $this->collectingStash,
+            stashMessage: $stashMessage ?? $this->stashMessage,
+            stashUntracked: $stashUntracked ?? $this->stashUntracked,
             cherryPick: $cherryPickSet ? $cherryPick : ($cherryPick ?? $this->cherryPick),
             worktrees: $worktreesSet ? $worktrees : ($worktrees ?? $this->worktrees),
             interactiveRebase: $interactiveRebaseSet ? $interactiveRebase : ($interactiveRebase ?? $this->interactiveRebase),
@@ -1607,6 +1647,64 @@ final class App implements Model
         return $this->withStashManager($sm->withCursor($dir));
     }
 
+    /** Open-or-close for the stash message buffer (candy-git-014): closing
+     * always drops the untracked tag with it, so a stale -u can never ride
+     * into the next push. */
+    private function withStashCollection(bool $collecting, string $message): self
+    {
+        return $this->withAll(collectingStash: $collecting, stashMessage: $message, stashUntracked: false);
+    }
+
+    /** 's' pushes tracked work, 'u' pushes tracked + untracked (-u); both
+     * open the message buffer first — Enter on an empty buffer lets git
+     * decorate the entry itself (WIP on <branch>). */
+    private function startStashPush(bool $untracked): self
+    {
+        return $this->withAll(collectingStash: true, stashMessage: '', stashUntracked: $untracked);
+    }
+
+    private function executeStashPush(): self
+    {
+        $sm = $this->stashManager;
+        if ($sm === null) return $this;
+        try {
+            $this->git->stashPush($this->stashMessage === '' ? null : $this->stashMessage, false, $this->stashUntracked);
+            $fresh = new StashManager($this->git->stashList());
+            return $this->withStashCollection(false, '')
+                ->withStashManager($fresh)
+                ->refresh()
+                ->withAll(successMessage: Lang::t('stash.pushed'));
+        } catch (\RuntimeException $e) {
+            // The buffer closes on failure too — its bytes describe a push
+            // that did not happen — but the overlay stays open for a retry.
+            return $this->withStashCollection(false, '')->withError($e->getMessage());
+        }
+    }
+
+    private function executeStashPop(): self
+    {
+        $sm = $this->stashManager;
+        if ($sm === null) return $this;
+        $current = $sm->current();
+        if ($current === null) return $this;
+        // Pop consumes the entry (apply + drop): arm like a drop, since the
+        // stash copy is destroyed either way (candy-git-014).
+        $arm = 'stashpop:' . $current->stashRef();
+        if ($this->pendingConfirm !== $arm) {
+            return $this->armConfirm($arm, Lang::t('confirm.stash_pop', ['ref' => $current->stashRef()]));
+        }
+        $base = $this->clearConfirm();
+        try {
+            $this->git->stashPop($current->stashRef());
+            $fresh = new StashManager($this->git->stashList());
+            return $base->withStashManager($fresh)->refresh()->withAll(
+                successMessage: Lang::t('stash.popped', ['ref' => $current->stashRef()])
+            );
+        } catch (\RuntimeException $e) {
+            return $base->withError($e->getMessage());
+        }
+    }
+
     private function executeStashApply(): self
     {
         $sm = $this->stashManager;
@@ -1615,7 +1713,13 @@ final class App implements Model
         if ($current === null) return $this;
         try {
             $this->git->stashApply($current->stashRef());
-            return $this->withStashManager(null)->refresh()->withAll(
+            // The overlay stays open (candy-git-076): closing it sent the
+            // next keystrokes to the base UI, where a documented stash `d`
+            // armed a status-pane file discard instead. apply does not
+            // change the list, so the manager is re-passed untouched;
+            // refresh() keeps it (keep-existing fallthrough) and reloads
+            // the worktree panes the apply just dirtied.
+            return $this->refresh()->withAll(
                 successMessage: Lang::t('stash.applied', ['ref' => $current->stashRef()])
             );
         } catch (\RuntimeException $e) {

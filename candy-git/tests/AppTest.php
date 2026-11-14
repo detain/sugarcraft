@@ -52,6 +52,8 @@ final class FixtureGit implements GitDriver
     public array $stashApplies = [];
     /** @var list<string> */
     public array $stashDrops = [];
+    public array $stashPushes = [];
+    public array $stashPops = [];
     public array $cherryPicks = [];
     public bool $cherryPickContinueCalled = false;
     public bool $cherryPickAbortCalled = false;
@@ -126,6 +128,8 @@ final class FixtureGit implements GitDriver
     }
     public function stashApply(string $stashRef): void { $this->maybeThrow('stashApply'); $this->stashApplies[] = $stashRef; }
     public function stashDrop(string $stashRef): void { $this->maybeThrow('stashDrop'); $this->stashDrops[] = $stashRef; }
+    public function stashPush(?string $message, bool $keepIndex = false, bool $includeUntracked = false): void { $this->maybeThrow('stashPush'); $this->stashPushes[] = [$message, $keepIndex, $includeUntracked]; }
+    public function stashPop(string $stashRef): void { $this->maybeThrow('stashPop'); $this->stashPops[] = $stashRef; }
     public function cherryPick(string $commit): void { $this->maybeThrow('cherryPick'); $this->cherryPicks[] = $commit; }
     public function cherryPickContinue(): void { $this->maybeThrow('cherryPickContinue'); $this->cherryPickContinueCalled = true; }
     public function cherryPickAbort(): void { $this->maybeThrow('cherryPickAbort'); $this->cherryPickAbortCalled = true; }
@@ -960,6 +964,116 @@ final class AppTest extends TestCase
         $this->assertNotNull($a->stashManager);
         [$a, ] = $a->update(new KeyMsg(KeyType::Escape, ''));
         $this->assertNull($a->stashManager);
+    }
+
+    /**
+     * CG-16 (candy-git-014): the manager used to be read/write-restricted to
+     * what git made elsewhere. `s` now creates a stash with a typed message
+     * and the overlay survives the write so the new entry is immediately
+     * actionable.
+     */
+    public function testStashOverlayPushFlow(): void
+    {
+        $g = $this->git();
+        $g->stashListResult = [new \SugarCraft\Git\StashEntry(0, 'abc1234', 'main', 'WIP thing')];
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'S'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 's'));
+        $this->assertTrue($a->collectingStash);
+        $this->assertNotNull($a->stashManager, 'the overlay stays up behind the buffer');
+        $this->assertFalse($a->stashUntracked);
+        foreach (['m', 'y'] as $rune) {
+            [$a, ] = $a->update(new KeyMsg(KeyType::Char, $rune));
+        }
+        [$a, ] = $a->update(new KeyMsg(KeyType::Space, ' '));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'x'));
+        $this->assertSame('my x', $a->stashMessage);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertSame([['my x', false, false]], $g->stashPushes);
+        $this->assertFalse($a->collectingStash);
+        $this->assertNotNull($a->stashManager, 'pushing leaves the manager open for the next move');
+        $this->assertSame('stashed', $a->successMessage);
+    }
+
+    public function testStashPushUntrackedLeg(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'S'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'u'));
+        $this->assertTrue($a->collectingStash);
+        $this->assertTrue($a->stashUntracked);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter, ''));
+        // An empty buffer hands git the default WIP decoration (null message).
+        $this->assertSame([[null, false, true]], $g->stashPushes);
+    }
+
+    public function testStashPushKeepsOverlayOpenOnFailure(): void
+    {
+        $g = $this->git();
+        $g->throwOn['stashPush'] = new \RuntimeException('No local changes to save');
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'S'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 's'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'x'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertFalse($a->collectingStash, 'the buffer closes on failure...');
+        $this->assertNotNull($a->stashManager, '...but the overlay stays for a retry');
+        $this->assertStringContainsString('No local changes', (string) $a->error);
+    }
+
+    /**
+     * CG-16 (candy-git-014): pop = apply then drop, armed exactly like drop
+     * because the entry is destroyed either way.
+     */
+    public function testStashPopArmsThenPops(): void
+    {
+        $g = $this->git();
+        $g->stashListResult = [new \SugarCraft\Git\StashEntry(0, 'abc1234', 'main', 'WIP thing')];
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'S'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'p'));
+        $this->assertSame('stashpop:stash@{0}', $a->pendingConfirm);
+        $this->assertStringContainsString('press p again', (string) $a->notice);
+        $this->assertSame([], $g->stashPops);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'p'));
+        $this->assertSame(['stash@{0}'], $g->stashPops);
+        $this->assertNull($a->pendingConfirm);
+        $this->assertStringContainsString('popped', (string) $a->successMessage);
+        $this->assertNotNull($a->stashManager, 'the list refreshes in place');
+    }
+
+    /**
+     * CG-16 (candy-git-076): apply used to close the overlay, sending every
+     * later keystroke to the base UI - where the documented stash `d` armed a
+     * STATUS-pane file discard. Apply now keeps the overlay open.
+     */
+    public function testApplyKeepsTheOverlayOpenAndLaterKeysHitStashRows(): void
+    {
+        $g = $this->git();
+        $g->stashListResult = [new \SugarCraft\Git\StashEntry(0, 'abc1234', 'main', 'WIP thing')];
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'S'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'a'));
+        $this->assertSame(['stash@{0}'], $g->stashApplies);
+        $this->assertNotNull($a->stashManager, 'apply must not eject the user from the manager');
+        // The next `d` belongs to the STASH list, not the status pane.
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
+        $this->assertSame('stash:stash@{0}', $a->pendingConfirm);
+        $this->assertSame([], $g->discards, 'a file discard must never be armed through the stash overlay');
+    }
+
+    public function testEscapeBacksOutOfStashBufferThenClosesOverlay(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'S'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 's'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Escape, ''));
+        $this->assertFalse($a->collectingStash, 'first Escape cancels the buffer');
+        $this->assertNotNull($a->stashManager, '...and leaves the overlay');
+        [$a, ] = $a->update(new KeyMsg(KeyType::Escape, ''));
+        $this->assertNull($a->stashManager, 'second Escape closes the overlay');
     }
 
     public function testVKeyStartsCherryPickCollection(): void

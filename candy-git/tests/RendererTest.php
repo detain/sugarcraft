@@ -113,6 +113,8 @@ final class RendererTest extends TestCase
             public function stashList(): array { return []; }
             public function stashApply(string $_stashRef): void {}
             public function stashDrop(string $_stashRef): void {}
+            public function stashPush(?string $message, bool $keepIndex = false, bool $includeUntracked = false): void {}
+            public function stashPop(string $_stashRef): void {}
             public function cherryPick(string $_commit): void {}
             public function cherryPickContinue(): void {}
             public function cherryPickAbort(): void {}
@@ -181,6 +183,8 @@ final class RendererTest extends TestCase
             public function stashList(): array { return []; }
             public function stashApply(string $stashRef): void {}
             public function stashDrop(string $stashRef): void {}
+            public function stashPush(?string $message, bool $keepIndex = false, bool $includeUntracked = false): void {}
+            public function stashPop(string $stashRef): void {}
             public function cherryPick(string $commit): void {}
             public function cherryPickContinue(): void {}
             public function cherryPickAbort(): void {}
@@ -323,6 +327,48 @@ final class RendererTest extends TestCase
         $out = \SugarCraft\Git\Renderer::render($a);
         $this->assertStringContainsString('stashes', $out);
         $this->assertStringContainsString('empty', $out);
+    }
+
+    // ---- CG-16: stash create/pop surface ----
+
+    public function testStashCollectorBarShowsTheTrackedPrompt(): void
+    {
+        $g = new FixtureGit([], [], []);
+        $sm = new \SugarCraft\Git\StashManager([]);
+        $a = new \SugarCraft\Git\App($g, stashManager: $sm, collectingStash: true, stashMessage: 'wip');
+        $plain = preg_replace('/\x1b\[[0-9;]*m/', '', \SugarCraft\Git\Renderer::render($a));
+        $this->assertStringContainsString('stash message: wip_', $plain);
+        $this->assertStringNotContainsString('(+untracked)', $plain);
+    }
+
+    public function testStashCollectorBarShowsTheUntrackedPrompt(): void
+    {
+        $g = new FixtureGit([], [], []);
+        $sm = new \SugarCraft\Git\StashManager([]);
+        $a = new \SugarCraft\Git\App($g, stashManager: $sm, collectingStash: true, stashMessage: 'wip', stashUntracked: true);
+        $plain = preg_replace('/\x1b\[[0-9;]*m/', '', \SugarCraft\Git\Renderer::render($a));
+        $this->assertStringContainsString('stash message (+untracked): wip_', $plain);
+    }
+
+    public function testStashOverlayFooterListsTheNewVerbs(): void
+    {
+        $g = new FixtureGit([], [], []);
+        $entries = [new \SugarCraft\Git\StashEntry(0, 'abc1234', 'main', 'WIP commit')];
+        $a = new \SugarCraft\Git\App($g, stashManager: new \SugarCraft\Git\StashManager($entries));
+        $plain = preg_replace('/\x1b\[[0-9;]*m/', '', \SugarCraft\Git\Renderer::render($a));
+        $this->assertStringContainsString('stash changes', $plain);
+        $this->assertStringContainsString('stash incl. untracked', $plain);
+        $this->assertStringContainsString('pop (apply + drop)', $plain);
+    }
+
+    public function testHostileStashMessageCannotForgeEscapesInTheBar(): void
+    {
+        $g = new FixtureGit([], [], []);
+        $sm = new \SugarCraft\Git\StashManager([]);
+        $a = new \SugarCraft\Git\App($g, stashManager: $sm, collectingStash: true, stashMessage: "evil\x1b[1;1Hgate");
+        $out = \SugarCraft\Git\Renderer::render($a);
+        $this->assertStringNotContainsString("\x1b[1;1H", $out);
+        $this->assertStringContainsString('evilgate', preg_replace('/\x1b\[[0-9;]*m/', '', $out));
     }
 
     public function testRenderWorktreeOverlayWithEntries(): void
@@ -471,6 +517,8 @@ final class RendererTest extends TestCase
             public function stashList(): array { return []; }
             public function stashApply(string $stashRef): void {}
             public function stashDrop(string $stashRef): void {}
+            public function stashPush(?string $message, bool $keepIndex = false, bool $includeUntracked = false): void {}
+            public function stashPop(string $stashRef): void {}
             public function cherryPick(string $commit): void {}
             public function cherryPickContinue(): void {}
             public function cherryPickAbort(): void {}

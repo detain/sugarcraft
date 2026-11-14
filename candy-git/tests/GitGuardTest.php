@@ -86,6 +86,14 @@ final class GitGuardTest extends TestCase
         $git->stashApply('--invalid');
     }
 
+    /** CG-16: pop composes apply/drop, and apply's guard runs before any argv. */
+    public function testStashPopRejectsLeadingDashRef(): void
+    {
+        $git = new Git($this->cwd);
+        $this->expectException(\RuntimeException::class);
+        $git->stashPop('--drop');
+    }
+
     public function testWorktreeAddRejectsLeadingDashPath(): void
     {
         $git = new Git($this->cwd);

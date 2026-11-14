@@ -260,4 +260,18 @@ final class TextInputTest extends TestCase
         $a = $this->commitCollector()->update(new KeyMsg(KeyType::Char, "\xff"))[0];
         self::assertSame('', $a->commitMessage);
     }
+
+    /** CG-16: the stash message buffer shares the same typed gate. */
+    public function testTypedControlIsRefusedInsideStashCollector(): void
+    {
+        $a = $this->type($this->type($this->app(), 'S'), 's');
+        self::assertTrue($a->collectingStash);
+        $a = $this->type($a, "\x07");
+        self::assertSame('', $a->stashMessage, 'a BEL must never enter the buffer');
+        $a = $this->type($a, 'w');
+        $a = $this->type($a, 'i');
+        self::assertSame('wi', $a->stashMessage);
+        // And the overlay survived the whole typing session.
+        self::assertNotNull($a->stashManager);
+    }
 }

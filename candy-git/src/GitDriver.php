@@ -156,6 +156,27 @@ interface GitDriver
     /** Drop (delete) a stash by its ref. */
     public function stashDrop(string $stashRef): void;
 
+    /**
+     * Create a stash from the current worktree/index (git stash push).
+     *
+     * A null or empty message lets git decorate the entry itself ("WIP on
+     * <branch>: ..."); $includeUntracked surfaces the -u leg so untracked
+     * files ride into the stash too, and $keepIndex leaves the staged state
+     * in place (the full lazygit stash-keeping flow).
+     *
+     * Mirrors jesseduffield/lazygit handlers.StashChanges.
+     */
+    public function stashPush(?string $message, bool $keepIndex = false, bool $includeUntracked = false): void;
+
+    /**
+     * Pop a stash: apply then drop (candy-git-014). Composed from the two
+     * guarded verbs rather than spawning `git stash pop` — a conflicted
+     * apply throws before the drop, so the entry survives for a retry,
+     * and the merge-capable dispatch guard already verifies the `apply`
+     * shape without needing a new argv lane in its tables.
+     */
+    public function stashPop(string $stashRef): void;
+
     /** Cherry-pick a commit. */
     public function cherryPick(string $commit): void;
 

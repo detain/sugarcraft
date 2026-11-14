@@ -63,14 +63,14 @@ candy-git v1 covers the local-repository loop: status / stage / unstage /
 discard, branches (checkout, create, delete — with remote-tracking branches
 listed and their divergence badged), log, the diff viewer, commit and
 amend, merge, cherry-pick, the sequencer menu (continue / abort / skip), stash
-list / apply / drop, worktrees (list / add / remove), an interactive-rebase todo
+create / apply / pop / drop, worktrees (list / add / remove), an interactive-rebase todo
 preview, the remote trio (fetch / pull / push, each behind an armed confirm),
 and undo / redo of the last operation.
 
 Not in v1 (absent, not hidden behind a key): **remote management** (add /
 rename / remove remotes), **tags**, **reflog**, **bisect**, **submodules**,
 hunk- and line-level **patch staging**, an in-app **conflict-resolution** view,
-creating a stash, and *executing* the interactive-rebase todo (it is a preview
+and *executing* the interactive-rebase todo (it is a preview
 today). Every git call is a synchronous, timeout-bounded subprocess on the UI
 thread; moving git work onto the ReactPHP loop as async commands (so slow
 remotes cannot stall rendering) remains the v2 direction.
@@ -105,7 +105,7 @@ or — when the local already exists — checks it out. They are read-only for
 `D`: the branch family manages locals.
 | `M`                      | Merge — prompt for a branch/ref to merge into current (free text; the selected row is never read) |
 | `r`                      | Open the sequencer menu (continue / abort; skip on a rebase) — when stopped only: opens while a rebase, cherry-pick, or conflicted merge is pending; on an idle repo it reports "no rebase in progress" |
-| `S`                      | Open stash manager (list / apply / drop; drop asks twice)   |
+| `S`                      | Open stash manager (create / apply / pop / drop; push takes an optional message, `u` includes untracked; pop and drop ask twice; the overlay stays open after apply so it remains usable) |
 | `V`                      | Cherry-pick — type a commit ref and press Enter       |
 | `w` (branches pane)     | Open worktrees manager (list / add / remove) — path collection refuses option-injection and `..` traversal; it does not jail the destination inside the repository |
 | `i`                      | Interactive rebase todo list — preview only; the todo is not yet executed |
@@ -151,9 +151,12 @@ merge has stopped; the prompt names the armed operation:
 | Key              | Action                                          |
 |------------------|--------------------------------------------------|
 | `j/k` or `↑/↓`  | Move between entries                            |
-| `a`              | Apply the selected stash                        |
+| `s`              | Stash the working tree — type a one-line message, Enter creates |
+| `u`              | Same, but include untracked files               |
+| `a`              | Apply the selected stash (the overlay stays open) |
+| `p`              | Pop the selected stash — apply then drop (press twice) |
 | `d`              | Drop the selected stash (press twice)           |
-| `Esc`            | Close                                           |
+| `Esc`            | Back out of the message buffer, then close      |
 
 **Worktrees** (`w`):
 
@@ -250,7 +253,7 @@ file key like `git.timeout` resolves through the core `T` registry as
 raw string.
 
 **Available keys** (`lang/en.php` — an excerpt; the file is the full roster
-of 154 keys):
+of 162 keys):
 
 | Key                    | Default string                                                    | Parameters  |
 |------------------------|-------------------------------------------------------------------|------------|
