@@ -43,7 +43,13 @@ final class MatchResultSorter
      * Sort and slice to limit.
      *
      * Simple full-sort-then-slice — no heap/partial-sort needed for typical
-     * TUI list sizes; preserves the stable-tiebreak contract.
+     * TUI list sizes; preserves the stable-tiebreak contract. Where the trade
+     * bites: N ≫ limit on large candidate sets pays a full O(N log N) sort
+     * (with the comparator's numeric-string tie cost per tied pair) to keep
+     * `limit` rows — deliberate at filter-box sizes; real volume stories are
+     * bounded by the Smith-Waterman caps and the aggregate-cost discussion
+     * parked under FUZZY-22, not by a missing top-K heap (finding
+     * sugar-fuzzy-039, document-don't-optimise ruling).
      *
      * @param array<MatchResult> $results
      * @param int|null $limit Maximum number of results to return. `null` or a
