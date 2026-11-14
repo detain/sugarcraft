@@ -107,7 +107,22 @@ final class ExternalModule implements LegacyModule
      */
     public function init(): array
     {
-        $this->startProcess();
+        try {
+            $this->startProcess();
+        } catch (\RuntimeException $e) {
+            // A binary that cannot be spawned disables its own panel with the
+            // honest reason (the README's lifecycle promise) instead of
+            // throwing into the host: discovery auto-loads everything in the
+            // plugin directory, and one missing file must not brick dashboard
+            // startup — the same rule the handshake refusals below already
+            // honor (sugar-dashboard-088).
+            $this->disable($e->getMessage());
+            return [
+                'name' => $this->name(),
+                'minSize' => $this->minSize(),
+                'interval' => 0,
+            ];
+        }
         if (!$this->sendRequest(Request::init())) {
             return [
                 'name' => $this->name(),
@@ -234,7 +249,10 @@ final class ExternalModule implements LegacyModule
         // a RuntimeException immediately after. Resolving the binary
         // here keeps proc_open() warning-free.
         if (self::resolveExecutable($this->command) === null) {
-            throw new \RuntimeException("Failed to start process: {$this->command}");
+            // The reason a host operator needs: the file is not there (or not
+            // executable), so the panel says exactly that once init() routes
+            // the refusal into disable() (sugar-dashboard-088).
+            throw new \RuntimeException("binary not found: {$this->command}");
         }
 
         $this->process = proc_open(
@@ -250,7 +268,9 @@ final class ExternalModule implements LegacyModule
         );
 
         if (!is_resource($this->process)) {
-            throw new \RuntimeException("Failed to start process: {$this->command}");
+            // The file exists but the spawn itself failed (fork/exec error);
+            // still a reason a disabled panel can print honestly.
+            throw new \RuntimeException("failed to start: {$this->command}");
         }
 
         $this->stdin = $pipes[0];
@@ -593,11 +613,31 @@ final class ExternalModule implements LegacyModule
 
     /**
      * Stop trusting this plugin for the session and remember why.
+     *
+     * The child is reaped HERE, at the seam that loses trust, not deferred to
+     * the destructor: a disabled plugin keeps its pipes open otherwise, so a
+     * child wedged writing to an unread stdout (the chatty fake in
+     * sugar-dashboard-094's probe) stays alive with two file descriptors of
+     * ours — one leak per disable while the host still holds the object.
+     * Closing our read sides first lets a pipe-blocked child fall on EPIPE;
+     * the bounded TERM→poll→KILL ladder then covers everything else and
+     * performs the reap itself (`proc_close` lives inside it). __destruct
+     * stays as the backstop for a never-disabled plugin, no longer the
+     * primary reaper.
      */
     private function disable(string $reason): void
     {
         $this->running = false;
         $this->lastError ??= $reason;
+
+        $this->closeStdout();
+        $this->closeStderr();
+        $this->closeStdin();
+
+        if ($this->process !== null && is_resource($this->process)) {
+            BoundedShutdown::terminateBounded($this->process);
+            $this->process = null;
+        }
     }
 
     /**

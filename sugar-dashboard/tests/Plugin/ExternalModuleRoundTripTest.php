@@ -133,13 +133,22 @@ final class ExternalModuleRoundTripTest extends TestCase
         $this->assertTrue(true);
     }
 
-    public function testInitFailureThrowsRuntimeException(): void
+    public function testMissingBinaryDisablesItsPanelInsteadOfThrowing(): void
     {
         $module = new ExternalModule('test-plugin', '/nonexistent-binary');
 
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessageMatches('/Failed to start process/');
+        // D-100 (sugar-dashboard-088) flipped this seam's old contract: the
+        // init() boundary used to let startProcess()'s RuntimeException
+        // escape, so one missing file in an auto-loaded plugin directory
+        // bricked dashboard startup. It now disables the panel and the
+        // reason reaches the chrome.
+        $state = $module->init();
 
-        $module->init();
+        $this->assertSame('test-plugin', $state['name']);
+        $this->assertSame(0, $state['interval']);
+
+        $rendered = $module->view([], 40, 4);
+        $this->assertStringContainsString('disabled', $rendered);
+        $this->assertStringContainsString('binary not found: /nonexistent-binary', $rendered);
     }
 }
