@@ -34,6 +34,12 @@ final class UiState
          * otherwise-value object — only the reference is the value.
          */
         public readonly ?CancellationSource $inFlight = null,
+        /**
+         * SQL-O12: the synchronous session's transaction is open (a `:tx`
+         * BEGIN succeeded and no COMMIT/ROLLBACK closed it). The [TX] status
+         * badge rides this flag and the commit/rollback legs gate on it.
+         */
+        public readonly bool $txOpen = false,
     ) {}
 
     public static function new(): self
@@ -64,5 +70,10 @@ final class UiState
     public function withInFlight(?CancellationSource $source): self
     {
         return $this->mutate(['inFlight' => $source]);
+    }
+
+    public function withTxOpen(bool $open): self
+    {
+        return $this->mutate(['txOpen' => $open]);
     }
 }

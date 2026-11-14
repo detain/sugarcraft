@@ -119,6 +119,12 @@ final class BorderFrame
             $status .= '  ' . Style::new()->bold()->foreground(Color::ansi(6))->render(Lang::t('bar.paused'));
         }
 
+        // SQL-O12: the open-transaction badge — rides after PAUSED so both
+        // can stand at once (a paused admin tick does not close the session).
+        if ($a->ui->txOpen) {
+            $status .= '  ' . Style::new()->bold()->foreground(Color::ansi(3))->render(Lang::t('bar.tx'));
+        }
+
         return $status;
     }
 

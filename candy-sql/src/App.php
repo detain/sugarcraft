@@ -1355,6 +1355,13 @@ final class App implements Model
             return [$this, null];
         }
 
+        // SQL-O12: the run-key colon grammar. Caught HERE, before the D-M27
+        // gate, history recording and the server, so a leading ':' never
+        // reaches any SQL path (a `:tx` is a command, not a statement).
+        if (str_starts_with($trimmed, ':')) {
+            return $this->handleColonCommand($trimmed);
+        }
+
         // D-M27: the editor's run keys used to fire DROP/TRUNCATE/… with zero
         // confirmation while KILL and SET GLOBAL gated behind prompts. First
         // press on a destructive statement only WARNS and arms; a second
@@ -1376,6 +1383,156 @@ final class App implements Model
             return $this->mutate(['ui' => $this->ui->withArmedDestructive(null)])->dispatchRunQuery();
         }
         return $this->dispatchRunQuery();
+    }
+
+    /**
+     * SQL-O12: the transaction workflow on the synchronous session. Every
+     * statement used to autocommit while the session was already one shared
+     * connection — BEGIN…COMMIT typed as plain SQL was uncoordinated. `:tx`
+     * (or `:tx begin`) opens the transaction behind a [TX] status badge,
+     * `:tx commit` closes it, and `:tx rollback` discards it behind the same
+     * two-press exact-text confirm D-M27 gives destructive SQL (the arm
+     * stages the pseudo-text ':tx rollback' in the same slot — one arm, one
+     * law). The async transport is refused BY NAME before any dial: the
+     * pooled React connection is shared with the one-second admin tick, so a
+     * transaction opened there would either swallow the tick's statements or
+     * be swallowed by them — the honest answer is the sync path (or explicit
+     * BEGIN/COMMIT if the user still wants to roll the dice server-side).
+     *
+     * @return array{self, ?Cmd}
+     */
+    private function handleColonCommand(string $trimmed): array
+    {
+        if (preg_match('/^:tx(?:\s+(begin|commit|rollback))?$/i', $trimmed, $m) !== 1) {
+            return [$this->consumeColonCommand(Lang::t('tx.unknown')), null];
+        }
+        if ($this->asyncTransportAvailable()) {
+            return [$this->consumeColonCommand(Lang::t('tx.async_refusal')), null];
+        }
+
+        $command = strtolower($m[1] ?? 'begin');
+        if ($command === 'begin') {
+            return $this->txBegin();
+        }
+        if ($command === 'commit') {
+            return $this->txCommit();
+        }
+        if ($command === 'rollback') {
+            return $this->txRollback();
+        }
+        // Unreachable by construction — the regex above enumerates exactly
+        // these arms; kept as the guard-clause shape for any future grammar.
+        return [$this->consumeColonCommand(Lang::t('tx.unknown')), null];
+    }
+
+    /**
+     * @return array{self, ?Cmd}
+     */
+    private function txBegin(): array
+    {
+        if ($this->ui->txOpen) {
+            return [$this->consumeColonCommand(Lang::t('tx.already_open')), null];
+        }
+        if (($failure = $this->sessionExec('BEGIN')) !== null) {
+            // A driver-side collision (BEGIN inside an already-open session
+            // transaction) surfaces honestly; the badge stays closed because
+            // this leg never opened anything.
+            return [$this->mutate(['ui' => $this->txFailed($failure)]), null];
+        }
+        return [$this->mutate([
+            'query' => $this->query->withEditor($this->editor()->reset()),
+            'ui' => $this->ui
+                ->withError(null)
+                ->withStatus(Lang::t('tx.opened'))
+                ->withArmedDestructive(null)
+                ->withTxOpen(true),
+        ]), null];
+    }
+
+    /**
+     * @return array{self, ?Cmd}
+     */
+    private function txCommit(): array
+    {
+        if (!$this->ui->txOpen) {
+            return [$this->consumeColonCommand(Lang::t('tx.no_tx')), null];
+        }
+        if (($failure = $this->sessionExec('COMMIT')) !== null) {
+            // A failed COMMIT leaves the session INSIDE the transaction —
+            // the badge keeps standing, claiming closure would lie.
+            return [$this->mutate(['ui' => $this->txFailed($failure)]), null];
+        }
+        return [$this->mutate([
+            'query' => $this->query->withEditor($this->editor()->reset()),
+            'ui' => $this->ui
+                ->withError(null)
+                ->withStatus(Lang::t('tx.committed'))
+                ->withArmedDestructive(null)
+                ->withTxOpen(false),
+        ]), null];
+    }
+
+    /**
+     * @return array{self, ?Cmd}
+     */
+    private function txRollback(): array
+    {
+        if (!$this->ui->txOpen) {
+            return [$this->consumeColonCommand(Lang::t('tx.no_tx')), null];
+        }
+        if ($this->ui->armedDestructive !== ':tx rollback') {
+            // First press warns and arms; the editor keeps the command text
+            // so the confirming second press matches it exactly (D-M27 law).
+            return [$this->mutate(['ui' => $this->ui
+                ->withError(null)
+                ->withStatus(Lang::t('tx.arm_rollback'))
+                ->withArmedDestructive(':tx rollback')]), null];
+        }
+        if (($failure = $this->sessionExec('ROLLBACK')) !== null) {
+            // A failed ROLLBACK leaves the session state unknown — the badge
+            // stands and the arm is consumed (this press already fired).
+            return [$this->mutate(['ui' => $this->txFailed($failure)]), null];
+        }
+        return [$this->mutate([
+            'query' => $this->query->withEditor($this->editor()->reset()),
+            'ui' => $this->ui
+                ->withError(null)
+                ->withStatus(Lang::t('tx.rolled_back'))
+                ->withArmedDestructive(null)
+                ->withTxOpen(false),
+        ]), null];
+    }
+
+    /** The consumed-command fold: editor reset, armed SQL stale, status line speaks. */
+    private function consumeColonCommand(string $status): self
+    {
+        return $this->mutate([
+            'query' => $this->query->withEditor($this->editor()->reset()),
+            'ui' => $this->ui
+                ->withError(null)
+                ->withStatus($status)
+                ->withArmedDestructive(null),
+        ]);
+    }
+
+    /** A transaction command failed: the driver's own message rides the error line. */
+    private function txFailed(string $message): UiState
+    {
+        return $this->ui
+            ->withError(Lang::t('tx.failed', ['message' => $message]))
+            ->withStatus(null)
+            ->withArmedDestructive(null);
+    }
+
+    /** Run one session-level statement on the sync connection; null = success, else the driver message. */
+    private function sessionExec(string $sql): ?string
+    {
+        try {
+            $this->syncTimeout()->run(fn (): int => $this->connection->db->exec($sql));
+            return null;
+        } catch (\PDOException | ReconnectException | StatementTimeoutException $e) {
+            return $e->getMessage();
+        }
     }
 
     /**

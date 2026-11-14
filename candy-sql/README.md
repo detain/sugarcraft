@@ -932,7 +932,12 @@ Pre-1.0 gaps to be aware of, mostly on the async (ReactPHP) query path:
 - **No transaction support on async connections.** `ReactMysqlConnection` /
   `ReactPostgresConnection` execute single statements only —
   `BEGIN`/`COMMIT` spanning multiple `query()` calls is not coordinated, and
-  the synchronous PDO path does not expose a transaction API either.
+  `:tx` refuses that transport by name rather than opening a transaction the
+  shared one-second admin tick would interleave into. The synchronous PDO
+  path (SQLite, and the TLS-refused MySQL-family sessions that fall back to
+  it) does carry transactions: `:tx` / `:tx begin` open the session behind a
+  `[TX]` status badge, `:tx commit` closes it, and `:tx rollback` discards it
+  behind the same two-press confirm destructive SQL gets.
 - **No prepared-statement cache.** Every query is sent as raw SQL text;
   repeated statements are re-parsed by the server each time.
 - **Async cancellation is cooperative and driver-dependent.**

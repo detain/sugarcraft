@@ -192,12 +192,13 @@
         }
     },
     "App.php": {
-        "reason": "Log/subscription tags (QueryLogger kind, tick id), not shown to users.",
+        "reason": "Log/subscription tags (QueryLogger kind, tick id), not shown to users. SQL-O12: ':tx rollback' is the exact-text confirm arm the D-M27 matcher compares (a grammar token staged in the arm slot, never rendered).",
         "dated": "2026-11-13",
         "literals": {
             "admin-fetch": 1,
             "admin drain": 1,
-            "admin fetch": 1
+            "admin fetch": 1,
+            ":tx rollback": 2
         }
     },
     "App/AppBuilder.php": {
