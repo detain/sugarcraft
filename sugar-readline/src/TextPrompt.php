@@ -87,6 +87,14 @@ final class TextPrompt
     /** @var list<string> */
     private array $completions = [];
 
+    /**
+     * Lazy completion source attached by withCompleter() (finding 089);
+     * null means the static {@see $completions} list is the candidate set.
+     *
+     * @var (callable(string $buffer, int $cursor): list<string>)|null
+     */
+    private $completer = null;
+
     /** @var (callable(string): bool)|null */
     private $validator = null;
 
@@ -231,6 +239,27 @@ final class TextPrompt
         $clone->completions = array_values($completions);
         // A new candidate set invalidates any armed empty-buffer preview.
         $clone->completionHint = null;
+        return $clone;
+    }
+
+    /**
+     * Attach a lazy completion source (finding 089).
+     *
+     * The callable is invoked once per Tab as (string $buffer, int $cursor)
+     * and answers with the candidate list for that context. The cursor lets
+     * a completer slice the word under the caret itself — path completion
+     * matches only the last segment — instead of the host rebuilding the
+     * whole list and prompt on every keystroke. With a completer attached
+     * its returned list IS the candidate set (no outer prefix filter is
+     * applied); the static {@see withCompletions()} list stays the fallback
+     * while no completer is set. Pass null to fall back to the list again.
+     *
+     * @param (callable(string $buffer, int $cursor): list<string>)|null $completer
+     */
+    public function withCompleter(?callable $completer): self
+    {
+        $clone = clone $this;
+        $clone->completer = $completer;
         return $clone;
     }
 
@@ -1384,10 +1413,16 @@ final class TextPrompt
         }
 
         $prefix = $this->buffer;
-        $candidates = array_values(array_filter(
-            $this->completions,
-            static fn(string $c): bool => str_starts_with($c, $prefix),
-        ));
+        if ($this->completer !== null) {
+            // Lazy seam (finding 089): the completer owns the context slice,
+            // so its answer IS the candidate set — no outer prefix filter.
+            $candidates = array_values(($this->completer)($this->buffer, $this->cursor));
+        } else {
+            $candidates = array_values(array_filter(
+                $this->completions,
+                static fn(string $c): bool => str_starts_with($c, $prefix),
+            ));
+        }
         if ($candidates === []) {
             return $this;
         }
