@@ -14,7 +14,7 @@ use SugarCraft\Vcr\Event;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Player;
 use SugarCraft\Vterm\Parser\CsiHandlerImpl;
-use SugarCraft\Vterm\Parser\OscHandlerImpl;
+use SugarCraft\Vterm\Parser\PenForwardingOscHandler;
 use SugarCraft\Vterm\Parser\RendererHandler;
 use SugarCraft\Vterm\Snapshot;
 use SugarCraft\Vterm\Terminal;
@@ -440,7 +440,7 @@ final class FrameStream implements \IteratorAggregate
         $cursor = $cursor->at(min($cursor->row, $rows - 1), min($cursor->col, $cols - 1));
 
         $csi = new CsiHandlerImpl($grid, $cursor, $terminal->theme());
-        $osc = new OscHandlerImpl($csi);
+        $osc = new PenForwardingOscHandler($csi);
         $handler = new RendererHandler($csi, new HandlerAdapter($csi, $osc));
         $parser = new Parser($handler, maxStringBuffer: Terminal::MAX_STRING_BUFFER);
 
