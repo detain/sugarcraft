@@ -12,6 +12,10 @@
 
 sugar-readline — an interactive line-editing prompt library for terminal UIs on PHP 8.3+.
 
+Status: the full surface ships green with examples, and `Readline::interactive()` has since 2026-11 carried the
+raw-mode ritual a host needs — what remains before a 🟢 readiness badge is a real in-repo consumer; the
+docs/MATCHUPS.md row (🟡) records the open G5 adoption call.
+
 ## Features
 
 - **TextPrompt** — single-line input with validation, autocomplete, hidden/password mode, char limit, default value, history navigation, and an optional display-width viewport
