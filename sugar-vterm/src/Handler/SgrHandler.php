@@ -38,9 +38,10 @@ final class SgrHandler
      *   {@see \SugarCraft\AnsiParser\Parser\Parser::subparams()} for this dispatch:
      *   true at index i means params[i+1] is a COLON sub-parameter of
      *   params[i], not an independent SGR (`4:3` curly vs `4;3` underline +
-     *   italic). Null — no parser wired — keeps the historical peek: any
-     *   usable next slot is treated as a sub-parameter, preserving the
-     *   direct-call behaviour SgrUnderlineStylesTest pins.
+     *   italic). Null — no parser wired — reads EVERY following parameter as
+     *   an INDEPENDENT SGR: a public call cannot express colon continuations,
+     *   and guessing `4;2` as a colon style contradicts xterm, where `CSI 4;2m`
+     *   is underline + dim. Colon readings require explicit subparams flags.
      */
     public function apply(array $params, Sgr $current, ?array $subparams = null): Sgr
     {
@@ -117,7 +118,9 @@ final class SgrHandler
      * With parser flags, `CSI 4 ; 3 m` is TWO independent SGRs (underline +
      * italic); only the COLON form `4:3` is one curly-underline parameter —
      * the flattened param list alone cannot tell them apart, the
-     * continuation flags can. Without flags the historical peek remains.
+     * continuation flags can. Without flags (direct call) every following
+     * parameter is an INDEPENDENT SGR — the unambiguous xterm semicolon
+     * reading; a colon style needs explicit subparams.
      *
      * @param list<int> $params
      * @param list<bool>|null $subparams
@@ -131,7 +134,7 @@ final class SgrHandler
             // Plain 4 (no subparam) → single underline.
             return [$sgr->withUnderlineStyle(UnderlineStyle::Single), $i + 1];
         }
-        $colon = $subparams === null ? true : ($subparams[$i] ?? false);
+        $colon = $subparams !== null && ($subparams[$i] ?? false);
         if (!$colon) {
             // `4;N` — semicolon form: N is an INDEPENDENT SGR, not a style.
             return [$sgr->withUnderlineStyle(UnderlineStyle::Single), $i + 1];
@@ -178,21 +181,34 @@ final class SgrHandler
         if ($subparams !== null && ($subparams[$i] ?? false) === true) {
             return $this->extendedColon($i, $params, $sgr, $subparams, $fg);
         }
+        $n = count($params);
         $kind = $params[$i + 1] ?? -1;
         if ($kind === 5) {
-            $idx = $this->resolveByte($params[$i + 2] ?? -1);
+            $idx = $this->colourByte($params[$i + 2] ?? -1);
+            if ($idx === null) {
+                // Missing or out-of-range index: xterm ignores the whole form
+                // (no -1→0 black resolve, no clamp-to-255 paint).
+                return [$sgr, min($i + 3, $n)];
+            }
             $color = Color::indexed256($idx);
             return [$fg ? $sgr->withForeground($color) : $sgr->withBackground($color), $i + 3];
         }
         if ($kind === 2) {
-            $r = $this->resolveByte($params[$i + 2] ?? -1);
-            $g = $this->resolveByte($params[$i + 3] ?? -1);
-            $b = $this->resolveByte($params[$i + 4] ?? -1);
+            $r = $this->colourByte($params[$i + 2] ?? -1);
+            $g = $this->colourByte($params[$i + 3] ?? -1);
+            $b = $this->colourByte($params[$i + 4] ?? -1);
+            if ($r === null || $g === null || $b === null) {
+                // Incomplete or out-of-range triplet: ignore the form whole.
+                return [$sgr, min($i + 5, $n)];
+            }
             $color = Color::truecolor($r, $g, $b);
             return [$fg ? $sgr->withForeground($color) : $sgr->withBackground($color), $i + 5];
         }
-        // Unknown sub-form — skip just the 38/48 marker.
-        return [$sgr, $i + 1];
+        // Unknown sub-form — xterm ignores the whole extended specification:
+        // consume the marker AND its invalid sub-form slot so a following
+        // byte (e.g. `38;7`) cannot replay as an independent SGR (7 would
+        // otherwise paint reverse).
+        return [$sgr, min($i + 2, $n)];
     }
 
     /**
@@ -224,15 +240,21 @@ final class SgrHandler
         $next = $end + 1;
         $kind = $group[1] ?? -1;
         if ($kind === 5) {
-            $idx = $this->resolveByte($group[2] ?? -1);
+            $idx = $this->colourByte($group[2] ?? -1);
+            if ($idx === null) {
+                return [$sgr, $next]; // invalid index: group consumed, pen untouched
+            }
             $color = Color::indexed256($idx);
             return [$fg ? $sgr->withForeground($color) : $sgr->withBackground($color), $next];
         }
         if ($kind === 2 && count($group) >= 5) {
             $o = count($group) === 5 ? 2 : 3;
-            $r = $this->resolveByte($group[$o] ?? -1);
-            $g = $this->resolveByte($group[$o + 1] ?? -1);
-            $b = $this->resolveByte($group[$o + 2] ?? -1);
+            $r = $this->colourByte($group[$o] ?? -1);
+            $g = $this->colourByte($group[$o + 1] ?? -1);
+            $b = $this->colourByte($group[$o + 2] ?? -1);
+            if ($r === null || $g === null || $b === null) {
+                return [$sgr, $next]; // invalid triplet: group consumed, pen untouched
+            }
             $color = Color::truecolor($r, $g, $b);
             return [$fg ? $sgr->withForeground($color) : $sgr->withBackground($color), $next];
         }
@@ -278,11 +300,18 @@ final class SgrHandler
         };
     }
 
-    private function resolveByte(int $value): int
+    /**
+     * An extended-colour byte slot (xterm `parse_extended_colors`): the
+     * empty/missing sentinel (-1) and anything outside 0..255 are INVALID —
+     * null, so the caller ignores the whole form instead of clamping a bad
+     * byte into a painted colour.
+     */
+    private function colourByte(int $value): ?int
     {
-        if ($value === -1) {
-            return 0;
+        if ($value < 0 || $value > 255) {
+            return null;
         }
-        return max(0, min(255, $value));
+
+        return $value;
     }
 }

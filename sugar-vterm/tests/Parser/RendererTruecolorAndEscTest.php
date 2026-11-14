@@ -152,20 +152,31 @@ final class RendererTruecolorAndEscTest extends TestCase
         $this->assertSame('Y', $edge->grid()->cell(0, 3)->char, 'no room for a tail — stays single');
     }
 
-    public function testOutOfRangePaletteIndexClampsLikeTheEmulator(): void
+    public function testInvalidExtendedColourIgnoredLikeTheEmulator(): void
     {
-        // `38;5;n` must resolve n the same way the emulator does: clamp to
-        // 0..255 (and map the -1 default sentinel to 0). A naive raw store would
-        // leave fg=300 here and silently break emulator↔renderer parity.
+        // `38;5;n` must treat n the same way the emulator does (vterm-16):
+        // the -1 sentinel and any value outside 0..255 are INVALID — the
+        // whole form is ignored, no clamp-paint. A naive raw store would
+        // leave fg=300 here; the old clamp painted 255/0 instead of nothing.
         $csi = $this->csi();
         $csi->sgr([38, 5, 300]);
         $csi->printable('X');
-        $this->assertSame(255, $csi->grid()->cell(0, 0)->fg, 'over-range index clamps to 255');
+        $this->assertSame(7, $csi->grid()->cell(0, 0)->fg, 'over-range index is ignored — pen stays default');
 
         $low = $this->csi();
         $low->sgr([38, 5, -1]);
         $low->printable('Y');
-        $this->assertSame(0, $low->grid()->cell(0, 0)->fg, 'default sentinel resolves to 0');
+        $this->assertSame(7, $low->grid()->cell(0, 0)->fg, 'default sentinel is ignored, not painted black');
+
+        $valid = $this->csi();
+        $valid->sgr([38, 5, 0]);
+        $valid->printable('Z');
+        $this->assertSame(0, $valid->grid()->cell(0, 0)->fg, 'contrast arm: valid 0 still paints black');
+
+        $tc = $this->csi();
+        $tc->sgr([38, 2, 999, 1, 2]);
+        $tc->printable('W');
+        $this->assertSame(7, $tc->grid()->cell(0, 0)->fg, 'out-of-range triplet byte ignores the form');
     }
 
     public function testSaveRestoreCarriesTheTruecolourPen(): void

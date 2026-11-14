@@ -183,19 +183,46 @@ final class SgrHandlerTest extends TestCase
         $this->assertSame(1, $sgr->foreground->value);
     }
 
-    public function testTruecolorClampsOutOfRange(): void
+    public function testTruecolorOutOfRangeIgnoredWholeForm(): void
     {
-        // Parser already validates; SgrHandler treats anything in range as-is.
-        $sgr = $this->apply([38, 2, 999, 999, 999]);
-        $this->assertSame(3, $sgr->foreground->kind);
-        $this->assertSame((255 << 16) | (255 << 8) | 255, $sgr->foreground->value);
+        // xterm ignores an extended specification with any invalid byte
+        // (256 colour index or truecolour channel): a bad `38;2` must not
+        // clamp-paint 255;255;255 — the pen stays exactly as it was.
+        $start = Sgr::empty()->withForeground(Color::indexed16(1));
+        $sgr = $this->apply([38, 2, 999, 999, 999], $start);
+        $this->assertNotNull($sgr->foreground);
+        $this->assertSame(1, $sgr->foreground->value, 'invalid triplet leaves pen untouched');
+        $partial = $this->apply([38, 2, 10, 20], $start);
+        $this->assertNotNull($partial->foreground);
+        $this->assertSame(1, $partial->foreground->value, 'incomplete triplet leaves pen untouched');
+        $rgb = $this->apply([38, 2, 10, 20, 30])->foreground;
+        $this->assertNotNull($rgb);
+        $this->assertSame(3, $rgb->kind);
+        $over = $this->apply([38, 5, 300], $start)->foreground;
+        $this->assertNotNull($over);
+        $this->assertSame(1, $over->value, 'over-range 256 index leaves pen untouched');
     }
 
-    public function testUnknown38SubFormSkipsMarker(): void
+    public function testMissing256IndexLeavesPenUntouched(): void
     {
-        // 38 with neither 5 nor 2 → unknown; consume only the 38, continue with next.
-        $sgr = $this->apply([38, 99, 1]);
-        $this->assertTrue($sgr->bold); // 1 was processed after the unknown sub-form
+        // `CSI 38;5m` with no index: not black paint — the form is ignored.
+        $start = Sgr::empty()->withForeground(Color::indexed16(1));
+        $fg = $this->apply([38, 5], $start)->foreground;
+        $this->assertNotNull($fg);
+        $this->assertSame(1, $fg->value);
+        $bg = $this->apply([48, 5], $start->withBackground(Color::indexed16(2)))->background;
+        $this->assertNotNull($bg);
+        $this->assertSame(2, $bg->value);
+    }
+
+    public function testUnknown38SubFormIgnoresWholeForm(): void
+    {
+        // 38 with neither 5 nor 2 → the marker AND its invalid sub-form slot
+        // are consumed (xterm ignores the whole extended specification); the
+        // old skip-just-the-marker let `38;7` replay 7 as standalone reverse.
+        $sgr = $this->apply([38, 7, 1]);
+        $this->assertFalse($sgr->reverse, 'the swallowed 7 must not run as REVERSE');
+        $this->assertTrue($sgr->bold, '1 after the ignored form still runs');
     }
 
     public function testUnknownParamIgnored(): void

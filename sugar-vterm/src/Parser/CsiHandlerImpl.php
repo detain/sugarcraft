@@ -431,19 +431,20 @@ final class CsiHandlerImpl implements CsiHandler
     }
 
     /**
-     * Clamp a parser slot to a byte, mapping the default sentinel (-1) to 0 —
-     * the identical read the emulator's {@see \SugarCraft\Vterm\Handler\SgrHandler}
-     * uses both when packing a truecolour triplet and when resolving a 256-color
-     * `38;5;n` index, so both engines store the same value from the same bytes
-     * (an out-of-range index such as `38;5;300` clamps to 255 on each).
+     * Validate an extended-colour byte slot — the identical read the
+     * emulator's {@see \SugarCraft\Vterm\Handler\SgrHandler} uses both when
+     * packing a truecolour triplet and when resolving a 256-color `38;5;n`
+     * index: the empty sentinel (-1) and anything outside 0..255 are INVALID
+     * (null), so both engines ignore the whole form from the same bytes
+     * (an out-of-range index such as `38;5;300` paints NOTHING on either).
      */
-    private function resolveByte(int $value): int
+    private function colourByte(int $value): ?int
     {
-        if ($value === -1) {
-            return 0;
+        if ($value < 0 || $value > 255) {
+            return null;
         }
 
-        return max(0, min(255, $value));
+        return $value;
     }
 
     private function packRgb(int $r, int $g, int $b): int
@@ -558,7 +559,10 @@ final class CsiHandlerImpl implements CsiHandler
      *
      * Before the consumption arms existed, `38;2;1;2;3` fell through as five
      * independent SGRs (2=…, 3=italic) and corrupted the pen; that misparse is
-     * gone. The triplet's byte slots are consumed either way.
+     * gone. The triplet's byte slots are consumed either way — and an invalid
+     * byte (missing or outside 0..255) makes the whole extended form a no-op
+     * for the pen (vterm-16: xterm ignores the specification, it does not
+     * clamp a bad byte into a painted colour).
      *
      * Also takes the ECMA-48 colon forms — `38:5:N`, `38:2:R:G:B`,
      * `38:2::R:G:B`, `38:2:CS:R:G:B` — whose whole specification rides in ONE
@@ -577,6 +581,7 @@ final class CsiHandlerImpl implements CsiHandler
      */
     private function sgrExtended(array $params, int $i, ?array $subs, bool $fg): array
     {
+        $n = count($params);
         if ($subs !== null && ($subs[$i] ?? false) === true) {
             $end = $this->colonGroupEnd($i, $params, $subs);
             $next = $end + 1;
@@ -586,7 +591,10 @@ final class CsiHandlerImpl implements CsiHandler
                 // The index must live INSIDE the group: `38:5;3` has no slot
                 // of its own after the kind, and the following 3 is a
                 // separate SGR — mirroring the emulator's group-scoped read.
-                $index = $this->resolveByte($end >= $i + 2 ? $params[$i + 2] : 0);
+                $index = $this->colourByte($end >= $i + 2 ? $params[$i + 2] : -1);
+                if ($index === null) {
+                    return [$this->fg, $this->bg, $this->attrs, $next];
+                }
                 $this->clearTruecolor($fg);
 
                 return $fg
@@ -595,15 +603,26 @@ final class CsiHandlerImpl implements CsiHandler
             }
             if ($kind === 2 && count($group) >= 5) {
                 $o = count($group) === 5 ? 2 : 3;
-                $this->setTruecolor($fg, $this->resolveByte($group[$o] ?? -1), $this->resolveByte($group[$o + 1] ?? -1), $this->resolveByte($group[$o + 2] ?? -1));
+                $r = $this->colourByte($group[$o] ?? -1);
+                $g = $this->colourByte($group[$o + 1] ?? -1);
+                $b = $this->colourByte($group[$o + 2] ?? -1);
+                if ($r !== null && $g !== null && $b !== null) {
+                    $this->setTruecolor($fg, $r, $g, $b);
+                }
             }
-            // Kind 2 stored its RGB above; any other kind just consumed the
-            // group without disturbing the palette channel.
+            // Kind 2 stored its RGB above (or was ignored whole); any other
+            // kind just consumed the group without disturbing the pen.
             return [$this->fg, $this->bg, $this->attrs, $next];
         }
         $kind = $params[$i + 1] ?? -1;
         if ($kind === 5) {
-            $index = $this->resolveByte($params[$i + 2] ?? 0);
+            $index = $this->colourByte($params[$i + 2] ?? -1);
+            if ($index === null) {
+                // Missing/out-of-range index: the whole form is ignored
+                // (emulator SgrHandler::extended parity) — no black resolve,
+                // no clamp-paint, and the truecolour slot stays intact.
+                return [$this->fg, $this->bg, $this->attrs, min($i + 3, $n)];
+            }
             $this->clearTruecolor($fg);
             if ($fg) {
                 return [$index, $this->bg, $this->attrs, $i + 3];
@@ -615,11 +634,20 @@ final class CsiHandlerImpl implements CsiHandler
             // Truecolor triplet: pack r;g;b into the channel's RGB slot; the
             // palette slot stays where it is (the RGB takes precedence at read
             // time via Cell::fgRgb()/bgRgb()).
-            $this->setTruecolor($fg, $this->resolveByte($params[$i + 2] ?? -1), $this->resolveByte($params[$i + 3] ?? -1), $this->resolveByte($params[$i + 4] ?? -1));
+            $r = $this->colourByte($params[$i + 2] ?? -1);
+            $g = $this->colourByte($params[$i + 3] ?? -1);
+            $b = $this->colourByte($params[$i + 4] ?? -1);
+            if ($r === null || $g === null || $b === null) {
+                return [$this->fg, $this->bg, $this->attrs, min($i + 5, $n)];
+            }
+            $this->setTruecolor($fg, $r, $g, $b);
 
             return [$this->fg, $this->bg, $this->attrs, $i + 5];
         }
-        return [$this->fg, $this->bg, $this->attrs, $i + 1];
+        // Unknown sub-form: consume marker + invalid sub-form slot (xterm
+        // ignores the whole extended specification — the slot must not
+        // replay as an independent SGR).
+        return [$this->fg, $this->bg, $this->attrs, min($i + 2, $n)];
     }
 
     /** Store a packed truecolour value on the requested channel. */

@@ -21,6 +21,22 @@ final class SgrUnderlineStylesTest extends TestCase
         return (new SgrHandler())->apply($params, $start ?? Sgr::empty());
     }
 
+    /**
+     * Colon form `4:N`: the style rides as a SUB-PARAMETER of 4, which only
+     * the parser's continuation flags can express. Null flags now mean the
+     * unambiguous xterm semicolon reading (every slot independent), so the
+     * style table is pinned with explicit flags — as the wire delivers them.
+     *
+     * @param list<int> $params
+     */
+    private function applyColon(array $params, ?Sgr $start = null): Sgr
+    {
+        $flags = array_fill(0, count($params), false);
+        $flags[0] = true;
+
+        return (new SgrHandler())->apply($params, $start ?? Sgr::empty(), $flags);
+    }
+
     public function testPlain4MeansSingleUnderline(): void
     {
         // CSI 4 (no subparam) → single underline
@@ -32,7 +48,7 @@ final class SgrUnderlineStylesTest extends TestCase
     public function testUnderlineStyleNone(): void
     {
         // CSI 4:0 → underline none
-        $sgr = $this->apply([4, 0]);
+        $sgr = $this->applyColon([4, 0]);
         $this->assertFalse($sgr->underline);
         $this->assertSame(UnderlineStyle::None, $sgr->underlineStyle);
     }
@@ -40,7 +56,7 @@ final class SgrUnderlineStylesTest extends TestCase
     public function testUnderlineStyleSingle(): void
     {
         // CSI 4:1 → single underline
-        $sgr = $this->apply([4, 1]);
+        $sgr = $this->applyColon([4, 1]);
         $this->assertTrue($sgr->underline);
         $this->assertSame(UnderlineStyle::Single, $sgr->underlineStyle);
         // The `1` is a colon sub-parameter of `4:1`, not a standalone SGR —
@@ -52,7 +68,7 @@ final class SgrUnderlineStylesTest extends TestCase
     public function testUnderlineStyleDouble(): void
     {
         // CSI 4:2 → double underline
-        $sgr = $this->apply([4, 2]);
+        $sgr = $this->applyColon([4, 2]);
         $this->assertTrue($sgr->underline);
         $this->assertSame(UnderlineStyle::Double, $sgr->underlineStyle);
     }
@@ -60,7 +76,7 @@ final class SgrUnderlineStylesTest extends TestCase
     public function testUnderlineStyleCurly(): void
     {
         // CSI 4:3 → curly underline
-        $sgr = $this->apply([4, 3]);
+        $sgr = $this->applyColon([4, 3]);
         $this->assertTrue($sgr->underline);
         $this->assertSame(UnderlineStyle::Curly, $sgr->underlineStyle);
     }
@@ -68,7 +84,7 @@ final class SgrUnderlineStylesTest extends TestCase
     public function testUnderlineStyleDotted(): void
     {
         // CSI 4:4 → dotted underline
-        $sgr = $this->apply([4, 4]);
+        $sgr = $this->applyColon([4, 4]);
         $this->assertTrue($sgr->underline);
         $this->assertSame(UnderlineStyle::Dotted, $sgr->underlineStyle);
     }
@@ -76,7 +92,7 @@ final class SgrUnderlineStylesTest extends TestCase
     public function testUnderlineStyleDashed(): void
     {
         // CSI 4:5 → dashed underline
-        $sgr = $this->apply([4, 5]);
+        $sgr = $this->applyColon([4, 5]);
         $this->assertTrue($sgr->underline);
         $this->assertSame(UnderlineStyle::Dashed, $sgr->underlineStyle);
     }
@@ -84,7 +100,7 @@ final class SgrUnderlineStylesTest extends TestCase
     public function testCsi24ClearsUnderlineStyle(): void
     {
         // CSI 24 → underline off (any style resets to none)
-        $sgr = $this->apply([4, 2]); // start with double
+        $sgr = $this->applyColon([4, 2]); // start with double
         $this->assertSame(UnderlineStyle::Double, $sgr->underlineStyle);
         $sgr = $this->apply([24], $sgr);
         $this->assertFalse($sgr->underline);
@@ -94,7 +110,7 @@ final class SgrUnderlineStylesTest extends TestCase
     public function testCsi0ResetsUnderlineStyle(): void
     {
         // CSI 0 → full reset
-        $sgr = $this->apply([4, 5]); // start with dashed
+        $sgr = $this->applyColon([4, 5]); // start with dashed
         $this->assertSame(UnderlineStyle::Dashed, $sgr->underlineStyle);
         $sgr = $this->apply([0], $sgr);
         $this->assertFalse($sgr->underline);
@@ -104,7 +120,7 @@ final class SgrUnderlineStylesTest extends TestCase
     public function testUnknownSubparamFallsBackToSingle(): void
     {
         // Unknown subparam (e.g. 4:6) → treat as single underline
-        $sgr = $this->apply([4, 99]);
+        $sgr = $this->applyColon([4, 99]);
         $this->assertTrue($sgr->underline);
         $this->assertSame(UnderlineStyle::Single, $sgr->underlineStyle);
     }
@@ -112,7 +128,7 @@ final class SgrUnderlineStylesTest extends TestCase
     public function testStyleSurvivesBoldToggle(): void
     {
         // Setting underline style, then toggling bold — style preserved
-        $sgr = $this->apply([4, 2]); // double underline
+        $sgr = $this->applyColon([4, 2]); // double underline
         $this->assertSame(UnderlineStyle::Double, $sgr->underlineStyle);
         $sgr = $this->apply([1], $sgr); // bold on
         $this->assertSame(UnderlineStyle::Double, $sgr->underlineStyle);
@@ -129,12 +145,21 @@ final class SgrUnderlineStylesTest extends TestCase
 
     public function testColonsSubparamForm(): void
     {
-        // CSI 4:2 (colon separator) produces same result as 4;2 (semicolon)
-        $colon = $this->apply([4, 2]);
-        $sgr = Sgr::empty();
-        $colonViaHandler = (new SgrHandler())->apply([4, 2], $sgr);
-        $this->assertTrue($colonViaHandler->underline);
-        $this->assertSame(UnderlineStyle::Double, $colonViaHandler->underlineStyle);
+        // `4:2` (colon, one parameter) is Double; `4;2` (semicolon, two
+        // independent SGRs) is underline + dim — the readings are NOT equal,
+        // and only the continuation flags tell them apart. vterm-16: the old
+        // null-flags default guessed colon and turned every direct `4;N`
+        // call into a style, swallowing N.
+        $colon = $this->applyColon([4, 2]);
+        $this->assertTrue($colon->underline);
+        $this->assertSame(UnderlineStyle::Double, $colon->underlineStyle);
+        $this->assertFalse($colon->dim, 'the 2 was a sub-parameter, not SGR 2');
+
+        $semicolon = $this->apply([4, 2]);
+        $this->assertTrue($semicolon->underline);
+        $this->assertSame(UnderlineStyle::Single, $semicolon->underlineStyle, '4;2 = plain underline + independent 2');
+        $this->assertTrue($semicolon->dim, '2 executed as its own SGR');
+        $this->assertFalse($semicolon->bold);
     }
 
     public function testWithUnderlineStyleMethod(): void
@@ -166,11 +191,11 @@ final class SgrUnderlineStylesTest extends TestCase
     public function testRoundTripThroughHandler(): void
     {
         // Double underline → 24 (off) → 4:2 (double again)
-        $sgr = $this->apply([4, 2]);
+        $sgr = $this->applyColon([4, 2]);
         $this->assertSame(UnderlineStyle::Double, $sgr->underlineStyle);
         $sgr = $this->apply([24], $sgr);
         $this->assertSame(UnderlineStyle::None, $sgr->underlineStyle);
-        $sgr = $this->apply([4, 2], $sgr);
+        $sgr = $this->applyColon([4, 2], $sgr);
         $this->assertSame(UnderlineStyle::Double, $sgr->underlineStyle);
     }
 
