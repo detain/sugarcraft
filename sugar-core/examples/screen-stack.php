@@ -10,6 +10,10 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
+require __DIR__ . '/guard.php';
+
+interactiveDemoGuard('screen-stack');
+
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
@@ -43,6 +47,15 @@ final class ScreenModel implements Model
     public function update(Msg $msg): array
     {
         if ($msg instanceof QuitMsg) {
+            return [$this, Cmd::quit()];
+        }
+        // sc-44 (finding sugar-core-068): Program routes keystrokes to the
+        // ACTIVE SCREEN, not the stack owner, so the root model's own `q`
+        // arm is unreachable while any screen is pushed — the demo shipped
+        // a help line ("q — quit") that only worked on an empty stack and
+        // the once-QA run reproduced the hang under a PTY. The pushed
+        // screens answer q themselves now; the showcase quits from depth.
+        if ($msg instanceof KeyMsg && $msg->rune === 'q') {
             return [$this, Cmd::quit()];
         }
         return [$this, null];

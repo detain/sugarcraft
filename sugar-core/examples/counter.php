@@ -12,6 +12,10 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
+require __DIR__ . '/guard.php';
+
+interactiveDemoGuard('counter');
+
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;

@@ -13,6 +13,10 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
+require __DIR__ . '/guard.php';
+
+interactiveDemoGuard('panes');
+
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
@@ -42,9 +46,19 @@ final class Counter implements Model
         if ($msg instanceof KeyMsg) {
             if ($msg->type === KeyType::Char && $msg->rune === '+') {
                 $this->count++;
-            } elseif ($msg->type === KeyType::Char && $msg->rune === '-') {
-                $this->count--;
+
+                return [$this, null];
             }
+            if ($msg->type === KeyType::Char && $msg->rune === '-') {
+                $this->count--;
+
+                return [$this, null];
+            }
+            // sc-44 (finding sugar-core-070): the header promised "Press any
+            // other key to quit" and the file shipped ZERO quit arms — Panes
+            // consumes Tab itself and routes everything else here, so the
+            // promise was a trap. Any other keystroke now really quits.
+            return [$this, Cmd::quit()];
         }
         return [$this, null];
     }
@@ -75,6 +89,12 @@ final class TextDisplay implements Model
 
     public function update(Msg $msg): array
     {
+        // sc-44 (finding sugar-core-070): same promise, same missing arm —
+        // focused on THIS pane, any keystroke quits now too.
+        if ($msg instanceof KeyMsg) {
+            return [$this, Cmd::quit()];
+        }
+
         return [$this, null];
     }
 
@@ -87,6 +107,9 @@ final class TextDisplay implements Model
         It demonstrates that different
         model types can coexist in a
         Panes composition.
+
+        Press Tab to switch panes.
+        Press any other key to quit.
         VIEW;
     }
 }

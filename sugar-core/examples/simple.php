@@ -11,6 +11,10 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
+require __DIR__ . '/guard.php';
+
+interactiveDemoGuard('simple');
+
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
