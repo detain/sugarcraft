@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Cli\Tests;
 
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Cli\Section;
 use SugarCraft\Cli\Theme;
@@ -323,5 +324,32 @@ final class SectionTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Section::rule(): $rune sanitized to an empty string');
         Section::rule(Theme::plain(), 8, "\x1b[31m");
+    }
+    /**
+     * Finding 033: header()/subHeader() lead and fill runs carry the theme's
+     * muted style exactly as rule() does, so all three surfaces read as one
+     * visual family. Cell layout is untouched by the styling (SGR is
+     * zero-width), which the strip-equality arms pin.
+     */
+    public function testHeaderAndSubHeaderFillRunsAreMutedStyled(): void
+    {
+        $header    = Section::header('Features', Theme::ansi(), width: 20);
+        $subHeader = Section::subHeader('Opts', Theme::ansi(), width: 20);
+        $rule      = Section::rule(Theme::ansi(), 20);
+
+        // Theme::ansi()->muted emits SGR 2 (faint) — same opening as rule().
+        $this->assertStringStartsWith("\x1b[2m", $header);
+        $this->assertStringStartsWith("\x1b[2m", $subHeader);
+        $this->assertStringStartsWith("\x1b[2m", $rule);
+
+        // Stripped of every SGR run, the ansi layout is the plain bytes.
+        $this->assertSame(Section::header('Features', Theme::plain(), width: 20), Ansi::strip($header));
+        $this->assertSame(Section::subHeader('Opts', Theme::plain(), width: 20), Ansi::strip($subHeader));
+
+        // Null-width paths: the lead and single trailing rune are muted too.
+        $nullHeader = Section::header('A', Theme::ansi(), leftPad: 1, width: null);
+        $this->assertStringStartsWith("\x1b[2m─\x1b[0m", $nullHeader);
+        $this->assertSame('─ A ─', Ansi::strip($nullHeader));
+        $this->assertStringEndsWith("\x1b[2m─\x1b[0m", $nullHeader);
     }
 }

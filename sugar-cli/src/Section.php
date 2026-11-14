@@ -14,8 +14,10 @@ use SugarCraft\Cli\Internal\WidthProbe;
  * rules: `── LABEL ──────────────`. Common in CLI output where you
  * want to break long stretches of stdout into named groups.
  *
- * The label uses the theme's accent style; the rule rune defaults to
- * `─` (Unicode box-drawing horizontal). Total width defaults to the
+ * The label uses the theme's accent style and the rule runs use the
+ * `muted` style — the same treatment {@see rule()} gives its dash — so
+ * header, subHeader and rule read as one visual family. The rule rune
+ * defaults to `─` (Unicode box-drawing horizontal). Total width defaults to the
  * terminal width — the exported `COLUMNS` where the environment
  * advertises one, else 80 cells (see {@see WidthProbe}); pass an
  * explicit width or `null` to disable trailing fill (output ends right
@@ -74,7 +76,8 @@ final class Section
         $leadRunes = intdiv($leadCells, $runeW);
         $left = str_repeat($rune, $leadRunes);
         if ($width === null) {
-            return $left . self::labelOut($label, $theme) . $rune;  // one trailing rune (may exceed for multi-cell runes)
+            // one trailing rune (may exceed for multi-cell runes)
+            return self::muted($theme, $left) . self::labelOut($label, $theme) . self::muted($theme, $rune);
         }
         return self::fill($left, $label, $theme, $width, $rune, $runeW);
     }
@@ -160,11 +163,22 @@ final class Section
         $runeW  = max(1, Width::string($rune));
         $indent = max(0, $indent);
         if ($width === null) {
-            return str_repeat(' ', $indent) . self::labelOut($label, $theme) . $rune;
+            return self::muted($theme, str_repeat(' ', $indent)) . self::labelOut($label, $theme) . self::muted($theme, $rune);
         }
         // An indent wider than the whole line keeps only the spaces that fit.
         $pad = str_repeat(' ', min($indent, $width));
         return self::fill($pad, $label, $theme, $width, $rune, $runeW);
+    }
+
+    /**
+     * A lead/fill run in the theme's `muted` style — the same treatment
+     * {@see rule()} gives its dash run, so header, subHeader and rule read
+     * as one visual family (finding 033). Under a plain theme this is the
+     * identity, byte for byte.
+     */
+    private static function muted(Theme $theme, string $run): string
+    {
+        return $run === '' ? '' : $theme->muted->render($run);
     }
 
     /** ` LABEL ` in the accent style, or '' for an empty label. */
@@ -177,7 +191,8 @@ final class Section
      * Lay `$lead` + ` LABEL ` + rune fill into exactly the room `$width`
      * allows, never past it. `$lead` must already fit in `$width`. The label
      * is measured and cut while still plain text — before styling — so the
-     * cut can never split an escape sequence.
+     * cut can never split an escape sequence. The lead and the fill run are
+     * both muted-styled, matching {@see rule()} (finding 033).
      */
     private static function fill(
         string $lead,
@@ -192,9 +207,9 @@ final class Section
         if ($label !== '' && Width::string($label) > $room) {
             $label = $room >= 1 ? Width::truncate($label, $room - 1) . '…' : '';
         }
-        $head = $lead . self::labelOut($label, $theme);
+        $head   = self::muted($theme, $lead) . self::labelOut($label, $theme);
         $repeat = intdiv(max(0, $width - Width::string($head)), $runeW);
-        return $head . str_repeat($rune, $repeat);
+        return $head . self::muted($theme, str_repeat($rune, $repeat));
     }
 
     /**
