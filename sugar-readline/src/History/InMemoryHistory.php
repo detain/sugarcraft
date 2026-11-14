@@ -29,7 +29,9 @@ class InMemoryHistory implements HistoryInterface
     private int $position = -1;
 
     /**
-     * Maximum number of history entries to retain. 0 = unlimited.
+     * Maximum number of history entries to retain. 0 = unlimited; a
+     * negative cap is rejected (it used to mean UNLIMITED silently —
+     * finding 032's fail-fast ruling).
      * Protected so FileHistory can consult the same cap when bounding its
      * on-disk rewrite — one source of truth for the limit.
      */
@@ -37,7 +39,36 @@ class InMemoryHistory implements HistoryInterface
 
     public function __construct(int $maxHistory = 0)
     {
-        $this->maxHistory = $maxHistory;
+        $this->maxHistory = self::checkedCap($maxHistory);
+    }
+
+    /**
+     * @throws \InvalidArgumentException When the cap is negative.
+     */
+    protected static function checkedCap(int $limit): int
+    {
+        if ($limit < 0) {
+            throw new \InvalidArgumentException(
+                'history cap must not be negative, got ' . $limit . '; use 0 for unlimited'
+            );
+        }
+        return $limit;
+    }
+
+    /**
+     * Apply the current cap at once: drop over-cap entries (newest-first
+     * list, so the oldest fall off) and re-clamp the navigation cursor when
+     * the trim moved the end of the list under it (finding 101 — a trim
+     * mid-walk must not strand previous()/next() on a purged slot).
+     */
+    protected function trimToCap(): void
+    {
+        if ($this->maxHistory > 0 && \count($this->history) > $this->maxHistory) {
+            $this->history = \array_slice($this->history, 0, $this->maxHistory);
+        }
+        if ($this->position >= \count($this->history)) {
+            $this->position = $this->history === [] ? -1 : \count($this->history) - 1;
+        }
     }
 
     public function push(string $line): void
@@ -52,24 +83,46 @@ class InMemoryHistory implements HistoryInterface
         // Prepend so index 0 = most recent.
         array_unshift($this->history, $line);
         $this->position = -1;
-        // Enforce maxHistory limit by evicting oldest entries.
-        if ($this->maxHistory > 0 && \count($this->history) > $this->maxHistory) {
-            $this->history = \array_slice($this->history, 0, $this->maxHistory);
-        }
+        // Enforce the live cap by evicting oldest entries.
+        $this->trimToCap();
     }
 
     /**
-     * Returns a new instance with the specified maxHistory limit.
+     * Set the retained-entry cap, applying it immediately.
+     *
+     * Mutates and returns $this (the with-prefix clone violated the store's
+     * push/clear-mutate paradigm; finding 032). The dropped-return call
+     * `$h->setMaxHistory(50);` and the chained form both work. 0 = unlimited;
+     * a negative cap throws. Trimming re-clamps the navigation cursor
+     * (finding 101). FileHistory overrides this to bound the disk file too.
+     *
+     * @throws \InvalidArgumentException When the cap is negative.
+     */
+    public function setMaxHistory(int $limit): self
+    {
+        $this->maxHistory = self::checkedCap($limit);
+        $this->trimToCap();
+        return $this;
+    }
+
+    /**
+     * BC forwarder for the pre-rename immutable spelling.
+     *
+     * @deprecated The clone-on-set form contradicted the store's mutating
+     *     paradigm; kept only as a BC forwarder marked for v2.0.0 removal.
+     *     Use {@see self::setMaxHistory()} instead. The forwarder applies
+     *     the cap to THIS instance and returns it, so a caller who relied
+     *     on the returned handle keeps working while one who dropped the
+     *     return value now gets the effect the clone never delivered.
+     *     REMOVED-IN: 2.0.0.
      */
     public function withMaxHistory(int $limit): self
     {
-        $clone = clone $this;
-        $clone->maxHistory = $limit;
-        // Immediately trim if current history exceeds new limit.
-        if ($limit > 0 && \count($clone->history) > $limit) {
-            $clone->history = \array_slice($clone->history, 0, $limit);
-        }
-        return $clone;
+        \trigger_error(
+            'SugarCraft\Readline\History\InMemoryHistory::withMaxHistory() is deprecated; use setMaxHistory()',
+            E_USER_DEPRECATED
+        );
+        return $this->setMaxHistory($limit);
     }
 
     public function previous(): ?string
@@ -158,14 +211,5 @@ class InMemoryHistory implements HistoryInterface
     {
         $this->history = [];
         $this->position = -1;
-    }
-
-    /**
-     * Return the most recent entry without modifying navigation position,
-     * or null if history is empty.
-     */
-    protected function getLastEntry(): ?string
-    {
-        return $this->history[0] ?? null;
     }
 }

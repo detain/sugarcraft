@@ -129,7 +129,8 @@ final class FileHistory extends InMemoryHistory
 
     /**
      * @param string $filePath    Path to the history file.  Created automatically if absent.
-     * @param int    $maxHistory  Maximum number of entries to retain. 0 = unlimited.
+     * @param int    $maxHistory  Maximum number of entries to retain. 0 = unlimited;
+     *                            negative throws (fail-fast, finding 032).
      * @param string $tempDir     Directory for temporary files during atomic writes.
      * @param bool   $deferWrites When true, push() only queues the entry in memory;
      *                            disk I/O happens in one batched atomic write on
@@ -392,6 +393,48 @@ final class FileHistory extends InMemoryHistory
         }
 
         $this->pushResident($line);
+    }
+
+    /**
+     * Set the retained-entry cap and honor it on DISK immediately when the
+     * new bound can shrink the persisted view (finding 065 — the inherited
+     * memory-only trim let another process's next read resurrect entries
+     * the live session had just discarded, because the file is the shared
+     * truth and a cap must reach it at set time, not at next push time).
+     *
+     * The bounding rewrite is the same bounded merge flush() checkpoints
+     * with; it commits BEFORE memory moves (persist-then-swap, finding
+     * 063): when the rewrite throws, the cap, the resident list and the
+     * cursor all stay exactly as they were. Growing the cap never rewrites
+     * the file — an oversized cap has nothing to bound, and the ordinary
+     * eviction rhythm picks up from there.
+     *
+     * @throws \InvalidArgumentException When the cap is negative.
+     */
+    public function setMaxHistory(int $limit): self
+    {
+        $cap = self::checkedCap($limit);
+        $oldCap = $this->maxHistory;
+        // When can the file hold more than the new cap?
+        $bound = $cap > 0 && ($oldCap === 0 || $cap < $oldCap || \count($this->history) > $cap);
+        if (!$bound) {
+            $this->maxHistory = $cap;
+            $this->trimToCap();
+            return $this;
+        }
+        $this->maxHistory = $cap;
+        try {
+            // The merge reads this->maxHistory for its bound and covers the
+            // pending queue through the resident view; a successful commit
+            // resets the deferred-trim checkpoint.
+            $this->mergeAndBoundOnDisk();
+            $this->pendingWrites = [];
+        } catch (\Throwable $e) {
+            $this->maxHistory = $oldCap;
+            throw $e;
+        }
+        $this->trimToCap();
+        return $this;
     }
 
     /**
