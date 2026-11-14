@@ -354,4 +354,32 @@ final class UnifiedScanTest extends TestCase
 
         $this->assertSame($walked, $published);
     }
+
+    public function testFileHeadersIsTheSameWalkProjectedOntoHeaderBits(): void
+    {
+        // Drift catcher (sugar-diff-025 leg B): the header-only path and the
+        // full row walk are one state machine — the bool list must equal the
+        // lines() projection on every shape, hostile ones included.
+        $rows = [
+            'diff --git a/x b/x',
+            'index 123..456 100644',
+            '--- a/x',
+            '+++ b/x',
+            '@@ -1,2 +1,2 @@',
+            '-a',
+            '+b',
+            ' ctx',
+            '\\ No newline at end of file',
+            'junk after spent budget',
+            '@@ -999999999999999999 +1 @@',
+            '-x',
+        ];
+
+        $projected = array_map(
+            static fn (ScannedLine $row): bool => $row->fileHeader,
+            UnifiedScan::lines($rows),
+        );
+        $this->assertSame($projected, UnifiedScan::fileHeaders($rows));
+        $this->assertSame([true, true, true, true], array_slice($projected, 0, 4));
+    }
 }

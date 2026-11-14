@@ -97,6 +97,33 @@ final class UnifiedScan
      */
     public static function lines(string|array $diff): array
     {
+        return self::classify($diff, true);
+    }
+
+    /**
+     * Which rows are file headers rather than diff content, under exactly the
+     * rule {@see isFileHeader()} documents — and exactly the rule
+     * {@see self::lines()} walks. One pass over the rows, no `ScannedLine`
+     * allocated (sugar-diff-025 leg B: this used to re-invocate the whole
+     * scan and map it).
+     *
+     * @param string|list<string> $diff
+     * @return list<bool>
+     */
+    public static function fileHeaders(string|array $diff): array
+    {
+        return self::classify($diff, false);
+    }
+
+    /**
+     * The one state machine behind both public shapes: hunk accounting and
+     * the header verdicts are identical by construction, and header-only
+     * hosts pay bools, not boxed rows.
+     *
+     * @return list<ScannedLine>|list<bool>
+     */
+    private static function classify(string|array $diff, bool $materialize): array
+    {
         $rows = is_string($diff)
             ? self::rowsOf($diff)
             : $diff;
@@ -129,13 +156,17 @@ final class UnifiedScan
                 // `?? '1'` would NOT catch — hence the explicit empty test.)
                 $oldLeft = $numberable ? self::declaredCount($m[2] ?? '') : 0;
                 $newLeft = $numberable ? self::declaredCount($m[4] ?? '') : 0;
-                $out[] = new ScannedLine(null, null, false, ScanRowKind::HunkHeader);
+                $out[] = $materialize
+                    ? new ScannedLine(null, null, false, ScanRowKind::HunkHeader)
+                    : false;
                 continue;
             }
 
             if (self::isFileHeader($line, $inHunk)) {
                 $inHunk = false;
-                $out[] = new ScannedLine(null, null, true, ScanRowKind::FileHeader);
+                $out[] = $materialize
+                    ? new ScannedLine(null, null, true, ScanRowKind::FileHeader)
+                    : true;
                 continue;
             }
 
@@ -146,12 +177,16 @@ final class UnifiedScan
             // hunk. A content row can never begin with `\` (the marker
             // column is `' '`, `-` or `+`), so this shape stays unclaimed.
             if (str_starts_with($line, '\\')) {
-                $out[] = new ScannedLine(null, null, false, ScanRowKind::NoNewlineAnnotation);
+                $out[] = $materialize
+                    ? new ScannedLine(null, null, false, ScanRowKind::NoNewlineAnnotation)
+                    : false;
                 continue;
             }
 
             if (!$inHunk) {
-                $out[] = new ScannedLine(null, null, false, ScanRowKind::OutsideHunk);
+                $out[] = $materialize
+                    ? new ScannedLine(null, null, false, ScanRowKind::OutsideHunk)
+                    : false;
                 continue;
             }
 
@@ -160,11 +195,15 @@ final class UnifiedScan
             if ($marker === '+') {
                 if ($newLeft <= 0) {
                     $inHunk = false; // the hunk's declared new side is spent
-                    $out[] = new ScannedLine(null, null, false, ScanRowKind::OutsideHunk);
+                    $out[] = $materialize
+                        ? new ScannedLine(null, null, false, ScanRowKind::OutsideHunk)
+                        : false;
                     continue;
                 }
 
-                $out[] = new ScannedLine(null, $new, false, ScanRowKind::Insert);
+                $out[] = $materialize
+                    ? new ScannedLine(null, $new, false, ScanRowKind::Insert)
+                    : false;
                 $new++;
                 $newLeft--;
                 $inHunk = !self::hunkSpent($oldLeft, $newLeft);
@@ -174,11 +213,15 @@ final class UnifiedScan
             if ($marker === '-') {
                 if ($oldLeft <= 0) {
                     $inHunk = false; // the hunk's declared old side is spent
-                    $out[] = new ScannedLine(null, null, false, ScanRowKind::OutsideHunk);
+                    $out[] = $materialize
+                        ? new ScannedLine(null, null, false, ScanRowKind::OutsideHunk)
+                        : false;
                     continue;
                 }
 
-                $out[] = new ScannedLine($old, null, false, ScanRowKind::Delete);
+                $out[] = $materialize
+                    ? new ScannedLine($old, null, false, ScanRowKind::Delete)
+                    : false;
                 $old++;
                 $oldLeft--;
                 $inHunk = !self::hunkSpent($oldLeft, $newLeft);
@@ -190,7 +233,9 @@ final class UnifiedScan
                 // Ending the hunk here keeps every later real header
                 // working and refuses to number the corruption.
                 $inHunk = false;
-                $out[] = new ScannedLine(null, null, false, ScanRowKind::OutsideHunk);
+                $out[] = $materialize
+                    ? new ScannedLine(null, null, false, ScanRowKind::OutsideHunk)
+                    : false;
                 continue;
             }
 
@@ -199,11 +244,15 @@ final class UnifiedScan
             // budgets must still have room.
             if ($oldLeft <= 0 || $newLeft <= 0) {
                 $inHunk = false;
-                $out[] = new ScannedLine(null, null, false, ScanRowKind::OutsideHunk);
+                $out[] = $materialize
+                    ? new ScannedLine(null, null, false, ScanRowKind::OutsideHunk)
+                    : false;
                 continue;
             }
 
-            $out[] = new ScannedLine($old, $new, false, ScanRowKind::Context);
+            $out[] = $materialize
+                ? new ScannedLine($old, $new, false, ScanRowKind::Context)
+                : false;
             $old++;
             $new++;
             $oldLeft--;
@@ -212,21 +261,6 @@ final class UnifiedScan
         }
 
         return $out;
-    }
-
-    /**
-     * Which rows are file headers rather than diff content, under exactly the
-     * rule {@see isFileHeader()} documents.
-     *
-     * @param string|list<string> $diff
-     * @return list<bool>
-     */
-    public static function fileHeaders(string|array $diff): array
-    {
-        return array_map(
-            static fn (ScannedLine $row): bool => $row->fileHeader,
-            self::lines($diff),
-        );
     }
 
     /**
