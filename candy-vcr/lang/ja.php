@@ -20,6 +20,7 @@ return [
     'cli.unknown_option' => 'candy-vcr {verb}: 不明なオプション {option}',
     'cli.idle_trim_positive' => '--idle-trim は 0 秒より大きい値にしてください',
     'cli.idle_trim_requires' => '--idle-trim には正の秒数が必要です',
+    'cli.speed_requires' => '--speed には引数が必要です (instant または realtime)',
     'choice.invalid' => '{flag} は {known} のいずれかである必要があります (受け取った値: "{got}")',
     'choice.invalid_type' => '{flag} は {known} のいずれかである必要があります (受け取った値: {got})',
     'fps.not_numeric' => '--fps は正の数値である必要があります (受け取った値: {value})。',

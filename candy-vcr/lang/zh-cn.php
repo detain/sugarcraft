@@ -20,6 +20,7 @@ return [
     'cli.unknown_option' => 'candy-vcr {verb}: 未知选项 {option}',
     'cli.idle_trim_positive' => '--idle-trim 必须大于 0 秒',
     'cli.idle_trim_requires' => '--idle-trim 需要一个正的秒数',
+    'cli.speed_requires' => '--speed 需要一个参数（instant 或 realtime）',
     'choice.invalid' => '{flag} 必须是 {known} 之一,实际为 "{got}"',
     'choice.invalid_type' => '{flag} 必须是 {known} 之一,实际为 {got}',
     'fps.not_numeric' => '--fps 必须是正数,实际为 {value}。',

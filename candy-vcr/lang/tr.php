@@ -20,6 +20,7 @@ return [
     'cli.unknown_option' => 'candy-vcr {verb}: bilinmeyen seçenek {option}',
     'cli.idle_trim_positive' => '--idle-trim 0 saniyeden büyük olmalı',
     'cli.idle_trim_requires' => '--idle-trim pozitif bir saniye değeri gerektirir',
+    'cli.speed_requires' => '--speed bir argüman gerektirir (instant veya realtime)',
     'choice.invalid' => '{flag} şunlardan biri olmalı: {known}, alınan "{got}"',
     'choice.invalid_type' => '{flag} şunlardan biri olmalı: {known}, alınan {got}',
     'fps.not_numeric' => '--fps pozitif bir sayı olmalı, alınan {value}.',

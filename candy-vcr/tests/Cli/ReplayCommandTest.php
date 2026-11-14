@@ -59,6 +59,70 @@ final class ReplayCommandTest extends TestCase
         }
     }
 
+    /**
+     * VCR-S71 (finding 099): the space form `--speed realtime` is what
+     * the docblock has always advertised ("like every other
+     * value-taking flag"), so it must parse — pre-fix it was refused
+     * as an unknown option.
+     */
+    public function testSpeedSpaceFormIsAcceptedLikeTheEqualsForm(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'cv-replay-');
+        $this->writeCassette($path, [
+            new Event(t: 0.0, kind: EventKind::Output, payload: ['b' => 'hi']),
+            new Event(t: 0.05, kind: EventKind::Quit, payload: []),
+        ]);
+        try {
+            $stdout = Stream::memory('w+');
+            $stderr = Stream::memory('w+');
+            $exit = (new ReplayCommand())->run([$path, '--speed', 'realtime'], $stdout, $stderr);
+            rewind($stdout);
+            $out = (string) stream_get_contents($stdout);
+            rewind($stderr);
+            $err = (string) stream_get_contents($stderr);
+
+            $this->assertSame(0, $exit, $err);
+            $this->assertSame('hi', $out);
+            $this->assertStringNotContainsString('unknown option', $err);
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    public function testSpeedSpaceFormRefusesMissingOrInvalidModes(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'cv-replay-');
+        $this->writeCassette($path, [
+            new Event(t: 0.0, kind: EventKind::Output, payload: ['b' => 'hi']),
+        ]);
+        try {
+            $stdout = Stream::memory('w+');
+            $stderr = Stream::memory('w+');
+            // Naked flag: the next token is another option, not a mode.
+            $exit = (new ReplayCommand())->run([$path, '--speed', '--no-trim'], $stdout, $stderr);
+            rewind($stderr);
+            $err = (string) stream_get_contents($stderr);
+            $this->assertSame(2, $exit);
+            $this->assertStringContainsString('--speed requires an argument', $err);
+
+            // Trailing naked flag.
+            $stderr2 = Stream::memory('w+');
+            $exit = (new ReplayCommand())->run([$path, '--speed'], Stream::memory('w+'), $stderr2);
+            $this->assertSame(2, $exit);
+            rewind($stderr2);
+            $this->assertStringContainsString('--speed requires an argument', (string) stream_get_contents($stderr2));
+
+            // A present-but-bogus mode keeps the named value gate.
+            $stderr3 = Stream::memory('w+');
+            $exit = (new ReplayCommand())->run([$path, '--speed', 'sideways'], Stream::memory('w+'), $stderr3);
+            $this->assertSame(2, $exit);
+            rewind($stderr3);
+            $this->assertStringContainsString("--speed must be 'instant' or 'realtime'", (string) stream_get_contents($stderr3));
+        } finally {
+            @unlink($path);
+        }
+    }
+
     public function testReplayRealtimeSpeedNoTrim(): void
     {
         $path = tempnam(sys_get_temp_dir(), 'cv-replay-');

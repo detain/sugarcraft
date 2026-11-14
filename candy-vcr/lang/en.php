@@ -20,6 +20,7 @@ return [
     'cli.unknown_option' => 'candy-vcr {verb}: unknown option {option}',
     'cli.idle_trim_positive' => '--idle-trim must be > 0 seconds',
     'cli.idle_trim_requires' => '--idle-trim requires a positive seconds argument',
+    'cli.speed_requires' => '--speed requires an argument (instant or realtime)',
     'choice.invalid' => '{flag} must be one of {known}, got "{got}"',
     'choice.invalid_type' => '{flag} must be one of {known}, got {got}',
     'fps.not_numeric' => '--fps must be a positive number, got {value}.',

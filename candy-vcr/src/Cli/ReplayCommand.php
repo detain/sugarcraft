@@ -10,10 +10,11 @@ use SugarCraft\Vcr\Lang;
 use SugarCraft\Vcr\Support\Scalars;
 
 /**
- * `candy-vcr replay <cassette> [--speed=instant|realtime] [--idle-trim=N|--idle-trim N]`
+ * `candy-vcr replay <cassette> [--speed=instant|realtime|--speed instant|realtime] [--idle-trim=N|--idle-trim N]`
  *
  * Stream the cassette's recorded output bytes to stdout. With
- * `--speed=realtime`, sleeps between events so playback matches the
+ * `--speed=realtime` (or the space form `--speed realtime`), sleeps
+ * between events so playback matches the
  * recorded cadence (useful for visual inspection and demos); when the
  * flag is absent the default is `instant` — the whole stream is flushed
  * as fast as the kernel accepts it. The header's `playbackSpeed`
@@ -23,7 +24,7 @@ use SugarCraft\Vcr\Support\Scalars;
  * `--idle-trim=N` clamps inter-event gaps longer than N seconds to N,
  * so long pauses in the recording don't produce long pauses in replay.
  * The space form `--idle-trim N` is accepted as well, like every other
- * value-taking flag on this verb.
+ * value-taking flag on this verb — including `--speed instant`.
  * Use `--no-trim` to restore original (pre-trim) wall-clock timing.
  *
  * A realtime gap taken from the cassette's own bytes is clamped to
@@ -115,7 +116,7 @@ final class ReplayCommand implements DocumentedCommand
 
     public function usage(): string
     {
-        return Lang::t('cli.usage_label') . ' candy-vcr replay <cassette> [--speed=instant|realtime]
+        return Lang::t('cli.usage_label') . ' candy-vcr replay <cassette> [--speed=instant|realtime|--speed instant]
        [--idle-trim=N|--idle-trim N] [--no-trim]' . "\n"
             . '  ' . str_replace("\n", "\n  ", Lang::t('replay.help_speed')) . "\n";
     }
@@ -131,6 +132,20 @@ final class ReplayCommand implements DocumentedCommand
             $arg = $args[$i];
             if (str_starts_with($arg, '--speed=')) {
                 $speed = substr($arg, 8);
+            } elseif ($arg === '--speed') {
+                // VCR-S71 (finding 099): the space form must work here —
+                // the class doc has always advertised space form "like
+                // every other value-taking flag on this verb", and
+                // --idle-trim honors that. Only the equals form being
+                // accepted made `--speed realtime` an unknown-option
+                // error for a flag that plainly exists.
+                $next = $args[$i + 1] ?? null;
+                if ($next === null || str_starts_with($next, '--')) {
+                    fwrite($stderr, Lang::t('cli.err', ['verb' => 'replay', 'message' => Lang::t('cli.speed_requires')]) . "\n");
+                    return 2;
+                }
+                $i++;
+                $speed = $next;
             } elseif ($arg === '--no-trim') {
                 $noTrim = true;
             } elseif (str_starts_with($arg, '--idle-trim=')) {

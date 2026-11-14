@@ -20,6 +20,7 @@ return [
     'cli.unknown_option' => 'candy-vcr {verb}: neznámá volba {option}',
     'cli.idle_trim_positive' => '--idle-trim musí být > 0 sekund',
     'cli.idle_trim_requires' => '--idle-trim vyžaduje kladný počet sekund',
+    'cli.speed_requires' => '--speed vyžaduje argument (instant nebo realtime)',
     'choice.invalid' => '{flag} musí být jedna z hodnot {known}, získáno "{got}"',
     'choice.invalid_type' => '{flag} musí být jedna z hodnot {known}, získáno {got}',
     'fps.not_numeric' => '--fps musí být kladné číslo, získáno {value}.',

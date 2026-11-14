@@ -20,6 +20,7 @@ return [
     'cli.unknown_option' => 'candy-vcr {verb}: 알 수 없는 옵션 {option}',
     'cli.idle_trim_positive' => '--idle-trim은 0초보다 커야 합니다',
     'cli.idle_trim_requires' => '--idle-trim에는 양수의 초 값이 필요합니다',
+    'cli.speed_requires' => '--speed에는 인자가 필요합니다 (instant 또는 realtime)',
     'choice.invalid' => '{flag}은(는) {known} 중 하나여야 합니다. 받은 값: "{got}"',
     'choice.invalid_type' => '{flag}은(는) {known} 중 하나여야 합니다. 받은 값: {got}',
     'fps.not_numeric' => '--fps는 양수여야 합니다. 받은 값: {value}.',
