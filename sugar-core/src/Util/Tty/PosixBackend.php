@@ -17,7 +17,8 @@ use SugarCraft\Pty\TermiosFactory;
  * Uses TermiosFactory (FFI primary, stty fallback) for raw mode and
  * SizeIoctl for terminal dimensions.
  *
- * Mirrors charmbracelet/bubbletea.TtyBackend
+ * Mirrors bubbletea's internal tty handling (bubbletea ships no public
+ * `TtyBackend` symbol — the cite is to the behavior, not a Go name)
  */
 final class PosixBackend implements Backend
 {

@@ -53,7 +53,8 @@ use SugarCraft\Core\Msg\WorkerResultMsg;
  * and stop()'s reap ladder runs once over the whole pool, not once per
  * worker. The pool never retries a task — a settled job is settled.
  *
- * Mirrors the worker-pool pattern of charmbracelet/bubbletea, the machinery for offloading heavy
+ * Original machinery: charmbracelet/bubbletea has no worker pool (its concurrency is
+ * per-Cmd goroutines), so this is not a port — it offloads heavy
  * computation off the UI thread.
  *
  * Child lifetime is owned by the pool: {@see stop()} — which the destructor

@@ -278,7 +278,7 @@ final class RendererTest extends TestCase
         $lineLen = ftell($lineOut);
         // Cell-diff should write meaningfully fewer bytes — exact
         // ratio depends on the line content but should be at least
-        // 25% smaller for this counter scenario.
+        // 15% smaller for this counter scenario (the assertion below enforces *0.85).
         $this->assertLessThan(
             $lineLen * 0.85,
             $cellLen,

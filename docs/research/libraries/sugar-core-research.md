@@ -54,9 +54,18 @@
 
 **Gaps (see Section 3):**
 
-- No Elm-style **Subscriptions** for model-driven continuous event streams
-- No **Screen Stack** (modal dialogs, sub-screens)
-- No **Component Composition** framework beyond interface contract
+_(Rewritten 2026-11-13: the three gaps this section carried from the
+2026-05-13 survey have all since shipped; this doc is a source-of-truth
+under AGENTS.md and must not assert what `src/` disproves.)_
+
+- ~~No Elm-style **Subscriptions**~~ — implemented: `src/Subscriptions.php`
+  (Key / Tick / Signal / Custom kinds, model-declared per frame via
+  `Model::subscriptions()`; the `SubscriptionCapable` trait supplies the default).
+- ~~No **Screen Stack**~~ — implemented: `src/ScreenStack.php` +
+  `src/Screen.php` + `RootModelWithScreenStack` and the push/pop Cmd pair
+  (modal dialogs, sub-screens, breadcrumbs).
+- ~~No **Component Composition**~~ — implemented: `src/Composite.php`
+  (nested child trees, lifecycle Cmd draining, id-keyed reconciliation).
 
 ---
 
