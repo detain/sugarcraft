@@ -401,7 +401,7 @@ line-end normalisation and renders bidi/zero-width characters as visible
 - **`Sanitize`** (in `Util/`) — the fleet's untrusted-string vocabulary; the contract and the method-by-method list live in [Security and the trust boundary](#security-and-the-trust-boundary).
 - **`Subscription`** — value object: id, Kind, params, produce closure.
 - **`Subscriptions`** — immutable collection with `withTick()`, `withKey()`, `withSignal()`, `withCustom()`, `all()`, `has()`.
-- **`Kind`** — pure enum: Tick (periodic timer, `seconds`) / Key (a fixed 0.1 s polling timer — see Subscriptions) / Signal (handlers for the requested signals) / Custom (periodic timer, `interval` defaulting to 1.0 s).
+- **`Kind`** — pure enum: Tick (periodic timer, `seconds` required) / Key (polling timer, `interval` defaulting to 0.1 s — see Subscriptions) / Signal (handlers for the requested signals) / Custom (periodic timer, `interval` defaulting to 1.0 s).
 - **`SubscriptionCapable`** — trait providing the default `subscriptions(): null`.
 
 ### Composition primitives
@@ -413,10 +413,10 @@ line-end normalisation and renders bidi/zero-width characters as visible
 - **`PushScreenCmd`** / **`PopScreenCmd`** (in `SugarCraft\Core\Cmd`) — Cmd factories that emit `ScreenStackPushedMsg` / `ScreenStackPoppedMsg`.
 - **`ScreenStackPushedMsg`** / **`ScreenStackPoppedMsg`** — infrastructure messages dispatched through the loop; always handled by the root model, never by the active screen.
 - **`Component`** — interface extending `Model`; adds `onMount(): ?Closure` (fired when mounted into a `Composite`) and `onUnmount(): ?Closure` (fired when removed). Return a `Cmd` to run immediately or `null` for no-op.
-- **`Composite`** — `Model` that manages a list of child `Component`s. Tracks `pendingCmds` and drains them during reconcile, calling child `onMount()`/`onUnmount()` Cmds synchronously. Children are reconciled by *presence*: a child that stays in the list keeps its state; adding or removing triggers lifecycle events. Reordering alone does not re-run lifecycle.
-- **`Panes` / `Pane` / `Rect`** — split-region bookkeeping for apps that manage multiple viewports. Geometry is advisory: the runtime does **not** clip a pane's `view()` output to its `Rect` — models must size their own frames (see [Viewport fit](#viewport-fit)).
-- **`WorkerPool`** — bounded-concurrency pool (default 4 workers) for offloading CPU-bound tasks to subprocesses. Tasks are named global functions or serialized `Serializable`/closure-free callables; a `Closure` cannot cross the process boundary, so dispatching one returns an already-rejected promise. Worker children run `php` without your application autoloader: only PHP built-ins and whatever the worker's own script loads are resolvable inside the child.
-- **`WorkerCmd`** — `Cmd` factory: `WorkerCmd::run($pool, $task)` (`callable|string $task` — a named global function or a serializable closure-free callable, matching the real parameter) dispatches a task to the pool and yields a `WorkerResultMsg` when complete.
+- **`Composite`** — `Model` that manages a list of child `Component`s. Tracks `pendingCmds` and drains them during reconcile, calling child `onMount()`/`onUnmount()` Cmds synchronously. Composites NEST: `drainPendingCmds()` walks the whole child tree, so a lifecycle Cmd queued by a grandchild reaches the runtime too — nested queues are honored, not swallowed. Children are reconciled by *presence*: a child that stays in the list keeps its state; adding or removing triggers lifecycle events. Reordering alone does not re-run lifecycle, and `withChildren()` merges (existing children survive; same-id entries are replaced) while carrying the pending queue forward.
+- **`Panes` / `Pane` / `Rect`** — split-region bookkeeping for apps that manage multiple viewports. A `Rect` is a HARD partition (sc-17): `Pane::view()` clips the model's content to `height` rows and every row to `width` visible, ANSI-aware cells — overflow is discarded, so a pane can never bleed into a sibling. A `View`-returning model inside a pane keeps only its clipped body: cursor/title/progress/colors/mouse-mode/paste/images extras are dropped at composition (only the root frame's View is consumed — see `Pane::view`).
+- **`WorkerPool`** — bounded-concurrency pool (default 4 workers) for offloading CPU-bound tasks to subprocesses. Tasks are class callables — `[Foo::class, 'bar']` or an invokable object — and the child bootstraps the SAME autoloader the parent hands it via argv, so library classes resolve in the subprocess; a plain string task name is refused at the door (the old global-function channel silently `function_exists`-missed in the child), and a `Closure` cannot cross the process boundary, so dispatching one rejects with the named reason. Thrown and returned library exceptions round-trip as the REAL class; results carrying disallowed classes reject with `worker.incomplete_result`. Outstanding work is capped (`maxOutstandingJobs`, default 1024, 0 disables) — past the cap `dispatch()` refuses synchronously instead of growing unbounded. Child lifetime is owned by the pool: stdin closes politely, then a bounded grace, SIGTERM, and SIGKILL with the whole pool reaped on ONE shared ladder; a wedged child delays shutdown by seconds, never forever, and its stderr tail (last 4 KiB) rides the rejection message.
+- **`WorkerCmd`** — `Cmd` factory: `WorkerCmd::run($pool, $task)` dispatches a task to the pool and yields exactly one message per outcome — a `WorkerResultMsg` on success, an `ExceptionMsg` on failure (verified single-channel: the resolve arm never carries an error). `$task` is a class callable (`[Foo::class, 'bar']` or an invokable object); a string name is refused by the pool and a `Closure` is rejected with a named `LogicException` before any subprocess spawns.
 - **`WorkerResultMsg`** — result `Msg` carrying `$result`, `$error`, and `$workerId` from a pool worker.
 
 ## Subscriptions
@@ -425,15 +425,22 @@ Subscription reconciliation lets a Model declare recurring timers and
 signal handlers (ticks, polled input, signals) without managing them
 manually. After each
 `update()` cycle the runtime diffs the returned `Subscriptions` set against
-the active one — new subscriptions start, dropped ones cancel, stable ones
-keep running.
+the active one — new subscriptions start, dropped ones cancel, and a
+subscription that keeps its id but changes its params or produce closure
+is RETUNED: the stale arm is cancelled and the new one armed (the identity
+rule is id + a params/producer signature, not the id alone; hand-built
+subscriptions are validated at arm time — a bad rate key is a named
+refusal, and a duplicate id inside one set refuses with
+`program.subscription_duplicate_id`).
 
 One cadence caveat worth stating plainly: `Kind::Key` is **not** how key
 presses arrive. Keystrokes reach `update()` through the input reader the
 moment they are parsed, subscription or not; a `withKey()` subscription
-arms a fixed 0.1 s polling timer (not configurable) whose produce closure
-runs on that beat. `withCustom()` arms its timer at `interval` seconds,
-defaulting to 1.0 s.
+arms a polling timer whose beat defaults to 0.1 s and is tuned per
+subscription through `withKey($id, $produce, $intervalSeconds)` — the
+interval is the shipped seam (there is no event-driven fan-out; that
+redesign is owner-gated). `withCustom()` arms its timer at `interval`
+seconds, defaulting to 1.0 s.
 
 ```php
 use SugarCraft\Core\{Model, Msg, Program, Subscriptions};
@@ -565,12 +572,16 @@ with this exact routing pre-implemented — extend-free to use, with
 
 ## Viewport fit
 
-The runtime paints whatever `view()` returns. It does **not** clip frames to
-the terminal, and `Pane`/`Rect` carry bounds purely as advisory metadata —
-no code path in the renderer reads them. A frame wider than the viewport
-soft-wraps and shifts every following row, which is why border-alignment
-defects surface so often across TUI apps. Read `WindowSizeMsg` (plain cell
-counts `$cols` / `$rows` arrive at startup and on every resize), size your content
+The runtime paints whatever `view()` returns. It does **not** clip the
+ROOT frame to the terminal — a frame wider than the viewport soft-wraps
+and shifts every following row, which is why border-alignment defects
+surface so often across TUI apps. (Within composed panes the picture
+differs: `Pane`/`Rect` are a hard partition — `Pane::view()` clips each
+pane to its `Rect` row-and-cell budget, ANSI-aware, and discards
+overflow, sc-17. Read "size your own frames" as a ROOT-model rule; a pane
+clips for you, but it also silently trims you.) Read `WindowSizeMsg`
+(plain cell counts `$cols` / `$rows` arrive at startup and on every
+resize), size your content
 to it, and truncate with `Util\Width::truncateAnsi()` so SGR bytes survive
 the cut.
 
