@@ -43,10 +43,17 @@ if ($tapes === []) {
     exit(1);
 }
 
-$ffmpegAvailable = shell_exec('command -v ffmpeg 2>/dev/null') !== null;
-if (!$ffmpegAvailable) {
+// shell_exec() returns an EMPTY STRING (not null) when the command exits
+// non-zero, so the naive !== null test read "ffmpeg present" on every host
+// without it — and the ffmpeg pass then silently re-baked the ffmpeg goldens
+// through TapeToGif's php fallback. Truthiness on the trimmed path is the
+// honest check.
+$ffmpegPath = trim((string) shell_exec('command -v ffmpeg 2>/dev/null'));
+if ($ffmpegPath === '') {
     fwrite(STDOUT, "refresh-goldens: ffmpeg not on PATH — skipping ffmpeg-encoder goldens.\n");
 }
+
+$ffmpegAvailable = $ffmpegPath !== '';
 
 $encoders = ['php'];
 if ($ffmpegAvailable) {

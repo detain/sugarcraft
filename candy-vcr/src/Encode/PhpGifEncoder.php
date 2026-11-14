@@ -7,8 +7,20 @@ namespace SugarCraft\Vcr\Encode;
 /**
  * Pure-PHP GIF encoder fallback.
  *
- * Assembles animated GIFs using GD's imagegif() with a custom animation
- * extension. Slow (~5-10x slower than ffmpeg) but requires no external binaries.
+ * Assembles animated GIFs byte-by-byte by hand (GIF89a header, NETSCAPE loop
+ * extension, per-frame Graphic Control + Local Color Table + LZW image data);
+ * GD is used only to decode the input PNGs. Slow (~5-10x slower than ffmpeg)
+ * but requires no external binaries.
+ *
+ * Host-invariant output ([ci-fix F4]): color reduction and palette ordering
+ * are plain PHP arithmetic on the frame's own RGB values (see
+ * {@see self::writeImageBlock()}), so identical input rasters produce
+ * identical GIF bytes on every host. The old path delegated reduction to
+ * libgd's imagetruecolortopalette(), whose palette ordering varies with the
+ * libgd build — CI runners and golden-baking hosts disagree, which moved the
+ * index bytes and the LCT stream for the SAME pixels. The only remaining
+ * host dependency is the upstream truecolor raster itself, which
+ * VisualRegressionTest gates with GOLDEN_RASTER_FINGERPRINT.
  *
  * No upstream counterpart: charmbracelet/vhs delegates GIF assembly wholly
  * to ffmpeg; a pure-PHP encoder fallback is original to SugarCraft.
@@ -162,13 +174,35 @@ final class PhpGifEncoder implements GifEncoder
         // Every frame writes its own LCT because we don't share a GCT.
         $gif->fwrite("\x87");
 
-        imagetruecolortopalette($image, false, 256);
-        $paletteSize = imagecolorstotal($image);
+        if (!imageistruecolor($image)) {
+            // Callers may hand us an indexed PNG; GD's palette-mode pixel reads
+            // return color-table indices, so normalize to truecolor RGB values
+            // before the scan below (the old imagetruecolortopalette() step did
+            // this conversion implicitly for every input).
+            imagepalettetotruecolor($image);
+        }
+
+        // Host-invariant quantization ([ci-fix F4]): one truecolor pass builds
+        // the color histogram and the flat RGB scan; the palette is then the
+        // 256 most-frequent colors in a total order (count DESC, rgb ASC) that
+        // depends on nothing but the frame's own bytes.
+        $counts = [];
+        $scan = [];
+        for ($y = 0; $y < $height; $y++) {
+            for ($x = 0; $x < $width; $x++) {
+                $rgb = imagecolorat($image, $x, $y) & 0xffffff;
+                $counts[$rgb] = ($counts[$rgb] ?? 0) + 1;
+                $scan[] = $rgb;
+            }
+        }
+
+        $palette = $this->buildPalette($counts);
+        $indices = $this->mapToPalette($counts, $palette);
 
         for ($idx = 0; $idx < 256; $idx++) {
-            if ($idx < $paletteSize) {
-                $rgba = imagecolorsforindex($image, $idx);
-                $gif->fwrite(chr($rgba['red'] & 0xff) . chr($rgba['green'] & 0xff) . chr($rgba['blue'] & 0xff));
+            if (isset($palette[$idx])) {
+                $rgb = $palette[$idx];
+                $gif->fwrite(chr(($rgb >> 16) & 0xff) . chr(($rgb >> 8) & 0xff) . chr($rgb & 0xff));
             } else {
                 $gif->fwrite("\x00\x00\x00");
             }
@@ -178,11 +212,11 @@ final class PhpGifEncoder implements GifEncoder
         // whole-frame string re-alloc as the string grows (finding candy-vcr-016
         // third term). Rows reset the append target to frame-width scale.
         $pixels = '';
+        $offset = 0;
         for ($y = 0; $y < $height; $y++) {
             $row = '';
             for ($x = 0; $x < $width; $x++) {
-                $idx = imagecolorat($image, $x, $y);
-                $row .= chr($idx & 0xff);
+                $row .= chr($indices[$scan[$offset++]]);
             }
             $pixels .= $row;
         }
@@ -194,6 +228,72 @@ final class PhpGifEncoder implements GifEncoder
         // zero-length sub-block (0x00). This ensures strict GIF parsers
         // correctly identify where the image data ends.
         $gif->fwrite("\x00");
+    }
+
+    /**
+     * The 256 most frequent colors, ordered by (frequency DESC, RGB ASC).
+     *
+     * Both sort keys together form a total order, so the palette is a pure
+     * function of the frame's color multiset: the same raster emits the same
+     * Local Color Table bytes on every host. Colors beyond 256 are dropped
+     * here and re-mapped to their nearest survivor by {@see self::mapToPalette()}.
+     *
+     * @param array<int,int> $counts rgb24 => occurrences
+     * @return list<int> rgb24 values in palette-index order, at most 256
+     */
+    private function buildPalette(array $counts): array
+    {
+        $colors = array_keys($counts);
+        usort($colors, static fn (int $a, int $b): int => $counts[$b] <=> $counts[$a] ?: $a <=> $b);
+        if (count($colors) > 256) {
+            $colors = array_slice($colors, 0, 256);
+        }
+        return $colors;
+    }
+
+    /**
+     * Map every observed color to its palette index.
+     *
+     * Kept colors map exactly; dropped ones (frames with > 256 unique colors)
+     * snap to the nearest palette entry by squared RGB distance, ties resolved
+     * to the lowest index by iterating the palette in order. Pure PHP, so the
+     * mapping is host-independent like the palette itself.
+     *
+     * @param array<int,int> $counts rgb24 => occurrences
+     * @param list<int> $palette
+     * @return array<int,int> rgb24 => palette index
+     */
+    private function mapToPalette(array $counts, array $palette): array
+    {
+        $map = [];
+        foreach ($palette as $idx => $rgb) {
+            $map[$rgb] = $idx;
+        }
+        if (count($counts) <= count($palette)) {
+            return $map;
+        }
+        foreach (array_keys($counts) as $rgb) {
+            if (isset($map[$rgb])) {
+                continue;
+            }
+            $r = ($rgb >> 16) & 0xff;
+            $g = ($rgb >> 8) & 0xff;
+            $b = $rgb & 0xff;
+            $best = 0;
+            $bestDistance = -1;
+            foreach ($palette as $idx => $candidate) {
+                $dr = $r - (($candidate >> 16) & 0xff);
+                $dg = $g - (($candidate >> 8) & 0xff);
+                $db = $b - ($candidate & 0xff);
+                $distance = $dr * $dr + $dg * $dg + $db * $db;
+                if ($bestDistance === -1 || $distance < $bestDistance) {
+                    $bestDistance = $distance;
+                    $best = $idx;
+                }
+            }
+            $map[$rgb] = $best;
+        }
+        return $map;
     }
 
     /**

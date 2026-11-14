@@ -12,11 +12,13 @@ use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
  * Visual regression: re-render each curated tape and diff against the
- * committed golden GIFs. PhpGifEncoder is byte-deterministic on a given
- * host, but the rendered bytes depend on the host libgd / GD font-cache
- * build, which varies between local-dev hosts and CI runners. To keep the
- * regression signal without forcing per-runner golden refreshes we
- * compare via:
+ * committed golden GIFs. Since [ci-fix F4] PhpGifEncoder's palette
+ * quantization and LZW output are pure PHP (host-invariant for a given
+ * raster), so on a host whose raster stack matches the golden fingerprint
+ * the rendered bytes reproduce exactly. The golden themselves were baked
+ * under the old libgd-ordered palette, which no longer round-trips on any
+ * current host — they were re-baked from the new encoder (md5-determinism
+ * proven x3 renders, see the [ci-fix F4] dossier). We still compare via:
  *
  *   1) A host-capability probe (ext-gd round-trip + the bundled font
  *      file) AND a golden-host raster fingerprint (FreeType build —
@@ -26,10 +28,11 @@ use SugarCraft\Vcr\Tests\Support\Stream;
  *      matter how large the divergence: whole-frame and single-row
  *      damage both fail loudly (VCR-S44).
  *   2) SHA-256 fast-path — bit-identical means we're done.
- *   3) Pixel-tolerance walk — pixels differing by more than 8 in any
- *      channel count; the total may reach 2% of the canvas AND no single
- *      row may reach 15% of itself, so localized damage hidden in the
- *      average is caught too.
+ *   3) Pixel-tolerance walk — decoded GIFs are normalized to truecolor
+ *      before the walk (palette indices are not colors); pixels differing
+ *      by more than 8 in any channel count; the total may reach 2% of the
+ *      canvas AND no single row may reach 15% of itself, so localized
+ *      damage hidden in the average is caught too.
  *
  * FfmpegGifEncoder gets an SSIM check (>= 0.95); when the SSIM filter
  * can't parse cleanly the fallback walks EVERY frame (ffmpeg passthrough
@@ -43,11 +46,12 @@ final class VisualRegressionTest extends TestCase
     private const SSIM_THRESHOLD = 0.95;
     private const PIXEL_DIFF_PCT_THRESHOLD = 0.01; // 1% of pixels may differ by >8 per channel
     /**
-     * Looser PHP-encoder tolerance: libgd builds differ enough between
-     * local-dev (matching golden) and Ubuntu CI runners that a
-     * pixel-perfect assertion regularly fires on cosmetic-only deltas.
-     * 2% absorbs that noise without losing the regression signal — a
-     * real encoder bug lands at double-digit pixel diff.
+     * Looser PHP-encoder tolerance: absorbs sub-threshold residual between
+     * a re-render and the baked golden (decoder rounding at GIF boundaries,
+     * exotic edge cases in palette reduction) without losing the regression
+     * signal — a real encoder bug lands at double-digit pixel diff. The
+     * libgd palette-order drift this originally papered over is cured at
+     * the source ([ci-fix F4]); the tolerance stays as cheap insurance.
      */
     private const PHP_PIXEL_DIFF_PCT_THRESHOLD = 0.02;
     /**
@@ -480,6 +484,17 @@ final class VisualRegressionTest extends TestCase
             return null;
         }
         try {
+            // GIF decode hands back a PALETTE image — imagecolorat returns
+            // color-table indices, not colors. The walk below is RGB
+            // arithmetic, so normalize first; comparing index bytes across a
+            // re-ordered palette reported phantom diffs of up to 99.9% of
+            // pixels (the [ci-fix F4] failure mode).
+            if (!imageistruecolor($imgA)) {
+                imagepalettetotruecolor($imgA);
+            }
+            if (!imageistruecolor($imgB)) {
+                imagepalettetotruecolor($imgB);
+            }
             $w = min(imagesx($imgA), imagesx($imgB));
             $h = min(imagesy($imgA), imagesy($imgB));
             if ($w <= 0 || $h <= 0) {
@@ -562,6 +577,61 @@ final class VisualRegressionTest extends TestCase
             );
         }
         return null;
+    }
+
+    /**
+     * The slow-path judge must compare colors, not palette indices: two GIFs
+     * with identical RGB content but different color-table ordering are
+     * visually identical. imagecreatefromstring decodes GIFs as PALETTE
+     * images (imagecolorat returns indices), so without the truecolor
+     * normalization in pixelDiffStats() the index arithmetic would flag this
+     * pair as fully divergent.
+     */
+    public function testPixelDiffStatsComparesColorsNotPaletteIndices(): void
+    {
+        if (!function_exists('imagegif') || !function_exists('imagecreatefromstring')) {
+            self::markTestSkipped('ext-gd required for palette-order judge test');
+        }
+
+        $a = $this->tmpDir . '/palette-order-a.gif';
+        $b = $this->tmpDir . '/palette-order-b.gif';
+
+        // A: background color at palette index 0, ink at index 1.
+        $imgA = imagecreate(2, 2);
+        self::assertNotFalse($imgA);
+        $bgA = imagecolorallocate($imgA, 10, 20, 30);
+        $inkA = imagecolorallocate($imgA, 200, 10, 10);
+        self::assertNotFalse($bgA);
+        self::assertNotFalse($inkA);
+        self::assertTrue(imagesetpixel($imgA, 0, 0, $inkA));
+        self::assertTrue(imagegif($imgA, $a));
+        imagedestroy($imgA);
+
+        // B: the same two colors parked at indices 13/14 behind twelve
+        // filler entries, painted to the identical visual result.
+        $imgB = imagecreate(2, 2);
+        self::assertNotFalse($imgB);
+        $filler = imagecolorallocate($imgB, 0, 0, 0);
+        self::assertNotFalse($filler);
+        for ($i = 1; $i <= 12; $i++) {
+            self::assertNotFalse(imagecolorallocate($imgB, 0, 0, $i));
+        }
+        $bgB = imagecolorallocate($imgB, 10, 20, 30);   // index 13
+        $inkB = imagecolorallocate($imgB, 200, 10, 10); // index 14
+        self::assertNotFalse($bgB);
+        self::assertNotFalse($inkB);
+        self::assertTrue(imagefill($imgB, 0, 0, $bgB));
+        self::assertTrue(imagesetpixel($imgB, 0, 0, $inkB));
+        self::assertTrue(imagegif($imgB, $b));
+        imagedestroy($imgB);
+
+        $stats = self::pixelDiffStats($a, $b);
+        self::assertNotNull($stats);
+        self::assertSame(
+            0.0,
+            $stats['pct'],
+            'identical colors behind different palette orders must not register as pixel diffs'
+        );
     }
 
     /**
@@ -659,6 +729,14 @@ final class VisualRegressionTest extends TestCase
             return '(could not load source GIFs)';
         }
         try {
+            // Same palette-index trap as pixelDiffStats(): the diagnostic walk
+            // is RGB arithmetic, so normalize the decoded GIFs first.
+            if (!imageistruecolor($imgA)) {
+                imagepalettetotruecolor($imgA);
+            }
+            if (!imageistruecolor($imgB)) {
+                imagepalettetotruecolor($imgB);
+            }
             $w = min(imagesx($imgA), imagesx($imgB));
             $h = min(imagesy($imgA), imagesy($imgB));
             $out = imagecreatetruecolor($w, $h);

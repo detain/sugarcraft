@@ -301,9 +301,22 @@ non-zero so you have to consciously acknowledge the scope.
 
 ### Determinism caveats
 
-Both PhpGifEncoder and FfmpegGifEncoder produce byte-stable output on
-the same ffmpeg binary version, so SSIM is only a safety net. If you
-hit hash drift between runs on a single machine, that's a real
+Since [ci-fix F4] (2026-11-15) PhpGifEncoder is fully host-invariant:
+palette quantization is pure PHP (frequency DESC, RGB ASC with nearest-
+color snapping beyond 256), so a raster that matches the golden's
+GOLDEN_RASTER_FINGERPRINT encodes to the golden's exact bytes on any
+runner — the SHA fast-path is the primary verdict again for the ten
+`.php.gif` goldens (they were re-baked from the new encoder with a
+three-render md5-identical proof; the old set was baked under libgd's
+imagetruecolortopalette ordering, which CI's newer libgd did not
+reproduce, and the index-arithmetic slow-path judge then flaked at up
+to 99.9%). FfmpegGifEncoder output stays byte-stable only on a given
+ffmpeg binary version; its `.ffmpeg.gif` goldens are judged via the
+SSIM floor for exactly that reason. `scripts/refresh-goldens.php`
+skips the ffmpeg pass entirely when ffmpeg is absent (pre-fix it
+silently re-baked the ffmpeg goldens through the php fallback).
+
+If you hit hash drift between runs on a single machine, that's a real
 non-determinism bug — chase down the source (palette ordering, frame
 timing rounding) before relaxing the test.
 
