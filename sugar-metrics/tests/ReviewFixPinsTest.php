@@ -289,6 +289,44 @@ final class ReviewFixPinsTest extends TestCase
         $this->assertCount(1, $b->histogramValues('work'), 'a double stop() must not double-record');
     }
 
+    public function testRegisterDoorRefusesNamesThatBypassedTheDescriptor(): void
+    {
+        // MET-REGCONFLICT (001, Registry leg): instrument verbs skip
+        // Descriptor entirely, and unserialize forges a DTO past its
+        // constructor — the register() door re-validates so a hyphenated
+        // (fold-prone) name can never enter the descriptor ledger.
+        $forged = unserialize('O:29:"SugarCraft\\Metrics\\Descriptor":4:{s:4:"name";s:3:"a-b";s:4:"help";s:4:"help";s:4:"type";s:7:"counter";s:9:"labelKeys";a:0:{}}');
+        self::assertInstanceOf(Descriptor::class, $forged);
+        $r = new Registry(new InMemoryBackend());
+        try {
+            $r->register($forged);
+            $this->fail('register() accepted a name the charset refuses');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('a-b', $e->getMessage());
+        }
+    }
+
+    public function testReRegisterWithDifferentLabelKeysThrowsNotSilentlyPins(): void
+    {
+        // MET-REGCONFLICT (002): the docblock promised a throw for every
+        // SECOND, DIFFERENT descriptor; labelKeys were ignored, so a
+        // changed label set silently kept the stale first pin.
+        $r = new Registry(new InMemoryBackend());
+        $r->register(new Descriptor('m', 'help', 'counter', ['route']));
+        $conflict = null;
+        try {
+            $r->register(new Descriptor('m', 'help', 'counter', ['method', 'code']));
+        } catch (\RuntimeException $e) {
+            $conflict = $e;
+        }
+        self::assertNotNull($conflict, 'different labelKeys must conflict, not overwrite silently');
+        self::assertStringContainsString('already registered', $conflict->getMessage());
+        // Control: the identical declaration (name, type, help, ordered
+        // labelKeys) stays an idempotent no-op.
+        $r->register(new Descriptor('m', 'help', 'counter', ['route']));
+        $this->assertTrue(true);
+    }
+
     // ------------------------------------------------------------ JSON lines
 
     public function testEncodeFailureThrowsInLoudModeAndDropsInSilentMode(): void

@@ -116,16 +116,31 @@ final class Registry
 
     /**
      * Register a metric descriptor for early TYPE/HELP emission.
-     * Re-registering the identical (name, type, help) is a no-op; a
-     * SECOND, DIFFERENT descriptor for the same name throws — silently
-     * keeping the first would let a copy-pasted registration pin stale
-     * TYPE/HELP onto an evolving metric.
+     * Re-registering the identical (name, type, help, labelKeys) is a
+     * no-op; a SECOND, DIFFERENT descriptor for the same name throws —
+     * silently keeping the first would let a copy-pasted registration
+     * pin stale TYPE/HELP onto an evolving metric. labelKeys are compared
+     * in order (the DTO stores the list as given): a reordering is a
+     * different declaration and conflicts like any other change.
      */
     public function register(Descriptor $descriptor): void
     {
+        // The instrument verbs never construct a Descriptor, so this door
+        // is the only place a DTO-carried name can be re-checked: refuse
+        // invalid names (unserialized or otherwise forged past the
+        // constructor) so folding aliases cannot be minted here at all.
+        // Sanitize-fold aliases are refused downstream by the backend
+        // fold-collision map, not by this check.
+        if (preg_match('/^[a-zA-Z_:][a-zA-Z0-9_:]*$/D', $descriptor->name) !== 1) {
+            throw new \InvalidArgumentException(Lang::t('descriptor.name_invalid', ['name' => Util::displaySafe($descriptor->name)]));
+        }
+        // Keyed by the RAW name: two distinct raw names folding to the same
+        // sanitized key pass this map (and every per-Registry ledger); the
+        // Prometheus backend's descriptor fold map is what refuses them.
         $existing = $this->descriptors[$descriptor->name] ?? null;
         if ($existing !== null) {
-            if ($existing->type === $descriptor->type && $existing->help === $descriptor->help) {
+            if ($existing->type === $descriptor->type && $existing->help === $descriptor->help
+                && $existing->labelKeys === $descriptor->labelKeys) {
                 return;
             }
             throw new \RuntimeException(Lang::t('registry.register_conflict', [
