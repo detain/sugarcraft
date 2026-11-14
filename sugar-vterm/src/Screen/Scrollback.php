@@ -76,27 +76,34 @@ final class Scrollback
     }
 
     /**
-     * Return all rows from oldest to newest.
+     * Iterate the ring from oldest to newest, one row at a time.
      *
-     * @return array<int, array<int, Cell>>
+     * The scan is lazy: a consumer that reads ten lines pays ten slot
+     * reads, not a whole-ring materialization per call (the previous
+     * array return copied every row on every snapshot).  The returned
+     * Generator is one-shot and unrewindable once started — for a
+     * reusable array use `iterator_to_array()`, and for indexing use
+     * O(1) `at()`.  The loop bound re-reads the live `count`, so rows
+     * pushed *during* iteration are yielded too; frozen-snapshot
+     * semantics belong to Screen's cloned ring, never to this method.
+     *
+     * @return \Generator<int, array<int, Cell>>
      */
-    public function all(): array
+    public function all(): \Generator
     {
-        if ($this->count === 0) {
-            return [];
-        }
-
         // When full, entries run from tail around to head-1.
         // When not full, entries run from 0 to head-1.
         $start = $this->count < $this->maxSize ? 0 : $this->tail;
 
-        $result = [];
         for ($i = 0; $i < $this->count; $i++) {
-            $idx = ($start + $i) % $this->maxSize;
-            $result[] = $this->rows[$idx];
+            $row = $this->rows[($start + $i) % $this->maxSize];
+            // The count bounds only populated (array) slots; the null
+            // check narrows the declared slot type for static analysis
+            // and can never fire — push() only ever stores arrays.
+            if ($row !== null) {
+                yield $row;
+            }
         }
-
-        return $result;
     }
 
     /**

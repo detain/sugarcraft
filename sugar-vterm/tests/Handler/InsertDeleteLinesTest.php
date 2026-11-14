@@ -97,10 +97,10 @@ final class InsertDeleteLinesTest extends TestCase
         // deletion starting exactly at the (full-width) region top feeds
         // the ring so scroll-up context survives.
         $h = $this->lettered();
-        $this->assertCount(0, $h->scrollback->all());
+        $this->assertCount(0, iterator_to_array($h->scrollback->all()));
         (new Parser($h))->feed("\x1b[1;1H\x1b[2M");
         /** @var array<int, array<int, Cell>> $rows */
-        $rows = $h->scrollback->all();
+        $rows = iterator_to_array($h->scrollback->all());
         $this->assertCount(2, $rows);
         $this->assertSame('aaaa', implode('', array_map(static fn (Cell $c): string => $c->grapheme, $rows[0])));
         $this->assertSame('bbbb', implode('', array_map(static fn (Cell $c): string => $c->grapheme, $rows[1])));
@@ -110,7 +110,7 @@ final class InsertDeleteLinesTest extends TestCase
     {
         $h = $this->lettered();
         (new Parser($h))->feed("\x1b[3;1H\x1b[M");
-        $this->assertCount(0, $h->scrollback->all());
+        $this->assertCount(0, iterator_to_array($h->scrollback->all()));
     }
 
     // ─── DECSTBM clipping ───────────────────────────────────────────────────

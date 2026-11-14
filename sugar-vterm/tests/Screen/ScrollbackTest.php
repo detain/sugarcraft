@@ -132,7 +132,7 @@ final class ScrollbackTest extends TestCase
             $sb->push($this->makeRow(sprintf('L%02d', $i)));
         }
 
-        $all = $sb->all();
+        $all = iterator_to_array($sb->all());
         $this->assertCount(5, $all);
         $this->assertSame('L00', $this->rowToString($all[0]));
         $this->assertSame('L04', $this->rowToString($all[4]));
@@ -146,7 +146,7 @@ final class ScrollbackTest extends TestCase
         }
 
         // Only last 3 entries retained: L02, L03, L04
-        $all = $sb->all();
+        $all = iterator_to_array($sb->all());
         $this->assertCount(3, $all);
         $this->assertSame('L02', $this->rowToString($all[0]));
         $this->assertSame('L03', $this->rowToString($all[1]));
@@ -267,7 +267,7 @@ final class ScrollbackTest extends TestCase
         $this->assertSame('CCC', $this->rowToString($sb->at(0)));
         $this->assertNull($sb->at(1));
 
-        $all = $sb->all();
+        $all = iterator_to_array($sb->all());
         $this->assertCount(1, $all);
         $this->assertSame('CCC', $this->rowToString($all[0]));
     }
@@ -303,6 +303,12 @@ final class ScrollbackTest extends TestCase
     // ─── helpers ─────────────────────────────────────────────────────────────
 
     /** Build a 3-cell row with the given grapheme repeated in each cell. */
+    /**
+     * Build a one-line row of cells: `@param string $text` padded/truncated
+     * to the fixture width. Typed for the push() contract (vterm-27).
+     *
+     * @return array<int, Cell>
+     */
     private function makeRow(string $text): array
     {
         return [
@@ -320,5 +326,46 @@ final class ScrollbackTest extends TestCase
             $s .= $cell->grapheme;
         }
         return $s;
+    }
+
+    /**
+     * vterm-27: `all()` is a lazy one-shot Generator.  These pins lock the
+     * documented contract: the scan follows the live ring (a row pushed
+     * mid-iteration is yielded — an eager array copy could not), a fresh
+     * call re-scans from oldest to newest, and a consumed generator is
+     * not rewindable.
+     */
+    public function testAllIsALazyLiveScanNotASnapshot(): void
+    {
+        $sb = new Scrollback(100);
+        for ($i = 0; $i < 10; $i++) {
+            $sb->push($this->makeRow(sprintf('L%02d', $i)));
+        }
+
+        $seen = 0;
+        foreach ($sb->all() as $row) {
+            $seen++;
+            if ($seen === 1) {
+                $sb->push($this->makeRow('L010'));
+            }
+        }
+
+        $this->assertSame(11, $sb->count(), 'the mid-iteration push landed in the ring');
+        $this->assertSame(11, $seen, 'a lazy scan sees the row an eager array copy could not');
+        $this->assertSame(11, iterator_count($sb->all()), 'a fresh call re-scans the full ring');
+    }
+
+    public function testAllGeneratorIsOneShotPerCall(): void
+    {
+        $sb = new Scrollback(10);
+        $sb->push($this->makeRow('AAA'));
+
+        $iter = $sb->all();
+        $this->assertSame('AAA', $this->rowToString($iter->current()));
+        $iter->next();
+        $this->assertFalse($iter->valid());
+
+        $this->expectException(\Exception::class);
+        $iter->rewind();
     }
 }

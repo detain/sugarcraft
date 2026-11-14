@@ -159,7 +159,7 @@ final class ScreenTest extends TestCase
         $snapshot = $terminal->screen();
         $frozenRing = $snapshot->scrollback();
         $this->assertNotNull($frozenRing);
-        $frozenRows = $frozenRing->all();
+        $frozenRows = iterator_to_array($frozenRing->all());
         $frozenLines = iterator_to_array($snapshot->linesWithHistory());
         $this->assertSame(['1   ', '2   ', '3   ', '4   '], $frozenLines);
 
@@ -168,7 +168,7 @@ final class ScreenTest extends TestCase
         $terminal->feed("\r\n5\r\n6");
         $later = $terminal->screen();
 
-        $this->assertSame($frozenRows, $frozenRing->all());
+        $this->assertSame($frozenRows, iterator_to_array($frozenRing->all()));
         $this->assertSame($frozenLines, iterator_to_array($snapshot->linesWithHistory()));
         // The second capture saw the extra history — without this leg the
         // equality pins above would stay green even if feed() never scrolled.
