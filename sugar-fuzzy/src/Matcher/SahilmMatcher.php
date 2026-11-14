@@ -134,6 +134,27 @@ final class SahilmMatcher implements FuzzyMatcher
     }
 
     /**
+     * Score a candidate through the interface door (finding sugar-fuzzy-033).
+     *
+     * The Sahilm algorithm is a single linear pass with no separate
+     * traceback half to skip, so this is exactly
+     * `match($query, $candidate)?->score ?? 0` — the value, not a cheaper
+     * route; callers reaching through FuzzyMatcher get one uniform door.
+     *
+     * @param string $query     The search query (needle)
+     * @param string $candidate The candidate string to score (haystack)
+     * @return int The match score (higher = better; 0 = no match)
+     */
+    public function score(string $query, string $candidate): int
+    {
+        $result = ($query === '' || $candidate === '') ? null : $this->compute($query, $candidate);
+
+        // Same door match() closes: a non-positive score (possible under exotic
+        // injected scoring) is NOT a match, so it must not leak through here.
+        return ($result !== null && $result->score > 0) ? $result->score : 0;
+    }
+
+    /**
      * Match a query against an iterable of candidates, returning ranked results.
      *
      * @param string    $query      The search query

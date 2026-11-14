@@ -6,6 +6,9 @@ namespace SugarCraft\Fuzzy\Tests;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
+use SugarCraft\Fuzzy\FuzzyMatcher;
+use SugarCraft\Fuzzy\Matcher\SahilmMatcher;
+use SugarCraft\Fuzzy\SahilmScoring;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 use SugarCraft\Fuzzy\MatchResult;
 use SugarCraft\Fuzzy\ScoringProfile;
@@ -613,5 +616,46 @@ final class SmithWatermanMatcherTest extends TestCase
 
         $this->assertCount(1, $results);
         $this->assertSame('k1', $results[0]->candidateKey);
+    }
+
+    #[Test]
+    public function testInterfaceScoreDoorIsUniformAcrossBothMatchers(): void
+    {
+        // Finding sugar-fuzzy-033 route (a): score() joined the interface, so
+        // the contract `score == match()?->score ?? 0` must hold through the
+        // abstraction for EVERY shipped matcher (SW via its two-row fast path,
+        // Sahilm via the value route), including exotic mode legs.
+        $matchers = [
+            'sahilm' => new SahilmMatcher(),
+            // Exotic injected scoring: every hit scores negative, match()
+            // closes the door on it — score() must agree through the same door.
+            'sahilm-negative' => (new SahilmMatcher())->withScoring(
+                SahilmScoring::new(matchScore: -10, consecutiveBonus: 0, separatorBonus: 0, camelBonus: 0, firstCharBonus: 0, lowerCaseBonus: 0)
+            ),
+            'sw-plain' => new SmithWatermanMatcher(),
+            'sw-full-query' => (new SmithWatermanMatcher())->withRequireFullQuery(),
+        ];
+        $pairs = [
+            ['he', 'hello'], ['', 'hello'], ['he', ''], ['xyz', 'abc'],
+            ['g', 'GHI'], ['app', 'application'], ['bxz', 'abcdef'],
+            ['gst', 'git status'], ['i', 'İstanbul'], ['e', 'café'],
+        ];
+
+        foreach ($matchers as $name => $matcher) {
+            $this->assertInstanceOf(FuzzyMatcher::class, $matcher, $name);
+            foreach ($pairs as [$query, $candidate]) {
+                $this->assertSame(
+                    $matcher->match($query, $candidate)?->score ?? 0,
+                    $matcher->score($query, $candidate),
+                    "$name: $query / $candidate",
+                );
+            }
+        }
+
+        // The interface declares the door (BC reflection pin for the lane):
+        $this->assertTrue(
+            method_exists(FuzzyMatcher::class, 'score'),
+            'FuzzyMatcher must declare score()',
+        );
     }
 }

@@ -53,6 +53,29 @@ interface FuzzyMatcher
     public function match(string $query, string $candidate): ?MatchResult;
 
     /**
+     * Score a single candidate WITHOUT (necessarily) building matched indices.
+     *
+     * Returns the identical score to
+     * `match($query, $candidate)?->score ?? 0` for the same matcher — use it
+     * for ranking/filtering when highlight indices are not required. An empty
+     * query or candidate scores 0, consistent with the empty-query rule on
+     * {@see self::match()}.
+     *
+     * @api Adding this method is a BC break for OUT-OF-TREE implementers of
+     *      this interface (finding sugar-fuzzy-033, route (a): score was a
+     *      SmithWatermanMatcher-only public method while the whole fleet
+     *      depends on the interface, so rank-first callers could not use the
+     *      cheap path through the abstraction). In-repo implementers are the
+     *      two shipped matchers, both now fulfilling it; external classes that
+     *      implement FuzzyMatcher must add score() or extend a shipped matcher.
+     *
+     * @param string $query     The search query (needle)
+     * @param string $candidate The candidate string to score (haystack)
+     * @return int The match score (higher = better; 0 = no match)
+     */
+    public function score(string $query, string $candidate): int;
+
+    /**
      * Match a query against an iterable of candidates, returning ranked results.
      *
      * Results are sorted by score descending, then by haystack (candidate)
