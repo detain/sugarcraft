@@ -674,6 +674,10 @@ final class FileHistoryTest extends TestCase
         file_put_contents($this->historyFile, "shared-a\nshared-b\n");
         $h = new FileHistory($this->historyFile, 2);
         $h->push('mine');
+        // Finding 016 moved the bounded rewrite off the per-push path: the
+        // raw file is a bounded superset until a trim fires. flush() is the
+        // documented checkpoint that forces the merged, cap-trimmed view.
+        $h->flush();
 
         $lines = array_values(array_filter(explode("\n", (string) file_get_contents($this->historyFile)), static fn ($l) => $l !== ''));
         $this->assertSame(['shared-b', 'mine'], $lines);

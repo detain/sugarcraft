@@ -74,6 +74,20 @@ final class FileHistory extends InMemoryHistory
     private array $pendingWrites = [];
 
     /**
+     * Resident membership set mirroring $this->history exactly (finding 062):
+     * $entry => true for every retained line. load(), push() and clear() all
+     * keep it in step through pushResident(), including maxHistory eviction —
+     * the same law the loader's local set already followed, now resident so
+     * the per-push membership test is O(1) instead of an in_array() scan.
+     *
+     * @var array<string, true>
+     */
+    private array $seen = [];
+
+    /** @var int Entries evicted from memory since the last bounded trim rewrite (finding 016). */
+    private int $trimOverflow = 0;
+
+    /**
      * @param string $filePath    Path to the history file.  Created automatically if absent.
      * @param int    $maxHistory  Maximum number of entries to retain. 0 = unlimited.
      * @param string $tempDir     Directory for temporary files during atomic writes.
@@ -201,10 +215,13 @@ final class FileHistory extends InMemoryHistory
      * With maxHistory = 0 (unlimited) persistence is an O(appended) in-place
      * append under the sidecar write lock, falling back to a secure temp +
      * rename rewrite (see appendLinesAtomically()). With a cap set, the
-     * DISK must stay bounded too, so every push rewrites the file as the
-     * merged, deduplicated, cap-trimmed view of file + memory
-     * (mergeAndBoundOnDisk()) — otherwise the in-memory eviction would leave
-     * the file growing without limit.
+     * DISK must stay bounded too — but not by rewriting the whole file on
+     * every Enter (finding 016, measured 10.5ms/push at 3k): each push still
+     * takes the O(appended) append path, and the merged, deduplicated,
+     * cap-trimmed rewrite (mergeAndBoundOnDisk()) fires once the file has
+     * grown a whole eviction window past the cap, so the file is bounded
+     * within 2x maxHistory and the cost amortizes to one rewrite per
+     * maxHistory pushes. flush() forces the bounded view immediately.
      *
      * Entries are escaped on write (see class docblock); the cross-process
      * duplicate guard compares the ESCAPED form against the raw file tail.
@@ -234,29 +251,65 @@ final class FileHistory extends InMemoryHistory
             // Memory is a superset of what we loaded from disk, so the check
             // above suffices — no per-push file I/O in deferred mode.
             $this->pendingWrites[] = $line;
-            parent::push($line);
+            $this->pushResident($line);
             return;
         }
+
+        // Sync paths screen first against another process having appended
+        // the same line since we loaded (raw escaped tail vs escaped
+        // candidate). This peek is a lock-free fast path only; the
+        // authoritative re-check runs inside appendLinesAtomically's
+        // write-lock section (finding 013).
+        $screened = $this->peekLastOnDisk() !== self::escapeLine($line);
 
         if ($this->maxHistory > 0) {
-            // Capped mode: the file mirrors the bounded memory (merged with
-            // whatever another process may have appended since we loaded).
-            parent::push($line);
-            $this->mergeAndBoundOnDisk();
+            // Capped mode (finding 016): the O(1) append carries each entry;
+            // the full read-merge-dedupe-rewrite runs only once the file has
+            // grown a whole eviction window past the cap — one rewrite per
+            // maxHistory pushes instead of one per Enter. Between trims the
+            // file is a bounded-superset (at most 2x cap lines); flush()
+            // forces the bounded view.
+            $evicted = $this->pushResident($line);
+            if ($screened) {
+                $this->appendLinesAtomically([$line]);
+            }
+            if ($evicted !== null && ++$this->trimOverflow >= $this->maxHistory) {
+                $this->mergeAndBoundOnDisk();
+            }
             return;
         }
 
-        // Sync path screens first against another process having appended the
-        // same line since we loaded (raw escaped tail vs escaped candidate).
-        // This peek is a lock-free fast path only; the authoritative re-check
-        // runs inside appendLinesAtomically's write-lock section (finding 013).
-        if ($this->peekLastOnDisk() === self::escapeLine($line)) {
-            return;
+        if ($screened) {
+            $this->appendLinesAtomically([$line]);
         }
 
-        $this->appendLinesAtomically([$line]);
+        $this->pushResident($line);
+    }
 
-        parent::push($line);
+    /**
+     * Prepend $entry to the parent's memory and mirror the resident set,
+     * dropping the line maxHistory eviction discarded (the loader's law,
+     * finding 062): the set must equal $this->history at every step, so a
+     * re-push of an evicted line is re-admitted exactly as an in_array()
+     * over the live window would be.
+     *
+     * @return string|null the entry eviction removed from the window, if any
+     */
+    private function pushResident(string $entry): ?string
+    {
+        $sizeBefore = \count($this->history);
+        $tailBefore = $sizeBefore > 0 ? $this->history[$sizeBefore - 1] : null;
+
+        parent::push($entry);
+
+        $this->seen[$entry] = true;
+
+        if (\count($this->history) === $sizeBefore && $tailBefore !== null) {
+            unset($this->seen[$tailBefore]);
+            return $tailBefore;
+        }
+
+        return null;
     }
 
     /**
@@ -268,6 +321,12 @@ final class FileHistory extends InMemoryHistory
     public function flush(): void
     {
         if ($this->pendingWrites === []) {
+            // Capped sync may be sitting on a deferred trim (finding 016);
+            // a flush is the documented persistence checkpoint, so deliver
+            // the bounded view now.
+            if ($this->maxHistory > 0 && $this->trimOverflow > 0) {
+                $this->mergeAndBoundOnDisk();
+            }
             return;
         }
         $pending = $this->pendingWrites;
@@ -524,6 +583,17 @@ final class FileHistory extends InMemoryHistory
             // Memory is newest-first; oldest-first for the merged list.
             $mine = array_reverse($this->history);
 
+            // Deferred-trim law (finding 016): for anything the memory still
+            // retains, MEMORY recency is the truth — a line re-pushed after
+            // eviction must trim by its fresh position, not its stale file
+            // slot. File-order recency governs only the residue memory no
+            // longer holds (foreign appends, evicted heads).
+            $retained = array_flip($mine);
+            $existing = array_values(array_filter(
+                $existing,
+                static fn (string $entry): bool => !isset($retained[$entry]),
+            ));
+
             $merged = [];
             $seen = [];
             foreach ([...$existing, ...$mine] as $entry) {
@@ -539,6 +609,7 @@ final class FileHistory extends InMemoryHistory
             }
 
             $this->writeAllLocked($merged);
+            $this->trimOverflow = 0;
         });
     }
 
@@ -660,29 +731,16 @@ final class FileHistory extends InMemoryHistory
         // File is oldest→newest; parent::push() prepends (newest-first), so
         // iterating in normal (oldest→newest) order ends up with newest at [0].
         //
-        // Apply the same dedup guard as push(), but back the membership test
-        // with an O(1) hash set instead of inMemoryContains()'s in_array()
-        // scan — otherwise load() is O(n²) in the number of file lines. The set
-        // must mirror $this->history EXACTLY, including maxHistory eviction:
-        // when a push overflows the cap, parent::push() drops the oldest (tail)
-        // entry, which must also leave the set so a later duplicate of an
-        // evicted line is re-admitted precisely as an in_array() over the live
-        // (post-eviction) history would be.
-        $seen = [];
+        // The dedup guard rides the resident hash set ($this->seen) — O(1)
+        // membership, so load() never pays the O(n²) in_array() scan the old
+        // per-push test would have caused over the file's line count.
         foreach ($lines as $entry) {
-            if (isset($seen[$entry])) {
+            // Law now enforced by pushResident(): the resident set mirrors
+            // $this->history exactly, eviction included.
+            if (isset($this->seen[$entry])) {
                 continue;
             }
-            $sizeBefore = \count($this->history);
-            // $entry is guaranteed absent from history here (not in $seen), so
-            // parent::push() always prepends: the count grows by one unless the
-            // cap evicted the previous tail, in which case it stays equal.
-            $tailBefore = $sizeBefore > 0 ? $this->history[$sizeBefore - 1] : null;
-            parent::push($entry);
-            $seen[$entry] = true;
-            if (\count($this->history) === $sizeBefore && $tailBefore !== null) {
-                unset($seen[$tailBefore]);
-            }
+            $this->pushResident($entry);
         }
     }
 
@@ -788,11 +846,13 @@ final class FileHistory extends InMemoryHistory
     }
 
     /**
-     * Check if the in-memory history already contains $line.
+     * Check if the in-memory history already contains $line — O(1) against
+     * the resident set mirroring the live window (finding 062; used to be an
+     * in_array() scan, which made unlimited-history sessions quadratic).
      */
     private function inMemoryContains(string $line): bool
     {
-        return \in_array($line, $this->history, true);
+        return isset($this->seen[$line]);
     }
 
     /**
@@ -814,6 +874,10 @@ final class FileHistory extends InMemoryHistory
         parent::clear();
         // Drop queued-but-unwritten entries too — they were cleared with the rest.
         $this->pendingWrites = [];
+        // The resident set mirrors the (now empty) window; the deferred trim
+        // counted against a file we just erased.
+        $this->seen = [];
+        $this->trimOverflow = 0;
         $this->withWriteLock(function (): void {
             // Atomic write (temp + rename) so a reader never sees a half-erased
             // file; no fsync, so a kernel crash can still lose recent writes.
