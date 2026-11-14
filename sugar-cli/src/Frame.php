@@ -149,8 +149,12 @@ final class Frame
         // Each row is then sanitized for the terminal (not for the row model —
         // the explode above already consumed the body's newlines as layout):
         // SGR survives, every other escape/control byte is dropped.
-        $contentLines = explode("\n", $body);
+        $contentLines = explode("\n", $body, $contentHeight + 1);
         if (count($contentLines) > $contentHeight) {
+            // Bounded split (finding 012): with a limit the final element
+            // carries every remaining line, so `count() > $contentHeight`
+            // stays true here exactly as it did with the full split — the
+            // slice drops the whole unmaterialized remainder, byte-identical.
             $contentLines = array_slice($contentLines, 0, $contentHeight);
         }
         for ($i = count($contentLines); $i < $contentHeight; $i++) {

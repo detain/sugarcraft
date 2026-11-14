@@ -121,6 +121,18 @@ final class FrameTest extends TestCase
         self::assertStringNotContainsString('row99', $out);
     }
 
+    /** The bounded explode keeps multi-KB bodies correct, not just cheap. */
+    public function testManyKilobyteBodyStillTruncatesToTheFrame(): void
+    {
+        $body = implode("\n", array_map(static fn (int $i): string => "row$i", range(0, 4999)));
+        $out  = Frame::new()->render($body, 80, 24);
+
+        self::assertCount(24, explode("\n", $out));
+        self::assertStringContainsString('row17', $out);
+        self::assertStringNotContainsString('row18', $out);
+        self::assertStringNotContainsString('row4999', $out);
+    }
+
     /** A body line wider than the terminal is truncated with an ellipsis. */
     public function testOverWideLineTruncatesWithEllipsis(): void
     {
