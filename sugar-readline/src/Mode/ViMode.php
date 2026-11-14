@@ -28,7 +28,12 @@ use SugarCraft\Readline\TextPrompt;
  *
  * Uses VimKeyHandler from sugar-forms for key-to-action mapping.
  *
- * Mirrors erikgeiser/promptkit vi mode.
+ * Not a port: erikgeiser/promptkit has no vi mode — the repo research table
+ * (`docs/research/libraries/sugar-readline-research.md`, capability census)
+ * records promptkit as ❌ for vi/emacs/custom bindings. This mode is a
+ * beyond-upstream addition implementing the vim normal-mode conventions,
+ * delegated through sugar-forms {@see VimKeyHandler}; the behavioural
+ * contract is the README's "Editing modes (Vi vs Emacs)" section.
  */
 final class ViMode implements ModeInterface
 {

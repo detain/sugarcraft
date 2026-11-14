@@ -36,7 +36,12 @@ use SugarCraft\Readline\TextPrompt;
  * does NOT abort. Callers who want Escape to quit should leave this mode
  * unattached, where Escape stays bound to abort.
  *
- * Mirrors erikgeiser/promptkit emacs mode.
+ * Not a port: erikgeiser/promptkit has no emacs mode — the repo research
+ * table (`docs/research/libraries/sugar-readline-research.md`, capability
+ * census) records promptkit as ❌ for vi/emacs/custom bindings. This mode
+ * is a beyond-upstream addition implementing the GNU readline chord family;
+ * the behavioural contract is the README's "Editing modes (Vi vs Emacs)"
+ * section.
  */
 final class EmacsMode implements ModeInterface
 {
