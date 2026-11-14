@@ -5,9 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\Vterm;
 
 use SugarCraft\Core\Util\Palettes;
-use SugarCraft\Vterm\Theme\TokyoNight;
-use SugarCraft\Vterm\Theme\TokyoNightLight;
-use SugarCraft\Vterm\Theme\TokyoNightStorm;
 
 /**
  * Terminal theme with 256-color palette and default fg/bg.

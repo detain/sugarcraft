@@ -11,6 +11,7 @@ use SugarCraft\Vterm\Mode\MouseEncoding;
  *
  * Recognised modes (and their `Mode` field):
  *
+ * - `6`    DECOM origin mode       → `originMode`
  * - `7`    DECAWM auto-wrap        → `autoWrap`
  * - `25`   cursor visibility       → {@see ScreenHandler::setCursorVisible()} (single write path)
  * - `1001` X10 highlight tracking  → `mouseHighlights`
@@ -20,6 +21,7 @@ use SugarCraft\Vterm\Mode\MouseEncoding;
  * - `1005` UTF-8 coordinate form   → `mouseUtf8`
  * - `1006` SGR coordinate form     → `mouseSgr`
  * - `1015` URXVT coordinate form   → `mouseUrxvt`
+ * - `1004` focus event reporting   → `reportFocusEvents` (records CSI I/CSI O to focusEvents)
  *
  * 1005/1006/1015 select HOW reports encode their coordinates and never
  * whether tracking happens at all (xterm ctlseqs "Extended mouse

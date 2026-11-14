@@ -1218,7 +1218,8 @@ final class ScreenHandler implements SubparamsAwareHandler
      * @see https://vt100.net/docs/vt510-rm/chapter4.html (Device Attributes)
      * @see charmbracelet/x/vt handlers.go PrimaryDeviceAttributes/SecondaryDeviceAttributes
      *
-     * @param array<int, int|string> $params CSI parameter list as dispatched by the parser
+     * @param list<int> $params CSI parameter list as dispatched by the parser
+     *                         (the whole fleet annotates CSI params this way)
      */
     private function deviceAttributes(int $prefix, array $params): void
     {

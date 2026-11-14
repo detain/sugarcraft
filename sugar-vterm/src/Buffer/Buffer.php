@@ -22,8 +22,10 @@ use SugarCraft\Vterm\Hyperlink\Hyperlink;
  * writes to the original can never reach through a clone (or vice versa).
  *
  * Tracks a minimal bounding box of cells written since the instance was
- * built ({@see dirtyRegion()}). `resize()`/`clear()` mint a new instance, so
- * their dirty box starts empty even though content carried over.
+ * built ({@see dirtyRegion()}). The box distinguishes the two mints:
+ * `resize()` carries content over and marks the WHOLE new grid dirty (a
+ * delta renderer must repaint rather than trust stale coordinates);
+ * `clear()` mints a pristine grid whose box starts empty.
  */
 final class Buffer
 {
@@ -97,7 +99,7 @@ final class Buffer
      * Wide-cell invariant: a wide base whose continuation column falls past
      * the width cut is erased at the boundary (it cannot occupy two columns
      * in a one-column space), so no row ever ends with a lone head and
-     * {@see \SugarCraft\Sprinkles\Width::of} on a rendered line never
+     * {@see \SugarCraft\Core\Util\Width::of} on a rendered line never
      * exceeds the new width.
      */
     public function resize(int $cols, int $rows): self

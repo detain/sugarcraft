@@ -115,10 +115,14 @@ final class ModeTest extends TestCase
         $this->assertTrue($m->mouseHighlights);
     }
 
-    public function testWithMouseHighlightsDefaultTrue(): void
+    public function testMouseHighlightsArgumentIsRequired(): void
     {
-        $m = (new Mode())->withMouseHighlights();
-        $this->assertTrue($m->mouseHighlights);
+        // vterm-29: the `= true` default was dropped — every internal
+        // caller already passes $set explicitly (ModeHandler's h/l arms),
+        // and a mode setter that silently means "on" invites l-arm bugs.
+        $param = (new \ReflectionMethod(Mode::class, 'withMouseHighlights'))->getParameters()[0];
+        $this->assertFalse($param->isDefaultValueAvailable());
+        $this->assertTrue((new Mode())->withMouseHighlights(true)->mouseHighlights);
     }
 
     public function testEquals(): void

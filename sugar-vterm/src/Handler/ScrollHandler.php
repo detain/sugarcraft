@@ -12,7 +12,9 @@ use SugarCraft\Vterm\Cursor\Cursor;
  *
  * Scrolling operates within a scroll region defined by DECSTBM
  * (CSI r). Defaults to the full screen when no margin is set.
- * Scrolled-off rows are dropped — there's no scrollback yet.
+ * Scrolled-off rows are captured for the emulator's scrollback ring at
+ * the ScreenHandler push sites (see its private scrollUp()/scrollDown())
+ * before this handler shifts the viewport.
  */
 final class ScrollHandler
 {

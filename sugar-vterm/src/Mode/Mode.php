@@ -197,7 +197,7 @@ final readonly class Mode
         return MouseEncoding::Default;
     }
 
-    public function withMouseHighlights(bool $v = true): self
+    public function withMouseHighlights(bool $v): self
     {
         return $this->mutate(['mouseHighlights' => $v]);
     }
