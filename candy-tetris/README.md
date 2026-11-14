@@ -141,7 +141,7 @@ difficulty lives on its own board's pace. Last player standing wins!
 | c         | Hold piece        |
 | p         | Pause / resume    |
 | r         | New game (after game over only; during play it is inert by design — a live forfeit belongs to the solo confirm, not to the duel) |
-| q         | Quit (immediate — the duel keeps no confirm toll) |
+| q         | Quit (immediate — the duel keeps no confirm toll; `Ctrl+C` leaves in one press too) |
 
 The versus strip teaches the table itself: its key rows are never budgeted
 out, and once a moment is earned the row carries the same award, `xN`
@@ -186,6 +186,10 @@ frame from any posture — live play, pause, even a floor-sized terminal
 where the sidebar card cannot fit — and the world freezes while it reads.
 `--help` carries the same derived card plus the terminal floor, read from
 the renderer's own constants, so help and code cannot drift.
+`docs/ACCESSIBILITY.md` spells the same vocabulary in remap form and states
+the screen-reader, colour-free and motion cautions; the three tables are
+pinned to the shipped map by `tests/KeysVocabReferenceTest.php`, so adding
+a token anywhere without teaching it goes red.
 
 ### Remapping keys
 
