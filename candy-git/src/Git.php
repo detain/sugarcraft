@@ -142,8 +142,13 @@ final class Git implements GitDriver
 
     public function branches(): array
     {
+        // Git's for-each-ref format language does NOT expand C-style escapes —
+        // a single-quoted '\t' here reached the child as literal backslash-t
+        // bytes (git log's pretty-format %x09 style is a different grammar),
+        // so the name/sha split below never fired. The tab must be a real
+        // byte in the argument: double-quoted PHP supplies it (candy-git-001).
         $out = $this->run([
-            'for-each-ref', '--format=%(HEAD) %(refname:short)\t%(objectname:short)',
+            'for-each-ref', "--format=%(HEAD) %(refname:short)\t%(objectname:short)",
             'refs/heads',
         ]);
         $rows = [];
