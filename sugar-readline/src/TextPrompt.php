@@ -47,12 +47,12 @@ final class TextPrompt implements PromptInterface, SizingInterface
     private const AUTOSUGGEST_SCAN_WINDOW = 200;
 
     private const EMACS_MOVEMENT_ALIASES = [
-        'ctrl_a' => Key::Home,
-        'ctrl_e' => Key::End,
-        'ctrl_b' => Key::Left,
-        'ctrl_f' => Key::Right,
-        'ctrl_p' => Key::Up,
-        'ctrl_n' => Key::Down,
+        Key::CtrlA => Key::Home,
+        Key::CtrlE => Key::End,
+        Key::CtrlB => Key::Left,
+        Key::CtrlF => Key::Right,
+        Key::CtrlP => Key::Up,
+        Key::CtrlN => Key::Down,
     ];
 
     /**
@@ -140,7 +140,7 @@ final class TextPrompt implements PromptInterface, SizingInterface
     private ?string $completionHint = null;
 
     /**
-     * History store consulted by ↑/↓ navigation: the LIVE handle the
+     * History store consulted by Up/Down navigation: the LIVE handle the
      * caller passed to withHistory(). Navigation state lives on the prompt
      * ({@see $historyPosition}), never in the store's own cursor, so every
      * prompt sharing a store sees the same entries without drifting.
@@ -497,7 +497,7 @@ final class TextPrompt implements PromptInterface, SizingInterface
         // handleChar that lands here folds into the same undo snapshot.
         $clone->undoRunEnd = $clone->cursor;
         $clone->error = '';
-        // Reset history navigation so ↑ goes back to the start of history.
+        // Reset history navigation so Up goes back to the start of history.
         $clone->historyPosition = -1;
         $clone->bufferBeforeHistory = null;
         return $clone;
@@ -599,7 +599,7 @@ final class TextPrompt implements PromptInterface, SizingInterface
         // extensions (ESC b/f/d, alt_*).
         $key = self::EMACS_MOVEMENT_ALIASES[$key] ?? $key;
 
-        // History navigation: ↑ / ↓
+        // History navigation: Up / Down
         if ($key === Key::Up || $key === Key::Down) {
             return $this->navigateHistory($key);
         }
@@ -618,23 +618,23 @@ final class TextPrompt implements PromptInterface, SizingInterface
             // send it for the Backspace key itself; sugar-input hands the
             // raw byte through Key::normalize as 'backspace', while an
             // explicit Ctrl+H arrives symbolically).
-            'ctrl_h', 'ctrl_backspace' => $this->deleteBeforeCursor(),
+            Key::CtrlH, 'ctrl_backspace' => $this->deleteBeforeCursor(),
             Key::Delete    => $this->deleteUnderCursor(),
             Key::CtrlU     => $this->deleteAllBeforeCursor(),
             Key::CtrlK     => $this->deleteAllAfterCursor(),
             Key::Tab       => $this->applyCompletion(),
             Key::Enter     => $this->submit(),
-            'ctrl_r' => $this->startHistorySearch(SearchDirection::Reverse),
-            'ctrl_s' => $this->startHistorySearch(SearchDirection::Forward),
+            Key::CtrlR => $this->startHistorySearch(SearchDirection::Reverse),
+            Key::CtrlS => $this->startHistorySearch(SearchDirection::Forward),
             // Ctrl+Z / Ctrl+Y are the keyboard doors to the undo stack —
             // the Key::Undo/Key::Redo names below stay available for
             // callers that produce them programmatically.
-            'ctrl_z'      => $this->undo(),
-            'ctrl_y'      => $this->redo(),
+            Key::CtrlZ     => $this->undo(),
+            Key::CtrlY     => $this->redo(),
             // Ctrl+D mirrors GNU readline's delete-char-or-eof: it deletes
             // the character under the cursor, and on an empty line it acts
             // as end-of-input (abort).
-            'ctrl_d'       => $this->buffer === '' ? $this->abort() : $this->deleteUnderCursor(),
+            Key::CtrlD     => $this->buffer === '' ? $this->abort() : $this->deleteUnderCursor(),
             Key::Undo      => $this->undo(),
             Key::Redo      => $this->redo(),
             Key::Escape, Key::CtrlC => $this->abort(),
@@ -749,14 +749,14 @@ final class TextPrompt implements PromptInterface, SizingInterface
     // -------------------------------------------------------------------------
 
     /**
-     * Navigate history with ↑ (previous) or ↓ (next) keys.
+     * Navigate history with Up (previous) or Down (next) keys.
      *
      * $historyPosition is the authoritative index into the newest-first
      * entry list (-1 = live buffer). The store is consulted through the
      * same live handle incremental search uses ({@see searchSource()}),
      * read-only via search() with an empty query — it never uses the store's
      * own cursor, and the store is never cloned/reset per keystroke (that
-     * made every ↑ re-return the newest entry, so 2nd-older history was
+     * made every Up re-return the newest entry, so 2nd-older history was
      * unreachable).
      */
     private function navigateHistory(string $key): self
@@ -772,7 +772,7 @@ final class TextPrompt implements PromptInterface, SizingInterface
         if ($key === Key::Up) {
             $target = $clone->historyPosition === -1 ? 0 : $clone->historyPosition + 1;
             if ($clone->historyPosition === -1 && $clone->buffer !== '') {
-                // Starting navigation from a live buffer: remember it so ↓
+                // Starting navigation from a live buffer: remember it so Down
                 // at the newest entry can restore what was typed.
                 $clone->bufferBeforeHistory = $clone->buffer;
             }
@@ -851,8 +851,8 @@ final class TextPrompt implements PromptInterface, SizingInterface
 
         return match ($key) {
             // Repeated Ctrl+R / Ctrl+S step past the current match.
-            'ctrl_r' => $this->stepSearch(SearchDirection::Reverse),
-            'ctrl_s' => $this->stepSearch(SearchDirection::Forward),
+            Key::CtrlR => $this->stepSearch(SearchDirection::Reverse),
+            Key::CtrlS => $this->stepSearch(SearchDirection::Forward),
             Key::Enter         => $this->acceptSearch(),
             Key::Escape, Key::CtrlG, Key::CtrlC
                                => $this->cancelSearch(),

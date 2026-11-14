@@ -179,11 +179,11 @@ final class ViMode implements ModeInterface
     {
         // Handle Ctrl+P/Ctrl+N as history navigation (symbolic — raw bytes
         // were canonicalized by handleKey()'s normalize).
-        if ($key === 'ctrl_p') {
-            return ['ctrl_p', false];
+        if ($key === Key::CtrlP) {
+            return [Key::CtrlP, false];
         }
-        if ($key === 'ctrl_n') {
-            return ['ctrl_n', false];
+        if ($key === Key::CtrlN) {
+            return [Key::CtrlN, false];
         }
 
         // Single character keys (a-z, 0-9, etc.)
@@ -534,7 +534,7 @@ final class ViMode implements ModeInterface
     /**
      * Delete a resolved character range from the prompt buffer, leaving
      * the cursor at the range start. Uses key replay (move + backspace),
-     * consistent with deleteLine()'s Home+CtrlK approach.
+     * consistent with deleteLine()'s Home-then-Ctrl+K approach.
      */
     private function deleteRange(TextPrompt $prompt, TextObject $range): TextPrompt
     {

@@ -227,19 +227,19 @@ final class TextareaPrompt implements PromptInterface, SizingInterface
             // Ctrl+P/N walk lines, Ctrl+A/E jump line ends. Ctrl+B/F stay
             // out here — mirroring them would widen the step's scope and
             // the arrows already own the column moves.
-            Key::Up, 'ctrl_p'      => $this->moveLine(-1),
-            Key::Down, 'ctrl_n'    => $this->moveLine(1),
+            Key::Up, Key::CtrlP      => $this->moveLine(-1),
+            Key::Down, Key::CtrlN    => $this->moveLine(1),
             Key::Left              => $this->moveColTo(self::clusterStart($this->lines[$this->line], $this->col)),
             Key::Right             => $this->moveColTo(self::clusterEnd($this->lines[$this->line], $this->col)),
-            Key::Home, 'ctrl_a'    => $this->moveColTo(0),
-            Key::End, 'ctrl_e'     => $this->moveColTo(self::charCount($this->lines[$this->line])),
+            Key::Home, Key::CtrlA    => $this->moveColTo(0),
+            Key::End, Key::CtrlE     => $this->moveColTo(self::charCount($this->lines[$this->line])),
             Key::Backspace => $this->deleteBeforeCursor(),
             Key::Delete    => $this->deleteUnderCursor(),
             // Enter submits the conversation (a keyboard must be able to
             // finish it); a newline is an explicit chord.
             Key::Enter     => $this->submit(),
-            'shift_enter', 'ctrl_j' => $this->insertNewline(),
-            'ctrl_u'       => $this->killBeforeCursor(),
+            'shift_enter', Key::CtrlJ => $this->insertNewline(),
+            Key::CtrlU      => $this->killBeforeCursor(),
             Key::Space     => $this->handleChar(' '),
             Key::Escape, Key::CtrlC => $this->abort(),
             default        => $this,

@@ -75,57 +75,57 @@ final class EmacsMode implements ModeInterface
         }
 
         // Ctrl+A → line start
-        if ($key === 'ctrl_a') {
+        if ($key === Key::CtrlA) {
             return $this->attachTo($prompt->handleKeyDirect(Key::Home));
         }
 
         // Ctrl+E → line end
-        if ($key === 'ctrl_e') {
+        if ($key === Key::CtrlE) {
             return $this->attachTo($prompt->handleKeyDirect(Key::End));
         }
 
         // Ctrl+B → move left
-        if ($key === 'ctrl_b') {
+        if ($key === Key::CtrlB) {
             return $this->attachTo($prompt->handleKeyDirect(Key::Left));
         }
 
         // Ctrl+F → move right
-        if ($key === 'ctrl_f') {
+        if ($key === Key::CtrlF) {
             return $this->attachTo($prompt->handleKeyDirect(Key::Right));
         }
 
         // Ctrl+P → history previous (Up)
-        if ($key === 'ctrl_p') {
+        if ($key === Key::CtrlP) {
             return $this->attachTo($prompt->handleKeyDirect(Key::Up));
         }
 
         // Ctrl+N → history next (Down)
-        if ($key === 'ctrl_n') {
+        if ($key === Key::CtrlN) {
             return $this->attachTo($prompt->handleKeyDirect(Key::Down));
         }
 
         // Ctrl+R / Ctrl+S → reverse / forward incremental history search.
         // Once active, TextPrompt::handleKey() intercepts every key before
         // delegating to this mode, so only search entry is handled here.
-        if ($key === 'ctrl_r' || $key === Key::CtrlR) {
+        if ($key === Key::CtrlR) {
             return $this->attachTo($prompt->startHistorySearch(TextPrompt::SEARCH_REVERSE));
         }
-        if ($key === 'ctrl_s' || $key === Key::CtrlS) {
+        if ($key === Key::CtrlS) {
             return $this->attachTo($prompt->startHistorySearch(TextPrompt::SEARCH_FORWARD));
         }
 
         // Ctrl+W → delete word before cursor
-        if ($key === 'ctrl_w') {
+        if ($key === Key::CtrlW) {
             return $this->attachTo($this->deleteWordBefore($prompt));
         }
 
         // Ctrl+T → transpose characters
-        if ($key === 'ctrl_t') {
+        if ($key === Key::CtrlT) {
             return $this->attachTo($this->transposeChars($prompt));
         }
 
         // Ctrl+L → clear screen (no-op at prompt level, just keep prompt)
-        if ($key === 'ctrl_l') {
+        if ($key === Key::CtrlL) {
             return $this->attachTo($prompt);
         }
 

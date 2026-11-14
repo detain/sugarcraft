@@ -796,7 +796,7 @@ final class Readline
 
             if ($event instanceof KeyEvent) {
                 $keyName = $this->symbolicKey($event);
-                if ($keyName === 'ctrl_l') {
+                if ($keyName === Key::CtrlL) {
                     // Ctrl+L is the display's reset (README binding table):
                     // wipe the screen, home the cursor, and forget how many
                     // rows the previous frame painted so the next repaint
@@ -1202,7 +1202,7 @@ final class Readline
                             'up', 'down', 'left', 'right', 'home', 'end',
                             'pageup', 'pagedown', 'escape', 'esc', 'f1', 'f2', 'f3',
                             'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'f11', 'f12',
-                            'ctrl_c', 'ctrl_u', 'ctrl_k', 'ctrl_w', 'undo', 'redo'];
+                            Key::CtrlC, Key::CtrlU, Key::CtrlK, Key::CtrlW, 'undo', 'redo'];
         if (in_array($keyName, $reserved, true)) {
             return false;
         }
@@ -1219,9 +1219,13 @@ final class Readline
      *
      * Maps EscapeDecoder output (ArrowUp, ArrowDown, Enter, etc.)
      * to sugar-readline Key constants (up, down, enter, etc.).
-     * Handles Ctrl modifier: Ctrl+C → 'ctrl_c', Ctrl+letter → 'ctrl_<letter>'.
-     * Handles Alt modifier: Alt+X → 'alt_x'.
-     * Handles Shift modifier: Shift+ArrowUp → 'shift_up'.
+     * Handles Ctrl modifier: Ctrl+C → Key::CtrlC spelling, Ctrl+letter →
+     * 'ctrl_<letter>' (the byte table in {@see Key::normalize()} produces
+     * the identical strings).
+     * Handles Alt modifier: Alt+X → 'alt_x', Alt+é → 'alt_é'.
+     * Handles Shift modifier: Shift+ArrowUp → 'shift_up'; the legacy
+     * uppercase byte 'A' and the kitty shift+letter form share the single
+     * canonical name 'shift_a' (finding 095).
      * Handles plain printable chars: 'a'–'z', 'A'–'Z', '0'–'9'.
      */
     private function symbolicKey(KeyEvent $event): string
@@ -1249,22 +1253,22 @@ final class Readline
             return $ctrlMap[$key] ?? 'ctrl_' . $letter;
         }
 
-        // Alt modifier — map to 'alt_<key>'
+        // Alt modifier — map to 'alt_<key>'. One shape for every key the
+        // decoder names, ASCII or multibyte (finding 095): stripPrefix is a
+        // no-op on plain letters, so 'alt_é' and 'alt_up' fall out of the
+        // same line. The old byte-length guard sent multibyte keys down a
+        // different road than they arrived from.
         if ($mod->includes(KeyModifier::ALT)) {
-            $lower = mb_strtolower($key, 'UTF-8');
-            if (strlen($lower) === 1) {
-                return 'alt_' . $lower;
-            }
-            // Alt+ArrowUp, Alt+ArrowDown etc.
             return 'alt_' . mb_strtolower($this->stripPrefix($key, 'Arrow'), 'UTF-8');
         }
 
-        // Shift modifier — map to 'shift_<key>'
+        // Shift modifier — ONE canonical spelling per shifted key
+        // (finding 095): the legacy uppercase byte and the kitty
+        // shift+letter report both name as shift_<lowercase-letter>, so a
+        // host binds 'shift_a' once and either wire form fires it. Plain
+        // insertion is untouched: printable dispatch reads the raw event
+        // character (Readline::dispatchKey), not this name.
         if ($mod->includes(KeyModifier::SHIFT)) {
-            // Shift only matters for uppercase letters
-            if (strlen($key) === 1 && ctype_upper($key)) {
-                return mb_strtolower($key, 'UTF-8');
-            }
             return 'shift_' . mb_strtolower($this->stripPrefix($key, 'Arrow'), 'UTF-8');
         }
 

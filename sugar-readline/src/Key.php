@@ -14,9 +14,10 @@ namespace SugarCraft\Readline;
  *
  * Constants — not an enum — so callers can interop with raw strings
  * (e.g. when forwarding from a parser that already produces names).
- * The set covers editing and navigation keys; it is not exhaustive of every
- * key a terminal can emit (function keys arrive as 'f1'–'f12', alt chords as
- * 'alt_<key>'; see {@see Readline::onKey()} for the full name shapes).
+ * The set covers editing, navigation and the full control-letter alphabet;
+ * it is not exhaustive of every key a terminal can emit (function keys
+ * arrive as 'f1'–'f12', alt chords as 'alt_<key>', shifted letters as
+ * 'shift_<letter>'; see {@see Readline::onKey()} for the full name shapes).
  */
 final class Key
 {
@@ -34,13 +35,36 @@ final class Key
     public const Delete    = 'delete';
     public const Space     = 'space';
     public const Escape    = 'esc';
+    // The complete control-letter vocabulary (finding 074): one constant
+    // per Ctrl byte, spelled exactly like {@see self::normalize()} emits it.
+    // Call sites across the library speak these names instead of re-typing
+    // the strings.
+    public const CtrlA     = 'ctrl_a';
+    public const CtrlB     = 'ctrl_b';
     public const CtrlC     = 'ctrl_c';
+    public const CtrlD     = 'ctrl_d';
+    public const CtrlE     = 'ctrl_e';
+    public const CtrlF     = 'ctrl_f';
     public const CtrlG     = 'ctrl_g';
+    public const CtrlH     = 'ctrl_h';
+    public const CtrlI     = 'ctrl_i';
+    public const CtrlJ     = 'ctrl_j';
     public const CtrlK     = 'ctrl_k';
+    public const CtrlL     = 'ctrl_l';
+    public const CtrlM     = 'ctrl_m';
+    public const CtrlN     = 'ctrl_n';
+    public const CtrlO     = 'ctrl_o';
+    public const CtrlP     = 'ctrl_p';
+    public const CtrlQ     = 'ctrl_q';
     public const CtrlR     = 'ctrl_r';
     public const CtrlS     = 'ctrl_s';
+    public const CtrlT     = 'ctrl_t';
     public const CtrlU     = 'ctrl_u';
+    public const CtrlV     = 'ctrl_v';
     public const CtrlW     = 'ctrl_w';
+    public const CtrlX     = 'ctrl_x';
+    public const CtrlY     = 'ctrl_y';
+    public const CtrlZ     = 'ctrl_z';
     public const Undo      = 'undo';
     public const Redo      = 'redo';
 

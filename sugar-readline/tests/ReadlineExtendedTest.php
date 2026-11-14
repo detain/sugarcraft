@@ -63,9 +63,13 @@ final class ReadlineExtendedTest extends TestCase
         $method = $refl->getMethod('symbolicKey');
         $method->setAccessible(true);
 
-        // Shift+A → 'a' (downcased)
+        // Canonical Shift+letter law (finding 095): the uppercase spelling
+        // and the kitty shift+letter form share ONE name, 'shift_a'. The old
+        // downcase-to-'a' behavior was re-pinned on purpose — it made a
+        // host bind shift_a once and have only one wire form fire. Plain
+        // typing is unaffected: printable dispatch uses the raw byte.
         $event = new KeyEvent('A', KeyModifier::SHIFT(), 'A');
-        $this->assertSame('a', $method->invoke($readline, $event));
+        $this->assertSame('shift_a', $method->invoke($readline, $event));
     }
 
     public function testSymbolicKeyShiftF1(): void

@@ -259,18 +259,18 @@ trait SelectionEngine
             // GNU-readline movement aliases, mirroring TextPrompt's default
             // keymap on the list surface. Ctrl+B/F stay out: the single-row
             // selection has no Left/Right arms to alias.
-            Key::Up, 'ctrl_p'   => $this->moveCursor(-1),
-            Key::Down, 'ctrl_n' => $this->moveCursor(1),
+            Key::Up, Key::CtrlP   => $this->moveCursor(-1),
+            Key::Down, Key::CtrlN => $this->moveCursor(1),
             Key::PageUp         => $this->changePage(-1),
             Key::PageDown       => $this->changePage(1),
-            Key::Home, 'ctrl_a' => $this->moveCursorTo(0),
-            Key::End, 'ctrl_e'  => $this->moveCursorTo(count($this->filtered) - 1),
+            Key::Home, Key::CtrlA => $this->moveCursorTo(0),
+            Key::End, Key::CtrlE  => $this->moveCursorTo(count($this->filtered) - 1),
             Key::Enter          => $this->submit(),
             Key::Space          => $this->onSpace(),
             Key::Escape, Key::CtrlC => $this->abort(),
             // Filter editing — mirrors the [filter] bar the view renders.
             Key::Backspace => $this->withFilter(mb_substr($this->filter, 0, max(0, mb_strlen($this->filter, 'UTF-8') - 1), 'UTF-8')),
-            'ctrl_u'       => $this->withFilter(''),
+            Key::CtrlU      => $this->withFilter(''),
             default       => $this,
         };
     }
