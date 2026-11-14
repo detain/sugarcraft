@@ -106,6 +106,14 @@ final class Player implements Model
     public const WATCH_POLL_SECONDS = 0.01;
 
     /**
+     * The four seam parameters — `$now`, `$anchor`, `$lapsCarried`, `$watch` —
+     * are internal wiring (test clock, schedule anchoring, lap carry across a
+     * reload, watch rebind), not caller vocabulary: hosts build Players via
+     * {@see self::start()} and the fluent setters, which thread the seams
+     * themselves. They stay public in the signature deliberately — promoted
+     * readonly state beats a parallel private-property ceremony — and the
+     * reload paths carry them via mutate().
+     *
      * @param list<Frame> $frames
      * @param ?\Closure():float $now E-09/E-03 clock seam: monotonic seconds;
      *        null (production) reads `hrtime(true) / 1e9`.
@@ -355,7 +363,13 @@ final class Player implements Model
      * anchors by the E-03 next-arrival law); playback policy — preset,
      * renderer, cadence, duration bound, loop bound, and the watch seam
      * itself — survives. A caller that wants the loop bound re-derived from
-     * the new bytes chains {@see withLoops()} onto the result.
+     * the new bytes chains {@see withLoops()} onto the result. The asymmetry
+     * is the contract: the manual swap keeps the caller's bound because only
+     * the caller knows its intent, while the WatchMsg reload in
+     * {@see self::update()} re-derives the bound from the fresh bytes on
+     * purpose, so a file whose loop extension changed mid-session gets its
+     * new bound without the caller lifting a finger (pinned by
+     * PlayerWatchTest).
      *
      * @param list<Frame> $frames
      */

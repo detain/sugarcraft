@@ -214,6 +214,10 @@ final class Decoder
      * GraphicsMagick and the Netscape spec text all read it as EXTRA repeats,
      * and that is the reading pinned.
      *
+     * The value returned here is already the PLAYS count — iterations + 1 in
+     * libnsgif's own arithmetic — so it feeds {@see Player::withLoops()}
+     * directly; a call site must not increment it again.
+     *
      * A stream with NO loop extension reports null = infinite. That is the
      * deliberate divergence from libnsgif's internal `loop_max = 1` seed
      * (namzug16/libnsgif gif.c:1601): chicle and every browser play an unauthored animation
@@ -328,6 +332,11 @@ final class Decoder
      *                             playback reads only `$cells`, and holding
      *                             N × W × H × 4 resident is the E-12 memory
      *                             model a player should not pay for.
+     *
+     * Named arguments are the documented call shape — the cell grid is a
+     * positional train of same-typed scalars otherwise, and the sites in
+     * the wild (sugar-image included) read clearer with the names on:
+     * `Decoder::decodeBytes($bytes, cellsW: 80, cellsH: 24, withCanvasRgba: true)`.
      *
      * @return \Generator<int, Frame>
      */
