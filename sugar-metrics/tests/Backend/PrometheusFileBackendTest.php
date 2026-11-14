@@ -680,4 +680,104 @@ final class PrometheusFileBackendTest extends TestCase
         $this->assertStringNotContainsString('$index =', $slice);
         $this->assertStringContainsString('$this->familyKeys[$family][$key] = true;', $slice);
     }
+
+    /**
+     * sugar-metrics-054 (MET-EMITGUARD): a name or label key that sanitizes
+     * to empty must refuse at the emit chokepoint, never enter the
+     * accumulator — one such line makes node_exporter reject the whole file,
+     * and the whole-replace flush would republish the poison forever.
+     *
+     * The refusals are captured via a helper, NOT assert-thrown-in-try:
+     * PHPUnit's fail() throws AssertionFailedError, which extends
+     * RuntimeException and would be swallowed by a catch (\RuntimeException)
+     * right below it (vacuous-catch class).
+     */
+    public function testEmptyNameAndLabelKeyRefuseAtEmitAndNeverPoisonTheFile(): void
+    {
+        $b = new PrometheusFileBackend($this->path);
+        $nameMsg = null;
+        $labelMsg = null;
+        try {
+            $b->counter('', 5.0);
+        } catch (\RuntimeException $e) {
+            $nameMsg = $e->getMessage();
+        }
+        $this->assertNotNull($nameMsg, 'counter() with an empty name must refuse');
+        $this->assertStringContainsString('metric name', (string) $nameMsg);
+        $this->assertStringContainsString('sanitizes to empty', (string) $nameMsg);
+        try {
+            $b->gauge('ok', 1.0, ['' => 'v']);
+        } catch (\RuntimeException $e) {
+            $labelMsg = $e->getMessage();
+        }
+        $this->assertNotNull($labelMsg, 'gauge() with an empty label key must refuse');
+        $this->assertStringContainsString('label key', (string) $labelMsg);
+        // The refused emits left no trace: a later healthy emit plus flush
+        // publishes a well-formed body containing only the healthy series.
+        $b->gauge('ok', 1.0);
+        $b->flush();
+        $body = (string) file_get_contents($this->path);
+        $this->assertStringContainsString("ok 1\n", $body);
+        $this->assertStringNotContainsString('# TYPE  gauge', $body);
+        $this->assertStringNotContainsString('{=', $body, 'refused series must never reach the file');
+        foreach (explode("\n", trim($body)) as $line) {
+            if ($line === '' || str_starts_with($line, '#')) {
+                continue;
+            }
+            $this->assertMatchesRegularExpression('/^[a-zA-Z_:][a-zA-Z0-9_:]*(\{[^{}]*\})? ([-+.eE0-9]+|NaN|\+Inf|-Inf)$/D', $line);
+        }
+    }
+
+    /**
+     * sugar-metrics-054 (MET-EMITGUARD): the flush-side line-shape belt is
+     * belt-and-braces — unreachable while the chokepoints hold — so it is
+     * pinned by calling the renderer directly with a malformed shape.
+     */
+    public function testMetricLineBeltRefusesMalformedLineShapes(): void
+    {
+        $b = new PrometheusFileBackend($this->path);
+        $m = new \ReflectionMethod(PrometheusFileBackend::class, 'metricLine');
+        $m->setAccessible(true);
+        // ('ok{"k"}' deliberately stays out of the set: the belt is a line
+        // SHAPE check, and that body is shape-legal — label grammar is the
+        // sanitizer's job upstream.)
+        foreach (['bad name!', '', 'ok{'] as $badName) {
+            $msg    = null;
+            $threw  = false;
+            try {
+                $m->invoke($b, $badName, '', 1.0);
+            } catch (\RuntimeException $e) {
+                $threw = true;
+                $msg   = $e->getMessage();
+            }
+            $this->assertTrue($threw, 'malformed line name must not be publishable: ' . var_export($badName, true));
+            $this->assertStringContainsString('malformed exposition line', (string) $msg);
+        }
+        // The belt accepts the canonical shapes: finite, exponent, and the
+        // non-finite tokens (NaN/Inf are valid Prometheus values).
+        $this->assertStringContainsString("ok 1\n", $m->invoke($b, 'ok', '', 1.0));
+        $this->assertStringContainsString("ok NaN\n", $m->invoke($b, 'ok', '', NAN));
+        $this->assertStringContainsString("ok -Inf\n", $m->invoke($b, 'ok', '', -\INF));
+    }
+
+    /**
+     * sugar-metrics-058 (MET-EMITGUARD): the cross-kind refusal is once, at
+     * the call site — the series already owned by the first kind stays and
+     * every later flush works (the old wedge made flush throw forever).
+     */
+    public function testCrossKindRefusalHealsNextFlushInsteadOfWedgingForever(): void
+    {
+        $b = new PrometheusFileBackend($this->path);
+        $b->counter('dup', 1.0);
+        $msg = null;
+        try {
+            $b->gauge('dup', 2.0);
+        } catch (\RuntimeException $e) {
+            $msg = $e->getMessage();
+        }
+        $this->assertNotNull($msg, 'cross-kind emit must refuse at the call site');
+        $this->assertStringContainsString('already emitted as a counter', (string) $msg);
+        $b->flush();
+        $this->assertStringContainsString("dup 1\n", (string) file_get_contents($this->path));
+    }
 }

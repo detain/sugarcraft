@@ -164,19 +164,34 @@ final class ReviewFixPinsTest extends TestCase
         $this->assertTrue(true, 'no collision throw after eviction');
     }
 
-    public function testSameNameAcrossKindsFailsLoudAtFlush(): void
+    /**
+     * sugar-metrics-058 (MET-EMITGUARD supersedes the old flush-wedge pin):
+     * counter then gauge on one series used to pass every emit-time guard
+     * and then wedge EVERY later flush with an unattributed
+     * duplicate_series. The refusal now happens once, at the call site,
+     * naming both racing kinds.
+     */
+    public function testSameNameAcrossKindsRefusesAtTheCallSite(): void
     {
         $path = $this->tempPromPath();
         $b    = new PrometheusFileBackend($path, [1.0]);
         $b->counter('hits', 1.0);
-        $b->gauge('hits', 2.0); // same sample identity as the counter line
+        $msg   = null;
+        $threw = false;
         try {
-            $this->expectException(\RuntimeException::class);
-            $this->expectExceptionMessage('duplicate series');
-            $b->flush();
+            $b->gauge('hits', 2.0); // same storage key, second kind
+        } catch (\RuntimeException $e) {
+            $threw = true;
+            $msg   = $e->getMessage();
         } finally {
             @unlink($path);
         }
+        // Captured, not assert-thrown-in-try: PHPUnit fail() extends
+        // RuntimeException and would be eaten by this very catch shape.
+        $this->assertTrue($threw, 'cross-kind emit must refuse at the call site');
+        $this->assertStringContainsString('counter', (string) $msg);
+        $this->assertStringContainsString('gauge', (string) $msg);
+        $this->assertStringContainsString('hits', (string) $msg);
     }
 
     public function testHistogramDerivedNameCollideFailsLoudAtFlush(): void

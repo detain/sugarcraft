@@ -56,6 +56,11 @@ use SugarCraft\Metrics\Util;
  * histogram's derived `*_count` colliding with a real family): one
  * poisoned line would make node_exporter reject the ENTIRE file, so the
  * failure is surfaced as a RuntimeException at the writer instead.
+ * Emit-time refusals go further (sugar-metrics-054/058): a name or label
+ * key that sanitizes to empty is refused at the storage-key chokepoint,
+ * and a second kind writing the same series is refused at the call site,
+ * so a permanently poisoned accumulator entry cannot be constructed at
+ * all and the whole-replaced file self-heals on the next flush.
  *
  * Durability: flush() verifies every write syscall, fsyncs the staging
  * file before publishing it via rename(2), and deletes the staging file
@@ -182,6 +187,7 @@ final class PrometheusFileBackend implements Backend
     public function counter(string $name, float $value, array $tags = []): void
     {
         $key = $this->key($name, $tags);
+        $this->refuseKindSwitch($key, 'counter', $this->counters);
         if (!isset($this->counters[$key])) {
             $this->ensureSpace($this->counters, $this->dirtyCounters, $key);
         }
@@ -192,6 +198,7 @@ final class PrometheusFileBackend implements Backend
     public function gauge(string $name, float $value, array $tags = []): void
     {
         $key = $this->key($name, $tags);
+        $this->refuseKindSwitch($key, 'gauge', $this->gauges);
         if (!isset($this->gauges[$key])) {
             $this->ensureSpace($this->gauges, $this->dirtyGauges, $key);
         }
@@ -210,6 +217,7 @@ final class PrometheusFileBackend implements Backend
             }
         }
         $key = $this->key($name, $tags);
+        $this->refuseKindSwitch($key, 'histogram', $this->histograms);
         if (!isset($this->histograms[$key])) {
             $this->ensureSpace($this->histograms, $this->dirtyHistograms, $key);
         }
@@ -287,6 +295,7 @@ final class PrometheusFileBackend implements Backend
     public function upDownCounter(string $name, float $amount, array $tags = []): void
     {
         $key = $this->key($name, $tags);
+        $this->refuseKindSwitch($key, 'up/down counter', $this->upDownCounters);
         if (!isset($this->upDownCounters[$key])) {
             $this->ensureSpace($this->upDownCounters, $this->dirtyUpDownCounters, $key);
         }
@@ -297,6 +306,7 @@ final class PrometheusFileBackend implements Backend
     public function asyncCounter(string $name, float $value, array $tags = []): void
     {
         $key = $this->key($name, $tags);
+        $this->refuseKindSwitch($key, 'async counter', $this->asyncCounters);
         if (!isset($this->asyncCounters[$key])) {
             $this->ensureSpace($this->asyncCounters, $this->dirtyAsyncCounters, $key);
         }
@@ -307,6 +317,7 @@ final class PrometheusFileBackend implements Backend
     public function asyncGauge(string $name, float $value, array $tags = []): void
     {
         $key = $this->key($name, $tags);
+        $this->refuseKindSwitch($key, 'async gauge', $this->asyncGauges);
         if (!isset($this->asyncGauges[$key])) {
             $this->ensureSpace($this->asyncGauges, $this->dirtyAsyncGauges, $key);
         }
@@ -635,6 +646,40 @@ final class PrometheusFileBackend implements Backend
     }
 
     /**
+     * sugar-metrics-058: refuse creating a series under a storage key
+     * already held by a DIFFERENT kind map. Without this, counter('x')
+     * then gauge('x') both accumulate and every later flush dies on the
+     * generic $seen guard with an unattributed duplicate_series — a caller
+     * bug that must surface once, at the call site, naming both kinds
+     * (same posture as the histogram `le` refusal).
+     *
+     * @param array<array-key, mixed> $own this verb's own accumulator
+     */
+    private function refuseKindSwitch(string $key, string $ownKind, array $own): void
+    {
+        if (isset($own[$key])) {
+            return; // same-kind continuation — not a switch
+        }
+        $others = [
+            'counter'         => $this->counters,
+            'gauge'           => $this->gauges,
+            'histogram'       => $this->histograms,
+            'up/down counter' => $this->upDownCounters,
+            'async counter'   => $this->asyncCounters,
+            'async gauge'     => $this->asyncGauges,
+        ];
+        foreach ($others as $kind => $map) {
+            if ($kind !== $ownKind && isset($map[$key])) {
+                throw new \RuntimeException(Lang::t('prom.kind_switch', [
+                    'name'   => Util::displaySafe(self::splitKey($key)[0]),
+                    'first'  => Util::displaySafe($kind),
+                    'second' => Util::displaySafe($ownKind),
+                ]));
+            }
+        }
+    }
+
+    /**
      * Refuse an incoming (name, tags) whose fold has landed on a storage
      * key already owned by a different raw identity. One refusal shape is
      * shared by the write path (key()) and the reclaim path (remove()).
@@ -670,6 +715,14 @@ final class PrometheusFileBackend implements Backend
     private static function storageKey(string $name, array $tags): string
     {
         $sanitized = self::sanitizeName($name);
+        // sugar-metrics-054: a name or label key that sanitizes to '' would
+        // publish `# TYPE  counter` / ` 5` — node_exporter rejects the ENTIRE
+        // file on that parse error, and rewrite-whole-on-flush makes the
+        // poison permanent. Refuse at the chokepoint so no accumulator can
+        // ever hold such a series (same message family as Descriptor's gates).
+        if ($sanitized === '') {
+            throw new \RuntimeException(Lang::t('prom.name_empty', ['name' => Util::displaySafe($name)]));
+        }
         if ($tags === []) {
             return $sanitized;
         }
@@ -677,7 +730,14 @@ final class PrometheusFileBackend implements Backend
         ksort($sorted);
         $parts = [];
         foreach ($sorted as $k => $v) {
-            $parts[] = self::sanitizeKey((string) $k) . '="' . self::escapeLabel((string) $v) . '"';
+            $labelKey = self::sanitizeKey((string) $k);
+            if ($labelKey === '') {
+                throw new \RuntimeException(Lang::t('prom.label_key_empty', [
+                    'key'  => Util::displaySafe((string) $k),
+                    'name' => Util::displaySafe($sanitized),
+                ]));
+            }
+            $parts[] = $labelKey . '="' . self::escapeLabel((string) $v) . '"';
         }
         return $sanitized . self::KEY_SEPARATOR . '{' . implode(',', $parts) . '}';
     }
@@ -859,7 +919,17 @@ final class PrometheusFileBackend implements Backend
 
     private function metricLine(string $name, string $labels, float $value): string
     {
-        return "{$name}{$labels} " . self::fmt($value) . "\n";
+        $line = "{$name}{$labels} " . self::fmt($value);
+        // sugar-metrics-054 belt-and-braces: every publishable sample line
+        // must carry a valid metric identifier and a token a Prometheus
+        // parser accepts (finite number, NaN, or the canonical +/-Inf).
+        // Unreachable while the emit chokepoints hold — repair is
+        // impossible at this point, so refuse to publish and name the line.
+        if (preg_match('/^[a-zA-Z_:][a-zA-Z0-9_:]*(\{[^{}]*\})? ([-+.eE0-9]+|NaN|\+Inf|-Inf)$/D', $line) !== 1) {
+            throw new \RuntimeException(Lang::t('prom.bad_line', ['line' => Util::displaySafe($line)]));
+        }
+
+        return $line . "\n";
     }
 
     private static function fmt(float $v): string
