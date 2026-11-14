@@ -437,8 +437,17 @@ final class FilePickerTest extends TestCase
     public function testErrorRowRendersControlBytesFromCraftedDirNameClean(): void
     {
         $dir = $this->root . DIRECTORY_SEPARATOR . "evil\x1b]0;pwned\x07link\x1b[31m\rX";
-        mkdir($dir);
-        $this->assertTrue(is_dir($dir), 'the crafted directory must exist for the probe to mean anything');
+        // F12c (dated 2026-11-15, CI jobs 132320531459/477): the sanitizer
+        // probe's premise is the NAME, not the OS. NTFS rejects control
+        // characters (0x00-0x1F) in file names outright, so on the Windows
+        // runners mkdir is a filesystem-capability refusal and there is no
+        // crafted directory to render. Probe the capability honestly: mint
+        // the name and skip only when this host's filesystem cannot carry
+        // it — a uname() gate would mislabel name-restricted POSIX mounts
+        // as capable and non-NTFS Windows volumes as incapable.
+        if (!@mkdir($dir) && !is_dir($dir)) {
+            $this->markTestSkipped('the host filesystem refuses control-byte names (NTFS family); the crafted directory cannot exist here');
+        }
         chmod($dir, 0o000);
         if (is_readable($dir)) {
             chmod($dir, 0o755);
