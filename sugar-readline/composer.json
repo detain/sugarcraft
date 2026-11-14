@@ -31,7 +31,8 @@
         "ext-mbstring": "*",
         "sugarcraft/sugar-core": "@dev",
         "sugarcraft/sugar-forms": "@dev",
-        "sugarcraft/sugar-input": "@dev"
+        "sugarcraft/sugar-input": "@dev",
+        "sugarcraft/sugar-style": "@dev"
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5"

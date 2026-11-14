@@ -8,6 +8,8 @@ use SugarCraft\Readline\Ansi;
 use SugarCraft\Readline\Key;
 use SugarCraft\Readline\Lang;
 use SugarCraft\Readline\RowFit;
+use SugarCraft\Readline\Styles;
+use SugarCraft\Style\Style;
 
 /**
  * Shared selection machinery for the list prompts.
@@ -55,8 +57,8 @@ trait SelectionEngine
     /** @var int|null Terminal row budget; null = unset (height-adoption eligible), 0 = explicit unbounded. */
     private ?int $viewportRows = null;
 
-    private string $cursorStyle = '7';     // reverse
-    private string $labelStyle  = '1;36';  // bold cyan
+    private string $cursorStyle = Styles::CURSOR;  // reverse
+    private string $labelStyle  = Styles::LABEL;   // bold cyan
 
     /**
      * Terminal rows the list chrome eats (label + bars + page footer), so a
@@ -99,6 +101,21 @@ trait SelectionEngine
             $clone->$property = $value;
         }
         return $clone;
+    }
+
+    // -------------------------------------------------------------------------
+    // Style seam (finding 036): palette defaults come from Styles;
+    // setters accept a composed sugar-style Style or a raw SGR code string.
+    // -------------------------------------------------------------------------
+
+    public function withCursorStyle(Style|string $style): static
+    {
+        return $this->mutate(['cursorStyle' => Styles::code($style)]);
+    }
+
+    public function withLabelStyle(Style|string $style): static
+    {
+        return $this->mutate(['labelStyle' => Styles::code($style)]);
     }
 
     public function withPageSize(int $size): static

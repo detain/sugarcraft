@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Readline;
 
+use SugarCraft\Style\Style;
 /**
  * Yes / No confirmation prompt.
  *
@@ -35,8 +36,8 @@ final class ConfirmationPrompt
     private ?string $confirmLabel = null;
     private ?string $cancelLabel  = null;
     private ?string $hint         = null;
-    private string $labelStyle    = '1;36';
-    private string $selectedStyle = '1;32';
+    private string $labelStyle    = Styles::LABEL;
+    private string $selectedStyle = Styles::SELECTED;
 
     /** @var int|null Display bound in cells; null = unset (width-adoption eligible), 0 = explicit unbounded. */
     private ?int $displayWidth = null;
@@ -71,6 +72,21 @@ final class ConfirmationPrompt
             $clone->$property = $value;
         }
         return $clone;
+    }
+
+    // -------------------------------------------------------------------------
+    // Style seam (finding 036): palette defaults come from Styles;
+    // setters accept a composed sugar-style Style or a raw SGR code string.
+    // -------------------------------------------------------------------------
+
+    public function withLabelStyle(Style|string $style): self
+    {
+        return $this->mutate(['labelStyle' => Styles::code($style)]);
+    }
+
+    public function withSelectedStyle(Style|string $style): self
+    {
+        return $this->mutate(['selectedStyle' => Styles::code($style)]);
     }
 
     public function withConfirmLabel(string $label): self

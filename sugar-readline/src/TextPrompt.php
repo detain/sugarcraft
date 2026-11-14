@@ -10,6 +10,7 @@ use SugarCraft\Readline\History\SearchDirection;
 use SugarCraft\Readline\History\SearchHit;
 use SugarCraft\Readline\Mode\ModeInterface;
 use SugarCraft\Readline\Mode\ViMode;
+use SugarCraft\Style\Style;
 
 /**
  * Single-line text input with cursor, optional validation, auto-completion,
@@ -98,10 +99,10 @@ final class TextPrompt
     /** @var (callable(string): bool)|null */
     private $validator = null;
 
-    private string $labelStyle      = '1;36';   // bold cyan
-    private string $cursorStyle     = '7';      // reverse
-    private string $errorStyle      = '31';     // red
-    private string $completionStyle = '90';     // bright black
+    private string $labelStyle      = Styles::LABEL;      // bold cyan
+    private string $cursorStyle     = Styles::CURSOR;     // reverse
+    private string $errorStyle      = Styles::ERROR;      // red
+    private string $completionStyle = Styles::COMPLETION; // bright black
     private string $hideMask        = '*';
 
     /**
@@ -225,6 +226,31 @@ final class TextPrompt
             $clone->$property = $value;
         }
         return $clone;
+    }
+
+    // -------------------------------------------------------------------------
+    // Style seam (finding 036): palette defaults come from Styles;
+    // setters accept a composed sugar-style Style or a raw SGR code string.
+    // -------------------------------------------------------------------------
+
+    public function withLabelStyle(Style|string $style): self
+    {
+        return $this->mutate(['labelStyle' => Styles::code($style)]);
+    }
+
+    public function withCursorStyle(Style|string $style): self
+    {
+        return $this->mutate(['cursorStyle' => Styles::code($style)]);
+    }
+
+    public function withErrorStyle(Style|string $style): self
+    {
+        return $this->mutate(['errorStyle' => Styles::code($style)]);
+    }
+
+    public function withCompletionStyle(Style|string $style): self
+    {
+        return $this->mutate(['completionStyle' => Styles::code($style)]);
     }
 
     public function withDefault(string $value): self

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Readline;
 
+use SugarCraft\Style\Style;
 /**
  * Native design: erikgeiser/promptkit (the declared antecedent, see
  * composer.json) ships no multi-line widget; the multi-line requirement
@@ -33,8 +34,8 @@ final class TextareaPrompt
     private bool $submitted = false;
     private bool $aborted   = false;
 
-    private string $labelStyle  = '1;36';
-    private string $cursorStyle = '7';
+    private string $labelStyle  = Styles::LABEL;
+    private string $cursorStyle = Styles::CURSOR;
 
     /** @var int|null Display bound in cells; null = unset (width-adoption eligible), 0 = explicit unbounded. */
     private ?int $displayWidth = null;
@@ -69,6 +70,21 @@ final class TextareaPrompt
             $clone->$property = $value;
         }
         return $clone;
+    }
+
+    // -------------------------------------------------------------------------
+    // Style seam (finding 036): palette defaults come from Styles;
+    // setters accept a composed sugar-style Style or a raw SGR code string.
+    // -------------------------------------------------------------------------
+
+    public function withLabelStyle(Style|string $style): self
+    {
+        return $this->mutate(['labelStyle' => Styles::code($style)]);
+    }
+
+    public function withCursorStyle(Style|string $style): self
+    {
+        return $this->mutate(['cursorStyle' => Styles::code($style)]);
     }
 
     public function withDefault(string $value): self
