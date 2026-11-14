@@ -545,26 +545,75 @@ function cmdInit(array $args): int
         AtomicWriter::ensureDir("{$dataPath}/{$dir}", $mode);
     }
 
-    // Create config
+    // Create config.
     // @rename-keep 2026-11-13 (094): the soft_serve_* key_path relic emitted
     // below is a dated-keep default (Config::fromDefaults carries the full
-    // reason — renaming would silently orphan already-issued keys); the
-    // S38 wave annotates this skeleton's live/dead keys per line.
-    $config = Config::fromDefaults();
+    // reason — renaming would silently orphan already-issued keys).
+    //
+    // (051/S38) Every line of this skeleton is annotated live or dead, and
+    // the day-one levers are carried explicitly with their shipped defaults
+    // — a key that is absent simply falls back to Config's default anyway,
+    // so the block is behavior-neutral; what it adds is an operator who can
+    // see, per line, what the shipped server actually consults. Do not
+    // "helpfully" open a firewall hole for the ssh block: there is no
+    // first-party SSH listener and nothing binds :23231 (README
+    // "## Configuration" is the authority for the live/dead census).
     $configYaml = <<<YAML
 name: "CandyGitServer"
-ssh:
-  listen_addr: ":23231"
-  public_url: "ssh://localhost:23231"
-  key_path: "ssh/soft_serve_host"
+
+# ---- git:// daemon (serve --git) ----
 git:
+  # LIVE: bind address of the git:// daemon.
   listen_addr: ":9418"
+  # LIVE: the anonymous-read lever. When true, PUBLIC repos may be
+  # cloned over git:// and smart HTTP without credentials; private
+  # repos are never affected. Off by default.
   allow_anonymous_read: false
+
+# ---- smart HTTP (serve --http) ----
 http:
+  # DEAD: `serve --http` binds the --http-host/--http-port flags and
+  # never reads this key; it is scaffold carried for compatibility.
   listen_addr: ":23232"
+  # LIVE: absolute base used to build LFS batch download hrefs.
   public_url: "http://localhost:23232"
+  # LIVE: cap on every request body — push packs and LFS uploads
+  # alike — in bytes. 268435456 is the shipped 256 MiB default made
+  # explicit; raise it together with your proxy's own body limit.
+  max_pack_bytes: 268435456
+  # LIVE: header identity trust, one of off | proxy | token.
+  #   off   — never believe forwarding headers (the loopback default).
+  #   proxy — believe them only from the trusted_proxies below.
+  #   token — believe signed X-CandyGitServer-User-Sig HMACs, which
+  #           requires the auth_secret below.
+  user_trust_mode: off
+  # LIVE: the proxies the trust modes may believe — exact IPs, CIDR
+  # ranges or IPv6 literals, as a YAML list or a comma-separated
+  # string. Empty means no peer is ever trusted.
+  trusted_proxies: []
+  # LIVE (token mode): HMAC signing secret. Generate your own, e.g.
+  #   php -r "echo bin2hex(random_bytes(32));"
+  # and paste the hex value here — do not copy anyone else's, and do
+  # not commit a real secret. Empty means token mode refuses to
+  # authenticate anyone.
+  auth_secret: ""
+
+# ---- Git LFS ----
 lfs:
+  # LIVE: master gate for the LFS batch/upload/download routes.
   enabled: true
+
+# ---- DEAD scaffold (kept for upgrade compatibility only) ----
+# The shipped server carries NO first-party SSH listener: nothing
+# binds :23231 and no key below is consulted. SSH access runs through
+# the host sshd wrapper — see README "SSH".
+ssh:
+  listen_addr: ":23231"               # dead: unwired scaffold
+  public_url: "ssh://localhost:23231" # dead: advertised-URL decoration
+  # @rename-keep 2026-11-13 (094): soft_serve_* relic — the name is
+  # kept verbatim because renaming would silently orphan keys that
+  # were already issued under it.
+  key_path: "ssh/soft_serve_host"     # dead: dated-keep relic name (094)
 YAML;
 
     // The config can carry http.auth_secret (the token-mode signing key),
