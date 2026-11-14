@@ -66,6 +66,29 @@ final class BrailleCanvas implements SizedItem
         $this->colors = array_fill(0, $this->cellHeight, array_fill(0, $this->cellWidth, null));
     }
 
+    private static int $gridFullCopies = 0;
+
+    /** @internal Test seam: full-grid copies performed (finding sugar-dashboard-078). */
+    public static function gridFullCopies(): int
+    {
+        return self::$gridFullCopies;
+    }
+
+    /**
+     * Deep-copy every grid row of this canvas - the O(area) operation the
+     * findings counted PER DOT.
+     *
+     * @deprecated The paint path uses shallow clones with copy-on-write
+     *     row writes instead; retained only as the honest counter target
+     *     for the regression pins. REMOVED-IN: 2.0.0.
+     */
+    private function copyGrids(): void
+    {
+        self::$gridFullCopies++;
+        $this->cells = array_map(static fn(array $row): array => [...$row], $this->cells);
+        $this->colors = array_map(static fn(array $row): array => [...$row], $this->colors);
+    }
+
     public static function new(int $pixelWidth, int $pixelHeight): self
     {
         return new self($pixelWidth, $pixelHeight);
@@ -136,6 +159,13 @@ final class BrailleCanvas implements SizedItem
     /**
      * Set a single dot at pixel coordinates (x, y).
      *
+     * Finding sugar-dashboard-078: this used to deep-copy BOTH grids per
+     * dot. The clone is shallow now and the nested writes touch exactly the
+     * one row per grid that changes - PHP copy-on-write gives the new
+     * canvas an independent grid container while untouched rows stay
+     * shared until they are written. Observably identical: same values,
+     * same immutable facade, O(1) work per point.
+     *
      * @param int $x Pixel X coordinate
      * @param int $y Pixel Y coordinate
      * @param \SugarCraft\Core\Util\Color|null $color Color for this dot (null = ramp color at the
@@ -148,24 +178,17 @@ final class BrailleCanvas implements SizedItem
         }
 
         $clone = clone $this;
-        $clone->cells = array_map(fn(array $row) => [...$row], $this->cells);
-        $clone->colors = array_map(fn(array $row) => [...$row], $this->colors);
-
-        $cellX = BrailleMatrix::cellX($x);
-        $cellY = BrailleMatrix::cellY($y);
-        $dotBit = BrailleMatrix::dotBit($x, $y);
-
-        $clone->cells[$cellY][$cellX] |= $dotBit;
-        $color ??= $this->gradientColor;
-        if ($color !== null) {
-            $clone->colors[$cellY][$cellX] = $color;
-        }
+        $this->paintPoint($clone, $x, $y, $color);
 
         return $clone;
     }
 
     /**
      * Draw a line from (x1,y1) to (x2,y2) using Bresenham's algorithm.
+     *
+     * The whole line paints into ONE shallow clone (finding sugar-dashboard-
+     * 078: the loop used to chain setPoint(), paying a full double-grid copy
+     * per point; grid copies per line now measure O(1), not O(points)).
      *
      * @param int $x1 Start X
      * @param int $y1 Start Y
@@ -175,7 +198,7 @@ final class BrailleCanvas implements SizedItem
      */
     public function setLine(int $x1, int $y1, int $x2, int $y2, ?\SugarCraft\Core\Util\Color $color = null): self
     {
-        $clone = $this;
+        $clone = clone $this;
 
         $dx = abs($x2 - $x1);
         $dy = abs($y2 - $y1);
@@ -184,7 +207,9 @@ final class BrailleCanvas implements SizedItem
         $err = $dx - $dy;
 
         while (true) {
-            $clone = $clone->setPoint($x1, $y1, $color);
+            if ($x1 >= 0 && $y1 >= 0 && $x1 < $this->pixelWidth && $y1 < $this->pixelHeight) {
+                $this->paintPoint($clone, $x1, $y1, $color);
+            }
 
             if ($x1 === $x2 && $y1 === $y2) {
                 break;
@@ -204,6 +229,23 @@ final class BrailleCanvas implements SizedItem
         }
 
         return $clone;
+    }
+
+    /**
+     * Paint one dot into a freshly cloned canvas - the shared body of the
+     * public setters. Private cross-instance writes are legal in-class.
+     */
+    private function paintPoint(self $target, int $x, int $y, ?\SugarCraft\Core\Util\Color $color): void
+    {
+        $cellX = BrailleMatrix::cellX($x);
+        $cellY = BrailleMatrix::cellY($y);
+        $dotBit = BrailleMatrix::dotBit($x, $y);
+
+        $target->cells[$cellY][$cellX] |= $dotBit;
+        $color ??= $this->gradientColor;
+        if ($color !== null) {
+            $target->colors[$cellY][$cellX] = $color;
+        }
     }
 
     /**
@@ -290,6 +332,13 @@ final class BrailleCanvas implements SizedItem
         return implode("\n", $lines);
     }
 
+    /**
+     * Resize the canvas. UNIT CONTRACT (finding sugar-dashboard-186): the
+     * dimensions are PIXELS - Braille cells are 2 wide by 4 tall, so
+     * feeding {@see innerSize()} (which answers in CELLS) back in here
+     * grows the canvas 2x/4x per lap. The round-trip bridge is
+     * {@see pixelSize()}.
+     */
     public function setSize(int $width, int $height): Sizer
     {
         // The ramp, scale and value are geometry-independent, so a resize

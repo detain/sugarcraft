@@ -371,4 +371,78 @@ final class BrailleCanvasTest extends TestCase
         $this->assertSame(20, $w);
         $this->assertSame(20, $h);
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Per-frame raster law (finding sugar-dashboard-078, D-83)
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testFullGridCopiesStayZeroThroughPaintStorm(): void
+    {
+        $before = BrailleCanvas::gridFullCopies();
+
+        $canvas = BrailleCanvas::new(50, 30);
+        for ($i = 0; $i < 200; $i++) {
+            $canvas = $canvas->setPoint($i % 50, intdiv($i, 50) * 4, null);
+        }
+        $canvas = $canvas->setLine(0, 0, 49, 29);
+        $canvas = $canvas->setLine(49, 0, 0, 29)->setLine(0, 15, 49, 15);
+
+        // The old shape copied BOTH grids per point: ~350 lines worth of
+        // O(points x grid) traffic. The COW paint path makes ZERO full-grid
+        // copies - the counter stays flat no matter how many points land.
+        $this->assertSame($before, BrailleCanvas::gridFullCopies(), 'painting must never trigger full-grid copies');
+        $this->assertNotSame('', $canvas->render(), 'storm actually painted');
+    }
+
+    public function testSetLinePaintsTheSameCellsAsTheEquivalentPointChain(): void
+    {
+        // Horizontal, vertical and diagonal: the batched clone path and the
+        // per-point public path must land byte-identical canvases (value
+        // preservation through the raster rewrite).
+        foreach ([[0, 0, 9, 0], [4, 0, 4, 9], [0, 0, 9, 9]] as [$x0, $y0, $x1, $y1]) {
+            $lined = BrailleCanvas::new(12, 12)->setLine($x0, $y0, $x1, $y1);
+
+            $chained = BrailleCanvas::new(12, 12);
+            if ($x0 === $x1) {
+                for ($y = min($y0, $y1); $y <= max($y0, $y1); $y++) {
+                    $chained = $chained->setPoint($x0, $y);
+                }
+            } elseif ($y0 === $y1) {
+                for ($x = min($x0, $x1); $x <= max($x0, $x1); $x++) {
+                    $chained = $chained->setPoint($x, $y0);
+                }
+            } else {
+                $steps = max(abs($x1 - $x0), abs($y1 - $y0));
+                for ($i = 0; $i <= $steps; $i++) {
+                    $chained = $chained->setPoint(
+                        (int) round($x0 + ($x1 - $x0) * $i / $steps),
+                        (int) round($y0 + ($y1 - $y0) * $i / $steps),
+                    );
+                }
+            }
+
+            $this->assertSame(
+                preg_replace('/\x1b\[[0-9;]*m/', '', $lined->render()),
+                preg_replace('/\x1b\[[0-9;]*m/', '', $chained->render()),
+                "line ({$x0},{$y0})-({$x1},{$y1}) paints the same cells as its point chain",
+            );
+        }
+    }
+
+    public function testPixelSizeRoundTripIsStableNotQuadGrowing(): void
+    {
+        // Finding sugar-dashboard-186: setSize speaks PIXELS, innerSize
+        // answers CELLS (half-width, quarter-height). The round-trip bridge
+        // is pixelSize() - feeding innerSize back into setSize grows the
+        // canvas 2x/4x every lap. Pin the honest bridge.
+        $canvas = BrailleCanvas::new(20, 8);
+        for ($lap = 0; $lap < 3; $lap++) {
+            [$w, $h] = $canvas->pixelSize();
+            $this->assertSame([20, 8], [$w, $h], 'pixel round-trip stays exact across laps');
+            $canvas = $canvas->setSize($w, $h);
+        }
+
+        [$cellW, $cellH] = $canvas->innerSize();
+        $this->assertSame([10, 2], [$cellW, $cellH], 'innerSize reports cells, pixelSize reports pixels');
+    }
 }

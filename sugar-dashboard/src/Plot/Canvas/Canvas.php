@@ -108,6 +108,11 @@ final class Canvas implements SizedItem
 
     /**
      * Set a single pixel.
+     *
+     * Finding sugar-dashboard-078: the old body deep-copied ALL THREE grids
+     * per pixel (O(area) work per dot). The clone is shallow now; the three
+     * nested writes touch only the one row per grid that changes (copy-on-
+     * write). Same values, same immutable facade, O(width+height) per write.
      */
     public function setPixel(int $x, int $y, string $char = '█', ?Color $fg = null, ?Color $bg = null): self
     {
@@ -116,9 +121,6 @@ final class Canvas implements SizedItem
         }
 
         $clone = clone $this;
-        $clone->pixels = array_map(fn(array $row) => [...$row], $this->pixels);
-        $clone->fgColors = array_map(fn(array $row) => [...$row], $this->fgColors);
-        $clone->bgColors = array_map(fn(array $row) => [...$row], $this->bgColors);
 
         $clone->pixels[$y][$x] = $char;
         $clone->fgColors[$y][$x] = $fg?->toHex();

@@ -872,19 +872,23 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     private function bufferFromOutput(string $output, int $width, int $height): Buffer
     {
-        $buffer = Buffer::new($width, $height);
         $display = (string) \preg_replace('/\x1b\[[0-9;]*m/', '', $output);
         $lines = \explode("\n", $display);
 
+        // Findings 193: the old loop chained withCellAt(), paying a
+        // full grid copy per cell. Build the flat row-major list once and
+        // hand it to Buffer::fromGrid - one allocation per frame, the same
+        // width-1 cells either way.
+        $cells = [];
         for ($row = 0; $row < $height; $row++) {
             $runes = \mb_str_split($lines[$row] ?? '');
             for ($col = 0; $col < $width; $col++) {
-                $cell = Cell::new($runes[$col] ?? ' ', null, null, 1);
-                $buffer = $buffer->withCellAt($col, $row, $cell);
+                // Each cell gets width 1; no wide-character handling in this path
+                $cells[] = Cell::new($runes[$col] ?? ' ', null, null, 1);
             }
         }
 
-        return $buffer;
+        return Buffer::fromGrid($width, $height, $cells);
     }
 
     /**
