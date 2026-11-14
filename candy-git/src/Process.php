@@ -264,9 +264,9 @@ final class Process
         // without this re-check, the proc_close() below waits on it OUTSIDE
         // the timeout budget. Spend whatever of the absolute deadline remains
         // on bounded liveness polling; if the child outlives the budget it
-        // goes through the same SIGTERM->grace->SIGKILL ladder a timeout uses.
+        // goes through the same SIGTERM -> grace -> SIGKILL ladder a timeout uses.
         // ($deadline === null means the caller asked for no bound at all —
-        // there, the blocking proc_close is the honest documented behaviour.)
+        // there, the blocking proc_close is the honest documented behavior.)
         if (!$abandoned && $deadline !== null) {
             while (proc_get_status($proc)['running']) {
                 if (microtime(true) >= $deadline) {

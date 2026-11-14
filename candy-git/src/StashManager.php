@@ -32,7 +32,7 @@ final readonly class StashManager
      * The three real shapes git emits (audit #15):
      *   stash@{0}: WIP on main: abc1234 Last commit subject
      *   stash@{0}: index on main: abc1234 Last commit subject
-     *   stash@{0}: On main: hand-written stash message   <- NO sha here
+     *   stash@{0}: On main: hand-written stash message   (no sha here)
      * The old generic `(.+?): ([a-f0-9]+) (.+)` inner match labelled the
      * whole "WIP on main" as the branch and dropped everything else into
      * the else-arm for the `On <branch>: <msg>` form (empty branch/sha).

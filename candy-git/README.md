@@ -18,6 +18,8 @@
 
 candy-git — a three-pane git TUI for PHP 8.3+, built on the SugarCraft stack. Status on the left, branches stacked over the log on the right; single-key stage / unstage, refresh, and an ahead/behind summary for branches that track an upstream.
 
+Naming: `candy-git` is the command and the package slug; **CandyGit** is the application the prose talks about.
+
 ```bash
 composer require sugarcraft/candy-git
 vendor/bin/candy-git    # run inside any git working tree
@@ -73,7 +75,7 @@ own git config.
 
 ## Scope (v1)
 
-candy-git v1 covers the local-repository loop: status / stage / unstage /
+CandyGit v1 covers the local-repository loop: status / stage / unstage /
 discard, branches (checkout, create, delete — with remote-tracking branches
 listed and their divergence badged), log (fetched in 20-commit pages that deepen
 as the cursor walks off the bottom, with a read-only commit details view and
@@ -346,7 +348,7 @@ named.
 | `Git`             | Concrete `git` shell-out — `status --porcelain=v1 -b`, `for-each-ref`, `log --pretty=format:…`, `add`, `restore --staged`; `stagePatch()` pipes a selected hunk through `git apply --cached --unidiff-zero -`. Throws `RuntimeException` on non-zero exit. |
 | `GitDriver`        | Interface for all git operations. Tests inject a fixture-backed driver so transition correctness is asserted without staging a real repo. |
 | `Platform`         | OS seam for `Process` — null device (`/dev/null` / `NUL`), PATH lookup, tree-kill (`taskkill /F /T`) — injectable so both ladders are tested on any host. |
-| `Process`          | The ONLY proc_open site — bounded drain loop (a polled temp-file loop on Windows), pinned child env (`GIT_TERMINAL_PROMPT=0`, pagers and editors neutered), stdin isolated from the UI tty, TERM->grace->KILL teardown. |
+| `Process`          | The ONLY proc_open site — bounded drain loop (a polled temp-file loop on Windows), pinned child env (`GIT_TERMINAL_PROMPT=0`, pagers and editors neutered), stdin isolated from the UI tty, TERM -> grace -> KILL teardown. |
 | `HistoryEntry`     | One undoable operation with its forward args and inverse (or a `refuse` marker when undo would lie — discard, amend, merge, plus a checkout with no origin to return to and a branch delete whose pre-delete SHA was not recorded). |
 | `HistoryManager`   | Bounded undo/redo stacks (`MAX_HISTORY`); a new operation clears the redo lane. |
 | `DiffViewer`       | Immutable diff overlay state — raw lines, hunk starts, selected hunk; `hunkIndex()` / `withHunkIndex()` (0-based positions, clamped) drive navigation, `currentHunkLine()` exposes the stored line index, and `currentHunkPatch()` yields the selection to stage (the empty string when the diff carries no hunks — `App::stageCurrentHunk` refuses that before git sees it; applying it is `Git::stagePatch()`); the `cached` bit remembers which side it renders, and `scrollOffset` keeps the visible window independent of the selection. |
@@ -551,7 +553,7 @@ code: clone, open, and commit only what you trust.
 
 ## Shared foundations
 
-candy-git uses [sugar-fuzzy](https://sugarcraft.github.io/lib/sugar-fuzzy.html): `StashManager::fuzzyFilter()` is a live, tested public API backed by its Smith-Waterman scored matcher, ranking stash entries by message and branch. The stash overlay UI is not wired to it yet — that integration is the future work, not the matching engine.
+CandyGit uses [sugar-fuzzy](https://sugarcraft.github.io/lib/sugar-fuzzy.html): `StashManager::fuzzyFilter()` is a live, tested public API backed by its Smith-Waterman scored matcher, ranking stash entries by message and branch. The stash overlay UI is not wired to it yet — that integration is the future work, not the matching engine.
 
 ## Testing
 

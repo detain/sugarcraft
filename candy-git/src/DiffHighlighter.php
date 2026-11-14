@@ -19,7 +19,7 @@ use SugarCraft\Core\Syntax\TokenSpan;
  * markdown pager CLI), so candy-git follows the candy-codeshot precedent:
  * consume the shared lexer, keep presentation in {@see Renderer}.
  *
- * This class carries NO colour/ANSI knowledge — it answers "which language
+ * This class carries NO color/ANSI knowledge — it answers "which language
  * is this file" and "what tokens does this diff line contain". It never
  * invents tokens: when nothing would be accented it returns null so the
  * caller renders the line exactly as before (opt-in guarantee — unknown
@@ -29,7 +29,7 @@ final class DiffHighlighter
 {
     /**
      * Extension (lowercase, no dot) → RegexHighlighter language id.
-     * Mirrors exactly the recognised set + aliases of the shared lexer
+     * Mirrors exactly the recognized set + aliases of the shared lexer
      * (php, js, ts, python, go, bash, sql, json) — no invented languages.
      *
      * @var array<string, string>
@@ -82,7 +82,7 @@ final class DiffHighlighter
     }
 
     /**
-     * Language id for a repo-relative file path, '' when unrecognised.
+     * Language id for a repo-relative file path, '' when unrecognized.
      *
      * 'composer.json' resolves through its .json extension; dotfiles such as
      * '.gitignore' carry no usable extension and answer '' (plain render).

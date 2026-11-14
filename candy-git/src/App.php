@@ -158,12 +158,12 @@ final class App implements Model
         if ($msg instanceof PasteMsg) {
             return $this->applyPaste($msg);
         }
-        // The program probes the terminal's colour capability once
+        // The program probes the terminal's color capability once
         // at launch (NO_COLOR / TERM / COLORTERM via ColorProfile::detect)
         // and hands the answer to the model. The profile is process render
         // state, not model state - sugar-style's Style::new() reads the
-        // default profile, so adopting it here downgrades every hex colour in
-        // the tree (and strips colour entirely under NO_COLOR) without the
+        // default profile, so adopting it here downgrades every hex color in
+        // the tree (and strips color entirely under NO_COLOR) without the
         // App itself changing. Returning [$this, null] keeps the model pure.
         if ($msg instanceof ColorProfileMsg) {
             Style::setDefaultProfile($msg->profile);

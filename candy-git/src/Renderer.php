@@ -817,7 +817,7 @@ final class Renderer
                         ? Lang::t('diff.side_staged')
                         : Lang::t('diff.side_worktree'))));
 
-        // Syntax pass: accent recognised-language tokens inside diff
+        // Syntax pass: accent recognized-language tokens inside diff
         // bodies. '' language (or an unaccentable line) keeps the plain
         // whole-line rendering below byte-for-byte (DiffHighlighter opt-in law).
         $language = DiffHighlighter::languageForPath($dv->path);
@@ -906,7 +906,7 @@ final class Renderer
             }
 
             // Marker (+/-/space) and unclassified content keep the diff-state
-            // colour; only recognised tokens steal the accent.
+            // color; only recognized tokens steal the accent.
             $row = $st->render(' ' . $line[0]);
             foreach ($spans as $span) {
                 $spanStyle = $span->kind === TokenKind::Plain
@@ -947,10 +947,10 @@ final class Renderer
     }
 
     /**
-     * Accent style for one recognised syntax token inside a diff body line.
+     * Accent style for one recognized syntax token inside a diff body line.
      * Hues extend the overlay palette (amber/violet/dim already frame the
      * diff); Plain is never asked for — the caller keeps the line-state
-     * colour for unclassified text. Exhaustive over TokenKind by design.
+     * color for unclassified text. Exhaustive over TokenKind by design.
      */
     private static function syntaxAccent(TokenKind $kind, bool $selected): Style
     {
