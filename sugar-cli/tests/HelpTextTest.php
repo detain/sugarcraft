@@ -360,6 +360,59 @@ final class HelpTextTest extends TestCase
         );
     }
 
+    /**
+     * A pathological long key can no longer push the description column off
+     * screen (finding 051): the aligned key column is capped at
+     * max(24, width/2) and overlong keys arrive ellipsized, so every row
+     * stays inside the requested width.
+     */
+    public function testPathologicalLongKeyIsCappedAndEllipsized(): void
+    {
+        $long = str_repeat('x', 90);
+        $out = HelpText::renderRows(
+            [$long => 'keeps the gutter sane', '--short' => 'brief'],
+            Theme::plain(),
+            60,
+        );
+        foreach (explode("\n", $out) as $line) {
+            $this->assertLessThanOrEqual(60, Width::string($line), 'row escapes the width: ' . $line);
+        }
+        // Cap at width 60 is max(24, 30) = 30 cells: 29 kept + one ellipsis.
+        $this->assertStringContainsString('  ' . str_repeat('x', 29) . '…', $out);
+        $this->assertStringNotContainsString($long, $out);
+    }
+
+    /** The cap floor is KEY_COLUMN_CAP, not width/2, on mid-narrow screens. */
+    public function testKeyCapFloorKeepsTwentyFourCellsAtWidthFortyFour(): void
+    {
+        // width 44: cap = max(24, 22) = 24; descColumn 28; 44-28 = 16 keeps
+        // the aligned path (MIN_DESCRIPTION_WIDTH is inclusive).
+        $key = str_repeat('y', 30);
+        $out = HelpText::renderRows([$key => 'z'], Theme::plain(), 44);
+        $this->assertStringContainsString('  ' . str_repeat('y', 23) . '…', $out);
+        foreach (explode("\n", $out) as $line) {
+            $this->assertLessThanOrEqual(44, Width::string($line));
+        }
+    }
+
+    /** A key exactly at the cap renders verbatim — no ellipsis on the boundary. */
+    public function testKeyExactlyAtTheCapIsUntouched(): void
+    {
+        $key = str_repeat('k', 30);
+        $out = HelpText::renderRows([$key => 'z'], Theme::plain(), 60);
+        $this->assertStringContainsString('  ' . $key . '  z', $out);
+        $this->assertStringNotContainsString('…', $out);
+    }
+
+    /** A null width has no screen to protect: long keys stay verbatim. */
+    public function testNullWidthLeavesOverlongKeysUncut(): void
+    {
+        $long = str_repeat('x', 90);
+        $out = HelpText::renderRows([$long => 'd'], Theme::plain(), null);
+        $this->assertStringContainsString($long, $out);
+        $this->assertStringNotContainsString('…', $out);
+    }
+
     /** Usage and description paragraphs wrap too. */
     public function testUsageAndDescriptionWrap(): void
     {

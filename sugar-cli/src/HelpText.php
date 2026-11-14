@@ -36,6 +36,14 @@ final class HelpText
     public const STACKED_INDENT = 6;
 
     /**
+     * Floor of the key-column cap: the derived alignment width never drops
+     * below this many cells, however narrow the terminal (see
+     * {@see renderRows()}), so flag-style keys keep a sane gutter on any
+     * usable screen.
+     */
+    public const KEY_COLUMN_CAP = 24;
+
+    /**
      * Render the full help screen.
      *
      * With a non-null `$width`, the usage synopsis, the description
@@ -224,6 +232,16 @@ final class HelpText
         $maxKey = array_reduce($keys, static fn (int $max, string $k): int
             => max($max, Width::string($k)), 0);
 
+        // A pathological long key must not push the description column off
+        // screen — hard-wrapping cannot save it either, since the row would
+        // still START past the edge. Cap the alignment column at half the
+        // width (never below KEY_COLUMN_CAP) and ellipsize keys past the cap;
+        // normal keys never reach it. A null width has no screen to protect,
+        // so the cap (and the ellipsize) stay out of that path entirely.
+        if ($width !== null) {
+            $maxKey = min($maxKey, max(self::KEY_COLUMN_CAP, intdiv($width, 2)));
+        }
+
         // 2-cell left margin + key column + 2-cell gutter.
         $descColumn = 2 + $maxKey + 2;
         $stacked = $width !== null && $width - $descColumn < self::MIN_DESCRIPTION_WIDTH;
@@ -241,6 +259,13 @@ final class HelpText
                     );
                 }
                 continue;
+            }
+            // The key column was capped above; a key past the cap would push
+            // every description past the edge, so it arrives ellipsized here.
+            // (The stacked branch keeps keys verbatim — there the key owns its
+            // own row and its full spelling is the content.)
+            if (Width::string($key) > $maxKey) {
+                $key = Width::truncateAnsi($key, $maxKey - 1) . '…';
             }
             $lines = self::wrap($desc, self::shrink($width, $descColumn));
             $first = array_shift($lines);
