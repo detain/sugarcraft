@@ -109,6 +109,10 @@ $fixture = new class implements GitDriver {
     public function stashList(): array { return []; }
     public function stashApply(string $stashRef): void {}
     public function stashDrop(string $stashRef): void {}
+    public function stashSha(string $stashRef): string { return ''; }
+
+    public function stashSubject(string $stashRef): string { return ''; }
+    public function stashRestore(string $sha, string $subject = ''): void {}
     public function stashPush(?string $message, bool $keepIndex = false, bool $includeUntracked = false): void {}
     public function stashPop(string $stashRef): void {}
     public function cherryPick(string $commit): void {}

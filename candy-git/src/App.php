@@ -1691,6 +1691,8 @@ final class App implements Model
                 'createBranch' => $this->git->createBranch($args['name'], ($args['base'] ?? '') !== '' ? (string) $args['base'] : null),
                 'removeBranch' => $this->undoCreateBranch($args),
                 'deleteBranch' => $this->git->deleteBranch($args['name']),
+                'stashDrop'    => $this->reverifyStashDrop((string) $args['ref'], (string) $args['sha']),
+                'restash'      => $this->git->stashRestore((string) $args['sha'], (string) ($args['subject'] ?? '')),
                 'restoreBranch' => $this->git->restoreBranch($args['name'], $args['sha']),
                 'stageAll' => $this->git->stageAll(),
                 'unstageAll' => $this->git->unstageAll(),
@@ -2114,14 +2116,36 @@ final class App implements Model
         }
         $base = $this->clearConfirm();
         try {
+            // candy-git-120: capture the entry's sha BEFORE destroying the
+            // ref - one rev-parse makes the drop recoverable, so capture
+            // failure refuses the drop outright rather than performing an
+            // unannounced unrecoverable delete.
+            $sha    = $this->git->stashSha($current->stashRef());
+            $subject = $this->git->stashSubject($current->stashRef());
             $this->git->stashDrop($current->stashRef());
             $freshStashes = $this->git->stashList();
-            return $base->withStashManager(new StashManager($freshStashes))->withAll(
-                successMessage: Lang::t('stash.dropped', ['ref' => $current->stashRef()])
-            );
+            return $base
+                ->withAll(history: $this->requireHistory()->push(HistoryEntry::stashDrop($current->stashRef(), $sha, $subject)))
+                ->withStashManager(new StashManager($freshStashes))
+                ->withAll(successMessage: Lang::t('stash.dropped', ['ref' => $current->stashRef()]));
         } catch (\RuntimeException $e) {
             return $base->withError($e->getMessage());
         }
+    }
+
+    /**
+     * Redo of a stash drop refuses to fire when stash@{N} no longer names
+     * the captured commit (candy-git-120): the ref is POSITIONAL, and after
+     * an undo the restored entry sits at stash@{0}, so a blind replay of
+     * stash@{2} could destroy a live different entry. Same-sha or nothing.
+     */
+    private function reverifyStashDrop(string $ref, string $sha): void
+    {
+        if ($this->git->stashSha($ref) !== $sha) {
+            throw new \RuntimeException(Lang::t('history.cannot_undo', ['op' => $this->opLabel('stashDrop')]));
+        }
+
+        $this->git->stashDrop($ref);
     }
 
     // ---- Cherry-pick ----

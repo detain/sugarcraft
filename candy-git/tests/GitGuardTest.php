@@ -93,6 +93,32 @@ final class GitGuardTest extends TestCase
         $git->stashApply('--invalid');
     }
 
+    /** CG-35: the recovery lane refuses hostile refs before git ever sees them. */
+    public function testStashShaRejectsLeadingDashRef(): void
+    {
+        $git = new Git($this->cwd);
+        $this->expectException(\RuntimeException::class);
+        $git->stashSha('--invalid');
+    }
+
+    public function testStashRestoreRejectsLeadingDashRef(): void
+    {
+        $git = new Git($this->cwd);
+        $this->expectException(\RuntimeException::class);
+        $git->stashRestore('--invalid');
+    }
+
+    public function testStashRestoreRefusesNonHexShasBeforeSpawning(): void
+    {
+        $git = new Git($this->cwd);
+        try {
+            $git->stashRestore('HEAD~1');
+            $this->fail('a rev expression must not reach update-ref');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('non-hex', $e->getMessage());
+        }
+    }
+
     /** CG-18: the details surface refuses dash refs before git ever sees them. */
     public function testCommitDetailsRejectsLeadingDashRef(): void
     {

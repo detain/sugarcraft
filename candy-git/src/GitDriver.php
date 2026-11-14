@@ -213,6 +213,14 @@ interface GitDriver
      */
     public function stashPop(string $stashRef): void;
 
+    /** Resolve a stash ref to its commit sha (candy-git-120). */
+    public function stashSha(string $stashRef): string;
+
+    /** Re-insert a dropped stash entry at the top of the stash list (candy-git-120). */
+    public function stashSubject(string $stashRef): string;
+
+    public function stashRestore(string $sha, string $subject = ''): void;
+
     /** Cherry-pick a commit. */
     public function cherryPick(string $commit): void;
 

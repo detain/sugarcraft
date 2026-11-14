@@ -120,6 +120,10 @@ final class RendererTest extends TestCase
             public function stashList(): array { return []; }
             public function stashApply(string $_stashRef): void {}
             public function stashDrop(string $_stashRef): void {}
+            public function stashSha(string $stashRef): string { return ''; }
+
+            public function stashSubject(string $stashRef): string { return ''; }
+            public function stashRestore(string $sha, string $subject = ''): void {}
             public function stashPush(?string $message, bool $keepIndex = false, bool $includeUntracked = false): void {}
             public function stashPop(string $_stashRef): void {}
             public function cherryPick(string $_commit): void {}
@@ -194,6 +198,10 @@ final class RendererTest extends TestCase
             public function stashList(): array { return []; }
             public function stashApply(string $stashRef): void {}
             public function stashDrop(string $stashRef): void {}
+    public function stashSha(string $stashRef): string { return ''; }
+
+    public function stashSubject(string $stashRef): string { return ''; }
+    public function stashRestore(string $sha, string $subject = ''): void {}
             public function stashPush(?string $message, bool $keepIndex = false, bool $includeUntracked = false): void {}
             public function stashPop(string $stashRef): void {}
             public function cherryPick(string $commit): void {}
@@ -586,6 +594,10 @@ final class RendererTest extends TestCase
             public function stashList(): array { return []; }
             public function stashApply(string $stashRef): void {}
             public function stashDrop(string $stashRef): void {}
+    public function stashSha(string $stashRef): string { return ''; }
+
+    public function stashSubject(string $stashRef): string { return ''; }
+    public function stashRestore(string $sha, string $subject = ''): void {}
             public function stashPush(?string $message, bool $keepIndex = false, bool $includeUntracked = false): void {}
             public function stashPop(string $stashRef): void {}
             public function cherryPick(string $commit): void {}

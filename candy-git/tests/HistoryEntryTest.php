@@ -265,4 +265,29 @@ final class HistoryEntryTest extends TestCase
         $this->assertSame('unstageAll', $entry->inverseOp);
         $this->assertSame([], $entry->inverseArgs);
     }
+
+    /** CG-35: a captured sha makes the drop recoverable... */
+    public function testStashDropWithAShaInvertsToRestash(): void
+    {
+        $entry = HistoryEntry::stashDrop('stash@{2}', '9f8e7d6c5b4a39281706f5e4d3c2b1a098765432');
+        $this->assertSame('stashDrop', $entry->op);
+        $this->assertSame(['ref' => 'stash@{2}', 'sha' => '9f8e7d6c5b4a39281706f5e4d3c2b1a098765432', 'subject' => ''], $entry->args);
+        $this->assertSame('restash', $entry->inverseOp);
+        $this->assertSame(['sha' => '9f8e7d6c5b4a39281706f5e4d3c2b1a098765432', 'subject' => ''], $entry->inverseArgs);
+    }
+
+    /** ...and a missing capture refuses undo instead of lying about it. */
+    public function testStashDropWithoutAShaRefusesUndo(): void
+    {
+        $entry = HistoryEntry::stashDrop('stash@{0}', '');
+        $this->assertSame(HistoryEntry::UNRECOVERABLE_INVERSE, $entry->inverseOp);
+        $this->assertSame('stash@{0}', $entry->args['ref']);
+    }
+
+    public function testStashDropRedoKeepsThePositionalRefForVerification(): void
+    {
+        $entry = HistoryEntry::stashDrop('stash@{1}', 'abc123');
+        $this->assertSame('stash@{1}', $entry->args['ref'], 'redo needs the ref to re-resolve');
+    }
+
 }

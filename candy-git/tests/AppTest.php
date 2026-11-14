@@ -149,6 +149,33 @@ final class FixtureGit implements GitDriver
     }
     public function stashApply(string $stashRef): void { $this->maybeThrow('stashApply'); $this->stashApplies[] = $stashRef; }
     public function stashDrop(string $stashRef): void { $this->maybeThrow('stashDrop'); $this->stashDrops[] = $stashRef; }
+
+    public string $stashShaResult = '9f8e7d6c5b4a39281706f5e4d3c2b1a098765432';
+
+    public function stashSha(string $stashRef): string
+    {
+        $this->maybeThrow('stashSha');
+
+        return $this->stashShaResult;
+    }
+
+    public string $stashSubjectResult = 'WIP on main: deadbeef seed';
+
+    public function stashSubject(string $stashRef): string
+    {
+        $this->maybeThrow('stashSubject');
+
+        return $this->stashSubjectResult;
+    }
+
+    /** @var list<string> */
+    public array $stashRestores = [];
+
+    public function stashRestore(string $sha, string $subject = ''): void
+    {
+        $this->maybeThrow('stashRestore');
+        $this->stashRestores[] = [$sha, $subject];
+    }
     public function stashPush(?string $message, bool $keepIndex = false, bool $includeUntracked = false): void { $this->maybeThrow('stashPush'); $this->stashPushes[] = [$message, $keepIndex, $includeUntracked]; }
     public function stashPop(string $stashRef): void { $this->maybeThrow('stashPop'); $this->stashPops[] = $stashRef; }
     public function cherryPick(string $commit): void { $this->maybeThrow('cherryPick'); $this->cherryPicks[] = $commit; }
@@ -1312,6 +1339,93 @@ final class AppTest extends TestCase
         $this->assertNotNull($a->stashManager, '...and leaves the overlay');
         [$a, ] = $a->update(new KeyMsg(KeyType::Escape, ''));
         $this->assertNull($a->stashManager, 'second Escape closes the overlay');
+    }
+
+    // ---- CG-35: dropped stashes are recoverable (candy-git-120) ----
+
+    private function stashDropGit(): FixtureGit
+    {
+        $g = $this->git();
+        $g->stashListResult = [new \SugarCraft\Git\StashEntry(0, 'deadbeef', 'main', 'WIP on main')];
+
+        return $g;
+    }
+
+    public function testStashDropCapturesTheShaSoHistoryCanUndoIt(): void
+    {
+        $g = $this->stashDropGit();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'S'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
+        $this->assertSame(['stash@{0}'], $g->stashDrops);
+        $stack = $a->history->undoStack;
+        $top = $stack[array_key_last($stack)];
+        $this->assertSame('stashDrop', $top->op);
+        $this->assertSame('restash', $top->inverseOp);
+        $this->assertSame($g->stashShaResult, $top->args['sha'], 'the capture rides the entry, not the decoration');
+        $this->assertStringContainsString('dropped', strtolower((string) $a->successMessage));
+    }
+
+    public function testUndoOfStashDropRestoresTheEntryAtTheTop(): void
+    {
+        $g = $this->stashDropGit();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'S'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
+        // Inside the overlay 'u' is the untracked-push verb - undo is a
+        // global lane, so the arm copy says 'from the main view'.
+        [$a, ] = $a->update(new KeyMsg(KeyType::Escape, ''));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'u'));
+        $this->assertSame([[$g->stashShaResult, $g->stashSubjectResult]], $g->stashRestores, 'the subject rides the restore too');
+        $this->assertStringContainsString('undone', strtolower((string) $a->successMessage));
+        $this->assertStringContainsString('drop stash', strtolower((string) $a->successMessage), 'the lane labels the forward op');
+    }
+
+    public function testStashDropWithoutACapturedShaRefusesUndo(): void
+    {
+        $g = $this->stashDropGit();
+        $g->stashShaResult = '';
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'S'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
+        $this->assertSame(['stash@{0}'], $g->stashDrops);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Escape, ''));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'u'));
+        $this->assertStringContainsString('cannot undo', (string) $a->error);
+        $this->assertSame([], $g->stashRestores, 'the refusal touches nothing');
+    }
+
+    public function testAFailedShaCaptureRefusesTheDropOutright(): void
+    {
+        $g = $this->stashDropGit();
+        $g->throwOn['stashSha'] = new \RuntimeException('cannot resolve stash@{0}');
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'S'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
+        $this->assertSame([], $g->stashDrops, 'an unannounced unrecoverable delete is not what the arm promised');
+        $this->assertStringContainsString('cannot resolve', (string) $a->error);
+    }
+
+    public function testRedoOfStashDropRefusesWhenThePositionalRefMoved(): void
+    {
+        $g = $this->stashDropGit();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'S'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Escape, ''));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'u'));
+        $this->assertSame(1, count($g->stashRestores));
+        // The restore lands at the top: stash@{N} after an undo names
+        // whatever else slid into the old slot. Redo must compare, not guess.
+        $g->stashShaResult = '1098765432abcdef';
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
+        $this->assertSame(['stash@{0}'], $g->stashDrops, 'the replay found a different commit and stopped');
+        $this->assertStringContainsString('cannot undo', (string) $a->error);
     }
 
     public function testVKeyStartsCherryPickCollection(): void

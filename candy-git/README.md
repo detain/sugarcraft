@@ -115,7 +115,7 @@ or — when the local already exists — checks it out. They are read-only for
 `D`: the branch family manages locals.
 | `M`                      | Merge — prompt for a branch/ref to merge into current, seeded with the branch under the cursor when the branches pane has a non-current row selected (still editable) |
 | `r`                      | Open the sequencer menu (continue / abort; skip on a rebase) — when stopped only: opens while a rebase, cherry-pick, or conflicted merge is pending; on an idle repo it reports "no rebase in progress" |
-| `S`                      | Open stash manager (create / apply / pop / drop; push takes an optional message, `u` includes untracked; pop and drop ask twice; the overlay stays open after apply so it remains usable) |
+| `S`                      | Open stash manager (create / apply / pop / drop; push takes an optional message, `u` includes untracked; pop and drop ask twice, and a drop is undoable from the main view; the overlay stays open after apply so it remains usable) |
 | `V`                      | Cherry-pick — type a commit ref and press Enter; from the log pane or the commit details view the ref is pre-filled from the cursor |
 | `w` (branches pane)     | Open worktrees manager (list / add / remove) — path collection refuses option-injection and `..` traversal; it does not jail the destination inside the repository |
 | `i`                      | Interactive rebase todo list — preview only; the todo is not yet executed |
@@ -197,8 +197,14 @@ merge has stopped; the prompt names the armed operation:
 | `u`              | Same, but include untracked files               |
 | `a`              | Apply the selected stash (the overlay stays open) |
 | `p`              | Pop the selected stash — apply then drop (press twice) |
-| `d`              | Drop the selected stash (press twice)           |
+| `d`              | Drop the selected stash (press twice; `u` from the main view restores it) |
 | `Esc`            | Back out of the message buffer, then close      |
+
+A drop captures the entry's sha and reflog subject first — if either
+capture fails the drop is refused outright — so `u` (global undo) can put the
+entry back with its message intact. It lands at the TOP of the list, not at
+its old position; say `git stash store` to your colleagues, that is the
+plumbing underneath.
 
 **Worktrees** (`w`):
 
@@ -304,7 +310,7 @@ file key like `git.timeout` resolves through the core `T` registry as
 raw string.
 
 **Available keys** (`lang/en.php` — an excerpt; the file is the full roster
-of 190 keys):
+of 194 keys):
 
 | Key                    | Default string                                                    | Parameters  |
 |------------------------|-------------------------------------------------------------------|------------|

@@ -742,6 +742,56 @@ final class Git implements GitDriver
         $this->stashDrop($stashRef);
     }
 
+    /**
+     * Resolve a stash ref to its commit sha (candy-git-120). One rev-parse
+     * away was all it took to make `drop` recoverable: the entry object in
+     * the overlay cannot be trusted for this because git's named-message
+     * decoration ('On <branch>: <msg>') carries no sha at all.
+     */
+    public function stashSha(string $stashRef): string
+    {
+        $this->guardRef($stashRef);
+
+        return trim(implode('', $this->run(['rev-parse', $stashRef])));
+    }
+
+    /**
+     * The entry's reflog subject ('On <branch>: <msg>' / 'WIP on ...') -
+     * the exact text `git stash list` displays (candy-git-120). Capture it
+     * BEFORE the drop: a restored entry without it reads 'Created via "git
+     * stash store".' and the user's message silently dies.
+     */
+    public function stashSubject(string $stashRef): string
+    {
+        $this->guardRef($stashRef);
+
+        return trim(implode('', $this->run(['log', '-g', '--format=%gs', '-1', $stashRef])));
+    }
+
+    /**
+     * Re-insert a dropped stash entry at the TOP of the stash list
+     * (candy-git-120). The entry is its own commit - parents intact - so
+     * `git stash store` recreates the ref; only the POSITION is lost, and
+     * the arm copy says so. The -m carries the captured subject because
+     * stash list displays it; without it the entry returns anonymous.
+     * The worktree and index are not touched by this lane at all.
+     */
+    public function stashRestore(string $sha, string $subject = ''): void
+    {
+        $this->guardRef($sha);
+        if ($sha === '' || !ctype_xdigit($sha)) {
+            throw new \RuntimeException(Lang::t('git.unsafe_sha'));
+        }
+
+        $store = ['stash', 'store'];
+        if ($subject !== '') {
+            $store[] = '-m';
+            $store[] = $subject;
+        }
+        $store[] = $sha;
+        $this->run($store);
+    }
+
     public function cherryPick(string $commit): void
     {
         $this->guardRef($commit);

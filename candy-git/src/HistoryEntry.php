@@ -243,6 +243,27 @@ final readonly class HistoryEntry
      * yanking the working tree onto it (audit A2). Without a sha (fixture
      * rows, stripped branch lists) the entry refuses undo.
      */
+    /**
+     * A dropped stash is recoverable while its commit survives the
+     * reflog/GC grace (candy-git-120): the inverse re-inserts the entry at
+     * the top of the stash list via update-ref. The position it had is NOT
+     * preserved - the API says so instead of pretending. Without a captured
+     * sha (a capture that failed, fixture rows) the entry refuses undo.
+     */
+    public static function stashDrop(string $ref, string $sha, string $subject = ''): self
+    {
+        if ($sha === '') {
+            return new self('stashDrop', ['ref' => $ref, 'sha' => ''], self::UNRECOVERABLE_INVERSE, []);
+        }
+
+        return new self(
+            'stashDrop',
+            ['ref' => $ref, 'sha' => $sha, 'subject' => $subject],
+            'restash',
+            ['sha' => $sha, 'subject' => $subject],
+        );
+    }
+
     public static function deleteBranch(string $name, string $sha): self
     {
         if ($sha === '') {
