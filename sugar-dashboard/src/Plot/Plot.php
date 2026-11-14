@@ -14,6 +14,7 @@ use SugarCraft\Dashboard\Foundation\Drawable;
 use SugarCraft\Dashboard\Foundation\Theme;
 use SugarCraft\Dashboard\Plot\Braille\BrailleCanvas;
 use SugarCraft\Dashboard\Plot\Braille\BrailleMatrix;
+use SugarCraft\Dashboard\Plot\Chart\AxisLabelFormatter;
 
 /**
  * A line/scatter chart rendered using braille characters for 2x4 resolution.
@@ -22,10 +23,20 @@ use SugarCraft\Dashboard\Plot\Braille\BrailleMatrix;
  * - LineChart: connected points with lines
  * - ScatterPlot: unconnected points only
  *
+ * Colour precedence (finding sugar-dashboard-234): the global colour set
+ * via {@see self::withColor()} always wins; a per-cell colour carries
+ * through to both entry paths only when no global colour is set.
+ *
+ * Both entry paths paint the SAME geometry (findings sugar-dashboard-183/
+ * 184): {@see self::buildPlot()} owns the gutter, the window and the
+ * braille canvas, so draw(Buffer) and render() can no longer drift.
+ *
  * Mirrors termui widgets/plot.go
  */
 final class Plot implements SizedItem, Drawable
 {
+    use AxisLabelFormatter;
+
     public const MODE_LINE = 'line';
     public const MODE_SCATTER = 'scatter';
 
@@ -171,52 +182,22 @@ final class Plot implements SizedItem, Drawable
     {
         [$bufWidth, $bufHeight] = $buffer->innerSize();
 
-        $innerWidth = $this->width - ($this->showAxes ? 2 : 0);
-        $innerHeight = $this->height - ($this->showAxes ? 2 : 0);
-
-        if ($innerWidth <= 0 || $innerHeight <= 0) {
+        if ($this->width - ($this->showAxes ? 2 : 0) <= 0 || $this->height - ($this->showAxes ? 3 : 0) <= 0) {
             return;
         }
+
+        [$canvas, $gutter, $innerWidth, $innerHeight, $yLabels, $windowStart, $lastPainted] = $this->buildPlot();
 
         $rect = $this->rect();
         $globalStyle = $this->color !== null
             ? new \SugarCraft\Dashboard\Foundation\Style(foreground: $this->color)
             : new \SugarCraft\Dashboard\Foundation\Style();
 
-        // Canvas origin offset within the buffer
-        $originX = $rect->minX + ($this->showAxes ? 2 : 0);
+        // Canvas origin offset within the buffer - the gutter is the label
+        // column, however wide the widest label needs it (finding 082: the
+        // fixed 2-cell gutter let long labels overrun the plot width).
+        $originX = $rect->minX + $gutter;
         $originY = $rect->minY + ($this->showAxes ? 1 : 0);
-
-        // Build canvas with same math as render()
-        $dotWidth = $innerWidth * 2;
-        $dotHeight = $innerHeight * 4;
-        $canvas = BrailleCanvas::new($dotWidth, $dotHeight);
-
-        $prevX = null;
-        $prevY = null;
-
-        foreach ($this->data as $i => $value) {
-            if ($value === null) {
-                $prevX = null;
-                $prevY = null;
-                continue;
-            }
-
-            $x = $i * $this->horizontalScale * 2;
-            $rawY = intdiv((int)(($value - $this->minValue) / max(0.001, ($this->maxValue - $this->minValue) / max(1, $innerHeight - 1))), 1) * 4;
-            $y = ($dotHeight - 1) - $rawY;
-            $x = max(0, min($x, $dotWidth - 1));
-            $y = max(0, min($y, $dotHeight - 1));
-
-            if ($this->mode === self::MODE_LINE && $prevX !== null && $prevY !== null) {
-                $canvas = $canvas->setLine($prevX, $prevY, $x, $y, $this->color);
-            } else {
-                $canvas = $canvas->setPoint($x, $y, $this->color);
-            }
-
-            $prevX = $x;
-            $prevY = $y;
-        }
 
         // Write braille cells directly into the buffer grid (in-place mutation, matching Buffer::draw() pattern)
         foreach ($canvas->cells() as [$cellX, $cellY, $bits, $cellColor]) {
@@ -229,7 +210,8 @@ final class Plot implements SizedItem, Drawable
 
             $rune = BrailleMatrix::rune($bits);
 
-            // Per-cell color overrides global color only when no global color is set
+            // Global colour always wins; the per-cell colour applies only
+            // when no global colour is set (documented in the class block).
             $style = ($cellColor !== null && $this->color === null)
                 ? $globalStyle->withForeground($cellColor)
                 : $globalStyle;
@@ -238,27 +220,24 @@ final class Plot implements SizedItem, Drawable
         }
 
         // Axes labels via setString (faster for text than per-cell setCell)
-        // Only write axes when there is data (matching render() behavior)
-        $dataCount = count(array_filter($this->data, fn($v) => $v !== null));
-        if ($this->showAxes && $dataCount > 0) {
-            $yLabels = $this->generateYLabels($innerHeight);
-
-            // Y-axis labels (left column, 2 chars wide)
+        // Only write axes when something was actually painted (shared null
+        // filter with render(), finding sugar-dashboard-184).
+        if ($this->showAxes && $lastPainted !== null) {
+            // Y-axis labels (left gutter column)
             $yLabelCount = count($yLabels);
             for ($y = 0; $y < $innerHeight && $y < $yLabelCount; $y++) {
                 $posY = $rect->minY + 1 + $y;
                 if ($posY > $rect->maxY) {
                     break;
                 }
-                $this->writeString($buffer, $rect->minX, $posY, str_pad($yLabels[$y], 2), $globalStyle, $bufWidth, $bufHeight);
+                $this->writeString($buffer, $rect->minX, $posY, str_pad($yLabels[$y], $gutter), $globalStyle, $bufWidth, $bufHeight);
             }
 
-            // X-axis labels (bottom two rows)
-            $xLabels = $this->generateXLabels($dataCount, $innerWidth);
-            $xLabelLine1 = '  ' . ($xLabels[0] ?? '');
-            $xLabelLine2 = '  ' . ($xLabels[1] ?? '');
-            $this->writeString($buffer, $rect->minX, $rect->minY + 1 + $innerHeight, $xLabelLine1, $globalStyle, $bufWidth, $bufHeight);
-            $this->writeString($buffer, $rect->minX, $rect->minY + 2 + $innerHeight, $xLabelLine2, $globalStyle, $bufWidth, $bufHeight);
+            // X-axis labels (bottom two rows), window-honest
+            [$xStart, $xEnd] = $this->generateXLabels($windowStart, $lastPainted);
+            $pad = str_repeat(' ', $gutter);
+            $this->writeString($buffer, $rect->minX, $rect->minY + 1 + $innerHeight, $pad . $xStart, $globalStyle, $bufWidth, $bufHeight);
+            $this->writeString($buffer, $rect->minX, $rect->minY + 2 + $innerHeight, $pad . $xEnd, $globalStyle, $bufWidth, $bufHeight);
         }
     }
 
@@ -304,20 +283,77 @@ final class Plot implements SizedItem, Drawable
     }
 
     /**
-     * Format a label value.
+     * Shared geometry for BOTH entry paths (findings sugar-dashboard-082,
+     * 183, 184, 197): the old draw()/render() pair duplicated the canvas
+     * math and drifted - differing null filters decided when axes were
+     * painted, labels wider than the fixed two-cell gutter overran the
+     * plot width, and samples beyond the canvas all clamped into the last
+     * column, piling history into a solid vertical bar. This builder owns
+     * the numbers once: the gutter is as wide as the widest label (never
+     * less than the historical 2 cells), the canvas gets every remaining
+     * column, and a sample stream longer than the canvas paints as a
+     * trailing window (the DualSampleGraph::frame() precedent in this lib).
+     *
+     * @return array{0:BrailleCanvas,1:int,2:int,3:int,4:list<string>,5:int,6:?int}
+     *         [canvas, gutterCells, innerWidth, innerHeight, yLabels, windowStart, lastPaintedIndex]
      */
-    private function formatLabel(float $value): string
+    private function buildPlot(): array
     {
-        if (abs($value) >= 1_000_000) {
-            return sprintf('%.1fM', $value / 1_000_000);
+        // One canvas row less than the old string-only path: axes spend a
+        // top row, two x-label rows and nothing else - draw() offsets its
+        // canvas origin by one under axes, so render() must too or the two
+        // entry paths paint different rectangles (finding 183).
+        $innerHeight = $this->height - ($this->showAxes ? 3 : 0);
+        $yLabels = $this->showAxes ? $this->generateYLabels($innerHeight) : [];
+
+        $gutter = 0;
+        if ($this->showAxes) {
+            $gutter = 2;
+            foreach ($yLabels as $label) {
+                $gutter = max($gutter, \SugarCraft\Core\Util\Width::string($label));
+            }
         }
-        if (abs($value) >= 1_000) {
-            return sprintf('%.1fK', $value / 1_000);
+        $innerWidth = $this->width - $gutter;
+
+        $dotWidth = $innerWidth * 2;
+        $dotHeight = $innerHeight * 4;
+        $canvas = BrailleCanvas::new($dotWidth, $dotHeight);
+
+        $step = $this->horizontalScale * 2;
+        $count = count($this->data);
+        // Trailing window: only the samples that fit land on the canvas.
+        $capacity = intdiv($dotWidth - 1, $step) + 1;
+        $windowStart = max(0, $count - $capacity);
+
+        $verticalScale = ($this->maxValue - $this->minValue) / max(1, $innerHeight - 1);
+
+        $prevX = null;
+        $prevY = null;
+        $lastPainted = null;
+
+        foreach (array_slice($this->data, $windowStart) as $offset => $value) {
+            if ($value === null) {
+                $prevX = null;
+                $prevY = null;
+                continue;
+            }
+
+            $x = min($offset * $step, $dotWidth - 1);
+            $rawY = (int) (($value - $this->minValue) / max(0.001, $verticalScale)) * 4;
+            $y = max(0, min(($dotHeight - 1) - $rawY, $dotHeight - 1));
+
+            if ($this->mode === self::MODE_LINE && $prevX !== null && $prevY !== null) {
+                $canvas = $canvas->setLine($prevX, $prevY, $x, $y, $this->color);
+            } else {
+                $canvas = $canvas->setPoint($x, $y, $this->color);
+            }
+
+            $prevX = $x;
+            $prevY = $y;
+            $lastPainted = $windowStart + $offset;
         }
-        if ($value === floor($value)) {
-            return sprintf('%.0f', $value);
-        }
-        return sprintf('%.1f', $value);
+
+        return [$canvas, $gutter, $innerWidth, $innerHeight, $yLabels, $windowStart, $lastPainted];
     }
 
     /**
@@ -325,87 +361,52 @@ final class Plot implements SizedItem, Drawable
      */
     public function render(): string
     {
-        $innerWidth = $this->width - ($this->showAxes ? 2 : 0);
-        $innerHeight = $this->height - ($this->showAxes ? 2 : 0);
-
-        if ($innerWidth <= 0 || $innerHeight <= 0) {
+        if ($this->width - ($this->showAxes ? 2 : 0) <= 0 || $this->height - ($this->showAxes ? 3 : 0) <= 0) {
             return '';
         }
 
-        $dataCount = count($this->data);
-        if ($dataCount === 0) {
+        if ($this->data === []) {
             return str_repeat("\n", $this->height - 1);
         }
 
-        // verticalScale = maxVal / (innerH - 1)
-        $verticalScale = ($this->maxValue - $this->minValue) / max(1, $innerHeight - 1);
-
-        // Create BrailleCanvas with high-resolution pixel dimensions
-        $dotWidth = $innerWidth * 2;
-        $dotHeight = $innerHeight * 4;
-        $canvas = BrailleCanvas::new($dotWidth, $dotHeight);
-
-        $prevX = null;
-        $prevY = null;
-
-        // Plot each data point
-        foreach ($this->data as $i => $value) {
-            if ($value === null) {
-                $prevX = null;
-                $prevY = null;
-                continue;
-            }
-
-            // x = i * horizontalScale * 2 (pixel coords)
-            $x = $i * $this->horizontalScale * 2;
-
-            // y = intval((value - minValue) / verticalScale) * 4 (scaled to 4 pixels per cell row)
-            $rawY = intdiv((int) (($value - $this->minValue) / max(0.001, $verticalScale)), 1) * 4;
-
-            // Invert: flip so max is at top
-            $y = ($dotHeight - 1) - $rawY;
-
-            // Clamp to canvas bounds
-            $x = max(0, min($x, $dotWidth - 1));
-            $y = max(0, min($y, $dotHeight - 1));
-
-            if ($this->mode === self::MODE_LINE && $prevX !== null && $prevY !== null) {
-                // Draw line from previous point
-                $canvas = $canvas->setLine($prevX, $prevY, $x, $y, $this->color);
-            } else {
-                // Draw single dot
-                $canvas = $canvas->setPoint($x, $y, $this->color);
-            }
-
-            $prevX = $x;
-            $prevY = $y;
-        }
+        [$canvas, $gutter, $innerWidth, $innerHeight, $yLabels, $windowStart, $lastPainted] = $this->buildPlot();
 
         $output = $canvas->render();
 
-        // If not showing axes, return just the canvas output
+        // If not showing axes, return the canvas alone - every row padded
+        // to the allocation (the canvas rtrim's content lines, but the plot
+        // contract is one exact row width so draw() and render() describe
+        // the same rectangle).
         if (!$this->showAxes) {
-            return $output;
+            return implode("\n", array_map(
+                static fn(string $line): string => \SugarCraft\Core\Util\Width::padRight($line, $innerWidth),
+                explode("\n", $output),
+            ));
         }
 
-        // Build axes labels
-        $yLabels = $this->generateYLabels($innerHeight);
-        $xLabels = $this->generateXLabels($dataCount, $innerWidth);
-
-        // Combine canvas output with axes
+        // Combine canvas output with axes - the gutter is label-honest, so
+        // a '-1.5M' fixture paints 5 cells and the canvas shrinks to match
+        // (finding sugar-dashboard-082: str_pad never truncated and every
+        // row overran the allocation).
         $canvasLines = explode("\n", $output);
-        $resultLines = [];
+        // Top axis row - the canvas origin under draw() sits one row down
+        // when axes are on; render must spend the same row or the two paths
+        // paint different rectangles (finding 183 parity, again).
+        $resultLines = [str_repeat(' ', $gutter + $innerWidth)];
 
         for ($y = 0; $y < $innerHeight; $y++) {
             $yLabel = $yLabels[$y] ?? '';
             $canvasLine = $canvasLines[$y] ?? '';
-            $resultLines[] = str_pad($yLabel, 2) . $canvasLine;
+            $resultLines[] = str_pad($yLabel, $gutter) . \SugarCraft\Core\Util\Width::padRight($canvasLine, $innerWidth);
         }
 
-        // X-axis labels (bottom row + padding row)
-        $xLabelLine = '  ' . ($xLabels[0] ?? '');
-        $resultLines[] = $xLabelLine;
-        $resultLines[] = '  ' . ($xLabels[1] ?? '');
+        // X-axis labels (bottom row + padding row), window-honest: they
+        // show the FIRST painted sample index and the LAST one, not a '0'
+        // when history was windowed away. Padded to the same exact width.
+        [$xStart, $xEnd] = $this->generateXLabels($windowStart, $lastPainted);
+        $pad = str_repeat(' ', $gutter);
+        $resultLines[] = \SugarCraft\Core\Util\Width::padRight($pad . $xStart, $gutter + $innerWidth);
+        $resultLines[] = \SugarCraft\Core\Util\Width::padRight($pad . $xEnd, $gutter + $innerWidth);
 
         $output = implode("\n", $resultLines);
 
@@ -430,28 +431,25 @@ final class Plot implements SizedItem, Drawable
         for ($i = 0; $i < $height; $i++) {
             // Labels from top to bottom (max to min)
             $value = $this->maxValue - (($i / max(1, $height - 1)) * $range);
-            $labels[] = $this->formatLabel($value);
+            $labels[] = $this->formatYLabel($value);
         }
 
         return $labels;
     }
 
     /**
-     * Generate X-axis labels.
+     * Generate X-axis labels: the first painted sample and the last one
+     * (null samples past the last painted point do not claim the axis).
      *
-     * @return list<string>
+     * @return array{0:string,1:string}
      */
-    private function generateXLabels(int $dataCount, int $width): array
+    private function generateXLabels(int $windowStart, ?int $lastPainted): array
     {
-        if ($dataCount === 0) {
+        if ($lastPainted === null) {
             return ['', ''];
         }
 
-        // Start and end indices
-        $startLabel = '0';
-        $endLabel = (string) ($dataCount - 1);
-
-        return [$startLabel, $endLabel];
+        return [(string) $windowStart, (string) $lastPainted];
     }
 
     /**

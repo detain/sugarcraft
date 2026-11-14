@@ -9,6 +9,7 @@ use SugarCraft\Dashboard\Foundation\Buffer;
 use SugarCraft\Dashboard\Foundation\Sizer;
 use SugarCraft\Dashboard\Foundation\Drawable;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Width;
 use PHPUnit\Framework\TestCase;
 
 final class PlotTest extends TestCase
@@ -446,5 +447,96 @@ final class PlotTest extends TestCase
         $rendered = $plot->render();
 
         $this->assertNotSame('', $rendered);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // D-92 (findings 082/183/184/197/234) - shared geometry law
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testLongAxisLabelsNeverOverrunTheAllocation(): void
+    {
+        $plot = Plot::new([-1_500_000.0, 1_000_000.0, 0.0], 40, 8);
+        $rows = self::plainRows($plot->render());
+
+        $this->assertCount(8, $rows, 'axes mode paints innerHeight + two label rows');
+        foreach ($rows as $i => $row) {
+            $this->assertSame(40, Width::string($row), "row {$i} is exactly the allocation");
+        }
+        $this->assertStringContainsString('-1.5M', $rows[5], 'the widest label is painted, not clipped away');
+    }
+
+    public function testHistoryBeyondTheCanvasIsWindowedNotPiled(): void
+    {
+        // width 8, axes on -> innerWidth 6 -> dotWidth 12, step 2 -> 6 slots.
+        // 30 samples: only indices 24..29 land on the canvas and the x labels
+        // say so (the old walk painted 0..29 into slot min(x,11), piling the
+        // tail into one column and labelling the origin '0' - fiction).
+        $data = range(1, 30);
+        $plot = Plot::new($data, 8, 12);
+        $rows = self::plainRows($plot->render());
+
+        $xStart = $rows[count($rows) - 2];
+        $xEnd = $rows[count($rows) - 1];
+        $this->assertMatchesRegularExpression('/^\s*[1-9]\d*\s*$/u', $xStart, 'window start index, not the old hardcoded 0');
+        $this->assertMatchesRegularExpression('/^\s*29\s*$/u', $xEnd, 'last painted index');
+
+        // Monotonic ascending data with 6 slots: the old overflow piled
+        // samples 0..29 into the final dot column (min(offset*2, dotWidth-1)
+        // with no window), smearing a near-full vertical bar at the right
+        // edge. The windowed walk paints only the last six samples, so the
+        // final cell column carries at most a handful of rows.
+        $canvasRows = array_slice($rows, 0, count($rows) - 2);
+        $lastColPainted = 0;
+        foreach ($canvasRows as $row) {
+            $ch = mb_substr(rtrim($row), -1);
+            if ($ch !== '' && preg_match('/[\x{2800}-\x{28FF}]/u', $ch)) {
+                $lastColPainted++;
+            }
+        }
+        $this->assertGreaterThan(0, $lastColPainted, 'the window tail is painted');
+        $this->assertLessThanOrEqual(3, $lastColPainted, 'overflow samples do not smear the final column');
+    }
+
+    public function testDrawIntoBufferMatchesRenderLineForLine(): void
+    {
+        $plot = Plot::new([1.0, 4.0, 2.0, 9.0, 7.0, 3.0], 40, 8);
+
+        $buffer = Buffer::new(40, 8);
+        $plot->draw($buffer);
+
+        $renderRows = self::plainRows($plot->render());
+        $bufferRows = self::plainRows($buffer->render());
+
+        $this->assertCount(count($renderRows), $bufferRows);
+        foreach ($renderRows as $i => $row) {
+            $this->assertSame(rtrim($row), rtrim($bufferRows[$i]), "line {$i} agrees between draw() and render()");
+        }
+    }
+
+    public function testMaxValueReachesTopCanvasRow(): void
+    {
+        $plot = Plot::new([0.0, 100.0], 10, 6)
+            ->withMinValue(0.0)
+            ->withMaxValue(100.0)
+            ->withShowAxes(false);
+        $rows = self::plainRows($plot->render());
+
+        $this->assertMatchesRegularExpression('/[\x{2800}-\x{28FF}]/u', $rows[0], 'the maximum paints dots on the top row');
+        $this->assertMatchesRegularExpression('/[\x{2800}-\x{28FF}]/u', $rows[count($rows) - 1], 'the minimum paints dots on the bottom row');
+    }
+
+    public function testAxisLabelFormatterIsWiredAndTheDuplicateIsGone(): void
+    {
+        $ref = new \ReflectionClass(Plot::class);
+        $this->assertFalse($ref->hasMethod('formatLabel'), 'the private copy of the formatter is deleted');
+        $this->assertTrue($ref->hasMethod('formatYLabel'), 'the shared AxisLabelFormatter trait does the labelling');
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function plainRows(string $block): array
+    {
+        return explode("\n", (string) preg_replace('/\x1b\[[0-9;]*m/', '', $block));
     }
 }

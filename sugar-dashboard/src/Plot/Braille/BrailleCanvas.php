@@ -278,7 +278,7 @@ final class BrailleCanvas implements SizedItem
                     if ($color !== null) {
                         $line .= $color->toFg($profile) . $rune . Ansi::reset();
                     } else {
-                        $line .= $rune . ' ';
+                        $line .= $rune;
                     }
                 }
             }
