@@ -196,7 +196,7 @@ maps each package to its upstream.
 | SugarAsync (sugar-async/) | none — first-party |
 | SugarCellbuffer (sugar-cellbuffer/) | [vte](https://github.com/charmbracelet/vte) |
 | SugarCharts (sugar-charts/) | [ntcharts](https://github.com/NimbleMarkets/ntcharts) |
-| SugarCli (sugar-cli/) | [fang](https://github.com/charmbracelet/fang) (output shape only — no argv/cobra layer) |
+| SugarCli (sugar-cli/) | [fang](https://github.com/charmbracelet/fang) (output shape only — no argv/cobra layer; surface inventory in [research](research/libraries/sugar-cli-research.md)) |
 | SugarColorprofile (sugar-colorprofile/) | [colorprofile](https://github.com/charmbracelet/colorprofile) |
 | SugarConstraints (sugar-constraints/) | [ratatui](https://github.com/ratatui/ratatui) |
 | SugarCraft (sugar-core/) | [Bubble Tea](https://github.com/charmbracelet/bubbletea) |

@@ -41,6 +41,7 @@ To implement an item:
 | **sugar-flexbox** | [research/libraries/sugar-flexbox-research.md](libraries/sugar-flexbox-research.md) | 1. Viewport, 2. Sticky via FlexBox, 3. Scrollbar |
 | **sugar-panels** | [research/libraries/sugar-panels-research.md](libraries/sugar-panels-research.md) | 1. Box styles enum, 2. Text alignment, 3. Box titles |
 | **sugar-navstack** | [research/libraries/sugar-navstack-research.md](libraries/sugar-navstack-research.md) | 1. Fix examples, 2. Closable interfaces, 3. Click regions |
+| **sugar-cli** | [research/libraries/sugar-cli-research.md](libraries/sugar-cli-research.md) | 1. fang-surface parity inventory, 2. width-never-touches-a-device divergence, 3. SC-G1/SC-G2 pending-ruling rows |
 | **MySQL Workbench status & performance dashboard** (candy-sql parity study) | [mysql_workbench_dash.md](mysql_workbench_dash.md) | 1. Performance page metrics, 2. Two-connection cache model, 3. Page lifecycle / event-task model |
 
 ### Input & Readline
