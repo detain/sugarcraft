@@ -95,7 +95,9 @@ final class Terminal
      * raw bytes a real terminal would write back to the application's
      * tty. Without a callback the answers queue for {@see replies()}
      * draining, which keeps the original `feed(string): void` contract
-     * untouched for all existing callers.
+     * untouched for all existing callers. The undrained queue is a
+     * drop-oldest ring; {@see replyOverflowCount()} tells a host whether
+     * any answer was evicted before it could drain it.
      *
      * Mirrors charmbracelet/x/vt's `Emulator.Read()` io.Pipe semantics in
      * pull form (x/vt emulator.go L265-281).
@@ -124,6 +126,16 @@ final class Terminal
         $pending = $this->handler->replies;
         $this->handler->replies = [];
         return $pending;
+    }
+
+    /**
+     * Replies evicted by the ring ceilings since construction
+     * (sugar-vterm-048): nonzero means answers were dropped before any
+     * drain saw them.
+     */
+    public function replyOverflowCount(): int
+    {
+        return $this->handler->replyOverflowCount();
     }
 
     /**

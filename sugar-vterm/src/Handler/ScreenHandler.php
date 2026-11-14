@@ -144,6 +144,8 @@ final class ScreenHandler implements SubparamsAwareHandler
      * Backlog cap for {@see $replies}: hostile streams (sugar-pty renders
      * untrusted program output) can spam queries nobody drains, and a
      * pull queue has no io.Pipe-style write blocking. Drop-oldest ring.
+     * Entry count alone is not a memory bound — every ring is ALSO
+     * capped by {@see self::MAX_RING_BYTES} resident payload bytes.
      */
     private const MAX_REPLIES = 1024;
 
@@ -153,9 +155,25 @@ final class ScreenHandler implements SubparamsAwareHandler
      * Both logs are fed by hostile streams — OSC 52 self-arms the clipboard
      * log without any consumer opt-in, and DECSET 1004 arms the focus log —
      * and a pull accessor has no back-pressure, so the ceiling is a library
-     * memory guarantee rather than a consumer courtesy.
+     * memory guarantee rather than a consumer courtesy. Focus messages
+     * carry no payload, so for that log the count cap alone binds.
      */
     private const MAX_EVENTS = 1024;
+
+    /**
+     * Resident-payload budget per ring (replies, clipboard): once the
+     * stored bytes exceed 2 MiB the oldest entries are evicted until the
+     * ring fits again, so an attacker writing megabyte OSC 52 payloads
+     * cannot hold the backlog open past a bounded size. Evict-whole-entries
+     * (never truncate): matches the drop-oldest precedent and loses no
+     * half records. A single entry larger than the budget may sit alone —
+     * the bound is on accumulated backlog, and the parser's 64 KiB string
+     * ceiling already caps one payload's size in practice (sugar-vterm-084).
+     */
+    private const MAX_RING_BYTES = 2 * 1024 * 1024;
+
+    /** Entries evicted from {@see $replies} by the ring ceilings. */
+    private int $replyDrops = 0;
 
     /**
      * Ceiling for the DEC 2026 synchronized-output mutation queue. Past it
@@ -1091,28 +1109,70 @@ final class ScreenHandler implements SubparamsAwareHandler
 
     // ─── Query → reply channel ───────────────────────────────────────────────
 
-    /** Queue one reply, dropping the oldest past {@see self::MAX_REPLIES}. */
+    /**
+     * Queue one reply, dropping the oldest past {@see self::MAX_REPLIES}
+     * entries or {@see self::MAX_RING_BYTES} resident bytes
+     * (sugar-vterm-048). Each eviction increments
+     * {@see self::replyOverflowCount()}.
+     */
     private function reply(string $bytes): void
     {
-        if (\count($this->replies) >= self::MAX_REPLIES) {
-            array_shift($this->replies);
-        }
         $this->replies[] = $bytes;
+        $resident = \array_sum(\array_map('strlen', $this->replies));
+        while (\count($this->replies) > 1
+            && (\count($this->replies) > self::MAX_REPLIES || $resident > self::MAX_RING_BYTES)) {
+            $resident -= \strlen((string) \array_shift($this->replies));
+            $this->replyDrops++;
+        }
+    }
+
+    /**
+     * Number of queued replies evicted by the ring ceilings — the
+     * overflow-detection seam for hosts that drain lazily (sugar-vterm-048).
+     */
+    public function replyOverflowCount(): int
+    {
+        return $this->replyDrops;
     }
 
     /**
      * Append one entry to a capped event log, dropping the oldest past
-     * {@see self::MAX_EVENTS}. Mirrors {@see self::reply()} for the two
-     * hostile-stream event lists so neither can grow without bound.
+     * {@see self::MAX_EVENTS} entries or {@see self::MAX_RING_BYTES}
+     * resident payload bytes (sugar-vterm-084). Mirrors {@see self::reply()}
+     * for the two hostile-stream event lists so neither can grow without
+     * bound; focus messages carry no payload, so the count cap alone binds
+     * that log.
      *
      * @param array<array-key, mixed> $log
      */
     private function pushEvent(array &$log, mixed $event): void
     {
-        if (\count($log) >= self::MAX_EVENTS) {
-            array_shift($log);
-        }
         $log[] = $event;
+        $resident = self::eventBytes($log);
+        while (\count($log) > 1
+            && (\count($log) > self::MAX_EVENTS || $resident > self::MAX_RING_BYTES)) {
+            $first = \array_shift($log);
+            $resident -= self::eventBytes([$first]);
+        }
+    }
+
+    /**
+     * Resident payload bytes of an event log — the sum of `payload` string
+     * fields, the only attacker-sized value in these entries. strlen is
+     * O(1) on PHP strings, so recomputing per push stays cheap and cannot
+     * go stale when consumers drain the public arrays directly.
+     *
+     * @param array<array-key, mixed> $log
+     */
+    private static function eventBytes(array $log): int
+    {
+        $bytes = 0;
+        foreach ($log as $event) {
+            if (\is_array($event) && isset($event['payload']) && \is_string($event['payload'])) {
+                $bytes += \strlen($event['payload']);
+            }
+        }
+        return $bytes;
     }
 
     /**

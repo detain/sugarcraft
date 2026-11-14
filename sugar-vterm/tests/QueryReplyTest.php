@@ -293,4 +293,24 @@ final class QueryReplyTest extends TestCase
         // 1099 % 5 + 1 = row 5 — head and tail genuinely differ.
         $this->assertSame("\x1b[5;1R", $replies[1023], 'newest reply kept');
     }
+
+    public function testReplyOverflowCounterObservesEvictions(): void
+    {
+        // sugar-vterm-048: the drop-oldest design stays, but the count of
+        // shed answers becomes observable so a lazily-draining host can
+        // tell silence from saturation. 1030 pushes past a 1024 window =
+        // exactly 6 evictions; draining does not reset the counter.
+        $t = Terminal::new(10, 6);
+        $this->assertSame(0, $t->replyOverflowCount(), 'no overflow before any eviction');
+
+        $storm = '';
+        for ($i = 0; $i < 1030; $i++) {
+            $storm .= "\x1b[" . ($i % 5 + 1) . ";1H\x1b[6n";
+        }
+        $t->feed($storm);
+
+        $this->assertSame(6, $t->replyOverflowCount());
+        $this->assertCount(1024, $t->replies());
+        $this->assertSame(6, $t->replyOverflowCount(), 'draining keeps the historical count');
+    }
 }

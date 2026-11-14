@@ -196,4 +196,37 @@ final class EventLogCeilingsTest extends TestCase
         );
         self::assertSame(1, $renderer->cursor()->col, 'dropped marks must not move the renderer cursor');
     }
+
+    public function testClipboardRingHonorsTheByteBudget(): void
+    {
+        // sugar-vterm-084: 1024 small entries were never the point — an
+        // attacker writing near-cap OSC 52 payloads must not pin megabytes
+        // of backlog below the count ceiling. Value assertion, not survival.
+        $t = FullTerminal::new(20, 5);
+        $payload = str_repeat('A', 60_000); // under the parser's 64 KiB string cap
+        $bytes = '';
+        for ($i = 0; $i < 40; $i++) {
+            $bytes .= "\x1b]52;c;{$payload}\x07";
+        }
+        $t->feed($bytes);
+
+        $events = $t->clipboardEvents();
+        $budgetRaw = (new \ReflectionClass(ScreenHandler::class))->getConstant('MAX_RING_BYTES');
+        self::assertIsInt($budgetRaw);
+        $budget = $budgetRaw;
+        $expected = intdiv($budget, strlen($payload));
+        self::assertSame(
+            $expected,
+            \count($events),
+            'resident byte budget must shed whole oldest entries, capped to the budget',
+        );
+        self::assertLessThan(self::EVENTS_CAP, \count($events), 'bytes bind before the count cap');
+        $resident = 0;
+        foreach ($events as $event) {
+            $resident += strlen((string) ($event['payload'] ?? ''));
+        }
+        self::assertLessThanOrEqual($budget, $resident);
+        // Drop-OLDEST: the newest write survived at full payload.
+        self::assertSame($payload, $events[\count($events) - 1]['payload'] ?? null);
+    }
 }
