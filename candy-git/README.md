@@ -353,53 +353,64 @@ what it cannot disarm safely, it detects and discloses:
   hostile clone would otherwise achieve instant code execution before you see
   a pane. `diff.external` is the same class of hazard and is disabled with
   `--no-ext-diff` on every diff.
-- Merge drivers are enumerated and neutralized on every merge-capable
-  command. `merge.<name>.driver` is the same species of executable-naming
-  key: one `.gitattributes` line (`*.txt merge=evil`) plus a driver definition
-  in the repository's *own* config — local, `config.worktree`, or pulled in
-  through `include.path` — sends git's 3-way merge machinery to an
-  attacker-chosen program, and a merge is exactly what a conflict prompts
-  you to do. Before running `merge`, `rebase --continue`/`--skip`,
-  `cherry-pick`, or `stash apply`/`pop`, CandyGit lists every reachable
-  `merge.*.driver` key in the merged config scope and overrides each one with
-  `false` — git launches driver values as programs, so this resolves through
-  PATH to the inert exit-1 coreutils binary rather than anything git-internal:
-  a hostile clone then produces a plain
-  CONFLICT instead of code execution. If a driver key exists in a shape that
-  cannot be re-expressed as an override, the merge is *refused*, not run —
-  and because the enumeration reads the merged config scope, such a key in
-  *your own* global or system config refuses CandyGit merges in every
-  repository you open; plain `git` in a terminal is unaffected. A second
-  side effect, disclosed on purpose: **your own** legitimate custom merge
-  drivers — global, system, or repo — never execute under CandyGit merges.
+- Merge drivers are enumerated and neutralized on every merge-capable command.
+  `merge.<name>.driver` is the same species of executable-naming key: one
+  `.gitattributes` line (`*.txt merge=evil`) plus a driver definition in the
+  repository's *own* config — local, `config.worktree`, or pulled in through
+  `include.path` — sends git's 3-way merge machinery to an attacker-chosen
+  program — and a merge is exactly what a conflict prompts you to do. The
+  neutralization runs in three steps:
+
+  1. **Enumerate and override** — before running `merge`,
+     `rebase --continue`/`--skip`, `cherry-pick`, or `stash apply`/`pop`,
+     CandyGit lists every reachable `merge.*.driver` key in the merged config
+     scope and overrides each one with `false`. Git launches driver values as
+     programs, so the override resolves through PATH to the inert exit-1
+     coreutils binary: a hostile clone then produces a plain CONFLICT instead
+     of code execution.
+  2. **Refuse the unrepresentable** — if a driver key exists in a shape that
+     cannot be re-expressed as an override, the merge is refused, not run;
+     the protection fails closed.
+  3. **Accepted side effects** — the enumeration reads the merged config
+     scope, so such a key in *your own* global or system config refuses
+     CandyGit merges in every repository you open (plain `git` in a terminal
+     is unaffected), and **your own** legitimate custom merge drivers —
+     global, system, or repo — never execute under CandyGit merges.
 - Filter drivers (`filter.<name>.clean|smudge|process`) are the same class of
   repo-controlled executable — `git add`, `commit`, a branch-switching
   `checkout`, `reset`, `restore`, `stash apply` and friends fire them through
-  `.gitattributes`. They are **detected and announced, not disarmed**, on
-  purpose: git-lfs and other real filter users depend on their drivers
+  `.gitattributes`. They are **detected and announced, not disarmed**, by
+  design: git-lfs and other real filter users depend on their drivers
   *working*, and silently forcing every filter to `false` would corrupt the
   files those tools manage — a worse defect than the disclosed trust gap.
-  Detection is value-granular over the merged config (`--list -z
-  --show-origin`, so multi-line driver values cannot forge their way past a
-  line-matching baseline) minus the origins and values the *operator's own*
-  global/system chains define: what remains are the lanes **the repository
-  itself defines**. On every filter-capable command CandyGit prints a stderr
-  notice naming those lanes (re-announcing when the set changes) and
-  proceeds — the drivers run, exactly as plain `git` would; only lane names
-  are printed, never config values. Two disclosures: (1) a repo row whose
-  full value byte-matches your global/system value runs *your own* command
-  string and stays notice-silent by design — the git-lfs-class nagging the
-  disarm ruling rejected — but it still counts in strict mode; (2) strict
-  refuses repo *definitions*, not filters per se: a repo with no filter
-  config whose `.gitattributes` still routes paths to your own global
-  git-lfs runs that trusted driver in every mode. Set
-  `CANDY_GIT_STRICT_FILTERS=1` (env) or `withStrictFilters()` (API) to turn
-  the posture into a refusal of every filter-capable command on which the
-  repository defines at least one lane — including the identical-value
-  shadow above. Threat model: a hostile clone that ships `.gitattributes` +
-  filter config gets code execution the moment you stage or check out —
-  clone, open, and operate only what you trust, and use strict mode if you
-  script CandyGit over untrusted directories.
+
+  1. **Detect** — CandyGit reads the merged config with `--list -z
+     --show-origin` (so multi-line driver values cannot forge their way past
+     a line-matching baseline), then subtracts the origins and values that
+     *the operator's own* global/system chains define. What remains are the
+     lanes **the repository itself defines**.
+  2. **Announce** — on every filter-capable command CandyGit prints a stderr
+     notice naming those lanes (re-announcing when the set changes) and
+     proceeds: the drivers run, exactly as plain `git` would, and only lane
+     names are printed, never config values.
+  3. **Identical-value carve-out** — a repo lane whose full value
+     byte-matches your global/system value runs *your own* command string
+     and stays notice-silent by design: noticing there would nag on the
+     git-lfs class of everyday setups without saying anything new. It still
+     counts in strict mode.
+  4. **Strict mode** — set `CANDY_GIT_STRICT_FILTERS` to `1`, `true`, or
+     `yes` (any case) in the environment, or call `withStrictFilters()`
+     through the API, and every filter-capable command on which the
+     repository defines at least one lane is refused — including the
+     identical-value shadow above. Strict refuses repo *definitions*, not
+     filters per se: a repo with no filter config whose `.gitattributes`
+     still routes paths to your own global git-lfs runs that trusted driver
+     in every mode.
+
+  Threat model: a hostile clone that ships `.gitattributes` + filter config
+  gets code execution the moment you stage or check out — clone, open, and
+  operate only what you trust, and use strict mode if you script CandyGit
+  over untrusted directories.
 - Child environment is pinned: `GIT_TERMINAL_PROMPT=0`, `GIT_PAGER=cat`,
   `GIT_EDITOR`/`GIT_SEQUENCE_EDITOR=true` (no credential, pager, or editor
   can hijack the TUI's terminal), and `LC_ALL=C`/`LANG=C` because the
