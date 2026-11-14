@@ -107,7 +107,8 @@ English" form fall through to `en` in `T::detect()`.
 | Lib           | Namespace | Notes |
 | ------------- | --------- | ----- |
 | `candy-code` | `crush`   | Only user-facing text (TUI, CLI, command and key-binding descriptions) goes through `Lang::t()`. Tool descriptions, prompt layers and tool errors are read by the model and stay English in every locale. The doc-drift tests compare the docs against English registry text, so they pin `en`. `bin/candy-code` selects the locale once at launch from `LC_ALL` / `LC_MESSAGES` / `LANG` (`Lang::useLaunchLocale()`; `C`/`POSIX` or unset → `en`). |
-| `candy-discord` | host `channels.discord.*` | Trusted channel bundle riding the HOST's catalogs (no own `lang/` dir): user-facing strings route through `Lang::t()` over the `channels.discord.*` family in `candy-code/lang/`, mirrored in every locale, guarded by `candy-discord/tests/I18n/UserFacingLiteralGuardTest`; log events are deliberately content-free English. `candy-msteams` follows the same doctrine. |
+| `candy-discord` | host `channels.discord.*` | Trusted channel bundle riding the HOST's catalogs (no own `lang/` dir): user-facing strings route through `Lang::t()` over the `channels.discord.*` family in `candy-code/lang/`, mirrored in every locale, guarded by `candy-discord/tests/I18n/UserFacingLiteralGuardTest`; log events are deliberately content-free English. `candy-msteams` follows the same doctrine — see its own row. |
+| `candy-msteams` | host `channels.msteams.*` | Trusted channel bundle riding the HOST's catalogs (no own `lang/` dir): delivered chat copy routes through `Lang::t()` over the `channels.msteams.*` family in `candy-code/lang/`, mirrored in every locale; boot and log lines are deliberately content-free English. No bundle-side literal guard ships yet (the discord `UserFacingLiteralGuardTest` is the pattern; a guard here is an open cost arm — see `candy-msteams/README.md` “Language”). |
 
 ## Plural policy
 
