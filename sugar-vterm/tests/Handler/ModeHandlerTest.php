@@ -48,7 +48,7 @@ final class ModeHandlerTest extends TestCase
         $this->assertTrue($h->mode->mouseHighlights);
         // ESC-1: DEC 1001 is X10 highlight TRACKING, an encoder change is not
         // implied — the old collapse set mouseHighlights from 1005/1015 too.
-        $this->assertSame(MouseEncoding::Default, $h->mode->mouseEncoding);
+        $this->assertSame(MouseEncoding::Default, $h->mode->effectiveMouseEncoding());
         (new ModeHandler())->apply([1001], false, $h);
         $this->assertFalse($h->mode->mouseHighlights);
     }
@@ -57,33 +57,48 @@ final class ModeHandlerTest extends TestCase
     {
         $h = $this->newHandler();
         (new ModeHandler())->apply([1005], true, $h);
-        $this->assertSame(MouseEncoding::Utf8, $h->mode->mouseEncoding);
+        $this->assertTrue($h->mode->mouseUtf8);
+        $this->assertSame(MouseEncoding::Utf8, $h->mode->effectiveMouseEncoding());
         // The collapse pin: selecting the UTF-8 encoder must NOT light the
         // 1001 tracking bit any more.
         $this->assertFalse($h->mode->mouseHighlights);
         (new ModeHandler())->apply([1005], false, $h);
-        $this->assertSame(MouseEncoding::Default, $h->mode->mouseEncoding);
+        $this->assertFalse($h->mode->mouseUtf8);
+        $this->assertSame(MouseEncoding::Default, $h->mode->effectiveMouseEncoding());
     }
 
     public function testMouseEncoding1015(): void
     {
         $h = $this->newHandler();
         (new ModeHandler())->apply([1015], true, $h);
-        $this->assertSame(MouseEncoding::Urxvt, $h->mode->mouseEncoding);
+        $this->assertTrue($h->mode->mouseUrxvt);
+        $this->assertSame(MouseEncoding::Urxvt, $h->mode->effectiveMouseEncoding());
         $this->assertFalse($h->mode->mouseHighlights);
         (new ModeHandler())->apply([1015], false, $h);
-        $this->assertSame(MouseEncoding::Default, $h->mode->mouseEncoding);
+        $this->assertSame(MouseEncoding::Default, $h->mode->effectiveMouseEncoding());
     }
 
-    public function testEncodersAreOneSlotLastSetterWins(): void
+    /** vterm-12: encoders are independent flags; report format resolves by xterm priority. */
+    public function testEncodersCoActivateWithSgrPriorityAndFallThrough(): void
     {
-        // xterm ctlseqs: 1005/1006/1015 are mutually-alternative encoders.
         $h = $this->newHandler();
         (new ModeHandler())->apply([1005, 1015], true, $h);
-        $this->assertSame(MouseEncoding::Urxvt, $h->mode->mouseEncoding);
-        // Turning one off drops to Default even though another was on before.
+        $this->assertTrue($h->mode->mouseUtf8);
+        $this->assertTrue($h->mode->mouseUrxvt);
+        $this->assertSame(MouseEncoding::Urxvt, $h->mode->effectiveMouseEncoding());
+        // Clearing one drops to the OTHER flag still on — the retired slot
+        // model fell to X10 here, contradicting xterm.
         (new ModeHandler())->apply([1015], false, $h);
-        $this->assertSame(MouseEncoding::Default, $h->mode->mouseEncoding);
+        $this->assertFalse($h->mode->mouseUrxvt);
+        $this->assertSame(MouseEncoding::Utf8, $h->mode->effectiveMouseEncoding());
+        // SGR outranks urxvt: the brief's `?1006h ?1015h ?1006l` sequence
+        // ends in URXVT reports, not X10.
+        $h2 = $this->newHandler();
+        (new ModeHandler())->apply([1006], true, $h2);
+        (new ModeHandler())->apply([1015], true, $h2);
+        $this->assertSame(MouseEncoding::Sgr, $h2->mode->effectiveMouseEncoding());
+        (new ModeHandler())->apply([1006], false, $h2);
+        $this->assertSame(MouseEncoding::Urxvt, $h2->mode->effectiveMouseEncoding());
     }
 
     public function testMouseCellMotion1002(): void
@@ -104,7 +119,8 @@ final class ModeHandlerTest extends TestCase
     {
         $h = $this->newHandler();
         (new ModeHandler())->apply([1006], true, $h);
-        $this->assertSame(MouseEncoding::Sgr, $h->mode->mouseEncoding);
+        $this->assertTrue($h->mode->mouseSgr);
+        $this->assertSame(MouseEncoding::Sgr, $h->mode->effectiveMouseEncoding());
         $this->assertFalse($h->mode->mouseHighlights);
     }
 
@@ -127,7 +143,7 @@ final class ModeHandlerTest extends TestCase
         $h = $this->newHandler();
         (new ModeHandler())->apply([1000, 1006, 2004], true, $h);
         $this->assertTrue($h->mode->mouseAny);
-        $this->assertSame(MouseEncoding::Sgr, $h->mode->mouseEncoding);
+        $this->assertSame(MouseEncoding::Sgr, $h->mode->effectiveMouseEncoding());
         $this->assertTrue($h->mode->bracketedPaste);
     }
 

@@ -18,11 +18,13 @@ namespace SugarCraft\Vterm\Mode;
  * Mouse state is split along xterm's own axis: WHICH tracking is on lives in
  * the four orthogonal bits {@see $mouseHighlights} (DEC 1001), {@see $mouseAny}
  * (1000), {@see $mouseCellMotion} (1002) and {@see $mouseExtended} (1003);
- * HOW a report encodes its coordinates lives in the single
- * {@see $mouseEncoding} value (DEC 1005/1006/1015 are mutually-alternative
- * encoders, never simultaneous — the enum makes the illegal combination
- * unrepresentable). "Is any report flowing at all" is
- * {@see self::isMouseReporting()}, deliberately independent of the encoding.
+ * HOW a report encodes its coordinates is the trio of per-mode flags
+ * {@see $mouseUtf8} (1005), {@see $mouseSgr} (1006) and {@see $mouseUrxvt}
+ * (1015) — vterm-12: xterm keeps each mode independently switched, so the
+ * flags co-activate and the EFFECTIVE encoder is resolved at report time by
+ * {@see self::effectiveMouseEncoding()} with xterm's SGR > urxvt > UTF-8 >
+ * X10 priority. "Is any report flowing at all" is
+ * {@see self::isMouseReporting()}, deliberately independent of the encoders.
  */
 final readonly class Mode
 {
@@ -34,7 +36,9 @@ final readonly class Mode
     public function __construct(
         public bool $cursorVisible = true,
         public bool $bracketedPaste = false,
-        public MouseEncoding $mouseEncoding = MouseEncoding::Default,
+        public bool $mouseUtf8 = false,
+        public bool $mouseSgr = false,
+        public bool $mouseUrxvt = false,
         public bool $mouseAny = false,
         public bool $mouseHighlights = false,
         public bool $mouseCellMotion = false,
@@ -96,14 +100,16 @@ final readonly class Mode
      * per-setter named-arg block. Mode fields are never nullable, so the
      * plain `??` fallback is total.
      *
-     * @param array{cursorVisible?:bool, bracketedPaste?:bool, mouseEncoding?:MouseEncoding, mouseAny?:bool, mouseHighlights?:bool, mouseCellMotion?:bool, syncUpdate?:bool, mouseExtended?:bool, altScreenVariant?:int, autoWrap?:bool, originMode?:bool, cursorShape?:int, reportFocusEvents?:bool} $changes
+     * @param array{cursorVisible?:bool, bracketedPaste?:bool, mouseUtf8?:bool, mouseSgr?:bool, mouseUrxvt?:bool, mouseAny?:bool, mouseHighlights?:bool, mouseCellMotion?:bool, syncUpdate?:bool, mouseExtended?:bool, altScreenVariant?:int, autoWrap?:bool, originMode?:bool, cursorShape?:int, reportFocusEvents?:bool} $changes
      */
     private function mutate(array $changes): self
     {
         return new self(
             cursorVisible: $changes['cursorVisible'] ?? $this->cursorVisible,
             bracketedPaste: $changes['bracketedPaste'] ?? $this->bracketedPaste,
-            mouseEncoding: $changes['mouseEncoding'] ?? $this->mouseEncoding,
+            mouseUtf8: $changes['mouseUtf8'] ?? $this->mouseUtf8,
+            mouseSgr: $changes['mouseSgr'] ?? $this->mouseSgr,
+            mouseUrxvt: $changes['mouseUrxvt'] ?? $this->mouseUrxvt,
             mouseAny: $changes['mouseAny'] ?? $this->mouseAny,
             mouseHighlights: $changes['mouseHighlights'] ?? $this->mouseHighlights,
             mouseCellMotion: $changes['mouseCellMotion'] ?? $this->mouseCellMotion,
@@ -149,17 +155,46 @@ final readonly class Mode
         return $this->mutate(['cursorVisible' => $v]);
     }
 
-    /**
-     * Select the mouse report coordinate encoding (DEC 1005/1006/1015).
-     *
-     * Reset (passing {@see MouseEncoding::Default}) is what xterm does when
-     * any of those modes is turned off: reports fall back to the X10 vector
-     * encoding, they do not switch "off" per-mode — the encoders are one
-     * slot, last setter wins.
-     */
-    public function withMouseEncoding(MouseEncoding $v): self
+    /** DEC 1005 — UTF-8 coordinate form flag (independent, vterm-12). */
+    public function withMouseUtf8(bool $v): self
     {
-        return $this->mutate(['mouseEncoding' => $v]);
+        return $this->mutate(['mouseUtf8' => $v]);
+    }
+
+    /** DEC 1006 — SGR coordinate form flag (independent, vterm-12). */
+    public function withMouseSgr(bool $v): self
+    {
+        return $this->mutate(['mouseSgr' => $v]);
+    }
+
+    /** DEC 1015 — urxvt coordinate form flag (independent, vterm-12). */
+    public function withMouseUrxvt(bool $v): self
+    {
+        return $this->mutate(['mouseUrxvt' => $v]);
+    }
+
+    /**
+     * The encoder a report emitted NOW would use (DEC 1005/1006/1015).
+     *
+     * xterm ctlseqs: the modes only change how coordinates are spelled;
+     * several may be on at once, and the effective form resolves by the
+     * SGR > urxvt > UTF-8 > X10 priority. Clearing the top mode therefore
+     * FALLS to the next-on flag (a `?1006l` with `?1015h` still on keeps
+     * emitting urxvt reports), which the retired single-slot model got
+     * wrong — it dropped to X10 whenever any encoder was reset.
+     */
+    public function effectiveMouseEncoding(): MouseEncoding
+    {
+        if ($this->mouseSgr) {
+            return MouseEncoding::Sgr;
+        }
+        if ($this->mouseUrxvt) {
+            return MouseEncoding::Urxvt;
+        }
+        if ($this->mouseUtf8) {
+            return MouseEncoding::Utf8;
+        }
+        return MouseEncoding::Default;
     }
 
     public function withMouseHighlights(bool $v = true): self
@@ -252,7 +287,9 @@ final readonly class Mode
     {
         return $this->cursorVisible === $other->cursorVisible
             && $this->bracketedPaste === $other->bracketedPaste
-            && $this->mouseEncoding === $other->mouseEncoding
+            && $this->mouseUtf8 === $other->mouseUtf8
+            && $this->mouseSgr === $other->mouseSgr
+            && $this->mouseUrxvt === $other->mouseUrxvt
             && $this->mouseAny === $other->mouseAny
             && $this->mouseHighlights === $other->mouseHighlights
             && $this->mouseCellMotion === $other->mouseCellMotion

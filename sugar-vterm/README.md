@@ -387,21 +387,23 @@ never encoded:
 | 1002 | `Mode::$mouseCellMotion` — cell-motion tracking flag.                    |
 | 1003 | `Mode::$mouseExtended` — any-event tracking flag.                        |
 | 1004 | `Mode::$reportFocusEvents` — arms the `CSI I`/`O` focus intercept.       |
-| 1005 | `Mode::$mouseEncoding = MouseEncoding::Utf8`; reset returns `Default`.   |
-| 1006 | `Mode::$mouseEncoding = MouseEncoding::Sgr`; reset returns `Default`.    |
-| 1015 | `Mode::$mouseEncoding = MouseEncoding::Urxvt`; reset returns `Default`.  |
+| 1005 | `Mode::$mouseUtf8` — UTF-8 coordinate-form flag.                          |
+| 1006 | `Mode::$mouseSgr` — SGR coordinate-form flag.                             |
+| 1015 | `Mode::$mouseUrxvt` — urxvt coordinate-form flag.                           |
 | 1047 | Alt-buffer swap without save, same arm as 47.                            |
 | 1048 | Cursor save/restore only (`enterAltScreenCursorOnly`) — no buffer swap.  |
 | 1049 | Full alt screen (`enterAltScreen`): save cursor, switch, clear.          |
 | 2004 | `Mode::$bracketedPaste` — flags that paste arrives bracketed.            |
 | 2026 | `Mode::$syncUpdate` — synchronized output queue (16384-cell budget).     |
 
-Modes 1005/1006/1015 share the one `MouseEncoding` slot: it is the decoder's
-note of which reporting dialect a real terminal would use — the last setter
-wins, any reset flips back to `Default`, and none of them change which
-tracking modes (1000–1003) are armed. The library emits nothing for any mouse,
-focus or paste mode; consumers read the `Mode` fields and build report bytes
-themselves.
+Modes 1005/1006/1015 are independent flags (xterm switches each one on its
+own): the reporting dialect a consumer should use is
+`Mode::effectiveMouseEncoding()`, which resolves the set flags by xterm's
+SGR > urxvt > UTF-8 > X10 priority, so clearing the winning mode falls to the
+next flag still on rather than to X10. DECRQM answers each of the three
+modes from its own flag. None of them change which tracking modes (1000–1003)
+are armed. The library emits nothing for any mouse, focus or paste mode;
+consumers read the `Mode` fields and build report bytes themselves.
 
 The `printable` and `execute` paths also route through the same
 adapter — printable bytes call `CsiHandlerImpl::printable()` (writes

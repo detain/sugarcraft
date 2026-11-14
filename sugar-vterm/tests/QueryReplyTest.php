@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Vterm\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Vterm\Mode\MouseEncoding;
 use SugarCraft\Vterm\Terminal\Terminal;
 
 /**
@@ -183,6 +184,28 @@ final class QueryReplyTest extends TestCase
         $t->feed("\x1b[?1001h");
         $t->feed("\x1b[?1001\$p\x1b[?1005\$p");
         $this->assertSame(["\x1b[?1001;1\$y", "\x1b[?1005;2\$y"], $t->replies());
+    }
+
+    public function testDecrqmShadowedEncoderStillAnswersSet(): void
+    {
+        // vterm-12: 1006/1015 co-activate. DECRQM answers per-MODE truth —
+        // the urxvt mode stays set even while SGR wins the report format,
+        // and clearing SGR falls the encoder to urxvt (the retired slot
+        // model answered DECRQM-1006 reset the moment 1015 overwrote it and
+        // dropped to X10 on any reset).
+        $t = Terminal::new(10, 3);
+        $t->feed("\x1b[?1006h\x1b[?1015h");
+        $t->feed("\x1b[?1006\$p\x1b[?1015\$p");
+        $t->feed("\x1b[?1006l");
+        $t->feed("\x1b[?1006\$p\x1b[?1015\$p");
+        $this->assertSame(
+            ["\x1b[?1006;1\$y", "\x1b[?1015;1\$y", "\x1b[?1006;2\$y", "\x1b[?1015;1\$y"],
+            $t->replies(),
+        );
+        $this->assertSame(
+            MouseEncoding::Urxvt,
+            $t->mode()->effectiveMouseEncoding(),
+        );
     }
 
     // ─── XTWINOPS ───────────────────────────────────────────────────────────

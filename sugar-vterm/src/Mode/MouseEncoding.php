@@ -10,11 +10,12 @@ namespace SugarCraft\Vterm\Mode;
  * These modes are ENCODING selectors, not tracking toggles: xterm ctlseqs
  * documents 1005/1006/1015 (and 1016) as alternatives that only change how a
  * report's coordinates are spelled once some tracking mode (1000/1001/1002/
- * 1003) is on; turning one on overrides the others, and turning one off drops
- * back to the X10 vector encoding ("mode 9" in xterm's list). Modelling them
- * as ONE enum instead of three co-activatable bits makes the illegal states —
- * e.g. 1005 and 1015 both on — unrepresentable (the last setter wins, exactly
- * like xterm), and keeps "is reporting on" ({@see Mode::isMouseReporting()})
+ * 1003) is on. vterm-12 corrected an earlier over-modelling here: xterm
+ * switches each mode INDEPENDENTLY (1005 and 1015 may both be on), so Mode
+ * stores three flags and this enum describes only the EFFECTIVE encoder,
+ * resolved by {@see Mode::effectiveMouseEncoding()} with xterm's SGR >
+ * urxvt > UTF-8 > X10 priority; turning the top mode off falls to the next
+ * flag still on. "Is reporting on" ({@see Mode::isMouseReporting()}) stays
  * orthogonal to "how to encode".
  *
  *  - {@see MouseEncoding::Default} — X10 vector encoding: button + 32,

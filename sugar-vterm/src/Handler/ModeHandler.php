@@ -17,16 +17,19 @@ use SugarCraft\Vterm\Mode\MouseEncoding;
  * - `1000` X11 mouse (button only) → `mouseAny`
  * - `1002` cell-motion mouse       → `mouseCellMotion`
  * - `1003` any-motion mouse        → `mouseExtended`
- * - `1005` UTF-8 coordinate form   → `mouseEncoding Utf8`
- * - `1006` SGR coordinate form     → `mouseEncoding Sgr`
- * - `1015` URXVT coordinate form   → `mouseEncoding Urxvt`
+ * - `1005` UTF-8 coordinate form   → `mouseUtf8`
+ * - `1006` SGR coordinate form     → `mouseSgr`
+ * - `1015` URXVT coordinate form   → `mouseUrxvt`
  *
  * 1005/1006/1015 select HOW reports encode their coordinates and never
  * whether tracking happens at all (xterm ctlseqs "Extended mouse
- * coordinates"), so they write the one shared {@see MouseEncoding} slot —
- * last setter wins, reset falls back to `MouseEncoding::Default`. Historically
- * they were folded onto `mouseHighlights`, conflating DEC 1001 (X10 highlight
- * TRACKING, a genuinely different reporting behaviour) with pure encoders;
+ * coordinates"), so each owns an independent flag (vterm-12): a reset
+ * clears only its own mode, and the effective encoder resolves at report
+ * time via {@see Mode::effectiveMouseEncoding()} with xterm's SGR > urxvt >
+ * UTF-8 > X10 priority — the retired single-slot model wrongly fell to X10
+ * when ANY encoder was reset. Historically they were folded onto
+ * `mouseHighlights`, conflating DEC 1001 (X10 highlight TRACKING, a
+ * genuinely different reporting behaviour) with pure encoders;
  * each mode now owns its own observable state (ESC-1).
  * - `47`   alt-screen (no save)    → `altScreenVariant ALT_NO_SAVE`, swaps Buffer only
  * - `1047` alt-screen (no save)    → `altScreenVariant ALT_NO_SAVE`, swaps Buffer only
@@ -64,9 +67,9 @@ final class ModeHandler
             1000 => $h->mode = $h->mode->withMouseAny($set),
             1002 => $h->mode = $h->mode->withMouseCellMotion($set),
             1003 => $h->mode = $h->mode->withMouseExtended($set),
-            1005 => $h->mode = $h->mode->withMouseEncoding($set ? MouseEncoding::Utf8 : MouseEncoding::Default),
-            1006 => $h->mode = $h->mode->withMouseEncoding($set ? MouseEncoding::Sgr : MouseEncoding::Default),
-            1015 => $h->mode = $h->mode->withMouseEncoding($set ? MouseEncoding::Urxvt : MouseEncoding::Default),
+            1005 => $h->mode = $h->mode->withMouseUtf8($set),
+            1006 => $h->mode = $h->mode->withMouseSgr($set),
+            1015 => $h->mode = $h->mode->withMouseUrxvt($set),
             1004 => $h->mode = $h->mode->withReportFocusEvents($set),
             47 => $set ? $h->enterAltScreenNoSave() : $h->leaveAltScreenNoSave(),
             1047 => $set ? $h->enterAltScreenNoSave() : $h->leaveAltScreenNoSave(),
