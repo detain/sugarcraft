@@ -8,6 +8,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Core\Util\Color;
 use SugarCraft\Style\Style;
 use SugarCraft\Git\App;
 use SugarCraft\Git\CherryPick;
@@ -77,6 +78,14 @@ final class RendererTest extends TestCase
         $this->assertStringContainsString('clean working tree', $out);
         $this->assertStringContainsString('no branches', $out);
         $this->assertStringContainsString('empty log', $out);
+
+        // candy-git-093: uniform empty-state chrome - the branches and log
+        // rows must ride the SAME dim channel the status pane uses, not raw
+        // text. Built through the style library so any wrap-off or hex drift
+        // changes the bytes and fails here.
+        $dim = static fn(string $text): string => Style::new()->foreground(Color::hex('#7d6e98'))->render($text);
+        $this->assertStringContainsString($dim('(no branches)'), $out, 'branches empty state lost its dim styling');
+        $this->assertStringContainsString($dim('(empty log)'), $out, 'log empty state lost its dim styling');
     }
 
     public function testRenderShowsErrorBanner(): void

@@ -349,7 +349,10 @@ final class Renderer
             $rows[] = $st->render($line);
         }
         if ($rows === []) {
-            $rows[] = Lang::t('branches.empty');
+            // candy-git-093: same dim channel as the status empty state -
+            // nothing-to-show is one chrome across all three panes.
+            $rows[] = Style::new()->foreground(Color::hex('#7d6e98'))
+                ->render(Lang::t('branches.empty'));
         }
         if ($below > 0) {
             $rows[] = self::scrollHint(Lang::t('viewport.below', ['n' => $below]));
@@ -430,7 +433,9 @@ final class Renderer
             $rows[] = $line;
         }
         if ($rows === []) {
-            $rows[] = Lang::t('log.empty');
+            // candy-git-093: same dim channel as the status empty state.
+            $rows[] = Style::new()->foreground(Color::hex('#7d6e98'))
+                ->render(Lang::t('log.empty'));
         }
         if ($below > 0) {
             $rows[] = self::scrollHint(Lang::t('viewport.below', ['n' => $below]));
