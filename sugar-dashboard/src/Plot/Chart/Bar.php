@@ -55,6 +55,25 @@ final class Bar implements \SugarCraft\Dashboard\Foundation\SizedItem
     }
 
     /**
+     * Create a bar styled from a Theme's foreground/background pair.
+     *
+     * The theming factory lives here, in the layer that already knows
+     * how to paint a bar, rather than on Foundation\Theme: a theme
+     * must not import the widget layers built on top of it (finding
+     * sugar-dashboard-138).
+     */
+    public static function themed(
+        string $content,
+        \SugarCraft\Dashboard\Foundation\Theme $theme,
+        ?HAlign $align = null,
+    ): self {
+        return self::new($content)
+            ->withForeground($theme->foreground())
+            ->withBackground($theme->background())
+            ->withAlign($align ?? HAlign::Left);
+    }
+
+    /**
      * Set the allocated dimensions for this bar.
      */
     public function setSize(int $width, int $height): \SugarCraft\Dashboard\Foundation\Sizer

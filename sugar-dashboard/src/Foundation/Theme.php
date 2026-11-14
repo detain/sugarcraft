@@ -7,16 +7,16 @@ namespace SugarCraft\Dashboard\Foundation;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Palettes;
-use SugarCraft\Dashboard\Plot\Chart\Bar;
-use SugarCraft\Dashboard\Layout\HAlign;
-use SugarCraft\Dashboard\Components\Card\Text;
 
 /**
- * Sugar-dash inline-termui Theme (9 colour slots + helper methods
- * bar(), text(), fg(), bg(), color(), highlight()). Intentionally
- * distinct from \SugarCraft\Style\Theme (13 colour slots: adds
- * muted, info, border, separator, cursor; readonly properties only,
- * no helper methods). Both are canonical for their lib.
+ * Sugar-dash inline-termui Theme (9 colour slots + name, accessors,
+ * color()/fg()/bg() helpers, and one wither per slot). Foundation
+ * layer: it depends on nothing in this library above Foundation —
+ * widgets that want themed styling are built by their own layers
+ * (see Bar::themed()), never by a factory here (finding 138).
+ * Intentionally distinct from \SugarCraft\Style\Theme (13 colour
+ * slots: adds muted, info, border, separator, cursor; readonly
+ * properties only, no helper methods). Both are canonical for their lib.
  *
  * See sugar-dashboard/CALIBER_LEARNINGS.md entry [pattern:dual-theme-ssot].
  */
@@ -252,29 +252,6 @@ final class Theme
     }
 
     /**
-     * Create a styled bar with this theme's colors.
-     */
-    public function bar(string $content, ?HAlign $align = null): Bar
-    {
-        return Bar::new($content)
-            ->withForeground($this->foreground)
-            ->withBackground($this->background)
-            ->withAlign($align ?? HAlign::Left);
-    }
-
-    /**
-     * Create a styled text with this theme's foreground color.
-     */
-    public function text(string $content, ?HAlign $align = null): Text
-    {
-        $text = Text::new($content);
-        if ($align !== null) {
-            $text = $text->withHorizontalAlign($align);
-        }
-        return $text;
-    }
-
-    /**
      * Get the ANSI escape sequence for the foreground color.
      *
      * With no explicit tier the escape is emitted for the process-wide
@@ -378,6 +355,120 @@ final class Theme
             warning: $this->warning,
             success: $this->success,
             highlight: $this->highlight,
+        );
+    }
+
+    /**
+     * Create a new theme with different secondary color.
+     */
+    public function withSecondary(Color $color): self
+    {
+        return new self(
+            name: $this->name,
+            foreground: $this->foreground,
+            background: $this->background,
+            primary: $this->primary,
+            secondary: $color,
+            accent: $this->accent,
+            error: $this->error,
+            warning: $this->warning,
+            success: $this->success,
+            highlight: $this->highlight,
+        );
+    }
+
+    /**
+     * Create a new theme with different accent color.
+     */
+    public function withAccent(Color $color): self
+    {
+        return new self(
+            name: $this->name,
+            foreground: $this->foreground,
+            background: $this->background,
+            primary: $this->primary,
+            secondary: $this->secondary,
+            accent: $color,
+            error: $this->error,
+            warning: $this->warning,
+            success: $this->success,
+            highlight: $this->highlight,
+        );
+    }
+
+    /**
+     * Create a new theme with different error color.
+     */
+    public function withError(Color $color): self
+    {
+        return new self(
+            name: $this->name,
+            foreground: $this->foreground,
+            background: $this->background,
+            primary: $this->primary,
+            secondary: $this->secondary,
+            accent: $this->accent,
+            error: $color,
+            warning: $this->warning,
+            success: $this->success,
+            highlight: $this->highlight,
+        );
+    }
+
+    /**
+     * Create a new theme with different warning color.
+     */
+    public function withWarning(Color $color): self
+    {
+        return new self(
+            name: $this->name,
+            foreground: $this->foreground,
+            background: $this->background,
+            primary: $this->primary,
+            secondary: $this->secondary,
+            accent: $this->accent,
+            error: $this->error,
+            warning: $color,
+            success: $this->success,
+            highlight: $this->highlight,
+        );
+    }
+
+    /**
+     * Create a new theme with different success color.
+     */
+    public function withSuccess(Color $color): self
+    {
+        return new self(
+            name: $this->name,
+            foreground: $this->foreground,
+            background: $this->background,
+            primary: $this->primary,
+            secondary: $this->secondary,
+            accent: $this->accent,
+            error: $this->error,
+            warning: $this->warning,
+            success: $color,
+            highlight: $this->highlight,
+        );
+    }
+
+    /**
+     * Create a new theme with different highlight color.
+     */
+    public function withHighlight(Color $color): self
+    {
+        return new self(
+            name: $this->name,
+            foreground: $this->foreground,
+            background: $this->background,
+            primary: $this->primary,
+            secondary: $this->secondary,
+            accent: $this->accent,
+            error: $this->error,
+            warning: $this->warning,
+            success: $this->success,
+            highlight: $color,
         );
     }
 }

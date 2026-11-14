@@ -8,6 +8,7 @@ use SugarCraft\Dashboard\Plot\Chart\Bar;
 use SugarCraft\Dashboard\Layout\HAlign;
 use SugarCraft\Dashboard\Foundation\Item;
 use SugarCraft\Dashboard\Foundation\Sizer;
+use SugarCraft\Dashboard\Foundation\Theme;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Ansi;
 use PHPUnit\Framework\TestCase;
@@ -28,6 +29,63 @@ final class BarTest extends TestCase
     {
         $bar = Bar::new('test');
         $this->assertInstanceOf(Item::class, $bar);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Theme factory (moved off Foundation\\Theme — finding 138)
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testThemedAdoptsTheThemeForegroundAndBackground(): void
+    {
+        $theme = Theme::dracula();
+        $bar = Bar::themed('Status', $theme);
+
+        $this->assertSame($theme->foreground(), $this->readColor($bar, 'foreground'));
+        $this->assertSame($theme->background(), $this->readColor($bar, 'background'));
+        $this->assertStringContainsString('Status', $bar->render());
+    }
+
+    public function testThemedCarriesTheRequestedAlignment(): void
+    {
+        $bar = Bar::themed('Centered', Theme::dark(), HAlign::Center);
+
+        $this->assertSame(HAlign::Center, $this->readAlign($bar));
+    }
+
+    public function testThemedDefaultsToLeftAlignment(): void
+    {
+        $bar = Bar::themed('Status', Theme::dark());
+
+        $this->assertSame(HAlign::Left, $this->readAlign($bar));
+    }
+
+    public function testThemedDoesNotReachIntoHigherLayers(): void
+    {
+        // Guard the direction of the dependency arrow: the theme-side
+        // factory must stay a factory, so Bar still knows only the
+        // colors it is handed.
+        $source = (string) file_get_contents(
+            (string) (new \ReflectionClass(Bar::class))->getFileName()
+        );
+
+        $this->assertSame(
+            0,
+            preg_match('/^use SugarCraft\\\\Dashboard\\\\Components\\\\/m', $source),
+        );
+    }
+
+    private function readColor(Bar $bar, string $property): ?Color
+    {
+        $reflection = new \ReflectionProperty(Bar::class, $property);
+        $reflection->setAccessible(true);
+        return $reflection->getValue($bar);
+    }
+
+    private function readAlign(Bar $bar): HAlign
+    {
+        $reflection = new \ReflectionProperty(Bar::class, 'align');
+        $reflection->setAccessible(true);
+        return $reflection->getValue($bar);
     }
 
     // ═══════════════════════════════════════════════════════════════

@@ -5,9 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\Dashboard\Tests\Foundation;
 
 use SugarCraft\Dashboard\Foundation\Theme;
-use SugarCraft\Dashboard\Plot\Chart\Bar;
-use SugarCraft\Dashboard\Components\Card\Text;
-use SugarCraft\Dashboard\Layout\HAlign;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Palettes;
@@ -142,40 +139,83 @@ final class ThemeTest extends TestCase
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // Component factories
+    // Foundation purity (finding sugar-dashboard-138) + wither parity
     // ═══════════════════════════════════════════════════════════════
 
-    public function testBar(): void
+    /**
+     * The dependency arrow must point downward: Foundation\Theme used
+     * to import Plot\Chart\Bar and Components\Card\Text to hand out
+     * styled widgets (and a text() whose doc promised a foreground it
+     * never applied). Those factories now live with the widget that
+     * can paint them (Bar::themed()); Theme itself must never learn
+     * about layers built on top of it.
+     */
+    public function testFoundationThemeImportsNothingFromHigherLayers(): void
     {
-        $theme = Theme::dark();
-        $bar = $theme->bar('Status');
+        $source = (string) file_get_contents(
+            (string) (new \ReflectionClass(Theme::class))->getFileName()
+        );
 
-        $this->assertInstanceOf(Bar::class, $bar);
-        $this->assertStringContainsString('Status', $bar->render());
+        $this->assertSame(
+            0,
+            preg_match('/^use SugarCraft\\\\Dashboard\\\\(Plot|Components|Layout)\\\\/m', $source),
+            'Foundation\\Theme must not import Plot, Components or Layout'
+        );
     }
 
-    public function testBarWithAlignment(): void
+    /**
+     * @return array<string, array{0:string, 1:string}> wither => accessor
+     */
+    public static function slotWitherProvider(): array
     {
-        $theme = Theme::dark();
-        $bar = $theme->bar('Centered', HAlign::Center);
-
-        $this->assertInstanceOf(Bar::class, $bar);
+        return [
+            'foreground' => ['withForeground', 'foreground'],
+            'background' => ['withBackground', 'background'],
+            'primary' => ['withPrimary', 'primary'],
+            'secondary' => ['withSecondary', 'secondary'],
+            'accent' => ['withAccent', 'accent'],
+            'error' => ['withError', 'error'],
+            'warning' => ['withWarning', 'warning'],
+            'success' => ['withSuccess', 'success'],
+            'highlight' => ['withHighlight', 'highlight'],
+        ];
     }
 
-    public function testText(): void
+    /**
+     * @dataProvider slotWitherProvider
+     */
+    public function testEveryColourSlotHasAHonestWither(string $wither, string $accessor): void
     {
         $theme = Theme::dark();
-        $text = $theme->text('Hello');
+        $replacement = Color::hex('#FF00AA');
 
-        $this->assertInstanceOf(Text::class, $text);
+        $themed = $theme->{$wither}($replacement);
+
+        $this->assertNotSame($theme, $themed, "{$wither}() must return a new theme");
+        $this->assertSame($replacement, $themed->{$accessor}(), "{$wither}() must store its color");
+
+        // The other slots must survive the rebuild untouched.
+        foreach (self::slotWitherProvider() as $otherAccessor) {
+            if ($otherAccessor[1] === $accessor) {
+                continue;
+            }
+            $this->assertSame(
+                $theme->{$otherAccessor[1]}(),
+                $themed->{$otherAccessor[1]}(),
+                "{$wither}() must not disturb {$otherAccessor[1]}()"
+            );
+        }
     }
 
-    public function testTextWithAlignment(): void
+    public function testWithNameKeepsEveryColour(): void
     {
         $theme = Theme::dark();
-        $text = $theme->text('Right', HAlign::Right);
+        $renamed = $theme->withName('midnight');
 
-        $this->assertInstanceOf(Text::class, $text);
+        $this->assertSame('midnight', $renamed->name());
+        foreach (array_keys(self::slotWitherProvider()) as $slot) {
+            $this->assertSame($theme->{$slot}(), $renamed->{$slot}());
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════
