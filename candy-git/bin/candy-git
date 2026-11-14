@@ -56,18 +56,22 @@ if (in_array('--version', $flags, true)) {
     exit(0);
 }
 if (in_array('--help', $flags, true) || in_array('-h', $flags, true)) {
-    fwrite(STDOUT, "candy-git — terminal git interface\n\n"
-        . "Usage:\n"
-        . "  candy-git            Browse the repository of the current directory\n"
-        . "  candy-git --version  Print the version\n"
-        . "  candy-git --help     Show this help\n");
+    // The help screen is canonical user-facing copy (candy-git-019): the
+    // catalogue and locale are already loaded above, so nothing here may
+    // bypass Lang::t. The command spellings are identifiers, not prose —
+    // they stay literal while their descriptions translate.
+    fwrite(STDOUT, Lang::t('cli.help_summary') . "\n\n"
+        . Lang::t('cli.help_usage') . "\n"
+        . '  candy-git            ' . Lang::t('cli.help_browse') . "\n"
+        . '  candy-git --version  ' . Lang::t('cli.help_version') . "\n"
+        . '  candy-git --help     ' . Lang::t('cli.help_help') . "\n");
     exit(0);
 }
 // Any leftover argument is one we do not serve — exiting 2 (the usage
 // convention) beats silently booting a TUI that ignored what it was given.
 foreach ($flags as $stray) {
     fwrite(STDERR, Lang::t('cli.unknown_flag', ['flag' => (string) $stray]) . "\n");
-    fwrite(STDERR, "candy-git: try --help\n");
+    fwrite(STDERR, Lang::t('cli.try_help') . "\n");
     exit(2);
 }
 

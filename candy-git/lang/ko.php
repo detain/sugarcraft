@@ -22,6 +22,12 @@ return [
     'cli.old_git'             => 'candy-git: git {version} 은 너무 오래되었습니다 -- {min} 이상 필요',
     'cli.bare_repo'           => 'candy-git: {cwd} 는 작업 트리가 없는 베어 리포지토리입니다 -- 체크아웃된 작업 디렉토리에서 실행하세요',
     'cli.needs_tty'           => 'candy-git: 대화형 터미널이 필요합니다 (stdout 이 tty 아님)',
+    'cli.help_summary'         => 'candy-git — 터미널 git 인터페이스',
+    'cli.help_usage'           => '사용법:',
+    'cli.help_browse'          => '현재 디렉터리의 저장소 탐색',
+    'cli.help_version'         => '버전 출력',
+    'cli.help_help'            => '이 도움말 표시',
+    'cli.try_help'             => 'candy-git: --help를 시도하세요',
     'ui.error_prefix'         => '오류: ',
     // Chrome titles routed through Lang.
     'ui.title.app'           => ' CandyGit ',

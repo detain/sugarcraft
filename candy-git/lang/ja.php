@@ -22,6 +22,12 @@ return [
     'cli.old_git'             => 'candy-git: git {version} は古すぎます -- バージョン {min} 以上が必要です',
     'cli.bare_repo'           => 'candy-git: {cwd} はワークツリーのないベアシストレポジトリです -- チェックアウト済みの作業ディレクトリで実行してください',
     'cli.needs_tty'           => 'candy-git: 対話型ターミナルが必要です (stdout が tty でありません)',
+    'cli.help_summary'         => 'candy-git — ターミナルの git インターフェース',
+    'cli.help_usage'           => '使い方:',
+    'cli.help_browse'          => '現在のディレクトリのリポジトリを閲覧',
+    'cli.help_version'         => 'バージョンを表示',
+    'cli.help_help'            => 'このヘルプを表示',
+    'cli.try_help'             => 'candy-git: --help をお試しください',
     'ui.error_prefix'         => 'エラー: ',
     // Chrome titles routed through Lang.
     'ui.title.app'           => ' CandyGit ',

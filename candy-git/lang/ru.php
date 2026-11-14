@@ -22,6 +22,12 @@ return [
     'cli.old_git'             => 'candy-git: git {version} слишком стар -- требуется версия {min} или новее',
     'cli.bare_repo'           => 'candy-git: {cwd} — голый репозиторий без рабочего дерева -- запустите candy-git в проверенном рабочем каталоге',
     'cli.needs_tty'           => 'candy-git: нужен интерактивный терминал (stdout не tty)',
+    'cli.help_summary'         => 'candy-git — терминальный интерфейс git',
+    'cli.help_usage'           => 'Использование:',
+    'cli.help_browse'          => 'Просмотр репозитория текущего каталога',
+    'cli.help_version'         => 'Показать версию',
+    'cli.help_help'            => 'Показать эту справку',
+    'cli.try_help'             => 'candy-git: попробуйте --help',
     'ui.error_prefix'         => 'ошибка: ',
     // Chrome titles routed through Lang.
     'ui.title.app'           => ' CandyGit ',

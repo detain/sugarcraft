@@ -22,6 +22,12 @@ return [
     'cli.old_git'             => 'candy-git: git {version} is te oud -- versie {min} of nieuwer is vereist',
     'cli.bare_repo'           => 'candy-git: {cwd} is een bare repository zonder werkboom -- draai candy-git vanuit een uitgecheckte werkmap',
     'cli.needs_tty'           => 'candy-git: een interactieve terminal is vereist (stdout is geen tty)',
+    'cli.help_summary'         => 'candy-git — git-interface in de terminal',
+    'cli.help_usage'           => 'Gebruik:',
+    'cli.help_browse'          => 'Blader door de repository van de huidige map',
+    'cli.help_version'         => 'De versie printen',
+    'cli.help_help'            => 'Deze hulp weergeven',
+    'cli.try_help'             => 'candy-git: probeer --help',
     'ui.error_prefix'         => 'fout: ',
     // Chrome titles routed through Lang.
     'ui.title.app'           => ' CandyGit ',

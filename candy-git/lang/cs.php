@@ -22,6 +22,12 @@ return [
     'cli.old_git'             => 'candy-git: git {version} je příliš starý -- vyžadována verze {min} nebo novější',
     'cli.bare_repo'           => 'candy-git: {cwd} je bare repozitář bez pracovního stromu -- spusťte candy-git ve vypnuté pracovní složce',
     'cli.needs_tty'           => 'candy-git: je potřeba interaktivní terminál (stdout není tty)',
+    'cli.help_summary'         => 'candy-git — terminální rozhraní git',
+    'cli.help_usage'           => 'Použití:',
+    'cli.help_browse'          => 'Procházet repozitář aktuální adresáře',
+    'cli.help_version'         => 'Vytisknout verzi',
+    'cli.help_help'            => 'Zobrazit tuto nápovědu',
+    'cli.try_help'             => 'candy-git: zkuste --help',
     'ui.error_prefix'         => 'chyba: ',
     // Chrome titles routed through Lang.
     'ui.title.app'           => ' CandyGit ',

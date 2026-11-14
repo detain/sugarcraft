@@ -80,10 +80,34 @@ final class CommandLineTest extends TestCase
 
     public function testHelpFlagPrintsUsage(): void
     {
-        [$exit, $out] = self::spawn(['--help'], sys_get_temp_dir());
+        [$exit, $out] = self::spawn(['--help'], sys_get_temp_dir(), ['LANG' => 'C', 'LC_ALL' => 'C']);
 
         self::assertSame(0, $exit);
         self::assertStringContainsString('Usage:', $out);
+        // candy-git-019: the descriptions are catalogue copy now, not literals.
+        self::assertStringContainsString('terminal git interface', $out);
+        self::assertStringContainsString('Browse the repository of the current directory', $out);
+        self::assertStringContainsString('Print the version', $out);
+        self::assertStringContainsString('Show this help', $out);
+    }
+
+    public function testHelpFlagLocalizesUnderGerman(): void
+    {
+        [$exit, $out] = self::spawn(['--help'], sys_get_temp_dir(), ['LANG' => 'de_DE.UTF-8']);
+
+        self::assertSame(0, $exit);
+        self::assertStringContainsString('Verwendung:', $out);
+        self::assertStringContainsString('Version ausgeben', $out);
+        self::assertStringContainsString('Diese Hilfe anzeigen', $out);
+        self::assertStringNotContainsString('Usage:', $out);
+    }
+
+    public function testTheTryHelpTailLocalizes(): void
+    {
+        [$exit, , $err] = self::spawn(['--frobnicate'], sys_get_temp_dir(), ['LANG' => 'de_DE.UTF-8']);
+
+        self::assertSame(2, $exit);
+        self::assertStringContainsString('versuchen Sie --help', $err);
     }
 
     /** @return array<string, array{0:string}> */

@@ -22,6 +22,12 @@ return [
     'cli.old_git'             => 'candy-git: git {version} 太旧 -- 需要 {min} 或更新版本',
     'cli.bare_repo'           => 'candy-git: {cwd} 是没有工作树的裸仓库 -- 请在检出的工作目录中运行 candy-git',
     'cli.needs_tty'           => 'candy-git: 需要交互式终端 (stdout 不是 tty)',
+    'cli.help_summary'         => 'candy-git — 终端 git 界面',
+    'cli.help_usage'           => '用法：',
+    'cli.help_browse'          => '浏览当前目录的仓库',
+    'cli.help_version'         => '打印版本',
+    'cli.help_help'            => '显示此帮助',
+    'cli.try_help'             => 'candy-git: 试试 --help',
     'ui.error_prefix'         => '错误： ',
     // Chrome titles routed through Lang.
     'ui.title.app'           => ' CandyGit ',

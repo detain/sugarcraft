@@ -22,6 +22,12 @@ return [
     'cli.old_git'             => 'candy-git: o git {version} é demasiado antigo -- é necessária a versão {min} ou superior',
     'cli.bare_repo'           => 'candy-git: {cwd} é um repositório sem árvore de trabalho -- execute o candy-git num diretório de trabalho',
     'cli.needs_tty'           => 'candy-git: é necessário um terminal interativo (stdout não é um tty)',
+    'cli.help_summary'         => 'candy-git — interface git de terminal',
+    'cli.help_usage'           => 'Uso:',
+    'cli.help_browse'          => 'Navegar pelo repositório do diretório atual',
+    'cli.help_version'         => 'Imprimir a versão',
+    'cli.help_help'            => 'Mostrar esta ajuda',
+    'cli.try_help'             => 'candy-git: tente --help',
     'ui.error_prefix'         => 'erro: ',
     // Chrome titles routed through Lang.
     'ui.title.app'           => ' CandyGit ',

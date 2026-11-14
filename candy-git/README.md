@@ -23,12 +23,19 @@ composer require sugarcraft/candy-git
 vendor/bin/candy-git    # run inside any git working tree
 ```
 
+Add `:@dev` (`composer require sugarcraft/candy-git:@dev`) while your project's
+`minimum-stability` is `stable` — Packagist carries only the rolling `dev-master`
+branch until a stable tag is cut, so the bare requirement dies with
+`does not match your minimum-stability`. This composer channel is distinct from
+the GitHub release tags: `candy-git/v*` tags (and the rolling `candy-git/latest`
+prerelease) are the phar channel, and until a stable `candy-git/v*` tag is cut
+the only release artifact is that prerelease phar.
+
 From a clone of this repository, run `composer install` inside `candy-git/`
 first — `vendor/` is gitignored, and without it the launcher exits with
 `candy-git: cannot find composer autoload.php`. Then `php candy-git/bin/candy-git`
 works. Release users can grab the `candy-git.phar` from the GitHub release and run
-`php candy-git.phar`. Until a stable `candy-git/v*` tag is cut, the only release
-channel is the rolling `candy-git/latest` prerelease. `--version`, `--help`, and the
+`php candy-git.phar`. `--version`, `--help`, and the
 `-h` alias short-circuit and exit 0 anywhere; any *other* argument exits 2 with a
 usage line rather than being silently ignored.
 
@@ -253,7 +260,7 @@ file key like `git.timeout` resolves through the core `T` registry as
 raw string.
 
 **Available keys** (`lang/en.php` — an excerpt; the file is the full roster
-of 162 keys):
+of 168 keys):
 
 | Key                    | Default string                                                    | Parameters  |
 |------------------------|-------------------------------------------------------------------|------------|

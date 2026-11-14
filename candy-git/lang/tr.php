@@ -22,6 +22,12 @@ return [
     'cli.old_git'             => 'candy-git: git {version} çok eski -- {min} veya yeni sürüm gerekli',
     'cli.bare_repo'           => 'candy-git: {cwd} çalışma ağacı olmayan bir bare depodur -- candy-git\'i çıkarılmış bir çalışma dizininde çalıştırın',
     'cli.needs_tty'           => 'candy-git: etkileşimli terminal gerekli (stdout bir tty değil)',
+    'cli.help_summary'         => 'candy-git — terminal git arayüzü',
+    'cli.help_usage'           => 'Kullanım:',
+    'cli.help_browse'          => 'Geçerli dizindeki depoyu gez',
+    'cli.help_version'         => 'Sürümü yazdır',
+    'cli.help_help'            => 'Bu yardımı göster',
+    'cli.try_help'             => 'candy-git: --help deneyin',
     'ui.error_prefix'         => 'hata: ',
     // Chrome titles routed through Lang.
     'ui.title.app'           => ' CandyGit ',
