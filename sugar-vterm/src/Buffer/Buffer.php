@@ -139,6 +139,37 @@ final class Buffer
         return $clone;
     }
 
+    /**
+     * Widen the closed column span `[start, end]` on `$row` so it never
+     * cuts a wide glyph in half: a span starting on a pair's continuation
+     * pulls left over its base; a span ending on a base whose tail sits one
+     * column right extends over the tail. This is THE erase-widening rule
+     * shared by both engines (vterm-13, ECMA-48/VT510 "double-width
+     * characters are treated as one unit" under ED/EL/ECH and the
+     * pair-atomic DCH/ICH shifts); the print path's outside-half clearing
+     * (ScreenHandler::eraseWidePartners) stays its own loop because it acts
+     * per written column rather than on a span.
+     *
+     * @return array{int, int}
+     */
+    public function widenPairSpan(int $row, int $start, int $end): array
+    {
+        if ($start > $end) {
+            return [$start, $end];
+        }
+        if ($start > 0 && $this->grid[$row][$start]->continuation) {
+            $start--;
+        }
+        if (
+            $end + 1 < $this->cols
+            && !$this->grid[$row][$end]->continuation
+            && $this->grid[$row][$end + 1]->continuation
+        ) {
+            $end++;
+        }
+        return [$start, $end];
+    }
+
     /** A fresh empty grid of the same dimensions; this instance is untouched. */
     public function clear(): self
     {

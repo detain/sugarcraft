@@ -183,4 +183,85 @@ final class EraseHandlerTest extends TestCase
         (new EraseHandler())->apply(ord('@'), [99], $buf, new Cursor(row: 0, col: 5));
         $this->assertSame('ABCDE     ', $this->rowChars($buf, 0));
     }
+
+    // ─── vterm-13: wide-pair fidelity (erase widens, shifts stay atomic) ───
+
+    private function putWide(Buffer $buf, int $row, int $col): void
+    {
+        $base = new Cell(grapheme: '漢');
+        $buf->put($row, $col, $base);
+        $buf->put($row, $col + 1, Cell::continuation($base));
+    }
+
+    public function testElFromContinuationBlanksWholeGlyph(): void
+    {
+        // Pin ①: EL 0 from a pair's tail must take the base too — the old
+        // naive span left the base painted (a visible no-op over the glyph).
+        $buf = new Buffer(10, 1);
+        $this->putWide($buf, 0, 0);
+        $buf->put(0, 2, new Cell(grapheme: 'a'));
+        (new EraseHandler())->apply(ord('K'), [0], $buf, new Cursor(row: 0, col: 1));
+        $this->assertSame('          ', $this->rowChars($buf, 0));
+    }
+
+    public function testEdSpanEndingOnABaseTakesItsTail(): void
+    {
+        // Pin ②: ED 1 up to a base column extends over the continuation —
+        // no orphaned tail survives at the span's right edge.
+        $buf = new Buffer(10, 1);
+        $this->fillRow($buf, 0, 'ABCDEFGH');
+        $this->putWide($buf, 0, 8);
+        (new EraseHandler())->apply(ord('J'), [1], $buf, new Cursor(row: 0, col: 8));
+        $this->assertSame('          ', $this->rowChars($buf, 0));
+    }
+
+    public function testEchSingleCountErasesWholePair(): void
+    {
+        // Pin ③: ECH 1 at a wide base erases base AND tail (old: blanked
+        // only the base column, orphaning the continuation).
+        $buf = new Buffer(10, 1);
+        $this->putWide($buf, 0, 0);
+        $buf->put(0, 2, new Cell(grapheme: 'X'));
+        $buf->put(0, 3, new Cell(grapheme: 'Y'));
+        (new EraseHandler())->apply(ord('X'), [1], $buf, new Cursor(row: 0, col: 0));
+        $this->assertSame('  XY      ', $this->rowChars($buf, 0));
+    }
+
+    public function testDchFromContinuationDeletesWholePair(): void
+    {
+        $buf = new Buffer(10, 1);
+        $this->putWide($buf, 0, 0);
+        $buf->put(0, 2, new Cell(grapheme: 'a'));
+        $buf->put(0, 3, new Cell(grapheme: 'b'));
+        (new EraseHandler())->apply(ord('P'), [1], $buf, new Cursor(row: 0, col: 1));
+        // Whole pair is the deleted unit: 'ab' lands at 0-1, no gap.
+        $this->assertSame('ab        ', $this->rowChars($buf, 0));
+    }
+
+    public function testIchBeforePairInsertsAheadOfTheBase(): void
+    {
+        $buf = new Buffer(10, 1);
+        $this->putWide($buf, 0, 0);
+        $buf->put(0, 2, new Cell(grapheme: 'a'));
+        (new EraseHandler())->apply(ord('@'), [2], $buf, new Cursor(row: 0, col: 1));
+        // Cursor on the tail: the insert happens before the base, and the
+        // pair shifts right intact (multibyte-safe: assert cells, not bytes).
+        $this->assertSame(' ', $buf->cell(0, 0)->grapheme);
+        $this->assertFalse($buf->cell(0, 1)->continuation);
+        $this->assertSame('漢', $buf->cell(0, 2)->grapheme);
+        $this->assertTrue($buf->cell(0, 3)->continuation, 'pair shifted intact');
+        $this->assertSame('a', $buf->cell(0, 4)->grapheme);
+    }
+
+    public function testIchClipsEdgeStraddlingPairLeavesNoOrphanBase(): void
+    {
+        $buf = new Buffer(10, 1);
+        $this->fillRow($buf, 0, 'ABCDEFG');
+        $this->putWide($buf, 0, 7); // base 7, tail 8, one blank at 9
+        (new EraseHandler())->apply(ord('@'), [2], $buf, new Cursor(row: 0, col: 0));
+        // Sources 8-9 fall off; the base would land at column 9 head-of-pair
+        // minus its tail -> clipped to blank (resize boundary rule).
+        $this->assertSame('  ABCDEFG ', $this->rowChars($buf, 0));
+        $this->assertFalse($buf->cell(0, 9)->continuation);
+    }
 }

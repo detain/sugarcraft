@@ -747,15 +747,20 @@ final class CsiHandlerImpl implements CsiHandler
         $col = $this->cursor->col;
 
         if ($mode === 0) {
+            // vterm-13: the cursor row's partial span widens over whole wide
+            // glyphs (shared Buffer::widenPairSpan rule, EraseHandler mirror);
+            // full-width rows need no widening.
+            [$s0, $e0] = $this->grid->widenPairSpan($row, $col, $this->grid->cols - 1);
             for ($r = $row; $r < $this->grid->rows; $r++) {
-                for ($c = ($r === $row ? $col : 0); $c < $this->grid->cols; $c++) {
+                for ($c = ($r === $row ? $s0 : 0); $c <= ($r === $row ? $e0 : $this->grid->cols - 1); $c++) {
                     $this->grid->put($r, $c, Cell::empty());
                 }
             }
         } elseif ($mode === 1) {
+            [$s1, $e1] = $this->grid->widenPairSpan($row, 0, $col);
             for ($r = 0; $r <= $row; $r++) {
-                $endCol = $r === $row ? $col + 1 : $this->grid->cols;
-                for ($c = 0; $c < $endCol; $c++) {
+                $endCol = $r === $row ? $e1 : $this->grid->cols - 1;
+                for ($c = 0; $c <= $endCol; $c++) {
                     $this->grid->put($r, $c, Cell::empty());
                 }
             }
@@ -770,11 +775,13 @@ final class CsiHandlerImpl implements CsiHandler
         $col = $this->cursor->col;
 
         if ($mode === 0) {
-            for ($c = $col; $c < $this->grid->cols; $c++) {
+            [$s, $e] = $this->grid->widenPairSpan($row, $col, $this->grid->cols - 1);
+            for ($c = $s; $c <= $e; $c++) {
                 $this->grid->put($row, $c, Cell::empty());
             }
         } elseif ($mode === 1) {
-            for ($c = 0; $c <= $col; $c++) {
+            [$s, $e] = $this->grid->widenPairSpan($row, 0, $col);
+            for ($c = $s; $c <= $e; $c++) {
                 $this->grid->put($row, $c, Cell::empty());
             }
         } elseif ($mode === 2) {
@@ -970,15 +977,28 @@ final class CsiHandlerImpl implements CsiHandler
         $row = $this->cursor->row;
         $col = $this->cursor->col;
         $cols = $this->grid->cols;
-        $count = min(max(1, $count), $cols - $col);
+        // vterm-13 pair-atomic ICH (EraseHandler mirror): insert before a
+        // whole pair when the cursor sits on its continuation, and erase an
+        // orphaned base when the right edge cuts a pair mid-shift.
+        $start = $col;
+        if ($start > 0 && $this->grid->cell($row, $start)->continuation) {
+            $start--;
+        }
+        $count = min(max(1, $count), $cols - $start);
         if ($count <= 0) {
             return;
         }
+        $clipTail = $start + $count <= $cols - 1
+            && $this->grid->cell($row, $cols - $count)->continuation
+            && !$this->grid->cell($row, $cols - $count - 1)->continuation;
 
-        for ($c = $cols - 1; $c >= $col + $count; $c--) {
+        for ($c = $cols - 1; $c >= $start + $count; $c--) {
             $this->grid->put($row, $c, $this->grid->cell($row, $c - $count));
         }
-        for ($c = $col; $c < $col + $count; $c++) {
+        if ($clipTail) {
+            $this->grid->put($row, $cols - 1, Cell::empty());
+        }
+        for ($c = $start; $c < $start + $count; $c++) {
             $this->grid->put($row, $c, Cell::empty());
         }
     }
@@ -993,12 +1013,21 @@ final class CsiHandlerImpl implements CsiHandler
         $row = $this->cursor->row;
         $col = $this->cursor->col;
         $cols = $this->grid->cols;
-        $count = min(max(1, $count), $cols - $col);
+        // vterm-13 pair-atomic DCH (EraseHandler mirror): a cursor on a wide
+        // glyph's continuation deletes the whole pair — start pulls to the
+        // base and the shift absorbs the extra column.
+        $start = $col;
+        $take = 0;
+        if ($start > 0 && $this->grid->cell($row, $start)->continuation) {
+            $start--;
+            $take = 1;
+        }
+        $count = min(max(1, $count) + $take, $cols - $start);
         if ($count <= 0) {
             return;
         }
 
-        for ($c = $col; $c < $cols - $count; $c++) {
+        for ($c = $start; $c < $cols - $count; $c++) {
             $this->grid->put($row, $c, $this->grid->cell($row, $c + $count));
         }
         for ($c = $cols - $count; $c < $cols; $c++) {

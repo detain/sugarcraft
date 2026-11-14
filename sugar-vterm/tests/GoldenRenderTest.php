@@ -77,4 +77,31 @@ final class GoldenRenderTest extends TestCase
             $output,
         );
     }
+
+    public function testWideEraseBoundaryGolden(): void
+    {
+        // vterm-13 (NEW golden, disclosed): EL starting on a wide glyph's
+        // continuation takes the base with it, and DCH on a continuation
+        // deletes the whole pair atomically — the grid must hold no orphaned
+        // halves at either erase boundary. Continuations render as '·'.
+        $t = Terminal::new(10, 2);
+        $t->feed("漢ab\x1b[1;2H\x1b[K");
+        $t->feed("\x1b[2;1H漢cd\x1b[2;2H\x1b[P");
+
+        $grid = $t->grid();
+        $output = '';
+        for ($r = 0; $r < $grid->rows; $r++) {
+            for ($c = 0; $c < $grid->cols; $c++) {
+                $cell = $grid->cell($r, $c);
+                $output .= $cell->continuation ? '·' : $cell->grapheme;
+            }
+            $output .= "\n";
+        }
+
+        $this->assertSame(2, substr_count($output, "\n"), 'two grid rows, newline-terminated');
+        Assertions::assertGoldenAnsi(
+            $this->fixturesDir . '/wide-erase-boundary.golden',
+            $output,
+        );
+    }
 }

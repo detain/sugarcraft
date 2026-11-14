@@ -80,6 +80,12 @@ final class EngineDifferentialTest extends TestCase
             'cht two stops then cbt' => ["ab\x1b[2I|\x1b[Z-"],
             'hts hard stop then ht' => ["\x1b[1;4H\x1bH\x1b[1;1Hx\ty"],
             'tbc 3 clears all, ht clamps to edge' => ["\x1b[3gstart\tx"],
+            // vterm-13: erase/shift spans widen to whole wide pairs in BOTH
+            // engines; these arms police the shared rule end to end.
+            'el at wide tail' => ["漢ab\x1b[1;2H\x1b[K"],
+            'dch deletes wide pair' => ["漢ab\x1b[1;2H\x1b[P"],
+            'ich clips edge pair' => ["ABCDEFGHIJKLMNOPQ\x1b[1;18H漢\x1b[1;1H\x1b[2@"],
+            'ed spans wide row' => ["漢x\x1b[1;1H漢y\x1b[1;2H\x1b[0J"],
             // DECSTBM invalidities: same-row and inverted regions are
             // ignored whole in both engines (xterm) — no one-row region,
             // no home. Divergence here would mean one engine accepted the

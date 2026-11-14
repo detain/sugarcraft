@@ -102,8 +102,19 @@ final class EraseHandler
         if ($cur->row < 0 || $cur->row >= $buf->rows) {
             return;
         }
-        $shift = min($count, $buf->cols - $cur->col);
-        for ($c = $cur->col; $c + $shift < $buf->cols; $c++) {
+        // vterm-13 pair-atomic DCH: a cursor sitting on a wide glyph's
+        // continuation deletes the WHOLE pair — the start pulls to the base
+        // and the shift absorbs the extra column (VT510 "double-width
+        // characters are treated as one unit"). A left shift keeps every
+        // surviving pair contiguous, so no orphan repair is needed behind it.
+        $start = $cur->col;
+        $take = 0;
+        if ($start > 0 && $buf->cell($cur->row, $start)->continuation) {
+            $start--;
+            $take = 1;
+        }
+        $shift = min($count + $take, $buf->cols - $start);
+        for ($c = $start; $c + $shift < $buf->cols; $c++) {
             $this->putOrQueue($buf, $cur->row, $c, $buf->cell($cur->row, $c + $shift), $pending);
         }
         $blank = $this->blankCell($sgr);
@@ -117,12 +128,26 @@ final class EraseHandler
         if ($cur->row < 0 || $cur->row >= $buf->rows) {
             return;
         }
-        $shift = min($count, $buf->cols - $cur->col);
-        for ($c = $buf->cols - 1; $c >= $cur->col + $shift; $c--) {
+        // vterm-13 pair-atomic ICH: a cursor on a continuation inserts before
+        // the WHOLE pair, and a pair cut by the right edge leaves no orphaned
+        // base behind (Buffer::resize boundary rule, applied to the shift).
+        $start = $cur->col;
+        if ($start > 0 && $buf->cell($cur->row, $start)->continuation) {
+            $start--;
+        }
+        $shift = min($count, $buf->cols - $start);
+        $clipTail = $shift > 0
+            && $start + $shift <= $buf->cols - 1
+            && $buf->cell($cur->row, $buf->cols - $shift)->continuation
+            && !$buf->cell($cur->row, $buf->cols - $shift - 1)->continuation;
+        for ($c = $buf->cols - 1; $c >= $start + $shift; $c--) {
             $this->putOrQueue($buf, $cur->row, $c, $buf->cell($cur->row, $c - $shift), $pending);
         }
+        if ($clipTail) {
+            $this->putOrQueue($buf, $cur->row, $buf->cols - 1, $this->blankCell($sgr), $pending);
+        }
         $blank = $this->blankCell($sgr);
-        for ($c = $cur->col; $c < $cur->col + $shift; $c++) {
+        for ($c = $start; $c < $start + $shift; $c++) {
             $this->putOrQueue($buf, $cur->row, $c, $blank, $pending);
         }
     }
@@ -158,6 +183,10 @@ final class EraseHandler
         if ($start > $end) {
             return;
         }
+        // vterm-13: erase spans widen to whole wide glyphs — a span starting
+        // on a pair's tail takes its base, one ending on a base takes its
+        // tail (Buffer::widenPairSpan is the shared rule for both engines).
+        [$start, $end] = $buf->widenPairSpan($row, $start, $end);
         $blank = $this->blankCell($sgr);
         for ($c = $start; $c <= $end; $c++) {
             $this->putOrQueue($buf, $row, $c, $blank, $pending);

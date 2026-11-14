@@ -361,4 +361,50 @@ final class BufferTest extends TestCase
     {
         $this->assertTrue((new Buffer(80, 24))->equals(new Buffer(80, 24)));
     }
+
+    // ─── vterm-13: widenPairSpan (shared erase-widening rule) ──────────────
+
+    private function withWide(Buffer $buf, int $col): void
+    {
+        $base = new Cell(grapheme: '漢');
+        $buf->put(0, $col, $base);
+        $buf->put(0, $col + 1, Cell::continuation($base));
+    }
+
+    public function testWidenPullsStartOverABaseWhenSpanStartsOnTail(): void
+    {
+        $buf = new Buffer(10, 1);
+        $this->withWide($buf, 2); // base 2, tail 3
+        $this->assertSame([2, 9], $buf->widenPairSpan(0, 3, 9));
+    }
+
+    public function testWidenExtendsEndOverAnOrphanTail(): void
+    {
+        $buf = new Buffer(10, 1);
+        $this->withWide($buf, 6); // base 6, tail 7
+        $this->assertSame([0, 7], $buf->widenPairSpan(0, 0, 6));
+    }
+
+    public function testWidenIsIdentityForAsciiAndFullSpans(): void
+    {
+        $buf = new Buffer(10, 1);
+        $buf->put(0, 4, new Cell(grapheme: 'a'));
+        $this->assertSame([2, 5], $buf->widenPairSpan(0, 2, 5));
+        $wide = new Buffer(10, 1);
+        $this->withWide($wide, 0);
+        $this->assertSame([0, 9], $wide->widenPairSpan(0, 0, 9), 'full width needs nothing');
+    }
+
+    public function testWidenDoesNotExtendBeyondLastColumn(): void
+    {
+        $buf = new Buffer(10, 1);
+        $buf->put(0, 9, new Cell(grapheme: 'a')); // base at last column, no tail possible
+        $this->assertSame([8, 9], $buf->widenPairSpan(0, 8, 9));
+    }
+
+    public function testWidenPassesEmptySpanThrough(): void
+    {
+        $buf = new Buffer(10, 1);
+        $this->assertSame([5, 4], $buf->widenPairSpan(0, 5, 4));
+    }
 }
