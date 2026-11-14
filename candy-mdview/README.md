@@ -3,6 +3,8 @@
 # CandyMdview
 
 > Formerly published as `sugarcraft/sugar-glow` (renamed 2026-10). <!-- @rename-keep -->
+>
+> Library: CandyMdview · package `sugarcraft/candy-mdview` · binary `candy-mdview`.
 > Namespace changed: `SugarCraft\Glow\` → `SugarCraft\MdView\`. <!-- @rename-keep -->
 > The old package name no longer receives updates — require `sugarcraft/candy-mdview`, and rename `SugarCraft\Glow\*` imports to `SugarCraft\MdView\*`.
 
@@ -25,7 +27,7 @@ candy-mdview — a Markdown CLI viewer for PHP 8.3+ that composes **SugarMarkdow
 composer require sugarcraft/candy-mdview   # binary lands in vendor/bin/candy-mdview
 ```
 
-Prefer a single file? The rolling latest phar is rebuilt on every push to master that affects this lib:
+Prefer a single file? The rolling latest phar is rebuilt on every push to master that changes this library:
 
 ```sh
 wget https://github.com/detain/sugarcraft/releases/download/candy-mdview/latest/candy-mdview.phar
@@ -95,9 +97,9 @@ Flags:
   color walk below picks the tier: **ansi** when the stream is decorated and
   color-capable, **ascii** when it is decorated but colorless, and **plain**
   when it is undecorated (`--no-ansi`, or stdout is not a terminal and
-  nothing forces decoration). The mirror
-  edge: forcing decoration (`--ansi` / `CLICOLOR_FORCE` / `FORCE_COLOR`)
-  decorates a pipe exactly like a terminal. To compare the palettes side by
+  nothing forces decoration). Conversely,
+  forcing decoration (`--ansi` / `CLICOLOR_FORCE` / `FORCE_COLOR`)
+  still emits color on a pipe, exactly like a terminal. To compare the palettes side by
   side, run `./examples/render-readme.sh [file]` over this README.
 - `--style` / `-s` — glamour-compat alias for `--theme`: it takes theme
   *names*, not style files (JSON goes through `--theme-config`). When both
@@ -116,8 +118,8 @@ Flags:
   library glamour styles through, so its map is keyed by token family — the
   shape of
   [charmbracelet/glamour's style files](https://github.com/charmbracelet/glamour/tree/master/styles))
-  is mapped by `GlamourTheme` onto a SugarMarkdown `Theme`; the historic flat
-  colour map goes through `Theme::fromJsonString`. (`Theme::fromJson` takes a
+  is mapped by `GlamourTheme` onto a SugarMarkdown `Theme`; the legacy flat
+  color map goes through `Theme::fromJsonString`. (`Theme::fromJson` takes a
   *path* and is used for the three bundled JSON themes.) In the flat shape the
   accepted top-level keys are exactly the `Theme` element slots —
   `heading1`…`heading6`, `paragraph`, `bold`, `italic`, `code`, `codeBlock`,
@@ -125,13 +127,14 @@ Flags:
   `comment`, `strike`, `linkText`, `image`, `htmlBlock`, `htmlSpan`,
   `definitionTerm`, `definitionDescription`, `text`, `autolink` — each one a
   style object; `themes/solarized.json` is a worked flat starting point.
-  Overrides `--theme`. The path must be a
+  Given with `--theme` as well, it replaces the named
+  preset. The path must be a
   regular file — a directory, FIFO or device refuses under the same heading
   instead of warning, reading unbounded, or hanging — and the payload must
   satisfy one of the two shapes: scalars, JSON lists and objects that match
   neither schema (a typo'd top-level container) refuse with exit 2 rather
   than silently rendering the stock theme.
-- `--width` / `-w <N>` — word-wrap paragraphs / blockquotes / list bodies at
+- `--width` / `-w <N>` — word-wrap paragraphs, blockquotes, and list bodies at
   N columns (1–9999). `0` disables wrapping; unwrapped lines are truncated by
   the pager, so scroll horizontally with `h`/`l`. Omitted, the wrap follows
   the terminal: stdout output wraps at `min(terminal width − 2, 80)` and the
@@ -215,7 +218,7 @@ explicit ISO-8859-style charset) the same row is written in pure ASCII:
 |---|---|
 | `↑` / `k` | line up |
 | `↓` / `j` | line down (`Alt+j` too) |
-| mouse wheel | 3 lines per notch, either direction |
+| mouse wheel | 3 lines per notch in either direction |
 | `PgUp` / `b` | page up (`Ctrl+B` too) |
 | `PgDn` / `space` / `f` | page down |
 | `Ctrl+U` / `Ctrl+D` | half page |
@@ -314,7 +317,7 @@ fixed 0.5 s tick rather than a transition.
 | 1 | input faults caught at the console layer — unknown option, more than one file argument, or the space-separated `--width -5` (the `=` form reaches the command and exits 2) — printed with the usage dump; runtime failures |
 | 2 | usage error — bad theme, unreadable/oversized theme config, missing or unreadable file, a directory argument with no resolvable document, non-text (binary) input, a document over 64 MiB, a refused or failed URL fetch (transport, non-2xx answer, oversize body), invalid `--width`, or no input (no file argument while stdin is a terminal, or an empty stdin) |
 
-Usage errors are named and go to **stderr** (`open notes.md: no such file`,
+Usage errors print a specific message to **stderr** (`open notes.md: no such file`,
 `no Markdown document in docs/: looked for …`, …); file paths and option values coming from
 argv are sanitized before display, so a crafted name cannot inject escape
 sequences or restyle the message. The rendered document is written **raw**:
@@ -357,12 +360,13 @@ autoloader found), which fire before the catalogue is even reachable.
 ## Library API
 
 Beyond the CLI, candy-mdview exposes three public pieces for integrating its
-behaviour into other PHP projects: the pager's TEA model (a The-Elm-
+behavior into other PHP projects: the pager's TEA model (a The-Elm-
 Architecture update loop, `MdViewModel`) and
 two utility helpers (`FileWatcher`, `GlamourTheme`). The deprecated
 `RenderCommand::set*Callback()` test seams and the legacy public
-`RenderCommand::loadInput()` are deliberately off this surface — kept for
-tests and integrators, not advertised API. Visual width measuring
+`RenderCommand::loadInput()` are deliberately not part of the supported
+API; they remain for the package's own tests, and any integrator using
+them does so at their own risk. Visual width measuring
 (CJK/emoji) is delegated to `SugarCraft\Core\Util\Width` in **sugar-core** —
 use that directly; this package ships no local width helpers.
 
@@ -438,9 +442,9 @@ silently change what existing style files render, so they stay disclosed and
 addressable instead), per-heading-level prefixes, and chroma families beyond
 the four slots. Unmappable fields are exposed verbatim through `element()` /
 `chroma()` /
-`indentToken()` for integrations that need them — no silent loss. This —
-plus the three JSON preset files — is the theme extension point; the built-in
-theme set itself is fixed.
+`indentToken()` for integrations that need them — no silent loss. Together
+with the three JSON presets in `themes/`, this is the only way to extend
+the fixed built-in theme set.
 
 ## Shared foundations
 
@@ -450,7 +454,7 @@ sanitize), **sugar-colorprofile** (terminal capability probing),
 **sugar-style**, and **symfony/console** (`^6.4 || ^7.0`) — the app is a
 Symfony Console program (`Application` extends
 `Symfony\Component\Console\Application`; the whole flag and exit-code surface
-rides on it). The command's private static `terminalSupportsColor()` consults
+depends on it). The command's private static `terminalSupportsColor()` consults
 the environment verdict first, then
 `\SugarCraft\ColorProfile\Probe\TerminalProbe::run()`, and falls back to
 `true` (assume color) if the probe throws — ensuring graceful degradation
@@ -458,19 +462,19 @@ on Windows, over SSH, and in old terminals.
 
 ## Snapshot tests
 
-Render output is covered by golden-file snapshot tests. Fixture files live
+Render output is covered by golden-file snapshot tests. Golden files live
 in `tests/fixtures/` with a `.golden` extension and are compared against
 actual ANSI byte output via `SugarCraft\Testing\Snapshot\Assertions::assertGoldenAnsi()`.
 The recorder is **create-only**: an existing golden that differs never gets
-rewritten. To re-record after intentional output changes, delete the fixture
-first:
+rewritten. To re-record after intentional output changes, delete the golden
+file first:
 
 ```sh
 rm tests/fixtures/<name>.golden
 UPDATE_GOLDENS=1 vendor/bin/phpunit
 ```
 
-## Test
+## Testing
 
 ```sh
 cd candy-mdview && composer install && vendor/bin/phpunit

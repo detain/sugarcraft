@@ -16,7 +16,7 @@ candy-mdview --theme-config ./my-theme.json README.md</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Stdout mode</strong><span><code>candy-mdview README.md</code> — pipe-friendly, exits clean.</span></div>
+      <div class="feature"><strong>Stdout mode</strong><span><code>candy-mdview README.md</code> — pipe-friendly, exits cleanly.</span></div>
       <div class="feature"><strong>Pager mode</strong><span><code>-p / --pager</code> — fullscreen scrollable Viewport that reflows live on terminal resize. A header row shows the file, scroll position, and an auto-reload marker. Esc, q, or Ctrl+C to exit.</span></div>
       <div class="feature"><strong>Theme picker</strong><span><code>--theme {ansi|ascii|plain|notty|dark|light|dracula|tokyo-night|pink|solarized|monokai|github}</code> (aliases: <code>no</code>, <code>auto-no</code>, <code>tokyonight</code>), <code>--theme-config ./my.json</code>, <code>-s</code> alias for <code>--theme</code>. Three themes (solarized/monokai/github) load from JSON in <code>themes/</code>. With no <code>--theme</code>: ansi on a color-capable terminal, ascii when color is off, plain when the output is undecorated (<code>--no-ansi</code> or a non-terminal without forced decoration).</span></div>
       <div class="feature"><strong>Word-wrap</strong><span><code>-w 80</code> — column width control (1-9999). <code>0</code> disables wrapping.</span></div>
@@ -44,7 +44,7 @@ candy-mdview --theme-config ./my-theme.json README.md</code></pre>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>MdViewModel</td><td>fromContent(content, width, height)</td><td>Build the pager Model from already-rendered text</td></tr>
-<tr><td>MdViewModel</td><td>withDocument(name)</td><td>Prepend a status header (file name, scroll percent, reload marker)</td></tr>
+<tr><td>MdViewModel</td><td>withDocument(name)</td><td>Enter document mode: prepend a status header (file name, scroll percent, reload marker)</td></tr>
 <tr><td>MdViewModel</td><td>withWatch(path, reRender)</td><td>Auto-reload from disk when the (mtime, size) tuple changes</td></tr>
 <tr><td>MdViewModel</td><td>isWatching()</td><td>Whether a file watch is armed on this model</td></tr>
 <tr><td>FileWatcher</td><td>snapshot(path)</td><td>Current (mtime, size) tuple for a file, or null when unreadable</td></tr>
@@ -75,7 +75,7 @@ candy-mdview --theme-config ./my-theme.json README.md</code></pre>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-mdview/.vhs/render.gif" alt="Render">
                 <h3>Render</h3>
-                <span class="demo-caption">README rendered with <code>--theme dark</code>.</span>
+                <span class="demo-caption">The monorepo root README rendered with <code>--theme dark</code>.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-mdview/.vhs/pager.gif" alt="Pager">

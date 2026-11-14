@@ -1,6 +1,7 @@
-# Render the project README via the local bin (no global composer
-# install required at render time). VHS runs from the lib's own
-# working dir, so `./bin/candy-mdview` and `../README.md` both resolve.
+# Render the monorepo ROOT README via the local bin (no global composer
+# install required at render time — and deliberately not this lib's own
+# README, which the demo gif's caption calls out). VHS runs from the lib's
+# own working dir, so `./bin/candy-mdview` and `../README.md` both resolve.
 Output .vhs/render.gif
 
 Set FontSize 14

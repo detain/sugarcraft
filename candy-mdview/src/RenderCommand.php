@@ -131,8 +131,11 @@ final class RenderCommand extends Command
                       directory/binary/oversized input, no input)
 
                 Environment:
-                  NO_COLOR           any non-empty value disables color (bold survives in ascii mode)
-                  CLICOLOR=0         disables color (BSD convention)
+                  NO_COLOR           any non-empty value selects the colorless
+                      tier: ASCII keeps bold, plain drops it (on a terminal
+                      OSC 8 links still flow — use --no-hyperlinks to drop
+                      those too)
+                  CLICOLOR=0         selects the colorless tier (BSD convention)
                   CLICOLOR_FORCE     any non-empty value other than 0 forces color on (pipes included)
                   FORCE_COLOR        any non-empty value other than 0 forces color on (pipes included)
                   TERM=dumb          treated as colorless

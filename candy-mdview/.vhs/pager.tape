@@ -1,5 +1,5 @@
 # VHS tape — CandyMdview markdown pager mode.
-# -p flag opens fullscreen pager with scroll.
+# The -p flag opens a fullscreen pager with scrolling.
 # Render with: `vhs candy-mdview/.vhs/pager.tape`
 Output .vhs/pager.gif
 
