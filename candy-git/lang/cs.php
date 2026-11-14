@@ -108,6 +108,9 @@ return [
     'confirm.fetch'           => 'fetch: stisknete znovu f pro nacteni z remote',
     'confirm.pull'            => 'pull: stisknete znovu p pro stazeni z remote',
     'confirm.push'            => 'push: stisknete znovu P pro odeslani do remote (viditelne ostatnim)',
+    // Notice lane (amber confirmation/hint state, candy-git-047)
+    'notice.collect_hint' => 'Enter potvrzuje · Esc ruší',
+
 
     // Remotes (fetch / pull / push)
     'remote.detached'       => 'nelze odeslat: detached HEAD — nejprve se prepněte na větev',

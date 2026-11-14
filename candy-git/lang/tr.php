@@ -108,6 +108,9 @@ return [
     'confirm.fetch'           => 'get-al: uzaktan almak için f tuşuna tekrar basın',
     'confirm.pull'            => 'çek: uzaktan çekmek için p tuşuna tekrar basın',
     'confirm.push'            => 'gönder: uzağa göndermek için P tuşuna tekrar basın (başkaları görür)',
+    // Notice lane (amber confirmation/hint state, candy-git-047)
+    'notice.collect_hint' => 'Enter onaylar · Esc iptal eder',
+
 
     // Remotes (fetch / pull / push)
     'remote.detached'       => 'gönderilemiyor: ayrık HEAD — önce bir dalı checkout edin',

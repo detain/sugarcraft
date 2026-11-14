@@ -108,6 +108,9 @@ return [
     'confirm.fetch'           => 'fetch: pulsa f de nuevo para hacer fetch del remoto',
     'confirm.pull'            => 'pull: pulsa p de nuevo para hacer pull del remoto',
     'confirm.push'            => 'push: pulsa P de nuevo para hacer push al remoto (visible para otros)',
+    // Notice lane (amber confirmation/hint state, candy-git-047)
+    'notice.collect_hint' => 'Intro confirma · Esc cancela',
+
 
     // Remotes (fetch / pull / push)
     'remote.detached'       => 'no se puede hacer push: HEAD detached — haz primero checkout de una rama',

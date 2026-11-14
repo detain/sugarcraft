@@ -108,6 +108,9 @@ return [
     'confirm.fetch'           => '抓取：再次按 f 从远程抓取',
     'confirm.pull'            => '拉取：再次按 p 从远程拉取',
     'confirm.push'            => '推送：再次按 P 推送到远程（其他人可见）',
+    // Notice lane (amber confirmation/hint state, candy-git-047)
+    'notice.collect_hint' => 'Enter 确认 · Esc 取消',
+
 
     // Remotes (fetch / pull / push)
     'remote.detached'       => '无法推送：分离的 HEAD——请先检出分支',

@@ -43,6 +43,40 @@ final class Renderer
         return Sanitize::untrusted($s);
     }
 
+    /**
+     * The amber lane text: the stored arm request while a confirm is armed,
+     * else the collector hint while any text buffer owns the keyboard
+     * (candy-git-106 — one confirmation grammar, one lane).
+     */
+    private static function armNotice(App $a): ?string
+    {
+        if ($a->notice !== null) {
+            return $a->notice;
+        }
+
+        return $a->isTyping() ? Lang::t('notice.collect_hint') : null;
+    }
+
+    /**
+     * The notice lanes are each exactly one physical row (candy-git-044):
+     * multi-line git stderr (checkout conflicts print five to ten lines) is
+     * collapsed to one bounded row by joining its non-empty lines with a
+     * middot before the budget truncate runs — nothing important is hidden,
+     * and extra rows can never push real content past the hard ceiling.
+     */
+    private static function oneLine(string $s): string
+    {
+        $kept = [];
+        foreach (preg_split('/\r\n|\r|\n/', $s) ?: [] as $line) {
+            $trimmed = trim($line);
+            if ($trimmed !== '') {
+                $kept[] = $trimmed;
+            }
+        }
+
+        return implode(' · ', $kept);
+    }
+
     public static function render(App $a): string
     {
         $left  = self::statusPane($a);
@@ -82,13 +116,24 @@ final class Renderer
         $err = '';
         if ($a->error !== null) {
             $err = "\n " . Style::new()->foreground(Color::hex('#ff5f87'))->bold()
-                ->render(self::truncate(Lang::t('ui.error_prefix') . self::sanitize($a->error), $a->barWidth()));
+                ->render(self::truncate(Lang::t('ui.error_prefix') . self::oneLine(self::sanitize($a->error)), $a->barWidth()));
+        }
+
+        $notice = '';
+        // One confirmation grammar (candy-git-106): the amber lane carries the
+        // arm's stored request when one is live, else the collector hint while
+        // a text buffer owns the keyboard. It is not an error state and does
+        // not ride the red slot (candy-git-047).
+        $noticeText = self::armNotice($a);
+        if ($noticeText !== null) {
+            $notice = "\n " . Style::new()->foreground(Color::hex('#fde68a'))->bold()
+                ->render(self::truncate(self::oneLine(self::sanitize($noticeText)), $a->barWidth()));
         }
 
         $success = '';
         if ($a->successMessage !== null) {
             $success = "\n " . Style::new()->foreground(Color::hex('#6ee7b7'))
-                ->render(self::truncate(self::sanitize($a->successMessage), $a->barWidth()));
+                ->render(self::truncate(self::oneLine(self::sanitize($a->successMessage)), $a->barWidth()));
         }
 
         $commitBar = '';
@@ -145,7 +190,7 @@ final class Renderer
             $interactiveRebaseOverlay = self::interactiveRebaseOverlay($a);
         }
 
-        $frame = $header . "\n" . $body . "\n " . $help . $err . $success . $commitBar . $branchBar . $mergeBar . $diffOverlay . $rebaseOverlay . $stashOverlay . $cherryPickBar . $worktreeOverlay . $interactiveRebaseOverlay . $overlay;
+        $frame = $header . "\n" . $body . "\n " . $help . $err . $notice . $success . $commitBar . $branchBar . $mergeBar . $diffOverlay . $rebaseOverlay . $stashOverlay . $cherryPickBar . $worktreeOverlay . $interactiveRebaseOverlay . $overlay;
 
         // Hard ceiling: whatever the per-pane budgets missed, the frame never
         // ships more rows than the terminal has. The trailing empty

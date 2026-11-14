@@ -134,6 +134,9 @@ return [
     'confirm.pull'            => 'pull: press p again to pull from the remote',
     'confirm.push'            => 'push: press P again to push to the remote (visible to others)',
 
+    // Notice lane (amber confirmation/hint state, candy-git-047)
+    'notice.collect_hint'   => 'enter confirms · esc cancels',
+
     // Remotes (fetch / pull / push)
     'remote.detached'       => 'cannot push: detached HEAD — check out a branch first',
     'remote.fetch_done'     => 'fetched from the remote',

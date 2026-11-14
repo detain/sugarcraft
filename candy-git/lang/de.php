@@ -108,6 +108,9 @@ return [
     'confirm.fetch'           => 'fetch: erneut f drücken, um vom Remote zu fetchen',
     'confirm.pull'            => 'pull: erneut p drücken, um vom Remote zu pullen',
     'confirm.push'            => 'push: erneut P drücken, um zum Remote zu pushen (für andere sichtbar)',
+    // Notice lane (amber confirmation/hint state, candy-git-047)
+    'notice.collect_hint' => 'Enter bestätigt · Esc bricht ab',
+
 
     // Remotes (fetch / pull / push)
     'remote.detached'       => 'push nicht möglich: detached HEAD — zuerst einen Branch auschecken',

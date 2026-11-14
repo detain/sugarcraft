@@ -108,6 +108,9 @@ return [
     'confirm.fetch'           => 'fetch: druk nogmaals op f om van de remote op te halen',
     'confirm.pull'            => 'pull: druk nogmaals op p om van de remote binnen te halen',
     'confirm.push'            => 'push: druk nogmaals op P om naar de remote te pushen (zichtbaar voor anderen)',
+    // Notice lane (amber confirmation/hint state, candy-git-047)
+    'notice.collect_hint' => 'Enter bevestigt · Esc annuleert',
+
 
     // Remotes (fetch / pull / push)
     'remote.detached'       => 'kan niet pushen: losgekoppelde HEAD — check eerst een branch uit',

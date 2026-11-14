@@ -108,6 +108,9 @@ return [
     'confirm.fetch'           => 'fetch: нажмите f ещё раз, чтобы сделать fetch с remote',
     'confirm.pull'            => 'pull: нажмите p ещё раз, чтобы сделать pull с remote',
     'confirm.push'            => 'push: нажмите P ещё раз, чтобы сделать push на remote (увидят другие)',
+    // Notice lane (amber confirmation/hint state, candy-git-047)
+    'notice.collect_hint' => 'Enter подтверждает · Esc отменяет',
+
 
     // Remotes (fetch / pull / push)
     'remote.detached'       => 'нельзя сделать push: detached HEAD — сначала сделайте checkout ветки',

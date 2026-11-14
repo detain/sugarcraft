@@ -108,6 +108,9 @@ return [
     'confirm.fetch'           => 'fetch : appuyez de nouveau sur f pour récuperer depuis le remote',
     'confirm.pull'            => 'pull : appuyez de nouveau sur p pour importer depuis le remote',
     'confirm.push'            => 'push : appuyez de nouveau sur P pour envoyer vers le remote (visible par les autres)',
+    // Notice lane (amber confirmation/hint state, candy-git-047)
+    'notice.collect_hint' => 'Entrée confirme · Échap annule',
+
 
     // Remotes (fetch / pull / push)
     'remote.detached'       => 'envoi impossible : HEAD détaché — faites dabord un checkout de branche',

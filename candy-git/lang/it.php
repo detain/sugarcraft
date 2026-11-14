@@ -108,6 +108,9 @@ return [
     'confirm.fetch'           => 'fetch: premi di nuovo f per recuperare dal remote',
     'confirm.pull'            => 'pull: premi di nuovo p per prelevare dal remote',
     'confirm.push'            => 'push: premi di nuovo P per inviare al remote (visibile agli altri)',
+    // Notice lane (amber confirmation/hint state, candy-git-047)
+    'notice.collect_hint' => 'Invio conferma · Esc annulla',
+
 
     // Remotes (fetch / pull / push)
     'remote.detached'       => 'impossibile inviare: HEAD distaccata — effettua prima il checkout di un branch',

@@ -108,6 +108,9 @@ return [
     'confirm.fetch'           => 'obter: pressione f novamente para obter do remoto',
     'confirm.pull'            => 'pull: pressione p novamente para integrar do remoto',
     'confirm.push'            => 'enviar: pressione P novamente para enviar para o remoto (visível para outros)',
+    // Notice lane (amber confirmation/hint state, candy-git-047)
+    'notice.collect_hint' => 'Enter confirma · Esc cancela',
+
 
     // Remotes (fetch / pull / push)
     'remote.detached'       => 'não é possível enviar: HEAD desanexada — faça primeiro o checkout de um ramo',

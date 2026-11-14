@@ -62,8 +62,17 @@ final class App implements Model
         public readonly bool $collectingBranchName = false,
         /** The accumulated branch name while collectingBranchName is true. */
         public readonly string $branchName = '',
-        /** Transient success message shown briefly after an action (e.g. hunk staged). */
+        /** Transient success message shown until the next action or refresh acks it; navigation does not. */
         public readonly ?string $successMessage = null,
+        /**
+         * Amber notice lane: the confirmation request that rides with an armed
+         * second press (or the collect hint while a buffer owns the keyboard).
+         * candy-git-047: this state is not an error and must not share the
+         * stealable red slot; the arm and its notice are one contract — they
+         * are written together, kept together through navigation, and dropped
+         * together on execute, cancel, refresh, or pane switch.
+         */
+        public readonly ?string $notice = null,
         /** Whether the app is collecting a merge target branch name. */
         public readonly bool $collectingMergeTarget = false,
         /** The accumulated merge target branch name. */
@@ -582,7 +591,7 @@ final class App implements Model
      * collide with letters (q) must not fire. Escape/Ctrl+C still cancel via
      * the global chain — only the letter collision is gated.
      */
-    private function isTyping(): bool
+    public function isTyping(): bool
     {
         return $this->collectingCommit
             || $this->collectingBranchName
@@ -754,6 +763,7 @@ final class App implements Model
         ?string $rebaseMenuKind = null,
         ?string $pendingConfirm = null,
         bool $pendingConfirmSet = false,
+        ?string $notice = null,
         ?StashManager $stashManager = null,
         bool $stashManagerSet = false,
         ?CherryPick $cherryPick = null,
@@ -788,13 +798,15 @@ final class App implements Model
             mergeTarget: $mergeTarget ?? $this->mergeTarget,
             showRebaseMenu: $showRebaseMenu ?? $this->showRebaseMenu,
             rebaseMenuKind: $rebaseMenuKind ?? $this->rebaseMenuKind,
-            // The armed confirm and its warning are one contract: armConfirm
-            // writes the pair together, and every OTHER lane here clobbers
-            // the warning (error is a pass-through), so an arm not explicitly
-            // re-set on this transition dies with its vanished warning —
-            // navigation could otherwise strand a live armed discard that the
-            // next press executed with no visible confirm (candy-git-002).
+            // The armed confirm, its amber notice, and the arm-set sentinel
+            // are one contract (candy-git-047): armConfirm writes the pair,
+            // navigation re-passes the pair, and every other lane drops the
+            // pair by leaving these parameters null — an arm can never
+            // outlive its visible warning, and a visible warning can never
+            // be erased while the arm still lives (the old shared-red-slot
+            // design allowed exactly that: candy-git-002).
             pendingConfirm: $pendingConfirmSet ? $pendingConfirm : null,
+            notice: $notice,
             stashManager: $stashManagerSet ? $stashManager : ($stashManager ?? $this->stashManager),
             cherryPick: $cherryPickSet ? $cherryPick : ($cherryPick ?? $this->cherryPick),
             worktrees: $worktreesSet ? $worktrees : ($worktrees ?? $this->worktrees),
@@ -806,17 +818,22 @@ final class App implements Model
 
     private function moveCursor(int $dir): self
     {
-        return match ($this->pane) {
-            Pane::Status => $this->withAll(
-                statusCursor: Clamp::int($this->statusCursor + $dir, 0, count($this->status) - 1),
-            ),
-            Pane::Branches => $this->withAll(
-                branchesCursor: Clamp::int($this->branchesCursor + $dir, 0, count($this->branches) - 1),
-            ),
-            Pane::Log => $this->withAll(
-                logCursor: Clamp::int($this->logCursor + $dir, 0, count($this->log) - 1),
-            ),
-        };
+        // Navigation is neither an answer to an arm nor a reading of a
+        // message: the amber notice, the red error, and the green success
+        // all persist until an action acks them (candy-git-047/098). The
+        // arm persists with its notice — pressing a DIFFERENT target while
+        // an arm lives re-arms (arm keys embed the target), so persisting
+        // never executes the wrong thing.
+        return $this->withAll(
+            statusCursor: $this->pane === Pane::Status ? Clamp::int($this->statusCursor + $dir, 0, count($this->status) - 1) : $this->statusCursor,
+            branchesCursor: $this->pane === Pane::Branches ? Clamp::int($this->branchesCursor + $dir, 0, count($this->branches) - 1) : $this->branchesCursor,
+            logCursor: $this->pane === Pane::Log ? Clamp::int($this->logCursor + $dir, 0, count($this->log) - 1) : $this->logCursor,
+            error: $this->error,
+            successMessage: $this->successMessage,
+            pendingConfirm: $this->pendingConfirm,
+            pendingConfirmSet: true,
+            notice: $this->notice,
+        );
     }
 
     /**
@@ -842,10 +859,10 @@ final class App implements Model
     }
 
     /** Runs `git restore --worktree -- <path>` via the GitDriver, then refreshes. */
-    /** Arms a destructive action: the stored key warns in red and a matching repeat press executes. */
+    /** Arms a destructive action: the stored key is answered by a matching repeat press, and the amber notice lane shows the request for as long as the arm lives. */
     private function armConfirm(string $key, string $warning): self
     {
-        return $this->withAll(pendingConfirm: $key, pendingConfirmSet: true, error: $warning);
+        return $this->withAll(pendingConfirm: $key, pendingConfirmSet: true, notice: $warning);
     }
 
     private function clearConfirm(): self

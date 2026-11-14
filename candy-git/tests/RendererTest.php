@@ -528,4 +528,55 @@ final class RendererTest extends TestCase
         $this->assertStringNotContainsString('~ origin/main [', $out, 'remote rows carry no upstream badge');
         $this->assertStringNotContainsString('ahead', substr($out, strpos($out, 'branches')), 'badges never ship English words (branches pane onward)');
     }
+
+    // --------------------------------------------------------- notice lane (CG-11)
+
+    public function testNoticeLaneRendersTheArmsRequestOutsideTheErrorLane(): void
+    {
+        $a = new App($this->git(), notice: 'discard: press d again for src/A.php (unrecoverable)', width: 80, height: 24);
+        $out = Renderer::render($a);
+
+        $this->assertStringContainsString('press d again for src/A.php', $out);
+        $this->assertStringNotContainsString('error:', $out, 'a request for confirmation must not wear the red lane');
+    }
+
+    public function testCollectorHintRidesTheNoticeLane(): void
+    {
+        // candy-git-106: one confirmation grammar — the collector gets the
+        // same amber instruction lane the destructive arms use.
+        $a = new App($this->git(), collectingCommit: true, commitMessage: 'wip', width: 80, height: 24);
+        $out = Renderer::render($a);
+
+        $this->assertStringContainsString('enter confirms · esc cancels', $out);
+    }
+
+    public function testArmNoticeWinsOverTheCollectorHint(): void
+    {
+        $a = new App($this->git(), collectingCommit: true, notice: 'press d again to discard src/A.php', width: 80, height: 24);
+        $out = Renderer::render($a);
+
+        $this->assertStringContainsString('press d again to discard', $out);
+        $this->assertStringNotContainsString('enter confirms', $out);
+    }
+
+    public function testMultiLineStderrCollapsesToOnePhysicalRow(): void
+    {
+        // candy-git-044: checkout-conflict stderr is five to ten lines; pasted
+        // raw into the one-row lane it grew the frame and pushed content past
+        // the ceiling, while truncation amputated the explanation. Every
+        // non-empty line must survive the collapse, and the lane must stay on
+        // exactly one physical row (budget truncate may still cut the tail —
+        // same law as every other lane).
+        $stderr = "local changes would be overwritten:\n\tmodified: src/A.php\nAborting";
+        $a      = new App($this->git(), error: $stderr, width: 80, height: 24);
+        $out    = Renderer::render($a);
+        $plain  = (string) preg_replace('/\x1b\[[0-9;]*m/', '', $out);
+
+        $this->assertStringContainsString('error: local changes would be overwritten: · modified: src/A.php · Aborting', $plain);
+        $this->assertSame(1, preg_match_all('/(?m)^.*error:.*$/', $plain), 'the error lane is exactly one physical row');
+
+        $tall = new App($this->git(), error: str_repeat("some git detail line ", 40) . "\nAborting", width: 80, height: 24);
+        $tallPlain = (string) preg_replace('/\x1b\[[0-9;]*m/', '', Renderer::render($tall));
+        $this->assertSame(1, preg_match_all('/(?m)^.*error:.*$/', $tallPlain), 'a twelve-hundred-cell stderr blob still owns a single row');
+    }
 }

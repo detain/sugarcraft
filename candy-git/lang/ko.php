@@ -108,6 +108,9 @@ return [
     'confirm.fetch'           => '페치: f를 다시 누르면 원격에서 페치합니다',
     'confirm.pull'            => '풀: p를 다시 누르면 원격에서 풀합니다',
     'confirm.push'            => '푸시: P를 다시 누르면 원격으로 푸시합니다(다른 사용자에게 노출됨)',
+    // Notice lane (amber confirmation/hint state, candy-git-047)
+    'notice.collect_hint' => 'Enter 확인 · Esc 취소',
+
 
     // Remotes (fetch / pull / push)
     'remote.detached'       => '푸시할 수 없습니다: 분리된 HEAD — 먼저 브랜치를 체크아웃하세요',

@@ -108,6 +108,9 @@ return [
     'confirm.fetch'           => 'フェッチ: f をもう一度押すとリモートからフェッチします',
     'confirm.pull'            => 'プル: p をもう一度押すとリモートからプルします',
     'confirm.push'            => 'プッシュ: P をもう一度押すとリモートへプッシュします（他者に公開されます）',
+    // Notice lane (amber confirmation/hint state, candy-git-047)
+    'notice.collect_hint' => 'Enter で確定 · Esc でキャンセル',
+
 
     // Remotes (fetch / pull / push)
     'remote.detached'       => 'プッシュできません: detached HEAD です — まずブランチをチェックアウトしてください',

@@ -108,6 +108,9 @@ return [
     'confirm.fetch'           => 'fetch: naciśnij ponownie f, aby pobrać z remote',
     'confirm.pull'            => 'pull: naciśnij ponownie p, aby ściągnąć z remote',
     'confirm.push'            => 'push: naciśnij ponownie P, aby wysłać do remote (widoczne dla innych)',
+    // Notice lane (amber confirmation/hint state, candy-git-047)
+    'notice.collect_hint' => 'Enter zatwierdza · Esc anuluje',
+
 
     // Remotes (fetch / pull / push)
     'remote.detached'       => 'nie można wysłać: odłączony HEAD — najpierw przełącz się na gałąź',

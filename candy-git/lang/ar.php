@@ -108,6 +108,9 @@ return [
     'confirm.fetch'           => 'جلب: اضغط f مجددًا للجلب من المستودع البعيد',
     'confirm.pull'            => 'سحب: اضغط p مجددًا للسحب من المستودع البعيد',
     'confirm.push'            => 'دفع: اضغط P مجددًا للدفع إلى المستودع البعيد (مرئي للآخرين)',
+    // Notice lane (amber confirmation/hint state, candy-git-047)
+    'notice.collect_hint' => 'Enter للتأكيد · Esc للإلغاء',
+
 
     // Remotes (fetch / pull / push)
     'remote.detached'       => 'لا يمكن الدفع: HEAD منفصل — اخرج إلى فرع أولًا',
