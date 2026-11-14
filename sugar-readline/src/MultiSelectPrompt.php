@@ -11,7 +11,7 @@ use SugarCraft\Readline\Selection\SelectionEngine;
  * multi-select mode.
  *
  * Multi-choice selection prompt with cursor navigation, filter, pagination,
- * and minimum / maximum selection enforcement.
+ * and min/max selection enforcement.
  *
  * Marks are tracked by the *original* choice index, so they survive filter
  * changes. Selected values are returned in original choice order.
@@ -130,7 +130,7 @@ final class MultiSelectPrompt implements PromptInterface, SizingInterface
     /** @return array<int, true> Map of marked choice indices to true. */
     public function marked(): array { return $this->marked; }
 
-    /** True when the current marked set satisfies min / max constraints. */
+    /** True when the current marked set satisfies min/max constraints. */
     public function canSubmit(): bool
     {
         $n = count($this->marked);

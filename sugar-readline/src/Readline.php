@@ -932,22 +932,6 @@ final class Readline
     }
 
     /**
-     * Emit `CSI ?2004h` (mirrors sugar-core Ansi::bracketedPasteOn()) so the
-     * terminal wraps pastes in ESC[200~ / ESC[201~ markers that sugar-input's
-     * decoder turns into PasteEvents.
-     *
-     * Guarded to real TTYs only: tests write to memory streams and pipes,
-     * which must not receive stray control sequences. The gate consults the
-     * OUTPUT stream (the only one this class writes to); the terminal that
-     * honors `?2004h` is the one the input arrives from, so a session with
-     * piped STDIN behind a TTY stdout may still deliver pastes as plain
-     * keystrokes — they take the ordinary handleChar path, where a CR or LF
-     * in the paste submits exactly as if typed (the literal-text guarantee
-     * of insertPastedText() belongs to the bracketed path alone).
-     *
-     * @return bool True when the mode was enabled (caller must disable on exit).
-     */
-    /**
      * Classify the output sink for escape-sequence safety (finding 023).
      *
      * A TTY whose TERM is 'dumb', unset, or names no known
@@ -992,6 +976,22 @@ final class Readline
         return (string) preg_replace($pattern, '', $view);
     }
 
+    /**
+     * Emit `CSI ?2004h` (mirrors sugar-core Ansi::bracketedPasteOn()) so the
+     * terminal wraps pastes in ESC[200~ / ESC[201~ markers that sugar-input's
+     * decoder turns into PasteEvents.
+     *
+     * Guarded to real TTYs only: tests write to memory streams and pipes,
+     * which must not receive stray control sequences. The gate consults the
+     * OUTPUT stream (the only one this class writes to); the terminal that
+     * honors `?2004h` is the one the input arrives from, so a session with
+     * piped STDIN behind a TTY stdout may still deliver pastes as plain
+     * keystrokes — they take the ordinary handleChar path, where a CR or LF
+     * in the paste submits exactly as if typed (the literal-text guarantee
+     * of insertPastedText() belongs to the bracketed path alone).
+     *
+     * @return bool True when the mode was enabled (caller must disable on exit).
+     */
     private function enableBracketedPaste(mixed $output, ?string $dumb = null): bool
     {
         // A dumb/unknown TTY cannot be trusted with DEC-private mode
@@ -1034,6 +1034,16 @@ final class Readline
         return true;
     }
 
+    /** Resolved paint target for the omitted-default path (STDOUT where defined). */
+    private static function stdoutHandle(): mixed
+    {
+        if (\defined('STDOUT')) {
+            return \STDOUT;
+        }
+        $h = @\fopen('php://stdout', 'w');
+        return $h === false ? null : $h;
+    }
+
     /**
      * Write a redraw sequence to the output stream if provided and the prompt
      * exposes a view() method.
@@ -1047,16 +1057,6 @@ final class Readline
      * with TextPrompt::withDisplayWidth() (which clips the visible window
      * instead of letting the row wrap).
      */
-    /** Resolved paint target for the omitted-default path (STDOUT where defined). */
-    private static function stdoutHandle(): mixed
-    {
-        if (\defined('STDOUT')) {
-            return \STDOUT;
-        }
-        $h = @\fopen('php://stdout', 'w');
-        return $h === false ? null : $h;
-    }
-
     private function repaint(object $prompt, mixed $output): void
     {
         if ($output === null) {

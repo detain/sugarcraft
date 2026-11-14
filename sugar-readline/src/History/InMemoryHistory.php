@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Readline\History;
 
 /**
- * In-memory history store for readline session.
+ * In-memory history store for a readline session.
  *
  * Entries are stored newest-first: index 0 = most recent, index N = oldest.
  * Position -1 means "live buffer" (no entry selected).  previous() moves

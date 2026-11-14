@@ -27,8 +27,9 @@ use SugarCraft\Readline\Lang;
  *
  * Deduplication is stricter than HistoryInterface's "differs from the last
  * entry" floor: a line already present anywhere in the retained history is
- * skipped (zsh `HIST_IGNORE_ALL_DUPS`-style; the weaker adjacent-only rule
- * GNU/zsh `HIST_IGNORE_DUPS` describe is what InMemoryHistory enforces). The
+ * skipped (zsh `HIST_IGNORE_ALL_DUPS`-style). The weaker adjacent-only rule
+ * that GNU (hist_ignore_dups) and zsh (`HIST_IGNORE_DUPS`) describe is what
+ * InMemoryHistory enforces. The
  * cross-process tail guard for the append path runs INSIDE the write-lock
  * critical section, not off the pre-append peek (finding 013), so a racing
  * duplicate can no longer survive concurrent append — including the batch

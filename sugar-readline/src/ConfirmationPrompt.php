@@ -6,14 +6,14 @@ namespace SugarCraft\Readline;
 
 use SugarCraft\Style\Style;
 /**
- * Yes / No confirmation prompt.
+ * Yes/No confirmation prompt.
  *
  * Port-of-spirit (not literal) of erikgeiser/promptkit `confirmation`.
  *
- * Selection and submission are decoupled by default: y / n / left / right /
- * tab / space change the selected value but do NOT auto-submit. Call
+ * Selection and submission are decoupled by default: y/n/left/right/tab/space
+ * change the selected value but do NOT auto-submit. Call
  * {@see submit()} (or feed {@see Key::Enter}) to commit. With
- * {@see withAutoSubmit()} armed, the y / n answer keys select AND commit in
+ * {@see withAutoSubmit()} armed, the y/n answer keys select AND commit in
  * one press (the gum-style reflex; arrows and the toggle stay browse-only).
  * {@see result()} is meaningful only after {@see isSubmitted()} returns true.
  */

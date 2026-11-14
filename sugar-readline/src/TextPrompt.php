@@ -39,9 +39,9 @@ final class TextPrompt implements PromptInterface, SizingInterface
     public const SEARCH_REVERSE = SearchDirection::Reverse;
 
     /**
-     * Default (emacs-style) Ctrl movement → the canonical navigation keys
-     * the rest of handleKeyDirect() already implements. Applied before the
-     * match so a plain TextPrompt moves with Ctrl+A/B/E/F/P/N.
+     * Maps default (emacs-style) Ctrl movement onto the canonical navigation
+     * keys that the rest of handleKeyDirect() already implements. Applied
+     * before the match so a plain TextPrompt moves with Ctrl+A/B/E/F/P/N.
      *
      * @var array<string, string>
      */
@@ -479,8 +479,9 @@ final class TextPrompt implements PromptInterface, SizingInterface
         }
         // Past the searching/mode claim points, only plain text belongs in
         // the buffer. Control bytes (including \n, \r, NUL, DEL) are keys,
-        // never content: force-fed through this door they used to forge
-        // multi-line values that corrupted newline-delimited history files.
+        // never content: before this gate they reached the buffer as plain
+        // text, forging multi-line values that corrupted newline-delimited
+        // history files.
         if (\ord($char) < 32 || \ord($char) === 127) {
             return $this;
         }
@@ -768,9 +769,9 @@ final class TextPrompt implements PromptInterface, SizingInterface
      * entry list (-1 = live buffer). The store is consulted through the
      * same live handle incremental search uses ({@see searchSource()}),
      * read-only via search() with an empty query — it never uses the store's
-     * own cursor, and the store is never cloned/reset per keystroke (that
-     * made every Up re-return the newest entry, so 2nd-older history was
-     * unreachable).
+     * own cursor, and the store is never cloned per keystroke (a per-keystroke
+     * clone reset the walk, so every Up returned the newest entry again and
+     * no older history was reachable).
      */
     private function navigateHistory(string $key): self
     {
@@ -956,9 +957,10 @@ final class TextPrompt implements PromptInterface, SizingInterface
     }
 
     /**
-     * Paint a search hit onto the buffer. Pure: mutates a fresh copy of the
-     * receiver (callers already pass their working clone, which carries the
-     * updated query/direction state into it).
+     * Paint a search hit onto the buffer. Non-mutating: it works on the
+     * fresh copy of the receiver it is handed (callers already pass their
+     * working clone, which carries the updated query/direction state into
+     * it).
      *
      * @param SearchHit|null $match
      */

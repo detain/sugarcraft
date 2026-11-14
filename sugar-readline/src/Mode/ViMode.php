@@ -23,14 +23,15 @@ use SugarCraft\Readline\TextPrompt;
  *   insert mode; x deletes and p puts via the unnamed register; D deletes to
  *   end-of-line; u undoes;
  *   Enter submits; dd deletes line; yy yanks it;
- *   text objects c/d/y + i/a + target (ci" di( da{ yiw ...) via sugar-forms TextObject;
+ *   text objects via sugar-forms TextObject: operator c/d/y, extent i/a,
+ *   target — `ci"`, `di(`, `da{`, `yiw` ...;
  *   Ctrl+C aborts, and `Q` aborts when no operator is half-typed (Escape
  *   never aborts — it only switches submodes)
  * - visual: V from normal (plain v is unbound — a bind-able key into an
  *   unrendered scaffold looks broken; G9 default), V dropping the cursor
  *   to column zero first — the line-wise spelling; movement keys
  *   reposition the cursor, but the
- *   selection itself is neither rendered nor operated on yet (motion-only
+ *   selection itself is neither rendered nor operated on (motion-only
  *   scaffold — there is no d/y-over-selection yet); Ctrl+C aborts
  *
  * Posture: a hidden prompt's text is never captured into the unnamed
@@ -51,7 +52,7 @@ final class ViMode implements ModeInterface
 
     private ViModeState $viMode = ViModeState::Insert;
 
-    /** Set to a motion character when waiting for motion key (e.g. 'd' + next key). */
+    /** Set to the operator character (e.g. 'd') while waiting for its motion key. */
     private ?string $pendingMotion = null;
 
     /** Set when a pending operator was followed by i/a — waiting for the text-object target key. */

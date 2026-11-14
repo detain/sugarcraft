@@ -11,7 +11,7 @@ namespace SugarCraft\Readline;
  * of redo states. Each push() clears the redo stack (standard undo behavior).
  *
  * Stack layout: [newest, ..., oldest]
- * - undo() pops newest and pushes to redo, returns the now-new-top
+ * - undo() pops newest and pushes to redo, returns the new top
  * - redo() pops redo-stack and pushes to undo, returns it
  *
  * Both stacks are bounded at self::MAX_STATES entries; the oldest states
