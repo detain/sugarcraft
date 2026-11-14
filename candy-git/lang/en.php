@@ -12,6 +12,7 @@ return [
     // Git errors
     'git.spawn_failed' => 'git: failed to spawn: {reason}',
     'git.error'        => 'git: {stderr}',
+    'git.bad_ref'  => 'ref cannot start with \'-\': {ref}',
     'git.timeout'      => 'git: command timed out after {seconds}s',
     'git.timeout_mutator' => 'git: mutator timed out after {seconds}s - the repository may be mid-operation (a stale .git/index.lock or a half-applied checkout); run git status outside candy-git and clear a lock you know is dead before retrying',
     'git.interrupted' => 'git: command was interrupted by a signal',
@@ -25,13 +26,13 @@ return [
     // CLI errors
     'cli.not_a_repo'   => 'candy-git: not a git repository: {cwd}',
     'cli.unknown_flag' => 'candy-git: unknown argument: {flag}',
-    'cli.no_git'       => 'candy-git: git is unavailable -- install git and make sure it is on PATH',
-    'cli.old_git'      => 'candy-git: git {version} is too old -- version {min} or newer is required',
-    'cli.bare_repo'    => 'candy-git: {cwd} is a bare repository without a work tree -- run candy-git from a checked-out working directory',
+    'cli.no_git'       => 'candy-git: git is unavailable - install git and make sure it is on PATH',
+    'cli.old_git'      => 'candy-git: git {version} is too old - version {min} or newer is required',
+    'cli.bare_repo'    => 'candy-git: {cwd} is a bare repository without a work tree - run candy-git from a checked-out working directory',
     'cli.needs_tty'    => 'candy-git: needs an interactive terminal (stdout is not a tty)',
     'cli.piped_stdout'    => 'candy-git: stdout was piped - the full-screen UI needs an interactive terminal',
     'cli.needs_tty_input' => 'candy-git: input was redirected - the UI needs an interactive terminal to read keys',
-    'cli.help_summary' => 'candy-git — terminal git interface',
+    'cli.help_summary' => 'candy-git - terminal git interface',
     'cli.help_usage'   => 'Usage:',
     'cli.help_browse'  => 'Browse the repository of the current directory',
     'cli.help_version' => 'Print the version',
@@ -75,7 +76,7 @@ return [
     'help.switch_pane'      => 'switch pane',
     'help.move_cursor'      => 'move cursor',
     'help.close_help'       => 'close',
-    'help.too_short'        => 'Terminal too short for the key list — resize the window.',
+    'help.too_short'        => 'Terminal too short for the key list - resize the window.',
     'help.ctrl_c'           => 'close overlay / quit',
     'help.porcelain_legend' => 'X=index Y=worktree; ?? new MM both UU conf',
     'help.pane_log'         => 'Log pane:',
@@ -144,8 +145,8 @@ return [
     'history.op.reset'        => 'reset',
     'history.op.revert'       => 'revert',
     'history.op.resetHard'    => 'reset --hard',
-    'history.unavailable'     => 'history: unavailable (app constructed without a HistoryManager)',
-    'history.cannot_undo'     => 'history: cannot undo {op} — the data it would restore is gone',
+    'history.unavailable'     => 'history: unavailable',
+    'history.cannot_undo'     => 'history: cannot undo {op} - the data it would restore is gone',
     'history.unknown_op'      => 'history: unknown operation {op}',
 
     // Branch delete
@@ -182,7 +183,7 @@ return [
     'ui.cursor_line'        => 'cursor: {target}',
 
     // Remotes (fetch / pull / push)
-    'remote.detached'       => 'cannot push: detached HEAD — check out a branch first',
+    'remote.detached'       => 'cannot push: detached HEAD - check out a branch first',
     'remote.fetch_done'     => 'fetched from the remote',
     'remote.pull_done'      => 'pulled from the remote',
     'remote.push_done'      => 'pushed to the remote',
@@ -193,7 +194,6 @@ return [
     'rebase.cherry_prompt'    => 'cherry-pick: [c]ontinue [a]bort',
     'rebase.merge_prompt'     => 'merge: [c]ontinue [a]bort',
     'rebase.success'         => 'rebase: {action}',
-    'rebase.conflict'        => 'rebase: unresolved conflicts',
     'rebase.continue'        => 'continue',
     'rebase.abort'          => 'abort',
     'rebase.skip'           => 'skip',
@@ -253,6 +253,6 @@ return [
     'rebase_i.todo_list'    => 'todo list:',
     'rebase_i.cycle_action'  => 'cycle action - parked, nothing changes',
     'rebase_i.drop'          => 'drop commit - parked, nothing changes',
-    'rebase_i.preview_only'  => 'preview only — not yet executed',
+    'rebase_i.preview_only'  => 'preview only - not yet executed',
     'rebase_i.count_positive' => 'count must be > 0',
 ];

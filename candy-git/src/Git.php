@@ -911,7 +911,11 @@ final class Git implements GitDriver
     private function guardRef(string $ref): void
     {
         if (str_starts_with($ref, '-')) {
-            throw new \RuntimeException(Lang::t('git.error', ['stderr' => "ref cannot start with '-': {$ref}"]));
+            // The refusal is candy-git's own words, not git's bytes, so it
+            // translates before riding the envelope - an English payload in
+            // a localized 'git: {stderr}' half-translates every locale
+            // (candy-git-071).
+            throw new \RuntimeException(Lang::t('git.error', ['stderr' => Lang::t('git.bad_ref', ['ref' => $ref])]));
         }
     }
 

@@ -261,3 +261,14 @@ Anti-pattern: mapping every spawn RuntimeException to `cli.no_git` — probe
 `Platform::findExecutable('git')` first; a launchable-but-failing git needs the
 `git.spawn_failed` reason, not an install hint.
 Source: CG-21 (p5 gate B)
+
+### Chrome-title / locale glossary policy (dated 2026-11-15)
+Rule: each locale file keeps its own established renderings; a "leak" is only
+fixed when the same file translates the same term elsewhere (a genuine miss) -
+never churn a locale's deliberate technical keep. Git command nouns
+(commit/rebase/merge/cherry-pick/worktree) stay untranslated unless that file
+already carries a native term; the 15/15-consensus keep set (git.error,
+ui.title.app, ui.count.n, ui.diff_prefix, diff.side_worktree) is permanent.
+Separator law: shipped values use " - " (ASCII hyphen, spaces both sides) -
+never " — " and never " -- " in a value.
+Source: CG-47 (candy-git-103, candy-git-105 findings)
