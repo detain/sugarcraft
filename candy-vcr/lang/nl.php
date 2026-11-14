@@ -129,6 +129,7 @@ header geldt voor het renderen (render-tape/render-batch), niet voor live afspel
     'record.refuse_overwrite' => 'bestaande cassette {path} wordt niet overschreven — geef --force op om te vervangen',
     'record.command_not_found' => 'commando niet gevonden: {cmd}',
     'record.incomplete' => 'cassette-opname ONVOLLEDIG ({count} mislukte schrijfactie(s)) op {path}',
+'record.hook_error' => 'hookwaarschuwing: {error}',
     'record.recorded' => 'candy-vcrrecord: {path} opgenomen (exit {code})',
     'record.output_requires' => '--output vereist een pad',
     'record.size_number' => '{flag} moet een geheel getal zijn, gekregen {value}',

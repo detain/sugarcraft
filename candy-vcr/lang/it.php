@@ -129,6 +129,7 @@ dell\'intestazione vale per il rendering (render-tape/render-batch), non per la 
     'record.refuse_overwrite' => 'rifiuto di sovrascrivere la cassetta esistente {path} — passa --force per sostituirla',
     'record.command_not_found' => 'comando non trovato: {cmd}',
     'record.incomplete' => 'cattura della cassetta INCOMPLETA ({count} scrittura/e fallita/e) in {path}',
+'record.hook_error' => 'avviso hook: {error}',
     'record.recorded' => 'candy-vcrrecord: {path} registrato (uscita {code})',
     'record.output_requires' => '--output richiede un percorso',
     'record.size_number' => '{flag} deve essere un numero intero, ricevuto {value}',

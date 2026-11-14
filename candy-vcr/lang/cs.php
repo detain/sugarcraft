@@ -129,6 +129,7 @@ platí pro vykreslování (render-tape/render-batch), ne pro živé přehráván
     'record.refuse_overwrite' => 'odmítám přepsat existující kazetu {path} — pro nahrazení předejte --force',
     'record.command_not_found' => 'příkaz nenalezen: {cmd}',
     'record.incomplete' => 'zachycení kazety NEÚPLNÉ (neúspěšných zápisů: {count}) v {path}',
+'record.hook_error' => 'varování háčku: {error}',
     'record.recorded' => 'candy-vcrrecord: {path} nahráno (výstup {code})',
     'record.output_requires' => '--output vyžaduje cestu',
     'record.size_number' => '{flag} musí být celé číslo, získáno {value}',

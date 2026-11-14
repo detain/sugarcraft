@@ -135,9 +135,12 @@ final class RecordCommand implements DocumentedCommand
             \fwrite($stderr, Lang::t('cli.err', ['verb' => 'record', 'message' => Lang::t('record.output_gz')]) . "\n");
             return 2;
         }
-        // M10: recording is destructive (fopen 'wb' truncates). Silently
-        // annihilating an existing cassette — possibly the ONLY copy of a
-        // session — was the default behavior; it now requires --force.
+        // M10: recording is destructive (the cassette is truncated once
+        // the exclusive lock is held). Silently annihilating an existing
+        // cassette — possibly the ONLY copy of a session — was the default
+        // behavior; it now requires --force. This startup gate is advisory
+        // only; the durable door is Recorder::open()'s flock (finding 116),
+        // which refuses a path another recorder holds RIGHT NOW.
         if (!$opts['force'] && \file_exists($outputPath)) {
             \fwrite($stderr, Lang::t('cli.err', ['verb' => 'record', 'message' => Lang::t('record.refuse_overwrite', ['path' => $outputPath])]) . "\n");
             return 2;
@@ -276,6 +279,13 @@ final class RecordCommand implements DocumentedCommand
                 'count' => $captureErrors,
                 'path' => $outputPath,
             ])]) . "\n");
+        }
+        // Finding 096: hooks swallow their own failures so the session
+        // survives a bad sanitizer, but the user still deserves to know a
+        // registered hook died mid-recording. Warnings, not failures: the
+        // tape itself is intact; only the hook's side work was skipped.
+        foreach ($recorder?->hookErrors() ?? [] as $hookError) {
+            \fwrite($stderr, Lang::t('record.hook_error', ['error' => $hookError]) . "\n");
         }
         if (!$frameworkFailed && $captureErrors === 0) {
             \fwrite($stderr, Lang::t('record.recorded', [

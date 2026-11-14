@@ -129,6 +129,7 @@ return [
     'record.refuse_overwrite' => '기존 카세트 {path}의 덮어쓰기를 거부합니다 — 교체하려면 --force를 지정하세요',
     'record.command_not_found' => '명령을 찾을 수 없습니다: {cmd}',
     'record.incomplete' => '카세트 캡처가 불완전합니다 (쓰기 실패 {count}건) 위치: {path}',
+'record.hook_error' => '훅 경고: {error}',
     'record.recorded' => 'candy-vcrrecord: {path} 녹화 완료 (종료 코드 {code})',
     'record.output_requires' => '--output에는 경로가 필요합니다',
     'record.size_number' => '{flag}은(는) 정수여야 하며, {value}을(를) 받았습니다',

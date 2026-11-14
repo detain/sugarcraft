@@ -129,6 +129,7 @@ l\'en-tête s\'applique au rendu (render-tape/render-batch), pas à la relecture
     'record.refuse_overwrite' => 'refus d\'écraser la cassette existante {path} — passez --force pour la remplacer',
     'record.command_not_found' => 'commande introuvable : {cmd}',
     'record.incomplete' => 'capture de la cassette INCOMPLÈTE ({count} écriture(s) en échec) dans {path}',
+'record.hook_error' => 'avertissement de hook : {error}',
     'record.recorded' => 'candy-vcr record : {path} enregistré (sortie {code})',
     'record.output_requires' => '--output requiert un chemin',
     'record.size_number' => '{flag} doit être un nombre entier, reçu {value}',

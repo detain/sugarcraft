@@ -208,4 +208,67 @@ final class HookRegistryTest extends TestCase
         $registry->clear();
         $this->assertSame(0, $registry->count());
     }
+
+    // ----- S36 (finding 096): swallow, but never silently -----------------
+
+    public function testAfterCaptureRecordsSwallowedFailureAndKeepsSweeping(): void
+    {
+        $seen = 0;
+        $bomb = new class implements Hook {
+            public function beforeSave(Event $event): Event
+            {
+                return $event;
+            }
+            public function afterCapture(Event $event): void
+            {
+                throw new \RuntimeException('boom');
+            }
+        };
+        $witness = new class ($seen) implements Hook {
+            /** @param int $seen */
+            public function __construct(private int &$seen)
+            {
+            }
+            public function beforeSave(Event $event): Event
+            {
+                return $event;
+            }
+            public function afterCapture(Event $event): void
+            {
+                $this->seen++;
+            }
+        };
+
+        $registry = new HookRegistry();
+        $registry->addHook($bomb);
+        $registry->addHook($witness);
+        $registry->afterCapture(new Event(t: 0.1, kind: EventKind::Output, payload: ['b' => 'x']));
+
+        $this->assertSame(1, $seen, 'one dead hook must not skip its neighbours');
+        $errors = $registry->hookErrors();
+        $this->assertCount(1, $errors);
+        $this->assertStringContainsString('::afterCapture failed: boom', $errors[0]);
+    }
+
+    public function testHookErrorsAccumulateOncePerSwallowedDeathPerEvent(): void
+    {
+        $registry = new HookRegistry();
+        $registry->addHook(new class implements Hook {
+            public function beforeSave(Event $event): Event
+            {
+                return $event;
+            }
+            public function afterCapture(Event $event): void
+            {
+                throw new \LogicException('again');
+            }
+        });
+        $this->assertSame([], $registry->hookErrors(), 'no sweep, no claims');
+
+        $event = new Event(t: 0.2, kind: EventKind::Quit, payload: []);
+        $registry->afterCapture($event);
+        $registry->afterCapture($event);
+        $errors = $registry->hookErrors();
+        $this->assertCount(2, $errors, 'every death is one entry — the count is itself the warning');
+    }
 }

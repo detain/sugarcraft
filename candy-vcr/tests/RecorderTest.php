@@ -6,10 +6,13 @@ namespace SugarCraft\Vcr\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\CassetteHeader;
+use SugarCraft\Vcr\Event;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Format\JsonlFormat;
 use SugarCraft\Vcr\Format\RelativeFormat;
+use SugarCraft\Vcr\Hook\Hook;
 use SugarCraft\Vcr\Recorder;
+use SugarCraft\Vcr\Tests\Support\FlushMeter;
 use SugarCraft\Vcr\Tests\Support\Stream;
 use SugarCraft\Vcr\Support\ObjectMap;
 
@@ -454,5 +457,193 @@ final class RecorderTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('relative-timestamp cassette');
         $r->withFormat(new JsonlFormat());
+    }
+
+    // ----- S36 (finding 113): flush coalescing doors ----------------------
+    // Pre-fix every line paid an fflush() syscall. The doors below are the
+    // durability/perf trade: 32 events, 64 KiB, or the writer going idle.
+    // The meter (tests/Support/FlushMeter) separates write from flush so
+    // these pins count DRAINS, never bytes.
+
+    public function testBurstCoalescesFlushesAtLeastTenfold(): void
+    {
+        $fh = FlushMeter::openFresh();
+        $r = new Recorder($fh, $this->stubHeader());
+        $this->assertSame(1, FlushMeter::flushCount(), 'the header drains at open (below every door)');
+
+        for ($i = 0; $i < 1000; $i++) {
+            $r->recordInputBytes('x');
+        }
+        $drainsDuringBurst = FlushMeter::flushCount();
+        $r->close();
+
+        // Door math: the event door fires at 32, 64, ..., 992 — a minimum
+        // of 31 drains plus the header drain = 32 by close time. The upper
+        // bound proves the ≥10× reduction against the pre-fix per-event
+        // contract (1001 flushes) with 3× headroom for a loaded-host
+        // scheduling pause tripping the idle door mid-burst.
+        $this->assertGreaterThanOrEqual(32, $drainsDuringBurst, 'every full event door must have drained');
+        $this->assertLessThanOrEqual(100, $drainsDuringBurst, 'burst must flush ≥10× less than the per-event contract (pre-fix: 1001)');
+        $this->assertCount(1001, FlushMeter::lines(), 'coalescing must not drop or duplicate a line');
+    }
+
+    public function testByteDoorDrainsOnFatEventsBeforeTheEventDoor(): void
+    {
+        $fh = FlushMeter::openFresh();
+        $r = new Recorder($fh, $this->stubHeader());
+        $r->recordOutput(str_repeat('a', 40000)); // below the 64 KiB door: no drain
+        $this->assertSame(1, FlushMeter::flushCount(), 'one fat event stays banked');
+        $r->recordOutput(str_repeat('b', 40000)); // 80 KiB banked: byte door opens
+
+        $this->assertSame(2, FlushMeter::flushCount(), 'accumulated bytes must drain past 64 KiB (2 events << 32-event door)');
+        $r->close();
+        $this->assertCount(3, FlushMeter::lines());
+    }
+
+    public function testIdleGapDoorFlushesLowVolumeEvents(): void
+    {
+        $fh = FlushMeter::openFresh();
+        $r = new Recorder($fh, $this->stubHeader());
+        $r->recordInputBytes('a');
+        \usleep(150_000);
+        $r->recordInputBytes('b'); // arrived after >100 ms idle: flush now
+        $this->assertSame(2, FlushMeter::flushCount(), 'idle event must drain through the gap door (2 events < 32/64KiB)');
+        \usleep(150_000);
+        $r->recordInputBytes('c');
+        $this->assertSame(3, FlushMeter::flushCount(), 'a second idle arrival drains again');
+        $r->close();
+        $this->assertSame(4, FlushMeter::flushCount(), 'close adds the final drain');
+        $this->assertCount(4, FlushMeter::lines());
+    }
+
+    public function testCloseDrainsEventsBelowEveryDoor(): void
+    {
+        $fh = FlushMeter::openFresh();
+        $r = new Recorder($fh, $this->stubHeader());
+        $r->recordOutput('small');
+        $r->recordResize(90, 30);
+        $this->assertSame(1, FlushMeter::flushCount(), 'busy sub-door events stay banked');
+        $r->close();
+        $this->assertSame(2, FlushMeter::flushCount(), 'close must push every banked line through');
+    }
+
+    // ----- S36 (finding 116): lock-before-truncate ------------------------
+    // fopen() with 'wb' truncated on the open syscall — a second recorder
+    // destroyed a live tape before any lock could refuse it. Now mode 'c'
+    // opens WITHOUT truncate and LOCK_EX|LOCK_NB decides before damage.
+    // Two distinct OFDs in this process contend exactly as two processes
+    // would (flock(2) tracks open-file descriptions, not pids).
+
+    public function testOpenRefusesPathHeldByAnotherWriterByName(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'candy-vcr-s36-');
+        $this->assertNotFalse($path);
+        $holder = fopen($path, 'wb');
+        $this->assertNotFalse($holder);
+        $this->assertTrue(flock($holder, LOCK_EX));
+        try {
+            Recorder::open($path);
+            $this->fail('a contended cassette path must be refused by name');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('is locked by another recorder process', $e->getMessage());
+            $this->assertStringContainsString($path, $e->getMessage(), 'the refusal names the path under contention');
+        } finally {
+            flock($holder, LOCK_UN);
+            fclose($holder);
+            @unlink($path);
+        }
+    }
+
+    public function testRefusedOpenLeavesHoldersBytesIntact(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'candy-vcr-s36-');
+        $this->assertNotFalse($path);
+        try {
+            $holder = Recorder::open($path, $this->stubHeader());
+            // The holder is mid-session — lock still held, file not closed.
+            $contenderFailed = false;
+            try {
+                Recorder::open($path, $this->stubHeader());
+            } catch (\RuntimeException) {
+                $contenderFailed = true;
+            }
+            $this->assertTrue($contenderFailed, 'the contender must be refused');
+
+            // Pre-fix the contender's fopen('wb') had already zeroed the
+            // holder's flushed header; the 'c' + lock order must not.
+            $raw = file_get_contents($path);
+            $this->assertIsString($raw);
+            $this->assertNotSame('', $raw, 'refused open may not truncate the holder cassette');
+            $header = json_decode(trim(explode("\n", $raw)[0]), true);
+            $this->assertIsArray($header);
+            $this->assertSame(1, $header['v'], 'the the holder header line line must survive the refusal');
+            $holder->close();
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    public function testOpenSucceedsAfterHolderReleasesTheLock(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'candy-vcr-s36-');
+        $this->assertNotFalse($path);
+        try {
+            $first = Recorder::open($path, $this->stubHeader());
+            $first->recordOutput('generation one');
+            $first->close(); // close releases the flock through fclose
+
+            $second = Recorder::open($path, $this->stubHeader()); // legal: re-record over the old tape
+            $second->recordOutput('generation two');
+            $second->close();
+
+            $cassette = (new JsonlFormat())->read($path);
+            $this->assertSame(1, $cassette->eventCount(), 'a released lock must not block the next recording');
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    // ----- S36 (finding 096): swallowed hook deaths are observable --------
+
+    public function testHookErrorsEmptyForCleanCapture(): void
+    {
+        $fh = $this->memory();
+        $r = new Recorder($fh, $this->stubHeader());
+        $r->withHook(new class implements Hook {
+            public function beforeSave(Event $event): Event
+            {
+                return $event;
+            }
+            public function afterCapture(Event $event): void
+            {
+            }
+        });
+        $r->recordOutput('fine');
+        $r->close();
+        $this->assertSame([], $r->hookErrors());
+    }
+
+    public function testSwallowedHookDeathIsListedForCloseSideWarnings(): void
+    {
+        $fh = $this->memory();
+        $r = new Recorder($fh, $this->stubHeader());
+        $r->withHook(new class implements Hook {
+            public function beforeSave(Event $event): Event
+            {
+                return $event;
+            }
+            public function afterCapture(Event $event): void
+            {
+                throw new \RuntimeException('sink exploded');
+            }
+        });
+        $r->recordOutput('one');
+        $r->recordOutput('two');
+
+        $errors = $r->hookErrors();
+        $this->assertCount(2, $errors, 'each swallowed death is one observable entry');
+        $this->assertStringContainsString('::afterCapture failed: sink exploded', $errors[0]);
+        $r->close();
+        $this->assertCount(2, $r->hookErrors(), 'close must not erase the evidence');
     }
 }

@@ -129,6 +129,7 @@ return [
     'record.refuse_overwrite' => 'تم رفض الكتابة فوق الشريط الموجود {path} — مرّر --force للاستبدال',
     'record.command_not_found' => 'الأمر غير موجود: {cmd}',
     'record.incomplete' => 'التقاط الشريط غير مكتمل ({count} عملية كتابة فاشلة) في {path}',
+'record.hook_error' => 'تحذير خطاف: {error}',
     'record.recorded' => 'candy-vcrrecord: تم تسجيل {path} (رمز الخروج {code})',
     'record.output_requires' => 'يتطلب --output مسارًا',
     'record.size_number' => 'يجب أن يكون {flag} عددًا صحيحًا، تم تقديم {value}',

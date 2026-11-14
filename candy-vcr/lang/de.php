@@ -129,6 +129,7 @@ Headers gilt für das Rendern (render-tape/render-batch), nicht für die Live-Wi
     'record.refuse_overwrite' => 'bestehende Kassette {path} wird nicht überschrieben — mit --force ersetzen',
     'record.command_not_found' => 'Befehl nicht gefunden: {cmd}',
     'record.incomplete' => 'Kassettenaufnahme UNVOLLSTÄNDIG ({count} fehlgeschlagene Schreibvorgänge) bei {path}',
+'record.hook_error' => 'Hook-Warnung: {error}',
     'record.recorded' => 'candy-vcrrecord: {path} aufgezeichnet (Exit {code})',
     'record.output_requires' => '--output erfordert einen Pfad',
     'record.size_number' => '{flag} muss eine ganze Zahl sein, übergeben {value}',

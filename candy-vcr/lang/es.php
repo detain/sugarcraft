@@ -129,6 +129,7 @@ cabecera se aplica al renderizado (render-tape/render-batch), no a la reproducci
     'record.refuse_overwrite' => 'se rechaza sobrescribir el cassette existente {path} — pase --force para reemplazarlo',
     'record.command_not_found' => 'comando no encontrado: {cmd}',
     'record.incomplete' => 'captura del cassette INCOMPLETA ({count} escritura(s) fallida(s)) en {path}',
+'record.hook_error' => 'advertencia de hook: {error}',
     'record.recorded' => 'candy-vcrrecord: {path} grabado (salida {code})',
     'record.output_requires' => '--output requiere una ruta',
     'record.size_number' => '{flag} debe ser un número entero, se recibió {value}',

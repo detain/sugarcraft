@@ -129,6 +129,7 @@ return [
     'record.refuse_overwrite' => 'отказ перезаписывать существующую кассету {path} — передайте --force для замены',
     'record.command_not_found' => 'команда не найдена: {cmd}',
     'record.incomplete' => 'захват кассеты НЕПОЛНЫЙ (неудачных записей: {count}) в {path}',
+'record.hook_error' => 'предупреждение хука: {error}',
     'record.recorded' => 'candy-vcrrecord: {path} записан (код выхода {code})',
     'record.output_requires' => '--output требует путь',
     'record.size_number' => '{flag} должно быть целым числом, получено {value}',

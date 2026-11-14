@@ -129,6 +129,7 @@ cabeçalho vale para a renderização (render-tape/render-batch), não para a re
     'record.refuse_overwrite' => 'recusando sobrescrever a fita existente {path} — passe --force para substituí-la',
     'record.command_not_found' => 'comando não encontrado: {cmd}',
     'record.incomplete' => 'captura da fita INCOMPLETA ({count} gravação(ões) com falha) em {path}',
+'record.hook_error' => 'aviso de hook: {error}',
     'record.recorded' => 'candy-vcrrecord: {path} gravado (saída {code})',
     'record.output_requires' => '--output exige um caminho',
     'record.size_number' => '{flag} deve ser um número inteiro, recebido {value}',

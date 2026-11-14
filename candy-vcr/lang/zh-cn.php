@@ -129,6 +129,7 @@ return [
     'record.refuse_overwrite' => '拒绝覆盖已有卡带 {path} — 传入 --force 以替换',
     'record.command_not_found' => '未找到命令: {cmd}',
     'record.incomplete' => '卡带捕获不完整({count} 次写入失败),位置: {path}',
+'record.hook_error' => '钩子警告：{error}',
     'record.recorded' => 'candy-vcrrecord: 已录制 {path}(退出码 {code})',
     'record.output_requires' => '--output 需要一个路径',
     'record.size_number' => '{flag} 必须是整数，得到 {value}',

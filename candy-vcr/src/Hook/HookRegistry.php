@@ -16,6 +16,18 @@ final class HookRegistry
     private array $hooks = [];
 
     /**
+     * Swallowed afterCapture failures (finding 096). The fire-and-forget
+     * contract stays — one hook's death must not abort the session or
+     * skip its neighbours — but "fire-and-forget" never meant
+     * "fire-and-invisible": every death is recorded here and surfaced
+     * via {@see hookErrors()} so the CLI (or any embedder) can warn that
+     * a hook silently skipped its work.
+     *
+     * @var list<string>
+     */
+    private array $errors = [];
+
+    /**
      * Register a hook to be called during recording.
      */
     public function addHook(Hook $hook): void
@@ -45,16 +57,33 @@ final class HookRegistry
 
     /**
      * Invoke all afterCapture hooks for an event.
+     *
+     * Fire-and-forget: a throwing hook is recorded (see {@see hookErrors()})
+     * and the sweep continues so one bad hook cannot kill the others nor
+     * the recording session itself.
      */
     public function afterCapture(\SugarCraft\Vcr\Event $event): void
     {
         foreach ($this->hooks as $hook) {
             try {
                 $hook->afterCapture($event);
-            } catch (\Throwable) {
-                // Fire-and-forget; don't let one hook's error affect others
+            } catch (\Throwable $t) {
+                // Keep the swallow (session continuity beats hook drama),
+                // but record the death — pre-fix it vanished entirely and
+                // a silently-disabled sanitizer looked identical to a
+                // clean capture.
+                $this->errors[] = $hook::class . '::afterCapture failed: ' . $t->getMessage();
             }
         }
+    }
+
+    /**
+     * @return list<string> afterCapture failures recorded so far, each
+     *                      naming the hook and the error it threw
+     */
+    public function hookErrors(): array
+    {
+        return $this->errors;
     }
 
     /**

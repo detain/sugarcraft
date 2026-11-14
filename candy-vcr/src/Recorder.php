@@ -10,8 +10,16 @@ use SugarCraft\Vcr\Format\RelativeFormat;
 use SugarCraft\Vcr\Hook\HookRegistry;
 
 /**
- * Streaming JSONL cassette writer. Each event is encoded and flushed
- * immediately so a crash mid-recording doesn't lose the cassette.
+ * Streaming JSONL cassette writer. Events are encoded line-by-line and
+ * flushed through coalescing doors (finding 113): every
+ * {@see FLUSH_EVENT_THRESHOLD} events, once {@see FLUSH_BYTE_THRESHOLD}
+ * bytes have accumulated, or immediately after any event whose inter-event
+ * gap exceeded {@see FLUSH_IDLE_GAP_SECONDS}. A live interactive session is
+ * idle-bound, so the practically relevant crash window is one event; a
+ * process killed mid-burst may lose up to the last unflushed door window
+ * (fewer than the thresholds of events / bytes) — the bounded cost the
+ * per-keystroke-fflush ruling accepted. The header line and everything
+ * before {@see close()} are always flushed.
  *
  * Output-fidelity contract: recording never throws because a
  * PTY chunk sliced a multibyte sequence — {@see recordOutput()} defers the
@@ -47,8 +55,10 @@ final class Recorder implements RecorderInterface
     /**
      * Idle-trim threshold in seconds. When set, inter-event gaps
      * larger than this are compressed to {@see $idleTrimCompressedMaxSec}
-     * and the trimmed event(s) carry a `tRaw` payload field with the
-     * original wallclock-relative timestamp.
+     * and the trimmed event — and every event after it while the trim
+     * offset is in effect — carries a `tRaw` payload field with the
+     * original wallclock-relative timestamp (finding 097: the stamp is
+     * NOT trimmed-event-only; see {@see withIdleTrim()}).
      *
      * Null disables trimming. Wired via {@see withIdleTrim()}.
      */
@@ -93,6 +103,25 @@ final class Recorder implements RecorderInterface
      */
     private int $writeErrors = 0;
     private int $flushErrors = 0;
+
+    /**
+     * Flush-coalescing doors (finding 113). Pre-fix every single event
+     * paid an fflush() syscall — a keystroke-rate stream of small events
+     * burned one fs-bound syscall per tap while a crash window of exactly
+     * zero events is not what the durability contract needs. Now a line
+     * reaches disk when ANY door opens: enough events, enough bytes, or
+     * the stream going idle (a gap past the idle door means the writer
+     * has paused, so the safe drain point has arrived).
+     */
+    private const FLUSH_EVENT_THRESHOLD = 32;
+    private const FLUSH_BYTE_THRESHOLD = 65536;
+    private const FLUSH_IDLE_GAP_SECONDS = 0.1;
+
+    /** @var int Events written since the last successful flush attempt. */
+    private int $eventsSinceFlush = 0;
+
+    /** @var int Payload bytes written since the last flush attempt. */
+    private int $bytesSinceFlush = 0;
 
     /**
      * Cumulative absolute timestamp used to calculate deltas for relative mode.
@@ -140,7 +169,11 @@ final class Recorder implements RecorderInterface
         // lines — the pre-fix shape — minted a file the reader could
         // never decode).
         $this->useRelativeTimestamps = $header->timestampMode === CassetteHeader::TIMESTAMP_MODE_RELATIVE;
-        $this->writeLine($header->toWireArray());
+        // The header is the cassette's contract: force it to disk at open
+        // so a session that dies before any event still leaves a
+        // parseable (empty) tape — the coalescing doors below must not
+        // bank the header against a threshold that may never arrive.
+        $this->writeLine($header->toWireArray(), true);
     }
 
     /**
@@ -154,14 +187,34 @@ final class Recorder implements RecorderInterface
      * the full environment in plaintext, so a default-umask world-readable
      * cassette is a secret leak waiting for a shared CI runner. A failed
      * chmod is fatal: half-permissioned output is worse than none.
+     *
+     * Concurrency (finding 116): the path is opened with mode `c` — NO
+     * truncate — then {@see flock()} is taken LOCK_EX|LOCK_NB BEFORE any
+     * byte of damage. Pre-fix the truncation rode `fopen('wb')` itself, so
+     * a second recorder destroyed the first one's tape on the open syscall,
+     * before any lock (the CLI's startup file_exists gate only ever
+     * covered the moment typing began). Only once the exclusive lock is
+     * held does the file get truncated. A contended open refuses by name;
+     * `--force` remains an overwrite INTENT, never a lock bypass.
      */
     public static function open(
         string $path,
         ?CassetteHeader $header = null,
     ): self {
-        $fh = @fopen($path, 'wb');
+        $fh = @fopen($path, 'cb');
         if ($fh === false) {
             throw new \RuntimeException("cannot open recorder file {$path}");
+        }
+        // Two distinct open-file descriptions clash on flock() exactly
+        // like two processes (flock(2) tracks OFDs, not pids), so this
+        // door admits one writer per cassette across the whole host.
+        if (@flock($fh, LOCK_EX | LOCK_NB) === false) {
+            fclose($fh);
+            throw new \RuntimeException("recorder file {$path} is locked by another recorder process — refusing to truncate or share it (stop the holder or pick another path)");
+        }
+        if (@ftruncate($fh, 0) === false || rewind($fh) === false) {
+            fclose($fh);
+            throw new \RuntimeException("cannot truncate recorder file {$path}");
         }
         if (@chmod($path, 0600) === false) {
             fclose($fh);
@@ -201,10 +254,13 @@ final class Recorder implements RecorderInterface
 
     /**
      * Enable idle-trim: gaps between consecutive events that exceed
-     * `$thresholdSec` are compressed to `$compressedMaxSec`, and the
-     * trimmed events carry a `tRaw` payload with their original
-     * (uncompressed) timestamp so a replay can opt back into the
-     * real cadence via `--no-trim` (player flag).
+     * `$thresholdSec` are compressed to `$compressedMaxSec`, and every
+     * event from the first trim onward — not only the trimmed one —
+     * carries a `tRaw` payload with its original (uncompressed)
+     * wallclock-relative timestamp while the trim offset is in effect,
+     * so a replay can opt back into the real cadence via `--no-trim`
+     * (player flag). This restates the wire format exactly as the
+     * encoder gates it (finding 097).
      *
      * Passing null disables trimming and resets the cumulative offset
      * so subsequent events resume at real-time.
@@ -385,13 +441,23 @@ final class Recorder implements RecorderInterface
             $this->writeEvent('output', ['b' => $tail]);
         }
         $this->closed = true;
-        if (is_resource($this->fh)) {
+        // Local alias: the drain() call below would otherwise invalidate
+        // PHPStan's is_resource narrowing on the property.
+        $fh = $this->fh;
+        if (is_resource($fh)) {
+            // Drain through the flush door first so a failed final push is
+            // counted as a FLUSH failure, then fclose. fclose() would
+            // implicitly flush a real file too, but counting it as a bare
+            // close failure conflates the buffered tail with the close
+            // itself — the explicit drain keeps the C3 tally honest for
+            // every stream type (files, memory, sockets).
+            $this->drain();
             // Keep: close() is teardown and runs from finally on EVERY
             // failure path; a double-close/EBADF warning raised here would
             // mask the exception actually unwinding. The is_resource guard
             // above already handles the meaningful case. A failed close is
             // still counted (C3) — buffered tail data may never reach disk.
-            if (@fclose($this->fh) === false) {
+            if (@fclose($fh) === false) {
                 $this->writeErrors++;
             }
         }
@@ -405,8 +471,12 @@ final class Recorder implements RecorderInterface
     {
         $realT = microtime(true) - $this->startTime;
 
+        // The inter-event gap is computed unconditionally now: the idle
+        // trim door needs it only when trimming is on, but the flush
+        // coalescer needs it always (finding 113 — a writer that paused
+        // is the safe moment to pay the flush syscall).
+        $gap = $this->hasPriorEvent ? $realT - $this->prevRealT : 0.0;
         if ($this->idleTrimSec !== null && $this->hasPriorEvent) {
-            $gap = $realT - $this->prevRealT;
             if ($gap > $this->idleTrimSec) {
                 $newGap = min($this->idleTrimSec, $this->idleTrimCompressedMaxSec);
                 $this->cumulativeTrim += ($gap - $newGap);
@@ -445,16 +515,40 @@ final class Recorder implements RecorderInterface
             // back into the real cadence via --no-trim.
             $line['tRaw'] = round($realT, 3);
         }
-        $this->writeLine($line);
+        // Idle door: the stream paused past the threshold, so this is the
+        // safe drain point — flush regardless of the count/byte doors.
+        // (First event after the header: gap is 0.0, the header already
+        // drained at open, so nothing is banked against a missing door.)
+        $this->writeLine($line, $gap > self::FLUSH_IDLE_GAP_SECONDS);
 
-        // Run afterCapture hooks (fire-and-forget)
+        // Run afterCapture hooks. A hook's death is swallowed (one bad hook
+        // must not kill the others or the session) but RECORDED —
+        // {@see hookErrors()} surfaces the tally as warnings at close.
         $this->hooks->afterCapture($event);
     }
 
     /**
-     * @param array<string, mixed> $data
+     * Hook failures swallowed during recording (finding 096): one entry
+     * per afterCapture death, naming the hook and its error. Empty means
+     * every registered hook ran clean; non-zero means the tape is fine but
+     * a hook (sanitizer, metadata fan-out, ...) silently skipped work the
+     * caller believes it did — callers (the record CLI) surface each entry
+     * as a warning after close(). Read after {@see close()} for the
+     * session-complete view.
+     *
+     * @return list<string>
      */
-    private function writeLine(array $data): void
+    public function hookErrors(): array
+    {
+        return $this->hooks->hookErrors();
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @param bool $forceFlush drain now (header line, idle door, close())
+     *                         instead of waiting for a coalescing door
+     */
+    private function writeLine(array $data, bool $forceFlush = false): void
     {
         $json = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
         if ($json === false) {
@@ -472,10 +566,29 @@ final class Recorder implements RecorderInterface
         if ($written === false || $written < \strlen($payload)) {
             $this->writeErrors++;
         }
-        // Keep: per-event flush is best-effort — fclose() in close()
-        // (and the OS) backstops the buffer; refusing the flush mid
-        // recording must not abort the session. Failures are counted (C3).
-        if (@fflush($this->fh) === false) {
+        $this->eventsSinceFlush++;
+        $this->bytesSinceFlush += \strlen($payload);
+        // Flush coalescing (finding 113): a door pays the syscall. Keep:
+        // flushing stays best-effort — fclose() in close() (and the OS)
+        // backstops the buffer; a refused flush mid-recording must not
+        // abort the session. Failures are counted (C3).
+        if (
+            $forceFlush
+            || $this->eventsSinceFlush >= self::FLUSH_EVENT_THRESHOLD
+            || $this->bytesSinceFlush >= self::FLUSH_BYTE_THRESHOLD
+        ) {
+            $this->drain();
+        }
+    }
+
+    /**
+     * Push buffered lines to the stream and reset the coalescing doors.
+     */
+    private function drain(): void
+    {
+        $this->eventsSinceFlush = 0;
+        $this->bytesSinceFlush = 0;
+        if (is_resource($this->fh) && @fflush($this->fh) === false) {
             $this->flushErrors++;
         }
     }

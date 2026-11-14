@@ -129,6 +129,7 @@ return [
     'record.refuse_overwrite' => '既存のカセット {path} の上書きを拒否します — 置き換えるには --force を指定してください',
     'record.command_not_found' => 'コマンドが見つかりません: {cmd}',
     'record.incomplete' => 'カセットのキャプチャが不完全です ({count} 件の書き込み失敗) 場所: {path}',
+'record.hook_error' => 'フック警告: {error}',
     'record.recorded' => 'candy-vcrrecord: {path} を記録しました (終了コード {code})',
     'record.output_requires' => '--output にはパスが必要です',
     'record.size_number' => '{flag} は整数である必要がありますが、{value} を受け取りました',
