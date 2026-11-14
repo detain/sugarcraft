@@ -280,13 +280,31 @@ final class SsotBehaviorTest extends TestCase
         $candidates = ['apple', 'applet', 'application', 'apply', 'apricot', 'banana', 'cherry'];
         $m = new SmithWatermanMatcher();
 
-        // A high minScore triggers the length-based prune for short/weak candidates.
-        // Pruning must not change the surviving set vs a full compute + post-filter.
+        // FUZZY-06 cure: the docblock promises "pruning must not change the
+        // surviving set vs a full compute + post-filter" — the old body never
+        // ran the baseline, it only re-read the post-filter on the pruned run
+        // (vacuous whenever the prune over-dropped). Now genuinely two-sided:
+        // the weakest-prune reference (minScore 1) post-filtered to each of
+        // the six thresholds must equal the pruned run at that threshold,
+        // row-for-row. This is the general-case counterpart of the negative
+        // adjacent-bonus guard below (ceilingPruneIsSound()).
+        $reference = array_map(
+            static fn (MatchResult $r): string => $r->haystack . '|' . $r->score,
+            $m->matchAll('app', $candidates, minScore: 1),
+        );
+
         foreach ([1, 5, 10, 15, 19, 25] as $minScore) {
-            $pruned = $m->matchAll('app', $candidates, minScore: $minScore);
-            foreach ($pruned as $r) {
-                $this->assertGreaterThanOrEqual($minScore, $r->score);
-            }
+            $expected = array_values(array_filter(
+                $reference,
+                static fn (string $row): bool => (int) substr($row, (int) strrpos($row, '|') + 1) >= $minScore,
+            ));
+
+            $pruned = array_map(
+                static fn (MatchResult $r): string => $r->haystack . '|' . $r->score,
+                $m->matchAll('app', $candidates, minScore: $minScore),
+            );
+
+            $this->assertSame($expected, $pruned, "prune at minScore $minScore must preserve the full-compute post-filter set");
         }
     }
 
