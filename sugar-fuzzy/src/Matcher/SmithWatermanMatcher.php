@@ -165,7 +165,56 @@ final class SmithWatermanMatcher implements FuzzyMatcher
      */
     public function withRequireFullQuery(bool $require = true): self
     {
-        return new self($this->profile, $this->maxQueryLength, $this->maxCandidateLength, $require);
+        return $this->mutate(requireFullQuery: $require);
+    }
+
+    /**
+     * Copy of this matcher using $profile for scoring (finding sugar-fuzzy-022:
+     * tuning a matcher meant rebuilding it through the constructor).
+     */
+    public function withProfile(ScoringProfile $profile): self
+    {
+        return $this->mutate(profile: $profile);
+    }
+
+    /**
+     * Copy of this matcher with a new query DoS cap.
+     *
+     * @throws \InvalidArgumentException If the cap is below 1 (constructor guard, re-entered by the copy)
+     */
+    public function withMaxQueryLength(int $limit): self
+    {
+        return $this->mutate(maxQueryLength: $limit);
+    }
+
+    /**
+     * Copy of this matcher with a new candidate DoS cap.
+     *
+     * @throws \InvalidArgumentException If the cap is below 1 (constructor guard, re-entered by the copy)
+     */
+    public function withMaxCandidateLength(int $limit): self
+    {
+        return $this->mutate(maxCandidateLength: $limit);
+    }
+
+    /**
+     * The single copy-and-replace door for the fluent `with*()` family.
+     *
+     * A null slot means "inherit"; a caller that genuinely wants the canonical
+     * profile passes `ScoringProfile::canonical()` through withProfile().
+     */
+    private function mutate(
+        ?ScoringProfile $profile = null,
+        ?int $maxQueryLength = null,
+        ?int $maxCandidateLength = null,
+        ?bool $requireFullQuery = null,
+    ): self {
+        return new self(
+            $profile ?? $this->profile,
+            $maxQueryLength ?? $this->maxQueryLength,
+            $maxCandidateLength ?? $this->maxCandidateLength,
+            $requireFullQuery ?? $this->requireFullQuery,
+        );
     }
 
     /**

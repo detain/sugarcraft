@@ -80,6 +80,39 @@ final class SahilmMatcher implements FuzzyMatcher
     }
 
     /**
+     * Copy of this matcher with case sensitivity switched (finding
+     * sugar-fuzzy-022: tuning a matcher meant rebuilding it).
+     */
+    public function withCaseSensitive(bool $caseSensitive = true): self
+    {
+        return $this->mutate(caseSensitive: $caseSensitive);
+    }
+
+    /**
+     * Copy of this matcher using $scoring for the bonus weights.
+     */
+    public function withScoring(SahilmScoring $scoring): self
+    {
+        return $this->mutate(scoring: $scoring);
+    }
+
+    /**
+     * The single copy-and-replace door for the fluent `with*()` family.
+     *
+     * A null slot means "inherit". The constructor resolves a null scoring to
+     * canonical, so mutate passes the (already-resolved) current one through.
+     */
+    private function mutate(
+        ?bool $caseSensitive = null,
+        ?SahilmScoring $scoring = null,
+    ): self {
+        return new self(
+            $caseSensitive ?? $this->caseSensitive,
+            $scoring ?? $this->scoring,
+        );
+    }
+
+    /**
      * Match a single candidate against the query.
      *
      * @param string $query     The search query (needle)

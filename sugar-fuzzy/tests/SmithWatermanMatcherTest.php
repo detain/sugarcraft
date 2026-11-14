@@ -521,4 +521,53 @@ final class SmithWatermanMatcherTest extends TestCase
 
         $this->assertSame([], $results);
     }
+
+    #[Test]
+    public function testFluentWithCopiesReplaceAndPreserveTheRest(): void
+    {
+        // Finding sugar-fuzzy-022: the whole option set must be tunable
+        // without rebuilding the matcher, through one mutate() door.
+        $base = SmithWatermanMatcher::new(maxQueryLength: 64, maxCandidateLength: 96);
+        $profile = ScoringProfile::new(matchScore: 5, gapOpen: -4, gapExtend: -1, adjacentBonus: 8);
+
+        $tuned = $base
+            ->withProfile($profile)
+            ->withMaxQueryLength(128)
+            ->withMaxCandidateLength(256)
+            ->withRequireFullQuery();
+
+        $this->assertNotSame($base, $tuned);
+        // Receiver untouched:
+        $this->assertSame(64, $base->maxQueryLength());
+        $this->assertSame(96, $base->maxCandidateLength());
+        $this->assertFalse($base->requiresFullQuery());
+        $this->assertEquals(ScoringProfile::canonical(), $base->profile());
+        // Copy carries every replaced slot:
+        $this->assertSame($profile, $tuned->profile());
+        $this->assertSame(128, $tuned->maxQueryLength());
+        $this->assertSame(256, $tuned->maxCandidateLength());
+        $this->assertTrue($tuned->requiresFullQuery());
+    }
+
+    #[Test]
+    public function testFluentCapSettersReEnterTheConstructorGuard(): void
+    {
+        // Fail fast: with* caps go through the same >=1 door as the ctor.
+        $matcher = SmithWatermanMatcher::new();
+        $this->expectException(\InvalidArgumentException::class);
+
+        $matcher->withMaxQueryLength(0);
+    }
+
+    #[Test]
+    public function testFluentCapChangeIsBehaviourLive(): void
+    {
+        // The replaced slot must actually steer matching, not just accessors:
+        // a 2-char query cap truncates 'gst' to 'gs' before aligning.
+        $capped = SmithWatermanMatcher::new()->withMaxQueryLength(2);
+        $plain = SmithWatermanMatcher::new();
+
+        $this->assertSame(2, $capped->maxQueryLength());
+        $this->assertNotSame($plain->match('gst', 'git status')?->score, $capped->match('gst', 'git status')?->score);
+    }
 }

@@ -123,6 +123,11 @@ $picker->match('app', 'apple');      // indices [0, 1, 2], score as in plain mod
 $picker->match('gst', 'git status'); // indices [0, 4, 5] — plain mode only finds "st"
 ```
 
+Every option is also fluent: `$picker->withProfile($profile)->withMaxQueryLength(256)`
+returns a copy with only those slots replaced (the constructor's cap guard applies
+through `with*()` too). The same doors exist on `SahilmMatcher`
+(`withCaseSensitive()`, `withScoring()`).
+
 When plain mode's best alignment already covers the whole query, full-query mode
 returns exactly that same alignment — nothing is forced. Otherwise (initials-style
 queries such as `gst`, where a short adjacent run outscores the spread-out path)

@@ -477,4 +477,35 @@ final class SahilmMatcherTest extends TestCase
 
         $this->assertSame([], $results);
     }
+
+    #[Test]
+    public function testFluentWithCopiesReplaceAndPreserveTheRest(): void
+    {
+        // Finding sugar-fuzzy-022: tune either option without a rebuild.
+        $base = new SahilmMatcher();
+        $scoring = SahilmScoring::canonical()->withFirstCharBonus(0);
+
+        $tuned = $base->withCaseSensitive()->withScoring($scoring);
+
+        $this->assertNotSame($base, $tuned);
+        $this->assertFalse($base->caseSensitive());
+        $this->assertEquals(SahilmScoring::canonical(), $base->scoring());
+        $this->assertTrue($tuned->caseSensitive());
+        $this->assertSame($scoring, $tuned->scoring());
+
+        // And switching back down through the same door:
+        $this->assertFalse($tuned->withCaseSensitive(false)->caseSensitive());
+    }
+
+    #[Test]
+    public function testFluentCaseSwitchIsBehaviourLive(): void
+    {
+        // The replaced slot steers matching, not just accessors: case-sensitive
+        // mode must refuse 'g' in 'GHI' where the default folds it through.
+        $sensitive = (new SahilmMatcher())->withCaseSensitive();
+        $folded = new SahilmMatcher();
+
+        $this->assertNull($sensitive->match('g', 'GHI'));
+        $this->assertNotNull($folded->match('g', 'GHI'));
+    }
 }
