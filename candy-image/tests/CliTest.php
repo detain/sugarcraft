@@ -434,18 +434,80 @@ final class CliTest extends TestCase
         $path = $this->uniqueTempPath('.png');
         file_put_contents($path, 'this is not an image');
 
-        [$exit, , $err] = self::drive([$path]);
+        [$exit, $out, $err] = self::drive([$path]);
 
         $this->assertSame(Cli::EXIT_INPUT, $exit);
         $this->assertNotSame('', $err);
+        $this->assertSame('', $out, 'a failed decode must never paint a partial frame first');
     }
 
     public function testAnimateMissingFileExitsInput(): void
     {
-        [$exit, , $err] = self::drive(['--animate', '/nonexistent/candy-image-absent.gif'], static fn (mixed $player): int => 0);
+        [$exit, $out, $err] = self::drive(['--animate', '/nonexistent/candy-image-absent.gif'], static fn (mixed $player): int => 0);
 
         $this->assertSame(Cli::EXIT_INPUT, $exit, 'the $play seam replaces the interactive loop, so no-terminal refusal must not shadow decode errors');
         $this->assertStringContainsString('no such file', strtolower($err));
+        $this->assertSame('', $out, 'a failed animate decode must never paint a partial frame first');
+    }
+
+    /**
+     * IMG-18 (candy-image-028): an exception outside the library's
+     * declared input vocabulary must name its class on stderr — not blame
+     * the user's file — and still keep the run inside the 0/1/2 contract.
+     */
+    public function testInternalFaultOnTheAnimationPassIsNamedNotBlamed(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('the seam probe needs gd to mint a real GIF.');
+        }
+
+        $gif = $this->uniqueTempPath('.gif');
+        $im = \imagecreatetruecolor(8, 8);
+        \imagegif($im, $gif);
+        \imagedestroy($im);
+
+        [$exit, $out, $err] = self::drive(['--animate', $gif], static function (mixed $player): int {
+            throw new \LogicException('seam-internal-fault-probe');
+        });
+
+        $this->assertSame(Cli::EXIT_INPUT, $exit);
+        $this->assertSame('', $out, 'an internal fault is reported, never painted');
+        $this->assertStringContainsString('internal fault', $err);
+        $this->assertStringContainsString('LogicException: seam-internal-fault-probe', $err, 'the class name is the point — a bare message would still read as input trouble');
+    }
+
+    /**
+     * IMG-18 (candy-image-028/033): the still-render block must carry the
+     * narrowed vocabulary catch plus the companion — no in-process trigger
+     * for the companion is known today (sugar-image declares only the two
+     * caught classes), so this arm is documented-unreachable and pinned
+     * structurally rather than behaviourally.
+     */
+    public function testStillRenderCarriesTheInternalFaultCompanionArm(): void
+    {
+        $source = (string) \file_get_contents(__DIR__ . '/../src/Cli.php');
+
+        $this->assertMatchesRegularExpression(
+            '/catch \(\\\\InvalidArgumentException \| \\\\RuntimeException \$e\) \{[^}]*return self::EXIT_INPUT;\s*\} catch \(\\\\Throwable \$e\) \{\s*(?:\/\/[^\n]*\n\s*)*return self::internalFault\(\$e, \$stderr\);/',
+            $source,
+            'some lane must hold the narrow catch immediately adjacent to its internal-fault companion'
+        );
+
+        // Proximity arithmetic, not regex: without it a still-lane deletion
+        // can lean on the animate lane's companion and pass a lazy scan.
+        $render = (int) \strpos($source, '$bytes = $mosaic->render(');
+        $animate = (int) \strpos($source, 'private static function animate');
+        $this->assertGreaterThan(0, $render);
+        $this->assertGreaterThan($render, $animate);
+
+        $stillFault = (int) \strpos($source, 'internalFault($e, $stderr)', $render);
+        $this->assertLessThan(1100, $stillFault - $render, 'the still-render companion must sit inside its own catch block, not a later function');
+
+        $animateFault = (int) \strpos($source, 'internalFault($e, $stderr)', $animate);
+        $this->assertLessThan(2200, $animateFault - $animate, 'the animate lane must widen past RuntimeException-only and carry the same companion — the Player/Renderer constructors inside it speak InvalidArgumentException too');
+
+        $animateBody = \substr($source, $animate, $animateFault - $animate);
+        $this->assertStringContainsString('catch (\\InvalidArgumentException | \\RuntimeException $e)', $animateBody, 'animate must not regress to the RuntimeException-only catch that left InvalidArgumentException fatals on the table');
     }
 
     public function testAnimateWithRenderDialsIsRefusedNamingEach(): void

@@ -379,10 +379,22 @@ final class Cli
                     $mosaic = $mosaic->withScale($scale);
                 }
                 $bytes = $mosaic->render($image, $cellsW, $height);
-            } catch (\Throwable $e) {
+            } catch (\InvalidArgumentException | \RuntimeException $e) {
+                // The decoder/validator vocabulary sugar-image actually
+                // declares — a real problem with the caller's combination
+                // of file and flags.
                 self::err($stderr, $e->getMessage());
 
                 return self::EXIT_INPUT;
+            } catch (\Throwable $e) {
+                // \Error/TypeError territory: programmer error or library
+                // drift, NOT the user's input — naming the class tells the
+                // truth instead of blaming the file (candy-image-028). No
+                // in-process trigger is known against the narrowed
+                // vocabulary today (sugar-image throws only the two classes
+                // above); this arm is the documented safety net keeping the
+                // 0/1/2 contract whole should that change.
+                return self::internalFault($e, $stderr);
             }
 
             // Windows console decodes bytes by the current OUTPUT codepage,
@@ -556,28 +568,52 @@ final class Cli
     {
         try {
             $frames = Decoder::decode($file, $cellsW, $cellsH);
-        } catch (\RuntimeException $e) {
+
+            if ($frames === []) {
+                self::err($stderr, Lang::t('cli.no_frames', ['path' => $file]));
+
+                return self::EXIT_INPUT;
+            }
+
+            $renderer = Renderer::withConstraints($cellsH, $cellsW);
+            $player = new Player($frames, renderer: $renderer);
+
+            if ($play !== null) {
+                return $play($player);
+            }
+
+            (new Program($player, new ProgramOptions(useAltScreen: true)))->run();
+
+            return self::EXIT_OK;
+        } catch (\InvalidArgumentException | \RuntimeException $e) {
+            // Decoder vocabulary, widened from the RuntimeException-only
+            // catch: Player/Renderer constructors also speak
+            // InvalidArgumentException, and between the old narrow try
+            // ending after decode() and these bare constructor calls, any
+            // of them was a road to an uncaught fatal outside 0/1/2.
             self::err($stderr, $e->getMessage());
 
             return self::EXIT_INPUT;
+        } catch (\Throwable $e) {
+            return self::internalFault($e, $stderr);
         }
+    }
 
-        if ($frames === []) {
-            self::err($stderr, Lang::t('cli.no_frames', ['path' => $file]));
+    /**
+     * Internal-fault wording for exceptions that are not the library's
+     * declared input vocabulary (candy-image-028): a programmer error or
+     * library drift must name its class — 'TypeError: …' style — instead
+     * of letting the user believe their file was bad. The exit code stays
+     * EXIT_INPUT: the documented contract carries no fourth value, and
+     * the distinct wording is enough for triage.
+     *
+     * @param resource $stderr
+     */
+    private static function internalFault(\Throwable $e, $stderr): int
+    {
+        self::err($stderr, 'internal fault — ' . \get_class($e) . ': ' . $e->getMessage());
 
-            return self::EXIT_INPUT;
-        }
-
-        $renderer = Renderer::withConstraints($cellsH, $cellsW);
-        $player = new Player($frames, renderer: $renderer);
-
-        if ($play !== null) {
-            return $play($player);
-        }
-
-        (new Program($player, new ProgramOptions(useAltScreen: true)))->run();
-
-        return self::EXIT_OK;
+        return self::EXIT_INPUT;
     }
 
     /**
