@@ -7,6 +7,7 @@ namespace SugarCraft\Cli;
 use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Style;
 
 /**
@@ -19,7 +20,8 @@ use SugarCraft\Style\Style;
  * First-party widget — there is no upstream Logo counterpart. The inspired-by
  * library (charmbracelet/fang, see MATCHUPS.md) renders its branded splash
  * as a half-block *image* logo and delegates command parsing to cobra;
- * figlet-style text-art presets like {@see sugarcraft()} exist only here.
+ * figlet-style text-art presets like {@see sugarcraft()} and its
+ * under-40-cell sibling {@see sugarcraftNarrow()} exist only here.
  *
  * Art is plain text by contract: terminal escapes and control bytes in a
  * caller-supplied page are stripped at ingress (line feeds survive — they
@@ -66,8 +68,9 @@ final class Logo
      * rails, and a uniform inner column) — the invariant LogoTest pins so a
      * re-flowed figlet row can never again overrun the right rail. That
      * width is 66 cells: the preset is NOT clamped to the terminal, so on a
-     * narrower one it wraps — supply narrower art via {@see fromAscii()} if
-     * the launch target may be under 66 columns.
+     * narrower one it wraps — reach for {@see sugarcraftNarrow()} (or the
+     * {@see fits()} predicate) first, and only then supply your own art via
+     * {@see fromAscii()}.
      *
      * NOTE: the logo has two visual layers — the double-line box border
      * (top/bottom rules and the side rails on every line) and the figlet
@@ -90,6 +93,48 @@ final class Logo
   ╚══════════════════════════════════════════════════════════════╝
 ART;
         return new self($art);
+    }
+
+    /**
+     * Built-in SugarCraft logo in narrow figlet art, for tight terminals.
+     *
+     * The same wordmark as {@see sugarcraft()} without the box border, cut
+     * from a small figlet face: no line exceeds 40 display cells (widest is
+     * 39), pinned line-by-line in LogoTest via {@see Width::string()} — the
+     * budget is a measured contract, not a visual guess. On a terminal under
+     * 66 columns prefer this preset over letting {@see sugarcraft()} wrap;
+     * below 40 columns use {@see fits()} to decide, then {@see fromAscii()}
+     * for art that suits the target.
+     */
+    public static function sugarcraftNarrow(): self
+    {
+        $art = <<<'ART'
+                    _             _   
+ ___ _   _ _ __ __ _| |__   __ _  | |_ 
+/ __| | | | '__/ _` | '_ \ / _` | | __|
+\__ \ |_| | | | (_| | | | | (_| | | |_ 
+|___/\__,_|_|  \__,_|_| |_|\__,_|  \__|
+ART;
+        return new self($art);
+    }
+
+    /**
+     * True when every art line fits within `$cols` display cells.
+     *
+     * Measures with {@see Width::string()} — CJK and emoji art count in
+     * cells, not codepoints. Blank art fits any width (there is no row to
+     * overrun). Use this to route a launch target between {@see sugarcraft()},
+     * {@see sugarcraftNarrow()} and custom {@see fromAscii()} art.
+     */
+    public function fits(int $cols): bool
+    {
+        foreach (explode("\n", $this->art) as $line) {
+            if (Width::string($line) > $cols) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

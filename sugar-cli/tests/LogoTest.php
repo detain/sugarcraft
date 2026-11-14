@@ -189,4 +189,39 @@ final class LogoTest extends TestCase
         $logo = Logo::sugarcraft()->withColor('#ff5fd2');
         $this->assertSame($logo->render(), $logo->render(ColorProfile::TrueColor));
     }
+
+    public function testNarrowPresetLinesStayUnderFortyCells(): void
+    {
+        // The 40-cell budget is the preset's whole point; measure every line
+        // in display cells (not eyeball the art in an editor with soft wrap).
+        $lines = explode("\n", Logo::sugarcraftNarrow()->render());
+        $this->assertCount(5, $lines);
+        foreach ($lines as $i => $line) {
+            $this->assertLessThanOrEqual(40, Width::string($line), "narrow preset line {$i} exceeds 40 cells");
+        }
+    }
+
+    public function testFitsBoundariesForBothPresets(): void
+    {
+        $narrow = Logo::sugarcraftNarrow();
+        $this->assertTrue($narrow->fits(40));
+        $this->assertTrue($narrow->fits(39)); // widest measured line is 39 cells
+        $this->assertFalse($narrow->fits(38));
+
+        $wide = Logo::sugarcraft();
+        $this->assertTrue($wide->fits(66)); // the pinned shared-width preset
+        $this->assertFalse($wide->fits(40)); // the narrow preset's budget
+    }
+
+    public function testFitsCountsDisplayCellsNotCodepoints(): void
+    {
+        // Art with a wide glyph: the predicate must answer in cells, matching
+        // what the renderer measures — the width is taken from Width::string
+        // itself so the pin cannot silently drift with a Unicode update.
+        $logo = Logo::fromAscii('a日');
+        $cells = Width::string('a日');
+        $this->assertGreaterThan(1, $cells, 'guard: the fixture must actually be multi-cell');
+        $this->assertTrue($logo->fits($cells));
+        $this->assertFalse($logo->fits($cells - 1));
+    }
 }
