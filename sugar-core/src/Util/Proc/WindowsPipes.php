@@ -102,8 +102,9 @@ final class WindowsPipes
     }
 
     /**
-     * A "child still running" probe over a proc_open handle. A handle that is
-     * no longer a resource, or whose status cannot be read, counts as exited.
+     * A "child still running" probe over a proc_open handle. A handle that
+     * is no longer a resource counts as exited; while it is one, PHP 8's
+     * proc_get_status() always answers the fixed-shape status array.
      *
      * @param resource $process
      * @return \Closure(): bool
@@ -116,7 +117,7 @@ final class WindowsPipes
             }
             $status = @\proc_get_status($process);
 
-            return \is_array($status) && $status['running'] === true;
+            return $status['running'] === true;
         };
     }
 

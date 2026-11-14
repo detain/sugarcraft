@@ -579,7 +579,7 @@ final class WorkerPool
         if (is_object($task)) {
             return [get_class($task)];
         }
-        if (is_array($task) && isset($task[0]) && is_object($task[0])) {
+        if (is_array($task) && is_object($task[0])) {
             return [get_class($task[0])];
         }
         return [];
@@ -1052,7 +1052,17 @@ PHP;
         $this->allExited($processes, self::REAP_KILL_SECONDS);
     }
 
-    /** Poll the whole set until every child is gone or the rung budget ends. */
+    /**
+     * Poll the whole set until every child is gone or the rung budget ends.
+     *
+     * proc_get_status() reaps internally once the child is gone, so a false
+     * 'running' here means proc_close() cannot block afterwards. 'running'
+     * is read without a `??` fallback on purpose: every call site hands in
+     * a resource that is closed only after the ladder finishes, and
+     * proc_get_status() on a live resource always answers the fixed-shape
+     * array — the race this poll lives through is exit-not-yet-observed
+     * (running stays true), never a missing offset.
+     */
     private function allExited(array $processes, float $seconds): bool
     {
         $deadline = microtime(true) + $seconds;
@@ -1080,21 +1090,6 @@ PHP;
         }
         return true;
     }
-
-    /**
-     * Poll the child up to $seconds for an exit, in ticks.
-     *
-     * proc_get_status() reaps internally once the child is gone, so a false
-     * 'running' here means proc_close() cannot block afterwards.
-     *
-     * 'running' is read without a `??` fallback on purpose: every call site
-     * hands in a resource that is closed only after the ladder finishes, and
-     * proc_get_status() on a live resource always answers the fixed-shape
-     * array — the race this poll lives through is exit-not-yet-observed
-     * (running stays true), never a missing offset.
-     *
-     * @param resource $process
-     */
 
     public function __destruct()
     {

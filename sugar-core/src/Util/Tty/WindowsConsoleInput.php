@@ -47,8 +47,9 @@ final class WindowsConsoleInput
             return null;
         }
 
-        // GetConsoleMode fails on anything that is not a console handle.
-        if ($mode === false || $mode === null) {
+        // GetConsoleMode fails (false) on anything that is not a console
+        // handle; int|false is the kernel32 signature, so null is not in play.
+        if ($mode === false) {
             return null;
         }
 

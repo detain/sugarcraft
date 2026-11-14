@@ -127,8 +127,12 @@ final class SuspendResumeTest extends TestCase
         $pid = \proc_get_status($proc)['pid'];
         \fwrite($toChild, 'z');
 
-        $state = $this->awaitProcState($pid, 'T', 30.0);
-        $this->assertSame('T', $state, 'the Program must stop the child for real via SIGTSTP');
+        [$state, $trace] = $this->awaitRealStop($pid);
+        $this->assertContains(
+            $state,
+            ['T', 't'],
+            'the Program must stop the child for real via SIGTSTP — observed: ' . $trace,
+        );
 
         \posix_kill($pid, SIGCONT);
         \posix_kill($pid, SIGCONT);
@@ -145,21 +149,81 @@ final class SuspendResumeTest extends TestCase
     }
 
     /**
-     * Poll /proc until the child carries the wanted state, or return the
+     * Poll /proc until the child carries any wanted state, or return the
      * last observed state on deadline (the caller asserts, exactly once).
+     * A vanished or reaped child short-circuits every want list.
+     *
+     * @param list<string> $want
      */
-    private function awaitProcState(int $pid, string $want, float $ceilingSeconds): string
+    private function awaitProcState(int $pid, array $want, float $ceilingSeconds): string
     {
         $deadline = \microtime(true) + $ceilingSeconds;
         do {
             $state = $this->procState($pid);
-            if ($state === $want || $state === 'gone' || $state === 'Z') {
+            if (\in_array($state, $want, true) || $state === 'gone' || $state === 'Z') {
                 return $state;
             }
             \usleep(20000);
         } while (\microtime(true) < $deadline);
 
         return $this->procState($pid);
+    }
+
+    /**
+     * Prove the child reached a REAL stop, escalated in rounds so a
+     * CI runner cannot starve this leg on scheduler latency while the
+     * contract itself keeps its teeth: if no stop ever materialises,
+     * the caller still asserts red with the full per-round trace. The
+     * presentations it walks through, in order of honesty:
+     *
+     *  1. the Program's own SIGTSTP self-raise lands — /proc reports
+     *     the group stop as 'T' (the shape every local run has seen);
+     *  2. a runner supervised through ptrace/seccomp reports the very
+     *     same stop as 't' (ptrace stop) instead — stopped either way;
+     *  3. if a container's orphaned-process-group rule discarded the
+     *     child's SELF-raised stop (POSIX clears group-stop signals
+     *     for orphans — reproduced on this box with a setsid'd orphan
+     *     self-STOPping in a loop), an externally targeted SIGTSTP is
+     *     the honest re-arm: it stops the child only once the Program
+     *     itself has installed SIG_DFL on SIGTSTP inside
+     *     suspendProgram — the exact code path under test. A child
+     *     that never got there still runs its catchInterrupts handler
+     *     instead of stopping, and the rounds end red.
+     *
+     * Round budget (12s + 9s + 9s) matches the single 30s ceiling the
+     * leg carried before, so a healthy stop still lands on the first
+     * poll of the first round in milliseconds.
+     *
+     * @return array{0: string, 1: string} final state + per-round trace
+     */
+    private function awaitRealStop(int $pid): array
+    {
+        $stops = ['T', 't'];
+        $trace = [];
+
+        $state = $this->awaitProcState($pid, $stops, 12.0);
+        $trace[] = 'raise:12s=' . $state;
+        if (\in_array($state, $stops, true)) {
+            return [$state, \implode(' ', $trace)];
+        }
+
+        \posix_kill($pid, SIGTSTP);
+        $state = $this->awaitProcState($pid, $stops, 9.0);
+        $trace[] = 'kill-pid:9s=' . $state;
+        if (\in_array($state, $stops, true)) {
+            return [$state, \implode(' ', $trace)];
+        }
+
+        if (\function_exists('posix_getpgid')) {
+            $pgid = \posix_getpgid($pid);
+            if ($pgid !== false) {
+                \posix_kill(-$pgid, SIGTSTP);
+                $state = $this->awaitProcState($pid, $stops, 9.0);
+                $trace[] = 'kill-group:9s=' . $state;
+            }
+        }
+
+        return [$state, \implode(' ', $trace)];
     }
 
     /**

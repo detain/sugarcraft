@@ -942,7 +942,11 @@ final class Program
      * User-code seat: model update (sugar-core-003). Returns null when the
      * handler absorbed a throw — callers keep the previous model untouched.
      *
-     * @return array{0: Model, 1: ?Cmd}|null
+     * The command slot is the bare `Closure(): ?Msg` that the {@see Cmd}
+     * factories build — Model::update's declared contract — not a Cmd
+     * instance (Cmd is a factory class, never a value that crosses here).
+     *
+     * @return array{0: Model, 1: ?\Closure}|null
      */
     private function userUpdate(Model $model, Msg $msg): ?array
     {
@@ -1611,21 +1615,36 @@ final class Program
                 if (defined('SIGKILL')) {
                     proc_terminate($proc, SIGKILL);
                 }
-                // One grace tick after the escalation, then give up on the
-                // reap — the structured exec failure is already propagating
-                // through the caller's exception path.
-                $grace = hrtime(true);
-                while ((hrtime(true) - $grace) / 1e9 < 0.25) {
-                    if (!proc_get_status($proc)['running']) {
-                        proc_close($proc);
-                        return true;
-                    }
-                    usleep(5000);
-                }
-                return false;
+                return self::graceReap($proc);
             }
             usleep(5000);
         }
+    }
+
+    /**
+     * One grace tick after the SIGKILL escalation, then give up on the
+     * reap — the structured exec failure is already propagating through
+     * the caller's exception path.
+     *
+     * Its own scope, not an in-place repeat: terminateAndReap has
+     * already read this child's status once and PHPStan caches a pure
+     * read across the call (WorkerPool::allExited's fresh-snapshot
+     * comment is the cited doctrine). The whole point here is that the
+     * answer changed, so the read has to live somewhere un-narrowed.
+     *
+     * @param resource $proc
+     */
+    private static function graceReap($proc): bool
+    {
+        $grace = hrtime(true);
+        while ((hrtime(true) - $grace) / 1e9 < 0.25) {
+            if (!proc_get_status($proc)['running']) {
+                proc_close($proc);
+                return true;
+            }
+            usleep(5000);
+        }
+        return false;
     }
 
     /**

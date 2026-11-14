@@ -893,13 +893,11 @@ final class InputReader
     }
 
     /**
-     * Locate a DCS / ST terminator (the two-byte `ESC \`) starting at
-     * byte $start. Returns `[payload, next_i]` or null if the
-     * terminator hasn't arrived yet. Also accepts `BEL` as a
-     * terminator since some terminals are sloppy about it for short
-     * replies.
-     *
-     * @return array{0:string,1:int}|null
+     * Decode a DCS payload the caller already located and stripped of
+     * its terminator. Only the XTVERSION reply (`>|<name version>`)
+     * carries meaning for us today; every other DCS answer decodes to
+     * null. Callers treat null as "nothing to dispatch", so unknown
+     * replies are absorbed silently like unsolicited bytes elsewhere.
      */
     private function decodeDcs(string $payload): ?Msg
     {
