@@ -61,6 +61,16 @@ echo Style::new()
     ->render() . "\n";
 ```
 
+### Where `sugar-style` sits in the fleet
+
+This package is the styling foundation: every `sugar-*` renderer and
+`candy-*` TUI composes its SGR output through `Style`/`Renderer`, and
+nothing here depends on an application layer. One naming trap worth
+stating plainly: this lib's `Table` is the lipgloss-style cell-collection
+convenience builder — the separate `sugar-table` package is the
+interactive table widget. They are not the same thing and neither
+requires the other.
+
 ## Layout helpers
 
 ```php
@@ -503,12 +513,18 @@ $pick  = $r->lightDark();                        // Closure(Color $light, Color 
 Each `Style` owns a `colorProfile()` setter too — the renderer is
 just a convenience wrapper. `Renderer::fromEnvironment()` calls
 `ColorProfile::detect()` for you (consults `NO_COLOR`,
-`CLICOLOR_FORCE`, `TERM_PROGRAM`, etc.).
+`CLICOLOR_FORCE`, `TERM_PROGRAM`, etc.). The profile is bound **at
+construction** (`Style::new()` reads the ambient default once — it never
+re-detects), and the `with*()` chain passes the instance's own profile
+through untouched; only `colorProfile()` — or a `resolveProfile()`
+collapse — rewrites it.
 
 Output is returned as strings rather than written to a bound writer, so
 there is no writer-carrying renderer constructor. Pair with
 `Output::fprint($stream, ...)` when you need to write to a
-specific stream.
+specific stream — the [styled-text demo](#styled-text) GIF shows the
+writers family (`sprint` / `printfSprint` / `fprint` / `print` /
+`println`) doing exactly that.
 
 ## The ambient default profile — `Style::setDefaultProfile()` (process-global)
 
@@ -565,7 +581,7 @@ seam for tests and one-off blocks: the 2.0 plan moves ambient capability
 onto a Renderer-carried profile, and this static gate retires with the
 move.
 
-## Color blending utilities
+## Color blending utilities (sugar-core `SugarCraft\Core\Util\Color`)
 
 `Util\Color` ships the lipgloss-equivalent helpers:
 
@@ -703,7 +719,7 @@ Available factories:
 
 | Method | Palette |
 |---|---|
-| `Theme::dark()` | Dark; high-contrast **text** (measured fg/bg 11.6:1, AAA) — border/separator slots are decorative non-text (~1.5:1) by design |
+| `Theme::dark()` | Dark; high-contrast **text** (measured fg/bg 11.6:1, AAA) — border/separator slots are decorative non-text by design (measured border ~1.5:1, separator ~1.2:1) |
 | `Theme::light()` | Light theme |
 | `Theme::dracula()` | Dracula |
 | `Theme::tokyoNight()` | Tokyo Night |
@@ -856,6 +872,9 @@ NoTty      → no escape sequence at all (clean text, layout kept)
 The tier rewrites apply to RGB colours; palette-slot colours
 (`Color::ansi(n)`) always emit their `30..37`/`90..97` form at every
 tier — measured at TrueColor, `Color::ansi(13)` still emits `ESC[95m`.
+Re-checked end-to-end against the full TrueColor → Ansi256 → Ansi →
+Ascii → NoTty ladder during the 2026-11 documentation pass; every
+mapping above holds at every adjacent pair.
 
 `Ascii` (what `NO_COLOR` selects) forbids colour, not emphasis, so text
 attributes and hyperlinks survive. `NoTty` means the output is not a
@@ -917,11 +936,14 @@ lookup (`SugarCraft\Core\I18n\T`; exact match → base language → `en` →
 raw key). The shipped catalogue is **16 locales** under `lang/`
 (`ar` `cs` `de` `en` `es` `fr` `it` `ja` `ko` `nl` `pl` `pt` `pt-br`
 `ru` `tr` `zh-cn`), `en.php` being the source of truth, and it carries
-**12 keys**: the width/height/max-width/max-height/tab-width/label
-non-negative guards, `style.hyperlink_id_delimiter`,
-`style.markup_depth`, `style.border_toggles_count`,
-`style.expand_sides_count`, `table.width_nonneg` and
-`tree.offset_nonneg`. Call sites: `src/Style.php`, `src/Markup.php`,
+**17 keys**: the non-negative guards `style.width_nonneg`,
+`style.height_nonneg`, `style.maxwidth_nonneg`, `style.maxheight_nonneg`,
+`style.tabwidth_nonneg`, `style.spacing_nonneg`, `style.label_nonneg`;
+then `style.hyperlink_id_delimiter`, `style.markup_depth`,
+`style.border_toggles_count`, `style.expand_sides_count`,
+`style.border_rune_width`, `style.slot_unresolved`,
+`style.write_invalid_stream`, `style.write_short`; plus
+`table.width_nonneg` and `tree.offset_nonneg`. Call sites: `src/Style.php`, `src/Markup.php`,
 `src/Table/Table.php`, `src/Tree/Tree.php`, `src/Bar/HelpBar.php` and
 `src/Bar/StatusBar.php`. Locale selection is the core's: `T::setLocale()`
 is explicit, otherwise `T::detect()` consults `LC_ALL` → `LC_MESSAGES` →
@@ -963,6 +985,10 @@ display withheld, so concealment is never a secret mechanism. SGR `2`
 (`faint()`) lowers contrast off the AA floors by design: never make it
 the sole carrier of a distinction (the zebra-striping example above
 stripes with *italic* and keeps faint as decoration only).
+The attribute-carrying claims in this section were re-checked across
+every degradation tier during the 2026-11 documentation pass: what
+holds at TrueColor holds unchanged at Ansi256, Ansi, and Ascii, with
+NoTty the only tier where colour and emphasis both leave the picture.
 
 ## Performance — build once, render many
 
@@ -986,18 +1012,21 @@ ns/op with a per-call `getenv()`, dev box 2026-10).
 
 ## Accessor era (2026-10-24)
 
-The fleet-wide bare-accessor sweep landed two renames in sugar-style —
-reads whose bare names were free, each keeping a one-line deprecated
-forwarder marked `REMOVED-IN: 2.0.0`:
+**What changed:** two reads were renamed to their bare names in this
+lib — the bare name was free in both cases, so each legacy `get*` name
+survives as a one-line deprecated forwarder. Nothing was removed and no
+call site broke: existing callers keep compiling through the forwarders.
+
+**Call this now:**
 
 | legacy read (kept as deprecated forwarder) | canonical bare read |
 | --- | --- |
 | `getDefaultProfile()` (static ambient read) | `defaultProfile()` — the `setDefaultProfile()` write keeps its name; no bare slot collided |
 | `getBorderSides()` | `Style::borderSides()` |
 
-`Border::getTitles()` already delegated to the bare `titles()` accessor
-before this era and stays as found. Existing callers keep compiling
-through the deprecated aliases.
+**Removal:** both forwarders carry `REMOVED-IN: 2.0.0`. Outside that
+window, `Border::getTitles()` already delegated to the bare `titles()`
+accessor before this era and stays as found.
 
 ### Exceptions — the 31 setter-blocked reads
 
@@ -1093,6 +1122,10 @@ measurement, not a live-pinned number).
 ### Style
 
 ![Foreground, background, bold, italic, underline, strikethrough, and adaptive colour on headline text](.vhs/style.gif)
+
+### Styled text
+
+![The writers family emitting styled console text with Output::fprint](.vhs/styled-text.gif)
 
 ### Table
 
