@@ -28,18 +28,18 @@ composer require "sugarcraft/candy-image:@dev"   # no stable release yet — see
 ./vendor/bin/candy-image --format=symbols --canvas=ansi256 --work=7 logo.png
 ```
 
-Composer's `vendor/bin` is not on your `PATH` by default, so the bare
-`candy-image` command above only works if you add it. Inside a checkout the
-entry point is `php bin/candy-image …` — the spelling the demo tape runs — and
-a rolling latest phar is published too (see Install).
+To run it as a bare `candy-image`, add `vendor/bin` (or the global equivalent)
+to your `PATH`; the `./vendor/bin/...` spelling above needs no PATH change.
+Inside a checkout the entry point is `php bin/candy-image …` — the spelling the
+demo tape runs — and a rolling latest phar is published too (see Install).
 
 **Long options only.** Apart from `-h`, every flag is `--`-prefixed; chafa's
 single-dash muscle memory (`-f`, `-s 80x24`, `-w 7`) is not parsed as options —
 the first such token quietly becomes the image filename, so `-f photo.png`
 exits 1 with an "unexpected argument" complaint about the value, and a bare
-`-v` exits 2 with `File not found: -v`. (Verified against the live bin.)
+`-v` exits 2 with `File not found: -v`.
 
-**Input formats.** PNG, JPEG and GIF are accepted, recognised by magic
+**Input formats.** PNG, JPEG and GIF are accepted, recognized by magic
 bytes. Anything else — including WebP and BMP — is refused with exit 2 and
 the MIME it detected (`Unsupported MIME type: image/webp`), even when the
 build's GD could decode it. That is a deliberate allow-list in the
@@ -105,8 +105,9 @@ terminal-size rescue rungs, and being inside `tmux` is what makes the
 default `--passthrough=auto` wrap frames in its envelope.
 
 **No released version yet.** Packagist serves `dev-master` only — there is
-no tag and no branch-alias — so under a default `minimum-stability: stable`
-project a bare `composer require sugarcraft/candy-image` cannot resolve.
+no tag and no branch-alias — so in a project with the default
+`minimum-stability: stable`, a bare `composer require sugarcraft/candy-image`
+cannot resolve.
 Ask for the dev package explicitly (the Packagist version badge above
 renders nothing until the first tag, for the same reason):
 
@@ -120,12 +121,19 @@ push to master that touches it or its dependency closure:
 ```bash
 curl -LO https://github.com/detain/sugarcraft/releases/download/candy-image/latest/candy-image.phar
 curl -LO https://github.com/detain/sugarcraft/releases/download/candy-image/latest/candy-image.phar.sha256
+sha256sum -c candy-image.phar.sha256
 php candy-image.phar photo.png
 ```
 
 `--version` prints the `dev-<shortsha>` stamp of the commit the phar was
-built from; the `.sha256` (plus `.commit`/`.pins.json`) sidecars sit beside
-the asset for verification.
+built from. The full sidecar set sits beside every rolling asset:
+`.phar.sha256` (integrity — `sha256sum -c` checks it, as above),
+`.phar.commit` (the full build SHA) and `.phar.pins.json` (the sibling pin
+map); when the CI run holds the signing key, the `.phar.sha256.sig`,
+`.phar.minisig` and `.phar.minisig.sha256` signatures ride along too.
+Integrity is verifiable as shipped; authenticity of the signatures needs the
+sugarcraft public key, which candy-image pins none — candy-code and candy-top
+are the only apps that carry it, to verify their own self-updates.
 
 ## Options
 
