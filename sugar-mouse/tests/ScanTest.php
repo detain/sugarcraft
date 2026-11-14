@@ -458,8 +458,17 @@ final class ScanTest extends TestCase
         self::assertSame([], $zonesN, 'unmatched open sentinels must yield no zones');
         self::assertSame([], $zones4N, 'unmatched open sentinels must yield no zones');
 
+        // The floor guards the RATIO's validity — under it both times are
+        // timer noise and the 8x bound judges nothing — not a speed claim,
+        // so it must ride the host's clock, not a fixed band.  The old
+        // 0.005s was host-parochial in the FAIL-FAST direction: CI job
+        // 132322205335 (2026-11-15, family F15a) measured the 25k parse at
+        // 0.0034s on a fast runner and reddened the leg with a perfectly
+        // linear parse (this lib's ratio measures ~3.7-4x, far from the
+        // 16x quadratic signature).  A calibrated floor trips only when the
+        // parse cannot be timed meaningfully at all.
         self::assertGreaterThan(
-            0.005,
+            self::timerNoiseFloor(),
             $timeN,
             'the 25k parse must stay well off the timer-noise band for the ratio to mean anything'
         );
@@ -469,6 +478,35 @@ final class ScanTest extends TestCase
             $time4N,
             'a 4x input must cost ~4x time, not ~16x: the rescan regression is quadratic, the index is near-linear'
         );
+    }
+
+    /**
+     * This host's timer-noise floor: 50x the per-call cost of the cheapest
+     * batch of 1000 null parses through the same Scan::parse entry path.
+     * Batching is what makes the figure real — a single null parse is
+     * sub-microsecond and measures 0.0 against the clock — and best-of-five
+     * batches is what keeps it honest: scheduler preemption can only inflate
+     * a batch, and an inflated floor would re-arm the F15a flake on the
+     * loaded-host side (the floor must track the clock, never the weather).
+     * The 50x margin sits far under any genuine 25k-sentinel parse (~3.4ms
+     * even on the fast CI runner that tripped the fixed floor) while staying
+     * above call and clock granularity on every host.
+     */
+    private static function timerNoiseFloor(): float
+    {
+        $bestPerCall = \INF;
+        for ($batch = 0; $batch < 5; ++$batch) {
+            $start    = microtime(true);
+            for ($i = 0; $i < 1000; ++$i) {
+                Scan::parse('');
+            }
+            $perCall = (microtime(true) - $start) / 1000;
+            if ($perCall < $bestPerCall) {
+                $bestPerCall = $perCall;
+            }
+        }
+
+        return 50.0 * $bestPerCall;
     }
 
     /**
