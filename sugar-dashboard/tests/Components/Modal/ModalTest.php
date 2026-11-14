@@ -289,7 +289,10 @@ final class ModalTest extends TestCase
 
     public function testUncoloredBorderRowsCarryNoSgr(): void
     {
-        $rendered = Modal::new('content')->withBorderColor(null)->setSize(40, 8)->render();
+        // D-68: the bg knob went live, so this uncolored-path pin is
+        // re-scoped to FULLY uncolored (no border, no bg); the historic
+        // single trailing reset byte is the only escape left.
+        $rendered = Modal::new('content')->withBorderColor(null)->withBgColor(null)->setSize(40, 8)->render();
 
         // The null border path emits no per-row styling; the single ESC
         // occurrence is the pre-existing trailing reset the box always
@@ -335,5 +338,27 @@ final class ModalTest extends TestCase
         $this->assertSame([40, 9], $modal->innerSize());
         $widths = array_map(static fn(string $r): int => Width::string($r), explode("\n", $modal->render()));
         $this->assertSame(50, max($widths), 'the render still fills the fifty-cell allocation');
+    }
+
+    public function testBackgroundColorPaintsTheInteriorCells(): void
+    {
+        // D-68 (finding 063): the bgColor knob was dead - new() default
+        // #1E1E2E must now paint the interior content rows cell-accurately.
+        $bgSgr = Color::hex('#1E1E2E')->toBg(ColorMode::profile());
+        $modal = Modal::new('Hello')->withBgColor(Color::hex('#1E1E2E'))->setSize(40, 8);
+        $sawInterior = false;
+        foreach (explode("\n", $modal->render()) as $row) {
+            if (str_contains($row, 'Hello')) {
+                $this->assertStringContainsString($bgSgr, $row, 'interior carries the bg between the walls');
+                $sawInterior = true;
+            }
+        }
+        $this->assertTrue($sawInterior, 'an interior row was inspected');
+    }
+
+    public function testBackgroundStaysInertWhenNull(): void
+    {
+        $rendered = Modal::new('Hello')->withBgColor(null)->setSize(40, 8)->render();
+        $this->assertFalse(str_contains($rendered, "\x1b[48;"), 'no bg SGR without a bgColor');
     }
 }

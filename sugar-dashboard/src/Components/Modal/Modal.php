@@ -129,6 +129,16 @@ final class Modal implements \SugarCraft\Dashboard\Foundation\SizedItem
         $borderSgr = $this->borderColor !== null ? $this->borderColor->toFg(ColorMode::profile()) : '';
         $rowEnd = $this->borderColor !== null ? Ansi::reset() : '';
 
+        // Finding sugar-dashboard-063 (D-68): bgColor was a public knob with
+        // zero effect - stored, defaulted by new()/titled(), propagated by
+        // every wither, never consulted. It now paints the INTERIOR content
+        // rows cell-accurately: opened after the left wall, reset before the
+        // right wall, so the bg spans exactly the padded cells of the line.
+        // Frame rows stay the border color's scope. A null bgColor collapses
+        // both parts to '' and the interior bytes are identical to before.
+        $bgSgr = $this->bgColor !== null ? $this->bgColor->toBg(ColorMode::profile()) : '';
+        $bgEnd = $bgSgr !== '' ? Ansi::reset() : '';
+
         // Top border with title or centered
         $result .= $borderSgr . $tl;
         if ($this->title !== null) {
@@ -177,7 +187,7 @@ final class Modal implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Content lines
         $contentLines = $this->renderContentLines($modalW - 2);
         foreach ($contentLines as $line) {
-            $paddedLine = $borderSgr . $v . $line . $v . $rowEnd;
+            $paddedLine = $borderSgr . $v . $bgSgr . $line . $bgEnd . $borderSgr . $v . $rowEnd;
             $result .= $paddedLine . "\n";
         }
 
