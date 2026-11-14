@@ -133,7 +133,7 @@ implement the `Format` interface (`JsonlFormat`, `CompressedJsonlFormat`,
 | Format | File extension | When to pick it | Trade-offs |
 |--------|----------------|-----------------|-----------|
 | **`JsonlFormat`** (default) | `.cas`, `.jsonl`, `.cassette` | Tests, version control, day-to-day recording. | One JSON document per line, absolute timestamps (`t`). Human-readable, diff-friendly, no compression. |
-| **`CompressedJsonlFormat`** | `.cas.gz` | Long recordings, CI artifact storage. | Gzipped JSONL. 5–10× smaller on disk; still streams (per-line flush). Loses git-diff friendliness. |
+| **`CompressedJsonlFormat`** | `.cas.gz` | Long recordings, CI artifact storage. | Gzipped JSONL. 5–10× smaller on disk; a batch write of a complete `Cassette` (the gzip pump is incremental inside `write()`, but the cassette object must exist first — live recording rides plain JSONL). Loses git-diff friendliness. |
 | **`RelativeFormat`** | `.cas` (with `dt` field) | Deterministic replay; cassettes meant to be edited by hand. | Delta timestamps (interval since previous event). Easier to reason about edits — no need to re-shift downstream `t` values. |
 | **`YamlFormat`** | `.yaml`, `.yml` | Test fixtures where the cassette is hand-authored. | Human-editable, indented. Largest on disk; slowest to parse. Lowest priority for production recordings. |
 | **`AsciinemaFormat`** | `.cast` | Importing existing asciinema recordings. | Read-only importer (not a `Format`): accepts cast v2 (asciinema's own output, top-level `width`/`height`) and the v3 header that nests them under `term`. Stdin events become raw-byte inputs; unknown event types are skipped. Never writes `.cast`. |
@@ -150,8 +150,8 @@ carries `t` or `dt`. Anything else throws `\InvalidArgumentException`.
 **Tape vs cassette.** A `.tape` file (the VHS DSL) is compiled
 **through** the Lexer → Parser → Compiler pipeline before it becomes a
 Cassette — the on-disk format is source code, not serialized events.
-`CassetteLoader::isTape()` exposes the sniff in case the caller needs to
-short-circuit (e.g. `render-tape --dry-run` only runs the compile pass).
+`CassetteLoader::isTape()` exposes the sniff for callers that want to
+short-circuit on it themselves.
 
 ### Timestamp modes
 
@@ -231,10 +231,12 @@ $cassette = $format->read('/tmp/session.cas.gz');
 ```
 
 Compressed cassettes are typically 5–10× smaller than plain JSONL,
-making them suitable for CI storage and git repositories. The format
-uses streaming gzip with per-line flush on the **write** side to keep
-memory flat as events are recorded; reading still materializes the whole
-tape in memory (see [Limitations](#limitations)).
+making them suitable for CI storage and git repositories. Compression is a
+**batch** operation: `CompressedJsonlFormat::write()` receives a complete
+`Cassette` value object, so gzip happens once the recording exists, not as
+events are recorded — live streaming with coalesced flush doors is the
+plain-JSONL `Recorder`'s domain. Reading materializes the whole tape in
+memory too (see [Limitations](#limitations)).
 
 ### Asciinema import
 
@@ -250,12 +252,11 @@ $player = new Player($cassette);
 $result = $player->play(programFactory: $factory, speed: Player::SPEED_REALTIME);
 ```
 
-The importer accepts asciinema v2 and v3 alike. Event lines carry delta-accumulated
-(relative) timestamps in **both** versions — each line is the seconds since the
-previous event; the v2/v3 split is only where the header keeps `width`/`height`
-(flat in v2, nested under `term:` in v3). The importer converts `o` (stdout)
-events to output events, `i` (stdin) events to input events, and `x` (exit)
-events to quit events.
+Event lines carry delta-accumulated (relative) timestamps in **both**
+versions — each line records the seconds since the previous event, which the
+importer re-accumulates into absolute `t` values. The importer converts `o`
+(stdout) events to output events, `i` (stdin) events to input events, and `x`
+(exit) events to quit events.
 
 ## PHP API
 
@@ -264,7 +265,7 @@ The core types in `SugarCraft\Vcr\`:
 | Class | Role |
 |-------|------|
 | `Cassette` | Immutable container: readonly `header: CassetteHeader` and `events: list<Event>` properties. Methods `eventCount()`, `duration()`. (`header()` still exists but is `@deprecated` — read `$header`.) |
-| `CassetteHeader` | Schema metadata — `$version`, `$createdAt`, `$cols`, `$rows`, `$runtime`, `$theme`, `$typingSpeed`, `$env`, `$timestampMode`, `$playbackSpeed`, `$fontSize`, `$fontFamily`, `$widthPx`, `$heightPx`. Constants `CURRENT_VERSION` (2 — the version writers stamp; `MAX_READABLE_VERSION` is also 2, so readers accept v2 today and refuse anything newer), `PLAYBACK_SPEED_DEFAULT` (1.0), `TIMESTAMP_MODE_ABSOLUTE`, `TIMESTAMP_MODE_RELATIVE`. (The wire key is `created`; the DTO property is `$createdAt`.) |
+| `CassetteHeader` | Schema metadata — `$version`, `$createdAt`, `$cols`, `$rows`, `$runtime`, `$theme`, `$typingSpeed`, `$env`, `$timestampMode`, `$playbackSpeed`, `$fontSize`, `$fontFamily`, `$widthPx`, `$heightPx`. Constants `CURRENT_VERSION` (1 — the version writers stamp; `MAX_READABLE_VERSION` is 2, so readers accept v1 and v2 today and refuse anything newer — v2 exists as the migration target only), `PLAYBACK_SPEED_DEFAULT` (1.0), `TIMESTAMP_MODE_ABSOLUTE`, `TIMESTAMP_MODE_RELATIVE`. (The wire key is `created`; the DTO property is `$createdAt`.) |
 | `Event` | One recorded line. Fields: `t: float`, `kind: EventKind`, payload `array`. |
 | `EventKind` | Enum: `Resize`, `Input`, `Output`, `Quit`, `Snapshot`, `Hide`, `Show`. |
 | `Recorder` | Record-side. Construct via `Recorder::open($path, ?CassetteHeader $header = null)` — the cassette file is created and tightened to `0600` (owner-only) because cassettes can embed secrets; the header's `timestampMode` decides absolute vs relative. Methods: `withFormat(Format)` (confirms only — throws when the header is not relative), `withHook(Hook)`, `withIdleTrim($threshold, $compressedMax=0.5)`, `recordResize($cols, $rows)`, `recordInputBytes($bytes)`, `recordOutput($bytes)`, `recordQuit()`, `close()`, `captureWriteErrors(): int` (count of failed write/flush attempts — a non-zero total means the cassette is silently incomplete). Helpers `defaultHeader($cols, $rows, $runtime)`, `hooks(): HookRegistry` — `hookErrors(): list<string>` reports the `afterCapture()` hooks that threw during capture (recorded, never swallowed; the `record` command prints them as warnings). Env filtering is `RecordCommand::filteredHostEnv()` — see the [record options](#recording-commands). |
@@ -314,7 +315,9 @@ what makes `candy-vcr replay x.cas | cmp - expected` a valid test.
 frames while it works, so a multi-minute render is not indistinguishable from a
 hang. Every verb responds to `-h` / `--help` with its own usage block on stdout and
 exit 0; `--version` / `-V` is handled before verb dispatch — it prints `candy-vcr <version>` on
-stdout and exits 0 (a `dev` stamp in a plain checkout, the composer or phar version otherwise).
+stdout and exits 0 (a `dev` stamp in any composer checkout or install — the honest composer-mode
+answer from `Application::versionString()`; only a PHAR build carries a release stamp from its
+manifest).
 
 ### Localization
 
@@ -333,7 +336,7 @@ translation may reorder them; `LocaleParityTest` pins key sets and placeholder n
 re-introduced `candy-vcr <verb>: …` literal in `src/Cli/`.
 
 `inspect` shows each event's timestamp, kind, and a short payload summary (with `--since=<seconds>` / `--until=<seconds>` filters). `replay` streams the cassette's recorded output bytes to stdout — `--speed=realtime` honours the recorded cadence (use it for visual demos), `--speed=instant` (the default when the flag is omitted) flushes everything as fast as the kernel will accept it; the header's `playbackSpeed` multiplier scales rendered output (`render-tape`/`render-batch`), not live replay. `diff` compares headers + per-event payloads and exits non-zero on any difference — event
-timestamps compare with a 2 ms tolerance (`DiffCommand::T_TOLERANCE_SECONDS = 0.002`), and the
+timestamps compare with a 2 ms tolerance, and the
 `_id`/`_enc` migration-metadata keys are stripped from both sides before payload comparison so a
 `migrate`d cassette diffs clean against its original; pass `--strict` to keep those keys in the
 comparison. `stats` prints event tallies by kind, total duration, input message type breakdown, and output byte counts with per-event averages.
@@ -414,16 +417,17 @@ The PosixPump recorder tap is a single conditional `recorder->recordOutput($byte
 
 Benchmark (`tests/Integration/ShirleyOverheadTest.php`: one warmup iteration, then 6 timed interleaved iterations per scenario — two rounds of `ROUNDS = 3` without/with pairs — reduced to a **trimmed mean** (min and max discarded, middle four averaged), `time bash -c 'seq 100000'`):
 
-| Scenario | Typical trimmed-mean wallclock |
+| Scenario | Trimmed-mean wallclock (illustrative single run) |
 |----------|-------------------------------|
 | Pump WITHOUT recorder | ~47 ms |
 | Pump WITH recorder | ~40 ms |
 | Measured overhead | **within noise** |
 
-Figures are trimmed means from a quiet dedicated host; on shared CI runners the
-without/with pair wanders by a few ms per direction, which is why the table's
-headline is a band, not a delta. Treat any single-run reading inside that band
-as "within noise" — the assertion budget below is what carries the signal.
+Figures are one trimmed-mean reading from a quiet dedicated host, printed to
+show the shape of the result — they are an illustrative single run, not a
+guarantee; on shared CI runners the without/with pair wanders by a few ms per
+direction, which is why the table's headline is a verdict ("within noise") and
+not a delta. The assertion budget below is what carries the signal.
 
 The assertion budget is 8 % to absorb shared-runner jitter while still catching the regression class this test exists to flag (a real serialization-per-chunk regression would land at dozens of percent). The original performance survey's 2 % acceptance target is reported by the test but not asserted.
 
@@ -733,7 +737,7 @@ $cassette = (new Compiler())->compile($result['ast'], 'demo.tape');
 | `Output <path>` | ✅ | Accepted (stored on the OutputDirective AST node for the render step; not encoded as a Cassette event). |
 | `Hide`, `Show` | ✅ | Suppresses/resumes cursor rendering in output GIF from this point. |
 | `Wait <duration>` | ✅ | Advances the virtual clock (like `Sleep`); emits no output event. |
-| `Wait /pattern/` | ⚠️ | CONDITION wait — upstream blocks until output matches; the record-side compiler has no live stream to poll, so it emits no event, advances no clock, and reports the mismatch (see below). |
+| `Wait /pattern/` | ⚠️ | CONDITION wait — upstream blocks until output matches; the record-side compiler has no live stream to poll, so it emits no event, advances no clock, and reports the mismatch through the compiler's problem channel — a warning by default, a hard error under `--strict`. |
 | `Screenshot <path>` | ✅ | Captures current frame to PNG path during render. |
 | `Source <path>` | ✅ | Inlines and compiles another .tape file at this point. |
 
@@ -922,7 +926,12 @@ palette-keyed tile, while pure-palette cells keep keys byte-identical to the
 pre-truecolor cache.
 
 **Wide chars:** CJK and fullwidth characters get a 2×-wide tile; the rasterizer
-advances 2 columns after blitting. Checked via `mb_strwidth($char) > 1`.
+advances 2 columns after blitting. The grid is the oracle: a head cell is wide
+exactly when its right neighbour carries `Cell::continuation()`, and a
+continuation cell paints nothing (it advances one column, covered by its head's
+tile). The former `mb_strwidth($char) > 1` width-table oracle is retired — it
+drifted from the emulator in both directions (`Glyphs::measure()`'s font-metrics
+helper is a separate surface, not the paint path).
 
 **Cursor shapes:**
 - Block (shape=1): glyph rendered in reverse-video (fg/bg swapped)
@@ -1000,7 +1009,8 @@ The last frame is listed twice to give it a display duration (the entry before i
 
 Honest capability boundaries, each with what closing it would take:
 
-- **Reading loads the whole tape.** The JSONL/gzip write side streams, but
+- **Reading loads the whole tape.** The plain-JSONL write side streams (the
+  `Recorder` appends event lines with coalesced flush doors), but
   every `read()` path materializes the cassette fully before the first
   event is returned — raw string, per-line array, `Event` list, and the
   `Cassette` copy stack, so peak RSS is a small multiple of the file size
@@ -1030,7 +1040,9 @@ Honest capability boundaries, each with what closing it would take:
 
 ## Examples
 
-`examples/record.php`, `examples/replay.php`, `examples/inspect.php` — runnable scripts using a tiny `CounterModel`. The `examples/cassettes/counter.cas` fixture is a real recording you can play with:
+`examples/record.php` and `examples/replay.php` are runnable scripts built on a tiny
+`CounterModel`; `examples/inspect.php` is a plain cassette reader that runs no model. The
+`examples/cassettes/counter.cas` fixture is a real recording you can play with:
 
 ```sh
 bin/candy-vcr inspect examples/cassettes/counter.cas
@@ -1114,9 +1126,9 @@ instead of being assumed to be SGR:
 | 1005 | X10 lead, UTF-8-encoded coordinates | decoded when on |
 | 1006 | SGR `CSI < b ; x ; y M/m` | self-identifying — handled by `InputReader` exactly as before |
 | 1015 | urxvt `CSI b ; x ; y M` | decoded only while 1015 is on (shape alone is ambiguous) |
-| 1016 | SGR + pixel coordinates (`…; x ; y ; z`) | **dropped, by design** — see limits |
+| 1016 | SGR + pixel coordinates (`…; x ; y ; z`) | **dropped, by design** — see [Known limits](#known-limits) |
 
-Known limits:
+#### Known limits
 
 - **1016 pixel reports are dropped.** `MouseMsg` carries 1-based *cell*
   coordinates and has no pixel fields, so a faithful decode is impossible;
@@ -1228,7 +1240,7 @@ Invalid PCRE patterns throw `\InvalidArgumentException` at construction.
 - **`BuiltinSerializer`** — covers 17 Msgs: `KeyMsg`,
   `MouseClickMsg / MotionMsg / WheelMsg / ReleaseMsg`, `WindowSizeMsg`,
   `FocusGainedMsg / FocusLostMsg / BlurMsg`, `FocusInMsg / FocusOutMsg`,
-  `PasteStartMsg / EndMsg / Msg`, `BackgroundColorMsg`, `ForegroundColorMsg`,
+  `PasteStartMsg`, `PasteEndMsg`, `PasteMsg`, `BackgroundColorMsg`, `ForegroundColorMsg`,
   `CursorPositionMsg`. Tag is the unqualified class name.
 - **`JsonableSerializer`** — catch-all for any Msg implementing
   `\JsonSerializable`. Tag is the FQCN; `data` is the
@@ -1315,18 +1327,19 @@ php candy-vcr/bin/candy-vcr render-batch <lib>/.vhs/ --encoder ffmpeg
 ```
 
 The `vhs-candy-vcr` job in the repo-root `.github/workflows/vhs.yml` renders its
-matrix via that command — but the matrix is still the soak **seed**, `lib:
-[sugar-core]` (vhs.yml:59-64), and the workflow comment expands it only in a
-follow-up PR after the soak window passes without visual drift. The soak has
+matrix via that command — but the matrix is still the soak **seed**, the
+`vhs-candy-vcr` job's `strategy.matrix.lib: [sugar-core]` entry, whose inline
+comment allows expansion only in a follow-up PR after the soak window passes
+without visual drift. The soak has
 **not** closed: `candy-vcr`'s own tapes are not rendered by this job (the seed
 renders sugar-core's `.vhs/*.tape` set). The job smoke-checks that every
 produced GIF is non-empty and that `file` recognises it as a `GIF image`, and
 uploads them as `vhs-candy-vcr-<lib>` workflow artifacts with 7-day retention.
 The job is advisory (`continue-on-error: true`); the legacy `render` job remains
-the blocking renderer — its matrix (vhs.yml:225, ~49 libs, `candy-vcr` included;
-sugar-dashboard is excluded there and rendered by a dedicated job) is gated by
-the `changed` job's per-lib diff output, whose render-all `all=(...)` selector
-(vhs.yml:141-155) fires only on manual dispatch or a `vhs.yml` change. Reverting
+the blocking renderer — its hand-maintained matrix (~49 libs, `candy-vcr`
+included; sugar-dashboard is excluded there and rendered by a dedicated job) is
+gated by the `changed` job's per-lib diff output, whose `all=(...)` force-render
+selector fires only on manual dispatch or a `vhs.yml` change. Reverting
 the `vhs-candy-vcr` job stanza is the rollback. `candy-vcr` ships one smoke tape
 (`.vhs/smoke.tape`); the rendered GIF is a CI artifact, not a committed file.
 
