@@ -31,6 +31,9 @@ final class FakeKernel32 implements \SugarCraft\Core\Util\Tty\Kernel32Interface
     private int|null $consoleModeStdout = null;
     private int $consoleCpIn  = 437;
     private int $consoleCpOut = 437;
+
+    /** Shared empty-cdef \FFI scope: primitive CData allocation without the deprecated static \FFI::new(). */
+    private static ?\FFI $wideScope = null;
     /** Single snapshot (PR1/PR2 style) or null. */
     private ?array $screenBufferInfo = null;
 
@@ -387,12 +390,24 @@ final class FakeKernel32 implements \SugarCraft\Core\Util\Tty\Kernel32Interface
 
     public function toWideString(string $str): \FFI\CData
     {
-        $len = \mb_strlen($str, 'UTF-8');
-        $w = \FFI::new("unsigned short[{$len} + 1]");
-        for ($i = 0; $i < $len; $i++) {
-            $w[$i] = \mb_ord(\mb_substr($str, $i, 1, 'UTF-8'), 'UTF-8');
+        // The surrogate math mirrors Kernel32::toWideString EXACTLY (the
+        // sc-42/finding-066 leg): UTF-16LE through mbstring, one unit per
+        // UTF-16 code unit, so a character beyond U+FFFF becomes its
+        // surrogate PAIR. The previous per-codepoint mb_ord() store here
+        // replicated the OLD live defect — a double that truncates the way
+        // production no longer does hides the shape instead of pinning it,
+        // which matters because the Windows-gated live pin skips on Linux
+        // runners and this fake is the only surrogate-arm witness there.
+        // (Instance \FFI scope, not the deprecated static \FFI::new().)
+        $bytes = (string) \mb_convert_encoding($str, 'UTF-16LE', 'UTF-8');
+        $units = \intdiv(\strlen($bytes), 2);
+        $w     = (self::$wideScope ??= \FFI::cdef(''))->new("unsigned short[" . ($units + 1) . "]");
+
+        if ($units > 0) {
+            \FFI::memcpy($w, $bytes, $units * 2);
         }
-        $w[$len] = 0;
+        $w[$units] = 0;
+
         return $w;
     }
 }

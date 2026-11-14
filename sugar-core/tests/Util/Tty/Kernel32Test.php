@@ -330,6 +330,41 @@ final class Kernel32Test extends TestCase
         $this->assertSame([0x61, 0xD83D, 0xDE00, 0], [$w[0], $w[1], $w[2], $w[3]]);
     }
 
+    /**
+     * The same surrogate shape, witnessed on Linux runners (finding
+     * sugar-core-066 leg, sc-42): the live pin above is Windows-gated and
+     * skips on every runner this repo actually executes (scripts/
+     * affected-libs.php never books sugar-core to a Windows job), so the
+     * ONLY surrogate-arm witness on the hosts that run the suite is the
+     * double. FakeKernel32::toWideString() now mirrors the live
+     * UTF-16LE math unit-for-unit; these three arms are what keeps that
+     * mirror honest in both directions — a fake drifted back to the old
+     * per-codepoint store reddens the emoji arm, and a live regression
+     * the fake keeps ahead of it reddens nothing here but is at least no
+     * longer the default shape in the family.
+     */
+    public function testTheDoubleEncodesTheSurrogatePairShapeEverywhere(): void
+    {
+        if (!\extension_loaded('ffi')) {
+            self::markTestSkipped('toWideString answers \\FFI\\CData; needs ext-ffi to witness');
+        }
+
+        $fake = new FakeKernel32();
+
+        // Beyond the BMP: one codepoint, two UTF-16 units.
+        $emoji = $fake->toWideString("a\u{1F600}");
+        $this->assertSame([0x61, 0xD83D, 0xDE00], [$emoji[0], $emoji[1], $emoji[2]]);
+        $this->assertSame(0, $emoji[3], 'NUL terminator follows every unit');
+
+        // Plain BMP text keeps one unit per character.
+        $bmp = $fake->toWideString('ok');
+        $this->assertSame([0x6F, 0x6B, 0], [$bmp[0], $bmp[1], $bmp[2]]);
+
+        // The empty string is a lone terminator.
+        $empty = $fake->toWideString('');
+        $this->assertSame(0, $empty[0]);
+    }
+
     // ─── Interface constants ──────────────────────────────────────────────────
 
     public function testStdInputHandleConstantIsNegativeTen(): void
