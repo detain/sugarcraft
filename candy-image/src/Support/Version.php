@@ -77,7 +77,20 @@ final class Version
             return null;
         }
 
-        $stamped = $metadata['version'];
+        return self::normalizeStamp($metadata['version']);
+    }
+
+    /**
+     * Normalize a build stamp to a printable version, or null when it names
+     * neither a comparable release nor a recognized development identity:
+     * TAG_PREFIX stripped, a leading `v` stripped, then the COMPARABLE
+     * release shape, then the DEV grammar. One grammar, one home — the
+     * reader above delegates here so every arm is testable without minting
+     * an archive (tests/Support/VersionTest.php pins the matrix, plus a
+     * real-stamp round-trip through the reader).
+     */
+    public static function normalizeStamp(string $stamped): ?string
+    {
         if (str_starts_with($stamped, self::TAG_PREFIX)) {
             $stamped = substr($stamped, strlen(self::TAG_PREFIX));
         }

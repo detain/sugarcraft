@@ -24,7 +24,8 @@ declare(strict_types=1);
  * DST-1 lesson: the frozen vendor/ inside the artifact makes Composer's
  * InstalledVersions report the build root's dev guess, so a stamp NOTHING
  * consumes means `--version` lies. PharBuildScriptTest pins the stamp field
- * and its reader agree.
+ * and tests/Support/VersionTest.php pins the reader — grammar matrix plus a
+ * real-stamp round-trip.
  *
  * WHY THE BUILD MUST RUN FROM A CLEAN PUBLISHED VENDOR
  * ====================================================
