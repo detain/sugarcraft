@@ -70,9 +70,12 @@ final class GridTable implements Item, Sizer
 
         // Recalculate pagination based on available height. The allocation
         // is the ceiling; an explicit withPerPage() wins below it (D-51,
-        // finding 144: this used to stomp any explicit page size).
+        // finding 144: this used to stomp any explicit page size). The
+        // budget subtracts the chrome THIS config actually emits (D-52,
+        // finding 045: height-2 assumed two border lines while the default
+        // BorderConfig paints five).
         if ($height > 0) {
-            $availableRows = $height - 2; // Account for header borders
+            $availableRows = $height - $this->chromeLines();
             if ($availableRows > 0) {
                 $perPage = $this->explicitPerPage === null
                     ? $availableRows
@@ -82,6 +85,22 @@ final class GridTable implements Item, Sizer
         }
 
         return $clone;
+    }
+
+    /**
+     * Number of non-data lines the configured frame emits around the body:
+     * outer borders, the always-present header row, the header and footer
+     * separators (the footer separator is budgeted even though an empty
+     * result suppresses it — the page size must never depend on the data).
+     */
+    private function chromeLines(): int
+    {
+        $c = $this->borderConfig;
+
+        return ($c->showOuter ? 2 : 0)
+            + 1
+            + ($c->showHeader ? 1 : 0)
+            + ($c->showFooter ? 1 : 0);
     }
 
     /**
@@ -158,7 +177,7 @@ final class GridTable implements Item, Sizer
     {
         $clone = clone $this;
         $clone->explicitPerPage = max(1, $perPage);
-        $available = $this->height === null ? 0 : $this->height - 2;
+        $available = $this->height === null ? 0 : $this->height - $this->chromeLines();
         $effective = $available > 0
             ? min($clone->explicitPerPage, $available)
             : $clone->explicitPerPage;

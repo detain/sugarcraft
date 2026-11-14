@@ -861,12 +861,14 @@ final class GridTableTest extends TestCase
         $this->assertSame(5, substr_count(trim($small->page(1)->render()), "\n") - 4);
 
         // Cap below the explicit clamps down (allocation is the ceiling).
+        // D-52 re-counted the default chrome at 5 lines, so height 12 now
+        // budgets 7 data rows (was 10 under the height-2 assumption).
         $capped = $grid->withPerPage(50)->setSize(40, 12);
-        $this->assertSame(10, $capped->pagination()->perPage);
+        $this->assertSame(7, $capped->pagination()->perPage);
 
-        // No explicit: allocation alone decides, as before.
+        // No explicit: allocation alone decides.
         $plain = $grid->setSize(40, 12);
-        $this->assertSame(10, $plain->pagination()->perPage);
+        $this->assertSame(7, $plain->pagination()->perPage);
     }
 
     public function testPerPageZeroAndNegativeAreGuarded(): void
@@ -900,5 +902,56 @@ final class GridTableTest extends TestCase
 
         $q = (new Pagination(page: 4, perPage: 10, totalRows: 25))->withTotalRows(12);
         $this->assertSame(2, $q->normalized()->page, 'clamps against the reduced total');
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // D-52: chrome budget = lines the frame actually emits (finding 045)
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testRenderFitsAllocationUnderDefaultBorder(): void
+    {
+        // The 13-lines-in-a-10 probe: height-2 assumed two chrome lines
+        // while the default BorderConfig emits five.
+        $col = Column::new('label', 'Label');
+        $rows = [];
+        for ($i = 0; $i < 40; $i++) {
+            $rows[] = new Row(['label' => 'row-' . $i]);
+        }
+
+        $grid = GridTable::new([$col], $rows)->setSize(40, 10);
+        $this->assertSame(5, $grid->pagination()->perPage);
+        $this->assertCount(10, explode("\n", $grid->render()));
+    }
+
+    /**
+     * @return array<string, array{0: BorderConfig, 1: int}>
+     */
+    public static function borderConfigProvider(): array
+    {
+        // Factories + withers only: the raw constructor with omitted chars
+        // hits a promoted-readonly reassignment fatal (pre-existing,
+        // reported to the GridTable tail rows - not this row's seat).
+        return [
+            'default' => [BorderConfig::new(), 5],
+            'no-footer-sep' => [BorderConfig::new()->withFooter(false), 4],
+            'header-only' => [BorderConfig::minimal(), 2],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('borderConfigProvider')]
+    public function testRowsPlusChromeAlwaysEqualsAllocation(BorderConfig $config, int $chrome): void
+    {
+        $col = Column::new('label', 'Label');
+        $rows = [];
+        for ($i = 0; $i < 40; $i++) {
+            $rows[] = new Row(['label' => 'r' . $i]);
+        }
+
+        $height = $chrome + 6;
+        $grid = new GridTable([$col], $rows, borderConfig: $config);
+        $grid = $grid->setSize(40, $height);
+
+        $this->assertSame(6, $grid->pagination()->perPage, 'budget leaves room for exactly 6 data rows');
+        $this->assertCount($height, explode("\n", $grid->page(1)->render()), 'rows + chrome == allocation');
     }
 }
