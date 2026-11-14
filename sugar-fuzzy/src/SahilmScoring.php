@@ -45,7 +45,14 @@ final class SahilmScoring
         return new self(...$arguments);
     }
 
-    /** The historical sahilm/fuzzy weights — the SahilmMatcher default. */
+    /**
+     * This port's historical weights — the SahilmMatcher default.
+     *
+     * The bonus SHAPE follows sahilm/fuzzy; the VALUES are the constants this
+     * matcher has always shipped (upstream's numbers were never verified from
+     * here — do not read this as attributing them to the Go library). The
+     * characterization suites pin them.
+     */
     public static function canonical(): self
     {
         return new self();

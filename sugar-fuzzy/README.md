@@ -20,7 +20,7 @@ Extracts the canonical Smith-Waterman fuzzy matcher from `sugar-forms` and adds 
 
 Provides two algorithms:
 - **SmithWatermanMatcher** — Smith-Waterman local alignment with adjacency bonus. Bit-equivalent to the original `sugar-forms` implementation for ASCII input within the default length caps; the legacy empty-candidate score and the per-codepoint case-fold deviations are documented under "Canonical matcher & consumer migration".
-- **SahilmMatcher** — Implements the `sahilm/fuzzy` scoring algorithm. Includes separator bonus, camelCase bonus, first-character bonus (`firstCharBonus`), and lower-case bonus (`lowerCaseBonus`).
+- **SahilmMatcher** — Greedy first-occurrence matcher in the shape of the `sahilm/fuzzy` bonus model: separator bonus, camelCase bonus, first-character bonus (`firstCharBonus`), and lower-case bonus (`lowerCaseBonus`). The scoring SHAPE follows that design; the canonical weight VALUES are this port's own (see "Sahilm weights").
 
 ## Quickstart
 
