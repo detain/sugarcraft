@@ -59,4 +59,42 @@ final class LangTest extends TestCase
         // The underlying T registry stores files under the flip namespace.
         $this->assertStringContainsString('sugar-animation', $result);
     }
+
+    /**
+     * SA-L2 (audit 025): locale key parity, fail-closed by construction.
+     * Every lang/*.php catalog must carry EXACTLY the key set of en.php —
+     * both directions. A new locale file joins the census automatically,
+     * and a key added to en alone goes red here instead of silently
+     * falling back to English at runtime. No count is asserted: the
+     * census on disk is the definition of the roster.
+     */
+    public function testAllLocalesCarryExactlyTheEnglishKeySet(): void
+    {
+        $files = glob(__DIR__ . '/../lang/*.php');
+        $this->assertNotEmpty($files, 'the lang/ census found no catalogs');
+        $english = require __DIR__ . '/../lang/en.php';
+        $this->assertIsArray($english);
+        $this->assertNotEmpty($english);
+
+        $drift = [];
+        foreach ($files as $file) {
+            if (basename($file) === 'en.php') {
+                continue;
+            }
+            $catalog = require $file;
+            $this->assertIsArray($catalog, basename($file) . ' must return an array');
+            $missing = array_diff(array_keys($english), array_keys($catalog));
+            $extra = array_diff(array_keys($catalog), array_keys($english));
+            if ($missing !== [] || $extra !== []) {
+                $drift[] = sprintf(
+                    '%s: missing [%s] extra [%s]',
+                    basename($file),
+                    implode(',', $missing),
+                    implode(',', $extra),
+                );
+            }
+        }
+
+        $this->assertSame([], $drift, 'locale key drift from en.php:');
+    }
 }
