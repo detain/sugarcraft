@@ -197,6 +197,48 @@ final class WidthResolutionTest extends TestCase
         Section::rule(Theme::plain(), 0);
     }
 
+    /**
+     * Finding 042: an advertised narrow width must flow into the FULL page
+     * renderer, not just the probe: every emitted row stays within the cap,
+     * over-long rows re-flow (wrap) instead of clipping, `AutoWidth::Auto`
+     * equals the omitted argument byte-for-byte, and `null` still opts out
+     * of resolution even under a tight terminal.
+     */
+    public function testRenderedHelpPageRespectsAdvertisedNarrowColumns(): void
+    {
+        $this->pinTerminalColumns(30);
+
+        $sections = ['flags' => [
+            '--enable-verbose-logging' => 'turn on verbose diagnostic output for everything that runs',
+            '-v'                       => 'short form of the verbose flag',
+        ]];
+        $build = function (array $extra = []) use ($sections): string {
+            return HelpText::render(...[
+                'usage'    => 'myapp [flags] <file>',
+                'sections' => $sections,
+                'theme'    => Theme::plain(),
+            ] + $extra);
+        };
+
+        $lines = explode("\n", $omitted = $build());
+        foreach ($lines as $line) {
+            $this->assertLessThanOrEqual(
+                30,
+                Width::string($line),
+                'no row may exceed the advertised width: ' . $line,
+            );
+        }
+        $this->assertGreaterThan(5, count($lines), 'over-long rows must wrap under the 30-cell cap');
+
+        $this->assertSame($omitted, $build(['width' => AutoWidth::Auto]), 'Auto is the same resolution as omission');
+
+        // null is the caller's opt-out: the 30-cell terminal is ignored and
+        // at least one row runs wider than the cap would have allowed.
+        $unbounded = explode("\n", $build(['width' => null]));
+        $widest    = max(array_map(static fn (string $l): int => Width::string($l), $unbounded));
+        $this->assertGreaterThan(30, $widest, 'null width must stay unbounded under a narrow advertised cap');
+    }
+
     // ------------------------------------------------------------------
     // The motivating 81-cell help line
     // ------------------------------------------------------------------
