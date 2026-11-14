@@ -378,6 +378,30 @@ final class DiffTest extends TestCase
         $this->assertSame("@@ -4 +4 @@\n-d\n+X\n", $diff->hunkText());
     }
 
+    /**
+     * sugar-diff-029: raw equality short-circuits before the fold — byte-equal
+     * rows under the folding options are context rows with verbatim emitted
+     * bytes, exactly as without the options (behavioural equivalence; the fold
+     * is only ever paid on a miss).
+     */
+    public function testByteEqualRowsMatchIdenticallyUnderEveryFoldOption(): void
+    {
+        foreach ([
+            'plain' => DiffOptions::new(),
+            'whitespace' => DiffOptions::new()->withIgnoreWhitespace(),
+            'case' => DiffOptions::new()->withIgnoreCase(),
+            'both' => DiffOptions::new()->withIgnoreWhitespace()->withIgnoreCase(),
+        ] as $name => $options) {
+            $diff = Diff::compute("Ünicode\trow\nb\n", "Ünicode\trow\nb\n", $options);
+            $this->assertTrue($diff->isEmpty(), "byte-equal input must be empty under the $name options");
+        }
+
+        // And the miss side still folds: a distinct pair that only the
+        // whitespace fold unites stays a context row (fold is reachable).
+        $folded = Diff::compute("a\u{00A0}b\n", "a b\n", DiffOptions::new()->withIgnoreWhitespace());
+        $this->assertTrue($folded->isEmpty(), 'a fold-only-equal pair must still fold to equality');
+    }
+
     /** @return array{0:string,1:string} */
     private function targetPair(array $range, array $targets): array
     {

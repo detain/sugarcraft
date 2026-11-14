@@ -391,8 +391,14 @@ final class Diff
      */
     private static function linesMatch(string $old, string $new, DiffOptions $options): bool
     {
+        // Raw equality is fold equality under every option — pay the fold only
+        // on a miss (sugar-diff-029).
+        if ($old === $new) {
+            return true;
+        }
+
         if (!$options->ignoreWhitespace && !$options->ignoreCase) {
-            return $old === $new;
+            return false;
         }
 
         return self::fingerprint($old, $options) === self::fingerprint($new, $options);
