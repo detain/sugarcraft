@@ -1035,4 +1035,70 @@ final class PrometheusFileBackendTest extends TestCase
         $ref = new \ReflectionProperty(PrometheusFileBackend::class, 'nameTokens');
         self::assertSame(['' => ''], $ref->getValue($b), 'the fold cache holds the deterministic empty token; the throw lives at the call site');
     }
+
+    /**
+     * sugar-metrics-030: a comma-decimal LC_NUMERIC must never reach the
+     * exposition. The rewrite seam is a pure function — pinned without any
+     * locale dependency (the review host ships no comma locale, the same
+     * disclosure the finding itself carries).
+     */
+    public function testForeignDecimalSeparatorIsRewrittenAtTheFormatterSeam(): void
+    {
+        $norm = new \ReflectionMethod(PrometheusFileBackend::class, 'normalizeDecimalPoint');
+        $norm->setAccessible(true);
+        self::assertSame('1.500000', $norm->invoke(null, '1,500000', ','), 'comma render must be rewritten to a true dot');
+        self::assertSame('1.500000', $norm->invoke(null, '1.500000', '.'), 'the C-locale identity path must pass bytes through untouched');
+        self::assertSame('1.500000', $norm->invoke(null, '1.500000', ''), 'a localeconv miss must pass bytes through untouched');
+        self::assertSame('1.000000e+16', $norm->invoke(null, '1,000000e+16', ','), 'the exponent branch carries the same hazard');
+
+        $fmt = new \ReflectionMethod(PrometheusFileBackend::class, 'formatDecimal');
+        $fmt->setAccessible(true);
+        self::assertSame('1.500000', $fmt->invoke(null, 1.5, '%.6f'), 'under the current (dot) locale the seam is byte-identical to the old sprintf');
+        self::assertSame('1.000000e+16', $fmt->invoke(null, 1.0e16, '%.6e'));
+    }
+
+    /**
+     * Live arm: only falsifiable where a comma-decimal locale is installed.
+     * Proves fmt() — not just the helper — routes every value line through
+     * the seam, then restores LC_NUMERIC in finally.
+     */
+    public function testValueRenderingSurvivesACommaLocaleWhenOneIsInstalled(): void
+    {
+        $saved = setlocale(LC_NUMERIC, 0);
+        $switched = @setlocale(LC_NUMERIC, ['de_DE.UTF-8', 'de_DE.UTF8', 'de_DE@euro', 'de_DE', 'deu', 'German']);
+        if ($switched === false || !\str_contains(sprintf('%.6f', 1.5), ',')) {
+            if ($switched !== false) {
+                setlocale(LC_NUMERIC, (string) $saved);
+            }
+            self::markTestSkipped('no comma-decimal locale installed on this host — finding 030 disclosure reproduced; the pure seam pin above carries the rewrite contract');
+        }
+        try {
+            self::assertSame('1,500000', sprintf('%.6f', 1.5), 'premise: raw sprintf renders with the comma under this locale');
+            $b = new PrometheusFileBackend($this->tempPromPath());
+            $b->gauge('x', 1.5);
+            $b->flush();
+            $body = (string) file_get_contents($this->path);
+            self::assertStringContainsString('x 1.500000', $body, 'the published sample must carry a true dot');
+            self::assertStringNotContainsString(',', $body, 'no comma may ride any value line');
+        } finally {
+            setlocale(LC_NUMERIC, (string) $saved);
+        }
+    }
+
+    /** Structural: both fmt() value branches must ride the locale-free seam. */
+    public function testFmtRoutesEveryValueBranchThroughFormatDecimal(): void
+    {
+        $method = new \ReflectionMethod(PrometheusFileBackend::class, 'fmt');
+        $lines  = file((string) $method->getFileName());
+        self::assertIsArray($lines);
+        $body = implode('', array_slice($lines, $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1));
+
+        self::assertStringContainsString("self::formatDecimal(\$v, '%.6e')", $body, 'the exponent branch must render through the seam');
+        self::assertStringContainsString("self::formatDecimal(\$v, '%.6f')", $body, 'the decimal branch must render through the seam');
+        $code = implode('', array_filter(
+            explode("\n", $body),
+            static fn (string $line): bool => !\str_starts_with(ltrim($line), '//')
+        ));
+        self::assertStringNotContainsString("sprintf('%.6", $code, 'a bare locale-aware sprintf must not return to fmt() (comment lines exempt — the -INF doctrine note cites it)');
+    }
 }

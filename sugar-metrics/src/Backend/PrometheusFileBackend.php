@@ -1101,8 +1101,36 @@ final class PrometheusFileBackend implements Backend
         // %.6f collapses sub-microsecond durations to "0.000000" and prints
         // six digits of noise past 1e15; exponent form keeps both honest.
         if (Util::needsExponentForm($v)) {
-            return sprintf('%.6e', $v);
+            return self::formatDecimal($v, '%.6e');
         }
-        return sprintf('%.6f', $v);
+        return self::formatDecimal($v, '%.6f');
+    }
+
+    /**
+     * sprintf's %f/%e inheritance of LC_NUMERIC means a host that called
+     * setlocale(LC_ALL, 'de_DE.UTF-8') renders every fractional sample with
+     * a comma — one locale setting would poison every value line and make
+     * a strict textfile collector reject the WHOLE file (sugar-metrics-030:
+     * full monitoring blackout from a shell profile). Render through this
+     * seam so the exposition always carries a true decimal point.
+     */
+    private static function formatDecimal(float $v, string $format): string
+    {
+        return self::normalizeDecimalPoint(
+            sprintf($format, $v),
+            (string) (localeconv()['decimal_point'] ?? '')
+        );
+    }
+
+    /** Pure: rewrite $rendered's foreign decimal separator to '.'. */
+    private static function normalizeDecimalPoint(string $rendered, string $point): string
+    {
+        if ($point === '' || $point === '.') {
+            return $rendered;
+        }
+        // %.6f/%.6e carry no thousands grouping, so the separator is the
+        // only locale glyph in the render; str_replace is belt-and-cover
+        // (a single occurrence either way).
+        return \str_replace($point, '.', $rendered);
     }
 }

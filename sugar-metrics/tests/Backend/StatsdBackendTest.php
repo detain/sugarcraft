@@ -433,4 +433,35 @@ final class StatsdBackendTest extends TestCase
         $this->assertStringContainsString('ver:1.0-stable', $payload);
         fclose($sock);
     }
+
+    /**
+     * sugar-metrics-030 doctrine at the StatsD chokepoint: the wire renders
+     * a true decimal point regardless of LC_NUMERIC — and here the trailing
+     * rtrim of a comma render ('1,5') would hand wireToken a comma to fold
+     * into '_', mutating the VALUE itself. Pure seam + structural pins;
+     * the live comma arm rides the PrometheusFileBackend locale test.
+     */
+    public function testWireDecimalRenderingIsLocaleFree(): void
+    {
+        $norm = new \ReflectionMethod(StatsdBackend::class, 'normalizeDecimalPoint');
+        $norm->setAccessible(true);
+        self::assertSame('1.500000', $norm->invoke(null, '1,500000', ','));
+        self::assertSame('1.500000', $norm->invoke(null, '1.500000', '.'), 'the dot identity path passes bytes through');
+
+        $fmt = new \ReflectionMethod(StatsdBackend::class, 'formatDecimal');
+        $fmt->setAccessible(true);
+        self::assertSame('1.500000', $fmt->invoke(null, 1.5, '%.6f'));
+
+        $method = new \ReflectionMethod(StatsdBackend::class, 'fmt');
+        $lines  = file((string) $method->getFileName());
+        self::assertIsArray($lines);
+        $body = implode('', array_slice($lines, $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1));
+        self::assertStringContainsString("self::formatDecimal(\$v, '%.6e')", $body);
+        self::assertStringContainsString("rtrim(rtrim(self::formatDecimal(\$v, '%.6f'), '0'), '.')", $body, 'the rtrim shape (1.500000 -> 1.5) must ride the seam, not raw sprintf');
+        $code = implode('', array_filter(
+            explode("\n", $body),
+            static fn (string $line): bool => !\str_starts_with(ltrim($line), '//')
+        ));
+        self::assertStringNotContainsString("sprintf('%.6", $code, 'bare locale-aware sprintf must not return (comment lines exempt)');
+    }
 }

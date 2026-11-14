@@ -311,8 +311,35 @@ final class StatsdBackend implements Backend
         // %.6f collapses sub-microsecond durations to "0.000000" and prints
         // six digits of noise past 1e15; switch to exponent form there.
         if (Util::needsExponentForm($v)) {
-            return sprintf('%.6e', $v);
+            return self::formatDecimal($v, '%.6e');
         }
-        return rtrim(rtrim(sprintf('%.6f', $v), '0'), '.');
+        return rtrim(rtrim(self::formatDecimal($v, '%.6f'), '0'), '.');
+    }
+
+    /**
+     * sprintf's %f/%e inheritance of LC_NUMERIC: a comma-decimal locale
+     * would render '1,500000' and the trailing-zero rtrim would hand
+     * wireToken a literal comma to fold into '_' — a mutated sample value
+     * on the wire. The exposition doctrine (sugar-metrics-030) is one true
+     * decimal point at every value chokepoint, line backends included.
+     */
+    private static function formatDecimal(float $v, string $format): string
+    {
+        return self::normalizeDecimalPoint(
+            sprintf($format, $v),
+            (string) (localeconv()['decimal_point'] ?? '')
+        );
+    }
+
+    /** Pure: rewrite $rendered's foreign decimal separator to '.'. */
+    private static function normalizeDecimalPoint(string $rendered, string $point): string
+    {
+        if ($point === '' || $point === '.') {
+            return $rendered;
+        }
+        // %.6f/%.6e carry no thousands grouping, so the separator is the
+        // only locale glyph in the render; str_replace is belt-and-cover
+        // (a single occurrence either way).
+        return \str_replace($point, '.', $rendered);
     }
 }
