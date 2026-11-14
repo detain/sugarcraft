@@ -490,4 +490,14 @@ final class ReviewFixPinsTest extends TestCase
         $d = new Descriptor('foo', 'help', 'counter', ['le', 'method', '_x9']);
         $this->assertSame(['le', 'method', '_x9'], $d->labelKeys);
     }
+
+    public function testExamplesNeverReimplementTheControlSweep(): void
+    {
+        // 016 (MET-SAFEEX): the shipped examples once carried their own
+        // C0/DEL-only regex — example code gets copied into production, so
+        // the sweep must ride the shared Util::displaySafe door.
+        foreach (glob(__DIR__ . '/../examples/*.php') ?: [] as $example) {
+            $this->assertStringNotContainsString('\x00-\x1F', (string) file_get_contents($example), basename($example) . ' must delegate display sanitizing to Util::displaySafe');
+        }
+    }
 }
