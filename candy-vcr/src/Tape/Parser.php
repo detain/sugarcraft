@@ -31,6 +31,7 @@ use SugarCraft\Vcr\Tape\Ast\WaitDirective;
 
 /**
  * Recursive-descent parser for tape tokens → AST directives.
+ * Mirrors charmbracelet/vhs tape parser.
  */
 final readonly class Parser
 {

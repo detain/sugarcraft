@@ -22,7 +22,8 @@ use SugarCraft\Vcr\Support\Scalars;
  * - Easier manual editing of cassettes (intervals are more intuitive than absolute times)
  * - Similar to asciinema v3 format which also uses relative timestamps
  *
- * Mirrors charmbracelet/x/vcr Format/RelativeFormat.
+ * SugarCraft-original relative-timestamp framing; x/vcr ships no Format
+ * namespace (its cassettes are YAML HTTP pairs).
  */
 final class RelativeFormat implements Format
 {

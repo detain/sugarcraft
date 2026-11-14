@@ -9,6 +9,7 @@ namespace SugarCraft\Vcr\Tape\Ast;
  * compiler has no clipboard to read, so it reports the seam
  * (warn/strict-abort via reportCompileProblem) instead of vanishing like
  * the old UNKNOWN drop (finding 005).
+ * Mirrors charmbracelet/vhs Paste command.
  */
 final readonly class PasteDirective implements Directive
 {

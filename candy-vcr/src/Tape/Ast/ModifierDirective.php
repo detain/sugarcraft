@@ -10,6 +10,7 @@ namespace SugarCraft\Vcr\Tape\Ast;
  * the NEXT keystroke directive's bytes (Alt = the ESC meta lead sugar-core
  * documents, Shift = the xterm `;2` parameter). A tape that ends with a
  * modifier never applied is reported, never silent (finding 005).
+ * Mirrors charmbracelet/vhs Alt and Shift keywords.
  */
 final readonly class ModifierDirective implements Directive
 {

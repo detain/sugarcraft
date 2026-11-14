@@ -25,7 +25,8 @@ use SugarCraft\Vterm\Terminal;
  * program's output is captured into the frames on the tape clock. Null (the
  * default) keeps the byte-identical echo path.
  *
- * Mirrors charmbracelet/x/vcr Renderer (simplified for PHP).
+ * SugarCraft-original: the snapshot-streaming renderer x/vcr never had
+ * (it replays HTTP pairs, not terminal frames).
  */
 final class Renderer
 {

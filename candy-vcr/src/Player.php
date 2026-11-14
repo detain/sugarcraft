@@ -52,7 +52,8 @@ use SugarCraft\Vcr\Support\Scalars;
  * replay. The two are compared in aggregate via the supplied
  * assertion when replay completes.
  *
- * Mirrors charmbracelet/x/vcr Player.
+ * SugarCraft-original: x/vcr models HTTP interactions and has no Player;
+ * this is the cassette-vocabulary replay loop for TUI events.
  */
 final class Player
 {
@@ -117,7 +118,9 @@ final class Player
      * consecutive events that exceed `$seconds` are clamped to `$seconds`
      * during SPEED_REALTIME playback. Has no effect in SPEED_INSTANT mode.
      *
-     * Mirrors charmbracelet/x/vcr Player.withIdleTrim.
+     * Idle-time trimming follows the asciinema v3 "idle time trimming"
+     * option (docs/research/libraries/candy-vcr-research.md §4.1) —
+     * x/vcr has no such knob.
      */
     public function withIdleTrim(?float $seconds): self
     {

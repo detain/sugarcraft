@@ -6,6 +6,7 @@ namespace SugarCraft\Vcr\Tape\Ast;
 
 /**
  * Type "..." directive — types a string of characters.
+ * Mirrors charmbracelet/vhs Type command.
  */
 final readonly class TypeDirective implements Directive
 {

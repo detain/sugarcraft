@@ -14,7 +14,8 @@ use SugarCraft\Core\Msg;
  * Serializers are tried in registration order. The first one whose
  * {@see canEncode()} returns true wins; same for {@see canDecode()}.
  *
- * Mirrors charmbracelet/x/vcr Msg/Serializer.
+ * SugarCraft-original: the msg-envelope serializer for terminal Msg
+ * trees (x/vcr marshals HTTP pairs; it has no Msg namespace).
  */
 interface MsgSerializer
 {

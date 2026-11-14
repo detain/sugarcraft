@@ -14,7 +14,8 @@ namespace SugarCraft\Vcr;
  * - Input:  `msg` (envelope written by a MsgSerializer)
  * - Quit:   (empty)
  *
- * Mirrors charmbracelet/x/vcr Event.
+ * Concept from charmbracelet/x/vcr cassettes' recorded pair; widened
+ * to the seven TUI event kinds.
  */
 final readonly class Event
 {

@@ -12,7 +12,7 @@ namespace SugarCraft\Vcr\Assert;
  * redundant SGR re-emission, an alternative cursor-position sequence
  * that lands the cursor in the same spot). Use {@see ScreenAssertion} for replay-time tolerance to those reorderings.
  *
- * Mirrors charmbracelet/x/vcr Assert/Bytes.
+ * SugarCraft-original byte assertion; x/vcr ships no assert package.
  */
 final class ByteAssertion implements Assertion
 {

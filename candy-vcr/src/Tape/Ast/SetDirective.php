@@ -7,6 +7,7 @@ namespace SugarCraft\Vcr\Tape\Ast;
 /**
  * Set <key> <value> directive — configures terminal settings.
  * Allowed keys: Theme, FontSize, Width, Height, TypingSpeed, FontFamily, Padding, Margin.
+ * Mirrors charmbracelet/vhs Set command.
  */
 final readonly class SetDirective implements Directive
 {

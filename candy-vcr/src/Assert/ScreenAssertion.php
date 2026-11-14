@@ -20,7 +20,7 @@ use SugarCraft\Vterm\Terminal\Terminal;
  * Requires `sugarcraft/sugar-vterm`. If sugar-vterm isn't installed, fall
  * back to {@see ByteAssertion}.
  *
- * Mirrors charmbracelet/x/vcr Assert/Screen.
+ * SugarCraft-original cell-grid assertion; x/vcr ships no assert package.
  */
 final class ScreenAssertion implements Assertion
 {

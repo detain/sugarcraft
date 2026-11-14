@@ -33,6 +33,8 @@ use SugarCraft\Vcr\Hook\HookRegistry;
  * $program->run();
  * // recorder is closed automatically when the loop ends
  * ```
+ * Concept from charmbracelet/x/vcr recorder.go — the record-while-you-
+ * drive seam, reified for TUI streams instead of HTTP interactions.
  */
 final class Recorder implements RecorderInterface
 {

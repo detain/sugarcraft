@@ -22,7 +22,8 @@ use SugarCraft\Core\Msg;
  * when a custom serializer has to outrank what `new()` already
  * installed.
  *
- * Mirrors charmbracelet/x/vcr Msg/Registry.
+ * SugarCraft-original tag table for the msg envelope family (x/vcr has
+ * no Msg namespace to mirror).
  */
 final class Registry
 {

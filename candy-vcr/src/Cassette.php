@@ -8,7 +8,8 @@ namespace SugarCraft\Vcr;
  * Header + ordered event list. Format-agnostic value object — JsonlFormat /
  * YamlFormat read and write this same shape.
  *
- * Mirrors charmbracelet/x/vcr Cassette.
+ * Concept from charmbracelet/x/vcr Cassette — reified for TUI event
+ * streams instead of HTTP pairs.
  */
 final class Cassette
 {

@@ -6,6 +6,7 @@ namespace SugarCraft\Vcr\Tape\Ast;
 
 /**
  * Env KEY "value" directive — exports environment variables to the child process.
+ * Mirrors charmbracelet/vhs Env command.
  */
 final readonly class EnvDirective implements Directive
 {

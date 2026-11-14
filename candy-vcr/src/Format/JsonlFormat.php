@@ -53,7 +53,8 @@ use SugarCraft\Vcr\Support\Scalars;
  * - `relative`: timestamps are intervals since the previous event, making
  *   cassettes easier to edit manually (like asciinema v3 format).
  *
- * Mirrors charmbracelet/x/vcr Format/Jsonl.
+ * SugarCraft-original JSON-lines framing; x/vcr ships no Format
+ * namespace (its cassettes are YAML HTTP pairs).
  */
 final class JsonlFormat implements Format
 {

@@ -9,6 +9,7 @@ namespace SugarCraft\Vcr\Tape\Ast;
  * terminal-native OSC 52 clipboard-set sequence, so the keystroke event is
  * real (the same wire a hardware copy produces) and the payload travels
  * base64-confined, never raw.
+ * Mirrors charmbracelet/vhs Copy command.
  */
 final readonly class CopyDirective implements Directive
 {

@@ -7,6 +7,7 @@ namespace SugarCraft\Vcr\Tape\Ast;
 /**
  * Sleep <duration> directive — advances virtual clock without emitting bytes.
  * Duration suffixes: s (seconds), ms (milliseconds), m (minutes).
+ * Mirrors charmbracelet/vhs Sleep command.
  */
 final readonly class SleepDirective implements Directive
 {

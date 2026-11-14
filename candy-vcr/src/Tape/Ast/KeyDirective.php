@@ -9,6 +9,8 @@ namespace SugarCraft\Vcr\Tape\Ast;
  * Delete, Insert, PageUp, PageDown, End, ScrollUp, ScrollDown.
  * The Compiler maps each to its xterm sequence (the same shapes
  * sugar-core InputReader decodes back into KeyType cases).
+ * Mirrors charmbracelet/vhs Delete/Insert/PageUp/PageDown/End/
+ * ScrollUp/ScrollDown commands.
  */
 final readonly class KeyDirective implements Directive
 {

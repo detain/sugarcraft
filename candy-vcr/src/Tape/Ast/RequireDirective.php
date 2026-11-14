@@ -10,6 +10,7 @@ namespace SugarCraft\Vcr\Tape\Ast;
  * package manager to consult, so the requirement is recorded as a loud
  * diagnostic (warn / strict-abort) rather than the old silent drop
  * (finding 005).
+ * Mirrors charmbracelet/vhs Require command.
  */
 final readonly class RequireDirective implements Directive
 {

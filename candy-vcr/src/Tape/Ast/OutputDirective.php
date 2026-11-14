@@ -6,6 +6,7 @@ namespace SugarCraft\Vcr\Tape\Ast;
 
 /**
  * Output <path> directive — sets the output GIF path for rendering.
+ * Mirrors charmbracelet/vhs Output command.
  */
 final readonly class OutputDirective implements Directive
 {

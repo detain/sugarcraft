@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Vcr;
 
 /**
- * Mirrors charmbracelet/x/vcr event kinds.
+ * SugarCraft-original event vocabulary; only the cassette idea is
+ * inspired by charmbracelet/x/vcr (which records HTTP pairs, not keystrokes).
  */
 enum EventKind: string
 {

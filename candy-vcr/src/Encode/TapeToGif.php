@@ -36,6 +36,8 @@ use SugarCraft\Vterm\Theme;
  * and the rasterizer/encoder are reused so glyph caches inside the
  * rasterizer survive across frames within a tape (Glyphs is still
  * rebuilt per-tape since cell dimensions can change between tapes).
+ * Mirrors charmbracelet/vhs tape-to-GIF pipeline: compile the tape,
+ * stream frames, rasterize, encode.
  */
 final class TapeToGif
 {

@@ -35,6 +35,8 @@ use SugarCraft\Vcr\Tape\Ast\WaitDirective;
 
 /**
  * Compiles a directive AST into a Cassette with events.
+ * Mirrors charmbracelet/vhs command dispatch: the tape AST becomes
+ * the emitted keystroke stream, directive by directive.
  */
 final class Compiler
 {

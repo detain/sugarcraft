@@ -10,7 +10,8 @@ use SugarCraft\Vcr\Event;
  * Callback invoked during cassette recording to inspect, modify, or
  * annotate events before they are persisted.
  *
- * Mirrors charmbracelet/x/vcr HookFunc.
+ * Concept from charmbracelet/x/vcr hooks.go — the replay/record hook
+ * seam, adapted to typed TUI events.
  */
 interface Hook
 {

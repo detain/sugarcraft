@@ -9,7 +9,8 @@ namespace SugarCraft\Vcr;
  * the runtime that produced the cassette, and the wall-clock creation time
  * (informational — Player ignores it).
  *
- * Mirrors charmbracelet/x/vcr CassetteHeader.
+ * Concept from charmbracelet/x/vcr cassette metadata, extended with the
+ * display fields (theme/fonts/frame-rate) an HTTP lib never needed.
  */
 final readonly class CassetteHeader
 {

@@ -15,7 +15,8 @@ use SugarCraft\Vcr\Event;
  * flexible tolerance (timing drift, payload divergence, kind-only match)
  * without changing the core {@see \SugarCraft\Vcr\Player} dispatch loop.
  *
- * Mirrors charmbracelet/x/vcr MatcherFunc.
+ * Concept from charmbracelet/x/vcr matcher.go — pluggable matching,
+ * specialised to the TUI event surface.
  */
 interface EventMatcher
 {

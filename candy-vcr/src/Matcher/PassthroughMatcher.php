@@ -14,7 +14,8 @@ use SugarCraft\Vcr\Event;
  * tolerate programs that emit events in a different order or with
  * slightly different timing.
  *
- * Mirrors charmbracelet/x/vcr PassthroughMatcher (kind-only HTTP match).
+ * Concept from charmbracelet/x/vcr's passthrough matcher; here it
+ * matches on the kind-only arm of TUI events.
  */
 final class PassthroughMatcher implements EventMatcher
 {

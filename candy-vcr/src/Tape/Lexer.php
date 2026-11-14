@@ -80,6 +80,8 @@ use SugarCraft\Vcr\Event;
  * READ doors ({@see \SugarCraft\Vcr\Format\CassetteLoader},
  * {@see \SugarCraft\Vcr\Encode\TapeToGif}) refuse files over
  * {@see MAX_TAPE_BYTES} before slurping.
+ * Mirrors charmbracelet/vhs tape lexer (the 60-key keyword roster
+ * was transcribed key-for-key; see candy-code/tests/VhsTapeContractTest.php).
  */
 final readonly class Lexer
 {

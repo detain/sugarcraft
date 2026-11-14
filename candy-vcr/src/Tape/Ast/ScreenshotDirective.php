@@ -7,6 +7,7 @@ namespace SugarCraft\Vcr\Tape\Ast;
 /**
  * Screenshot <path> directive — captures a single frame to disk.
  * Deferred: v2 scope.
+ * Mirrors charmbracelet/vhs Screenshot command.
  */
 final readonly class ScreenshotDirective implements Directive
 {
