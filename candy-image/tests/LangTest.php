@@ -17,8 +17,10 @@ final class LangTest extends TestCase
 {
     protected function setUp(): void
     {
-        // Fresh T registry per test: no cross-contamination from a
-        // previously-loaded 'image' namespace.
+        // Fresh T registry per test — hygiene only. The load-bearing paper
+        // over it used to be (both apps baked 'image' and first-wins made
+        // file order decide the outcome) died with the namespace rename;
+        // the both-packages test below proves the bake is now collision-free.
         \SugarCraft\Core\I18n\T::reset();
     }
 
@@ -45,13 +47,33 @@ final class LangTest extends TestCase
     {
         $message = Lang::t($key);
 
-        $this->assertNotSame('image.' . $key, $message, $key . ' must ship in lang/en.php');
+        $this->assertNotSame('candy-image.' . $key, $message, $key . ' must ship in lang/en.php');
         $this->assertStringContainsString('candy-image', $message);
+    }
+
+    /**
+     * The collision candy-image-003 reported: T::register() is first-wins, so
+     * baking the sibling's 'image' namespace meant whichever package
+     * registered second degraded every string to `image.<key>` literals in
+     * any process resolving both (the advertised library-embed / $play seam).
+     * No T::reset() between the two facades — this is that shared process.
+     */
+    public function testBothPackagesResolveTheirOwnStringsInOneProcess(): void
+    {
+        $ours = Lang::t('cli.usage');
+        $this->assertStringContainsString('candy-image', $ours, 'own namespace must speak even after the sibling registers');
+
+        $theirs = \SugarCraft\Image\Lang::t('image_source.file_not_found');
+        $this->assertStringContainsString('File not found', $theirs, 'the sibling must not degrade to raw keys');
+        $this->assertNotSame('image.image_source.file_not_found', $theirs);
+
+        $again = Lang::t('cli.usage');
+        $this->assertSame($ours, $again, 'registration order must not shift our lookups');
     }
 
     public function testUnknownKeyFallsBackToNamespacedKey(): void
     {
         $result = Lang::t('nonexistent.key');
-        $this->assertSame('image.nonexistent.key', $result);
+        $this->assertSame('candy-image.nonexistent.key', $result);
     }
 }
