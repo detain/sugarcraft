@@ -80,6 +80,16 @@ final class SpinEventedExitTest extends TestCase
 
     private function spinWith(FakeProcess $fake): SpinCommand
     {
+        // F13-W (CI-watch 2026-11-13): the programFactory below hands the
+        // Program a real select-able input descriptor — a STREAM_PF_UNIX
+        // socket pair, a POSIX-only domain stream_socket_pair() cannot honour
+        // on Windows (same gate as SpinCommandTest's scaffolding). Only the
+        // watcher-settling leg uses this; the geometry/belt legs in this
+        // class need no sockets and stay Windows-green.
+        if (DIRECTORY_SEPARATOR === '\\') {
+            self::markTestSkipped('stream_socket_pair(STREAM_PF_UNIX, …) is not supported on Windows.');
+        }
+
         return new SpinCommand(
             processFactory: static fn (array $argv, bool $so, bool $se): Process => $fake,
             programFactory: static function (Model $model, \React\EventLoop\LoopInterface $loop): Program {

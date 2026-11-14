@@ -17,6 +17,17 @@ use PHPUnit\Framework\TestCase;
  */
 final class SignalHonestyTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        // F13-W (CI-watch 2026-11-13): the pcntl warning latch is process-wide
+        // once-per-run state. On the Windows CI arms (no pcntl) an earlier
+        // arg-less call anywhere in this PHPUnit process consumes it before
+        // this file runs, so the first-notice leg below could only observe
+        // null — cross-test leakage, not a product bug. The reset seam pins
+        // the latch open at test start; production keeps once-per-run.
+        InteractiveRuntime::resetPcntlWarningLatch();
+    }
+
     public function testComposerSuggestsExtPcntl(): void
     {
         // scriptui-53 KEEP (manifest-pin): the suggest entry IS the contract
@@ -45,6 +56,15 @@ final class SignalHonestyTest extends TestCase
         // One latch per run: a pcntl-less session must not spam the
         // diagnostic channel on every prompt.
         $this->assertNull(InteractiveRuntime::signalNotice(pcntlLoaded: false));
+
+        // ...and the reset seam (F13-W) re-opens the arm: the notice is once
+        // per RUN, not once per process forever — what makes setUp above a
+        // hermetic contract instead of a one-shot lucky order.
+        InteractiveRuntime::resetPcntlWarningLatch();
+        $this->assertIsString(
+            InteractiveRuntime::signalNotice(pcntlLoaded: false),
+            'resetPcntlWarningLatch() must re-arm the notice'
+        );
     }
 
     public function testNoNoticeWhenPcntlIsLoaded(): void

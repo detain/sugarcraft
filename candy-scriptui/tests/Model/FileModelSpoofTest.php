@@ -77,18 +77,48 @@ final class FileModelSpoofTest extends TestCase
         self::assertStringContainsString('noise', $view);
     }
 
+    /**
+     * F13-W (CI-watch 2026-11-13): NTFS forbids control bytes (0x00-0x1F) in
+     * file names, so a planted 'evil\x1b[31m…' directory simply cannot exist
+     * on Windows runners — mkdir refuses and the planted-name surface
+     * degenerates. The gate is a filesystem-capability probe (attempt the
+     * mkdir), not a uname check: the constraint is filesystem semantics, and
+     * any host whose fs answers the same refusal gets the same honest skip.
+     */
+    private function requireControlByteNames(): void
+    {
+        $probe = sys_get_temp_dir() . DIRECTORY_SEPARATOR
+            . 'scriptui-spoof-probe-' . bin2hex(random_bytes(6));
+        if (!mkdir($probe)) {
+            self::fail('cannot create the temp probe directory (host tmp malfunction)');
+        }
+
+        // The warning IS the NTFS refusal this probe exists to observe.
+        if (!@mkdir($probe . DIRECTORY_SEPARATOR . "x\x1b[2K")) {
+            @rmdir($probe);
+            self::markTestSkipped('this filesystem refuses control-byte directory names (NTFS); the planted-name spoof surface cannot be staged here');
+        }
+
+        @rmdir($probe . DIRECTORY_SEPARATOR . "x\x1b[2K");
+        @rmdir($probe);
+    }
+
     private function makeTree(bool $c1 = false, bool $noise = false): string
     {
-        $this->dir = sys_get_temp_dir() . '/scriptui-spoof-' . bin2hex(random_bytes(6));
+        $this->requireControlByteNames();
+
+        // Tempdir-native join (F13-W): '/' after a 'C:\...\Temp' answer mixes
+        // separators on Windows; DIRECTORY_SEPARATOR is '/' on POSIX.
+        $this->dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'scriptui-spoof-' . bin2hex(random_bytes(6));
         mkdir($this->dir);
-        file_put_contents($this->dir . '/plain.txt', 'x');
-        mkdir($this->dir . '/evil' . "\x1b[31m" . 'red');
+        file_put_contents($this->dir . DIRECTORY_SEPARATOR . 'plain.txt', 'x');
+        mkdir($this->dir . DIRECTORY_SEPARATOR . 'evil' . "\x1b[31m" . 'red');
         if ($c1) {
-            mkdir($this->dir . '/c1' . "\x9b" . '31mhost');
+            mkdir($this->dir . DIRECTORY_SEPARATOR . 'c1' . "\x9b" . '31mhost');
         }
         if ($noise) {
             // BEL, OSC title-setter, and CSI-erase smuggled into one name.
-            mkdir($this->dir . '/noise' . "\x07\x1b]0;pwned\x07\x1b[2K");
+            mkdir($this->dir . DIRECTORY_SEPARATOR . 'noise' . "\x07\x1b]0;pwned\x07\x1b[2K");
         }
 
         return $this->dir;

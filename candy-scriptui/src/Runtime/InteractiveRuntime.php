@@ -199,6 +199,21 @@ final class InteractiveRuntime
     }
 
     /**
+     * F13-W (CI-watch 2026-11-13): reopen the once-per-process pcntl warning
+     * latch. The latch is deliberate in production — one notice per run —
+     * but it is PROCESS-wide state: on a pcntl-less host (the Windows CI
+     * arms) any earlier in-process call through {@see warnIfPcntlAbsent()}
+     * consumes it before the honesty test runs, so the test can no longer
+     * observe its own first-notice contract. This seam lets the suite start
+     * from a known latch state without weakening production: callers in
+     * src/ are held to the once-per-run guarantee exactly as before.
+     */
+    public static function resetPcntlWarningLatch(): void
+    {
+        self::$pcntlWarned = false;
+    }
+
+    /**
      * Print {@see signalNotice()} once to STDERR (never STDOUT — the data
      * channel) and pass the options through.
      */

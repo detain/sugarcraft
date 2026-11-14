@@ -94,6 +94,16 @@ final class IntakeReaderTest extends TestCase
     /** @return array{0:resource,1:resource} */
     private function pipe(): array
     {
+        // F13-W (CI-watch 2026-11-13): the unit legs above drive IntakeReader
+        // on a STREAM_PF_UNIX socket pair. The AF_UNIX domain is POSIX-only —
+        // on Windows stream_socket_pair() returns false and warns, which
+        // candy-scriptui's failOnWarning="true" turns into a CI failure. Same
+        // gate as SpinCommandTest's socket-backed scaffolding; the stalled-
+        // pipe child leg already skips on Windows via its own POSIX guard.
+        if (DIRECTORY_SEPARATOR === '\\') {
+            self::markTestSkipped('stream_socket_pair(STREAM_PF_UNIX, …) is not supported on Windows.');
+        }
+
         $pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
         self::assertIsArray($pair);
 

@@ -22,10 +22,23 @@ final class DiagnosticsTest extends TestCase
     /** @return array{stdout:string,stderr:string} */
     private function runChild(string $scriptBody): array
     {
+        if (PHP_OS_FAMILY === 'Windows') {
+            // F13-W (CI-watch 2026-11-13): the wall-clock bound uses coreutils
+            // timeout(1); the Windows runner's own timeout.exe speaks a
+            // different grammar and the probe child exits 1 instead of running.
+            // Skip rather than risk an unbounded child — same gate as
+            // BinExitCodeTest's bounded child probes.
+            self::markTestSkipped('bounded child probes require a POSIX timeout(1)');
+        }
+
         $autoload = realpath(__DIR__ . '/../../vendor/autoload.php');
         $this->assertIsString($autoload, 'the suite must run against the library autoloader');
 
-        $script = sprintf('%s/scriptui-diagnostics-%s.php', sys_get_temp_dir(), bin2hex(random_bytes(6)));
+        // Tempdir-native join (F13-W): sys_get_temp_dir() answers 'C:\...\Temp'
+        // on Windows, where a hand-typed '/' mixed separators into the
+        // proc_open argv. DIRECTORY_SEPARATOR is '/' on POSIX — byte-identical.
+        $script = sys_get_temp_dir() . DIRECTORY_SEPARATOR
+            . sprintf('scriptui-diagnostics-%s.php', bin2hex(random_bytes(6)));
         file_put_contents($script, "<?php\nrequire '" . $autoload . "';\n" . $scriptBody);
 
         try {
