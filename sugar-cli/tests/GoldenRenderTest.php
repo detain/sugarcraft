@@ -55,7 +55,7 @@ final class GoldenRenderTest extends TestCase
      */
     public function testStepRendersAnsi(): void
     {
-        $output = Stage::step(2, 5, 'building dependencies', Theme::ansi());
+        $output = Stage::step('building dependencies', 2, 5, Theme::ansi());
 
         $this->assertNotEmpty($output);
         Assertions::assertGoldenAnsi(

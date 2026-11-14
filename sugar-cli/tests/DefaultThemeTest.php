@@ -68,7 +68,7 @@ final class DefaultThemeTest extends TestCase
             'Section::header'     => [static fn (?Theme $t): string => Section::header('Setup', $t, width: 30)],
             'Section::rule'       => [static fn (?Theme $t): string => Section::rule($t, 10)],
             'Section::subHeader'  => [static fn (?Theme $t): string => Section::subHeader('Opts', $t, width: 30)],
-            'Stage::step'         => [static fn (?Theme $t): string => Stage::step(1, 3, 'build', $t)],
+            'Stage::step'         => [static fn (?Theme $t): string => Stage::step('build', 1, 3, $t)],
             'Stage::subStep'      => [static fn (?Theme $t): string => Stage::subStep('fetch', $t)],
             'Stage::progress'     => [static fn (?Theme $t): string => Stage::subStepWithProgress('dl', 4, 10, $t)],
             'HelpText::render'    => [static fn (?Theme $t): string => HelpText::render('app [flags]', ['flags' => ['-v' => 'verbose']], 'A tool.', $t)],

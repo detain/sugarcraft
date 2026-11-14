@@ -28,19 +28,19 @@ final class StageTest extends TestCase
 
     public function testStepRendersGlyphCountAndMessage(): void
     {
-        $out = Stage::step(2, 5, 'building', Theme::plain());
+        $out = Stage::step('building', 2, 5, Theme::plain());
         $this->assertSame('▸ 2/5 building', $out);
     }
 
     public function testStepWithoutTotalOmitsSlash(): void
     {
-        $out = Stage::step(7, 0, 'cleanup', Theme::plain());
+        $out = Stage::step('cleanup', 7, 0, Theme::plain());
         $this->assertSame('▸ 7 cleanup', $out);
     }
 
     public function testCustomGlyph(): void
     {
-        $out = Stage::step(1, 1, 'go', Theme::plain(), Stage::GLYPH_HASH);
+        $out = Stage::step('go', 1, 1, Theme::plain(), Stage::GLYPH_HASH);
         $this->assertSame('# 1/1 go', $out);
     }
 
@@ -54,7 +54,7 @@ final class StageTest extends TestCase
 
     public function testThemeAppliesAccentToGlyph(): void
     {
-        $out = Stage::step(1, 2, 'x', Theme::ansi());
+        $out = Stage::step('x', 1, 2, Theme::ansi());
         // ANSI accent style emits SGR; raw string contains ESC sequence.
         $this->assertStringContainsString("\x1b[", $out);
     }
@@ -62,7 +62,7 @@ final class StageTest extends TestCase
     /** GLYPH_BULLET is currently the only un-exercised constant — close that gap. */
     public function testBulletGlyph(): void
     {
-        $out = Stage::step(1, 0, 'init', Theme::plain(), Stage::GLYPH_BULLET);
+        $out = Stage::step('init', 1, 0, Theme::plain(), Stage::GLYPH_BULLET);
         $this->assertStringContainsString('•', $out);
         $this->assertStringContainsString('init', $out);
     }
@@ -102,7 +102,7 @@ final class StageTest extends TestCase
     {
         $evil = "run\x1b[2Jx\x1b]0;t\x07end";
         foreach ([
-            Stage::step(1, 2, $evil, Theme::plain()),
+            Stage::step($evil, 1, 2, Theme::plain()),
             Stage::subStep($evil, Theme::plain()),
             Stage::subStepWithProgress($evil, 3, 10, Theme::plain()),
         ] as $out) {
@@ -115,14 +115,14 @@ final class StageTest extends TestCase
     /** Clean ASCII messages render byte-for-byte identically (no regression). */
     public function testCleanMessageUnchanged(): void
     {
-        $this->assertSame('▸ 2/5 building', Stage::step(2, 5, 'building', Theme::plain()));
+        $this->assertSame('▸ 2/5 building', Stage::step('building', 2, 5, Theme::plain()));
     }
 
     /** Width clamp cuts only the message; the ▸ N/M prefix is never touched. */
     public function testStepClipsLongMessage(): void
     {
         // prefix '▸ 1/2 ' = 6 cells; budget 12-6 = 6 → 5 z's + ellipsis.
-        $out = Stage::step(1, 2, str_repeat('z', 50), Theme::plain(), width: 12);
+        $out = Stage::step(str_repeat('z', 50), 1, 2, Theme::plain(), width: 12);
         $this->assertSame('▸ 1/2 zzzzz…', $out);
         $this->assertSame(12, Width::string($out));
     }
@@ -130,7 +130,7 @@ final class StageTest extends TestCase
     /** A message that fits under the budget renders whole. */
     public function testStepFitsUnderWidth(): void
     {
-        $this->assertSame('▸ 1/2 go', Stage::step(1, 2, 'go', Theme::plain(), width: 12));
+        $this->assertSame('▸ 1/2 go', Stage::step('go', 1, 2, Theme::plain(), width: 12));
     }
 
     public function testSubStepClipsToWidth(): void
@@ -184,6 +184,6 @@ final class StageTest extends TestCase
     public function testWidthBelowOneThrows(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        Stage::step(1, 1, 'x', Theme::plain(), width: 0);
+        Stage::step('x', 1, 1, Theme::plain(), width: 0);
     }
 }

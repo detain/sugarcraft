@@ -36,6 +36,12 @@ final class Stage
      * Counts are clamped to the range `[0, total]` (i.e. negative values
      * become `0`, and `current > total` is capped at `total`).
      *
+     * Message-first, like {@see subStep()} and {@see subStepWithProgress()},
+     * so the whole step family shares one argument order (finding 008).
+     *
+     * @param string $message  the step text, sanitized and clipped to fit.
+     * @param int $current     1-based step counter.
+     * @param int $total       step total; 0 omits the `/total` suffix.
      * @param string $glyph  leading marker, sanitized like the message (it is
      *                       caller-supplied display text) but never clipped —
      *                       a glyph wider than the budget overflows with the
@@ -49,9 +55,9 @@ final class Stage
      * @throws \InvalidArgumentException when `$width` is less than 1
      */
     public static function step(
+        string $message,
         int $current,
         int $total,
-        string $message,
         ?Theme $theme = null,
         string $glyph = self::GLYPH_ARROW,
         int|AutoWidth|null $width = AutoWidth::Auto,
