@@ -34,7 +34,6 @@ use SugarCraft\Dashboard\Foundation\Buffer;
 use SugarCraft\Dashboard\Foundation\Theme;
 use SugarCraft\Dashboard\Keys\KeyMap;
 use SugarCraft\Dashboard\Module\BaseModule;
-use SugarCraft\Dashboard\Layout\Boxer\Address;
 use SugarCraft\Dashboard\Layout\Boxer\Boxer;
 use SugarCraft\Dashboard\Layout\Boxer\Node;
 use SugarCraft\Dashboard\Layout\FocusManager;
@@ -63,12 +62,12 @@ final class AccessorDeprecationTest extends TestCase
 
     /**
      * Names that stay get*() by construction: the bare name is taken
-     * by a different member. Address::child(self, int) is the static
-     * factory, so the getter cannot move there.
+     * by a different member, so the getter cannot move there.
+     *
+     * (D-133 retired the only seat this list carried — Address, a VO
+     * no production door ever consumed, now gone with it.)
      */
-    private const NAMED_CARVE_OUTS = [
-        'Address::getChild',
-    ];
+    private const NAMED_CARVE_OUTS = [];
 
     /**
      * @return array<string, array{0: class-string, 1: string, 2: string, 3: list<mixed>}>
@@ -134,7 +133,6 @@ final class AccessorDeprecationTest extends TestCase
             'Buffer::getCell' => [Buffer::class, 'getCell', 'cell', [0, 0]],
             'Theme::getName' => [Theme::class, 'getName', 'name', []],
             'KeyMap::getRegisteredKeys' => [KeyMap::class, 'getRegisteredKeys', 'registeredKeys', []],
-            'Address::getParent' => [Address::class, 'getParent', 'parent', []],
             'Boxer::getHeight' => [Boxer::class, 'getHeight', 'height', []],
             'Boxer::getItem' => [Boxer::class, 'getItem', 'item', ['0']],
             'Boxer::getModelMap' => [Boxer::class, 'getModelMap', 'modelMap', []],
@@ -198,7 +196,6 @@ final class AccessorDeprecationTest extends TestCase
             Buffer::class => new Buffer(4, 4),
             Theme::class => Theme::dark(),
             KeyMap::class => new KeyMap(new Spinner()),
-            Address::class => Address::root(),
             Boxer::class => new Boxer(new Node()),
             BrailleCanvas::class => new BrailleCanvas(8, 8),
             Heatmap::class => new Heatmap([[1, 2], [3, 4]]),
@@ -317,7 +314,8 @@ final class AccessorDeprecationTest extends TestCase
         sort($found);
         sort($expected);
         $this->assertSame($expected, $found, 'src/ census drifted from the tested pairs');
-        $this->assertCount(89, $found);
+        // D-133 (2026-11-14) retired Address, dropping the roster 89 -> 88.
+        $this->assertCount(88, $found);
     }
 
     public function testTheReadmeTableAgreesWithTheSrcCensus(): void
@@ -335,7 +333,8 @@ final class AccessorDeprecationTest extends TestCase
             $rows,
             PREG_SET_ORDER
         );
-        $this->assertCount(89, $rows, 'README Accessor-deprecation table must list exactly the swept pairs');
+        // D-133 (2026-11-14) retired Address, dropping the roster 89 -> 88.
+        $this->assertCount(88, $rows, 'README Accessor-deprecation table must list exactly the swept pairs');
         $tabled = [];
         foreach ($rows as $row) {
             $tabled[$row['class'] . '::' . $row['legacy']] = $row['bare'];

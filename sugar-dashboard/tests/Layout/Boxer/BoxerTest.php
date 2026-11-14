@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\Dashboard\Tests\Layout\Boxer;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Dashboard\Layout\Boxer\Address;
 use SugarCraft\Dashboard\Layout\Boxer\Boxer;
 use SugarCraft\Dashboard\Layout\Boxer\Node;
 use SugarCraft\Dashboard\Layout\Boxer\NotFoundError;
@@ -28,8 +27,29 @@ final class BoxerTest extends TestCase
         $this->assertInstanceOf(Sizer::class, $boxer);
     }
 
-    public function testLeafFactoryEmptyAddressThrows(): void
+    /**
+     * D-133 took the annotation's delete route: Address and SizeFunc
+     * were VOs no production door ever consumed (the boxer speaks dotted
+     * strings end to end and size functions are plain Closures). The
+     * acceptance bar is zero dead classes behind these names.
+     */
+    public function testRetiredAddressAndSizeFuncLeaveNoDeadClasses(): void
     {
+        foreach ([
+            'SugarCraft\\Dashboard\\Layout\\Boxer\\Address',
+            'SugarCraft\\Dashboard\\Layout\\Boxer\\SizeFunc',
+        ] as $gone) {
+            // autoload disabled: a missing-file walk emits include()
+            // warnings; absence from the already-loaded set is the pin.
+            $this->assertFalse(class_exists($gone, false), $gone . ' must not ship');
+        }
+
+        $boxerSrc = dirname(__DIR__, 3) . '/src/Layout/Boxer';
+        $this->assertFileDoesNotExist($boxerSrc . '/Address.php');
+        $this->assertFileDoesNotExist($boxerSrc . '/SizeFunc.php');
+    }
+
+    public function testLeafFactoryEmptyAddressThrows(): void    {
         $item = new class implements Item {
             public function render(): string { return 'content'; }
         };
