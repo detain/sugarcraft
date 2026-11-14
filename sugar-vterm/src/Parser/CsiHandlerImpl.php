@@ -500,7 +500,12 @@ final class CsiHandlerImpl implements CsiHandler
             $p === 4 => $this->sgrUnderline($params, $i, $subs),
             $p === 7 => [$this->fg, $this->bg, $this->attrs | Cell::ATTR_INVERSE, $i + 1],
             $p === 9 => [$this->fg, $this->bg, $this->attrs | Cell::ATTR_STRIKETHROUGH, $i + 1],
-            $p === 22 => [$this->fg, $this->bg, $this->attrs & ~Cell::ATTR_BOLD & ~0x20000, $i + 1],
+            // `CSI 22 m` resets bold. The historical `& ~0x20000` faint bit
+            // was deleted with the model that had no bit 17 (vterm-17 bit
+            // census: every attrs producer in this file ORs only the five
+            // Cell::ATTR_* bits, 1<<0..1<<4, so the mask was dead on all
+            // values); faint has no renderer arm and never will here.
+            $p === 22 => [$this->fg, $this->bg, $this->attrs & ~Cell::ATTR_BOLD, $i + 1],
             $p === 23 => [$this->fg, $this->bg, $this->attrs & ~Cell::ATTR_ITALIC, $i + 1],
             $p === 24 => [$this->fg, $this->bg, $this->attrs & ~Cell::ATTR_UNDERLINE, $i + 1],
             $p === 27 => [$this->fg, $this->bg, $this->attrs & ~Cell::ATTR_INVERSE, $i + 1],

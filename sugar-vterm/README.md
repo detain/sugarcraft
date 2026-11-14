@@ -476,7 +476,10 @@ only the five `Cell::ATTR_*` bits: `2`/`5`/`6`/`8` have no renderer arm
 and are accepted as parity no-ops, and every underline style collapses
 onto the single underline bit. Consumers that paint from the renderer's
 grid — candy-vcr's `TapeToGif` included — therefore draw faint, blinking
-and hidden text at full brightness):
+and hidden text at full brightness). This subset is a deliberate
+modeling choice, not an oversight: extend the bitfield only when a real
+consumer needs faint/blink/hidden in rendered snapshots (sugar-vterm-091
+revisit note — recorded, no action):
 
 | SGR param | Effect |
 |-----------|--------|
