@@ -111,7 +111,14 @@ final class SideBySideFormat
             $kind = match ($scan->kind) {
                 ScanRowKind::Insert => LineKind::Insert,
                 ScanRowKind::Delete => LineKind::Delete,
-                default => LineKind::Equal,
+                ScanRowKind::Context => LineKind::Equal,
+                // The isContentRow() boundary above admits exactly these
+                // three; anything else reaching here is a roster drift —
+                // fail loud instead of silently rendering it as context
+                // (sugar-diff-015).
+                default => throw new \LogicException(
+                    'unmapped ScanRowKind reached the side-by-side pairing walk: ' . $scan->kind->name,
+                ),
             };
 
             $text = $rawRows[$index];
