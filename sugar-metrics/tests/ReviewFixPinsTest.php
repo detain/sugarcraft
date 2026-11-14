@@ -216,6 +216,55 @@ final class ReviewFixPinsTest extends TestCase
         @unlink($path);
     }
 
+    public function testDescriptorCannotClaimKeyAnEmittedSeriesAlreadyOwns(): void
+    {
+        // MET-DESCRIBE (001, the reported wedge): counter('a-b') owns the
+        // folded key a_b on the raw-facts ledger; the descriptor path used
+        // to bypass that memory entirely, so register(Descriptor('a_b',…,
+        // 'gauge')) pinned `# TYPE a_b gauge` over the counter's samples.
+        $path = $this->tempPromPath();
+        $b    = new PrometheusFileBackend($path);
+        $b->counter('a-b', 3.0);
+        $conflict = null;
+        try {
+            $b->describe(new Descriptor('a_b', 'help', 'gauge'));
+        } catch (\RuntimeException $e) {
+            $conflict = $e;
+        }
+        self::assertNotNull($conflict, 'a descriptor folding onto an occupied emitted key must be refused');
+        $this->assertStringContainsString('a-b', $conflict->getMessage());
+        // Fixed point: a descriptor for the SAME raw fold identity as an
+        // emitted series still registers (idempotent re-describe included).
+        $b->counter('ok', 1.0);
+        $b->describe(new Descriptor('ok', 'help', 'counter'));
+        $b->describe(new Descriptor('ok', 'help', 'counter'));
+        @unlink($path);
+        $this->assertTrue(true);
+    }
+
+    public function testRemoveRefusesTwinOfDescriptorOwnedFamily(): void
+    {
+        // MET-DESCRIBE (001, reclaim symmetry): the fold map is consulted by
+        // remove() too — a tagless remove whose name folds onto a descriptor
+        // owned by a different raw name is the innocent-twin wipe, refused
+        // even though nothing was ever emitted for the family.
+        $path = $this->tempPromPath();
+        $b    = new PrometheusFileBackend($path);
+        $b->describe(new Descriptor('a_b', 'help', 'gauge'));
+        $conflict = null;
+        try {
+            $b->remove('a-b');
+        } catch (\RuntimeException $e) {
+            $conflict = $e;
+        }
+        self::assertNotNull($conflict, 'remove() must refuse to wipe a twin family by its fold alias');
+        $this->assertStringContainsString('a_b', $conflict->getMessage());
+        // Control: the owning raw identity still reclaims cleanly.
+        $b->remove('a_b');
+        @unlink($path);
+        $this->assertTrue(true);
+    }
+
     // -------------------------------------------------------------- Registry
 
     public function testCardinalityLimitBelowOneIsRefused(): void

@@ -45,7 +45,10 @@ use SugarCraft\Metrics\Util;
  * fold makes {@see remove()} ambiguous (wiping one caller's series when
  * the other asked for its twin) and lets a forged label key produce a
  * duplicate `label="..."` that makes the whole exposition
- * unparseable. Likewise flush() refuses to publish a body containing a
+ * unparseable. The fold memory covers every path: the emit ledger
+ * (raw facts) and the TYPE/HELP descriptor ledger share it, so write,
+ * describe() and remove() all refuse the same twins. Likewise flush()
+ * refuses to publish a body containing a
  * duplicate sample identity (two kinds racing for one name, or a
  * histogram's derived `*_count` colliding with a real family): one
  * poisoned line would make node_exporter reject the ENTIRE file, so the
@@ -115,6 +118,9 @@ final class PrometheusFileBackend implements Backend
 
     /** @var array<string,array{0:string,1:array<string,string>}> First raw (name, tags) seen per storage key — the collision detector's memory. */
     private array $rawFacts = [];
+
+    /** @var array<string,string> First raw name claiming each descriptor key — the describe() twin of {@see $rawFacts}. */
+    private array $rawDescriptors = [];
 
     /** @var array<string,array<string,true>> Insertion-ordered key index per sanitized family — makes the series cap O(1). */
     private array $familyKeys = [];
@@ -299,9 +305,44 @@ final class PrometheusFileBackend implements Backend
 
     public function describe(Descriptor $descriptor): void
     {
+        $raw       = $descriptor->name;
+        $sanitized = self::sanitizeName($raw);
+        // Internal assertion (MET-DESCRIBE, 001): a valid Prometheus name is
+        // a fold fixed point, so after the Descriptor gate and the Registry
+        // door this leg is unreachable — kept because the class docblock
+        // promises the guard and a forged DTO must never key the ledger
+        // under its fold alias.
+        if ($sanitized !== $raw) {
+            throw new \InvalidArgumentException(Lang::t('descriptor.name_invalid', ['name' => Util::displaySafe($raw)]));
+        }
+        // Descriptor ownership mirrors the emit path's raw facts: the FIRST
+        // raw name to claim a sanitized key owns it, and a different raw
+        // name folding onto the occupied key is refused — sampled or not,
+        // even when nothing has ever been emitted for the family.
+        $owner = $this->rawDescriptors[$sanitized] ?? null;
+        if ($owner !== null && $owner !== $raw) {
+            throw new \RuntimeException(Lang::t('prom.name_collision', [
+                'first'  => Util::displaySafe(self::describeRaw($owner, [])),
+                'second' => Util::displaySafe(self::describeRaw($raw, [])),
+                'folded' => Util::displaySafe($sanitized),
+            ]));
+        }
+        // The descriptor may not claim a key an emitted series already owns
+        // under a different raw name — this is the found wedge: counter('a-b')
+        // followed by register(Descriptor('a_b', …, 'gauge')) silently pinned
+        // `# TYPE a_b gauge` over the twin's samples.
+        $emitted = $this->rawFacts[$sanitized] ?? null;
+        if ($emitted !== null && $emitted[0] !== $raw) {
+            throw new \RuntimeException(Lang::t('prom.name_collision', [
+                'first'  => Util::displaySafe(self::describeRaw($emitted[0], $emitted[1])),
+                'second' => Util::displaySafe(self::describeRaw($raw, [])),
+                'folded' => Util::displaySafe($sanitized),
+            ]));
+        }
+        $this->rawDescriptors[$sanitized] = $raw;
         // Store keyed by sanitized name so flush() can look up by the same key
         // that is used when emitting TYPE/HELP headers.
-        $this->descriptors[self::sanitizeName($descriptor->name)] = $descriptor;
+        $this->descriptors[$sanitized] = $descriptor;
     }
 
     public function flush(): void
@@ -515,6 +556,20 @@ final class PrometheusFileBackend implements Backend
             // to refuse, not a removal to honour.
             $this->refuseImpostor($name, $tags, $key);
         }
+        if ($tags === []) {
+            // Symmetry (MET-DESCRIBE): the descriptor ledger is consulted on
+            // the reclaim path just like on describe() — a tagless remove()
+            // whose fold lands on a family whose descriptor is owned by a
+            // different raw name is a twin wipe and is refused.
+            $owner = $this->rawDescriptors[$key] ?? null;
+            if ($owner !== null && $owner !== $name) {
+                throw new \RuntimeException(Lang::t('prom.name_collision', [
+                    'first'  => Util::displaySafe(self::describeRaw($owner, [])),
+                    'second' => Util::displaySafe(self::describeRaw($name, [])),
+                    'folded' => Util::displaySafe($key),
+                ]));
+            }
+        }
         unset(
             $this->counters[$key], $this->dirtyCounters[$key],
             $this->gauges[$key], $this->dirtyGauges[$key],
@@ -549,6 +604,7 @@ final class PrometheusFileBackend implements Backend
         $this->dirtyAsyncGauges = [];
         $this->descriptors = [];
         $this->rawFacts = [];
+        $this->rawDescriptors = [];
         $this->familyKeys = [];
     }
 
