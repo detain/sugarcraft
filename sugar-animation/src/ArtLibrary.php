@@ -42,6 +42,16 @@ final class ArtLibrary
         '16' => ['256', 'tc'],
     ];
 
+    /**
+     * SA-X2 (audit 032): hard size gate for {@see self::mergeManifest()}.
+     * A logos.jsonl row is a few hundred bytes; 4 MiB covers hundreds of
+     * thousands of slugs, orders of magnitude beyond any real corpus. The
+     * optional-metadata contract means an oversize manifest is SKIPPED,
+     * never thrown on — the gate mirrors Decoder::MAX_INPUT_BYTES discipline
+     * with the smaller bound its own input class deserves.
+     */
+    private const MAX_MANIFEST_BYTES = 4 * 1024 * 1024;
+
     private const FILE_PATTERN =
         '/^logo-(?<slug>.+?)(?<skinny>-skinny)?(?<anim>-anim)?-(?<depth>16|256|tc)-(?<w>\d+)x(?<h>\d+)\.ansi$/';
 
@@ -127,7 +137,11 @@ final class ArtLibrary
      * Attach per-slug description/tags from a `logos.jsonl` manifest.
      * Tolerant by design: a missing/unreadable file or malformed rows is a
      * no-op, because the manifest is optional human metadata shipped
-     * alongside the corpus, never a load-bearing dependency.
+     * alongside the corpus, never a load-bearing dependency. SA-X2 (audit
+     * 032): the tolerance is paid with a bound — the read is capped at
+     * MAX_MANIFEST_BYTES, and a manifest beyond the gate is skipped exactly
+     * like an absent one (no throw, no partial enrichment, no unbounded
+     * slurp of a file we were going to distrust anyway).
      *
      * @return $this for chaining
      */
@@ -136,10 +150,21 @@ final class ArtLibrary
         if (!is_file($jsonlPath) || !is_readable($jsonlPath)) {
             return $this;
         }
-        $lines = file($jsonlPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-        if ($lines === false) {
+        // SA-X2: bounded read instead of file()'s unbounded slurp — at most
+        // MAX_MANIFEST_BYTES + 1 bytes ever enter memory here, so both the
+        // stat-visible and the grow-after-stat oversize outcomes skip
+        // honestly (the +1 byte is the race witness; same door discipline
+        // as Decoder's capped stream_get_contents).
+        $handle = fopen($jsonlPath, 'rb');
+        if ($handle === false) {
             return $this;
         }
+        $raw = fread($handle, self::MAX_MANIFEST_BYTES + 1);
+        fclose($handle);
+        if ($raw === false || strlen($raw) > self::MAX_MANIFEST_BYTES) {
+            return $this;
+        }
+        $lines = explode("\n", $raw);
 
         // Filename => entry slug, so the manifest's '-anim'-suffixed slug
         // field is never trusted for grouping.

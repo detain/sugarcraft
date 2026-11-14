@@ -283,6 +283,44 @@ final class ArtLibraryTest extends TestCase
         self::assertSame([], $library->tags('alpha'));
     }
 
+    /**
+     * SA-X2 (audit 032): an oversize manifest is skipped like an absent one —
+     * no throw, no partial enrichment (even a valid first row must not land,
+     * the whole file was distrusted), and the read itself is capped so
+     * tolerance never pays an unbounded slurp.
+     */
+    public function testOversizedManifestIsSkippedWithoutThrowingOrPoisoning(): void
+    {
+        $manifest = $this->dir . '/bloated.jsonl';
+        $row = json_encode(['filename' => 'logo-alpha-tc-2x1.ansi', 'slug' => 'alpha', 'description' => 'must not land', 'tags' => ['poison']]);
+        // 4 MiB gate + 1 witness byte past it.
+        file_put_contents($manifest, $row . "\n" . str_repeat('x', 4 * 1024 * 1024 + 1));
+
+        $library = ArtLibrary::fromDir($this->dir)->mergeManifest($manifest);
+
+        self::assertSame('', $library->description('alpha'), 'oversize manifest is tolerated as absent — no row lands');
+        self::assertSame([], $library->tags('alpha'));
+    }
+
+    /**
+     * SA-X2 boundary arm: EXACTLY at the gate is honest input, not oversize
+     * padding — the file must still merge.
+     */
+    public function testManifestExactlyAtTheSizeGateStillMerges(): void
+    {
+        $manifest = $this->dir . '/at-gate.jsonl';
+        $row = json_encode(['filename' => 'logo-alpha-tc-2x1.ansi', 'slug' => 'alpha', 'description' => 'at gate', 'tags' => []]);
+        // Row line + one junk line sized so the TOTAL is exactly 4 MiB;
+        // trailing junk rows are the pre-existing malformed-row skip, not a
+        // size refusal.
+        $pad = 4 * 1024 * 1024 - strlen($row) - 2;
+        file_put_contents($manifest, $row . "\n" . str_repeat('x', $pad) . "\n");
+
+        $library = ArtLibrary::fromDir($this->dir)->mergeManifest($manifest);
+
+        self::assertSame('at gate', $library->description('alpha'), 'at-cap is accepted; only past-cap skips');
+    }
+
     public function testRandomSlugIsUniformOverCascadeResolvableSlugsViaInjectedRng(): void
     {
         $library = ArtLibrary::fromDir($this->dir);
