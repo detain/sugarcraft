@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Tests\Overlay;
 
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Top\Overlay\Menus;
 use SugarCraft\Top\Overlay\MsgBox;
 use SugarCraft\Top\Overlay\OptionsMenu;
@@ -50,6 +51,31 @@ final class MenusTest extends OverlayTestCase
         $this->assertInstanceOf(MsgBox::class, $box);
 
         return $box->title;
+    }
+
+    public function testWarningWrapsKeepingTheTailOfTheReason(): void
+    {
+        // Finding 136: the old single-line 74-cell cut lopped the very tail
+        // where a config-write diagnostic names its cause. A long reason now
+        // wraps to box width and its words survive complete and in order.
+        $reason = 'Failed to write the config file /home/user/.config/btop/themes/current.theme: Permission denied';
+        $box = Menus::warning($reason);
+        $this->assertInstanceOf(MsgBox::class, $box);
+        $text = self::text($box);
+        $lines = explode("\n", $text);
+        $this->assertGreaterThan(1, count($lines), 'a 96-cell reason wraps, it is not cut');
+        $this->assertSame(
+            $reason,
+            str_replace("\n", ' ', $text),
+            'every word of the reason survives, in order, with the tail intact',
+        );
+        foreach ($lines as $line) {
+            $this->assertLessThanOrEqual(74, Width::string($line), 'no line overflows the box');
+        }
+
+        // A short reason still renders as one line (no gratuitous wrapping).
+        $short = Menus::warning('Config not saved.');
+        $this->assertSame('Config not saved.', self::text($short));
     }
 
     public function testSizeErrorAndOptions(): void

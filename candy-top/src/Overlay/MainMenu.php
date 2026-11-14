@@ -203,7 +203,12 @@ final class MainMenu implements Overlay
         $profile = $ink->profile();
         $cy = $y + 7 + $delta;
         foreach (self::WIDTHS as $i => $w) {
-            $art = !$tty && $i === $this->selected ? self::SELECTED[$i] : self::NORMAL[$i];
+            // Finding 137: under tty_mode the swap used to collapse to
+            // colour-only focus (hi_fg vs main_fg) — invisible on greyscale,
+            // whiteout and NO_COLOR hosts. The frame-char swap (SELECTED
+            // double-lines vs NORMAL light lines) now reads in tty mode
+            // too; the colour still rides the tty arms below.
+            $art = $i === $this->selected ? self::SELECTED[$i] : self::NORMAL[$i];
             foreach ($art as $ic => $line) {
                 if ($tty) {
                     $sgr = $i === $this->selected ? $ink->fg('hi_fg') : $ink->fg('main_fg');

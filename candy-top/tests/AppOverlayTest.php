@@ -19,6 +19,7 @@ use SugarCraft\Top\App;
 use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\HostInfo;
 use SugarCraft\Top\Msg\ClockTickMsg;
+use SugarCraft\Top\Msg\ConfigSavedMsg;
 use SugarCraft\Top\Msg\OpenOverlayMsg;
 use SugarCraft\Top\Msg\PaletteMsg;
 use SugarCraft\Top\Msg\SetOptionMsg;
@@ -507,5 +508,36 @@ final class AppOverlayTest extends TestCase
         [, $none] = $app->update(new SetOptionMsg('proc_tree', true));
         $this->assertSame([], Cmds::of(PaletteMsg::class, $none), 'unrelated options never reload the theme');
         $this->assertNotSame(App::themeKey(self::config()), App::themeKey(self::config(['color_theme' => 'nord'])));
+    }
+
+    public function testASaveFailureBehindTheSizeNoticeResurfacesWhenFramed(): void
+    {
+        // Finding 139: the warning used to vanish in the unframed branch —
+        // the settings loss reported was invisible to exactly the small
+        // terminal users the notice was for. The reason now queues and
+        // surfaces on the first resize that fits a box again.
+        $app = self::app(40, 10);
+        $this->assertNotSame('warning', $app->overlay()?->title, 'a fresh small terminal shows the size notice');
+
+        [$app] = $app->update(new ConfigSavedMsg(false, 'could not write the config file: Read-only file system', $app->config));
+        $this->assertNotSame('warning', $app->overlay()?->title, 'the failure cannot cut in behind the notice');
+        $this->assertStringNotContainsString('Read-only file system', implode("\n", $app->surface()?->plainLines() ?? []));
+
+        [$app] = $app->update(new WindowSizeMsg(120, 40));
+        $this->assertSame('warning', $app->overlay()?->title, 'the first framing resize surfaces the queued reason');
+        $this->assertStringContainsString('Read-only file system', implode("\n", $app->surface()?->plainLines() ?? []));
+
+        // Dismissed like any Ok box, and it never comes back.
+        [$app] = $app->update(self::keyMsg('enter'));
+        $this->assertNull($app->overlay());
+        [$app] = $app->update(new WindowSizeMsg(40, 10));
+        [$app] = $app->update(new WindowSizeMsg(120, 40));
+        $this->assertNotSame('warning', $app->overlay()?->title, 'surfaced once — the queue is empty again');
+
+        // Framed hosts keep the old immediate behaviour: the box is up the
+        // moment the save fails.
+        [$framed] = self::app(120, 40)->update(new ConfigSavedMsg(false, 'disk full', self::config()));
+        $this->assertSame('warning', $framed->overlay()?->title);
+        $this->assertStringContainsString('disk full', implode("\n", $framed->surface()?->plainLines() ?? []));
     }
 }

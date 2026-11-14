@@ -599,6 +599,43 @@ final class SelfUpdateTest extends TestCase
         self::assertStringContainsString('v9.9.9', $text);
     }
 
+    public function testThePharFetchAnnouncesWhatIsInFlight(): void
+    {
+        // Finding 138: the phar download was the one long leg with no word
+        // at all — a slow link looked like a hung process. The verb now
+        // names the asset and target version immediately before the fetch.
+        self::assertNotFalse(\file_put_contents($this->livePharPath(), 'ORIGINAL-PHAR-BYTES'));
+        $exit = SelfUpdate::run(
+            [],
+            $this->fakeServerClient(),
+            $this->releasesUrl([$this->stageRelease('candy-top/v9.9.9', 'UPDATED-PHAR-BYTES')]),
+            $this->livePharPath(),
+            'v0.1.0',
+            '',
+        );
+        self::assertSame(SelfUpdate::EXIT_OK, $exit);
+        self::assertStringContainsString('downloading candy-top.phar for v9.9.9', $this->errorText());
+    }
+
+    public function testTheDownloadNoticeAppearsOnAFailedFetchToo(): void
+    {
+        // The notice fires before the transfer, so a refused dial still
+        // names what was being attempted — paired with the download_failed
+        // line that follows it.
+        self::assertNotFalse(\file_put_contents($this->livePharPath(), 'ORIGINAL'));
+        $exit = SelfUpdate::run(
+            [],
+            $this->fakeServerClient('connection refused'),
+            $this->releasesUrl([$this->stageRelease('candy-top/v9.9.9', 'UPDATED-PHAR-BYTES')]),
+            $this->livePharPath(),
+            'v0.1.0',
+            '',
+        );
+        self::assertSame(SelfUpdate::EXIT_FAILURE, $exit);
+        self::assertStringContainsString('downloading candy-top.phar for v9.9.9', $this->errorText());
+        self::assertStringContainsString('could not download candy-top.phar', $this->errorText());
+    }
+
     /**
      * M4: the swap publishes the temp file the sink wrote, and that file
      * carries the process umask — not an executable bit. Nothing else on this

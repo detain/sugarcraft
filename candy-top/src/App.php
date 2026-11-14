@@ -225,6 +225,13 @@ final class App implements Model
         private readonly float $logoStartedAt = 0.0,
         /** Ambient profile from sugar-core's {@see ColorProfileMsg}; null = not yet received. */
         private readonly ?ColorProfile $ambient = null,
+        /**
+         * Finding 139: a config-save failure that landed while the terminal
+         * was too small to frame (size notice up) queues its reason here
+         * instead of vanishing — the next WindowSizeMsg that restores
+         * framing surfaces it in a warning box. Null = nothing owed.
+         */
+        private readonly ?string $pendingWarning = null,
     ) {
         $this->overlays = $overlays ?? OverlayStack::new();
         $this->themes = $themes ?? self::systemThemes();
@@ -420,6 +427,14 @@ final class App implements Model
             $next = $next->mutate(overlays: $next->overlays->revalidate($next->cols, $next->rows));
             [$next, $cmd] = $next->broadcast($msg);
 
+            // A save-failure reason queued behind the size notice (finding
+            // 139) surfaces once, on the first frame that fits the boxes.
+            $pending = $next->pendingWarning;
+            if ($pending !== null && $next->framed()) {
+                $next = $next->mutate(pendingWarning: null, pendingWarningSet: true)
+                    ->withOverlay(Menus::warning($pending));
+            }
+
             // btop repaints everything once on a resize, menu or not.
             return [$next->settledBackdrop(true), $cmd];
         }
@@ -550,7 +565,16 @@ final class App implements Model
                 return [$clean ? $this->mutate(writeNew: false) : $this, null];
             }
 
-            return [$this->framed() ? $this->withOverlay(Menus::warning($msg->error)) : $this, null];
+            // Finding 139: behind the size notice the box cannot show, so
+            // the reason is queued instead of dropped — the settings loss it
+            // reports is invisible to exactly the small-terminal users the
+            // notice is for. The next framing WindowSizeMsg surfaces it.
+            return [
+                $this->framed()
+                    ? $this->withOverlay(Menus::warning($msg->error))
+                    : $this->mutate(pendingWarning: $msg->error, pendingWarningSet: true),
+                null,
+            ];
         }
         if ($msg instanceof ConfigLoadedMsg) {
             return $this->reloaded($msg);
@@ -1884,6 +1908,8 @@ final class App implements Model
         ?float $logoStartedAt = null,
         ?ColorProfile $ambient = null,
         bool $ambientSet = false,
+        ?string $pendingWarning = null,
+        bool $pendingWarningSet = false,
     ): self {
         return new self(
             $config ?? $this->config,
@@ -1913,6 +1939,7 @@ final class App implements Model
             $logoEpoch ?? $this->logoEpoch,
             $logoStartedAt ?? $this->logoStartedAt,
             $ambientSet ? $ambient : $this->ambient,
+            $pendingWarningSet ? $pendingWarning : $this->pendingWarning,
         );
     }
 }

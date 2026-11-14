@@ -325,6 +325,7 @@ return [
     'cli.selfupdate.dir_not_writable' => 'candy-top: phar を置き換えられません — ディレクトリ {dir} に書き込めません。',
     'cli.selfupdate.downgrade_refused' => 'candy-top: ダウングレードを拒否しました — このインストールは {current}、最新リリースは {latest} です。(--rollback は保持されたコピーを復元します。それ以外で戻ることはありません。)',
     'cli.selfupdate.download_failed' => 'candy-top: {asset} をダウンロードできませんでした: {reason}。',
+    'cli.selfupdate.downloading' => 'candy-top: {version} 用の {asset} をダウンロードしています。しばらくかかる場合があります。',
     'cli.selfupdate.empty_download' => 'candy-top: {asset} のダウンロードが 0 バイトでした。',
     'cli.selfupdate.fetch_failed' => 'candy-top: リリース一覧を読み込めませんでした: {reason}。',
     'cli.selfupdate.flags_exclusive' => 'candy-top: --check は報告のみです。--rollback や --allow-unsigned と併用せず、単独で指定してください。',

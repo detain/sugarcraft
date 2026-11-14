@@ -474,6 +474,12 @@ final class SelfUpdate
         }
 
         $temp = $phar . '.tmp-' . \getmypid() . '-' . \bin2hex(\random_bytes(4));
+        // Finding 138: the phar is the one large transfer this verb makes and
+        // it carried no word at all — on a slow link the user stared at a
+        // dead screen wondering whether the process had hung. Say what is
+        // in flight, and say it only for the leg that can actually take
+        // long (the sidecar and signature fetches are small and stay quiet).
+        self::stderr(Lang::t('cli.selfupdate.downloading', ['asset' => self::PHAR_ASSET, 'version' => $release['version']]));
         try {
             $http->request('GET', $release['pharUrl'], ['sink' => $temp]);
         } catch (TransferException $e) {

@@ -325,6 +325,7 @@ return [
     'cli.selfupdate.dir_not_writable' => 'candy-top: impossibile sostituire il phar — la cartella {dir} non è scrivibile.',
     'cli.selfupdate.downgrade_refused' => "candy-top: downgrade rifiutato — questa installazione è {current}, l'ultima release è {latest}. (--rollback ripristina la copia conservata; nient'altro torna indietro.)",
     'cli.selfupdate.download_failed' => 'candy-top: impossibile scaricare {asset}: {reason}.',
+    'cli.selfupdate.downloading' => 'candy-top: download di {asset} per {version} in corso; potrebbe volerci un momento.',
     'cli.selfupdate.empty_download' => 'candy-top: il download di {asset} non ha prodotto alcun byte.',
     'cli.selfupdate.fetch_failed' => "candy-top: impossibile leggere l'elenco delle release: {reason}.",
     'cli.selfupdate.flags_exclusive' => 'candy-top: --check si limita a riportare; usarlo da solo, non con --rollback o --allow-unsigned.',

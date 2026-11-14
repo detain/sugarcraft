@@ -325,6 +325,7 @@ return [
     'cli.selfupdate.dir_not_writable' => 'candy-top: Das Phar kann nicht ersetzt werden – Verzeichnis {dir} ist nicht beschreibbar.',
     'cli.selfupdate.downgrade_refused' => 'candy-top: Downgrade abgelehnt – diese Installation ist {current}, das neueste Release ist {latest}. (--rollback stellt die aufbewahrte Kopie wieder her; sonst geht nichts rückwärts.)',
     'cli.selfupdate.download_failed' => 'candy-top: {asset} konnte nicht heruntergeladen werden: {reason}.',
+    'cli.selfupdate.downloading' => 'candy-top: {asset} für {version} wird heruntergeladen; das kann einen Moment dauern.',
     'cli.selfupdate.empty_download' => 'candy-top: Der Download von {asset} lieferte keine Bytes.',
     'cli.selfupdate.fetch_failed' => 'candy-top: Die Release-Liste konnte nicht gelesen werden: {reason}.',
     'cli.selfupdate.flags_exclusive' => 'candy-top: --check meldet nur; allein verwenden, nicht mit --rollback oder --allow-unsigned.',

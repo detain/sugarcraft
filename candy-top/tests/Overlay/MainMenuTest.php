@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Tests\Overlay;
 
+use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\Msg\QuitRequestMsg;
 use SugarCraft\Top\Overlay\HelpMenu;
 use SugarCraft\Top\Overlay\MainMenu;
 use SugarCraft\Top\Overlay\OptionsMenu;
+use SugarCraft\Top\View\Surface;
 
 /** btop Menu::mainMenu: selection, Switch to help/options, quit, mouse. */
 final class MainMenuTest extends OverlayTestCase
@@ -67,5 +69,29 @@ final class MainMenuTest extends OverlayTestCase
         $this->assertInstanceOf(MainMenu::class, $picked->overlay);
         $this->assertSame(1, $picked->overlay->selected, 'a click selects');
         $this->assertInstanceOf(HelpMenu::class, $picked->overlay->update(self::click(55, 21), self::ctx())->push, 'a click on the selection enters it');
+    }
+
+    public function testTtyModeKeepsTheFrameCharFocusSwap(): void
+    {
+        // Finding 137: tty_mode used to paint every entry with the light
+        // NORMAL art, collapsing focus to colour alone — invisible on
+        // greyscale, whiteout and NO_COLOR hosts. The selected entry now
+        // keeps the double-line SELECTED art in every mode.
+        $c = self::ctx(120, 40, Config::new()->with('tty_mode', true));
+        $surface = Surface::new($c->cols, $c->rows);
+        MainMenu::new()->paint($surface, $c);
+        $text = implode("\n", $surface->plainLines());
+        $this->assertStringContainsString('╔═╗╔═╗', $text, 'the selected OPTIONS entry keeps the double-line art under tty_mode');
+        $this->assertStringContainsString('┌─┐', $text, 'unselected entries stay light-lined');
+
+        // And the double-line art follows the move: the OPTIONS-family
+        // selected row is gone, the HELP-family selected row is present.
+        $moved = self::feed(MainMenu::new(), ['down']);
+        $this->assertInstanceOf(MainMenu::class, $moved->overlay);
+        $second = Surface::new($c->cols, $c->rows);
+        $moved->overlay->paint($second, $c);
+        $after = implode("\n", $second->plainLines());
+        $this->assertStringNotContainsString('╔═╗╔═╗', $after, 'deselected OPTIONS reverts to light art');
+        $this->assertStringContainsString('╦ ╦╔═╗', $after, 'selected HELP paints its double-lined art');
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Top\Overlay;
 
 use SugarCraft\Core\Msg;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Top\Collect\ProcessControl;
 use SugarCraft\Top\Lang;
 use SugarCraft\Top\Msg\OpenOverlayMsg;
@@ -51,10 +52,18 @@ final class Menus
      */
     public static function warning(string $reason): Overlay
     {
+        // Finding 136: the old 74-cell cut lopped the tail of the reason —
+        // exactly where the config-write diagnostic names its cause
+        // (`...: Permission denied`, `...: No space left on device`). Wrap
+        // to box width instead; the msgBox grows one line per wrapped row.
+        // mb_strlen (code points) keeps the width rule simple: a reason
+        // past 68 code points gets the full 78-wide box, 74 usable cells.
+        $lines = \explode("\n", Width::wrap($reason, 74));
+
         return MsgBox::ok(
             min(78, mb_strlen($reason) + 10),
             Lang::t('overlay.title.warning'),
-            static fn (Ink $ink): array => [MenuDraw::cut($reason, 74)],
+            static fn (Ink $ink): array => $lines,
         );
     }
 

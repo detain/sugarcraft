@@ -325,6 +325,7 @@ return [
     'cli.selfupdate.dir_not_writable' => 'candy-top: phar를 교체할 수 없습니다 — 디렉터리 {dir}에 쓸 수 없습니다.',
     'cli.selfupdate.downgrade_refused' => 'candy-top: 다운그레이드를 거부합니다 — 현재 설치는 {current}, 최신 릴리스는 {latest}입니다. (--rollback은 보관된 사본을 복원하며, 그 외에는 이전 버전으로 돌아가지 않습니다.)',
     'cli.selfupdate.download_failed' => 'candy-top: {asset}을(를) 다운로드할 수 없습니다: {reason}.',
+    'cli.selfupdate.downloading' => 'candy-top: {version}용 {asset}을(를) 다운로드하는 중입니다. 잠시 시간이 걸릴 수 있습니다.',
     'cli.selfupdate.empty_download' => 'candy-top: {asset} 다운로드 결과가 0바이트입니다.',
     'cli.selfupdate.fetch_failed' => 'candy-top: 릴리스 목록을 읽을 수 없습니다: {reason}.',
     'cli.selfupdate.flags_exclusive' => 'candy-top: --check는 알려 주기만 합니다. --rollback 또는 --allow-unsigned와 함께 쓰지 말고 단독으로 지정하세요.',

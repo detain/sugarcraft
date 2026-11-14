@@ -325,6 +325,7 @@ return [
     'cli.selfupdate.dir_not_writable' => 'candy-top: не удаётся заменить phar — каталог {dir} недоступен для записи.',
     'cli.selfupdate.downgrade_refused' => 'candy-top: понижение версии отклонено — установлена версия {current}, последний релиз — {latest}. (--rollback восстанавливает сохранённую копию; иначе назад не возвращаются.)',
     'cli.selfupdate.download_failed' => 'candy-top: не удалось скачать {asset}: {reason}.',
+    'cli.selfupdate.downloading' => 'candy-top: загрузка {asset} для {version}; это может занять некоторое время.',
     'cli.selfupdate.empty_download' => 'candy-top: при скачивании {asset} не получено ни одного байта.',
     'cli.selfupdate.fetch_failed' => 'candy-top: не удалось прочитать список релизов: {reason}.',
     'cli.selfupdate.flags_exclusive' => 'candy-top: --check только сообщает; указывайте его отдельно, без --rollback и --allow-unsigned.',
