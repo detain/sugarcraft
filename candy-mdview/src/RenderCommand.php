@@ -125,8 +125,10 @@ final class RenderCommand extends Command
 
                 Exit codes:
                   0   rendered successfully
-                  1   generic failure
-                  2   usage error (bad flag, missing/unreadable/directory/binary input)
+                  1   console-layer input faults (unknown option, too many
+                      arguments) and runtime failures, with the usage dump
+                  2   named refusals (bad theme value, missing/unreadable/
+                      directory/binary/oversized input, no input)
 
                 Environment:
                   NO_COLOR           any non-empty value disables color (bold survives in ascii mode)

@@ -71,21 +71,25 @@ Flags:
   `Theme::dracula()`, …); `solarized`, `monokai`, and `github` load JSON theme
   files from `themes/`. The three tiers: **ansi** is the terminal-native
   palette, **ascii** keeps structure — bold/italic survive, color does not —
-  and **plain** is undecorated bytes. With `--theme` omitted: **ansi** on a
-  color-capable terminal, **ascii** when color is off, **plain** when stdout
-  is not a terminal or `--no-ansi` vetoes the stream. The mirror
-  edge: forcing decoration (`--ansi` / `CLICOLOR_FORCE` / `FORCE_COLOR`) yields
-  a decorated tier even on a pipe. To compare the palettes side by side, run
-  `./examples/render-readme.sh [file]` over this README.
+  and **plain** is undecorated bytes. With `--theme` omitted, the numbered
+  color walk below picks the tier: **ansi** when the stream is decorated and
+  color-capable, **ascii** when it is decorated but colorless, and **plain**
+  when it is undecorated (`--no-ansi`, or stdout is not a terminal and
+  nothing forces decoration). The mirror
+  edge: forcing decoration (`--ansi` / `CLICOLOR_FORCE` / `FORCE_COLOR`)
+  decorates a pipe exactly like a terminal. To compare the palettes side by
+  side, run `./examples/render-readme.sh [file]` over this README.
 - `--style` / `-s` — glamour-compat alias for `--theme`: it takes theme
   *names*, not style files (JSON goes through `--theme-config`). When both
   flags are given and name different themes, `--style` wins and a
   `note: --style … overrides --theme …` line lands on stderr.
 - `--version` — handled by the Symfony Console application (no row in the
-  command's own flags). Inside a phar the build stamp wins; outside an archive
-  it reports the composer/dev fallback — the only documented way to tell
-  `vendor/bin/candy-mdview`, a wget'd `candy-mdview.phar`, and a bare checkout
-  apart.
+  command's own flags). A release-tagged phar reports its build stamp; every
+  other install — a rolling dev phar, `vendor/bin/candy-mdview`, a bare
+  checkout — reports the fallback `0.1.0`, because a dev build deliberately
+  keeps its `dev-build` sentinel out of the answer. `--version` therefore
+  separates a tagged phar from a checkout, but never a dev phar from a
+  checkout.
 - `--theme-config <path>` — load a custom JSON theme (up to 1 MB). Two shapes
   are detected automatically: a **glamour** config (top-level `"document"`
   block with nested element/chroma maps, the shape of
@@ -112,7 +116,8 @@ Flags:
   pager wraps at the live column count — and re-wraps the document when you
   resize. Naming `--width` pins the column count instead: resizing then only
   moves the clip window. Anything non-numeric is a usage error.
-- `--no-hyperlinks` — suppresses the OSC 8 envelopes. They are emitted for
+- `--no-hyperlinks` — suppresses the OSC 8 hyperlink envelopes (the escape
+  wrappers that make links clickable). They are emitted for
   terminal output by default, and also into redirected output when decoration
   is forced (`--ansi` / `CLICOLOR_FORCE` / `FORCE_COLOR`) — forcing decoration
   means full decoration. Labelled links always show their visible `text (url)`
@@ -135,27 +140,38 @@ Flags:
   into your redirect target instead of a screen.
 - `--ansi` / `--no-ansi` — force / forbid decorated output.
 
-Two independent chains decide color, and it matters which one you are in:
+Color runs through three decisions, in order:
 
-- **Decoration gate** (does the stream emit ANSI and OSC envelopes at all):
-  `--no-ansi`, then `--ansi`, then the environment — where only affirmative
-  ON verdicts act: `CLICOLOR_FORCE` / `FORCE_COLOR` force color on when set
-  to any value other than `0`. A non-empty `NO_COLOR` — including
-  `NO_COLOR=0` per the spec — or `CLICOLOR=0` forces nothing off *here*: it
-  decides the theme probe only, so on a terminal the gate still opens. An
-  empty `NO_COLOR=` takes no position in either chain. The terminfo probe is
-  *not* consulted at the gate.
-- **Theme probe** (implicit theme tier only): a terminfo capability probe
-  (`TERM=dumb` counts as colorless) picks between the `ansi` and `ascii`
-  themes.
+1. **Explicit theme.** `--theme`, `--style`, `--theme-config` — and the
+   `MDVIEW_THEME` / config-file layers under the flags — name a theme, and a
+   named theme renders its colors everywhere: an explicit `--theme dark`
+   piped into a file still emits SGR. The name `auto` steps out of this
+   decision and reruns the implicit walk.
+2. **Implicit tier.** With no explicit name, the decorated verdict of
+   decision 3 and the capability facts pick the tier: on a decorated stream,
+   **ansi** when the terminal answers color-capable and **ascii** when it
+   answers colorless (`TERM=dumb`, `NO_COLOR`, `CLICOLOR=0` all count as
+   colorless); on an undecorated stream, **plain** — undecorated bytes.
+3. **Decoration gate.** One boolean says whether the stream receives terminal
+   decoration: `--no-ansi` closes it, `--ansi` opens it, and otherwise only
+   affirmative environment verdicts act — `CLICOLOR_FORCE` or `FORCE_COLOR`
+   at any value other than `0` opens it even on a pipe. A non-empty
+   `NO_COLOR` — including `NO_COLOR=0` per the spec — or `CLICOLOR=0` forces
+   nothing closed *here*: it answers decision 2's color-capability question
+   only, so on a terminal the gate still opens. An empty `NO_COLOR=` takes no
+   position anywhere. The terminfo probe is *not* consulted at the gate.
+
+The gate's verdict also decides the OSC 8 hyperlink envelopes: no envelopes
+on an undecorated stream or under `--no-hyperlinks`, and forced decoration
+emits them even into a pipe or file — forcing decoration is forcing all of
+it. An explicit theme changes the palette, never the envelopes.
 
 Two consequences worth knowing: `NO_COLOR` on a terminal selects the ascii
-theme but does not silence OSC 8 link envelopes — the decoration gate is a
-tty check and never reads `NO_COLOR`; and `--no-ansi` on a color-capable
-terminal yields the **plain** theme, not `ascii`. A value `CLICOLOR` or
-`NO_COLOR` cannot act on never throws: it takes no position and the
-terminal/probe chain decides (`FORCE_COLOR=banana` is the different shape —
-any non-`0` value forces color on at the gate).
+theme but does not silence the link envelopes — the gate never reads
+`NO_COLOR`; and `--no-ansi` on a color-capable terminal yields the **plain**
+tier, not `ascii`. A value `CLICOLOR` or `NO_COLOR` cannot act on never
+throws: it takes no position and the walk decides. `FORCE_COLOR=banana` is
+the different shape — any non-`0` value opens the gate.
 
 ## Pager
 
@@ -273,14 +289,16 @@ fixed 0.5 s tick rather than a transition.
 | Code | Meaning |
 |---|---|
 | 0 | rendered successfully (an empty *file* renders blank) |
-| 1 | runtime failure |
-| 2 | usage error — bad theme, unreadable/oversized theme config, missing or unreadable file, a directory argument with no resolvable document, non-text (binary) input, a document over 64 MiB, a refused or failed URL fetch (transport, non-2xx answer, oversize body), invalid `--width`, or no input (no file argument with a terminal on stdin, or empty stdin) |
+| 1 | input faults caught at the console layer — unknown option, more than one file argument, or the space-separated `--width -5` (the `=` form reaches the command and exits 2) — printed with the usage dump; runtime failures |
+| 2 | usage error — bad theme, unreadable/oversized theme config, missing or unreadable file, a directory argument with no resolvable document, non-text (binary) input, a document over 64 MiB, a refused or failed URL fetch (transport, non-2xx answer, oversize body), invalid `--width`, or no input (no file argument while stdin is a terminal, or an empty stdin) |
 
 Usage errors are named and go to **stderr** (`open notes.md: no such file`,
 `no Markdown document in docs/: looked for …`, …); file paths and option values coming from
 argv are sanitized before display, so a crafted name cannot inject escape
 sequences or restyle the message. The rendered document is written **raw**:
 Symfony's output formatter never interprets `<tags>` inside your Markdown.
+Run `candy-mdview --help` for the flag list; a console-layer fault prints the
+same help beneath its error.
 
 ## Trust boundary
 
