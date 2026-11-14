@@ -184,26 +184,64 @@ final class ExternalModuleProtocolTest extends TestCase
         $this->assertStringContainsString('disabled', $view);
     }
 
-    public function testViewIsCachedUntilStateOrDimensionsActuallyChange(): void
+    public function testResizeRendersFromCacheAndTheUpdateSeamRefreshesIt(): void
     {
-        // Every-frame synchronous round-trips used to stall input on healthy
-        // but slow plugins; the counter mode makes the number of WIRE trips
-        // visible: identical renders must reuse the cache, any real change
-        // (new state or a resize) must pay exactly one fresh trip.
+        // D-101 contract flip (DISCLOSED): a resize used to pay a fresh
+        // synchronous trip on the paint path, so a live drag hammered the
+        // child once per repaint and a slow plugin could stall or be
+        // deadline-disabled from view(). Paint is now inert — the counter
+        // mode keeps the trip count visible: nothing but the seams talks.
         $module = $this->module('counter');
         $module->init();
 
         $first = $module->view(['tick' => 1], 80, 24);
-        $this->assertStringContainsString('render #1', $first);
+        $this->assertStringContainsString('render #1', $first, 'cold first frame still renders');
 
         $again = $module->view(['tick' => 1], 80, 24);
         $this->assertSame($first, $again, 'unchanged render served from cache');
 
         $resized = $module->view(['tick' => 1], 100, 24);
-        $this->assertStringContainsString('render #2', $resized, 'resize pays a fresh trip');
+        $this->assertSame($first, $resized, 'a resize must not pay a paint-path trip');
 
-        $advanced = $module->view(['tick' => 2], 100, 24);
-        $this->assertStringContainsString('render #3', $advanced, 'state change pays a fresh trip');
-        $this->assertStringContainsString('tick:2', $advanced);
+        $byPaint = $module->view(['tick' => 2], 100, 24);
+        $this->assertSame($first, $byPaint, 'view() never conversations; only seams do');
+
+        // The seam catches up: the state advanced and the pending size
+        // differs, so exactly one render trip rides the next update().
+        $next = $module->update(['tick' => 2]);
+        $this->assertSame(['tick' => 2], $next);
+        $refreshed = $module->view(['tick' => 2], 100, 24);
+        $this->assertStringContainsString('render #2', $refreshed, 'resize + state refresh cost exactly one seam trip');
+        $this->assertStringContainsString('tick:2', $refreshed, 'the fresh frame carries the advanced state');
+
+        // Steady paints (even resized) stay cache-only...
+        $this->assertSame($refreshed, $module->view(['tick' => 2], 120, 40));
+
+        // ...and the next seam pays for it once.
+        $module->update(['tick' => 3]);
+        $after = $module->view(['tick' => 3], 120, 40);
+        $this->assertStringContainsString('render #3', $after);
+        $this->assertStringContainsString('tick:3', $after);
+    }
+
+    public function testDisabledReasonCarriesThePluginsOwnStderrLine(): void
+    {
+        // sugar-dashboard-203: the child's stderr was drained and thrown
+        // away, so a panel disabled itself with only the host's half of the
+        // story. The wept fixture complains on stderr, THEN breaks protocol;
+        // the complaint must ride the disable reason.
+        $module = $this->module('wept');
+        $module->init();
+
+        $state = $module->update(['x' => 1]);
+        $this->assertSame(['x' => 1], $state, 'the refusal keeps the host state');
+
+        $view = $module->view(['x' => 1], 80, 24);
+        $this->assertStringContainsString('unexpected response: nonsense', $view);
+        $this->assertStringContainsString('plugin stderr: config load fai', $view, 'the visible clip keeps the seam honest about what it carries');
+
+        $error = (new \ReflectionProperty(ExternalModule::class, 'lastError'))->getValue($module);
+        $this->assertIsString($error);
+        $this->assertStringContainsString('/etc/wept.conf (request: update)', $error, 'the stored reason holds the full stderr line');
     }
 }

@@ -20,7 +20,14 @@ use SugarCraft\Core\Util\Sanitize;
  * deadline-bounded (write and read), unparsable or out-of-order wire lines
  * disable the plugin for the session instead of throwing into the host
  * loop, disabled panels name themselves and say why, and the child gets a
- * small environment allow-list rather than the parent's whole env. Reply
+ * small environment allow-list rather than the parent's whole env. Round
+ * trips live at the update seam only (the first frame of a fresh panel is
+ * the one exception): view() renders the cached frame and a resize is
+ * re-rendered at the next update(), so a slow plugin can never stall — or
+ * be disabled — from the paint path (sugar-dashboard-092). When a send or
+ * read fails, the plugin's own last stderr line rides into the disable
+ * reason instead of vanishing down the unread pipe (sugar-dashboard-203).
+ * Reply
  * state is additionally normalised at the store seam (invalid UTF-8 bytes
  * substituted) and any payload still unencodable at the send seam disables
  * the panel ('state not encodable') — on PHP ≥ 8.3 the JSON parser itself
@@ -43,8 +50,8 @@ final class ExternalModule implements LegacyModule
     private const SHUTDOWN_GRACE_SECONDS = 2.0;
 
     /**
-     * stderr is drained-and-discarded while we wait on stdout: the child
-     * blocks once its 64 KiB pipe buffer fills, and a blocked child never
+     * stderr is drained (into a bounded tail) while we wait on stdout: the
+     * child blocks once its 64 KiB pipe buffer fills, and a blocked child never
      * reaches the response it owes us (the old shape timed out after
      * READ_TIMEOUT_SECS and silently disabled the plugin). One select round
      * consumes at most this many stderr bytes, so a continuous spammer
@@ -54,6 +61,16 @@ final class ExternalModule implements LegacyModule
 
     /** fread() granularity inside a {@see self::STDERR_DRAIN_BYTES_PER_ROUND} round. */
     private const STDERR_DRAIN_CHUNK_BYTES = 8192;
+
+    /**
+     * How much of the plugin's stderr is kept, not just drained: the tail
+     * survives so a failing send can quote the child's own last line in the
+     * disable reason (sugar-dashboard-203). Everything older is dropped.
+     */
+    private const MAX_STDERR_TAIL_BYTES = 2048;
+
+    /** Longest stderr line quoted into a disable reason before the tail clip. */
+    private const STDERR_LINE_VISIBLE_BYTES = 96;
 
     /** Longest plugin-supplied label allowed into chrome (name header/panel title). */
     private const MAX_LABEL_BYTES = 64;
@@ -66,10 +83,25 @@ final class ExternalModule implements LegacyModule
     /** Why the plugin was disabled this session, if it was (surfaced through view()). */
     private ?string $lastError = null;
 
-    /** Last rendered view plus the signature (state + dimensions) it was rendered for. */
+    /**
+     * Last rendered frame, plus what it was rendered for. The cache is keyed
+     * by state AND dimensions: a resize alone must not force a round-trip
+     * (sugar-dashboard-092), so the frame a plugin drew for the old size is
+     * served as-is until the update seam can afford a fresh one.
+     */
     private ?string $viewCache = null;
 
-    private ?string $viewSignature = null;
+    private ?string $renderedDims = null;
+
+    private ?string $renderedStateKey = null;
+
+    /** Dimensions the host last painted at; a changed pair is picked up at the next update(). */
+    private ?int $pendingWidth = null;
+
+    private ?int $pendingHeight = null;
+
+    /** Rolling tail of plugin stderr bytes, kept bounded for disable reasons (sugar-dashboard-203). */
+    private string $stderrTail = '';
 
     /** @var resource|null */
     private $stdin = null;
@@ -156,6 +188,12 @@ final class ExternalModule implements LegacyModule
 
     /**
      * {@inheritdoc}
+     *
+     * The seam that owns round-trips also owns re-rendering: after the state
+     * advances here, a frame that went stale (new state) or wrong-sized
+     * (resized since the last paint) is refreshed at this seam — where the
+     * deadline-bounded wait belongs to the update loop, never to the paint
+     * path (sugar-dashboard-092).
      */
     public function update(array $state): array
     {
@@ -170,7 +208,14 @@ final class ExternalModule implements LegacyModule
 
         if ($response->type === 'update') {
             $nextState = $response->data['state'] ?? $state;
-            return is_array($nextState) ? self::sanitizeEncodedState($nextState) : $state;
+            $nextState = is_array($nextState) ? self::sanitizeEncodedState($nextState) : $state;
+            if ($this->pendingWidth !== null && $this->pendingHeight !== null
+                && ($this->viewCache === null
+                    || $this->renderedDims !== $this->pendingWidth . 'x' . $this->pendingHeight
+                    || $this->renderedStateKey !== self::stateKey($nextState))) {
+                $this->renderView($nextState, $this->pendingWidth, $this->pendingHeight);
+            }
+            return $nextState;
         }
 
         // Protocol error: unexpected response type or error from plugin.
@@ -183,6 +228,16 @@ final class ExternalModule implements LegacyModule
 
     /**
      * {@inheritdoc}
+     *
+     * Paint renders; it does not converse. The old shape ran a full
+     * synchronous plugin exchange inside view() on every frame whose
+     * state OR dimensions differed — so a live resize storm hammered the
+     * child once per repaint, and a healthy-but-slow plugin could be
+     * stalled (or deadline-disabled) from the paint path. view() now
+     * records the requested size and serves the cached frame; the resized
+     * (or state-advanced) frame is re-rendered at the next update() seam.
+     * The one exception is the cold first frame: there is no cached bytes
+     * to show yet, so the founding render still pays its bounded trip here.
      */
     public function view(array $state, int $width, int $height): string
     {
@@ -190,41 +245,56 @@ final class ExternalModule implements LegacyModule
             // A plugin that started and then died or broke protocol must say
             // so in its panel — an empty string read as "nothing to show" hid
             // every failure. Never started (no round trip yet) stays blank.
-            if ($this->lastError === null) {
-                return '';
+            return $this->disabledMarker();
+        }
+
+        $this->pendingWidth = $width;
+        $this->pendingHeight = $height;
+
+        if ($this->viewCache === null) {
+            $this->renderView($state, $width, $height);
+            if (!$this->running) {
+                return $this->disabledMarker();
             }
-            return Sanitize::untrusted(
-                '[' . self::chromeLabel($this->name) . ' disabled: ' . self::chromeLabel($this->lastError) . ']'
-            );
         }
 
-        // Render round-trips are bounded to actual change: a full synchronous
-        // plugin exchange inside view() ran on EVERY frame, stalling input
-        // for a healthy-but-slow plugin even when nothing had updated. The
-        // signature covers state and dimensions, so any real refresh (new
-        // state from update(), or a resize) still costs exactly one trip.
-        $signature = $width . 'x' . $height . '|' . self::stateKey($state);
-        if ($this->viewCache !== null && $this->viewSignature === $signature) {
-            return $this->viewCache;
-        }
+        return $this->viewCache ?? '';
+    }
 
+    /**
+     * One bounded render round-trip, called only from seams that may spend
+     * one (update(), or a cold panel's first frame). Success fills the cache
+     * with the frame it was rendered for; failure disables the panel with
+     * the reason, and any older cached frame simply stays on screen.
+     */
+    private function renderView(array $state, int $width, int $height): void
+    {
         if (!$this->sendRequest(Request::view($width, $height, $state))) {
-            return $this->viewCache ?? '';
+            return; // sendRequest() has already disabled with its reason
         }
         $response = $this->readResponse();
 
         if ($response->type === 'view') {
-            $rendered = Sanitize::untrusted((string) ($response->data['content'] ?? ''));
-            $this->viewCache = $rendered;
-            $this->viewSignature = $signature;
-            return $rendered;
+            $this->viewCache = Sanitize::untrusted((string) ($response->data['content'] ?? ''));
+            $this->renderedDims = $width . 'x' . $height;
+            $this->renderedStateKey = self::stateKey($state);
+            return;
         }
 
-        // Protocol error — disable the plugin; the marker below replaces
-        // the stale/empty render so the panel is never silently blank.
+        // Protocol error — disable the plugin; the marker replaces the
+        // stale/empty render so the panel is never silently blank.
         $this->disable("unexpected response: {$response->type}");
+    }
+
+    /** The panel text for a plugin that is no longer trusted: named, with its reason. */
+    private function disabledMarker(): string
+    {
+        if ($this->lastError === null) {
+            return '';
+        }
+
         return Sanitize::untrusted(
-            '[' . self::chromeLabel($this->name) . ' disabled: ' . self::chromeLabel((string) $this->lastError) . ']'
+            '[' . self::chromeLabel($this->name) . ' disabled: ' . self::chromeLabel($this->lastError) . ']'
         );
     }
 
@@ -515,9 +585,10 @@ final class ExternalModule implements LegacyModule
 
     /**
      * Consume everything currently pending on stderr, up to one bounded
-     * round, and discard it. Non-blocking reads make this cheap when the
-     * child is quiet; the per-round cap keeps a chatty one from starving
-     * the stdout side of {@see readResponse()}.
+     * round, keeping the last {@see self::MAX_STDERR_TAIL_BYTES} of it.
+     * Non-blocking reads make this cheap when the child is quiet; the
+     * per-round cap keeps a chatty one from starving the stdout side of
+     * {@see readResponse()}.
      */
     private function drainStderr(): void
     {
@@ -536,7 +607,41 @@ final class ExternalModule implements LegacyModule
                 return; // EAGAIN (non-blocking) or EOF
             }
             $consumed += strlen($chunk);
+            $this->stderrTail .= $chunk;
+            // Keep the window bounded on a LINE boundary where possible: a
+            // partial pipe read ending mid-line must not orphan its first
+            // bytes — the next round's newline would then make the
+            // line-after-that the "last line" and lose the real complaint.
+            $overflow = strlen($this->stderrTail) - self::MAX_STDERR_TAIL_BYTES;
+            if ($overflow > 0) {
+                $newline = strrpos($this->stderrTail, "\n", $overflow);
+                $this->stderrTail = (string) substr(
+                    $this->stderrTail,
+                    $newline === false ? $overflow : $newline + 1
+                );
+            }
         }
+    }
+
+    /**
+     * The plugin's last stderr line from the kept tail — the complaint it
+     * was making while we were failing to talk to it. Bytes are untrusted:
+     * the result rides into the disable reason and is chromeLabel()-clipped
+     * on its way to the panel.
+     */
+    private static function lastStderrLine(string $tail): string
+    {
+        $tail = rtrim($tail, "\r\n");
+        if ($tail === '') {
+            return '';
+        }
+        $newline = strrpos($tail, "\n");
+        $line = trim((string) substr($tail, $newline === false ? 0 : $newline + 1));
+        if (strlen($line) > self::STDERR_LINE_VISIBLE_BYTES) {
+            $line = substr($line, 0, self::STDERR_LINE_VISIBLE_BYTES) . '...';
+        }
+
+        return $line;
     }
 
     /**
@@ -627,6 +732,18 @@ final class ExternalModule implements LegacyModule
      */
     private function disable(string $reason): void
     {
+        // One last bounded look at stderr before the pipes close: the child
+        // writes its complaint before the stdout line that got us here
+        // (program order, and pipe writes are visible in order), so the bytes
+        // are pending even when the earlier drain round missed them. The
+        // plugin's own last line turns 'read timeout' into a diagnosable
+        // reason instead of a mystery (sugar-dashboard-203).
+        $this->drainStderr();
+        $stderrLine = self::lastStderrLine($this->stderrTail);
+        if ($stderrLine !== '') {
+            $reason .= '; plugin stderr: ' . $stderrLine;
+        }
+
         $this->running = false;
         $this->lastError ??= $reason;
 

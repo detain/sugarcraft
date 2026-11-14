@@ -19,6 +19,11 @@
  *  poison    honest handshake; every update reply carries raw invalid-UTF-8
  *            bytes (a lone surrogate \xED\xA0\x80) in the wire line — the
  *            finding-008 landmine, refused by the PHP ≥ 8.3 JSON parser.
+ *  wept      honest handshake; every later request earns a stderr complaint
+ *            and then an out-of-type stdout reply — the trust-boundary
+ *            probe for sugar-dashboard-203: the disable reason must carry
+ *            the plugin's own last stderr line, not just our half of the
+ *            failed conversation.
  *  surrogate honest handshake; every update reply carries the ASCII
  *            \ud800 ESCAPE form — the finding's literal probe vector,
  *            likewise refused at decode on supported PHP.
@@ -79,6 +84,24 @@ if ($mode === 'counter') {
                 'data' => ['content' => 'render #' . $renders . ' tick:' . ($data['state']['tick'] ?? 0)],
             ]) . "\n");
         }
+    }
+    exit(0);
+}
+
+if ($mode === 'wept') {
+    // sdx-203: the child complains on stderr, THEN breaks protocol. The
+    // complaint is written strictly before the offending stdout line, so a
+    // host that drains stderr at the disable seam can quote it verbatim —
+    // which is exactly what that seam is for.
+    while (($line = fgets(STDIN)) !== false) {
+        $request = json_decode(trim($line), true);
+        $type = is_array($request) ? ($request['type'] ?? '') : '';
+        if ($type === 'init') {
+            greet();
+            continue;
+        }
+        fwrite(STDERR, 'config load failed: no such file /etc/wept.conf (request: ' . $type . ")\n");
+        fwrite(STDOUT, json_encode(['type' => 'nonsense', 'data' => []]) . "\n");
     }
     exit(0);
 }
