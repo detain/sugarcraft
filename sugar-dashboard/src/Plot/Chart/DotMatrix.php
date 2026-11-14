@@ -7,6 +7,8 @@ namespace SugarCraft\Dashboard\Plot\Chart;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
@@ -342,13 +344,36 @@ final class DotMatrix implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     private const CHAR_SPACING = 1;
 
+    /**
+     * Memo for the last full render of THIS instance (finding 194: the dot
+     * pattern was rebuilt per cell on every repaint). Immutability makes it
+     * safe: withers hand out fresh objects, so a stale memo cannot survive
+     * a knob change; the key still pins content/cell/frame/colors plus the
+     * resolved color profile for belt-and-braces.
+     */
+    private ?string $renderMemoKey = null;
+
+    private ?string $renderMemo = null;
+
+    /**
+     * @internal test seam - counts actual pattern rebuilds, never production logic.
+     */
+    private static int $renderBuilds = 0;
+
+    private string $content;
+
     public function __construct(
-        private readonly string $content,
+        string $content,
         private readonly int $cellSize = 1,
         private readonly bool $showFrame = false,
         private readonly ?Color $onColor = null,
         private readonly ?Color $offColor = null,
-    ) {}
+    ) {
+        // Entry-point law (finding sugar-dashboard-191): content is external
+        // data; ESC/OSC bytes used to stream straight into the dot grid.
+        // new()/withContent rebuild through this constructor, one choke.
+        $this->content = Sanitize::untrusted($content);
+    }
 
     /**
      * Create a new dot matrix display with default styling.
@@ -408,6 +433,16 @@ final class DotMatrix implements \SugarCraft\Dashboard\Foundation\SizedItem
     public function render(): string
     {
         $profile = ColorMode::profile();
+
+        $memoKey = $this->content . "\0" . $this->cellSize . "\0" . ($this->showFrame ? '1' : '0')
+            . "\0" . ($this->onColor?->toFg($profile) ?? '-')
+            . "\0" . ($this->offColor?->toFg($profile) ?? '-')
+            . "\0" . $profile->name;
+        if ($this->renderMemo !== null && $this->renderMemoKey === $memoKey) {
+            return $this->renderMemo;
+        }
+        self::$renderBuilds++;
+
         $chars = mb_str_split(mb_strtoupper($this->content, 'UTF-8'), 1, 'UTF-8');
 
         // Each character is 5 dots tall, and 5 + spacing dots wide
@@ -437,7 +472,9 @@ final class DotMatrix implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Apply frame if enabled
         if ($this->showFrame) {
-            $width = mb_strlen($rows[0], 'UTF-8');
+            // Cells, not bytes: colored rows carry SGR runs that mb_strlen
+            // counted into the frame width (finding sugar-dashboard-191).
+            $width = Width::string($rows[0]);
             $frameTop = '┌' . str_repeat('─', $width) . '┐';
             $frameBottom = '└' . str_repeat('─', $width) . '┘';
 
@@ -456,6 +493,9 @@ final class DotMatrix implements \SugarCraft\Dashboard\Foundation\SizedItem
         if ($this->onColor !== null || $this->offColor !== null) {
             $result .= Ansi::reset();
         }
+
+        $this->renderMemoKey = $memoKey;
+        $this->renderMemo = $result;
 
         return $result;
     }

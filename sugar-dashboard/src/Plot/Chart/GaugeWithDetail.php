@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Dashboard\Plot\Chart;
 
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\Core\Util\Width;
 
 /**
  * A horizontal gauge bar with detail text overlaid in the center.
@@ -19,13 +21,24 @@ final class GaugeWithDetail implements \SugarCraft\Dashboard\Foundation\SizedIte
     private ?int $width = null;
     private ?int $height = null;
 
+    private readonly string $label;
+
+    private readonly string $detail;
+
     public function __construct(
-        private readonly string $label = '',
+        string $label = '',
         private readonly float $value = 0,
         private readonly float $max = 100,
-        private readonly string $detail = '',
+        string $detail = '',
         private readonly int $widthConstraint = 40,
-    ) {}
+    ) {
+        // Entry-point law (finding sugar-dashboard-191): label and detail are
+        // external data; ESC/OSC bytes used to be painted straight into the
+        // bar. The constructor is the single choke - factories and withers
+        // rebuild through it, so every path is covered exactly once.
+        $this->label = Sanitize::untrusted($label);
+        $this->detail = Sanitize::untrusted($detail);
+    }
 
     /**
      * Create a new gauge with detail overlay.
@@ -68,7 +81,7 @@ final class GaugeWithDetail implements \SugarCraft\Dashboard\Foundation\SizedIte
         $pctStr = sprintf('%3.0f%%', $filledRatio * 100);
 
         // Bar width = total width - label area (7) - detail - space before pct - pct
-        $detailLen = \strlen($this->detail);
+        $detailLen = Width::string($this->detail);
         $barWidth = $width - 7 - $detailLen - 1 - 4;
 
         // Minimum bar width of 5
@@ -129,14 +142,15 @@ final class GaugeWithDetail implements \SugarCraft\Dashboard\Foundation\SizedIte
      */
     private function renderLabel(): string
     {
-        $labelLen = \strlen($this->label);
-        // Pad label to 6 chars (4 + 2 spaces) for visual alignment
+        $labelLen = Width::string($this->label);
+        // Pad label to 4 cells (finding sugar-dashboard-191: byte strlen made
+        // CJK labels escape the budget); bold styling wraps whatever fits.
         $paddedLabel = $this->label;
         if ($labelLen < 4) {
-            $paddedLabel = str_pad($this->label, 4, ' ', STR_PAD_RIGHT);
+            $paddedLabel = Width::padRight($this->label, 4);
         } elseif ($labelLen > 4) {
             // Truncate if longer
-            $paddedLabel = substr($this->label, 0, 4);
+            $paddedLabel = Width::truncateAnsi($this->label, 4);
         }
 
         // Apply bold styling and return with trailing space

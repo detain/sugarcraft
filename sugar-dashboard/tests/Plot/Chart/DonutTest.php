@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Dashboard\Plot\Chart\Donut;
 
 final class DonutTest extends TestCase
@@ -875,13 +876,14 @@ final class DonutTest extends TestCase
             ->render();
         $line = explode("\n", $rendered)[10];
 
-        // The center row's hole spans 7 CELLS (innerRadius 4 → strict-hole
-        // columns ±3), not 6: the audit found the previous `diameter - 2`
-        // breathing-margin cap clipping a glyph that provably fit. Codepoint
-        // math, not byte math — a byte slicer would mangle these.
-        $this->assertSame(' ██████日本語テキスト██████ ', $line);
-        $this->assertSame(21, mb_strlen($line), 'Row must hold exactly 21 cells — no partial codepoints.');
-        $this->assertStringNotContainsString('デ', $line, 'The 8th codepoint must be cut.');
+        // Cell budget, not codepoint budget (finding sugar-dashboard-191):
+        // this hole row spans 7 CELLS, so the truthful cut is the widest
+        // whole-cell prefix that fits - '日本語テ' (2+2+2+1 cells). A
+        // codepoint slicer let seven codepoints (12 cells) eat four extra
+        // hole columns; the old pin recorded that overflow.
+        $this->assertStringContainsString('日本語', $line, 'six-cell run is what the seven-cell hole can hold (テ is a wide glyph)');
+        $this->assertStringNotContainsString('テ', $line, 'the cell-budget cut must drop the fourth codepoint');
+        $this->assertSame(21, Width::string($line), 'Row must hold exactly 21 CELLS.');
     }
 
     public function testDownstreamReportedThreeCharReadoutSurvivesSizeTwelve(): void

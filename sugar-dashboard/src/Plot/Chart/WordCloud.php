@@ -6,6 +6,8 @@ namespace SugarCraft\Dashboard\Plot\Chart;
 
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
@@ -49,7 +51,9 @@ final class WordCloud implements \SugarCraft\Dashboard\Foundation\SizedItem
         }
         $normalized = array_map(function (array $item): array {
             return [
-                'word' => $item['word'] ?? '',
+                // Finding sugar-dashboard-191: word text is external data and
+                // reached the frame raw.
+                'word' => Sanitize::untrusted((string) ($item['word'] ?? '')),
                 'weight' => max(0.1, floatval($item['weight'] ?? 1.0)),
             ];
         }, $words);
@@ -120,12 +124,14 @@ final class WordCloud implements \SugarCraft\Dashboard\Foundation\SizedItem
         $currentLineWidth = 0;
 
         foreach ($sorted as $index => $wordData) {
-            $word = $wordData['word'];
+            // Belt AND braces with WordCloud::new(): the constructor is
+            // public, so a raw list<array{word:...}> can still arrive here.
+            $word = Sanitize::untrusted((string) $wordData['word']);
             $weight = $wordData['weight'];
 
             // Size based on weight (1-3 chars visual size)
             $sizeFactor = 1 + (($weight / $maxWeight) * 2);
-            $wordLen = mb_strlen($word, 'UTF-8');
+            $wordLen = Width::string($word);
             $wordWidth = (int) ceil($wordLen * $sizeFactor);
 
             $colors = $this->colors;

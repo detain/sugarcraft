@@ -6,6 +6,8 @@ namespace SugarCraft\Dashboard\Plot\Chart;
 
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
@@ -254,12 +256,15 @@ final class Partition implements \SugarCraft\Dashboard\Foundation\SizedItem
             $result .= $v;
 
             if ($this->showLabels && $row === intval($middleHeight / 2)) {
-                // Show label in middle row
+                // Show label in middle row (finding sugar-dashboard-191:
+                // segment labels reached the frame raw and were budgeted in
+                // codepoints, not cells)
                 $label = $this->showValues
                     ? $segment->label . ' ' . sprintf('(%.0f)', $segment->value)
                     : $segment->label;
-                $label = mb_substr($label, 0, $segmentWidth - 2, 'UTF-8');
-                $padding = $segmentWidth - 2 - mb_strlen($label, 'UTF-8');
+                $label = Sanitize::untrusted($label);
+                $label = Width::truncateAnsi($label, max(0, $segmentWidth - 2));
+                $padding = $segmentWidth - 2 - Width::string($label);
                 $result .= ' ' . $label . str_repeat(' ', max(0, $padding)) . $v . "\n";
             } else {
                 $result .= str_repeat(' ', $segmentWidth - 2) . $v . "\n";
@@ -394,8 +399,9 @@ final class Partition implements \SugarCraft\Dashboard\Foundation\SizedItem
                 $label = $this->showValues
                     ? $segment->label . ' ' . sprintf('(%.0f)', $segment->value)
                     : $segment->label;
-                $label = mb_substr($label, 0, $width - 2, 'UTF-8');
-                $padding = $width - 2 - mb_strlen($label, 'UTF-8');
+                $label = Sanitize::untrusted($label);
+                $label = Width::truncateAnsi($label, max(0, $width - 2));
+                $padding = $width - 2 - Width::string($label);
                 $result .= ' ' . $label . str_repeat(' ', max(0, $padding)) . ' ' . $v . "\n";
             } else {
                 $result .= str_repeat(' ', $width) . $v . "\n";

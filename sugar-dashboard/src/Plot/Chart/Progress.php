@@ -6,6 +6,7 @@ namespace SugarCraft\Dashboard\Plot\Chart;
 
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Dashboard\Foundation\ColorMode;
 
@@ -27,14 +28,29 @@ final class Progress implements \SugarCraft\Dashboard\Foundation\SizedItem
     private ?int $height = null;
 
     /**
+     * @var list<array{label: string, ratio: float, color: Color|null}>
+     */
+    private readonly array $segments;
+
+    /**
      * @param list<array{label: string, ratio: float, color: Color|null}> $segments
      */
     public function __construct(
-        private readonly array $segments,
+        array $segments,
         private readonly bool $showLabels = true,
         private readonly bool $showPercentages = true,
         private readonly string $segmentSeparator = '',
-    ) {}
+    ) {
+        // Entry-point law (finding sugar-dashboard-191): segment labels are
+        // external data; ESC/OSC bytes used to paint straight into the bar.
+        // Factories and withers rebuild through this constructor, so the
+        // sweep runs exactly once per carrier.
+        foreach ($segments as &$segment) {
+            $segment['label'] = Sanitize::untrusted((string) ($segment['label'] ?? ''));
+        }
+        unset($segment);
+        $this->segments = $segments;
+    }
 
     /**
      * Create a new progress bar with default styling.
@@ -136,8 +152,10 @@ final class Progress implements \SugarCraft\Dashboard\Foundation\SizedItem
                     $result .= $label;
                     $result .= str_repeat('█', $segmentWidth - $labelWidth);
                 } else {
-                    // Label too long, truncate
-                    $result .= mb_substr($label, 0, $segmentWidth, 'UTF-8');
+                    // Label too long, truncate to the cells that fit
+                    // (finding sugar-dashboard-191: mb_substr counted
+                    // codepoints, so CJK labels doubled the segment).
+                    $result .= Width::truncateAnsi($label, $segmentWidth);
                 }
             } else {
                 $result .= str_repeat('█', $segmentWidth);

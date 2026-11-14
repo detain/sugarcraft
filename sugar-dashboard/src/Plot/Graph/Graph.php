@@ -6,6 +6,8 @@ namespace SugarCraft\Dashboard\Plot\Graph;
 
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\Core\Util\Width;
 
 /**
  * A graph/chart component for displaying data visualizations.
@@ -120,7 +122,10 @@ final class Graph implements \SugarCraft\Dashboard\Foundation\SizedItem
     public function withLabels(array $labels): self
     {
         $clone = clone $this;
-        $clone->labels = $labels;
+        // Data-bearing strings reaching the frame are sanitized at entry
+        // (finding sugar-dashboard-191): ESC/CSI bytes in a label used to be
+        // painted verbatim, letting external data recolor or clear the chart.
+        $clone->labels = array_map(static fn($label): string => Sanitize::untrusted((string) $label), array_values($labels));
         return $clone;
     }
 
@@ -345,11 +350,14 @@ final class Graph implements \SugarCraft\Dashboard\Foundation\SizedItem
         $labelWidth = intval($width / max(1, count($this->labels)));
 
         foreach ($this->labels as $label) {
-            $shortLabel = mb_substr($label, 0, $labelWidth - 1);
-            $result .= str_pad($shortLabel, $labelWidth);
+            // Cell-aware budget (finding sugar-dashboard-191): mb_* counted
+            // codepoints, so wide glyphs overran the slot and the row budget
+            // lay about the painted frame.
+            $shortLabel = Width::truncateAnsi($label, max(0, $labelWidth - 1));
+            $result .= Width::padRight($shortLabel, $labelWidth);
         }
 
-        return mb_substr($result, 0, $width);
+        return Width::truncateAnsi($result, $width);
     }
 
     /**

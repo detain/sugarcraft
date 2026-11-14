@@ -6,6 +6,8 @@ namespace SugarCraft\Dashboard\Plot\Chart;
 
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Dashboard\Plot\Braille\Bresenham;
 use SugarCraft\Dashboard\Foundation\ColorMode;
 
@@ -584,15 +586,45 @@ final class Donut implements \SugarCraft\Dashboard\Foundation\SizedItem
             return $grid;
         }
 
-        $characters = mb_str_split(mb_strlen($text) > $fit ? mb_substr($text, 0, $fit) : $text);
+        // Data-bearing center text enters the cell grid raw today (finding
+        // sugar-dashboard-191); sanitize at entry and count in cells, not
+        // codepoints - one wide glyph used to eat two hole columns, and the
+        // codepoint centering mis-placed every CJK readout off the middle.
+        $text = Sanitize::untrusted($text);
+        if (Width::string($text) > $fit) {
+            $text = Width::truncateAnsi($text, $fit);
+        }
 
-        $startX = $centerX - intdiv(count($characters), 2);
-        foreach ($characters as $offset => $character) {
-            $cell = &$grid[$y][$startX + $offset];
-            if ($cell['char'] === ' ' && $cell['color'] === null) {
-                $cell['char'] = $character;
+        // The hole window of this row is exactly $fit cells wide, centred on
+        // $centerX; clearing it first and laying left/right pads by CELL
+        // count keeps the painted row at exactly the grid width whatever the
+        // glyph mix.
+        $windowStart = $centerX - intdiv($fit, 2);
+        for ($x = $windowStart; $x < $windowStart + $fit; $x++) {
+            if (isset($grid[$y][$x])) {
+                $grid[$y][$x] = ['char' => ' ', 'color' => null];
             }
-            unset($cell);
+        }
+
+        $textCells = Width::string($text);
+        $cursor = $windowStart + intdiv($fit - $textCells, 2);
+        foreach (mb_str_split($text) as $character) {
+            $cells = max(1, Width::string($character));
+            if ($cursor + $cells > $windowStart + $fit) {
+                break; // wide glyph would spill past the hole window
+            }
+            if (isset($grid[$y][$cursor])) {
+                $grid[$y][$cursor]['char'] = $character;
+            }
+            // A wide glyph occupies the next column too: an empty-string
+            // continuation cell emits nothing, keeping the row exactly the
+            // grid width in cells (finding sugar-dashboard-191 again).
+            for ($c = 1; $c < $cells; $c++) {
+                if (isset($grid[$y][$cursor + $c])) {
+                    $grid[$y][$cursor + $c] = ['char' => '', 'color' => null];
+                }
+            }
+            $cursor += $cells;
         }
 
         return $grid;
