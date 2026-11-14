@@ -32,6 +32,14 @@ final class Stage
     public const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
     /**
+     * Cell count of the determinate progress bar (filled + empty segments).
+     * Its own number from {@see SPINNER_FRAMES} (finding 029): the two tens
+     * rhyme, but nothing couples them — retuning bar granularity must not
+     * silently retime the spinner, or vice versa.
+     */
+    public const BAR_SEGMENTS = 10;
+
+    /**
      * Render a stage line. Pass `total = 0` to omit the `/total` suffix.
      * Counts are clamped to the range `[0, total]` (i.e. negative values
      * become `0`, and `current > total` is capped at `total`).
@@ -106,9 +114,13 @@ final class Stage
      *
      * Output: `  ├─ message ████░░░░ 40%`
      *
-     * The bar is drawn with 10 segments (█ for filled, ░ for empty).
-     * Both $current and $total are clamped: negatives become 0, and
-     * values exceeding $total are capped at $total.
+     * The bar is drawn with `$segments` cells (█ for filled, ░ for empty,
+     * default `Stage::BAR_SEGMENTS`). Both $current and $total are clamped:
+     * negatives become 0, and values exceeding $total are capped at $total.
+     * When the width cannot fit prefix + bar + one message cell, the bar
+     * suffix is dropped and the line degrades to the {@see subStep()} shape
+     * so the message keeps its budget — the line never exceeds the cap and
+     * never prints furniture over an empty message (finding 013).
      *
      * @param string $message  descriptive label for the step
      * @param int    $current  completed units
@@ -138,10 +150,14 @@ final class Stage
         int $indent = 2,
         int|AutoWidth|null $width = AutoWidth::Auto,
         ?int $frame = null,
+        int $segments = self::BAR_SEGMENTS,
     ): string {
-        $theme   ??= Theme::detect();
-        $current  = max(0, $current);
-        $total    = max(0, $total);
+        $theme    ??= Theme::detect();
+        $current   = max(0, $current);
+        $total     = max(0, $total);
+        if ($segments < 1) {
+            throw new \InvalidArgumentException('Stage::subStepWithProgress(): $segments must be at least 1.');
+        }
         if ($total > 0) {
             $current = min($current, $total);
         }
@@ -149,20 +165,23 @@ final class Stage
         $bar = '';
         $pct = '';
         if ($total > 0) {
-            $filled = (int) round(10 * $current / $total);
+            $filled = (int) round($segments * $current / $total);
             $bar = $theme->accent->render(str_repeat('█', $filled))
-               . $theme->muted->render(str_repeat('░', 10 - $filled));
+               . $theme->muted->render(str_repeat('░', $segments - $filled));
             $pct = $theme->muted->render(sprintf(' %3d%%', (int) round(100 * $current / $total)));
         } else {
             // Indeterminate: cycle through a rotating spinner glyph. With no
             // explicit frame, microtime(true) — the float seconds — supplies
-            // one: `* 10` then mod the frame count. (microtime(false) would
-            // return the string "0.xxxxxx sssss" and raise a non-numeric
+            // one: `* 10` samples the clock at ten steps a second, then the
+            // modulo is the FRAME count (finding 029: bar cells and spinner
+            // frames are separate numbers that merely rhyme). (microtime(false)
+            // would return the string "0.xxxxxx sssss" and raise a non-numeric
             // warning in the arithmetic — fatal under failOnWarning.) Callers
             // who need the byte deterministic pass $frame.
+            $frames = count(self::SPINNER_FRAMES);
             $index = $frame === null
-                ? (int) (microtime(true) * 10) % 10
-                : (($frame % 10) + 10) % 10;
+                ? (int) (microtime(true) * 10) % $frames
+                : (($frame % $frames) + $frames) % $frames;
             $bar = $theme->accent->render(self::SPINNER_FRAMES[$index]);
         }
 
@@ -171,6 +190,15 @@ final class Stage
 
         $prefix = $pad . $theme->muted->render($glyph) . ' ';
         $suffix = ' ' . $bar . $pct;
+
+        // Finding 013: if the budget cannot hold prefix + bar + one message
+        // cell, the bar is dropped entirely and the line degrades to the
+        // subStep shape — the message keeps its budget and the line never
+        // exceeds the cap, instead of printing furniture over an empty label.
+        $resolved = WidthProbe::resolve($width);
+        if ($resolved !== null && $resolved < Width::string($prefix) + Width::string($suffix) + 1) {
+            return self::clipped($prefix, SafeText::line($message), $width, 'Stage::subStepWithProgress');
+        }
         return self::clipped($prefix, SafeText::line($message), $width, 'Stage::subStepWithProgress', Width::string($suffix)) . $suffix;
     }
 

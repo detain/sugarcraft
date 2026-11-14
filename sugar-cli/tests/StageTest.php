@@ -7,6 +7,7 @@ namespace SugarCraft\Cli\Tests;
 use SugarCraft\Cli\Stage;
 use SugarCraft\Cli\Theme;
 use SugarCraft\Cli\Tests\Support\SandboxTerminalColumns;
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
 use PHPUnit\Framework\TestCase;
 
@@ -185,5 +186,61 @@ final class StageTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         Stage::step('x', 1, 1, Theme::plain(), width: 0);
+    }
+
+    /**
+     * Finding 013: a budget too tight for prefix + bar + one message cell
+     * drops the bar and degrades to the subStep shape — never a bar glued
+     * past the cap, never furniture over an empty message.
+     */
+    public function testProgressBarDroppedWhenItWouldOverflowTheWidth(): void
+    {
+        foreach (range(12, 19) as $w) {
+            $out = Stage::subStepWithProgress('Downloading the archive', 4, 10, Theme::plain(), width: $w);
+            $this->assertLessThanOrEqual($w, Width::string($out), "width {$w} overflowed");
+            $this->assertStringNotContainsString('█', $out, "width {$w} still carried a bar");
+            $this->assertStringNotContainsString('░', $out);
+            $this->assertStringContainsString('├─', $out, 'the tree furniture survives the degrade');
+            $this->assertStringNotContainsString(' 40%', $out);
+        }
+    }
+
+    /** Width 21 is the old blank-message case: now the message keeps 16 cells. */
+    public function testNearBoundWidthDegradesInsteadOfBlankingMessage(): void
+    {
+        $out = Stage::subStepWithProgress('Downloading the archive', 4, 10, Theme::plain(), width: 21);
+        $this->assertStringNotContainsString('█', $out);
+        $this->assertSame(21, Width::string($out));
+        // 21 >= prefix 5 + suffix 16 + 1: the bar survives with a one-cell message.
+        $fit = Stage::subStepWithProgress('Downloading the archive', 4, 10, Theme::plain(), width: 22);
+        $this->assertStringContainsString('█', $fit);
+        $this->assertSame(22, Width::string($fit));
+    }
+
+    /** Finding 029: bar cells and spinner frames are independent numbers. */
+    public function testBarAndSpinnerCountsComeFromTheirOwnConstants(): void
+    {
+        $full = Ansi::strip(Stage::subStepWithProgress('x', 1, 1, Theme::plain(), width: null));
+        $this->assertStringContainsString(str_repeat('█', Stage::BAR_SEGMENTS), $full, 'bar width is BAR_SEGMENTS');
+
+        $n    = count(Stage::SPINNER_FRAMES);
+        $wrap = Stage::subStepWithProgress('x', 0, 0, Theme::plain(), frame: $n, segments: 3);
+        $this->assertStringEndsWith(Stage::SPINNER_FRAMES[0], $wrap, 'frame modulo is count(SPINNER_FRAMES), not BAR_SEGMENTS');
+    }
+
+    /** The optional segments knob retunes the bar; the spinner ignores it. */
+    public function testSegmentsKnobRetunesTheDeterminateBar(): void
+    {
+        $bar = Ansi::strip(Stage::subStepWithProgress('dl', 4, 10, Theme::plain(), width: null, segments: 4));
+        $this->assertStringContainsString('██░░  40%', $bar);
+        $this->assertStringNotContainsString('██████', $bar);
+    }
+
+    /** Zero segments is an authoring error, not a silently clamped bar. */
+    public function testSegmentsBelowOneThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Stage::subStepWithProgress(): $segments must be at least 1.');
+        Stage::subStepWithProgress('x', 1, 2, Theme::plain(), segments: 0);
     }
 }
