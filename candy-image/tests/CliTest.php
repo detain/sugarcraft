@@ -59,10 +59,10 @@ final class CliTest extends TestCase
     }
 
     /** @param list<string> $args */
-    private static function drive(array $args): array
+    private static function drive(array $args, ?\Closure $play = null): array
     {
         [$stdout, $stderr] = self::pipes();
-        $exit = Cli::main(array_merge(['candy-image'], $args), $stdout, $stderr);
+        $exit = Cli::main(array_merge(['candy-image'], $args), $stdout, $stderr, $play);
 
         return [$exit, self::drain($stdout), self::drain($stderr)];
     }
@@ -425,9 +425,9 @@ final class CliTest extends TestCase
 
     public function testAnimateMissingFileExitsInput(): void
     {
-        [$exit, , $err] = self::drive(['--animate', '/nonexistent/candy-image-absent.gif']);
+        [$exit, , $err] = self::drive(['--animate', '/nonexistent/candy-image-absent.gif'], static fn (mixed $player): int => 0);
 
-        $this->assertSame(Cli::EXIT_INPUT, $exit);
+        $this->assertSame(Cli::EXIT_INPUT, $exit, 'the $play seam replaces the interactive loop, so no-terminal refusal must not shadow decode errors');
         $this->assertStringContainsString('no such file', strtolower($err));
     }
 
@@ -443,10 +443,44 @@ final class CliTest extends TestCase
 
     public function testAnimateWithViewportBoxIsHonoredNotRefused(): void
     {
-        [$exit, , $err] = self::drive(['--animate', '--size=40x12', '/nonexistent/candy-image-absent.gif']);
+        [$exit, , $err] = self::drive(['--animate', '--size=40x12', '/nonexistent/candy-image-absent.gif'], static fn (mixed $player): int => 0);
 
         $this->assertSame(Cli::EXIT_INPUT, $exit, 'the box dials steer the animation path, so they must not join the refusal');
         $this->assertStringNotContainsString('ignores', $err);
+    }
+
+    /**
+     * candy-image-004: with both standard streams redirected there is nobody
+     * to steer the alternate-screen player — the pump spins CPU forever
+     * (timeout 4 previously produced rc=124). The CLI route must refuse with
+     * exit 1 instead. Runs as a child because the refusal reads the process's
+     * own STDIN/STDOUT, which a pipe-open harness can shape but an in-process
+     * test cannot.
+     */
+    public function testAnimateWithoutATerminalIsRefusedInsteadOfSpinning(): void
+    {
+        $cmd = [\PHP_BINARY, __DIR__ . '/../bin/candy-image', '--animate', '/nonexistent/candy-image-absent.gif'];
+        $proc = \proc_open($cmd, [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, \dirname(__DIR__));
+        $this->assertIsResource($proc);
+        \fclose($pipes[0]); // stdin reads EOF — a redirected pipe, not a terminal
+
+        foreach ([1, 2] as $i) {
+            \stream_set_timeout($pipes[$i], 10);
+        }
+        $out = (string) \stream_get_contents($pipes[1]);
+        $err = (string) \stream_get_contents($pipes[2]);
+        \fclose($pipes[1]);
+        \fclose($pipes[2]);
+
+        $status = \proc_get_status($proc);
+        if ($status['running']) {
+            \proc_terminate($proc); // spinning-player regression guard: never hang the suite
+        }
+        $rc = \proc_close($proc);
+
+        $this->assertSame(Cli::EXIT_USAGE, $rc, 'a pipe-bound --animate must refuse promptly, never spin (stdout was: ' . $out . ')');
+        $this->assertStringContainsString('--animate', $err);
+        $this->assertStringContainsString('terminal', $err);
     }
 
     public function testDumpDetectCannotEmitRawControlBytesFromHostileEnv(): void

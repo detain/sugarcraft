@@ -332,6 +332,18 @@ final class Cli
             $cellsW = $width ?? $viewportW;
 
             if ($animate) {
+                // --animate enters the blocking interactive Program loop; with
+                // neither standard stream attached to a terminal there is no
+                // one to steer the player and the pump spins CPU forever
+                // (candy-image-004). Refuse loudly, same lane as every other
+                // usage error. The $play seam is exempt: it replaces exactly
+                // that loop, so Program->run() is never reached.
+                if ($play === null && !\stream_isatty(STDIN) && !\stream_isatty(STDOUT)) {
+                    self::err($stderr, Lang::t('cli.animate_requires_terminal'));
+
+                    return self::EXIT_USAGE;
+                }
+
                 return self::animate($file, $cellsW, $height ?? $viewportH, $stdout, $stderr, $play);
             }
 
