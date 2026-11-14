@@ -202,4 +202,48 @@ final class ImageSourceAnimatedFileTest extends TestCase
         $this->expectExceptionMessageMatches('/declares 2 frames .*exceeding the maximum of 9/');
         ImageSource::fromAnimatedFile($this->write('gifagg.gif', $gif), 9);
     }
+
+    /**
+     * FLIP_MAX_CELLS boundary (findings-plan follow-up, banked since the SI-34 era):
+     * the gate is a STRICT `>` on the logical-screen cell product, so exactly
+     * 400×250 = ImageSource::FLIP_MAX_CELLS must load whole while one cell more
+     * is refused with the translated flip sentence. The cap itself is documented
+     * in the README's Limits table and enforced since the ceiling landed, but no
+     * test ever touched the boundary edge: a `>=` drift (or an off-by-one rewrite
+     * of the constant) would have shipped unnoticed. Solid colour keeps the cost
+     * honest — the guard reads the cell product, not pixel variety.
+     */
+    public function testLogicalScreenExactlyAtFlipCellCapLoads(): void
+    {
+        $colors = [[0, 0, 0], [255, 0, 0]];
+        $gif    = F::gif(400, 250, $colors, [
+            ['pixels' => array_fill(0, 400 * 250, 1), 'delay' => 10],
+        ]);
+
+        $animation = ImageSource::fromAnimatedFile($this->write('flip-cap.gif', $gif));
+
+        self::assertSame(1, $animation->frameCount());
+        self::assertSame([100], $animation->delaysMs);
+        self::assertSame(400, $animation->frames[0]->width);
+        self::assertSame(250, $animation->frames[0]->height);
+    }
+
+    /**
+     * The other side of the same edge: 11×9091 = 100,001 cells — FLIP_MAX_CELLS
+     * plus one — is refused BEFORE the structural walks or any flip allocation,
+     * with the mosaic-owned translated reason (the gate exists precisely so
+     * sugar-animation's 100k cell grid is never asked to overflow). The dimensions
+     * and the cap appear in the sentence, pinning the message parameters too.
+     */
+    public function testLogicalScreenOneCellAboveFlipCellCapIsRefused(): void
+    {
+        $colors = [[0, 0, 0], [255, 0, 0]];
+        $gif    = F::gif(11, 9091, $colors, [
+            ['pixels' => array_fill(0, 11 * 9091, 1), 'delay' => 10],
+        ]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/Animated GIF 11×9091 exceeds the 100000-pixel frame-grid limit/');
+        ImageSource::fromAnimatedFile($this->write('flip-cap-plus1.gif', $gif));
+    }
 }
