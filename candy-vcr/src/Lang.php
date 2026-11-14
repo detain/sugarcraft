@@ -14,8 +14,6 @@ use SugarCraft\Core\I18n\Lang as BaseLang;
  * {@see ../lang/en.php}. The CLI front door (`bin/candy-vcr`) selects the
  * locale from LC_ALL / LC_MESSAGES / LANG; library callers that never set
  * one get English.
- *
- * @extends BaseLang
  */
 final class Lang extends BaseLang
 {

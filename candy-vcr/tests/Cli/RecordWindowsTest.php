@@ -78,7 +78,7 @@ final class RecordWindowsTest extends TestCase
             static function () use (&$inputs): string {
                 return \array_shift($inputs) ?? '';
             },
-            static function () use (&$sizes): ?array {
+            static function () use (&$sizes): array {
                 return \count($sizes) > 1 ? \array_shift($sizes) : $sizes[0];
             },
         );

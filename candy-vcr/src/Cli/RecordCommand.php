@@ -321,7 +321,7 @@ final class RecordCommand implements DocumentedCommand
             $backend = new WindowsBackend();
             $backend->enableRawMode();
             $readInput = static fn (): string => $console->read();
-            $hostSize = static function () use ($backend): ?array {
+            $hostSize = static function () use ($backend): array {
                 $size = $backend->size();
 
                 return [(int) $size['cols'], (int) $size['rows']];

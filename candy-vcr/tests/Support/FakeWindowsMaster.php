@@ -15,6 +15,11 @@ final class FakeWindowsMaster implements MasterPty
     /** @var list<array{0:int,1:int}> */
     public array $resizes = [];
 
+    /** @var resource|null */
+    private $stream = null;
+
+    private bool $closed = false;
+
     /** @param list<?string> $reads */
     public function __construct(private array $reads)
     {
@@ -37,14 +42,24 @@ final class FakeWindowsMaster implements MasterPty
         $this->resizes[] = [$cols, $rows];
     }
 
+    /** @return array{rows: int, cols: int, xpix: int, ypix: int} */
     public function size(): array
     {
-        return [80, 24];
+        return ['rows' => 24, 'cols' => 80, 'xpix' => 0, 'ypix' => 0];
     }
 
+    /** @return resource */
     public function stream(): mixed
     {
-        return null;
+        if (!is_resource($this->stream)) {
+            $stream = fopen('php://memory', 'w+b');
+            if ($stream === false) {
+                throw new \RuntimeException('FakeWindowsMaster: php://memory open failed');
+            }
+            $this->stream = $stream;
+        }
+
+        return $this->stream;
     }
 
     public function setBlocking(bool $blocking): void
@@ -53,11 +68,15 @@ final class FakeWindowsMaster implements MasterPty
 
     public function close(): void
     {
+        $this->closed = true;
+        if (is_resource($this->stream)) {
+            fclose($this->stream);
+        }
     }
 
     public function isClosed(): bool
     {
-        return false;
+        return $this->closed;
     }
 
     public function fd(): int
