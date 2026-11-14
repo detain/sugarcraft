@@ -191,6 +191,11 @@ echo $result->result() ? 'yes' : 'no';  // 'yes' or 'no'
 
 `ConfirmationPrompt::withHint(string)` paints a hint row (e.g. "Press
 Enter to confirm") under the Yes/No choice.
+`ConfirmationPrompt::withAutoSubmit(bool $on = true)` is the immediate-answer
+opt-in: when armed, a `y` or `n` press selects and submits in one keystroke
+(the gum reflex), while arrows and the Space/Tab toggle remain browse-only.
+The feature defaults off, so the Enter-to-commit contract above is shipped
+behaviour.
 
 ### Custom Key Handlers
 
@@ -381,6 +386,7 @@ sequence a terminal can send.
 - `Key::Space` — a second Enter in SelectionPrompt (submits the row under the cursor); toggles the mark in MultiSelectPrompt; toggles Yes/No in ConfirmationPrompt; inserts a literal space in text inputs
 - `Key::Tab` — autocomplete or toggle confirmation value; pressing Tab again cycles the matches (first Tab extends to their longest common prefix)
 - `y` / `n` (any case) — set Yes/No directly in ConfirmationPrompt (Enter still commits); there the Left/Right arrows alias to the same one-keystroke Yes/No picks
+- `ConfirmationPrompt::withAutoSubmit()` arms the immediate-answer reflex: y / n then selects AND submits in one press (arrows and the Space/Tab toggle stay browse-only); off by default, so the Enter-to-commit contract above is the shipped behaviour
 - `Key::Backspace` / `Key::Delete` — delete characters; Ctrl+H erases before the cursor (both the BS 0x08 and DEL 0x7F spellings bind to Backspace); Ctrl+D deletes under the cursor and, on an empty buffer, aborts (like GNU `delete-char-or-eof`)
 - `Key::CtrlU` / `Key::CtrlK` — delete to start / end of line; Ctrl+W deletes the previous word
 - `Key::CtrlR` / `Key::CtrlS` — reverse / forward incremental history search; without the `-ixon` recipe (see *Terminal mode* above) the discipline intercepts Ctrl+S as XOFF and freezes output instead of opening forward search — Ctrl+Q (XON) unfreezes it

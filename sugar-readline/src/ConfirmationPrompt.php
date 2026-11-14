@@ -7,16 +7,21 @@ namespace SugarCraft\Readline;
 /**
  * Yes / No confirmation prompt.
  *
- * Selection and submission are decoupled: y / n / left / right / tab / space
- * change the selected value but do NOT auto-submit. Call {@see submit()} (or
- * feed {@see Key::Enter}) to commit. {@see result()} is meaningful only after
- * {@see isSubmitted()} returns true.
+ * Selection and submission are decoupled by default: y / n / left / right /
+ * tab / space change the selected value but do NOT auto-submit. Call
+ * {@see submit()} (or feed {@see Key::Enter}) to commit. With
+ * {@see withAutoSubmit()} armed, the y / n answer keys select AND commit in
+ * one press (the gum-style reflex; arrows and the toggle stay browse-only).
+ * {@see result()} is meaningful only after {@see isSubmitted()} returns true.
  */
 final class ConfirmationPrompt
 {
     private bool $value;       // tracks current selection
     private bool $submitted = false;
     private bool $aborted   = false;
+
+    /** Opt-in y/n-commits-immediately; OFF preserves the Enter-to-commit contract. */
+    private bool $autoSubmit = false;
 
     private string $confirmLabel = 'Yes';
     private string $cancelLabel  = 'No';
@@ -62,6 +67,20 @@ final class ConfirmationPrompt
         return $clone;
     }
 
+    /**
+     * Arm the immediate-answer reflex: with $on, a y or n press selects and
+     * submits in one key (finding 090). The feature defaults to OFF — plain
+     * usage keeps the documented Enter-to-commit parity, so existing hosts
+     * see byte-identical behaviour; calling withAutoSubmit() arms it,
+     * withAutoSubmit(false) stays off.
+     */
+    public function withAutoSubmit(bool $on = true): self
+    {
+        $clone = clone $this;
+        $clone->autoSubmit = $on;
+        return $clone;
+    }
+
     // -------------------------------------------------------------------------
     // Input
     // -------------------------------------------------------------------------
@@ -79,13 +98,29 @@ final class ConfirmationPrompt
         $key = Key::normalize($key);
 
         return match ($key) {
-            'y', 'Y', Key::Left  => $this->select(true),
-            'n', 'N', Key::Right => $this->select(false),
+            'y', 'Y'         => $this->answer(true),
+            'n', 'N'         => $this->answer(false),
+            Key::Left        => $this->select(true),
+            Key::Right       => $this->select(false),
             Key::Tab, Key::Space => $this->select(!$this->value),
             Key::Enter           => $this->submit(),
             Key::Escape, Key::CtrlC => $this->abort(),
             default              => $this,
         };
+    }
+
+    /**
+     * y/n lands on the selection — and under withAutoSubmit() it also
+     * commits (finding 090's opt-in reflex). Arrow keys and the
+     * Space/Tab toggle stay browse-only even when auto-submit is armed:
+     * they move a highlight, they are not an answer. Enter-to-commit
+     * parity is untouched either way — the default is OFF.
+     */
+    private function answer(bool $value): self
+    {
+        $selected = $this->select($value);
+
+        return $this->autoSubmit ? $selected->submit() : $selected;
     }
 
     public function submit(): self
