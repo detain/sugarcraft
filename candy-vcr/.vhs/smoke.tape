@@ -1,7 +1,8 @@
+# Render with: vhs candy-vcr/.vhs/smoke.tape
 Set Theme "TokyoNight"
-Set FontSize 14
-Set Width 700
-Set Height 240
-Type "Hello"
+Set FontSize "16"
+Set Width "600"
+Set Height "180"
+Type "php examples/inspect.php examples/cassettes/counter.cas"
 Enter
-Sleep 1s
+Sleep 2s
