@@ -1398,20 +1398,23 @@ final class Style
 
         // 2. Inner width: explicit, else max line width.
         //
-        // In the auto-width branch, capture each line's display width while
-        // scanning for the maximum and hand those widths to halign() so it
-        // does not re-measure every line a second time. The cache is voided
-        // (null) whenever a later step re-truncates the lines, in which case
-        // halign() measures afresh — keeping output byte-identical.
-        $lineWidths = null;
+        // Both branches capture each line's post-clamp display width and
+        // hand those widths to halign() so it never re-measures (finding
+        // 029: the explicit branch cached nothing and the maxWidth leg
+        // below voided the auto cache, costing 3-4 ANSI-aware re-walks of
+        // every line per render).
+        $lineWidths = [];
         if ($this->width !== null) {
             $innerWidth = $this->width;
             // Preserve inline ANSI escapes when callers pass pre-styled
             // content (e.g. another Style's render() output).
-            $lines = array_map(static fn(string $l) => Width::truncateAnsi($l, $innerWidth), $lines);
+            foreach ($lines as $i => $l) {
+                $t            = Width::truncateAnsi($l, $innerWidth);
+                $lines[$i]    = $t;
+                $lineWidths[] = Width::string($t);
+            }
         } else {
             $innerWidth = 0;
-            $lineWidths = [];
             foreach ($lines as $l) {
                 $w = Width::string($l);
                 $lineWidths[] = $w;
@@ -1423,22 +1426,28 @@ final class Style
         // MaxWidth caps innerWidth without padding shorter lines.
         if ($this->maxWidth !== null && $innerWidth > $this->maxWidth) {
             $innerWidth = $this->maxWidth;
-            $lines = array_map(static fn(string $l) => Width::truncateAnsi($l, $innerWidth), $lines);
-            $lineWidths = null; // lines re-truncated → cached widths are stale
+            // truncateAnsi is the identity on any line that already fits:
+            // its walk drops visible clusters ONLY after the budget is
+            // reached and copies every escape verbatim otherwise. So the
+            // cap re-walk runs on over-cap lines alone, and the surviving
+            // cached widths stay honest — no wholesale nulling.
+            foreach ($lines as $i => $l) {
+                if ($lineWidths[$i] > $innerWidth) {
+                    $t              = Width::truncateAnsi($l, $innerWidth);
+                    $lines[$i]      = $t;
+                    $lineWidths[$i] = Width::string($t);
+                }
+            }
         }
 
         // 3. Horizontal alignment within innerWidth — kept as
         //    [leftFill, line, rightFill] so step 4 can leave the fill
         //    unstyled when colorWhitespace is off.
-        if ($lineWidths !== null) {
-            $aligned = array_map(
-                fn(string $l, int $w) => $this->halign($l, $innerWidth, $w),
-                $lines,
-                $lineWidths,
-            );
-        } else {
-            $aligned = array_map(fn(string $l) => $this->halign($l, $innerWidth), $lines);
-        }
+        $aligned = array_map(
+            fn(string $l, int $w) => $this->halign($l, $innerWidth, $w),
+            $lines,
+            $lineWidths,
+        );
 
         // 4. Padding. With colorWhitespace (the default) the style's SGR
         //    spans padding + alignment fill + content; without it only the

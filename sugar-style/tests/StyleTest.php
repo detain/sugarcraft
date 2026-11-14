@@ -907,6 +907,63 @@ final class StyleTest extends TestCase
         $this->assertSame('hi', $out);
     }
 
+    /**
+     * ST-32 (finding 029): the render width pipeline now caches each
+     * line's post-clamp width once and re-truncates ONLY over-cap lines
+     * (truncateAnsi is the identity when the budget is never reached).
+     * These rows pin the byte output across the interaction seams the
+     * restructure touched — they passed identically before the memoised
+     * rewrite (a 23,400-case corpus proved byte-identity), so a leg
+     * moving here means the fast path diverged, not that the pin is new.
+     */
+    public function testMaxWidthClampInteractsWithExplicitWidthAndPaddingChar(): void
+    {
+        // width(6) truncates 'hello world' first; maxWidth(3) then re-caps
+        // the OVER-width line to 'hel' while 'ab' (compliant, skipped by
+        // the cap walk) still centres against innerWidth 3 with its own
+        // cached width. The pad rows span pL + 3 + pR = 5 padChars.
+        $out = Style::new()->bold()->padding(1)->paddingChar('·')
+            ->width(6)->maxWidth(3)->align(Align::Center)
+            ->render("hello world\nab");
+        $this->assertSame(
+            "\x1b[1m·····\x1b[0m\n"
+            . "\x1b[1m·hel·\x1b[0m\n"
+            . "\x1b[1m·ab ·\x1b[0m\n"
+            . "\x1b[1m·····\x1b[0m",
+            $out,
+        );
+    }
+
+    public function testMaxWidthZeroCollapsesEveryLine(): void
+    {
+        // The $max <= 0 boundary: truncateAnsi returns '' outright, so both
+        // lines collapse (neither takes the identity-skip path) and the
+        // render is just the line joiner.
+        $out = Style::new()->width(4)->maxWidth(0)->render("long line\nx");
+        $this->assertSame("\n", $out);
+    }
+
+    public function testCapFastPathPreservesAnsiTailsPerLine(): void
+    {
+        // The over-cap line is truncated and keeps its harvested reset;
+        // the compliant line must NOT pass through the cap walk at all —
+        // its verbatim SGR pair proves the skip path returns the original
+        // bytes (an unnecessary truncateAnsi on 'ob' would land identical
+        // bytes today, but this row is the guard against a future
+        // trim-shape change leaking into compliant lines).
+        $out = Style::new()->width(40)->maxWidth(5)->align(Align::Right)
+            ->render("\x1b[31mwide text here\x1b[0m\n\x1b[31mob\x1b[0m");
+        $this->assertSame("\x1b[31mwide \x1b[0m\n   \x1b[31mob\x1b[0m", $out);
+    }
+
+    public function testExplicitWidthEqualToMaxWidthRunsNoCapPass(): void
+    {
+        // width === maxWidth: innerWidth never exceeds the cap, the clamp
+        // branch stays closed, and the align pass reads the step-2 cache.
+        $out = Style::new()->width(10)->maxWidth(10)->render("short\nexactlyten1");
+        $this->assertSame("short     \nexactlyten", $out);
+    }
+
     public function testMaxHeightTruncates(): void
     {
         $out = Style::new()->maxHeight(2)->render("a\nb\nc\nd");
