@@ -314,4 +314,119 @@ final class ThemeTest extends TestCase
         // nord red #bf616a → 38;2;191;97;106
         $this->assertStringContainsString('38;2;191;97;106', $t->error->render('x'));
     }
+
+    // ------------------------------------------------------------------
+    // SC-T2 · finding 002 (high): detect() memoization, never stale
+    // ------------------------------------------------------------------
+
+    /**
+     * The environment roster the memo fingerprint covers. Kept in lockstep
+     * with sugar-core's private ColorProfile::defaultEnv() roster by the
+     * drift guard below — that is what makes "keyed on exactly what
+     * detection consults" a checked fact rather than a hope.
+     */
+    private const FINGERPRINT_ENV_KEYS = [
+        'NO_COLOR', 'CLICOLOR', 'CLICOLOR_FORCE', 'FORCE_COLOR',
+        'TERM', 'COLORTERM', 'TERM_PROGRAM',
+        'WT_SESSION',
+        'CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'BUILDKITE',
+    ];
+
+    public function testDetectMemoizesAnUnchangedEnvironment(): void
+    {
+        $first = Theme::detect();
+        $this->assertSame($first, Theme::detect(), 'identical environment must return the memoized instance');
+    }
+
+    public function testDetectChangingOneEnvKeyComputesAFreshPalette(): void
+    {
+        $restore = $this->isolateEnv(['NO_COLOR' => '1', 'CLICOLOR_FORCE' => '1']);
+        try {
+            // force + NO_COLOR outranks it → Ascii: decoration, no colour.
+            $ascii = Theme::detect();
+            $this->assertStringNotContainsString('38;2;', $ascii->prompt->render('p'));
+
+            putenv('NO_COLOR=0'); // same stream, one changed value → fresh
+            $full = Theme::detect();
+
+            $this->assertNotSame($ascii, $full, 'a changed env key must never return the memoized answer');
+            $this->assertStringContainsString('38;2;', $full->prompt->render('p'), 'force leg: TrueColor returns');
+        } finally {
+            $this->restoreEnv($restore);
+        }
+    }
+
+    public function testDetectMemoIsFingerprintedNotFirstWriteWins(): void
+    {
+        $base = Theme::detect();
+        // Flip NO_COLOR to a value the ambient env does not already carry.
+        $probe = \getenv('NO_COLOR') === '0' ? '1' : '0';
+        $restore = $this->isolateEnv(['NO_COLOR' => $probe]);
+        try {
+            $other = Theme::detect();
+            $this->assertNotSame($base, $other);
+        } finally {
+            $this->restoreEnv($restore);
+        }
+        $this->assertSame($base, Theme::detect(), 'returning the env must return the original memo entry');
+    }
+
+    public function testDetectWithExplicitEnvArrayBypassesTheMemo(): void
+    {
+        $a = Theme::detect(['NO_COLOR' => '1']);
+        $b = Theme::detect(['NO_COLOR' => '1']);
+        $this->assertNotSame($a, $b, 'caller-owned arrays are never identity-shared');
+        $this->assertStringNotContainsString('38;2;', $a->prompt->render('p'));
+    }
+
+    public function testFingerprintRosterMatchesSugarCoreDefaultEnv(): void
+    {
+        $restore = [];
+        foreach (self::FINGERPRINT_ENV_KEYS as $k) {
+            $restore[$k] = \getenv($k);
+            putenv($k . '=sc-t2-drift-probe');
+        }
+        try {
+            $method = new \ReflectionMethod(\SugarCraft\Core\Util\ColorProfile::class, 'defaultEnv');
+            $collected = $method->invoke(null);
+
+            $themeKeys = self::FINGERPRINT_ENV_KEYS;
+            sort($themeKeys);
+            $coreKeys = array_keys($collected);
+            sort($coreKeys);
+            $this->assertSame(
+                $themeKeys,
+                $coreKeys,
+                'sugar-core changed its detection env roster — Theme::DETECT_ENV_KEYS (the memo fingerprint) must follow, or the memo can go stale',
+            );
+        } finally {
+            $this->restoreEnv($restore);
+        }
+    }
+
+    /**
+     * @param array<string,string> $set
+     * @return array<string,string|false>
+     */
+    private function isolateEnv(array $set): array
+    {
+        $restore = [];
+        foreach ($set as $k => $v) {
+            $restore[$k] = \getenv($k);
+            putenv($k . '=' . $v);
+        }
+        return $restore;
+    }
+
+    /** @param array<string,string|false> $restore */
+    private function restoreEnv(array $restore): void
+    {
+        foreach ($restore as $k => $v) {
+            if ($v === false) {
+                putenv($k);
+            } else {
+                putenv($k . '=' . $v);
+            }
+        }
+    }
 }

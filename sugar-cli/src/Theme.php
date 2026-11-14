@@ -72,9 +72,13 @@ final class Theme
      * which owns the whole convention order (non-tty output, TERM=dumb,
      * NO_COLOR, CLICOLOR_FORCE / FORCE_COLOR, COLORTERM, TERM, ...), and is
      * applied via
-     * {@see withColorProfile()}. Detection runs on every call: no result is
-     * cached, so a process that changes its environment or output stream is
-     * never served a stale answer.
+     * {@see withColorProfile()}. The default (no-argument) answer is memoized
+     * against a fingerprint of exactly what detection consults — the
+     * environment values {@see ColorProfile::detect()} reads plus the state
+     * of the default output stream — so a repeat call in an unchanged
+     * process returns the same instance, while a process that changes its
+     * environment or output stream computes fresh: no result is ever served
+     * stale.
      *
      * Mirrors charmbracelet/fang, which renders through
      * `colorprofile.Detect(w, os.Environ())`; the ladder order lives in
@@ -99,15 +103,67 @@ final class Theme
      */
     public static function detect(?array $env = null, mixed $stream = null): self
     {
-        if ($stream === null) {
+        // Only the ambient no-argument call is memoized: an explicit $env
+        // array is caller-owned data whose identity the fingerprint cannot
+        // observe, and an explicit $stream skips the default-stream leg.
+        if ($stream !== null) {
+            if (!\is_resource($stream)) {
+                throw new \InvalidArgumentException(
+                    'Theme::detect() expects a stream resource or null; got ' . get_debug_type($stream) . '.'
+                );
+            }
+            return self::ansi()->withColorProfile(ColorProfile::detect($env, $stream));
+        }
+        if ($env !== null) {
             return self::ansi()->withColorProfile(self::detectDefaultStream($env));
         }
-        if (!\is_resource($stream)) {
-            throw new \InvalidArgumentException(
-                'Theme::detect() expects a stream resource or null; got ' . get_debug_type($stream) . '.'
-            );
+
+        $key            = self::detectFingerprint();
+        self::$detectMemo ??= [];
+
+        return self::$detectMemo[$key] ??= self::ansi()->withColorProfile(self::detectDefaultStream(null));
+    }
+
+    /**
+     * The environment values {@see ColorProfile::detect()} consults when it
+     * snapshots the process itself (its private `defaultEnv()` roster).
+     * Pinned against sugar-core by ThemeTest's fingerprint-drift guard — if
+     * the upstream roster changes without this list, that test goes red
+     * instead of the memo silently serving a stale answer.
+     *
+     * @var list<string>
+     */
+    private const DETECT_ENV_KEYS = [
+        'NO_COLOR', 'CLICOLOR', 'CLICOLOR_FORCE', 'FORCE_COLOR',
+        'TERM', 'COLORTERM', 'TERM_PROGRAM',
+        'WT_SESSION',
+        'CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'BUILDKITE',
+    ];
+
+    /** @var array<string, self>|null */
+    private static ?array $detectMemo = null;
+
+    /**
+     * Fingerprint of everything the default-stream detect path reads: the
+     * twelve roster values and the state of STDOUT as sugar-core will see it
+     * (defined / open / tty-ness — the three facts detectDefaultStream()
+     * branches on). Two calls share a key exactly when both inputs are
+     * byte-identical, which is precisely the never-stale condition.
+     */
+    private static function detectFingerprint(): string
+    {
+        $parts = [];
+        foreach (self::DETECT_ENV_KEYS as $k) {
+            $v       = \getenv($k);
+            $parts[] = $k . '=' . ($v === false ? "\x00unset" : $v);
         }
-        return self::ansi()->withColorProfile(ColorProfile::detect($env, $stream));
+        $stream = !\defined('STDOUT')
+            ? 'none'
+            : (!\is_resource(\STDOUT)
+                ? 'closed'
+                : (\stream_isatty(\STDOUT) ? 'tty' : 'pipe'));
+
+        return $stream . "\x1f" . implode("\x1f", $parts);
     }
 
     /**
