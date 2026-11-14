@@ -25,7 +25,7 @@ To implement an item:
 | **sugar-core** | [research/libraries/sugar-core-research.md](libraries/sugar-core-research.md) | 1. Elm-Style Subscriptions, 2. Screen Stack, 3. Component Composition |
 | **sugar-style** | [research/libraries/sugar-style-research.md](libraries/sugar-style-research.md) | 1. Theme class, 2. String color parsing, 3. Layout spacing |
 | **sugar-pty** | [research/libraries/sugar-pty-research.md](libraries/sugar-pty-research.md) | 1. openpty() FFI, 2. waitpid() FFI, 3. Raw mode support |
-| **sugar-vterm** | [research/libraries/sugar-vterm-research.md](libraries/sugar-vterm-research.md) | 1. DECSTBM margins, 2. Auto-wrap, 3. Subparam parsing |
+| **sugar-vterm** | [research/libraries/sugar-vterm-research.md](libraries/sugar-vterm-research.md) | 1. DECSTBM margins ✅, 2. Auto-wrap ✅, 3. Subparam parsing ✅ (all landed; survey superseded 2026-11 — lib README is authority) |
 | **candy-vcr** | [research/libraries/candy-vcr-research.md](libraries/candy-vcr-research.md) | 1. stats CLI, 2. RegexAssertion, 3. Gzip compression |
 
 ### Dashboard & Components
@@ -118,8 +118,8 @@ To implement an item:
 | 11 | candy-codeshot | Background colors | 2h | [link](libraries/candy-codeshot-research.md) |
 | 12 | candy-codeshot | Ligature flag | 1h | [link](libraries/candy-codeshot-research.md) |
 | 13 | sugar-image | WezTerm detection fix | 0.5h | [link](libraries/sugar-image-research.md) |
-| 14 | sugar-vterm | DECSTBM margins | 2-3h | [link](libraries/sugar-vterm-research.md) |
-| 15 | sugar-vterm | Auto-wrap DECAWM | 2h | [link](libraries/sugar-vterm-research.md) |
+| 14 | sugar-vterm | DECSTBM margins ✅ landed | 2-3h | [link](libraries/sugar-vterm-research.md) |
+| 15 | sugar-vterm | Auto-wrap DECAWM ✅ landed | 2h | [link](libraries/sugar-vterm-research.md) |
 | 16 | candy-kv | CSV/JSON export | 1-2h | [link](libraries/candy-kv-research.md) |
 | 17 | candy-kv | Levenshtein suggestions | 1h | [link](libraries/candy-kv-research.md) |
 | 18 | sugar-animation | imagecreatefromstring | 1-2h | [link](libraries/sugar-animation-research.md) |

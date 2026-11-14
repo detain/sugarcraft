@@ -5,6 +5,17 @@
 **Upstream:** charmbracelet/x/vt (Go)
 **Context:** Research for feature parity and potential improvements
 
+> **SUPERSEDED (2026-11-13)** — this survey predates the README coverage tables
+> and the 2026-11 review pass; the lib's own `sugar-vterm/README.md` is the
+> authority. The "Known Gaps" list below was largely overtaken by events:
+> scrollback, auto-wrap (DECAWM), DECSTBM/DECOM margins, BCE, combining
+> composition, subparameters, DECSCUSR, synchronized output (2026) and the
+> OSC/DA/DSR/XTWINOPS/DECRQM query families are all implemented today, while
+> sixel/Kitty graphics and DECRQSS remain open. The CALIBER_LEARNINGS.md
+> gap roster this file cited has since been removed from the lib. Inline
+> notes mark the most misleading passages; they do not replace reading the
+> current README + source.
+
 ---
 
 ## Executive Summary
@@ -16,6 +27,13 @@ sugar-vterm implements a VT500-series ANSI parser with cell grid management, cur
 ## 1. Current Implementation Overview
 
 ### Source Structure
+
+> **Note (2026-11-13):** the parser core (`Parser.php`, `State.php`,
+> `Transitions.php`, `Action.php`) has since moved to the shared
+> `sugar-ansi-parser` package; `sugar-vterm/src/Parser/` now holds the
+> engine-specific handler implementations (`CsiHandlerImpl`,
+> `PenForwardingOscHandler`, `RendererHandler`, …). The tree below is the
+> 2026-05 layout.
 
 ```
 sugar-vterm/src/
@@ -60,6 +78,17 @@ sugar-vterm/src/
 - ✅ Wide char handling (CJK, emoji — 2 cells with continuation)
 
 ### Known Gaps (from CALIBER_LEARNINGS.md)
+
+> **Note (2026-11-13):** the cited CALIBER_LEARNINGS.md gap roster no longer
+> exists. Of the gaps below, **scrollback, auto-wrap (DECAWM), DECSTBM
+> margins, BCE and combining composition are implemented** (see
+> `sugar-vterm/src/Screen/Scrollback.php`, `Mode::$autoWrap`,
+> `Handler/ScrollHandler.php` + `ScreenHandler` region guards,
+> `Handler/EraseHandler.php`, `Cell::$combining` + the parser's
+> `attachCombining`), and the file's last bullet carries a mojibake artifact
+> ("DEC绍") of a DECSET-2026 item that is likewise implemented
+> (`tests/Handler/SyncOutputTest.php`). Sixel, Kitty graphics and DECRQSS are
+> still genuinely open.
 
 - ❌ **No scrollback** — scrolled-off rows are dropped
 - ❌ **No auto-wrap** — cursor clamps at right edge; auto-wrap deferred until DECSTBM margins
@@ -160,6 +189,12 @@ pub trait Perform {
 **Key design:** `Perform` trait allows zero-cost abstraction — the parser doesn't know about terminal semantics, it just dispatches to a performer.
 
 ### 2.2 Subparameter Handling (CSI `:` separator)
+
+> **Note (2026-11-13):** implemented — colon subparameters parse in
+> `sugar-ansi-parser`'s shared `Transitions.php` and land in both engines
+> (`tests/Parser/SubparamTest.php`, `tests/Parser/CsiHandlerImplColonSgrTest`,
+> `tests/Handler/ColonExtendedColourTest.php`,
+> `tests/SgrUnderlineStylesTest.php`). The recommendation below is historical.
 
 **Source:** [alacritty/vte#22](https://github.com/jwilm/vte/issues/22) — colon-separated CSI parameters
 
@@ -272,6 +307,13 @@ final class BufferLinear {
 ---
 
 ## 4. Scrollback Buffer Comparison
+
+> **Note (2026-11-13):** superseded in full — `Screen/Scrollback.php` is a
+> fixed-cap ring pushed by `ScreenHandler`'s private `scrollUp`/`scrollDown`
+> before each viewport shift (lines surface via `Screen::linesWithHistory`,
+> now a lazy `all()` generator — vterm-27), with `withScrollbackSize` intake
+> governed by the facade ceilings (vterm-28). The ring-buffer designs
+> surveyed below describe what shipped, not what is missing.
 
 ### 4.1 charmbracelet/x/vt — Recent Addition (March 2026)
 
@@ -456,6 +498,12 @@ final readonly class Cursor {
 
 ### 5.2 Missing Cursor Features
 
+> **Note (2026-11-13):** DECOM origin mode and DECSCUSR (`CSI Ps q` shapes,
+> stored as `CursorShape` in `Mode`) are implemented, and DECSC/DECRC now
+> carry the origin-mode half (the general save slot stores it); cursor blink
+> state remains represented via the blinking `CursorShape` variants rather
+> than a separate flag.
+
 | Feature | charmbracelet/x/vt | sugar-vterm |
 |---------|-------------------|----------|
 | Origin mode (DECOM) | ✅ Full support | ❌ Not implemented |
@@ -514,6 +562,13 @@ final readonly class Color {
 
 ### 6.2 Missing SGR Features
 
+> **Note (2026-11-13):** underline `4:subparameter` styles (single/double/
+> curly/dotted/dashed, colon grammar) and SGR 28/29 conceal/reveal are
+> implemented (`tests/SgrUnderlineStylesTest.php`, `Sgr::$invisible`,
+> `Handler/SgrHandler.php`); the renderer grid carries a documented subset
+> bitfield — faint/hidden are pen-level, not painted — see the README SGR
+> section and the sugar-vterm-091 revisit note.
+
 | Feature | Notes |
 |---------|-------|
 | SGR 4:subparameter (underline style) | 0=none, 1=single, 2=double, 3=curly, 4=dotted, 5=dashed |
@@ -558,6 +613,11 @@ final readonly class Sgr {
 ---
 
 ## 7. Synchronized Output (DECSET 2026)
+
+> **Note (2026-11-13):** implemented — DECSET/DECRST 2026 arms in
+> `Handler/ModeHandler.php`, deferred-mutation queue in `ScreenHandler`
+> (`MAX_SYNC_MUTATIONS` byte/count ceiling, vterm-15 ring hygiene), pinned by
+> `tests/Handler/SyncOutputTest.php` + `SyncOutputEraseTest.php`.
 
 ### 7.1 Purpose
 
