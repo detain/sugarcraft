@@ -212,8 +212,11 @@ final class TextPrompt
     public function withDefault(string $value): self
     {
         $clone = clone $this;
-        // Clamp to charLimit if set (ordering caveat: withCharLimit() should precede
-        // withDefault() for the clamp to engage, matching upstream promptkit behavior).
+        // Order-independence law (finding 092): whichever of withDefault()
+        // and withCharLimit() is applied last enforces the clamp, so the
+        // chain order no longer changes the outcome. The former "limit
+        // must precede default" caveat cited upstream promptkit behavior
+        // no repo artifact could verify; the cite is dropped with the fix.
         if ($clone->charLimit > 0) {
             $clone->buffer = self::sliceChars($value, 0, $clone->charLimit);
             $clone->cursor = self::charCount($clone->buffer);
@@ -224,10 +227,32 @@ final class TextPrompt
         return $clone;
     }
 
-    public function withHidden(bool $hidden = true, string $mask = '*'): self
+    /**
+     * Toggle the hidden (password) render.
+     *
+     * The mask glyph is its own setting: toggling hidden OFF no longer
+     * resets it to '*' (finding 092), so a prompt can be switched off and
+     * back on without losing a configured glyph. Pass $mask explicitly
+     * when this call should also change it; for the glyph alone use
+     * withMask().
+     *
+     * @param bool       $hidden render buffered characters as the mask
+     * @param string|null $mask  set the mask glyph (null keeps the current one)
+     */
+    public function withHidden(bool $hidden = true, ?string $mask = null): self
     {
         $clone = clone $this;
-        $clone->hidden   = $hidden;
+        $clone->hidden = $hidden;
+        if ($mask !== null) {
+            $clone->hideMask = $mask;
+        }
+        return $clone;
+    }
+
+    /** Set the glyph repeated in place of each buffered char when hidden. */
+    public function withMask(string $mask): self
+    {
+        $clone = clone $this;
         $clone->hideMask = $mask;
         return $clone;
     }
@@ -286,10 +311,21 @@ final class TextPrompt
         return $clone;
     }
 
+    /**
+     * Cap the buffer at $limit characters (0 = unlimited).
+     *
+     * A limit applied after a default re-clamps the default immediately —
+     * the clamp is enforced by whichever setter runs last, not by chain
+     * order (finding 092).
+     */
     public function withCharLimit(int $limit): self
     {
         $clone = clone $this;
         $clone->charLimit = max(0, $limit);
+        if ($clone->charLimit > 0 && self::charCount($clone->buffer) > $clone->charLimit) {
+            $clone->buffer = self::sliceChars($clone->buffer, 0, $clone->charLimit);
+            $clone->cursor = self::charCount($clone->buffer);
+        }
         return $clone;
     }
 

@@ -101,10 +101,14 @@ instance:
   throwing — but a throwing validator is now caught: its exception is
   contained as a default-message rejection instead of escaping `submit()`,
   `handleKey()` and `run()`.
-- `withCharLimit(int)` caps the buffer.
+- `withCharLimit(int)` caps the buffer. Limit and default are
+  order-independent: whichever of `withDefault()` and `withCharLimit()`
+  runs last enforces the clamp (`withMaxLines()` behaves the same way on
+  the textarea).
 - `withHidden()` masks input (for secrets) and disables history pushes and
   completion echoes. The masked frame renders one glyph per typed character
-  (`*` by default; the setter's `$mask` argument changes the glyph), so
+  (`*` by default; `withMask()` or the setter's nullable `$mask` argument
+  changes the glyph — toggling hidden off keeps the configured glyph), so
   assistive output perceives the length of what is typed but never its
   content. When even a growing mask run is unwanted, drive the prompt
   through the pure state-machine API and render whatever subset you choose.

@@ -57,8 +57,11 @@ final class TextareaPrompt
     {
         $clone = clone $this;
         $clone->lines = explode("\n", $value);
-        // Clamp to maxLines if set (ordering caveat: withMaxLines() should precede
-        // withDefault() for the clamp to engage, matching upstream promptkit behavior).
+        // Order-independence law (finding 092): whichever of withDefault()
+        // and withMaxLines() is applied last enforces the line clamp. The
+        // former "maxLines must precede default" caveat cited upstream
+        // promptkit behavior no repo artifact could verify; the cite is
+        // dropped with the fix.
         if ($clone->maxLines > 0 && count($clone->lines) > $clone->maxLines) {
             $clone->lines = array_slice($clone->lines, 0, $clone->maxLines);
         }
@@ -67,10 +70,22 @@ final class TextareaPrompt
         return $clone;
     }
 
+    /**
+     * Cap the editor at $max lines (0 = unlimited).
+     *
+     * A cap applied after a default re-slices the lines immediately —
+     * the clamp is enforced by whichever setter runs last, not by chain
+     * order (finding 092). The caret follows the last surviving line.
+     */
     public function withMaxLines(int $max): self
     {
         $clone = clone $this;
         $clone->maxLines = max(0, $max);
+        if ($clone->maxLines > 0 && count($clone->lines) > $clone->maxLines) {
+            $clone->lines = array_slice($clone->lines, 0, $clone->maxLines);
+            $clone->line  = count($clone->lines) - 1;
+            $clone->col   = self::charCount($clone->lines[$clone->line]);
+        }
         return $clone;
     }
 
