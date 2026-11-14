@@ -545,6 +545,9 @@ final class TapeToGif
      */
     private function resolveShell(array $options): ?string
     {
+        // Precedence: CLI --shell (the operator's own invocation — deliberately
+        // not nine-name-validated) → the tape's directive (validated at the
+        // compile door, Compiler::VALID_SHELLS) → --exec's default shell.
         $cliShell = $options['shell'] ?? null;
         if (is_string($cliShell) && trim($cliShell) !== '') {
             return trim($cliShell);

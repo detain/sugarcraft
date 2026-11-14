@@ -496,7 +496,7 @@ vendor/bin/candy-vcr render-tape demo.tape --strict
 
 # Exec mode — actually RUN the typed commands and capture the program's
 # output into the GIF (real vhs-style program demos, not just keystrokes).
-# Opt in via `Set Shell "sh"` inside the tape, or on the CLI:
+# Opt in via `Set Shell "bash"` inside the tape, or on the CLI:
 vendor/bin/candy-vcr render-tape demo.tape --shell sh
 vendor/bin/candy-vcr render-tape demo.tape --exec        # default shell ($SHELL/sh)
 
@@ -547,9 +547,15 @@ Enable it three ways, in precedence order: the CLI `--shell=<sh>`
 (operator override) → the tape's own `Set Shell "<sh>"` directive →
 `--exec` (default shell). **Absence of all three keeps the byte-identical
 echo path** — tapes with no shell render exactly as before.
+A tape's shell name is validated against upstream vhs's nine-name set
+(`bash, zsh, fish, powershell, pwsh, cmd, nu, osh, xonsh` — plain `sh` is
+not one of them, upstream included); an unknown name is refused at the
+compile door — a warning and the tape stays on the echo path, or a hard
+error under `--strict`. The CLI `--shell` flag is your own invocation and
+skips the roster.
 
 ```tape
-Set Shell "sh"
+Set Shell "bash"
 Type "php examples/spinner.php"
 Enter
 Sleep 3s

@@ -65,7 +65,8 @@ final class Compiler
      * as typed characters and no subprocess runs. A non-null value opts the render
      * into exec mode ({@see \SugarCraft\Vcr\Render\FrameStream}), where the typed
      * commands are written to a real PTY and the program's output is captured into
-     * the frames — mirroring charmbracelet/vhs `Set Shell`. Kept as a render-time
+     * the frames — mirroring charmbracelet/vhs `Set Shell` including its
+     * nine-name validation ({@see self::VALID_SHELLS}, VCR-S54). Kept as a render-time
      * accessor ({@see shell()}) rather than a serialized header field, matching the
      * existing {@see outputPath()} idiom for compile-resolved, render-only values.
      */
@@ -101,6 +102,18 @@ final class Compiler
     private array $sourceStack = [];
 
     private const MAX_SOURCE_DEPTH = 10;
+
+    /**
+     * The shells upstream vhs accepts for `Set Shell`, transcribed from its
+     * fixed nine-key lookup map (measured against the real binary; evidence
+     * pinned by candy-code/tests/VhsTapeContractTest.php::VALID_SHELLS).
+     * Upstream refuses anything else with `invalid shell <name>` — notably
+     * including plain `sh`, which surprises people. Before this roster the
+     * "Mirrors charmbracelet/vhs Set Shell" docblocks lacked that guard rail:
+     * an arbitrary executable name rode straight into exec mode under CI
+     * render-matrices that consume committed tapes unattended.
+     */
+    public const VALID_SHELLS = ['bash', 'zsh', 'fish', 'powershell', 'pwsh', 'cmd', 'nu', 'osh', 'xonsh'];
 
     /**
      * When true, a Source directive that escapes the tape's directory or cannot
@@ -217,7 +230,8 @@ final class Compiler
      * Shell requested by the tape's `Set Shell "<shell>"` directive, or null when
      * the tape sets none. A non-null value opts the render into exec mode (real
      * PTY + captured program output); null keeps the byte-identical echo path.
-     * Reflects the most recent compile() call. Mirrors charmbracelet/vhs Set Shell.
+     * Reflects the most recent compile() call. Mirrors charmbracelet/vhs Set Shell,
+     * nine-name validation included — a tape cannot surface an arbitrary executable.
      */
     public function shell(): ?string
     {
@@ -375,6 +389,34 @@ final class Compiler
     }
 
     /**
+     * The `Set Shell` name door: only the nine shells upstream's map carries
+     * ({@see self::VALID_SHELLS}) reach exec mode. An unknown or empty value
+     * is a compile problem — loud, and the directive is dropped (null) so the
+     * tape keeps its safe echo-path behaviour. The CLI `--shell` flag is the
+     * operator's own explicit invocation and is NOT routed through here; the
+     * tape is the untrusted input CI renders unattended.
+     */
+    private function parseShell(string $raw): ?string
+    {
+        $name = trim($raw, '"\' ');
+
+        if ($name === '') {
+            $this->reportCompileProblem('Set Shell needs a shell name; the directive is ignored');
+            return null;
+        }
+
+        if (!in_array($name, self::VALID_SHELLS, true)) {
+            $this->reportCompileProblem(
+                "Invalid shell '{$name}' (upstream vhs accepts: " . implode(', ', self::VALID_SHELLS) . ')'
+                    . '; the directive is ignored',
+            );
+            return null;
+        }
+
+        return $name;
+    }
+
+    /**
      * Report a problem that LOST tape content, and book it in
      * {@see droppedDiagnostics()} too (finding 024): callers that surface a
      * summary — the CLI's default-mode warning print, S08's accepted-not-
@@ -413,8 +455,12 @@ final class Compiler
             'FontFamily' => $this->fontFamily = trim($node->value, '"\' '),
             // Opt-in exec mode: the tape's typed commands run in this shell and the
             // program's real output is captured into the frames. Absence keeps the
-            // byte-identical echo path. Mirrors charmbracelet/vhs `Set Shell`.
-            'Shell' => $this->shell = trim($node->value, '"\' '),
+            // byte-identical echo path. Mirrors charmbracelet/vhs `Set Shell`,
+            // including its nine-name validation (VCR-S54): an unknown name is
+            // refused at the compile door — strict throws, else a warning names
+            // it and the directive is dropped so the render stays on the echo
+            // path instead of exec'ing an arbitrary executable.
+            'Shell' => $this->shell = $this->parseShell($node->value) ?? $this->shell,
             // The one output-cadence knob upstream exposes: honoured through
             // TapeToGif's fps resolution (CLI --fps still wins). Finding 008.
             'Framerate' => $this->framerate = $this->parseFramerate($node->value),

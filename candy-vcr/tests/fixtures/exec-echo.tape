@@ -8,7 +8,7 @@ Set FontSize 14
 Set Width 700
 Set Height 240
 Set TypingSpeed 10ms
-Set Shell "sh"
+Set Shell "bash"
 # Arithmetic expansion the shell must EVALUATE: the typed command carries
 # `$((6*7))`, but only a shell that RAN it prints `vcr-ran-42`. Echo-only
 # rendering could never produce the expanded `42`, so the output line is

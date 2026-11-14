@@ -40,7 +40,7 @@ final class FrameStreamExecTest extends TestCase
         // Echo path is unaffected: parsing succeeds and the shell surfaces on the
         // compiler accessor (not on the serialized header). No PTY needed here.
         [, $compiler] = $this->compileTape();
-        self::assertSame('sh', $compiler->shell());
+        self::assertSame('bash', $compiler->shell());
     }
 
     public function testTapeWithoutSetShellStaysEcho(): void
@@ -57,8 +57,8 @@ final class FrameStreamExecTest extends TestCase
     public function testExecModeRendersProgramOutputIntoFrames(): void
     {
         $this->requirePtySyscalls();
-        if (\PHP_OS_FAMILY === 'Windows' && HostShell::locate('sh') === null) {
-            $this->markTestSkipped('The fixture tape asks for `sh`, and this Windows host has none on PATH (Git for Windows ships one).');
+        if (\PHP_OS_FAMILY === 'Windows' && HostShell::locate('bash') === null) {
+            $this->markTestSkipped('The fixture tape asks for `bash`, and this Windows host has none on PATH (Git for Windows ships one).');
         }
 
         [$cassette, $compiler] = $this->compileTape();
@@ -68,13 +68,29 @@ final class FrameStreamExecTest extends TestCase
         $terminal = Terminal::new($cassette->header->cols, $cassette->header->rows);
         $stream = new FrameStream(new Player($cassette), $terminal, 30.0, $shell);
 
-        // Collect the distinct, non-blank line texts seen across ALL frames — the
-        // program output arrives on the frames inside the trailing `Sleep 1s`.
-        $lines = [];
-        /** @var Snapshot $snapshot */
-        foreach ($stream as $snapshot) {
-            foreach ($this->frameLines($snapshot) as $line) {
-                $lines[$line] = true;
+        // A render must be reproducible (FrameStream's own reason for not
+        // starting a login shell): an interactive bash sources $HOME/.bashrc,
+        // and on hosts whose bashrc talks back on stderr (the dev image here
+        // runs a `ulimit` line that errors under the sandbox) that noise lands
+        // in the frames. Pin HOME to a nonexistent path for the spawn window
+        // so the shell starts rc-clean, exactly as `sh` did before VCR-S54.
+        $home = getenv('HOME');
+        putenv('HOME=/nonexistent-vcr-exec-test');
+        try {
+            // Collect the distinct, non-blank line texts seen across ALL frames — the
+            // program output arrives on the frames inside the trailing `Sleep 1s`.
+            $lines = [];
+            /** @var Snapshot $snapshot */
+            foreach ($stream as $snapshot) {
+                foreach ($this->frameLines($snapshot) as $line) {
+                    $lines[$line] = true;
+                }
+            }
+        } finally {
+            if ($home === false) {
+                putenv('HOME');
+            } else {
+                putenv("HOME={$home}");
             }
         }
         $seen = array_keys($lines);
