@@ -613,7 +613,10 @@ final class Renderer
         $lines = [];
         $titleBox = self::overlayWidth($a, 72);
         $lines[] = Style::new()->bold()->foreground(Color::hex('#fde68a'))
-            ->render(Lang::t('ui.diff_prefix') . self::truncate(self::sanitize($dv->path), max(6, $titleBox - 10)) . ' ');
+            ->render(Lang::t('ui.diff_prefix') . self::truncate(self::sanitize($dv->path), max(6, $titleBox - 10))
+                . ' ' . ($dv->cached
+                    ? Lang::t('diff.side_staged')
+                    : Lang::t('diff.side_worktree')));
 
         // Syntax pass: accent recognised-language tokens inside diff
         // bodies. '' language (or an unaccentable line) keeps the plain
@@ -622,16 +625,40 @@ final class Renderer
 
         // Window the diff body to the terminal height —
         // every line used to be appended below the frame where nothing could
-        // reach it. The selected hunk's first line (the cursor) stays visible;
-        // lines clip to the box width. The 3 reserved rows are the
-        // title, the navigation hint, and one scroll indicator at most.
+        // reach it. The window is anchored at scrollOffset, a LINE position
+        // the user pages through independently of the hunk selection
+        // (candy-git-045: hunk-only navigation stranded every tall hunk at
+        // its first screen; candy-git-122: an offset-derived window slices
+        // O(visible) rows per navigation instead of re-materialising the
+        // whole hunk). The selected hunk keeps its highlight wherever it
+        // lies; hunk jumps bring their hunk into view. Lines clip to the box
+        // width. The 3 reserved rows are the title, the navigation hint, and
+        // one scroll indicator at most.
         $boxW = self::overlayWidth($a, 72);
         $inner = max(10, $boxW - 5);
-        [$winStart, $winShown, $above, $below] = self::rowWindow(
-            count($dv->lines),
-            (int) $dv->hunkCursor,
-            max(1, $a->overlayBodyRows() - 3),
-        );
+        // Top-anchored paging (candy-git-045): unlike a selection list, a
+        // text viewer reads from its first line — j/k and the page keys
+        // move the TOP of the window, and the rowWindow indicator contract
+        // is mirrored here by hand.
+        $count = count($dv->lines);
+        $visible = max(1, $a->overlayBodyRows() - 3);
+        if ($count === 0 || $visible >= $count) {
+            [$winStart, $winShown, $above, $below] = [0, $count, 0, 0];
+        } else {
+            $body = max(1, $visible - 2);
+            $winStart = max(0, min($dv->scrollOffset, $count - $body));
+            $above = $winStart;
+            $below = $count - $winStart - $body;
+            if ($above === 0) {
+                $body = max(1, $visible - 1);
+                $below = $count - $winStart - $body;
+            } elseif ($below <= 0) {
+                $winStart = $count - $body;
+                $above = $winStart;
+                $below = 0;
+            }
+            $winShown = $body;
+        }
         if ($above > 0) {
             $lines[] = self::scrollHint(Lang::t('viewport.above', ['n' => $above]));
         }
@@ -695,7 +722,9 @@ final class Renderer
         }
 
         $hint = Style::new()->foreground(Color::hex('#7d6e98'))
-            ->render(Lang::t('diff.navigation_hint'));
+            ->render($dv->cached
+                ? Lang::t('diff.navigation_hint_cached')
+                : Lang::t('diff.navigation_hint'));
 
         $border = Border::rounded();
         $box = Style::new()

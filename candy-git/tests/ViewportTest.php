@@ -182,24 +182,36 @@ final class ViewportTest extends TestCase
         self::assertGreaterThan($halfDown->branchesCursor, $oneMore->branchesCursor);
     }
 
-    public function testDiffHunkNavigationFollowsPageUpPageDownHomeEnd(): void
+    public function testDiffPageKeysScrollLinesAndBracketsHopHunks(): void
     {
         $git = new FixtureGit([], [], []);
-        $viewer = DiffViewer::fromRawDiff('src/f.php', self::diffLines(3));
+        $lines = self::diffLines(3);
+        $viewer = DiffViewer::fromRawDiff('src/f.php', $lines);
         $app = new App($git, diffViewer: $viewer, width: 80, height: 24);
         self::assertSame($viewer->hunkStarts[0], $app->diffViewer->hunkCursor);
+        self::assertSame(0, $app->diffViewer->scrollOffset, 'a fresh window opens at the top of the diff');
 
+        // Re-anchored (candy-git-045): PageUp/PageDown became LINE paging -
+        // the selection stays put and the window moves. They used to hop
+        // hunks, which left every hunk taller than the screen unreadable
+        // past its first window; the hop itself now rides the brackets.
+        $page = max(1, $app->overlayBodyRows() - 6);
         [$down, ] = $app->update(new KeyMsg(KeyType::PageDown, ''));
-        self::assertSame($viewer->hunkStarts[1], $down->diffViewer->hunkCursor);
+        self::assertSame(min(count($lines) - 1, $page), $down->diffViewer->scrollOffset);
+        self::assertSame($viewer->hunkStarts[0], $down->diffViewer->hunkCursor, 'paging must not move the selection');
+
+        [$next, ] = $down->update(new KeyMsg(KeyType::Char, ']'));
+        self::assertSame($viewer->hunkStarts[1], $next->diffViewer->hunkCursor);
+        self::assertSame($viewer->hunkStarts[1], $next->diffViewer->scrollOffset, 'a hunk jump brings the selection into view');
 
         [$end, ] = $app->update(new KeyMsg(KeyType::End, ''));
         self::assertSame($viewer->hunkStarts[2], $end->diffViewer->hunkCursor);
 
-        [$home, ] = $app->update(new KeyMsg(KeyType::Home, ''));
+        [$home, ] = $end->update(new KeyMsg(KeyType::Home, ''));
         self::assertSame($viewer->hunkStarts[0], $home->diffViewer->hunkCursor);
 
         [$back, ] = $home->update(new KeyMsg(KeyType::PageUp, ''));
-        self::assertSame($viewer->hunkStarts[0], $back->diffViewer->hunkCursor, 'PageUp at the first hunk stays put');
+        self::assertSame(0, $back->diffViewer->scrollOffset, 'PageUp at the top stays put');
     }
 
     public function testATallDiffOverlayWindowsAroundTheSelectedHunk(): void

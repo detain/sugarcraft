@@ -22,6 +22,14 @@ final readonly class DiffViewer
      * @param list<string> $lines Raw diff lines (including hunk headers)
      * @param list<int>    $hunkStarts Line indices in $lines where each hunk begins
      * @param list<string> $header Lines before the first hunk header (diff --git / --- / +++)
+     * @param bool         $cached Which side this diff shows: true = the index
+     *                             (`--cached`), so Space must UNstage; false =
+     *                             the worktree (candy-git-034 — the viewer used
+     *                             to show the staged side but could only stage).
+     * @param int          $scrollOffset First visible line of the window; the
+     *                             display anchor, separate from the hunk
+     *                             cursor (candy-git-045: hunk-only navigation
+     *                             stranded any hunk taller than the screen).
      */
     public function __construct(
         public array $lines,
@@ -29,6 +37,8 @@ final readonly class DiffViewer
         public string $path,
         public array $hunkStarts,
         public array $header,
+        public bool $cached = false,
+        public int $scrollOffset = 0,
     ) {}
 
     /**
@@ -37,7 +47,7 @@ final readonly class DiffViewer
      * Hunk headers look like:
      *   @@ -1,3 +1,4 @@ optional context
      */
-    public static function fromRawDiff(string $path, array $lines): self
+    public static function fromRawDiff(string $path, array $lines, bool $cached = false): self
     {
         $hunkStarts = [];
         $header = [];
@@ -53,7 +63,7 @@ final readonly class DiffViewer
         // Default cursor to first hunk, or 0 if no hunks
         $cursor = $hunkStarts[0] ?? 0;
 
-        return new self(lines: $lines, hunkCursor: $cursor, path: $path, hunkStarts: $hunkStarts, header: $header);
+        return new self(lines: $lines, hunkCursor: $cursor, path: $path, hunkStarts: $hunkStarts, header: $header, cached: $cached);
     }
 
     /** Returns the hunk lines around hunkCursor, for rendering and staging. */
@@ -120,7 +130,7 @@ final readonly class DiffViewer
     public function withHunkIndex(int $index): self
     {
         if ($this->hunkStarts === []) {
-            return new self(lines: $this->lines, hunkCursor: 0, path: $this->path, hunkStarts: [], header: $this->header);
+            return new self(lines: $this->lines, hunkCursor: 0, path: $this->path, hunkStarts: [], header: $this->header, cached: $this->cached, scrollOffset: 0);
         }
         $max = count($this->hunkStarts) - 1;
         $newIdx = max(0, min($index, $max >= 0 ? $max : 0));
@@ -133,7 +143,34 @@ final readonly class DiffViewer
             path: $this->path,
             hunkStarts: $this->hunkStarts,
             header: $this->header,
+            cached: $this->cached,
+            // Jumping to a hunk brings it into view (candy-git-045: the
+            // scroll window follows selection; scrolling never moves
+            // selection).
+            scrollOffset: $lineIdx,
         );
+    }
+
+    /** First visible line of the window (clamped to the diff body). candy-git-045. */
+    public function withScrollOffset(int $offset): self
+    {
+        $max = max(0, count($this->lines) - 1);
+
+        return new self(
+            lines: $this->lines,
+            hunkCursor: $this->hunkCursor,
+            path: $this->path,
+            hunkStarts: $this->hunkStarts,
+            header: $this->header,
+            cached: $this->cached,
+            scrollOffset: max(0, min($offset, $max)),
+        );
+    }
+
+    /** Scroll the window by $delta lines without touching hunk selection. */
+    public function scrollBy(int $delta): self
+    {
+        return $this->withScrollOffset($this->scrollOffset + $delta);
     }
 
     /** Number of hunks in this diff. */

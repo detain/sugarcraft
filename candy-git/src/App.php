@@ -391,27 +391,37 @@ final class App implements Model
         // (Help overlay needs no Escape arm here: the global block above
         // already closes it, and 'q' while help is open dismisses it too.)
 
-        // Diff viewer: Space stages the current hunk, Up/Down navigate hunks, Escape/d closes
+        // Diff viewer (candy-git-034/036/045): Space acts on the side the
+        // viewer is showing — worktree side stages, cached side UNstages
+        // (armed twice, the index edit is the one a mis-press hides).
+        // j/k/arrows scroll LINES so a hunk taller than the screen is
+        // readable to its last row; [ ] hop hunks; page keys page lines.
         if ($this->diffViewer !== null) {
             $dv = $this->diffViewer;
             if ($msg->type === KeyType::Escape || ($msg->type === KeyType::Char && $msg->rune === 'd')) {
                 return [$this->withDiffViewer(null), null];
             }
             if ($msg->type === KeyType::Space) {
-                return [$this->stageCurrentHunk(), null];
+                return [$dv->cached ? $this->unstageCurrentHunk() : $this->stageCurrentHunk(), null];
             }
             if ($msg->type === KeyType::Up || ($msg->type === KeyType::Char && $msg->rune === 'k')) {
-                return [$this->navigateHunk(-1), null];
+                return [$this->withDiffViewer($dv->scrollBy(-1)), null];
             }
             if ($msg->type === KeyType::Down || ($msg->type === KeyType::Char && $msg->rune === 'j')) {
-                return [$this->navigateHunk(+1), null];
+                return [$this->withDiffViewer($dv->scrollBy(+1)), null];
             }
-            // Page keys hop hunks, Home/End snap to the first/last one.
-            if ($msg->type === KeyType::PageUp) {
+            if ($msg->type === KeyType::Char && $msg->rune === '[') {
                 return [$this->navigateHunk(-1), null];
             }
-            if ($msg->type === KeyType::PageDown) {
+            if ($msg->type === KeyType::Char && $msg->rune === ']') {
                 return [$this->navigateHunk(+1), null];
+            }
+            $page = max(1, $this->overlayBodyRows() - 6);
+            if ($msg->type === KeyType::PageUp) {
+                return [$this->withDiffViewer($dv->scrollBy(-$page)), null];
+            }
+            if ($msg->type === KeyType::PageDown) {
+                return [$this->withDiffViewer($dv->scrollBy(+$page)), null];
             }
             if ($msg->type === KeyType::Home) {
                 return [$this->withDiffViewer($dv->withHunkIndex(0)), null];
@@ -1276,7 +1286,10 @@ final class App implements Model
                 && ($row['index_status'] ?? ' ') !== '?'
                 && ($row['work_status'] ?? ' ') === ' ';
             $lines = $this->git->diff($row['path'], $cached);
-            $diffViewer = DiffViewer::fromRawDiff($row['path'], $lines);
+            // The side must ride the viewer, not just the request: a staged
+            // row's viewer showing --cached bytes while Space re-staged them
+            // was the candy-git-034 trap.
+            $diffViewer = DiffViewer::fromRawDiff($row['path'], $lines, $cached);
             return $this->withDiffViewer($diffViewer);
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
@@ -1330,14 +1343,86 @@ final class App implements Model
             $patch = $dv->currentHunkPatch();
             $this->git->stagePatch($dv->path, $patch);
             $newHistory = $this->requireHistory()->push(HistoryEntry::stagePatch($dv->path, $patch));
-            return $this
-                ->withAll(history: $newHistory)
-                ->withDiffViewer(null)
-                ->refresh()
-                ->withAll(history: $newHistory, successMessage: Lang::t('diff.hunk_staged'));
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
         }
+
+        return $this
+            ->withAll(history: $newHistory)
+            ->rebuildDiffViewer(Lang::t('diff.hunk_staged'));
+    }
+
+    /**
+     * Unstage the selected hunk on the cached side (candy-git-034). The
+     * viewer reaches this side from a staged-only status row; before this
+     * row, Space on a --cached diff re-applied an already-staged hunk and
+     * unstage was reachable only through history undo.
+     * Armed twice like every other index edit: the first press states the
+     * target in the notice lane, git runs only on the second.
+     */
+    private function unstageCurrentHunk(): self
+    {
+        $dv = $this->diffViewer;
+        if ($dv === null) {
+            return $this;
+        }
+        if ($dv->hunkCount() === 0) {
+            return $this->withError(Lang::t('diff.no_hunks'));
+        }
+        $arm = 'unstagehunk:' . $dv->path . ':' . $dv->hunkIndex();
+        if ($this->pendingConfirm !== $arm) {
+            return $this->armConfirm($arm, Lang::t('confirm.unstage_hunk'));
+        }
+        $base = $this->clearConfirm();
+        try {
+            $patch = $dv->currentHunkPatch();
+            $this->git->unstagePatch($dv->path, $patch);
+            $newHistory = $this->requireHistory()->push(HistoryEntry::unstagePatch($dv->path, $patch));
+        } catch (\RuntimeException $e) {
+            return $base->withError($e->getMessage());
+        }
+
+        return $base
+            ->withAll(history: $newHistory)
+            ->rebuildDiffViewer(Lang::t('diff.hunk_unstaged'));
+    }
+
+    /**
+     * Re-run the viewer's own diff in place after a hunk left it
+     * (candy-git-036: closing the viewer turned per-hunk staging into an
+     * open/stage/reopen loop — the pre-image context of the other hunks is
+     * untouched by staging hunk k, so the review should continue right
+     * where it was). Lands on the next remaining hunk: the staged one is
+     * gone from this side, so the same 0-based index now points forward.
+     * If the side has nothing left to show, the overlay closes honestly.
+     */
+    private function rebuildDiffViewer(string $success): self
+    {
+        $dv = $this->diffViewer;
+        if ($dv === null) {
+            return $this;
+        }
+        try {
+            $lines = $this->git->diff($dv->path, $dv->cached);
+        } catch (\RuntimeException $e) {
+            // The edit itself worked; losing the fresh view must not hide
+            // that. Close with the error surfaced, exactly as the old
+            // close-and-error path behaved.
+            return $this->withDiffViewer(null)->refresh()->withError($e->getMessage());
+        }
+
+        $fresh = DiffViewer::fromRawDiff($dv->path, $lines, $dv->cached);
+        $base = $this->refresh();
+        if ($fresh->hunkCount() === 0) {
+            return $base
+                ->withDiffViewer(null)
+                ->withAll(successMessage: $success);
+        }
+        $target = $fresh->withHunkIndex($dv->hunkIndex());
+
+        return $base
+            ->withDiffViewer($target)
+            ->withAll(successMessage: $success);
     }
 
     /**

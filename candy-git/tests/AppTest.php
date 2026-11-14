@@ -590,11 +590,132 @@ final class AppTest extends TestCase
             ' context',
         ];
         $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'j')); // to src/B.php: worktree side
         [$a, ] = $a->update(new KeyMsg(KeyType::Enter));
         $this->assertNotNull($a->diffViewer);
         [$a, ] = $a->update(new KeyMsg(KeyType::Space, ''));
-        $this->assertArrayHasKey('src/A.php', $g->stagePatches);
-        $this->assertNull($a->diffViewer);
+        $this->assertArrayHasKey('src/B.php', $g->stagePatches);
+        // Re-anchored (candy-git-036): staging used to CLOSE the viewer,
+        // turning a multi-hunk file into an open/stage/reopen loop. The
+        // rebuild now keeps it open on the same side (the fixture hands
+        // back the same diff, so the viewer sits on the same lone hunk).
+        $this->assertNotNull($a->diffViewer);
+        $this->assertFalse($a->diffViewer->cached);
+        $this->assertSame('hunk staged', $a->successMessage);
+    }
+
+    /** @return list<string> a 19-line diff carrying three hunks */
+    private static function threeHunkDiff(): array
+    {
+        $lines = ['diff --git a/src/B.php b/src/B.php', 'index 111..222 100644', '--- a/src/B.php', '+++ b/src/B.php'];
+        for ($h = 0; $h < 3; $h++) {
+            $lines[] = '@@ -' . (1 + $h * 10) . ',2 +' . (1 + $h * 10) . ',2 @@';
+            $lines[] = ' context line ' . $h . 'a';
+            $lines[] = '-removed ' . $h;
+            $lines[] = '+added ' . $h;
+        }
+        return $lines;
+    }
+
+    public function testEnterOnAStagedOnlyRowOpensTheCachedSide(): void
+    {
+        $g = $this->git();
+        $g->diffs = self::threeHunkDiff();
+        $a = App::start($g); // cursor sits on src/A.php: index M, work clean
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter));
+        $this->assertSame([['src/A.php', true]], $g->diffRequests);
+        // candy-git-034: the side must ride the viewer, not just the request.
+        $this->assertNotNull($a->diffViewer);
+        $this->assertTrue($a->diffViewer->cached);
+    }
+
+    public function testSpaceOnTheCachedSideArmsThenUnstages(): void
+    {
+        $g = $this->git();
+        $g->diffs = self::threeHunkDiff();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Space, ''));
+        $this->assertSame('unstagehunk:src/A.php:0', $a->pendingConfirm);
+        $this->assertStringContainsString('press space again', (string) $a->notice);
+        $this->assertSame([], $g->unstagePatches);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Space, ''));
+        $this->assertArrayHasKey('src/A.php', $g->unstagePatches);
+        $this->assertNull($a->pendingConfirm);
+        $this->assertSame('hunk unstaged', $a->successMessage);
+        // Unstaging refreshes the index view too, so the fresh diff must
+        // arrive (the fixture replays the same bytes; the rebuild request is
+        // the second entry).
+        $this->assertSame([['src/A.php', true], ['src/A.php', true]], $g->diffRequests);
+    }
+
+    public function testStagingKeepsTheViewerAndRefreshesItInPlace(): void
+    {
+        $g = $this->git();
+        $g->diffs = self::threeHunkDiff();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'j'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Space, ''));
+        // candy-git-036: open/stage/re-close used to end the session after
+        // one hunk. The diff is re-run for the same path and the viewer is
+        // rebuilt in place.
+        $this->assertSame([['src/B.php', false], ['src/B.php', false]], $g->diffRequests);
+        $this->assertNotNull($a->diffViewer);
+        $this->assertSame(0, $a->diffViewer->hunkIndex(), 'the rebuild re-points at the same index - in real git the staged hunk leaves the diff, so that index is the NEXT hunk; the fixture replays identical bytes');
+        $this->assertSame('hunk staged', $a->successMessage);
+        $this->assertCount(1, $g->stagePatches);
+    }
+
+    public function testViewerClosesWhenTheRefreshedDiffCarriesNoMoreHunks(): void
+    {
+        $g = $this->git();
+        $g->diffs = self::threeHunkDiff();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'j'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter));
+        $g->diffs = ['diff --git a/src/B.php b/src/B.php', '--- a/src/B.php', '+++ b/src/B.php'];
+        [$a, ] = $a->update(new KeyMsg(KeyType::Space, ''));
+        $this->assertNull($a->diffViewer, 'nothing left on this side: close with the success shown');
+        $this->assertSame('hunk staged', $a->successMessage);
+        $this->assertArrayHasKey('src/B.php', $g->stagePatches);
+    }
+
+    public function testDiffScrollKeysMoveTheWindowNotTheSelection(): void
+    {
+        $g = $this->git();
+        $g->diffs = self::threeHunkDiff();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'j'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter));
+        $app0 = $a;
+        $this->assertSame(0, $app0->diffViewer->scrollOffset);
+
+        [$k1, ] = $app0->update(new KeyMsg(KeyType::Char, 'k'));
+        $this->assertSame(0, $k1->diffViewer->scrollOffset, 'scroll-up at the top stays put');
+        [$j, ] = $app0->update(new KeyMsg(KeyType::Char, 'j'));
+        [$j, ] = $j->update(new KeyMsg(KeyType::Char, 'j'));
+        [$j, ] = $j->update(new KeyMsg(KeyType::Char, 'j'));
+        $this->assertSame(3, $j->diffViewer->scrollOffset, 'candy-git-045: j/k scroll lines');
+        $this->assertSame($app0->diffViewer->hunkIndex(), $j->diffViewer->hunkIndex(), 'and the selection never moves');
+
+        [$next, ] = $app0->update(new KeyMsg(KeyType::Char, ']'));
+        $this->assertSame(1, $next->diffViewer->hunkIndex());
+        $this->assertSame($next->diffViewer->hunkStarts[1], $next->diffViewer->scrollOffset, 'a hunk jump brings it into view');
+    }
+
+    public function testUndoInsideTheViewerIsSwallowed(): void
+    {
+        $g = $this->git();
+        $g->diffs = self::threeHunkDiff();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'j'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'u'));
+        $this->assertFalse($g->resetCalled, 'the global undo must not fire under the viewer');
+        $this->assertSame([], $g->stagePatches);
+        $this->assertSame([], $g->unstagePatches);
+        $this->assertNotNull($a->diffViewer);
     }
 
     public function testDiffViewerHunkNavigation(): void
@@ -1467,12 +1588,16 @@ final class AppTest extends TestCase
         ];
         $g->throwOn['stagePatch'] = new \RuntimeException('patch boom');
         $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'j')); // worktree side: the staging lane
         [$a, ] = $a->update(new KeyMsg(KeyType::Enter));
         $this->assertNotNull($a->diffViewer);
         [$a, ] = $a->update(new KeyMsg(KeyType::Space, ''));
         $this->assertNotNull($a->error);
         $this->assertStringContainsString('patch boom', $a->error);
         $this->assertSame([], $g->stagePatches);
+        // candy-git-036: the viewer stays open on failure so the user can
+        // fix the cause and retry the same hunk in place.
+        $this->assertNotNull($a->diffViewer);
     }
 
     // ---- CG-22 (candy-git-022): the cursor modeline's target -------------

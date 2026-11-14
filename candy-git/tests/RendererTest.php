@@ -259,6 +259,60 @@ final class RendererTest extends TestCase
         $this->assertStringNotContainsString("\x1b[38;2;137;180;250mfunction\x1b[0m", $out);
     }
 
+    public function testDiffTitleCarriesTheSideChip(): void
+    {
+        $lines = ['diff --git a/src/A.php b/src/A.php', '@@ -1,2 +1,2 @@', '+added'];
+        $staged = new App($this->git(), diffViewer: DiffViewer::fromRawDiff('src/A.php', $lines, true));
+        $plainStaged = preg_replace('/\x1b\[[0-9;]*m/', '', Renderer::render($staged));
+        preg_match('/(?m)^.*diff: src\/A\.php.*$/', $plainStaged, $m);
+        $this->assertStringContainsString('staged', (string) ($m[0] ?? ''), 'the viewed side rides the title');
+        $this->assertStringNotContainsString('worktree', (string) ($m[0] ?? ''), 'only one side is named on the title row');
+
+        $work = new App($this->git(), diffViewer: DiffViewer::fromRawDiff('src/A.php', $lines, false));
+        $plainWork = preg_replace('/\x1b\[[0-9;]*m/', '', Renderer::render($work));
+        preg_match('/(?m)^.*diff: src\/A\.php.*$/', $plainWork, $m2);
+        $this->assertStringContainsString('worktree', (string) ($m2[0] ?? ''));
+        $this->assertStringNotContainsString('staged', (string) ($m2[0] ?? ''));
+    }
+
+    public function testDiffHintNamesTheActionOfTheViewedSide(): void
+    {
+        $lines = ['diff --git a/src/A.php b/src/A.php', '@@ -1,2 +1,2 @@', '+added'];
+        $staged = preg_replace('/\x1b\[[0-9;]*m/', '', Renderer::render(
+            new App($this->git(), diffViewer: DiffViewer::fromRawDiff('src/A.php', $lines, true)),
+        ));
+        $this->assertStringContainsString('space: unstage', $staged);
+        $this->assertStringNotContainsString('space: stage ', $staged);
+
+        $work = preg_replace('/\x1b\[[0-9;]*m/', '', Renderer::render(
+            new App($this->git(), diffViewer: DiffViewer::fromRawDiff('src/A.php', $lines, false)),
+        ));
+        $this->assertStringContainsString('space: stage', $work);
+        $this->assertStringNotContainsString('space: unstage', $work);
+    }
+
+    public function testDiffWindowFollowsScrollOffsetNotSelection(): void
+    {
+        $lines = ['diff --git a/src/A.php b/src/A.php', 'index 111..222', '--- a/src/A.php', '+++ b/src/A.php'];
+        for ($i = 0; $i < 30; $i++) {
+            $lines[] = ' body line ' . $i;
+        }
+        $viewer = DiffViewer::fromRawDiff('src/A.php', $lines)->withScrollOffset(6);
+        $app = new App($this->git(), diffViewer: $viewer, height: 20);
+        $plain = preg_replace('/\x1b\[[0-9;]*m/', '', Renderer::render($app));
+
+        // candy-git-045/122: the visible slice derives from scrollOffset (the
+        // array lines[6] up = body line 2), so a scrolled view hides the
+        // early rows and reports them above - while the selection stays
+        // exactly where it was (this fixture carries no hunks at all).
+        $this->assertStringNotContainsString('body line 1', $plain, 'rows above the top-anchored window are not rendered');
+        $this->assertStringContainsString('body line 2', $plain, 'the window opens exactly at scrollOffset');
+        $this->assertStringContainsString('body line 7', $plain);
+        $this->assertStringNotContainsString('body line 8', $plain, 'and stops at the bottom');
+        $this->assertStringContainsString('above', $plain, 'the scroll indicator names what is out of view');
+        self::assertSame(0, $viewer->hunkIndex(), 'scrolling never moved the selection');
+    }
+
     public function testRenderRebaseOverlay(): void
     {
         $g = new FixtureGit([], [], []);

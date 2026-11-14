@@ -129,6 +129,16 @@ final class HistoryEntryTest extends TestCase
         $this->assertSame(['path' => 'src/App.php', 'hunk' => '@@ -1,3 +1,4 @@'], $entry->inverseArgs);
     }
 
+    public function testUnstagePatchFactoryInvertsToStagePatch(): void
+    {
+        $entry = HistoryEntry::unstagePatch('src/App.php', '@@ -1,3 +1,4 @@');
+
+        $this->assertSame('unstagePatch', $entry->op);
+        $this->assertSame(['path' => 'src/App.php', 'hunk' => '@@ -1,3 +1,4 @@'], $entry->args);
+        $this->assertSame('stagePatch', $entry->inverseOp, 'undoing an unstage must re-stage the same bytes');
+        $this->assertSame($entry->args, $entry->inverseArgs);
+    }
+
     public function testMergeFactoryCreatesCorrectEntry(): void
     {
         $entry = HistoryEntry::merge('feature-branch');

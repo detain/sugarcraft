@@ -142,6 +142,17 @@ final readonly class HistoryEntry
     }
 
     /**
+     * Convenience factory for unstage patch (hunk) — the cached-side
+     * gesture of the diff viewer (candy-git-034). Its forward arm was
+     * already routed; the missing piece was an entry that remembers the
+     * side it came from, so undo stages the hunk back.
+     */
+    public static function unstagePatch(string $path, string $hunk): self
+    {
+        return new self('unstagePatch', ['path' => $path, 'hunk' => $hunk], 'stagePatch', ['path' => $path, 'hunk' => $hunk]);
+    }
+
+    /**
      * Convenience factory for merge.
      *
      * UNRECOVERABLE by design: the old 'abort' inverse was routed to

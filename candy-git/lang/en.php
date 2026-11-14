@@ -98,8 +98,12 @@ return [
 
     // Diff viewer
     'diff.hunk_staged'      => 'hunk staged',
+    'diff.hunk_unstaged'    => 'hunk unstaged',
     'diff.no_hunks'         => 'nothing to stage: this diff has no hunks',
-    'diff.navigation_hint'  => 'space: stage hunk  ·  ↑↓: navigate  ·  esc: close',
+    'diff.navigation_hint'  => 'j/k: scroll  ·  [ ]: hunk  ·  space: stage  ·  esc: close',
+    'diff.navigation_hint_cached' => 'j/k: scroll  ·  [ ]: hunk  ·  space: unstage  ·  esc: close',
+    'diff.side_staged'      => 'staged',
+    'diff.side_worktree'    => 'worktree',
 
     // Undo/Redo
     'history.nothing_to_undo' => 'nothing to undo',
@@ -141,6 +145,7 @@ return [
     'confirm.delete_branch'   => 'delete branch {name}: press D again to delete',
     'confirm.stash_drop'      => 'drop stash {ref}: press d again to drop (unrecoverable)',
     'confirm.stash_pop'       => 'pop stash {ref}: press p again to apply and drop it',
+    'confirm.unstage_hunk'    => 'unstage hunk: press space again to remove it from the index',
     'confirm.fetch'           => 'fetch: press f again to fetch from the remote',
     'confirm.pull'            => 'pull: press p again to pull from the remote',
     'confirm.push'            => 'push: press P again to push to the remote (visible to others)',
