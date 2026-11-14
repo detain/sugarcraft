@@ -103,13 +103,23 @@ final class Renderer
 
     public static function render(App $a): string
     {
-        $left  = self::statusPane($a);
-        $right = Layout::joinVertical(
-            Position::LEFT,
-            self::branchesPane($a),
-            self::logPane($a),
-        );
-        $body = Layout::joinHorizontal(Position::TOP, $left, '  ', $right);
+        $left     = self::statusPane($a);
+        $branches = self::branchesPane($a);
+        $log      = self::logPane($a);
+        // A pane with no fitting budget contributes NO string at all —
+        // joinVertical would turn the empty one into a blank row and
+        // reintroduce the very overflow the budgets just removed
+        // (candy-git-033).
+        $right = match (TRUE) {
+            $branches === '' => $log,
+            $log === ''      => $branches,
+            default          => Layout::joinVertical(Position::LEFT, $branches, $log),
+        };
+        $body = match (TRUE) {
+            $left === ''   => $right,
+            $right === ''  => $left,
+            default        => Layout::joinHorizontal(Position::TOP, $left, '  ', $right),
+        };
 
         // The summary is git's first porcelain line: branch names are user
         // data, and a hostile repo can name a branch with escape payloads or
@@ -274,6 +284,9 @@ final class Renderer
 
     private static function statusPane(App $a): string
     {
+        if ($a->statusBodyRows() === 0) {
+            return ''; // shorter than a frame: the pane is hidden, not clipped (candy-git-033)
+        }
         [$start, $shown, $above, $below] = self::rowWindow(count($a->status), $a->statusCursor, $a->statusBodyRows());
         $rows = [];
         if ($above > 0) {
@@ -306,6 +319,9 @@ final class Renderer
 
     private static function branchesPane(App $a): string
     {
+        if ($a->branchesBodyRows() === 0) {
+            return ''; // right column too short for even one stacked pane (candy-git-033)
+        }
         [$start, $shown, $above, $below] = self::rowWindow(count($a->branches), $a->branchesCursor, $a->branchesBodyRows());
         $rows = [];
         if ($above > 0) {
@@ -374,6 +390,9 @@ final class Renderer
 
     private static function logPane(App $a): string
     {
+        if ($a->logBodyRows() === 0) {
+            return ''; // no stacked-room left below branches (candy-git-033)
+        }
         [$start, $shown, $above, $below] = self::rowWindow(count($a->log), $a->logCursor, $a->logBodyRows());
         $rows = [];
         if ($above > 0) {
@@ -616,6 +635,41 @@ final class Renderer
                 '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('enter') . '  ' . Lang::t('help.log_details'),
             ]);
         }
+
+        // The box is windowed, not clipped (candy-git-033): every line used
+        // to render into the box and the hard ceiling then amputated its
+        // tail, so on laptop-height frames (h<=23 probed) the pane-specific
+        // key sections — the reason a user opened help at all — fell
+        // off-screen with no cue that more existed. The rowWindow contract
+        // (same as the list panes) keeps the reading position visible and
+        // carries the '+N above/below' indicators; App's modal key block
+        // pages it.
+        $visible = $a->overlayBodyRows();
+        if ($visible !== PHP_INT_MAX) {
+            $visible -= 2; // the box's own two border rows
+        }
+        if ($visible < 3) {
+            // Below threshold: a one-row notice instead of a clipped box. At
+            // this height even the notice's own frame would fall off-screen
+            // tail-first, so say why plainly — the frame's chrome rows
+            // (header, help line, trailing) plus one bar always fit where a
+            // box cannot (candy-git-033).
+            return "\n " . Style::new()->foreground(Color::hex('#fde68a'))
+                ->render(self::truncate(Lang::t('help.too_short'), $a->barWidth())) . "\n";
+        }
+        $count = count($lines);
+        [$start, $shown, $above, $below] = self::rowWindow($count, $a->helpScroll, $visible);
+        $windowed = [];
+        if ($above > 0) {
+            $windowed[] = self::scrollHint(Lang::t('viewport.above', ['n' => $above]));
+        }
+        foreach (array_slice($lines, $start, $shown) as $row) {
+            $windowed[] = $row;
+        }
+        if ($below > 0) {
+            $windowed[] = self::scrollHint(Lang::t('viewport.below', ['n' => $below]));
+        }
+        $lines = $windowed;
 
         $border = Border::rounded();
         $box = Style::new()

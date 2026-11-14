@@ -53,6 +53,13 @@ final class App implements Model
         public readonly ?string $error = null,
         /** Whether the help overlay is currently displayed. */
         public readonly bool $showHelp = false,
+        /**
+         * Top row of the help overlay's row window (candy-git-033). The box
+         * is ~30 rows; on laptop-height frames the pane-specific sections
+         * used to clip off-screen with no cue. j/k/PgUp/PgDn/Home/End page
+         * this window; opening or closing help resets it to 0.
+         */
+        public readonly int $helpScroll = 0,
         /** Whether the app is collecting a commit message (Tab adds lines, Enter commits). */
         public readonly bool $collectingCommit = false,
         /** The accumulated commit message (newlines included) while collectingCommit is true. */
@@ -218,6 +225,33 @@ final class App implements Model
         if ($this->showHelp) {
             if ($msg->type === KeyType::Char && $msg->rune === '?') {
                 return [$this->withShowHelp(false), null];
+            }
+            // The box is now windowed (candy-git-033): navigation keys page
+            // it so the pane-specific sections reach a laptop-height screen.
+            // They mutate nothing but the reading position, so the modal
+            // law — no git-state key runs under a covering help box —
+            // stands exactly as CG-027 left it.
+            if ($msg->type === KeyType::Up || ($msg->type === KeyType::Char && $msg->rune === 'k')) {
+                return [$this->withAll(helpScroll: max(0, $this->helpScroll - 1)), null];
+            }
+            if ($msg->type === KeyType::Down || ($msg->type === KeyType::Char && $msg->rune === 'j')) {
+                return [$this->withAll(helpScroll: $this->helpScroll + 1), null];
+            }
+            // Same sane-ceiling arithmetic the diff pager uses: an
+            // unsized (null-height) terminal must not overflow the
+            // scroll into PHP_INT_MIN territory.
+            $page = max(1, min(1000000, $this->overlayBodyRows() - 5));
+            if ($msg->type === KeyType::PageUp) {
+                return [$this->withAll(helpScroll: max(0, $this->helpScroll - $page)), null];
+            }
+            if ($msg->type === KeyType::PageDown) {
+                return [$this->withAll(helpScroll: $this->helpScroll + $page), null];
+            }
+            if ($msg->type === KeyType::Home) {
+                return [$this->withAll(helpScroll: 0), null];
+            }
+            if ($msg->type === KeyType::End) {
+                return [$this->withAll(helpScroll: 1000000), null];
             }
 
             return [$this, null];
@@ -710,33 +744,59 @@ final class App implements Model
             return PHP_INT_MAX;
         }
         if ($this->overlayOpen()) {
-            return max(3, intdiv($rows, 3));
+            // The 3-row floor only makes sense while the screen can spare
+            // it; below that it inflated the panes past the terminal and
+            // starved the overlay to nothing (candy-git-033).
+            return min($rows, max(3, intdiv($rows, 3)));
         }
         return $rows;
     }
 
-    /** Visible status-list rows (frame borders excluded). */
+    /**
+     * Body rows shared by the right-column pair after both frames pay their
+     * two border rows. The pair used to floor independently at 1 each, so
+     * the stack demanded branches(3)+log(3)=6 rows from a 5-row area on an
+     * h=8 terminal — the log body vanished behind the hard ceiling while
+     * the frame still claimed it was rendered (candy-git-033). Deriving the
+     * budget from the enforced minimums keeps demand ≤ supply at every
+     * height: a pane appears only when its borders plus one body row fit.
+     */
+    public function rightColumnBodyRows(): int
+    {
+        $area = $this->paneArea();
+        return $area === PHP_INT_MAX ? PHP_INT_MAX : max(0, $area - 4);
+    }
+
+    /** Visible status-list rows (frame borders excluded; 0 = no room for the pane). */
     public function statusBodyRows(): int
-    {
-        $area = $this->paneArea();
-        return $area === PHP_INT_MAX ? PHP_INT_MAX : max(1, $area - 2);
-    }
-
-    /** Visible branch-list rows: the right column stacks branches over log. */
-    public function branchesBodyRows(): int
-    {
-        $area = $this->paneArea();
-        return $area === PHP_INT_MAX ? PHP_INT_MAX : max(1, intdiv($area, 2) - 2);
-    }
-
-    /** Visible log rows: the right-column remainder below branches. */
-    public function logBodyRows(): int
     {
         $area = $this->paneArea();
         if ($area === PHP_INT_MAX) {
             return PHP_INT_MAX;
         }
-        return max(1, ($area - intdiv($area, 2)) - 2);
+        return $area >= 3 ? $area - 2 : 0;
+    }
+
+    /** Visible branch-list rows: the right column stacks branches over log. */
+    public function branchesBodyRows(): int
+    {
+        $inner = $this->rightColumnBodyRows();
+        if ($inner === PHP_INT_MAX) {
+            return PHP_INT_MAX;
+        }
+        // The historical half-split is preserved byte-exactly wherever both
+        // panes fit (inner >= 2); only the double-floored short frames move.
+        return $inner <= 0 ? 0 : max(1, intdiv($inner, 2));
+    }
+
+    /** Visible log rows: the right-column remainder below branches. */
+    public function logBodyRows(): int
+    {
+        $inner = $this->rightColumnBodyRows();
+        if ($inner === PHP_INT_MAX) {
+            return PHP_INT_MAX;
+        }
+        return $inner <= 1 ? 0 : $inner - max(1, intdiv($inner, 2));
     }
 
     /** Rows an open overlay gets; a tiny floor so short screens still show a frame. */
@@ -1017,7 +1077,10 @@ final class App implements Model
 
     private function withShowHelp(bool $v): self
     {
-        return $this->withAll(showHelp: $v);
+        // Either transition resets the window: help opens at its top and a
+        // reopened box never resumes someone else's reading position
+        // (candy-git-033).
+        return $this->withAll(showHelp: $v, helpScroll: 0);
     }
 
     private function withCommitCollection(bool $collecting, string $message): self
@@ -1058,6 +1121,7 @@ final class App implements Model
         ?int $logCursor = null,
         ?string $error = null,
         ?bool $showHelp = null,
+        ?int $helpScroll = null,
         ?bool $collectingCommit = null,
         ?string $commitMessage = null,
         ?bool $commitAmend = null,
@@ -1104,6 +1168,7 @@ final class App implements Model
             logCursor: $logCursor ?? $this->logCursor,
             error: $error,
             showHelp: $showHelp ?? $this->showHelp,
+            helpScroll: $helpScroll ?? $this->helpScroll,
             collectingCommit: $collectingCommit ?? $this->collectingCommit,
             commitMessage: $commitMessage ?? $this->commitMessage,
             commitAmend: $commitAmend ?? $this->commitAmend,

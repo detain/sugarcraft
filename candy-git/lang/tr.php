@@ -62,6 +62,7 @@ return [
     'help.switch_pane'        => 'bölme değiştir',
     'help.move_cursor'        => 'imleci hareket ettir',
     'help.close_help'         => 'kapat',
+    'help.too_short'          => 'Tuş listesi için terminal çok kısa — pencere boyutunu değiştirin.',
     'help.ctrl_c'             => 'yerleşimi kapat / çık',
     'help.porcelain_legend' => 'X=dizin Y=ağaç; ?? yeni UU çakışma',
     'help.pane_log'           => 'Günlük bölmesi:',

@@ -62,6 +62,7 @@ return [
     'help.switch_pane'        => 'pane wechseln',
     'help.move_cursor'        => 'cursor bewegen',
     'help.close_help'         => 'schließen',
+    'help.too_short'          => 'Terminal zu kurz für die Tastenliste — bitte Fenstergröße ändern.',
     'help.ctrl_c'             => 'Overlay schließen / beenden',
     'help.porcelain_legend' => 'X=Index Y=Arbeitsbaum; ?? neu UU Konflikt',
     'help.pane_log'           => 'Log-Pane:',

@@ -62,6 +62,7 @@ return [
     'help.switch_pane'        => 'تبديل اللوحة',
     'help.move_cursor'        => 'تحريك المؤشر',
     'help.close_help'         => 'إغلاق',
+    'help.too_short'          => 'المحطة قصيرة جدًا على قائمة المفاتيح — أعد ضبط حجم النافذة.',
     'help.ctrl_c'             => 'إغلاق/إنهاء',
     'help.porcelain_legend' => 'X=الفهرس Y=شجرة العمل؛ ?? جديد UU تعارض',
     'help.pane_log'           => 'لوحة السجلات:',

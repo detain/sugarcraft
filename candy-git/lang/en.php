@@ -73,6 +73,7 @@ return [
     'help.switch_pane'      => 'switch pane',
     'help.move_cursor'      => 'move cursor',
     'help.close_help'       => 'close',
+    'help.too_short'        => 'Terminal too short for the key list — resize the window.',
     'help.ctrl_c'           => 'close overlay / quit',
     'help.porcelain_legend' => 'X=index Y=worktree; ?? new MM both UU conf',
     'help.pane_log'         => 'Log pane:',

@@ -62,6 +62,7 @@ return [
     'help.switch_pane'        => '패널 전환',
     'help.move_cursor'        => '커서 이동',
     'help.close_help'         => '닫기',
+    'help.too_short'          => '단축키 목록을 표시하기에 터미널이 너무 짧습니다 — 창 크기를 조절하세요.',
     'help.ctrl_c'             => '오버레이 닫기 / 종료',
     'help.porcelain_legend' => 'X=인덱스 Y=작업 트리; ?? 새 UU 충돌',
     'help.pane_log'           => '로그 패널:',

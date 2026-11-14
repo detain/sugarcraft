@@ -62,6 +62,7 @@ return [
     'help.switch_pane'        => 'changer de volet',
     'help.move_cursor'        => 'déplacer le curseur',
     'help.close_help'         => 'fermer',
+    'help.too_short'          => 'Terminal trop court pour la liste des touches — redimensionnez la fenêtre.',
     'help.ctrl_c'             => 'fermer la fenêtre / quitter',
     'help.porcelain_legend' => 'X=index Y=arbre ; ?? nouveau UU conflit',
     'help.pane_log'           => 'Volet journal :',

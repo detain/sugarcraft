@@ -62,6 +62,7 @@ return [
     'help.switch_pane'        => '切换面板',
     'help.move_cursor'        => '移动光标',
     'help.close_help'         => '关闭',
+    'help.too_short'          => '终端高度不足，无法显示按键列表 — 请调整窗口大小。',
     'help.ctrl_c'             => '关闭浮层 / 退出',
     'help.porcelain_legend' => 'X=索引 Y=工作树；?? 未跟踪 UU 冲突',
     'help.pane_log'           => '日志面板:',

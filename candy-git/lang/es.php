@@ -62,6 +62,7 @@ return [
     'help.switch_pane'        => 'cambiar panel',
     'help.move_cursor'        => 'mover cursor',
     'help.close_help'         => 'cerrar',
+    'help.too_short'          => 'Terminal demasiado corto para la lista de teclas — cambia el tamaño de la ventana.',
     'help.ctrl_c'             => 'cerrar overlay / salir',
     'help.porcelain_legend' => 'X=indice Y=arbol; ?? nuevo UU conflicto',
     'help.pane_log'           => 'Panel de registro:',

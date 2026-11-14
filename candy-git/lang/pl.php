@@ -62,6 +62,7 @@ return [
     'help.switch_pane'        => 'zmień panel',
     'help.move_cursor'        => 'przenieś kursor',
     'help.close_help'         => 'zamknij',
+    'help.too_short'          => 'Terminal zbyt niski, aby wyświetlić listę klawiszy — zmień rozmiar okna.',
     'help.ctrl_c'             => 'zamknij nakładkę / wyjście',
     'help.porcelain_legend' => 'X=indeks Y=drzewo; ?? nowe UU konflikt',
     'help.pane_log'           => 'Panel logów:',

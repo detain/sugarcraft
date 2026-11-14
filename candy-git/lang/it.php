@@ -62,6 +62,7 @@ return [
     'help.switch_pane'        => 'cambia riquadro',
     'help.move_cursor'        => 'muovi cursore',
     'help.close_help'         => 'chiudi',
+    'help.too_short'          => 'Terminale troppo corto per la lista dei tasti — ridimensiona la finestra.',
     'help.ctrl_c'             => 'chiudi overlay / esci',
     'help.porcelain_legend' => 'X=indice Y=albero; ?? nuovo UU conflitto',
     'help.pane_log'           => 'Riquadro registro:',

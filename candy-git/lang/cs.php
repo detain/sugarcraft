@@ -62,6 +62,7 @@ return [
     'help.switch_pane'        => 'přepnout panel',
     'help.move_cursor'        => 'posunout kurzor',
     'help.close_help'         => 'zavřít',
+    'help.too_short'          => 'Terminál je příliš nízký na seznam kláves — změňte velikost okna.',
     'help.ctrl_c'             => 'zavřít overlay / skončit',
     'help.porcelain_legend' => 'X=index Y=prac. strom; ?? nove UU konflikt',
     'help.pane_log'           => 'Panel protokolu:',

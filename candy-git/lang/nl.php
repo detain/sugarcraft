@@ -62,6 +62,7 @@ return [
     'help.switch_pane'        => 'venster wisselen',
     'help.move_cursor'        => 'cursor bewegen',
     'help.close_help'         => 'sluiten',
+    'help.too_short'          => 'Terminal te kort voor de toetsenlijst — pas de venstergrootte aan.',
     'help.ctrl_c'             => 'overlay sluiten / afsluiten',
     'help.porcelain_legend' => 'X=index Y=werkbomen; ?? nieuw UU conflict',
     'help.pane_log'           => 'Logvenster:',

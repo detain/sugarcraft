@@ -62,6 +62,7 @@ return [
     'help.switch_pane'        => 'ペイン切替',
     'help.move_cursor'        => 'カーソル移動',
     'help.close_help'         => '閉じる',
+    'help.too_short'          => 'ターミナルが短すぎてキー一覧を表示できません — ウィンドウサイズを変更してください。',
     'help.ctrl_c'             => 'オーバーレイを閉じる / 終了',
     'help.porcelain_legend' => 'X=インデックス Y=ツリー；?? 新規 UU 競合',
     'help.pane_log'           => 'ログペイン:',

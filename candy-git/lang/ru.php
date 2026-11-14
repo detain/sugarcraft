@@ -62,6 +62,7 @@ return [
     'help.switch_pane'        => 'сменить панель',
     'help.move_cursor'        => 'переместить курсор',
     'help.close_help'         => 'закрыть',
+    'help.too_short'          => 'Терминал слишком мал для списка клавиш — измените размер окна.',
     'help.ctrl_c'             => 'закрыть оверлей / выйти',
     'help.porcelain_legend' => 'X=индекс Y=дерево; ?? новое UU конфликт',
     'help.pane_log'           => 'Панель журнала:',

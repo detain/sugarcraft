@@ -62,6 +62,7 @@ return [
     'help.switch_pane'        => 'trocar painel',
     'help.move_cursor'        => 'mover cursor',
     'help.close_help'         => 'fechar',
+    'help.too_short'          => 'Terminal curto demais para a lista de teclas — redimensione a janela.',
     'help.ctrl_c'             => 'fechar sobreposição / sair',
     'help.porcelain_legend' => 'X=indice Y=arvore; ?? novo UU conflito',
     'help.pane_log'           => 'Painel de registos:',
