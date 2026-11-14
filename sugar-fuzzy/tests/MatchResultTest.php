@@ -62,6 +62,10 @@ final class MatchResultTest extends TestCase
         $result = new MatchResult('foo', 'foobar', 10, $indices);
 
         $this->assertSame($indices, $result->indices());
+        // Deprecation-equivalence pin (sugar-fuzzy-034): the @deprecated
+        // property stays byte-identical to the canonical accessor — the
+        // doc-surface spelling changed, the data path did not.
+        $this->assertSame($result->matchedIndices, $result->indices());
     }
 
     #[Test]

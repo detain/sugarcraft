@@ -207,9 +207,9 @@ final class MatchResult
     public readonly string $needle;         // Search query
     public readonly string $haystack;       // Matched candidate
     public readonly int $score;             // Higher = better match
-    public readonly array $matchedIndices;  // 0-based CODE-POINT indices into the original haystack (not byte offsets)
+    public readonly array $matchedIndices;  // @deprecated read via indices() — 0-based CODE-POINT indices into the original haystack (not byte offsets)
 
-    public function indices(): array;       // the same offsets as a list<int> — accessor quickpick-style consumers use
+    public function indices(): array;       // canonical accessor: the same list<int> — quickpick-style consumers use this spelling
     public function isMatched(): bool;      // score > 0
     public function isEmpty(): bool;        // no characters matched
 }
@@ -279,7 +279,7 @@ The highlighter is presentation-neutral and forwards unmatched haystack segments
 Highlighting conveys the match through color alone, which fails color-blind
 users — pair it with shape cues (bold/underline) in the styler callback. ANSI
 styling is never announced to screen readers: the accessible channels are the
-`matchedIndices` on each result and `matchAll()`'s deterministic ranking
+`indices()` list on each result and `matchAll()`'s deterministic ranking
 (ordering is reproducible at equal scores), and carrying that rank into
 non-visual channels (plain-text listings, ARIA live regions in web UIs) is
 the consumer's responsibility.

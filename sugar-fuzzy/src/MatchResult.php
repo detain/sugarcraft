@@ -26,6 +26,15 @@ final class MatchResult
         public readonly string $needle,
         public readonly string $haystack,
         public readonly int $score,
+        /**
+         * @deprecated Read via {@see self::indices()} — one canonical accessor
+         *     spelling for the same list (finding sugar-fuzzy-034, house
+         *     bare-accessor convention). The property itself STAYS public
+         *     readonly: MatchResult is constructed positionally inside the
+         *     matchers and external code already reads it; only the
+         *     doc-surface spelling changes, no BC break.
+         * @var list<int> 0-based CODE-POINT indices into the ORIGINAL haystack
+         */
         public readonly array $matchedIndices,
     ) {}
 
@@ -46,7 +55,12 @@ final class MatchResult
     }
 
     /**
-     * @return list<int> 0-based character indices of matched chars
+     * @return list<int> 0-based CODE-POINT indices into the ORIGINAL haystack
+     *                   (never the lowercased comparison space) — same wording
+     *                   as the ctor's `$matchedIndices` contract above; this is
+     *                   the canonical accessor (finding sugar-fuzzy-031, house
+     *                   bare-accessor convention; the property carries a
+     *                   @deprecated doc-surface pointer only).
      */
     public function indices(): array
     {
