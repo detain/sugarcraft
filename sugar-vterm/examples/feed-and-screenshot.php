@@ -25,12 +25,12 @@ $bytes = "\x1b]2;SugarVterm demo\x07"            // OSC 2: window title
        . "\x1b[4;38;5;39mclick here\x1b[0m"    // underlined blue hyperlink
        . "\x1b]8;;\x07"                        // close hyperlink
        . " \xe2\x86\x92 source.\r\n\r\n"       // " → source.\r\n\r\n"
-       . "\x1b[38;5;208m  PR1-PR9 shipped \xe2\x9c\x94\x1b[0m"; // orange "PR1-PR9 shipped ✔"
+        . "\x1b[38;5;208m  feed and screenshot demo\x1b[0m"; // orange caption line
 
 $term = Terminal::new(cols: 40, rows: 8);
 $term->feed($bytes);
 
-// windowTitle() is VERBATIM attacker text (README §Trust boundary): route
+// windowTitle() is verbatim attacker text (README §Trust boundary): route
 // through Sanitize::untrusted() before echoing, exactly as any consumer must.
 echo "Window title: " . Sanitize::untrusted($term->windowTitle() ?? '(none)') . "\n";
 echo "Cursor:       row=" . $term->cursor()->row . ", col=" . $term->cursor()->col . "\n";
@@ -46,7 +46,7 @@ foreach ($screen->lines() as $row => $line) {
 }
 echo str_repeat('-', $screen->cols + 2) . "\n\n";
 
-// Cells styled with bold inherit their SGR — show a few specific ones:
+// Cells styled with bold inherit their SGR — show one:
 echo "Highlights:\n";
 $cell = $screen->cell(0, 2);
 echo "  (0,2) grapheme=" . json_encode($cell->grapheme)
@@ -58,7 +58,7 @@ echo "  (0,2) grapheme=" . json_encode($cell->grapheme)
 for ($c = 0; $c < $screen->cols; $c++) {
     $cell = $screen->cell(3, $c);
     if ($cell->hyperlink !== null) {
-        // Cell::\$hyperlink keeps the OSC 8 URI VERBATIM (Stored strings
+        // Cell::\$hyperlink keeps the OSC 8 URI verbatim (Stored strings
         // bullet): the parser records it, the consumer sanitises before
         // display or onward propagation.
         echo "  Hyperlink found at row=3 col=$c -> " . Sanitize::untrusted($cell->hyperlink->uri) . "\n";
