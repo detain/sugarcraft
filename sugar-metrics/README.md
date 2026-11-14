@@ -20,7 +20,14 @@ Lightweight telemetry primitives for SugarCraft / SugarSshServer servers. Six in
 composer require sugarcraft/sugar-metrics
 ```
 
-The `sugarcraft/sugar-ssh-server` hard requirement is by design and serves only the optional drop-in `SessionMetrics` middleware — the `Registry`, the instruments and every backend never touch it, so a consumer that skips the middleware autoloads none of its code (nor its transitive crypto/pty stack).
+## Requirements
+
+PHP >= 8.3. Three native extensions are enforced *transitively* — this manifest names none of them:
+`ext-intl` and `ext-mbstring` arrive via `sugarcraft/sugar-core`, and `ext-ffi` arrives via
+`sugarcraft/sugar-ssh-server` → `sugarcraft/sugar-pty` (whose own manifest hard-requires it). Check
+them before wiring metrics into a minimal container.
+
+The `sugarcraft/sugar-ssh-server` hard requirement is by design and serves only the optional drop-in `SessionMetrics` middleware — the `Registry`, the instruments and every backend never touch it, so a consumer that skips the middleware autoloads none of its code (nor its transitive crypto/pty stack). That promise is AUTOLOAD-only: Composer's platform checks still *install and enforce* the extensions above (and sugar-ssh-server's own deps) whether or not the middleware is ever used (sugar-metrics-059).
 
 ## Concepts
 
@@ -213,7 +220,7 @@ Tags emit as `|#k:v,...`; with `dogstatsd: false` tags are dropped entirely (leg
 hits:1|c|#route:/x,env:prod
 ```
 
-Type tokens follow the table in *Names on the wire*; notably async counters emit an absolute `|g` (StatsD `\|c` is itself a monotonic counter, so re-publishing a cumulative external reading as `|c` would double-count it).
+Type tokens follow the table in *Names on the wire*; notably async counters emit an absolute `|g` (StatsD `\|c` is itself a monotonic counter, so re-publishing a cumulative external reading as `|c` would double-count it). Histograms ride `\|h` in both tag modes; with `dogstatsd: false` the lib still ships `\|h` — the current Prometheus statsd mapping drops `\|h` series entirely, so collector-side tolerance for the legacy shape is a deployment decision, not something the wire grammar here can fix (sugar-metrics-060). And the integrity note: UDP carries no authentication and no integrity protection — anything that can reach the sink port can emit *as* your service, untraceably (sugar-metrics-050). Keep `host` at `127.0.0.1` or inside a trusted network boundary; no fold or clamp in `StatsdBackend` defends against a forged datagram, only against smuggled wire bytes.
 
 ### `PrometheusFileBackend`
 
@@ -237,6 +244,24 @@ $reg = Registry::new(MultiBackend::new(
 ```
 
 Error isolation: with the plain constructor the fan-out stops at the first failing child and that failure propagates unchanged. Build with `MultiBackend::withContinueOnError(...)` instead and every child gets a turn: all failures are collected and rethrown as one `MultiBackendException`, whose `errors()` method returns the collected `Throwable`s. The rule holds for *every* operation — emits, `remove()` and `clear()` alike: `remove()` / `clear()` propagate the first child failure by default and aggregate under `withContinueOnError`.
+
+### Writing a backend
+
+`SugarCraft\Metrics\Backend` is ten `void` methods and nothing else (sugar-metrics-011):
+
+| Method | Contract |
+|--------|----------|
+| `counter($name, $value, $tags)` | monotonic add (`$value >= 0`; the registry refuses negatives at the verb) |
+| `gauge($name, $value, $tags)` | set the current level — last write wins, negatives allowed |
+| `histogram($name, $value, $tags)` | observe one sample into the named family's distribution |
+| `upDownCounter($name, $amount, $tags)` | apply a *signed* delta |
+| `asyncCounter($name, $value, $tags)` / `asyncGauge($name, $value, $tags)` | publish an ABSOLUTE reading of externally-owned state |
+| `describe(Descriptor $descriptor)` | record a family's TYPE/HELP metadata; called once per new registration, so a backend with no metadata channel may no-op |
+| `flush()` | make buffered state observable (rewrite the file, drain the buffer); the shipping sinks throw a `RuntimeException` here on write failure |
+| `remove($name, $tags)` | reclaim one series — the eviction hook the cardinality caps call during churn, so it must tolerate being called at any time |
+| `clear()` | reclaim everything |
+
+Conventions the shipped backends keep to: emit verbs may throw on structurally invalid input (a name or label key that folds to empty refuses at the exposition chokepoint; a cross-kind name collision refuses loudly) — never accept-and-corrupt; the tag array merges with registry default tags already applied by the caller, raw, before dispatch; nothing arms timers — `flush()` happens only when the application calls it (or a destructor attempts its one swallowed pass); and the whole surface is value-typed (`string`/`float`/`array`) so a backend can be exercised without touching a wire.
 
 ## SugarSshServer session middleware
 
@@ -268,6 +293,16 @@ Per session this emits:
 
 Pass `extraTags` (a callable receiving the `Session`) to add things like client subnet, geo, build version.
 
+The middleware only *emits* — it registers no `Descriptor`s, so a textfile sink shows nothing for a family until its first session (sugar-metrics-010). To publish `# TYPE`/`# HELP` up front, pre-register the names the *backend* will see: the dotted emit names above arrive at the exposition folded, dots to underscores (see *Descriptor registration* — the descriptor door refuses raw dots):
+
+```php
+$reg->register(Descriptor::new('ssh_session_connect',  'SSH connect attempts',             'counter',   ['user', 'term']));
+$reg->register(Descriptor::new('ssh_session_duration', 'Seconds each session stayed open', 'histogram', ['user', 'term']));
+$reg->register(Descriptor::new('ssh_session_error',    'Sessions ended by an exception',   'counter',   ['user', 'term', 'exception']));
+```
+
+The bundled `examples/ssh-server-with-metrics.php` honours `SSH_METRICS_TEXTFILE=<path>` and publishes textfile exposition there alongside its StatsD packets; the library itself never reads the environment (sugar-metrics-061).
+
 ## Localization
 
 Every exception message in this library is looked up through `SugarCraft\Core\I18n\Lang` (the metrics namespace facade), so failures render in the operator's locale. The *lookup* flows through `Lang`; the *selection* lives on `T`, and the library never sets the locale itself — out of the box every message renders from `lang/en.php`. Select one at startup:
@@ -282,7 +317,7 @@ Sixteen locales ship: `ar`, `cs`, `de`, `en`, `es`, `fr`, `it`, `ja`, `ko`, `nl`
 
 ## Status
 
-Feature-complete and in production use: UpDownCounter, AsyncCounter and AsyncGauge instrument kinds, Registry cardinality tracking with FIFO eviction and backend reclaim, exposition-integrity guards, fsync-before-rename durability, and five backends — `InMemory`, `JsonStream`, `Statsd`, `PrometheusFile` and `Multi`. 291 tests (1,584 assertions; ≈4 s baseline suite: Registry, each backend, SessionMetrics middleware, wire-format and tag-key collision pins, hex-level forgery pins, i18n locale parity across all 16 shipped locales, and example smoke checks).
+Feature-complete and in production use: all six instrument kinds holdable (`newCounter`/`newGauge`/`newHistogram` join the async trio), Registry cardinality tracking with FIFO eviction and backend reclaim, exposition-integrity guards, fsync-before-rename durability, a structured read surface (`snapshot()`/`histogramSummary()`), and five backends — `InMemory`, `JsonStream`, `Statsd`, `PrometheusFile` and `Multi`. 291 tests (1,584 assertions; ≈37 s full run measured at this commit on the lane host — the two-process staging and append pins cost real wall time; pure unit legs stay a few seconds): Registry, each backend, SessionMetrics middleware, wire-format and tag-key collision pins, hex-level forgery pins, i18n locale parity across all 16 shipped locales, and example smoke checks.
 
 ## Breaking changes
 
