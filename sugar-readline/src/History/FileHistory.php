@@ -60,9 +60,13 @@ namespace SugarCraft\Readline\History;
  * half of the old write-side hazard and is the deliberate asymmetry.
  *
  * Write failures (lock or temp file unavailable) throw RuntimeException;
- * queued entries are then lost loudly rather than silently. The automatic
- * flush() on destruct downgrades to an error_log line — throwing from a
- * destructor is fatal territory.
+ * the loud contract is kept by a persist-then-swap ordering: push(),
+ * flush() and clear() commit the disk first and only then swap the
+ * in-memory view, so a caller who catches the failure is left with memory
+ * agreeing with the file (and a retryable queue), never a store that
+ * contradicts its own disk (finding 063). The automatic flush() on
+ * destruct downgrades to an error_log line — throwing from a destructor
+ * is fatal territory.
  */
 final class FileHistory extends InMemoryHistory
 {
@@ -281,7 +285,10 @@ final class FileHistory extends InMemoryHistory
      *
      * @throws \RuntimeException when the file cannot be persisted (write lock
      *                           or temp file unavailable) — failure is loud,
-     *                           never a silent drop.
+     *                           never a silent drop, and persist-then-swap
+     *                           (finding 063) means a caught throw leaves
+     *                           memory, file and trim checkpoint exactly as
+     *                           they were: the push simply did not happen.
      *
      * In deferred mode the entry is only queued; see flush().
      */
@@ -318,13 +325,29 @@ final class FileHistory extends InMemoryHistory
             // maxHistory pushes instead of one per Enter. Between trims the
             // file is a bounded-superset (at most 2x cap lines); flush()
             // forces the bounded view.
-            $evicted = $this->pushResident($line);
-            if ($screened) {
-                $this->appendLinesAtomically([$line]);
+            //
+            // Persist-then-swap (finding 063): disk work commits BEFORE the
+            // memory mutation, so a caller who catches a write failure sees
+            // memory agreeing with the file, never a store contradicting its
+            // own disk. The merge arm therefore carries the pushed line as a
+            // pending-newest view (memory is not yet swapped), and the trim
+            // checkpoint counter only advances over the successful commit.
+            $evicts = $this->wouldEvictOnPush();
+            if ($evicts && $this->trimOverflow + 1 >= $this->maxHistory) {
+                // The trim checkpoint absorbs this push's eviction in the
+                // rewrite it already committed (merge resets the counter),
+                // so only the append arm advances it past a successful
+                // commit.
+                $this->mergeAndBoundOnDisk($line);
+            } else {
+                if ($screened) {
+                    $this->appendLinesAtomically([$line]);
+                }
+                if ($evicts) {
+                    $this->trimOverflow++;
+                }
             }
-            if ($evicted !== null && ++$this->trimOverflow >= $this->maxHistory) {
-                $this->mergeAndBoundOnDisk();
-            }
+            $this->pushResident($line);
             return;
         }
 
@@ -333,6 +356,17 @@ final class FileHistory extends InMemoryHistory
         }
 
         $this->pushResident($line);
+    }
+
+    /**
+     * Would the next landing push evict the oldest entry? Evaluated BEFORE
+     * the mutation (persist-then-swap, finding 063): a push lands whenever
+     * push() reaches this point (the empty/dup guards above return early),
+     * so eviction is exactly "window already full".
+     */
+    private function wouldEvictOnPush(): bool
+    {
+        return $this->maxHistory > 0 && \count($this->history) >= $this->maxHistory;
     }
 
     /**
@@ -379,14 +413,17 @@ final class FileHistory extends InMemoryHistory
             return;
         }
         $pending = $this->pendingWrites;
-        $this->pendingWrites = [];
         if ($this->maxHistory > 0) {
             // The queued entries already live in memory (push() updated it);
-            // the bounded rewrite persists the whole retained view.
+            // the bounded rewrite persists the whole retained view. The
+            // queue drains only after the commit succeeds (finding 063) —
+            // a caught failure leaves the batch retryable, not dissolved.
             $this->mergeAndBoundOnDisk();
+            $this->pendingWrites = [];
             return;
         }
         $this->appendLinesAtomically($pending);
+        $this->pendingWrites = [];
     }
 
     /**
@@ -609,10 +646,18 @@ final class FileHistory extends InMemoryHistory
      * loaded) and what memory retains, trimmed to maxHistory entries and
      * written oldest-first. The file is thereby bounded too — in-memory
      * eviction alone left it growing without limit.
+     *
+     * A push that fires the checkpoint passes its line as $pendingNewest
+     * (persist-then-swap, finding 063): memory has not been swapped yet, so
+     * the merged view must carry it as the newest entry — and have it claim
+     * the memory-recency slot against any stale copy in the file.
+     *
+     * @param string|null $pendingNewest an entry to treat as the newest
+     *                                   retained line without mutating memory
      */
-    private function mergeAndBoundOnDisk(): void
+    private function mergeAndBoundOnDisk(?string $pendingNewest = null): void
     {
-        $this->withWriteLock(function (): void {
+        $this->withWriteLock(function () use ($pendingNewest): void {
             // Existing file lines (oldest-first, decoded).
             $existing = [];
             if (file_exists($this->filePath)) {
@@ -631,6 +676,9 @@ final class FileHistory extends InMemoryHistory
 
             // Memory is newest-first; oldest-first for the merged list.
             $mine = array_reverse($this->history);
+            if ($pendingNewest !== null) {
+                $mine[] = $pendingNewest;
+            }
 
             // Deferred-trim law (finding 016): for anything the memory still
             // retains, MEMORY recency is the truth — a line re-pushed after
@@ -920,16 +968,12 @@ final class FileHistory extends InMemoryHistory
      */
     public function clear(): void
     {
-        parent::clear();
-        // Drop queued-but-unwritten entries too — they were cleared with the rest.
-        $this->pendingWrites = [];
-        // The resident set mirrors the (now empty) window; the deferred trim
-        // counted against a file we just erased.
-        $this->seen = [];
-        $this->trimOverflow = 0;
         $this->withWriteLock(function (): void {
             // Atomic write (temp + rename) so a reader never sees a half-erased
             // file; no fsync, so a kernel crash can still lose recent writes.
+            // The memory swap (finding 063) rides AFTER this commit: a caught
+            // lock/replace failure leaves entries, queue and file all intact —
+            // a half-clear is exactly the divergence persist-then-swap kills.
             $tempFile = @tempnam($this->tempDir, 'hist');
             if ($tempFile === false) {
                 throw new \RuntimeException('sugar-readline: cannot create temp file for history clear in ' . $this->tempDir);
@@ -944,5 +988,12 @@ final class FileHistory extends InMemoryHistory
             // rename inherits the temp file's 0600, but re-assert to be safe.
             chmod($this->filePath, 0600);
         });
+        parent::clear();
+        // Drop queued-but-unwritten entries too — they were cleared with the rest.
+        $this->pendingWrites = [];
+        // The resident set mirrors the (now empty) window; the deferred trim
+        // counted against a file we just erased.
+        $this->seen = [];
+        $this->trimOverflow = 0;
     }
 }
