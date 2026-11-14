@@ -8,6 +8,7 @@ use SugarCraft\Dashboard\Layout\Sidebar;
 use SugarCraft\Dashboard\Foundation\Item;
 use SugarCraft\Dashboard\Foundation\Sizer;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Width;
 use PHPUnit\Framework\TestCase;
 
 final class SidebarTest extends TestCase
@@ -322,5 +323,63 @@ final class SidebarTest extends TestCase
         $rendered = $sidebar->render();
 
         $this->assertStringContainsString('ダッシュボード', $rendered);
+    }
+
+    // ─── D-165: the border pass costs cells, never corrupts them ───
+
+    public function testEveryRenderedRowIsExactlyTheAllocatedWidth(): void
+    {
+        $sidebar = (Sidebar::new([
+            ['label' => 'Home', 'icon' => '⌂', 'isActive' => true],
+            ['label' => 'Settings'],
+            ['isDivider' => true],
+        ]))->withTitle('ナビゲーション')->setSize(20, 7);
+
+        foreach (explode("\n", $sidebar->render()) as $line) {
+            $this->assertSame(20, Width::string($line));
+        }
+    }
+
+    public function testStyledWideBackgroundRowsCarryNoTruncatedEscapes(): void
+    {
+        // The old border pass ran mb_substr over lines that END in the
+        // SGR reset the background wrap appends — cutting inside the
+        // escape left `ESC[0` (unterminated) and corrupted the border and
+        // everything after it.
+        $sidebar = (Sidebar::new([
+            ['label' => '控制台面板控制台面板控制台面板', 'icon' => '⌂', 'isActive' => true],
+            ['label' => 'Settings'],
+            ['isDivider' => true],
+        ]))
+            ->withTitle('ナビゲーション')
+            ->withBgColor(Color::hex('#101020'))
+            ->withActiveColor(Color::hex('#FF0000'))
+            ->setSize(20, 7);
+
+        $rendered = $sidebar->render();
+
+        foreach (explode("\n", $rendered) as $line) {
+            $stripped = preg_replace('/\x1b\[[0-9;]*[A-Za-z]/', '', $line);
+            $this->assertStringNotContainsString("\x1b", $stripped, 'every escape is terminated');
+            $this->assertSame(20, Width::string($line));
+        }
+        // The resets themselves survive — the '0'-terminated form intact.
+        $this->assertGreaterThan(0, substr_count($rendered, "\x1b[0m"));
+    }
+
+    public function testBorderFrameKeepsEveryContentCell(): void
+    {
+        // Content width = allocated - 2 borders - 1 marker - 1 gutter;
+        // a label that fits that budget must appear whole, un-clipped
+        // by the frame afterwards.
+        $label = str_repeat('x', 15);
+        $sidebar = (Sidebar::new([['label' => $label]]))->setSize(20, 3);
+
+        $rendered = $sidebar->render();
+
+        $this->assertStringContainsString($label, $rendered);
+        foreach (explode("\n", $rendered) as $line) {
+            $this->assertSame(20, Width::string($line));
+        }
     }
 }

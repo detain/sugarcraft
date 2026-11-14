@@ -112,19 +112,25 @@ final class Sidebar implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         $lines = [];
 
+        // Border budget is known BEFORE content (D-165): outer useWidth =
+        // border + interior(useWidth - 2) + border. Interior rows carry a
+        // one-cell marker column, so item text gets useWidth - 3 and the
+        // title's flanking spaces get the rest. Nothing is clipped for
+        // the frame afterwards — no content cell is ever consumed.
+        $inner = max(1, $useWidth - 2);
+
         // Title section
         if ($this->title !== null) {
-            $titleWidth = $useWidth - 2;
-            $titleText = Truncate::truncate($this->title, $titleWidth, '');
-            $lines[] = ' ' . $titleText . ' ';
-            $lines[] = '─' . str_repeat('─', $titleWidth) . '─';
+            $titleText = Truncate::truncate($this->title, max(0, $inner - 2), '');
+            $lines[] = ' ' . $titleText . str_repeat(' ', max(0, $inner - 1 - Width::string($titleText)));
+            $lines[] = str_repeat('─', $inner);
         }
 
         // Items
         foreach ($this->items as $item) {
             if (isset($item['isDivider']) && $item['isDivider']) {
                 // Divider line
-                $lines[] = '─' . str_repeat('─', $useWidth - 2) . '─';
+                $lines[] = str_repeat('─', $inner);
             } else {
                 $label = $item['label'];
                 $icon = $item['icon'] ?? '';
@@ -134,22 +140,23 @@ final class Sidebar implements \SugarCraft\Dashboard\Foundation\SizedItem
                     ? $icon
                     : ($icon !== '' ? $icon . ' ' . $label : $label);
 
-                $text = Truncate::truncate($text, $useWidth - 2, '');
+                $text = Truncate::truncate($text, max(0, $inner - 2), '');
+                $marker = $isActive ? '>' : ' ';
 
                 if ($isActive && $this->activeColor !== null) {
-                    $lines[] = '>' . $this->activeColor->toFg(ColorMode::profile()) . $text . Ansi::reset() . ' ';
+                    $lines[] = $marker . ' ' . $this->activeColor->toFg(ColorMode::profile()) . $text . Ansi::reset();
                 } elseif (!$isActive && $this->inactiveColor !== null) {
-                    $lines[] = ' ' . $this->inactiveColor->toFg(ColorMode::profile()) . $text . Ansi::reset() . ' ';
+                    $lines[] = $marker . ' ' . $this->inactiveColor->toFg(ColorMode::profile()) . $text . Ansi::reset();
                 } else {
-                    $lines[] = ' ' . $text . ' ';
+                    $lines[] = $marker . ' ' . $text;
                 }
             }
         }
 
-        // Pad to allocated height
+        // Pad to allocated height; the border pass does the cell filling.
         $lineCount = count($lines);
         while ($lineCount < $useHeight) {
-            $lines[] = str_repeat(' ', $useWidth);
+            $lines[] = '';
             $lineCount++;
         }
 
@@ -165,17 +172,21 @@ final class Sidebar implements \SugarCraft\Dashboard\Foundation\SizedItem
             }, $lines);
         }
 
-        // Pad lines to full width and add border
+        // Wrap by CELLS (D-165). The border pass owns one column at each
+        // edge (as shipped and as the examples' goldens show); the
+        // interior gets exactly useWidth - 2 cells. The clip goes through
+        // the canonical ANSI-aware truncation, never mb_substr: styled
+        // lines END in SGR reset sequences, and the old byte cut landed
+        // inside them, leaving a malformed `ESC[0` (no terminator) that
+        // corrupted the border and everything after it — and on clean
+        // lines it still consumed one content cell per row.
         $borderChar = $this->borderColor !== null ? '│' : '|';
+        $borderPrefix = $this->borderColor !== null ? $this->borderColor->toFg(ColorMode::profile()) : '';
+        $borderSuffix = $this->borderColor !== null ? Ansi::reset() : '';
         $output = [];
         foreach ($lines as $line) {
-            $lineWidth = Width::string($line);
-            if ($lineWidth < $useWidth - 1) {
-                $line = mb_substr($line, 0, -1, 'UTF-8') . str_repeat(' ', $useWidth - 1 - $lineWidth) . mb_substr($line, -1, 1, 'UTF-8');
-            }
-            $borderPrefix = $this->borderColor !== null ? $this->borderColor->toFg(ColorMode::profile()) : '';
-            $borderSuffix = $this->borderColor !== null ? Ansi::reset() : '';
-            $output[] = $borderPrefix . $borderChar . mb_substr($line, 0, -1, 'UTF-8') . $borderChar . $borderSuffix;
+            $clipped = Width::padRight(Width::truncateAnsi($line, $inner), $inner);
+            $output[] = $borderPrefix . $borderChar . $clipped . $borderChar . $borderSuffix;
         }
 
         return implode("\n", $output);
