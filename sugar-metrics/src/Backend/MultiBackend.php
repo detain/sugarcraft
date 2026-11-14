@@ -32,6 +32,16 @@ final class MultiBackend implements Backend
     /** If true, catch throwables from children and rethrow after all attempts. */
     private bool $continueOnError;
 
+    /**
+     * House-idiom factory (sugar-metrics-014): `MultiBackend::new($a, $b)`.
+     * The continue-on-error posture is still flipped with the immutable
+     * `withContinueOnError()` — `new()` builds, `with*()` adjusts.
+     */
+    public static function new(Backend ...$children): self
+    {
+        return new self(...$children);
+    }
+
     public function __construct(Backend ...$children)
     {
         if ($children === []) {

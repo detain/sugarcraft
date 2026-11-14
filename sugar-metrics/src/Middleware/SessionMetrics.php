@@ -45,6 +45,14 @@ final class SessionMetrics implements Middleware
     /**
      * @param (callable(Session): array<string,string>)|null $extraTags
      */
+    /**
+     * House-idiom factory (sugar-metrics-014): `SessionMetrics::new($registry)`.
+     */
+    public static function new(Registry $registry, ?callable $extraTags = null): self
+    {
+        return new self($registry, $extraTags);
+    }
+
     public function __construct(
         private readonly Registry $registry,
         ?callable $extraTags = null,

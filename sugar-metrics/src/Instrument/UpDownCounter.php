@@ -19,6 +19,15 @@ final class UpDownCounter
      * @param array<string,string> $tags Static tags applied on every add() call;
      *                                   per-call tags win on key conflicts.
      */
+    /**
+     * House-idiom factory (sugar-metrics-014): forward-to-ctor while the
+     * constructor stays public (privatization is the gated MET-PRIVATECTOR).
+     */
+    public static function new(Registry $registry, string $name, string $help = '', array $tags = []): self
+    {
+        return new self($registry, $name, $help, $tags);
+    }
+
     public function __construct(
         private readonly Registry $registry,
         private readonly string $name,

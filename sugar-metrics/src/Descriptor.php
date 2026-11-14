@@ -26,6 +26,14 @@ final class Descriptor
      *                                                                      "summary" emits a TYPE header only (quantiles / exemplars unsupported).
      * @param list<non-empty-string>                     $labelKeys Ordered list of label names for this metric.
      */
+    /**
+     * House-idiom factory (sugar-metrics-014): `Descriptor::new(name:, help:, type:)`.
+     */
+    public static function new(string $name, string $help, string $type, array $labelKeys = []): self
+    {
+        return new self($name, $help, $type, $labelKeys);
+    }
+
     public function __construct(
         public readonly string $name,
         public readonly string $help,

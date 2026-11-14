@@ -26,6 +26,15 @@ final class AsyncGauge
      * @param \Closure(): float $callback Called by each observe() to obtain the sampled value.
      * @param array<string,string>     $tags Static tags attached to this instrument.
      */
+    /**
+     * House-idiom factory (sugar-metrics-014): forward-to-ctor while the
+     * constructor stays public (privatization is the gated MET-PRIVATECTOR).
+     */
+    public static function new(Registry $registry, string $name, string $help, \Closure $callback, array $tags = []): self
+    {
+        return new self($registry, $name, $help, $callback, $tags);
+    }
+
     public function __construct(
         private readonly Registry $registry,
         private readonly string $name,

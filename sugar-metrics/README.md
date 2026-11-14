@@ -38,7 +38,7 @@ A `Registry` is the application-facing facade; it forwards every emit to the con
 The registry exposes dedicated factory methods that return instrument objects — useful when an instrument is held for repeated `add()` / `observe()` calls:
 
 ```php
-$reg = new Registry($backend);
+$reg = Registry::new($backend);
 $connCounter = $reg->newUpDownCounter('server.active_connections', 'Active server connections', ['host' => $host]);
 $connCounter->add(1);    // connection opened
 // ... later ...
@@ -87,10 +87,10 @@ The registry tracks per-metric cardinality and, when the limit (default: 10 000,
 
 ```php
 // Default limit of 10 000 label combinations per metric
-$reg = new Registry($backend);
+$reg = Registry::new($backend);
 
 // Custom limit
-$reg = new Registry($backend, [], 500);
+$reg = Registry::new($backend, [], 500);
 
 // Inspect current cardinality, and the configured ceiling
 $reg->cardinality('http.requests');      // → int
@@ -118,9 +118,9 @@ use SugarCraft\Metrics\Registry;
 use SugarCraft\Metrics\Descriptor;
 use SugarCraft\Metrics\Backend\PrometheusFileBackend;
 
-$reg = new Registry(new PrometheusFileBackend('/var/lib/app/metrics.prom'));
+$reg = Registry::new(PrometheusFileBackend::new('/var/lib/app/metrics.prom'));
 
-$reg->register(new Descriptor(
+$reg->register(Descriptor::new(
     name: 'http_request_duration_seconds',
     help: 'HTTP request duration in seconds',
     type: 'histogram',
@@ -142,7 +142,7 @@ The constructor validates its input: a non-empty name matching `[a-zA-Z_:][a-zA-
 use SugarCraft\Metrics\Registry;
 use SugarCraft\Metrics\Backend\StatsdBackend;
 
-$reg = new Registry(new StatsdBackend('127.0.0.1', 8125));
+$reg = Registry::new(StatsdBackend::new('127.0.0.1', 8125));
 
 $reg->counter('http.requests', 1, ['route' => '/api/foo', 'status' => '200']);
 $reg->gauge  ('queue.depth',   42);
@@ -204,9 +204,9 @@ Counter values accumulate across `flush()`s; histograms emit the 14 cumulative b
 Fan out to multiple backends — e.g. live StatsD plus a JSON audit trail. Constructing it with zero children throws.
 
 ```php
-$reg = new Registry(new MultiBackend(
-    new StatsdBackend(),
-    new JsonStreamBackend('./metrics.jsonl'),
+$reg = Registry::new(MultiBackend::new(
+    StatsdBackend::new(),
+    JsonStreamBackend::new('./metrics.jsonl'),
 ));
 ```
 
@@ -222,10 +222,10 @@ use SugarCraft\Metrics\Registry;
 use SugarCraft\Metrics\Backend\PrometheusFileBackend;
 use SugarCraft\Metrics\Middleware\SessionMetrics;
 
-$reg = new Registry(new PrometheusFileBackend('/var/lib/ssh/metrics.prom'));
+$reg = Registry::new(PrometheusFileBackend::new('/var/lib/ssh/metrics.prom'));
 
 Server::new()
-    ->use(new SessionMetrics($reg))
+    ->use(SessionMetrics::new($reg))
     ->use(/* ... your stack ... */)
     ->serve();
 ```
@@ -256,7 +256,7 @@ Sixteen locales ship: `ar`, `cs`, `de`, `en`, `es`, `fr`, `it`, `ja`, `ko`, `nl`
 
 ## Status
 
-Feature-complete and in production use: UpDownCounter, AsyncCounter and AsyncGauge instrument kinds, Registry cardinality tracking with FIFO eviction and backend reclaim, exposition-integrity guards, fsync-before-rename durability, and five backends — `InMemory`, `JsonStream`, `Statsd`, `PrometheusFile` and `Multi`. 248 tests (1,152 assertions; ≈4 s baseline suite: Registry, each backend, SessionMetrics middleware, wire-format and tag-key collision pins, hex-level forgery pins, i18n locale parity across all 16 shipped locales, and example smoke checks).
+Feature-complete and in production use: UpDownCounter, AsyncCounter and AsyncGauge instrument kinds, Registry cardinality tracking with FIFO eviction and backend reclaim, exposition-integrity guards, fsync-before-rename durability, and five backends — `InMemory`, `JsonStream`, `Statsd`, `PrometheusFile` and `Multi`. 249 tests (1,165 assertions; ≈4 s baseline suite: Registry, each backend, SessionMetrics middleware, wire-format and tag-key collision pins, hex-level forgery pins, i18n locale parity across all 16 shipped locales, and example smoke checks).
 
 ## Breaking changes
 

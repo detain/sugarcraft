@@ -46,6 +46,20 @@ final class StatsdBackend implements Backend
     /**
      * @param resource|null $existingSocket If provided, used directly (e.g. for tests).
      */
+    /**
+     * House-idiom factory (sugar-metrics-014): `StatsdBackend::new()`.
+     */
+    public static function new(
+        string $host = '127.0.0.1',
+        int $port = 8125,
+        bool $dogstatsd = true,
+        bool $failSilently = true,
+        float $timeout = 1.0,
+        mixed $existingSocket = null,
+    ): self {
+        return new self($host, $port, $dogstatsd, $failSilently, $timeout, $existingSocket);
+    }
+
     public function __construct(
         string $host = '127.0.0.1',
         int $port = 8125,

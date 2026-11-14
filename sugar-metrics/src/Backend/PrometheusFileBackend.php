@@ -138,6 +138,14 @@ final class PrometheusFileBackend implements Backend
      * @param int $maxSeriesPerFamily Distinct series each metric family may accumulate
      *                                before the oldest is FIFO-dropped. Must be >= 1.
      */
+    /**
+     * House-idiom factory (sugar-metrics-014): `PrometheusFileBackend::new($path)`.
+     */
+    public static function new(string $path, ?array $buckets = null, int $maxSeriesPerFamily = self::DEFAULT_MAX_SERIES_PER_FAMILY): self
+    {
+        return new self($path, $buckets, $maxSeriesPerFamily);
+    }
+
     public function __construct(
         private readonly string $path,
         ?array $buckets = null,

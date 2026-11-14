@@ -18,6 +18,14 @@ final class MultiBackendException extends \RuntimeException
     /**
      * @param array<\Throwable> $errors
      */
+    /**
+     * House-idiom factory (sugar-metrics-014): `MultiBackendException::new($errors)`.
+     */
+    public static function new(array $errors, string $message = ''): self
+    {
+        return new self($errors, $message);
+    }
+
     public function __construct(
         private readonly array $errors,
         string $message = '',

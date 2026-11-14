@@ -82,6 +82,16 @@ final class Registry
     /**
      * @param array<string,string> $defaultTags
      */
+    /**
+     * House-idiom factory (sugar-metrics-014): `Registry::new($backend)`.
+     * The constructor stays public and unchanged — this is the additive
+     * front door every other SugarCraft class ships.
+     */
+    public static function new(Backend $backend, array $defaultTags = [], int $cardinalityLimit = 10000): self
+    {
+        return new self($backend, $defaultTags, $cardinalityLimit);
+    }
+
     public function __construct(
         private readonly Backend $backend,
         array $defaultTags = [],

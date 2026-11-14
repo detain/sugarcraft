@@ -29,6 +29,14 @@ final class JsonStreamBackend implements Backend
      * @param resource|string|null $target
      * @param bool $throwOnError If false, silently drop metrics on partial write failure.
      */
+    /**
+     * House-idiom factory (sugar-metrics-014): `JsonStreamBackend::new($target)`.
+     */
+    public static function new($target = null, bool $throwOnError = true): self
+    {
+        return new self($target, $throwOnError);
+    }
+
     public function __construct($target = null, bool $throwOnError = true)
     {
         if (is_string($target)) {

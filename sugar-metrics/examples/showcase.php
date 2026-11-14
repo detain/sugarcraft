@@ -17,8 +17,8 @@ use SugarCraft\Metrics\Backend\InMemoryBackend;
 use SugarCraft\Metrics\Registry;
 use SugarCraft\Metrics\Util;
 
-$tally = new InMemoryBackend();
-$registry = new Registry($tally);
+$tally = InMemoryBackend::new();
+$registry = Registry::new($tally);
 
 // Simulate a handful of TUI sessions.
 $registry->counter('ssh.sessions.opened', tags: ['app' => 'demo']);

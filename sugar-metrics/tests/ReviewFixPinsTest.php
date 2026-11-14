@@ -7,9 +7,15 @@ namespace SugarCraft\Metrics\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Metrics\Backend\InMemoryBackend;
 use SugarCraft\Metrics\Backend\JsonStreamBackend;
+use SugarCraft\Metrics\Backend\MultiBackend;
+use SugarCraft\Metrics\Backend\MultiBackendException;
 use SugarCraft\Metrics\Backend\PrometheusFileBackend;
 use SugarCraft\Metrics\Backend\StatsdBackend;
 use SugarCraft\Metrics\Descriptor;
+use SugarCraft\Metrics\Instrument\AsyncCounter;
+use SugarCraft\Metrics\Instrument\AsyncGauge;
+use SugarCraft\Metrics\Instrument\UpDownCounter;
+use SugarCraft\Metrics\Middleware\SessionMetrics;
 use SugarCraft\Metrics\Registry;
 use SugarCraft\Metrics\Util;
 
@@ -499,5 +505,39 @@ final class ReviewFixPinsTest extends TestCase
         foreach (glob(__DIR__ . '/../examples/*.php') ?: [] as $example) {
             $this->assertStringNotContainsString('\x00-\x1F', (string) file_get_contents($example), basename($example) . ' must delegate display sanitizing to Util::displaySafe');
         }
+    }
+
+    /**
+     * 014 (MET-FACTORIES): every public class ships the house `::new()`
+     * front door forwarding to its constructor. The pin exists so a
+     * factory body can rot loudly, and so the additive law is proven —
+     * `new X(...)` keeps working beside it.
+     */
+    public function testEveryPublicClassShipsTheHouseNewFactory(): void
+    {
+        $registry = Registry::new(InMemoryBackend::new());
+        $this->assertInstanceOf(Registry::class, $registry);
+        $this->assertInstanceOf(Registry::class, new Registry(InMemoryBackend::new()), 'constructor stays public (MET-PRIVATECTOR is the gated move)');
+        $this->assertInstanceOf(Descriptor::class, Descriptor::new('m_total', 'help', 'counter'));
+        $this->assertInstanceOf(InMemoryBackend::class, InMemoryBackend::new());
+        $this->assertInstanceOf(StatsdBackend::class, StatsdBackend::new());
+        $tmp = (string) \tempnam(\sys_get_temp_dir(), 'met-pin') . '.prom';
+        try {
+            $this->assertInstanceOf(PrometheusFileBackend::class, PrometheusFileBackend::new($tmp));
+        } finally {
+            @\unlink($tmp);
+        }
+        $jsonTarget = (string) \tempnam(\sys_get_temp_dir(), 'met-pin-json');
+        try {
+            $this->assertInstanceOf(JsonStreamBackend::class, JsonStreamBackend::new($jsonTarget));
+        } finally {
+            @\unlink($jsonTarget);
+        }
+        $this->assertInstanceOf(MultiBackend::class, MultiBackend::new(InMemoryBackend::new()));
+        $this->assertInstanceOf(MultiBackendException::class, MultiBackendException::new([]));
+        $this->assertInstanceOf(SessionMetrics::class, SessionMetrics::new($registry));
+        $this->assertInstanceOf(UpDownCounter::class, UpDownCounter::new($registry, 'uc'));
+        $this->assertInstanceOf(AsyncCounter::class, AsyncCounter::new($registry, 'ac', 'help', static fn (): array => []));
+        $this->assertInstanceOf(AsyncGauge::class, AsyncGauge::new($registry, 'ag', 'help', static fn (): array => []));
     }
 }

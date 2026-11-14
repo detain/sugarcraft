@@ -67,6 +67,14 @@ final class InMemoryBackend implements Backend
      *                              accumulators; oldest evicted first. 0 (the
      *                              default) means unbounded.
      */
+    /**
+     * House-idiom factory (sugar-metrics-014): `InMemoryBackend::new()`.
+     */
+    public static function new(int $maxSamplesPerKey = 4096, int $maxSeries = 0): self
+    {
+        return new self($maxSamplesPerKey, $maxSeries);
+    }
+
     public function __construct(
         private readonly int $maxSamplesPerKey = 4096,
         private readonly int $maxSeries = 0,

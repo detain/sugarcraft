@@ -52,19 +52,19 @@ final class HelloMetrics implements Middleware
     }
 }
 
-$tally = new InMemoryBackend();
+$tally = InMemoryBackend::new();
 // The scratch textfile is per-process unique: two runs (or CI shards) must
 // never share the inode, and the smoke test passes SSH_METRICS_TEXTFILE to
 // aim the child at a path it can clean up after itself.
 $textfile = (string) (\getenv('SSH_METRICS_TEXTFILE') ?: \sys_get_temp_dir() . '/sugar-ssh-server-metrics-' . \uniqid((string) \getmypid(), true) . '.prom');
-$registry = new Registry(new MultiBackend(
+$registry = Registry::new(MultiBackend::new(
     $tally,
-    new PrometheusFileBackend($textfile),
+    PrometheusFileBackend::new($textfile),
 ));
 
 Server::new()
     ->use(new Logger())
-    ->use(new SessionMetrics($registry))
+    ->use(SessionMetrics::new($registry))
     ->use(new HelloMetrics($registry))
     ->serve();
 
