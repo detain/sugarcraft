@@ -98,4 +98,18 @@ final class UnifiedFormatQuotingTest extends TestCase
 
         self::assertStringStartsWith("--- /dev/null\n+++ b/f\n", $diff->unified('f'));
     }
+
+    public function test_quoted_labels_carry_the_prefix_inside_the_quotes_like_live_git(): void
+    {
+        // sugar-diff-026 probe, git 2.43.0: a hostile quote in the name emits
+        //   --- "a/w\"ird.txt"
+        //   +++ "b/w\"ird.txt"
+        // — the prefix is glued on BEFORE quoting, so the port emits the
+        // identical bytes (this is conformance, not a deviation).
+        $patch = Diff::compute("one\n", "two\n")->unified('w"ird.txt');
+        $rows = explode("\n", $patch);
+
+        self::assertSame('--- "a/w\"ird.txt"', $rows[0]);
+        self::assertSame('+++ "b/w\"ird.txt"', $rows[1]);
+    }
 }

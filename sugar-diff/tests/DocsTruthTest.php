@@ -29,6 +29,9 @@ final class DocsTruthTest extends TestCase
     /** M1: the Fidelity bullet's generalisation the scanner does not honour. */
     private const FALSE_EXTENDED_HEADER_CLAIM = 'extended header lines scan as file headers';
 
+    /** sugar-diff-026: live git quotes the WHOLE label — prefix included. */
+    private const FALSE_PREFIX_OUTSIDE_CLAIM = 'keeps the prefix outside';
+
     private static function readme(): string
     {
         return (string) file_get_contents(self::ROOT . '/README.md');
@@ -108,6 +111,28 @@ final class DocsTruthTest extends TestCase
             'scanned as unnumbered out-of-hunk rows',
             $readme,
             'the corrected extended-header rule must live in the README, unwrapped',
+        );
+    }
+
+    public function test_the_docs_do_not_claim_git_keeps_the_prefix_outside_the_quotes(): void
+    {
+        // sugar-diff-026: live git 2.43 emits '--- "a/w\"ird.txt"' — the
+        // a//b/ prefix rides INSIDE the quoted label, so the old README claim
+        // taught a divergence that does not exist. The false literal must
+        // never return to a doc surface; the tie-disclosure counterpart
+        // (sugar-diff-030) must stay in the README.
+        foreach (self::docsSurfaces() as $document) {
+            self::assertStringNotContainsString(
+                self::FALSE_PREFIX_OUTSIDE_CLAIM,
+                $document,
+                'git quotes the whole label including the prefix — the probe is pinned in tests/Writer/UnifiedFormatQuotingTest.php',
+            );
+        }
+
+        self::assertStringContainsString(
+            'byte-applied',
+            self::readme(),
+            'the tie-placement divergence disclosure must stay on the README surface',
         );
     }
 

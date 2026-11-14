@@ -88,9 +88,10 @@ final class UnifiedFormat
     }
 
     /**
-     * core.quotePath-style treatment for the path tokens (two deliberate
-     * deviations from git — bytes ≥ 0x80 pass raw, and the `a/`/`b/` prefix
-     * rides inside the quoted string; see the README Fidelity notes). Labels
+     * core.quotePath-style treatment for the path tokens (one deliberate
+     * deviation from git — bytes ≥ 0x80 pass raw; the `a/`/`b/` prefix
+     * riding inside the quoted string is exactly what live git does
+     * — see the README Fidelity notes). Labels
      * are raw interpolation targets of a line-oriented protocol, so a path carrying a
      * control byte could otherwise forge its own `+++ ` row, drop a raw CSI
      * sequence into the terminal, or desynchronise a counter-tracking
@@ -98,7 +99,10 @@ final class UnifiedFormat
      * byte-identical (the common case, and the pinned contract); anything
      * else ships C-quoted, `\n`-style, so every emitted row is one physical
      * line no matter what a hostile filename contains. Bytes ≥ 0x80 are left
-     * alone — they cannot carry a newline or a control code.
+     * raw — none of them can forge a row boundary (no newline, quote or
+     * backslash lives above 0x7E); the residual C1 passthrough is the one
+     * declared deviation, pending the OG-4 ruling on widening the escape arm
+     * (sugar-diff-006).
      */
     private static function quotePath(string $label): string
     {
