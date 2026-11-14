@@ -23,6 +23,13 @@ final class StatusLine
 {
     public const GLYPH_SUCCESS = '✓';
     public const GLYPH_ERROR   = '✗';
+    // WHY the cell budget may lie (016): ⚠ (U+26A0) and ℹ (U+2139) are
+    // East-Asian-Ambiguous — sugar-core's width table counts them as 1 cell,
+    // which matches modern western terminals, but emoji-substitution fonts and
+    // some EA locales paint them 2 cells wide. The clamp therefore cannot
+    // promise the visible fit on those hosts; the glyphs are deliberately NOT
+    // swapped for wider-but-unambiguous lookalikes (an opt-in ASCII set is
+    // the owner-gated alternative, see docs/research/libraries/sugar-cli-research.md).
     public const GLYPH_WARN    = '⚠';
     public const GLYPH_INFO    = 'ℹ';
     public const GLYPH_PROMPT  = '?';
@@ -30,10 +37,16 @@ final class StatusLine
     /**
      * @param int|AutoWidth|null $width  cell budget for the whole line; the
      *                     message (never the glyph) is cut to fit with the
-     *                     house `…` ellipsis. Omitted (or `AutoWidth::Auto`)
+     *                     house `…` ellipsis. A budget narrower than the
+     *                     glyph plus its separator drops the separator: the
+     *                     line degrades to the bare styled glyph so it always
+     *                     fits. Omitted (or `AutoWidth::Auto`)
      *                     resolves to the terminal width, falling back to 80
      *                     cells — see {@see WidthProbe}. `null` disables the
      *                     clamp: the message renders in full.
+     *                     Pass a custom budget as the named argument
+     *                     `width:` — positionally it forces spelling out the
+     *                     theme parameter too.
      *
      * @throws \InvalidArgumentException when `$width` is less than 1
      */
@@ -86,6 +99,12 @@ final class StatusLine
         $prefix  = $style->render($glyph) . ' ';
         $message = SafeText::line($message);
         if ($resolved !== null) {
+            if ($resolved < Width::string($prefix)) {
+                // Even the separator space would overflow the cap. The
+                // "glyph is never clipped" invariant wins: emit the styled
+                // glyph bare, so the line always fits the budget.
+                return $style->render($glyph);
+            }
             $message = Clip::text($message, $resolved - Width::string($prefix));
         }
         return $prefix . $message;

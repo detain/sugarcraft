@@ -108,6 +108,26 @@ final class StatusLineTest extends TestCase
         $this->assertSame('✓ done', StatusLine::success('done', Theme::plain(), width: 6));
     }
 
+    /**
+     * A budget under the glyph+separator drops the separator instead of
+     * overflowing (finding 032): the line is exactly the glyph, styling kept.
+     */
+    public function testWidthOneDegradesToBareGlyph(): void
+    {
+        $out = StatusLine::success('anything at all', Theme::plain(), width: 1);
+        $this->assertSame('✓', $out);
+        $this->assertSame(1, Width::string($out));
+        $styled = StatusLine::warn('x', Theme::ansi(), width: 1);
+        $this->assertStringStartsWith("\x1b[", $styled);
+        $this->assertSame(1, Width::string($styled));
+    }
+
+    /** At exactly the prefix width the separator survives; only the message goes. */
+    public function testWidthTwoKeepsSeparatorWithEmptyMessage(): void
+    {
+        $this->assertSame('✓ ', StatusLine::success('far too long to fit', Theme::plain(), width: 2));
+    }
+
     /** null opts out of the clamp entirely: the full message renders. */
     public function testNullWidthKeepsFullMessage(): void
     {
