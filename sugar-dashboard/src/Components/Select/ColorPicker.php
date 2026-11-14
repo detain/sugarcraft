@@ -40,7 +40,7 @@ final class ColorPicker implements \SugarCraft\Dashboard\Foundation\SizedItem
 
     public function __construct(
         private readonly array $palette = [],
-        private readonly int $selectedIndex = 0,
+        private readonly ?int $selectedIndex = 0,
         private readonly bool $showHex = true,
         private readonly int $columns = 4,
         private readonly ?Color $selectedColor = null,
@@ -49,14 +49,18 @@ final class ColorPicker implements \SugarCraft\Dashboard\Foundation\SizedItem
 
     /**
      * Create a new color picker with default palette.
+     *
+     * Passing no index is an honest NO SELECTION (D-146): nothing is
+     * highlighted and the hex line reads '  (none)'. The old seam
+     * silently defaulted to index 10 — a positional magic coupling to
+     * the palette order (index 10 was '#3B82F6' by arrangement, and the
+     * separate hardcoded selectedColor hex duplicated that coupling).
      */
     public static function new(?int $selectedIndex = null): self
     {
-        $currentIndex = $selectedIndex ?? 10; // Default to blue
-
         return new self(
             palette: self::$DEFAULT_PALETTE,
-            selectedIndex: $currentIndex,
+            selectedIndex: $selectedIndex,
             showHex: true,
             columns: 4,
             selectedColor: Color::hex('#3B82F6'),
@@ -73,7 +77,7 @@ final class ColorPicker implements \SugarCraft\Dashboard\Foundation\SizedItem
     {
         return new self(
             palette: $hexColors,
-            selectedIndex: $selectedIndex ?? 0,
+            selectedIndex: $selectedIndex,
             showHex: true,
             columns: 4,
             selectedColor: Color::hex('#3B82F6'),
@@ -103,10 +107,17 @@ final class ColorPicker implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         $rows = $this->buildRows();
 
-        if ($this->showHex && $this->selectedIndex >= 0 && $this->selectedIndex < count($this->palette)) {
-            $selectedHex = $this->palette[$this->selectedIndex];
-            $hexLine = '  ' . $selectedHex;
-            $rows[] = $hexLine;
+        if ($this->showHex) {
+            if ($this->selectedIndex !== null
+                && $this->selectedIndex >= 0
+                && $this->selectedIndex < count($this->palette)
+            ) {
+                $rows[] = '  ' . $this->palette[$this->selectedIndex];
+            } else {
+                // Honest none-row (D-146): keepHex reserves the line and
+                // says so, instead of silently shrinking below innerSize().
+                $rows[] = '  (none)';
+            }
         }
 
         return implode("\n", $rows);
@@ -148,7 +159,7 @@ final class ColorPicker implements \SugarCraft\Dashboard\Foundation\SizedItem
     private function renderSwatch(int $index): string
     {
         $hex = $this->palette[$index];
-        $isSelected = ($index === $this->selectedIndex);
+        $isSelected = $this->selectedIndex !== null && $index === $this->selectedIndex;
 
         $bgColor = Color::hex($hex);
 
@@ -295,7 +306,9 @@ final class ColorPicker implements \SugarCraft\Dashboard\Foundation\SizedItem
     {
         return new self(
             palette: $palette,
-            selectedIndex: min($this->selectedIndex, count($palette) - 1),
+            selectedIndex: $this->selectedIndex === null
+                ? null
+                : min($this->selectedIndex, count($palette) - 1),
             showHex: $this->showHex,
             columns: $this->columns,
             selectedColor: $this->selectedColor,

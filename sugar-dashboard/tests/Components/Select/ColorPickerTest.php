@@ -293,4 +293,39 @@ final class ColorPickerTest extends TestCase
         $rendered = $updated->render();
         $this->assertNotSame('', $rendered);
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    // D-146: no-selection is a real state, palette order is not magic
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testDefaultSelectionIsNoneNotPositionalMagic(): void
+    {
+        $stripped = $this->stripAnsi(ColorPicker::new()->render());
+
+        // No swatch wears the selection brackets and the hex line says
+        // what is true: nothing is selected.
+        $this->assertStringNotContainsString('[', $stripped);
+        $this->assertStringContainsString('  (none)', $stripped);
+
+        // The none-row keeps the painted height honest with innerSize()
+        // (showHex reserves the line whether or not something is picked).
+        $this->assertCount(ColorPicker::new()->innerSize()[1], explode("\n", $stripped));
+    }
+
+    public function testPaletteReorderCannotMoveAHiddenSelection(): void
+    {
+        $colors = ['#FF0000', '#00FF00', '#0000FF'];
+        $forward = ColorPicker::fromPalette($colors, null);
+        $reversed = ColorPicker::fromPalette(array_reverse($colors), null);
+
+        // D-141-era lesson generalised: order must not mint a selection.
+        $this->assertStringContainsString('  (none)', $this->stripAnsi($forward->render()));
+        $this->assertStringContainsString('  (none)', $this->stripAnsi($reversed->render()));
+
+        // An explicit identity DOES follow semantics: index 1 in each is
+        // green forward, green is index 1 reversed too - pick the same
+        // hex explicitly to show bracket highlight tracks the chosen swatch.
+        $green = ColorPicker::fromPalette($colors, 1);
+        $this->assertStringContainsString('[█00FF00]', $this->stripAnsi($green->render()));
+    }
 }
