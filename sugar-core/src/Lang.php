@@ -19,7 +19,7 @@ use SugarCraft\Core\I18n\Lang as BaseLang;
  * ```
  *
  * The first call registers sugar-core's `lang/` directory with the
- * shared {@see T} registry; subsequent calls are no-ops, so this helper
+ * shared {@see \SugarCraft\Core\I18n\T} registry; subsequent calls are no-ops, so this helper
  * stays cheap to use anywhere user-facing text is generated.
  */
 final class Lang extends BaseLang

@@ -17,7 +17,7 @@ use SugarCraft\Pty\Posix\PosixPtySystem;
  *
  * `PosixBackend::size()`'s first arm and `PosixBackend::enableRawMode()` both
  * spelled the descriptor `$fd = (int) $this->stream` a line or two above
- * {@see \SugarCraft\Pty\SizeIoctl::query()} /
+ * `SizeIoctl::query()` /
  * {@see \SugarCraft\Pty\TermiosFactory::open()}. An `(int)` cast of a PHP
  * stream yields its RESOURCE ID. MEASURED, PHP 8.3.6, fresh CLI process,
  * three takes, identical each time: `(int) STDIN` is 1, `(int) STDOUT` is 2,
@@ -495,7 +495,7 @@ final class PosixBackendStreamDescriptorTest extends TestCase
      * uppercase -- the same split {@see SttyReading::of()} and sugar-pty's
      * own stty(1) fallbacks use. The GNU-only `-F` spelling is what kept
      * this on Linux by its rc guard, and until recently the guard was doing
-     * double duty: the first arm's {@see SizeIoctl::query()} -- the very
+     * double duty: the first arm's `SizeIoctl::query()` -- the very
      * thing under test -- could not answer on arm64 Darwin at all (the
      * fixed-arg FFI cdef and the variadic ioctl ABI; MEASURED on CI,
      * macos-15-arm64, PHP 8.3.33, run 33796495350, job 100785492531:

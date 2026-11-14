@@ -316,7 +316,7 @@ final class PosixBackend implements Backend
      * not be opened" contract -- which is what the guard asserts -- two
      * contracts instead of one.
      *
-     * This exists because {@see SizeIoctl::query()} and
+     * This exists because `SizeIoctl::query()` and
      * {@see TermiosFactory::open()} both take an `int` descriptor and PHP
      * offers no portable way to get one out of a stream handle — an `(int)`
      * cast yields the resource id, a different number entirely. So rather
@@ -407,7 +407,7 @@ final class PosixBackend implements Backend
      * ## What this replaces, and why it is not a constructor change
      *
      * WHAT THE TWO CALL SITES BELOW USED TO SAY: `$fd = (int) $this->stream`,
-     * one to two lines above {@see SizeIoctl::query()} and
+     * one to two lines above `SizeIoctl::query()` and
      * {@see TermiosFactory::open()}. An `(int)` cast of a PHP stream yields
      * its RESOURCE ID, which is a different number from its descriptor.
      * MEASURED, PHP 8.3.6, fresh CLI process, three takes: `(int) STDIN` is

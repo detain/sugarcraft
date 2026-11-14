@@ -10,8 +10,8 @@ namespace SugarCraft\Core;
  * ScreenStackPoppedMsg infrastructure messages through its own update().
  *
  * @see ScreenStackCapable
- * @see ScreenStackPushedMsg
- * @see ScreenStackPoppedMsg
+ * @see \SugarCraft\Core\Msg\ScreenStackPushedMsg
+ * @see \SugarCraft\Core\Msg\ScreenStackPoppedMsg
  */
 final class RootModelWithScreenStack implements Model, ScreenStackCapable
 {

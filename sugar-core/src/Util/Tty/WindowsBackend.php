@@ -9,14 +9,14 @@ use SugarCraft\Core\Util\Tty\InterruptFlags;
 /**
  * Windows-specific TTY backend using FFI to kernel32.dll.
  *
- * This class is never instantiated directly — use {@see Tty}
+ * This class is never instantiated directly — use {@see \SugarCraft\Core\Util\Tty}
  * which selects the correct backend based on environment detection.
  *
  * Windows console handles (HANDLE) are represented as plain PHP `int`
  * values throughout this class.  FFI pointer types never leak outside
  * Kernel32.php / Kernel32Interface.php.
  *
- * @see Tty
+ * @see \SugarCraft\Core\Util\Tty
  * @see PosixBackend
  */
 final class WindowsBackend implements Backend
@@ -413,7 +413,7 @@ final class WindowsBackend implements Backend
      * indicating which signals were dispatched.
      *
      * When SIGNAL_INTERRUPT is returned, the caller (e.g. Program::tick)
-     * is responsible for dispatching {@see InterruptMsg} to the running
+     * is responsible for dispatching {@see \SugarCraft\Core\Msg\InterruptMsg} to the running
      * Program instance.
      *
      * Call this exactly once per event-loop tick.

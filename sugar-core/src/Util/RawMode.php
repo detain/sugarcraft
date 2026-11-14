@@ -47,7 +47,7 @@ use SugarCraft\Core\Util\Tty\PosixBackend;
  * stty toggle and don't want the sugar-pty dependency.
  *
  * @see TtyDetect::isAtty()
- * @see \SugarCraft\Pty\PosixTermios
+ * @see \SugarCraft\Pty\Posix\PosixTermios
  */
 final class RawMode
 {

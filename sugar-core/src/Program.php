@@ -1696,7 +1696,7 @@ final class Program
     }
 
     /**
-     * Promote a buffered lone-ESC byte to a {@see KeyMsg} after a short
+     * Promote a buffered lone-ESC byte to a {@see \SugarCraft\Core\Msg\KeyMsg} after a short
      * settling window. If a follow-up byte arrives in time and resolves
      * the buffer (e.g. a CSI sequence), {@see InputReader::flushPending()}
      * returns null and nothing is dispatched.

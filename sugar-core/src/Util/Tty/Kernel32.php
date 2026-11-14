@@ -253,7 +253,7 @@ CPROTO
     /**
      * Peek at console input events without consuming them.
      *
-     * @param int $h CONIN$ handle from {@see openTty()} or {@see stdIn()}
+     * @param int $h CONIN$ handle from {@see WindowsBackend::openTty()} or {@see stdIn()}
      * @param list<array{type:int, dataIndex:int}> $records buffer to fill
      * @param int $recordSize max number of records to read
      * @return int|false number of records peeked, or false on error
@@ -290,7 +290,7 @@ CPROTO
     /**
      * Read and consume console input events.
      *
-     * @param int $h CONIN$ handle from {@see openTty()} or {@see stdIn()}
+     * @param int $h CONIN$ handle from {@see WindowsBackend::openTty()} or {@see stdIn()}
      * @param int $recordSize max number of records to read
      * @return list<array{type:int, dataIndex:int, keyDown?:bool, repeat?:int, vk?:int, scan?:int, char?:int, ctrl?:int}>|false records read, or false on error
      */

@@ -10,7 +10,7 @@ use SugarCraft\Core\ScreenStack;
 
 /**
  * Cmd that pushes a screen onto the Program's ScreenStack and returns
- * a {@see ScreenStackPushedMsg} so the model can update its stack state.
+ * a {@see \SugarCraft\Core\Msg\ScreenStackPushedMsg} so the model can update its stack state.
  *
  * @see PopScreenCmd
  */

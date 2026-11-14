@@ -6,8 +6,6 @@ namespace SugarCraft\Core;
 
 /**
  * Immutable stack of screens for modal / sub-screen workflows.
- *
- * @readonly
  */
 final class ScreenStack implements \Countable
 {

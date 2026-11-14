@@ -16,8 +16,6 @@ namespace SugarCraft\Core;
  * subtree parked under one id participates in the parent's lifecycle,
  * and {@see drainPendingCmds()} walks the whole tree so a Cmd queued
  * at any depth still runs (see sugar-core-010).
- *
- * @readonly
  */
 final class Composite implements Component
 {

@@ -6,8 +6,6 @@ namespace SugarCraft\Core;
 
 /**
  * A single screen in a modal / sub-screen workflow.
- *
- * @readonly
  */
 final class Screen
 {

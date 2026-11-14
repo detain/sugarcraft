@@ -76,7 +76,7 @@ final class SgrState
     }
 
     /**
-     * Apply a {@see Token::CSI} `m` token (an SGR sequence) to this
+     * Apply a {@see \SugarCraft\Core\Util\Token::CSI} `m` token (an SGR sequence) to this
      * state. No-op for any other token type — callers feed the whole
      * token stream and we silently ignore non-SGR.
      */
@@ -398,7 +398,7 @@ final class SgrState
      * An OSC 8 hyperlink open (with $uri) or close (with ''), ST-terminated.
      *
      * ST (`ESC \`) rather than BEL: both terminate an OSC and sugar-core's
-     * {@see Parser} accepts either, but BEL inside a frame is a byte a
+     * {@see \SugarCraft\Core\Util\Parser} accepts either, but BEL inside a frame is a byte a
      * terminal may also ring.
      */
     public static function osc8(string $uri): string

@@ -132,7 +132,7 @@ final class ProgramOptions
         public readonly bool $withoutSignalHandler = false,
         /**
          * Override the {@see Termios} implementation used for raw-mode
-         * setup / teardown. When null (default), {@see Tty} resolves
+         * setup / teardown. When null (default), {@see \SugarCraft\Core\Util\Tty} resolves
          * via sugar-pty's `TermiosFactory` (FFI primary, stty fallback).
          *
          * Production code rarely needs to set this — the factory hits
