@@ -44,7 +44,7 @@ Start with [Quickstart](#quickstart) for the shortest end-to-end path, or jump s
 - **Regression tests** — record a known-good session, replay in CI, diff
   against expected screen state.
 - **Demo capture** — alternative to [VHS](https://github.com/charmbracelet/vhs) (the Go terminal-GIF recorder) for headless / scriptable
-  recordings (no docker, runs in PHP unit-test process).
+  recordings (no Docker; runs in a PHP unit-test process).
 - **Fuzzing seeds** — mutate recorded Msgs slightly, replay to find edge
   cases.
 
@@ -357,7 +357,7 @@ Captured env lands on the cassette header as a JSON object:
 
 #### `--idle-trim N` and `replay --no-trim`
 
-Borrowed from asciinema, idle-trim compresses long inter-event gaps so a 30-second `make build` doesn't take 30 seconds to replay. When the gap between consecutive events exceeds `N` seconds, the recorder writes the event with both `t` (the compressed timestamp) and `tRaw` (the original wall-clock timestamp). The compressed gap defaults to 0.5 s (or `N`, whichever is smaller). `--idle-trim` is `replay`'s only dual-form flag — both `--idle-trim=N` and `--idle-trim N` are accepted. `--speed` accepts the `--speed=…` form **only**; any other `--flag` spelling (the space form `--speed 2` included) is reported as `unknown option` and exits 2.
+Borrowed from asciinema, idle-trim compresses long inter-event gaps so a 30-second `make build` doesn't take 30 seconds to replay. When the gap between consecutive events exceeds `N` seconds, the recorder writes the event with both `t` (the compressed timestamp) and `tRaw` (the original wall-clock timestamp). The compressed gap defaults to 0.5 s (or `N`, whichever is smaller). `--idle-trim` and `--speed` are `replay`'s two dual-form flags — both `--flag=N` and `--flag N` are accepted for each. Every other `--flag` spelling is reported as `unknown option` and exits 2.
 
 ```jsonl
 {"v":1,"created":"...","cols":80,"rows":24,"runtime":"sugarcraft/candy-vcr@record"}
