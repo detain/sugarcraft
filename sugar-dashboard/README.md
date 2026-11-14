@@ -902,7 +902,6 @@ All built-in modules extend `BaseModule` and use `withState()` for immutable sta
 | `Clock\ClockModule` | Single-line clock |
 | `System\SystemModule` | CPU/mem/uptime stats (+ GPU via nvidia-smi when present) |
 | `Uptime\UptimeModule` | System uptime |
-| `Greeting\GreetingModule` | Time-of-day greeting |
 | `Generic\GenericModule` | Arbitrary command runner — string commands go to the shell (trusted-input contract); array argv runs without a shell, bounded by a kill ladder |
 | `Weather\WeatherModule` | Live weather from wttr.in + 30min cache + stale fallback |
 | `Weather\WttrInClient` | wttr.in J1 JSON API client implementing `HttpClient` |

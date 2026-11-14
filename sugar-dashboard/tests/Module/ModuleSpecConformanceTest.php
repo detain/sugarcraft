@@ -11,7 +11,6 @@ use SugarCraft\Dashboard\Module\Module;
 use SugarCraft\Dashboard\Modules\Clock\ClockModule;
 use SugarCraft\Dashboard\Modules\Generic\GenericModule;
 use SugarCraft\Dashboard\Modules\Generic\TickMsg;
-use SugarCraft\Dashboard\Modules\Greeting\GreetingModule;
 use SugarCraft\Dashboard\Modules\System\SystemModule;
 use SugarCraft\Dashboard\Modules\Uptime\TickMsg as UptimeTickMsg;
 use SugarCraft\Dashboard\Modules\Uptime\UptimeModule;
@@ -34,7 +33,6 @@ final class ModuleSpecConformanceTest extends TestCase
         yield 'ClockModule with date' => ['clock-date', new ClockModule(showDate: true)];
         yield 'ClockModule with timezone' => ['clock-utc', new ClockModule(timezone: 'UTC')];
         yield 'SystemModule' => ['system', new SystemModule()];
-        yield 'GreetingModule' => ['greeting', new GreetingModule()];
         yield 'UptimeModule' => ['uptime', new UptimeModule()];
         yield 'GenericModule' => ['generic', new GenericModule('echo hello')];
     }
@@ -97,18 +95,6 @@ final class ModuleSpecConformanceTest extends TestCase
         $this->assertMatchesRegularExpression('/^\d{2}:\d{2}:\d{2}$/', $view);
     }
 
-    public function testGreetingModuleReturnsTimeBasedGreeting(): void
-    {
-        $module = new GreetingModule();
-        $tickMsg = new class implements Msg {};
-
-        [$nextModule] = $module->update($tickMsg);
-        $view = $nextModule->view();
-
-        $validGreetings = ['Good morning', 'Good afternoon', 'Good evening', 'Good night'];
-        $this->assertContains($view, $validGreetings, 'Greeting must be a time-based greeting');
-    }
-
     public function testSystemModuleContainsProcData(): void
     {
         $module = new SystemModule();
@@ -152,7 +138,6 @@ final class ModuleSpecConformanceTest extends TestCase
             new ClockModule(),
             new ClockModule(showDate: true),
             new SystemModule(),
-            new GreetingModule(),
             new UptimeModule(),
             new GenericModule('echo test'),
         ];
@@ -162,6 +147,52 @@ final class ModuleSpecConformanceTest extends TestCase
             $this->assertLessThanOrEqual(120, $w, "{$module->name()}: width should be <= 120");
             $this->assertLessThanOrEqual(50, $h, "{$module->name()}: height should be <= 50");
         }
+    }
+
+    /**
+     * sugar-dashboard-102: the deleted GreetingModule had left the README
+     * catalog stale once already. Pin the modules table BOTH ways against
+     * the shipped namespaces, so a phantom row fails as loudly as an
+     * uncataloged module does.
+     */
+    public function testReadmeModulesCatalogMatchesTheShippedNamespaces(): void
+    {
+        $readme = (string) file_get_contents(dirname(__DIR__, 2) . '/README.md');
+        $sectionStart = strpos($readme, '## Modules Namespace (Built-in Modules)');
+        self::assertNotFalse($sectionStart, 'the README must carry the Modules catalog section');
+        $section = substr($readme, $sectionStart);
+        $nextHeading = strpos($section, "\n## ", 4);
+        if ($nextHeading !== false) {
+            $section = substr($section, 0, $nextHeading);
+        }
+
+        preg_match_all('/^\| `([A-Za-z0-9]+)\\\\([A-Za-z0-9]+)` \|/m', $section, $matches, PREG_SET_ORDER);
+        self::assertNotEmpty($matches, 'the Modules catalog parsed nothing — the table shape moved');
+
+        $catalogedDirs = [];
+        foreach ($matches as [$_, $dir, $class]) {
+            $catalogedDirs[$dir] = true;
+            $fqcn = 'SugarCraft\\Dashboard\\Modules\\' . $dir . '\\' . $class;
+            self::assertTrue(
+                class_exists($fqcn) || interface_exists($fqcn),
+                "README catalog row {$dir}\\{$class} names a type that does not ship",
+            );
+        }
+
+        $shippedDirs = [];
+        foreach (glob(dirname(__DIR__, 2) . '/src/Modules/*', GLOB_ONLYDIR) as $path) {
+            $shippedDirs[basename($path)] = true;
+        }
+
+        $cataloged = array_keys($catalogedDirs);
+        $shipped = array_keys($shippedDirs);
+        sort($cataloged);
+        sort($shipped);
+        self::assertSame(
+            $shipped,
+            $cataloged,
+            'README Modules catalog and src/Modules/ must list the same namespaces',
+        );
     }
 
     private function assertNullOrIsCallable(mixed $value, string $message = ''): void
