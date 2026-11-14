@@ -39,6 +39,10 @@ namespace SugarCraft\Fuzzy\Matcher;
  *
  * Pure memoized folding — same input, same output; the process cache is an
  * optimization with a hard size cap and is never observable from outside.
+ * The user-facing consequences of the per-code-point contract (lowercasing
+ * ONLY — no diacritic decomposition; malformed bytes fold to a literal '?'
+ * that only a literal '?' query can hit) are documented in the README's
+ * "Case folding" section (finding sugar-fuzzy-035).
  */
 final class CharFold
 {

@@ -229,6 +229,8 @@ final class MatchResult
 
 **Case folding.** Both matchers fold case per code point (`CharFold::foldSplit()`) instead of lowercasing the whole string: `mb_strtolower` expands U+0130 (İ → i + combining dot) and context-maps Greek final sigma, which shifts every later code-point index; per-codepoint folding keeps exactly one fold element per original character, so `matchedIndices` stay truthful. Malformed UTF-8 bytes fold to `?` without desync (see Security note).
 
+The fold is lowercasing ONLY — there is no diacritic decomposition, so a base letter never reaches its accented form: `match('cafe', 'Café')` covers `c`/`a`/`f` only (SmithWaterman scores 19 with indices `[0, 1, 2]`; Sahilm answers `null`, its all-query contract refusing the unmatched final `e`), and `match('e', 'xÉy')` is `null` in both. And the `?` that malformed bytes fold to is matchable ONLY by a literal `?` in the query: `match('a?b', "a\xffb")` scores (19 SmithWaterman, 30 Sahilm), while `match('a b', "a\xffb")` is `null` for Sahilm (SmithWaterman's local mode can still bank a run on the surrounding letters) — `?` is never a wildcard for "any character".
+
 ## Interface
 
 Swap matchers without touching call-sites — type-hint the `FuzzyMatcher` interface, implemented by both `SmithWatermanMatcher` and `SahilmMatcher`:
