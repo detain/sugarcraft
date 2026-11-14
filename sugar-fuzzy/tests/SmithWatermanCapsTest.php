@@ -98,6 +98,26 @@ final class SmithWatermanCapsTest extends TestCase
 
         $this->assertNotNull($result);
         $this->assertSame([0, 1, 2, 3, 4, 5], $result->matchedIndices);
-        $this->assertLessThan(2.0, $elapsed);
+
+        // Tripwire (fenced, FUZZY-10 — same opt-in contract as
+        // PerformanceTest::assertWithinPerfBudget; a loaded K=24 runner must
+        // not fail the suite on wall-clock alone).
+        $this->assertWithinPerfBudget($elapsed, 'SmithWaterman capped match on hostile candidate');
+    }
+
+    private function assertWithinPerfBudget(float $elapsed, string $context): void
+    {
+        $budget = getenv('SUGARFUZZY_PERF_BUDGET');
+
+        if ($budget === false || $budget === '' || !is_numeric($budget)) {
+            return;
+        }
+
+        $this->assertLessThan((float) $budget, $elapsed, sprintf(
+            '%s took %.3fs — over the armed %ss budget',
+            $context,
+            $elapsed,
+            $budget
+        ));
     }
 }

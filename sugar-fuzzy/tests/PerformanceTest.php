@@ -43,12 +43,8 @@ final class PerformanceTest extends TestCase
         $this->assertNotEmpty($result->indices());
         $this->assertGreaterThan(0, $result->score);
 
-        // Tripwire: should complete in well under 2 seconds even on slow CI.
-        // If this fails, suspect O(n³) mb_substr re-introduction in the hot loop.
-        $this->assertLessThan(2.0, $elapsed, sprintf(
-            'SmithWaterman match on 2000-char string took %.3fs — possible mb_substr regression',
-            $elapsed
-        ));
+        // Tripwire (fenced, FUZZY-10): suspect O(n³) mb_substr re-introduction.
+        $this->assertWithinPerfBudget($elapsed, 'SmithWaterman match on 2000-char string');
     }
 
     #[Test]
@@ -69,11 +65,8 @@ final class PerformanceTest extends TestCase
         $this->assertNotEmpty($result->indices());
         $this->assertGreaterThan(0, $result->score);
 
-        // Tripwire: should complete in well under 2 seconds even on slow CI.
-        $this->assertLessThan(2.0, $elapsed, sprintf(
-            'SahilmMatcher match on 2000-char string took %.3fs — possible mb_substr regression',
-            $elapsed
-        ));
+        // Tripwire (fenced, FUZZY-10).
+        $this->assertWithinPerfBudget($elapsed, 'SahilmMatcher match on 2000-char string');
     }
 
     #[Test]
@@ -98,11 +91,8 @@ final class PerformanceTest extends TestCase
             $this->assertNotEmpty($result->indices());
         }
 
-        // Tripwire: ~2000 calls with O(n²) each should finish in < 2s with pre-split.
-        $this->assertLessThan(2.0, $elapsed, sprintf(
-            'SmithWaterman matchAll on 2000 candidates took %.3fs — possible regression',
-            $elapsed
-        ));
+        // Tripwire (fenced, FUZZY-10): ~2000 calls should finish fast with pre-split.
+        $this->assertWithinPerfBudget($elapsed, 'SmithWaterman matchAll on 2000 candidates');
     }
 
     #[Test]
@@ -126,10 +116,34 @@ final class PerformanceTest extends TestCase
             $this->assertNotEmpty($result->indices());
         }
 
-        // Tripwire: should be very fast with pre-split.
-        $this->assertLessThan(2.0, $elapsed, sprintf(
-            'SahilmMatcher matchAll on 2000 candidates took %.3fs — possible regression',
-            $elapsed
+        // Tripwire (fenced, FUZZY-10).
+        $this->assertWithinPerfBudget($elapsed, 'SahilmMatcher matchAll on 2000 candidates');
+    }
+
+
+    /**
+     * FUZZY-10 (finding sugar-fuzzy-028): wall-clock tripwires under an opt-in
+     * fence. The 2.0s budget is headroom against algorithmic blow-up (mb_substr
+     * re-introduction, O(n^3) regressions), NOT signal we want raising on shared
+     * CI — the K=24 parallel battery on loaded runners can spike past 2.0s with
+     * zero code change (flake by construction). Default: timing legs run, the
+     * budget is not asserted, and the functional completion asserts in each
+     * test stay unconditional. Set SUGARFUZZY_PERF_BUDGET=<seconds> to arm the
+     * tripwire (perf-watch runs); a real regression then still goes red.
+     */
+    private function assertWithinPerfBudget(float $elapsed, string $context): void
+    {
+        $budget = getenv('SUGARFUZZY_PERF_BUDGET');
+
+        if ($budget === false || $budget === '' || !is_numeric($budget)) {
+            return;
+        }
+
+        $this->assertLessThan((float) $budget, $elapsed, sprintf(
+            '%s took %.3fs — over the armed %ss budget',
+            $context,
+            $elapsed,
+            $budget
         ));
     }
 }
