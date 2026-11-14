@@ -154,30 +154,39 @@ final class InMemoryHistoryTest extends TestCase
 
     public function testSearchFindsNewestMatchFirst(): void
     {
+        // Raw-int calls here double as the BC leg of the S-17 enum
+        // migration: the legacy polarity still maps (>= 0 reverse).
         $match = $this->searchable()->search('git', 0, 1);
 
-        $this->assertSame(['index' => 0, 'entry' => 'git status'], $match);
+        $this->assertSearchHit(0, 'git status', $match);
     }
 
     public function testSearchTowardOlderFromOffset(): void
     {
         $match = $this->searchable()->search('git', 1, 1);
 
-        $this->assertSame(['index' => 2, 'entry' => 'git log'], $match);
+        $this->assertSearchHit(2, 'git log', $match);
     }
 
     public function testSearchTowardNewer(): void
     {
         $match = $this->searchable()->search('git', 1, -1);
 
-        $this->assertSame(['index' => 0, 'entry' => 'git status'], $match);
+        $this->assertSearchHit(0, 'git status', $match);
     }
 
     public function testSearchEmptyQueryMatchesAnyEntry(): void
     {
         $match = $this->searchable()->search('', 0, 1);
 
-        $this->assertSame(['index' => 0, 'entry' => 'git status'], $match);
+        $this->assertSearchHit(0, 'git status', $match);
+    }
+
+    private function assertSearchHit(int $index, string $entry, ?\SugarCraft\Readline\History\SearchHit $hit): void
+    {
+        $this->assertInstanceOf(\SugarCraft\Readline\History\SearchHit::class, $hit);
+        $this->assertSame($index, $hit->index);
+        $this->assertSame($entry, $hit->entry);
     }
 
     public function testSearchNoMatchReturnsNull(): void

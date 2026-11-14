@@ -46,17 +46,40 @@ interface HistoryInterface
     public function clear(): void;
 
     /**
+     * Every retained entry in storage order: newest first (index 0 is the
+     * most recent push — the same order {@see self::previous()} walks).
+     *
+     * Implementations hand back a read view; mutating the returned list
+     * must never write through to the store. The prompt's autosuggest
+     * scans this window instead of replaying previous() per repaint
+     * (finding 014), so callers that only need recent matches should
+     * bound their scan rather than the storage.
+     *
+     * @return list<string>
+     */
+    public function entries(): array;
+
+    /** Number of retained entries — the length of {@see self::entries()}. */
+    public function count(): int;
+
+    /**
      * Incrementally search history for an entry containing $query.
      *
      * Read-only: does not disturb the previous()/next() navigation
      * position, so incremental search and arrow-key navigation can coexist.
      *
-     * @param string $query     Substring to match; '' matches any entry.
-     * @param int    $fromIndex Index to start scanning at (0 = newest entry).
-     * @param int    $direction Positive scans toward older entries (higher
-     *                          indexes), negative toward newer (lower indexes).
-     * @return array{index: int, entry: string}|null The first match at or
-     *                          after $fromIndex in the scan direction, or null.
+     * @param string               $query     Substring to match; '' matches any entry.
+     * @param int                  $fromIndex Index to start scanning at (0 = newest entry).
+     * @param SearchDirection|int  $direction Canonical enum (finding 091); a raw
+     *                                        int is still accepted and maps by the
+     *                                        legacy polarity — non-negative scans
+     *                                        toward older entries (higher indexes),
+     *                                        negative toward newer (lower indexes).
+     * @return SearchHit|null      The first match at or after $fromIndex in the
+     *                                        scan direction, or null. An
+     *                                        out-of-range start index means the
+     *                                        direction is exhausted: null, never a
+     *                                        clamped rematch.
      */
-    public function search(string $query, int $fromIndex, int $direction): ?array;
+    public function search(string $query, int $fromIndex, SearchDirection|int $direction): ?SearchHit;
 }

@@ -6,6 +6,8 @@ namespace SugarCraft\Readline;
 
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Readline\History\HistoryInterface;
+use SugarCraft\Readline\History\SearchDirection;
+use SugarCraft\Readline\History\SearchHit;
 use SugarCraft\Readline\Mode\ModeInterface;
 use SugarCraft\Readline\Mode\ViMode;
 
@@ -22,8 +24,16 @@ use SugarCraft\Readline\Mode\ViMode;
  */
 final class TextPrompt
 {
-    /** History search direction: toward older entries (readline Ctrl+R). */
-    public const SEARCH_REVERSE = 1;
+    /**
+     * History search direction: toward older entries (readline Ctrl+R).
+     *
+     * @deprecated The polarity's home is now {@see SearchDirection}
+     *     (finding 091); this alias IS the enum case (the int-backed value
+     *     was 1), so `$d === TextPrompt::SEARCH_REVERSE` keeps working for
+     *     hosts that compare it. Use SearchDirection::Reverse.
+     *     REMOVED-IN: 2.0.0.
+     */
+    public const SEARCH_REVERSE = SearchDirection::Reverse;
 
     /**
      * Default (emacs-style) Ctrl movement → the canonical navigation keys
@@ -32,6 +42,9 @@ final class TextPrompt
      *
      * @var array<string, string>
      */
+    /** How many (newest) history entries autosuggest scans per repaint — finding 014. */
+    private const AUTOSUGGEST_SCAN_WINDOW = 200;
+
     private const EMACS_MOVEMENT_ALIASES = [
         'ctrl_a' => Key::Home,
         'ctrl_e' => Key::End,
@@ -41,8 +54,13 @@ final class TextPrompt
         'ctrl_n' => Key::Down,
     ];
 
-    /** History search direction: toward newer entries (readline Ctrl+S). */
-    public const SEARCH_FORWARD = -1;
+    /**
+     * History search direction: toward newer entries (readline Ctrl+S).
+     *
+     * @deprecated Superseded by {@see SearchDirection::Forward} (finding
+     *     091); the alias keeps the legacy value (-1). REMOVED-IN: 2.0.0.
+     */
+    public const SEARCH_FORWARD = SearchDirection::Forward;
 
     /**
      * Default rejection painted when a validator says no without a reason.
@@ -146,8 +164,8 @@ final class TextPrompt
     /** Query typed so far while incremental search is active. */
     private string $searchQuery = '';
 
-    /** @var self::SEARCH_* Direction the active search scans in. */
-    private int $searchDirection = self::SEARCH_REVERSE;
+    /** Direction the active search scans in. */
+    private SearchDirection $searchDirection = SearchDirection::Reverse;
 
     /** History index of the current search match; -1 = no match yet. */
     private int $searchIndex = -1;
@@ -506,8 +524,8 @@ final class TextPrompt
             Key::CtrlK     => $this->deleteAllAfterCursor(),
             Key::Tab       => $this->applyCompletion(),
             Key::Enter     => $this->submit(),
-            'ctrl_r' => $this->startHistorySearch(self::SEARCH_REVERSE),
-            'ctrl_s' => $this->startHistorySearch(self::SEARCH_FORWARD),
+            'ctrl_r' => $this->startHistorySearch(SearchDirection::Reverse),
+            'ctrl_s' => $this->startHistorySearch(SearchDirection::Forward),
             // Ctrl+Z / Ctrl+Y are the keyboard doors to the undo stack —
             // the Key::Undo/Key::Redo names below stay available for
             // callers that produce them programmatically.
@@ -655,14 +673,14 @@ final class TextPrompt
                 // at the newest entry can restore what was typed.
                 $clone->_bufferBeforeHistory = $clone->buffer;
             }
-            $found = $clone->history->search('', $target, self::SEARCH_REVERSE);
+            $found = $clone->history->search('', $target, SearchDirection::Reverse);
             if ($found === null) {
                 // Already at the oldest entry — stay put, like GNU readline.
                 return $clone;
             }
             $clone->_historyPosition = $target;
-            $clone->buffer = $found['entry'];
-            $clone->cursor = self::charCount($found['entry']);
+            $clone->buffer = $found->entry;
+            $clone->cursor = self::charCount($found->entry);
             return $clone;
         }
 
@@ -672,7 +690,7 @@ final class TextPrompt
             return $clone;
         }
         $target = $clone->_historyPosition - 1;
-        $found = $target >= 0 ? $clone->history->search('', $target, self::SEARCH_FORWARD) : null;
+        $found = $target >= 0 ? $clone->history->search('', $target, SearchDirection::Forward) : null;
         if ($found === null) {
             // Stepping past the newest entry returns the saved buffer.
             $clone->buffer = $clone->_bufferBeforeHistory ?? '';
@@ -681,8 +699,8 @@ final class TextPrompt
             $clone->_bufferBeforeHistory = null;
         } else {
             $clone->_historyPosition = $target;
-            $clone->buffer = $found['entry'];
-            $clone->cursor = self::charCount($found['entry']);
+            $clone->buffer = $found->entry;
+            $clone->cursor = self::charCount($found->entry);
         }
         return $clone;
     }
@@ -700,23 +718,24 @@ final class TextPrompt
      * history the mode still engages but renders a "failed" indicator, so the
      * user gets feedback instead of a dead prompt.
      *
-     * @param self::SEARCH_* $direction
+     * @param SearchDirection|int $direction Enum (canonical); a raw int rides the
+     *                                         legacy polarity (>= 0 reverse, < 0 forward).
      */
-    public function startHistorySearch(int $direction = self::SEARCH_REVERSE): self
+    public function startHistorySearch(SearchDirection|int $direction = SearchDirection::Reverse): self
     {
         if ($this->submitted || $this->aborted || $this->history === null) {
             return $this;
         }
         $clone = clone $this;
         $clone->searching = true;
-        $clone->searchDirection = $direction;
+        $clone->searchDirection = self::toDirection($direction);
         $clone->searchQuery = '';
         $clone->searchIndex = -1;
         $clone->bufferBeforeSearch = $clone->buffer;
         $clone->cursorBeforeSearch = $clone->cursor;
         // Empty history can never match anything: flag as failed immediately
         // so view() shows "(failed …)" feedback rather than a broken state.
-        $clone->searchFailed = $clone->searchSource()->search('', 0, self::SEARCH_REVERSE) === null;
+        $clone->searchFailed = $clone->searchSource()->search('', 0, SearchDirection::Reverse) === null;
         return $clone;
     }
 
@@ -729,8 +748,8 @@ final class TextPrompt
 
         return match ($key) {
             // Repeated Ctrl+R / Ctrl+S step past the current match.
-            'ctrl_r' => $this->stepSearch(self::SEARCH_REVERSE),
-            'ctrl_s' => $this->stepSearch(self::SEARCH_FORWARD),
+            'ctrl_r' => $this->stepSearch(SearchDirection::Reverse),
+            'ctrl_s' => $this->stepSearch(SearchDirection::Forward),
             Key::Enter         => $this->acceptSearch(),
             Key::Escape, Key::CtrlG, Key::CtrlC
                                => $this->cancelSearch(),
@@ -759,13 +778,13 @@ final class TextPrompt
     }
 
     /** Move to the next match in $direction, past the current one. */
-    private function stepSearch(int $direction): self
+    private function stepSearch(SearchDirection $direction): self
     {
         $clone = clone $this;
         $clone->searchDirection = $direction;
         // No match yet: start scanning from the newest entry rather than
         // skipping past a match that does not exist.
-        $from = $clone->searchIndex === -1 ? 0 : $clone->searchIndex + $direction;
+        $from = $clone->searchIndex === -1 ? 0 : $clone->searchIndex + $direction->value;
         return $clone->applySearchResult(
             $clone->searchSource()->search($clone->searchQuery, $from, $direction)
         );
@@ -785,7 +804,7 @@ final class TextPrompt
         );
         // A shorter query may match a newer entry, so restart from the top.
         return $clone->applySearchResult(
-            $clone->searchSource()->search($clone->searchQuery, 0, self::SEARCH_REVERSE)
+            $clone->searchSource()->search($clone->searchQuery, 0, SearchDirection::Reverse)
         );
     }
 
@@ -820,9 +839,9 @@ final class TextPrompt
      * receiver (callers already pass their working clone, which carries the
      * updated query/direction state into it).
      *
-     * @param array{index: int, entry: string}|null $match
+     * @param SearchHit|null $match
      */
-    private function applySearchResult(?array $match): self
+    private function applySearchResult(?SearchHit $match): self
     {
         $clone = clone $this;
         if ($match === null) {
@@ -831,9 +850,9 @@ final class TextPrompt
             return $clone;
         }
         $clone->searchFailed = false;
-        $clone->searchIndex = $match['index'];
-        $clone->buffer = $match['entry'];
-        $clone->cursor = self::charCount($match['entry']);
+        $clone->searchIndex = $match->index;
+        $clone->buffer = $match->entry;
+        $clone->cursor = self::charCount($match->entry);
         $clone->undoRunEnd = -1;
         return $clone;
     }
@@ -1032,7 +1051,7 @@ final class TextPrompt
     {
         // Whole-line key (LOCALES.md): direction + failure wording live in
         // the sentence itself, not in fragments spliced around it here.
-        $lineKey = 'text.search_line_' . ($this->searchDirection === self::SEARCH_REVERSE ? 'reverse' : 'forward')
+        $lineKey = 'text.search_line_' . ($this->searchDirection === SearchDirection::Reverse ? 'reverse' : 'forward')
             . ($this->searchFailed ? '_failed' : '');
         $labelRaw = Ansi::sanitize($this->label);
         $display = $this->hidden
@@ -1361,23 +1380,33 @@ final class TextPrompt
             return '';
         }
 
-        // Scan history entries (newest first) for one that starts with buffer.
-        // We need to peek at history without advancing position.
-        // Clone the history to peek.
-        $history = clone $this->historyOriginal;
-        $history->reset();
-
-        while (true) {
-            $entry = $history->previous();
-            if ($entry === null) {
-                break;
-            }
-            if (str_starts_with($entry, $this->buffer)) {
+        // Bounded scan of the storage-order view — index 0 is the NEWEST
+        // entry (finding 014): entries() is a read view (arrays copy on
+        // write), so a repaint costs at most AUTOSUGGEST_SCAN_WINDOW
+        // comparisons — no history clone, no position-replay walk per
+        // keystroke. Same first-match-wins order the old previous() walk
+        // had; entries older than the window simply stop competing.
+        $entries = $this->historyOriginal->entries();
+        $limit = min(\count($entries), self::AUTOSUGGEST_SCAN_WINDOW);
+        for ($i = 0; $i < $limit; $i++) {
+            if (str_starts_with($entries[$i], $this->buffer)) {
                 // Return the remainder after the buffer prefix.
-                return self::sliceChars($entry, self::charCount($this->buffer));
+                return self::sliceChars($entries[$i], self::charCount($this->buffer));
             }
         }
 
         return '';
+    }
+
+    /**
+     * Map a legacy int polarity onto the canonical enum (finding 091):
+     * >= 0 scans toward older entries, < 0 toward newer — the exact step
+     * law the int constants always carried.
+     */
+    private static function toDirection(SearchDirection|int $direction): SearchDirection
+    {
+        return $direction instanceof SearchDirection
+            ? $direction
+            : ($direction >= 0 ? SearchDirection::Reverse : SearchDirection::Forward);
     }
 }

@@ -112,15 +112,38 @@ class InMemoryHistory implements HistoryInterface
      */
     public function getNext(): ?string { return $this->next(); }
 
-    public function search(string $query, int $fromIndex, int $direction): ?array
+    /**
+     * Storage-order read view: newest first (index 0 = most recent push).
+     *
+     * PHP arrays copy on write, so handing the internal list straight over
+     * is both O(1) and safe: a caller mutating its copy cannot write
+     * through to the store.
+     *
+     * @return list<string>
+     */
+    public function entries(): array
     {
+        return $this->history;
+    }
+
+    public function count(): int
+    {
+        return \count($this->history);
+    }
+
+    public function search(string $query, int $fromIndex, SearchDirection|int $direction): ?SearchHit
+    {
+        // The enum is canonical; raw ints ride the legacy polarity (the
+        // int-backed cases carry the exact old constants), step >= 0 →
+        // toward older — including a legacy 0, which behaves as before.
+        $polarity = $direction instanceof SearchDirection ? $direction->value : $direction;
         $count = \count($this->history);
-        $step = $direction >= 0 ? 1 : -1;
+        $step = $polarity >= 0 ? 1 : -1;
         // No clamping: a $fromIndex already outside the list means the scan
         // direction is exhausted, and the caller must see null (not a rematch).
         for ($i = $fromIndex; $i >= 0 && $i < $count; $i += $step) {
             if ($query === '' || str_contains($this->history[$i], $query)) {
-                return ['index' => $i, 'entry' => $this->history[$i]];
+                return SearchHit::new($i, $this->history[$i]);
             }
         }
         return null;

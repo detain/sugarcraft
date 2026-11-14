@@ -40,6 +40,13 @@ namespace SugarCraft\Readline\History;
  * decode a literal `\n` sequence into a newline on load (documented
  * consequence of adopting the format).
  *
+ * Entry view: entries()/count() (inherited, finding 014) expose this
+ * process's retained window — the file as loaded plus pushes since, capped
+ * by maxHistory. Another process appending after our load is visible to the
+ * dedupe/merge machinery under the write lock, not to the in-memory view
+ * until the next load; that asymmetry is deliberate (loading per keystroke
+ * would re-read the world for an autosuggest hint).
+ *
  * Symlink policy: the history path must be a regular file. A symlink at it
  * is refused at construction, re-checked under the write lock, and — on
  * every locked open — proven inert afterwards: the handle is fstat'd for
