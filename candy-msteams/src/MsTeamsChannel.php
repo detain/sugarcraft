@@ -43,31 +43,31 @@ use SugarCraft\Code\Server\StateDir;
 require_once __DIR__ . '/autoload.php';
 
 /**
- * The `sugarcraft/candy-msteams` channel root (§8): Microsoft Teams dialogs, over
+ * The `sugarcraft/candy-msteams` channel root (docs/SPEC.md §8): Microsoft Teams dialogs, over
  * the INVERSE transport.
  *
  * Discord keeps a websocket to its platform and dials the local serve;
  * Teams keeps a websocket to the local serve and lets Microsoft POST at
- * US: the daemon's `/channels/msteams/…` mount (§8.1) lands in
+ * US: the daemon's `/channels/msteams/…` mount (docs/SPEC.md §8.1) lands in
  * {@see handleRequest()}, where Bot Framework JWT validation TERMINATES —
  * the candy-code router never speaks Bot Framework, so every byte of that
  * trust door lives here, over an injected signing-key roster. Outbound
- * rides the activity's serviceUrl conversation reference (§8.6); the
+ * rides the activity's serviceUrl conversation reference (docs/SPEC.md §8.6); the
  * serve leg is the same self-dial state machine the discord bundle runs,
  * because durable cursors do not care which side originally opened a
  * socket.
  *
  * Dark until `channels.msteams.enabled === true`; policy read from the
  * USER tier only; credentials only from the 0600 channels store (with the
- * default-account env fallback §8.2 — read HERE, bundle-side, costing the
- * host env roster zero churn). Groups are blocked by default (§8.3).
- * Graph/RSC media and file consent are P3.5 (§8.7): the v1 face fetches
+ * default-account env fallback docs/SPEC.md §8.2 — read HERE, bundle-side, costing the
+ * host env roster zero churn). Groups are blocked by default (docs/SPEC.md §8.3).
+ * Graph/RSC media and file consent are P3.5 (docs/SPEC.md §8.7): the v1 face fetches
  * platform-hosted attachment bytes only and REFUSES Graph-hosted content
  * with a disclosed note — never a silent drop.
  */
 final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
 {
-    /** Activities are small JSON; inline attachment bytes are NOT v1 (§8.7). */
+    /** Activities are small JSON; inline attachment bytes are NOT v1 (docs/SPEC.md §8.7). */
     private const MAX_BODY_BYTES = 1_048_576;
 
     private ?LoopInterface $loop = null;
@@ -173,7 +173,7 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
         foreach ($accounts as $account) {
             $triple = $store->msteamsCredentials($account);
             if ($triple === null && $account === 'default') {
-                // §8.2 env fallback: default account only, store wins.
+                // docs/SPEC.md §8.2 env fallback: default account only, store wins.
                 $appId = self::nonEmptyString(getenv(CredentialStore::APP_ID_ENV));
                 $appPassword = self::nonEmptyString(getenv(CredentialStore::APP_PASSWORD_ENV));
                 $tenantId = self::nonEmptyString(getenv(CredentialStore::TENANT_ID_ENV));
@@ -289,7 +289,7 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
             $placeholder->addChannel($face, $face->accountName());
         }
 
-        // Timer-law guard (§9.5's shape): an escaping throw inside a periodic
+        // Timer-law guard (docs/SPEC.md §9.5's shape): an escaping throw inside a periodic
         // closure kills the shared loop for EVERYONE, so both housekeeping
         // ticks swallow at the door and log — a broken db or a half-written
         // discovery must cost one tick, never the process.
@@ -298,7 +298,7 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
         });
         $this->pollServe();
         // The dedupe ledger stays bounded without a platform-side sweep
-        // (§9.5); 6 h is amply frequent for a 7-day keep.
+        // (docs/SPEC.md §9.5); 6 h is amply frequent for a 7-day keep.
         $this->pruneTimer = $this->loop->addPeriodicTimer(21600.0, function (): void {
             $this->pruneSeenGuarded();
         });
@@ -329,10 +329,10 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
     }
 
     /**
-     * The mounted webhook door (§8.1). The candy-code router delivers the
+     * The mounted webhook door (docs/SPEC.md §8.1). The candy-code router delivers the
      * WHOLE request under `/channels/msteams/`; this method owns path
      * matching, size capping BEFORE any comparison, JWT validation, and
-     * the activity fast-ack law (§8.5: the answer to the model is NOT
+     * the activity fast-ack law (docs/SPEC.md §8.5: the answer to the model is NOT
      * produced inside the request — 200 returns as soon as the activity
      * is accepted and queued).
      */
@@ -556,8 +556,8 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
         );
         $this->queueGate = new QueueGate(
             $this->loop,
-            (int) (((array) ($cfg['queue'] ?? []))['debounceMs'] ?? 500),
-            (int) (((array) ($cfg['queue'] ?? []))['maxPending'] ?? 20),
+            (int) (((array) ($cfg['queue'] ?? []))['debounceMs'] ?? QueueGate::DEFAULT_DEBOUNCE_MS),
+            (int) (((array) ($cfg['queue'] ?? []))['maxPending'] ?? QueueGate::DEFAULT_MAX_PENDING),
         );
         $this->router->setQueueGate($this->queueGate);
         $this->router->setPairHandler(function (string $key, array $ref, array $args): void {
@@ -629,7 +629,7 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
             'dmScope' => (string) ($access['dmScope'] ?? Keys::DM_PER_PEER),
             'allowFrom' => (array) ($access['allowFrom'] ?? []),
             'groupPolicy' => (string) ($groups['groupPolicy'] ?? 'allowlist'),
-            // §8.3: rows are keyed by Teams conversation id; NO row means
+            // docs/SPEC.md §8.3: rows are keyed by Teams conversation id; NO row means
             // the group is not served — the default is BLOCK, so an empty
             // roster here silences every channel and group chat.
             'groups' => (array) ($groups['rows'] ?? []),
@@ -648,7 +648,7 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
             'streamReplies' => (bool) ($cfg['streamReplies'] ?? false),
         ];
 
-        // accounts.<id> rows override EVERYTHING above, per account (§7.11
+        // accounts.<id> rows override EVERYTHING above, per account (docs/SPEC.md §7.11
         // multi-account flattening — same posture as the discord bundle).
         $row = (array) (((array) ($cfg['accounts'] ?? []))[$account] ?? []);
         foreach ($row as $key => $value) {

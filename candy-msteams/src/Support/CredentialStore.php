@@ -39,8 +39,8 @@ final class CredentialStore
     public const CURRENT_VERSION = 1;
 
     /**
-     * Environment fallbacks for the DEFAULT account's triple only (§8.2,
-     * the §7.2 posture re-stated): bundle-side reads, deliberately outside
+     * Environment fallbacks for the DEFAULT account's triple only (docs/SPEC.md §8.2,
+     * the docs/SPEC.md §7.2 posture re-stated): bundle-side reads, deliberately outside
      * the candy-code src env roster — the settings tree carries policy, the
      * store carries credentials. The caller composes them only for the
      * account literally named "default", never for a store-named sibling.
@@ -159,7 +159,7 @@ final class CredentialStore
 
     /**
      * Peer ids paired (approved) for one account — the pairing tier of
-     * §7.3's dmPolicy, stored in the user-tier file, never in config.json.
+     * docs/SPEC.md §7.3's dmPolicy, stored in the user-tier file, never in config.json.
      *
      * @return list<string>
      */

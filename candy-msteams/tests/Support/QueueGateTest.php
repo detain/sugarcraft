@@ -76,6 +76,24 @@ final class QueueGateTest extends TestCase
         self::assertSame(2, $count);
     }
 
+    /**
+     * msteams-27 pin: the docs/SPEC.md §9.2 shipped defaults are the single
+     * source of truth — the constructor fallbacks AND the boot seam in
+     * MsTeamsChannel both read these constants, so a drift here is loud at
+     * zero wall cost (mutation: change the constant, this test goes red).
+     */
+    public function testTheShippedDefaultsAreTheDocumentedConstants(): void
+    {
+        $params = (new \ReflectionMethod(QueueGate::class, '__construct'))->getParameters();
+
+        self::assertSame(500, QueueGate::DEFAULT_DEBOUNCE_MS);
+        self::assertSame(20, QueueGate::DEFAULT_MAX_PENDING);
+        self::assertTrue($params[1]->isDefaultValueConstant());
+        self::assertTrue($params[2]->isDefaultValueConstant());
+        self::assertSame(QueueGate::DEFAULT_DEBOUNCE_MS, $params[1]->getDefaultValue());
+        self::assertSame(QueueGate::DEFAULT_MAX_PENDING, $params[2]->getDefaultValue());
+    }
+
     private static function settleGate(LoopInterface $loop, int $capMs, callable $stillWaiting): void
     {
         $deadline = microtime(true) + $capMs / 1000.0;

@@ -16,12 +16,12 @@ use React\Promise\Promise;
 use React\Promise\PromiseInterface;
 
 /**
- * Bot Framework REST over the activity's serviceUrl (§8.6): every outbound
+ * Bot Framework REST over the activity's serviceUrl (docs/SPEC.md §8.6): every outbound
  * is an activity post to {serviceUrl}/v3/conversations/{conversationId}/
  * activities, authenticated with the broker-minted bot token. The reply
  * window expires — ConversationRouter never calls back into this class
  * expecting old activity ids to still answer; the SessionMap
- * last_conversation row is the durable re-key (§9.1).
+ * last_conversation row is the durable re-key (docs/SPEC.md §9.1).
  *
  * serviceUrl is ACTIVITY data, so it passes two floors before any dial:
  * https-only unless it is a loopback host AND the operator opted into
@@ -170,7 +170,7 @@ final class Rest
     }
 
     /**
-     * Raw attachment bytes (§8.7 v1 stance): https + the Bot Framework
+     * Raw attachment bytes (docs/SPEC.md §8.7 v1 stance): https + the Bot Framework
      * media hosts ONLY. A Graph/SharePoint content url is NOT fetchable
      * without delegated consent — that is P3.5's file-consent leg — and
      * dialing it here would hand our bot token to a stranger, so the

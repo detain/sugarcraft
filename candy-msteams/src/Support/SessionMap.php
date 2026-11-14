@@ -10,11 +10,11 @@ namespace CandyCode\Bundles\MsTeams\Support;
  * inbound dedupe ledger. SQLite over PDO, opened 0600 in the bridge state
  * directory.
  *
- * Key grammar (§9.1): `<platform>:<account>:<channel-or-thread-id>` —
+ * Key grammar (docs/SPEC.md §9.1): `<platform>:<account>:<channel-or-thread-id>` —
  *   msteams:<account>:<conversationId>       (personal | groupChat | channel)
  * with the peer appended by dmScope rung on personal chats. The
  * `msteams:<account>:` spelling is the one SessionMap's sibling bundle
- * documented for this grammar since P1; replies expire in Teams (§8.6), so
+ * documented for this grammar since P1; replies expire in Teams (docs/SPEC.md §8.6), so
  * the last_conversation row is the durable reply address the REST layer
  * re-keys from when an activity id goes stale.
  *

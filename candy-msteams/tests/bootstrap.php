@@ -21,6 +21,18 @@ if (!\is_file($host)) {
 require_once $host;
 require_once __DIR__ . '/../src/autoload.php';
 
+// msteams-27: suites here bound waits with timers on the loop, so the
+// stable-clock pin is loaded FIRST when the host tree ships sugar-testing
+// (under ext-uv deadlines are computed against a clock refreshed once per
+// loop iteration — a timer armed after synchronous idle is already
+// overdue). Conditional by design: the bundle vendor subtree never sees
+// sugar-testing, and the host vendor may or may not carry it; StreamSelect
+// hosts are already honest. The host-vendor hop above stays as-is — the
+// runtime bundle never takes it.
+if (\class_exists(\SugarCraft\Testing\LoopPin::class)) {
+    \SugarCraft\Testing\LoopPin::pinStableClock();
+}
+
 \spl_autoload_register(static function (string $class): void {
     $prefix = 'CandyCode\\Bundles\\MsTeams\\Tests\\';
     if (!\str_starts_with($class, $prefix)) {

@@ -8,7 +8,7 @@ use CandyCode\Bundles\MsTeams\Support\OutboundChunker;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Platform limits are config-passed (§8.5: Teams sizes come from the
+ * Platform limits are config-passed (docs/SPEC.md §8.5: Teams sizes come from the
  * face's settings, not this class); the pins below drive explicit caps.
  * Fenced code blocks must stay balanced inside every chunk — the chunker
  * opens synthetic fences and closes them, and never emits a chunk that is

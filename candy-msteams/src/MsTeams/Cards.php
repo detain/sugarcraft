@@ -7,7 +7,7 @@ namespace CandyCode\Bundles\MsTeams\MsTeams;
 use SugarCraft\Code\Lang;
 
 /**
- * Approval cards — the Teams dialect of §8.4. An adaptive card carries the
+ * Approval cards — the Teams dialect of docs/SPEC.md §8.4. An adaptive card carries the
  * ask (tool, command summary, session) and one Action.Submit per verdict;
  * Teams delivers the action's `data` back inside the `value` of a message
  * activity addressed to the bot, which the webhook unpacks and answers
@@ -17,7 +17,7 @@ use SugarCraft\Code\Lang;
  * a hand-crafted activity can name anyone (the nonce is what a crafted
  * `value` cannot forge).
  *
- * Retiring a card REPLACES it with a plain one-line card (§8.4's
+ * Retiring a card REPLACES it with a plain one-line card (docs/SPEC.md §8.4's
  * answered-elsewhere posture): no dead buttons that would only collect a
  * refused second answer.
  *
@@ -25,11 +25,11 @@ use SugarCraft\Code\Lang;
  * here too, so both answer paths share one verdict vocabulary, and the
  * fallback parser is the same one the router's `approve` command uses.
  *
- * Pure payload builders; no I/O, so the §8.5 shape law is testable offline.
+ * Pure payload builders; no I/O, so the docs/SPEC.md §8.5 shape law is testable offline.
  */
 final class Cards
 {
-    /** Text/command vocabulary → serve verdict (§9.6: once|always|reject). */
+    /** Text/command vocabulary → serve verdict (docs/SPEC.md §9.6: once|always|reject). */
     public const VERDICTS = ['once' => 'once', 'always' => 'always', 'deny' => 'reject'];
 
     /** Action.Submit data key that marks an approval answer. */
@@ -82,7 +82,7 @@ final class Cards
         ];
     }
 
-    /** Wrap a card into the message-activity attachment envelope (§8.4). */
+    /** Wrap a card into the message-activity attachment envelope (docs/SPEC.md §8.4). */
     public static function cardActivity(string $fromId, array $card): array
     {
         return [

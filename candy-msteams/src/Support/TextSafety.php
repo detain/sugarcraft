@@ -7,7 +7,7 @@ namespace CandyCode\Bundles\MsTeams\Support;
 use SugarCraft\Code\Context\PromptFence;
 
 /**
- * The trust floor for inbound platform text (§6.4 trust law, §9.5):
+ * The trust floor for inbound platform text (docs/SPEC.md §6.4 trust law, docs/SPEC.md §9.5):
  * channel bytes are UNTRUSTED input spliced into a prompt, and the repo's
  * own authority on that splice is {@see PromptFence} — the same escape the
  * inbound-webhook door applies before splicing `{{payload}}`
@@ -18,7 +18,7 @@ use SugarCraft\Code\Context\PromptFence;
  * are channel bytes too — the webhook door fences before the router ever
  * sees the text.
  *
- * Redaction (§2.3, §9.4) rides the same door: configured secrets (the serve
+ * Redaction (docs/SPEC.md §2.3, docs/SPEC.md §9.4) rides the same door: configured secrets (the serve
  * token, app passwords, client secrets — anything the operator named)
  * never echo back into a transcript or channel, in either direction.
  */
@@ -44,7 +44,7 @@ final class TextSafety
      * msteams-24: the single immutability funnel, mirroring sugar-core's
      * Concerns/Mutable shape (new instance from current state + changes —
      * no scattered ad-hoc cloning). addSecret below is the ONE declared
-     * in-place exception (§7.3's mint-time roster); every other state
+     * in-place exception (docs/SPEC.md §7.3's mint-time roster); every other state
      * transition of this value object goes through here.
      *
      * @param array<string,mixed> $changes
@@ -61,7 +61,7 @@ final class TextSafety
     }
 
     /**
-     * Runtime-issued secrets (pairing codes, §7.3) join the roster as they
+     * Runtime-issued secrets (pairing codes, docs/SPEC.md §7.3) join the roster as they
      * are minted. This is the ONE deliberate mutation on this value object
      * — a pairing code cannot be pre-registered at boot, and the additive
      * rule keeps the floor monotonic: secrets only ever enter, never leave,

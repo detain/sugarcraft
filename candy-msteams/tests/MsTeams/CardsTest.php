@@ -8,7 +8,7 @@ use CandyCode\Bundles\MsTeams\MsTeams\Cards;
 use PHPUnit\Framework\TestCase;
 
 /**
- * §8.4 card-shape pins: the approval envelope Teams expects, the answer
+ * docs/SPEC.md §8.4 card-shape pins: the approval envelope Teams expects, the answer
  * vocabulary shared by both answer paths, and the retired replacement that
  * leaves NO action behind. Pure builders — no fake needed, no network, no
  * wall clock. The roster leg below is display-only by design; the answer
@@ -37,7 +37,7 @@ final class CardsTest extends TestCase
             self::assertSame('ask_9', $action['data'][Cards::DATA_KEY]);
             $words[] = $action['data']['verdict'];
         }
-        self::assertSame(['once', 'always', 'deny'], $words, 'the ask must offer exactly the §8.4 vocabulary');
+        self::assertSame(['once', 'always', 'deny'], $words, 'the ask must offer exactly the docs/SPEC.md §8.4 vocabulary');
     }
 
     public function testTheCardActivityWrapsTheAdaptiveContentType(): void

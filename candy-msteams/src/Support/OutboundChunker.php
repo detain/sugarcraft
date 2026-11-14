@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace CandyCode\Bundles\MsTeams\Support;
 
 /**
- * Model output → platform messages. Composition is shared (§9.4); the
- * limits are per-platform (§8.5: Teams takes its caps from config — the
+ * Model output → platform messages. Composition is shared (docs/SPEC.md §9.4); the
+ * limits are per-platform (docs/SPEC.md §8.5: Teams takes its caps from config — the
  * webhook's reply window and the message-size ceilings make a smaller
  * default friendlier than Discord's 2000/17, so the face passes its own).
  * Chunking happens here, never in the model loop.

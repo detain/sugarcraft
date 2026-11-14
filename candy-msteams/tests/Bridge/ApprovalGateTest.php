@@ -28,6 +28,7 @@ use CandyCode\Bundles\MsTeams\Support\OutboundChunker;
 use CandyCode\Bundles\MsTeams\Support\SessionMap;
 use CandyCode\Bundles\MsTeams\Support\TextSafety;
 use CandyCode\Bundles\MsTeams\Tests\Fixture\FakeServe;
+use CandyCode\Bundles\MsTeams\Tests\Support\Settle;
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\StreamSelectLoop;
@@ -238,7 +239,7 @@ final class ApprovalGateTest extends TestCase
 
     public function testTheNeverPresentedTextAnswerBindsToTheSessionsOwnConversation(): void
     {
-        // Post-restart recovery (§7.5): the ask was never presented in
+        // Post-restart recovery (docs/SPEC.md §7.5): the ask was never presented in
         // THIS process; a /approve arriving on the session's own
         // conversation binds lazily and answers.
         $this->bootRouter();
@@ -279,10 +280,12 @@ final class ApprovalGateTest extends TestCase
         $this->bridge->start()->then(static function () use (&$started): void {
             $started = true;
         });
-        for ($tick = 0; $tick < 20 && !$started; $tick++) {
-            self::runFor($this->loop, 100);
-        }
-        if (!$started) {
+        // msteams-27: handshake admission awaited at 5 ms granularity instead
+        // of a 100 ms × 20 fixed poll — same 2 s ceiling. (Reference capture:
+        // an arrow fn would snapshot $started=false at definition.)
+        if (!Settle::await($this->loop, 2000, function () use (&$started): bool {
+            return $started;
+        })) {
             self::fail('serve handshake never admitted');
         }
     }
@@ -306,12 +309,19 @@ final class ApprovalGateTest extends TestCase
 
     private function pushSettled(array $envelope): void
     {
+        // msteams-27 note: kept as a bounded window — an inbound envelope may
+        // legitimately move no serve-side counter (silent/reset arms), so the
+        // legacy 250 ms ceiling is the honest settle here.
         $this->serve->pushEvent($envelope);
         self::runFor($this->loop, 250);
     }
 
     private function inboundDm(string $text, bool $isMention, string $inboundId): void
     {
+        // msteams-27: deliberately NOT an early-return await — the dispatch
+        // leg is multi-tick (session create, then send, then exec) and a
+        // counter-move predicate returns between legs (the router twin's
+        // collect-mode test pins this). The 300 ms ceiling is the honest settle.
         $this->router->inbound('msteams', self::DM_KEY, ['conversationId' => 'conv-9', 'serviceUrl' => 'https://s.test', 'activityId' => $inboundId], $text, $isMention, $inboundId);
         self::runFor($this->loop, 300);
     }

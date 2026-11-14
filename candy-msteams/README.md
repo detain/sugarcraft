@@ -178,7 +178,7 @@ tenant that the permission is granted in the manifest and by an admin).
 
 If that consent is **not** granted, set `groups.degraded` to `true`. The
 bundle then forces mention-only in every group (`degraded` is the declared
-posture, §8.3 in the code's comments), so it does not depend on the consent
+posture, docs/SPEC.md §8.3 in the code's comments), so it does not depend on the consent
 being present. The bundle does not use any other RSC permission in the code
 paths reviewed here; anything beyond that is a verify-in-your-tenant item.
 

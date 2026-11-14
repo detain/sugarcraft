@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace CandyCode\Bundles\MsTeams\MsTeams;
 
 /**
- * Bot Framework token validation — the ENTIRE §8.1 trust door, terminated
+ * Bot Framework token validation — the ENTIRE docs/SPEC.md §8.1 trust door, terminated
  * inside this bundle: the candy-code router that mounts `/channels/` never
  * speaks Bot Framework, so an unverified activity would otherwise reach
  * policy code with a typed string on its forehead.

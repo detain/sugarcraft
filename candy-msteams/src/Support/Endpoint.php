@@ -7,7 +7,7 @@ namespace CandyCode\Bundles\MsTeams\Support;
 use RuntimeException;
 
 /**
- * Resolves the Teams OAuth token root and the Bot Framework JWKS URL (§8.1).
+ * Resolves the Teams OAuth token root and the Bot Framework JWKS URL (docs/SPEC.md §8.1).
  *
  * The override settings exist so a local test proxy (or an air-gapped
  * mirror of the login endpoints) can front Microsoft. That same knob is a
@@ -19,7 +19,7 @@ use RuntimeException;
  * case, where the operator controls the last hop).
  *
  * Outbound conversation posts are NOT resolved here: their base is the
- * activity's serviceUrl (§8.6), which Rest validates as https on its own.
+ * activity's serviceUrl (docs/SPEC.md §8.6), which Rest validates as https on its own.
  *
  * Fail loud at start, not quiet at first send: a refused override throws
  * with the exact setting name that would authorize it.
@@ -30,7 +30,7 @@ final class Endpoint
     public const DEFAULT_JWKS = 'https://login.botframework.com/v1/.well-known/keys';
 
     /**
-     * The OAuth token root (§8.1): override wins, empty means default.
+     * The OAuth token root (docs/SPEC.md §8.1): override wins, empty means default.
      *
      * @throws RuntimeException when the override is not an allowed endpoint
      */

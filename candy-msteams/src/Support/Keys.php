@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace CandyCode\Bundles\MsTeams\Support;
 
 /**
- * The key grammar (§9.1): every conversation the bridge binds carries
+ * The key grammar (docs/SPEC.md §9.1): every conversation the bridge binds carries
  * `<platform>:<account>:<channel-or-thread-id>` — and the `dmScope` ladder
  * decides which DMs COLLAPSE onto one session.
  *
@@ -27,7 +27,7 @@ final class Keys
     public const SCOPES = [self::DM_MAIN, self::DM_PER_PEER, self::DM_PER_CHANNEL_PEER, self::DM_PER_ACCOUNT_CHANNEL_PEER];
 
     /**
-     * The binding key for a DM per the §9.1 scope ladder.
+     * The binding key for a DM per the docs/SPEC.md §9.1 scope ladder.
      */
     public static function dmKey(string $platform, string $account, string $peerId, string $channelId, string $scope): string
     {
@@ -63,7 +63,7 @@ final class Keys
     }
 
     /**
-     * Bot-loop protection (§7.3): a message whose author is our own
+     * Bot-loop protection (docs/SPEC.md §7.3): a message whose author is our own
      * application id is NEVER input — we echo into that channel ourselves.
      * `allowBots` gates everything else: a foreign bot's message is noise
      * unless the operator opened the door, and even then the pairing floor

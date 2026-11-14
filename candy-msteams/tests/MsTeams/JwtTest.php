@@ -10,7 +10,7 @@ use CandyCode\Bundles\MsTeams\MsTeams\JwtException;
 use PHPUnit\Framework\TestCase;
 
 /**
- * §8.1: the JWT accept/refuse matrix, fully offline — fixture RSA keys
+ * docs/SPEC.md §8.1: the JWT accept/refuse matrix, fully offline — fixture RSA keys
  * generated per process, tokens signed by this file, the roster injected as
  * a closure. No network leg exists here by construction.
  */

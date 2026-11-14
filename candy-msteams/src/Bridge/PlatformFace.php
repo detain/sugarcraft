@@ -12,7 +12,7 @@ namespace CandyCode\Bundles\MsTeams\Bridge;
  * conversationReference, or a Discord channel id) — the Bridge stores it verbatim and hands it
  * back, never reading it.
  *
- * The shared composition law (§9.4): all text arrives ALREADY chunked by
+ * The shared composition law (docs/SPEC.md §9.4): all text arrives ALREADY chunked by
  * the OutboundChunker under the adapter's own declared limits; the
  * adapter still owns platform dialect (markdown flavor, link handling).
  */
@@ -20,7 +20,7 @@ interface PlatformFace
 {
     public function name(): string;
 
-    /** The chunk ceiling this platform tolerates (§7.7). */
+    /** The chunk ceiling this platform tolerates (docs/SPEC.md §7.7). */
     public function textChunkLimit(): int;
 
     /** The line ceiling that rides with it. */
@@ -43,7 +43,7 @@ interface PlatformFace
      */
     public function promptApproval(array $ref, string $sessionId, array $ask, string $nonce = ''): void;
 
-    /** Retire a presented approval prompt once answered (§7.5 single-use). */
+    /** Retire a presented approval prompt once answered (docs/SPEC.md §7.5 single-use). */
     public function retireApproval(string $askId, string $line): void;
 
     /** Best-effort typing indicator while the turn runs; may no-op. */

@@ -29,7 +29,7 @@ final class HelpStatusCostTest extends TestCase
 
     public function testTheTeamsWordsParseAndTheSharedRosterIsUntouched(): void
     {
-        self::assertSame(['new', 'stop', 'approve', 'queue', 'model', 'pair'], Commands::ROSTER, 'the shared §7.6 roster stays identical to discord');
+        self::assertSame(['new', 'stop', 'approve', 'queue', 'model', 'pair'], Commands::ROSTER, 'the shared docs/SPEC.md §7.6 roster stays identical to discord');
         self::assertSame(['name' => 'help', 'args' => []], Commands::parseText('/help'));
         self::assertSame(['name' => 'status', 'args' => []], Commands::parseText('<at>candy</at> /STATUS'));
         self::assertSame(['name' => 'cost', 'args' => []], Commands::parseText('/cost'));

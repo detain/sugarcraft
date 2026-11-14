@@ -13,7 +13,7 @@ use React\EventLoop\LoopInterface;
 use React\EventLoop\Loop;
 
 /**
- * §8.2: the client_credentials exchange against the configurable auth base,
+ * docs/SPEC.md §8.2: the client_credentials exchange against the configurable auth base,
  * exercised over a loopback fake — mint, cache, in-flight dedupe, forced
  * re-mint, loud refusal. Never a real token endpoint.
  */

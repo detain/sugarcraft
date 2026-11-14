@@ -8,7 +8,7 @@ use CandyCode\Bundles\MsTeams\Support\SessionMap;
 use PHPUnit\Framework\TestCase;
 
 /**
- * §7.1/D4 privacy law over the WAL shadow: the constructor chmods the
+ * docs/SPEC.md §7.1/D4 privacy law over the WAL shadow: the constructor chmods the
  * main .db 0600, but in WAL mode SQLite creates `db-wal` and `db-shm` at
  * the first write in the SHAPE OF THE PROCESS UMASK — and the sidecars
  * carry the very rows the main file is kept private for (bindings,

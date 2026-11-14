@@ -20,7 +20,7 @@ use React\Http\Browser;
 use React\Socket\Connector;
 
 /**
- * §8.6 transport floors for the outbound leg: serviceUrl is activity data
+ * docs/SPEC.md §8.6 transport floors for the outbound leg: serviceUrl is activity data
  * and must pass the https door before a byte leaves; the media allowlist
  * names the P3.5 deferral out loud; 429 surfaces, 401 invalidates the
  * cached token — and no leg here loops or retries.

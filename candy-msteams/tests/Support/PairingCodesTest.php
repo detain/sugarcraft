@@ -10,7 +10,7 @@ use CandyCode\Bundles\MsTeams\Support\TextSafety;
 use PHPUnit\Framework\TestCase;
 
 /**
- * §7.3 pairing SHARED LAW, re-stated for this bundle: length-8 codes from
+ * docs/SPEC.md §7.3 pairing SHARED LAW, re-stated for this bundle: length-8 codes from
  * an ambiguous-glyph-free alphabet, one hour TTL, at most three pending,
  * one reminder per hour, and the code is a redaction secret the moment it
  * exists. The constants below are pinned byte-for-byte against the law the
@@ -171,7 +171,7 @@ final class PairingCodesTest extends TestCase
         }
         $glyphs = \str_split(PairingCodes::ALPHABET);
         self::assertSame(\count($glyphs), \count(\array_unique($glyphs)), 'one slot per glyph');
-        self::assertSame(8, PairingCodes::CODE_LENGTH, 'the shared §7.3 law is length 8 in both bundles');
+        self::assertSame(8, PairingCodes::CODE_LENGTH, 'the shared docs/SPEC.md §7.3 law is length 8 in both bundles');
         self::assertSame(3600, PairingCodes::TTL_SECONDS, 'one hour');
         self::assertSame(3, PairingCodes::MAX_PENDING, 'at most three pending');
         self::assertSame(3600, PairingCodes::REMINDER_SECONDS, 'at most one reminder per hour');

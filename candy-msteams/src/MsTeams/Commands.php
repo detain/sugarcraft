@@ -13,18 +13,18 @@ use SugarCraft\Code\Lang;
  * equivalent deploy leg for a message bot — command UX there is messaging
  * extensions (invoke), which is P3.5 territory alongside Graph consent.
  * So the TEXT fallback is the whole surface in v1: the same `/word` roster
- * the §7.9 approval law already requires, mention-prefixed or bare. An
+ * the docs/SPEC.md §7.9 approval law already requires, mention-prefixed or bare. An
  * approval path that depends on any card render fails closed; this parser
  * is why it doesn't have to.
  */
 final class Commands
 {
-    /** The shared §7.6 roster — identical vocabulary in both bundles. */
+    /** The shared docs/SPEC.md §7.6 roster — identical vocabulary in both bundles. */
     public const ROSTER = ['new', 'stop', 'approve', 'queue', 'model', 'pair'];
 
     /**
      * Teams-only words on top of the shared roster: discord answers these
-     * natively (or not at all), so they stay out of the §7.6 list.
+     * natively (or not at all), so they stay out of the docs/SPEC.md §7.6 list.
      */
     public const TEAMS_EXTRA = ['help', 'status', 'cost'];
 

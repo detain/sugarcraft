@@ -24,7 +24,7 @@
  * This is the same port the discord bundle ships (P2): the serve leg is
  * transport-agnostic — Teams' INVERSE inbound transport (webhook instead of
  * a long-lived platform client) changes nothing about how the bridge dials
- * the local daemon, and §8.6's replies-expire rule is exactly why the
+ * the local daemon, and docs/SPEC.md §8.6's replies-expire rule is exactly why the
  * session side must keep following cursors durably while the platform side
  * is stateless between activities.
  *
@@ -287,7 +287,7 @@ final class ServeBridge
         // mime mismatch; the caller decides what a refusal means (the face
         // retries once without attachments and says so). Teams inbound
         // attachments that are platform-delivered ride this same wire in v1;
-        // Graph-hosted content is refused pre-flight (§8.7, P3.5).
+        // Graph-hosted content is refused pre-flight (docs/SPEC.md §8.7, P3.5).
         if ($images !== []) {
             $params['images'] = $images;
         }

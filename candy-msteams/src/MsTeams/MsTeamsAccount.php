@@ -21,26 +21,26 @@ use SugarCraft\Code\Lang;
 
 /**
  * One Teams account's face: webhook activities in, serviceUrl REST out
- * (§8). The inverse transport — no dial to Microsoft, no keepalive: the
+ * (docs/SPEC.md §8). The inverse transport — no dial to Microsoft, no keepalive: the
  * daemon's mounted route delivers verified POSTs and everything the bot
- * says is a reply to a stored conversation reference (§8.6).
+ * says is a reply to a stored conversation reference (docs/SPEC.md §8.6).
  *
  * Inbound discipline, in order (mirroring the shared bridge law): ignore
  * our own author id and foreign bots per `allowBots`; personal chats
- * follow the `dmPolicy` ladder (pairing is the §7.3 SHARED law — same
+ * follow the `dmPolicy` ladder (pairing is the docs/SPEC.md §7.3 SHARED law — same
  * code, same alphabet, same caps); groupChat / channel / teamChannel
- * follow the `groupPolicy` allowlist with GROUPS BLOCKED BY DEFAULT (§8.3:
+ * follow the `groupPolicy` allowlist with GROUPS BLOCKED BY DEFAULT (docs/SPEC.md §8.3:
  * a conversation is served only when named by `groups` or `groupPolicy`
  * says open), `requireMention` default true per row, and the declared
  * degraded posture (no ChannelMessage.Read.Group RSC → mention-only,
- * §8.3); `ignoreOtherMentions` drops posts addressed to somebody else.
- * The §9.1 key resolves next — personal chats ride the `dmScope` ladder,
+ * docs/SPEC.md §8.3); `ignoreOtherMentions` drops posts addressed to somebody else.
+ * The docs/SPEC.md §9.1 key resolves next — personal chats ride the `dmScope` ladder,
  * every group conversation keys by its Teams conversation id. Commands
  * are the text roster (Teams slash deploy is messaging-extension
- * territory, P3.5 — §8.7); everything else is a prompt, with attachment
+ * territory, P3.5 — docs/SPEC.md §8.7); everything else is a prompt, with attachment
  * down-select kept SMALL in v1: platform-hosted media only, Graph-hosted
  * content refused with a disclosed note (file consent is P3.5's first
- * citizen, §8.7).
+ * citizen, docs/SPEC.md §8.7).
  *
  * Outbound: markdown-subset messages via the activity conversation
  * reference, `replyToId` threading replies, retirement of answered cards
@@ -71,7 +71,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
     /** @var array<string, array{serviceUrl: string, conversationId: string, activityId: string}> askId → the card to retire */
     private array $approvalMessages = [];
 
-    /** @var array<string, TimerInterface> askId → the expiry timer (§9.6 30-min posture) */
+    /** @var array<string, TimerInterface> askId → the expiry timer (docs/SPEC.md §9.6 30-min posture) */
     private array $approvalTimers = [];
 
     /**
@@ -167,7 +167,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
         return \is_int($lines) && $lines >= 1 ? $lines : 40;
     }
 
-    /** No platform dial to start — the webhook IS the connection (§8.1). */
+    /** No platform dial to start — the webhook IS the connection (docs/SPEC.md §8.1). */
     public function start(): void
     {
         $this->log->info('msteams_face_ready', ['account' => $this->account]);
@@ -200,13 +200,13 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
     }
 
     /**
-     * §9.6: the adaptive card carries the ask, the summary, (display only)
+     * docs/SPEC.md §9.6: the adaptive card carries the ask, the summary, (display only)
      * the approver roster, and the C-1 per-ask nonce in every action data —
      * the WALL is the router's answerApproval (roster + nonce + conversation
      * binding), re-checked on the invoke path below behind the account's
      * access floor. The configured ttl posture arms an expiry timer that
      * RETIRES the card clock-triggered, self-clamped to the core expiry
-     * ceiling (see approvalTtlSeconds(), co-TTL code-chat §11.6) so the
+     * ceiling (see approvalTtlSeconds(), co-TTL docs/SPEC.md §11.6) so the
      * card never advertises a window the core will not honor, and the same
      * retirement runs when an answer lands: card replace with no actions
      * at all. The universal same-chat `/approve` fallback needs no card —
@@ -245,7 +245,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
     }
 
     /**
-     * The card-side window of the co-TTL pair (code-chat §11.6): the core
+     * The card-side window of the co-TTL pair (docs/SPEC.md §11.6): the core
      * refuses the ask at PendingAsk::EXPIRY_SECONDS no matter what this
      * card promises, so the advertised window self-clamps to that ceiling
      * and says so LOUDLY — a longer configured ttlMinutes must never leave
@@ -320,7 +320,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
         $this->replies = [];
     }
 
-    /** The declared RSC posture (§8.3): degraded = the app package lacks ChannelMessage.Read.Group. */
+    /** The declared RSC posture (docs/SPEC.md §8.3): degraded = the app package lacks ChannelMessage.Read.Group. */
     public function degraded(): bool
     {
         return $this->boolCfg('degraded', false);
@@ -330,7 +330,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
 
     /**
      * The verified-activity door (the caller JWT-validated the bearer —
-     * nothing reaches here unsigned, §8.1).
+     * nothing reaches here unsigned, docs/SPEC.md §8.1).
      *
      * @param array<string,mixed> $activity
      */
@@ -386,7 +386,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
         $this->pendingEntityPeers = $peers;
         $isMention = $this->mentionsUs($activity);
 
-        // Bot-loop floor (§7.4): own posts ALWAYS ignored; 'true' admits
+        // Bot-loop floor (docs/SPEC.md §7.4): own posts ALWAYS ignored; 'true' admits
         // bots; 'false' refuses; 'mentions' admits a bot only when it
         // addressed us.
         $botsMode = $this->strCfg('allowBots', 'mentions');
@@ -395,7 +395,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
             return;
         }
 
-        // §8.3 degraded posture: the operator declares the RSC was declined
+        // docs/SPEC.md §8.3 degraded posture: the operator declares the RSC was declined
         // (or never granted); mention-only is then forced, no override.
         $degraded = $this->degraded();
 
@@ -411,7 +411,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
         $this->rememberConversation($activity, $conversationType);
 
         // The own-mention markup is stripped; other <at> tokens are dropped
-        // so the transcript carries no addressing noise (§7.4 analogue).
+        // so the transcript carries no addressing noise (docs/SPEC.md §7.4 analogue).
         $text = $content;
         $text = (string) \preg_replace('/<at>\s*' . \preg_quote($this->botName(), '/') . '\s*<\/at>\s*/iu', '', $text);
         $text = \trim((string) \preg_replace('/<at>.*?<\/at>/is', '', $text));
@@ -454,7 +454,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
 
             return;
         }
-        // §8.7 v1 stance: platform-hosted media rides the settled batch;
+        // docs/SPEC.md §8.7 v1 stance: platform-hosted media rides the settled batch;
         // Graph-hosted content is refused LOUD (a disclosed skip note),
         // never a silent drop, and never a dial with our token.
         $this->collectMediaAndDispatch($rawAttachments, $key, $ref, $text, $isMention);
@@ -552,7 +552,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
     }
 
     /**
-     * The §7.3 DM ladder, the SHARED code — every constant byte-identical
+     * The docs/SPEC.md §7.3 DM ladder, the SHARED code — every constant byte-identical
      * to the discord bundle's pairing (alphabet, length 8, hour TTL, three
      * pending, one reminder per hour). Returns true when the message may
      * proceed. Pairing is a GATE, not a prompt: an unpaired peer gets its
@@ -588,7 +588,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
             default => '', // 'silent' / 'paired': inside the reminder window, or raced onto the roster
         };
         if ($notice !== '') {
-            // The notice IS the code's one legitimate surface (§7.3): it
+            // The notice IS the code's one legitimate surface (docs/SPEC.md §7.3): it
             // rides raw REST, NOT safety->outbound — everywhere else
             // (transcripts, logs, channel chatter) the code is redacted,
             // because PairingCodes registered it as a secret.
@@ -605,7 +605,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
     }
 
     /**
-     * §8.1 tenant floor: with a tenant configured, an activity whose tenant
+     * docs/SPEC.md §8.1 tenant floor: with a tenant configured, an activity whose tenant
      * differs (or names none) is refused before anything reads it. Fail closed.
      *
      * @param array<string,mixed> $activity
@@ -631,7 +631,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
 
     /**
      * A group row with requireMention:false admits plain prompts once the
-     * door has approved the conversation (§8.3). The degraded floor still
+     * door has approved the conversation (docs/SPEC.md §8.3). The degraded floor still
      * forces mention-only.
      */
     private function groupTakesPlainPrompts(string $conversationId, bool $degraded): bool
@@ -656,11 +656,11 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
     }
 
     /**
-     * §8.3 group door: GROUPS ARE BLOCKED BY DEFAULT — a groupChat or
+     * docs/SPEC.md §8.3 group door: GROUPS ARE BLOCKED BY DEFAULT — a groupChat or
      * channel conversation is served only when `groupPolicy` says open OR
      * the conversation carries a `groups` row. A row may be 'disabled'
      * explicitly. `requireMention` defaults true per row and globally; the
-     * degraded floor (§8.3 without the RSC consent) forces mention-only.
+     * degraded floor (docs/SPEC.md §8.3 without the RSC consent) forces mention-only.
      */
     private function allowedGroup(string $conversationId, string $authorId, bool $isMention, bool $degraded, string $serviceUrl = ''): bool
     {
@@ -732,7 +732,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
     }
 
     /**
-     * §8.7 v1 down-select: ≤4 images + ≤2 PDFs under `media.maxMb`, and
+     * docs/SPEC.md §8.7 v1 down-select: ≤4 images + ≤2 PDFs under `media.maxMb`, and
      * ONLY platform-hosted content (Bot Framework media hosts). A
      * Graph/SharePoint url gets a disclosed refusal note — the bytes need
      * delegated consent the bundle does not ask for until P3.5 — never a
@@ -1030,7 +1030,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
         return \is_array($groups[$conversationId] ?? null) ? $groups[$conversationId] : null;
     }
 
-    /** Whether the conversation is served at all (the §8.3 door, without the mention arms). */
+    /** Whether the conversation is served at all (the docs/SPEC.md §8.3 door, without the mention arms). */
     private function groupServed(string $conversationId): bool
     {
         $row = $this->groupRow($conversationId);
@@ -1242,14 +1242,14 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
         return $this->clock !== null ? ($this->clock)() : \microtime(true);
     }
 
-    /** Public door for the router's /pair text fallback (§7.3). */
+    /** Public door for the router's /pair text fallback (docs/SPEC.md §7.3). */
     public function pairCommand(array $ref, array $args, string $actorId, bool $isDm): void
     {
         $this->handlePairCommand($ref, $args, $actorId, $isDm);
     }
 
     /**
-     * Pairing is an approver's act (§7.3): the roster that answers tool asks
+     * Pairing is an approver's act (docs/SPEC.md §7.3): the roster that answers tool asks
      * answers pairings too, and an EMPTY roster answers nobody — the gate that
      * admits a peer to the bot must not default open. Codes are listed only in
      * a direct message; a group reply names no code.

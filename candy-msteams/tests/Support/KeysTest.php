@@ -8,7 +8,7 @@ use CandyCode\Bundles\MsTeams\Support\Keys;
 use PHPUnit\Framework\TestCase;
 
 /**
- * §9.1 grammar: <platform>:<account>:<rest> with the dmScope ladder.
+ * docs/SPEC.md §9.1 grammar: <platform>:<account>:<rest> with the dmScope ladder.
  * Teams conversation ids themselves carry colons ("19:..."), which the
  * three-way-limited parse absorbs into <rest> — pinned below, because the
  * whole sidecar keys on this split surviving an adversarial id.

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace CandyCode\Bundles\MsTeams\Support;
 
 /**
- * DM pairing codes (§7.3 shared law — this bundle re-states it verbatim):
+ * DM pairing codes (docs/SPEC.md §7.3 shared law — this bundle re-states it verbatim):
  * the default gate for who may talk to the bot in a personal chat.
  *
  * A stranger DMs the bot → they get an 8-glyph code valid for one hour; an
@@ -130,7 +130,7 @@ final class PairingCodes
     }
 
     /**
-     * The approved roster (§7.3's user-tier allowlist) — the DM policy door
+     * The approved roster (docs/SPEC.md §7.3's user-tier allowlist) — the DM policy door
      * unions this with the settings' allowFrom names.
      *
      * @return list<string>

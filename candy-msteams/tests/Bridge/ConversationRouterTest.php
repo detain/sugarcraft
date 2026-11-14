@@ -14,6 +14,7 @@ use CandyCode\Bundles\MsTeams\Support\QueueGate;
 use CandyCode\Bundles\MsTeams\Support\SessionMap;
 use CandyCode\Bundles\MsTeams\Support\TextSafety;
 use CandyCode\Bundles\MsTeams\Tests\Fixture\FakeServe;
+use CandyCode\Bundles\MsTeams\Tests\Support\Settle;
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\StreamSelectLoop;
@@ -638,10 +639,13 @@ final class ConversationRouterTest extends TestCase
         $this->bridge->start()->then(static function () use (&$started): void {
             $started = true;
         });
-        for ($tick = 0; $tick < 20 && !$started; $tick++) {
-            self::runFor($this->loop, 100);
-        }
-        if (!$started) {
+        // msteams-27: handshake admission awaited at 5 ms granularity instead
+        // of a 100 ms × 20 fixed poll — success returns the moment the promise
+        // settles, the 2 s ceiling is unchanged. (Reference capture: an arrow
+        // fn would snapshot $started=false at definition.)
+        if (!Settle::await($this->loop, 2000, function () use (&$started): bool {
+            return $started;
+        })) {
             self::fail('serve handshake never admitted');
         }
     }
@@ -710,17 +714,24 @@ final class ConversationRouterTest extends TestCase
     /** Push an event and settle the loop until the router has processed it. */
     private function pushSettled(array $envelope): void
     {
+        // msteams-27 note: kept as a bounded window — an inbound envelope may
+        // legitimately move no serve-side counter (silent/reset arms), so the
+        // legacy 250 ms ceiling is the honest settle here.
         $this->serve->pushEvent($envelope);
         self::runFor($this->loop, 250);
     }
 
     private function inboundDm(string $text, bool $isMention, string $inboundId): void
     {
+        // msteams-27: deliberately NOT an early-return await — the dispatch
+        // leg is multi-tick (session create, then send, then exec) and a
+        // counter-move predicate returns between legs (the collect-mode test
+        // pins this). The 300 ms ceiling is the honest settle.
         $this->router->inbound('msteams', self::DM_KEY, ['conversationId' => '19:dm-9@thread.v2', 'serviceUrl' => 'https://s.test', 'activityId' => $inboundId], $text, $isMention, $inboundId);
         self::runFor($this->loop, 300);
     }
 
-    /** Drive one inbound message on an arbitrary §9.1 conversation key. */
+    /** Drive one inbound message on an arbitrary docs/SPEC.md §9.1 conversation key. */
     private function inboundOn(string $key, string $text, bool $isMention = false): void
     {
         $conversationId = '19:' . \substr(\md5($key), 0, 8) . '@thread.v2';

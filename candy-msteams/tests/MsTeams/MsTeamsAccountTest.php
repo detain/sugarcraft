@@ -25,7 +25,7 @@ use SugarCraft\Code\Backend\PendingAsk;
 
 /**
  * The account face driven through its public intake with fixture activities
- * (§8.1-§8.6 surfaces): the pairing gate answers before anything reaches the
+ * (docs/SPEC.md §8.1-docs/SPEC.md §8.6 surfaces): the pairing gate answers before anything reaches the
  * router, unlisted groups are blocked by default, the degraded posture
  * forces mention-only, outbound carries the conversation reference, cards
  * retire by replace, and the /pair text surface speaks. The REST leg rides
@@ -192,7 +192,7 @@ final class MsTeamsAccountTest extends TestCase
         $this->buildFace(['degraded' => true, 'groups' => ['conv-1' => ['policy' => 'open', 'requireMention' => false]]]);
         $this->face->handleActivity($this->activity('u1', 'no mention in a degraded world', 'groupChat'));
         $this->settle();
-        self::assertSame([], $this->api->calls, 'no ChannelMessage.Read.Group consent means no unmentioned reads, §8.3');
+        self::assertSame([], $this->api->calls, 'no ChannelMessage.Read.Group consent means no unmentioned reads, docs/SPEC.md §8.3');
 
         $this->face->handleActivity($this->activity('u1', '<at>candy</at> now', 'groupChat', [
             ['type' => 'mention', 'mentioned' => ['user' => ['id' => '28:' . self::APP_ID]]],
@@ -564,7 +564,7 @@ final class MsTeamsAccountTest extends TestCase
         }
         self::assertSame(1, $serve->sendSeen);
         self::assertSame('hello there', $serve->seenText);
-        self::assertNotSame('', $serve->lastIdempotencyKey, 'the session.send must carry an idempotencyKey (§9.5 dedupe)');
+        self::assertNotSame('', $serve->lastIdempotencyKey, 'the session.send must carry an idempotencyKey (docs/SPEC.md §9.5 dedupe)');
 
         // The answer-side redaction rides the SAME shared TextSafety the
         // face was built with — the secret joins the roster as a live

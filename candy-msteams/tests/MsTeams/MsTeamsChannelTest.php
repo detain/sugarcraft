@@ -302,7 +302,7 @@ final class MsTeamsChannelTest extends TestCase
         $channel->dispose();
         self::assertSame([], $channel->faceNames());
         // A started channel created its state dir; dispose must not delete
-        // durable state (the bindings outlive the dial, §9.1) — pin it.
+        // durable state (the bindings outlive the dial, docs/SPEC.md §9.1) — pin it.
         self::assertDirectoryExists(Bootstrap::trustedConfigDirPath() . '/msteams');
     }
 

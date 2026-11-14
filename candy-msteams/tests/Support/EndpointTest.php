@@ -9,7 +9,7 @@ use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
 /**
- * §8.1/§8.2 transport law: overrides are honored only when they keep the
+ * docs/SPEC.md §8.1/docs/SPEC.md §8.2 transport law: overrides are honored only when they keep the
  * wire honest — https anywhere, plain http only for an opt-in loopback proxy.
  */
 final class EndpointTest extends TestCase

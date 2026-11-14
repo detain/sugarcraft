@@ -8,7 +8,7 @@ use CandyCode\Bundles\MsTeams\MsTeams\Commands;
 use PHPUnit\Framework\TestCase;
 
 /**
- * The Teams text-command leg (§7.6 roster, §8.4 fallback law): the shared
+ * The Teams text-command leg (docs/SPEC.md §7.6 roster, docs/SPEC.md §8.4 fallback law): the shared
  * vocabulary arrives bare or <at>-prefixed; anything outside the roster is
  * ordinary text.
  */
