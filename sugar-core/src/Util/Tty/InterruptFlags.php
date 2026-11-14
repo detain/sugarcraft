@@ -15,11 +15,17 @@ namespace SugarCraft\Core\Util\Tty;
  *
  * ## Platform behaviour
  *
- * - **Linux / macOS**: uses `shmop_open()` with key `ftok(__FILE__, 1)`.
- *   Multiple processes with the same key see the same segment.
- * - **Windows**: uses `shmop_open()` with a fixed namespaced string key.
- *   Windows maps this to a named shared-memory object via the POSIX shmop
- *   shim that PHP's `ext-shmop` provides on Windows.
+ * - **Linux / macOS**: uses `shmop_open()` with an `ftok(__FILE__, 'S')`
+ *   key. Multiple processes with the same key see the same segment.
+ * - **Windows**: INERT, by the constructor's `extension_loaded('shmop')`
+ *   guard — ext-shmop is not built for Windows PHP. An earlier version of
+ *   this bullet claimed Windows shmop worked "via the POSIX shmop shim
+ *   that PHP's ext-shmop provides on Windows"; that shim does not exist on
+ *   any PHP release, and the named-int keying in {@see makeKey()} below is
+ *   dead code kept only in case a future build ever enables the extension.
+ *   The native-Windows interrupt machine is the CONIN$ KEY_EVENT poll in
+ *   {@see WindowsBackend::drainSignals()} (sc-02, finding sugar-core-051's
+ *   doc-truth leg).
  *
  * ## Safety contract
  *
@@ -41,8 +47,10 @@ final class InterruptFlags
     /**
      * Return the singleton InterruptFlags instance.
      *
-     * All callers — `WindowsBackend::drainSignals()`, `restore()`, and
-     * test doubles — share the same underlying shmop segment.
+     * All callers — `WindowsBackend::drainSignals()` and the process-shutdown
+     * cleanup `enableRawMode()` registers — share the same underlying shmop
+     * segment. {@see destroy()} releases the cache, so a sibling that holds a
+     * stale reference can never strand this entry point on a dead segment.
      */
     public static function self(): self
     {
@@ -57,8 +65,11 @@ final class InterruptFlags
      * Create (or attach to) the shared interrupt flag segment.
      *
      * The segment is created with `c` mode (create if missing).
-     * It is NOT automatically destroyed on process exit — that is the
-     * responsibility of {@see WindowsBackend::restore()}.
+     * Its teardown is process-scoped, not instance-scoped: the shutdown
+     * hook {@see WindowsBackend::enableRawMode()} registers calls
+     * {@see destroyShared()} exactly once (sc-02, finding sugar-core-053 —
+     * the earlier per-restore() destroy let any one backend tear the shared
+     * segment out from under its siblings).
      */
     private function __construct()
     {
@@ -132,11 +143,20 @@ final class InterruptFlags
     /**
      * Destroy the shared-memory segment, if we created it.
      *
-     * Called by {@see WindowsBackend::restore()} to clean up.
+     * sc-02 (finding sugar-core-053): this also releases the cached
+     * singleton when the caller IS that singleton. Without the release a
+     * post-destroy `self()` kept handing back this object with `$shmId`
+     * false — a zombie every consume() answered `false` from, silently
+     * deaf to interrupts for the rest of the process.
+     *
      * Returns `true` on success, `false` on error or if already detached.
      */
     public function destroy(): bool
     {
+        if (self::$instance === $this) {
+            self::$instance = null;
+        }
+
         if ($this->shmId === false) {
             return false;
         }
@@ -149,52 +169,55 @@ final class InterruptFlags
     }
 
     /**
-     * Derive a platform-specific shared-memory key from this file.
+     * Destroy the cached singleton without holding an instance reference.
      *
-     * Uses `ftok()` on POSIX for filesystem-association; falls back to
-     * a fixed key on Windows (the shmop ext on Windows uses different
-     * key semantics).
+     * The process-lifetime cleanup WindowsBackend registers at raw-mode
+     * entry (sc-02/053). A no-op when nothing ever created a segment this
+     * run — which is every POSIX test process and every Windows run
+     * (there this class is inert by construction).
+     */
+    public static function destroyShared(): void
+    {
+        $instance = self::$instance;
+        self::$instance = null;
+
+        if ($instance !== null) {
+            $instance->destroy();
+        }
+    }
+
+    /**
+     * Derive a platform-specific shared-memory key.
+     *
+     * POSIX: `ftok()` maps this file's inode to a System V IPC key —
+     * every process that can stat the same file agrees on the number.
+     *
+     * Windows: unreachable in practice. ext-shmop is not built for Windows
+     * PHP, so the constructor's `extension_loaded('shmop')` guard returns
+     * before this method is ever called there. An earlier body of this
+     * method explained the branch as "shmop_open on Windows accepts a
+     * string identifier" and "ftok() on Windows maps to a shared memory
+     * slot via the registry" — neither mechanism exists (sc-02, finding
+     * sugar-core-051's doc-truth leg). The fixed int stays as a
+     * project-scoped placeholder for a hypothetical future build that
+     * enables the extension, nothing more.
      */
     private function makeKey(): int
     {
-        // On Windows, shmop_open uses a platform-native named shared
-        // memory object.  The key string is passed as-is on Windows.
-        // On POSIX, ftok() maps a file inode to a System V IPC key.
-        // When ext-shmop is not available this returns 0 — the caller
-        // guards against that case.
+        static $cachedKey = null;
+        if ($cachedKey !== null) {
+            return $cachedKey;
+        }
+
         if (DIRECTORY_SEPARATOR === '\\') {
-            // Use a well-known name string.  shmop_open on Windows accepts
-            // this as the shared memory object name.
-            // We pass it via ftok emulation — on Windows PHP shmop, the
-            // "key" parameter is actually a string identifier.
-            // Check if ext-shmop on Windows uses string keys:
-            static $windowsKey = null;
-            if ($windowsKey === null) {
-                // PHP on Windows shmop: key is an int, but maps to a
-                // named kernel object.  Use a fixed project-scoped id.
-                // ftok() on Windows maps to a shared memory slot via the
-                // registry; we use a fixed value to avoid reliance on it.
-                $windowsKey = 0x53475643; // 'SGVC' — SugarCraft Virtual Console
-            }
-
-            return $windowsKey;
+            return $cachedKey = 0x53475643; // 'SGVC' — SugarCraft Virtual Console
         }
 
-        // POSIX: use ftok for a stable System V IPC key.
-        static $posixKey = null;
-        if ($posixKey === null) {
-            $result = @\ftok(__FILE__, 'S');
-            // ftok returns int on success, -1 if file inaccessible.
-            if ($result === -1) {
-                // ftok fallback: use a fixed key if the file is unavailable.
-                // This is safe for single-process use (no other process needs
-                // to attach to the same segment in tests).
-                $posixKey = 0x41544347; // 'SGC' — fixed fallback
-            } else {
-                $posixKey = $result;
-            }
-        }
-
-        return $posixKey;
+        // POSIX: ftok for a stable System V IPC key.
+        $result = @\ftok(__FILE__, 'S');
+        // ftok returns int on success, -1 if the file is inaccessible.
+        // The fixed fallback keeps single-process use working (no other
+        // process needs to attach to the same segment in tests).
+        return $cachedKey = $result === -1 ? 0x41544347 : $result; // 'ATCG' fallback
     }
 }

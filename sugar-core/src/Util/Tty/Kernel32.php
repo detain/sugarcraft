@@ -76,6 +76,27 @@ typedef struct {
 CDEF;
 
     /**
+     * Standalone cdef for the console input record.
+     *
+     * The real INPUT_RECORD is 20 bytes: a WORD tag, 2 bytes of alignment
+     * padding, then a 16-byte union (KEY_EVENT_RECORD is the largest member
+     * and is 4-byte aligned). Split into its own constant — the sc-01
+     * {@see SIZE_CDEF} idiom — so `tests/Util/Tty/Kernel32SizeTest.php` can
+     * pin the sizeof and the union offset against the Windows ABI WITHOUT
+     * kernel32.dll. The superseded shape declared `unsigned char[8][$n]`,
+     * letting ReadConsoleInputW write 20 bytes into every 8-byte stride —
+     * a heap landmine that corrupted the records it "returned" (and, at
+     * $n records, the allocator past the end of the block).
+     */
+    public const INPUT_RECORD_CDEF = <<<'CDEF'
+typedef struct _INPUT_RECORD {
+    unsigned short EventType;
+    unsigned short _padding;
+    unsigned char  Event[16];
+} INPUT_RECORD;
+CDEF;
+
+    /**
      * Live ctrl-handler trampolines and the closures behind them.
      *
      * WHY A STATIC AT ALL: SetConsoleCtrlHandler is handed a raw function
@@ -116,7 +137,7 @@ CDEF;
         }
 
         self::$ffi = \FFI::cdef(
-            self::SIZE_CDEF . <<<'CPROTO'
+            self::SIZE_CDEF . self::INPUT_RECORD_CDEF . <<<'CPROTO'
 typedef void* HANDLE;
 typedef unsigned long DWORD;
 typedef unsigned int  UINT;
@@ -172,16 +193,6 @@ BOOL PeekConsoleInputW(long long hConsoleInput, void *lpBuffer,
                        DWORD nLength, DWORD *lpNumberOfEventsRead);
 BOOL ReadConsoleInputW(long long hConsoleInput, void *lpBuffer,
                        DWORD nLength, DWORD *lpNumberOfEventsRead);
-
-/* The real INPUT_RECORD is 20 bytes: a WORD tag, 2 bytes of padding, then
-   a 16-byte union (KEY_EVENT_RECORD is the largest member and is 4-byte
-   aligned). The old 8-byte shape let ReadConsoleInputW write 20*N bytes
-   into an 8*N buffer. */
-typedef struct _INPUT_RECORD {
-    unsigned short EventType;
-    unsigned short _padding;
-    unsigned char  Event[16];
-} INPUT_RECORD;
 
 enum {
     KEY_EVENT = 0x0001,
@@ -243,7 +254,7 @@ CPROTO
      * Peek at console input events without consuming them.
      *
      * @param int $h CONIN$ handle from {@see openTty()} or {@see stdIn()}
-     * @param list<array{type:int, data:nonempty-string}> $records buffer to fill
+     * @param list<array{type:int, dataIndex:int}> $records buffer to fill
      * @param int $recordSize max number of records to read
      * @return int|false number of records peeked, or false on error
      */
@@ -270,7 +281,7 @@ CPROTO
 
         $records = [];
         for ($i = 0; $i < $count->cdata; $i++) {
-            $records[] = ['type' => (int) $buf[$i]->EventType, 'index' => $i];
+            $records[] = ['type' => (int) $buf[$i]->EventType, 'dataIndex' => $i];
         }
 
         return (int) $count->cdata;
@@ -281,7 +292,7 @@ CPROTO
      *
      * @param int $h CONIN$ handle from {@see openTty()} or {@see stdIn()}
      * @param int $recordSize max number of records to read
-     * @return list<array{type:int, dataIndex:int}>|false records read, or false on error
+     * @return list<array{type:int, dataIndex:int, keyDown?:bool, repeat?:int, vk?:int, scan?:int, char?:int, ctrl?:int}>|false records read, or false on error
      */
     public function readConsoleInput(int $h, int $recordSize = 1): array|false
     {
@@ -309,7 +320,7 @@ CPROTO
 
         $records = [];
         for ($i = 0; $i < $count->cdata; $i++) {
-            $record = ['type' => (int) $buf[$i]->EventType, 'index' => $i];
+            $record = ['type' => (int) $buf[$i]->EventType, 'dataIndex' => $i];
             if ($record['type'] === self::KEY_EVENT) {
                 $record += self::keyEventFields(\FFI::string(\FFI::addr($buf[$i]->Event), 16));
             }

@@ -89,4 +89,27 @@ final class WindowsConsoleInputTest extends TestCase
             Kernel32::keyEventFields($raw),
         );
     }
+
+    /**
+     * sc-02 (finding sugar-core-052): recordBytes() is the public decode seam
+     * WindowsBackend::drainSignals() forwards non-interrupt records through.
+     * It is the SAME method the read() loop runs — one surrogate-join state,
+     * one rule set, no second decoder beside the signal poll.
+     */
+    public function testRecordBytesIsTheSharedDecoderSeam(): void
+    {
+        $in = new WindowsConsoleInput(10, new FakeKernel32());
+
+        self::assertSame('a', $in->recordBytes($this->key(0x61)));
+        self::assertSame('', $in->recordBytes($this->key(0x62, down: false)), 'key-up carries no bytes');
+        self::assertSame('', $in->recordBytes(['type' => Kernel32Interface::WINDOW_BUFFER_SIZE_EVENT]), 'non-key records carry none');
+
+        // The join state is per-instance and shared with read(): feed the
+        // high half through the seam, the low half through the queue.
+        $k = new FakeKernel32();
+        $in2 = new WindowsConsoleInput(10, $k);
+        self::assertSame('', $in2->recordBytes($this->key(0xD83D)));
+        $k->setReadConsoleInputSequence([$this->key(0xDE00)]);
+        self::assertSame("\u{1F600}", $in2->read(), 'a pair split across seam and read joins once');
+    }
 }

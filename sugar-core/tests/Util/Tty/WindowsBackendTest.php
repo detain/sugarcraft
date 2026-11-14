@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Core\Tests\Util\Tty;
 
 use SugarCraft\Core\Util\Tty\Backend;
+use SugarCraft\Core\Util\Tty\InterruptFlags;
 use SugarCraft\Core\Util\Tty\WindowsBackend;
 use SugarCraft\Core\Tests\Util\Tty\FakeInterruptFlags;
 use SugarCraft\Core\Tests\Util\Tty\FakeKernel32;
@@ -434,33 +435,251 @@ final class WindowsBackendTest extends TestCase
         WindowsBackend::resetStaticState();
     }
 
-    // ─── PR5: drainSignals + CONIN$ key detection ──────────────────────────
+    // ─── PR5: drainSignals + CONIN$ key detection (sc-02 / finding 052) ────
 
-    public function testDrainSignalsReturnsInterruptWhenConinHandleOpenAndKeyEvents(): void
+    /**
+     * A KEY_EVENT record in the shape Kernel32::readConsoleInput() ships:
+     * full field set, real control-state bits (not the superseded fake's
+     * 'ctrl' => true boolean that pre-sc-02 pins seeded).
+     *
+     * @return array<string, mixed>
+     */
+    private static function keyRecord(
+        int $vk,
+        int $char = 0,
+        bool $down = true,
+        int $ctrl = 0,
+        int $repeat = 1,
+    ): array {
+        return [
+            'type'    => Kernel32Interface::KEY_EVENT,
+            'keyDown' => $down,
+            'repeat'  => $repeat,
+            'vk'      => $vk,
+            'scan'    => 0,
+            'char'    => $char,
+            'ctrl'    => $ctrl,
+        ];
+    }
+
+    /**
+     * The machine, end to end: a plain key is INPUT (forwarded, not eaten,
+     * not a signal), a Ctrl+C key-up is nothing, and the Ctrl+C key-down is
+     * the interrupt. The superseded heuristic answered the opposite on all
+     * three arms: first-seen KEY_EVENT of any kind flipped a permanent latch
+     * to "interrupt", and every record went to the shredder.
+     */
+    public function testDrainSignalsMapsOnlyCtrlCKeyDownAndForwardsPlainKeys(): void
     {
-        // openTty() must succeed for this test — skip if no console is attached
-        // (e.g. headless Windows CI runner with no ConHost).
-        if (DIRECTORY_SEPARATOR === '\\' && WindowsBackend::openTty() === null) {
-            $this->markTestSkipped('openTty() returned null: no console attached on this Windows environment');
-        }
         $fake = new FakeKernel32();
-        // Seed a KEY_EVENT into the console input queue (simulates Ctrl+C).
-        $fake->setReadConsoleInputSequence([
-            ['type' => Kernel32Interface::KEY_EVENT],
-        ]);
         WindowsBackend::setTestKernel32($fake);
-        // Open TTY so drainSignals reads CONIN$ for key events.
-        $opened = WindowsBackend::openTty();
-        $this->assertNotNull($opened);
-
-        // No interrupt flag set; drainSignals must detect via KEY_EVENT polling.
         WindowsBackend::setTestInterruptFlags(new FakeInterruptFlags());
+        $this->assertNotNull(WindowsBackend::openTty());
+
+        $fake->setWaitSignalled(true);
+        $fake->setReadConsoleInputSequence([
+            self::keyRecord(0x41, char: 0x61),                                   // plain 'a' down
+            self::keyRecord(Kernel32Interface::VK_C, ctrl: Kernel32Interface::LEFT_CTRL_PRESSED, down: false),  // Ctrl+C UP: no signal
+            self::keyRecord(Kernel32Interface::VK_C, char: 0x03, ctrl: Kernel32Interface::LEFT_CTRL_PRESSED),   // Ctrl+C DOWN: the signal
+        ]);
 
         $result = WindowsBackend::drainSignals();
 
         $this->assertNotFalse($result);
         $this->assertNotSame(0, $result & WindowsBackend::SIGNAL_INTERRUPT);
+        $this->assertSame('a', WindowsBackend::takePendingKeyBytes(), 'the plain key rode the forward, not the shredder');
+        $this->assertSame('', WindowsBackend::takePendingKeyBytes(), 'the take empties');
+        // Ctrl+C down was consumed as the SIGNAL, its bytes not forwarded too.
+        $this->assertStringNotContainsString("\x03", WindowsBackend::takePendingKeyBytes());
 
         WindowsBackend::resetStaticState();
+    }
+
+    public function testDrainSignalsMapsCtrlBreakKeyDownToInterrupt(): void
+    {
+        $fake = new FakeKernel32();
+        WindowsBackend::setTestKernel32($fake);
+        WindowsBackend::setTestInterruptFlags(new FakeInterruptFlags());
+        $this->assertNotNull(WindowsBackend::openTty());
+
+        $fake->setWaitSignalled(true);
+        $fake->setReadConsoleInputSequence([
+            self::keyRecord(Kernel32Interface::VK_CANCEL, char: 0x1E, ctrl: Kernel32Interface::RIGHT_CTRL_PRESSED),
+        ]);
+
+        $result = WindowsBackend::drainSignals();
+        $this->assertNotFalse($result);
+        $this->assertNotSame(0, $result & WindowsBackend::SIGNAL_INTERRUPT);
+
+        WindowsBackend::resetStaticState();
+    }
+
+    /**
+     * Ctrl held over an ordinary key is input, not an interrupt — and its
+     * decoded control byte reaches the input pump. Ctrl+A arrives under
+     * ENABLE_VIRTUAL_TERMINAL_INPUT as vk 'A' with the Ctrl state and the
+     * xterm byte 0x01 in UnicodeChar.
+     */
+    public function testPlainCtrlCombinationsAreInputNotInterrupt(): void
+    {
+        $fake = new FakeKernel32();
+        WindowsBackend::setTestKernel32($fake);
+        WindowsBackend::setTestInterruptFlags(new FakeInterruptFlags());
+        $this->assertNotNull(WindowsBackend::openTty());
+
+        $fake->setWaitSignalled(true);
+        $fake->setReadConsoleInputSequence([
+            self::keyRecord(0x41, char: 0x01, ctrl: Kernel32Interface::LEFT_CTRL_PRESSED), // Ctrl+A
+            self::keyRecord(0x56, char: 0x16, ctrl: Kernel32Interface::LEFT_CTRL_PRESSED), // Ctrl+V
+        ]);
+
+        $this->assertFalse(WindowsBackend::drainSignals(), 'neither record is a signal');
+        $this->assertSame("\x01\x16", WindowsBackend::takePendingKeyBytes());
+
+        WindowsBackend::resetStaticState();
+    }
+
+    /**
+     * The interrupt is per-PRESS, not one-shot-per-process: two Ctrl+C downs
+     * across two ticks must both answer SIGNAL_INTERRUPT. The superseded
+     * $interruptKeySeen latch delivered only the first one in the process.
+     */
+    public function testConsecutiveInterruptPressesBothSignal(): void
+    {
+        $fake = new FakeKernel32();
+        WindowsBackend::setTestKernel32($fake);
+        WindowsBackend::setTestInterruptFlags(new FakeInterruptFlags());
+        $this->assertNotNull(WindowsBackend::openTty());
+
+        $down = self::keyRecord(Kernel32Interface::VK_C, ctrl: Kernel32Interface::LEFT_CTRL_PRESSED);
+
+        $fake->setWaitSignalled(true);
+        $fake->setReadConsoleInputSequence([$down]);
+        $first = WindowsBackend::drainSignals();
+        $fake->setReadConsoleInputSequence([$down]);
+        $second = WindowsBackend::drainSignals();
+
+        $this->assertNotSame(0, (int) $first & WindowsBackend::SIGNAL_INTERRUPT);
+        $this->assertNotSame(0, (int) $second & WindowsBackend::SIGNAL_INTERRUPT);
+
+        WindowsBackend::resetStaticState();
+    }
+
+    /**
+     * Record-shape contract (sc-02 / finding 053): the interface names the
+     * slot dataIndex, the real binding stamps dataIndex — the fake must not
+     * drift into modelling a shape the kernel never returns.
+     */
+    public function testFakeReadConsoleInputCarriesTheDataIndexContractSlot(): void
+    {
+        $fake = new FakeKernel32();
+        $fake->setReadConsoleInputSequence([['type' => Kernel32Interface::KEY_EVENT]]);
+
+        // Peek first — it must NOT consume (the real API leaves the queue
+        // intact) — then the consuming read.
+        $peeked = [];
+        $this->assertSame(1, $fake->peekConsoleInput(1, $peeked, 8));
+        $this->assertArrayHasKey('dataIndex', $peeked[0]);
+
+        $records = $fake->readConsoleInput(1, 8);
+
+        $this->assertIsArray($records);
+        $this->assertArrayHasKey('dataIndex', $records[0]);
+    }
+
+    // ─── sc-02 / finding 051: acquisition survives stream failure ──────────
+
+    /**
+     * A HANDLE is not a CRT fd: on a live Windows console the php://fd wrap
+     * can legitimately fail (named Windows-CI survivor). The interrupt poll
+     * runs on the HANDLE, so a failed wrap must keep the poll alive and only
+     * answer null for the stream pair the caller asked for. The superseded
+     * shape closed both handles and nulled the CONIN$ static on wrap failure
+     * — a stream stumble silently murdered signal detection with it.
+     */
+    public function testOpenTtyKeepsConsolePollWhenStreamWrapFails(): void
+    {
+        $fake = new FakeKernel32();
+        // Realistic Windows handles: large pointer-ish ints, no such fd here,
+        // so both php://fd wraps fail.
+        $fake->setCreateFileHandle('CONIN$', 999);
+        $fake->setCreateFileHandle('CONOUT$', 998);
+        WindowsBackend::setTestKernel32($fake);
+        WindowsBackend::setTestInterruptFlags(new FakeInterruptFlags());
+
+        $this->assertNull(WindowsBackend::openTty(), 'no stream pair on a failed wrap');
+
+        $fake->setWaitSignalled(true);
+        $fake->setReadConsoleInputSequence([
+            self::keyRecord(Kernel32Interface::VK_C, ctrl: Kernel32Interface::LEFT_CTRL_PRESSED),
+        ]);
+        $result = WindowsBackend::drainSignals();
+        $this->assertNotFalse($result, 'the CONIN$ poll survived the wrap failure');
+        $this->assertNotSame(0, $result & WindowsBackend::SIGNAL_INTERRUPT);
+
+        WindowsBackend::resetStaticState();
+    }
+
+    /** The output side refusing to open must not blind the input side either. */
+    public function testOpenTtyKeepsConsolePollWhenConoutRefuses(): void
+    {
+        $fake = new FakeKernel32();
+        $fake->setCreateFileHandle('CONOUT$', false);
+        WindowsBackend::setTestKernel32($fake);
+        WindowsBackend::setTestInterruptFlags(new FakeInterruptFlags());
+
+        $this->assertNull(WindowsBackend::openTty());
+
+        $fake->setWaitSignalled(true);
+        $fake->setReadConsoleInputSequence([
+            self::keyRecord(0x41, char: 0x61), // plain key: forwarded, no signal
+        ]);
+        $this->assertFalse(WindowsBackend::drainSignals());
+        $this->assertSame('a', WindowsBackend::takePendingKeyBytes());
+
+        WindowsBackend::resetStaticState();
+    }
+
+    /** Only a failed CONIN$ acquisition itself leaves the machine dormant. */
+    public function testOpenTtyStaysDormantWhenConinAcquisitionFails(): void
+    {
+        $fake = new FakeKernel32();
+        $fake->setCreateFileHandle('CONIN$', false);
+        WindowsBackend::setTestKernel32($fake);
+        WindowsBackend::setTestInterruptFlags(new FakeInterruptFlags());
+
+        $this->assertNull(WindowsBackend::openTty());
+
+        $fake->setWaitSignalled(true);
+        $fake->setReadConsoleInputSequence([
+            self::keyRecord(Kernel32Interface::VK_C, ctrl: Kernel32Interface::LEFT_CTRL_PRESSED),
+        ]);
+        $this->assertFalse(WindowsBackend::drainSignals(), 'nothing was acquired, nothing polls');
+
+        WindowsBackend::resetStaticState();
+    }
+
+    // ─── sc-02 / finding 053: restore() keeps process-shared machinery ─────
+
+    /**
+     * One backend's restore() (and every __destruct rides it) used to call
+     * InterruptFlags::self()->destroy() — tearing the ONE shared segment out
+     * from under sibling backends and leaving the cached singleton as a
+     * zombie that answered consume()===false forever. Segment lifetime is now
+     * the process (enableRawMode's single shutdown hook); a restore must keep
+     * the singleton intact for every other holder.
+     */
+    public function testRestoreKeepsTheSharedInterruptSegmentForSiblings(): void
+    {
+        $before = InterruptFlags::self();
+
+        $fake = new FakeKernel32();
+        $fake->setConsoleModeStdin(0x0003);
+        $fake->setConsoleModeStdout(0x0001);
+        $backend = $this->backend($fake);
+        $backend->enableRawMode();
+        $backend->restore();
+
+        $this->assertSame($before, InterruptFlags::self(), 'restore() must not strand the shared flag');
     }
 }

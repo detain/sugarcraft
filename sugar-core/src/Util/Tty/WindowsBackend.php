@@ -91,19 +91,31 @@ final class WindowsBackend implements Backend
     private static ?object $testInterruptFlags = null;
 
     /**
-     * Tracks whether an interrupt has been consumed from the shared flag
-     * but not yet dispatched (for the current drainSignals() cycle).
+     * The keystroke decoder bound to the current CONIN$ acquisition, or null.
      *
-     * @var bool
+     * sc-02 (finding sugar-core-052): drainSignals() forwards the non-interrupt
+     * KEY_EVENTs it reads here instead of shredding them; sharing one instance
+     * with whoever drives WindowsConsoleInput keeps the surrogate-join state
+     * in one place. Created at acquisition, dropped by resetStaticState().
      */
-    private static bool $interruptPending = false;
+    private static ?WindowsConsoleInput $keyDecoder = null;
 
     /**
-     * Tracks whether a KEY_EVENT has been seen on the open CONIN$ handle.
+     * Keystroke bytes forwarded by drainSignals() and not yet taken.
      *
-     * @var bool
+     * @see takePendingKeyBytes()
      */
-    private static bool $interruptKeySeen = false;
+    private static string $pendingKeyBytes = '';
+
+    /**
+     * One-per-process guard for the InterruptFlags shutdown cleanup.
+     *
+     * sc-02 (finding sugar-core-053): the interrupt segment is process-shared
+     * machinery; its lifetime is the process, not any one backend instance,
+     * so the destroy rides a single shutdown hook registered by
+     * enableRawMode() — never a per-instance restore().
+     */
+    private static bool $flagsCleanupRegistered = false;
 
     // ─── Constructor ────────────────────────────────────────────────────────
 
@@ -144,17 +156,19 @@ final class WindowsBackend implements Backend
      * Open the system console TTY directly, bypassing any redirected stdin.
      *
      * On Windows, PHP's STDIN may be a pipe when launched from certain
-     * launchers.  Opening `CONIN$` gives us a direct handle to the
-     * active console's input queue, which is required for detecting
-     * Ctrl+C via ReadConsoleInputW.
+     * launchers.  Opening `CONIN$` via CreateFileW gives us a direct handle
+     * to the active console's input queue — the only way to see keystrokes
+     * (and Ctrl+C/Ctrl+Break as KEY_EVENT records) on a redirected stdin.
      *
-     * The returned handles are PHP `resource` values wrapping the raw
-     * CONIN$/CONOUT$ HANDLEs.  Callers can read from `$handles[0]`
-     * (CONIN) and write to `$handles[1]` (CONOUT).
-     *
-     * When this method succeeds, drainSignals() will poll CONIN$ for
-     * key events (Ctrl+C, Ctrl+Break) as a fallback when the native
-     * SetConsoleCtrlHandler callback is unavailable.
+     * The return value is the stream pair callers asked for: `[$fin, $fout]`
+     * resources wrapping CONIN$/CONOUT$. But the ACQUISITION and the STREAM
+     * WRAP are decoupled since sc-02 (finding sugar-core-051): once CONIN$
+     * is open, drainSignals() polls it for interrupts regardless of whether
+     * a php://fd stream could be produced on top — a null return therefore
+     * means "no stream pair", NOT "the console input machine is dead".
+     * Only a failed CreateFileW of CONIN$ itself leaves the machine dormant
+     * (and even that no longer goes unnoticed — see the Program constructor
+     * notice in the openTty fallback).
      *
      * @return array{0:resource,1:resource}|null on success, null on failure
      */
@@ -164,6 +178,9 @@ final class WindowsBackend implements Backend
             $k = self::$testKernel32 ?? Kernel32::self();
 
             // Open CONIN$ (console input) for raw read access.
+            // sc-02 (finding sugar-core-051): this IS the CreateFile('CONIN$')
+            // acquisition — no php://fd re-numbering of a CRT fd it does not
+            // own. The stream wrapping below is a convenience layer ON TOP.
             $conin = $k->createFile(
                 'CONIN$',
                 Kernel32Interface::GENERIC_READ | Kernel32Interface::GENERIC_WRITE,
@@ -173,6 +190,13 @@ final class WindowsBackend implements Backend
                 return null;
             }
 
+            // The handle-driven machinery — drainSignals()'s CONIN$ poll and
+            // the keystroke forward — needs the handle and NOTHING else.
+            // Bind it (and the decoder that shares its surrogate state) the
+            // moment acquisition succeeds, before any stream concern.
+            self::$coninHandle = $conin;
+            self::$keyDecoder  = new WindowsConsoleInput($conin, $k);
+
             // Open CONOUT$ (console output) for raw write access.
             $conout = $k->createFile(
                 'CONOUT$',
@@ -180,16 +204,20 @@ final class WindowsBackend implements Backend
                 Kernel32Interface::FILE_SHARE_READ | Kernel32Interface::FILE_SHARE_WRITE,
             );
             if ($conout === false) {
-                $k->closeHandle($conin);
+                // sc-02 (051): a failed OUTPUT side must not blind the input
+                // side. The caller asked for a stream pair and gets null —
+                // but interrupt polling stays alive on the CONIN$ handle.
+                // The handle deliberately leaks: it is process machinery now.
                 return null;
             }
 
-            // Store the CONIN$ handle so drainSignals() can poll it
-            // for key events without needing a stream resource.
-            self::$coninHandle = $conin;
-
             // Wrap the raw handles as PHP stream resources.
-            // On Windows, fdopen() accepts an OS handle number.
+            // NAMED SURVIVOR (sc-02, live-Windows leg): a Windows HANDLE is not
+            // a CRT file descriptor, so `php://fd/<handle>` can legitimately
+            // fail on a real console — exactly why the handle above is kept
+            // independently of this wrap. Linux CI exercises both arms through
+            // FakeKernel32 (small fds wrap fine; 999-series fail); the live
+            // handle-vs-fd behaviour needs the owner's interactive Windows box.
             $fin  = @fopen('php://fd/' . $conin, 'rb');
             $fout = @fopen('php://fd/' . $conout, 'wb');
 
@@ -197,12 +225,12 @@ final class WindowsBackend implements Backend
                 if ($fin !== false) {
                     fclose($fin);
                 }
-                $k->closeHandle($conin);
                 if ($fout !== false) {
                     fclose($fout);
                 }
-                $k->closeHandle($conout);
-                self::$coninHandle = null;
+                // sc-02 (051): the old shape closed both OS handles and
+                // nulled self::$coninHandle here — a wrap failure silently
+                // murdered the interrupt poll with it. The acquisition stands.
                 return null;
             }
 
@@ -291,6 +319,16 @@ final class WindowsBackend implements Backend
                 $registered = true;
                 register_shutdown_function([$this, 'restore']);
             }
+            // sc-02 (finding sugar-core-053): the interrupt segment's owner
+            // is the PROCESS, not any one backend. One shutdown cleanup
+            // tears it down once; per-instance restore() no longer touches
+            // it (see restore() for the sibling-poisoning story it stopped).
+            if (!self::$flagsCleanupRegistered) {
+                self::$flagsCleanupRegistered = true;
+                register_shutdown_function(static function (): void {
+                    InterruptFlags::destroyShared();
+                });
+            }
         } catch (\Throwable) {
             // If anything fails during setup, leave console in original state.
             $this->savedInputMode  = null;
@@ -325,9 +363,11 @@ final class WindowsBackend implements Backend
     /**
      * Drain any pending resize or interrupt signals.
      *
-     * On Windows this polls `GetConsoleScreenBufferInfo(stdout)` once and
-     * checks the shared interrupt flag once.  Returns a bitmask indicating
-     * which signals were dispatched.
+     * On Windows this checks the shared interrupt flag, polls CONIN$ for
+     * key-event records when openTty() bound one (interrupts signal; plain
+     * keys forward to {@see takePendingKeyBytes()}, never drop), and polls
+     * `GetConsoleScreenBufferInfo(stdout)` for a resize. Returns a bitmask
+     * indicating which signals were dispatched.
      *
      * When SIGNAL_INTERRUPT is returned, the caller (e.g. Program::tick)
      * is responsible for dispatching {@see InterruptMsg} to the running
@@ -348,58 +388,50 @@ final class WindowsBackend implements Backend
         //    This is the primary path: works whenever SetConsoleCtrlHandler
         //    was successfully registered.
         $flags = self::$testInterruptFlags ?? InterruptFlags::self();
-        if ($flags->consume()) {
-            self::$interruptPending = true;
-        }
+        $interrupt = $flags->consume();
 
-        if (self::$interruptPending) {
-            self::$interruptPending = false;
-            $signals |= self::SIGNAL_INTERRUPT;
-            // Note: the caller (e.g. Program::tick) is responsible for
-            // dispatching InterruptMsg when this bit is returned.
-        }
-
-        // 2. Poll CONIN$ for key events (Ctrl+C, Ctrl+Break) if openTty()
-        //    was called and the native Ctrl handler is not available.
-        //    This is the fallback path for PHP 8.3.6 (no FFI::dynamicFunction)
-        //    or when SetConsoleCtrlHandler was not successfully registered.
-        //    ReadConsoleInputW delivers Ctrl+C as KEY_EVENT with
-        //    VirtualKeyCode == 0x43 ('C') and ControlKeyState indicating
-        //    LEFT_CTRL_PRESSED or RIGHT_CTRL_PRESSED.
+        // 2. Poll CONIN$ for key events when openTty() bound a handle.
+        //
+        //    sc-02 (finding sugar-core-052) retires the heuristic this block
+        //    used to run: ANY KEY_EVENT counted as an interrupt, once — a
+        //    $interruptKeySeen latch permanently armed after the first sight
+        //    of a key, every other record was consumed-and-DROPPED, and the
+        //    comment admitted the whole thing ("for now we conservatively set
+        //    the interrupt bit if any KEY_EVENT was read"). A user typing
+        //    'ctrl'-free text into a TEA program on this path lost keystrokes
+        //    to the signal poll, and a second Ctrl+C after the first key was
+        //    never delivered again.
+        //
+        //    Protocol truth: ReadConsoleInputW hands over KEY_EVENT_RECORDs
+        //    with wVirtualKeyCode + dwControlKeyState. An interrupt is a
+        //    Ctrl+C key-DOWN (vk 'C' + a Ctrl state bit) or a Ctrl+Break
+        //    key-DOWN (vk CANCEL + a Ctrl state bit); the matching key-UP is
+        //    the second half of the same press and carries no signal.
+        //    Everything else is INPUT: forwarded through the shared decoder
+        //    to takePendingKeyBytes() instead of silently eaten.
         $conin = self::$coninHandle;
         if ($conin !== null) {
             $records = $k->readConsoleInput($conin, 64);
             if (is_array($records)) {
                 foreach ($records as $rec) {
-                    if ($rec['type'] === Kernel32Interface::KEY_EVENT) {
-                        // KEY_EVENT is at index 0 of each 8-byte record.
-                        // The VirtualKeyCode (byte 2) and ControlKeyState
-                        // (byte 3) tell us whether Ctrl+C or Ctrl+Break fired.
-                        // For now, any KEY_EVENT with Ctrl state while
-                        // openTty is active is treated as an interrupt signal.
-                        // The actual key-code filtering is done in the
-                        // readConsoleInput path in openTty mode.
-                        //
-                        // Practical note: Ctrl+C generates TWO KEY_EVENTs —
-                        // a key-down and a key-up.  We drain all and treat
-                        // the presence of any Ctrl-key KEY_EVENT as the
-                        // interrupt signal.
-                        // A full implementation would parse the KeyDown flag
-                        // and VirtualKeyCode; for now we conservatively set
-                        // the interrupt bit if any KEY_EVENT was read.
-                        if (self::$interruptKeySeen !== true) {
-                            self::$interruptKeySeen = true;
-                            self::$interruptPending = true;
-                        }
+                    if ($rec['type'] !== Kernel32Interface::KEY_EVENT) {
+                        continue;
+                    }
+                    if (self::isInterruptKeyRecord($rec)) {
+                        $interrupt = true;
+                        continue;
+                    }
+                    if (self::$keyDecoder !== null) {
+                        self::$pendingKeyBytes .= self::$keyDecoder->recordBytes($rec);
                     }
                 }
-
-                if (self::$interruptPending && !($signals & self::SIGNAL_INTERRUPT)) {
-                    // Only set if not already set via InterruptFlags above.
-                    self::$interruptPending = false;
-                    $signals |= self::SIGNAL_INTERRUPT;
-                }
             }
+        }
+
+        if ($interrupt) {
+            $signals |= self::SIGNAL_INTERRUPT;
+            // Note: the caller (e.g. Program::tick) is responsible for
+            // dispatching InterruptMsg when this bit is returned.
         }
 
         // 3. Poll resize detection via GetConsoleScreenBufferInfo.
@@ -421,6 +453,51 @@ final class WindowsBackend implements Backend
         }
 
         return $signals ?: false;
+    }
+
+    /**
+     * Is this KEY_EVENT record a console interrupt (Ctrl+C / Ctrl+Break)?
+     *
+     * A press of Ctrl+C reaches the console input queue as TWO records — a
+     * key-down carrying vk 0x43 plus a Ctrl state bit, and a key-up with the
+     * same shape. Matching the down side only keeps one signal per press
+     * without the latch the superseded heuristic needed (that latch was
+     * itself the bug: it survived the press it was meant to deduplicate and
+     * swallowed every later one).
+     *
+     * @param array<array-key, mixed> $rec a readConsoleInput() record
+     */
+    private static function isInterruptKeyRecord(array $rec): bool
+    {
+        if (($rec['keyDown'] ?? false) !== true) {
+            return false;
+        }
+        if (((int) ($rec['ctrl'] ?? 0) & Kernel32Interface::CTRL_STATE_MASK) === 0) {
+            return false;
+        }
+
+        return match ((int) ($rec['vk'] ?? 0)) {
+            Kernel32Interface::VK_C, Kernel32Interface::VK_CANCEL => true,
+            default => false,
+        };
+    }
+
+    /**
+     * Take the keystroke bytes a signal drain forwarded, leaving '' behind.
+     *
+     * sc-02 (finding 052) input-pump seam: production wiring for the
+     * native-Windows pump is a separate ruling (crush_libs.md's sugar-core
+     * RE-VERIFY 2026-10-08 block), but the record SHREDDER it was ruled
+     * against is gone — non-interrupt keys a drainSignal() tick happens to
+     * read now wait here, already decoded to the same UTF-8 bytes
+     * WindowsConsoleInput::read() yields, until a reader takes them.
+     */
+    public static function takePendingKeyBytes(): string
+    {
+        $bytes = self::$pendingKeyBytes;
+        self::$pendingKeyBytes = '';
+
+        return $bytes;
     }
 
     // ─── Static last-resort restore ─────────────────────────────────────────
@@ -501,12 +578,14 @@ final class WindowsBackend implements Backend
             $this->savedOutputCp   = null;
         }
 
-        // Clean up the shared interrupt-memory segment.
-        try {
-            InterruptFlags::self()->destroy();
-        } catch (\Throwable) {
-            // Best-effort.
-        }
+        // sc-02 (finding sugar-core-053): this used to end with
+        // InterruptFlags::self()->destroy(). That was sibling poisoning —
+        // EVERY backend's restore() (and so every __destruct, including a
+        // plain go-out-of-scope) tore down the ONE process-shared segment
+        // all siblings still depended on, and the cached singleton kept
+        // answering consume()===false against the dead handle forever after.
+        // Segment lifetime is the process now: enableRawMode() registers the
+        // single destroyShared() shutdown hook.
     }
 
     public function __destruct()
@@ -551,8 +630,11 @@ final class WindowsBackend implements Backend
         self::$testInterruptFlags  = null;
         self::$resizeCallback      = null;
         self::$resizeLastSize      = null;
-        self::$interruptPending    = false;
         self::$coninHandle         = null;
-        self::$interruptKeySeen    = false;
+        self::$keyDecoder          = null;
+        self::$pendingKeyBytes     = '';
+        // sc-02: the superseded $interruptPending / $interruptKeySeen latches
+        // are gone — signal assembly is per-tick locals now (finding 052).
+        self::$flagsCleanupRegistered = false;
     }
 }

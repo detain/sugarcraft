@@ -61,6 +61,26 @@ interface Kernel32Interface
     public const KEY_EVENT                   = 0x0001;
     public const WINDOW_BUFFER_SIZE_EVENT    = 0x0004;
 
+    // ─── KEY_EVENT_RECORD fields (wincon.h) ───────────────────────────────
+    //
+    // sc-02 (finding sugar-core-052): the interrupt matcher on these is the
+    // machine that replaces the "any KEY_EVENT while CONIN$ is open counts as
+    // an interrupt" heuristic. dwControlKeyState says WHICH keys were held;
+    // wVirtualKeyCode says WHICH key — together they single out Ctrl+C and
+    // Ctrl+Break out of a queue that also carries every ordinary keystroke.
+
+    /** KEY_EVENT_RECORD.dwControlKeyState: left Ctrl was down. */
+    public const LEFT_CTRL_PRESSED  = 0x0008;
+    /** KEY_EVENT_RECORD.dwControlKeyState: right Ctrl was down. */
+    public const RIGHT_CTRL_PRESSED = 0x0004;
+    /** The Ctrl-state mask: any bit set means a Ctrl key qualified the event. */
+    public const CTRL_STATE_MASK    = self::LEFT_CTRL_PRESSED | self::RIGHT_CTRL_PRESSED;
+
+    /** KEY_EVENT_RECORD.wVirtualKeyCode: Ctrl+Break arrives as VK_CANCEL. */
+    public const VK_CANCEL = 0x03;
+    /** KEY_EVENT_RECORD.wVirtualKeyCode: Ctrl+C arrives as vk 'C' with a Ctrl state bit set. */
+    public const VK_C      = 0x43;
+
     // ─── Wait states ──────────────────────────────────────────────────────
 
     public const WAIT_TIMEOUT  = 0x00000102;
@@ -191,7 +211,7 @@ interface Kernel32Interface
      *
      * @param int $h CONIN$ handle
      * @param int $recordSize max records to read
-     * @return list<array{type:int, index:int, keyDown?:bool, repeat?:int, vk?:int, scan?:int, char?:int, ctrl?:int}>|false records read, or false
+     * @return list<array{type:int, dataIndex:int, keyDown?:bool, repeat?:int, vk?:int, scan?:int, char?:int, ctrl?:int}>|false records read, or false
      */
     public function readConsoleInput(int $h, int $recordSize = 1): array|false;
 

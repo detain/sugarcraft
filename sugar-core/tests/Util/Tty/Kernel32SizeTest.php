@@ -43,6 +43,41 @@ final class Kernel32SizeTest extends TestCase
         $this->assertSame(22, \FFI::sizeof($info));
     }
 
+    /**
+     * sc-02 (finding sugar-core-049): the console INPUT record ABI.
+     *
+     * The superseded cdef declared an 8-byte record and allocated
+     * `unsigned char[8][$n]`; ReadConsoleInputW writes 20 bytes per record
+     * (KEY_EVENT_RECORD is the largest union member), so every read
+     * trampled the block with 2.5x its declared stride — the heap landmine.
+     * This pin holds the corrected layout: sizeof 20 and the Event union at
+     * byte offset 4 (alignment padding after the WORD tag), fields read by
+     * name. The by-name KEY_EVENT decode seam itself is pinned in
+     * WindowsConsoleInputTest::testKeyEventFieldsDecodeTheRecordLayout —
+     * no duplication here.
+     */
+    public function testInputRecordStructMatchesWindowsAbi(): void
+    {
+        if (!\extension_loaded('ffi')) {
+            $this->markTestSkipped('ext-ffi required for the struct layout pins');
+        }
+        if (unpack('v', pack('S', 1))[1] !== 1) {
+            $this->markTestSkipped('byte-offset pin assumes a little-endian host');
+        }
+
+        $ffi = \FFI::cdef(Kernel32::INPUT_RECORD_CDEF);
+        $rec = $ffi->new('INPUT_RECORD');
+
+        $this->assertSame(20, \FFI::sizeof($rec), 'WORD tag + 2 pad + 16-byte union');
+
+        $rec->EventType = 0x0001; // KEY_EVENT
+        $rec->Event[0]  = 0xAA;
+        $raw = \FFI::string($rec, 20);
+
+        $this->assertSame(1, unpack('v', substr($raw, 0, 2))[1], 'EventType at byte 0 (little-endian)');
+        $this->assertSame(0xAA, \ord($raw[4]), 'the Event union begins at byte 4, after the alignment pad');
+    }
+
     public function testFieldReadsLandOnDocumentedByteOffsets(): void
     {
         if (!\extension_loaded('ffi')) {

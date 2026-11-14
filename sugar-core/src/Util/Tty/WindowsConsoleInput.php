@@ -69,7 +69,7 @@ final class WindowsConsoleInput
                 break;
             }
             foreach ($records as $record) {
-                $bytes .= $this->bytesOf($record);
+                $bytes .= $this->recordBytes($record);
             }
             if (\count($records) < $maxRecords) {
                 break;
@@ -80,9 +80,17 @@ final class WindowsConsoleInput
     }
 
     /**
+     * The keystroke bytes carried by ONE input record; '' for records that
+     * carry none (key-up, focus, menu, mouse, buffer-size, bare modifiers).
+     *
+     * Public from sc-02 (finding sugar-core-052) as the shared decoder seam:
+     * {@see WindowsBackend::drainSignals()} forwards the non-interrupt records
+     * its CONIN$ poll touched through THIS instance, so the surrogate-join
+     * state is shared with the read() path instead of reimplemented beside it.
+     *
      * @param array{type:int, keyDown?:bool, repeat?:int, char?:int} $record
      */
-    private function bytesOf(array $record): string
+    public function recordBytes(array $record): string
     {
         if ($record['type'] !== Kernel32Interface::KEY_EVENT || ($record['keyDown'] ?? false) !== true) {
             return '';

@@ -350,7 +350,12 @@ final class FakeKernel32 implements \SugarCraft\Core\Util\Tty\Kernel32Interface
         }
 
         $take = \min($recordSize, \count($this->readConsoleInputSequence));
-        $records = \array_slice($this->readConsoleInputSequence, 0, $take);
+        // Same shape normalisation readConsoleInput() gives — peeked records
+        // carry the dataIndex the real binding stamps (sc-02 contract).
+        $records = \array_map(
+            fn (array $r): array => $r + ['dataIndex' => 0],
+            \array_slice($this->readConsoleInputSequence, 0, $take),
+        );
 
         return \count($records);
     }
@@ -361,7 +366,7 @@ final class FakeKernel32 implements \SugarCraft\Core\Util\Tty\Kernel32Interface
      * Returns the pre-seeded sequence (from {@see setReadConsoleInputSequence})
      * if set.  Each call pops up to $recordSize entries.
      *
-     * @return list<array{type:int, dataIndex:int}>|false
+     * @return list<array{type:int, dataIndex:int, keyDown?:bool, repeat?:int, vk?:int, scan?:int, char?:int, ctrl?:int}>|false
      */
     public function readConsoleInput(int $_h, int $recordSize = 1): array|false
     {
@@ -373,9 +378,9 @@ final class FakeKernel32 implements \SugarCraft\Core\Util\Tty\Kernel32Interface
         $records = \array_splice($this->readConsoleInputSequence, 0, $take);
 
         // Normalise to the shape the real binding returns: seeded key fields
-        // (keyDown/char/repeat/...) pass through, index defaults to 0.
+        // (keyDown/char/repeat/...) pass through, dataIndex defaults to 0.
         return \array_map(
-            fn (array $r): array => $r + ['index' => 0],
+            fn (array $r): array => $r + ['dataIndex' => 0],
             $records,
         );
     }

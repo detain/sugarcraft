@@ -239,6 +239,14 @@ final class Program
             $opened = Tty::openTty();
             if ($opened !== null) {
                 [$this->input, $this->output] = $opened;
+            } else {
+                // sc-02 (finding sugar-core-051): this fallback used to be
+                // SILENT — when the console refused to open the program just
+                // plain-STDIN'd onward with no trace of the TTY it was asked
+                // to bypass. Loud degradation now: one E_USER_NOTICE names
+                // the failure (host-visible notice path, not a throw — the
+                // program stays runnable on redirected pipes).
+                @trigger_error(Lang::t('tty.open_failed'), E_USER_NOTICE);
             }
         }
         $this->reader = new InputReader($options->sanitizePaste);
