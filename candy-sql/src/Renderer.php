@@ -171,14 +171,21 @@ final class Renderer
 
         $query  = self::queryPane($a, $cols);
 
-        // Help text differs per pane
+        // SQL-O16 (once-020): the legend follows the keys that are actually
+        // armed in the focused pane. Rows with a table selected advertises
+        // its real chords (including j/k, previously hidden); Rows holding a
+        // synthetic result (query answer / history trend) drops the edit
+        // chords App refuses there; Rows with nothing loaded promises
+        // nothing but quitting; Enter:load belongs to the Tables pane alone.
         if ($a->ui->pane === Pane::Query) {
             $help = Style::new()->foreground(Color::hex('#7d6e98'))
                 ->render(Lang::t('ui.help.query'));
-        } elseif ($a->ui->pane === Pane::Rows && $a->browse->selectedTable !== null && !$a->browse->holdsSyntheticResult()) {
-            // SQL-O03: the edit chords are advertised where they act.
-            $help = Style::new()->foreground(Color::hex('#7d6e98'))
-                ->render(Lang::t('ui.help.rows'));
+        } elseif ($a->ui->pane === Pane::Rows) {
+            $help = Style::new()->foreground(Color::hex('#7d6e98'))->render(match (true) {
+                $a->browse->holdsSyntheticResult() && $a->browse->rows !== [] => Lang::t('ui.help.result'),
+                $a->browse->selectedTable !== null && $a->browse->rows !== [] => Lang::t('ui.help.rows'),
+                default => Lang::t('ui.help.empty'),
+            });
         } else {
             $help = Style::new()->foreground(Color::hex('#7d6e98'))
                 ->render(Lang::t('ui.help.browse'));

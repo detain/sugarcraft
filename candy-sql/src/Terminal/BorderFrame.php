@@ -96,7 +96,10 @@ final class BorderFrame
     {
         $segments = [Lang::t('bar.cycle'), Lang::t('bar.navigate')];
 
-        if ($a->ui->pane === Pane::Tables || $a->ui->pane === Pane::Rows) {
+        // SQL-O16: Enter loads a table only in the Tables pane — the Rows
+        // pane has no Enter arm, so the segment may not advertise it there
+        // (once-020: "the footer lies while focused Rows").
+        if ($a->ui->pane === Pane::Tables) {
             $segments[] = Lang::t('bar.load');
         }
         if ($a->ui->pane === Pane::Query) {
