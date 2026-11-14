@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Git\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Git\Platform;
 use SugarCraft\Git\Support\GitRequirement;
 use SugarCraft\Git\Tests\Concerns\RecursiveDirCleanup;
 
@@ -153,7 +154,7 @@ final class CommandLineTest extends TestCase
     {
         $this->requireGit();
         $dir = $this->tempDir();
-        exec('git init --bare ' . escapeshellarg($dir) . ' 2>/dev/null');
+        exec('git init --bare ' . escapeshellarg($dir) . '' . self::nullSink());
 
         [$exit, , $err] = self::spawn([], $dir);
 
@@ -233,7 +234,10 @@ final class CommandLineTest extends TestCase
     {
         $bin     = realpath(__DIR__ . '/../bin/candy-git');
         self::assertIsString($bin, 'the launcher must exist to be tested');
-        $spec    = [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+        // The child starts at an immediate EOF on any host: /dev/null is
+        // meaningless to cmd.exe, so the seam speaks the host's own device
+        // (the same contract src/Process.php keeps via Platform::nullDevice).
+        $spec    = [0 => ['file', Platform::new()->nullDevice(), 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
         $proc    = proc_open(array_merge([PHP_BINARY, $bin], $args), $spec, $pipes, $cwd, $env);
         self::assertIsResource($proc);
         $out     = (string) stream_get_contents($pipes[1]);
@@ -255,15 +259,30 @@ final class CommandLineTest extends TestCase
 
     private function writeShim(string $dir, string $body): void
     {
+        if (Platform::new()->isWindows()) {
+            // cmd.exe cannot run a shebang script; a .cmd twin answers the
+            // same probe (Platform::findExecutable walks .cmd on Windows).
+            // cmd echo takes bare text, so the single quotes must go.
+            $echo = str_replace(["echo '", "'\n"], ['echo ', "\r\n"], $body);
+            file_put_contents($dir . '/git.cmd', "@echo off\r\n" . $echo . "exit /b 0\r\n");
+            return;
+        }
+
         $path = $dir . '/git';
         file_put_contents($path, "#!/bin/sh\n" . $body . "exit 0\n");
         chmod($path, 0755);
         // The shim dir holds the fake `git`; removeDir must be able to, too.
     }
 
+    /** Host-native stderr sink for fixture exec lines: ' 2>/dev/null' / ' 2>NUL'. */
+    private static function nullSink(): string
+    {
+        return ' 2>' . Platform::new()->nullDevice();
+    }
+
     private function requireGit(): void
     {
-        if (!exec('git --version 2>/dev/null')) {
+        if (!exec('git --version' . self::nullSink())) {
             $this->markTestSkipped('git not available');
         }
     }
@@ -271,12 +290,12 @@ final class CommandLineTest extends TestCase
     private function makeRepo(): string
     {
         $dir = $this->tempDir();
-        exec('git init ' . escapeshellarg($dir) . ' 2>/dev/null');
-        exec('git -C ' . escapeshellarg($dir) . " config user.email 'test@test.com' 2>/dev/null");
-        exec('git -C ' . escapeshellarg($dir) . " config user.name 'Test' 2>/dev/null");
+        exec('git init ' . escapeshellarg($dir) . '' . self::nullSink());
+        exec('git -C ' . escapeshellarg($dir) . " config user.email 'test@test.com'" . self::nullSink());
+        exec('git -C ' . escapeshellarg($dir) . " config user.name 'Test'" . self::nullSink());
         file_put_contents($dir . '/file.txt', "line 1\n");
-        exec('git -C ' . escapeshellarg($dir) . ' add file.txt 2>/dev/null');
-        exec('git -C ' . escapeshellarg($dir) . ' commit -m initial 2>/dev/null');
+        exec('git -C ' . escapeshellarg($dir) . ' add file.txt' . self::nullSink());
+        exec('git -C ' . escapeshellarg($dir) . ' commit -m initial' . self::nullSink());
 
         return $dir;
     }

@@ -6,6 +6,7 @@ namespace SugarCraft\Git\Tests;
 
 use SugarCraft\Git\Git;
 use SugarCraft\Git\GitDriver;
+use SugarCraft\Git\Platform;
 use SugarCraft\Git\Tests\Concerns\RecursiveDirCleanup;
 use PHPUnit\Framework\TestCase;
 
@@ -20,7 +21,7 @@ final class GitGuardTest extends TestCase
         mkdir($this->cwd);
         // Hermetic: pin the initial branch (runners may default to main OR
         // master) so branch-name-dependent tests are deterministic.
-        exec('git init -b main ' . escapeshellarg($this->cwd) . ' 2>/dev/null');
+        exec('git init -b main ' . escapeshellarg($this->cwd) . '' . self::nullSink());
     }
 
     protected function tearDown(): void
@@ -33,6 +34,12 @@ final class GitGuardTest extends TestCase
         $git = new Git($this->cwd);
         $this->expectException(\RuntimeException::class);
         $git->checkout('-f');
+    }
+
+    /** Host-native stderr sink for fixture exec lines: ' 2>/dev/null' / ' 2>NUL' (F12b). */
+    private static function nullSink(): string
+    {
+        return ' 2>' . Platform::new()->nullDevice();
     }
 
     public function testMergeRejectsLeadingDashBranch(): void
@@ -124,7 +131,7 @@ final class GitGuardTest extends TestCase
     public function testCheckoutAcceptsNormalBranch(): void
     {
         $repo = escapeshellarg($this->cwd);
-        exec('git -C ' . $repo . " -c user.email=test@example.com -c user.name=Test commit --allow-empty -m 'first' 2>/dev/null");
+        exec('git -C ' . $repo . " -c user.email=test@example.com -c user.name=Test commit --allow-empty -m 'first'" . self::nullSink());
         $git = new Git($this->cwd);
         $git->createBranch('testbranch');
         $this->assertSame('testbranch', trim((string) shell_exec('git -C ' . $repo . ' rev-parse --abbrev-ref HEAD')));
@@ -139,9 +146,9 @@ final class GitGuardTest extends TestCase
     public function testMergeAcceptsNormalBranch(): void
     {
         // Inline identity: CI runners have no global user.name/user.email.
-        exec('git -C ' . escapeshellarg($this->cwd) . " -c user.email=test@example.com -c user.name=Test commit --allow-empty -m 'first' 2>/dev/null");
-        exec('git -C ' . escapeshellarg($this->cwd) . ' branch feature 2>/dev/null');
-        exec('git -C ' . escapeshellarg($this->cwd) . ' checkout main 2>/dev/null');
+        exec('git -C ' . escapeshellarg($this->cwd) . " -c user.email=test@example.com -c user.name=Test commit --allow-empty -m 'first'" . self::nullSink());
+        exec('git -C ' . escapeshellarg($this->cwd) . ' branch feature' . self::nullSink());
+        exec('git -C ' . escapeshellarg($this->cwd) . ' checkout main' . self::nullSink());
         $git = new Git($this->cwd);
         $git->merge('feature');
         $this->assertTrue(true);
@@ -173,8 +180,8 @@ final class GitGuardTest extends TestCase
         // A legit relative path is anchored to the realpath'd repo root and the
         // worktree is actually created there — proving the guard resolves rather
         // than rejects safe input.
-        exec('git -C ' . escapeshellarg($this->cwd) . " -c user.email=test@example.com -c user.name=Test commit --allow-empty -m 'first' 2>/dev/null");
-        exec('git -C ' . escapeshellarg($this->cwd) . ' branch feature 2>/dev/null');
+        exec('git -C ' . escapeshellarg($this->cwd) . " -c user.email=test@example.com -c user.name=Test commit --allow-empty -m 'first'" . self::nullSink());
+        exec('git -C ' . escapeshellarg($this->cwd) . ' branch feature' . self::nullSink());
         $git = new Git($this->cwd);
         $git->worktreeAdd('wt-sub', 'feature');
         $this->assertDirectoryExists(realpath($this->cwd) . '/wt-sub');

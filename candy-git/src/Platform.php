@@ -14,7 +14,7 @@ namespace SugarCraft\Git;
  * cannot poll a `proc_open` pipe (it reports ready then blocks in fread), and
  * there is no SIGTERM — `taskkill /T` is the only tree-aware stop. Because the
  * values are injected, both ladders run in the Linux test suite
- * (`Platform::windows()->withNullDevice('/dev/null')`) and the Windows CI leg
+ * (`Platform::windows()->withNullDevice(Platform::new()->nullDevice())`) and the Windows CI leg
  * (`WINDOWS_LIBS` in scripts/affected-libs.php) verifies the real thing.
  *
  * Immutable: every `with*()` returns a new instance.

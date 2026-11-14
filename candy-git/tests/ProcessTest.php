@@ -159,7 +159,11 @@ final class ProcessTest extends TestCase
     /** The Windows ladder, exercised on any host by injecting the null device. */
     private static function windowsLadder(): Platform
     {
-        return Platform::windows()->withNullDevice('/dev/null');
+        // The seam under test is the WINDOWS code path, not the device name:
+        // inject the host's own null device so the legs open stdin on real
+        // Windows runners too (hardcoded /dev/null is unopenable there —
+        // every stdin-less polled-ladder leg died at proc_open, F12b).
+        return Platform::windows()->withNullDevice(Platform::new()->nullDevice());
     }
 
     public function testPlatformSeamAnswersBothBranches(): void
