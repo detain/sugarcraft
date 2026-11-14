@@ -203,9 +203,28 @@ final class Rest
                 return (string) $response->getBody();
             },
             function (\Throwable $e) use ($safeLabel): never {
-                throw new RestException("msteams media fetch failed for {$safeLabel}: {$e->getMessage()}", 0, '', $e);
+                // msteams-20 leg 028: a wire failure can embed the FULL
+                // request target — a media URL's signed query is bearer
+                // material, and this interpolated text rides the rejected
+                // RestException (and through it the log). The signature is
+                // cut out before interpolation; the previous Throwable
+                // stays attached verbatim for the developer path.
+                $reason = self::scrubSignature($e->getMessage());
+
+                throw new RestException("msteams media fetch failed for {$safeLabel}: {$reason}", 0, '', $e);
             },
         );
+    }
+
+    /**
+     * Cut the SAS signature out of a failure prose before it is embedded in
+     * an exception message or a log line (msteams-20 leg 028). Matches the
+     * whole query run around `sig=` (the parameter set is one blob: cutting
+     * a single value would leave the URL shape to re-leak on retry prose).
+     */
+    private static function scrubSignature(string $reason): string
+    {
+        return (string) \preg_replace('/\?\S*sig=\S*/i', '?[signature-redacted]', $reason);
     }
 
     /**

@@ -227,7 +227,15 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
 
         $dir = Bootstrap::trustedConfigDirPath() . '/msteams';
         if (!is_dir($dir)) {
-            mkdir($dir, 0700, true);
+            // msteams-20 leg 030: a read-only config tree must cost ONE clean
+            // refusal line and a stopped boot — never a raw PHP warning inside
+            // the TUI frame, never a half-boot that dies at the SQLite open.
+            // The @mkdir/is_dir guard is the file's own fold idiom.
+            if (!@\mkdir($dir, 0700, true) && !is_dir($dir)) {
+                ($context->log)("channels.msteams: cannot create the state directory '{$dir}' — refusing to start. Check the config directory permissions.");
+
+                return;
+            }
         }
         $this->map = new SessionMap($dir . '/sessions.db');
 
@@ -242,6 +250,17 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
 
         $roster = self::rosterProvider($jwksUrl, $insecure);
         foreach ($credentials as $account => $triple) {
+            if (isset($this->validators[$triple['appId']])) {
+                // msteams-20 leg 032: one appId may not be claimed twice — the
+                // overwrite used to hand the FIRST account's validator slot to
+                // the later account's Jwt object, so its face verified against
+                // another tenant's door (silent-at-verify is the failure mode
+                // this refuses). The first triple keeps the validator; the
+                // duplicate is announced loudly at boot and gets no face.
+                $this->log->warn('channels.msteams.duplicate_appid_refused', ['account' => $account]);
+
+                continue;
+            }
             $jwt = new Jwt($triple['appId'], $roster);
             $this->validators[$triple['appId']] = ['account' => $account, 'jwt' => $jwt];
             $broker = new TokenBroker($triple, $this->log, $authBase);

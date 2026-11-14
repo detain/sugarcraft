@@ -44,7 +44,11 @@ final class OutboundChunker
         $before = $after = [];
         foreach ($lines as $i => $line) {
             $before[$i] = $fence;
-            if (\preg_match('/^```(\S*)/', $line, $m) === 1) {
+            // CommonMark fences tolerate up to 3 leading spaces (a 4th is
+            // indented code, NOT a fence); msteams-20 leg 031 — an indented
+            // open used to read as prose, so a chunk boundary could split
+            // the block and re-add a synthetic fence on top of real ones.
+            if (\preg_match('/^ {0,3}```(\S*)/', $line, $m) === 1) {
                 $fence = $fence === null ? $m[1] : null;
             }
             $after[$i] = $fence;
@@ -125,7 +129,10 @@ final class OutboundChunker
 
         return \array_values(\array_filter(
             $chunks,
-            static fn (string $c): bool => \trim((string) \preg_replace('/^```\S*$/m', '', $c)) !== '',
+            // msteams-20 leg 031 (belt): the noise law must see indented
+            // fence lines exactly like pass 1 does — same CommonMark
+            // tolerance, or a fence-only chunk survives here but not there.
+            static fn (string $c): bool => \trim((string) \preg_replace('/^ {0,3}```\S*$/m', '', $c)) !== '',
         ));
     }
 

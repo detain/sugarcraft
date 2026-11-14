@@ -96,6 +96,9 @@ final class ServeBridge
     private bool $stopping = false;
     private int $attempts = 0;
     private ?\React\EventLoop\TimerInterface $reconnectTimer = null;
+
+    /** msteams-20 leg 041: door that settles the LIVE backoff promise on stop(). */
+    private ?\Closure $rejectReconnect = null;
     private ?\React\EventLoop\TimerInterface $idleTimer = null;
     private int $rpcSeq = 0;
     private ?\Closure $onDown = null;
@@ -107,6 +110,11 @@ final class ServeBridge
         private readonly string $authDoor,
         private readonly Log $log,
         private readonly LoopInterface $loop,
+        // msteams-20 leg 041: the ladder ceiling as a seam (constructor arg,
+        // the smaller surface — no settings key rides this far down). The
+        // default is the shipped daemon budget; tests drive exhaustion
+        // without waiting out 60 backoffs.
+        private readonly int $maxConnectAttempts = self::MAX_CONNECT_ATTEMPTS,
     ) {
     }
 
@@ -146,6 +154,13 @@ final class ServeBridge
         if ($this->reconnectTimer !== null) {
             $this->loop->cancelTimer($this->reconnectTimer);
             $this->reconnectTimer = null;
+        }
+        // msteams-20 leg 041: cancelling the timer alone left the waiter
+        // pending forever — the deliberate stop is itself a give-up.
+        $rejectReconnect = $this->rejectReconnect;
+        $this->rejectReconnect = null;
+        if ($rejectReconnect !== null) {
+            $rejectReconnect(new GiveUp('stopping'));
         }
         $this->endSocket('bridge stopping');
     }
@@ -652,7 +667,7 @@ final class ServeBridge
             return reject(new GiveUp('stopping'));
         }
         $this->attempts++;
-        if ($this->attempts > self::MAX_CONNECT_ATTEMPTS) {
+        if ($this->attempts > $this->maxConnectAttempts) {
             $message = "msteams-bundle: give up after {$this->attempts} attempts ({$reason})";
             $this->log->error('serve_give_up', ['attempts' => $this->attempts, 'reason' => $reason]);
             ($this->onGivenUp ?? static function (): void {})($message);
@@ -666,8 +681,16 @@ final class ServeBridge
         $this->log->info('serve_redial', ['attempt' => $this->attempts, 'delayMs' => (int) ($delay * 1000), 'reason' => $reason]);
 
         return new \React\Promise\Promise(function (callable $resolveP, callable $rejectP) use ($delay): void {
+            // msteams-20 leg 041: the ladder's promise must never outlive the
+            // bridge. stop() uses this door to settle a pending backoff with
+            // GiveUp('stopping') instead of cancelling the timer and leaving
+            // every waiter hanging forever.
+            $this->rejectReconnect = static function (\Throwable $e) use ($rejectP): void {
+                $rejectP($e);
+            };
             $this->reconnectTimer = $this->loop->addTimer($delay, function () use ($resolveP, $rejectP): void {
                 $this->reconnectTimer = null;
+                $this->rejectReconnect = null;
                 $this->dialAndBind()->then($resolveP, $rejectP);
             });
         });

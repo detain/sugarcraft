@@ -250,6 +250,37 @@ final class RestGuardsTest extends TestCase
         self::assertStringNotContainsString('bearerish', $error->getMessage());
     }
 
+    public function testAFailedMediaFetchNeverCarriesTheSignatureIntoItsReason(): void
+    {
+        // msteams-20 leg 028: the signed query of a media URL is bearer
+        // material; a wire failure that embeds the full request target must
+        // have its signature cut out before the text rides the exception
+        // (and through it the log). The developer path keeps the verbatim
+        // cause as the attached previous Throwable.
+        $signed = 'http://127.0.0.1:9/media/pic.png?notBefore=2026&sig=SUPERSECRETBEARER&&se=2030';
+        $rejecting = new class extends Browser {
+            public function __construct()
+            {
+            }
+
+            public function get($url, array $headers = array())
+            {
+                return \React\Promise\reject(new \RuntimeException('Connection to ' . $url . ' refused'));
+            }
+        };
+
+        $error = null;
+        $this->rest(true, null, null, $rejecting)->fetchBinary($signed)->then(null, static function (\Throwable $e) use (&$error): void {
+            $error = $e;
+        });
+
+        self::assertInstanceOf(RestException::class, $error);
+        self::assertStringNotContainsString('SUPERSECRETBEARER', $error->getMessage());
+        self::assertStringContainsString('[signature-redacted]', $error->getMessage());
+        self::assertStringContainsString('media/pic.png', $error->getMessage(), 'the path label survives — scrubbing must not amputate the diagnosis');
+        self::assertStringContainsString('SUPERSECRETBEARER', $error->getPrevious()->getMessage(), 'the attached cause stays verbatim for the developer path');
+    }
+
     private ?TokenBroker $broker = null;
 
     private function rest(bool $insecure = false, ?Log $log = null, ?TextSafety $safety = null, ?Browser $http = null): Rest

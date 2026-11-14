@@ -196,6 +196,74 @@ final class MsTeamsChannelTest extends TestCase
         }
     }
 
+    public function testAReadOnlyConfigTreeRefusesToBootWithOneCleanLine(): void
+    {
+        // msteams-20 leg 030: the boot-time state mkdir ran unguarded — a
+        // read-only config tree emitted a raw PHP warning INTO the TUI frame
+        // and died at the SQLite open. The cure: one clean refusal line and a
+        // stopped boot. Skipped as root: mode bits do not bind the superuser.
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            $this->markTestSkipped('root ignores 0500 mode bits — the refusal cannot be provoked');
+        }
+        $this->writeUserConfig(['channels.msteams' => ['enabled' => true]]);
+        $store = new CredentialStore(CredentialStore::defaultPath());
+        $store->writeMsteamsPairing('default', [], [], [
+            'appId' => 'app-fs', 'appPassword' => 'fs-secret', 'tenantId' => '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d',
+        ]);
+        $configDir = $this->homeRoot . '/.candy-code';
+        chmod($configDir, 0o500);
+
+        $lines = [];
+        try {
+            $channel = new MsTeamsChannel();
+            $channel->start($this->context(static function (string $line) use (&$lines): void {
+                $lines[] = $line;
+            }));
+            $channel->dispose();
+        } finally {
+            chmod($configDir, 0o700);
+        }
+        $joined = \implode("\n", $lines);
+
+        self::assertSame(1, \substr_count($joined, 'cannot create the state directory'), 'exactly one clean refusal line');
+        self::assertStringNotContainsString('PHP Warning', $joined);
+        self::assertSame([], $channel->faceNames(), 'a boot that cannot create state must stand up no face');
+        self::assertFileDoesNotExist($configDir . '/msteams/sessions.db');
+    }
+
+    public function testADuplicateAppIdRefusesTheLaterTripleAndTheFirstKeepsItsValidator(): void
+    {
+        // msteams-20 leg 032: two accounts claiming one appId used to SILENTLY
+        // overwrite the validator map — LAST-wins routing meant the earlier
+        // account's face verified against the other account's Jwt. Fail loud
+        // at boot: the duplicate is named once, gets no face, and the first
+        // validator entry survives.
+        $this->writeUserConfig(['channels.msteams' => ['enabled' => true]]);
+        $store = new CredentialStore(CredentialStore::defaultPath());
+        $store->writeMsteamsPairing('default', [], [], [
+            'appId' => 'app-dup', 'appPassword' => 'dup-secret-first', 'tenantId' => '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d',
+        ]);
+        $store->writeMsteamsPairing('second', [], [], [
+            'appId' => 'app-dup', 'appPassword' => 'dup-secret-second', 'tenantId' => '1a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4e',
+        ]);
+
+        $lines = [];
+        $channel = new MsTeamsChannel();
+        $channel->start($this->context(static function (string $line) use (&$lines): void {
+            $lines[] = $line;
+        }));
+        $joined = \implode("\n", $lines);
+
+        self::assertSame(1, \substr_count($joined, 'channels.msteams.duplicate_appid_refused'), 'the clash names the refused account once at boot');
+        self::assertStringContainsString('second', $joined, 'the LATER triple is the one refused');
+        self::assertSame(['default'], $channel->faceNames(), 'only the first account stands up a face');
+
+        $validators = (new \ReflectionObject($channel))->getProperty('validators')->getValue($channel);
+        self::assertSame(['app-dup'], array_keys($validators), 'one validator for a shared appId');
+        self::assertSame('default', $validators['app-dup']['account'], 'first-wins: the duplicate never rides over the established validator');
+        $channel->dispose();
+    }
+
     public function testEveryRefusalBeforeCryptoCostsTheLoudCodeNotTheQuietOne(): void
     {
         $this->writeUserConfig(['channels.msteams' => ['enabled' => true]]);

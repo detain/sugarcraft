@@ -93,4 +93,40 @@ final class OutboundChunkerTest extends TestCase
     {
         self::assertSame([], OutboundChunker::split("```php\n```", 2000, 17));
     }
+
+    public function testIndentedFencesToggleTheBlockStateLikeBareOnes(): void
+    {
+        // msteams-20 leg 031: CommonMark fences tolerate up to 3 leading
+        // spaces. The old column-0-only law read an indented block as prose,
+        // so a chunk boundary could split it open — and stack a synthetic
+        // fence on top of the real ones.
+        $body = implode("\n", array_map(static fn (int $i): string => "payload line number {$i}", range(1, 30)));
+        $text = "intro line\n  ```php\n{$body}\n   ```\noutro line";
+
+        $chunks = OutboundChunker::split($text, 500, 8);
+        self::assertGreaterThanOrEqual(2, $chunks, 'the body must force a split inside the block');
+        foreach ($chunks as $chunk) {
+            $fences = preg_match_all('/^ {0,3}```/m', $chunk, $unused);
+            self::assertSame(0, $fences % 2, 'an indented fence block was split open: ' . var_export($chunk, true));
+        }
+        self::assertStringStartsWith('intro line', $chunks[0]);
+        self::assertStringContainsString('outro line', $chunks[count($chunks) - 1]);
+    }
+
+    public function testAFourSpaceIndentedFenceIsIndentedCodeNotABlockEdge(): void
+    {
+        // msteams-20 leg 031 (the ceiling): a 4-space-indented fence line is
+        // indented CODE, not a block edge — the new tolerance stops at 3, or
+        // the chunker would start reopening fences around literal prose.
+        $body = implode("\n", array_map(static fn (int $i): string => "payload line number {$i}", range(1, 30)));
+        $text = "intro line\n    ```php\n{$body}\ntrailing prose";
+
+        $chunks = OutboundChunker::split($text, 500, 8);
+        self::assertGreaterThanOrEqual(2, $chunks, 'the budget still forces the split');
+        foreach ($chunks as $chunk) {
+            self::assertStringNotContainsString("\n```", "\n" . $chunk, 'no synthetic fence may decorate a 4-space-indented lookalike: ' . var_export($chunk, true));
+        }
+        self::assertStringStartsWith('intro line', $chunks[0]);
+        self::assertStringContainsString('trailing prose', $chunks[count($chunks) - 1]);
+    }
 }

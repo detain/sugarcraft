@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\MsTeams\Tests\Candy;
 
+use CandyCode\Bundles\MsTeams\Candy\GiveUp;
 use CandyCode\Bundles\MsTeams\Candy\ServeBridge;
 use CandyCode\Bundles\MsTeams\Candy\ServeError;
 use CandyCode\Bundles\MsTeams\Support\Log;
@@ -202,6 +203,60 @@ final class ServeBridgeTest extends TestCase
         if (!$started) {
             self::fail('serve handshake never admitted');
         }
+    }
+
+    public function testTheAttemptBudgetExhaustionRejectsNamingTheGiveUp(): void
+    {
+        // msteams-20 leg 041 (a): the ladder ceiling is a constructor seam now,
+        // so the test can drive exhaustion without waiting out the shipped
+        // 60-step budget. The exhausted ladder must FAIL the waiter loudly —
+        // a silently-pending reconnect promise is the shape this pin refuses.
+        $this->serve->stop();
+        $error = null;
+        $givenUp = null;
+        $bridge = new ServeBridge($this->url, 'tok-123456', 'subprotocol', Log::silent(), $this->loop, maxConnectAttempts: 1);
+        $bridge->start(null, static function (string $reason) use (&$givenUp): void {
+            $givenUp = $reason;
+        })->then(null, static function (\Throwable $e) use (&$error): void {
+            $error = $e;
+        });
+        for ($tick = 0; $tick < 50 && $error === null; $tick++) {
+            self::runFor($this->loop, 100);
+        }
+
+        self::assertInstanceOf(GiveUp::class, $error, 'an exhausted ladder must reject, never pend silently');
+        self::assertSame('give_up', $error->kind);
+        self::assertStringContainsString('give up after 2 attempts', $error->getMessage());
+        self::assertSame($error->getMessage(), $givenUp, 'the callback and the rejection name the same give-up');
+    }
+
+    public function testStoppingWhileTheBackoffIsArmedSettlesTheWaiter(): void
+    {
+        // msteams-20 leg 041 (b): stop() used to cancel the timer and leave
+        // every holder of the dial promise waiting forever. Both in-flight
+        // shapes — backoff timer armed, or a refusal landing after the stop —
+        // now settle GiveUp('stopping').
+        $this->serve->stop();
+        $error = null;
+        $bridge = new ServeBridge($this->url, 'tok-123456', 'subprotocol', Log::silent(), $this->loop);
+        $bridge->start()->then(null, static function (\Throwable $e) use (&$error): void {
+            $error = $e;
+        });
+        // one pump: the loopback refusal has already scheduled the FIRST backoff
+        // (0.25 s), so the ladder is genuinely waiting when stop lands.
+        self::runFor($this->loop, 100);
+        self::assertNull($error, 'the shipped budget is wide: the ladder must still be waiting when stop lands');
+
+        $bridge->stop();
+        self::runFor($this->loop, 50);
+
+        self::assertInstanceOf(GiveUp::class, $error, 'a deliberate stop settles the waiter with GiveUp(stopping)');
+        self::assertStringContainsString('stopping', $error->getMessage());
+        // no redial behind the shutdown: run past the delay the cancelled
+        // timer would have taken — the reason never mutates into the ladder's.
+        self::runFor($this->loop, 800);
+        self::assertStringContainsString('stopping', $error->getMessage());
+        self::assertStringNotContainsString('give up after', $error->getMessage());
     }
 
     private static function runFor(LoopInterface $loop, int $ms): void
