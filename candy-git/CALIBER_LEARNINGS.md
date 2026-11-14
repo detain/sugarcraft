@@ -20,7 +20,7 @@ string in the Model state:
    mode (sets `collectingCommit=false, commitMessage=''`).
 
 This keeps the model entirely immutable — every keystroke returns a fresh App
-with the updated accumulator. No external readline or $stream_get_contents
+with the updated accumulator. No external readline or stream_get_contents
 calls needed.
 
 The same pattern applies to any inline text input: patch messages, branch names,
@@ -57,11 +57,12 @@ and sugar-toast:
    `@return array<string, string>` docblock. `declare(strict_types=1)` at
    top.
 
-2. **`src/Lang.php`** — `final class Lang` wrapping
-   `SugarCraft\Core\I18n\T`. Bakes the library namespace (`'git'`) into
-   every key. Mirrors the candy-ssh-launcher/calendar/toast facade pattern.
-   Registers the namespace + lang dir on every call (safe; `T::register`
-   is idempotent).
+2. **`src/Lang.php`** — `final class Lang extends`
+   `SugarCraft\Core\I18n\Lang`; `t()` and the idempotent per-call
+   `T::register` live on the base class, so `NAMESPACE` and `DIR` are the
+   only per-lib constants. The baked `'git'` namespace lands on every key.
+   Same facade family as candy-ssh-launcher, sugar-datepicker, and
+   sugar-toast.
 
 3. **Translation keys** — use dot notation (`status.clean`), not camelCase.
    Avoid generic keys like `'label'` — prefix with context (`ui.error_prefix`).
@@ -78,16 +79,12 @@ and sugar-toast:
    (`tools/check-path-repos.php --fix --strict-closure`); the committed
    tree is guarded by `--no-lib-path-repos`.
 
-6. **Keys in candy-git** — `git.spawn_failed`, `git.error`,
-      `cli.not_a_repo`, `ui.error_prefix`, `status.clean`, `branches.empty`,
-      `log.empty`, `help.keyhints`, `help.context_general`, `help.quit`,
-      `help.refresh`, `help.switch_pane`, `help.move_cursor`, `help.close_help`,
-      `help.pane_navigation`, `help.pane_status`, `help.pane_branches`,
-      `help.stage_single`, `help.stage_all`, `help.checkout`, `help.commit`,
-      `help.amend`, `help.new_branch`, `help.discard`, `help.diff_viewer`,
-      `checkout.no_branch`, `commit.prompt`, `commit.empty_message`,
-      `branch.prompt`, `branch.empty_name`, `diff.hunk_staged`,
-      `diff.navigation_hint`.
+6. **Keys in candy-git** — the roster lives in `lang/en.php`; do not
+   hand-copy it here. It is guarded by `LangCoverageTest` (every referenced
+   key exists) and `LocaleParityTest` (all 16 locales carry the full key
+   set), so the file with the bytes is the only authority. A hand list of
+   29 keys rotted against a 137-key era and was deleted 2026-11-15
+   (candy-git-086; current roster 204).
 
 ---
 
@@ -227,30 +224,27 @@ answer with the preview-only notice instead of editing the preview:
 9. **Immutability** — every state-changing method returns a new instance;
    `App::withInteractiveRebase()` bypasses `withAll()` for null-explicitness.
 
-- Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.
-
 ### 2026-05-31 — Use sugar-fuzzy for scored filter matching
 Pattern: When a lib needs type-to-filter with ranked results, adopt `sugarcraft/sugar-fuzzy` and use `SmithWatermanMatcher::matchAll()` — it returns scored `MatchResult` objects with grapheme-aligned highlight indices.
 Anti-pattern: Ad-hoc `str_contains()` or `stripos()` boolean filtering; it gives no ranking signal and no match-position data for highlighting.
 Source: step-33 ai/filter-consumers
 
 ### 2026-09-16 — Consume sugar-core's shared lexer for diff syntax highlighting
-Pattern: Step 10.06's deferred "syntax highlighting in diff view" landed by
-consuming `SugarCraft\Core\Syntax\RegexHighlighter` — the pure tokenisation
-primitive shipped with the step 10.24 highlighting pipeline (candy-mdview itself
-is a pager CLI with no embeddable highlight surface; sugar-markdown's
-`SyntaxHighlighter` and candy-codeshot's `CodeHighlighter` are the other two
-consumers of this same lexer). `DiffHighlighter` keeps ZERO colour knowledge:
-it maps file extension → lexer language (only languages the lexer actually
-recognises — never invents) and returns `null` for header lines, empty
-payloads, unknown languages, and all-Plain tokenisations. `Renderer` owns the
-accent palette and composites spans over the diff-state colour; the `null`
-contract makes unrecognised diffs render byte-for-byte as before (opt-in law,
-same posture candy-codeshot documents for its highlighter).
+Pattern: Diff syntax highlighting consumes `SugarCraft\Core\Syntax\RegexHighlighter`
+— the shared tokenisation primitive in sugar-core. sugar-markdown and
+candy-codeshot consume the same lexer; candy-mdview is a pager CLI with no
+embeddable highlight surface, so it is not one. `DiffHighlighter` keeps ZERO
+color knowledge: it maps file extension → lexer language (only languages the
+lexer actually recognizes — never invents) and returns `null` for header
+lines, empty payloads, unknown languages, and all-Plain tokenisations.
+`Renderer` owns the accent palette and composites spans over the diff-state
+color; the `null` contract makes unrecognized diffs render byte-for-byte as
+before (opt-in law, same posture candy-codeshot documents for its highlighter).
 Anti-pattern: adding a dependency on candy-mdview to "consume" it — the pager
 exposes no API, and a dep bump on a CLI lib buys nothing at render time.
 Source: leftover-rollout step 10.06 Phase 4 (round-84 lane t2, E735)
 
+### 2026-11-13 — OS seams behind the Platform class
 Pattern: OS differences in the subprocess runner live behind `Platform` (null
 device, PATH lookup, tree-kill) so the Windows ladder runs in the Linux suite via
 `Platform::windows()->withNullDevice('/dev/null')->withKillTree(...)`. On Windows
