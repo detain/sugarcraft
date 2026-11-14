@@ -455,4 +455,203 @@ final class BufferTest extends TestCase
         $this->assertSame(' ', $buffer->getCell(0, 0)->rune);
         $this->assertSame(' ', $buffer->getCell(4, 4)->rune);
     }
+    // ═══════════════════════════════════════════════════════════════
+    // Moved from tests/Layout/BufferTest.php (D-159 suite consolidation:
+    // Buffer is a Foundation class; one suite per class).
+    // Dropped-duplicate disclosures: testNewWithZeroDimensions and
+    // testRenderEmptyBuffer were byte-twins of the legs above, and the
+    // old testSetSizeReturnsNewInstance was a strict subset of it.
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testBufferImplementsSizer(): void
+    {
+        $buffer = Buffer::new(10, 10);
+        $this->assertInstanceOf(Sizer::class, $buffer);
+    }
+
+    public function testBufferImplementsItem(): void
+    {
+        $buffer = Buffer::new(10, 10);
+        $this->assertInstanceOf(Item::class, $buffer);
+    }
+
+    public function testRenderWithContent(): void
+    {
+        $buffer = Buffer::new(5, 3)->setString(0, 0, 'hello');
+        $this->assertSame("hello\n     \n     ", $buffer->render());
+    }
+
+    public function testSetStringBasic(): void
+    {
+        $buffer = Buffer::new(10, 5)->setString(0, 0, 'test');
+        $this->assertSame('t', $buffer->getCell(0, 0)->rune);
+        $this->assertSame('e', $buffer->getCell(1, 0)->rune);
+        $this->assertSame('s', $buffer->getCell(2, 0)->rune);
+        $this->assertSame('t', $buffer->getCell(3, 0)->rune);
+    }
+
+    public function testSetStringTruncatesAtRightEdge(): void
+    {
+        $buffer = Buffer::new(3, 3)->setString(0, 0, 'hello');
+        $this->assertSame('h', $buffer->getCell(0, 0)->rune);
+        $this->assertSame('e', $buffer->getCell(1, 0)->rune);
+        $this->assertSame('l', $buffer->getCell(2, 0)->rune);
+    }
+
+    public function testSetStringAtPosition(): void
+    {
+        $buffer = Buffer::new(5, 3)->setString(2, 1, 'ab');
+        $this->assertSame('ab', $buffer->getCell(2, 1)->rune . $buffer->getCell(3, 1)->rune);
+    }
+
+    public function testSetStringOutOfBoundsReturnsSameBuffer(): void
+    {
+        $buffer = Buffer::new(3, 3)->setString(5, 0, 'test');
+        $this->assertSame(' ', $buffer->getCell(0, 0)->rune);
+    }
+
+    public function testSetStringNegativeCoordinatesReturnsSameBuffer(): void
+    {
+        $buffer = Buffer::new(3, 3)->setString(-1, 0, 'test');
+        $this->assertSame(' ', $buffer->getCell(0, 0)->rune);
+    }
+
+    public function testSetStringYOutOfBoundsReturnsSameBuffer(): void
+    {
+        $buffer = Buffer::new(3, 3)->setString(0, 10, 'test');
+        $this->assertSame(' ', $buffer->getCell(0, 0)->rune);
+    }
+
+    public function testSetStringUnicodeCharacters(): void
+    {
+        $buffer = Buffer::new(3, 3)->setString(0, 0, '日本語');
+        $this->assertSame('日', $buffer->getCell(0, 0)->rune);
+        $this->assertSame('本', $buffer->getCell(1, 0)->rune);
+        $this->assertSame('語', $buffer->getCell(2, 0)->rune);
+    }
+
+    public function testFillBasic(): void
+    {
+        $cell = new Cell('#', new Style());
+        $buffer = Buffer::new(3, 3)->fill(new Rect(0, 0, 1, 1), $cell);
+
+        $this->assertSame('#', $buffer->getCell(0, 0)->rune);
+        $this->assertSame('#', $buffer->getCell(1, 0)->rune);
+        $this->assertSame('#', $buffer->getCell(0, 1)->rune);
+        $this->assertSame('#', $buffer->getCell(1, 1)->rune);
+        $this->assertSame(' ', $buffer->getCell(2, 0)->rune);
+        $this->assertSame(' ', $buffer->getCell(2, 2)->rune);
+    }
+
+    public function testGetCellNegativeCoordinatesThrowOutOfBounds(): void
+    {
+        // Moved-leg pin (D-159): negative coordinates are refused too
+        $buffer = Buffer::new(3, 3);
+        $this->expectException(\OutOfBoundsException::class);
+        $buffer->getCell(-1, 0);
+    }
+
+    public function testGetCellEmptyReturnsDefaultCell(): void
+    {
+        $buffer = Buffer::new(3, 3);
+        $cell = $buffer->getCell(0, 0);
+        $this->assertSame(' ', $cell->rune);
+    }
+
+    public function testClearResetsBuffer(): void
+    {
+        $buffer = Buffer::new(3, 3)
+            ->setString(0, 0, 'abc')
+            ->setString(0, 1, 'def')
+            ->clear();
+
+        $this->assertSame(' ', $buffer->getCell(0, 0)->rune);
+        $this->assertSame(' ', $buffer->getCell(0, 1)->rune);
+        $this->assertSame(' ', $buffer->getCell(0, 2)->rune);
+    }
+
+    public function testInnerSizeRoundTripsLandscapeDimensions(): void
+    {
+        // Moved-leg pin (D-159): a different aspect ratio round-trips
+        $buffer = Buffer::new(10, 20);
+
+        [$w, $h] = $buffer->innerSize();
+
+        $this->assertSame(10, $w);
+        $this->assertSame(20, $h);
+    }
+
+    public function testMultipleOperationsAreImmutable(): void
+    {
+        $buffer = Buffer::new(5, 5)
+            ->setString(0, 0, 'a')
+            ->setString(1, 0, 'b')
+            ->setString(2, 0, 'c');
+
+        $this->assertSame('a', $buffer->getCell(0, 0)->rune);
+        $this->assertSame('b', $buffer->getCell(1, 0)->rune);
+        $this->assertSame('c', $buffer->getCell(2, 0)->rune);
+    }
+
+    public function testChainedOperations(): void
+    {
+        $cell = new Cell('-', new Style());
+        $buffer = Buffer::new(5, 5)
+            ->setString(0, 0, 'hello')
+            ->fill(new Rect(0, 1, 4, 1), $cell)
+            ->setString(0, 2, 'world');
+
+        $this->assertSame('h', $buffer->getCell(0, 0)->rune);
+        $this->assertSame('-', $buffer->getCell(0, 1)->rune);
+        $this->assertSame('w', $buffer->getCell(0, 2)->rune);
+    }
+
+    public function testDrawBox(): void
+    {
+        $buffer = Buffer::new(5, 3);
+        $cell = new Cell('#', new Style());
+
+        $buffer = $buffer
+            ->setString(0, 0, '┌───┐', new Style())
+            ->setString(0, 1, '│   │', new Style())
+            ->setString(0, 2, '└───┘', new Style());
+
+        $this->assertSame('┌', $buffer->getCell(0, 0)->rune);
+    }
+
+    public function testEmptyStringDoesNotCrash(): void
+    {
+        $buffer = Buffer::new(5, 5)->setString(0, 0, '');
+        $this->assertSame(' ', $buffer->getCell(0, 0)->rune);
+    }
+
+    public function testSingleCharacterString(): void
+    {
+        $buffer = Buffer::new(5, 5)->setString(2, 2, 'X');
+        $this->assertSame('X', $buffer->getCell(2, 2)->rune);
+    }
+
+    public function testLargeBuffer(): void
+    {
+        $buffer = Buffer::new(100, 50)->setString(0, 0, 'test');
+        $this->assertSame('t', $buffer->getCell(0, 0)->rune);
+        $this->assertSame(100, $buffer->innerSize()[0]);
+        $this->assertSame(50, $buffer->innerSize()[1]);
+    }
+
+    public function testRenderProducesCorrectLineCount(): void
+    {
+        $buffer = Buffer::new(10, 5);
+        $lines = explode("\n", $buffer->render());
+        $this->assertCount(5, $lines);
+    }
+
+    public function testRenderLineWidthMatchesBufferWidth(): void
+    {
+        $buffer = Buffer::new(7, 3)->setString(0, 0, 'ab');
+        $lines = explode("\n", $buffer->render());
+        foreach ($lines as $line) {
+            $this->assertLessThanOrEqual(7, mb_strlen($line));
+        }
+    }
 }
