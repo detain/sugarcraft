@@ -153,7 +153,8 @@ Off by default — env capture is opt-in to avoid leaking
 the caller\'s full shell environment. Keys matching the
 secret regex (see --env-regex) are stripped.',
     'record.help_env_regex' => 'Override the secret-stripping regex (default conservative
-/(SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i).
+/(PASS|SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i).
+Credential values (scheme://user:pass@host) are stripped too.
 An empty pattern is rejected — it can no longer be used
 to disable filtering. Implies --env.',
     'record.help_env_all' => 'DANGEROUS: capture the FULL host environment with secret

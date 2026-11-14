@@ -153,7 +153,8 @@ Desactivado por omisión — la captura es opcional para no filtrar
 el entorno completo del shell. Las claves que coinciden con el
 regex de secretos (véase --env-regex) se eliminan.',
     'record.help_env_regex' => 'Sustituir el regex que elimina secretos (predeterminado, prudente:
-/(SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i).
+/(PASS|SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i).
+Los valores de credenciales (scheme://user:pass@host) también se eliminan.
 Un patrón vacío se rechaza — ya no sirve para desactivar
 el filtrado. Implica --env.',
     'record.help_env_all' => 'PELIGROSO: capturar TODO el entorno del host sin filtrar secretos

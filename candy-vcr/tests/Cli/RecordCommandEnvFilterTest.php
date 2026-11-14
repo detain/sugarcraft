@@ -37,6 +37,7 @@ final class RecordCommandEnvFilterTest extends TestCase
         yield 'plain CRED'        => ['DB_CRED',            true];
         yield 'plain AUTH'        => ['AUTH_HEADER',        true];
         yield 'plain PRIV'        => ['SSH_PRIVATE_KEY',    true];
+        yield 'PASSPHRASE word'   => ['SSH_PASSPHRASE',     true]; // finding 028: the PASS arm
         yield 'mixed case secret' => ['service_secret_v2',  true];
 
         yield 'PATH stays'        => ['PATH',               false];
@@ -96,6 +97,67 @@ final class RecordCommandEnvFilterTest extends TestCase
                 } else {
                     \putenv("{$k}={$v}");
                 }
+            }
+        }
+    }
+
+    /**
+     * The value screen (finding 029): a benign key name must not vouch
+     * for a credential-shaped value. Postgres/redis URL secrets under
+     * innocent keys go; colon-less `user@host` and plain URLs stay.
+     */
+    public function testCredentialValuesAreStrippedUnderBenignKeys(): void
+    {
+        $fixtures = [
+            'VCR_FIXTURE_URL'      => 'postgres://user:pw@db.internal:5432/app',
+            'VCR_FIXTURE_REDIS'    => 'redis://:token@cache:6379/0',
+            'VCR_FIXTURE_PLAIN'    => 'https://example.com/docs',
+            'VCR_FIXTURE_PORTY'    => 'mysql://db.internal:3306/app',
+            'VCR_FIXTURE_GITSSH'   => 'git+ssh://git@github.com/acme/x.git',
+            'VCR_FIXTURE_NOTHING_SPECIAL' => 'visible',
+        ];
+        $prior = [];
+        foreach ($fixtures as $k => $v) {
+            $prior[$k] = \getenv($k);
+            \putenv("{$k}={$v}");
+        }
+
+        try {
+            $kept = RecordCommand::filteredHostEnv();
+
+            $this->assertArrayNotHasKey('VCR_FIXTURE_URL', $kept, 'embedded URL credentials must not ride a benign key');
+            $this->assertArrayNotHasKey('VCR_FIXTURE_REDIS', $kept, 'empty-userinfo redis secrets must go too');
+            $this->assertArrayHasKey('VCR_FIXTURE_PLAIN', $kept);
+            $this->assertArrayHasKey('VCR_FIXTURE_PORTY', $kept, 'host:port without userinfo is not a secret');
+            $this->assertArrayHasKey('VCR_FIXTURE_GITSSH', $kept, 'colon-less user@host carries no inline password');
+            $this->assertArrayHasKey('VCR_FIXTURE_NOTHING_SPECIAL', $kept);
+        } finally {
+            foreach ($prior as $k => $v) {
+                if ($v === false) {
+                    \putenv($k);
+                } else {
+                    \putenv("{$k}={$v}");
+                }
+            }
+        }
+    }
+
+    public function testCaptureAllAlsoBypassesTheValueScreen(): void
+    {
+        $key = 'VCR_FIXTURE_URL';
+        $prior = \getenv($key);
+        \putenv("{$key}=postgres://user:pw@db.internal/app");
+
+        try {
+            $kept = RecordCommand::filteredHostEnv(null, true);
+            // --env-all is the documented "secrets included" door: the
+            // second screen must not second-guess it.
+            $this->assertArrayHasKey($key, $kept);
+        } finally {
+            if ($prior === false) {
+                \putenv($key);
+            } else {
+                \putenv("{$key}={$prior}");
             }
         }
     }

@@ -153,7 +153,8 @@ vypnuto — zachytávání je dobrovolné, aby neuniklo celé prostředí
 shellu volajícího. Klíče odpovídající regexu tajemství
 (viz --env-regex) se odstraní.',
     'record.help_env_regex' => 'Přepsat regex odstraňující tajemství (výchozí, opatrný:
-/(SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i).
+/(PASS|SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i).
+Hodnoty přihlašovacích údajů (scheme://user:pass@host) jsou také odstraněny.
 Prázdný vzor se odmítne — už nelze vypnout filtrování.
 Implikuje --env.',
     'record.help_env_all' => 'NEBEZPEČNÉ: zachytit CELÉ prostředí hostitele bez filtrování

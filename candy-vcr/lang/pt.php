@@ -153,7 +153,8 @@ padrão — a captura é opcional para não vazar todo o ambiente do
 shell de quem chama. Chaves que casam com o regex de segredos
 (veja --env-regex) são removidas.',
     'record.help_env_regex' => 'Substituir o regex que remove segredos (padrão conservador:
-/(SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i).
+/(PASS|SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i).
+Os valores de credenciais (scheme://user:pass@host) também são removidos.
 Um padrão vazio é recusado — ele não serve mais para
 desativar a filtragem. Implica --env.',
     'record.help_env_all' => 'PERIGOSO: capturar TODO o ambiente do host sem filtrar segredos

@@ -151,7 +151,8 @@ return [
 以免泄露调用者完整的 shell 环境。匹配机密正则(见 --env-regex)
 的键会被移除。',
     'record.help_env_regex' => '覆盖移除机密的正则(保守的默认值:
-/(SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i)。
+/(PASS|SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i)。
+包含凭据的值 (scheme://user:pass@host) 也会被剥离。
 空模式会被拒绝 —— 不能再用它来关闭过滤。隐含 --env。',
     'record.help_env_all' => '危险:在不过滤机密的情况下捕获完整的主机环境 ——
 卡带将以明文包含凭据,并且每个被捕获的变量名都会作为警告

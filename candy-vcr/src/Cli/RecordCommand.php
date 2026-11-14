@@ -50,11 +50,24 @@ final class RecordCommand implements DocumentedCommand
      * Conservative secret-name regex used by `--env` to strip likely
      * credential vars before they reach the cassette. Matches anywhere
      * in the key, case-insensitive — `MYSQL_PASSWORD`, `GITHUB_TOKEN`,
-     * `STRIPE_API_KEY` are all stripped. Per the plan's review focus,
-     * we'd rather over-strip than leak; callers needing finer control
-     * can pass `--env-regex=` to override.
+     * `STRIPE_API_KEY` are all stripped. `PASS` (finding 028) is its own
+     * arm so `SSH_PASSPHRASE` cannot dodge the alternation while spelling
+     * its secret as a phrase. Per the plan's review focus, we'd rather
+     * over-strip than leak; callers needing finer control can pass
+     * `--env-regex=` to override.
      */
-    public const SECRET_KEY_REGEX = '/(SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i';
+    public const SECRET_KEY_REGEX = '/(PASS|SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i';
+
+    /**
+     * Second screen (finding 029): a benign NAME never vouches for the
+     * VALUE. Any captured value embedding URL credentials — the userinfo
+     * of `scheme://user:pass@host` — is stripped as well, or the
+     * `DATABASE_URL` class of secrets rides into the cassette header
+     * under a clean-looking key. Empty userinfo before the colon still
+     * counts (`redis://:token@host`); a colon-less `user@host` carries
+     * no inline secret and passes.
+     */
+    public const CREDENTIAL_VALUE_REGEX = '~://[^/@\s]*:[^/@\s]+@~';
 
     /** Fallback shell when `$SHELL` is empty / unset during `--shell`. */
     public const FALLBACK_SHELL = '/bin/sh';
@@ -714,8 +727,10 @@ final class RecordCommand implements DocumentedCommand
 
     /**
      * Snapshot the current process env, dropping any key that matches
-     * the configured secret regex. Keys are sorted alphabetically so
-     * the cassette diff stays stable across runs.
+     * the configured secret regex and any value that embeds URL
+     * credentials (the {@see CREDENTIAL_VALUE_REGEX} second screen). Keys
+     * are sorted alphabetically so the cassette diff stays stable across
+     * runs.
      *
      * Safe-by-default: an empty (or null) `$regex` falls back to the
      * conservative {@see SECRET_KEY_REGEX} rather than meaning "capture
@@ -776,6 +791,12 @@ final class RecordCommand implements DocumentedCommand
             // "not a secret" (keep the var) beats aborting the whole
             // capture; the probe suppression only silences that noise.
             if (!$captureAll && @\preg_match($effectiveRegex, $k) === 1) {
+                continue;
+            }
+            // Value screen (finding 029): the name can be as innocent as
+            // `DATABASE_URL` — a credential-shaped VALUE still leaks. The
+            // over-strip ruling governs: the var goes, not just the URL.
+            if (!$captureAll && \is_string($v) && $v !== '' && \preg_match(self::CREDENTIAL_VALUE_REGEX, $v) === 1) {
                 continue;
             }
             $kept[$k] = $v;

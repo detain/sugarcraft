@@ -151,7 +151,8 @@ return [
 호출자의 전체 셸 환경이 유출되지 않도록 캡처는 선택 사항입니다.
 비밀 정규식(--env-regex 참조)과 일치하는 키는 제거됩니다.',
     'record.help_env_regex' => '비밀 제거 정규식을 재정의합니다 (보수적 기본값:
-/(SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i).
+/(PASS|SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i).
+자격 증명이 포함된 값(scheme://user:pass@host)도 제거됩니다.
 빈 패턴은 거부됩니다 — 더 이상 필터링을 끄는 데 쓸 수 없습니다.
 --env를 함께 켭니다.',
     'record.help_env_all' => '위험: 호스트의 전체 환경을 비밀 필터링 없이 캡처합니다 —

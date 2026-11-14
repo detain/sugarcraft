@@ -153,7 +153,8 @@ aus — die Erfassung ist Opt-in, damit nicht die gesamte Shell-
 Umgebung des Aufrufers preisgegeben wird. Schlüssel, die dem
 Geheimnis-Regex entsprechen (siehe --env-regex), werden entfernt.',
     'record.help_env_regex' => 'Den Regex zum Entfernen von Geheimnissen überschreiben (Standard,
-konservativ: /(SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i).
+konservativ: /(PASS|SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i).
+Anmeldungsdaten-Werte (scheme://user:pass@host) werden ebenfalls entfernt.
 Ein leeres Muster wird abgelehnt — damit lässt sich die Filterung
 nicht mehr abschalten. Impliziert --env.',
     'record.help_env_all' => 'GEFÄHRLICH: die VOLLSTÄNDIGE Host-Umgebung ohne Geheimnisfilter

@@ -153,7 +153,8 @@ Disattivato di default — la cattura è opzionale per non esporre
 l\'intero ambiente shell del chiamante. Le chiavi che corrispondono
 al regex dei segreti (vedi --env-regex) vengono rimosse.',
     'record.help_env_regex' => 'Sostituisce il regex di rimozione dei segreti (predefinito, prudente:
-/(SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i).
+/(PASS|SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i).
+Anche i valori delle credenziali (scheme://user:pass@host) vengono rimossi.
 Un pattern vuoto viene rifiutato — non si può più usare per
 disattivare il filtro. Implica --env.',
     'record.help_env_all' => 'PERICOLOSO: cattura l\'INTERO ambiente dell\'host senza filtrare i

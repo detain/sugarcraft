@@ -153,7 +153,8 @@ przechwytywanie jest opcjonalne, by nie ujawnić całego środowiska
 powłoki wywołującego. Klucze pasujące do regexu sekretów
 (zob. --env-regex) są usuwane.',
     'record.help_env_regex' => 'Zastąp regex usuwający sekrety (domyślny, ostrożny:
-/(SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i).
+/(PASS|SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i).
+Wartości poświadczeń (scheme://user:pass@host) również są usuwane.
 Pusty wzorzec jest odrzucany — nie służy już do wyłączania
 filtrowania. Implikuje --env.',
     'record.help_env_all' => 'NIEBEZPIECZNE: przechwyć CAŁE środowisko hosta bez filtrowania

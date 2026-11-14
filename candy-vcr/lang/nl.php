@@ -153,7 +153,8 @@ vastleggen is opt-in om niet de volledige shellomgeving van de
 aanroeper te lekken. Sleutels die overeenkomen met de geheimen-regex
 (zie --env-regex) worden verwijderd.',
     'record.help_env_regex' => 'De regex voor het verwijderen van geheimen overschrijven (standaard,
-conservatief: /(SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i).
+conservatief: /(PASS|SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i).
+Waarden met inloggegevens (scheme://user:pass@host) worden ook verwijderd.
 Een leeg patroon wordt geweigerd — het kan niet meer dienen om
 filtering uit te schakelen. Impliceert --env.',
     'record.help_env_all' => 'GEVAARLIJK: de VOLLEDIGE hostomgeving vastleggen zonder geheimenfilter

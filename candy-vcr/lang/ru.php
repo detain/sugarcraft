@@ -153,7 +153,8 @@ return [
 вызывающего. Ключи, подходящие под regex секретов
 (см. --env-regex), удаляются.',
     'record.help_env_regex' => 'Переопределить regex удаления секретов (по умолчанию осторожный:
-/(SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i).
+/(PASS|SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i).
+Значения с учётными данными (scheme://user:pass@host) также удаляются.
 Пустой шаблон отклоняется — им больше нельзя отключить
 фильтрацию. Подразумевает --env.',
     'record.help_env_all' => 'ОПАСНО: захватить ВСЁ окружение хоста без фильтрации секретов —

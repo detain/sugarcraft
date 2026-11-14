@@ -151,7 +151,8 @@ return [
 呼び出し元のシェル環境全体が漏れないよう、キャプチャは任意です。
 シークレット用の正規表現 (--env-regex 参照) に一致するキーは除去されます。',
     'record.help_env_regex' => 'シークレット除去の正規表現を上書きします (既定の保守的な値:
-/(SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i)。
+/(PASS|SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i)。
+認証情報を含む値 (scheme://user:pass@host) も除去されます。
 空のパターンは拒否されます — フィルタリングの無効化には使えません。
 --env を暗黙的に有効にします。',
     'record.help_env_all' => '危険: ホストの環境全体をシークレットのフィルタリングなしでキャプチャします —

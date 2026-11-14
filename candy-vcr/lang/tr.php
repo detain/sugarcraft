@@ -153,7 +153,8 @@ Konumsal <cmd> ile birlikte kullanılamaz.',
 Gizli bilgi regex\'iyle eşleşen anahtarlar (bkz. --env-regex)
 çıkarılır.',
     'record.help_env_regex' => 'Gizli bilgileri çıkaran regex\'i geçersiz kıl (varsayılan, ihtiyatlı:
-/(SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i).
+/(PASS|SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i).
+Kimlik bilgisi içeren değerler (scheme://user:pass@host) de kaldırılır.
 Boş desen reddedilir — artık filtrelemeyi kapatmak için
 kullanılamaz. --env anlamına gelir.',
     'record.help_env_all' => 'TEHLİKELİ: ana makinenin TÜM ortamını gizli bilgi filtrelemesi

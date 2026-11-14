@@ -153,7 +153,8 @@ Désactivé par défaut — la capture est optionnelle pour ne pas
 faire fuiter tout l\'environnement shell de l\'appelant. Les clés
 correspondant au regex de secrets (voir --env-regex) sont retirées.',
     'record.help_env_regex' => 'Remplacer le regex de retrait des secrets (défaut prudent
-/(SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i).
+/(PASS|SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i).
+Les valeurs d\'identifiants (scheme://user:pass@host) sont également supprimées.
 Un motif vide est refusé — il ne peut plus servir à
 désactiver le filtrage. Implique --env.',
     'record.help_env_all' => 'DANGEREUX : capturer TOUT l\'environnement de l\'hôte sans filtrage

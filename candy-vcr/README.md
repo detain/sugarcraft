@@ -331,7 +331,7 @@ Spawn the user's `$SHELL -l` (falling back to `/bin/sh -l` when `$SHELL` is empt
 
 #### `--env` and `--env-regex=PATTERN`
 
-Env capture is **opt-in** — `--env` snapshots the host environment into the cassette header. By default, keys matching the conservative secret-name regex `/(SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i` are stripped before they hit disk. The bias is "rather strip-too-much than leak" — `KEYBOARD_LAYOUT` is stripped because it contains `KEY`. Override the regex with `--env-regex=PATTERN` when you need a narrower (or wider) filter; passing `--env-regex` implies `--env`. An **empty** `--env-regex=` is rejected — it can no longer be used to silently disable filtering (that footgun previously recorded every secret).
+Env capture is **opt-in** — `--env` snapshots the host environment into the cassette header. By default, keys matching the conservative secret-name regex `/(PASS|SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i` are stripped before they hit disk (`SSH_PASSPHRASE` falls to the `PASS` arm). A second screen inspects the VALUE: any variable whose value embeds URL credentials (`scheme://user:pass@host`) is stripped too, so a clean-looking `DATABASE_URL` cannot smuggle a password under a benign name. The bias is "rather strip-too-much than leak" — `KEYBOARD_LAYOUT` is stripped because it contains `KEY`. Override the regex with `--env-regex=PATTERN` when you need a narrower (or wider) filter; passing `--env-regex` implies `--env`. An **empty** `--env-regex=` is rejected — it can no longer be used to silently disable filtering (that footgun previously recorded every secret).
 
 #### `--env-all` (formerly `--env-allow-secrets`)
 
