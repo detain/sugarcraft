@@ -127,9 +127,12 @@ or — when the local already exists — checks it out. They are read-only for
 
 While collecting text (commit message with `c`, branch name with `n`,
 merge target with `M`, cherry-pick ref with `V`, worktree path and branch
-with `a` + `tab` in the worktrees overlay): printable keys and `Space` append, `Backspace`
-deletes the last character, a bracketed `paste` inserts the (sanitized,
-newline-flattened) text, `Enter` confirms, and `Esc` cancels.
+with `a` + `tab` in the worktrees overlay): printable keys and `Space` append,
+`Backspace` deletes the last character (one press erases a whole emoji cluster,
+ZWJ families included), `Ctrl+W` kills the previous word, `Ctrl+U` clears the
+line, a bracketed `paste` inserts the sanitized text, `Enter` confirms, and
+`Esc` cancels. A buffer longer than the bar is shown as a tail window with a
+leading `…`, so the caret and the text you just typed are always visible.
 
 ### Diff viewer keys
 
@@ -215,10 +218,12 @@ marker carries no color, so tab cycling stays visible under `NO_COLOR`,
   alt buffer, no cursor addressing), so a styleless terminal gets text
   rather than control-sequence garbage.
 - **Text buffers** — commit messages, branch names, and merge/cherry-pick
-  targets are append-only: printable keys and `Space` append, `Backspace`
-  deletes the last character, and a bracketed `paste` inserts the whole
-  (sanitized, newline-flattened) blob, so screen readers and keyboard-only
-  flows never need arrow navigation inside an input.
+  targets: printable keys and `Space` append, `Backspace` deletes a whole
+  character cluster (one press erases a ZWJ emoji), `Ctrl+W`/`Ctrl+U` kill a
+  word or the line, and a bracketed `paste` inserts the whole sanitized
+  blob — with a tail window under the caret for anything longer than the bar,
+  so screen readers and keyboard-only flows never need arrow navigation
+  inside an input and nothing you type is ever rendered invisible.
 - **Palette contrast (design note)** — the hint strip (`#7d6e98`) lands at
   roughly 3.4:1 and the blurred unfocused border (`#4a3868`) at roughly
   2.1:1 against the dark background the demos ship with; actual ratios move

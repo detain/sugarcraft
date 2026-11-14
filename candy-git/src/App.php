@@ -13,6 +13,7 @@ use SugarCraft\Core\Msg\ColorProfileMsg;
 use SugarCraft\Core\Msg\PasteMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Util\Clamp;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Style;
 
 /**
@@ -713,8 +714,10 @@ final class App implements Model
 
     /**
      * Apply one text-edit key to a collecting buffer: printable Char and
-     * Space append, Backspace removes the last codepoint. Returns the new
-     * buffer, or null when the key is not an edit key (ctrl/alt chords never
+     * Space append, Backspace removes the last grapheme cluster (candy-git-099
+     * — one press on 👩‍💻, no orphaned joiners), Ctrl+W kills the last word
+     * and Ctrl+U clears the buffer (candy-git-046). Returns the new buffer,
+     * or null when the key is not an edit key (other ctrl/alt chords never
      * insert text). Space arrives as KeyType::Space from the input parser,
      * never as Char ' ' — both shapes are handled.
      *
@@ -728,6 +731,18 @@ final class App implements Model
      */
     private static function editBuffer(string $buffer, KeyMsg $msg): ?string
     {
+        if ($msg->ctrl && !$msg->alt && $msg->type === KeyType::Char) {
+            // InputReader folds ctrl+letter into chr(0x60+code) with ctrl=true:
+            // 23 is 'w', 21 is 'u'. The other edit-relevant ctrl chords never
+            // arrive here: Ctrl+C is claimed by the quit chain above the
+            // collectors, and pane verbs (Ctrl+R) sit behind the early
+            // collector return, so an unclaimed chord just no-ops in-buffer.
+            return match ($msg->rune) {
+                'w' => self::killWord($buffer),
+                'u' => '',
+                default => null,
+            };
+        }
         if ($msg->ctrl || $msg->alt) {
             return null;
         }
@@ -745,9 +760,41 @@ final class App implements Model
             return $buffer . ' ';
         }
         if ($msg->type === KeyType::Backspace) {
-            return $buffer === '' ? '' : mb_substr($buffer, 0, mb_strlen($buffer) - 1);
+            if ($buffer === '') {
+                return '';
+            }
+            // candy-git-099: walk the SAME grapheme splitter the truncation
+            // paths use (Width::nextCluster) so a ZWJ family like 👩‍💻
+            // dies in one press instead of shedding orphaned joiners mid-buffer.
+            $i = 0;
+            $last = 0;
+            $len = strlen($buffer);
+            while ($i < $len) {
+                $cluster = Width::nextCluster($buffer, $i);
+                $last = $i;
+                $i += strlen($cluster);
+            }
+
+            return substr($buffer, 0, $last);
         }
         return null;
+    }
+
+    /**
+     * Ctrl+W: kill the last word — trailing blanks, then the word behind
+     * them (readline semantics on words-as-run-of-nonspace, the honest shape
+     * for branch names, refs, and one-line messages). Fail-closed on
+     * malformed UTF-8: a FALSE preg answer refuses the edit, never eats text.
+     */
+    private static function killWord(string $buffer): string
+    {
+        $unspaced = preg_replace('/\s+$/u', '', $buffer);
+        if (!is_string($unspaced)) {
+            return $buffer;
+        }
+        $cut = preg_replace('/\S+$/u', '', $unspaced);
+
+        return is_string($cut) ? $cut : $buffer;
     }
 
     /**

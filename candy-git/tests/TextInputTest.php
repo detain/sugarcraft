@@ -15,8 +15,10 @@ use PHPUnit\Framework\TestCase;
 /**
  * K1: text collection must actually work — the letter q is typeable while a
  * buffer owns the keyboard, Space (delivered as KeyType::Space, never as
- * Char ' ') appends, Backspace removes the last codepoint, and bracketed
- * pastes land in the active buffer flattened to one line.
+ * Char ' ') appends, Backspace erases a whole grapheme cluster (pasted
+ * families, candy-git-099), Ctrl+W/Ctrl+U edit by word and line
+ * (candy-git-046), and bracketed pastes land in the active buffer flattened
+ * to one line.
  */
 final class TextInputTest extends TestCase
 {
@@ -297,5 +299,80 @@ final class TextInputTest extends TestCase
         self::assertSame('wi', $a->stashMessage);
         // And the overlay survived the whole typing session.
         self::assertNotNull($a->stashManager);
+    }
+
+    // ---- CG-29 (candy-git-046 / candy-git-099): word chords and clusters ----
+
+    public function testCtrlWKillsThePreviousWord(): void
+    {
+        $a = $this->type($this->commitCollector(), 'fix login bug');
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'w', ctrl: true));
+        self::assertSame('fix login ', $a->commitMessage);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'w', ctrl: true));
+        self::assertSame('fix ', $a->commitMessage);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'w', ctrl: true));
+        self::assertSame('', $a->commitMessage, 'the last bare word dies too');
+    }
+
+    public function testCtrlWKillsTrailingWhitespaceAndWordTogether(): void
+    {
+        $a = $this->type($this->commitCollector(), 'abc');
+        $a = $a->update(new KeyMsg(KeyType::Space))[0];
+        $a = $a->update(new KeyMsg(KeyType::Space))[0];
+        $a = $a->update(new KeyMsg(KeyType::Space))[0];
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'w', ctrl: true));
+        self::assertSame('', $a->commitMessage, 'the run of spaces is the tail of the word boundary');
+    }
+
+    public function testCtrlWKillsAHyphenatedWordWhole(): void
+    {
+        $a = $this->type($this->commitCollector(), 'fix-login');
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'w', ctrl: true));
+        self::assertSame('', $a->commitMessage);
+    }
+
+    public function testCtrlUClearsTheLineWithoutClosingTheCollector(): void
+    {
+        $a = $this->type($this->type($this->app(), 'n'), 'hello world');
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'u', ctrl: true));
+        self::assertSame('', $a->branchName);
+        self::assertTrue($a->collectingBranchName);
+    }
+
+    public function testAltCtrlChordsAreStillRefused(): void
+    {
+        $a = $this->type($this->commitCollector(), 'ab');
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'w', alt: true, ctrl: true));
+        self::assertSame('ab', $a->commitMessage, 'kill-word is a plain ctrl chord only');
+    }
+
+    public function testForeignCtrlChordsNoOpInsideACollector(): void
+    {
+        $a = $this->type($this->commitCollector(), 'ab');
+        [$a, $cmd] = $a->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
+        self::assertSame('ab', $a->commitMessage);
+        self::assertTrue($a->collectingCommit, 'the pane refresh behind the collector must not fire');
+        self::assertNull($cmd);
+    }
+
+    public function testAPastedGraphemeFamilyDiesInOneBackspace(): void
+    {
+        $family = "\u{1F469}\u{200D}\u{1F4BB}"; // woman + ZWJ + laptop
+        $a = $this->type($this->app(), 'n');
+        [$a, ] = $a->update(new \SugarCraft\Core\Msg\PasteMsg($family));
+        self::assertSame($family, $a->branchName, 'the flatten lane keeps the family intact');
+        [$a, ] = $a->update(new KeyMsg(KeyType::Backspace));
+        self::assertSame('', $a->branchName, 'one press — not three — and no orphaned joiners');
+    }
+
+    public function testClusterBackspaceKeepsTheTextBehindIt(): void
+    {
+        $family = "\u{1F469}\u{200D}\u{1F4BB}";
+        $a = $this->type($this->app(), 'n');
+        [$a, ] = $a->update(new \SugarCraft\Core\Msg\PasteMsg($family . 'a'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Backspace));
+        self::assertSame($family, $a->branchName, 'the ASCII tail dies first');
+        [$a, ] = $a->update(new KeyMsg(KeyType::Backspace));
+        self::assertSame('', $a->branchName, 'then the whole cluster goes');
     }
 }

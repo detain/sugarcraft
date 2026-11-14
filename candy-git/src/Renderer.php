@@ -180,9 +180,9 @@ final class Renderer
             // candy-git-013: multi-line buffer, single-row preview; the amend
             // prefill asks for its rewrite honestly in its own prompt.
             $commitBar = "\n " . Style::new()->foreground(Color::hex('#6ee7b7'))
-                ->render(self::truncate(
-                    Lang::t($a->commitAmend ? 'commit.prompt_amend' : 'commit.prompt')
-                    . self::sanitize(self::commitPreview($a->commitMessage)) . '_',
+                ->render(self::barLine(
+                    Lang::t($a->commitAmend ? 'commit.prompt_amend' : 'commit.prompt'),
+                    self::sanitize(self::commitPreview($a->commitMessage)),
                     $a->barWidth()
                 ));
         }
@@ -190,13 +190,13 @@ final class Renderer
         $branchBar = '';
         if ($a->collectingBranchName) {
             $branchBar = "\n " . Style::new()->foreground(Color::hex('#fde68a'))
-                ->render(self::truncate(Lang::t('branch.prompt') . self::sanitize($a->branchName) . '_', $a->barWidth()));
+                ->render(self::barLine(Lang::t('branch.prompt'), self::sanitize($a->branchName), $a->barWidth()));
         }
 
         $mergeBar = '';
         if ($a->collectingMergeTarget === TRUE) {
             $mergeBar = "\n " . Style::new()->foreground(Color::hex('#a78bfa'))
-                ->render(self::truncate(Lang::t('merge.prompt') . self::sanitize($a->mergeTarget) . '_', $a->barWidth()));
+                ->render(self::barLine(Lang::t('merge.prompt'), self::sanitize($a->mergeTarget), $a->barWidth()));
         }
 
         // Stash message buffer, shown inside the stash overlay (candy-git-014):
@@ -205,7 +205,7 @@ final class Renderer
         $stashBar = '';
         if ($a->collectingStash) {
             $stashBar = "\n " . Style::new()->foreground(Color::hex('#6ee7b7'))
-                ->render(self::truncate(Lang::t($a->stashUntracked ? 'stash.prompt_untracked' : 'stash.prompt') . self::sanitize($a->stashMessage) . '_', $a->barWidth()));
+                ->render(self::barLine(Lang::t($a->stashUntracked ? 'stash.prompt_untracked' : 'stash.prompt'), self::sanitize($a->stashMessage), $a->barWidth()));
         }
 
         $diffOverlay = '';
@@ -231,7 +231,7 @@ final class Renderer
         $cherryPickBar = '';
         if ($a->cherryPick !== null && $a->cherryPick->collecting) {
             $cherryPickBar = "\n " . Style::new()->foreground(Color::hex('#fde68a'))
-                ->render(self::truncate(Lang::t('cherry_pick.prompt') . self::sanitize($a->cherryPick->commitRef) . '_', $a->barWidth()));
+                ->render(self::barLine(Lang::t('cherry_pick.prompt'), self::sanitize($a->cherryPick->commitRef), $a->barWidth()));
         }
 
         $worktreeOverlay = '';
@@ -406,6 +406,60 @@ final class Renderer
             return $s;
         }
         return Width::truncate($s, max(0, $max - 1)) . '…';
+    }
+
+    /**
+     * One-row collect-bar render: prompt + the tail of the buffer that fits
+     * + the caret. candy-git-046: the head-anchored truncate used to cut the
+     * caret itself off the right once a buffer passed the bar, so users typed
+     * blind and one paste could make the text permanently invisible. The tail
+     * window always shows what was just typed; a leading ellipsis says the
+     * front is hidden, which is exactly the information a head-anchored bar
+     * was withholding.
+     */
+    private static function barLine(string $prompt, string $buffer, int $max): string
+    {
+        $budget = $max - Width::string($prompt) - 1; // 1 cell for the caret
+
+        return self::truncate($prompt . self::tailWindow($buffer, $budget) . '_', $max);
+    }
+
+    /**
+     * Longest suffix of $s that fits $display cells, cluster-safely (the same
+     * Width::nextCluster splitter as every truncation path), head-clipped
+     * with a leading '…'. $s is expected already sanitized by the caller.
+     */
+    private static function tailWindow(string $s, int $cells): string
+    {
+        if ($cells <= 0) {
+            return '';
+        }
+        if (Width::of($s) <= $cells) {
+            return $s;
+        }
+
+        $budget = $cells - 1; // reserve the leading ellipsis cell
+        $clusters = [];
+        $i = 0;
+        $len = strlen($s);
+        while ($i < $len) {
+            $cluster = Width::nextCluster($s, $i);
+            $clusters[] = $cluster;
+            $i += strlen($cluster);
+        }
+
+        $out = '';
+        $outCells = 0;
+        for ($k = count($clusters) - 1; $k >= 0; $k--) {
+            $w = Width::string($clusters[$k]);
+            if ($outCells + $w > $budget) {
+                break;
+            }
+            $out = $clusters[$k] . $out;
+            $outCells += $w;
+        }
+
+        return '…' . $out;
     }
 
     /**

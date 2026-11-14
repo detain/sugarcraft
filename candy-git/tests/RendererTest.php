@@ -778,4 +778,63 @@ final class RendererTest extends TestCase
         $this->assertStringNotContainsString(chr(27) . '[1;1H', $frame);
         $this->assertStringContainsString('cursor: evilgate', $frame);
     }
+
+    // ---- CG-29 (candy-git-046): the collect bar windows the tail under the caret ----
+
+    private static function branchRowOf(string $frame): string
+    {
+        $plain = (string) preg_replace('/\x1b\[[0-9;]*m/', '', $frame);
+        self::assertSame(1, preg_match('/(?m)^ branch name: (.*)$/m', $plain, $m), 'the branch bar is exactly one row');
+
+        return $m[1];
+    }
+
+    public function testALongBufferShowsItsTailNotItsHead(): void
+    {
+        $frame = Renderer::render(new App(
+            $this->git(),
+            collectingBranchName: true,
+            branchName: str_repeat('x', 200) . 'TAILMARK',
+            width: 80,
+            height: 24,
+        ));
+
+        $this->assertStringNotContainsString(str_repeat('x', 200), $frame, 'the head may not overflow the bar');
+        $row = self::branchRowOf($frame);
+        $this->assertStringContainsString('…', $row, 'the hidden head is signalled');
+        $this->assertMatchesRegularExpression('/TAILMARK_\z/', $row, 'the tail and its caret are the visible part');
+        $this->assertLessThanOrEqual(78, Width::of('branch name: ' . $row));
+    }
+
+    public function testTheTailWindowNeverSplitsAGraphemeCluster(): void
+    {
+        $frame = Renderer::render(new App(
+            $this->git(),
+            collectingBranchName: true,
+            branchName: str_repeat("\u{1F469}\u{200D}\u{1F4BB}", 40),
+            width: 80,
+            height: 24,
+        ));
+
+        $row = self::branchRowOf($frame);
+        $this->assertLessThanOrEqual(78, Width::of('branch name: ' . $row));
+        $this->assertMatchesRegularExpression('/_\z/', $row);
+        $this->assertStringNotContainsString("\u{200D}", (string) preg_replace('/(?:\x{1F469}\x{200D}\x{1F4BB})+/u', '', $row), 'no orphaned joiner survives the window');
+    }
+
+    public function testEvenANarrowBarKeepsItsCaret(): void
+    {
+        $frame = Renderer::render(new App(
+            $this->git(),
+            collectingBranchName: true,
+            branchName: str_repeat('y', 50),
+            width: 20,
+            height: 24,
+        ));
+
+        $row = self::branchRowOf($frame);
+        $this->assertStringContainsString('…', $row);
+        $this->assertMatchesRegularExpression('/_\z/', $row, 'barWidth 18: prompt 8 + ellipsis + 8 tail + caret = 18');
+        $this->assertLessThanOrEqual(18, Width::of('branch name: ' . $row));
+    }
 }
