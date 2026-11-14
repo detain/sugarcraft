@@ -156,5 +156,73 @@ final class RendererSanitizeTest extends TestCase
         $this->assertStringNotContainsString("\x07", $out);
         $this->assertStringContainsString('okdone', $out);
     }
+
+    /**
+     * candy-git-008: the header badge is git's porcelain branch line — user
+     * data from a hostile repo. Escape payloads must die before the styled
+     * render, exactly as every pane row already demands.
+     */
+    public function testHostileBranchSummaryCannotInjectIntoHeader(): void
+    {
+        $a   = new App(new FixtureGit([], [], []), branchSummary: "ev\x1b[1;1Hil\x07[gate]", width: 80, height: 24);
+        $out = Renderer::render($a);
+
+        $this->assertStringNotContainsString("\x1b[1;1H", $out);
+        $this->assertStringNotContainsString("\x07", $out);
+        $this->assertStringContainsString('evil[gate]', $out);
+    }
+
+    /**
+     * candy-git-008: the badge truncates to the bar budget minus the title —
+     * the header never pushes a line past the terminal width.
+     */
+    public function testHeaderBadgeTruncatesToBarWidth(): void
+    {
+        $a   = new App(new FixtureGit([], [], []), branchSummary: str_repeat('x', 500), width: 80, height: 24);
+        $out = Renderer::render($a);
+
+        $header = explode("\n", $out)[0];
+        $plain  = preg_replace('/\x1b\[[0-9;]*m/', '', $header);
+        $this->assertLessThanOrEqual($a->barWidth(), Width::of($plain), 'header must fit the bar budget');
+    }
+
+    /**
+     * candy-git-024: a selected log row is one unbroken reverse band. The old
+     * outer-reverse-over-styled-spans shape left the sha span's trailing
+     * reset killing the highlight for everything right of it — assert the
+     * gap and subject cells reopen the band after each inner reset.
+     */
+    public function testSelectedLogRowKeepsItsReverseBandClosed(): void
+    {
+        $g = new FixtureGit([], [], [
+            ['sha' => 'abc1', 'subject' => 'headsubject', 'author' => 'Joe', 'ago' => '5m'],
+        ]);
+        $a   = new App($g, log: $g->logRows, pane: \SugarCraft\Git\Pane::Log, logCursor: 0, width: 100, height: 24);
+        $out = Renderer::render($a);
+
+        $this->assertMatchesRegularExpression(
+            '/\x1b\[0m\x1b\[7m  \x1b\[0m\x1b\[7mheadsubject/',
+            $out,
+            'every cell between sha and subject carries its own reverse — no orphan reset inside the band',
+        );
+        $this->assertStringNotContainsString("\x1b[0mheadsubject", $out, 'subject must never sit outside the band');
+    }
+
+    /**
+     * The interactive-rebase todo rows share the band-continuity law: the
+     * cursor row's action/sha/subject cells must all wear the reverse.
+     */
+    public function testSelectedInteractiveRebaseRowKeepsItsBand(): void
+    {
+        $g = new FixtureGit([], [], []);
+        $ir = new \SugarCraft\Git\InteractiveRebase([
+            new \SugarCraft\Git\RebaseCommit('abc1234', 'irsubject', \SugarCraft\Git\RebaseAction::Pick),
+        ], selectingN: false);
+        $a   = new App($g, interactiveRebase: $ir, width: 100, height: 24);
+        $out = Renderer::render($a);
+
+        $this->assertStringNotContainsString("\x1b[0mirsubject", $out, 'subject must never sit outside the band');
+        $this->assertMatchesRegularExpression('/\x1b\[7m[^\x1b]*irsubject/', $out);
+    }
 }
 

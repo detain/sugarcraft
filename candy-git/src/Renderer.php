@@ -53,11 +53,23 @@ final class Renderer
         );
         $body = Layout::joinHorizontal(Position::TOP, $left, '  ', $right);
 
-        $header = Style::new()->bold()->foreground(Color::hex('#fde68a'))
-            ->render(Lang::t('ui.title.app'))
-            . '   '
-            . Style::new()->foreground(Color::hex('#a78bfa'))
-                ->render($a->branchSummary !== '' ? "[{$a->branchSummary}]" : '');
+        // The summary is git's first porcelain line: branch names are user
+        // data, and a hostile repo can name a branch with escape payloads or
+        // simply a kilometre of text (candy-git-008). Sanitize first, then
+        // truncate the whole badge to what the bar leaves after the title —
+        // as a styled unit, never by cutting inside an SGR sequence.
+        $title  = Style::new()->bold()->foreground(Color::hex('#fde68a'))
+            ->render(Lang::t('ui.title.app'));
+        $header = $title;
+        if ($a->branchSummary !== '') {
+            $gap    = '   ';
+            $budget = $a->barWidth();
+            $avail  = $budget === PHP_INT_MAX ? PHP_INT_MAX : max(0, $budget - Width::of(Lang::t('ui.title.app')) - strlen($gap));
+            $badge  = self::truncate(self::sanitize("[{$a->branchSummary}]"), $avail);
+            if ($badge !== '') {
+                $header = $title . $gap . Style::new()->foreground(Color::hex('#a78bfa'))->render($badge);
+            }
+        }
 
         // The key-hint strip is the longest single line
         // in the frame; clip it to the terminal instead of overflowing.
@@ -257,7 +269,6 @@ final class Renderer
             $rows[] = self::scrollHint(Lang::t('viewport.above', ['n' => $above]));
         }
         foreach (array_slice($a->log, $start, $shown, true) as $i => $entry) {
-            $sha     = Style::new()->foreground(Color::hex('#fde68a'))->render($entry['sha']);
             $subject = self::sanitize($entry['subject']);
             $subjectMax = $a->logSubjectWidth();
             // Cell-width aware: mb_strlen counts codepoints, so CJK subjects
@@ -265,9 +276,19 @@ final class Renderer
             if (Width::of($subject) > $subjectMax) {
                 $subject = Width::truncate($subject, max(0, $subjectMax - 1)) . '…';
             }
-            $line = $sha . '  ' . $subject;
             if ($a->pane === Pane::Log && $i === $a->logCursor) {
-                $line = Style::new()->reverse()->render($line);
+                // An outer reverse over an already-styled row died at the sha
+                // span's trailing reset: everything after the sha — the gap,
+                // the subject, the whole right side — rendered UNhighlighted
+                // inside a "selected" band (candy-git-024). The diff overlay
+                // already solves this by carrying the selection in every
+                // segment; the log row adopts the same shape.
+                $line = Style::new()->foreground(Color::hex('#fde68a'))->reverse()->render((string) $entry['sha'])
+                    . Style::new()->reverse()->render('  ')
+                    . Style::new()->reverse()->render($subject);
+            } else {
+                $line = Style::new()->foreground(Color::hex('#fde68a'))->render((string) $entry['sha'])
+                    . '  ' . $subject;
             }
             $rows[] = $line;
         }
@@ -753,14 +774,24 @@ final class Renderer
                     // Pad the PLAIN action text to 8 cells before colorizing:
                     // sprintf %-8s counted the SGR bytes of the rendered string
                     // as content, so every column collapsed.
-                    $line = '  '
-                        . Style::new()->foreground(Color::hex($actionColor))->render(Width::padRight($commit->action->value, 8))
-                        . ' '
-                        . Style::new()->foreground(Color::hex('#fde68a'))->render($commit->sha)
-                        . ' '
-                        . self::truncate(self::sanitize($commit->subject), max(1, $inner - 17));
+                    $subj = self::truncate(self::sanitize($commit->subject), max(1, $inner - 17));
                     if ($i === $ir->cursor) {
-                        $line = Style::new()->reverse()->render($line);
+                        // Same candy-git-024 shape as the log pane: an outer
+                        // reverse over inner-styled spans died at the first
+                        // segment's reset. Each segment carries its own.
+                        $line = '  '
+                            . Style::new()->foreground(Color::hex($actionColor))->reverse()->render(Width::padRight($commit->action->value, 8))
+                            . Style::new()->reverse()->render(' ')
+                            . Style::new()->foreground(Color::hex('#fde68a'))->reverse()->render($commit->sha)
+                            . Style::new()->reverse()->render(' ')
+                            . Style::new()->reverse()->render($subj);
+                    } else {
+                        $line = '  '
+                            . Style::new()->foreground(Color::hex($actionColor))->render(Width::padRight($commit->action->value, 8))
+                            . ' '
+                            . Style::new()->foreground(Color::hex('#fde68a'))->render($commit->sha)
+                            . ' '
+                            . $subj;
                     }
                     $lines[] = $line;
                 }

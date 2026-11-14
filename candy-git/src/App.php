@@ -36,7 +36,7 @@ final class App implements Model
 
     /**
      * @param list<array<string,mixed>> $status
-     * @param list<array{name:string,sha:string,current:bool}> $branches
+     * @param list<array{name:string,sha:string,current:bool,remote:bool,ahead:?int,behind:?int,gone:bool}> $branches
      * @param list<array{sha:string,subject:string,author:string,ago:string}> $log
      */
     public function __construct(
