@@ -223,6 +223,47 @@ final class SideBySideFormatTest extends TestCase
     }
 
     /**
+     * sugar-diff-016: a host that split the patch itself sees the same walk.
+     * The pre-split must be terminator-aware — `rtrim($patch, "\n")` only —
+     * so a CRLF patch keeps its trailing CR inside the last row exactly as
+     * UnifiedScan::rowsOf() reports it (a default rtrim() would eat it).
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('parityFixtures')]
+    public function testAHostPreSplitListChannelIsByteEqualToTheStringChannel(
+        string $before,
+        string $after,
+        ?DiffOptions $options,
+    ): void {
+        $patch = Diff::compute($before, $after, $options)->unified('f.txt', 'g.txt');
+
+        $this->assertEquals(
+            SideBySideFormat::fromUnified($patch),
+            SideBySideFormat::fromUnified(explode("\n", rtrim($patch, "\n"))),
+        );
+    }
+
+    /**
+     * The list channel carries newlines verbatim (sugar-diff-016): a passed
+     * row that embeds "\n" is one ordinary row with that exact text — no
+     * refusal, no re-split. A host printing scanned text owns sanitising.
+     */
+    public function testListRowsMayCarryNewlinesAndAreReportedVerbatim(): void
+    {
+        $forged = "--- a\n+++ forged";
+
+        $rows = SideBySideFormat::fromUnified([
+            '--- a/file',
+            '+++ b/file',
+            '@@ -1 +1 @@',
+            '-' . $forged,
+        ]);
+
+        $this->assertCount(1, $rows, 'the newline-carrying element is one row, not two');
+        $this->assertSame($forged, $rows[0]->left?->text, 'the embedded newline rides verbatim');
+        $this->assertSame(\SugarCraft\Diff\LineKind::Delete, $rows[0]->left?->kind);
+    }
+
+    /**
      * Scaling pin for #103: pairing one changed region must cost time linear
      * in its rows. A whole-file replacement (the degraded fallback) queues
      * 100 000 removals followed by 100 000 additions in a single run — when
