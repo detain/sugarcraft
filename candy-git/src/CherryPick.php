@@ -8,6 +8,9 @@ namespace SugarCraft\Git;
  * Cherry-pick state — tracks whether we're collecting a commit ref
  * and any in-progress cherry-pick result.
  *
+ * Mirrors jesseduffield/lazygit cherry-pick panel — collect a commit ref,
+ * then run the pick against it.
+ *
  * @readonly
  */
 final readonly class CherryPick

@@ -6,6 +6,9 @@ namespace SugarCraft\Git;
 
 /**
  * Represents a single action in an interactive rebase todo list.
+ *
+ * Mirrors jesseduffield/lazygit rebase todo action verbs - the pick, reword,
+ * edit, squash and drop vocabulary.
  */
 enum RebaseAction: string
 {

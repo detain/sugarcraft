@@ -6,6 +6,9 @@ namespace SugarCraft\Git;
 
 /**
  * A commit entry in the interactive rebase todo list.
+ *
+ * Mirrors jesseduffield/lazygit rebase todo line — a commit carrying its
+ * current action label (preview today; execution parked behind gate G1).
  */
 final readonly class RebaseCommit
 {

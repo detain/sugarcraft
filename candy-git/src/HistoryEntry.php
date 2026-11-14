@@ -7,7 +7,7 @@ namespace SugarCraft\Git;
 /**
  * Immutable value object representing a single entry in the undo/redo history.
  *
- * @param string       $op          Human-readable operation name (e.g. 'stage', 'commit')
+ * @param string       $op          Operation identifier (e.g. 'stage', 'commit'); the label shown to the user resolves through the Lang history.op.* keys
  * @param array       $args        Arguments passed to the operation
  * @param string      $inverseOp   The operation name that undoes this (e.g. 'unstage', 'reset')
  * @param array       $inverseArgs Arguments for the inverse operation

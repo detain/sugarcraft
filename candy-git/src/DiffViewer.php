@@ -111,10 +111,10 @@ final readonly class DiffViewer
         $header = [];
         $inHeader = true;
         foreach ($lines as $i => $line) {
-            if (str_starts_with($line, '@@') === TRUE) {
+            if (str_starts_with($line, '@@') === true) {
                 $inHeader = false;
                 $hunkStarts[] = $i;
-            } elseif ($inHeader === TRUE) {
+            } elseif ($inHeader === true) {
                 $header[] = $line;
             }
         }

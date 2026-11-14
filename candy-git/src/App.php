@@ -170,7 +170,7 @@ final class App implements Model
 
             return [$this, null];
         }
-        if ($msg instanceof KeyMsg === FALSE) {
+        if ($msg instanceof KeyMsg === false) {
             return [$this, null];
         }
 
@@ -292,7 +292,7 @@ final class App implements Model
         if ($this->stashManager !== null) {
             // candy-git-078: `?` reaches the help overlay from inside every
             // non-collecting overlay; closing help leaves this one standing.
-            if ($msg->type === KeyType::Char && $msg->rune === '?' && $this->isTyping() === FALSE) {
+            if ($msg->type === KeyType::Char && $msg->rune === '?' && $this->isTyping() === false) {
                 return [$this->withShowHelp(true), null];
             }
             
@@ -353,7 +353,7 @@ final class App implements Model
         }
 
         // Cherry-pick mode (Escape closes it via the global block above)
-        if ($this->cherryPick !== null && $this->cherryPick->collecting === TRUE) {
+        if ($this->cherryPick !== null && $this->cherryPick->collecting === true) {
             if ($msg->type === KeyType::Enter) {
                 return [$this->executeCherryPick(), null];
             }
@@ -370,13 +370,13 @@ final class App implements Model
         if ($this->worktrees !== null) {
             // candy-git-078: `?` reaches the help overlay from inside every
             // non-collecting overlay; closing help leaves this one standing.
-            if ($msg->type === KeyType::Char && $msg->rune === '?' && $this->isTyping() === FALSE) {
+            if ($msg->type === KeyType::Char && $msg->rune === '?' && $this->isTyping() === false) {
                 return [$this->withShowHelp(true), null];
             }
             
             // When adding, Enter confirms and text edits (Char/Space/Backspace) append to the active field;
             // Tab switches which field that is (CG-24, candy-git-030: the branch slot had no input path).
-            if ($this->worktrees->adding === TRUE) {
+            if ($this->worktrees->adding === true) {
                 if ($msg->type === KeyType::Enter) {
                     return [$this->executeWorktreeAdd(), null];
                 }
@@ -393,7 +393,7 @@ final class App implements Model
             if ($msg->type === KeyType::Char && $msg->rune === 'a') {
                 return [$this->withWorktrees($this->worktrees->startAdding()), null];
             }
-            if ($msg->type === KeyType::Char && $msg->rune === 'd' && $this->worktrees->removing === FALSE) {
+            if ($msg->type === KeyType::Char && $msg->rune === 'd' && $this->worktrees->removing === false) {
                 return [$this->withWorktrees($this->worktrees->startRemoving()), null];
             }
             if ($msg->type === KeyType::Up || ($msg->type === KeyType::Char && $msg->rune === 'k')) {
@@ -417,7 +417,7 @@ final class App implements Model
         if ($this->interactiveRebase !== null) {
             // candy-git-078: `?` reaches the help overlay from inside every
             // non-collecting overlay; closing help leaves this one standing.
-            if ($msg->type === KeyType::Char && $msg->rune === '?' && $this->isTyping() === FALSE) {
+            if ($msg->type === KeyType::Char && $msg->rune === '?' && $this->isTyping() === false) {
                 return [$this->withShowHelp(true), null];
             }
             
@@ -426,7 +426,7 @@ final class App implements Model
                 if ($msg->type === KeyType::Enter) {
                     return [$this->confirmRebaseCount(), null];
                 }
-                if ($msg->type === KeyType::Char && ctype_digit($msg->rune) === TRUE) {
+                if ($msg->type === KeyType::Char && ctype_digit($msg->rune) === true) {
                     return [$this->withInteractiveRebase($this->interactiveRebase->withCountDigit($msg->rune)), null];
                 }
                 return [$this, null];
@@ -485,7 +485,7 @@ final class App implements Model
         if ($this->showRebaseMenu) {
             // candy-git-078: `?` reaches the help overlay from inside every
             // non-collecting overlay; closing help leaves this one standing.
-            if ($msg->type === KeyType::Char && $msg->rune === '?' && $this->isTyping() === FALSE) {
+            if ($msg->type === KeyType::Char && $msg->rune === '?' && $this->isTyping() === false) {
                 return [$this->withShowHelp(true), null];
             }
             
@@ -522,7 +522,7 @@ final class App implements Model
             $dv = $this->diffViewer;
             // candy-git-078: `?` reaches the help overlay from inside every
             // non-collecting overlay; closing help leaves this one standing.
-            if ($msg->type === KeyType::Char && $msg->rune === '?' && $this->isTyping() === FALSE) {
+            if ($msg->type === KeyType::Char && $msg->rune === '?' && $this->isTyping() === false) {
                 return [$this->withShowHelp(true), null];
             }
             
@@ -654,7 +654,7 @@ final class App implements Model
             return [$this->executeUndo(), null];
         }
         // Redo: Ctrl+r
-        if ($msg->ctrl === TRUE && $msg->rune === 'r') {
+        if ($msg->ctrl === true && $msg->rune === 'r') {
             return [$this->executeRedo(), null];
         }
         // Delete branch: D key (branches pane only, not current branch)
@@ -712,7 +712,7 @@ final class App implements Model
 
     /**
      * Rows available for the pane/overlay area after fixed chrome (header row,
-     * help line, trailing row) and any notice or prompt bars. NULL until the
+     * help line, trailing row) and any notice or prompt bars. null until the
      * terminal reports its size — callers then treat lists as unbounded, which
      * is the historical byte-stable first-frame output (the height
      * was stored but never read, so every list and overlay rendered in full
@@ -755,8 +755,8 @@ final class App implements Model
     public function overlayOpen(): bool
     {
         return $this->diffViewer !== null
-            || $this->showHelp === TRUE
-            || $this->showRebaseMenu === TRUE
+            || $this->showHelp === true
+            || $this->showRebaseMenu === true
             || $this->stashManager !== null
             || $this->worktrees !== null
             || $this->interactiveRebase !== null;
@@ -1305,7 +1305,6 @@ final class App implements Model
         return $this->moveCursor($type === KeyType::PageUp ? -$step : +$step);
     }
 
-    /** Runs `git restore --worktree -- <path>` via the GitDriver, then refreshes. */
     /** Arms a destructive action: the stored key is answered by a matching repeat press, and the amber notice lane shows the request for as long as the arm lives. */
     private function armConfirm(string $key, string $warning): self
     {
@@ -1317,6 +1316,7 @@ final class App implements Model
         return $this->withAll(pendingConfirm: null, pendingConfirmSet: true);
     }
 
+    /** Runs `git restore --worktree -- <path>` via the GitDriver, then refreshes. */
     private function discard(): self
     {
         if ($this->pane !== Pane::Status) {
@@ -1413,8 +1413,8 @@ final class App implements Model
         }
         try {
             // Conflicted ('U') and untracked ('?') rows stage on the first key:
-        // their index letters are not a staged change to reverse.
-        $isStaged = !in_array((string) ($row['index_status'] ?? ' '), [' ', '?', 'U'], true);
+            // their index letters are not a staged change to reverse.
+            $isStaged = !in_array((string) ($row['index_status'] ?? ' '), [' ', '?', 'U'], true);
             $newHistory = null;
             if ($isStaged) {
                 $this->git->unstage($row['path']);
@@ -1873,7 +1873,7 @@ final class App implements Model
         if ($this->history === null) {
             return $this->withError(Lang::t('history.unavailable'));
         }
-        if ($this->history->canRedo() === FALSE) {
+        if ($this->history->canRedo() === false) {
             return $this->withError(Lang::t('history.nothing_to_redo'));
         }
         $result = $this->history->redo();
@@ -2555,7 +2555,7 @@ final class App implements Model
     private function confirmRebaseCount(): self
     {
         $ir = $this->interactiveRebase;
-        if ($ir === null || $ir->selectingN === FALSE) return $this;
+        if ($ir === null || $ir->selectingN === false) return $this;
         try {
             $log = $this->git->log(50);
             return $this->withInteractiveRebase($ir->confirmCount($log));

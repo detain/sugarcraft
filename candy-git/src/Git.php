@@ -145,7 +145,7 @@ final class Git implements GitDriver
         $rows = [];
         foreach ($out as $line) {
             if ($line === '') continue;
-            if (str_starts_with($line, '##') === TRUE) {
+            if (str_starts_with($line, '##') === true) {
                 $rows[] = ['branch_summary' => trim(substr($line, 2))];
                 continue;
             }
@@ -1218,7 +1218,7 @@ final class Git implements GitDriver
      * STRICT mode refuses any repo-defined lane — even one whose value is
      * byte-identical to the global one (git's last-wins means the repo row
      * is what executes; strict is the "never execute a repo-defined filter"
-     * posture the ruling asked for). Default mode ANNOUCES repo-defined
+     * posture the ruling asked for). Default mode ANNOUNCES repo-defined
      * lanes, with one disclosed carve-out: a repo row that byte-matches a
      * full global/system value runs the operator's own command string, so
      * it stays notice-silent (that is the git-lfs-class breakage the disarm
@@ -1520,7 +1520,7 @@ final class Git implements GitDriver
      * sitting OUTSIDE a quoted section (a quoted name may itself contain
      * the arrow, e.g. `"we\"ird -> old" -> new.txt`).
      *
-     * @return array{0: string, 1: string}|null null when no unquoted arrow exists
+     * @return array{0: string, 1: string}|null (null when no unquoted arrow exists)
      */
     private static function splitRename(string $field): ?array
     {
@@ -1586,13 +1586,13 @@ final class Git implements GitDriver
      */
     private function assertNotTimedOut(array $result, ?float $budget = null, bool $mutator = false): void
     {
-        if ($result['timedOut'] === TRUE) {
+        if ($result['timedOut'] === true) {
             throw new \RuntimeException(self::timeoutMessage($mutator, $budget ?? $this->timeout));
         }
         // candy-git-006: a child we abandoned to a signal storm was killed,
         // not merely late — say so with a distinct marker instead of letting a
         // SIGTERM/SIGKILL exit code through as if it were a git failure.
-        if ($result['interrupted'] === TRUE) {
+        if ($result['interrupted'] === true) {
             throw new \RuntimeException(Lang::t('git.interrupted'));
         }
     }

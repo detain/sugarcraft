@@ -18,8 +18,9 @@ final readonly class HistoryManager
      * Longest undo lane kept. Each entry holds plain strings (paths, refs,
      * messages), but a session that stages and switches for eight hours must
      * still cost bounded memory — the oldest operation is also the one least
-     * likely to be undone, so dropping from the tail of the stack is cheap
-     * in every sense.
+     * likely to be undone, so eviction bites the FRONT of the lane (see
+     * {@see self::trimmed()}: the tail is always the newest, most-reachable
+     * end; candy-git-060 retired the other reading of the word).
      */
     public const MAX_HISTORY = 100;
 

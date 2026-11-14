@@ -6,6 +6,9 @@ namespace SugarCraft\Git;
 
 /**
  * Represents a single stash entry.
+ *
+ * Mirrors jesseduffield/lazygit stash panel entry — the index, sha, branch
+ * and message record parsed out of `git stash list`.
  */
 final readonly class StashEntry
 {

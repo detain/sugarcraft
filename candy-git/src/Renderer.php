@@ -110,12 +110,12 @@ final class Renderer
         // joinVertical would turn the empty one into a blank row and
         // reintroduce the very overflow the budgets just removed
         // (candy-git-033).
-        $right = match (TRUE) {
+        $right = match (true) {
             $branches === '' => $log,
             $log === ''      => $branches,
             default          => Layout::joinVertical(Position::LEFT, $branches, $log),
         };
-        $body = match (TRUE) {
+        $body = match (true) {
             $left === ''   => $right,
             $right === ''  => $left,
             default        => Layout::joinHorizontal(Position::TOP, $left, '  ', $right),
@@ -209,7 +209,7 @@ final class Renderer
         }
 
         $mergeBar = '';
-        if ($a->collectingMergeTarget === TRUE) {
+        if ($a->collectingMergeTarget === true) {
             $mergeBar = "\n " . Style::new()->foreground(Color::hex('#a78bfa'))
                 ->render(self::barLine(Lang::t('merge.prompt'), self::sanitize($a->mergeTarget), $a->barWidth()));
         }
@@ -236,12 +236,12 @@ final class Renderer
         }
 
         $rebaseOverlay = '';
-        if ($a->showRebaseMenu === TRUE) {
+        if ($a->showRebaseMenu === true) {
             $rebaseOverlay = self::rebaseOverlay($a);
         }
 
         $overlay = '';
-        if ($a->showHelp === TRUE) {
+        if ($a->showHelp === true) {
             $overlay = self::helpOverlay($a);
         }
 
@@ -885,11 +885,11 @@ final class Renderer
             $isHeaderLine = preg_match('/^(diff |index |--- |\+\+\+ |new file|deleted file|similarity |rename )/', $line) === 1;
             if ($isHeaderLine) {
                 $st = $st->foreground(Color::hex('#c5b6dd'));
-            } elseif (str_starts_with($line, '+') === TRUE) {
+            } elseif (str_starts_with($line, '+') === true) {
                 $st = $st->foreground(Color::hex('#6ee7b7'));
-            } elseif (str_starts_with($line, '-') === TRUE) {
+            } elseif (str_starts_with($line, '-') === true) {
                 $st = $st->foreground(Color::hex('#ff5f87'));
-            } elseif (str_starts_with($line, '@@') === TRUE) {
+            } elseif (str_starts_with($line, '@@') === true) {
                 $st = $st->foreground(Color::hex('#a78bfa'))->italic();
             } else {
                 $st = $st->foreground(Color::hex('#c5b6dd'));
@@ -962,7 +962,7 @@ final class Renderer
             TokenKind::Plain => Style::new()->foreground(Color::hex('#c5b6dd')),
         };
 
-        return $selected === TRUE ? $style->reverse() : $style;
+        return $selected === true ? $style->reverse() : $style;
     }
 
     private static function rebaseOverlay(App $a): string
@@ -1079,7 +1079,7 @@ final class Renderer
             '',
         ];
 
-        if ($wt->adding === TRUE) {
+        if ($wt->adding === true) {
             $lines[] = Style::new()->foreground(Color::hex('#c5b6dd'))->render(Lang::t('worktree.add_prompt'));
             // CG-24: Tab toggles which field edits; the caret and the hot
             // label color follow it, so the branch slot is visibly fillable.
@@ -1095,7 +1095,7 @@ final class Renderer
             $lines[] = '  ' . Style::new()->foreground(Color::hex('#7d6e98'))->render('tab') . '  ' . Lang::t('worktree.switch_field');
             $lines[] = '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('enter') . '  ' . Lang::t('worktree.confirm_add');
             $lines[] = '  ' . Style::new()->foreground(Color::hex('#7d6e98'))->render('c') . '  ' . Lang::t('help.close_help');
-        } elseif ($wt->removing === TRUE) {
+        } elseif ($wt->removing === true) {
             $current = $wt->current();
             $lines[] = Style::new()->foreground(Color::hex('#ff5f87'))->render(Lang::t('worktree.remove_confirm', ['path' => self::truncate(self::sanitize($current?->path ?? ''), $inner)]));
             $lines[] = '';
@@ -1160,7 +1160,7 @@ final class Renderer
             '',
         ];
 
-        if ($ir->selectingN === TRUE) {
+        if ($ir->selectingN === true) {
             $lines[] = Style::new()->foreground(Color::hex('#c5b6dd'))->render(Lang::t('rebase_i.select_count'));
             $lines[] = '  ' . Style::new()->foreground(Color::hex('#fde68a'))->render(Lang::t('ui.count.n') . ($ir->countInput !== '' ? $ir->countInput : '_'));
             $lines[] = '';

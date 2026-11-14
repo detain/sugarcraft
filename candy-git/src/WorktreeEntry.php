@@ -6,6 +6,9 @@ namespace SugarCraft\Git;
 
 /**
  * Represents a single git worktree.
+ *
+ * Mirrors jesseduffield/lazygit worktree list — the path, branch and HEAD
+ * record parsed out of `git worktree list --porcelain`.
  */
 final readonly class WorktreeEntry
 {
@@ -48,16 +51,16 @@ final readonly class WorktreeEntry
                 continue;
             }
 
-            if (str_starts_with($line, 'worktree ') === TRUE) {
+            if (str_starts_with($line, 'worktree ') === true) {
                 // Porcelain is verbatim — a path may legitimately end in a
                 // space, so substr() without trim().
                 $pending['path'] = substr($line, 9);
-            } elseif (str_starts_with($line, 'HEAD ') === TRUE) {
+            } elseif (str_starts_with($line, 'HEAD ') === true) {
                 $pending['HEAD'] = trim(substr($line, 5));
-            } elseif (str_starts_with($line, 'branch ') === TRUE) {
+            } elseif (str_starts_with($line, 'branch ') === true) {
                 $branch = trim(substr($line, 7));
                 // Strip "refs/heads/" prefix to get short name
-                if (str_starts_with($branch, 'refs/heads/') === TRUE) {
+                if (str_starts_with($branch, 'refs/heads/') === true) {
                     $branch = substr($branch, 11);
                 }
                 $pending['branch'] = $branch;

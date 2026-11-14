@@ -120,7 +120,7 @@ final class DiffHighlighter
             return null;
         }
         foreach (self::HEADER_PREFIXES as $header) {
-            if (str_starts_with($line, $header) === TRUE) {
+            if (str_starts_with($line, $header) === true) {
                 return null;
             }
         }

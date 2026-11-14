@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace SugarCraft\Git;
 
 /**
- * Immutable worktree manager state — list of worktrees + cursor.
+ * Immutable worktree manager state — the list of worktrees and its cursor.
  *
- * Activated by pressing 'w' in the branches pane. Shows list of
- * worktrees with options to add/remove.
+ * Activated by pressing 'w' in the branches pane. Shows the list of
+ * worktrees, with options to add or remove them.
  *
  * @readonly
  *

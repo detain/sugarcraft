@@ -7,10 +7,10 @@ namespace SugarCraft\Git;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 
 /**
- * Immutable stash manager state — tracks stash list and selection cursor.
+ * Immutable stash manager state — tracks the stash list and its selection cursor.
  *
- * Activated by pressing 'S' (capital S) from the main view. Shows list
- * of stashes with cursor navigation, 'a' to apply, 'd' to drop.
+ * Activated by pressing 'S' (capital S) from the main view. Shows the list
+ * of stashes with cursor navigation, 'a' to apply and 'd' to drop.
  *
  * @readonly
  *
