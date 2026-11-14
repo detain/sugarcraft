@@ -53,7 +53,7 @@ return [
     'log.empty'             => '(empty log)',
 
     // Key hints
-    'help.keyhints'         => 'S  stash  ·  V  cherry-pick  ·  i  rebase-i  ·  w  worktrees  ·  tab  switch pane  ·  j/k  move  ·  s  stage/unstage  ·  a  stage all  ·  d  discard  ·  P  diff  ·  space  checkout  ·  c  commit  ·  A  amend  ·  n  new branch  ·  R  refresh  ·  u  undo  ·  M  merge  ·  r  rebase  ·  ?  help  ·  q  quit',
+    'help.keyhints'         => 'S  stash  ·  V  cherry-pick  ·  i  rebase-i  ·  w  worktrees  ·  tab  switch pane  ·  j/k  move  ·  s  stage/unstage  ·  a  stage all  ·  d  discard  ·  enter  diff  ·  f  fetch  ·  p  pull  ·  P  push  ·  space  checkout  ·  c  commit  ·  A  amend  ·  n  new branch  ·  R  refresh  ·  u  undo  ·  M  merge  ·  r  rebase  ·  ?  help  ·  q  quit',
 
     // Help overlay
     'help.context_general'  => 'show this help',
@@ -73,6 +73,9 @@ return [
     'help.new_branch'       => 'create new branch',
     'help.discard'          => 'discard changes to file (press twice)',
     'help.diff_viewer'     => 'open diff viewer',
+    'help.fetch'            => 'fetch from remote (press twice)',
+    'help.pull'             => 'pull from remote (press twice)',
+    'help.push'             => 'push to remote (press twice)',
 
     // Checkout
     'checkout.no_branch'    => 'checkout: no branch selected',
@@ -126,6 +129,15 @@ return [
     'confirm.discard'         => 'discard {path}: press d again to discard (unrecoverable)',
     'confirm.delete_branch'   => 'delete branch {name}: press D again to delete',
     'confirm.stash_drop'      => 'drop stash {ref}: press d again to drop (unrecoverable)',
+    'confirm.fetch'           => 'fetch: press f again to fetch from the remote',
+    'confirm.pull'            => 'pull: press p again to pull from the remote',
+    'confirm.push'            => 'push: press P again to push to the remote (visible to others)',
+
+    // Remotes (fetch / pull / push)
+    'remote.detached'       => 'cannot push: detached HEAD — check out a branch first',
+    'remote.fetch_done'     => 'fetched from the remote',
+    'remote.pull_done'      => 'pulled from the remote',
+    'remote.push_done'      => 'pushed to the remote',
 
     // Rebase
     'rebase.prompt'          => 'rebase: [c]ontinue [a]bort [s]kip',

@@ -93,6 +93,21 @@ interface GitDriver
     /** Merge a branch into the current branch. */
     public function merge(string $branch): void;
 
+    /** Fetch from the default remote: updates tracking refs, never the worktree. */
+    public function fetch(): void;
+
+    /** Pull the tracked remote branch into the current one (merge back-end, non-interactive). */
+    public function pull(): void;
+
+    /**
+     * Push the current branch. A branch without an upstream goes to
+     * `origin` with `--set-upstream` recorded; a detached HEAD has no
+     * branch to push and throws.
+     *
+     * @throws \RuntimeException on detached HEAD or a failing git push
+     */
+    public function push(): void;
+
     /** Continue an in-progress rebase. */
     public function rebaseContinue(): void;
 

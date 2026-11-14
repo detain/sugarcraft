@@ -201,6 +201,39 @@ final class Git implements GitDriver
         return $r['exit'] === 0;
     }
 
+    /**
+     * Fully-qualified upstream ref of HEAD's branch (`origin/main`), or ''
+     * when none is configured. Exit-code probe like {@see self::hasAnyCommits()}
+     * — `@{upstream}` exits 128 on "no upstream", an EXPECTED state for a
+     * fresh branch, and run() would launder it into an error row.
+     */
+    private function currentUpstream(): string
+    {
+        $r = Process::run(
+            array_merge(self::gitBase($this->cwd), ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}']),
+            null,
+            $this->timeout,
+        );
+
+        return $r['exit'] === 0 ? trim($r['stdout']) : '';
+    }
+
+    /**
+     * Short name of the checked-out branch ('main'), or '' on detached HEAD
+     * — `symbolic-ref` exits 1 there. The second push-leg probe; exit codes
+     * again, never run() (candy-git-005 first-push needs the name).
+     */
+    private function currentBranch(): string
+    {
+        $r = Process::run(
+            array_merge(self::gitBase($this->cwd), ['symbolic-ref', '--short', 'HEAD']),
+            null,
+            $this->timeout,
+        );
+
+        return $r['exit'] === 0 ? trim($r['stdout']) : '';
+    }
+
     public function stage(string $path): void
     {
         $this->run(['add', '--', $path]);
@@ -315,6 +348,46 @@ final class Git implements GitDriver
         // --no-edit: a merge that needs a commit message must never open
         // $EDITOR inside the TUI (the editor would inherit our terminal).
         $this->run(['merge', '--no-edit', '--', $branch]);
+    }
+
+    public function fetch(): void
+    {
+        // Plain `fetch` with no explicit remote: git resolves the branch's
+        // remote or origin, exactly like the CLI. Credentials are never
+        // prompted on our tty — Process pins GIT_TERMINAL_PROMPT=0 for every
+        // child, so a credentialed remote fails honestly instead of
+        // deadlocking on an invisible prompt (see README "Trust boundary").
+        $this->run(['fetch']);
+    }
+
+    public function pull(): void
+    {
+        // --no-edit keeps the merge leg non-interactive (same contract as
+        // merge() above). Pull is BOTH merge- and filter-capable — it runs
+        // git's 3-way merge and writes the worktree — so it rides the
+        // merge-driver disarm lane and the filter detect posture through
+        // the dispatch tables; argv ordering keeps the `-c` overlays before
+        // the verb, where they win over repo config.
+        $this->run(['pull', '--no-edit']);
+    }
+
+    public function push(): void
+    {
+        if ($this->currentUpstream() !== '') {
+            $this->run(['push']);
+            return;
+        }
+        // First push of an untracked branch: aim at origin and RECORD the
+        // tracking ref (lazygit's push-on-untracked convenience), so the
+        // next push and the ahead/behind badges resolve. Detached HEAD
+        // answers '' — there is no branch to name, and pushing a bare sha
+        // to origin/HEAD would be a silent history fork.
+        $branch = $this->currentBranch();
+        if ($branch === '') {
+            throw new \RuntimeException(Lang::t('remote.detached'));
+        }
+        $this->guardRef($branch);
+        $this->run(['push', '--set-upstream', 'origin', $branch]);
     }
 
     public function rebaseContinue(): void
@@ -530,12 +603,14 @@ final class Git implements GitDriver
      * clone-time code execution as core.fsmonitor, but fired by the merge
      * machinery rather than by `status`. The verbs listed here are every
      * command this class runs that performs a 3-way merge: `git merge`,
-     * `git rebase --continue/--skip`, `git cherry-pick` (bare or `--continue`;
-     * `--abort` tears state down without merging), and `git stash apply/pop`
+     * `git pull` (fetch+merge in one verb), `git rebase --continue/--skip`,
+     * `git cherry-pick` (bare or `--continue`; `--abort` tears state down
+     * without merging), and `git stash apply/pop`
      * (stash application merges into the worktree).
      */
     private const MERGE_CAPABLE_DISPATCH = [
         'merge'           => null,   // any argument shape
+        'pull'            => null,   // fetch + merge in one verb (candy-git-005)
         'rebase'          => ['--continue', '--skip'],
         'cherry-pick'     => ['__not_abort__'],
         'stash'           => ['apply', 'pop'],
@@ -547,7 +622,8 @@ final class Git implements GitDriver
      * an executable, reached by a matching `.gitattributes` entry
      * (`*.txt filter=lfs`) — the same class of attacker-controlled-repo code
      * execution as the merge drivers above, but fired by the checkin/checkout
-     * machinery: stage, commit, branch-switching checkout, reset, restore,
+     * machinery: stage, commit, branch-switching checkout, pull (its merge
+     * leg writes the worktree), reset, restore,
      * stash apply, worktree add (measured on git 2.43; abort/teardown shapes
      * never merge, so they are excluded like in MERGE_CAPABLE_DISPATCH).
      *
@@ -569,6 +645,7 @@ final class Git implements GitDriver
         'checkout'    => null,
         'commit'      => null,
         'diff'        => null,
+        'pull'        => null,
         'restore'     => null,
         'reset'       => null,
         'merge'       => null,

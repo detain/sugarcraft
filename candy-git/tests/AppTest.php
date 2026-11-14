@@ -38,6 +38,9 @@ final class FixtureGit implements GitDriver
     /** @var list<array{name:string,sha:string}> */
     public array $restoredBranches = [];
     public array $merges = [];
+    public bool $fetchCalled = false;
+    public bool $pullCalled = false;
+    public bool $pushCalled = false;
     public bool $resetCalled = false;
     public bool $rebaseContinueCalled = false;
     public bool $rebaseAbortCalled = false;
@@ -97,6 +100,9 @@ final class FixtureGit implements GitDriver
     public function deleteBranch(string $name): void { $this->maybeThrow('deleteBranch'); $this->branchDeletions[] = $name; }
     public function restoreBranch(string $name, string $sha): void { $this->maybeThrow('restoreBranch'); $this->restoredBranches[] = ['name' => $name, 'sha' => $sha]; }
     public function merge(string $branch): void { $this->maybeThrow('merge'); $this->merges[] = $branch; }
+    public function fetch(): void { $this->maybeThrow('fetch'); $this->fetchCalled = true; }
+    public function pull(): void { $this->maybeThrow('pull'); $this->pullCalled = true; }
+    public function push(): void { $this->maybeThrow('push'); $this->pushCalled = true; }
     public function rebaseContinue(): void { $this->maybeThrow('rebaseContinue'); $this->rebaseContinueCalled = true; }
     public function rebaseAbort(): void { $this->maybeThrow('rebaseAbort'); $this->rebaseAbortCalled = true; }
     public function rebaseSkip(): void { $this->maybeThrow('rebaseSkip'); $this->rebaseSkipCalled = true; }
@@ -335,7 +341,7 @@ final class AppTest extends TestCase
         $g = $this->git();
         $g->diffs = ['+added line'];
         $a = App::start($g);
-        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'P'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter));
         $this->assertNotNull($a->diffViewer);
         [$a, ] = $a->update(new KeyMsg(KeyType::Escape, ''));
         $this->assertNull($a->diffViewer);
@@ -410,7 +416,7 @@ final class AppTest extends TestCase
             ' context',
         ];
         $a = App::start($g);
-        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'P'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter));
         $this->assertNotNull($a->diffViewer);
         [$a, ] = $a->update(new KeyMsg(KeyType::Space, ''));
         $this->assertArrayHasKey('src/A.php', $g->stagePatches);
@@ -430,7 +436,7 @@ final class AppTest extends TestCase
             '+line 5 modified',
         ];
         $a = App::start($g);
-        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'P'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter));
         $this->assertNotNull($a->diffViewer);
         $this->assertSame(2, $a->diffViewer->hunkCount());
 
@@ -458,23 +464,23 @@ final class AppTest extends TestCase
         $this->assertSame([], $g->discards);
     }
 
-    public function testPDiffViewerKeyOpensDiffViewer(): void
+    public function testEnterOpensDiffViewer(): void
     {
         $g = $this->git();
         $g->diffs = ['+added line'];
         $a = App::start($g);
         $this->assertNull($a->diffViewer);
-        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'P'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter));
         $this->assertNotNull($a->diffViewer);
         $this->assertSame('src/A.php', $a->diffViewer->path);
     }
 
-    public function testPDiffViewerKeyOnlyInStatusPane(): void
+    public function testEnterOpensDiffViewerOnlyInStatusPane(): void
     {
         $g = $this->git();
         $a = App::start($g);
         [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));  // branches
-        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'P'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter));
         $this->assertNull($a->diffViewer);
     }
 
@@ -1075,7 +1081,7 @@ final class AppTest extends TestCase
             '+line 1 modified',
         ];
         $a = App::start($g);
-        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'P'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter));
         $this->assertNotNull($a->diffViewer);
         $this->assertSame(1, $a->diffViewer->hunkCount());
         // Navigate down when only 1 hunk - should stay at same hunk
@@ -1089,7 +1095,7 @@ final class AppTest extends TestCase
         $g = $this->git();
         $g->throwOn['diff'] = new \RuntimeException('diff boom');
         $a = App::start($g);
-        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'P'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter));
         $this->assertNotNull($a->error);
         $this->assertStringContainsString('diff boom', $a->error);
         $this->assertNull($a->diffViewer, 'a failed diff must not open the overlay');
@@ -1106,7 +1112,7 @@ final class AppTest extends TestCase
         ];
         $g->throwOn['stagePatch'] = new \RuntimeException('patch boom');
         $a = App::start($g);
-        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'P'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter));
         $this->assertNotNull($a->diffViewer);
         [$a, ] = $a->update(new KeyMsg(KeyType::Space, ''));
         $this->assertNotNull($a->error);

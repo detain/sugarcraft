@@ -63,16 +63,16 @@ candy-git v1 covers the local-repository loop: status / stage / unstage /
 discard, branches (checkout, create, delete), log, the diff viewer, commit and
 amend, merge, cherry-pick, the sequencer menu (continue / abort / skip), stash
 list / apply / drop, worktrees (list / add / remove), an interactive-rebase todo
-preview, and undo / redo of the last operation.
+preview, the remote trio (fetch / pull / push, each behind an armed confirm),
+and undo / redo of the last operation.
 
-Not in v1 (absent, not hidden behind a key): **remotes** (fetch, pull, push,
-remote management), **tags**, **reflog**, **bisect**, **submodules**,
+Not in v1 (absent, not hidden behind a key): **remote management** (add /
+rename / remove remotes), **tags**, **reflog**, **bisect**, **submodules**,
 hunk- and line-level **patch staging**, an in-app **conflict-resolution** view,
 creating a stash, and *executing* the interactive-rebase todo (it is a preview
 today). Every git call is a synchronous, timeout-bounded subprocess on the UI
 thread; moving git work onto the ReactPHP loop as async commands (so slow
-remotes cannot stall rendering) is the v2 direction and the prerequisite for the
-remote family.
+remotes cannot stall rendering) remains the v2 direction.
 
 ## Keys
 
@@ -85,7 +85,10 @@ remote family.
 | `s` (status pane)        | Stage / unstage the highlighted entry — on conflicted or untracked rows the first press stages (there is no staged side to reverse) |
 | `a` (status pane)        | Stage all files                                         |
 | `d` (status pane)        | Discard changes to the highlighted file (press twice)    |
-| `P` (status pane)        | Open diff viewer for the highlighted file                |
+| `Enter` (status pane)    | Open diff viewer for the highlighted file              |
+| `f` (press twice)        | Fetch from the remote                                  |
+| `p` (press twice)        | Pull from the remote                                   |
+| `P` (press twice)        | Push to the remote — the first push of an untracked branch bootstraps `origin` with `--set-upstream`; refuses on detached HEAD |
 | `Space` (branches pane)  | Checkout branch                                         |
 | `c`                      | Commit (type message, Enter to confirm, Esc to cancel) |
 | `A`                      | Amend last commit                                        |
@@ -117,7 +120,7 @@ newline-flattened) text, `Enter` confirms, and `Esc` cancels.
 
 | Key              | Action                          |
 |------------------|--------------------------------|
-| `Space`          | Stage the current hunk — then the viewer closes and the status pane refreshes; re-open (`P`) for the next hunk |
+| `Space`          | Stage the current hunk — then the viewer closes and the status pane refreshes; re-open (`Enter`) for the next hunk |
 | `↑/↓` or `k/j`   | Navigate between hunks         |
 | `PageUp/PageDown`| Navigate between hunks         |
 | `Home/End`       | First / last hunk              |
@@ -240,7 +243,7 @@ file key like `git.timeout` resolves through the core `T` registry as
 raw string.
 
 **Available keys** (`lang/en.php` — an excerpt; the file is the full roster
-of 137 keys):
+of 148 keys):
 
 | Key                    | Default string                                                    | Parameters  |
 |------------------------|-------------------------------------------------------------------|------------|
@@ -256,7 +259,7 @@ of 137 keys):
 | `status.clean`          | `clean working tree`                                            | —          |
 | `branches.empty`       | `(no branches)`                                                  | —          |
 | `log.empty`            | `(empty log)`                                                    | —          |
-| `help.keyhints`         | `S  stash  ·  V  cherry-pick  ·  i  rebase-i  ·  w  worktrees  ·  tab  switch pane  ·  j/k  move  ·  s  stage/unstage  ·  a  stage all  ·  d  discard  ·  P  diff  ·  space  checkout  ·  c  commit  ·  A  amend  ·  n  new branch  ·  R  refresh  ·  u  undo  ·  M  merge  ·  r  rebase  ·  ?  help  ·  q  quit` | —          |
+| `help.keyhints`         | `S  stash  ·  V  cherry-pick  ·  i  rebase-i  ·  w  worktrees  ·  tab  switch pane  ·  j/k  move  ·  s  stage/unstage  ·  a  stage all  ·  d  discard  ·  enter  diff  ·  f  fetch  ·  p  pull  ·  P  push  ·  space  checkout  ·  c  commit  ·  A  amend  ·  n  new branch  ·  R  refresh  ·  u  undo  ·  M  merge  ·  r  rebase  ·  ?  help  ·  q  quit` | —          |
 
 **Switching locale:** 16 locales ship (`lang/*.php`). The `bin/candy-git`
 launcher adopts the environment automatically at startup via

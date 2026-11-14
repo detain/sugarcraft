@@ -98,6 +98,9 @@ final class RendererTest extends TestCase
             public function deleteBranch(string $_name): void {}
             public function restoreBranch(string $_name, string $_sha): void {}
             public function merge(string $branch): void {}
+            public function fetch(): void {}
+            public function pull(): void {}
+            public function push(): void {}
             public function rebaseContinue(): void {}
             public function rebaseAbort(): void {}
             public function rebaseSkip(): void {}
@@ -158,6 +161,9 @@ final class RendererTest extends TestCase
             public function deleteBranch(string $_name): void {}
             public function restoreBranch(string $_name, string $_sha): void {}
             public function merge(string $branch): void {}
+            public function fetch(): void {}
+            public function pull(): void {}
+            public function push(): void {}
             public function rebaseContinue(): void {}
             public function rebaseAbort(): void {}
             public function rebaseSkip(): void {}
@@ -407,6 +413,9 @@ final class RendererTest extends TestCase
             public function deleteBranch(string $_name): void {}
             public function restoreBranch(string $_name, string $_sha): void {}
             public function merge(string $branch): void {}
+            public function fetch(): void {}
+            public function pull(): void {}
+            public function push(): void {}
             public function rebaseContinue(): void {}
             public function rebaseAbort(): void {}
             public function rebaseSkip(): void {}

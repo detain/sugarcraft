@@ -103,6 +103,52 @@ final class ConfirmTest extends TestCase
         self::assertNull($a->pendingConfirm);
     }
 
+    // ----------------------------------------------------------------- remotes (CG-06)
+
+    public function testEachRemoteVerbArmsThenExecutesOnSecondPress(): void
+    {
+        foreach (['f' => ['fetch', 'fetchCalled'], 'p' => ['pull', 'pullCalled'], 'P' => ['push', 'pushCalled']] as $key => [$verb, $flag]) {
+            $g = $this->git();
+            $a = App::start($g);
+            [$a, ] = $a->update(new KeyMsg(KeyType::Char, $key));
+
+            self::assertFalse($g->{$flag}, "one press must never run {$verb}");
+            self::assertSame("remote:{$verb}", $a->pendingConfirm);
+            self::assertStringContainsString("press {$key} again", (string) $a->error);
+
+            [$a, ] = $a->update(new KeyMsg(KeyType::Char, $key));
+            self::assertTrue($g->{$flag}, "second press must run {$verb}");
+            self::assertNull($a->pendingConfirm, 'confirming must clear the arm');
+            self::assertStringContainsString($verb, (string) $a->successMessage);
+        }
+    }
+
+    public function testRemoteArmDiesOnEscapeAndPaneSwitch(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'P'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Escape, ''));
+        self::assertNull($a->pendingConfirm);
+        self::assertFalse($g->pushCalled);
+
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'p'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));   // pane switch kills a stale arm
+        self::assertNull($a->pendingConfirm);
+        self::assertFalse($g->pullCalled);
+    }
+
+    public function testFailedPushLandsInTheErrorLaneWithArmCleared(): void
+    {
+        $g = $this->git();
+        $g->throwOn['push'] = new \RuntimeException('push rejected: non-fast-forward');
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'P'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'P'));
+        self::assertSame('push rejected: non-fast-forward', (string) $a->error);
+        self::assertNull($a->pendingConfirm, 'the arm must not survive into the error lane');
+    }
+
     public function testStashDropArmsThenDrops(): void
     {
         $g = $this->git();

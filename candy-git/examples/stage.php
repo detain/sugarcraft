@@ -89,6 +89,9 @@ $fixture = new class implements GitDriver {
     public function deleteBranch(string $name): void {}
     public function restoreBranch(string $name, string $sha): void {}
     public function merge(string $branch): void {}
+    public function fetch(): void {}
+    public function pull(): void {}
+    public function push(): void {}
     public function rebaseContinue(): void {}
     public function rebaseAbort(): void {}
     public function rebaseSkip(): void {}

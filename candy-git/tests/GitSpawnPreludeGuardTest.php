@@ -42,7 +42,10 @@ final class GitSpawnPreludeGuardTest extends TestCase
     /** Every Process::run() spawn site in src/ (recursively), by design. */
     // CG-02 adds Git::hasAnyCommits() — the unborn-HEAD probe (candy-git-026) —
     // adjudicated into the roster through the same gitBase() funnel.
-    private const EXPECTED_SPAWN_SITES = 7;
+    // CG-06 adds currentUpstream()/currentBranch() — the two exit-code probes
+    // the push leg reads (candy-git-005), same adjudication: both assemble
+    // argv from gitBase(), so the prelude rides them like every other spawn.
+    private const EXPECTED_SPAWN_SITES = 9;
 
     public function testEveryGitSpawnIsAssembledFromThePreludeFunnel(): void
     {
@@ -130,7 +133,9 @@ final class GitSpawnPreludeGuardTest extends TestCase
 
         // Keys are the argv heads that reach git's 3-way merge machinery.
         // Losing any entry reopens a merge-driver door on that path.
-        self::assertSame(['merge', 'rebase', 'cherry-pick', 'stash'], array_keys($table));
+        // CG-06: pull is merge-capable through its merge leg (fetch then
+        // merge into the worktree) — same door, same table.
+        self::assertSame(['merge', 'pull', 'rebase', 'cherry-pick', 'stash'], array_keys($table));
         self::assertContains('--continue', $table['rebase']);
         self::assertContains('--skip', $table['rebase']);
         self::assertContains('apply', $table['stash']);
@@ -145,11 +150,12 @@ final class GitSpawnPreludeGuardTest extends TestCase
         $table = $constant->getValue();
 
         // Ordered key set: the measured firing surface on git 2.43 (add,
-        // commit, branch-switching checkout, diff, restore, reset, merge,
+        // commit, branch-switching checkout, diff, pull (its merge leg
+        // writes the worktree — CG-06), restore, reset, merge,
         // cherry-pick, rebase, stash apply/pop, worktree add), with the
         // head-level conservative overs disclosed in the table's docblock.
         self::assertSame(
-            ['add', 'checkout', 'commit', 'diff', 'restore', 'reset', 'merge', 'cherry-pick', 'rebase', 'stash', 'worktree'],
+            ['add', 'checkout', 'commit', 'diff', 'pull', 'restore', 'reset', 'merge', 'cherry-pick', 'rebase', 'stash', 'worktree'],
             array_keys($table),
         );
         self::assertSame(['__not_abort__'], $table['cherry-pick']);

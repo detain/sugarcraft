@@ -22,6 +22,8 @@ use SugarCraft\Style\Style;
  * stages all files; Space (branches pane) checks out the selected
  * branch; `c` opens inline commit message collection; `?` shows the
  * help overlay; `R` refreshes from disk. `u` / Ctrl+r for undo/redo.
+ * `f` / `p` / `P` fetch, pull and push the tracked remote (each behind the
+ * same armed confirm as the destructive verbs).
  *
  * Mirrors jesseduffield/lazygit pkg/gui — three-pane focus model and per-key controller dispatch. */
 final class App implements Model
@@ -54,7 +56,7 @@ final class App implements Model
         public readonly bool $collectingCommit = false,
         /** The accumulated commit message while collectingCommit is true. */
         public readonly string $commitMessage = '',
-        /** Diff viewer overlay (opened with 'P' on a status file; 'd' discards, and also closes the open viewer). */
+        /** Diff viewer overlay (opened with 'Enter' on a status file; 'd' discards, and also closes the open viewer). */
         public readonly ?DiffViewer $diffViewer = null,
         /** Whether the app is collecting a branch name character-by-character. */
         public readonly bool $collectingBranchName = false,
@@ -386,8 +388,21 @@ final class App implements Model
         if ($msg->type === KeyType::Char && $msg->rune === 'd' && $this->pane === Pane::Status) {
             return [$this->discard(), null];
         }
-        if ($msg->type === KeyType::Char && $msg->rune === 'P' && $this->pane === Pane::Status) {
+        if ($msg->type === KeyType::Enter && $this->pane === Pane::Status) {
             return [$this->showDiff(), null];
+        }
+        // Remotes: f fetch, p pull, P push (candy-git-005). Repo-wide verbs,
+        // every one armed for a second confirming press — a push is visible
+        // to others and a pull merges into the worktree, the same contract
+        // discard/delete-drop already keep.
+        if ($msg->type === KeyType::Char && $msg->rune === 'f') {
+            return [$this->handleRemote('fetch'), null];
+        }
+        if ($msg->type === KeyType::Char && $msg->rune === 'p') {
+            return [$this->handleRemote('pull'), null];
+        }
+        if ($msg->type === KeyType::Char && $msg->rune === 'P') {
+            return [$this->handleRemote('push'), null];
         }
         if ($msg->type === KeyType::Char && $msg->rune === 'A') {
             return [$this->amendCommit(), null];
@@ -843,6 +858,43 @@ final class App implements Model
         try {
             $this->git->discard($row['path']);
             return $base->withAll(history: $base->requireHistory()->push(HistoryEntry::discard($row['path'])))->refresh();
+        } catch (\RuntimeException $e) {
+            return $base->withError($e->getMessage());
+        }
+    }
+
+    /**
+     * Arm-confirm lane for the three remote verbs (candy-git-005). First
+     * press arms (naming the operation in the warning lane), the same press
+     * executes; Escape/pane-navigation clears the arm like every other
+     * confirm. Success lands in the transient success lane and refreshes the
+     * panes — fetch/pull move ahead/behind state, push changes what origin
+     * knows, and all three are the point of the header summary.
+     */
+    private function handleRemote(string $verb): self
+    {
+        $arm     = 'remote:' . $verb;
+        $warning = match ($verb) {
+            'fetch' => Lang::t('confirm.fetch'),
+            'pull'  => Lang::t('confirm.pull'),
+            default => Lang::t('confirm.push'),
+        };
+        if ($this->pendingConfirm !== $arm) {
+            return $this->armConfirm($arm, $warning);
+        }
+        $base = $this->clearConfirm();
+        try {
+            match ($verb) {
+                'fetch' => $this->git->fetch(),
+                'pull'  => $this->git->pull(),
+                default => $this->git->push(),
+            };
+            $done = match ($verb) {
+                'fetch' => Lang::t('remote.fetch_done'),
+                'pull'  => Lang::t('remote.pull_done'),
+                default => Lang::t('remote.push_done'),
+            };
+            return $base->refresh()->withAll(successMessage: $done);
         } catch (\RuntimeException $e) {
             return $base->withError($e->getMessage());
         }
