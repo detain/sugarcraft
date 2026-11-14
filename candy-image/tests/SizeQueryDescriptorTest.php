@@ -87,4 +87,51 @@ final class SizeQueryDescriptorTest extends TestCase
         $this->assertStringNotContainsString('fromFile', $bin, 'the bin stays a shim: no logic outside Cli');
         $this->assertStringContainsString('cannot find composer autoload.php', $bin);
     }
+
+    /**
+     * Execute the IMG-01 env rung as a real child: stdout is a pipe, so the
+     * ioctl throws, the catch falls through to COLUMNS/LINES, and the render
+     * box must come from the environment — measured shape: an 8x8 source in
+     * ascii fills width and derives rows as width/2, so COLUMNS=40 yields
+     * exactly 40-column rows (the fixed [60,24] fallback would be 60x30).
+     */
+    public function testTheEnvRungSizesTheChildRender(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('ext-gd is required to mint the fixture.');
+        }
+
+        $png = sys_get_temp_dir() . '/candy-image-test-' . bin2hex(random_bytes(8)) . '.png';
+        $im = imagecreatetruecolor(8, 8);
+        self::assertIsObject($im);
+        imagepng($im, $png);
+        imagedestroy($im);
+
+        try {
+            $process = proc_open(
+                [PHP_BINARY, self::BIN, '--format=ascii', $png],
+                [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+                $pipes,
+                dirname(__DIR__),
+                ['PATH' => '/usr/bin:/bin', 'COLUMNS' => '40', 'LINES' => '10'],
+            );
+            self::assertIsResource($process);
+            fclose($pipes[0]);
+            $out = (string) stream_get_contents($pipes[1]);
+            $err = (string) stream_get_contents($pipes[2]);
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            $rc = proc_close($process);
+
+            self::assertSame(0, $rc, "child stderr: {$err}");
+            $rows = preg_split('/\R/', rtrim($out, "\n"));
+            self::assertIsArray($rows);
+            self::assertNotSame([], $rows);
+            $widths = array_map('strlen', $rows);
+            self::assertSame(40, max($widths), 'COLUMNS=40 must serve the render width (fallback would be 60)');
+            self::assertCount(20, $rows, 'the env-sized box measures 40x20 for this aspect (fallback 60x30)');
+        } finally {
+            @unlink($png);
+        }
+    }
 }

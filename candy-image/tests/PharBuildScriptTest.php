@@ -188,4 +188,68 @@ final class PharBuildScriptTest extends TestCase
 
         return [$rc, $stderr];
     }
+
+    public function testUnrecognizedOptionRefusesWithoutCreatingAnything(): void
+    {
+        $probe = sys_get_temp_dir() . '/candy-image-test-bogus-' . bin2hex(random_bytes(6)) . '.phar';
+
+        // The argv loop sits above every guard and the first write, so a
+        // typo'd flag must die naming itself — never reach the readonly
+        // guard, a mkdir, or the artifact path.
+        [$rc, $err] = $this->runBuildScript(['--out=' . $probe, '--definitely-bogus']);
+
+        self::assertSame(2, $rc);
+        self::assertStringContainsString('unrecognized option --definitely-bogus', $err);
+        self::assertStringNotContainsString('phar.readonly is On', $err, 'the refusal is the argv arm, not a later guard (usage text may name the flag)');
+        clearstatcache();
+        self::assertFalse(is_file($probe), 'a refused build must create no artifact');
+    }
+
+    public function testTheBinShimRunsCliMainAndTheVersionLineIsByteExact(): void
+    {
+        [$rc, $out, $err] = $this->runBin(['--version']);
+
+        self::assertSame(0, $rc, "shim stderr: {$err}");
+        self::assertSame('', $err);
+        // Byte-exact: the exit(Cli::main(...)) shim, the 'candy-image <v>'
+        // grammar, and the compiled VERSION (no archive => no stamp).
+        self::assertSame("candy-image " . \SugarCraft\CandyImage\Cli::VERSION . "\n", $out);
+    }
+
+    public function testTheBinShimAnswersHelpWithUsageOnStdout(): void
+    {
+        [$rc, $out, $err] = $this->runBin(['--help']);
+
+        self::assertSame(0, $rc);
+        self::assertSame('', $err, 'help is a success print, never an error');
+        self::assertStringContainsString('usage: candy-image', $out);
+    }
+
+    /**
+     * Run bin/candy-image as a real child (autoload resolution + the
+     * exit(Cli::main) contract are what this executes).
+     *
+     * @param list<string>      $args
+     * @param list<string>|null $env  full child environment (name=value), or null to inherit
+     *
+     * @return array{0:int,1:string,2:string} exit code, stdout, stderr
+     */
+    private function runBin(array $args, ?array $env = null): array
+    {
+        $process = proc_open(
+            array_merge([PHP_BINARY, self::APP_ROOT . '/bin/candy-image'], $args),
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            self::APP_ROOT,
+            $env,
+        );
+        self::assertIsResource($process, 'the bin must be launchable');
+        fclose($pipes[0]);
+        $stdout = (string) stream_get_contents($pipes[1]);
+        $stderr = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+
+        return [proc_close($process), $stdout, $stderr];
+    }
 }
