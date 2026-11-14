@@ -83,9 +83,15 @@ echo StatusLine::error('connection refused'), "\n";
   never errors).
   Two seeded styles bypass the downgrade because they are rendered as
   given and emit SGR even through a pipe: `Frame::new()`'s slate border
-  (`#64748b`) and the tint from `Logo::withColor()`. For fully plain
-  output under every profile pass `Theme::plain()` and, for a colourless
-  Frame border, `->withBorderStyle(Style::new())`.
+  (`#64748b`) and the tint from `Logo::withColor()`. Both can opt in to
+  honouring the theme instead: `Frame::withTheme($t)` routes the border
+  through `$t->muted` (no argument uses `Theme::detect()`),
+  `->withPlainBorder()` drops border styling entirely, and
+  `Logo::render(ColorProfile::detect())` re-quantises the tint (`NoTty`
+  removes it). The defaults stay the branded splash — slate seed and
+  tint-as-given — so only callers that pass a theme or profile change.
+  For fully plain output under every profile pass `Theme::plain()` and,
+  for a colourless Frame border, `->withPlainBorder()`.
 - **`StatusLine`** — `success` / `error` / `warn` / `info` / `prompt` static
   helpers returning a themed glyph + space + message. Only
   the glyph is styled; the space and the message itself stay plain. The severity

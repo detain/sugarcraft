@@ -7,6 +7,7 @@ namespace SugarCraft\Cli\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Cli\Logo;
 
 final class LogoTest extends TestCase
@@ -167,5 +168,24 @@ final class LogoTest extends TestCase
     {
         $this->assertStringNotContainsString("\x1b", Logo::fromAscii("plain\nart")->render());
         $this->assertStringNotContainsString("\x1b", Logo::sugarcraft()->render());
+    }
+
+    /** SC-F2: a NoTty profile removes the tint; the default path is untouched. */
+    public function testRenderWithNoTtyProfileDowngradesTint(): void
+    {
+        $logo = Logo::fromAscii("plain\nart")->withColor('#ff5fd2');
+        $out = $logo->render(ColorProfile::NoTty);
+        $this->assertStringNotContainsString("\x1b", $out, 'NoTty must emit no escape bytes at all');
+        [$first, $second] = explode("\n", $out);
+        $this->assertSame('plain', $first);
+        $this->assertSame('art', rtrim($second), 'trailing Style layout residue only, colour gone');
+        $this->assertStringContainsString("\x1b[", $logo->render(), 'default keeps the tint');
+    }
+
+    /** SC-F2: TrueColor profile is the identity tier for an already-truecolor tint. */
+    public function testRenderWithTrueColorProfileMatchesDefault(): void
+    {
+        $logo = Logo::sugarcraft()->withColor('#ff5fd2');
+        $this->assertSame($logo->render(), $logo->render(ColorProfile::TrueColor));
     }
 }

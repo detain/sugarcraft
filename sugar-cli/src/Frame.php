@@ -66,10 +66,17 @@ final class Frame
         private readonly Style $borderStyle,
     ) {}
 
+    /**
+     * The seed border colour: slate rgb 100,116,139. A plain string const is
+     * the closest a fluent `Style::new()->foreground(...)` seed can come to a
+     * constant expression — the assembled Style would not be `const`-able.
+     */
+    public const DEFAULT_BORDER_COLOR = '#64748b';
+
     /** Default root — a slate box border (rgb 100,116,139 = #64748b). */
     public static function new(): self
     {
-        return new self('', '', Style::new()->foreground(Color::hex('#64748b')));
+        return new self('', '', Style::new()->foreground(Color::hex(self::DEFAULT_BORDER_COLOR)));
     }
 
     /** The (pre-rendered) title-bar string, centred on the top row. */
@@ -99,6 +106,26 @@ final class Frame
     public function withBorderStyle(Style $style): self
     {
         return $this->mutate(['borderStyle' => $style]);
+    }
+
+    /**
+     * Adopt the theme's muted style for the border.
+     *
+     * WHY: the slate seed bypasses profile downgrade (README discloses it),
+     * which is right for a branded splash but wrong for themed UI — this
+     * routes the chrome through `Theme::$muted` so `NO_COLOR`, piped STDOUT
+     * and `Theme::plain()` all reach the border like every other run. Omit
+     * the argument to honour {@see Theme::detect()}.
+     */
+    public function withTheme(?Theme $theme = null): self
+    {
+        return $this->mutate(['borderStyle' => ($theme ?? Theme::detect())->muted]);
+    }
+
+    /** Drop the border styling entirely (identity `Style::new()`). */
+    public function withPlainBorder(): self
+    {
+        return $this->mutate(['borderStyle' => Style::new()]);
     }
 
     /**

@@ -6,6 +6,7 @@ namespace SugarCraft\Cli;
 
 use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Style\Style;
 
 /**
@@ -107,13 +108,20 @@ ART;
 
     /**
      * Render the logo as a string, applying the chosen color (if any) once.
+     *
+     * Pass a {@see ColorProfile} (e.g. `ColorProfile::detect()`) to re-quantise
+     * the tint to what the destination supports: `NoTty`/`Ascii` downgrade the
+     * colour like the themed presenters do, richer profiles quantise the tint.
+     * Omitting it keeps the tint as given — the branded-splash default.
      */
-    public function render(): string
+    public function render(?ColorProfile $profile = null): string
     {
         if ($this->color === null) {
             return $this->art;
         }
 
-        return Style::new()->foreground($this->color)->render($this->art);
+        $style = Style::new()->foreground($this->color);
+
+        return ($profile === null ? $style : $style->colorProfile($profile))->render($this->art);
     }
 }

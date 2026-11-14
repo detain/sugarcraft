@@ -9,6 +9,8 @@ use SugarCraft\Core\Util\Width;
 use SugarCraft\Cli\Frame;
 use SugarCraft\Style\Style;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Cli\Theme;
 
 /**
  * @see Frame
@@ -429,5 +431,32 @@ final class FrameTest extends TestCase
             $out[0],
             'chrome bytes are identical between closed and open body runs'
         );
+    }
+
+    /** SC-F2: the published seed is what the default border is built from. */
+    public function testDefaultBorderIsThePublishedSeedColor(): void
+    {
+        $expected = Style::new()->foreground(Color::hex(Frame::DEFAULT_BORDER_COLOR));
+        $this->assertStringContainsString(
+            $expected->render("╔" . str_repeat("═", 18) . "╗"),
+            Frame::new()->withTitle('t')->render('body', 20, 8),
+            'default border runs must equal the DEFAULT_BORDER_COLOR seed rendering'
+        );
+    }
+
+    /** SC-F2: withTheme routes chrome through the theme — plain theme, zero SGR. */
+    public function testWithThemePlainRendersZeroSgrBytes(): void
+    {
+        $out = Frame::new()->withTheme(Theme::plain())->withTitle('t')->withStatus('s')
+            ->render("a\nb", 20, 8);
+        $this->assertStringNotContainsString("\x1b[", $out);
+        $this->assertStringContainsString("═", $out, 'structure survives the colour drop');
+    }
+
+    /** SC-F2: withPlainBorder drops the styling but keeps the box. */
+    public function testWithPlainBorderRendersZeroSgrBytes(): void
+    {
+        $out = Frame::new()->withPlainBorder()->render('body', 20, 8);
+        $this->assertStringNotContainsString("\x1b[", $out);
     }
 }
