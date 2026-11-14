@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core\Tests\Msg;
 
+use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Msg\BackgroundColorMsg;
+use SugarCraft\Core\Msg\ForegroundColorMsg;
 use SugarCraft\Core\ModeState;
 use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\MouseButton;
@@ -177,4 +180,39 @@ final class MsgValueObjectsTest extends TestCase
         $this->assertTrue($msg->alt);
         $this->assertTrue($msg->ctrl);
     }
+
+    // sc-25 (finding sugar-core-046): isDark boundary set and ExecMsg
+    // ok() conjunction arm.
+
+    public function testBackgroundColorIsDarkBoundaryIsNaiveLinearFlip(): void
+    {
+        // The Msg colours mirror lipgloss v2's HasDarkBackground: naive
+        // linear luminance, flip between 127 (dark) and 128 (light).
+        $this->assertTrue((new BackgroundColorMsg(127, 127, 127))->isDark());
+        $this->assertFalse((new BackgroundColorMsg(128, 128, 128))->isDark());
+        $this->assertTrue((new ForegroundColorMsg(127, 127, 127))->isDark());
+        $this->assertFalse((new ForegroundColorMsg(128, 128, 128))->isDark());
+    }
+
+    public function testColorIsDarkBoundaryIsWcagGammaFlip(): void
+    {
+        // Util\\Color documents WCAG 2.1 relative luminance instead: the
+        // flip sits far higher (187 dark, 188 light for pure grey). The
+        // two formulas are intentional, not a drift - mid greys around
+        // #888888 are dark for Color and light for the Msg mirror.
+        $this->assertTrue(Color::rgb(187, 187, 187)->isDark());
+        $this->assertFalse(Color::rgb(188, 188, 188)->isDark());
+        $this->assertTrue(Color::hex('#888888')->isDark());
+        $this->assertFalse((new BackgroundColorMsg(136, 136, 136))->isDark());
+    }
+
+    public function testExecMsgOkFalseWhenErrorSetDespiteZeroExit(): void
+    {
+        // ok() is the conjunction error===null && exitCode===0: a launch
+        // that reported 0 yet carried a Throwable must not read as success.
+        $msg = new ExecMsg(0, new \RuntimeException('runner died'));
+        $this->assertSame(0, $msg->exitCode);
+        $this->assertFalse($msg->ok());
+    }
+
 }

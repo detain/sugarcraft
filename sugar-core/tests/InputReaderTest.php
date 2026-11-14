@@ -1639,4 +1639,58 @@ final class InputReaderTest extends TestCase
         $this->assertCount(1, $msgs);
         $this->assertSame("\x1c", $msgs[0]->rune);
     }
+
+    // sc-25 (finding sugar-core-046): the mouse decode family's modifier
+    // combos — the companion set to sc-03's code x terminator matrix that
+    // would have caught the wheel-release bug alongside it.
+
+    public function testMouseWheelUpPressCarriesCtrlModifier(): void
+    {
+        // wheel-up (64) + ctrl (16) = 80.
+        $msgs = (new InputReader())->parse("\x1b[<80;5;5M");
+        $this->assertInstanceOf(MouseWheelMsg::class, $msgs[0]);
+        $this->assertSame(MouseButton::WheelUp, $msgs[0]->button);
+        $this->assertSame(MouseAction::Press, $msgs[0]->action);
+        $this->assertTrue($msgs[0]->ctrl);
+    }
+
+    public function testMouseWheelDownPressCarriesCtrlModifier(): void
+    {
+        // wheel-down (65) + ctrl (16) = 81: direction bit 0x01 survives
+        // the modifier add, exactly the bit sc-03 stopped mis-reading.
+        $msgs = (new InputReader())->parse("\x1b[<81;5;5M");
+        $this->assertSame(MouseButton::WheelDown, $msgs[0]->button);
+        $this->assertSame(MouseAction::Press, $msgs[0]->action);
+        $this->assertTrue($msgs[0]->ctrl);
+    }
+
+    public function testMouseWheelReleaseDialectCarriesAltModifier(): void
+    {
+        // wheel-up release (66) + alt (8) = 74, final byte 'm' owns
+        // press-vs-release (sc-03 law) even with modifier bits set.
+        $msgs = (new InputReader())->parse("\x1b[<74;5;5m");
+        $this->assertSame(MouseButton::WheelUp, $msgs[0]->button);
+        $this->assertSame(MouseAction::Release, $msgs[0]->action);
+        $this->assertTrue($msgs[0]->alt);
+    }
+
+    public function testMouseMotionWithoutButtonCarriesShiftModifier(): void
+    {
+        // none (3) + motion (32) + shift (4) = 39.
+        $msgs = (new InputReader())->parse("\x1b[<39;9;9M");
+        $this->assertInstanceOf(MouseMotionMsg::class, $msgs[0]);
+        $this->assertSame(MouseButton::None, $msgs[0]->button);
+        $this->assertSame(MouseAction::Motion, $msgs[0]->action);
+        $this->assertTrue($msgs[0]->shift);
+        $this->assertSame(9, $msgs[0]->x);
+        $this->assertSame(9, $msgs[0]->y);
+    }
+
+    public function testMouseMotionWithoutButtonAlone(): void
+    {
+        // none (3) + motion (32) = 35: hover-motion must not invent a button.
+        $msgs = (new InputReader())->parse("\x1b[<35;9;9M");
+        $this->assertSame(MouseButton::None, $msgs[0]->button);
+        $this->assertSame(MouseAction::Motion, $msgs[0]->action);
+    }
 }
