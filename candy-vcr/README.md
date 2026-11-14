@@ -353,7 +353,7 @@ vendor/bin/candy-vcr record --idle-trim 1.0 -- bash demo.sh         # compress i
 vendor/bin/candy-vcr replay  --no-trim session.cas --speed=realtime # restore real cadence on a trimmed cassette
 ```
 
-Comparable to `asciinema rec`, but writes the candy-vcr JSONL cassette so the existing inspect / replay / diff / stats commands and the `Player::play()` API work without conversion. `--cols`/`--rows` set the child PTY size when the recording starts (80×24 when omitted) and are written into the header; the recorder does not track `SIGWINCH`, so resizing your own terminal mid-recording leaves the program laid out for the size you started with — pick the geometry up front. `--idle-trim` and the host-termios safety net (`register_shutdown_function` + signal handlers) are covered under their own headings below.
+Comparable to `asciinema rec`, but writes the candy-vcr JSONL cassette so the existing inspect / replay / diff / stats commands and the `Player::play()` API work without conversion. `record` is a PTY feature like exec-mode rendering — it needs sugar-pty's master/slave layer, so it is POSIX-only at the pump (native Windows records through ConPTY, see below) — and the signal half of its TTY safety net needs `pcntl`: the handlers are installed only where `pcntl_signal()` and `pcntl_async_signals()` exist, and without them the net degrades to the in-band `finally` plus the shutdown function. `--cols`/`--rows` set the child PTY size when the recording starts (80×24 when omitted) and are written into the header; the recorder does not track `SIGWINCH`, so resizing your own terminal mid-recording leaves the program laid out for the size you started with — pick the geometry up front. `--idle-trim` and the host-termios safety net (`register_shutdown_function` + signal handlers) are covered under their own headings below.
 
 **Native Windows** (PHP 8.4+ with FFI) records through ConPTY with its own polling loop instead of the POSIX pump. Keystrokes from a console are read as console input records in VT input mode, so arrows and Ctrl keys reach the child as the same bytes a POSIX terminal sends. A piped or redirected stdin is forwarded as-is. Host console resizes are forwarded and recorded, because Windows has no `SIGWINCH`. The child gets the Windows system variables it needs to start (`SystemRoot`, `ComSpec`, `PATHEXT`, …), and `--ctty` has no meaning there: the pseudo console delivers Ctrl+C itself.
 
@@ -389,7 +389,7 @@ Captured env lands on the cassette header as a JSON object:
 
 #### `--idle-trim N` and `replay --no-trim`
 
-Borrowed from asciinema, idle-trim compresses long inter-event gaps so a 30-second `make build` doesn't take 30 seconds to replay. When the gap between consecutive events exceeds `N` seconds, the recorder writes the event with both `t` (the compressed timestamp) and `tRaw` (the original wall-clock timestamp). The compressed gap defaults to 0.5 s (or `N`, whichever is smaller). `--idle-trim` and `--speed` are `replay`'s two dual-form flags — both `--flag=N` and `--flag N` are accepted for each. Every other `--flag` spelling is reported as `unknown option` and exits 2.
+Borrowed from asciinema, idle-trim compresses long inter-event gaps so a 30-second `make build` doesn't take 30 seconds to replay. When the gap between consecutive events exceeds `N` seconds, the recorder writes the event with both `t` (the compressed timestamp) and `tRaw` (the original wall-clock timestamp). The compressed gap defaults to 0.5 s (or `N`, whichever is smaller). Flag grammar is per-verb: on `replay`, `--idle-trim` and `--speed` are the two dual-form value flags (both `--flag=N` and `--flag N` accepted) — `--no-trim` is a plain boolean and every other `--flag` spelling is reported as `unknown option` and exits 2. `record --idle-trim` and `inspect --fps` accept both forms too; `inspect --since`/`--until` are equals-form only, where a bare space form falls to the `unknown option` door.
 
 ```jsonl
 {"v":1,"created":"...","cols":80,"rows":24,"runtime":"sugarcraft/candy-vcr@record"}
@@ -512,11 +512,14 @@ The `render-tape` and `render-batch` commands convert `.tape` files to animated 
 > [Exec mode](#exec-mode--rendering-program-output-set-shell) below.
 
 ```sh
+# Try it now — render the smoke tape this repo ships (from the candy-vcr/ directory)
+vendor/bin/candy-vcr render-tape .vhs/smoke.tape
+
 # Render a single .tape file
 vendor/bin/candy-vcr render-tape demo.tape
 
 # Custom output path
-vendor/bin/candy-vcr render-tape demo.tape -o output.gif
+vendor/bin/candy-vcr render-tape .vhs/smoke.tape -o output.gif
 
 # Specify theme and fps
 vendor/bin/candy-vcr render-tape demo.tape --theme Dracula --fps 20
@@ -673,6 +676,10 @@ Frame hold durations are tracked through the dedup stage and passed to the encod
 ## Cassette migration
 
 Cassette format versions evolve over time. The `migrate` command upgrades cassettes automatically:
+`migrate` reads and writes plain JSONL only — YAML, tape and gzip inputs are
+refused by name rather than fed to the JSON parser, and an output path ending
+in `.gz` is rejected too; for a `.cas.gz` cassette the workflow is gunzip,
+migrate, re-gzip.
 
 ```sh
 # Migrate in-place (creates session.cas.bak backup)
@@ -740,6 +747,22 @@ $cassette = (new Compiler())->compile($result['ast'], 'demo.tape');
 | `Wait /pattern/` | ⚠️ | CONDITION wait — upstream blocks until output matches; the record-side compiler has no live stream to poll, so it emits no event, advances no clock, and reports the mismatch through the compiler's problem channel — a warning by default, a hard error under `--strict`. |
 | `Screenshot <path>` | ✅ | Captures current frame to PNG path during render. |
 | `Source <path>` | ✅ | Inlines and compiles another .tape file at this point. |
+| `Key <name>` | ✅ | Named-key byte roster (finding 005); a name outside the roster is reported through the problem channel. |
+| `Modifier <key>` | ✅ | Latches Alt (or Shift) so the following key event carries it. |
+| `Copy "text"` | ✅ | Emits an OSC 52 clipboard-set sequence (`ESC ]52;c;<base64> BEL`) — the bytes upstream's clipboard copy produces, on the wire. |
+| `Paste` | ⚠️ | Needs a clipboard to read from; the record-side compiler emits no bytes — reported through the problem channel (warning, hard error under `--strict`). |
+| `Require <module>` | ⚠️ | Upstream's precondition loader; candy-vcr emits no bytes for it — reported the same way. |
+| `Screen <arg>` | — | Candy-only keyword with no upstream counterpart: it lexes (so it never falls to UNKNOWN's door) and the Parser discards it — accepted and ignored, not ported. |
+
+**Upstream delta.** Upstream-legal tapes cannot fail silently. The twelve
+upstream command keywords the original port never lexed (`Key` / `Modifier` /
+`Copy` / `Paste` / `Require` family arms) carry dedicated lexer arms; the
+60-name keyword roster is pinned by `KeywordRosterParityTest` against
+candy-code's `VhsTapeContractTest`, and any unclassifiable line becomes a
+`ParseError` — a warning without `--strict`, an abort with it. What remains
+accepted-but-inert is exactly the `Paste` / `Require` pair above (no clipboard
+to read, no module loader during a compile-only pass) and the candy-only
+`Screen` keyword.
 
 The `Set` directive's `key` parameter is validated against an
 allowlist; unknown keys raise a `ParseError`:
@@ -1037,6 +1060,12 @@ Honest capability boundaries, each with what closing it would take:
   record path, and the `record --env` machinery filters environment *names*
   only. Closing it needs a decision on which default redaction set ships
   enabled, then wiring into the CLI record path.
+- **Upstream's operational modes are not ported.** charmbracelet/vhs's
+  record/replay modes (`RecordOnly` / `ReplayOnly` / `Passthrough`) are
+  deliberately absent — the `Recorder`/`Player` API split subsumes them.
+  The concepts that carry state across that split — hooks, matchers and
+  redaction filters — did port (`SanitizingHook`, the `Matcher\` classes);
+  the mode-flag surface did not.
 
 ## Examples
 
