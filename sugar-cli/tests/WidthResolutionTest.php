@@ -91,6 +91,46 @@ final class WidthResolutionTest extends TestCase
         $this->assertNull(WidthProbe::resolve(null));
     }
 
+    /**
+     * Finding 041: the probe's read ladder is getenv → $_ENV → $_SERVER,
+     * but every other test drives it through the sandbox trait, which pins
+     * all three sources in lockstep — a regression in either superglobal
+     * fallback would hide there. These arms light exactly one source at a
+     * time (verified locally by commenting out each ladder rung in
+     * WidthProbe::columns(); the matching test goes red, then green again).
+     */
+    public function testColumnsResolvesFromServerSuperglobalAlone(): void
+    {
+        $this->snapshotTerminalColumns();
+        putenv('COLUMNS');                    // getenv: absent
+        unset($_ENV['COLUMNS']);              // $_ENV: absent
+        $_SERVER['COLUMNS'] = '64';           // only $_SERVER is alive
+
+        $this->assertSame(64, WidthProbe::columns());
+        $this->assertSame(64, WidthProbe::resolve(AutoWidth::Auto));
+    }
+
+    public function testColumnsResolvesFromEnvSuperglobalAlone(): void
+    {
+        $this->snapshotTerminalColumns();
+        putenv('COLUMNS');
+        $_ENV['COLUMNS'] = '72';              // only $_ENV is alive
+        unset($_SERVER['COLUMNS']);
+
+        $this->assertSame(72, WidthProbe::columns());
+    }
+
+    /** The ladder order is itself a contract: the exported value wins. */
+    public function testGetenvOutranksTheSuperglobals(): void
+    {
+        $this->snapshotTerminalColumns();
+        putenv('COLUMNS=55');
+        $_ENV['COLUMNS']    = '72';
+        $_SERVER['COLUMNS'] = '64';
+
+        $this->assertSame(55, WidthProbe::columns());
+    }
+
     // ------------------------------------------------------------------
     // Precedence across the presenters
     // ------------------------------------------------------------------
