@@ -91,26 +91,51 @@ final class ScoringProfile
 
     public function withMatchScore(int $matchScore): self
     {
-        return new self($matchScore, $this->mismatchPenalty, $this->gapOpen, $this->gapExtend, $this->adjacentBonus);
+        return $this->mutate(matchScore: $matchScore);
     }
 
     public function withMismatchPenalty(int $mismatchPenalty): self
     {
-        return new self($this->matchScore, $mismatchPenalty, $this->gapOpen, $this->gapExtend, $this->adjacentBonus);
+        return $this->mutate(mismatchPenalty: $mismatchPenalty);
     }
 
     public function withGapOpen(int $gapOpen): self
     {
-        return new self($this->matchScore, $this->mismatchPenalty, $gapOpen, $this->gapExtend, $this->adjacentBonus);
+        return $this->mutate(gapOpen: $gapOpen);
     }
 
     public function withGapExtend(int $gapExtend): self
     {
-        return new self($this->matchScore, $this->mismatchPenalty, $this->gapOpen, $gapExtend, $this->adjacentBonus);
+        return $this->mutate(gapExtend: $gapExtend);
     }
 
     public function withAdjacentBonus(int $adjacentBonus): self
     {
-        return new self($this->matchScore, $this->mismatchPenalty, $this->gapOpen, $this->gapExtend, $adjacentBonus);
+        return $this->mutate(adjacentBonus: $adjacentBonus);
+    }
+
+    /**
+     * The one private builder every with*() routes through (AGENTS.md
+     * "Immutable + fluent"; the compliant sibling is SahilmScoring::mutate).
+     * Named forwarding with ?? fallbacks keeps the constructor defaults the
+     * single source of the canonical set — five positional new self(...)
+     * re-listings here were exactly the silent-fork hazard this class's own
+     * new() docblock warns about (finding sugar-fuzzy-017, CONV-002).
+     * Zero API change.
+     */
+    private function mutate(
+        ?int $matchScore = null,
+        ?int $mismatchPenalty = null,
+        ?int $gapOpen = null,
+        ?int $gapExtend = null,
+        ?int $adjacentBonus = null,
+    ): self {
+        return new self(
+            $matchScore ?? $this->matchScore,
+            $mismatchPenalty ?? $this->mismatchPenalty,
+            $gapOpen ?? $this->gapOpen,
+            $gapExtend ?? $this->gapExtend,
+            $adjacentBonus ?? $this->adjacentBonus,
+        );
     }
 }
