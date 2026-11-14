@@ -109,7 +109,12 @@ final class UnifiedScan
         $out = [];
 
         foreach ($rows as $line) {
-            if (preg_match(self::HUNK_HEADER_PATTERN, $line, $m) === 1) {
+            // Cheap two-char gate before the regex: the pattern can only hit
+            // rows starting '@@', and real patches are overwhelmingly content
+            // rows (sugar-diff-025 leg A — exact same verdict, less preg work).
+            if ($line !== '' && $line[0] === '@' && ($line[1] ?? '') === '@'
+                && preg_match(self::HUNK_HEADER_PATTERN, $line, $m) === 1
+            ) {
                 // Matched with an unbounded \d+ on purpose: the header has to
                 // be RECOGNISED even when its numbers are absurd, or the rows
                 // after it get counted as context. Only the numbering opts
