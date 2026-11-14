@@ -140,6 +140,22 @@ The constructor validates its input: a non-empty name matching `[a-zA-Z_:][a-zA-
 
 ## Usage
 
+The two happy paths are one-liners (sugar-metrics-045): `Registry::inMemory()`
+for a registry that just accumulates (tests, boot probes), and `Registry::to($target)`
+for one that streams newline JSON to a path, a resource, or `php://stderr`
+when `$target` is null. Both forward every argument to the explicit
+`Registry::new(new InMemoryBackend())` / `Registry::new(new JsonStreamBackend($target))`
+shape — use that whenever a non-default backend belongs in the picture:
+
+```php
+use SugarCraft\Metrics\Registry;
+
+$reg   = Registry::inMemory();
+$audit = Registry::to('/var/log/metrics.json');
+```
+
+Full wiring:
+
 ```php
 use SugarCraft\Metrics\Registry;
 use SugarCraft\Metrics\Backend\StatsdBackend;
@@ -262,7 +278,7 @@ Sixteen locales ship: `ar`, `cs`, `de`, `en`, `es`, `fr`, `it`, `ja`, `ko`, `nl`
 
 ## Status
 
-Feature-complete and in production use: UpDownCounter, AsyncCounter and AsyncGauge instrument kinds, Registry cardinality tracking with FIFO eviction and backend reclaim, exposition-integrity guards, fsync-before-rename durability, and five backends — `InMemory`, `JsonStream`, `Statsd`, `PrometheusFile` and `Multi`. 281 tests (1,523 assertions; ≈4 s baseline suite: Registry, each backend, SessionMetrics middleware, wire-format and tag-key collision pins, hex-level forgery pins, i18n locale parity across all 16 shipped locales, and example smoke checks).
+Feature-complete and in production use: UpDownCounter, AsyncCounter and AsyncGauge instrument kinds, Registry cardinality tracking with FIFO eviction and backend reclaim, exposition-integrity guards, fsync-before-rename durability, and five backends — `InMemory`, `JsonStream`, `Statsd`, `PrometheusFile` and `Multi`. 282 tests (1,532 assertions; ≈4 s baseline suite: Registry, each backend, SessionMetrics middleware, wire-format and tag-key collision pins, hex-level forgery pins, i18n locale parity across all 16 shipped locales, and example smoke checks).
 
 ## Breaking changes
 

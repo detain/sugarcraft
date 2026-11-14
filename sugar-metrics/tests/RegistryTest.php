@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Metrics\Tests;
 
 use SugarCraft\Metrics\Backend\InMemoryBackend;
+use SugarCraft\Metrics\Backend\JsonStreamBackend;
 use SugarCraft\Metrics\Backend\PrometheusFileBackend;
 use SugarCraft\Metrics\Descriptor;
 use SugarCraft\Metrics\Instrument\AsyncCounter;
@@ -269,6 +270,70 @@ final class RegistryTest extends TestCase
         $r->counter('m', 1.0, ['x' => 'a|y=b']);
         $r->counter('m', 1.0, ['x' => 'a', 'y' => 'b']);
         $this->assertSame(2, $r->cardinality('m'));
+    }
+
+    public function testInMemoryAndToShorthandsForwardEveryArgument(): void
+    {
+        // sugar-metrics-045: Registry::inMemory() / Registry::to() are pure
+        // sugar over the explicit two-constructor shape — the pin IS the
+        // parity with that shape on every observable axis.
+        $short = Registry::inMemory(['pod' => 'p1'], 1);
+        $this->assertInstanceOf(InMemoryBackend::class, $short->backend());
+        $this->assertSame(1, $short->cardinalityLimit(), 'the limit forwards');
+
+        $explicit = Registry::inMemory(['pod' => 'p1'], 1);
+        $explicit->counter('m', 2.0);
+        $explicit->counter('m', 3.0, ['extra' => '1']);
+        $this->assertSame(1, $explicit->cardinality('m'), 'a cap-1 ledger holds exactly one series');
+        $short2 = Registry::inMemory(['pod' => 'p1']);
+        $short2->counter('hits', 4.0);
+        $backend = $short2->backend();
+        $this->assertInstanceOf(InMemoryBackend::class, $backend);
+        $this->assertSame(4.0, $backend->counterValue('hits', ['pod' => 'p1']), 'defaultTags ride into the backend key');
+
+        $a = fopen('php://memory', 'w');
+        $b = fopen('php://memory', 'w');
+        $viaTo = Registry::to($a);
+        $viaCtor = Registry::new(JsonStreamBackend::new($b));
+        $viaTo->counter('x', 1.0);
+        $viaCtor->counter('x', 1.0);
+        $viaTo->flush();
+        $viaCtor->flush();
+        rewind($a);
+        rewind($b);
+        $strip = static function (string $jsonl): array {
+            $out = [];
+            foreach (explode("\n", trim($jsonl)) as $line) {
+                $rec = json_decode($line, true);
+                unset($rec['ts']); // per-record clock, not shape
+                $out[] = $rec;
+            }
+            return $out;
+        };
+        $this->assertSame(
+            $strip((string) stream_get_contents($b)),
+            $strip((string) stream_get_contents($a)),
+            'to() is byte-parity (sans clock) with the explicit JsonStreamBackend shape'
+        );
+
+        $threw = false;
+        try {
+            Registry::inMemory([], 0);
+        } catch (\InvalidArgumentException) {
+            $threw = true;
+        }
+        $this->assertTrue($threw, 'the door validation is the constructor-s, forward unchanged');
+
+        // Default tags and the loud posture forward through to() as well:
+        // the record rides tags {env:t} and a failing write throws.
+        $c = fopen('php://memory', 'w');
+        $tagged = Registry::to($c, true, ['env' => 't']);
+        $tagged->counter('y', 2.0);
+        $tagged->flush();
+        rewind($c);
+        $rec = json_decode(trim((string) stream_get_contents($c)), true);
+        $this->assertSame(['env' => 't'], $rec['tags'], 'to() forwards defaultTags to the registry');
+        $this->assertArrayHasKey('ts', $rec);
     }
 
     public function testTimeSamplesOnTheMonotonicClockNeverWallTime(): void

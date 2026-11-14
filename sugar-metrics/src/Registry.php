@@ -7,6 +7,8 @@ namespace SugarCraft\Metrics;
 use SugarCraft\Metrics\Instrument\AsyncCounter;
 use SugarCraft\Metrics\Instrument\AsyncGauge;
 use SugarCraft\Metrics\Instrument\UpDownCounter;
+use SugarCraft\Metrics\Backend\InMemoryBackend;
+use SugarCraft\Metrics\Backend\JsonStreamBackend;
 
 /**
  * Mirrors charmbracelet/promwish Registry (NewRegistry / MustRegister
@@ -99,6 +101,33 @@ final class Registry
     public static function new(Backend $backend, array $defaultTags = [], int $cardinalityLimit = 10000): self
     {
         return new self($backend, $defaultTags, $cardinalityLimit);
+    }
+
+    /**
+     * One-line default-backend construction (sugar-metrics-045): the
+     * test/boot pattern "a registry that just accumulates" used to cost
+     * two constructors — `Registry::new(InMemoryBackend::new())`. Pure
+     * sugar over the same front door; every argument forwards unchanged.
+     */
+    public static function inMemory(array $defaultTags = [], int $cardinalityLimit = 10000): self
+    {
+        return new self(InMemoryBackend::new(), $defaultTags, $cardinalityLimit);
+    }
+
+    /**
+     * One-line JSON-stream construction (sugar-metrics-045): "a registry
+     * writing to stderr/a file" was `Registry::new(new JsonStreamBackend(
+     * $target))`. The target accepts a path string, a stream resource, or
+     * null for php://stderr — exactly the JsonStreamBackend front door
+     * (`resource` is not expressible in a signature union, hence the
+     * untyped parameter mirroring that class); every argument forwards
+     * unchanged.
+     *
+     * @param string|resource|null $target
+     */
+    public static function to($target = null, bool $throwOnError = true, array $defaultTags = [], int $cardinalityLimit = 10000): self
+    {
+        return new self(JsonStreamBackend::new($target, $throwOnError), $defaultTags, $cardinalityLimit);
     }
 
     public function __construct(
