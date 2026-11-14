@@ -121,7 +121,7 @@ final class ThemeTest extends TestCase
     public function testByNameRejectsUnknown(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('expected one of: ansi, plain, charm, dracula, nord, catppuccin, auto');
+        $this->expectExceptionMessage('Theme::byName(): unknown preset "nonexistent" (expected one of: ansi, plain, charm, dracula, nord, catppuccin, auto).');
         Theme::byName('nonexistent');
     }
 
@@ -427,6 +427,48 @@ final class ThemeTest extends TestCase
             } else {
                 putenv($k . '=' . $v);
             }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // SC-T3 · findings 017/023/036/053: detectFor() + message prefix
+    // ------------------------------------------------------------------
+
+    public function testErrorMessagesCarryTheMethodPrefix(): void
+    {
+        try {
+            Theme::byName('nope');
+            $this->fail('expected byName() to reject');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringStartsWith('Theme::byName(): ', $e->getMessage());
+        }
+        try {
+            Theme::detectFor('not-a-stream');
+            $this->fail('expected detectFor() to reject a non-stream');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringStartsWith('Theme::detectFor(): ', $e->getMessage());
+            $this->assertStringContainsString('string', $e->getMessage());
+        }
+        // detect() keeps its own (already-prefixed-by-name) guard wording.
+        try {
+            Theme::detect(null, 42);
+            $this->fail('expected detect() to reject a non-stream');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringStartsWith('Theme::detect() expects', $e->getMessage());
+        }
+    }
+
+    public function testDetectForUsesTheGivenStreamNotTheDefault(): void
+    {
+        // A memory stream is never a tty; unforced, that resolves NoTty —
+        // proving the stream argument is what decides, not STDOUT.
+        $fh = fopen('php://memory', 'r');
+        $this->assertIsResource($fh);
+        try {
+            $theme = Theme::detectFor($fh);
+            $this->assertStringNotContainsString("\x1b[", $theme->success->render('x'));
+        } finally {
+            fclose($fh);
         }
     }
 }

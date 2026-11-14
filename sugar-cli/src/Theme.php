@@ -19,9 +19,9 @@ use SugarCraft\Style\Style;
  * of them falls back to {@see detect()} when handed no theme, per below).
  * Themes are immutable; {@see ansi()} ships the default colourful
  * palette, {@see plain()} produces a no-op palette ideal for
- * snapshot tests, and a handful of named presets (`charm`,
- * `dracula`, `nord`, `catppuccin`) cover the most-requested
- * branded palettes.
+ * snapshot tests, and the named presets in {@see PRESET_NAMES}
+ * (`charm`, `dracula`, `nord`, `catppuccin`, plus `auto`) cover the
+ * most-requested branded palettes.
  *
  * Every presenter that is handed no theme falls back to {@see detect()},
  * not {@see ansi()}: the colourful palette downgraded to what the output
@@ -80,14 +80,17 @@ final class Theme
      * environment or output stream computes fresh: no result is ever served
      * stale.
      *
-     * Mirrors charmbracelet/fang, which renders through
-     * `colorprofile.Detect(w, os.Environ())`; the ladder order lives in
-     * sugar-core's {@see \SugarCraft\Core\Util\ColorProfile} and is not
-     * re-implemented here: `CLICOLOR_FORCE` / `FORCE_COLOR` resolve first
-     * and outrank tty-ness and `TERM=dumb` (a forced stream keeps full
-     * colour even through a pipe), while `NO_COLOR` outranks the force
-     * vars and resolves to Ascii (colour dropped, bold/faint kept). An
-     * unforced non-tty stream resolves to NoTty (no escape bytes at all).
+     * The operative lineage is the port's own: sugar-core's
+     * {@see ColorProfile} (which, when sugar-colorprofile is installed,
+     * delegates to its DetectionChain — one authority for the fleet), and
+     * the Go-side ancestor charmbracelet/fang's `colorprofile.Detect(w,
+     * os.Environ())` is mirrored only in spirit: the ladder order lives in
+     * sugar-core and is not re-implemented here: `CLICOLOR_FORCE` /
+     * `FORCE_COLOR` resolve first and outrank tty-ness and `TERM=dumb` (a
+     * forced stream keeps full colour even through a pipe), while
+     * `NO_COLOR` outranks the force vars and resolves to Ascii (colour
+     * dropped, bold/faint kept). An unforced non-tty stream resolves to
+     * NoTty (no escape bytes at all).
      *
      * @param array<string,string>|null $env    environment to inspect;
      *                                          null = the process environment
@@ -404,9 +407,30 @@ final class Theme
             $safe = Width::truncate($safe, 39) . '…';
         }
         throw new \InvalidArgumentException(sprintf(
-            'unknown theme: "%s" (expected one of: %s).',
+            'Theme::byName(): unknown preset "%s" (expected one of: %s).',
             $safe,
             implode(', ', self::PRESET_NAMES),
         ));
+    }
+
+    /**
+     * Detect for one named stream — the entry point for callers that
+     * already know their destination (a file handle, a pty master) and
+     * want the {@see detect()} downgrade without going through the
+     * default-stream substitution.
+     *
+     * @param mixed $stream open stream resource to query for tty-ness
+     *
+     * @throws \InvalidArgumentException when $stream is not an open
+     *                                   stream resource
+     */
+    public static function detectFor(mixed $stream): self
+    {
+        if (!\is_resource($stream)) {
+            throw new \InvalidArgumentException(
+                'Theme::detectFor(): $stream must be an open stream resource; got ' . get_debug_type($stream) . '.'
+            );
+        }
+        return self::ansi()->withColorProfile(ColorProfile::detect(null, $stream));
     }
 }

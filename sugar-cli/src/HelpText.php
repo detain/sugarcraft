@@ -14,10 +14,12 @@ use SugarCraft\Cli\Internal\WidthProbe;
  * supplied section becomes a labelled block of two-column
  * `KEY  description` rows (like git's `--help` output).
  *
- * Inspired by charmbracelet/fang's help screen: fang drives its layout
- * from cobra's typed flag metadata (required/optional/default markers),
- * while this surface lays out plain key/description pairs — any such
- * affordance is text the caller supplies, not something parsed here.
+ * WHY this is not a fang port: fang drives its layout from cobra's typed
+ * flag metadata (required/optional/default markers); there is no parsed
+ * command tree here, so this surface lays out plain key/description
+ * pairs — every such affordance is text the caller supplies, not
+ * something parsed. Mirrors charmbracelet/fang's help screen in shape
+ * only.
  */
 final class HelpText
 {
