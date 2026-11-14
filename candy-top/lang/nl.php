@@ -326,6 +326,7 @@ return [
     'cli.selfupdate.downgrade_refused' => 'candy-top: downgrade geweigerd — deze installatie is {current}, de nieuwste release is {latest}. (--rollback herstelt de bewaarde kopie; niets anders gaat terug.)',
     'cli.selfupdate.download_failed' => 'candy-top: kon {asset} niet downloaden: {reason}.',
     'cli.selfupdate.downloading' => 'candy-top: {asset} voor {version} wordt gedownload; dit kan even duren.',
+    'cli.selfupdate.windows_refused' => 'candy-top: self-update kan een draaiende phar op Windows niet vervangen: het image blijft vergrendeld tijdens uitvoer; download de nieuwe release en vervang deze vanuit een gestopte shell.',
     'cli.selfupdate.empty_download' => 'candy-top: de download van {asset} leverde geen bytes op.',
     'cli.selfupdate.fetch_failed' => 'candy-top: kon de releaselijst niet lezen: {reason}.',
     'cli.selfupdate.flags_exclusive' => 'candy-top: --check meldt alleen; geef het alleen op, niet samen met --rollback of --allow-unsigned.',

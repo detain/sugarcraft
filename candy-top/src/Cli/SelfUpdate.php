@@ -253,6 +253,10 @@ final class SelfUpdate
 
     /**
      * @param list<string> $options the argv slice after the `self-update` verb
+     * @param ?string      $osFamily the OS family this verb believes it runs
+     *                              on; production leaves it null (the
+     *                              runtime answers), the suite drives the
+     *                              Windows refusal arm through it
      */
     public static function run(
         array $options = [],
@@ -261,6 +265,7 @@ final class SelfUpdate
         ?string $pharPath = null,
         ?string $currentVersion = null,
         ?string $publicKey = null,
+        ?string $osFamily = null,
     ): int {
         // Gate ORDER mirrors candy-code exactly: flag exclusivity is judged
         // before the operand refusal, so `--check --rollback junk` reports
@@ -314,6 +319,19 @@ final class SelfUpdate
         $phar = $pharPath ?? \Phar::running(false);
         if ($phar === '') {
             self::stderr(self::composerRefusal());
+
+            return self::EXIT_FAILURE;
+        }
+
+        // Finding 148: Windows holds a lock on the image of a running
+        // executable, so neither the swap below nor --rollback can rename
+        // over the slot candy-top is executing from — and unlinking first
+        // to dodge the lock would open a window where no binary exists at
+        // all. --check never touches the slot and survives; the two verbs
+        // that rename are refused honestly, before a byte is fetched,
+        // instead of failing late with half-moved bytes.
+        if (!$check && ($osFamily ?? \PHP_OS_FAMILY) === 'Windows') {
+            self::stderr(Lang::t('cli.selfupdate.windows_refused'));
 
             return self::EXIT_FAILURE;
         }

@@ -262,8 +262,18 @@ foreach ($loaded->warnings as $warning) {
 }
 // btop auto-enables tty mode on a console: Term::current_tty.starts_with("/dev/tty")
 // (btop.cpp) — /dev/tty1 and serial consoles like /dev/ttyS0 alike.
-$tty = function_exists('posix_ttyname') ? (posix_ttyname(STDIN) ?: '') : '';
-$config = $loaded->config->withTtyModeResolved(null, str_starts_with($tty, '/dev/tty'));
+// Finding 150: without ext-posix the console NAME is unreadable but the
+// console itself is not — the stream_isatty gate above already refused
+// anything that is not a terminal, so on a Unix-family host with no
+// extension STDIN is the /dev/tty console btop names (the old blind
+// fallback answered false and silently skipped the 16-colour mode a
+// stock php Linux build would have enabled). Windows keeps false either
+// way: it has no /dev/tty semantics, and force_tty stays inert by the
+// options-menu rule that refuses the pairing on purpose.
+$onConsole = function_exists('posix_ttyname')
+    ? str_starts_with(posix_ttyname(STDIN) ?: '', '/dev/tty')
+    : PHP_OS_FAMILY !== 'Windows';
+$config = $loaded->config->withTtyModeResolved(null, $onConsole);
 // btop Theme::updateThemes: the list the options menu cycles (rescanned on ctrl+r).
 $catalog = ThemeRegistry::new($themesDir);
 // btop launch flags -p/-t/-u (S-O06): session-only overrides — they steer this

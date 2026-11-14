@@ -406,15 +406,72 @@ final class App implements Model
             . Ansi::bracketedPasteOff() . Ansi::cursorShow() . Ansi::altScreenLeave();
     }
 
-    /** The live clock Cmd: wall time plus /proc/uptime (0 when unreadable). */
+    /** Boot-time seam: non-null replaces every live answer (test only). */
+    private static ?float $bootTimeOverride = null;
+
+    /** Memoised live discovery (-1.0 = asked, no answer; null = never asked). */
+    private static ?float $resolvedBootTime = null;
+
+    /**
+     * Test seam: pin the boot instant the clock falls back to (null
+     * restores live discovery). The suite drives the off-Linux arm this
+     * way — /proc/uptime never fails on a Linux host, so without a seam
+     * the boot-time fallback could only be reached by lying about the OS.
+     */
+    public static function pretendBootTimeForTesting(?float $epoch): void
+    {
+        self::$bootTimeOverride = $epoch;
+    }
+
+    /**
+     * The live clock Cmd: wall time plus uptime. /proc/uptime answers on
+     * Linux; finding 149 adds the off-Linux fallback — discover the boot
+     * instant once and subtract it, so %u/%U stop reading a permanent 0
+     * wherever a dependency-free answer exists (BSD family). Windows has
+     * none (kern.boottime is BSD-only, GetTickCount64 would need FFI) and
+     * keeps the documented 0 rather than a fabricated number.
+     */
     public static function systemClock(): \Closure
     {
         return static function (): ClockTickMsg {
+            $wall = microtime(true);
+            $override = self::$bootTimeOverride;
+            if ($override !== null) {
+                return new ClockTickMsg($wall, max(0.0, $wall - $override));
+            }
             $raw = @file_get_contents('/proc/uptime');
-            $uptime = $raw === false ? 0.0 : (float) strtok($raw, ' ');
+            if ($raw !== false) {
+                return new ClockTickMsg($wall, (float) strtok($raw, ' '));
+            }
+            self::$resolvedBootTime ??= self::queryBootTime() ?? -1.0;
+            $boot = self::$resolvedBootTime;
 
-            return new ClockTickMsg(microtime(true), $uptime);
+            return new ClockTickMsg($wall, $boot >= 0.0 ? max(0.0, $wall - $boot) : 0.0);
         };
+    }
+
+    /**
+     * One-shot boot-instant discovery for the BSD family: kern.boottime
+     * through a constant sysctl command line — no arguments, no user or
+     * config data anywhere near the shell, so there is no external-CLI
+     * surface to escape. null means no answer (any other family, or a
+     * sysctl that cannot speak), and the clock then reports 0 as before.
+     */
+    private static function queryBootTime(): ?float
+    {
+        if (PHP_OS_FAMILY !== 'BSD' && PHP_OS_FAMILY !== 'Darwin') {
+            return null;
+        }
+        $out = @shell_exec('sysctl -n kern.boottime 2>/dev/null');
+        if (!is_string($out) || trim($out) === '') {
+            return null;
+        }
+        if (preg_match('/sec\s*=\s*(\d+)/', $out, $m) === 1) {
+            return (float) $m[1];
+        }
+        $bare = (int) trim($out);
+
+        return $bare > 0 ? (float) $bare : null;
     }
 
     public function init(): \Closure

@@ -326,6 +326,7 @@ return [
     'cli.selfupdate.downgrade_refused' => "candy-top : rétrogradation refusée — cette installation est en {current}, la dernière version est {latest}. (--rollback restaure la copie conservée ; rien d'autre ne revient en arrière.)",
     'cli.selfupdate.download_failed' => 'candy-top : impossible de télécharger {asset} : {reason}.',
     'cli.selfupdate.downloading' => 'candy-top : téléchargement de {asset} pour {version} ; cela peut prendre un moment.',
+    'cli.selfupdate.windows_refused' => 'candy-top : la mise à jour automatique ne peut pas remplacer un phar en cours d\'exécution sous Windows : l\'image reste verrouillée pendant son exécution ; téléchargez la nouvelle version et remplacez-la depuis un terminal arrêté.',
     'cli.selfupdate.empty_download' => "candy-top : le téléchargement de {asset} n'a produit aucun octet.",
     'cli.selfupdate.fetch_failed' => 'candy-top : impossible de lire la liste des versions : {reason}.',
     'cli.selfupdate.flags_exclusive' => "candy-top : --check ne fait que signaler ; l'utiliser seul, sans --rollback ni --allow-unsigned.",

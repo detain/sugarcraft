@@ -274,6 +274,73 @@ final class SelfUpdateTest extends TestCase
         self::assertSame(SelfUpdate::composerRefusal(), \trim($text), 'the refusal is the documented sentence verbatim');
     }
 
+    public function testWindowsRefusesEveryVerbThatRenamesTheRunningImage(): void
+    {
+        // Finding 148: the refusal must arrive before the first GET. The
+        // fake server answers no route with a ConnectException, so merely
+        // reaching the refusal wording is the proof that a swap nobody can
+        // complete fetched nothing; both renaming verbs (the swap and
+        // --rollback) take the same honest exit.
+        foreach ([[], ['--rollback']] as $verb) {
+            $this->resetErrorStream();
+            $exit = SelfUpdate::run(
+                $verb,
+                $this->fakeServerClient(),
+                $this->releasesUrl([$this->stageRelease('candy-top/v9.9.9', 'NEW')]),
+                $this->livePharPath(),
+                'v0.1.0',
+                '',
+                'Windows',
+            );
+            self::assertSame(SelfUpdate::EXIT_FAILURE, $exit);
+            self::assertStringContainsString(
+                'cannot replace a running phar on Windows',
+                $this->errorText(),
+            );
+        }
+    }
+
+    public function testWindowsCheckSurvivesBecauseItNeverTouchesTheSlot(): void
+    {
+        // --check is read-only: the lock that dooms the swap says nothing
+        // about asking what is new, so the refusal is scoped to the verbs
+        // that rename and the check keeps its normal answer.
+        $exit = SelfUpdate::run(
+            ['--check'],
+            $this->fakeServerClient(),
+            $this->releasesUrl([$this->stageRelease('candy-top/v9.9.9', 'NEW')]),
+            $this->livePharPath(),
+            'v0.1.0',
+            '',
+            'Windows',
+        );
+        $text = $this->errorText();
+        self::assertStringContainsString('update available', $text);
+        self::assertStringNotContainsString('running phar on Windows', $text);
+        self::assertSame(SelfUpdate::EXIT_FAILURE, $exit, 'a pending --check exits 1 as everywhere');
+    }
+
+    public function testTheOsFamilySeamIsTheWholeTruthForTheRefusal(): void
+    {
+        // A 'Linux' answer proceeds even when the refusal arm is live in
+        // the code — the pin is the fetch notice, which only the real
+        // update path prints, so this also witnesses the seam overriding
+        // the runtime rather than merely agreeing with it.
+        $exit = SelfUpdate::run(
+            [],
+            $this->fakeServerClient(),
+            $this->releasesUrl([$this->stageRelease('candy-top/v9.9.9', 'NEW')]),
+            $this->livePharPath(),
+            'v0.1.0',
+            '',
+            'Linux',
+        );
+        $text = $this->errorText();
+        self::assertStringContainsString('downloading', $text);
+        self::assertStringNotContainsString('running phar on Windows', $text);
+        self::assertContains($exit, [SelfUpdate::EXIT_OK, SelfUpdate::EXIT_FAILURE]);
+    }
+
     public function testCheckDistinguishesAvailableFromUpToDateByExitCode(): void
     {
         $available = SelfUpdate::run(

@@ -326,6 +326,7 @@ return [
     'cli.selfupdate.downgrade_refused' => 'candy-top: downgrade recusado — esta instalação é {current}, a última versão é {latest}. (--rollback restaura a cópia guardada; nada mais volta atrás.)',
     'cli.selfupdate.download_failed' => 'candy-top: não foi possível baixar {asset}: {reason}.',
     'cli.selfupdate.downloading' => 'candy-top: baixando {asset} para {version}; isso pode levar um momento.',
+    'cli.selfupdate.windows_refused' => 'candy-top: a auto-atualização não pode substituir um phar em execução no Windows: a imagem fica bloqueada durante a execução; baixe a nova versão e substitua-a de um shell encerrado.',
     'cli.selfupdate.empty_download' => 'candy-top: o download de {asset} não produziu nenhum byte.',
     'cli.selfupdate.fetch_failed' => 'candy-top: não foi possível ler a lista de versões: {reason}.',
     'cli.selfupdate.flags_exclusive' => 'candy-top: --check apenas informa; use-o sozinho, sem --rollback ou --allow-unsigned.',

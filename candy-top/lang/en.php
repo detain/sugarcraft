@@ -342,6 +342,7 @@ return [
     'cli.selfupdate.downgrade_refused' => 'candy-top: refusing to downgrade — this install is {current}, the latest release is {latest}. (--rollback restores the kept copy; nothing else goes backwards.)',
     'cli.selfupdate.download_failed' => 'candy-top: could not download {asset}: {reason}.',
     'cli.selfupdate.downloading' => 'candy-top: downloading {asset} for {version}; this may take a moment.',
+    'cli.selfupdate.windows_refused' => 'candy-top: self-update cannot replace a running phar on Windows: the image stays locked while it executes; download the new release and swap it from a stopped shell.',
     'cli.selfupdate.empty_download' => 'candy-top: the download of {asset} produced no bytes.',
     'cli.selfupdate.fetch_failed' => 'candy-top: could not read the release list: {reason}.',
     'cli.selfupdate.flags_exclusive' => 'candy-top: --check reports only; pass it alone, not with --rollback or --allow-unsigned.',

@@ -326,6 +326,7 @@ return [
     'cli.selfupdate.downgrade_refused' => 'candy-top：拒絕降級 — 當前安裝為 {current}，最新發佈版本為 {latest}。（--rollback 會還原保留的副本；其他方式都不會回退。）',
     'cli.selfupdate.download_failed' => 'candy-top：無法下載 {asset}：{reason}。',
     'cli.selfupdate.downloading' => 'candy-top：正在下載 {version} 的 {asset}，可能需要片刻時間。',
+    'cli.selfupdate.windows_refused' => 'candy-top：自更新無法在 Windows 上取代正在執行的 phar：映像檔在執行期間保持鎖定；請下載新版本並在已停止的 shell 中取代。',
     'cli.selfupdate.empty_download' => 'candy-top：{asset} 的下載內容為 0 位元組。',
     'cli.selfupdate.fetch_failed' => 'candy-top：無法讀取發佈清單：{reason}。',
     'cli.selfupdate.flags_exclusive' => 'candy-top：--check 僅作報告；請單獨使用，不要與 --rollback 或 --allow-unsigned 同用。',

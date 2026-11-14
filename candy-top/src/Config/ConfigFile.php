@@ -201,6 +201,13 @@ final class ConfigFile
                 throw $this->writeFailed('close failed');
             }
 
+            // The rename is the publish point, and it is also the failure
+            // that says the most: on Windows a target held open by a
+            // running process refuses to be moved over, which lands here
+            // as a loud refusal with the previous file byte-intact. That
+            // posture is deliberate — the alternative (unlink, then
+            // rename) would delete a readable config before knowing the
+            // new bytes could take its place.
             if (!@rename($tmp, $target)) {
                 throw $this->writeFailed('rename failed');
             }
