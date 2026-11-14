@@ -483,7 +483,9 @@ final class Editor implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withContent(?string $content): self
     {
-        return new self(
+        // D-17: the allocation lives in setSize-owned fields outside
+        // the ctor; rebuilds must re-apply it or the box is forgotten.
+        $carried = new self(
             content: $content,
             showLineNumbers: $this->showLineNumbers,
             wordWrap: $this->wordWrap,
@@ -498,6 +500,10 @@ final class Editor implements \SugarCraft\Dashboard\Foundation\SizedItem
             borderColor: $this->borderColor,
             style: $this->style,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -505,7 +511,7 @@ final class Editor implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withLineNumbers(bool $show): self
     {
-        return new self(
+        $carried = new self(
             content: $this->content(),
             showLineNumbers: $show,
             wordWrap: $this->wordWrap,
@@ -520,6 +526,10 @@ final class Editor implements \SugarCraft\Dashboard\Foundation\SizedItem
             borderColor: $this->borderColor,
             style: $this->style,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -527,7 +537,7 @@ final class Editor implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withWordWrap(bool $wrap): self
     {
-        return new self(
+        $carried = new self(
             content: $this->content(),
             showLineNumbers: $this->showLineNumbers,
             wordWrap: $wrap,
@@ -542,6 +552,10 @@ final class Editor implements \SugarCraft\Dashboard\Foundation\SizedItem
             borderColor: $this->borderColor,
             style: $this->style,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -549,7 +563,7 @@ final class Editor implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withReadOnly(bool $readOnly): self
     {
-        return new self(
+        $carried = new self(
             content: $this->content(),
             showLineNumbers: $this->showLineNumbers,
             wordWrap: $this->wordWrap,
@@ -564,6 +578,10 @@ final class Editor implements \SugarCraft\Dashboard\Foundation\SizedItem
             borderColor: $this->borderColor,
             style: $this->style,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -571,7 +589,7 @@ final class Editor implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withShowCursor(bool $show): self
     {
-        return new self(
+        $carried = new self(
             content: $this->content(),
             showLineNumbers: $this->showLineNumbers,
             wordWrap: $this->wordWrap,
@@ -586,6 +604,10 @@ final class Editor implements \SugarCraft\Dashboard\Foundation\SizedItem
             borderColor: $this->borderColor,
             style: $this->style,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -593,7 +615,7 @@ final class Editor implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withTextColor(?Color $color): self
     {
-        return new self(
+        $carried = new self(
             content: $this->content(),
             showLineNumbers: $this->showLineNumbers,
             wordWrap: $this->wordWrap,
@@ -608,6 +630,10 @@ final class Editor implements \SugarCraft\Dashboard\Foundation\SizedItem
             borderColor: $this->borderColor,
             style: $this->style,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -615,7 +641,7 @@ final class Editor implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withStyle(string $style): self
     {
-        return new self(
+        $carried = new self(
             content: $this->content(),
             showLineNumbers: $this->showLineNumbers,
             wordWrap: $this->wordWrap,
@@ -630,5 +656,9 @@ final class Editor implements \SugarCraft\Dashboard\Foundation\SizedItem
             borderColor: $this->borderColor,
             style: $style,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 }

@@ -297,7 +297,9 @@ final class Input implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withValue(?string $value): self
     {
-        return new self(
+        // D-17: the allocation lives in setSize-owned fields outside
+        // the ctor; rebuilds must re-apply it or the box is forgotten.
+        $carried = new self(
             value: $value,
             placeholder: $this->placeholder,
             label: $this->label,
@@ -309,6 +311,10 @@ final class Input implements \SugarCraft\Dashboard\Foundation\SizedItem
             masked: $this->masked,
             style: $this->style,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -316,7 +322,7 @@ final class Input implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withPlaceholder(?string $placeholder): self
     {
-        return new self(
+        $carried = new self(
             value: $this->value,
             placeholder: $placeholder,
             label: $this->label,
@@ -328,6 +334,10 @@ final class Input implements \SugarCraft\Dashboard\Foundation\SizedItem
             masked: $this->masked,
             style: $this->style,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -335,7 +345,7 @@ final class Input implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withLabel(?string $label): self
     {
-        return new self(
+        $carried = new self(
             value: $this->value,
             placeholder: $this->placeholder,
             label: $label,
@@ -347,6 +357,10 @@ final class Input implements \SugarCraft\Dashboard\Foundation\SizedItem
             masked: $this->masked,
             style: $this->style,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -354,7 +368,7 @@ final class Input implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withError(?string $error): self
     {
-        return new self(
+        $carried = new self(
             value: $this->value,
             placeholder: $this->placeholder,
             label: $this->label,
@@ -366,6 +380,10 @@ final class Input implements \SugarCraft\Dashboard\Foundation\SizedItem
             masked: $this->masked,
             style: $this->style,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -373,7 +391,7 @@ final class Input implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withBorderColor(?Color $color): self
     {
-        return new self(
+        $carried = new self(
             value: $this->value,
             placeholder: $this->placeholder,
             label: $this->label,
@@ -385,6 +403,10 @@ final class Input implements \SugarCraft\Dashboard\Foundation\SizedItem
             masked: $this->masked,
             style: $this->style,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -392,7 +414,7 @@ final class Input implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withTextColor(?Color $color): self
     {
-        return new self(
+        $carried = new self(
             value: $this->value,
             placeholder: $this->placeholder,
             label: $this->label,
@@ -404,6 +426,10 @@ final class Input implements \SugarCraft\Dashboard\Foundation\SizedItem
             masked: $this->masked,
             style: $this->style,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -411,7 +437,7 @@ final class Input implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withPlaceholderColor(?Color $color): self
     {
-        return new self(
+        $carried = new self(
             value: $this->value,
             placeholder: $this->placeholder,
             label: $this->label,
@@ -423,6 +449,10 @@ final class Input implements \SugarCraft\Dashboard\Foundation\SizedItem
             masked: $this->masked,
             style: $this->style,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -430,7 +460,7 @@ final class Input implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withBackgroundColor(?Color $color): self
     {
-        return new self(
+        $carried = new self(
             value: $this->value,
             placeholder: $this->placeholder,
             label: $this->label,
@@ -442,6 +472,10 @@ final class Input implements \SugarCraft\Dashboard\Foundation\SizedItem
             masked: $this->masked,
             style: $this->style,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -449,7 +483,7 @@ final class Input implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withMasked(bool $masked): self
     {
-        return new self(
+        $carried = new self(
             value: $this->value,
             placeholder: $this->placeholder,
             label: $this->label,
@@ -461,6 +495,10 @@ final class Input implements \SugarCraft\Dashboard\Foundation\SizedItem
             masked: $masked,
             style: $this->style,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -468,7 +506,7 @@ final class Input implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withStyle(string $style): self
     {
-        return new self(
+        $carried = new self(
             value: $this->value,
             placeholder: $this->placeholder,
             label: $this->label,
@@ -480,6 +518,10 @@ final class Input implements \SugarCraft\Dashboard\Foundation\SizedItem
             masked: $this->masked,
             style: $style,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**

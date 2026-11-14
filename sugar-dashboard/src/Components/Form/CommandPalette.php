@@ -310,7 +310,9 @@ final class CommandPalette implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withQuery(string $query): self
     {
-        return new self(
+        // D-17: the allocation lives in setSize-owned fields outside
+        // the ctor; rebuilds must re-apply it or the box is forgotten.
+        $carried = new self(
             commands: $this->commands,
             query: $query,
             selectedIndex: 0, // Reset selection when query changes
@@ -322,6 +324,10 @@ final class CommandPalette implements \SugarCraft\Dashboard\Foundation\SizedItem
             borderChar: $this->borderChar,
             selectedChar: $this->selectedChar,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -332,7 +338,7 @@ final class CommandPalette implements \SugarCraft\Dashboard\Foundation\SizedItem
         $filtered = $this->filteredCommands();
         $maxIndex = max(0, count($filtered) - 1);
 
-        return new self(
+        $carried = new self(
             commands: $this->commands,
             query: $this->query,
             selectedIndex: max(0, min($index, $maxIndex)),
@@ -344,6 +350,10 @@ final class CommandPalette implements \SugarCraft\Dashboard\Foundation\SizedItem
             borderChar: $this->borderChar,
             selectedChar: $this->selectedChar,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -353,7 +363,7 @@ final class CommandPalette implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withCommands(array $commands): self
     {
-        return new self(
+        $carried = new self(
             commands: $commands,
             query: $this->query,
             selectedIndex: min($this->selectedIndex, max(0, count($commands) - 1)),
@@ -365,6 +375,10 @@ final class CommandPalette implements \SugarCraft\Dashboard\Foundation\SizedItem
             borderChar: $this->borderChar,
             selectedChar: $this->selectedChar,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -372,7 +386,7 @@ final class CommandPalette implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withPaletteColor(?Color $color): self
     {
-        return new self(
+        $carried = new self(
             commands: $this->commands,
             query: $this->query,
             selectedIndex: $this->selectedIndex,
@@ -384,6 +398,10 @@ final class CommandPalette implements \SugarCraft\Dashboard\Foundation\SizedItem
             borderChar: $this->borderChar,
             selectedChar: $this->selectedChar,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -391,7 +409,7 @@ final class CommandPalette implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withSelectedColor(?Color $color): self
     {
-        return new self(
+        $carried = new self(
             commands: $this->commands,
             query: $this->query,
             selectedIndex: $this->selectedIndex,
@@ -403,6 +421,10 @@ final class CommandPalette implements \SugarCraft\Dashboard\Foundation\SizedItem
             borderChar: $this->borderChar,
             selectedChar: $this->selectedChar,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -410,7 +432,7 @@ final class CommandPalette implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withQueryColor(?Color $color): self
     {
-        return new self(
+        $carried = new self(
             commands: $this->commands,
             query: $this->query,
             selectedIndex: $this->selectedIndex,
@@ -422,6 +444,10 @@ final class CommandPalette implements \SugarCraft\Dashboard\Foundation\SizedItem
             borderChar: $this->borderChar,
             selectedChar: $this->selectedChar,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -429,7 +455,7 @@ final class CommandPalette implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withShortcutColor(?Color $color): self
     {
-        return new self(
+        $carried = new self(
             commands: $this->commands,
             query: $this->query,
             selectedIndex: $this->selectedIndex,
@@ -441,6 +467,10 @@ final class CommandPalette implements \SugarCraft\Dashboard\Foundation\SizedItem
             borderChar: $this->borderChar,
             selectedChar: $this->selectedChar,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -448,7 +478,7 @@ final class CommandPalette implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withPlaceholder(string $placeholder): self
     {
-        return new self(
+        $carried = new self(
             commands: $this->commands,
             query: $this->query,
             selectedIndex: $this->selectedIndex,
@@ -460,6 +490,10 @@ final class CommandPalette implements \SugarCraft\Dashboard\Foundation\SizedItem
             borderChar: $this->borderChar,
             selectedChar: $this->selectedChar,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -467,7 +501,7 @@ final class CommandPalette implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withBorderChar(string $char): self
     {
-        return new self(
+        $carried = new self(
             commands: $this->commands,
             query: $this->query,
             selectedIndex: $this->selectedIndex,
@@ -479,6 +513,10 @@ final class CommandPalette implements \SugarCraft\Dashboard\Foundation\SizedItem
             borderChar: $char,
             selectedChar: $this->selectedChar,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -486,7 +524,7 @@ final class CommandPalette implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withSelectedChar(string $char): self
     {
-        return new self(
+        $carried = new self(
             commands: $this->commands,
             query: $this->query,
             selectedIndex: $this->selectedIndex,
@@ -498,5 +536,9 @@ final class CommandPalette implements \SugarCraft\Dashboard\Foundation\SizedItem
             borderChar: $this->borderChar,
             selectedChar: $char,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 }

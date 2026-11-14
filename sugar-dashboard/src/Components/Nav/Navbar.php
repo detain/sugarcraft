@@ -220,7 +220,9 @@ final class Navbar implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withItems(array $items): self
     {
-        return new self(
+        // D-17: the allocation lives in setSize-owned fields outside
+        // the ctor; rebuilds must re-apply it or the box is forgotten.
+        $carried = new self(
             items: $items,
             brand: $this->brand,
             borderColor: $this->borderColor,
@@ -228,6 +230,10 @@ final class Navbar implements \SugarCraft\Dashboard\Foundation\SizedItem
             inactiveColor: $this->inactiveColor,
             bgColor: $this->bgColor,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -235,7 +241,7 @@ final class Navbar implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withBrand(?string $brand): self
     {
-        return new self(
+        $carried = new self(
             items: $this->items,
             brand: $brand,
             borderColor: $this->borderColor,
@@ -243,6 +249,10 @@ final class Navbar implements \SugarCraft\Dashboard\Foundation\SizedItem
             inactiveColor: $this->inactiveColor,
             bgColor: $this->bgColor,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -250,7 +260,7 @@ final class Navbar implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withBorderColor(?Color $color): self
     {
-        return new self(
+        $carried = new self(
             items: $this->items,
             brand: $this->brand,
             borderColor: $color,
@@ -258,6 +268,10 @@ final class Navbar implements \SugarCraft\Dashboard\Foundation\SizedItem
             inactiveColor: $this->inactiveColor,
             bgColor: $this->bgColor,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -265,7 +279,7 @@ final class Navbar implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withActiveColor(?Color $color): self
     {
-        return new self(
+        $carried = new self(
             items: $this->items,
             brand: $this->brand,
             borderColor: $this->borderColor,
@@ -273,6 +287,10 @@ final class Navbar implements \SugarCraft\Dashboard\Foundation\SizedItem
             inactiveColor: $this->inactiveColor,
             bgColor: $this->bgColor,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -280,7 +298,7 @@ final class Navbar implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withInactiveColor(?Color $color): self
     {
-        return new self(
+        $carried = new self(
             items: $this->items,
             brand: $this->brand,
             borderColor: $this->borderColor,
@@ -288,6 +306,10 @@ final class Navbar implements \SugarCraft\Dashboard\Foundation\SizedItem
             inactiveColor: $color,
             bgColor: $this->bgColor,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -295,7 +317,7 @@ final class Navbar implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withBgColor(?Color $color): self
     {
-        return new self(
+        $carried = new self(
             items: $this->items,
             brand: $this->brand,
             borderColor: $this->borderColor,
@@ -303,6 +325,10 @@ final class Navbar implements \SugarCraft\Dashboard\Foundation\SizedItem
             inactiveColor: $this->inactiveColor,
             bgColor: $color,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -315,7 +341,7 @@ final class Navbar implements \SugarCraft\Dashboard\Foundation\SizedItem
             return $item;
         }, $this->items, array_keys($this->items));
 
-        return new self(
+        $carried = new self(
             items: $items,
             brand: $this->brand,
             borderColor: $this->borderColor,
@@ -323,5 +349,9 @@ final class Navbar implements \SugarCraft\Dashboard\Foundation\SizedItem
             inactiveColor: $this->inactiveColor,
             bgColor: $this->bgColor,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 }

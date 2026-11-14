@@ -208,7 +208,9 @@ final class Scrollbar implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withPosition(float $position): self
     {
-        return new self(
+        // D-17: the allocation lives in setSize-owned fields outside
+        // the ctor; rebuilds must re-apply it or the box is forgotten.
+        $carried = new self(
             position: max(0.0, min(1.0, $position)),
             viewportRatio: $this->viewportRatio,
             heightConstraint: $this->heightConstraint,
@@ -220,6 +222,10 @@ final class Scrollbar implements \SugarCraft\Dashboard\Foundation\SizedItem
             arrowUp: $this->arrowUp,
             arrowDown: $this->arrowDown,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -227,7 +233,7 @@ final class Scrollbar implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withViewportRatio(float $ratio): self
     {
-        return new self(
+        $carried = new self(
             position: $this->position,
             viewportRatio: max(0.1, min(1.0, $ratio)),
             heightConstraint: $this->heightConstraint,
@@ -239,6 +245,10 @@ final class Scrollbar implements \SugarCraft\Dashboard\Foundation\SizedItem
             arrowUp: $this->arrowUp,
             arrowDown: $this->arrowDown,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -246,7 +256,7 @@ final class Scrollbar implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withHeight(int $height): self
     {
-        return new self(
+        $carried = new self(
             position: $this->position,
             viewportRatio: $this->viewportRatio,
             heightConstraint: max(3, $height),
@@ -258,6 +268,10 @@ final class Scrollbar implements \SugarCraft\Dashboard\Foundation\SizedItem
             arrowUp: $this->arrowUp,
             arrowDown: $this->arrowDown,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -265,7 +279,7 @@ final class Scrollbar implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withThumbColor(?Color $color): self
     {
-        return new self(
+        $carried = new self(
             position: $this->position,
             viewportRatio: $this->viewportRatio,
             heightConstraint: $this->heightConstraint,
@@ -277,6 +291,10 @@ final class Scrollbar implements \SugarCraft\Dashboard\Foundation\SizedItem
             arrowUp: $this->arrowUp,
             arrowDown: $this->arrowDown,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -284,7 +302,7 @@ final class Scrollbar implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withTrackColor(?Color $color): self
     {
-        return new self(
+        $carried = new self(
             position: $this->position,
             viewportRatio: $this->viewportRatio,
             heightConstraint: $this->heightConstraint,
@@ -296,6 +314,10 @@ final class Scrollbar implements \SugarCraft\Dashboard\Foundation\SizedItem
             arrowUp: $this->arrowUp,
             arrowDown: $this->arrowDown,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -303,7 +325,7 @@ final class Scrollbar implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withShowArrows(bool $show): self
     {
-        return new self(
+        $carried = new self(
             position: $this->position,
             viewportRatio: $this->viewportRatio,
             heightConstraint: $this->heightConstraint,
@@ -315,6 +337,10 @@ final class Scrollbar implements \SugarCraft\Dashboard\Foundation\SizedItem
             arrowUp: $this->arrowUp,
             arrowDown: $this->arrowDown,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -322,7 +348,7 @@ final class Scrollbar implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withChars(string $thumb, string $track): self
     {
-        return new self(
+        $carried = new self(
             position: $this->position,
             viewportRatio: $this->viewportRatio,
             heightConstraint: $this->heightConstraint,
@@ -334,6 +360,10 @@ final class Scrollbar implements \SugarCraft\Dashboard\Foundation\SizedItem
             arrowUp: $this->arrowUp,
             arrowDown: $this->arrowDown,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -341,7 +371,7 @@ final class Scrollbar implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withArrows(string $up, string $down): self
     {
-        return new self(
+        $carried = new self(
             position: $this->position,
             viewportRatio: $this->viewportRatio,
             heightConstraint: $this->heightConstraint,
@@ -353,5 +383,9 @@ final class Scrollbar implements \SugarCraft\Dashboard\Foundation\SizedItem
             arrowUp: $up,
             arrowDown: $down,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 }

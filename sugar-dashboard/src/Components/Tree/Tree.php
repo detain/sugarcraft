@@ -219,7 +219,9 @@ final class Tree implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withShowLines(bool $show): self
     {
-        return new self(
+        // D-17: the allocation lives in setSize-owned fields outside
+        // the ctor; rebuilds must re-apply it or the box is forgotten.
+        $carried = new self(
             nodes: $this->nodes,
             showLines: $show,
             nodeColor: $this->nodeColor,
@@ -229,6 +231,10 @@ final class Tree implements \SugarCraft\Dashboard\Foundation\SizedItem
             verticalChar: $this->verticalChar,
             spaceChar: $this->spaceChar,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -236,7 +242,7 @@ final class Tree implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withNodeColor(?Color $color): self
     {
-        return new self(
+        $carried = new self(
             nodes: $this->nodes,
             showLines: $this->showLines,
             nodeColor: $color,
@@ -246,6 +252,10 @@ final class Tree implements \SugarCraft\Dashboard\Foundation\SizedItem
             verticalChar: $this->verticalChar,
             spaceChar: $this->spaceChar,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -253,7 +263,7 @@ final class Tree implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withCollapsedColor(?Color $color): self
     {
-        return new self(
+        $carried = new self(
             nodes: $this->nodes,
             showLines: $this->showLines,
             nodeColor: $this->nodeColor,
@@ -263,6 +273,10 @@ final class Tree implements \SugarCraft\Dashboard\Foundation\SizedItem
             verticalChar: $this->verticalChar,
             spaceChar: $this->spaceChar,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -270,7 +284,7 @@ final class Tree implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withBranchChars(string $branch, string $end): self
     {
-        return new self(
+        $carried = new self(
             nodes: $this->nodes,
             showLines: $this->showLines,
             nodeColor: $this->nodeColor,
@@ -280,6 +294,10 @@ final class Tree implements \SugarCraft\Dashboard\Foundation\SizedItem
             verticalChar: $this->verticalChar,
             spaceChar: $this->spaceChar,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -290,7 +308,7 @@ final class Tree implements \SugarCraft\Dashboard\Foundation\SizedItem
     public function withNodeCollapsed(string $label, bool $collapsed): self
     {
         $nodes = $this->toggleNodeCollapsed($this->nodes, $label, $collapsed);
-        return new self(
+        $carried = new self(
             nodes: $nodes,
             showLines: $this->showLines,
             nodeColor: $this->nodeColor,
@@ -300,6 +318,10 @@ final class Tree implements \SugarCraft\Dashboard\Foundation\SizedItem
             verticalChar: $this->verticalChar,
             spaceChar: $this->spaceChar,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**

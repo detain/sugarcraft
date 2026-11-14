@@ -253,7 +253,9 @@ final class Slider implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withValue(float $value): self
     {
-        return new self(
+        // D-17: the allocation lives in setSize-owned fields outside
+        // the ctor; rebuilds must re-apply it or the box is forgotten.
+        $carried = new self(
             value: $value,
             min: $this->min,
             max: $this->max,
@@ -264,6 +266,10 @@ final class Slider implements \SugarCraft\Dashboard\Foundation\SizedItem
             thumbChar: $this->thumbChar,
             trackChar: $this->trackChar,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -271,7 +277,7 @@ final class Slider implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withMin(float $min): self
     {
-        return new self(
+        $carried = new self(
             value: $this->value,
             min: $min,
             max: $this->max,
@@ -282,6 +288,10 @@ final class Slider implements \SugarCraft\Dashboard\Foundation\SizedItem
             thumbChar: $this->thumbChar,
             trackChar: $this->trackChar,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -289,7 +299,7 @@ final class Slider implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withMax(float $max): self
     {
-        return new self(
+        $carried = new self(
             value: $this->value,
             min: $this->min,
             max: $max,
@@ -300,6 +310,10 @@ final class Slider implements \SugarCraft\Dashboard\Foundation\SizedItem
             thumbChar: $this->thumbChar,
             trackChar: $this->trackChar,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -307,7 +321,7 @@ final class Slider implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withRange(float $min, float $max): self
     {
-        return new self(
+        $carried = new self(
             value: $this->value,
             min: $min,
             max: $max,
@@ -318,6 +332,10 @@ final class Slider implements \SugarCraft\Dashboard\Foundation\SizedItem
             thumbChar: $this->thumbChar,
             trackChar: $this->trackChar,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -325,7 +343,7 @@ final class Slider implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withShowValue(bool $show): self
     {
-        return new self(
+        $carried = new self(
             value: $this->value,
             min: $this->min,
             max: $this->max,
@@ -336,6 +354,10 @@ final class Slider implements \SugarCraft\Dashboard\Foundation\SizedItem
             thumbChar: $this->thumbChar,
             trackChar: $this->trackChar,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -343,7 +365,7 @@ final class Slider implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withTrackColor(?Color $color): self
     {
-        return new self(
+        $carried = new self(
             value: $this->value,
             min: $this->min,
             max: $this->max,
@@ -354,6 +376,10 @@ final class Slider implements \SugarCraft\Dashboard\Foundation\SizedItem
             thumbChar: $this->thumbChar,
             trackChar: $this->trackChar,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -361,7 +387,7 @@ final class Slider implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withThumbColor(?Color $color): self
     {
-        return new self(
+        $carried = new self(
             value: $this->value,
             min: $this->min,
             max: $this->max,
@@ -372,6 +398,10 @@ final class Slider implements \SugarCraft\Dashboard\Foundation\SizedItem
             thumbChar: $this->thumbChar,
             trackChar: $this->trackChar,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -379,7 +409,7 @@ final class Slider implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withChars(string $thumb, string $track): self
     {
-        return new self(
+        $carried = new self(
             value: $this->value,
             min: $this->min,
             max: $this->max,
@@ -390,6 +420,10 @@ final class Slider implements \SugarCraft\Dashboard\Foundation\SizedItem
             thumbChar: $thumb,
             trackChar: $track,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -397,7 +431,7 @@ final class Slider implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withVertical(bool $vertical): self
     {
-        return new self(
+        $carried = new self(
             value: $this->value,
             min: $this->min,
             max: $this->max,
@@ -408,5 +442,9 @@ final class Slider implements \SugarCraft\Dashboard\Foundation\SizedItem
             thumbChar: $vertical ? '●' : ($this->thumbChar === '●' ? '●' : $this->thumbChar),
             trackChar: $vertical ? '│' : ($this->trackChar === '│' ? '─' : $this->trackChar),
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 }

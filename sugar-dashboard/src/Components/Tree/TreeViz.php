@@ -224,7 +224,9 @@ final class TreeViz implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withNodes(array $nodes): self
     {
-        return new self(
+        // D-17: the allocation lives in setSize-owned fields outside
+        // the ctor; rebuilds must re-apply it or the box is forgotten.
+        $carried = new self(
             nodes: $nodes,
             showLines: $this->showLines,
             showLabels: $this->showLabels,
@@ -233,6 +235,10 @@ final class TreeViz implements \SugarCraft\Dashboard\Foundation\SizedItem
             labelColor: $this->labelColor,
             orientation: $this->orientation,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -240,7 +246,7 @@ final class TreeViz implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withShowLines(bool $show): self
     {
-        return new self(
+        $carried = new self(
             nodes: $this->nodes,
             showLines: $show,
             showLabels: $this->showLabels,
@@ -249,6 +255,10 @@ final class TreeViz implements \SugarCraft\Dashboard\Foundation\SizedItem
             labelColor: $this->labelColor,
             orientation: $this->orientation,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -256,7 +266,7 @@ final class TreeViz implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withShowLabels(bool $show): self
     {
-        return new self(
+        $carried = new self(
             nodes: $this->nodes,
             showLines: $this->showLines,
             showLabels: $show,
@@ -265,6 +275,10 @@ final class TreeViz implements \SugarCraft\Dashboard\Foundation\SizedItem
             labelColor: $this->labelColor,
             orientation: $this->orientation,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -272,7 +286,7 @@ final class TreeViz implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withOrientation(string $orientation): self
     {
-        return new self(
+        $carried = new self(
             nodes: $this->nodes,
             showLines: $this->showLines,
             showLabels: $this->showLabels,
@@ -281,5 +295,9 @@ final class TreeViz implements \SugarCraft\Dashboard\Foundation\SizedItem
             labelColor: $this->labelColor,
             orientation: $orientation,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 }

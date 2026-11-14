@@ -162,7 +162,9 @@ final class Breadcrumb implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withItems(array $items): self
     {
-        return new self(
+        // D-17: the allocation lives in setSize-owned fields outside
+        // the ctor; rebuilds must re-apply it or the box is forgotten.
+        $carried = new self(
             items: $items,
             separator: $this->separator,
             separatorColor: $this->separatorColor,
@@ -170,6 +172,10 @@ final class Breadcrumb implements \SugarCraft\Dashboard\Foundation\SizedItem
             activeColor: $this->activeColor,
             activeIndex: count($items) - 1,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -177,7 +183,7 @@ final class Breadcrumb implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withSeparator(string $separator): self
     {
-        return new self(
+        $carried = new self(
             items: $this->items,
             separator: $separator,
             separatorColor: $this->separatorColor,
@@ -185,6 +191,10 @@ final class Breadcrumb implements \SugarCraft\Dashboard\Foundation\SizedItem
             activeColor: $this->activeColor,
             activeIndex: $this->activeIndex,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -192,7 +202,7 @@ final class Breadcrumb implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withSeparatorColor(?Color $color): self
     {
-        return new self(
+        $carried = new self(
             items: $this->items,
             separator: $this->separator,
             separatorColor: $color,
@@ -200,6 +210,10 @@ final class Breadcrumb implements \SugarCraft\Dashboard\Foundation\SizedItem
             activeColor: $this->activeColor,
             activeIndex: $this->activeIndex,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -207,7 +221,7 @@ final class Breadcrumb implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withItemColor(?Color $color): self
     {
-        return new self(
+        $carried = new self(
             items: $this->items,
             separator: $this->separator,
             separatorColor: $this->separatorColor,
@@ -215,6 +229,10 @@ final class Breadcrumb implements \SugarCraft\Dashboard\Foundation\SizedItem
             activeColor: $this->activeColor,
             activeIndex: $this->activeIndex,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -222,7 +240,7 @@ final class Breadcrumb implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withActiveColor(?Color $color): self
     {
-        return new self(
+        $carried = new self(
             items: $this->items,
             separator: $this->separator,
             separatorColor: $this->separatorColor,
@@ -230,6 +248,10 @@ final class Breadcrumb implements \SugarCraft\Dashboard\Foundation\SizedItem
             activeColor: $color,
             activeIndex: $this->activeIndex,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -237,7 +259,7 @@ final class Breadcrumb implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withActiveIndex(int $index): self
     {
-        return new self(
+        $carried = new self(
             items: $this->items,
             separator: $this->separator,
             separatorColor: $this->separatorColor,
@@ -245,5 +267,9 @@ final class Breadcrumb implements \SugarCraft\Dashboard\Foundation\SizedItem
             activeColor: $this->activeColor,
             activeIndex: $index,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 }

@@ -232,7 +232,9 @@ final class Stepper implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withSteps(array $steps): self
     {
-        return new self(
+        // D-17: the allocation lives in setSize-owned fields outside
+        // the ctor; rebuilds must re-apply it or the box is forgotten.
+        $carried = new self(
             steps: $steps,
             showNumbers: $this->showNumbers,
             completedColor: $this->completedColor,
@@ -240,6 +242,10 @@ final class Stepper implements \SugarCraft\Dashboard\Foundation\SizedItem
             pendingColor: $this->pendingColor,
             connectorColor: $this->connectorColor,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -258,7 +264,7 @@ final class Stepper implements \SugarCraft\Dashboard\Foundation\SizedItem
             return $s;
         }, $this->steps, array_keys($this->steps));
 
-        return new self(
+        $carried = new self(
             steps: $steps,
             showNumbers: $this->showNumbers,
             completedColor: $this->completedColor,
@@ -266,6 +272,10 @@ final class Stepper implements \SugarCraft\Dashboard\Foundation\SizedItem
             pendingColor: $this->pendingColor,
             connectorColor: $this->connectorColor,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -273,7 +283,7 @@ final class Stepper implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withShowNumbers(bool $show): self
     {
-        return new self(
+        $carried = new self(
             steps: $this->steps,
             showNumbers: $show,
             completedColor: $this->completedColor,
@@ -281,6 +291,10 @@ final class Stepper implements \SugarCraft\Dashboard\Foundation\SizedItem
             pendingColor: $this->pendingColor,
             connectorColor: $this->connectorColor,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -288,7 +302,7 @@ final class Stepper implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withCompletedColor(?Color $color): self
     {
-        return new self(
+        $carried = new self(
             steps: $this->steps,
             showNumbers: $this->showNumbers,
             completedColor: $color,
@@ -296,6 +310,10 @@ final class Stepper implements \SugarCraft\Dashboard\Foundation\SizedItem
             pendingColor: $this->pendingColor,
             connectorColor: $this->connectorColor,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -303,7 +321,7 @@ final class Stepper implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withActiveColor(?Color $color): self
     {
-        return new self(
+        $carried = new self(
             steps: $this->steps,
             showNumbers: $this->showNumbers,
             completedColor: $this->completedColor,
@@ -311,6 +329,10 @@ final class Stepper implements \SugarCraft\Dashboard\Foundation\SizedItem
             pendingColor: $this->pendingColor,
             connectorColor: $this->connectorColor,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -318,7 +340,7 @@ final class Stepper implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withPendingColor(?Color $color): self
     {
-        return new self(
+        $carried = new self(
             steps: $this->steps,
             showNumbers: $this->showNumbers,
             completedColor: $this->completedColor,
@@ -326,6 +348,10 @@ final class Stepper implements \SugarCraft\Dashboard\Foundation\SizedItem
             pendingColor: $color,
             connectorColor: $this->connectorColor,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 
     /**
@@ -333,7 +359,7 @@ final class Stepper implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withConnectorColor(?Color $color): self
     {
-        return new self(
+        $carried = new self(
             steps: $this->steps,
             showNumbers: $this->showNumbers,
             completedColor: $this->completedColor,
@@ -341,5 +367,9 @@ final class Stepper implements \SugarCraft\Dashboard\Foundation\SizedItem
             pendingColor: $this->pendingColor,
             connectorColor: $color,
         );
+        if ($this->width !== null && $this->height !== null) {
+            return $carried->setSize($this->width, $this->height);
+        }
+        return $carried;
     }
 }
