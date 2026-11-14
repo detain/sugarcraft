@@ -235,7 +235,7 @@ marker carries no color, so tab cycling stays visible under `NO_COLOR`,
 | `Process`          | The ONLY proc_open site — bounded drain loop (a polled temp-file loop on Windows), pinned child env (`GIT_TERMINAL_PROMPT=0`, pagers and editors neutered), stdin isolated from the UI tty, TERM->grace->KILL teardown. |
 | `HistoryEntry`     | One undoable operation with its forward args and inverse (or a `refuse` marker when undo would lie — discard, amend, merge, plus a checkout with no origin to return to and a branch delete whose pre-delete SHA was not recorded). |
 | `HistoryManager`   | Bounded undo/redo stacks (`MAX_HISTORY`); a new operation clears the redo lane. |
-| `DiffViewer`       | Immutable diff overlay state — raw lines, hunk starts, selected hunk; `hunkCount()` / `withHunkCursor()` drive navigation and `currentHunkPatch()` yields the selection to stage (applying it is `Git::stagePatch()`). |
+| `DiffViewer`       | Immutable diff overlay state — raw lines, hunk starts, selected hunk; `hunkIndex()` / `withHunkIndex()` (0-based positions, clamped) drive navigation, `currentHunkLine()` exposes the stored line index, and `currentHunkPatch()` yields the selection to stage (the empty string when the diff carries no hunks — `App::stageCurrentHunk` refuses that before git sees it; applying it is `Git::stagePatch()`). |
 | `DiffHighlighter`  | Per-line hunk-header/old/new token spans for the diff overlay. |
 | `Lang`             | i18n lookup over `lang/*.php` (16 locales) on the core `T` registry, namespace `git`. |
 | `Support\Version`  | `--version` line + phar build stamping — the archive-first read mirrors candy-top's version channels: the stamp of the phar the process launched from wins, and the `dev-build` sentinel is never read as a version. |
@@ -268,7 +268,7 @@ file key like `git.timeout` resolves through the core `T` registry as
 raw string.
 
 **Available keys** (`lang/en.php` — an excerpt; the file is the full roster
-of 170 keys):
+of 171 keys):
 
 | Key                    | Default string                                                    | Parameters  |
 |------------------------|-------------------------------------------------------------------|------------|

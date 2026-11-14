@@ -79,6 +79,7 @@ return [
     'branch.prompt'           => 'dal adı: ',
     'branch.empty_name'       => 'dal: ad boş olamaz',
     'diff.hunk_staged'        => 'hunk staged',
+    'diff.no_hunks'           => 'stagelenecek bir şey yok: bu diff hiç hunk içermiyor',
     'diff.navigation_hint'    => 'boşluk: hunk stage et  ·  ↑↓: gezin  ·  esc: kapat',
     'history.nothing_to_undo' => 'geri alınacak bir şey yok',
     'history.nothing_to_redo' => 'yinelecek bir şey yok',

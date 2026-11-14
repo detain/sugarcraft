@@ -79,6 +79,7 @@ return [
     'branch.prompt'           => 'اسم الفرع: ',
     'branch.empty_name'       => 'فرع: لا يمكن أن يكون الاسم فارغًا',
     'diff.hunk_staged'        => 'تم تجهيز القطعة',
+    'diff.no_hunks'           => 'لا شيء للتحضير: هذا الفرق لا يحتوي على قطع',
     'diff.navigation_hint'    => 'مسافة: تجهيز القطعة  ·  ↑↓: تنقل  ·  esc: إغلاق',
     'history.nothing_to_undo' => 'لا شيء للتراجع عنه',
     'history.nothing_to_redo' => 'لا شيء لإعادة تنفيذه',

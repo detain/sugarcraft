@@ -79,6 +79,7 @@ return [
     'branch.prompt'           => 'název větve: ',
     'branch.empty_name'       => 'větev: název nesmí být prázdný',
     'diff.hunk_staged'        => 'hunk naistaged',
+    'diff.no_hunks'           => 'nic ke stagingu: tento diff neobsahuje žádné hunky',
     'diff.navigation_hint'    => 'mezerník: stage hunku  ·  ↑↓: navigace  ·  esc: zavřít',
     'history.nothing_to_undo' => 'nic k vrácení',
     'history.nothing_to_redo' => 'nic k opakování',

@@ -1533,4 +1533,22 @@ final class AppTest extends TestCase
         ));
         $this->assertNull($empty->cursorTarget());
     }
+
+    public function testStagingAHunklessDiffRefusesWithoutTouchingGit(): void
+    {
+        $g = $this->git();
+        // Header-only diff: git emits this shape for content-less changes;
+        // there is no @@ hunk to stage (candy-git-073).
+        $g->diffs = ['diff --git a/src/A.php b/src/A.php', '--- a/src/A.php', '+++ b/src/A.php'];
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter));
+        $this->assertNotNull($a->diffViewer);
+
+        [$a, ] = $a->update(new KeyMsg(KeyType::Space, ''));
+
+        $this->assertSame([], $g->stagePatches, 'git never sees an empty or duplicated patch');
+        $this->assertNotNull($a->error);
+        $this->assertStringContainsString('no hunks', $a->error);
+        $this->assertNotNull($a->diffViewer, 'the refusal keeps the viewer open for esc');
+    }
 }

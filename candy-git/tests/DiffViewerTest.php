@@ -69,7 +69,7 @@ final class DiffViewerTest extends TestCase
         ];
 
         $dv = DiffViewer::fromRawDiff('src/A.php', $lines);
-        $dv = $dv->withHunkCursor(1);
+        $dv = $dv->withHunkIndex(1);
         $hunk = $dv->currentHunkLines();
 
         $this->assertSame(['@@ -5,3 +5,4 @@', '-line 5', '+line 5 modified'], $hunk);
@@ -106,11 +106,11 @@ final class DiffViewerTest extends TestCase
         $dv = DiffViewer::fromRawDiff('src/A.php', $lines);
 
         // Clamp up
-        $dv2 = $dv->withHunkCursor(10);
+        $dv2 = $dv->withHunkIndex(10);
         $this->assertSame($dv->hunkStarts[1], $dv2->hunkCursor);
 
         // Clamp down
-        $dv3 = $dv2->withHunkCursor(-1);
+        $dv3 = $dv2->withHunkIndex(-1);
         $this->assertSame($dv->hunkStarts[0], $dv3->hunkCursor);
     }
 
@@ -141,22 +141,65 @@ final class DiffViewerTest extends TestCase
     public function testWithHunkCursorOnEmptyHunkStartsReturnsZeroCursor(): void
     {
         $dv = DiffViewer::fromRawDiff('src/A.php', ['diff --git a/src/A.php b/src/A.php']);
-        // hunkStarts is [] → withHunkCursor should still work and set cursor to 0
-        $dv2 = $dv->withHunkCursor(5);
+        // hunkStarts is [] → withHunkIndex should still work and set cursor to 0
+        $dv2 = $dv->withHunkIndex(5);
         $this->assertSame(0, $dv2->hunkCursor);
         $this->assertSame([], $dv2->hunkStarts);
     }
 
-    public function testCurrentHunkPatchOnNoHunksReturnsImplodedLines(): void
+    public function testCurrentHunkPatchWithoutHunksIsEmpty(): void
     {
         $lines = ['diff --git a/src/A.php b/src/A.php', 'content'];
         $dv = DiffViewer::fromRawDiff('src/A.php', $lines);
-        $patch = $dv->currentHunkPatch();
-        // When no @@ markers: header = all lines (inHeader stays true), currentHunkLines = all lines
-        // Bug: header is not empty so it gets prepended, causing duplication
-        // This test documents the current (potentially buggy) behavior
-        $this->assertStringContainsString('diff --git a/src/A.php b/src/A.php', $patch);
-        $this->assertStringContainsString('content', $patch);
+        // candy-git-073 contract: a header-only diff has no patchable
+        // selection. The old behavior prepended the header to a line list
+        // that already contained it, emitting every line twice into a blob
+        // destined for git apply --cached and the undo payload. Byte-exact
+        // assertion — the duplication cannot hide inside a contains-check.
+        $this->assertSame('', $dv->currentHunkPatch());
+    }
+
+    public function testHunkIndexResolvesTheStoredLine(): void
+    {
+        $lines = [
+            'diff --git a/src/A.php b/src/A.php',
+            '--- a/src/A.php',
+            '+++ b/src/A.php',
+            '@@ -1,2 +1,2 @@',
+            '-a',
+            '+b',
+            '@@ -9,2 +9,2 @@',
+            '-c',
+            '+d',
+        ];
+        $dv = DiffViewer::fromRawDiff('src/A.php', $lines);
+
+        $this->assertSame(0, $dv->hunkIndex());
+        $this->assertSame(3, $dv->currentHunkLine());
+
+        $second = $dv->withHunkIndex(1);
+        $this->assertSame(1, $second->hunkIndex());
+        $this->assertSame(6, $second->currentHunkLine());
+        // candy-git-059: the parameter is a HUNK INDEX, the stored field
+        // stays the LINE index the windowing renders from.
+        $this->assertSame(6, $second->hunkCursor);
+    }
+
+    public function testWithHunkIndexClampsBothEnds(): void
+    {
+        $lines = [
+            'diff --git a/src/A.php b/src/A.php',
+            '@@ -1,1 +1,1 @@',
+            '-a',
+            '@@ -9,1 +9,1 @@',
+            '-c',
+        ];
+        $dv = DiffViewer::fromRawDiff('src/A.php', $lines);
+
+        $this->assertSame(1, $dv->withHunkIndex(42)->hunkIndex());
+        $this->assertSame(0, $dv->withHunkIndex(-7)->hunkIndex());
+        // PHP_INT_MAX — the End arm's spelling — lands on the last hunk.
+        $this->assertSame(1, $dv->withHunkIndex(PHP_INT_MAX)->hunkIndex());
     }
 
     public function testFromRawDiffSeparatesHeaderFromHunkLines(): void

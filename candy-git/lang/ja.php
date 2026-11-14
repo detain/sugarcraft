@@ -79,6 +79,7 @@ return [
     'branch.prompt'           => 'ブランチ名: ',
     'branch.empty_name'       => 'ブランチ: 名前は空にできません',
     'diff.hunk_staged'        => 'ハンクをステージしました',
+    'diff.no_hunks'           => 'ステージするものがありません: この diff にハンクがありません',
     'diff.navigation_hint'    => 'space: ハンクをステージ  ·  ↑↓: 移動  ·  esc: 閉じる',
     'history.nothing_to_undo' => '元に戻す操作はありません',
     'history.nothing_to_redo' => 'やり直す操作はありません',

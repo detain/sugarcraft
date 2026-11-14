@@ -79,6 +79,7 @@ return [
     'branch.prompt'           => 'zweigname: ',
     'branch.empty_name'       => 'zweig: name darf nicht leer sein',
     'diff.hunk_staged'        => 'hunk gestaged',
+    'diff.no_hunks'           => 'nichts zu stageln: dieser Diff hat keine Hunks',
     'diff.navigation_hint'    => 'leertaste: hunk stagen  ·  ↑↓: navigieren  ·  esc: schließen',
     'history.nothing_to_undo' => 'nichts rückgängig zu machen',
     'history.nothing_to_redo' => 'nichts wiederherzustellen',

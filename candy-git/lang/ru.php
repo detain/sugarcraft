@@ -79,6 +79,7 @@ return [
     'branch.prompt'           => 'имя ветки: ',
     'branch.empty_name'       => 'ветка: имя не может быть пустым',
     'diff.hunk_staged'        => 'ханк застейджан',
+    'diff.no_hunks'           => 'нечего стейджить: в этом диффе нет ханков',
     'diff.navigation_hint'    => 'пробел: застейджить ханк  ·  ↑↓: навигация  ·  esc: закрыть',
     'history.nothing_to_undo' => 'нечего отменять',
     'history.nothing_to_redo' => 'нечего повторять',

@@ -79,6 +79,7 @@ return [
     'branch.prompt'           => 'nome do ramo: ',
     'branch.empty_name'       => 'ramo: o nome não pode estar vazio',
     'diff.hunk_staged'        => 'hunk stageado',
+    'diff.no_hunks'           => 'nada para stagear: este diff não tem hunks',
     'diff.navigation_hint'    => 'espaço: stagear hunk  ·  ↑↓: navegar  ·  esc: fechar',
     'history.nothing_to_undo' => 'nada a desfazer',
     'history.nothing_to_redo' => 'nada a refazer',

@@ -9,8 +9,10 @@ namespace SugarCraft\Git;
  * interactive hunk cursor.
  *
  * @param list<string> $lines       Raw output of `git diff --no-color -- <path>`
- * @param int          $hunkCursor Line index where the selected hunk starts
- *                                 (always one of $hunkStarts; Space stages it)
+ * @param int          $hunkCursor  Line index where the selected hunk starts
+ *                                  (always one of $hunkStarts, or 0 when the
+ *                                  diff carries no hunks at all — Space stages
+ *                                  it; see hunkIndex() for the 0-based position)
  * @param string       $path       The file path this diff belongs to
  *
  * Mirrors jesseduffield/lazygit pkg/gui/patches — hunk cursor with per-hunk stage over unified diff. */
@@ -18,7 +20,7 @@ final readonly class DiffViewer
 {
     /**
      * @param list<string> $lines Raw diff lines (including hunk headers)
-     * @param list<int>    $hunkStarts Byte-offsets in $lines where each hunk begins
+     * @param list<int>    $hunkStarts Line indices in $lines where each hunk begins
      * @param list<string> $header Lines before the first hunk header (diff --git / --- / +++)
      */
     public function __construct(
@@ -73,21 +75,55 @@ final readonly class DiffViewer
         return array_slice($this->lines, $start, $end - $start + 1);
     }
 
-    /** Returns the raw patch for just the current hunk (for git apply --cached). */
+    /**
+     * The raw patch for just the current hunk (for git apply --cached).
+     *
+     * Contract (candy-git-073): a diff with no hunks has no patchable
+     * selection, so the result is the empty string. The old behavior
+     * prepended the header to currentHunkLines() — which falls back to
+     * EVERY line when hunkStarts is empty — emitting each header line
+     * twice in a string destined for git apply --cached and the undo
+     * payload. Production survived only because git rejects the
+     * malformed blob with an opaque error; the guard in
+     * App::stageCurrentHunk now refuses it cleanly before that.
+     */
     public function currentHunkPatch(): string
     {
+        if ($this->hunkStarts === []) {
+            return '';
+        }
+
         $header = implode("\n", $this->header);
         $hunk = implode("\n", $this->currentHunkLines());
         return $header === '' ? $hunk . "\n" : $header . "\n" . $hunk . "\n";
     }
 
-    public function withHunkCursor(int $cursor): self
+    /** 0-based position of the selected hunk within $hunkStarts. */
+    public function hunkIndex(): int
+    {
+        $idx = array_search($this->hunkCursor, $this->hunkStarts, true);
+
+        return $idx === false ? 0 : $idx;
+    }
+
+    /** Line index in $lines where the selected hunk starts. */
+    public function currentHunkLine(): int
+    {
+        return $this->hunkCursor;
+    }
+
+    /**
+     * Select the hunk at 0-based position $index in $hunkStarts (clamped).
+     * candy-git-059: this parameter is a HUNK INDEX; the stored cursor stays
+     * the line index it selects, which is what the windowing needs.
+     */
+    public function withHunkIndex(int $index): self
     {
         if ($this->hunkStarts === []) {
             return new self(lines: $this->lines, hunkCursor: 0, path: $this->path, hunkStarts: [], header: $this->header);
         }
         $max = count($this->hunkStarts) - 1;
-        $newIdx = max(0, min($cursor, $max >= 0 ? $max : 0));
+        $newIdx = max(0, min($index, $max >= 0 ? $max : 0));
         $lineIdx = ($max >= 0 && isset($this->hunkStarts[$newIdx]))
             ? $this->hunkStarts[$newIdx]
             : 0;

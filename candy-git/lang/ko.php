@@ -79,6 +79,7 @@ return [
     'branch.prompt'           => '브랜치 이름: ',
     'branch.empty_name'       => '브랜치: 이름은 비워둘 수 없습니다',
     'diff.hunk_staged'        => '헝이 스테이지되었습니다',
+    'diff.no_hunks'           => '스테이지할 항목 없음: 이 diff에 헝이 없습니다',
     'diff.navigation_hint'    => 'space: 헝 스테이지  ·  ↑↓: 이동  ·  esc: 닫기',
     'history.nothing_to_undo' => '실행 취소할 항목이 없습니다',
     'history.nothing_to_redo' => '다시 실행할 항목이 없습니다',

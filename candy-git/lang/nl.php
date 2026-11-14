@@ -79,6 +79,7 @@ return [
     'branch.prompt'           => 'branch-naam: ',
     'branch.empty_name'       => 'branch: naam mag niet leeg zijn',
     'diff.hunk_staged'        => 'hunk gestaged',
+    'diff.no_hunks'           => 'niets om te stagetten: deze diff heeft geen hunks',
     'diff.navigation_hint'    => 'spatie: hunk stage  ·  ↑↓: navigeren  ·  esc: sluiten',
     'history.nothing_to_undo' => 'niets ongedaan te maken',
     'history.nothing_to_redo' => 'niets te herhalen',

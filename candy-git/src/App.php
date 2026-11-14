@@ -413,10 +413,10 @@ final class App implements Model
                 return [$this->navigateHunk(+1), null];
             }
             if ($msg->type === KeyType::Home) {
-                return [$this->withDiffViewer($dv->withHunkCursor(0)), null];
+                return [$this->withDiffViewer($dv->withHunkIndex(0)), null];
             }
             if ($msg->type === KeyType::End) {
-                return [$this->withDiffViewer($dv->withHunkCursor(PHP_INT_MAX)), null];
+                return [$this->withDiffViewer($dv->withHunkIndex(PHP_INT_MAX)), null];
             }
             return [$this, null];
         }
@@ -1262,13 +1262,9 @@ final class App implements Model
         if ($count <= 1) {
             return $this;
         }
-        // hunkCursor is a line-index into hunkStarts; find current index and move
-        $currentIdx = array_search($dv->hunkCursor, $dv->hunkStarts, true);
-        if ($currentIdx === false) {
-            $currentIdx = 0;
-        }
-        $newIdx = max(0, min($count - 1, $currentIdx + $dir));
-        return $this->withDiffViewer($dv->withHunkCursor($newIdx));
+        // candy-git-059: hunkIndex() resolves the stored line back to the
+        // 0-based position; withHunkIndex() owns the clamping.
+        return $this->withDiffViewer($dv->withHunkIndex($dv->hunkIndex() + $dir));
     }
 
     /** Stage the currently selected hunk in the diff viewer. */
@@ -1277,6 +1273,11 @@ final class App implements Model
         $dv = $this->diffViewer;
         if ($dv === null) {
             return $this;
+        }
+        if ($dv->hunkCount() === 0) {
+            // candy-git-073: a diff with no hunks has nothing to stage;
+            // refuse cleanly instead of piping an unapplyable blob to git.
+            return $this->withError(Lang::t('diff.no_hunks'));
         }
         try {
             $patch = $dv->currentHunkPatch();

@@ -98,6 +98,7 @@ return [
 
     // Diff viewer
     'diff.hunk_staged'      => 'hunk staged',
+    'diff.no_hunks'         => 'nothing to stage: this diff has no hunks',
     'diff.navigation_hint'  => 'space: stage hunk  ·  ↑↓: navigate  ·  esc: close',
 
     // Undo/Redo

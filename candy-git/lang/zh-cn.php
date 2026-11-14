@@ -79,6 +79,7 @@ return [
     'branch.prompt'           => '分支名称： ',
     'branch.empty_name'       => '分支：名称不能为空',
     'diff.hunk_staged'        => '块已暂存',
+    'diff.no_hunks'           => '没有可暂存的内容：此 diff 没有块',
     'diff.navigation_hint'    => '空格：暂存块  ·  ↑↓：导航  ·  esc：关闭',
     'history.nothing_to_undo' => '没有可撤销的操作',
     'history.nothing_to_redo' => '没有可重做的操作',

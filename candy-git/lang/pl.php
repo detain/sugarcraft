@@ -79,6 +79,7 @@ return [
     'branch.prompt'           => 'nazwa gałęzi: ',
     'branch.empty_name'       => 'gałąź: nazwa nie może być pusta',
     'diff.hunk_staged'        => 'hunk zstagowany',
+    'diff.no_hunks'           => 'nic do stageowania: ten diff nie ma hunków',
     'diff.navigation_hint'    => 'spacja: stage hunka  ·  ↑↓: nawigacja  ·  esc: zamknij',
     'history.nothing_to_undo' => 'nie ma czego cofnąć',
     'history.nothing_to_redo' => 'nie ma czego powtórzyć',
