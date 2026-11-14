@@ -10,7 +10,8 @@ use PHPUnit\Framework\TestCase;
  * Fails closed if any `throw` in src/ grows an embedded tool-name prefix.
  *
  * The whole CLI re-wraps escaped exceptions with its own label
- * (`candy-vcr record: `, `candy-vcr inspect: `, `Failed: ` …), so a prefix
+ * (`candy-vcr record: `, `candy-vcr inspect: `, `candy-vcr render-tape: ` …),
+ * so a prefix
  * baked into the thrown message reaches users doubled — the exact shape this
  * library's own boundary law (src/Cli/FpsOption.php) forbids. The census
  * walks throw statements only: direct writers (fwrite/error_log sites that

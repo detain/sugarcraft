@@ -140,7 +140,7 @@ final class CompileDiagnosticsTest extends TestCase
         [$exit, $stdout, $stderr] = $this->runCli(['render-tape', $tape, '--dry-run', '--strict']);
 
         $this->assertSame(1, $exit, '--dry-run --strict must abort where plain --dry-run warns');
-        $this->assertStringContainsString('Failed:', $stdout . $stderr);
+        $this->assertStringContainsString('candy-vcr render-tape:', $stdout . $stderr);
         $this->assertStringContainsString('sleep', $stdout . $stderr);
     }
 

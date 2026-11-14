@@ -54,7 +54,7 @@ final class RenderTapeCommand extends Command
         try {
             $fps = FpsOption::parse($input->getOption('fps')) ?? 30.0;
         } catch (\InvalidArgumentException $e) {
-            $output->writeln('<error>' . Lang::t('render.failed', ['message' => $e->getMessage()]) . '</error>');
+            $output->writeln('<error>' . Lang::t('cli.err', ['verb' => 'render-tape', 'message' => $e->getMessage()]) . '</error>');
             return 1;
         }
 
@@ -66,7 +66,7 @@ final class RenderTapeCommand extends Command
             $backend = ChoiceOption::parse($input->getOption('backend'), '--backend', ['gd', 'imagick'], 'gd');
             $encoderType = ChoiceOption::parse($input->getOption('encoder'), '--encoder', ['ffmpeg', 'php'], 'ffmpeg');
         } catch (\InvalidArgumentException $e) {
-            $output->writeln('<error>' . Lang::t('render.failed', ['message' => $e->getMessage()]) . '</error>');
+            $output->writeln('<error>' . Lang::t('cli.err', ['verb' => 'render-tape', 'message' => $e->getMessage()]) . '</error>');
             return 1;
         }
 
@@ -82,7 +82,7 @@ final class RenderTapeCommand extends Command
 
         if (!is_file($tapePath)) {
             $cwdHint = str_starts_with($tapePath, '/') ? '' : Lang::t('render.cwd_hint', ['cwd' => (string) getcwd()]);
-            $output->writeln('<error>' . Lang::t('render.failed', ['message' => Lang::t('render.tape_not_found', ['path' => $tapePath, 'hint' => $cwdHint])]) . '</error>');
+            $output->writeln('<error>' . Lang::t('cli.err', ['verb' => 'render-tape', 'message' => Lang::t('render.tape_not_found', ['path' => $tapePath, 'hint' => $cwdHint])]) . '</error>');
             return 1;
         }
 
@@ -125,7 +125,7 @@ final class RenderTapeCommand extends Command
                 'onProgress' => $progress,
             ]);
         } catch (\Throwable $e) {
-            $output->writeln('<error>' . Lang::t('render.failed', ['message' => $e->getMessage()]) . '</error>');
+            $output->writeln('<error>' . Lang::t('cli.err', ['verb' => 'render-tape', 'message' => $e->getMessage()]) . '</error>');
             return 1;
         }
 
@@ -150,12 +150,12 @@ final class RenderTapeCommand extends Command
             // tape by name before it is ever slurped.
             $size = @filesize($tapePath);
             if ($size !== false && $size > Lexer::MAX_TAPE_BYTES) {
-                $output->writeln('<error>' . Lang::t('render.failed', ['message' => Lang::t('render.tape_too_large', ['path' => $tapePath, 'cap' => Lexer::MAX_TAPE_BYTES])]) . '</error>');
+                $output->writeln('<error>' . Lang::t('cli.err', ['verb' => 'render-tape', 'message' => Lang::t('render.tape_too_large', ['path' => $tapePath, 'cap' => Lexer::MAX_TAPE_BYTES])]) . '</error>');
                 return 1;
             }
             $source = @file_get_contents($tapePath);
             if ($source === false) {
-                $output->writeln('<error>' . Lang::t('render.failed', ['message' => Lang::t('render.cannot_read_tape', ['path' => $tapePath])]) . '</error>');
+                $output->writeln('<error>' . Lang::t('cli.err', ['verb' => 'render-tape', 'message' => Lang::t('render.cannot_read_tape', ['path' => $tapePath])]) . '</error>');
                 return 1;
             }
             $tokens = (new Lexer())->tokenize($source);
@@ -166,7 +166,7 @@ final class RenderTapeCommand extends Command
             // print a clean stream with the bad directive quietly removed.
             $cassette = $compiler->compile($ast, $tapePath, $strict);
         } catch (\Throwable $e) {
-            $output->writeln('<error>' . Lang::t('render.failed', ['message' => $e->getMessage()]) . '</error>');
+            $output->writeln('<error>' . Lang::t('cli.err', ['verb' => 'render-tape', 'message' => $e->getMessage()]) . '</error>');
             return 1;
         }
 

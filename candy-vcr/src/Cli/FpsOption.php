@@ -23,8 +23,9 @@ final class FpsOption
      *                   from programmatic callers, or null when absent)
      *
      * Messages carry no tool prefix: every catch site re-wraps them with its
-     * own label (`candy-vcr inspect: ` in InspectCommand, `Failed: ` in the
-     * render commands), so an embedded prefix would reach users doubled.
+     * own label (`candy-vcr <verb>: ` via the cli.err door — one voice for
+     * all eight verbs since VCR-S66), so an embedded prefix would reach
+     * users doubled.
      *
      * @return float|null null means "not provided — use the caller's
      *                    default"; a provided value must be a positive

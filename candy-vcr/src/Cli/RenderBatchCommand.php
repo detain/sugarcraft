@@ -47,7 +47,7 @@ final class RenderBatchCommand extends Command
         try {
             $fps = FpsOption::parse($input->getOption('fps')) ?? 30.0;
         } catch (\InvalidArgumentException $e) {
-            $output->writeln('<error>' . Lang::t('render.failed', ['message' => $e->getMessage()]) . '</error>');
+            $output->writeln('<error>' . Lang::t('cli.err', ['verb' => 'render-batch', 'message' => $e->getMessage()]) . '</error>');
             return 1;
         }
 
@@ -57,7 +57,7 @@ final class RenderBatchCommand extends Command
             $backend = ChoiceOption::parse($input->getOption('backend'), '--backend', ['gd', 'imagick'], 'gd');
             $encoderType = ChoiceOption::parse($input->getOption('encoder'), '--encoder', ['ffmpeg', 'php'], 'ffmpeg');
         } catch (\InvalidArgumentException $e) {
-            $output->writeln('<error>' . Lang::t('render.failed', ['message' => $e->getMessage()]) . '</error>');
+            $output->writeln('<error>' . Lang::t('cli.err', ['verb' => 'render-batch', 'message' => $e->getMessage()]) . '</error>');
             return 1;
         }
 
@@ -68,7 +68,7 @@ final class RenderBatchCommand extends Command
         // keeps the in-process serial path byte-identical to before.
         $jobsRaw = (string) $input->getOption('jobs');
         if (!preg_match('/^\d+$/', $jobsRaw) || (int) $jobsRaw < 1) {
-            $output->writeln('<error>' . Lang::t('batch.jobs_invalid', ['value' => $jobsRaw]) . '</error>');
+            $output->writeln('<error>' . Lang::t('cli.err', ['verb' => 'render-batch', 'message' => Lang::t('batch.jobs_invalid', ['value' => $jobsRaw])]) . '</error>');
             return 1;
         }
         $jobs = (int) $jobsRaw;
@@ -80,7 +80,7 @@ final class RenderBatchCommand extends Command
         $fontFamily = is_string($fontOpt) ? $fontOpt : 'JetBrainsMono';
 
         if (!is_dir($dir)) {
-            $output->writeln('<error>' . Lang::t('batch.not_directory', ['dir' => $dir]) . '</error>');
+            $output->writeln('<error>' . Lang::t('cli.err', ['verb' => 'render-batch', 'message' => Lang::t('batch.not_directory', ['dir' => $dir])]) . '</error>');
             return 1;
         }
 

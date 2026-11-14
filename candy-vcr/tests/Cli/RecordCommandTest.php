@@ -122,7 +122,7 @@ final class RecordCommandTest extends TestCase
 
             \rewind($stderr);
             $err = (string) \stream_get_contents($stderr);
-            $this->assertStringContainsString('candy-vcr: recorded', $err);
+            $this->assertStringContainsString('candy-vcr record: recorded', $err);
 
             $reader = new JsonlFormat();
             $loaded = $reader->read($cassette);

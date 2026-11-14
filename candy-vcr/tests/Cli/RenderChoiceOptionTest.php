@@ -76,7 +76,7 @@ final class RenderChoiceOptionTest extends TestCase
         rewind($stdout);
         $out = (string) stream_get_contents($stdout);
         $this->assertSame(1, $exit);
-        $this->assertStringContainsString('Failed:', $out);
+        $this->assertStringContainsString('candy-vcr render-tape:', $out);
         $this->assertStringContainsString('--backend must be one of gd, imagick', $out);
         $this->assertStringNotContainsString('_header', $out, 'the refusal must short-circuit the dry-run plan');
         @unlink($tape);

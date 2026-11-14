@@ -94,7 +94,7 @@ final class RecordCommandOverwriteGuardTest extends TestCase
             $this->assertStringStartsWith('{"v":1', (string) \file_get_contents($path));
             \rewind($stderr);
             $err = (string) \stream_get_contents($stderr);
-            $this->assertStringContainsString('candy-vcr: recorded', $err);
+            $this->assertStringContainsString('candy-vcr record: recorded', $err);
         } finally {
             \fclose($stdout);
             \fclose($stderr);
@@ -124,7 +124,7 @@ final class RecordCommandOverwriteGuardTest extends TestCase
             \rewind($stderr);
             $err = (string) \stream_get_contents($stderr);
             $this->assertStringContainsString('cannot open recorder file', $err);
-            $this->assertStringNotContainsString('candy-vcr: recorded', $err);
+            $this->assertStringNotContainsString('candy-vcr record: recorded', $err);
         } finally {
             \fclose($stdout);
             \fclose($stderr);
