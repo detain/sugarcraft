@@ -39,12 +39,14 @@ the first such token quietly becomes the image filename, so `-f photo.png`
 exits 1 with an "unexpected argument" complaint about the value, and a bare
 `-v` exits 2 with `File not found: -v`. (Verified against the live bin.)
 
-**Input formats.** Still rendering accepts PNG, JPEG, GIF (87a/89a) and
-*static* WebP, recognised by magic bytes; BMP and other formats a built GD
-decodes but the magic list does not name ride the `getimagesize()` fallback.
-Refused before any decode — exit 2 with a named reason, never a silent blank —
-are animated WebP (refused on its VP8X/ANMF structure, host-independently) and
-exotic containers (AVIF/HEIF-family `ftyp` brands, JPEG XL codestream, TIFF).
+**Input formats.** PNG, JPEG and GIF are accepted, recognised by magic
+bytes. Anything else — including WebP and BMP — is refused with exit 2 and
+the MIME it detected (`Unsupported MIME type: image/webp`), even when the
+build's GD could decode it. That is a deliberate allow-list in the
+sugar-image library's `ImageSource::fromFile`, and widening it is a
+sugar-image decision, not this app's. The library's wider magic-byte roster
+and its animated-WebP structural refusal (the VP8X/ANMF sniff,
+host-independent) apply to the embedded `fromString` route.
 `--animate` plays animated **GIF** only: the sugar-animation decoder rejects
 non-GIF bytes outright.
 
