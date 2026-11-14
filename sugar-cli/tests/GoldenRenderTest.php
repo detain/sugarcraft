@@ -25,12 +25,132 @@ use SugarCraft\Testing\Snapshot\Assertions;
  * to detect regressions in themed CLI output.
  *
  * Output styling mirrors the spirit of charmbracelet/fang's help pages.
+ *
+ * RULE (finding 046): an indeterminate render (total = 0) draws its spinner
+ * from wall-clock time unless the caller passes an explicit `frame:`; a
+ * golden captured that way is a different byte string on every re-mint, so
+ * it silently rots the snapshot corpus. {@see
+ * testIndeterminateGoldenCallsPinExplicitFrame()} enforces the rule
+ * structurally over this file's own source — adding a total=0 golden without
+ * a pinned frame goes red on sight. (StageTest carries the same rule and
+ * covers the behaviour: its frame-pinned determinism pins were the guard's
+ * seed cases.)
  */
 final class GoldenRenderTest extends TestCase
 {
     use SandboxTerminalColumns;
 
     private string $fixturesDir;
+
+    /**
+     * Finding 046: structural guard. Every literal-argument render call in
+     * this file that reaches the indeterminate spinner path (total = 0) must
+     * carry an explicit frame. Pinned on the source (the same house technique
+     * SafeTextTest uses for untriggerable runtime arms) because the failure
+     * it prevents is a FUTURE dataset addition, not a callable bug.
+     */
+    public function testIndeterminateGoldenCallsPinExplicitFrame(): void
+    {
+        $src = (string) file_get_contents(__FILE__);
+        $violations = [];
+
+        foreach (['step' => 2, 'subStepWithProgress' => 2] as $method => $totalPos) {
+            // Walk every call site; a total=0 render without frame: is a coin
+            // flip turned into a snapshot.
+            $offset = 0;
+            while (($at = strpos($src, "Stage::{$method}(", $offset)) !== false) {
+                $offset = $at + 1;
+                $open = $at + \strlen("Stage::{$method}");
+                $depth = 0;
+                $end = null;
+                $inString = false;
+                $stringChar = '';
+                for ($i = $open, $n = \strlen($src); $i < $n; $i++) {
+                    $c = $src[$i];
+                    if ($inString) {
+                        if ($c === '\\') {
+                            $i++;
+                        } elseif ($c === $stringChar) {
+                            $inString = false;
+                        }
+                        continue;
+                    }
+                    if ($c === "'" || $c === '"') {
+                        $inString = true;
+                        $stringChar = $c;
+                    } elseif ($c === '(') {
+                        $depth++;
+                    } elseif ($c === ')') {
+                        if (--$depth === 0) {
+                            $end = $i;
+                            break;
+                        }
+                    }
+                }
+                self::assertNotNull($end, "unbalanced call text at Stage::{$method} — parser guard");
+
+                $callText = \substr($src, $open + 1, $end - $open - 1);
+
+                // Split top-level args.
+                $args = [];
+                $depth = 0;
+                $current = '';
+                $inString = false;
+                $stringChar = '';
+                for ($i = 0, $n = \strlen($callText); $i < $n; $i++) {
+                    $c = $callText[$i];
+                    if ($inString) {
+                        $current .= $c;
+                        if ($c === '\\') {
+                            $current .= $callText[++$i];
+                        } elseif ($c === $stringChar) {
+                            $inString = false;
+                        }
+                        continue;
+                    }
+                    if ($c === "'" || $c === '"') {
+                        $inString = true;
+                        $stringChar = $c;
+                        $current .= $c;
+                    } elseif ($c === '(' || $c === '[') {
+                        $depth++;
+                        $current .= $c;
+                    } elseif ($c === ')' || $c === ']') {
+                        $depth--;
+                        $current .= $c;
+                    } elseif ($c === ',' && $depth === 0) {
+                        $args[] = trim($current);
+                        $current = '';
+                    } else {
+                        $current .= $c;
+                    }
+                }
+                $args[] = trim($current);
+
+                // Named arguments (width:, frame:, ...) ride past the
+                // positional block; only literal positional totals are static.
+                $positional = [];
+                $hasFrame = false;
+                foreach ($args as $arg) {
+                    if (preg_match('/^(\w+)\s*:/', $arg)) {
+                        if (preg_match('/^frame\s*:/', $arg)) {
+                            $hasFrame = true;
+                        }
+                        continue;
+                    }
+                    $positional[] = $arg;
+                }
+
+                $total = $positional[$totalPos] ?? null;
+                if ($total === '0' && !$hasFrame) {
+                    $line = substr_count($src, "\n", 0, $at) + 1;
+                    $violations[] = "Stage::{$method}() at line {$line} renders the indeterminate path without frame:";
+                }
+            }
+        }
+
+        $this->assertSame([], $violations, implode("\n", $violations));
+    }
 
     protected function setUp(): void
     {

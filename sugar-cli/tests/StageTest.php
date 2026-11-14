@@ -11,6 +11,16 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
 use PHPUnit\Framework\TestCase;
 
+/**
+ * Behavioural coverage for the Stage presenter tree.
+ *
+ * RULE (finding 046, shared with GoldenRenderTest): an indeterminate render
+ * (total = 0) draws its spinner from wall-clock time unless the caller
+ * passes an explicit `frame:`. Every determinism assertion in this class is
+ * frame-pinned for exactly that reason; GoldenRenderTest enforces the rule
+ * structurally over its own source so a future total=0 golden without a
+ * pinned frame cannot land.
+ */
 final class StageTest extends TestCase
 {
     use SandboxTerminalColumns;
