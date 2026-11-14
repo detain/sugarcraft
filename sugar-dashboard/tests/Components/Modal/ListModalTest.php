@@ -122,4 +122,16 @@ final class ListModalTest extends TestCase
         $this->assertStringContainsString('[E]dit [D]elete', $both);
         $this->assertStringContainsString('> Item 09', $both, 'both carries compose');
     }
+
+    public function testInnerSizeReportsTheWindowedBox(): void
+    {
+        $items = array_map(static fn(int $i): string => sprintf('Item %02d', $i), range(0, 9));
+        $modal = ListModal::new($items, 'List')->withOnEdit(static fn(...$args): ?string => null);
+        $natural = $modal->innerSize();
+        $this->assertSame(9, $natural[0], 'title 4, hints 6, rows are 2 cells plus a 7-cell label');
+        $this->assertSame(12, $natural[1], 'two header rows plus all ten items');
+
+        $boxed = $modal->setSize(20, 4)->innerSize();
+        $this->assertSame([20, 4], $boxed, 'header rows survive, the item window fills the rest');
+    }
 }

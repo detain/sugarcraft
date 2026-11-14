@@ -6,12 +6,13 @@ namespace SugarCraft\Dashboard\Components\Modal;
 
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Dashboard\Foundation\Item;
+use SugarCraft\Dashboard\Foundation\SizedItem;
 use SugarCraft\Dashboard\Foundation\Sizer;
 
 /**
  * A modal dialog that displays a list of items.
  */
-final class ListModal implements Item, Sizer
+final class ListModal implements Item, SizedItem
 {
     /** @var list<string> */
     private array $items;
@@ -85,6 +86,43 @@ final class ListModal implements Item, Sizer
         $clone->width = $width;
         $clone->height = $height;
         return $clone;
+    }
+
+    /**
+     * @return array{0:int,1:int} the windowed box this list paints (D-70:
+     *     mirrors the render budget math - header rows plus the visible
+     *     item window when a height is allocated).
+     */
+    public function innerSize(): array
+    {
+        $headerCount = ($this->title !== null ? 1 : 0)
+            + ($this->onEdit !== null || $this->onDelete !== null ? 1 : 0);
+        $count = count($this->items);
+        $naturalLines = [];
+        if ($this->title !== null) {
+            $naturalLines[] = $this->title;
+        }
+        if ($this->onEdit !== null || $this->onDelete !== null) {
+            $hints = [];
+            if ($this->onEdit !== null) {
+                $hints[] = '[E]dit';
+            }
+            if ($this->onDelete !== null) {
+                $hints[] = '[D]elete';
+            }
+            $naturalLines[] = implode(' ', $hints);
+        }
+        foreach ($this->items as $item) {
+            $naturalLines[] = '  ' . $item;
+        }
+        $naturalWidth = $naturalLines === [] ? 0 : max(array_map(
+            static fn(string $l): int => Width::string($l),
+            $naturalLines,
+        ));
+        $windowed = $this->height !== null && $this->height > 0
+            ? $headerCount + min(max(1, $this->height - $headerCount), $count)
+            : $headerCount + $count;
+        return [$this->width ?? $naturalWidth, $windowed];
     }
 
     /**
