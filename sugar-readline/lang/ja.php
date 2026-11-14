@@ -36,6 +36,7 @@ return array (
   'multiselect.hint_min' => '[複数選択] 選択数: {count} (最小 {min})',
   'multiselect.hint_min_max' => '[複数選択] 選択数: {count} (最小 {min}) (最大 {max})',
   'multiselect.notice_unmarked' => '上限 {max} に収めるため {item} の選択を解除しました',
+  'multiselect.nothing_to_submit' => 'フィルターに一致する項目がありません',
   'selection.filter_prefix' => '[フィルター] ',
   'selection.matches_one' => ' ({count} 件の一致)',
   'selection.matches_other' => ' ({count} 件の一致)',

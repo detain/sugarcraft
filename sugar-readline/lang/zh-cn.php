@@ -36,6 +36,7 @@ return array (
   'multiselect.hint_min' => '[多选] 已选：{count}（最少 {min}）',
   'multiselect.hint_min_max' => '[多选] 已选：{count}（最少 {min}）（最多 {max}）',
   'multiselect.notice_unmarked' => '已取消标记 {item}，以遵守 {max} 项上限',
+  'multiselect.nothing_to_submit' => '没有匹配当前筛选的选项',
   'selection.filter_prefix' => '[筛选] ',
   'selection.matches_one' => ' ({count} 个匹配)',
   'selection.matches_other' => ' ({count} 个匹配)',

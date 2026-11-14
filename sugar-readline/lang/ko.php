@@ -36,6 +36,7 @@ return array (
   'multiselect.hint_min' => '[다중 선택] 선택됨: {count} (최소 {min})',
   'multiselect.hint_min_max' => '[다중 선택] 선택됨: {count} (최소 {min}) (최대 {max})',
   'multiselect.notice_unmarked' => '한도 {max} 준수를 위해 {item} 선택 취소됨',
+  'multiselect.nothing_to_submit' => '필터와 일치하는 항목이 없음',
   'selection.filter_prefix' => '[필터] ',
   'selection.matches_one' => ' ({count} 개의 일치)',
   'selection.matches_other' => ' ({count} 개의 일치)',

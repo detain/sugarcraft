@@ -88,7 +88,17 @@ final class MultiSelectPrompt implements PromptInterface, SizingInterface
 
     public function submit(): self
     {
-        if ($this->submitted || $this->aborted || !$this->canSubmit()) {
+        if ($this->submitted || $this->aborted) {
+            return $this;
+        }
+        if ($this->filtered === []) {
+            // The README promises Enter is refused while nothing matches
+            // (finding 034); the refusal announces on the transient row
+            // instead of submitting an empty result the host cannot tell
+            // from an abandoned pick-list.
+            return $this->withNotice(Lang::t('multiselect.nothing_to_submit'));
+        }
+        if (!$this->canSubmit()) {
             return $this;
         }
         $clone = clone $this;

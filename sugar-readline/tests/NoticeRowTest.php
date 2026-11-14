@@ -91,6 +91,23 @@ final class NoticeRowTest extends TestCase
         self::assertSame(['banana', 'cherry'], $next->selectedValues());
     }
 
+    public function testEnterOnFullyFilteredOutListIsRefusedWithAnnounce(): void
+    {
+        $p = MultiSelectPrompt::new('Picks', ['apple', 'banana'])
+            ->handleChar('q')                      // filter matches nothing
+            ->handleKey(Key::Enter);
+
+        self::assertFalse($p->isSubmitted(), 'the README refusal promise: Enter on no matches never submits an empty result');
+        self::assertStringContainsString(
+            "\x1b[90mnothing matches the filter\x1b[0m",
+            $p->view(),
+        );
+
+        // Backspace restores a match; Enter then submits normally.
+        $restored = $p->handleKey(Key::Backspace)->handleKey(Key::Enter);
+        self::assertTrue($restored->isSubmitted());
+    }
+
     public function testListNoticeAlsoDiesOnTypedFilterInput(): void
     {
         // The notice funnel is shared between handleKey and handleChar, so

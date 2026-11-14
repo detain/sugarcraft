@@ -36,6 +36,7 @@ return array (
   'multiselect.hint_min' => '[çoklu seçim] seçili: {count} (en az {min})',
   'multiselect.hint_min_max' => '[çoklu seçim] seçili: {count} (en az {min}) (en çok {max})',
   'multiselect.notice_unmarked' => '{max} sınırını korumak için {item} işaretinden çıkarıldı',
+  'multiselect.nothing_to_submit' => 'filtreyle eşleşen seçenek yok',
   'selection.filter_prefix' => '[süzgeç] ',
   'selection.matches_one' => ' ({count} eşleşme)',
   'selection.matches_other' => ' ({count} eşleşme)',

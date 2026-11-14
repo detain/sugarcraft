@@ -36,6 +36,7 @@ return array (
   'multiselect.hint_min' => '[multi-select] geselecteerd: {count} (min {min})',
   'multiselect.hint_min_max' => '[multi-select] geselecteerd: {count} (min {min}) (max {max})',
   'multiselect.notice_unmarked' => 'markering van {item} verwijderd om de limiet van {max} te halen',
+  'multiselect.nothing_to_submit' => 'geen enkele optie komt overeen met het filter',
   'selection.filter_prefix' => '[filter] ',
   'selection.matches_one' => ' ({count} overeenkomst)',
   'selection.matches_other' => ' ({count} overeenkomsten)',

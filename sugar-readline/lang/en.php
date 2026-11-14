@@ -53,6 +53,7 @@ return [
     'multiselect.hint_min' => '[multi-select] selected: {count} (min {min})',
     'multiselect.hint_min_max' => '[multi-select] selected: {count} (min {min}) (max {max})',
     'multiselect.notice_unmarked' => 'un-marked {item} to respect the limit of {max}',
+    'multiselect.nothing_to_submit' => 'nothing matches the filter',
 
     // SelectionEngine filter bar / page footer. matches_one/_other are
     // whole sentences chosen at the call site (LOCALES.md plural policy);

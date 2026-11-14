@@ -36,6 +36,7 @@ return array (
   'multiselect.hint_min' => '[تحديد متعدد] محدد: {count} (أدنى {min})',
   'multiselect.hint_min_max' => '[تحديد متعدد] محدد: {count} (أدنى {min}) (أقصى {max})',
   'multiselect.notice_unmarked' => 'أزيل تحديد {item} للالتزام بالحد {max}',
+  'multiselect.nothing_to_submit' => 'لا يوجد خيار مطابق للمرشح',
   'selection.filter_prefix' => '[مرشح] ',
   'selection.matches_one' => ' ({count} مطابقة)',
   'selection.matches_other' => ' ({count} مطابقة)',

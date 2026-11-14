@@ -36,6 +36,7 @@ return array (
   'multiselect.hint_min' => '[více položek] vybráno: {count} (min {min})',
   'multiselect.hint_min_max' => '[více položek] vybráno: {count} (min {min}) (max {max})',
   'multiselect.notice_unmarked' => 'zrušena značka {item}, aby byl dodržen limit {max}',
+  'multiselect.nothing_to_submit' => 'žádná volba neodpovídá filtru',
   'selection.filter_prefix' => '[filtr] ',
   'selection.matches_one' => ' ({count} shoda)',
   'selection.matches_other' => ' ({count} shod)',

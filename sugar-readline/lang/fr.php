@@ -36,6 +36,7 @@ return array (
   'multiselect.hint_min' => '[multi-sélection] sélectionnées : {count} (min {min})',
   'multiselect.hint_min_max' => '[multi-sélection] sélectionnées : {count} (min {min}) (max {max})',
   'multiselect.notice_unmarked' => '{item} décoché pour respecter la limite de {max}',
+  'multiselect.nothing_to_submit' => 'aucune entrée ne correspond au filtre',
   'selection.filter_prefix' => '[filtre] ',
   'selection.matches_one' => ' ({count} correspondance)',
   'selection.matches_other' => ' ({count} correspondances)',

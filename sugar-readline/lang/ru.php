@@ -36,6 +36,7 @@ return array (
   'multiselect.hint_min' => '[мультивыбор] выбрано: {count} (мин {min})',
   'multiselect.hint_min_max' => '[мультивыбор] выбрано: {count} (мин {min}) (макс {max})',
   'multiselect.notice_unmarked' => 'отметка {item} снята ради лимита {max}',
+  'multiselect.nothing_to_submit' => 'ни один вариант не соответствует фильтру',
   'selection.filter_prefix' => '[фильтр] ',
   'selection.matches_one' => ' ({count} совпадение)',
   'selection.matches_other' => ' ({count} совпадений)',

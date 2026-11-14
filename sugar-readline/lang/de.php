@@ -36,6 +36,7 @@ return array (
   'multiselect.hint_min' => '[Mehrfachauswahl] ausgewählt: {count} (min {min})',
   'multiselect.hint_min_max' => '[Mehrfachauswahl] ausgewählt: {count} (min {min}) (max {max})',
   'multiselect.notice_unmarked' => 'Markierung von {item} aufgehoben, um das Limit von {max} einzuhalten',
+  'multiselect.nothing_to_submit' => 'kein Eintrag entspricht dem Filter',
   'selection.filter_prefix' => '[Filter] ',
   'selection.matches_one' => ' ({count} Übereinstimmung)',
   'selection.matches_other' => ' ({count} Übereinstimmungen)',

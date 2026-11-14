@@ -36,6 +36,7 @@ return array (
   'multiselect.hint_min' => '[wybór wielokrotny] zaznaczono: {count} (min {min})',
   'multiselect.hint_min_max' => '[wybór wielokrotny] zaznaczono: {count} (min {min}) (max {max})',
   'multiselect.notice_unmarked' => 'odznaczono {item}, aby przestrzec limitu {max}',
+  'multiselect.nothing_to_submit' => 'żadna opcja nie pasuje do filtra',
   'selection.filter_prefix' => '[filtr] ',
   'selection.matches_one' => ' ({count} dopasowanie)',
   'selection.matches_other' => ' ({count} dopasowań)',
