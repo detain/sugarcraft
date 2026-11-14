@@ -23,6 +23,13 @@ use SugarCraft\Metrics\Descriptor;
  *
  * The rule holds for every operation, including the idempotent
  * remove/clear cleanup: nothing is silently swallowed in either mode.
+ *
+ * Partial-fanout contract (sugar-metrics-040): in fail-fast mode the
+ * loop aborts at the throwing child — children ordered after it are
+ * NOT attempted for that call, so one operation can land on some
+ * sinks and not others. In continue-on-error mode every child is
+ * always attempted and the aggregate failure rethrows only after the
+ * full fanout completes.
  */
 final class MultiBackend implements Backend
 {

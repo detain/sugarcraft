@@ -97,16 +97,51 @@ final class MultiBackendTest extends TestCase
 
         $inMemory = new InMemoryBackend();
         $multi = new MultiBackend($throwing, $inMemory);
+        $multi->counter('hits', 1); // seed the series (counter is a no-op on the thrower)
 
         // Default (fail-fast) mode: a throwing child propagates — the old
         // swallow-regardless-of-mode behavior is gone.
         try {
-            $multi->remove('any_metric', ['a' => 'b']);
+            $multi->remove('hits');
             $this->fail('expected the child failure to propagate');
         } catch (\RuntimeException $e) {
             $this->assertSame('remove fails', $e->getMessage());
         }
         $this->assertTrue($throwing->removeCalled);
+        // sugar-metrics-040: the recorded partial-fanout semantics — fail-fast
+        // aborted at the thrower, so the second child's remove was never
+        // attempted and the seeded series survives there.
+        $this->assertSame(1.0, $inMemory->counterValue('hits'));
+    }
+
+    public function testFailFastAbortsTheFanoutAtTheFirstThrower(): void
+    {
+        // sugar-metrics-040: counter-side leg of the partial-fanout contract
+        // mirrored in the class docblock — a throwing first child means the
+        // later children never see the emit at all in fail-fast mode.
+        $throwing = new class implements \SugarCraft\Metrics\Backend {
+            public function counter(string $_name, float $_value, array $_tags = []): void { throw new \RuntimeException('first child fails'); }
+            public function gauge(string $_name, float $_value, array $_tags = []): void {}
+            public function histogram(string $_name, float $_value, array $_tags = []): void {}
+            public function upDownCounter(string $_name, float $_amount, array $_tags = []): void {}
+            public function asyncCounter(string $_name, float $_value, array $_tags = []): void {}
+            public function asyncGauge(string $_name, float $_value, array $_tags = []): void {}
+            public function describe(Descriptor $_descriptor): void {}
+            public function flush(): void {}
+            public function remove(string $_name, array $_tags = []): void {}
+            public function clear(): void {}
+        };
+
+        $inMemory = new InMemoryBackend();
+        $multi = new MultiBackend($throwing, $inMemory);
+
+        try {
+            $multi->counter('hits', 42);
+            $this->fail('expected the child failure to propagate');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('first child fails', $e->getMessage());
+        }
+        $this->assertSame(0.0, $inMemory->counterValue('hits'), 'later children must not be attempted in fail-fast mode');
     }
 
     public function testRemoveWithContinueOnErrorTriesAllChildrenAndAggregates(): void
@@ -240,12 +275,17 @@ final class MultiBackendTest extends TestCase
 
         // In continue-on-error mode, every child receives the emit even if others throw.
         // A counter is recorded; the aggregate exception is thrown after the fanout.
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('MultiBackend: 1 child backend(s) failed');
-        $multi->counter('hits', 42);
+        // sugar-metrics-012: restructured off expectException — the old form aborted
+        // the method before the child-received assertion below, so the headline
+        // "reaches all children" claim ran nowhere (the :248 excuse was fiction).
+        try {
+            $multi->counter('hits', 42);
+            $this->fail('expected the aggregated MultiBackendException');
+        } catch (MultiBackendException $e) {
+            $this->assertStringContainsString('1 child backend(s) failed', $e->getMessage());
+        }
 
         // inMemory still received the counter despite the throwing sibling.
-        // (This assertion runs in a subsequent test invocation since expectException aborts this one.)
         $this->assertSame(42.0, $inMemory->counterValue('hits'));
     }
 
@@ -291,9 +331,13 @@ final class MultiBackendTest extends TestCase
         $inMemory = new InMemoryBackend();
         $multi = MultiBackend::withContinueOnError($throwing, $inMemory);
 
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('MultiBackend: 1 child backend(s) failed');
-        $multi->histogram('latency', 0.05);
+        // sugar-metrics-012: try/fail/catch so the child-received assertion runs.
+        try {
+            $multi->histogram('latency', 0.05);
+            $this->fail('expected the aggregated MultiBackendException');
+        } catch (MultiBackendException $e) {
+            $this->assertStringContainsString('1 child backend(s) failed', $e->getMessage());
+        }
 
         // inMemory received the histogram despite the throwing sibling.
         $this->assertSame([0.05], $inMemory->histogramValues('latency'));
@@ -317,9 +361,13 @@ final class MultiBackendTest extends TestCase
         $inMemory = new InMemoryBackend();
         $multi = MultiBackend::withContinueOnError($throwing, $inMemory);
 
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('MultiBackend: 1 child backend(s) failed');
-        $multi->upDownCounter('delta', 7.0);
+        // sugar-metrics-012: try/fail/catch so the child-received assertion runs.
+        try {
+            $multi->upDownCounter('delta', 7.0);
+            $this->fail('expected the aggregated MultiBackendException');
+        } catch (MultiBackendException $e) {
+            $this->assertStringContainsString('1 child backend(s) failed', $e->getMessage());
+        }
 
         $this->assertSame(7.0, $inMemory->upDownCounterValue('delta'));
     }
@@ -342,9 +390,13 @@ final class MultiBackendTest extends TestCase
         $inMemory = new InMemoryBackend();
         $multi = MultiBackend::withContinueOnError($throwing, $inMemory);
 
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('MultiBackend: 1 child backend(s) failed');
-        $multi->asyncCounter('jvm_gc', 3.0);
+        // sugar-metrics-012: try/fail/catch so the child-received assertion runs.
+        try {
+            $multi->asyncCounter('jvm_gc', 3.0);
+            $this->fail('expected the aggregated MultiBackendException');
+        } catch (MultiBackendException $e) {
+            $this->assertStringContainsString('1 child backend(s) failed', $e->getMessage());
+        }
 
         $this->assertSame(3.0, $inMemory->asyncCounterValue('jvm_gc'));
     }
@@ -367,9 +419,13 @@ final class MultiBackendTest extends TestCase
         $inMemory = new InMemoryBackend();
         $multi = MultiBackend::withContinueOnError($throwing, $inMemory);
 
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('MultiBackend: 1 child backend(s) failed');
-        $multi->asyncGauge('heap', 4.0);
+        // sugar-metrics-012: try/fail/catch so the child-received assertion runs.
+        try {
+            $multi->asyncGauge('heap', 4.0);
+            $this->fail('expected the aggregated MultiBackendException');
+        } catch (MultiBackendException $e) {
+            $this->assertStringContainsString('1 child backend(s) failed', $e->getMessage());
+        }
 
         $this->assertSame(4.0, $inMemory->asyncGaugeValue('heap'));
     }
