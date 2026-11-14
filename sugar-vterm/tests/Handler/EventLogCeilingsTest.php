@@ -11,7 +11,7 @@ use SugarCraft\AnsiParser\Parser\Parser;
 use SugarCraft\Vterm\Buffer\Buffer;
 use SugarCraft\Vterm\Handler\ScreenHandler;
 use SugarCraft\Vterm\Msg\FocusInMsg;
-use SugarCraft\Vterm\Parser\DebugHandler;
+use SugarCraft\AnsiParser\Parser\DebugHandler;
 use SugarCraft\Vterm\Terminal\Terminal as FullTerminal;
 
 /**
@@ -144,7 +144,10 @@ final class EventLogCeilingsTest extends TestCase
 
     public function testDebugHandlerLogIsBounded(): void
     {
-        $d = new DebugHandler();
+        // sap-20 fold (2026-11-13): the fork's bounded-by-default became the
+        // lib's opt-in ring — pass the ceiling explicitly to keep the
+        // residency promise this row pins.
+        $d = new DebugHandler(maxLogRows: DebugHandler::MAX_LOG_ROWS);
         $parser = new Parser($d);
         $parser->feed('Z');
         $parser->feed(str_repeat('x', DebugHandler::MAX_LOG_ROWS + DebugHandler::EVICT_GRACE_ROWS + 1));
