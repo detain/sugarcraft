@@ -230,7 +230,7 @@ final class InfocmpBinary
             $windows = WindowsPipes::runtimeNeedsIt();
 
             while (true) {
-                $exited = $windows && !(\proc_get_status($handle)['running'] ?? false);
+                $exited = $windows && !\proc_get_status($handle)['running'];
                 $chunk = $windows ? WindowsPipes::readAvailable($pipes[1], 8192) : \fread($pipes[1], 8192);
                 if (\is_string($chunk) && $chunk !== '') {
                     if (!$pastCap) {
