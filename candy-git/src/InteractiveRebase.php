@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace SugarCraft\Git;
 
 /**
- * Interactive rebase state — shows todo list and allows picking actions
- * per commit.
+ * Interactive rebase todo state — a READ-ONLY preview list built from the
+ * recent commits. Action cycling and dropping were preview theatre
+ * (candy-git-011): the todo is discarded on Esc and nothing is ever executed.
+ * Parked per gate G1 (2026-11-14): the App refuses the mutating keys with the
+ * preview-only notice; the model methods below stay as the building blocks for
+ * the wire arm (temp todo + GIT_SEQUENCE_EDITOR) should the owner commission it.
  *
- * Press 'i' to enter interactive rebase mode and select number of commits.
- * Then shows a list where you can change each commit's action.
+ * Press 'i' to open, choose a commit count, read the todo, leave with Esc.
  *
  * @readonly
  *
@@ -111,6 +114,9 @@ final readonly class InteractiveRebase
 
     /**
      * Cycle the action for the current commit.
+     *
+     * Model API only while parked (gate G1): the App's space/l keys answer
+     * with the preview-only refusal instead of calling this.
      */
     public function cycleAction(): self
     {

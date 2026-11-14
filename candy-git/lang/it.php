@@ -160,8 +160,8 @@ return [
     'rebase_i.confirm_count'  => 'conferma (invio)',
     'rebase_i.no_commits'     => '(nessun commit)',
     'rebase_i.todo_list'      => 'lista da fare:',
-    'rebase_i.cycle_action'   => 'cambia azione (preview)',
-    'rebase_i.drop'           => 'elimina commit (preview)',
+    'rebase_i.cycle_action'   => 'cambia azione - parcheggiato, nulla cambia',
+    'rebase_i.drop'           => 'elimina commit - parcheggiato, nulla cambia',
     'rebase_i.preview_only'   => 'solo anteprima — non ancora eseguito',
     'rebase_i.count_positive' => 'il numero deve essere > 0',
 ];

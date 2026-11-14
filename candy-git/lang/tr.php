@@ -160,8 +160,8 @@ return [
     'rebase_i.confirm_count'  => 'onayla (enter)',
     'rebase_i.no_commits'     => '(commit yok)',
     'rebase_i.todo_list'      => 'yapılacaklar listesi:',
-    'rebase_i.cycle_action'   => 'eylemi değiştir (preview)',
-    'rebase_i.drop'           => 'commit at (preview)',
+    'rebase_i.cycle_action'   => 'eylemi değiştir - parkta, hiçbir şey değişmez',
+    'rebase_i.drop'           => 'taahhüdü sil - parkta, hiçbir şey değişmez',
     'rebase_i.preview_only'   => 'yalnızca önizleme — henüz çalıştırılmıyor',
     'rebase_i.count_positive' => 'sayı > 0 olmalı',
 ];

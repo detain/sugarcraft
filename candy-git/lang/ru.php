@@ -160,8 +160,8 @@ return [
     'rebase_i.confirm_count'  => 'подтвердить (enter)',
     'rebase_i.no_commits'     => '(нет коммитов)',
     'rebase_i.todo_list'      => 'список задач:',
-    'rebase_i.cycle_action'   => 'сменить действие (preview)',
-    'rebase_i.drop'           => 'отбросить коммит (preview)',
+    'rebase_i.cycle_action'   => 'сменить действие - припарковано, ничего не меняется',
+    'rebase_i.drop'           => 'убрать коммит - припарковано, ничего не меняется',
     'rebase_i.preview_only'   => 'только предпросмотр — ещё не выполняется',
     'rebase_i.count_positive' => 'число должно быть > 0',
 ];

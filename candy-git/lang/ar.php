@@ -160,8 +160,8 @@ return [
     'rebase_i.confirm_count'  => 'تأكيد (enter)',
     'rebase_i.no_commits'     => '(لا التزامات)',
     'rebase_i.todo_list'      => 'قائمة المهام:',
-    'rebase_i.cycle_action'   => 'تبديل الإجراء (preview)',
-    'rebase_i.drop'           => 'حذف الالتزام (preview)',
+    'rebase_i.cycle_action'   => 'تبديل الإجراء — متوقف، لا شيء يتغير',
+    'rebase_i.drop'           => 'إسقاط الالتزام — متوقف، لا شيء يتغير',
     'rebase_i.preview_only'   => 'معاينة فقط — لم يُنفذ بعد',
     'rebase_i.count_positive' => 'يجب أن يكون العدد > 0',
 ];

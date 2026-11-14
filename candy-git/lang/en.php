@@ -197,8 +197,8 @@ return [
     'rebase_i.confirm_count' => 'confirm (enter)',
     'rebase_i.no_commits'   => '(no commits)',
     'rebase_i.todo_list'    => 'todo list:',
-    'rebase_i.cycle_action'  => 'cycle action (preview)',
-    'rebase_i.drop'          => 'drop commit (preview)',
+    'rebase_i.cycle_action'  => 'cycle action - parked, nothing changes',
+    'rebase_i.drop'          => 'drop commit - parked, nothing changes',
     'rebase_i.preview_only'  => 'preview only — not yet executed',
     'rebase_i.count_positive' => 'count must be > 0',
 ];

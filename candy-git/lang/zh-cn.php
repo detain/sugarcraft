@@ -160,8 +160,8 @@ return [
     'rebase_i.confirm_count'  => '确认（回车）',
     'rebase_i.no_commits'     => '（无提交）',
     'rebase_i.todo_list'      => '待办列表：',
-    'rebase_i.cycle_action'   => '切换操作 (preview)',
-    'rebase_i.drop'           => '丢弃提交 (preview)',
+    'rebase_i.cycle_action'   => '循环操作 - 已暂停，不会更改',
+    'rebase_i.drop'           => '丢弃提交 - 已暂停，不会更改',
     'rebase_i.preview_only'   => '仅预览 — 尚未执行',
     'rebase_i.count_positive' => '数量必须大于 0',
 ];

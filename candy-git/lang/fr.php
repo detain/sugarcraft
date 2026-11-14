@@ -160,8 +160,8 @@ return [
     'rebase_i.confirm_count'  => 'confirmer (entrée)',
     'rebase_i.no_commits'     => '(aucun commit)',
     'rebase_i.todo_list'      => 'liste de tâches :',
-    'rebase_i.cycle_action'   => 'changer l’action (preview)',
-    'rebase_i.drop'           => 'jeter le commit (preview)',
+    'rebase_i.cycle_action'   => 'changer l\'action - gelé, rien ne change',
+    'rebase_i.drop'           => 'abandonner le commit - gelé, rien ne change',
     'rebase_i.preview_only'   => 'aperçu uniquement — pas encore exécuté',
     'rebase_i.count_positive' => 'le nombre doit être > 0',
 ];

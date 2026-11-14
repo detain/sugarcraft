@@ -160,8 +160,8 @@ return [
     'rebase_i.confirm_count'  => 'bevestigen (enter)',
     'rebase_i.no_commits'     => '(geen commits)',
     'rebase_i.todo_list'      => 'takenlijst:',
-    'rebase_i.cycle_action'   => 'actie wisselen (preview)',
-    'rebase_i.drop'           => 'commit verwijderen (preview)',
+    'rebase_i.cycle_action'   => 'actie wisselen - geparkeerd, niets verandert',
+    'rebase_i.drop'           => 'commit laten vallen - geparkeerd, niets verandert',
     'rebase_i.preview_only'   => 'alleen voorbeeld — nog niet uitgevoerd',
     'rebase_i.count_positive' => 'aantal moet > 0 zijn',
 ];

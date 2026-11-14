@@ -160,8 +160,8 @@ return [
     'rebase_i.confirm_count'  => 'bestätigen (enter)',
     'rebase_i.no_commits'     => '(keine commits)',
     'rebase_i.todo_list'      => 'todo-liste:',
-    'rebase_i.cycle_action'   => 'aktion wechseln (preview)',
-    'rebase_i.drop'           => 'commit verwerfen (preview)',
+    'rebase_i.cycle_action'   => 'Aktion wechseln - geparkt, nichts ändert sich',
+    'rebase_i.drop'           => 'Commit verwerfen - geparkt, nichts ändert sich',
     'rebase_i.preview_only'   => 'nur vorschau — noch nicht ausgeführt',
     'rebase_i.count_positive' => 'anzahl muss > 0 sein',
 ];

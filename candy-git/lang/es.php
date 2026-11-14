@@ -160,8 +160,8 @@ return [
     'rebase_i.confirm_count'  => 'confirmar (enter)',
     'rebase_i.no_commits'     => '(sin commits)',
     'rebase_i.todo_list'      => 'lista de tareas:',
-    'rebase_i.cycle_action'   => 'cambiar acción (preview)',
-    'rebase_i.drop'           => 'descartar commit (preview)',
+    'rebase_i.cycle_action'   => 'cambiar acción - en pausa, nada cambia',
+    'rebase_i.drop'           => 'descartar commit - en pausa, nada cambia',
     'rebase_i.preview_only'   => 'solo vista previa — aún no se ejecuta',
     'rebase_i.count_positive' => 'el número debe ser > 0',
 ];

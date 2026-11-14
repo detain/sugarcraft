@@ -275,13 +275,19 @@ final class App implements Model
             if ($msg->type === KeyType::Down || ($msg->type === KeyType::Char && $msg->rune === 'j')) {
                 return [$this->navigateRebaseCommit(+1), null];
             }
-            // Cycle action (space or right arrow)
+            // candy-git-011, parked per gate G1 (default arm): cycling and
+            // dropping were preview theatre - the built todo was discarded on
+            // Esc and no history could ever change - so the mutating keys
+            // answer with the banner's own words on the amber notice lane
+            // instead of silently re-drawing the preview. The keys stay
+            // swallowed HERE on purpose: an unmapped key must never leak to
+            // the global handlers (a 'd' that reached the status pane from
+            // under this overlay would arm a real discard).
             if ($msg->type === KeyType::Space || ($msg->type === KeyType::Char && $msg->rune === 'l')) {
-                return [$this->withInteractiveRebase($this->interactiveRebase->cycleAction()), null];
+                return [$this->refuseParkedRebase(), null];
             }
-            // Drop current commit
             if ($msg->type === KeyType::Char && $msg->rune === 'd') {
-                return [$this->withInteractiveRebase($this->interactiveRebase->dropCurrent()), null];
+                return [$this->refuseParkedRebase(), null];
             }
             return [$this, null];
         }
@@ -1688,6 +1694,22 @@ final class App implements Model
         $ir = $this->interactiveRebase;
         if ($ir === null) return $this;
         return $this->withInteractiveRebase($ir->withCursor($dir));
+    }
+
+    /**
+     * The park-G1 refusal: answers a mutating todo key with the banner's own
+     * words on the amber notice lane, leaving the preview untouched. The
+     * interactiveRebase re-pass keeps the built todo exactly as it was — a
+     * refusal must not rebuild (or reorder) what the user is reading.
+     */
+    private function refuseParkedRebase(): self
+    {
+        return $this->withAll(
+            interactiveRebase: $this->interactiveRebase,
+            interactiveRebaseSet: true,
+            error: $this->error,
+            notice: Lang::t('rebase_i.preview_only'),
+        );
     }
 
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions

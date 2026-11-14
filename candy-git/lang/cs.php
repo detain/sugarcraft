@@ -160,8 +160,8 @@ return [
     'rebase_i.confirm_count'  => 'potvrdit (enter)',
     'rebase_i.no_commits'     => '(žádné commity)',
     'rebase_i.todo_list'      => 'seznam úkolů:',
-    'rebase_i.cycle_action'   => 'střídat akci (preview)',
-    'rebase_i.drop'           => 'zahodit commit (preview)',
+    'rebase_i.cycle_action'   => 'cyklická akce - zaparkováno, nic se nemění',
+    'rebase_i.drop'           => 'zahodit commit - zaparkováno, nic se nemění',
     'rebase_i.preview_only'   => 'jen náhled — zatím se nespouští',
     'rebase_i.count_positive' => 'počet musí být > 0',
 ];

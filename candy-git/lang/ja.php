@@ -160,8 +160,8 @@ return [
     'rebase_i.confirm_count'  => '確定 (enter)',
     'rebase_i.no_commits'     => '(コミットなし)',
     'rebase_i.todo_list'      => 'todoリスト:',
-    'rebase_i.cycle_action'   => 'アクション切替 (preview)',
-    'rebase_i.drop'           => 'コミットを破棄 (preview)',
+    'rebase_i.cycle_action'   => 'アクション変更 - 保留中、何も変わりません',
+    'rebase_i.drop'           => 'コミット削除 - 保留中、何も変わりません',
     'rebase_i.preview_only'   => 'プレビューのみ — まだ実行されません',
     'rebase_i.count_positive' => '数は > 0 でなければなりません',
 ];

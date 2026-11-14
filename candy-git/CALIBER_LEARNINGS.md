@@ -204,16 +204,19 @@ two sub-modes (add and remove) each collecting path/branch input:
 
 ## [pattern:interactive-rebase-todo] Interactive rebase todo list (i key)
 
-Interactive rebase shows a todo list of commits, each with an assignable action
-(pick/reword/edit/squash/drop), then dispatches the rebase via the GitDriver's
-`stagePatch` or `reset` methods:
+Interactive rebase builds a **preview-only** todo list of commits, each entry
+carrying an action word (pick/reword/edit/squash/drop); execution is not yet
+wired (see the `InteractiveRebase` TODO; gate G1 parked it 2026-11-14). The
+list is discarded on Esc, and the App's mutating keys (space/l cycle, d drop)
+answer with the preview-only notice instead of editing the preview:
 
 1. **`interactiveRebase: ?InteractiveRebase`** — `null` when inactive.
 2. **`RebaseAction` enum** — `Pick`, `Reword`, `Edit`, `Squash`, `Drop`.
 3. **`RebaseCommit`** — immutable entry: `sha`, `subject`, `action` (default
    `Pick`) + `withAction(RebaseAction): self`.
 4. **Two phases** — `selectingN` (user types a digit count, `Enter` confirms) and
-   `!selectingN` (todo list is shown, user navigates and changes actions).
+   `!selectingN` (todo list is shown, user navigates; action changes are parked
+   at the App surface until the wire arm lands).
 5. **`withCountDigit(string $digit): self`** — only accepts `ctype_digit`
    input; returns `$this` unchanged for non-digits (no-op, not an error).
 6. **`cycleAction(): self`** — advances the current commit's action through the

@@ -160,8 +160,8 @@ return [
     'rebase_i.confirm_count'  => 'potwierdź (enter)',
     'rebase_i.no_commits'     => '(brak commitów)',
     'rebase_i.todo_list'      => 'lista zadań:',
-    'rebase_i.cycle_action'   => 'zmień akcję (preview)',
-    'rebase_i.drop'           => 'odrzuć commit (preview)',
+    'rebase_i.cycle_action'   => 'zmień akcję - zaparkowane, nic się nie zmienia',
+    'rebase_i.drop'           => 'usuń commit - zaparkowane, nic się nie zmienia',
     'rebase_i.preview_only'   => 'tylko podgląd — jeszcze niewykonywane',
     'rebase_i.count_positive' => 'liczba musi być > 0',
 ];

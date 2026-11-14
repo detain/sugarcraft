@@ -988,6 +988,33 @@ final class AppTest extends TestCase
         $this->assertNull($a->interactiveRebase);
     }
 
+    /**
+     * candy-git-011 (gate G1, park arm): the preview todo's mutating keys must
+     * refuse, not fake-edit — and they must never leak to the global lanes.
+     * 'd' is the critical swallow: a plain unmapped fall-through would arm a
+     * REAL worktree discard from underneath a preview overlay.
+     */
+    public function testParkedRebaseTodoKeysRefuseWithoutEditingOrLeaking(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'i'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, '2'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter));
+        $this->assertNotNull($a->interactiveRebase);
+        $this->assertCount(2, $a->interactiveRebase->commits);
+
+        foreach ([['space', KeyType::Space, ''], ['l', KeyType::Char, 'l'], ['d', KeyType::Char, 'd']] as [$label, $type, $rune]) {
+            [$a, ] = $a->update(new KeyMsg($type, $rune));
+            $this->assertSame('preview only - not yet executed', preg_replace('/\x{2014}/u', '-', (string) $a->notice), "{$label} answers with the banner");
+            $this->assertCount(2, $a->interactiveRebase->commits, "{$label} never re-drops the preview");
+            $this->assertSame(\SugarCraft\Git\RebaseAction::Pick, $a->interactiveRebase->commits[0]->action, "{$label} never cycles actions");
+            $this->assertNull($a->pendingConfirm, 'a refusal arms nothing');
+        }
+
+        $this->assertSame([], $g->discards, 'the overlay swallows d - no real discard ran');
+    }
+
     public function testDefaultGeometryBeforeAnyWindowSize(): void
     {
         $a = App::start($this->git());

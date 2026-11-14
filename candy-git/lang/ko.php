@@ -160,8 +160,8 @@ return [
     'rebase_i.confirm_count'  => '확인 (enter)',
     'rebase_i.no_commits'     => '(커밋 없음)',
     'rebase_i.todo_list'      => 'todo 목록:',
-    'rebase_i.cycle_action'   => '동작 전환 (preview)',
-    'rebase_i.drop'           => '커밋 버리기 (preview)',
+    'rebase_i.cycle_action'   => '작업 순환 - 보류, 아무것도 변하지 않음',
+    'rebase_i.drop'           => '커밋 삭제 - 보류, 아무것도 변하지 않음',
     'rebase_i.preview_only'   => '미리보기 전용 — 아직 실행되지 않음',
     'rebase_i.count_positive' => '숫자는 > 0 이어야 합니다',
 ];

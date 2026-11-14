@@ -171,8 +171,8 @@ on a conflict; the prompt names the armed operation:
 |------------------|--------------------------------------------------|
 | digits + `Enter` | Choose how many commits to rebase               |
 | `j/k` or `↑/↓`  | Move through the todo                           |
-| `Space` or `l`   | Cycle the entry's action (pick → reword → edit → squash → drop) |
-| `d`              | Drop the selected entry                         |
+| `Space` or `l`   | Parked — refused with the preview-only notice (todo editing is not wired) |
+| `d`              | Parked — refused with the preview-only notice (rows are never dropped) |
 | `Esc`            | Close                                           |
 
 **Help (`?`):** context-sensitive — it covers the general keys plus the
@@ -186,7 +186,7 @@ diff viewer, or a text buffer) is open — close that layer first.
 Every state the UI needs you to know is carried by **text**, not by color
 alone: status rows show git's porcelain `XY` codes, diff lines keep their
 leading `+`/`-` markers, the rebase todo spells its actions as words
-(`pick`/`reword`/`squash`/`drop`), and the ahead/behind summary is git's own
+(`pick`/`reword`/`edit`/`squash`/`drop`), and the ahead/behind summary is git's own
 `## …[ahead N, behind M]` upstream header rendered verbatim — so the panes
 stay readable under `NO_COLOR`, `TERM=dumb`, or an ASCII-only palette. Pane
 **focus** rides two channels too: the accent
