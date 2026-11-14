@@ -8,15 +8,19 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Dashboard\Foundation\ColorMode;
+use SugarCraft\Dashboard\Support\ListWindow;
 
 /**
  * A dropdown select component.
  *
- * Displays a compact select control that shows all options when rendered,
- * with one option marked as selected:
+ * Displays a compact select control, one option per row, with one option
+ * marked as selected:
  * - Vertical list of options with selection indicator
  * - Custom selection marker and colors
  * - Optional width constraint
+ * - When an allocation height is given, the list is scroll-windowed
+ *   around the selected row instead of painting every option (finding
+ *   sugar-dashboard-051; same ListWindow rule as the calendar list)
  *
  * Mirrors the select/dropdown concept from bubble-tea/lipgloss but adapted
  * to PHP with wither-style immutable setters.
@@ -67,7 +71,11 @@ final class Select implements \SugarCraft\Dashboard\Foundation\SizedItem
     }
 
     /**
-     * Render the select component showing all options.
+     * Render the select component.
+     *
+     * With an allocation height the list is a scroll window around the
+     * selected row (support ListWindow, same rule as the calendar list);
+     * without one it paints every option at natural height.
      */
     public function render(): string
     {
@@ -77,8 +85,13 @@ final class Select implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         $safeIndex = max(0, min($this->selectedIndex, count($this->options) - 1));
 
+        $total = count($this->options);
+        $visible = $this->height !== null && $this->height > 0 ? min($this->height, $total) : $total;
+        $top = ListWindow::scrollTop($safeIndex, $visible, $total);
+
         $lines = [];
-        foreach ($this->options as $index => $option) {
+        for ($index = $top; $index < $top + $visible; $index++) {
+            $option = $this->options[$index];
             $lines[] = $this->renderOption($option, $index, $index === $safeIndex);
         }
 
@@ -126,24 +139,38 @@ final class Select implements \SugarCraft\Dashboard\Foundation\SizedItem
             }
         }
 
-        return [$maxWidth, count($this->options)];
+        return [$maxWidth, $this->height !== null && $this->height > 0 ? min($this->height, count($this->options)) : count($this->options)];
     }
 
     // ─── Withers ──────────────────────────────────────────────────
+
+    /**
+     * Carry the current allocation onto a wither result.
+     *
+     * The withers rebuild via new self(...); without this the setSize()
+     * width/height would silently evaporate on the first styling tweak
+     * (the Popover/Dropdown allocation-drop class).
+     */
+    private function carryAllocation(self $next): self
+    {
+        $next->width = $this->width;
+        $next->height = $this->height;
+        return $next;
+    }
 
     /**
      * Set the selected option index.
      */
     public function withSelectedIndex(int $index): self
     {
-        return new self(
+        return $this->carryAllocation(new self(
             options: $this->options,
             selectedIndex: max(0, min($index, count($this->options) - 1)),
             selectedColor: $this->selectedColor,
             unselectedColor: $this->unselectedColor,
             selectedChar: $this->selectedChar,
             unselectedChar: $this->unselectedChar,
-        );
+        ));
     }
 
     /**
@@ -153,14 +180,14 @@ final class Select implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withOptions(array $options): self
     {
-        return new self(
+        return $this->carryAllocation(new self(
             options: $options,
             selectedIndex: min($this->selectedIndex, count($options) - 1),
             selectedColor: $this->selectedColor,
             unselectedColor: $this->unselectedColor,
             selectedChar: $this->selectedChar,
             unselectedChar: $this->unselectedChar,
-        );
+        ));
     }
 
     /**
@@ -168,14 +195,14 @@ final class Select implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withSelectedColor(?Color $color): self
     {
-        return new self(
+        return $this->carryAllocation(new self(
             options: $this->options,
             selectedIndex: $this->selectedIndex,
             selectedColor: $color,
             unselectedColor: $this->unselectedColor,
             selectedChar: $this->selectedChar,
             unselectedChar: $this->unselectedChar,
-        );
+        ));
     }
 
     /**
@@ -183,14 +210,14 @@ final class Select implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withUnselectedColor(?Color $color): self
     {
-        return new self(
+        return $this->carryAllocation(new self(
             options: $this->options,
             selectedIndex: $this->selectedIndex,
             selectedColor: $this->selectedColor,
             unselectedColor: $color,
             selectedChar: $this->selectedChar,
             unselectedChar: $this->unselectedChar,
-        );
+        ));
     }
 
     /**
@@ -198,13 +225,13 @@ final class Select implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withChars(string $selected, string $unselected): self
     {
-        return new self(
+        return $this->carryAllocation(new self(
             options: $this->options,
             selectedIndex: $this->selectedIndex,
             selectedColor: $this->selectedColor,
             unselectedColor: $this->unselectedColor,
             selectedChar: $selected,
             unselectedChar: $unselected,
-        );
+        ));
     }
 }

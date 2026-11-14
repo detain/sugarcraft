@@ -332,4 +332,76 @@ final class ComboBoxTest extends TestCase
         $updated = $original->withOptions([['label' => 'Only']]);
         $this->assertNotSame('', $updated->render());
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Allocation windowing (finding sugar-dashboard-051)
+    // ═══════════════════════════════════════════════════════════════
+
+    /** @return list<array{label: string}> */
+    private function manyOptions(int $count): array
+    {
+        $options = [];
+        for ($i = 0; $i < $count; $i++) {
+            $options[] = ['label' => sprintf('Res %03d', $i)];
+        }
+        return $options;
+    }
+
+    public function testUnallocatedComboboxPaintsEveryResult(): void
+    {
+        $rendered = ComboBox::new('Search...', $this->manyOptions(50))->render();
+
+        $this->assertCount(51, explode("\n", $rendered)); // input + 50
+    }
+
+    public function testResultsAreWindowedToHeightMinusTheInputRow(): void
+    {
+        $rendered = ComboBox::new('Search...', $this->manyOptions(50))
+            ->withSelectedIndex(40)
+            ->setSize(0, 6)
+            ->render();
+
+        $rows = explode("\n", $rendered);
+        $this->assertCount(6, $rows);
+        $this->assertStringContainsString('🔍', $rows[0]);
+        $this->assertStringContainsString('Res 040', $rendered);
+        $this->assertStringNotContainsString('Res 000', $rendered);
+    }
+
+    public function testHeightOfOneLeavesOnlyTheInputRow(): void
+    {
+        $rendered = ComboBox::new('Search...', $this->manyOptions(50))
+            ->setSize(0, 1)
+            ->render();
+
+        $this->assertCount(1, explode("\n", $rendered));
+        $this->assertStringContainsString('Search...', $rendered);
+    }
+
+    public function testInnerSizeReportsTheWindowedHeight(): void
+    {
+        [, $natural] = ComboBox::new('Search...', $this->manyOptions(50))->innerSize();
+        $this->assertSame(51, $natural);
+
+        [, $windowed] = ComboBox::new('Search...', $this->manyOptions(50))->setSize(0, 6)->innerSize();
+        $this->assertSame(6, $windowed);
+    }
+
+    public function testWithersCarryTheAllocation(): void
+    {
+        $sized = ComboBox::new('Search...', $this->manyOptions(50))
+            ->withSelectedIndex(40)
+            ->setSize(0, 6);
+
+        foreach (
+            [
+                fn(ComboBox $c) => $c->withPlaceholder('Find...'),
+                fn(ComboBox $c) => $c->withInputColor(null),
+                fn(ComboBox $c) => $c->withMatchColor(null),
+                fn(ComboBox $c) => $c->withSelectedColor(null),
+            ] as $wither
+        ) {
+            $this->assertCount(6, explode("\n", $wither($sized)->render()));
+        }
+    }
 }

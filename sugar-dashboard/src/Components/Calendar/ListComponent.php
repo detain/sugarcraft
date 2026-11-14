@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Components\Calendar;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Dashboard\Output\Truncate;
 use SugarCraft\Dashboard\Layout\HAlign;
+use SugarCraft\Dashboard\Support\ListWindow;
 
 /**
  * A scrollable list component with item selection.
@@ -216,15 +217,10 @@ final class ListComponent implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     private function calculateScrollTop(int $selected, int $height, int $totalItems): int
     {
-        if ($height >= $totalItems) {
-            return 0;
-        }
-
-        // Keep selected item centered when possible
-        $idealTop = (int) floor($selected - ($height / 2));
-
-        // Clamp to valid range
-        return max(0, min($idealTop, $totalItems - $height));
+        // Behaviour lives in Support/ListWindow so the calendar list,
+        // Select, and ComboBox share one windowing law (D-57); this class's
+        // long-pinned scroll behaviour is that formula unchanged.
+        return ListWindow::scrollTop($selected, $height, $totalItems);
     }
 
     /**

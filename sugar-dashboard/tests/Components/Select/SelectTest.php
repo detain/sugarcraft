@@ -262,4 +262,87 @@ final class SelectTest extends TestCase
         $updated = $original->withOptions([['label' => 'Only']]);
         $this->assertNotSame('', $updated->render());
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Allocation windowing (finding sugar-dashboard-051)
+    // ═══════════════════════════════════════════════════════════════
+
+    /** @return list<array{label: string}> */
+    private function manyOptions(int $count): array
+    {
+        $options = [];
+        for ($i = 0; $i < $count; $i++) {
+            $options[] = ['label' => sprintf('Opt %03d', $i)];
+        }
+        return $options;
+    }
+
+    public function testUnallocatedSelectPaintsEveryOption(): void
+    {
+        $rendered = Select::new($this->manyOptions(500))->withSelectedIndex(250)->render();
+
+        $this->assertCount(500, explode("\n", $rendered));
+    }
+
+    public function testSelectIsWindowedToTheAllocatedHeight(): void
+    {
+        $rendered = Select::new($this->manyOptions(500))
+            ->withSelectedIndex(250)
+            ->setSize(0, 20)
+            ->render();
+
+        $this->assertCount(20, explode("\n", $rendered));
+        $this->assertStringContainsString('Opt 250', $rendered);
+        $this->assertStringNotContainsString('Opt 000', $rendered);
+        $this->assertStringNotContainsString('Opt 499', $rendered);
+    }
+
+    public function testWindowTracksSelectionAtTheEdges(): void
+    {
+        $bottom = Select::new($this->manyOptions(500))
+            ->withSelectedIndex(499)
+            ->setSize(0, 20)
+            ->render();
+
+        // Last window shows through the final option
+        $this->assertStringContainsString('Opt 499', $bottom);
+        $this->assertStringContainsString('Opt 480', $bottom);
+        $this->assertStringNotContainsString('Opt 479', $bottom);
+
+        $top = Select::new($this->manyOptions(500))
+            ->withSelectedIndex(0)
+            ->setSize(0, 20)
+            ->render();
+
+        $this->assertStringContainsString('Opt 000', $top);
+        $this->assertStringNotContainsString('Opt 020', $top);
+    }
+
+    public function testInnerSizeReportsTheWindowedHeight(): void
+    {
+        [, $natural] = Select::new($this->manyOptions(500))->innerSize();
+        $this->assertSame(500, $natural);
+
+        [, $windowed] = Select::new($this->manyOptions(500))->setSize(0, 20)->innerSize();
+        $this->assertSame(20, $windowed);
+    }
+
+    public function testWithersCarryTheAllocation(): void
+    {
+        $sized = Select::new($this->manyOptions(500))->withSelectedIndex(45)->setSize(0, 10);
+
+        // Every wither must keep the allocation, or the window disappears.
+        foreach (
+            [
+                fn(Select $s) => $s->withSelectedIndex(45),
+                fn(Select $s) => $s->withSelectedColor(null),
+                fn(Select $s) => $s->withUnselectedColor(null),
+                fn(Select $s) => $s->withChars('>', '-'),
+            ] as $wither
+        ) {
+            $rows = explode("\n", $wither($sized)->render());
+            $this->assertCount(10, $rows);
+            $this->assertStringContainsString('Opt 045', implode("\n", $rows));
+        }
+    }
 }

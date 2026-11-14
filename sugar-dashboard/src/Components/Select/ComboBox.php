@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Dashboard\Foundation\ColorMode;
+use SugarCraft\Dashboard\Support\ListWindow;
 
 /**
  * A combobox component with search filtering.
@@ -56,6 +57,21 @@ final class ComboBox implements \SugarCraft\Dashboard\Foundation\SizedItem
     }
 
     /**
+     * Carry the current allocation onto a wither result.
+     *
+     * The withers rebuild via new self(...); without this the setSize()
+     * width/height evaporates on the first tweak after sizing (the
+     * Popover/Dropdown allocation-drop class). The ::new() factory is
+     * deliberately not routed here: a fresh build has no allocation.
+     */
+    private function carryAllocation(self $next): self
+    {
+        $next->width = $this->width;
+        $next->height = $this->height;
+        return $next;
+    }
+
+    /**
      * Set the allocated dimensions for this combobox.
      */
     public function setSize(int $width, int $height): \SugarCraft\Dashboard\Foundation\Sizer
@@ -75,7 +91,7 @@ final class ComboBox implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         $filtered = $this->getFilteredOptions();
         // Always show results when there are options (with or without query)
-        if (!empty($filtered)) {
+        if (!empty($filtered) && $this->visibleResultCount($filtered) > 0) {
             $result .= "\n" . $this->renderResults($filtered);
         }
 
@@ -104,17 +120,44 @@ final class ComboBox implements \SugarCraft\Dashboard\Foundation\SizedItem
     }
 
     /**
+     * How many result rows the current allocation allows.
+     *
+     * Null/zero height means natural (every match). An allocated height
+     * reserves the input row first; a height of one leaves no budget for
+     * results at all.
+     *
+     * @param array<int, mixed> $filtered
+     */
+    private function visibleResultCount(array $filtered): int
+    {
+        if ($this->height === null || $this->height <= 0) {
+            return count($filtered);
+        }
+
+        return min(count($filtered), max(0, $this->height - 1));
+    }
+
+    /**
      * Render the filtered results.
+     *
+     * With an allocation the results are a scroll window around the
+     * selected row (height minus the input line; same ListWindow rule as
+     * the calendar list). Without one every match paints (finding
+     * sugar-dashboard-051: the height used to be stored and ignored).
      *
      * @param array<int, array{label: string, value?: string}> $filtered
      */
     private function renderResults(array $filtered): string
     {
         $lines = [];
-        $safeIndex = max(0, min($this->selectedIndex, count($filtered) - 1));
+        $total = count($filtered);
+        $safeIndex = max(0, min($this->selectedIndex, $total - 1));
 
-        foreach ($filtered as $index => $option) {
-            $lines[] = $this->renderResultItem($option, $index === $safeIndex);
+        $visible = $this->visibleResultCount($filtered);
+        $top = ListWindow::scrollTop($safeIndex, $visible, $total);
+
+        for ($index = $top; $index < $top + $visible; $index++) {
+            $lines[] = $this->renderResultItem($filtered[$index], $index === $safeIndex);
         }
 
         return implode("\n", $lines);
@@ -208,7 +251,7 @@ final class ComboBox implements \SugarCraft\Dashboard\Foundation\SizedItem
         }
 
         $width = max($inputWidth, $maxResultWidth);
-        $height = 1 + count($filtered);
+        $height = 1 + $this->visibleResultCount($filtered);
 
         return [$width, $height];
     }
@@ -220,7 +263,7 @@ final class ComboBox implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withPlaceholder(string $placeholder): self
     {
-        return new self(
+        return $this->carryAllocation(new self(
             placeholder: $placeholder,
             options: $this->options,
             query: $this->query,
@@ -228,7 +271,7 @@ final class ComboBox implements \SugarCraft\Dashboard\Foundation\SizedItem
             inputColor: $this->inputColor,
             matchColor: $this->matchColor,
             selectedColor: $this->selectedColor,
-        );
+        ));
     }
 
     /**
@@ -238,7 +281,7 @@ final class ComboBox implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withOptions(array $options): self
     {
-        return new self(
+        return $this->carryAllocation(new self(
             placeholder: $this->placeholder,
             options: $options,
             query: $this->query,
@@ -246,7 +289,7 @@ final class ComboBox implements \SugarCraft\Dashboard\Foundation\SizedItem
             inputColor: $this->inputColor,
             matchColor: $this->matchColor,
             selectedColor: $this->selectedColor,
-        );
+        ));
     }
 
     /**
@@ -254,7 +297,7 @@ final class ComboBox implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withQuery(string $query): self
     {
-        return new self(
+        return $this->carryAllocation(new self(
             placeholder: $this->placeholder,
             options: $this->options,
             query: $query,
@@ -262,7 +305,7 @@ final class ComboBox implements \SugarCraft\Dashboard\Foundation\SizedItem
             inputColor: $this->inputColor,
             matchColor: $this->matchColor,
             selectedColor: $this->selectedColor,
-        );
+        ));
     }
 
     /**
@@ -271,7 +314,7 @@ final class ComboBox implements \SugarCraft\Dashboard\Foundation\SizedItem
     public function withSelectedIndex(int $index): self
     {
         $filtered = $this->getFilteredOptions();
-        return new self(
+        return $this->carryAllocation(new self(
             placeholder: $this->placeholder,
             options: $this->options,
             query: $this->query,
@@ -279,7 +322,7 @@ final class ComboBox implements \SugarCraft\Dashboard\Foundation\SizedItem
             inputColor: $this->inputColor,
             matchColor: $this->matchColor,
             selectedColor: $this->selectedColor,
-        );
+        ));
     }
 
     /**
@@ -287,7 +330,7 @@ final class ComboBox implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withInputColor(?Color $color): self
     {
-        return new self(
+        return $this->carryAllocation(new self(
             placeholder: $this->placeholder,
             options: $this->options,
             query: $this->query,
@@ -295,7 +338,7 @@ final class ComboBox implements \SugarCraft\Dashboard\Foundation\SizedItem
             inputColor: $color,
             matchColor: $this->matchColor,
             selectedColor: $this->selectedColor,
-        );
+        ));
     }
 
     /**
@@ -303,7 +346,7 @@ final class ComboBox implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withMatchColor(?Color $color): self
     {
-        return new self(
+        return $this->carryAllocation(new self(
             placeholder: $this->placeholder,
             options: $this->options,
             query: $this->query,
@@ -311,7 +354,7 @@ final class ComboBox implements \SugarCraft\Dashboard\Foundation\SizedItem
             inputColor: $this->inputColor,
             matchColor: $color,
             selectedColor: $this->selectedColor,
-        );
+        ));
     }
 
     /**
@@ -319,7 +362,7 @@ final class ComboBox implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withSelectedColor(?Color $color): self
     {
-        return new self(
+        return $this->carryAllocation(new self(
             placeholder: $this->placeholder,
             options: $this->options,
             query: $this->query,
@@ -327,6 +370,6 @@ final class ComboBox implements \SugarCraft\Dashboard\Foundation\SizedItem
             inputColor: $this->inputColor,
             matchColor: $this->matchColor,
             selectedColor: $color,
-        );
+        ));
     }
 }
