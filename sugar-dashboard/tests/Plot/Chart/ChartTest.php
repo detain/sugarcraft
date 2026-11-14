@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Tests\Plot\Chart;
 use SugarCraft\CellBuffer\Buffer;
 use SugarCraft\Dashboard\Plot\Chart\Chart;
 use SugarCraft\Dashboard\Plot\Chart\ChartDataPoint;
+use SugarCraft\Dashboard\Plot\Chart\ChartRenderContext;
 use SugarCraft\Dashboard\Plot\Chart\ChartType;
 use SugarCraft\Dashboard\Foundation\Item;
 use SugarCraft\Dashboard\Foundation\Sizer;
@@ -652,16 +653,18 @@ final class ChartTest extends TestCase
             new ChartDataPoint('B', 3),
         ])->setSize(40, 15);
 
-        // Frame 1: full render
-        $out1 = $chart->render();
-        $bytes1 = \strlen($out1);
+        // D-98 disclosure: render() is pure now; the streaming host threads
+        // the per-call context through the private helper (frameOf), which
+        // is exactly what the old wither-carry did implicitly.
+        [, $ctx1] = $this->frameOf($chart);
+        $bytes1 = \strlen($chart->render()); // full frame (baseline)
 
         // Frame 2: change one data point value (small change)
         $chart2 = $chart->withDataPoints([
             new ChartDataPoint('A', 5),
             new ChartDataPoint('B', 4), // changed from 3 to 4
         ]);
-        $out2 = $chart2->render();
+        [$out2, $ctx2] = $this->frameOf($chart2, $ctx1);
         $bytes2 = \strlen($out2);
 
         // Frame 3: change another data point value
@@ -669,11 +672,12 @@ final class ChartTest extends TestCase
             new ChartDataPoint('A', 6), // changed from 5 to 6
             new ChartDataPoint('B', 4),
         ]);
-        $out3 = $chart3->render();
+        [$out3] = $this->frameOf($chart3, $ctx2);
         $bytes3 = \strlen($out3);
 
         // Delta frames should be smaller than full re-render (not absolute byte count)
         // The 30-byte threshold was a placeholder; real goal is delta < full 80x24 re-emit (≥1920 bytes)
+        $this->assertNotSame('', $out2, 'precondition: threaded frame 2 emits ops');
         $this->assertLessThan($bytes1, $bytes2, 'Frame 2 delta should be smaller than full re-render');
         $this->assertLessThan($bytes1, $bytes3, 'Frame 3 delta should be smaller than full re-render');
     }
@@ -737,6 +741,96 @@ final class ChartTest extends TestCase
     }
 
     /**
+     * Chart geometry the diff machinery runs on (private getters via
+     * reflection). D-98 disclosure: delta tests thread the per-call
+     * ChartRenderContext through the now-private renderDeltaFrame helper
+     * instead of the removed instance property.
+     *
+     * @return array{0:int,1:int} [chartWidth, chartHeight]
+     */
+    private function chartDims(Chart $chart): array
+    {
+        $w = new \ReflectionMethod(Chart::class, 'getChartWidth');
+        $h = new \ReflectionMethod(Chart::class, 'getChartHeight');
+
+        return [$w->invoke($chart), $h->invoke($chart)];
+    }
+
+    /**
+     * Full frame + threaded delta frame: render() is pure since D-98, so
+     * the streaming contract lives here - the caller keeps the returned
+     * context and feeds it to the next frame, exactly like a terminal host
+     * would via the private helper.
+     *
+     * @return array{0:string,1:ChartRenderContext} [frame bytes, next context]
+     */
+    private function frameOf(Chart $chart, ?ChartRenderContext $context = null): array
+    {
+        [$w, $h] = $this->chartDims($chart);
+
+        return (new \ReflectionMethod(Chart::class, 'renderDeltaFrame'))
+            ->invoke($chart, $chart->render(), $w, $h, $context);
+    }
+
+    /**
+     * D-98 pin: render() is pure - the same instance repeated must emit
+     * byte-identical FULL frames with no manual reset and no hidden
+     * first-then-delta drift.
+     */
+    public function testRenderIsPureAcrossRepeatedCalls(): void
+    {
+        $chart = Chart::new([
+            new ChartDataPoint('A', 5),
+            new ChartDataPoint('B', 3),
+        ])->setSize(40, 15);
+
+        $first = $chart->render();
+        $this->assertSame($first, $chart->render(), 'same instance, same bytes, forever');
+        $this->assertSame($first, $chart->render(), 'third render too - no stored frame to decay');
+    }
+
+    /**
+     * D-98 pin: delta history is bounded to exactly one frame - the context
+     * carries the LATEST full buffer and nothing older.
+     */
+    public function testDeltaHistoryIsBoundedToOneFrame(): void
+    {
+        $chart = Chart::new([
+            new ChartDataPoint('A', 5),
+            new ChartDataPoint('B', 3),
+        ])->setSize(40, 15);
+
+        [$f1, $ctx1] = $this->frameOf($chart);
+        $this->assertSame($f1, $chart->render(), 'first threaded frame is the full frame');
+
+        [$f2, $ctx2] = $this->frameOf($chart->withDataPoints([
+            new ChartDataPoint('A', 6),
+            new ChartDataPoint('B', 3),
+        ]), $ctx1);
+
+        // The threaded second frame is a delta (bounded history, live path),
+        // and its stored context previousFrame is the frame-2 buffer.
+        $this->assertLessThan(strlen($f1), strlen($f2), 'threaded frame 2 is a delta');
+        $this->assertSame(
+            ['previousFrame', 'prevWidth', 'prevHeight'],
+            array_keys(get_object_vars($ctx2)),
+            'context holds exactly one frame of history'
+        );
+        [$w2, $h2] = $this->chartDims($chart);
+        $this->assertGreaterThan(0, $w2); // chart area is live; the pin below is the F1 invariant
+        $this->assertSame(
+            $ctx2->previousFrame->width(),
+            $ctx2->prevWidth,
+            'F1 invariant: context dims mirror the ACTUAL stored buffer, not the chart area'
+        );
+        $this->assertSame(
+            $ctx2->previousFrame->height(),
+            $ctx2->prevHeight,
+            'F1 invariant (rows): context dims mirror the ACTUAL stored buffer'
+        );
+    }
+
+    /**
      * Core B11 pin: on a reused chart the second render must store the
      * same cell grid a fresh full render of that state would store. With
      * multibyte content the old byte-indexed guard emitted '' cells instead
@@ -750,10 +844,13 @@ final class ChartTest extends TestCase
             new ChartDataPoint('日本', 5),
             new ChartDataPoint('B', 10),
         ]);
-        $firstFrame = $chart->render();
+        // D-98 DISCLOSURE: the delta now rides a per-call context threaded
+        // through the private renderDeltaFrame() helper - the instance keeps
+        // no frame history, so the helper call replaces the second render().
+        [$firstFrame, $ctx1] = $this->frameOf($chart);
         $this->assertStringContainsString('日本', $firstFrame, 'precondition: CJK label painted on first frame');
 
-        // Mutate the SAME instance → next render() takes the diff path
+        // Mutate the SAME instance → next frame takes the diff path
         // (value shift grows the first bar by two rows; label keeps CJK).
         $points = new \ReflectionProperty(Chart::class, 'dataPoints');
         $points->setAccessible(true);
@@ -762,22 +859,20 @@ final class ChartTest extends TestCase
             new ChartDataPoint('B', 10),
         ]);
 
-        $delta = $chart->render();
+        [$delta, $diffCtx] = $this->frameOf($chart, $ctx1);
         $this->assertNotSame('', $delta, 'precondition: changed cells must emit ops');
         $this->assertLessThan(strlen($firstFrame), strlen($delta), 'precondition: same-size re-render must emit a delta, not a full frame');
 
-        $stored = new \ReflectionProperty(Chart::class, 'renderContext');
-        $stored->setAccessible(true);
         /** @var Buffer $diffBuffer */
-        $diffBuffer = $stored->getValue($chart)->previousFrame;
+        $diffBuffer = $diffCtx->previousFrame;
 
         $fresh = $this->plainBarChart([
             new ChartDataPoint('東京', 7),
             new ChartDataPoint('B', 10),
         ]);
-        $freshFrame = $fresh->render();
+        [$freshFrame, $freshCtx] = $this->frameOf($fresh);
         /** @var Buffer $freshBuffer */
-        $freshBuffer = $stored->getValue($fresh)->previousFrame;
+        $freshBuffer = $freshCtx->previousFrame;
 
         $this->assertNotSame($diffBuffer, $freshBuffer, 'sanity: distinct instances');
 
@@ -876,10 +971,10 @@ final class ChartTest extends TestCase
             new ChartDataPoint('日本', 5),
             new ChartDataPoint('B', 10),
         ]);
-        $firstFrame = $chart->render();
+        [$firstFrame, $ctx1] = $this->frameOf($chart);
         $this->assertStringContainsString("\x1b[38;2;137;180;250m", $firstFrame, 'precondition: default Chart::new path embeds truecolor SGR');
 
-        // Mutate the SAME instance → second render takes the diff path.
+        // Mutate the SAME instance → second frame takes the diff path.
         $points = new \ReflectionProperty(Chart::class, 'dataPoints');
         $points->setAccessible(true);
         $points->setValue($chart, [
@@ -887,22 +982,20 @@ final class ChartTest extends TestCase
             new ChartDataPoint('B', 10),
         ]);
 
-        $delta = $chart->render();
+        [$delta, $diffCtx] = $this->frameOf($chart, $ctx1);
         $this->assertNotSame('', $delta, 'precondition: changed cells must emit ops');
         $this->assertLessThan(strlen($firstFrame), strlen($delta), 'precondition: same-size colored re-render must emit a delta, not a full frame');
 
-        $stored = new \ReflectionProperty(Chart::class, 'renderContext');
-        $stored->setAccessible(true);
         /** @var Buffer $diffBuffer */
-        $diffBuffer = $stored->getValue($chart)->previousFrame;
+        $diffBuffer = $diffCtx->previousFrame;
 
         $fresh = Chart::new([
             new ChartDataPoint('東京', 7),
             new ChartDataPoint('B', 10),
         ]);
-        $freshFrame = $fresh->render();
+        [$freshFrame, $freshCtx] = $this->frameOf($fresh);
         /** @var Buffer $freshBuffer */
-        $freshBuffer = $stored->getValue($fresh)->previousFrame;
+        $freshBuffer = $freshCtx->previousFrame;
 
         $this->assertNotSame($diffBuffer, $freshBuffer, 'sanity: distinct instances');
 
@@ -1022,7 +1115,7 @@ final class ChartTest extends TestCase
             new ChartDataPoint('日本', 5),
             new ChartDataPoint('B', 10),
         ]);
-        $firstFrame = $chart->render();
+        [$firstFrame, $ctx1] = $this->frameOf($chart);
         $this->assertStringContainsString('日本', $firstFrame, 'precondition: CJK label painted on first frame');
 
         // Mutate the SAME instance with IDENTICAL values — only the label text
@@ -1034,7 +1127,7 @@ final class ChartTest extends TestCase
             new ChartDataPoint('B', 10),
         ]);
 
-        $delta = $chart->render();
+        [$delta, $diffCtx] = $this->frameOf($chart, $ctx1);
         $this->assertNotSame('', $delta, 'label-only mutation must not diff to zero bytes');
         $this->assertStringContainsString('東', $delta, 'delta must repaint the new label');
         $this->assertStringContainsString('京', $delta, 'delta must repaint the new label');
@@ -1056,7 +1149,7 @@ final class ChartTest extends TestCase
             new ChartDataPoint('A', 5),
             new ChartDataPoint('BBBBBBBBBBBB', 10), // 12 Bs: cols 28-39, inside the old clip
         ]);
-        $firstFrame = $chart->render();
+        [$firstFrame, $ctx1] = $this->frameOf($chart);
         $this->assertStringContainsString('BBBBBBBBBBBB', $firstFrame, 'precondition: first-frame label ends at col 39');
 
         // Identical values; the second label gains 7 C runes landing exactly
@@ -1068,17 +1161,15 @@ final class ChartTest extends TestCase
             new ChartDataPoint('BBBBBBBBBBBBCCCCCCC', 10),
         ]);
 
-        $delta = $chart->render();
+        [$delta, $diffCtx] = $this->frameOf($chart, $ctx1);
         $this->assertNotSame('', $delta, 'beyond-chartWidth mutation must not diff to zero bytes');
         $this->assertStringContainsString('C', $delta, 'delta must repaint the new tail runes');
         $this->assertLessThan(strlen($firstFrame), strlen($delta), 'same-size re-render stays a delta, not a full frame');
 
         // The stored diff-state buffer physically holds the painted tail:
         // labels row (index 11) cols 40-46 carry the Cs, col 47 pads blank.
-        $stored = new \ReflectionProperty(Chart::class, 'renderContext');
-        $stored->setAccessible(true);
         /** @var Buffer $buffer */
-        $buffer = $stored->getValue($chart)->previousFrame;
+        $buffer = $diffCtx->previousFrame;
         $this->assertSameRune('C', $buffer, 40, 11);
         $this->assertSameRune('C', $buffer, 46, 11);
         $this->assertSameRune(' ', $buffer, 47, 11);
@@ -1101,7 +1192,7 @@ final class ChartTest extends TestCase
         $points30 = array_slice($points31, 0, 30);
 
         $chart = Chart::new($points30);
-        $firstFrame = $chart->render();
+        [$firstFrame, $ctx1] = $this->frameOf($chart);
         $this->assertNotSame('', $firstFrame, 'precondition: first render emits a full frame');
 
         // Mutate the SAME instance: chart area untouched, but diffWidth
@@ -1110,7 +1201,7 @@ final class ChartTest extends TestCase
         $points->setAccessible(true);
         $points->setValue($chart, $points31);
 
-        $second = $chart->render(); // must not throw — gate forces the full frame
+        [$second, $gateCtx] = $this->frameOf($chart, $ctx1); // must not throw — gate forces the full frame
         $this->assertSame(
             Chart::new($points31)->render(),
             $second,

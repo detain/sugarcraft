@@ -31,9 +31,6 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
     /** @var list<ChartDataPoint> */
     private array $dataPoints;
 
-    /** @var ChartRenderContext|null Render context for diff-based emission (avoids mutating scattered properties) */
-    private ?ChartRenderContext $renderContext = null;
-
     public function __construct(
         array $dataPoints = [],
         private readonly ChartType $type = ChartType::Bar,
@@ -86,24 +83,17 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
     }
 
     /**
-     * Render the chart as a string.
-     *
-     * On the first render (or after a resize), emits the full output.
-     * On subsequent renders with the same dimensions, emits only the
-     * delta via Buffer::diff() + DiffEncoder for reduced SSH bandwidth.
-     *
-     * Uses a render-context object stored on the instance to track diff state
-     * instead of mutating multiple scattered properties ($previousFrame,
-     * $prevWidth, $prevHeight). This consolidates mutation into a single
-     * context object that can be reset via resetPreviousFrame().
+     * Renders the chart as a string - PURE (finding sugar-dashboard-192,
+     * D-98): every call emits the full frame and the instance never carries
+     * frame history, so repeated renders of one chart are byte-identical.
+     * Streaming hosts that want delta emission thread a ChartRenderContext
+     * through renderDeltaFrame() themselves (DualSampleGraph::frame() is the
+     * model: per-call state object, not hidden instance mutation).
      */
     public function render(): string
     {
         $chartWidth = $this->getChartWidth();
         $chartHeight = $this->getChartHeight();
-
-        // (Resize detection moved below, where the diff-buffer geometry is
-        // known — the gate must compare ACTUAL buffer dimensions, F1.)
 
         if ($chartWidth <= 0 || $chartHeight <= 0 || empty($this->dataPoints)) {
             return '';
@@ -129,69 +119,91 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
             $output = $this->renderLineChart($chartWidth, $chartHeight, $minValue, $maxValue, $gridLines);
         }
 
-        // Diff-state rows cover the FULL emitted frame, not just the chart
-        // area: renderBarChart appends the x-axis row (showGrid) and the labels
-        // row (showLabels); renderLineChart only the labels row (its border grid
-        // lives inside the chart area). Storing only $chartHeight rows clipped
-        // those rows out of the buffer, so an axis/label-only mutation diffed to
-        // ZERO bytes and a delta-tracking terminal kept painting stale labels.
-        // The height is structural, not count(explode($output)): the renderers
-        // trim() their frames, so an emitted-line count can vary between frames
-        // of identical parameters (all-blank top rows vanish), and Buffer::diff()
-        // throws on dimension mismatch — the readonly flags make this expression
-        // constant for an instance. Resize detection is keyed on the ACTUAL
-        // diff-buffer dimensions — see the gate below (F1 moved it here because
-        // $diffWidth now tracks the data count too, which the chart-area keys
-        // never carried).
+        // Finding sugar-dashboard-192 (D-98): render() is PURE. The instance
+        // never carries frame history, so two renders of the same chart are
+        // byte-identical without any manual reset. The diff machinery below
+        // lives in renderDeltaFrame(), which takes and returns its state as
+        // a value object (the DualSampleGraph::frame() model) - streaming
+        // hosts thread the ChartRenderContext themselves instead of getting
+        // hidden cross-render mutation from a plain render() call.
+        return $output;
+    }
+
+    /**
+     * Emit one frame against a caller-threaded diff context.
+     *
+     * Diff-state rows cover the FULL emitted frame, not just the chart
+     * area: renderBarChart appends the x-axis row (showGrid) and the labels
+     * row (showLabels); renderLineChart only the labels row (its border grid
+     * lives inside the chart area). Storing only $chartHeight rows clipped
+     * those rows out of the buffer, so an axis/label-only mutation diffed to
+     * ZERO bytes and a delta-tracking terminal kept painting stale labels.
+     * The height is structural, not count(explode($output)): the renderers
+     * trim() their frames, so an emitted-line count can vary between frames
+     * of identical parameters (all-blank top rows vanish), and Buffer::diff()
+     * throws on dimension mismatch - the readonly flags make this expression
+     * constant for an instance. Resize detection is keyed on the ACTUAL
+     * diff-buffer dimensions - see the gate below (F1 moved it here because
+     * $diffWidth now tracks the data count too, which the chart-area keys
+     * never carried).
+     *
+     * F1 COLUMN parity (the column twin of the D1 row clip above): frames
+     * paint past $chartWidth - a colored 40-wide, 2-point bar row is 50
+     * cells - so the diff buffer spans the full emitted row extent
+     * (diffWidth()). Clipping it at $chartWidth froze every column beyond
+     * the chart width at the first-frame paint: a mutation landing only
+     * out there diffed to ZERO bytes while a fresh full frame carried the
+     * glyphs, exactly the stale-cell class D1 closed for rows.
+     *
+     * @return array{0:string,1:ChartRenderContext} [frame bytes, next context]
+     */
+    private function renderDeltaFrame(
+        string $output,
+        int $chartWidth,
+        int $chartHeight,
+        ?ChartRenderContext $context,
+    ): array {
         $diffHeight = $chartHeight
             + ($this->type === ChartType::Bar && $this->showGrid ? 1 : 0)
             + ($this->showLabels ? 1 : 0);
 
-        // F1 COLUMN parity (the column twin of the D1 row clip above): frames
-        // paint past $chartWidth — a colored 40-wide, 2-point bar row is 50
-        // cells — so the diff buffer spans the full emitted row extent
-        // (diffWidth()). Clipping it at $chartWidth froze every column beyond
-        // the chart width at the first-frame paint: a mutation landing only
-        // out there diffed to ZERO bytes while a fresh full frame carried the
-        // glyphs, exactly the stale-cell class D1 closed for rows.
         $diffWidth = $this->diffWidth($chartWidth);
 
-        // Detect resize / diff-geometry change — reset diff state so the next
-        // render emits a full frame. The gate MUST compare the actual stored
+        // Detect resize / diff-geometry change - drop the caller's context so
+        // this frame emits full. The gate MUST compare the actual stored
         // buffer dimensions: $diffWidth depends on the data count, so a
-        // dataCount change resizes the diff buffer even when the chart area is
-        // untouched — and Buffer::diff() throws on ANY dimension mismatch
-        // (sugar-cellbuffer Buffer.php:416-422). A chart-area resize always moves
-        // $diffHeight (chartHeight enters it additively), so it trips this
-        // gate as well; prevWidth/prevHeight mirror these same buffer dims.
-        if ($this->renderContext !== null &&
-            ($this->renderContext->previousFrame === null ||
-             $this->renderContext->previousFrame->width() !== $diffWidth ||
-             $this->renderContext->previousFrame->height() !== $diffHeight)) {
-            $this->renderContext = null;
+        // dataCount change resizes the diff buffer even when the chart area
+        // is untouched - and Buffer::diff() throws on ANY dimension mismatch
+        // (sugar-cellbuffer Buffer.php:416-422). A chart-area resize always
+        // moves $diffHeight (chartHeight enters it additively), so it trips
+        // this gate as well; prevWidth/prevHeight mirror these same buffer
+        // dims.
+        if ($context !== null &&
+            ($context->previousFrame === null ||
+             $context->previousFrame->width() !== $diffWidth ||
+             $context->previousFrame->height() !== $diffHeight)) {
+            $context = null;
         }
 
         // First frame or resize: emit full output and store as previousFrame.
-        if ($this->renderContext === null) {
-            $this->renderContext = new ChartRenderContext(
+        if ($context === null) {
+            return [$output, new ChartRenderContext(
                 previousFrame: $this->bufferFromOutput($output, $diffWidth, $diffHeight),
                 prevWidth: $diffWidth,
                 prevHeight: $diffHeight
-            );
-            return $output;
+            )];
         }
 
         // Subsequent frames with same dimensions: compute diff and emit delta.
         $currentFrame = $this->bufferFromOutput($output, $diffWidth, $diffHeight);
-        $ops = $currentFrame->diff($this->renderContext->previousFrame);
-        $this->renderContext = new ChartRenderContext(
+        $ops = $currentFrame->diff($context->previousFrame);
+
+        $encoder = new DiffEncoder();
+        return [$encoder->encode($ops), new ChartRenderContext(
             previousFrame: $currentFrame,
             prevWidth: $diffWidth,
             prevHeight: $diffHeight
-        );
-
-        $encoder = new DiffEncoder();
-        return $encoder->encode($ops);
+        )];
     }
 
     /**
@@ -479,9 +491,10 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
             gridColor: $this->gridColor,
             labelColor: $this->labelColor,
         );
-        // the diff-emit context is the other off-ctor field; without the
-        // carry every wither-driven frame silently re-embeds the full box.
-        $carried->renderContext = $this->renderContext;
+        // Finding sugar-dashboard-192 (D-98): the former renderContext carry
+        // lived here - frame history is now per-call state threaded through
+        // renderDeltaFrame(), never propagated by withers, so a withered
+        // chart renders a full frame exactly like a fresh one.
         if ($this->width !== null && $this->height !== null) {
             return $carried->setSize($this->width, $this->height);
         }
@@ -507,9 +520,10 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
             gridColor: $this->gridColor,
             labelColor: $this->labelColor,
         );
-        // the diff-emit context is the other off-ctor field; without the
-        // carry every wither-driven frame silently re-embeds the full box.
-        $carried->renderContext = $this->renderContext;
+        // Finding sugar-dashboard-192 (D-98): the former renderContext carry
+        // lived here - frame history is now per-call state threaded through
+        // renderDeltaFrame(), never propagated by withers, so a withered
+        // chart renders a full frame exactly like a fresh one.
         if ($this->width !== null && $this->height !== null) {
             return $carried->setSize($this->width, $this->height);
         }
@@ -535,9 +549,10 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
             gridColor: $this->gridColor,
             labelColor: $this->labelColor,
         );
-        // the diff-emit context is the other off-ctor field; without the
-        // carry every wither-driven frame silently re-embeds the full box.
-        $carried->renderContext = $this->renderContext;
+        // Finding sugar-dashboard-192 (D-98): the former renderContext carry
+        // lived here - frame history is now per-call state threaded through
+        // renderDeltaFrame(), never propagated by withers, so a withered
+        // chart renders a full frame exactly like a fresh one.
         if ($this->width !== null && $this->height !== null) {
             return $carried->setSize($this->width, $this->height);
         }
@@ -563,9 +578,10 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
             gridColor: $this->gridColor,
             labelColor: $this->labelColor,
         );
-        // the diff-emit context is the other off-ctor field; without the
-        // carry every wither-driven frame silently re-embeds the full box.
-        $carried->renderContext = $this->renderContext;
+        // Finding sugar-dashboard-192 (D-98): the former renderContext carry
+        // lived here - frame history is now per-call state threaded through
+        // renderDeltaFrame(), never propagated by withers, so a withered
+        // chart renders a full frame exactly like a fresh one.
         if ($this->width !== null && $this->height !== null) {
             return $carried->setSize($this->width, $this->height);
         }
@@ -591,9 +607,10 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
             gridColor: $this->gridColor,
             labelColor: $this->labelColor,
         );
-        // the diff-emit context is the other off-ctor field; without the
-        // carry every wither-driven frame silently re-embeds the full box.
-        $carried->renderContext = $this->renderContext;
+        // Finding sugar-dashboard-192 (D-98): the former renderContext carry
+        // lived here - frame history is now per-call state threaded through
+        // renderDeltaFrame(), never propagated by withers, so a withered
+        // chart renders a full frame exactly like a fresh one.
         if ($this->width !== null && $this->height !== null) {
             return $carried->setSize($this->width, $this->height);
         }
@@ -619,9 +636,10 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
             gridColor: $this->gridColor,
             labelColor: $this->labelColor,
         );
-        // the diff-emit context is the other off-ctor field; without the
-        // carry every wither-driven frame silently re-embeds the full box.
-        $carried->renderContext = $this->renderContext;
+        // Finding sugar-dashboard-192 (D-98): the former renderContext carry
+        // lived here - frame history is now per-call state threaded through
+        // renderDeltaFrame(), never propagated by withers, so a withered
+        // chart renders a full frame exactly like a fresh one.
         if ($this->width !== null && $this->height !== null) {
             return $carried->setSize($this->width, $this->height);
         }
@@ -647,9 +665,10 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
             gridColor: $this->gridColor,
             labelColor: $this->labelColor,
         );
-        // the diff-emit context is the other off-ctor field; without the
-        // carry every wither-driven frame silently re-embeds the full box.
-        $carried->renderContext = $this->renderContext;
+        // Finding sugar-dashboard-192 (D-98): the former renderContext carry
+        // lived here - frame history is now per-call state threaded through
+        // renderDeltaFrame(), never propagated by withers, so a withered
+        // chart renders a full frame exactly like a fresh one.
         if ($this->width !== null && $this->height !== null) {
             return $carried->setSize($this->width, $this->height);
         }
@@ -675,9 +694,10 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
             gridColor: $this->gridColor,
             labelColor: $this->labelColor,
         );
-        // the diff-emit context is the other off-ctor field; without the
-        // carry every wither-driven frame silently re-embeds the full box.
-        $carried->renderContext = $this->renderContext;
+        // Finding sugar-dashboard-192 (D-98): the former renderContext carry
+        // lived here - frame history is now per-call state threaded through
+        // renderDeltaFrame(), never propagated by withers, so a withered
+        // chart renders a full frame exactly like a fresh one.
         if ($this->width !== null && $this->height !== null) {
             return $carried->setSize($this->width, $this->height);
         }
@@ -703,9 +723,10 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
             gridColor: $this->gridColor,
             labelColor: $this->labelColor,
         );
-        // the diff-emit context is the other off-ctor field; without the
-        // carry every wither-driven frame silently re-embeds the full box.
-        $carried->renderContext = $this->renderContext;
+        // Finding sugar-dashboard-192 (D-98): the former renderContext carry
+        // lived here - frame history is now per-call state threaded through
+        // renderDeltaFrame(), never propagated by withers, so a withered
+        // chart renders a full frame exactly like a fresh one.
         if ($this->width !== null && $this->height !== null) {
             return $carried->setSize($this->width, $this->height);
         }
@@ -731,9 +752,10 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
             gridColor: $this->gridColor,
             labelColor: $this->labelColor,
         );
-        // the diff-emit context is the other off-ctor field; without the
-        // carry every wither-driven frame silently re-embeds the full box.
-        $carried->renderContext = $this->renderContext;
+        // Finding sugar-dashboard-192 (D-98): the former renderContext carry
+        // lived here - frame history is now per-call state threaded through
+        // renderDeltaFrame(), never propagated by withers, so a withered
+        // chart renders a full frame exactly like a fresh one.
         if ($this->width !== null && $this->height !== null) {
             return $carried->setSize($this->width, $this->height);
         }
@@ -759,9 +781,10 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
             gridColor: $color,
             labelColor: $this->labelColor,
         );
-        // the diff-emit context is the other off-ctor field; without the
-        // carry every wither-driven frame silently re-embeds the full box.
-        $carried->renderContext = $this->renderContext;
+        // Finding sugar-dashboard-192 (D-98): the former renderContext carry
+        // lived here - frame history is now per-call state threaded through
+        // renderDeltaFrame(), never propagated by withers, so a withered
+        // chart renders a full frame exactly like a fresh one.
         if ($this->width !== null && $this->height !== null) {
             return $carried->setSize($this->width, $this->height);
         }
@@ -787,9 +810,10 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
             gridColor: $this->gridColor,
             labelColor: $color,
         );
-        // the diff-emit context is the other off-ctor field; without the
-        // carry every wither-driven frame silently re-embeds the full box.
-        $carried->renderContext = $this->renderContext;
+        // Finding sugar-dashboard-192 (D-98): the former renderContext carry
+        // lived here - frame history is now per-call state threaded through
+        // renderDeltaFrame(), never propagated by withers, so a withered
+        // chart renders a full frame exactly like a fresh one.
         if ($this->width !== null && $this->height !== null) {
             return $carried->setSize($this->width, $this->height);
         }
@@ -892,11 +916,14 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
     }
 
     /**
-     * Reset the previous-frame buffer, forcing the next render to emit
-     * a full frame (used on window resize or cursor-position-lost events).
+     * @deprecated Since sugar-dashboard 1.x (finding sugar-dashboard-192,
+     *     D-98): frame state is confined to the caller-threaded
+     *     ChartRenderContext, so render() always emits a full frame and the
+     *     reset contract is trivially satisfied. Kept as an honest no-op for
+     *     existing streaming hosts. REMOVED-IN: 2.0.0.
      */
     public function resetPreviousFrame(): void
     {
-        $this->renderContext = null;
+        // Confined state: there is no stored frame to reset.
     }
 }
