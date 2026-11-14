@@ -107,7 +107,7 @@ output anywhere.
 > LFs (files, pipes, hand-written fixtures) stacks diagonally and the cell
 > grid false-diffs against what a human saw on screen. Normalise `\n` to
 > `\r\n` (collapsing existing `\r\n` first) before `feed()` when the source
-> is not a tty capture.
+> is not a tty capture — or call `feedCaptured()`, which does this for you.
 
 ## Architecture
 

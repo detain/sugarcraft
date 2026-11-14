@@ -135,6 +135,32 @@ final class Terminal
     }
 
     /**
+     * Feed captured program output: every newline is expanded to `\r\n`
+     * before the bytes reach {@see self::feed()}, applying the README's
+     * "Captured-stream gotcha (ONLCR)" normalisation for you. Existing
+     * `\r\n` pairs and lone `\r` are collapsed to one break first, so a
+     * capture with mixed terminators lands consistently. The transform is
+     * idempotent — already-CRLF bytes pass through untouched — which makes
+     * it safe over streams a producer may have pre-expanded. The `$respond`
+     * query→reply channel behaves exactly as in {@see self::feed()}.
+     *
+     * @param (callable(string): void)|null $respond
+     */
+    public function feedCaptured(string $bytes, ?callable $respond = null): void
+    {
+        $this->feed(self::expandNewlines($bytes), $respond);
+    }
+
+    /**
+     * Expand every newline shape to `\r\n` in one pass: collapse `\r\n`
+     * pairs, then lone `\r`, then re-expand every remaining `\n`.
+     */
+    private static function expandNewlines(string $bytes): string
+    {
+        return str_replace(["\r\n", "\r", "\n"], ["\n", "\n", "\r\n"], $bytes);
+    }
+
+    /**
      * Drain the queued terminal→host replies (DA1/DA2, DECRPM, CPR,
      * XTWINOPS …) in request order. OSC-sourced requests are NOT in this
      * queue: an OSC 52 read is recorded in the clipboard event log and the
