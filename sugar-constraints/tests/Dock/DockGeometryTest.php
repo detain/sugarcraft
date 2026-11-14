@@ -46,9 +46,14 @@ final class DockGeometryTest extends TestCase
         $geometry = DockGeometry::new(['chat' => Region::fromSize(5, 5)], [['x' => 5, 'side' => Side::Left]]);
 
         // The README/docblock freeze claim, pinned at both props: readonly
-        // rejects indirect modification, not just reassignment.
+        // rejects indirect modification, not just reassignment. PHP 8.4
+        // reworded the indirect-write fault to "Cannot indirectly modify
+        // readonly property" (dated 2026-11-14, F18 CI cure) — accept the
+        // wording the running interpreter actually throws, never both.
         $this->expectException(\Error::class);
-        $this->expectExceptionMessage('Cannot modify readonly property');
+        $this->expectExceptionMessage(\PHP_VERSION_ID >= 80400
+            ? 'Cannot indirectly modify readonly property'
+            : 'Cannot modify readonly property');
         $geometry->regions['chat'] = Region::fromSize(9, 9);
     }
 
