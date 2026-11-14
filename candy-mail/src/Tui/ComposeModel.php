@@ -125,6 +125,13 @@ final class ComposeModel implements Model
         );
     }
 
+    /**
+     * Every arm returns a ComposeModel (self / with() / edit() / move()),
+     * never some other Model — the shape states that, so consumers (the
+     * Program host and the tests) keep the concrete type across the boundary.
+     *
+     * @return array{0: ComposeModel, 1: ?\Closure}
+     */
     public function update(Msg $msg): array
     {
         if ($msg instanceof WindowSizeMsg) {
@@ -156,7 +163,7 @@ final class ComposeModel implements Model
         return [$this, null];
     }
 
-    /** @return array{0: Model, 1: ?\Closure} */
+    /** @return array{0: ComposeModel, 1: ?\Closure} */
     private function key(KeyMsg $k): array
     {
         $s = $k->string();
@@ -222,7 +229,7 @@ final class ComposeModel implements Model
         return [$this, null];
     }
 
-    /** @return array{0: Model, 1: ?\Closure} */
+    /** @return array{0: ComposeModel, 1: ?\Closure} */
     private function dispatch(): array
     {
         try {

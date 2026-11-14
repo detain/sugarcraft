@@ -67,6 +67,7 @@ final class MailgunCliTest extends TestCase
         $this->env('CANDY_MAIL_MAILGUN_REGION', 'eu');
 
         $t = \SugarCraft\Mail\buildTransport(['transport' => 'mailgun']);
+        $this->assertInstanceOf(MailgunTransport::class, $t);
         $this->assertSame('https://api.eu.mailgun.net/v3/mg.example.com/messages', $t->endpoint());
     }
 

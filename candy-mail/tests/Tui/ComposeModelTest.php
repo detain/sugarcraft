@@ -79,7 +79,12 @@ final class ComposeModelTest extends TestCase
     public function testIsAModelWithNoInitCmdOrSubscriptions(): void
     {
         $m = $this->model();
-        $this->assertInstanceOf(Model::class, $m);
+        // An instanceof assert on the natively-typed model is statically
+        // certain (both assertInstanceOf and assertTrue get flagged as
+        // dead) — the contract this line guards is the DECLARATION, so ask
+        // the runtime about it directly; it still fails if ComposeModel
+        // ever stops implementing Model.
+        $this->assertTrue((new \ReflectionClass($m))->implementsInterface(Model::class));
         $this->assertNull($m->init());
         $this->assertNull($m->subscriptions());
         $this->assertSame('from', $m->focused());
