@@ -29,9 +29,14 @@ use SugarCraft\Vterm\Theme;
  * per Snapshot with `time<TAB>cursor_row,cursor_col<TAB>grid_sha1`. The
  * grid hash digests `row|col|char|fg|bg|attrs|fgTruecolor|bgTruecolor|rendition`
  * tuples (the two truecolor slots hashing to `-1` when unset) in
- * deterministic row-major order, so two grids producing the same visible
- * output share a hash regardless of cell-construction order — while a
- * differing packed truecolor or line rendition separates them.
+ * deterministic row-major order, so two grids the rasterizer would paint
+ * identically share a hash regardless of cell-construction order — while a
+ * differing packed truecolor or line rendition separates them. Uniqueness
+ * is measured on the hash itself (a full {@see Snapshot::equals()} only
+ * breaks a hash tie), so a long stream costs one grid walk per frame
+ * instead of three. Writes to stdout are the quiet door: once the reader
+ * downstream is gone (`inspect x.cas | head`) the walk stops and the verb
+ * exits 0, like every well-behaved CLI.
  */
 final class InspectCommand implements DocumentedCommand
 {
@@ -136,7 +141,9 @@ final class InspectCommand implements DocumentedCommand
         }
         CassetteLoader::writeTapeWarnings($loader, $stderr, 'inspect');
 
-        $this->renderHeader($stdout, $cassette);
+        if (!$this->renderHeader($stdout, $cassette)) {
+            return 0; // stdout reader is gone (e.g. `| head`) — stop quietly.
+        }
 
         if ($frames) {
             return $this->renderFrames($stdout, $cassette, $fps);
@@ -150,20 +157,36 @@ final class InspectCommand implements DocumentedCommand
             if ($until !== null && $event->t > $until) {
                 continue;
             }
-            fwrite($stdout, $this->formatEvent($event) . "\n");
+            if (!$this->writeOut($stdout, $this->formatEvent($event) . "\n")) {
+                return 0; // broken pipe: the reader took what it wanted.
+            }
             $shown++;
         }
-        fwrite($stdout, "\n" . Lang::t('inspect.shown', ['shown' => $shown, 'total' => $cassette->eventCount()]) . "\n");
+        $this->writeOut($stdout, "\n" . Lang::t('inspect.shown', ['shown' => $shown, 'total' => $cassette->eventCount()]) . "\n");
         return 0;
+    }
+
+    /**
+     * The stdout write door for every `inspect` line. A `fwrite()` that
+     * returns false means the downstream reader closed the pipe — git and
+     * grep treat that as a normal end of business, not an error, so we
+     * suppress the errno-32 notice and let the caller stop iterating.
+     *
+     * @param resource $stdout
+     */
+    private function writeOut($stdout, string $text): bool
+    {
+        return @fwrite($stdout, $text) !== false;
     }
 
     /**
      * Walk the cassette through a Renderer + Terminal at `$fps` and print
      * one line per snapshot. Closes with a `frames: <total> unique: <dedup>
-     * deduped: <count>` footer — uniqueness is measured by consecutive
-     * {@see Snapshot::equals()} comparison in the stream (the same rule
-     * {@see \SugarCraft\Vcr\Render\FrameDedup} applies), so the dedup ratio
-     * is visible at a glance.
+     * deduped: <count>` footer — uniqueness is measured on the per-frame
+     * grid hash, with a full {@see Snapshot::equals()} only run to break a
+     * hash tie (identical content always hashes identically, so a differing
+     * hash is proof of a changed frame without a second grid walk). The
+     * dedup ratio stays visible at a glance.
      *
      * @param resource $stdout
      */
@@ -181,30 +204,42 @@ final class InspectCommand implements DocumentedCommand
         $unique = 0;
         $dedupCount = 0;
         $prev = null;
+        $prevHash = null;
         $prevUnique = null;
+        $prevUniqueHash = null;
 
         foreach ($stream as $snapshot) {
             $total++;
             $hash = $this->hashGrid($snapshot);
-            fwrite($stdout, sprintf(
+            if (!$this->writeOut($stdout, sprintf(
                 "%.3f\t%d,%d\t%s\n",
                 $snapshot->time,
                 $snapshot->cursor->row,
                 $snapshot->cursor->col,
                 $hash,
-            ));
-            if ($prev === null || !$snapshot->equals($prev)) {
+            ))) {
+                return 0; // broken pipe mid-timeline — stop quietly.
+            }
+            $sameAsPrev = $prev !== null
+                && $hash === $prevHash
+                && $snapshot->equals($prev);
+            if (!$sameAsPrev) {
                 $unique++;
                 // Track consecutive unique snapshots for dedup count
-                if ($prevUnique === null || !$snapshot->equals($prevUnique)) {
+                $sameAsPrevUnique = $prevUnique !== null
+                    && $hash === $prevUniqueHash
+                    && $snapshot->equals($prevUnique);
+                if (!$sameAsPrevUnique) {
                     $dedupCount++;
                 }
                 $prevUnique = $snapshot;
+                $prevUniqueHash = $hash;
             }
             $prev = $snapshot;
+            $prevHash = $hash;
         }
 
-        fwrite($stdout, "\n" . Lang::t('inspect.frames_footer', [
+        $this->writeOut($stdout, "\n" . Lang::t('inspect.frames_footer', [
             'total' => $total,
             'unique' => $unique,
             'deduped' => $dedupCount,
@@ -215,11 +250,15 @@ final class InspectCommand implements DocumentedCommand
     /**
      * Deterministic SHA-1 of the grid: walks row-major, emitting
      * `row|col|char|fg|bg|attrs|fgTruecolor|bgTruecolor|rendition` per cell so
-     * two grids agree iff they'd render identically. The 24-bit slots and the
-     * line rendition are folded in so a truecolor repaint or a DECDHL/DECDWL
-     * stamp changes the hash even when the glyph and palette numbers are
-     * unchanged (`-1` marks a palette/default slot with no packed RGB). The
-     * cursor is hashed too so blink-only frames still get distinct hashes.
+     * two grids agree iff the rasterizer would paint them identically. The
+     * 24-bit slots and the line rendition are folded in so a truecolor
+     * repaint or a DECDHL/DECDWL stamp changes the hash even when the glyph
+     * and palette numbers are unchanged (`-1` marks a palette/default slot
+     * with no packed RGB). The cursor is hashed too so blink-only frames
+     * still get distinct hashes. Scope note: OSC-8 hyperlinks, combining
+     * marks and the raw SGR string are deliberately NOT in the digest — they
+     * do not change what the GD rasterizer paints, but a consumer wanting
+     * terminal-STATE equivalence must use {@see Snapshot::equals()} instead.
      */
     private function hashGrid(Snapshot $snapshot): string
     {
@@ -261,9 +300,9 @@ final class InspectCommand implements DocumentedCommand
     /**
      * @param resource $stdout
      */
-    private function renderHeader($stdout, Cassette $cassette): void
+    private function renderHeader($stdout, Cassette $cassette): bool
     {
-        fwrite($stdout, Lang::t('inspect.header', [
+        return $this->writeOut($stdout, Lang::t('inspect.header', [
             'version' => $cassette->header->version,
             'cols' => $cassette->header->cols,
             'rows' => $cassette->header->rows,
@@ -271,8 +310,8 @@ final class InspectCommand implements DocumentedCommand
             'created' => $this->displaySafe($cassette->header->createdAt),
             'duration' => sprintf('%.3f', $cassette->duration()),
             'events' => $cassette->eventCount(),
-        ]) . "\n");
-        fwrite($stdout, str_repeat('-', 72) . "\n");
+        ]) . "\n")
+            && $this->writeOut($stdout, str_repeat('-', 72) . "\n");
     }
 
     private function formatEvent(\SugarCraft\Vcr\Event $event): string
