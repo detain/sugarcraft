@@ -150,6 +150,7 @@ return [
     // Notice lane (amber confirmation/hint state, candy-git-047)
     'notice.collect_hint' => 'Enter onaylar · Esc iptal eder',
     'notice.commit_hint' => 'Enter commit yapar · Tab yeni satır · Esc iptal eder',
+    'notice.commit_hint_signed' => 'Enter commit yapar (pinentry uçbirimde) · Tab yeni satır · Esc iptal eder',
     'ui.cursor_line'     => 'imleç: {target}',
 
 

@@ -150,6 +150,7 @@ return [
     // Notice lane (amber confirmation/hint state, candy-git-047)
     'notice.collect_hint' => 'Invio conferma · Esc annulla',
     'notice.commit_hint' => 'Invio conferma il commit · Tab nuova riga · Esc annulla',
+    'notice.commit_hint_signed' => 'Invio conferma il commit (pinentry nel terminale) · Tab nuova riga · Esc annulla',
     'ui.cursor_line'     => 'cursor: {target}',
 
 

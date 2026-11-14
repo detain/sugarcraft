@@ -335,6 +335,39 @@ final class Git implements GitDriver
         return $r['exit'] === 0 ? trim($r['stdout']) : '';
     }
 
+    /**
+     * Does committing here go through GPG (and therefore gpg-agent's
+     * pinentry)? True when `commit.gpgsign` resolves true and `gpg.format`
+     * is not ssh: SSH-format signing rides the ssh-agent socket the user
+     * already unlocked, while classic GPG prompts on /dev/tty - an input
+     * channel candy-git's stdin isolation cannot fence (candy-git-054).
+     * Exit-code probes, never run(): "key not set" is the common case.
+     */
+    public function commitGpgSigns(): bool
+    {
+        if ($this->configProbe(['--bool', '--get', 'commit.gpgsign']) !== 'true') {
+            return false;
+        }
+
+        return $this->configProbe(['--get', 'gpg.format']) !== 'ssh';
+    }
+
+    /**
+     * Effective value of one git config key, or null when it is unset or
+     * unreadable - read-only, so the repo-controlled executable surfaces
+     * (diff.external, fsmonitor) are never reached from here.
+     */
+    private function configProbe(array $args): ?string
+    {
+        $r = Process::run(
+            array_merge(self::gitBase($this->cwd), ['config', ...$args]),
+            null,
+            $this->timeout,
+        );
+
+        return $r['exit'] === 0 ? trim($r['stdout']) : null;
+    }
+
     public function stage(string $path): void
     {
         $this->run(['add', '--', $path]);

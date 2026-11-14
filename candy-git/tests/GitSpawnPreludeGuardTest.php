@@ -45,7 +45,10 @@ final class GitSpawnPreludeGuardTest extends TestCase
     // CG-06 adds currentUpstream()/currentBranch() — the two exit-code probes
     // the push leg reads (candy-git-005), same adjudication: both assemble
     // argv from gitBase(), so the prelude rides them like every other spawn.
-    private const EXPECTED_SPAWN_SITES = 9;
+    // CG-41 adds configProbe() — the read-only `git config --get` pair behind
+    // the signing warning (candy-git-054): a config READ spawns nothing
+    // repo-executable, and its argv flows through gitBase() like the rest.
+    private const EXPECTED_SPAWN_SITES = 10;
 
     public function testEveryGitSpawnIsAssembledFromThePreludeFunnel(): void
     {

@@ -150,6 +150,7 @@ return [
     // Notice lane (amber confirmation/hint state, candy-git-047)
     'notice.collect_hint' => 'Enter で確定 · Esc でキャンセル',
     'notice.commit_hint' => 'Enter でコミット · Tab で改行 · Esc でキャンセル',
+    'notice.commit_hint_signed' => 'Enter でコミット (pinentry は端末に表示) · Tab で改行 · Esc でキャンセル',
     'ui.cursor_line'     => 'カーソル: {target}',
 
 

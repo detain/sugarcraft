@@ -150,6 +150,7 @@ return [
     // Notice lane (amber confirmation/hint state, candy-git-047)
     'notice.collect_hint' => 'Enter zatwierdza · Esc anuluje',
     'notice.commit_hint' => 'Enter zatwierdza commit · Tab nowy wiersz · Esc anuluje',
+    'notice.commit_hint_signed' => 'Enter zatwierdza commit (pinentry w terminalu) · Tab nowy wiersz · Esc anuluje',
     'ui.cursor_line'     => 'kursor: {target}',
 
 

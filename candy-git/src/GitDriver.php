@@ -101,6 +101,13 @@ interface GitDriver
     public function lastCommitMessage(): string;
 
     /**
+     * Whether a commit here will be GPG-signed through gpg-agent's pinentry
+     * on /dev/tty (candy-git-054) — the commit collector's hint lane uses
+     * this to warn before the signing step can paint over the frame.
+     */
+    public function commitGpgSigns(): bool;
+
+    /**
      * Stage a single hunk via git apply --cached.
      * @param string $hunk The hunk patch text (unified diff format)
      */

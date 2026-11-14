@@ -87,6 +87,7 @@ $fixture = new class implements GitDriver {
     public function amend(): void {}
     public function amendWith(string $message): void {}
     public function lastCommitMessage(): string { return ""; }
+    public function commitGpgSigns(): bool { return false; }
     public function stagePatch(string $path, string $hunk): void {}
     public function unstageAll(): void {}
     public function unstagePatch(string $path, string $hunk): void {}

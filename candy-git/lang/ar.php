@@ -150,6 +150,7 @@ return [
     // Notice lane (amber confirmation/hint state, candy-git-047)
     'notice.collect_hint' => 'Enter للتأكيد · Esc للإلغاء',
     'notice.commit_hint' => 'Enter للحفظ · Tab سطر جديد · Esc للإلغاء',
+    'notice.commit_hint_signed' => 'Enter للحفظ (pinentry على الطرفية) · Tab سطر جديد · Esc للإلغاء',
     'ui.cursor_line'     => 'المؤشر: {target}',
 
 

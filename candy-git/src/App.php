@@ -62,6 +62,10 @@ final class App implements Model
         public readonly int $helpScroll = 0,
         /** Whether the app is collecting a commit message (Tab adds lines, Enter commits). */
         public readonly bool $collectingCommit = false,
+        /** True while the commit/amend collector is open in a repo with GPG
+         *  commit signing on: pinentry will prompt on the terminal itself,
+         *  outside the app's input isolation (candy-git-054). */
+        public readonly bool $commitGpgSigns = false,
         /** The accumulated commit message (newlines included) while collectingCommit is true. */
         public readonly string $commitMessage = '',
         /** While the collector is open: it rewrites the last commit ('A' prefill) rather than starting a new one. */
@@ -1098,13 +1102,13 @@ final class App implements Model
         return $this->withAll(showHelp: $v, helpScroll: 0);
     }
 
-    private function withCommitCollection(bool $collecting, string $message): self
+    private function withCommitCollection(bool $collecting, string $message, bool $gpgSigns = false): self
     {
         // Opening or closing the buffer always leaves amend mode behind it:
         // the next commit starts fresh, and a stale amend flag must never
         // rewrite HEAD again by accident (candy-git-013). startAmend
         // re-raises the flag explicitly on top of this call.
-        return $this->withAll(collectingCommit: $collecting, commitMessage: $message, commitAmend: false);
+        return $this->withAll(collectingCommit: $collecting, commitMessage: $message, commitAmend: false, commitGpgSigns: $gpgSigns);
     }
 
     private function withCommitMessage(string $msg): self
@@ -1140,6 +1144,7 @@ final class App implements Model
         ?bool $collectingCommit = null,
         ?string $commitMessage = null,
         ?bool $commitAmend = null,
+        ?bool $commitGpgSigns = null,
         ?DiffViewer $diffViewer = null,
         bool $diffViewerSet = false,
         ?bool $collectingBranchName = null,
@@ -1187,6 +1192,10 @@ final class App implements Model
             collectingCommit: $collectingCommit ?? $this->collectingCommit,
             commitMessage: $commitMessage ?? $this->commitMessage,
             commitAmend: $commitAmend ?? $this->commitAmend,
+            // The probe persists while the buffer is open (typing re-passes
+            // through this gate constantly) and dies with the buffer: closes
+            // thread an explicit false through withCommitCollection.
+            commitGpgSigns: $commitGpgSigns ?? $this->commitGpgSigns,
             diffViewer: $diffViewerSet ? $diffViewer : ($diffViewer ?? $this->diffViewer),
             collectingBranchName: $collectingBranchName ?? $this->collectingBranchName,
             branchName: $branchName ?? $this->branchName,
@@ -1498,7 +1507,12 @@ final class App implements Model
     /** Opens inline commit message collection — sets collectingCommit=true, clears commitMessage. */
     private function startCommit(): self
     {
-        return $this->withCommitCollection(true, '');
+        // candy-git-054: with commit.gpgsign on and a non-ssh format, the
+        // signing step talks to gpg-agent through /dev/tty - pinentry ignores
+        // our stdin isolation and paints over the raw-mode frame. The
+        // collector hint says so up front (suspend-the-UI is the async-v2
+        // fix, candy-git-010).
+        return $this->withCommitCollection(true, '', $this->git->commitGpgSigns());
     }
 
     /** Calls GitDriver::commit() (or the amend leg) with the accumulated message, then exits collection mode and refreshes. */
@@ -1723,7 +1737,12 @@ final class App implements Model
             return $this->withError($e->getMessage());
         }
 
-        return $this->withCommitCollection(true, $message)->withAll(commitAmend: true);
+        // The amend re-raise must re-pass the signing probe too: every
+        // withAll write is the collector's whole state contract, same
+        // one-contract-per-write law as the arm+notice pair.
+        $signing = $this->git->commitGpgSigns();
+
+        return $this->withCommitCollection(true, $message, $signing)->withAll(commitAmend: true, commitGpgSigns: $signing);
     }
 
     /** Open inline branch name collection. */
@@ -1896,7 +1915,7 @@ final class App implements Model
                 // used to drop the typed message with it — the collector is
                 // the only authoring path, so re-arm it with the exact bytes
                 // the history entry captured.
-                $result = $result->withCommitCollection(true, (string) ($entry->args['message'] ?? ''));
+                $result = $result->withCommitCollection(true, (string) ($entry->args['message'] ?? ''), $this->git->commitGpgSigns());
             }
 
             return $result;

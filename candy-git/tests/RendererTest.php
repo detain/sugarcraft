@@ -99,6 +99,7 @@ final class RendererTest extends TestCase
             public function amend(): void {}
             public function amendWith(string $message): void {}
             public function lastCommitMessage(): string { return ""; }
+            public function commitGpgSigns(): bool { return false; }
             public function stagePatch(string $path, string $hunk): void {}
             public function unstagePatch(string $path, string $hunk): void {}
             public function createBranch(string $name, ?string $from = null): void {}
@@ -177,6 +178,7 @@ final class RendererTest extends TestCase
             public function amend(): void {}
             public function amendWith(string $message): void {}
             public function lastCommitMessage(): string { return ""; }
+            public function commitGpgSigns(): bool { return false; }
             public function stagePatch(string $path, string $hunk): void {}
             public function unstagePatch(string $path, string $hunk): void {}
             public function createBranch(string $name, ?string $from = null): void {}
@@ -577,6 +579,7 @@ final class RendererTest extends TestCase
             public function amend(): void {}
             public function amendWith(string $message): void {}
             public function lastCommitMessage(): string { return ""; }
+            public function commitGpgSigns(): bool { return false; }
             public function stagePatch(string $path, string $hunk): void {}
             public function unstagePatch(string $path, string $hunk): void {}
             public function createBranch(string $name, ?string $from = null): void {}

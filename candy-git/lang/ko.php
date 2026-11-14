@@ -150,6 +150,7 @@ return [
     // Notice lane (amber confirmation/hint state, candy-git-047)
     'notice.collect_hint' => 'Enter 확인 · Esc 취소',
     'notice.commit_hint' => 'Enter 커밋 · Tab 줄바꿈 · Esc 취소',
+    'notice.commit_hint_signed' => 'Enter 커밋 (pinentry가 터미널에 표시) · Tab 줄바꿈 · Esc 취소',
     'ui.cursor_line'     => '커서: {target}',
 
 

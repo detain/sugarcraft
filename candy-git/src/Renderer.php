@@ -62,7 +62,7 @@ final class Renderer
         // generic 'enter confirms' hint would lie about the newline chord
         // (candy-git-013).
         return $a->collectingCommit
-            ? Lang::t('notice.commit_hint')
+            ? Lang::t($a->commitGpgSigns ? 'notice.commit_hint_signed' : 'notice.commit_hint')
             : Lang::t('notice.collect_hint');
     }
 

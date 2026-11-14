@@ -115,6 +115,8 @@ final class FixtureGit implements GitDriver
     public string $lastCommitMessageReturn = 'feat: original';
     public function amendWith(string $message): void { $this->maybeThrow('amendWith'); $this->amendWithCalled = true; $this->amendWiths[] = $message; }
     public function lastCommitMessage(): string { $this->maybeThrow('lastCommitMessage'); return $this->lastCommitMessageReturn; }
+    public bool $commitGpgSignsReturn = false;
+    public function commitGpgSigns(): bool { return $this->commitGpgSignsReturn; }
     public function stagePatch(string $path, string $hunk): void { $this->maybeThrow('stagePatch'); $this->stagePatches[$path] = $hunk; }
     public function unstageAll(): void { $this->maybeThrow('unstageAll'); $this->unstageAllCalled = true; }
     public function unstagePatch(string $path, string $hunk): void { $this->maybeThrow('unstagePatch'); $this->unstagePatches[$path] = $hunk; }
