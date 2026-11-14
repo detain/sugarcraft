@@ -528,6 +528,8 @@ final class RendererTest extends TestCase
             public function amendWith(string $message): void {}
             public function lastCommitMessage(): string { return ""; }
             public function commitGpgSigns(): bool { return false; }
+            public function conflictedPathsCarryingMarkers(): array { return []; }
+            public function localHooksPresent(): bool { return false; }
             public function stagePatch(string $path, string $hunk): void {}
             public function unstagePatch(string $path, string $hunk): void {}
             public function createBranch(string $name, ?string $from = null): void {}

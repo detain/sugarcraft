@@ -108,6 +108,23 @@ interface GitDriver
     public function commitGpgSigns(): bool;
 
     /**
+     * Repo-relative paths git still reports as unmerged whose file bytes
+     * carry conflict markers (candy-git-090) - the App arms a named
+     * confirm for staging all when this list is non-empty, because
+     * `git add -A` is marker-blind.
+     *
+     * @return list<string>
+     */
+    public function conflictedPathsCarryingMarkers(): array;
+
+    /**
+     * Whether the repository ships executable hooks that our own commit
+     * verbs will run unannounced (candy-git-144) - the collector warns
+     * once per session when this is true.
+     */
+    public function localHooksPresent(): bool;
+
+    /**
      * Stage a single hunk via git apply --cached.
      * @param string $hunk The hunk patch text (unified diff format)
      */

@@ -136,6 +136,7 @@ return [
     'merge.success'           => '{branch} fusionnée',
     'merge.conflict'          => 'impossible de fusionner {branch} : conflits non résolus',
     'merge.sequence_success' => 'fusion : {action}',
+    'confirm.stage_markers' => 'a : {count} fichier(s) en conflit portent encore des marqueurs de conflit ({files}) - appuyez à nouveau sur a pour préparer quand même',
     'confirm.discard'         => 'ignorer {path} : appuyez a nouveau sur d pour ignorer (irrecuperable)',
     'confirm.discard_untracked' => 'supprimer {path} : appuyez a nouveau sur d pour le retirer du disque (irrecuperable)',
     'discard.deleted'         => 'supprimé {path}',
@@ -154,6 +155,7 @@ return [
     'notice.collect_hint' => 'Entrée confirme · Échap annule',
     'notice.commit_hint' => 'Entrée valide le commit · Tab nouvelle ligne · Échap annule',
     'notice.commit_hint_signed' => 'Entrée valide le commit (pinentry dans le terminal) · Tab nouvelle ligne · Échap annule',
+    'notice.local_hooks'   => 'ce dépôt contient des hooks git actifs - ils s\'exécutent avec votre git, annoncé une fois',
     'ui.cursor_line'     => 'curseur : {target}',
 
 

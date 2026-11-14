@@ -73,6 +73,10 @@ final class App implements Model
          *  commit signing on: pinentry will prompt on the terminal itself,
          *  outside the app's input isolation (candy-git-054). */
         public readonly bool $commitGpgSigns = false,
+        /** candy-git-144: one-shot per session - true once the local-hooks
+         *  notice has been shown, so the probe and the warning each fire at
+         *  most once no matter how many collectors open. */
+        public readonly bool $hooksAnnounced = false,
         /** The accumulated commit message (newlines included) while collectingCommit is true. */
         public readonly string $commitMessage = '',
         /** While the collector is open: it rewrites the last commit ('A' prefill) rather than starting a new one. */
@@ -1173,6 +1177,7 @@ final class App implements Model
         ?string $commitMessage = null,
         ?bool $commitAmend = null,
         ?bool $commitGpgSigns = null,
+        ?bool $hooksAnnounced = null,
         ?DiffViewer $diffViewer = null,
         bool $diffViewerSet = false,
         ?bool $collectingBranchName = null,
@@ -1225,6 +1230,7 @@ final class App implements Model
             // through this gate constantly) and dies with the buffer: closes
             // thread an explicit false through withCommitCollection.
             commitGpgSigns: $commitGpgSigns ?? $this->commitGpgSigns,
+            hooksAnnounced: $hooksAnnounced ?? $this->hooksAnnounced,
             diffViewer: $diffViewerSet ? $diffViewer : ($diffViewer ?? $this->diffViewer),
             collectingBranchName: $collectingBranchName ?? $this->collectingBranchName,
             branchName: $branchName ?? $this->branchName,
@@ -1445,6 +1451,26 @@ final class App implements Model
         // staged file (index and worktree both dirty) makes the old state
         // unreconstructable - that undo refuses instead of resetting it away.
         [$select, $partial] = $this->stagedSelection();
+        // candy-git-090: git add -A is marker-blind - staging a conflicted
+        // merge with a sweeps <<<<<<< bytes into the index and marks the
+        // conflict resolved by accident. Name the files and ask twice; the
+        // arm embeds the list, so a conflict set that changed mid-session
+        // re-arms rather than answering a stale question.
+        $markerFiles = $this->git->conflictedPathsCarryingMarkers();
+        if ($markerFiles !== []) {
+            $arm = 'stageall-markers:' . implode('|', $markerFiles);
+            if ($this->pendingConfirm !== $arm) {
+                $listed = implode(', ', array_slice($markerFiles, 0, 3));
+                if (count($markerFiles) > 3) {
+                    $listed .= ' +' . (count($markerFiles) - 3) . ' more';
+                }
+
+                return $this->armConfirm($arm, Lang::t('confirm.stage_markers', [
+                    'count' => (string) count($markerFiles),
+                    'files' => $listed,
+                ]));
+            }
+        }
         try {
             $this->git->stageAll();
             return $this->withAll(history: $this->requireHistory()->push(HistoryEntry::stageAll($select, $partial)))->refresh();
@@ -1554,7 +1580,15 @@ final class App implements Model
         // our stdin isolation and paints over the raw-mode frame. The
         // collector hint says so up front (suspend-the-UI is the async-v2
         // fix, candy-git-010).
-        return $this->withCommitCollection(true, '', $this->git->commitGpgSigns());
+        $fresh = $this->withCommitCollection(true, '', $this->git->commitGpgSigns());
+        if (!$fresh->hooksAnnounced && $this->git->localHooksPresent()) {
+            // candy-git-144: hooks are the one execution channel the trust
+            // boundary deliberately leaves running - say so once, in-app,
+            // where the alt-screen cannot swallow it.
+            $fresh = $fresh->withAll(hooksAnnounced: true, notice: Lang::t('notice.local_hooks'));
+        }
+
+        return $fresh;
     }
 
     /** Calls GitDriver::commit() (or the amend leg) with the accumulated message, then exits collection mode and refreshes. */
@@ -1780,7 +1814,13 @@ final class App implements Model
         // one-contract-per-write law as the arm+notice pair.
         $signing = $this->git->commitGpgSigns();
 
-        return $this->withCommitCollection(true, $message, $signing)->withAll(commitAmend: true, commitGpgSigns: $signing);
+        $fresh = $this->withCommitCollection(true, $message, $signing)->withAll(commitAmend: true, commitGpgSigns: $signing);
+        if (!$fresh->hooksAnnounced && $this->git->localHooksPresent()) {
+            // candy-git-144: same one-shot announce as the commit collector.
+            $fresh = $fresh->withAll(hooksAnnounced: true, notice: Lang::t('notice.local_hooks'));
+        }
+
+        return $fresh;
     }
 
     /** Open inline branch name collection. */
@@ -1954,6 +1994,11 @@ final class App implements Model
                 // the only authoring path, so re-arm it with the exact bytes
                 // the history entry captured.
                 $result = $result->withCommitCollection(true, (string) ($entry->args['message'] ?? ''), $this->git->commitGpgSigns());
+                if (!$result->hooksAnnounced && $this->git->localHooksPresent()) {
+                    // candy-git-144: the re-armed collector is still an open
+                    // commit surface - announce once here too.
+                    $result = $result->withAll(hooksAnnounced: true, notice: Lang::t('notice.local_hooks'));
+                }
             }
 
             return $result;

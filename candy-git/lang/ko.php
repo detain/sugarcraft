@@ -136,6 +136,7 @@ return [
     'merge.success'           => '{branch} 병합됨',
     'merge.conflict'          => '{branch} 병합 실패: 해결되지 않은 충돌',
     'merge.sequence_success' => '병합: {action}',
+    'confirm.stage_markers' => 'a: 충돌 파일 {count}개에 충돌 마커가 남아 있습니다 ({files}) - a를 다시 눌러 그냥 스테이지',
     'confirm.discard'         => '{path} 폐기: d를 다시 누르면 폐기됩니다(복구 불가)',
     'confirm.discard_untracked' => '{path} 삭제: d를 다시 누르면 디스크에서 제거됩니다(복구 불가)',
     'discard.deleted'         => '삭제됨: {path}',
@@ -154,6 +155,7 @@ return [
     'notice.collect_hint' => 'Enter 확인 · Esc 취소',
     'notice.commit_hint' => 'Enter 커밋 · Tab 줄바꿈 · Esc 취소',
     'notice.commit_hint_signed' => 'Enter 커밋 (pinentry가 터미널에 표시) · Tab 줄바꿈 · Esc 취소',
+    'notice.local_hooks'   => '이 저장소에는 활성 git 후크가 있습니다 - 사용자의 git과 함께 실행되며 한 번만 알립니다',
     'ui.cursor_line'     => '커서: {target}',
 
 

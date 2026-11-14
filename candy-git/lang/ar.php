@@ -136,6 +136,7 @@ return [
     'merge.success'           => 'تم دمج {branch}',
     'merge.conflict'          => 'تعذر دمج {branch}: توجد نزاعات غير محلولة',
     'merge.sequence_success' => 'دمج: {action}',
+    'confirm.stage_markers' => 'a: لا تزال {count} ملفًا تحتوي على علامات تعارض ({files}) - اضغط a مرة أخرى للتجهيز رغم ذلك',
     'confirm.discard'         => 'تجاهل {path}: اضغط d مجددًا للتجاهل (لا يمكن الاسترداد)',
     'confirm.discard_untracked' => 'حذف {path}: اضغط d مجددًا لإزالته من القرص (لا يمكن الاسترداد)',
     'discard.deleted'           => 'تم حذف {path}',
@@ -154,6 +155,7 @@ return [
     'notice.collect_hint' => 'Enter للتأكيد · Esc للإلغاء',
     'notice.commit_hint' => 'Enter للحفظ · Tab سطر جديد · Esc للإلغاء',
     'notice.commit_hint_signed' => 'Enter للحفظ (pinentry على الطرفية) · Tab سطر جديد · Esc للإلغاء',
+    'notice.local_hooks'   => 'تحتوي هذه المستودعة على خطافات git نشطة - تعمل مع git الخاص بك، تُعلن مرة واحدة',
     'ui.cursor_line'     => 'المؤشر: {target}',
 
 

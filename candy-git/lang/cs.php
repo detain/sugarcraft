@@ -136,6 +136,7 @@ return [
     'merge.success'           => '{branch} sloučena',
     'merge.conflict'          => 'větev {branch} nelze sloučit: nevyřešené konflikty',
     'merge.sequence_success' => 'slučování: {action}',
+    'confirm.stage_markers' => 'a: {count} konfliktních souborů stále obsahuje značky konfliktu ({files}) - stiskněte znovu a pro přestoční naplánování',
     'confirm.discard'         => 'zahodit {path}: stisknutím d znovu zahodíte (nezvratné)',
     'confirm.discard_untracked' => 'smazat {path}: stisknutím d znovu jej odstraníte z disku (nezvratné)',
     'discard.deleted'         => 'smazáno {path}',
@@ -154,6 +155,7 @@ return [
     'notice.collect_hint' => 'Enter potvrzuje · Esc ruší',
     'notice.commit_hint' => 'Enter odesílá · Tab nový řádek · Esc ruší',
     'notice.commit_hint_signed' => 'Enter odesílá (pinentry v terminálu) · Tab nový řádek · Esc ruší',
+    'notice.local_hooks'   => 'tento repozitář obsahuje aktivní git hooky - spouštějí se s vaším gitem, oznameno jednou',
     'ui.cursor_line'     => 'kurzor: {target}',
 
 

@@ -136,6 +136,7 @@ return [
     'merge.success'           => '已合并 {branch}',
     'merge.conflict'          => '无法合并 {branch}：存在未解决的冲突',
     'merge.sequence_success' => '合并：{action}',
+    'confirm.stage_markers' => 'a: {count} 个冲突文件仍带有冲突标记 ({files}) - 再按 a 仍然暂存',
     'confirm.discard'         => '丢弃 {path}：再次按 d 确认丢弃（不可恢复）',
     'confirm.discard_untracked' => '删除 {path}：再次按 d 将其从磁盘移除（不可恢复）',
     'discard.deleted'         => '已删除 {path}',
@@ -154,6 +155,7 @@ return [
     'notice.collect_hint' => 'Enter 确认 · Esc 取消',
     'notice.commit_hint' => 'Enter 提交 · Tab 换行 · Esc 取消',
     'notice.commit_hint_signed' => 'Enter 提交 (pinentry 在终端提示) · Tab 换行 · Esc 取消',
+    'notice.local_hooks'   => '此仓库带有活动的 git 钩子 - 它们随您的 git 运行，仅提示一次',
     'ui.cursor_line'     => '光标: {target}',
 
 

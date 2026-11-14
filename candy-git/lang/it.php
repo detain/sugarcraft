@@ -136,6 +136,7 @@ return [
     'merge.success'           => '{branch} unito',
     'merge.conflict'          => 'impossibile unire {branch}: conflitti irrisolti',
     'merge.sequence_success' => 'unione: {action}',
+    'confirm.stage_markers' => 'a: {count} file in conflitto contengono ancora marcatori di conflitto ({files}) - premi di nuovo a per preparare comunque',
     'confirm.discard'         => 'elimina {path}: premi di nuovo d per eliminare (irrecuperabile)',
     'confirm.discard_untracked' => 'elimina {path}: premi di nuovo d per rimuoverlo dal disco (irrecuperabile)',
     'discard.deleted'         => 'eliminato {path}',
@@ -154,6 +155,7 @@ return [
     'notice.collect_hint' => 'Invio conferma · Esc annulla',
     'notice.commit_hint' => 'Invio conferma il commit · Tab nuova riga · Esc annulla',
     'notice.commit_hint_signed' => 'Invio conferma il commit (pinentry nel terminale) · Tab nuova riga · Esc annulla',
+    'notice.local_hooks'   => 'questa repository contiene hook git attivi - vengono eseguiti con il vostro git, annunciato una volta',
     'ui.cursor_line'     => 'cursor: {target}',
 
 

@@ -136,6 +136,7 @@ return [
     'merge.success'           => '{branch} gemergt',
     'merge.conflict'          => 'Merge von {branch} fehlgeschlagen: ungelöste Konflikte',
     'merge.sequence_success' => 'Merge: {action}',
+    'confirm.stage_markers' => 'a: {count} Konfliktdateien enthalten noch Konfliktmarker ({files}) - erneut a drücken, um trotzdem zu stagen',
     'confirm.discard'         => 'Verwerfen von {path}: erneut d drücken zum Verwerfen (unwiderruflich)',
     'confirm.discard_untracked' => 'Löschen von {path}: erneut d drücken, um die Datei vom Datenträger zu entfernen (unwiderruflich)',
     'discard.deleted'         => 'gelöscht {path}',
@@ -154,6 +155,7 @@ return [
     'notice.collect_hint' => 'Enter bestätigt · Esc bricht ab',
     'notice.commit_hint' => 'Enter committet · Tab neue Zeile · Esc bricht ab',
     'notice.commit_hint_signed' => 'Enter committet (pinentry im Terminal) · Tab neue Zeile · Esc bricht ab',
+    'notice.local_hooks'   => 'dieses Repository enthält aktive Git-Hooks - sie laufen mit Ihrem Git, einmal angekündigt',
     'ui.cursor_line'     => 'Cursor: {target}',
 
 

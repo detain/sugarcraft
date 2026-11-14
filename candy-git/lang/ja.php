@@ -136,6 +136,7 @@ return [
     'merge.success'           => '{branch} をマージしました',
     'merge.conflict'          => '{branch} をマージできませんでした: 未解決の競合があります',
     'merge.sequence_success' => 'マージ: {action}',
+    'confirm.stage_markers' => 'a: 競合ファイル {count} 件にまだ競合マーカーが残っています ({files}) - 再度 a でそのままステージ',
     'confirm.discard'         => '{path} を破棄: d をもう一度押すと破棄されます（復元不可）',
     'confirm.discard_untracked' => '{path} を削除: d をもう一度押すとディスクから削除されます（復元不可）',
     'discard.deleted'         => '削除しました: {path}',
@@ -154,6 +155,7 @@ return [
     'notice.collect_hint' => 'Enter で確定 · Esc でキャンセル',
     'notice.commit_hint' => 'Enter でコミット · Tab で改行 · Esc でキャンセル',
     'notice.commit_hint_signed' => 'Enter でコミット (pinentry は端末に表示) · Tab で改行 · Esc でキャンセル',
+    'notice.local_hooks'   => 'このリポジトリは有効な git フックを含みます - あなたの git と共に実行されます（1 回だけ通知）',
     'ui.cursor_line'     => 'カーソル: {target}',
 
 

@@ -548,8 +548,12 @@ running a project's hooks as `false` would silently delete somebody's commit
 gate, which is a correctness harm the app has no license to inflict on a
 repository you chose to commit in. The exec exception stays bounded and
 honest: hooks fire exactly when you invoke a command whose normal git
-behavior includes them, never unasked. Treat repository hooks as executing
-code: clone, open, and commit only what you trust.
+behavior includes them, never unasked — and the app makes the posture
+visible: when the repository ships executable hooks, the first commit or
+amend collector of a session says so once on the amber notice lane (an
+stderr-only warning would be invisible under the full-screen interface).
+Treat repository hooks as executing code: clone, open, and commit only what
+you trust.
 
 ## Shared foundations
 

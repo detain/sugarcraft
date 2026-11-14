@@ -161,6 +161,7 @@ return [
     'merge.success'           => 'merged {branch}',
     'merge.conflict'          => 'could not merge {branch}: unresolved conflicts',
     'merge.sequence_success'  => 'merge: {action}',
+    'confirm.stage_markers' => 'a: {count} conflicted file(s) still carry conflict markers ({files}) - press a again to stage anyway',
     'confirm.discard'         => 'discard {path}: press d again to discard (unrecoverable)',
     'confirm.discard_untracked' => 'delete {path}: press d again to remove it from disk (unrecoverable)',
     'discard.deleted'           => 'deleted {path}',
@@ -180,6 +181,7 @@ return [
     'notice.collect_hint'   => 'enter confirms · esc cancels',
     'notice.commit_hint'    => 'enter commits · tab newline · esc cancels',
     'notice.commit_hint_signed' => 'enter commits (pinentry on the tty) · tab newline · esc cancels',
+    'notice.local_hooks'   => 'this repository ships active git hooks - they run with your git, announced once',
     'ui.cursor_line'        => 'cursor: {target}',
 
     // Remotes (fetch / pull / push)

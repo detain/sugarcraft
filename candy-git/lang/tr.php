@@ -136,6 +136,7 @@ return [
     'merge.success'           => '{branch} birleştirildi',
     'merge.conflict'          => '{branch} birleştirilemedi: çözümlenmemiş çakışmalar',
     'merge.sequence_success' => 'birleştirme: {action}',
+    'confirm.stage_markers' => 'a: {count} çatışma dosyası hâlâ çatışma işaretçileri taşıyor ({files}) - yine de hazırlamak için tekrar a tuşuna basın',
     'confirm.discard'         => '{path} yoksay: silmek için d tuşuna tekrar basın (geri alınamaz)',
     'confirm.discard_untracked' => '{path} sil: diskten kaldırmak için d tuşuna tekrar basın (geri alınamaz)',
     'discard.deleted'         => 'silindi {path}',
@@ -154,6 +155,7 @@ return [
     'notice.collect_hint' => 'Enter onaylar · Esc iptal eder',
     'notice.commit_hint' => 'Enter commit yapar · Tab yeni satır · Esc iptal eder',
     'notice.commit_hint_signed' => 'Enter commit yapar (pinentry uçbirimde) · Tab yeni satır · Esc iptal eder',
+    'notice.local_hooks'   => 'bu depo etkin git kancaları barındırıyor - sizin git ile çalışırlar, bir kez bildirilir',
     'ui.cursor_line'     => 'imleç: {target}',
 
 

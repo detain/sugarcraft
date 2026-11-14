@@ -136,6 +136,7 @@ return [
     'merge.success'           => 'scalono {branch}',
     'merge.conflict'          => 'nie udało się scalić {branch}: nierozstrzygnięte konflikty',
     'merge.sequence_success' => 'scalanie: {action}',
+    'confirm.stage_markers' => 'a: {count} plików konfliktów wciąż zawiera znaczniki konfliktu ({files}) - naciśnij a ponownie, aby mimo to zatwierdzić',
     'confirm.discard'         => 'odrzuć {path}: naciśnij d ponownie, aby odrzucić (nieodwracalne)',
     'confirm.discard_untracked' => 'usuń {path}: naciśnij d ponownie, aby usunąć z dysku (nieodwracalne)',
     'discard.deleted'         => 'usunięto {path}',
@@ -154,6 +155,7 @@ return [
     'notice.collect_hint' => 'Enter zatwierdza · Esc anuluje',
     'notice.commit_hint' => 'Enter zatwierdza commit · Tab nowy wiersz · Esc anuluje',
     'notice.commit_hint_signed' => 'Enter zatwierdza commit (pinentry w terminalu) · Tab nowy wiersz · Esc anuluje',
+    'notice.local_hooks'   => 'to repozytorium zawiera aktywne haki git - uruchamiają się z twoim git, zgłoszone raz',
     'ui.cursor_line'     => 'kursor: {target}',
 
 

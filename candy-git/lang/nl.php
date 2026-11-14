@@ -136,6 +136,7 @@ return [
     'merge.success'           => '{branch} gemergd',
     'merge.conflict'          => 'kon {branch} niet samenvoegen: onopgeloste conflicten',
     'merge.sequence_success' => 'merge: {action}',
+    'confirm.stage_markers' => 'a: {count} conflicbestand(en) bevatten nog conflictmarkeringen ({files}) - druk opnieuw op a om toch te stagen',
     'confirm.discard'         => 'verwerp {path}: druk nogmaals op d om te verwerpen (onherstelbaar)',
     'confirm.discard_untracked' => 'verwijder {path}: druk nogmaals op d om het van schijf te verwijderen (onherstelbaar)',
     'discard.deleted'         => 'verwijderd {path}',
@@ -154,6 +155,7 @@ return [
     'notice.collect_hint' => 'Enter bevestigt · Esc annuleert',
     'notice.commit_hint' => 'Enter bevestigt commit · Tab nieuwe regel · Esc annuleert',
     'notice.commit_hint_signed' => 'Enter bevestigt commit (pinentry in de terminal) · Tab nieuwe regel · Esc annuleert',
+    'notice.local_hooks'   => 'deze repository bevat actieve git hooks - ze draaien met uw git, één keer aangekondigd',
     'ui.cursor_line'     => 'cursor: {target}',
 
 

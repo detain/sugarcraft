@@ -100,6 +100,16 @@ class NullGit implements GitDriver
         return false;
     }
 
+    public function conflictedPathsCarryingMarkers(): array
+    {
+        return [];
+    }
+
+    public function localHooksPresent(): bool
+    {
+        return false;
+    }
+
     public function stagePatch(string $path, string $hunk): void
     {
     }

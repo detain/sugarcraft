@@ -136,6 +136,7 @@ return [
     'merge.success'           => '{branch} слита',
     'merge.conflict'          => 'не удалось влить {branch}: неразрешённые конфликты',
     'merge.sequence_success' => 'слияние: {action}',
+    'confirm.stage_markers' => 'a: {count} конфликтных файлов всё ещё содержат маркеры конфликта ({files}) - нажмите a ещё раз, чтобы проиндексировать несмотря на это',
     'confirm.discard'         => 'отбросить {path}: нажмите d ещё раз для отброса (необратимо)',
     'confirm.discard_untracked' => 'удалить {path}: нажмите d ещё раз, чтобы стереть с диска (необратимо)',
     'discard.deleted'         => 'удалён {path}',
@@ -154,6 +155,7 @@ return [
     'notice.collect_hint' => 'Enter подтверждает · Esc отменяет',
     'notice.commit_hint' => 'Enter коммитит · Tab новая строка · Esc отменяет',
     'notice.commit_hint_signed' => 'Enter коммитит (pinentry в терминале) · Tab новая строка · Esc отменяет',
+    'notice.local_hooks'   => 'этот репозиторий содержит активные git-хуки - они выполняются с вашим git, предупреждаем один раз',
     'ui.cursor_line'     => 'курсор: {target}',
 
 
