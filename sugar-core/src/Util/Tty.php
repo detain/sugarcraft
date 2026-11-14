@@ -53,41 +53,74 @@ final class Tty
     }
 
     /**
-     * Resolve the appropriate backend for the current process environment.
+     * The single backend-selection truth (finding sugar-core-056).
      *
-     * Detection order:
-     * 1. WSL  → PosixBackend (Linux ELF binary on Windows)
-     * 2. Mintty / MSYS2 / Git-Bash → PosixBackend (PTY pipe)
-     * 3. Cygwin → PosixBackend (POSIX-like environment)
-     * 4. Native Windows (DIRECTORY_SEPARATOR === '\\') → WindowsBackend
-     * 5. Everything else → PosixBackend
+     * WHAT THIS USED TO BE, AND WHY IT CHANGED: there were TWO copies of the
+     * decision — this class's `backend()` checked `DIRECTORY_SEPARATOR`
+     * FIRST (so native Windows PHP launched from inside Git-Bash, which sets
+     * MSYSTEM but is a '\\' process, got a WindowsBackend INSTANCE), while
+     * `concreteBackendClass()` checked the WSL/Mintty/Cygwin env probes FIRST
+     * (so the same process got PosixBackend for every STATIC call — openTty,
+     * restoreLast, onResize, drainSignals). Two APIs, two truths, one
+     * terminal. The env-first order is the documented intent (see "Platform
+     * detection order" above), and PosixBackend::size()'s arms comment already
+     * described exactly that shape ("Tty picks this backend there whenever
+     * MSYSTEM is set, i.e. under Git Bash"). The duplicated arm also carried
+     * a dead code path: the second separator-equality return was
+     * unreachable — reaching it required NOT isWsl (arms 1/2 disagree only
+     * when a probe is true) while the first arm already returned
+     * WindowsBackend for every '\\' process whose isWsl was false. P2-verified
+     * dead, then deleted with this rationale (sc-40).
+     *
+     * Both paths now derive their booleans from the environment and hand them
+     * to {@see decideBackendClass()}, which carries the order law. That keeps
+     * the order testable on any host: the matrix in
+     * {@see \SugarCraft\Core\Tests\Util\Tty\BackendSelectionTest} drives the
+     * divergent shape (native Windows + mintty) without a Windows box.
+     *
+     * @param resource $stream
      */
     private static function backend($stream, ?Termios $termios = null): \SugarCraft\Core\Util\Tty\Backend
     {
-        if (DIRECTORY_SEPARATOR === '\\') {
-            // WSL_INTEROP / WSL_DISTRO_NAME are set inside WSL even when
-            // running Windows-side PHP via interop, but the PHP binary
-            // itself is a Linux ELF so DIRECTORY_SEPARATOR would be '/'.
-            // If we are here, DIRECTORY_SEPARATOR is '\\', so this IS
-            // native Windows and we should use the WindowsBackend.
-            // WindowsBackend does not take a Termios — the sugar-pty
-            // contract is POSIX-only in v1.
-            if (!Tty\EnvDetect::isWsl()) {
-                return new Tty\WindowsBackend($stream);
-            }
-        }
+        $class = self::decideBackendClass(
+            DIRECTORY_SEPARATOR === '\\',
+            Tty\EnvDetect::isWsl(),
+            Tty\EnvDetect::isMintty(),
+            Tty\EnvDetect::isCygwin(),
+        );
 
-        // WSL, Mintty, MSYS2, Git-Bash, Cygwin — all use a POSIX-like PTY.
-        if (Tty\EnvDetect::isWsl() || Tty\EnvDetect::isMintty() || Tty\EnvDetect::isCygwin()) {
-            return new Tty\PosixBackend($stream, $termios);
-        }
-
-        // Native Windows PHP.
-        if (DIRECTORY_SEPARATOR === '\\') {
+        // WindowsBackend does not take a Termios — the sugar-pty contract is
+        // POSIX-only in v1.
+        if ($class === Tty\WindowsBackend::class) {
             return new Tty\WindowsBackend($stream);
         }
 
         return new Tty\PosixBackend($stream, $termios);
+    }
+
+    /**
+     * Pure backend selection over the four detection booleans (the decision
+     * function behind sc-40's single-truth fix).
+     *
+     * Order law: every POSIX-fronted environment (WSL, Mintty/MSYS2/Git-Bash,
+     * Cygwin) beats the native-Windows separator arm, because each of them
+     * can wrap a '\\' PHP process while still providing the POSIX pipe the
+     * PosixBackend was written for; only an unequipped native Windows process
+     * takes the FFI WindowsBackend.
+     *
+     * @return class-string<Tty\Backend>
+     */
+    private static function decideBackendClass(bool $nativeWindows, bool $wsl, bool $mintty, bool $cygwin): string
+    {
+        if ($wsl || $mintty || $cygwin) {
+            return Tty\PosixBackend::class;
+        }
+
+        if ($nativeWindows) {
+            return Tty\WindowsBackend::class;
+        }
+
+        return Tty\PosixBackend::class;
     }
 
     public function isTty(): bool
@@ -159,17 +192,19 @@ final class Tty
     /**
      * Return the fully-qualified name of the concrete backend class for
      * the current process environment.
+     *
+     * Delegates to the same {@see decideBackendClass()} the instance path
+     * uses — that is the whole point (finding sugar-core-056): the static
+     * and instance APIs can no longer disagree about which backend owns
+     * this process.
      */
     private static function concreteBackendClass(): string
     {
-        // WSL, Mintty, MSYS2, Git-Bash, Cygwin — all use a POSIX-like PTY.
-        if (Tty\EnvDetect::isWsl() || Tty\EnvDetect::isMintty() || Tty\EnvDetect::isCygwin()) {
-            return Tty\PosixBackend::class;
-        }
-        // Native Windows PHP.
-        if (DIRECTORY_SEPARATOR === '\\') {
-            return Tty\WindowsBackend::class;
-        }
-        return Tty\PosixBackend::class;
+        return self::decideBackendClass(
+            DIRECTORY_SEPARATOR === '\\',
+            Tty\EnvDetect::isWsl(),
+            Tty\EnvDetect::isMintty(),
+            Tty\EnvDetect::isCygwin(),
+        );
     }
 }

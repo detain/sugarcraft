@@ -523,4 +523,54 @@ final class PosixBackendTest extends TestCase
 
         return str_contains($out, '-icanon') && str_contains($out, '-echo');
     }
+
+    // ─── sc-40 / finding 058: the stty rungs parse honestly, the who rung is gone ─
+
+    /**
+     * The size() shell-out rungs share one parser, and it answers null for
+     * anything that is not a GNU-coreutils-flavoured "rows cols" pair — the
+     * old `who -a` rung used to fabricate geometry from unrelated digits,
+     * and these arms must not do it on a smaller scale.
+     */
+    public static function provideSttySizeLines(): array
+    {
+        return [
+            'clean pair'            => [" 24 80\n", ['cols' => 80, 'rows' => 24]],
+            'zero rows'             => ['0 80', null],
+            'zero cols'             => ['24 0', null],
+            'negative rows'         => ['-3 80', null],
+            'garbage words'         => ['hello world', null],
+            'single field'          => ['24', null],
+            'empty output'          => ['', null],
+            'whitespace only'       => ['   ', null],
+        ];
+    }
+
+    /**
+     * @dataProvider provideSttySizeLines
+     *
+     * @param array{cols:int, rows:int}|null $expected
+     */
+    public function testSttySizeLineParsesOnlyTruth(string $output, ?array $expected): void
+    {
+        $method = new \ReflectionMethod(PosixBackend::class, 'parseSttySizeLine');
+        $method->setAccessible(true);
+
+        $this->assertSame($expected, $method->invoke(null, $output));
+    }
+
+    /**
+     * Source pin: the `who -a` rung (whose claimed "rows cols" columns do
+     * not exist in who output) is deleted, while the honest GNU-stty rungs
+     * remain in the chain.
+     */
+    public function testWhoFabricationArmIsGoneAndSttyRungsRemain(): void
+    {
+        $source = (string) file_get_contents((new \ReflectionClass(PosixBackend::class))->getFileName());
+
+        $this->assertStringNotContainsString("shell_exec('who", $source, 'the fabricated-geometry rung must stay deleted (sc-40)');
+        $this->assertStringContainsString("shell_exec('stty -F /dev/tty size 2>/dev/null')", $source);
+        $this->assertStringContainsString("shell_exec('stty size 2>/dev/null')", $source);
+        $this->assertStringContainsString('return self::LAST_RESORT_SIZE;', $source, 'the honest null answer must remain the tail');
+    }
 }

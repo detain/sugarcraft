@@ -200,34 +200,62 @@ final class PosixBackend implements Backend
 
         // 4. stty -F /dev/tty — queries the controlling terminal directly (most reliable)
         // This avoids the stdin redirection problem where "stty size" reads from pipe
-        $sttyTty = trim((string) shell_exec('stty -F /dev/tty size 2>/dev/null'));
-        if ($sttyTty !== '' && str_contains($sttyTty, ' ')) {
-            [$sRows, $sCols] = explode(' ', $sttyTty, 2);
-            if ((int) $sRows > 0 && (int) $sCols > 0) {
-                return ['cols' => (int) $sCols, 'rows' => (int) $sRows];
-            }
+        $sttyTty = self::parseSttySizeLine((string) shell_exec('stty -F /dev/tty size 2>/dev/null'));
+        if ($sttyTty !== null) {
+            return $sttyTty;
         }
 
         // 5. stty size fallback — works when stdin is the terminal
-        $stty = trim((string) shell_exec('stty size 2>/dev/null'));
-        if ($stty !== '' && str_contains($stty, ' ')) {
-            [$sRows, $sCols] = explode(' ', $stty, 2);
-            if ((int) $sRows > 0 && (int) $sCols > 0) {
-                return ['cols' => (int) $sCols, 'rows' => (int) $sRows];
-            }
+        $stty = self::parseSttySizeLine((string) shell_exec('stty size 2>/dev/null'));
+        if ($stty !== null) {
+            return $stty;
         }
 
-        // 6. Wtmp query — check last login's terminal size (rough proxy)
-        $who = trim((string) shell_exec('who -a 2>/dev/null | grep -m1 pts/0'));
-        if ($who !== '' && preg_match('/\d+\s+\d+\s+(\d+)\s+(\d+)/', $who, $m)) {
-            // who format: user tty pts/0 ... rows cols
-            if ((int) $m[1] > 0 && (int) $m[2] > 0) {
-                return ['cols' => (int) $m[2], 'rows' => (int) $m[1]];
-            }
-        }
-
-        // 7. Final fallback — the shared last-resort answer (see Backend::LAST_RESORT_SIZE).
+        // 6. Final fallback — the shared last-resort answer (see Backend::LAST_RESORT_SIZE).
+        //
+        // WHAT USED TO SIT HERE, AND WHY IT IS GONE (finding sugar-core-058,
+        // sc-40): a "Wtmp query" rung — `who -a | grep -m1 pts/0` fed to the
+        // regex `/\d+\s+\d+\s+(\d+)\s+(\d+)/` on the claim that who's output
+        // carries "rows cols". It does not. `who -a` prints login time, idle,
+        // PID and comment fields — never a terminal geometry — so on any host
+        // where grep found a pts/0 line the regex matched THREE ARBITRARY
+        // ADJACENT NUMBERS from that row (dates, idle minutes, PIDs) and
+        // returned them as the terminal size. grep -m1 pts/0 compounds it: it
+        // names the machine's first pty slot, not the user's stream, so the
+        // geometry (such as it was) came from an unrelated session. The rung
+        // fabricated size from empty/garbage input — exactly the failure
+        // sc-01's no-fabrication rule and the owner's deriveSize null-on-
+        // garbage fix (cd1beeee2) close on the other rungs. The honest answer
+        // when the stty rungs miss is LAST_RESORT_SIZE, named and pinned, not
+        // a number scraped out of `who`.
         return self::LAST_RESORT_SIZE;
+    }
+
+    /**
+     * Parse one GNU-coreutils-flavoured `stty size` capture: `"<rows> <cols>"`.
+     *
+     * GNU-specific by spelling: the rungs above shell out to the coreutils
+     * vocabulary (`stty size`, rows-first pair on one line); a host whose
+     * stty(1) prints otherwise answers null — the honest "no answer from this
+     * rung" — and the size() chain continues to the next rung. Non-positive
+     * or malformed output answers null the same way (sc-40, finding
+     * sugar-core-058: what the deleted `who -a` rung used to fabricate).
+     *
+     * @return array{cols:int, rows:int}|null
+     */
+    private static function parseSttySizeLine(string $output): ?array
+    {
+        $line = trim($output);
+        if ($line === '' || !str_contains($line, ' ')) {
+            return null;
+        }
+
+        [$sRows, $sCols] = explode(' ', $line, 2);
+        if ((int) $sRows > 0 && (int) $sCols > 0) {
+            return ['cols' => (int) $sCols, 'rows' => (int) $sRows];
+        }
+
+        return null;
     }
 
     /**

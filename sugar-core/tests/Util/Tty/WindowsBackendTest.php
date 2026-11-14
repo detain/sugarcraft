@@ -682,4 +682,118 @@ final class WindowsBackendTest extends TestCase
 
         $this->assertSame($before, InterruptFlags::self(), 'restore() must not strand the shared flag');
     }
+
+    // ─── sc-40 / finding 059: panic-rescue + shutdown lifecycle ──────────────
+
+    /**
+     * restoreLast() used to call a method that never existed
+     * (`self::kernel32()`); `Error` is a Throwable, so the best-effort catch
+     * swallowed the fatal on EVERY invocation — the rescue path was a silent
+     * no-op end to end. Pinned observable through the injected double: the
+     * classic arm/fire shape must actually save, then actually restore.
+     */
+    public function testRestoreLastSaveThenFireDrivesTheKernel(): void
+    {
+        $fake = new FakeKernel32();
+        $fake->setConsoleModeStdin(0x0003);
+        $fake->setConsoleModeStdout(0x0001);
+        $fake->setConsoleCpIn(1252);
+        WindowsBackend::setTestKernel32($fake);
+
+        WindowsBackend::restoreLast(); // arm: save current
+        $this->assertSame([], $fake->getSetConsoleModeCalls(), 'the save pass must not write any mode');
+        $this->assertSame(0x0003, $this->staticSlot('lastInputMode'));
+
+        WindowsBackend::restoreLast(); // fire: restore saved
+        $this->assertContains([$fake->stdIn(), 0x0003], $fake->getSetConsoleModeCalls());
+        $this->assertContains([$fake->stdOut(), 0x0001], $fake->getSetConsoleModeCalls());
+        $this->assertContains(1252, $fake->getSetConsoleCPCalls(), 'the codepage side of the rescue must ride too');
+        $this->assertNull($this->staticSlot('lastInputMode'), 'a fired rescue clears its slot');
+    }
+
+    /**
+     * Coherence (finding 059): after a raw enable, the rescue slot holds the
+     * PRE-raw modes seeded by enableRawMode itself — so a panic handler's
+     * first restoreLast() lands on the real original state instead of
+     * "saving" the raw mode it was meant to undo. First-writer-wins across
+     * re-instantiation: the second enable (which now captures a raw world)
+     * must not overwrite the first instance's original snapshot.
+     */
+    public function testEnableRawModeSeedsTheRescueSlotFirstWriterWins(): void
+    {
+        $fake = new FakeKernel32();
+        $fake->setConsoleModeStdin(0x0003);
+        $fake->setConsoleModeStdout(0x0001);
+        WindowsBackend::setTestKernel32($fake);
+
+        $first = $this->backend($fake);
+        $first->enableRawMode();
+        $this->assertSame(0x0003, $this->staticSlot('lastInputMode'), 'the enable itself must seed the rescue slot');
+
+        // The fake now reports the RAW modes the first enable installed; a
+        // second enable captures those, but the slot keeps the original.
+        $after = $fake->getSetConsoleModeCalls();
+        $this->assertNotSame([], $after);
+        $fake->setConsoleModeStdin(end($after)[1]);
+        $fake->setConsoleModeStdout(end($after)[1]);
+
+        $secondStream = fopen('php://memory', 'r+');
+        $this->assertNotFalse($secondStream);
+        $second = new WindowsBackend($secondStream, $fake);
+        try {
+            $second->enableRawMode();
+            $this->assertSame(0x0003, $this->staticSlot('lastInputMode'), 'a later enable must not overwrite the original rescue snapshot');
+
+            WindowsBackend::restoreLast(); // seeded slot: first call already restores
+            $this->assertContains([$fake->stdIn(), 0x0003], $fake->getSetConsoleModeCalls(), 'the rescue must replay the ORIGINAL mode, not the raw one');
+        } finally {
+            $second->restore();
+            if (is_resource($secondStream)) {
+                fclose($secondStream);
+            }
+        }
+    }
+
+    /**
+     * The shutdown backstop is armed per INSTANCE now. The method-local
+     * `static $registered` gave ONE process-wide registration while
+     * backends re-instantiate freely: the second instance that entered raw
+     * mode rode no backstop at all, and its closure referenced the FIRST
+     * instance's snapshot anyway.
+     */
+    public function testShutdownBackstopIsArmedPerInstance(): void
+    {
+        $fake = new FakeKernel32();
+        $fake->setConsoleModeStdin(0x0003);
+        $fake->setConsoleModeStdout(0x0001);
+        WindowsBackend::setTestKernel32($fake);
+
+        $first = $this->backend($fake);
+        $first->enableRawMode();
+
+        $secondStream = fopen('php://memory', 'r+');
+        $this->assertNotFalse($secondStream);
+        $second = new WindowsBackend($secondStream, $fake);
+        try {
+            $second->enableRawMode();
+
+            $prop = new \ReflectionProperty(WindowsBackend::class, 'shutdownRegistered');
+            $this->assertTrue($prop->getValue($first), 'the enabling instance must hold a shutdown backstop');
+            $this->assertTrue($prop->getValue($second), 'backstops do not stack-share: every raw-mode instance needs its own');
+        } finally {
+            $second->restore();
+            if (is_resource($secondStream)) {
+                fclose($secondStream);
+            }
+        }
+    }
+
+    /** Read a private static slot off WindowsBackend. */
+    private function staticSlot(string $name): mixed
+    {
+        $prop = new \ReflectionProperty(WindowsBackend::class, $name);
+        $prop->setAccessible(true);
+
+        return $prop->getValue(null);
+    }
 }

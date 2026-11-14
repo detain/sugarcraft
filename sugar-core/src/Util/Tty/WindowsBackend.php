@@ -117,6 +117,20 @@ final class WindowsBackend implements Backend
      */
     private static bool $flagsCleanupRegistered = false;
 
+    /**
+     * True when THIS instance registered its shutdown restore backstop.
+     *
+     * sc-40 (finding sugar-core-059): this used to be a method-local
+     * `static $registered` — armed once per PROCESS while the backend
+     * re-instantiates freely. A second WindowsBackend that enabled raw mode
+     * never got a backstop (the one slot was spent on the first instance,
+     * whose saved snapshot the closure referenced), so a crash after the
+     * first instance had already restored left the user's console stuck in
+     * raw mode with no teardown. Per-instance registration is safe because
+     * restore() is idempotent (null saved state returns immediately).
+     */
+    private bool $shutdownRegistered = false;
+
     // ─── Constructor ────────────────────────────────────────────────────────
 
     /**
@@ -131,6 +145,20 @@ final class WindowsBackend implements Backend
 
     // ─── TTY detection ───────────────────────────────────────────────────────
 
+    /**
+     * True when this backend's OWN stream is a terminal AND the process is
+     * attached to a console.
+     *
+     * sc-40 (finding sugar-core-056's right-handle leg): the two gates
+     * answer two different questions and both are deliberate.
+     * `stream_isatty($this->stream)` probes the stream the backend was
+     * CONSTRUCTED with — not STDIN — so an injected-output backend never
+     * answers about a device it does not own. The `stdIn()` check is NOT a
+     * per-stream handle probe (Windows has no handle-to-stream map to
+     * consult) but the process-wide "is there a console at all" gate: a
+     * detached/GUI process with no console cannot drive any of the
+     * console-mode machinery even when PHP's std streams are buffers.
+     */
     public function isTty(): bool
     {
         if (!is_resource($this->stream)) {
@@ -285,6 +313,20 @@ final class WindowsBackend implements Backend
             $this->savedInputCp    = $this->kernel32->getConsoleCP();
             $this->savedOutputCp   = $this->kernel32->getConsoleOutputCP();
 
+            // sc-40 (finding sugar-core-059): make the static panic-rescue
+            // slot coherent with THIS enable instead of letting a later
+            // restoreLast() "save" the raw mode it is supposed to undo.
+            // First-writer-wins keeps the ORIGINAL pre-raw geometry across
+            // re-instantiation — a second enable must not overwrite the slot
+            // with modes captured while the first instance's raw session is
+            // still applied (that was the multi-instance overwrite defect).
+            if (self::$lastInputMode === null) {
+                self::$lastInputMode  = $this->savedInputMode;
+                self::$lastOutputMode = $this->savedOutputMode;
+                self::$lastInputCp    = $this->savedInputCp;
+                self::$lastOutputCp   = $this->savedOutputCp;
+            }
+
             // Build raw input mode:
             //   clear  ENABLE_PROCESSED_INPUT  (cooked line editing)
             //   clear  ENABLE_LINE_INPUT       (wait for Enter per line)
@@ -314,9 +356,10 @@ final class WindowsBackend implements Backend
 
             // Defensive shutdown guard (caveat 8): if PHP crashes without
             // calling restore(), the user's cmd.exe is left in UTF-8 mode.
-            static $registered = false;
-            if (!$registered) {
-                $registered = true;
+            // sc-40 (finding sugar-core-059): once per INSTANCE, not once
+            // per process — see $shutdownRegistered for the story.
+            if (!$this->shutdownRegistered) {
+                $this->shutdownRegistered = true;
                 register_shutdown_function([$this, 'restore']);
             }
             // sc-02 (finding sugar-core-053): the interrupt segment's owner
@@ -514,12 +557,34 @@ final class WindowsBackend implements Backend
     /** Saved output codepage for restoreLast(). */
     private static ?int $lastOutputCp = null;
 
+    /**
+     * Save-then-restore of the console modes, for panic handlers that hold
+     * no Tty instance.
+     *
+     * sc-40 (finding sugar-core-059): both branches used to call
+     * `self::kernel32()` — A METHOD THAT NEVER EXISTED. `Error` is a
+     * Throwable, so the catch swallowed the fatal on every invocation: the
+     * whole rescue path was a silent no-op (nothing saved, nothing restored)
+     * and stayed that way because no Linux runner executes this class
+     * outside its test doubles. It now takes the same accessor
+     * openTty()/drainSignals() use — the injected test double when present,
+     * the real singleton otherwise — which is also what makes the path
+     * observable in the suite.
+     *
+     * Coherence with {@see enableRawMode()}: a successful enable seeds this
+     * slot with the PRE-raw modes (first-writer-wins), so a panic handler's
+     * first restoreLast() after any raw session lands on the real original
+     * state instead of "saving" the raw mode it was meant to undo. With no
+     * enable in the process history, the classic two-call shape (save on
+     * arm, restore on fire) still works.
+     */
     public static function restoreLast(): void
     {
         if (self::$lastInputMode !== null) {
-            // Second+ call: actually restore.
+            // Second+ call (or any call after a raw enable seeded the slot):
+            // actually restore.
             try {
-                $k = self::kernel32();
+                $k = self::$testKernel32 ?? Kernel32::self();
                 $k->setConsoleMode($k->stdIn(), self::$lastInputMode);
                 $k->setConsoleMode($k->stdOut(), self::$lastOutputMode);
                 $k->setConsoleCP(self::$lastInputCp);
@@ -534,9 +599,10 @@ final class WindowsBackend implements Backend
             }
             return;
         }
-        // First call: save current state.
+        // First call: save current state (only reached when no raw mode was
+        // ever enabled in this process — enableRawMode seeds the slot above).
         try {
-            $k = self::kernel32();
+            $k = self::$testKernel32 ?? Kernel32::self();
             $stdin  = $k->stdIn();
             $stdout = $k->stdOut();
             self::$lastInputMode  = $k->getConsoleMode($stdin) ?? 0;
@@ -636,5 +702,12 @@ final class WindowsBackend implements Backend
         // sc-02: the superseded $interruptPending / $interruptKeySeen latches
         // are gone — signal assembly is per-tick locals now (finding 052).
         self::$flagsCleanupRegistered = false;
+        // sc-40: the panic-rescue slot is static state too — enableRawMode
+        // now seeds it, so a test that enables must not leak the seed into
+        // the next test's restoreLast accounting.
+        self::$lastInputMode  = null;
+        self::$lastOutputMode = null;
+        self::$lastInputCp    = null;
+        self::$lastOutputCp   = null;
     }
 }
