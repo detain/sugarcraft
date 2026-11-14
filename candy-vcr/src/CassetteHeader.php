@@ -84,13 +84,13 @@ final readonly class CassetteHeader
         public ?int $heightPx = null,
     ) {
         if ($version < 1) {
-            throw new \InvalidArgumentException("CassetteHeader version must be >= 1, got {$version}");
+            throw new \InvalidArgumentException("cassette header version must be >= 1, got {$version}");
         }
         if ($version > self::MAX_READABLE_VERSION) {
             throw new \InvalidArgumentException("cassette version {$version} is newer than this build can read (max v" . self::MAX_READABLE_VERSION . ') — upgrade candy-vcr');
         }
         if ($cols <= 0 || $rows <= 0) {
-            throw new \InvalidArgumentException("CassetteHeader dimensions must be positive, got {$cols}x{$rows}");
+            throw new \InvalidArgumentException("cassette header dimensions must be positive, got {$cols}x{$rows}");
         }
         // Finding 011: the grid is allocated from these numbers by every
         // consumer, so the ceiling lives on the value object itself — a
@@ -99,36 +99,36 @@ final readonly class CassetteHeader
 
         if ($cols > self::MAX_COLS_ROWS || $rows > self::MAX_COLS_ROWS) {
             throw new \InvalidArgumentException(
-                "CassetteHeader dimensions must not exceed " . self::MAX_COLS_ROWS
+                "cassette header dimensions must not exceed " . self::MAX_COLS_ROWS
                     . "x" . self::MAX_COLS_ROWS . ", got {$cols}x{$rows}",
             );
         }
         if ($fontSize !== null && ($fontSize < 1 || $fontSize > self::MAX_FONT_SIZE)) {
             throw new \InvalidArgumentException(
-                "CassetteHeader fontSize must be between 1 and " . self::MAX_FONT_SIZE . ", got {$fontSize}",
+                "cassette header fontSize must be between 1 and " . self::MAX_FONT_SIZE . ", got {$fontSize}",
             );
         }
         if ($widthPx !== null && $widthPx < 1) {
-            throw new \InvalidArgumentException("CassetteHeader widthPx must be >= 1 when set, got {$widthPx}");
+            throw new \InvalidArgumentException("cassette header widthPx must be >= 1 when set, got {$widthPx}");
         }
         if ($heightPx !== null && $heightPx < 1) {
-            throw new \InvalidArgumentException("CassetteHeader heightPx must be >= 1 when set, got {$heightPx}");
+            throw new \InvalidArgumentException("cassette header heightPx must be >= 1 when set, got {$heightPx}");
         }
         // Finding 011: the pixel axes are capped too — a cassette may carry
         // widthPx/heightPx straight through to imagecreatetruecolor.
         if ($widthPx !== null && $widthPx > self::MAX_DIM_PX) {
             throw new \InvalidArgumentException(
-                "CassetteHeader widthPx must not exceed " . self::MAX_DIM_PX . ", got {$widthPx}",
+                "cassette header widthPx must not exceed " . self::MAX_DIM_PX . ", got {$widthPx}",
             );
         }
         if ($heightPx !== null && $heightPx > self::MAX_DIM_PX) {
             throw new \InvalidArgumentException(
-                "CassetteHeader heightPx must not exceed " . self::MAX_DIM_PX . ", got {$heightPx}",
+                "cassette header heightPx must not exceed " . self::MAX_DIM_PX . ", got {$heightPx}",
             );
         }
         if ($timestampMode !== self::TIMESTAMP_MODE_ABSOLUTE && $timestampMode !== self::TIMESTAMP_MODE_RELATIVE) {
             throw new \InvalidArgumentException(
-                "CassetteHeader timestampMode must be 'absolute' or 'relative', got '{$timestampMode}'",
+                "cassette header timestampMode must be 'absolute' or 'relative', got '{$timestampMode}'",
             );
         }
         // Finding 004: header strings are printed verbatim by inspect/stats/
@@ -146,10 +146,10 @@ final readonly class CassetteHeader
         }
         foreach ($env as $key => $value) {
             if (!\is_string($key) || $key === '') {
-                throw new \InvalidArgumentException('CassetteHeader env keys must be non-empty strings');
+                throw new \InvalidArgumentException('cassette header env keys must be non-empty strings');
             }
             if (!\is_string($value)) {
-                throw new \InvalidArgumentException("CassetteHeader env['{$key}'] must be a string, got " . \get_debug_type($value));
+                throw new \InvalidArgumentException("cassette header env['{$key}'] must be a string, got " . \get_debug_type($value));
             }
         }
     }
@@ -170,7 +170,7 @@ final readonly class CassetteHeader
             \preg_match('/[\x00-\x1f\x7f]/', $value) === 1
             || \preg_match('/[\x{80}-\x{9f}]/u', $value) !== 0
         ) {
-            throw new \InvalidArgumentException("CassetteHeader {$field} must not contain control characters");
+            throw new \InvalidArgumentException("cassette header {$field} must not contain control characters");
         }
     }
 

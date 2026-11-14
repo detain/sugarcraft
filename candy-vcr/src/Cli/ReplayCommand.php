@@ -215,7 +215,7 @@ final class ReplayCommand implements DocumentedCommand
                 // matches the original wallclock. Default replay (no flag)
                 // uses `t` (compressed) which matches existing behaviour.
                 $effectiveT = ($noTrim && isset($event->payload['tRaw']))
-                    ? Scalars::float($event->payload['tRaw'], 'replay tRaw timestamp')
+                    ? Scalars::float($event->payload['tRaw'], 'cassette event `tRaw`')
                     : $event->t;
                 if ($speed === 'realtime') {
                     $delta = $effectiveT - $previousT;
@@ -237,7 +237,7 @@ final class ReplayCommand implements DocumentedCommand
                     }
                 }
                 if ($event->kind === EventKind::Output) {
-                    $bytes = Scalars::string($event->payload['b'] ?? '', 'replay output bytes');
+                    $bytes = Scalars::string($event->payload['b'] ?? '', 'cassette event `b`');
                     fwrite($stdout, $bytes);
                     $outputBytes += strlen($bytes);
                 }

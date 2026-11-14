@@ -191,7 +191,7 @@ final class TapeToGifTest extends TestCase
         $tapeToGif = TapeToGif::create();
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Cannot read tape file');
+        $this->expectExceptionMessage('cannot read tape file');
 
         $tapeToGif->render('/nonexistent/path.tape', '/tmp/out.gif');
     }

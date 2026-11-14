@@ -25,7 +25,7 @@ final class PhpGifEncoderFpsDoorTest extends TestCase
     public function testEncodeRefusesNonPositiveFpsBeforeTouchingFrames(int $fps): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('PhpGifEncoder fps must be a positive');
+        $this->expectExceptionMessage('fps must be a positive finite');
         // 'missing.png' is never read: the door fires first, which is also
         // why this test needs no ext-gd and no fixture frames.
         (new PhpGifEncoder())->encode(['missing.png'], '/tmp/candy-vcr-must-not-exist.gif', $fps);

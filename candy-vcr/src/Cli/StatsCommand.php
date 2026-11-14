@@ -163,7 +163,7 @@ final class StatsCommand implements DocumentedCommand
             }
             $msg = $event->payload['msg'] ?? null;
             if (is_array($msg) && isset($msg['@type'])) {
-                $type = Scalars::string($msg['@type'], 'stats msg @type');
+                $type = Scalars::string($msg['@type'], 'cassette envelope `@type`');
                 $msgCounts[$type] = ($msgCounts[$type] ?? 0) + 1;
             } elseif (isset($event->payload['b'])) {
                 $rawByteCount++;

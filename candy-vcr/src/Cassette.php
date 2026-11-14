@@ -36,7 +36,7 @@ final class Cassette
         foreach ($events as $event) {
             if (!$event instanceof Event) {
                 throw new \InvalidArgumentException(
-                    'Cassette events must be SugarCraft\\Vcr\\Event instances, got ' . get_debug_type($event),
+                    'cassette events must all be Event instances, got ' . get_debug_type($event),
                 );
             }
             $list[] = $event;

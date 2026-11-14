@@ -138,7 +138,7 @@ final class AsciinemaFormat
             $handle = @fopen($path, 'rb');
         }
         if ($handle === false) {
-            throw new \RuntimeException("Cannot open asciinema cast file: {$path}");
+            throw new \RuntimeException("cannot open asciinema cast file: {$path}");
         }
         return $handle;
     }

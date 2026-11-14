@@ -272,7 +272,9 @@ final class Recorder implements RecorderInterface
             '%s requested against a relative-timestamp cassette — the header was '
             . 'written with timestampMode "relative"; use RelativeFormat (or open with an '
             . 'absolute header)',
-            $f::class
+            // Short class name, not the namespaced identifier: the copy names
+            // a format the caller can act on, not an internal path (VCR-COPY-03).
+            ($tail = strrchr($f::class, '\\')) === false ? $f::class : substr($tail, 1)
         ));
     }
 

@@ -127,7 +127,7 @@ final class TapeToGif
         }
         $source = @file_get_contents($tapePath);
         if ($source === false) {
-            throw new \RuntimeException("Cannot read tape file: {$tapePath}");
+            throw new \RuntimeException("cannot read tape file: {$tapePath}");
         }
         if (strlen($source) > Lexer::MAX_TAPE_BYTES) {
             throw new \RuntimeException(

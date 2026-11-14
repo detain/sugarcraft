@@ -88,7 +88,7 @@ final class InspectFpsOptionFormsTest extends TestCase
             [$exit, $out] = $this->fpsInspect(...$argv);
 
             $this->assertSame(2, $exit, $out);
-            $this->assertStringContainsString('must be a positive number', $out);
+            $this->assertStringContainsString('must be a positive finite number', $out);
         }
     }
 

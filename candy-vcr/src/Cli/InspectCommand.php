@@ -320,18 +320,18 @@ final class InspectCommand implements DocumentedCommand
         return $base . '  ' . match ($event->kind) {
             EventKind::Resize => sprintf(
                 '%dx%d',
-                Scalars::int($event->payload['cols'] ?? 0, 'inspect resize cols'),
-                Scalars::int($event->payload['rows'] ?? 0, 'inspect resize rows'),
+                Scalars::int($event->payload['cols'] ?? 0, 'cassette event `cols`'),
+                Scalars::int($event->payload['rows'] ?? 0, 'cassette event `rows`'),
             ),
-            EventKind::Output => $this->summarizeBytes(Scalars::string($event->payload['b'] ?? '', 'inspect output bytes')),
+            EventKind::Output => $this->summarizeBytes(Scalars::string($event->payload['b'] ?? '', 'cassette event `b`')),
             EventKind::Input => isset($event->payload['msg'])
                 ? $this->formatMsgTag($event->payload['msg'])
-                : $this->summarizeBytes(Scalars::string($event->payload['b'] ?? '', 'inspect input bytes')),
+                : $this->summarizeBytes(Scalars::string($event->payload['b'] ?? '', 'cassette event `b`')),
             EventKind::Quit => '',
             // The path comes off the cassette; a forged snapshot event could
             // carry ANSI/OSC bytes that would be emitted raw to the host.
             EventKind::Snapshot => Lang::t('inspect.screenshot', ['path' => $this->displaySafe(
-                Scalars::string($event->payload['path'] ?? '?', 'inspect snapshot path')
+                Scalars::string($event->payload['path'] ?? '?', 'cassette event `path`')
             )]),
             EventKind::Hide => '',
             EventKind::Show => '',
@@ -347,7 +347,7 @@ final class InspectCommand implements DocumentedCommand
         if (!is_array($msg)) {
             return '@?';
         }
-        return '@' . $this->displaySafe(Scalars::string($msg['@type'] ?? '?', 'inspect msg @type'));
+        return '@' . $this->displaySafe(Scalars::string($msg['@type'] ?? '?', 'cassette envelope `@type`'));
     }
 
     /**

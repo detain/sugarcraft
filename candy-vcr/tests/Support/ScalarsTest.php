@@ -48,35 +48,35 @@ final class ScalarsTest extends TestCase
     public function testIntRejectsArray(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('field.path must be int, array given');
+        $this->expectExceptionMessage('field.path must be a whole number, got an array');
         Scalars::int([], 'field.path');
     }
 
     public function testStringRejectsArray(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('field.path must be string, array given');
+        $this->expectExceptionMessage('field.path must be text, got an array');
         Scalars::string([], 'field.path');
     }
 
     public function testFloatRejectsArray(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('field.path must be float, array given');
+        $this->expectExceptionMessage('field.path must be a number, got an array');
         Scalars::float([], 'field.path');
     }
 
     public function testBoolRejectsArray(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('field.path must be bool, array given');
+        $this->expectExceptionMessage('field.path must be true or false, got an array');
         Scalars::bool([], 'field.path');
     }
 
     public function testObjectAlsoRejectedWithItsClassName(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('payload.t must be float, stdClass given');
+        $this->expectExceptionMessage('payload.t must be a number, got an object (stdClass)');
         Scalars::float(new \stdClass(), 'payload.t');
     }
 

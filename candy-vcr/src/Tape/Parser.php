@@ -183,7 +183,7 @@ final readonly class Parser
         if (!isset(self::SET_KEYS[$key])) {
             return new ParseError(
                 $token->line,
-                "Unknown Set key '{$key}'. Allowed: " . implode(', ', array_keys(self::SET_KEYS)),
+                "unknown Set key '{$key}'. Allowed: " . implode(', ', array_keys(self::SET_KEYS)),
             );
         }
 

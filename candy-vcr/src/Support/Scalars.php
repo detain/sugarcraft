@@ -143,10 +143,35 @@ final class Scalars
     private static function reject(string $where, string $want, mixed $value): never
     {
         throw new \InvalidArgumentException(sprintf(
-            '%s must be %s, %s given',
+            '%s must be %s, got %s',
             $where,
-            $want,
-            get_debug_type($value),
+            self::WANT_WORDS[$want] ?? $want,
+            self::valueWord($value),
         ));
+    }
+
+    /**
+     * Plain-spoken nouns for the type doors (VCR-COPY-03/04): engine chatter
+     * like 'must be int, string given' reads as a stack trace, not a
+     * sentence. One dialect for every Scalars door.
+     */
+    private const WANT_WORDS = [
+        'int' => 'a whole number',
+        'float' => 'a number',
+        'string' => 'text',
+        'bool' => 'true or false',
+    ];
+
+    private static function valueWord(mixed $value): string
+    {
+        return match (true) {
+            $value === null => 'nothing',
+            is_bool($value) => 'true or false',
+            is_int($value), is_float($value) => 'a number',
+            is_string($value) => 'text',
+            is_array($value) => 'an array',
+            is_object($value) => 'an object (' . get_debug_type($value) . ')',
+            default => get_debug_type($value),
+        };
     }
 }

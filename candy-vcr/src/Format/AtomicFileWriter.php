@@ -205,7 +205,7 @@ final class AtomicFileWriter
         }
         $handle = @fopen($tmp, 'x');
         if ($handle === false) {
-            throw new \RuntimeException("Cannot create a temporary file for atomic {$subject} write in: {$dir}");
+            throw new \RuntimeException("cannot create a temporary file for atomic {$subject} write in: {$dir}");
         }
         fclose($handle);
 

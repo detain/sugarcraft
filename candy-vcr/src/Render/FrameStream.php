@@ -122,17 +122,17 @@ final class FrameStream implements \IteratorAggregate
         // (echo and exec alike) behind the same door.
         if (!is_finite($fps) || $fps <= 0.0) {
             throw new \InvalidArgumentException(
-                "FrameStream fps must be a positive finite number of frames per second, got {$fps}."
+                "fps must be a positive finite number of frames per second, got {$fps}"
             );
         }
         if ($maxFrames < 1) {
             throw new \InvalidArgumentException(
-                "FrameStream maxFrames must be at least 1, got {$maxFrames}."
+                "maxFrames must be at least 1, got {$maxFrames}"
             );
         }
         if ($maxRuntimeSeconds !== null && (!is_finite($maxRuntimeSeconds) || $maxRuntimeSeconds <= 0.0)) {
             throw new \InvalidArgumentException(
-                "FrameStream maxRuntimeSeconds must be a positive finite number of seconds, got {$maxRuntimeSeconds}."
+                "maxRuntimeSeconds must be a positive finite number of seconds, got {$maxRuntimeSeconds}"
             );
         }
     }

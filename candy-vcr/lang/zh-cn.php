@@ -23,7 +23,7 @@ return [
     'cli.speed_requires' => '--speed 需要一个参数（instant 或 realtime）',
     'choice.invalid' => '{flag} 必须是 {known} 之一,实际为 "{got}"',
     'choice.invalid_type' => '{flag} 必须是 {known} 之一,实际为 {got}',
-    'fps.not_numeric' => '--fps 必须是正数,实际为 {value}。',
+    'fps.not_numeric' => '--fps 必须是正的有限帧率,实际为 {value}。',
     'fps.not_positive' => '--fps 必须是正的有限帧率,实际为 {value}。',
     'summary.record' => '将命令的 PTY 会话录制到卡带中',
     'summary.inspect' => '列出卡带中的事件(使用 --frames 则列出帧)',

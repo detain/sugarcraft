@@ -23,7 +23,7 @@ return [
     'cli.speed_requires' => '--speed には引数が必要です (instant または realtime)',
     'choice.invalid' => '{flag} は {known} のいずれかである必要があります (受け取った値: "{got}")',
     'choice.invalid_type' => '{flag} は {known} のいずれかである必要があります (受け取った値: {got})',
-    'fps.not_numeric' => '--fps は正の数値である必要があります (受け取った値: {value})。',
+    'fps.not_numeric' => '--fps は毎秒フレーム数として正の有限な数値である必要があります (受け取った値: {value})。',
     'fps.not_positive' => '--fps は毎秒フレーム数として正の有限な数値である必要があります (受け取った値: {value})。',
     'summary.record' => 'コマンドの PTY セッションをカセットに記録します',
     'summary.inspect' => 'カセットのイベント (--frames ではフレーム) を一覧表示します',
