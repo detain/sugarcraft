@@ -5,6 +5,11 @@ declare(strict_types=1);
 namespace SugarCraft\Readline;
 
 /**
+ * Native design: erikgeiser/promptkit (the declared antecedent, see
+ * composer.json) ships no multi-line widget; the multi-line requirement
+ * comes from the wider ecosystem census in
+ * docs/research/libraries/sugar-readline-research.md.
+ *
  * Multi-line text input with per-line cursor navigation, optional max-line cap,
  * and a default initial value.
  *
@@ -175,8 +180,8 @@ final class TextareaPrompt
             // the arrows already own the column moves.
             Key::Up, 'ctrl_p'      => $this->moveLine(-1),
             Key::Down, 'ctrl_n'    => $this->moveLine(1),
-            Key::Left              => $this->moveCol(-1),
-            Key::Right             => $this->moveCol(1),
+            Key::Left              => $this->moveColTo(self::clusterStart($this->lines[$this->line], $this->col)),
+            Key::Right             => $this->moveColTo(self::clusterEnd($this->lines[$this->line], $this->col)),
             Key::Home, 'ctrl_a'    => $this->moveColTo(0),
             Key::End, 'ctrl_e'     => $this->moveColTo(self::charCount($this->lines[$this->line])),
             Key::Backspace => $this->deleteBeforeCursor(),
@@ -249,9 +254,10 @@ final class TextareaPrompt
                 $out[] = RowFit::row([[$text, null]], $bound);
                 continue;
             }
+            $caretEnd = self::clusterEnd($text, $this->col);
             $before = self::sliceChars($text, 0, $this->col);
-            $under  = self::sliceChars($text, $this->col, 1);
-            $after  = self::sliceChars($text, $this->col + 1);
+            $under  = self::sliceChars($text, $this->col, $caretEnd - $this->col);
+            $after  = self::sliceChars($text, $caretEnd);
             $out[]  = RowFit::row([
                 [$before, null],
                 [$under === '' ? ' ' : $under, $this->cursorStyle],
@@ -379,9 +385,10 @@ final class TextareaPrompt
         if ($this->col > 0) {
             $clone = clone $this;
             $current = $clone->lines[$clone->line];
-            $clone->lines[$clone->line] = self::sliceChars($current, 0, $clone->col - 1)
+            $start = self::clusterStart($current, $clone->col);
+            $clone->lines[$clone->line] = self::sliceChars($current, 0, $start)
                                         . self::sliceChars($current, $clone->col);
-            $clone->col--;
+            $clone->col = $start;
             return $clone;
         }
         // Backspace at column 0: merge with previous line.
@@ -416,7 +423,7 @@ final class TextareaPrompt
         if ($this->col < self::charCount($current)) {
             $clone = clone $this;
             $clone->lines[$clone->line] = self::sliceChars($current, 0, $clone->col)
-                                        . self::sliceChars($current, $clone->col + 1);
+                                        . self::sliceChars($current, self::clusterEnd($current, $clone->col));
             return $clone;
         }
         // Delete at end of line: merge with next line.
@@ -455,5 +462,62 @@ final class TextareaPrompt
         return $length === null
             ? mb_substr($s, $start, null, 'UTF-8')
             : mb_substr($s, $start, $length, 'UTF-8');
+    }
+
+    /**
+     * Byte offset of a codepoint index inside a line.
+     */
+    private static function byteAt(string $line, int $col): int
+    {
+        return strlen(self::sliceChars($line, 0, max(0, $col)));
+    }
+
+    /**
+     * Codepoint index just past the grapheme cluster that starts at or
+     * after $col (finding 026: caret moves and forward deletes must walk
+     * WHOLE clusters - family emoji and flags are multi-codepoint).
+     * Without ext-intl grapheme_extract every codepoint is its own
+     * cluster, which is the pre-fix behavior.
+     */
+    private static function clusterEnd(string $line, int $col): int
+    {
+        $len = self::charCount($line);
+        if ($col >= $len) {
+            return $len;
+        }
+        if (!function_exists('grapheme_extract')) {
+            return $col + 1;
+        }
+        $next = 0;
+        $out = grapheme_extract($line, 1, 0 /* GRAPHEME_EXTR_COUNT — the constant is intl-conditional; 0 is its value */, self::byteAt($line, $col), $next);
+        if (!is_string($out) || $next <= 0) {
+            return $col + 1;
+        }
+        return self::charCount(substr($line, 0, $next));
+    }
+
+    /**
+     * Codepoint index where the grapheme cluster ending at $col starts -
+     * the backspace/Left target (whole-cluster stepping again, finding 026).
+     */
+    private static function clusterStart(string $line, int $col): int
+    {
+        if ($col <= 0) {
+            return 0;
+        }
+        if (!function_exists('grapheme_extract')) {
+            return $col - 1;
+        }
+        $start = 0;
+        $limit = self::byteAt($line, $col);
+        while (true) {
+            $next = 0;
+            $out = grapheme_extract($line, 1, 0 /* GRAPHEME_EXTR_COUNT — the constant is intl-conditional; 0 is its value */, $start, $next);
+            if (!is_string($out) || $next <= $start || $next >= $limit) {
+                break;
+            }
+            $start = $next;
+        }
+        return self::charCount(substr($line, 0, $start));
     }
 }
