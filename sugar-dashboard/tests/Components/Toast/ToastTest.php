@@ -193,6 +193,41 @@ final class ToastTest extends TestCase
         $this->assertMatchesRegularExpression('/\x1b\[/', $rendered);
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // D-152 (finding 172): one composite per allocation, shared legs
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testBuiltLinesAreMemoisedPerWidth(): void
+    {
+        $toast = Toast::info('memo probe')->setSize(40, 0);
+        // Prime the real pipeline first so widths agree.
+        self::assertNotSame('', $toast->render());
+
+        $memo = new \ReflectionProperty(Toast::class, 'lineMemo');
+        $memoWidth = new \ReflectionProperty(Toast::class, 'memoWidth');
+        $memo->setValue($toast, ['SENTINEL-LINE']);
+        $memoWidth->setValue($toast, 40);
+
+        // render() and innerSize() must consume the cache at the same width
+        // instead of re-driving the engine (the old 2-3 composites per frame):
+        self::assertSame('SENTINEL-LINE', $toast->render());
+        self::assertSame(40, $toast->innerSize()[0]);
+
+        // A different allocation misses the memo and rebuilds for real.
+        $wider = $toast->setSize(60, 0);
+        self::assertStringNotContainsString('SENTINEL-LINE', $wider->render());
+    }
+
+    public function testRenderAndInnerSizeAgreeByteForByteInAnyOrder(): void
+    {
+        $toast = Toast::warning('agreement check')->setSize(30, 0);
+        self::assertSame($toast->render(), $toast->render());
+        $sizeFirst = Toast::warning('agreement check')->setSize(30, 0);
+        $sizeFirst->innerSize();
+        self::assertSame($toast->render(), $sizeFirst->render());
+        self::assertSame(count(explode("\n", $toast->render())), $sizeFirst->innerSize()[1]);
+    }
+
     public function testColorResetAtEnd(): void
     {
         $toast = Toast::new('Test')

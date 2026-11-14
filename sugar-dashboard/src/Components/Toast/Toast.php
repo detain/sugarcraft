@@ -37,6 +37,10 @@ final class Toast implements \SugarCraft\Dashboard\Foundation\SizedItem
     private ?int $width = null;
     private ?int $height = null;
 
+    /** @var list<string>|null D-152 per-width line memo (see renderLines) */
+    private ?array $lineMemo = null;
+    private ?int $memoWidth = null;
+
     public function __construct(
         private readonly string $message,
         private readonly ?string $title = null,
@@ -235,7 +239,8 @@ final class Toast implements \SugarCraft\Dashboard\Foundation\SizedItem
     }
 
     /**
-     * Render the styled box to its exact lines through the sugar-toast engine.
+     * Render the styled box to its exact lines through the sugar-toast
+     * engine - once per allocation.
      *
      * @return list<string>
      */
@@ -243,6 +248,14 @@ final class Toast implements \SugarCraft\Dashboard\Foundation\SizedItem
     {
         $useWidth = min($this->width ?? $this->maxWidth, $this->maxWidth);
         $useWidth = max($useWidth, 10);
+
+        // D-152: the component is immutable between allocations (all fields
+        // are readonly; setSize hands back a fresh clone), so the built lines
+        // are memoised per width. render() and innerSize() used to drive the
+        // full panel separately - 2-3 composites per frame.
+        if ($this->memoWidth === $useWidth && $this->lineMemo !== null) {
+            return $this->lineMemo;
+        }
 
         // The engine's Alert has no title field, so a title becomes the first
         // paragraph (its own wrapped line via the "\n" break the engine's
@@ -263,28 +276,40 @@ final class Toast implements \SugarCraft\Dashboard\Foundation\SizedItem
             ->withPosition(ToastPosition::TopLeft)
             ->push($alert);
 
-        // Probe the box height: render into a viewport tall enough to hold any
-        // wrap (the body length bounds the line count) and count the non-blank
-        // rows, discarding the filler the compositor pads beneath a
+        // Single composite (D-152): render into a viewport tall enough to
+        // hold any wrap (the body length bounds the line count), count the
+        // non-blank rows, and TRIM the filler the compositor pads beneath a
         // TopLeft-anchored box.
         $bound = mb_strlen($body, 'UTF-8') + 4;
-        $height = self::boxHeight($engine->View('', $useWidth, $bound));
+        $probeLines = explode("\n", $engine->View('', $useWidth, $bound));
+        $height = self::boxHeightFrom($probeLines);
+        // The exact-height re-render used to place the bottom border on the
+        // viewport's last row, where the compositor flushes a closing SGR
+        // reset (pinned by testColorResetAtEnd). Trimmed rows sit mid-
+        // viewport, so the reset is appended by hand - coalesceSgr below
+        // dedupes it should the compositor ever close the line itself.
+        $trimmed = implode("\n", \array_slice($probeLines, 0, $height)) . \SugarCraft\Core\Util\Ansi::reset();
 
-        // Re-render at the exact height so no filler rows are emitted and the
-        // trailing SGR reset lands on the bottom border, then collapse the
-        // per-cell SGR the engine emits (its color pass rebuilds a fresh Style
-        // per cell, defeating the buffer's identity-based SGR coalescing).
-        return explode("\n", self::coalesceSgr($engine->View('', $useWidth, $height)));
+        // Collapse the per-cell SGR the engine emits (its color pass rebuilds
+        // a fresh Style per cell, defeating the buffer's identity-based SGR
+        // coalescing).
+        $lines = explode("\n", self::coalesceSgr($trimmed));
+        $this->memoWidth = $useWidth;
+        $this->lineMemo = $lines;
+
+        return $lines;
     }
 
     /**
      * Count the box rows in a composited render, ignoring the blank filler
      * rows padded beneath a TopLeft-anchored box.
+     *
+     * @param list<string> $lines
      */
-    private static function boxHeight(string $rendered): int
+    private static function boxHeightFrom(array $lines): int
     {
         $last = 0;
-        foreach (explode("\n", $rendered) as $i => $line) {
+        foreach ($lines as $i => $line) {
             $visible = preg_replace('/\x1b\[[0-9;]*m/', '', $line);
             if ($visible !== '' && !ctype_space($visible)) {
                 $last = $i;
