@@ -12,7 +12,7 @@ return [
     'cli.usage' => 'usage: candy-image <file> [--format=auto|sixel|kitty|iterm2|half|quarter|ascii|ansi16|ansi256|truecolor|symbols|symbol|sym]'
         . ' [--width=N|--size=WxH] [--height=N] [--scale=fit|shrink|fill|stretch|none|crop]'
         . ' [--symbols=CLASS[+CLASS...]] [--canvas=truecolor|ansi256|ansi16|fgbg] [--work=N]'
-        . ' [--animate] [--passthrough=auto|none] [--polite] [--dump-detect] [--version] [--help|-h]',
+        . ' [--animate] [--passthrough=auto|none] [--polite[=on|off]] [--dump-detect] [--version] [--help|-h]',
     // Dead as a lookup: bin/candy-image cannot reach Lang before the autoloader
     // resolves and prints the twin literal itself. Key kept so LangTest's
     // existence arm stays green and the wording has one canonical home.
@@ -26,7 +26,7 @@ return [
     'cli.too_many'     => 'candy-image: unexpected argument \'{arg}\' (this viewer takes one image file)',
     'cli.no_frames'    => 'candy-image: no animation frames decoded from \'{path}\'',
     'cli.not_a_file'   => 'candy-image: not a regular file: {path}',
-    'cli.animate_dials_refused' => 'candy-image: --animate ignores {flags} — they steer the still-image render path; drop them, or drop --animate',
+    'cli.animate_dials_refused' => 'candy-image: --animate cannot be combined with {flags} — they steer the still-image render path; drop them, or drop --animate',
     'cli.animate_requires_terminal' => 'candy-image: --animate needs an interactive terminal (stdin and stdout are both redirected); render a still image instead, or run it from a tty',
     'cli.box_too_large'  => 'candy-image: box too large: {cells} cells (width x height) reaches the {limit}-cell ceiling; render time scales with the product — lower --width/--height or use a smaller --size box',
 ];

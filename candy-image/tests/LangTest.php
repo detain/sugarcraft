@@ -39,6 +39,9 @@ final class LangTest extends TestCase
             'too_many' => ['cli.too_many'],
             'no_frames' => ['cli.no_frames'],
             'animate_dials_refused' => ['cli.animate_dials_refused'],
+            'animate_requires_terminal' => ['cli.animate_requires_terminal'],
+            'not_a_file' => ['cli.not_a_file'],
+            'box_too_large' => ['cli.box_too_large'],
         ];
     }
 

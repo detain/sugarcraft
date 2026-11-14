@@ -580,6 +580,7 @@ final class CliTest extends TestCase
         [$exit, , $err] = self::drive(['--animate', '--work=9', '--format=half', '/nonexistent/candy-image-absent.gif']);
 
         $this->assertSame(Cli::EXIT_USAGE, $exit);
+        $this->assertStringContainsString('--animate cannot be combined', $err, 'the refusal must name itself (candy-image-044: "ignores" lied — the run refuses)');
         $this->assertStringContainsString('--animate', $err);
         $this->assertStringContainsString('--work', $err);
         $this->assertStringContainsString('--format', $err);
@@ -590,7 +591,7 @@ final class CliTest extends TestCase
         [$exit, , $err] = self::drive(['--animate', '--size=40x12', '/nonexistent/candy-image-absent.gif'], static fn (mixed $player): int => 0);
 
         $this->assertSame(Cli::EXIT_INPUT, $exit, 'the box dials steer the animation path, so they must not join the refusal');
-        $this->assertStringNotContainsString('ignores', $err);
+        $this->assertStringNotContainsString('cannot be combined', $err);
     }
 
     /**
