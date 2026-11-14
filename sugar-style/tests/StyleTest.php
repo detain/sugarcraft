@@ -1213,6 +1213,96 @@ final class StyleTest extends TestCase
         $this->assertStringNotContainsString('┘', $out);
     }
 
+    /**
+     * ST-25 (finding 010): byte-exact SGR matrix over the four sides ×
+     * {borderForeground, borderBackground, per-side unset}. Pinning, not
+     * fixing — these rows record today's shape, including its honest
+     * asymmetries:
+     *  - a single active side carries its styling as ONE run around its
+     *    runes; the content text itself stays unstyled;
+     *  - unsetting one side of a styled border does not merely delete a
+     *    rune: the corner pair it anchored re-folds into the neighbour's
+     *    run (unset top → the sides close over the content row and the
+     *    bottom lands as one styled `└─┘` segment; unset left → the bare
+     *    `─┐`/`─┘` runs keep the border colour with no left corner).
+     * A leg changing bytes means behaviour moved: re-derive, don't
+     * silently re-pin.
+     */
+    public static function borderSideColorMatrixProvider(): iterable
+    {
+        $red  = "\x1b[38;2;255;0;0m";
+        $blue = "\x1b[48;2;0;0;255m";
+        $r    = "\x1b[0m";
+        yield 'top-fg'      => ['top', 'fg',     "{$red}─{$r}\nx"];
+        yield 'top-bg'      => ['top', 'bg',     "{$blue}─{$r}\nx"];
+        yield 'top-unset'   => ['top', 'unset',  "{$red}{$blue}│{$r}x{$red}{$blue}│{$r}\n{$red}{$blue}└─┘{$r}"];
+        yield 'right-fg'    => ['right', 'fg',   "x{$red}│{$r}"];
+        yield 'right-bg'    => ['right', 'bg',   "x{$blue}│{$r}"];
+        yield 'right-unset' => ['right', 'unset', "{$red}{$blue}┌─{$r}\n{$red}{$blue}│{$r}x\n{$red}{$blue}└─{$r}"];
+        yield 'bottom-fg'   => ['bottom', 'fg',   "x\n{$red}─{$r}"];
+        yield 'bottom-bg'   => ['bottom', 'bg',   "x\n{$blue}─{$r}"];
+        yield 'bottom-unset'=> ['bottom', 'unset', "{$red}{$blue}┌─┐{$r}\n{$red}{$blue}│{$r}x{$red}{$blue}│{$r}"];
+        yield 'left-fg'     => ['left', 'fg',     "{$red}│{$r}x"];
+        yield 'left-bg'     => ['left', 'bg',     "{$blue}│{$r}x"];
+        yield 'left-unset'  => ['left', 'unset',  "{$red}{$blue}─┐{$r}\nx{$red}{$blue}│{$r}\n{$red}{$blue}─┘{$r}"];
+    }
+
+    /**
+     * @param string $side   borderSides slot to isolate or unset
+     * @param string $mode   fg | bg | unset
+     * @param string $expect byte-exact rendered output
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('borderSideColorMatrixProvider')]
+    public function testPerSideBorderColorMatrixIsByteExact(string $side, string $mode, string $expect): void
+    {
+        $index = ['top' => 0, 'right' => 1, 'bottom' => 2, 'left' => 3][$side];
+        $sides = array_fill(0, 4, $mode === 'unset');
+        $sides[$index] = $mode === 'fg' || $mode === 'bg';
+
+        $style = Style::new()->border(Border::normal(), ...$sides);
+        if ($mode !== 'unset') {
+            $style = $mode === 'fg'
+                ? $style->borderForeground(Color::hex('#ff0000'))
+                : $style->borderBackground(Color::hex('#0000ff'));
+        } else {
+            $style = $style
+                ->borderForeground(Color::hex('#ff0000'))
+                ->borderBackground(Color::hex('#0000ff'))
+                ->{"unsetBorder" . ucfirst($side)}();
+        }
+
+        $this->assertSame($expect, $style->render('x'), "matrix leg {$side}/{$mode} moved its bytes");
+    }
+
+    public function testAllSidesForegroundPlusBackgroundCombineInOneRun(): void
+    {
+        $out = Style::new()->border(Border::normal())
+            ->borderForeground(Color::hex('#ff0000'))
+            ->borderBackground(Color::hex('#0000ff'))
+            ->render('x');
+        $this->assertSame(
+            "\x1b[38;2;255;0;0m\x1b[48;2;0;0;255m┌─┐\x1b[0m\n"
+            . "\x1b[38;2;255;0;0m\x1b[48;2;0;0;255m│\x1b[0mx\x1b[38;2;255;0;0m\x1b[48;2;0;0;255m│\x1b[0m\n"
+            . "\x1b[38;2;255;0;0m\x1b[48;2;0;0;255m└─┘\x1b[0m",
+            $out,
+        );
+    }
+
+    public function testBorderBackgroundTruecolorDegradesWithTheProfile(): void
+    {
+        // The border run degrades exactly like content colours: the
+        // 48;2 triple collapses to the 256-palette index under
+        // ColorProfile::Ansi256 — no side-channel escape hatch.
+        $out = Style::new()->border(Border::normal())
+            ->borderBackground(Color::hex('#0000ff'))
+            ->colorProfile(ColorProfile::Ansi256)
+            ->render('x');
+        $this->assertSame(
+            "\x1b[48;5;21m┌─┐\x1b[0m\n\x1b[48;5;21m│\x1b[0mx\x1b[48;5;21m│\x1b[0m\n\x1b[48;5;21m└─┘\x1b[0m",
+            $out,
+        );
+    }
+
     public function testMarkdownBorderUsesAsciiPipesAndDashes(): void
     {
         $b = Border::markdownBorder();
