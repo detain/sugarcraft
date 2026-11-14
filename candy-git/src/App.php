@@ -713,6 +713,7 @@ final class App implements Model
             return null;
         }
         $used = 3; // header row, help line, trailing row
+        if ($this->hintRows() === 2) { $used++; } // contextual strip overflow (candy-git-032)
         if ($this->error !== null)          { $used++; }
         if ($this->successMessage !== null) { $used++; }
         if ($this->collectingCommit)        { $used++; }
@@ -723,6 +724,20 @@ final class App implements Model
         if ($this->cherryPick !== null && $this->cherryPick->collecting) { $used++; }
         if ($this->cursorTarget() !== null)               { $used++; } // candy-git-022 modeline row
         return max(1, $this->height - $used);
+    }
+
+    /**
+     * Rows the key-hint strip gets (candy-git-032). The monolithic sentence
+     * put the rarest verbs first, so `q` and `?` — the two affordances the
+     * strip exists for — never survived truncation at any realistic width.
+     * The contextual rebuild uses a second row when the screen can pay it
+     * (>= 16 rows: a laptop frame still has six pane rows); short frames
+     * keep one row, and essentials-first ordering guarantees that row ends
+     * with the verbs the pane actually answers to, not with 'quit'.
+     */
+    public function hintRows(): int
+    {
+        return $this->height !== null && $this->height >= 16 ? 2 : 1;
     }
 
     /** Whether a full overlay is open and must share the screen with the lists. */

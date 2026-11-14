@@ -317,7 +317,11 @@ final class RendererTest extends TestCase
             $lines[] = ' body line ' . $i;
         }
         $viewer = DiffViewer::fromRawDiff('src/A.php', $lines)->withScrollOffset(6);
-        $app = new App($this->git(), diffViewer: $viewer, height: 20);
+        // CG-30 disclosed re-pin: the contextual strip's second row pays a
+        // chrome row on screens >= 16, so the same window that fit at h=20
+        // needs h=21 now. The windowing contract itself is unchanged
+        // (precedent: CG-16/CG-36 stash-overlay footer re-pins).
+        $app = new App($this->git(), diffViewer: $viewer, height: 21);
         $plain = preg_replace('/\x1b\[[0-9;]*m/', '', Renderer::render($app));
 
         // candy-git-045/122: the visible slice derives from scrollOffset (the

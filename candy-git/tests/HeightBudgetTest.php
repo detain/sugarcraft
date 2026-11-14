@@ -314,7 +314,10 @@ final class HeightBudgetTest extends TestCase
         $app  = $this->helpApp(10);
         $view = $app->view();
         self::assertStringContainsString('too short', $view, 'the notice says why nothing else does');
-        self::assertStringNotContainsString('show this help', $view, 'no clipped key list is shipped');
+        // 'close overlay / quit' is help.ctrl_c, a line the help BOX owns
+        // (the hint strip says the shorter 'quit'): if the box were still
+        // shipping clipped, this would render.
+        self::assertStringNotContainsString('close overlay / quit', $view, 'no clipped key list is shipped');
         self::assertLessThanOrEqual(10, self::frameRows($view), 'and the notice itself survives the ceiling');
     }
 

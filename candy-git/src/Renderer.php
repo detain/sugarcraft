@@ -139,13 +139,13 @@ final class Renderer
             }
         }
 
-        // The key-hint strip is the longest single line
-        // in the frame; clip it to the terminal instead of overflowing.
-        $help = self::truncate(
-            Style::new()->foreground(Color::hex('#7d6e98'))
-                ->render(Lang::t('help.keyhints')),
-            $a->barWidth()
-        );
+        // The key-hint strip is rebuilt contextually (candy-git-032): the
+        // monolithic ~220-268-cell sentence truncated tail-first, so
+        // q/?/push — the affordances the strip exists to teach — never
+        // survived at any realistic width. Essentials come first, the
+        // focused pane's verbs next, rare global verbs last; App's
+        // hintRows() pays for a second row on screens that can afford one.
+        $help = self::keyHints($a);
 
         $err = '';
         if ($a->error !== null) {
@@ -579,6 +579,123 @@ final class Renderer
             $st = $st->borderForeground(Color::hex('#4a3868'));
         }
         return $st->render(Style::new()->bold()->render($title) . "\n" . $body);
+    }
+
+    /**
+     * The contextual strip's (key, meaning) pairs in priority order
+     * (candy-git-032): general essentials, the focused pane's verbs
+     * (only while no overlay owns the keys), then the rare global verbs.
+     * Every meaning rides an existing help.* key — the same catalog the
+     * help overlay reads, so the strip and the manual can never disagree.
+     *
+     * @return list<array{0:string,1:string}>
+     */
+    private static function hintPairs(App $a): array
+    {
+        $general = [
+            ['?', 'help.context_general'],
+            ['q', 'help.quit'],
+            ['tab', 'help.switch_pane'],
+            ['j/k', 'help.move_cursor'],
+            ['R', 'help.refresh'],
+        ];
+        $pane = $a->overlayOpen() ? [] : match ($a->pane) {
+            Pane::Status => [
+                ['enter', 'help.diff_viewer'],
+                ['s', 'help.stage_single'],
+                ['a', 'help.stage_all'],
+                ['d', 'help.discard'],
+                ['c', 'help.commit'],
+            ],
+            Pane::Branches => [
+                ['space', 'help.checkout'],
+                ['n', 'help.new_branch'],
+                ['D', 'help.delete_branch'],
+            ],
+            Pane::Log => [
+                ['enter', 'help.log_details'],
+                ['V', 'help.cherry_pick'],
+            ],
+        };
+        $global = [
+            ['u', 'help.undo'],
+            ['ctrl+r', 'help.redo'],
+            ['PgUp/PgDn', 'help.viewport'],
+            ['f', 'help.fetch'],
+            ['p', 'help.pull'],
+            ['P', 'help.push'],
+            ['S', 'help.stash'],
+            ['w', 'help.worktrees'],
+            ['i', 'help.interactive_rebase'],
+            ['M', 'help.merge'],
+            ['r', 'help.rebase'],
+            ['A', 'help.amend'],
+        ];
+        return array_merge($general, $pane, $global);
+    }
+
+    /**
+     * The key-hint strip itself. The null-height legacy path keeps the
+     * monolithic sentence byte-identically (the first-frame contract
+     * ViewportTest pins); sized frames get the contextual pair bar, one
+     * row on short screens and two once the frame can pay it. A pair that
+     * cannot fit a row alone is DROPPED — priority order means what gets
+     * dropped is always the rarest verb, never `q`.
+     */
+    private static function keyHints(App $a): string
+    {
+        if ($a->height === null) {
+            return self::truncate(
+                Style::new()->foreground(Color::hex('#7d6e98'))
+                    ->render(Lang::t('help.keyhints')),
+                $a->barWidth()
+            );
+        }
+
+        $sep     = ' · ';
+        $budget  = $a->barWidth();
+        $limit   = $budget === PHP_INT_MAX ? PHP_INT_MAX : $budget - 1; // rows ride behind the frame's leading space
+        $maxRows = $a->hintRows();
+        $rows    = [[]];
+        $width   = 0;
+        foreach (self::hintPairs($a) as [$key, $meaningKey]) {
+            $meaning = Lang::t($meaningKey);
+            $current = count($rows) - 1;
+            $cells   = Width::of($key) + 2 + Width::of($meaning);
+            $needed  = ($rows[$current] === [] ? 0 : Width::of($sep)) + $cells;
+            if ($width + $needed > $limit) {
+                if ($rows[$current] === []) {
+                    continue; // cannot fit alone: drop the rarest, keep the row honest
+                }
+                if (count($rows) >= $maxRows) {
+                    break; // the budget is spent; priority order chose the loser
+                }
+                $rows[] = [];
+                $width  = 0;
+                if ($cells > $limit) {
+                    continue; // fresh row, and it still cannot fit alone
+                }
+                $rows[count($rows) - 1][] = [$key, $meaning];
+                $width += $cells;
+                continue;
+            }
+            $width += $needed;
+            $rows[$current][] = [$key, $meaning];
+        }
+
+        $out = [];
+        foreach ($rows as $pairs) {
+            if ($pairs === []) {
+                continue;
+            }
+            $cells = [];
+            foreach ($pairs as [$key, $meaning]) {
+                $cells[] = Style::new()->foreground(Color::hex('#6ee7b7'))->render($key)
+                    . '  ' . Style::new()->foreground(Color::hex('#7d6e98'))->render($meaning);
+            }
+            $out[] = self::truncate(implode($sep, $cells), $limit);
+        }
+        return implode("\n ", $out);
     }
 
     private static function helpOverlay(App $a): string
