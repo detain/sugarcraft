@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vterm\Tests;
 
-use SugarCraft\Vterm\Buffer\Buffer;
 use SugarCraft\Vterm\Cell;
 use SugarCraft\Vterm\Terminal;
+use SugarCraft\Vterm\Tests\Support\RenditionOracle;
 use SugarCraft\Testing\Snapshot\Assertions;
 use PHPUnit\Framework\TestCase;
 
@@ -54,7 +54,7 @@ final class GoldenRenderTest extends TestCase
 
         Assertions::assertGoldenAnsi(
             $this->fixturesDir . '/terminal-parsed-text.golden',
-            self::dumpGrid($t->grid()),
+            RenditionOracle::dumpGrid($t->grid()),
         );
 
         // Independent of the file: the pen truth, so an update-and-commit
@@ -93,7 +93,7 @@ final class GoldenRenderTest extends TestCase
 
         Assertions::assertGoldenAnsi(
             $this->fixturesDir . '/terminal-cleared.golden',
-            self::dumpGrid($grid),
+            RenditionOracle::dumpGrid($grid),
         );
     }
 
@@ -125,26 +125,8 @@ final class GoldenRenderTest extends TestCase
     }
 
     /**
-     * Full-grid rendition dump — the oracle the goldens baseline against.
-     */
-    private static function dumpGrid(Buffer $grid): string
-    {
-        $out = '#' . $grid->cols . 'x' . $grid->rows . "\n";
-        for ($r = 0; $r < $grid->rows; $r++) {
-            $out .= "r$r\n";
-            for ($c = 0; $c < $grid->cols; $c++) {
-                $cell = $grid->cell($r, $c);
-                $fg = $cell->fgTruecolor !== null ? '#' . dechex($cell->fgTruecolor) : (string) $cell->fg;
-                $bg = $cell->bgTruecolor !== null ? '#' . dechex($cell->bgTruecolor) : (string) $cell->bg;
-                $out .= ($cell->continuation ? '·CONT' : $cell->grapheme)
-                    . '|' . $fg . '|' . $bg
-                    . '|a' . dechex($cell->attrs)
-                    . '|r' . $cell->rendition->value
-                    . '|h' . ($cell->hyperlink === null ? '-' : $cell->hyperlink->uri)
-                    . '|c' . ($cell->combining === '' ? '-' : bin2hex($cell->combining))
-                    . "\n";
-            }
-        }
-        return $out;
-    }
+      * Full-grid rendition dump lives in the shared RenditionOracle
+      * (vterm-33 extraction) so the replay corpus asserts through the
+      * same lens the rendition goldens do.
+      */
 }

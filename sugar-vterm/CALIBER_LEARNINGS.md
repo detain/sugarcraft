@@ -208,25 +208,26 @@ for each rune the parser emits.
 - Wide char that doesn't fit at the right edge: clamp cursor at
   `cols - 1` without writing. Auto-wrap lands when DECSTBM margins do.
 
-## Fixtures are committed as binary `.ansi` files (PR8)
+## Byte-fixture replay corpus (`tests/fixtures/*.ansi`) — vterm-33
 
 `sugar-vterm/tests/fixtures/*.ansi` are raw byte captures of small
-realistic ANSI streams. They MUST be LF-only and MUST NOT be
-git-normalised. The dir-local `.gitattributes` (`*.ansi binary`)
-prevents CRLF rewriting on checkout.
+hostile-but-realistic ANSI streams (scroll+wrap, OSC-heavy,
+combining+wide, DECSTBM+DECSCUSR, OSC 52). `FuzzCorpusTest` replays each
+one through the renderer at 20x6 and baselines the FULL rendition dump
+(the same `tests/Support/RenditionOracle` vterm-31's goldens use) plus
+cursor/title trailers in one combined golden,
+`corpus-replay.golden`. This makes the docs promise real — hostile
+bytes land as a fixture + a one-way re-pin, not a bespoke assertion.
 
-To regenerate or add fixtures, write the bytes via `printf` rather
-than an editor — most editors will silently insert/strip BOMs or
-normalise newlines. Example:
+New fixtures: write the bytes with `printf`/php, never an editor
+(editors silently normalise newlines and BOMs in ANSI captures). Keep
+them small (≤ 250 bytes). The root `.gitattributes` rule
+`*.ansi   -text` keeps bytes verbatim across checkouts (there is no
+directory-local `.gitattributes` — the root rule is sufficient).
 
-```sh
-printf '\x1b[31mR\x1b[0m' > tests/fixtures/example.ansi
-```
-
-`SnapshotTest` reads each fixture with `file_get_contents()` and
-asserts specific cells/cursor/mode. Keep fixtures small (≤100 bytes
-each) — they're for the Parser/handler integration sanity check, not
-for full-frame golden images.
+To re-baseline deliberately: delete `corpus-replay.golden` and run
+`SUGAR_TESTING_UPDATE_GOLDENS=1 vendor/bin/phpunit --filter FuzzCorpusTest`
+(the golden workflow is create-only; a mismatch never self-heals).
 
 ## Fuzzer: feed() must never throw
 

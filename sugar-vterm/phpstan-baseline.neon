@@ -121,12 +121,6 @@ parameters:
 			path: tests/CellTest.php
 
 		-
-			message: '#^Call to method PHPUnit\\Framework\\Assert\:\:assertTrue\(\) with true will always evaluate to true\.$#'
-			identifier: method.alreadyNarrowedType
-			count: 1
-			path: tests/FuzzerTest.php
-
-		-
 			message: '#^Method SugarCraft\\Vterm\\Tests\\FuzzerTest\:\:seedAndLength\(\) should return list\<array\{int, int\}\> but returns array\{tiny\: array\{42, 100\}, small\: array\{12648430, 1024\}, medium\: array\{3735928559, 16384\}, large\: array\{195948557, 102400\}\}\.$#'
 			identifier: return.type
 			count: 1

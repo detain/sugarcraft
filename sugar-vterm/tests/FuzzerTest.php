@@ -10,9 +10,17 @@ use SugarCraft\AnsiParser\Parser\Parser;
 use SugarCraft\Vterm\Terminal\Terminal;
 
 /**
- * Random-byte fuzzing — feeds large pseudo-random streams through the
- * full Parser → ScreenHandler pipeline and asserts no exception is
- * thrown. Doesn't validate output, only crash-safety on bad input.
+ * Random-byte fuzzing + hostile-cap regressions (vterm-33 uplift of
+ * findings sugar-vterm-047/083).
+ *
+ * Feeds large pseudo-random streams through the full Parser →
+ * ScreenHandler pipeline: the contract is that feed() never throws on
+ * any byte sequence and observable state stays bounded. The escape-storm
+ * case used to end in an `assertTrue(true)` sentinel; it now asserts
+ * values (bounds, ring caps, reference-build parity), and the ceiling
+ * story (64 KiB string buffer, 1024-entry reply ring, screen-full REP)
+ * has per-cap regressions sitting right next to the fuzz. Deterministic
+ * seeds keep every failure reproducible from one number.
  */
 final class FuzzerTest extends TestCase
 {
@@ -30,7 +38,7 @@ final class FuzzerTest extends TestCase
      */
     public function testFuzzerSurvivesRandomBytes(int $seed, int $length): void
     {
-        $term = Terminal::create(cols: 80, rows: 24);
+        $term = Terminal::new(80, 24);
         $rng = $this->rng($seed);
         $bytes = '';
         for ($i = 0; $i < $length; $i++) {
@@ -40,11 +48,12 @@ final class FuzzerTest extends TestCase
         // The contract: feed() never throws on any byte sequence.
         $term->feed($bytes);
         $term->flush();
-        // Sanity: cursor stayed in bounds.
+        // Sanity: cursor stayed in bounds, rings stayed capped.
         $this->assertGreaterThanOrEqual(0, $term->cursor()->row);
         $this->assertLessThan(24, $term->cursor()->row);
         $this->assertGreaterThanOrEqual(0, $term->cursor()->col);
         $this->assertLessThan(80, $term->cursor()->col);
+        $this->assertLessThanOrEqual(1024, count($term->replies()));
     }
 
     /** @return list<array{int, int}> */
@@ -62,7 +71,6 @@ final class FuzzerTest extends TestCase
     {
         // Pathological case: lots of partial sequences that should all
         // be either consumed or recovered from cleanly.
-        $term = Terminal::create(cols: 80, rows: 24);
         $patterns = [
             "\x1b[",        // CSI entry, no final
             "\x1b]",        // OSC start, no terminator
@@ -75,15 +83,100 @@ final class FuzzerTest extends TestCase
             "\x1b[1;2;3;4;5;6;7;8;9;10m", // many SGR params
             "\x1b[1A\x1b[2B\x1b[3C\x1b[4D", // a flurry of moves
         ];
+        $term = Terminal::new(80, 24);
         for ($i = 0; $i < 200; $i++) {
             $term->feed($patterns[$i % count($patterns)]);
         }
         $term->flush();
-        // Fuzz-and-survive sentinel: the assertions of this test are "no
-        // exception and no hang" across the 200-feed hostile pattern stream —
-        // reaching this line IS the pass condition (docs-fix-1023 N1: kept
-        // explicit so the green assert count is read as intentional).
-        $this->assertTrue(true);
+
+        // Value assertions replace the old assertTrue(true) sentinel:
+        // state is bounded, and a reference build fed the identical
+        // stream agrees cell-for-cell — the storm is deterministic, so
+        // any order-dependent parser corruption shows up here.
+        $this->assertGreaterThanOrEqual(0, $term->cursor()->row);
+        $this->assertLessThan(24, $term->cursor()->row);
+        $this->assertGreaterThanOrEqual(0, $term->cursor()->col);
+        $this->assertLessThan(80, $term->cursor()->col);
+        $this->assertLessThanOrEqual(1024, count($term->replies()));
+
+        $reference = Terminal::new(80, 24);
+        for ($i = 0; $i < 200; $i++) {
+            $reference->feed($patterns[$i % count($patterns)]);
+        }
+        $reference->flush();
+        $this->assertSame(self::gridDigest($reference), self::gridDigest($term));
+    }
+
+    /** Full-grid grapheme digest + cursor of an emulator terminal. */
+    private static function gridDigest(Terminal $term): string
+    {
+        $hash = hash_init('sha1');
+        for ($r = 0; $r < 24; $r++) {
+            for ($c = 0; $c < 80; $c++) {
+                hash_update($hash, $term->screen()->cell($r, $c)->grapheme . "\0");
+            }
+        }
+        hash_update($hash, sprintf('|%d,%d', $term->cursor()->row, $term->cursor()->col));
+        return hash_final($hash);
+    }
+
+    public function testGiantOscPayloadHonoursTheStringCeiling(): void
+    {
+        // A terminated OSC title far past the 64 KiB buffer cap lands the
+        // capped prefix, not the flood: the measured ceiling is 65534
+        // bytes (the bound sits two bytes under MAX_STRING_BUFFER; the
+        // exact figure is pinned by observation, not by a formula).
+        $term = Terminal::new(20, 5);
+        $term->feed("\x1b]0;" . str_repeat('A', 100 * 1024) . "\x07");
+        $title = (string) $term->windowTitle();
+        $this->assertSame(65534, strlen($title));
+        $this->assertSame(str_repeat('A', 65534), $title);
+
+        // Unterminated and flushed: the flush DISPATCHES the pending OSC
+        // with the code it collected — the title lands, still capped (the
+        // ceiling is a ceiling, not a reject). A payload with no code at
+        // all (bare OSC string) is the one the flush drops: no title.
+        $partial = Terminal::new(20, 5);
+        $partial->feed("\x1b]0;" . str_repeat('A', 100 * 1024));
+        $partial->flush();
+        $this->assertSame(str_repeat('A', 65534), $partial->windowTitle());
+
+        $codeless = Terminal::new(20, 5);
+        $codeless->feed("\x1b]" . str_repeat('A', 70 * 1024));
+        $codeless->flush();
+        $this->assertNull($codeless->windowTitle());
+    }
+
+    public function testReplyRingStaysCappedAndObservableUnderQueryStorm(): void
+    {
+        // Post-vterm-15 the eviction counter is public: 1030 cursor
+        // queries on a small screen must leave exactly the newest 1024
+        // replies with the overflow count observing the six drops.
+        $term = Terminal::new(10, 6);
+        $term->feed(str_repeat("\x1b[6n", 1030));
+        $term->flush();
+        $this->assertCount(1024, $term->replies());
+        $this->assertSame(6, $term->replyOverflowCount());
+    }
+
+    public function testRepStormWritesStayScreenBounded(): void
+    {
+        // CSI 65535 b (repeat last graphic): the renderer-side ceiling
+        // story pinned in ParamLimitTest, exercised through the emulator
+        // fuzz pad — here the emulator has no REP arm at all, so the
+        // observable contract is 'nothing explodes, grid stays pristine'.
+        $term = Terminal::new(80, 24);
+        $term->feed('X' . "\x1b[65535b");
+        $term->flush();
+        $xCount = 0;
+        for ($r = 0; $r < 24; $r++) {
+            for ($c = 0; $c < 80; $c++) {
+                if ($term->screen()->cell($r, $c)->grapheme === 'X') {
+                    $xCount++;
+                }
+            }
+        }
+        $this->assertSame(1, $xCount, 'emulator records the X and no REP expansion');
     }
 
     /**
