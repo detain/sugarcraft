@@ -32,6 +32,9 @@ final class FocusManager
 
     private ?string $focusedId = null;
 
+    /** Last restoreState() skip/repair reason, or null when the restore was clean. */
+    private ?string $restoreNotice = null;
+
     /** Ordered focusable-id set + wrap-around traversal, mirrors array_keys($focusMap). */
     private FocusRing $ring;
 
@@ -43,30 +46,43 @@ final class FocusManager
     }
 
     /**
-     * Set focus to a panel.
+     * Move focus to a REGISTERED panel.
      *
-     * Note: $id is not type-hinted as string because PHP array_keys()
-     * returns int for numeric string keys. Callers must cast to string
-     * before passing, or this method will coerce internally.
+     * Registration belongs to register()/unregister() — focus and blur only
+     * move state (finding 127). The old shape grew the traversal set through
+     * focus() itself, so tab order silently became first-touched order and
+     * focus(-1) minted a phantom slot named '-1'; such a call is now refused
+     * (no-op return) instead of mutating the ring.
      */
     public function focus(string|int $id): self
     {
         $key = (string) $id;
+        if (!$this->ring->has($key)) {
+            return $this;
+        }
+
         $clone = clone $this;
         $clone->focusedId = $key;
         $clone->focusMap[$key] = true;
-        // Focusing an unregistered id extends the traversal set (mirrors the
-        // focusMap append); an already-registered id is a ring no-op.
-        $clone->ring = $this->ring->register($key);
         return $clone;
     }
 
+    /**
+     * Drop the focused flag for a REGISTERED panel.
+     *
+     * Blurring an id that was never registered is a no-op — it must not seed
+     * a ghost tab-stop (finding 127: the old blur INSERTED into the ring,
+     * the opposite of intent through the door meant to shrink focus).
+     */
     public function blur(string $id): self
     {
         $key = (string) $id;
+        if (!$this->ring->has($key)) {
+            return $this;
+        }
+
         $clone = clone $this;
         $clone->focusMap[$key] = false;
-        $clone->ring = $this->ring->register($key);
         if ($clone->focusedId === $key) {
             $clone->focusedId = null;
         }
@@ -105,9 +121,10 @@ final class FocusManager
             return $this->focus($ids[0]);
         }
 
-        // The ring keeps its own stale index (focus() only registers here),
-        // so the query re-anchors to the authoritative focusedId first —
-        // peekNext answers what the old mover+current() shape computed.
+        // The ring's own cursor is never advanced by these wrappers (focus()
+        // only moves the manager's state now), so the query re-anchors to the
+        // authoritative focusedId first — peekNext answers what the old
+        // mover+current() shape computed.
         $next = $this->ring->focus($this->focusedId)->peekNext();
         return $this->focus($next ?? $ids[0]);
     }
@@ -173,22 +190,76 @@ final class FocusManager
     /**
      * Restore focus state from disk.
      *
-     * Returns a new FocusManager with restored state, or $this if no
-     * persisted state exists.
+     * Returns a new FocusManager with restored state, or $this if no persisted
+     * state exists. Fail-soft by contract (finding 127, the D-08
+     * disable-with-reason doctrine ported to focus state): a version
+     * mismatch or unreadable shape never throws through init — the restore is
+     * skipped or repaired, and {@see restoreNotice()} carries the honest
+     * reason for callers that want to surface it.
      */
     public function restoreState(Persistence $persistence, string $path): self
     {
-        $data = $persistence->load($path);
+        try {
+            $data = $persistence->load($path);
+        } catch (\RuntimeException $e) {
+            $skipped = clone $this;
+            $skipped->restoreNotice = 'restore skipped: ' . $e->getMessage();
+            return $skipped;
+        }
+
         if ($data === null) {
             return $this;
         }
 
+        $rawMap = $data['focusMap'] ?? null;
+        if (!is_array($rawMap)) {
+            $skipped = clone $this;
+            $skipped->restoreNotice = 'restore skipped: focusMap is not an object in ' . $path;
+            return $skipped;
+        }
+
+        $reasons = [];
+        $map = [];
+        foreach ($rawMap as $key => $value) {
+            // Array keys are int|string by PHP's own cast — the value is the
+            // corruptible slot: only the bool polarity the manager stores.
+            if (!is_bool($value)) {
+                $reasons[] = "entry '{$key}' is not a bool";
+                continue;
+            }
+            $map[(string) $key] = $value;
+        }
+
         $clone = clone $this;
-        $clone->focusedId = $data['focusedId'] ?? null;
-        $clone->focusMap = $data['focusMap'] ?? [$this->rootId => true];
-        // Rebuild the traversal ring from the restored ids (registration order
-        // preserved); numeric-string keys are normalised back to strings.
-        $clone->ring = FocusRing::of(...array_map(strval(...), array_keys($clone->focusMap)));
+        $clone->focusMap = $map;
+        // Rebuild the traversal ring from the surviving ids (registration
+        // order preserved); numeric-string keys are normalised back to strings.
+        $clone->ring = FocusRing::of(...array_map(strval(...), array_keys($map)));
+
+        $focusedId = $data['focusedId'] ?? null;
+        if ($focusedId === null) {
+            $clone->focusedId = null;
+        } elseif ((is_string($focusedId) || is_int($focusedId)) && isset($map[(string) $focusedId])) {
+            $clone->focusedId = (string) $focusedId;
+        } else {
+            $clone->focusedId = null;
+            $reasons[] = "focusedId is not a registered panel";
+        }
+
+        if ($reasons !== []) {
+            $clone->restoreNotice = 'restore repaired: ' . implode('; ', $reasons);
+        }
+
         return $clone;
+    }
+
+    /**
+     * Why the last restoreState() skipped or repaired something, or null if
+     * the last restore was clean. The reason is surfaced, not swallowed —
+     * the chrome or log line that shows it is the consumer's call.
+     */
+    public function restoreNotice(): ?string
+    {
+        return $this->restoreNotice;
     }
 }

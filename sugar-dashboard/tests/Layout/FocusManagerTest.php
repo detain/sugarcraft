@@ -87,7 +87,7 @@ final class FocusManagerTest extends TestCase
 
     public function testFocusCoercesIntId(): void
     {
-        $fm = (new FocusManager('root'))->focus(42);
+        $fm = (new FocusManager('root'))->register(42)->focus(42);
         $this->assertSame('42', $fm->getFocusedId());
         $this->assertTrue($fm->isFocused('42'));
     }
@@ -232,26 +232,99 @@ final class FocusManagerTest extends TestCase
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // focus()/blur() on unregistered ids extend the traversal set
+    // Registration is the only door to the traversal set (finding 127)
+    // — DISCLOSED contract flip: this file once pinned that focus()/
+    // blur() on unregistered ids EXTENDED the set; that WAS the bug.
     // ═══════════════════════════════════════════════════════════════
 
-    public function testFocusOnUnregisteredIdAddsItToTraversal(): void
+    public function testFocusOnUnregisteredIdIsRefused(): void
     {
-        // focus('x') on a fresh manager adds 'x' after 'root'; wrapping from 'x'
-        // lands back on 'root'.
-        $fm = (new FocusManager('root'))->focus('x');
-        $this->assertSame('x', $fm->getFocusedId());
-        $wrapped = $fm->focusNext();
-        $this->assertSame('root', $wrapped->getFocusedId());
+        $fm = (new FocusManager('root'))->register('a');
+        $after = $fm->focus('x');
+        $this->assertSame($fm, $after, 'focus() must not move state for an unregistered id');
+        $this->assertNull($after->focusedId(), 'a refused focus leaves the slot empty, never names a phantom');
+        // The traversal set never learned about 'x': Tab walks root -> a -> root.
+        $walk = $after->focusNext()->focusNext()->focusNext();
+        $this->assertSame('root', $walk->focusedId());
     }
 
-    public function testBlurOnUnregisteredIdAddsItToTraversal(): void
+    public function testNegativeNumericFocusCannotMintAPhantomSlot(): void
     {
-        // blur('y') seeds 'y' (disabled-bool false) at the end of the set; it
-        // still participates in traversal ordering.
-        $fm = (new FocusManager('root'))->blur('y')->focus('root');
-        $next = $fm->focusNext();
-        $this->assertSame('y', $next->getFocusedId());
+        $fm = (new FocusManager('root'))->register('a');
+        $this->assertSame($fm, $fm->focus(-1), 'focus(-1) must be refused, not stored as the id "-1"');
+        $this->assertNull($fm->focusedId());
+        // And the ring never grew: only root and 'a' exist.
+        $probe = $fm->focusNext()->focusNext()->focusNext();
+        $this->assertSame('root', $probe->focusedId());
+    }
+
+    public function testBlurOnUnregisteredIdIsANoOp(): void
+    {
+        $fm = (new FocusManager('root'))->register('a');
+        $this->assertSame($fm, $fm->blur('y'), 'blur must never seed a ghost tab-stop');
+        // The set the old shape grew via blur stays closed: two members means
+        // the third Tab lands back on root; a ghost 'y' would land on 'y'.
+        $walk = $fm->focusNext()->focusNext()->focusNext();
+        $this->assertSame('root', $walk->focusedId());
+        $this->assertFalse($walk->isFocused('y'), 'blur must not register anything');
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Fail-soft restore (finding 127): corrupt state is skipped or
+    // repaired with a reason, never a TypeError through init.
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testRestoreSkipsCorruptMapEntriesAndReportsReasons(): void
+    {
+        $persistence = new Persistence();
+        $path = $this->tmpDir . '/focus-corrupt.json';
+        $persistence->save($path, [
+            'focusedId' => 'ghost',
+            'focusMap' => ['a' => true, 'b' => 'yes', 'c' => 1],
+        ]);
+
+        $restored = (new FocusManager('root'))->restoreState($persistence, $path);
+
+        $notice = $restored->restoreNotice();
+        $this->assertNotNull($notice);
+        $this->assertStringStartsWith('restore repaired:', $notice);
+        $this->assertStringContainsString("entry 'b' is not a bool", $notice);
+        $this->assertStringContainsString("entry 'c' is not a bool", $notice);
+        $this->assertStringContainsString('focusedId is not a registered panel', $notice);
+        $this->assertNull($restored->focusedId(), 'the ghost focusedId must be dropped, not trusted');
+        $this->assertFalse($restored->isFocused('a'), 'restored registration is not focus; the double gate holds');
+        // Survivors traverse; victims are gone: the set is exactly ['a'].
+        $this->assertSame('a', $restored->focusNext()->focusedId());
+    }
+
+    public function testRestoreOfUnsupportedVersionSkipsWithHonestNoticeInsteadOfThrowing(): void
+    {
+        $persistence = new Persistence();
+        $path = $this->tmpDir . '/focus-future.json';
+        file_put_contents(
+            $path,
+            (string) json_encode(['version' => 2, 'data' => ['focusedId' => 'a', 'focusMap' => ['a' => true]]])
+        );
+
+        $fm = new FocusManager('root');
+        $restored = $fm->restoreState($persistence, $path);
+
+        $this->assertSame('restore skipped: Unsupported persistence version: 2', $restored->restoreNotice());
+        $this->assertNull($restored->focusedId(), 'the untouched manager keeps its constructor state');
+        $this->assertSame('root', $restored->focusNext()->focusedId(), 'root-only ring survives');
+    }
+
+    public function testRestoreWithNonArrayFocusMapSkipsCleanly(): void
+    {
+        $persistence = new Persistence();
+        $path = $this->tmpDir . '/focus-shapeless.json';
+        $persistence->save($path, ['focusedId' => 'a', 'focusMap' => 'not-an-object']);
+
+        $restored = (new FocusManager('root'))->restoreState($persistence, $path);
+
+        $this->assertStringStartsWith('restore skipped: focusMap is not an object', (string) $restored->restoreNotice());
+        $this->assertNull($restored->focusedId());
+        $this->assertSame('root', $restored->focusNext()->focusedId());
     }
 
     // ═══════════════════════════════════════════════════════════════
