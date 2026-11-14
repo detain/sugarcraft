@@ -355,12 +355,25 @@ final class Diff
         $aKeys = self::fingerprints($a, $options);
         $bKeys = self::fingerprints($b, $options);
 
-        $dp = array_fill(0, $n + 1, array_fill(0, $m + 1, 0));
+        // Flat cell array (stride m+1) instead of a list of rows: one fill,
+        // integer indexing, the per-row `max()` and repeated $aKeys[$i] lookups
+        // gone from the inner loop (sugar-diff-026). Cells and tie-break
+        // semantics are the classic table's — `$down >= $right` prints the same
+        // winner as max(), including on the equal tie that keeps deletes first.
+        $stride = $m + 1;
+        $dp = array_fill(0, ($n + 1) * $stride, 0);
         for ($i = $n - 1; $i >= 0; $i--) {
+            $row = $i * $stride;
+            $below = $row + $stride;
+            $aKey = $aKeys[$i];
             for ($j = $m - 1; $j >= 0; $j--) {
-                $dp[$i][$j] = $aKeys[$i] === $bKeys[$j]
-                    ? $dp[$i + 1][$j + 1] + 1
-                    : max($dp[$i + 1][$j], $dp[$i][$j + 1]);
+                if ($aKey === $bKeys[$j]) {
+                    $dp[$row + $j] = $dp[$below + $j + 1] + 1;
+                } else {
+                    $down = $dp[$below + $j];
+                    $right = $dp[$row + $j + 1];
+                    $dp[$row + $j] = $down >= $right ? $down : $right;
+                }
             }
         }
 
@@ -372,12 +385,16 @@ final class Diff
                 $kinds .= self::K_EQUAL;
                 $i++;
                 $j++;
-            } elseif ($dp[$i + 1][$j] >= $dp[$i][$j + 1]) {
-                $kinds .= self::K_DELETE;
-                $i++;
             } else {
-                $kinds .= self::K_INSERT;
-                $j++;
+                $down = $dp[($i + 1) * $stride + $j];
+                $right = $dp[$i * $stride + $j + 1];
+                if ($down >= $right) {
+                    $kinds .= self::K_DELETE;
+                    $i++;
+                } else {
+                    $kinds .= self::K_INSERT;
+                    $j++;
+                }
             }
         }
 
