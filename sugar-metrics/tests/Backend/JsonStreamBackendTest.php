@@ -51,12 +51,44 @@ final class JsonStreamBackendTest extends TestCase
 
     public function testConstructWithNullDefaultsToStderr(): void
     {
-        $b = new JsonStreamBackend(null);
-        $this->assertInstanceOf(JsonStreamBackend::class, $b);
-        // No exception means success — stderr is always writable in CLI.
-        // Verify by emitting; we can't easily read php://stderr, but we ensure no throw.
-        $b->counter('test', 1);
-        $b->flush();
+        // sugar-metrics-019: the old arm constructed the default-target
+        // backend and really emitted into the suite's own stderr asserting
+        // only "did not throw" — polluting CI logs while leaving the actual
+        // property (null resolves to php://stderr and lands exactly one JSON
+        // line there) unpinned. The contract is now proven in a child
+        // process: its stderr is captured on a pipe, the record is read
+        // back, and the suite's own streams stay clean. A memory-stream
+        // substitute was rejected: it would not pin the php://stderr
+        // resolution itself.
+        $autoload = dirname(__DIR__, 2) . '/vendor/autoload.php';
+        $this->assertFileExists($autoload);
+        $cmd = [
+            PHP_BINARY, '-r',
+            'require $argv[1];'
+            . ' $b = SugarCraft\\Metrics\\Backend\\JsonStreamBackend::new(null);'
+            . ' $b->counter($argv[2], 1, ["probe" => "child"]);'
+            . ' $b->flush();',
+            $autoload,
+            'stderr.probe',
+        ];
+        $pipes = [];
+        $proc = proc_open($cmd, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, dirname(__DIR__, 2));
+        $this->assertIsResource($proc);
+        $stdout = stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $this->assertSame(0, proc_close($proc));
+        $this->assertSame('', $stdout, 'the record must ride stderr, never stdout');
+        $this->assertSame("\n", substr($stderr, -1));
+        $lines = explode("\n", rtrim($stderr, "\n"));
+        $this->assertCount(1, $lines, 'exactly one record line on php://stderr');
+        $record = json_decode($lines[0], true);
+        $this->assertIsArray($record, 'the stderr line must be decodable JSON');
+        $this->assertSame('stderr.probe', $record['name']);
+        $this->assertSame('counter', $record['kind']);
+        $this->assertSame(1, $record['value']);
+        $this->assertSame(['probe' => 'child'], $record['tags']);
     }
 
     public function testConstructWithFilePath(): void
