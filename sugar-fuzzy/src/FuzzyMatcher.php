@@ -62,7 +62,7 @@ interface FuzzyMatcher
      *
      * @param string    $query      The search query
      * @param iterable<string> $candidates candidate strings to score
-     * @param int|null  $limit      Maximum number of results to return (null = unlimited)
+     * @param int|null  $limit      Maximum number of results to return (`null` or a negative value = unlimited; see {@see MatchResultSorter::sortAndSlice()})
      * @param int       $minScore   Minimum score threshold (default 1; scores are integers so >= 1 ≡ > 0)
      * @return array<MatchResult> Ranked match results
      */
@@ -82,7 +82,7 @@ interface FuzzyMatcher
      *
      * @param string    $query      The search query
      * @param iterable<string> $candidates candidate strings to score
-     * @param int|null  $limit      Maximum number of results to return (null = unlimited)
+     * @param int|null  $limit      Maximum number of results to return (`null` or a negative value = unlimited; see {@see MatchResultSorter::sortAndSlice()})
      * @param int       $minScore   Minimum score threshold (default 1; scores are integers so >= 1 ≡ > 0)
      * @return \Generator<MatchResult> Yields MatchResult in ranked order
      */

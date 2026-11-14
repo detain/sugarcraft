@@ -46,7 +46,13 @@ final class MatchResultSorter
      * TUI list sizes; preserves the stable-tiebreak contract.
      *
      * @param array<MatchResult> $results
-     * @param int|null $limit
+     * @param int|null $limit Maximum number of results to return. `null` or a
+     *                        NEGATIVE value means unlimited — the negative arm
+     *                        deliberately skips the slice rather than throwing.
+     *                        This is the documented rank-contract rule from the
+     *                        README ('a negative limit is treated as
+     *                        unlimited'); callers get clamping-by-absence, not
+     *                        an error (finding sugar-fuzzy-009).
      * @return array<MatchResult>
      */
     public static function sortAndSlice(array $results, ?int $limit): array
