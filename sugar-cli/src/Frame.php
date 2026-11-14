@@ -311,8 +311,13 @@ final class Frame
         $len = Width::string($s);
 
         if ($len > $width) {
-            $s = Width::truncateAnsi($s, max(0, $width - 1)) . '…' . Ansi::reset();
-            $len = Width::string($s);
+            // Finding 030: the re-measure runs on the truncated remainder
+            // only, and the ellipsis adds exactly one cell (the reset is
+            // width-less) — the result string keeps its bytes; the second
+            // scan keeps a smaller input.
+            $kept = Width::truncateAnsi($s, max(0, $width - 1));
+            $s    = $kept . '…' . Ansi::reset();
+            $len  = Width::string($kept) + 1;
         }
 
         return [$s, $len];

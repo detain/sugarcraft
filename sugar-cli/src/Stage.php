@@ -196,10 +196,19 @@ final class Stage
         // subStep shape — the message keeps its budget and the line never
         // exceeds the cap, instead of printing furniture over an empty label.
         $resolved = WidthProbe::resolve($width);
-        if ($resolved !== null && $resolved < Width::string($prefix) + Width::string($suffix) + 1) {
-            return self::clipped($prefix, SafeText::line($message), $width, 'Stage::subStepWithProgress');
+        if ($resolved !== null) {
+            // Finding 030: with a cap, the suffix is measured once here and
+            // handed to clipped(); without a cap clipped() ignores the
+            // reservation, so nothing is measured at all (the old code paid
+            // a full Width::string($suffix) scan that was always discarded).
+            $suffixCells = Width::string($suffix);
+            if ($resolved < Width::string($prefix) + $suffixCells + 1) {
+                return self::clipped($prefix, SafeText::line($message), $width, 'Stage::subStepWithProgress');
+            }
+            return self::clipped($prefix, SafeText::line($message), $width, 'Stage::subStepWithProgress', $suffixCells) . $suffix;
         }
-        return self::clipped($prefix, SafeText::line($message), $width, 'Stage::subStepWithProgress', Width::string($suffix)) . $suffix;
+
+        return self::clipped($prefix, SafeText::line($message), $width, 'Stage::subStepWithProgress') . $suffix;
     }
 
     /**

@@ -38,6 +38,18 @@ final class SafeText
      */
     public static function line(string $s): string
     {
+        // Fast path (finding 030): plain printable text is the overwhelming
+        // majority of ingress. If no byte below 0x20, no DEL and no 8-bit byte
+        // appears, there is no ESC introducer to strip, no control run to fold
+        // and no C0/DEL to delete — the pipeline below is a provable identity
+        // — so one byte-class scan replaces three passes. Any UTF-8 text (bytes
+        // ≥ 0x80) and every dirty string take the full path unchanged; a false
+        // preg_match (impossible for this pattern, but not assumed) also falls
+        // through to it.
+        if (preg_match('/[\x00-\x1f\x7f\x80-\xff]/', $s) !== 1) {
+            return $s;
+        }
+
         $whitespaced = preg_replace('/[\x09-\x0d]+/', ' ', Ansi::strip($s));
 
         if ($whitespaced === null) {

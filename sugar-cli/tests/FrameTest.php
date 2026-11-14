@@ -148,6 +148,23 @@ final class FrameTest extends TestCase
         }
     }
 
+    /**
+     * Finding 030 companion: when truncation stops SHORT of the budget (a
+     * double-width rune never splits), the ellipsis row's exact cell count
+     * is what the padding maths consumes. Getting it wrong pads the row past
+     * the frame width and forces a terminal wrap — the one sin the constant
+     * line count exists to prevent.
+     */
+    public function testWideGlyphTruncationPadsToExactWidth(): void
+    {
+        $out = Frame::new()->render(str_repeat('日', 300), 80, 24);
+
+        self::assertStringContainsString('…', $out);
+        foreach (explode("\n", $out) as $line) {
+            self::assertSame(80, Width::string($line), 'every row stays exactly $cols cells');
+        }
+    }
+
     /** A styled (SGR-laden) body line still pads to exactly the terminal width. */
     public function testStyledLinePadsByDisplayWidth(): void
     {

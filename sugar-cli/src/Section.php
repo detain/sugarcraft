@@ -203,12 +203,23 @@ final class Section
         int $runeW,
     ): string {
         // Room for the label itself once the lead and its two pad spaces are placed.
-        $room = $width - Width::string($lead) - 2;
-        if ($label !== '' && Width::string($label) > $room) {
+        // Finding 030: SGR sequences are width-less and sugar-style strips
+        // only bytes, never characters, so the composed head's cell count is
+        // the lead's plus the label's (plus labelOut's two spaces) — the
+        // head is derived, not re-scanned. A re-scan remains only on the
+        // truncated-label branch, where Width::truncate can stop short of a
+        // wide glyph and the exact cut length is unknown.
+        $leadCells  = Width::string($lead);
+        $room       = $width - $leadCells - 2;
+        $labelCells = Width::string($label);
+        if ($label !== '' && $labelCells > $room) {
             $label = $room >= 1 ? Width::truncate($label, $room - 1) . '…' : '';
+            $labelCells = $label === '' ? 0 : Width::string($label);
         }
-        $head   = self::muted($theme, $lead) . self::labelOut($label, $theme);
-        $repeat = intdiv(max(0, $width - Width::string($head)), $runeW);
+        $head = self::muted($theme, $lead) . self::labelOut($label, $theme);
+
+        $headCells = $leadCells + ($label === '' ? 0 : $labelCells + 2);
+        $repeat = intdiv(max(0, $width - $headCells), $runeW);
         return $head . self::muted($theme, str_repeat($rune, $repeat));
     }
 
