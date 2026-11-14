@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Readline\History;
 
+use SugarCraft\Readline\Lang;
+
 /**
  * File-persisted history store.
  *
@@ -162,11 +164,11 @@ final class FileHistory extends InMemoryHistory
         // warning; touch() can warn, hence @).
         if (!file_exists($this->filePath)) {
             if (@touch($this->filePath) === false) {
-                throw new \RuntimeException('sugar-readline: cannot create history file ' . $this->filePath);
+                throw new \RuntimeException('sugar-readline: ' . Lang::t('history.create_failed', ['path' => $this->filePath]));
             }
         }
         if (!chmod($this->filePath, 0600)) {
-            throw new \RuntimeException('sugar-readline: cannot set 0600 on history file ' . $this->filePath);
+            throw new \RuntimeException('sugar-readline: ' . Lang::t('history.chmod_failed', ['path' => $this->filePath]));
         }
         $this->load();
     }
@@ -234,7 +236,7 @@ final class FileHistory extends InMemoryHistory
     {
         \clearstatcache(true, $path);
         if (\is_link($path)) {
-            throw new \RuntimeException('sugar-readline: refusing symlinked ' . $what . ' ' . $path);
+            throw new \RuntimeException('sugar-readline: ' . Lang::t('history.symlink_refused', ['what' => $what, 'path' => $path]));
         }
     }
 
@@ -258,20 +260,20 @@ final class FileHistory extends InMemoryHistory
     {
         $fp = \fopen($this->filePath, $mode);
         if ($fp === false) {
-            throw new \RuntimeException('sugar-readline: cannot open history file ' . $this->filePath);
+            throw new \RuntimeException('sugar-readline: ' . Lang::t('history.open_failed', ['path' => $this->filePath]));
         }
         $stat = \fstat($fp);
         // (mode & S_IFMT) === S_IFREG via octal literals: this PHP build
         // ships no S_IF* constants (checked at lane time).
         if ($stat === false || (((int) $stat['mode']) & 0170000) !== 0100000) {
             \fclose($fp);
-            throw new \RuntimeException('sugar-readline: history path is not a regular file (opened through a swap?): ' . $this->filePath);
+            throw new \RuntimeException('sugar-readline: ' . Lang::t('history.not_regular', ['path' => $this->filePath]));
         }
         \clearstatcache(true, $this->filePath);
         $link = \lstat($this->filePath);
         if ($link === false || (int) $link['ino'] !== (int) $stat['ino']) {
             \fclose($fp);
-            throw new \RuntimeException('sugar-readline: history path changed under us (possible symlink swap): ' . $this->filePath);
+            throw new \RuntimeException('sugar-readline: ' . Lang::t('history.changed_under_us', ['path' => $this->filePath]));
         }
         return $fp;
     }
@@ -504,7 +506,7 @@ final class FileHistory extends InMemoryHistory
                 {
                     if (!flock($fp, LOCK_EX)) {
                         fclose($fp);
-                        throw new \RuntimeException('sugar-readline: cannot acquire append lock on ' . $this->filePath);
+                        throw new \RuntimeException('sugar-readline: ' . Lang::t('history.append_lock_failed', ['path' => $this->filePath]));
                     }
                     $stat = fstat($fp);
                     $size = $stat !== false ? (int) ($stat['size'] ?? 0) : 0;
@@ -565,7 +567,7 @@ final class FileHistory extends InMemoryHistory
     {
         $tempFile = @tempnam($this->tempDir, 'hist');
         if ($tempFile === false) {
-            throw new \RuntimeException('sugar-readline: cannot create temp file for history rewrite in ' . $this->tempDir);
+            throw new \RuntimeException('sugar-readline: ' . Lang::t('history.temp_create_failed', ['dir' => $this->tempDir]));
         }
         // Restrict perms before writing so history content is never exposed,
         // even briefly, on any platform/umask (tempnam is 0600 on POSIX only).
@@ -573,12 +575,12 @@ final class FileHistory extends InMemoryHistory
         $fp = fopen($tempFile, 'w');
         if ($fp === false) {
             @unlink($tempFile);
-            throw new \RuntimeException('sugar-readline: cannot open temp file for history rewrite: ' . $tempFile);
+            throw new \RuntimeException('sugar-readline: ' . Lang::t('history.temp_open_failed', ['path' => $tempFile]));
         }
         if (!flock($fp, LOCK_EX)) {
             fclose($fp);
             @unlink($tempFile);
-            throw new \RuntimeException('sugar-readline: cannot lock temp file for history rewrite: ' . $tempFile);
+            throw new \RuntimeException('sugar-readline: ' . Lang::t('history.temp_lock_failed', ['path' => $tempFile]));
         }
         // Copy existing content to temp file (already in escaped on-disk form).
         if (file_exists($this->filePath)) {
@@ -626,7 +628,7 @@ final class FileHistory extends InMemoryHistory
         // done: the temp file is cleaned up before the throw.
         if (!@rename($tempFile, $this->filePath)) {
             @unlink($tempFile);
-            throw new \RuntimeException('sugar-readline: cannot replace history file ' . $this->filePath);
+            throw new \RuntimeException('sugar-readline: ' . Lang::t('history.replace_failed', ['path' => $this->filePath]));
         }
         chmod($this->filePath, 0600);
     }
@@ -659,7 +661,7 @@ final class FileHistory extends InMemoryHistory
         $lock = @fopen($lockPath, 'c');
         \umask($umask);
         if ($lock === false) {
-            throw new \RuntimeException('sugar-readline: cannot open history write lock ' . $lockPath);
+            throw new \RuntimeException('sugar-readline: ' . Lang::t('history.lock_open_failed', ['path' => $lockPath]));
         }
         // Identity proof before any path-based chmod: lstat names the path
         // itself (a symlink carries its own inode), so an inode match means
@@ -673,12 +675,12 @@ final class FileHistory extends InMemoryHistory
         $pathStat = \lstat($lockPath);
         if ($lockStat === false || $pathStat === false || (int) $pathStat['ino'] !== (int) $lockStat['ino']) {
             \fclose($lock);
-            throw new \RuntimeException('sugar-readline: history lock changed under us (possible symlink swap): ' . $lockPath);
+            throw new \RuntimeException('sugar-readline: ' . Lang::t('history.lock_changed', ['path' => $lockPath]));
         }
         \chmod($lockPath, 0600); // hygiene only — the inode never holds content
         if (!flock($lock, LOCK_EX)) {
             fclose($lock);
-            throw new \RuntimeException('sugar-readline: cannot acquire history write lock ' . $lockPath);
+            throw new \RuntimeException('sugar-readline: ' . Lang::t('history.lock_acquire_failed', ['path' => $lockPath]));
         }
         try {
             $this->refuseSymlink();
@@ -781,18 +783,18 @@ final class FileHistory extends InMemoryHistory
     {
         $tempFile = @tempnam($this->tempDir, 'hist');
         if ($tempFile === false) {
-            throw new \RuntimeException('sugar-readline: cannot create temp file for history rewrite in ' . $this->tempDir);
+            throw new \RuntimeException('sugar-readline: ' . Lang::t('history.temp_create_failed', ['dir' => $this->tempDir]));
         }
         chmod($tempFile, 0600);
         $fp = fopen($tempFile, 'w');
         if ($fp === false) {
             @unlink($tempFile);
-            throw new \RuntimeException('sugar-readline: cannot open temp file for history rewrite: ' . $tempFile);
+            throw new \RuntimeException('sugar-readline: ' . Lang::t('history.temp_open_failed', ['path' => $tempFile]));
         }
         if (!flock($fp, LOCK_EX)) {
             fclose($fp);
             @unlink($tempFile);
-            throw new \RuntimeException('sugar-readline: cannot lock temp file for history rewrite: ' . $tempFile);
+            throw new \RuntimeException('sugar-readline: ' . Lang::t('history.temp_lock_failed', ['path' => $tempFile]));
         }
         // Format stamp (finding 069): a full rewrite declares the format it
         // wrote. Append paths never add this line - adoption is a trajectory.
@@ -806,7 +808,7 @@ final class FileHistory extends InMemoryHistory
         fclose($fp);
         if (!@rename($tempFile, $this->filePath)) {
             @unlink($tempFile);
-            throw new \RuntimeException('sugar-readline: cannot replace history file ' . $this->filePath);
+            throw new \RuntimeException('sugar-readline: ' . Lang::t('history.replace_failed', ['path' => $this->filePath]));
         }
         // A symlink planted at the destination between rename and chmod would
         // send the chmod to its target; refuse rather than follow.
@@ -1144,13 +1146,13 @@ final class FileHistory extends InMemoryHistory
             // a half-clear is exactly the divergence persist-then-swap kills.
             $tempFile = @tempnam($this->tempDir, 'hist');
             if ($tempFile === false) {
-                throw new \RuntimeException('sugar-readline: cannot create temp file for history clear in ' . $this->tempDir);
+                throw new \RuntimeException('sugar-readline: ' . Lang::t('history.clear_temp_failed', ['dir' => $this->tempDir]));
             }
             chmod($tempFile, 0600);
             file_put_contents($tempFile, '');
             if (!@rename($tempFile, $this->filePath)) {
                 @unlink($tempFile);
-                throw new \RuntimeException('sugar-readline: cannot replace history file ' . $this->filePath);
+                throw new \RuntimeException('sugar-readline: ' . Lang::t('history.replace_failed', ['path' => $this->filePath]));
             }
             // Defensive: if the destination pre-existed with looser perms, the
             // rename inherits the temp file's 0600, but re-assert to be safe.

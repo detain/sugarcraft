@@ -24,6 +24,28 @@ return [
     'confirm.no' => 'No',
     'confirm.yes' => 'Yes',
 
+    // FileHistory diagnostics (finding 041): the user-reachable throw sites
+    // translate at throw time; the 'sugar-readline: ' program tag stays
+    // English at the call site (it is the grep handle). The three error_log
+    // channels (destruct flush failure, tryOpen decline, read-lock
+    // degradation) are developer-facing diagnostics and ride the recorded
+    // English exemption in CALIBER_LEARNINGS.md.
+    'history.append_lock_failed' => 'cannot acquire append lock on {path}',
+    'history.changed_under_us' => 'history path changed under us (possible symlink swap): {path}',
+    'history.chmod_failed' => 'cannot set 0600 on history file {path}',
+    'history.clear_temp_failed' => 'cannot create temp file for history clear in {dir}',
+    'history.create_failed' => 'cannot create history file {path}',
+    'history.lock_acquire_failed' => 'cannot acquire history write lock {path}',
+    'history.lock_changed' => 'history lock changed under us (possible symlink swap): {path}',
+    'history.lock_open_failed' => 'cannot open history write lock {path}',
+    'history.not_regular' => 'history path is not a regular file (opened through a swap?): {path}',
+    'history.open_failed' => 'cannot open history file {path}',
+    'history.replace_failed' => 'cannot replace history file {path}',
+    'history.symlink_refused' => 'refusing symlinked {what} {path}',
+    'history.temp_create_failed' => 'cannot create temp file for history rewrite in {dir}',
+    'history.temp_lock_failed' => 'cannot lock temp file for history rewrite: {path}',
+    'history.temp_open_failed' => 'cannot open temp file for history rewrite: {path}',
+
     // MultiSelectPrompt hint row — one whole sentence per min/max
     // combination so word order stays the locale's own.
     'multiselect.hint' => '[multi-select] selected: {count}',
