@@ -41,6 +41,8 @@ return [
     'prom.reserved_label'             => '直方图指标 "{name}" 不能接受调用方提供的 "le" 标签',
     'prom.two_kinds'                  => 'prometheus textfile："{name}" 同时作为直方图和 {kind} 输出；一个指标名称不能承载两种类型',
     'prom.write_incomplete'           => 'prometheus textfile：写入 {path} 不完整：{reason}',
+    'prom.chmod_failed'               => 'Prometheus 文本文件：无法为 {path} 设置文件权限模式',
+    'prom.file_mode'                  => 'Prometheus 指标：fileMode 必须是 0-0777 的八进制权限掩码，实际为 {mode}',
     'registry.cardinality_limit'      => 'cardinalityLimit 必须 >= 1，实际为 {limit}',
     'registry.negative_monotonic'     => '单调 {kind} "{name}" 拒绝负值 {value}',
     'registry.register_conflict'      => '指标 "{name}" 已注册为 {existing}；无法重新注册为 {incoming}',

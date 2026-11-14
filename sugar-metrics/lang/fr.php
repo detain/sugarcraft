@@ -41,6 +41,8 @@ return [
     'prom.reserved_label'             => 'la métrique d\'histogramme "{name}" ne peut pas recevoir une étiquette "le" de l\'appelant',
     'prom.two_kinds'                  => 'prometheus textfile : « {name} » est émis comme histogramme et comme {kind} ; un nom de métrique ne peut pas porter deux types',
     'prom.write_incomplete'           => 'prometheus textfile : écriture incomplète vers {path} : {reason}',
+    'prom.chmod_failed'               => 'Fichier Prometheus : impossible de définir le mode du fichier sur {path}',
+    'prom.file_mode'                  => 'Métriques Prometheus : fileMode doit être un masque de permissions octal compris entre 0 et 0777, reçu {mode}',
     'registry.cardinality_limit'      => 'cardinalityLimit doit être >= 1, valeur reçue : {limit}',
     'registry.negative_monotonic'     => 'l\'instrument monotone {kind} "{name}" a refusé la valeur négative {value}',
     'registry.register_conflict'      => 'la métrique "{name}" est déjà enregistrée comme {existing} ; impossible de l\'enregistrer comme {incoming}',

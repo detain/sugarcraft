@@ -41,6 +41,8 @@ return [
     'prom.reserved_label'             => 'histogram metric "{name}" cannot accept a caller-supplied "le" label',
     'prom.two_kinds'                  => 'Prometheus textfile: "{name}" is emitted as both a histogram and a {kind}; one metric name cannot carry two kinds',
     'prom.write_incomplete'           => 'Prometheus textfile: incomplete write to {path}: {reason}',
+    'prom.chmod_failed'               => 'Prometheus textfile: could not set the file mode on {path}',
+    'prom.file_mode'                  => 'Prometheus metrics: fileMode must be an octal 0-0777 permission mask, got {mode}',
     'registry.cardinality_limit'      => 'cardinalityLimit must be >= 1, got {limit}',
     'registry.negative_monotonic'     => 'monotonic {kind} "{name}" refused negative value {value}',
     'registry.register_conflict'      => 'metric "{name}" is already registered as {existing}; cannot re-register as {incoming}',

@@ -231,7 +231,7 @@ final class ReviewFixPinsTest extends TestCase
         $b    = new PrometheusFileBackend($path);
         $b->counter('hits', 1.0);
         $b->flush();
-        $leaked  = glob($path . '.tmp.*');
+        $leaked  = array_merge(glob($path . '.*.tmp') ?: [], glob($path . '.tmp.*') ?: []);
         $this->assertSame([], $leaked === false ? [] : $leaked, 'staging files must not survive a flush');
         $this->assertStringContainsString('# TYPE hits counter', (string) file_get_contents($path));
         @unlink($path);

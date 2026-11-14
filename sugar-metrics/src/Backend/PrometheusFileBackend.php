@@ -63,11 +63,16 @@ use SugarCraft\Metrics\Util;
  * all and the whole-replaced file self-heals on the next flush.
  *
  * Durability: flush() verifies every write syscall, fsyncs the staging
- * file before publishing it via rename(2), and deletes the staging file
- * on any failure, so a returned success means a collector scraping now
- * reads complete bytes from disk. The staging file inherits the process
- * umask for its mode (typically 0644) — a textfile directory that must
- * not leak metrics needs deployment-level mode control.
+ * file before publishing it via rename(2), fsyncs the parent directory
+ * (best-effort) after it, and deletes the staging file on any failure,
+ * so a returned success means a collector scraping now reads complete
+ * bytes from disk. Staging names end in `.tmp` (the collector's
+ * version-independent ignore rule) and every successful publish sweeps
+ * crash-leaked residue of its own pattern past a grace window. The
+ * publish mode is 0600 by default — chmod on the staging
+ * path (exclusive create) before the rename, so the process umask never decides exposure;
+ * the `fileMode` constructor argument opens it up for a reader as
+ * another user.
  *
  * Atomicity: each flush() writes its body to a unique per-writer temp
  * file (`<path>.tmp.<pid>-<entropy>`), then `rename()`s it over `<path>`.
@@ -85,6 +90,17 @@ final class PrometheusFileBackend implements Backend
 
     /** Default per-family series budget; mirrors the Registry cardinality default. */
     public const DEFAULT_MAX_SERIES_PER_FAMILY = 10_000;
+
+    /** Default publish mode (sugar-metrics-029): owner read/write only, umask-independent. */
+    public const DEFAULT_FILE_MODE = 0600;
+
+    /** Bounded x+ retries per flush (sugar-metrics-028): a taken staging name is retried, never reused. */
+    private const STAGING_ATTEMPTS = 8;
+
+    /** Crash-leaked staging residue younger than this is left alone (sugar-metrics-055). */
+    private const STAGING_GRACE_SECONDS = 3600;
+
+    private int $fileMode;
 
     /** @var list<float> */
     private array $buckets;
@@ -142,23 +158,34 @@ final class PrometheusFileBackend implements Backend
      *                                  bounds silently corrupt every bucket count).
      * @param int $maxSeriesPerFamily Distinct series each metric family may accumulate
      *                                before the oldest is FIFO-dropped. Must be >= 1.
+     * @param int|null $fileMode      Publish mode for the textfile (sugar-metrics-029):
+     *                                applied via chmod on the staging path (x+ create) before the
+     *                                rename, so the process umask never decides exposure.
+     *                                Null means DEFAULT_FILE_MODE (0600); pass e.g. 0644
+     *                                when the exporter reads as another user. Must be a
+     *                                0-0777 permission mask.
      */
     /**
      * House-idiom factory (sugar-metrics-014): `PrometheusFileBackend::new($path)`.
      */
-    public static function new(string $path, ?array $buckets = null, int $maxSeriesPerFamily = self::DEFAULT_MAX_SERIES_PER_FAMILY): self
+    public static function new(string $path, ?array $buckets = null, int $maxSeriesPerFamily = self::DEFAULT_MAX_SERIES_PER_FAMILY, ?int $fileMode = null): self
     {
-        return new self($path, $buckets, $maxSeriesPerFamily);
+        return new self($path, $buckets, $maxSeriesPerFamily, $fileMode);
     }
 
     public function __construct(
         private readonly string $path,
         ?array $buckets = null,
         private readonly int $maxSeriesPerFamily = self::DEFAULT_MAX_SERIES_PER_FAMILY,
+        ?int $fileMode = null,
     ) {
         if ($maxSeriesPerFamily < 1) {
             throw new \InvalidArgumentException(Lang::t('prom.max_series', ['limit' => (string) $maxSeriesPerFamily]));
         }
+        if ($fileMode !== null && ($fileMode < 0 || $fileMode > 0777)) {
+            throw new \InvalidArgumentException(Lang::t('prom.file_mode', ['mode' => decoct($fileMode)]));
+        }
+        $this->fileMode = $fileMode ?? self::DEFAULT_FILE_MODE;
         $this->buckets = $buckets ?? self::DEFAULT_BUCKETS;
         $previous = -\INF;
         foreach ($this->buckets as $index => $boundary) {
@@ -492,35 +519,64 @@ final class PrometheusFileBackend implements Backend
         $this->dirtyAsyncCounters = [];
         $this->dirtyAsyncGauges = [];
 
-        // Unique per-writer temp name: two processes flushing the same path
-        // must never share the staging file. A shared `<path>.tmp` meant one
-        // writer's rename could steal the file mid-flight (or truncate the
-        // other's half-written body), and the loser then died on a spurious
-        // rename_failed(ENOENT). flock still guards the write phase of THIS
-        // staging file; rename(2) publishes atomically, so a reader only ever
-        // sees a complete body — last writer wins, which is exactly the
-        // textfile-collector contract.
-        $tmp = $this->path . '.tmp.' . uniqid((string) getmypid() . '-', true);
-        $dir = dirname($tmp);
-        // fopen() raises an E_WARNING *before* returning false when its
-        // parent cannot host the file (missing dir, parent is a file,
-        // unwritable dir). The RuntimeException below is this door's documented
-        // contract, so probe the parent first and only reach fopen() when
-        // success is expected; the `=== false` check stays to close the
-        // probe-vs-open race with the same refusal.
-        $fh = is_dir($dir) && is_writable($dir) ? fopen($tmp, 'c+') : false;
+        // Staging lifecycle (sugar-metrics-028/029/055/056/057 — one sweep):
+        //  * name: `<path>.<pid>-<entropy>.tmp` — ending in `.tmp` is node_exporter's
+        //    version-independent ignore rule for textfile directories, so an
+        //    in-flight (or crash-residual) staging file is invisible to the
+        //    collector regardless of its parsing filters;
+        //  * create: `x+` (O_EXCL) fails closed on a taken name and the writer
+        //    retries with a fresh entropy draw — the old `c+` open on a
+        //    clock-derived uniqid name would publish an attacker-planted or
+        //    crash-residual file's bytes verbatim;
+        //  * mode: chmod on the staging path (just x+-created) before the rename, so the
+        //    published file's exposure is decided here, not by the process
+        //    umask ($fileMode opens it up for a reader in another user);
+        //  * no flock: per-writer-unique names make contention impossible;
+        //    rename(2) alone carries the atomic-publish guarantee;
+        //  * durability: fsync before the rename (bytes survive a crash
+        //    between staging and publish), then best-effort fsync of the
+        //    parent directory (the rename link itself survives power loss);
+        //  * residue: every successful publish sweeps stale files matching
+        //    this class's own staging pattern past a generous grace window —
+        //    names are per-writer-unique and this class is the only writer,
+        //    so a deleted stale cannot be a live flush in flight.
+        $dir = dirname($this->path);
+        $tmp = $this->path . '.' . getmypid() . '-.tmp';
+        $fh = false;
+        // fopen() raises an E_WARNING *before* returning false when its parent
+        // cannot host the file (missing dir, parent is a file, unwritable dir)
+        // or when a planted name is taken (x+). The RuntimeException below is
+        // this door's documented contract; a taken name is retried in bounded
+        // attempts, an unhostable parent is probed first so a real refusal
+        // never emits a diagnostic.
+        if (is_dir($dir) && is_writable($dir)) {
+            for ($attempt = 0; $attempt < self::STAGING_ATTEMPTS; $attempt++) {
+                $candidate = $this->path . '.' . getmypid() . '-' . random_int(0, PHP_INT_MAX) . '.tmp';
+                $tmp       = $candidate;
+                $fh        = @fopen($candidate, 'x+');
+                if ($fh !== false) {
+                    break;
+                }
+            }
+        }
         if ($fh === false) {
             throw new \RuntimeException(Lang::t('prom.cannot_open', ['path' => Util::displaySafe($tmp)]));
         }
+        // PHP core ships no fchmod(); chmod on the staging PATH is the
+        // equivalent here — x+ just created this exact inode exclusively, so
+        // the path provably still refers to the handle we opened.
+        if (@chmod($tmp, $this->fileMode) === false) {
+            fclose($fh);
+            @unlink($tmp);
+            throw new \RuntimeException(Lang::t('prom.chmod_failed', ['path' => Util::displaySafe($tmp)]));
+        }
         $failure = null;
         try {
-            flock($fh, LOCK_EX);
             // Every write syscall reports failure — a discarded fwrite
             // return (disk full: short write) used to publish a truncated
-            // body under a good name. The staging name is unique and opened
-            // 'c+', so it starts empty and needs no truncation. fsync BEFORE
-            // the rename so a success means the bytes survive a crash
-            // between staging and publish.
+            // body under a good name. The x+ staging file starts empty and
+            // needs no truncation. fsync BEFORE the rename so a success
+            // means the bytes survive a crash between staging and publish.
             $written = $body === '' ? 0 : fwrite($fh, $body);
             if ($written !== strlen($body)) {
                 $failure = 'fwrite';
@@ -530,7 +586,6 @@ final class PrometheusFileBackend implements Backend
                 $failure = 'fsync';
             }
         } finally {
-            flock($fh, LOCK_UN);
             fclose($fh);
         }
         if ($failure !== null) {
@@ -548,6 +603,24 @@ final class PrometheusFileBackend implements Backend
                 'tmp'  => Util::displaySafe($tmp),
                 'dest' => Util::displaySafe($this->path),
             ]));
+        }
+        // Best-effort: publish the rename into the directory itself. A failure
+        // here does not undo the success — the body is durably reachable until
+        // a hard power loss steps on the unflushed directory entry.
+        $dirh = @fopen($dir, 'r');
+        if ($dirh !== false) {
+            @fsync($dirh);
+            fclose($dirh);
+        }
+        // Reclaim crash-leaked staging residue (a SIGKILL between create and
+        // rename can leave one behind — possibly a COMPLETE body, which an
+        // old collector without the .tmp rule would parse as a duplicate
+        // family and sink the whole textfile directory).
+        foreach (glob($this->path . '.*.tmp') ?: [] as $stale) {
+            $age = is_file($stale) ? @filemtime($stale) : false;
+            if ($age !== false && $age !== null && time() - $age > self::STAGING_GRACE_SECONDS) {
+                @unlink($stale);
+            }
         }
     }
 

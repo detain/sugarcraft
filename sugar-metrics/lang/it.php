@@ -41,6 +41,8 @@ return [
     'prom.reserved_label'             => 'la metrica istogramma "{name}" non può ricevere unetichetta "le" dal chiamante',
     'prom.two_kinds'                  => 'prometheus textfile: "{name}" viene emesso sia come istogramma sia come {kind}; un nome di metrica non può avere due tipi',
     'prom.write_incomplete'           => 'prometheus textfile: scrittura incompleta su {path}: {reason}',
+    'prom.chmod_failed'               => 'File Prometheus: impossibile impostare la modalità file su {path}',
+    'prom.file_mode'                  => 'Metriche Prometheus: fileMode deve essere una maschera di permessi ottale tra 0 e 0777, ottenuto {mode}',
     'registry.cardinality_limit'      => 'cardinalityLimit deve essere >= 1, ricevuto {limit}',
     'registry.negative_monotonic'     => '{kind} monotono "{name}" ha rifiutato il valore negativo {value}',
     'registry.register_conflict'      => 'la metrica "{name}" è già registrata come {existing}; impossibile registrarla come {incoming}',

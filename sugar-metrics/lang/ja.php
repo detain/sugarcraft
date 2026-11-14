@@ -41,6 +41,8 @@ return [
     'prom.reserved_label'             => 'ヒストグラムメトリクス "{name}" は呼び出し元が提供する "le" ラベルを受け付けられません',
     'prom.two_kinds'                  => 'prometheus textfile: 「{name}」はヒストグラムと{kind}の両方として出力されています。1つのメトリック名は2種類のタイプを持てません',
     'prom.write_incomplete'           => 'prometheus textfile: {path} への書き込みが不完全です: {reason}',
+    'prom.chmod_failed'               => 'Prometheus テキストファイル: {path} にファイルモードを設定できませんでした',
+    'prom.file_mode'                  => 'Prometheus メトリクス: fileMode は 0〜0777 のオクタル権限マスクである必要があります。指定値 {mode}',
     'registry.cardinality_limit'      => 'cardinalityLimit は 1 以上である必要があります。指定値: {limit}',
     'registry.negative_monotonic'     => '単調な {kind} "{name}" で負の値 {value} は拒否されました',
     'registry.register_conflict'      => 'メトリクス "{name}" は既に {existing} として登録されています。{incoming} として再登録できません',

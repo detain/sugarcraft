@@ -41,6 +41,8 @@ return [
     'prom.reserved_label'             => 'a métrica de histograma "{name}" não pode receber uma etiqueta "le" do chamador',
     'prom.two_kinds'                  => 'prometheus textfile: "{name}" é emitido como histograma e como {kind}; um nome de métrica não pode carregar dois tipos',
     'prom.write_incomplete'           => 'prometheus textfile: escrita incompleta em {path}: {reason}',
+    'prom.chmod_failed'               => 'Ficheiro Prometheus: não foi possível definir o modo do ficheiro em {path}',
+    'prom.file_mode'                  => 'Métricas do Prometheus: fileMode tem de ser uma máscara de permissões octal entre 0 e 0777; obtido {mode}',
     'registry.cardinality_limit'      => 'cardinalityLimit tem de ser >= 1, obtido {limit}',
     'registry.negative_monotonic'     => '{kind} monotónico "{name}" recusou valor negativo {value}',
     'registry.register_conflict'      => 'a métrica "{name}" já está registada como {existing}; não pode ser registada como {incoming}',

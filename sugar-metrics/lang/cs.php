@@ -41,6 +41,8 @@ return [
     'prom.reserved_label'             => 'histogramová metrika "{name}" nepřijme štítek "le" zadaný volajícím',
     'prom.two_kinds'                  => 'prometheus textfile: "{name}" je emitován jako histogram i jako {kind}; jeden název metriky nemůže nést dva druhy',
     'prom.write_incomplete'           => 'prometheus textfile: neúplný zápis do {path}: {reason}',
+    'prom.chmod_failed'               => 'Prometheus textfile: na {path} nelze nastavit režim souboru',
+    'prom.file_mode'                  => 'Metriky Prometheus: fileMode musí být maska oprávnění 0-0777, zadáno {mode}',
     'registry.cardinality_limit'      => 'cardinalityLimit musí být >= 1, obdrženo {limit}',
     'registry.negative_monotonic'     => 'monotonická {kind} "{name}" zamítla zápornou hodnotu {value}',
     'registry.register_conflict'      => 'metrika "{name}" je již registrována jako {existing}; nelze ji registrovat znovu jako {incoming}',

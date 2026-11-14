@@ -41,6 +41,8 @@ return [
     'prom.reserved_label'             => '히스토그램 메트릭 "{name}"은(는) 호출자가 제공한 "le" 레이블을 허용하지 않습니다',
     'prom.two_kinds'                  => 'prometheus textfile: "{name}"이 히스토그램과 {kind} 두 유형으로 모두 출력됩니다; 한 메트릭 이름은 두 유형을 가질 수 없습니다',
     'prom.write_incomplete'           => 'prometheus textfile: {path}에 대한 쓰기가 불완전합니다: {reason}',
+    'prom.chmod_failed'               => 'Prometheus 텍스트 파일: {path}에 파일 모드를 설정할 수 없습니다',
+    'prom.file_mode'                  => 'Prometheus 메트릭: fileMode는 0-0777 8진수 권한 마스크여야 하며, 다음 값을 받음 {mode}',
     'registry.cardinality_limit'      => 'cardinalityLimit은 1 이상이어야 합니다. 받은 값: {limit}',
     'registry.negative_monotonic'     => '단조 {kind} "{name}"에서 음수 값 {value} 거부됨',
     'registry.register_conflict'      => '"{name}" 메트릭은 이미 {existing}(으)로 등록되어 있습니다. {incoming}(으)로 재등록할 수 없습니다',

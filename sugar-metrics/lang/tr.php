@@ -41,6 +41,8 @@ return [
     'prom.reserved_label'             => 'histogram metriği "{name}", çağıranın verdiği "le" etiketini kabul edemez',
     'prom.two_kinds'                  => 'prometheus textfile: "{name}" hem histogram hem de {kind} olarak yayınlanıyor; bir metrik adı iki tür taşıyamaz',
     'prom.write_incomplete'           => 'prometheus textfile: eksik yazma, {path}: {reason}',
+    'prom.chmod_failed'               => 'Prometheus metin dosyası: {path} üzerinde dosya modu ayarlanamadı',
+    'prom.file_mode'                  => 'Prometheus ölçümleri: fileMode, 0-0777 sekizlik izin maskesi olmalı, alınan {mode}',
     'registry.cardinality_limit'      => 'cardinalityLimit >= 1 olmalıdır, alınan {limit}',
     'registry.negative_monotonic'     => 'monotonik {kind} "{name}" için negatif değer {value} reddedildi',
     'registry.register_conflict'      => '"{name}" metriği zaten {existing} olarak kayıtlı; {incoming} olarak yeniden kaydedilemez',

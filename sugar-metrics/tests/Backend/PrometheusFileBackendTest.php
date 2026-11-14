@@ -17,6 +17,12 @@ final class PrometheusFileBackendTest extends TestCase
         $this->path = sys_get_temp_dir() . '/sugar-metrics-' . uniqid() . '.prom';
     }
 
+    /** Fresh target path for tests that need more than one backend at once. */
+    private function tempPromPath(): string
+    {
+        return sys_get_temp_dir() . '/sugar-metrics-' . uniqid() . '.prom';
+    }
+
     protected function tearDown(): void
     {
         foreach ([$this->path] as $f) {
@@ -24,9 +30,10 @@ final class PrometheusFileBackendTest extends TestCase
                 unlink($f);
             }
         }
-        // flush() stages into unique per-writer files `<path>.tmp.<pid>-...`;
-        // sweep them so a leak (or a test planted residue) cannot survive.
-        foreach (glob($this->path . '.tmp.*') ?: [] as $leaked) {
+        // flush() stages into unique per-writer files `<path>.<pid>-<entropy>.tmp`;
+        // sweep them (plus the pre-STAGING `.tmp.<suffix>` shape) so a leak (or
+        // a test planted residue) cannot survive.
+        foreach (array_merge(glob($this->path . '.*.tmp') ?: [], glob($this->path . '.tmp.*') ?: []) as $leaked) {
             if (is_file($leaked)) {
                 unlink($leaked);
             }
@@ -516,7 +523,8 @@ final class PrometheusFileBackendTest extends TestCase
         unset($b);
 
         self::assertNotNull($thrown, 'explicit flush() must surface the refusal');
-        self::assertStringContainsString($path . '.tmp', $thrown->getMessage());
+        self::assertStringContainsString($path, $thrown->getMessage());
+        self::assertStringContainsString('.tmp', $thrown->getMessage());
         @rmdir($dir);
     }
 
@@ -564,7 +572,8 @@ final class PrometheusFileBackendTest extends TestCase
         self::assertSame([$missingParent, $fileParent], array_keys($refusalMessages), 'both uncreatable shapes must refuse');
         foreach ($refusalMessages as $path => $message) {
             self::assertStringStartsWith('Prometheus textfile: cannot open ', $message, "refusal for {$path} must use the documented door message");
-            self::assertStringContainsString($path . '.tmp', $message, "refusal for {$path} must name the tmp path");
+            self::assertStringContainsString($path, $message, "refusal for {$path} must name the target");
+            self::assertStringContainsString('.tmp', $message, "refusal for {$path} must name the staging suffix");
         }
         self::assertSame([], $raised, 'the refusal door must not raise a PHP diagnostic');
 
@@ -590,21 +599,26 @@ final class PrometheusFileBackendTest extends TestCase
     }
 
     /**
-     * Structural pin: flush() must stage into a per-writer UNIQUE temp file.
-     * A fixed shared name (`<path>.tmp`) lets one writer's rename steal the
-     * other's staging file, so the loser dies on a spurious
-     * rename_failed(ENOENT) — this pin reddens deterministically if the unique
-     * suffix is ever dropped, without relying on process interleavings.
+     * Structural pin (MET-STAGING doctrine, sugar-metrics-028/055/057): the
+     * staging name must END in `.tmp` (node_exporter's version-independent
+     * ignore rule), be created `x+` (O_EXCL — a `c+` open republished planted
+     * bytes verbatim), derive entropy from random_int (a clock-derived
+     * `uniqid` name is predictable), carry the writer pid, and lock nothing
+     * (the per-writer-unique name makes a staging flock unfalsifiable — the
+     * old prose sold it as a concurrency defence that never defended).
      */
     public function testFlushStagesIntoAPerWriterUniqueTmpName(): void
     {
         $method = new \ReflectionMethod(PrometheusFileBackend::class, 'flush');
-        $lines = file((string) $method->getFileName());
+        $lines  = file((string) $method->getFileName());
         self::assertIsArray($lines);
         $body = implode('', array_slice($lines, $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1));
 
-        self::assertStringContainsString('.tmp.', $body, 'flush() must stage into a .tmp.<suffix> file');
-        self::assertStringContainsString('uniqid(', $body, 'the staging name must be unique per flush');
+        self::assertStringContainsString(". '.tmp'", $body, 'the staging name must end in .tmp');
+        self::assertStringContainsString("'x+'", $body, 'staging must be an exclusive create — c+ republished planted bytes');
+        self::assertStringContainsString('getmypid()', $body, 'the staging name must carry the writer pid');
+        self::assertStringNotContainsString('uniqid(', $body, 'the staging name must not ride the clock');
+        self::assertStringNotContainsString('flock(', $body, 'rename(2) carries the publish guarantee; a staging flock is unfalsifiable here');
         self::assertStringNotContainsString("\$this->path . '.tmp';", $body, 'a fixed shared staging name re-introduces the rename race');
     }
 
@@ -656,7 +670,7 @@ final class PrometheusFileBackendTest extends TestCase
         );
 
         unset($parent);
-        foreach (glob($this->path . '.tmp.*') ?: [] as $leaked) {
+        foreach (array_merge(glob($this->path . '.*.tmp') ?: [], glob($this->path . '.tmp.*') ?: []) as $leaked) {
             self::fail('unique staging file leaked to disk: ' . $leaked);
         }
     }
@@ -779,5 +793,99 @@ final class PrometheusFileBackendTest extends TestCase
         $this->assertStringContainsString('already emitted as a counter', (string) $msg);
         $b->flush();
         $this->assertStringContainsString("dup 1\n", (string) file_get_contents($this->path));
+    }
+    /**
+     * sugar-metrics-029: the publish mode is decided by this class, not the
+     * process umask — 0600 by default (attacker-influenced session ids ride
+     * in the labels), `fileMode:` opens it up for a reader as another user.
+     */
+    public function testPublishedFileIsClosedToOtherUsersByDefaultAndOpensViaFileMode(): void
+    {
+        $closed = $this->tempPromPath();
+        $open   = $this->tempPromPath();
+        $a = new PrometheusFileBackend($closed);
+        $a->counter('hits', 1.0);
+        $a->flush();
+        clearstatcache();
+        self::assertSame(0600, fileperms($closed) & 0777, 'publish must default to owner-only, umask-independent');
+        $b = new PrometheusFileBackend($open, fileMode: 0644);
+        $b->counter('hits', 1.0);
+        $b->flush();
+        clearstatcache();
+        self::assertSame(0644, fileperms($open) & 0777, 'fileMode must override the default upward for a shared reader');
+        unset($a, $b);
+        @unlink($closed);
+        @unlink($open);
+    }
+
+    /** sugar-metrics-029: a nonsense mask refuses at the door (fail fast). */
+    public function testInvalidFileModeRefusedAtTheDoor(): void
+    {
+        foreach ([07777, -1] as $mode) {
+            try {
+                new PrometheusFileBackend($this->tempPromPath(), fileMode: $mode);
+                self::fail("fileMode {$mode} must refuse at construction");
+            } catch (\InvalidArgumentException $e) {
+                self::assertStringContainsString('fileMode', $e->getMessage());
+            }
+        }
+    }
+
+    /**
+     * sugar-metrics-055: a crash between staging create and rename leaks a
+     * `.tmp` file (possibly a COMPLETE body). Every successful publish
+     * reclaims residue of its own pattern past the grace window — and only
+     * that: in-window names (a live writer's flight), differently-shaped
+     * neighbours, and foreign files must survive the sweep.
+     */
+    public function testStaleStagingResidueIsSweptAndFreshResidueIsKept(): void
+    {
+        $path    = $this->tempPromPath();
+        $stale   = $path . '.4242-99.tmp';
+        $fresh   = $path . '.1337-98.tmp';
+        $alien   = $path . 'other.tmp';
+        $foreign = dirname($path) . '/unrelated-' . getmypid() . '.tmp';
+        foreach ([$stale, $fresh, $alien, $foreign] as $planted) {
+            self::assertIsInt(file_put_contents($planted, 'planted'));
+        }
+        self::assertTrue(touch($stale, time() - 7200));
+        self::assertTrue(touch($fresh, time()));
+        $b = new PrometheusFileBackend($path);
+        $b->counter('hits', 1.0);
+        $b->flush();
+        self::assertFileDoesNotExist($stale, 'residue past the grace window must be reclaimed by the next publish');
+        self::assertFileExists($fresh, 'names inside the grace window belong to a possibly-live writer and must be left alone');
+        self::assertFileExists($alien);
+        self::assertFileExists($foreign);
+        foreach ([$alien, $foreign] as $planted) {
+            @unlink($planted);
+        }
+        unset($b);
+        @unlink($path);
+    }
+
+    /**
+     * sugar-metrics-028: 16 planted files across the staging pattern space
+     * must neither wedge the writer (x+ retries with fresh entropy) nor
+     * poison the exposition (the published body is this writer's bytes
+     * only). The old `c+` + predictable-uniqid design failed both directions.
+     */
+    public function testPlantedStagingClutterNeverWedgesOrPoisonsThePublish(): void
+    {
+        $path = $this->tempPromPath();
+        for ($i = 0; $i < 16; $i++) {
+            self::assertIsInt(file_put_contents($path . '.' . getmypid() . '-' . random_int(0, 999999) . '.tmp', 'planted junk'));
+        }
+        $b = new PrometheusFileBackend($path);
+        $b->counter('hits', 2.0);
+        $b->flush();
+        $contents = (string) file_get_contents($path);
+        self::assertStringNotContainsString('planted', $contents);
+        self::assertStringContainsString('hits 2', $contents);
+        foreach (array_merge(glob($path . '.*.tmp') ?: [], glob($path . '.tmp.*') ?: []) as $leaked) {
+            @unlink($leaked);
+        }
+        unset($b);
+        @unlink($path);
     }
 }

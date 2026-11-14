@@ -41,6 +41,8 @@ return [
     'prom.reserved_label'             => 'Histogramm-Metrik "{name}" darf kein vom Aufrufer gesetztes "le"-Label erhalten',
     'prom.two_kinds'                  => 'Prometheus textfile: "{name}" wird als Histogramm und als {kind} ausgegeben; ein Metrikname kann nicht zwei Arten tragen',
     'prom.write_incomplete'           => 'Prometheus textfile: unvollständiger Schreibvorgang auf {path}: {reason}',
+    'prom.chmod_failed'               => 'Prometheus-Textdatei: Dateimodus für {path} konnte nicht gesetzt werden',
+    'prom.file_mode'                  => 'Prometheus-Metriken: fileMode muss eine Oktal-Rechte-Maske von 0-0777 sein, erhalten {mode}',
     'registry.cardinality_limit'      => 'cardinalityLimit muss >= 1 sein, erhalten: {limit}',
     'registry.negative_monotonic'     => 'monotonisches {kind} "{name}" lehnte negativen Wert {value} ab',
     'registry.register_conflict'      => 'Metrik "{name}" ist bereits als {existing} registriert; Umschreibung auf {incoming} nicht möglich',

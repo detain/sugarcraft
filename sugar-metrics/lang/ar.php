@@ -41,6 +41,8 @@ return [
     'prom.reserved_label'             => 'لا يمكن لمقياس المدرج "{name}" قبول وسم "le" من المستدعي',
     'prom.two_kinds'                  => 'prometheus textfile: يتم إصدار "{name}" كمدرج وكـ {kind} معًا؛ لا يمكن لاسم مقياس واحد أن يحمل نوعين',
     'prom.write_incomplete'           => 'prometheus textfile: كتابة غير مكتملة إلى {path}: {reason}',
+    'prom.chmod_failed'               => 'ملف Prometheus: تعذّر تعيين صلاحية الملف على {path}',
+    'prom.file_mode'                  => 'مقاييس Prometheus: يجب أن يكون fileMode قناع أذونات ثمانيًا من 0 إلى 0777، والقيمة {mode}',
     'registry.cardinality_limit'      => 'يجب أن يكون cardinalityLimit أكبر من أو يساوي 1، القيمة: {limit}',
     'registry.negative_monotonic'     => 'رفضت الأداة الرتيبة {kind} "{name}" قيمة سالبة {value}',
     'registry.register_conflict'      => 'المقياس "{name}" مسجَّل بالفعل كـ {existing}؛ لا يمكن إعادة تسجيله كـ {incoming}',
