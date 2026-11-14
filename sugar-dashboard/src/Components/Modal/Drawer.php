@@ -140,24 +140,22 @@ final class Drawer implements \SugarCraft\Dashboard\Foundation\SizedItem
         $drawerW = max(3, min($drawerW, $allocW));
         $drawerH = max(3, min($drawerH, $allocH));
 
-        [$tl, $tr, $bl, $br, $h, $v] = $this->getStyleChars();
+        // Finding sugar-dashboard-062 (D-71): the border color was PREPENDED
+        // to the result one breath before the twin branch RE-ASSIGNED $result
+        // from scratch - the documented knob styled nothing at all. The color
+        // now opens and resets INSIDE every painted row (the D-67 Modal
+        // frame law). An uncolored drawer collapses both parts to '' and
+        // keeps its historic bytes, single trailing reset included.
+        $borderSgr = $this->borderColor !== null ? $this->borderColor->toFg(ColorMode::profile()) : '';
+        $rowEnd = $this->borderColor !== null ? Ansi::reset() : '';
 
-        $contentWidth = $drawerW - 2;
-        $result = '';
-
-        // Apply border color if set
-        if ($this->borderColor !== null) {
-            $result .= $this->borderColor->toFg(ColorMode::profile());
-        }
-
-        // Render based on position
-        $contentLines = $this->renderContentLines($contentWidth);
-
-        if ($this->position === self::POSITION_LEFT || $this->position === self::POSITION_RIGHT) {
-            $result = $this->renderVerticalDrawer($drawerW, $drawerH, $tl, $tr, $bl, $br, $h, $v, $contentLines);
-        } else {
-            $result = $this->renderHorizontalDrawer($drawerW, $drawerH, $tl, $tr, $bl, $br, $h, $v, $contentLines);
-        }
+        $result = $this->renderBox(
+            $drawerW,
+            $drawerH,
+            $this->renderSurfaceLines($this->content, $drawerW - 2),
+            $borderSgr,
+            $rowEnd,
+        );
 
         // Reset ANSI
         $result .= Ansi::reset();
@@ -166,90 +164,71 @@ final class Drawer implements \SugarCraft\Dashboard\Foundation\SizedItem
     }
 
     /**
-     * Render a left or right positioned drawer.
+     * Paint the drawer box from pre-rendered surfaces: top frame, title
+     * header, content rows padded to the box budget, footer section, bottom
+     * frame - each row colored inside its own span.
+     *
+     * Finding sugar-dashboard-062 (D-71): this replaces two byte-identical
+     * twins (renderVerticalDrawer/renderHorizontalDrawer, one carrying a
+     * dead foreach key). The positions differ only in how render() sizes
+     * the box, never in how the box is painted, so all four orientations
+     * now render from one code path.
+     *
+     * @param list<string> $contentLines
      */
-    private function renderVerticalDrawer(
-        int $drawerW,
-        int $drawerH,
-        string $tl,
-        string $tr,
-        string $bl,
-        string $br,
-        string $h,
-        string $v,
-        array $contentLines
-    ): string {
+    private function renderBox(int $drawerW, int $drawerH, array $contentLines, string $borderSgr, string $rowEnd): string
+    {
+        [$tl, $tr, $bl, $br, $h, $v] = $this->getStyleChars();
         $contentWidth = $drawerW - 2;
 
-        // Top border
-        $result = $tl . str_repeat($h, $contentWidth) . $tr . "\n";
+        $rows = [$tl . str_repeat($h, $contentWidth) . $tr];
 
-        // Content lines
-        foreach ($contentLines as $i => $line) {
-            $paddedLine = $v . $line . $v;
-            $result .= $paddedLine . "\n";
+        $titleRows = 0;
+        if ($this->title !== null) {
+            // Finding sugar-dashboard-062 (D-71): the title was a
+            // documented, withered, constructor-held surface that render()
+            // never read. It now paints as the header row below the top
+            // border, cell-truncated to the interior budget.
+            $title = Width::truncateAnsi($this->title, $contentWidth);
+            $rows[] = $v . Width::padRight($title, $contentWidth) . $v;
+            $titleRows = 1;
         }
 
-        // Pad with empty lines if needed
-        $usedLines = count($contentLines);
-        while ($usedLines < $drawerH - 2) {
-            $result .= $v . str_repeat(' ', $contentWidth) . $v . "\n";
-            $usedLines++;
-        }
+        $footerLines = $this->footer !== null ? $this->renderSurfaceLines($this->footer, $contentWidth) : [];
 
-        // Bottom border
-        $result .= $bl . str_repeat($h, $contentWidth) . $br;
+        // The header and the footer reserve rows inside the box: the
+        // content shares what the frame leaves (finding 062 again).
+        $budget = max(0, $drawerH - 2 - $titleRows - count($footerLines));
 
-        return rtrim($result, "\n");
-    }
-
-    /**
-     * Render a top or bottom positioned drawer.
-     */
-    private function renderHorizontalDrawer(
-        int $drawerW,
-        int $drawerH,
-        string $tl,
-        string $tr,
-        string $bl,
-        string $br,
-        string $h,
-        string $v,
-        array $contentLines
-    ): string {
-        $contentWidth = $drawerW - 2;
-
-        // Top border
-        $result = $tl . str_repeat($h, $contentWidth) . $tr . "\n";
-
-        // Content lines
         foreach ($contentLines as $line) {
-            $paddedLine = $v . $line . $v;
-            $result .= $paddedLine . "\n";
+            $rows[] = $v . $line . $v;
+        }
+        for ($pad = $budget - count($contentLines); $pad > 0; $pad--) {
+            $rows[] = $v . str_repeat(' ', $contentWidth) . $v;
+        }
+        foreach ($footerLines as $line) {
+            $rows[] = $v . $line . $v;
         }
 
-        // Pad with empty lines if needed
-        $usedLines = count($contentLines);
-        while ($usedLines < $drawerH - 2) {
-            $result .= $v . str_repeat(' ', $contentWidth) . $v . "\n";
-            $usedLines++;
+        $rows[] = $bl . str_repeat($h, $contentWidth) . $br;
+
+        $out = '';
+        foreach ($rows as $row) {
+            $out .= $borderSgr . $row . $rowEnd . "\n";
         }
 
-        // Bottom border
-        $result .= $bl . str_repeat($h, $contentWidth) . $br;
-
-        return rtrim($result, "\n");
+        return rtrim($out, "\n");
     }
 
     /**
-     * Render content and return lines.
+     * Render a surface (content or footer) and return cell-padded lines.
      *
      * @return list<string>
      */
-    private function renderContentLines(int $contentWidth): array
+    private function renderSurfaceLines(\SugarCraft\Dashboard\Foundation\Item|string $surface, int $contentWidth): array
     {
-        if ($this->content instanceof \SugarCraft\Dashboard\Foundation\Item) {
-            $contentToRender = $this->content;
+        if ($surface instanceof \SugarCraft\Dashboard\Foundation\Item) {
+            $contentToRender = $surface;
             if ($contentToRender instanceof \SugarCraft\Dashboard\Foundation\Sizer) {
                 $contentToRender = $contentToRender->setSize($contentWidth, 0);
             }
@@ -269,12 +248,12 @@ final class Drawer implements \SugarCraft\Dashboard\Foundation\SizedItem
             }, $lines);
         }
 
-        // String content - simple word wrap
-        if ($this->content === '') {
+        // String surface - simple word wrap
+        if ($surface === '') {
             return [str_repeat(' ', $contentWidth)];
         }
 
-        $wrapped = $this->wrapText($this->content, $contentWidth);
+        $wrapped = $this->wrapText($surface, $contentWidth);
 
         return array_map(function ($line) use ($contentWidth) {
             $lineWidth = Width::string($line);
@@ -356,7 +335,7 @@ final class Drawer implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withContent(\SugarCraft\Dashboard\Foundation\Item|string $content): self
     {
-        return new self(
+        $next = new self(
             content: $content,
             position: $this->position,
             size: $this->size,
@@ -365,6 +344,13 @@ final class Drawer implements \SugarCraft\Dashboard\Foundation\SizedItem
             style: $this->style,
             footer: $this->footer,
         );
+        // Finding sugar-dashboard-062 (D-71): every wither rebuilt through
+        // the constructor and dropped the setSize allocation (the D-56/D-77
+        // Modal class) - a configured drawer fell back to the default box
+        // after any fluent change. All seven now carry it.
+        $next->width = $this->width;
+        $next->height = $this->height;
+        return $next;
     }
 
     /**
@@ -372,7 +358,7 @@ final class Drawer implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withPosition(string $position): self
     {
-        return new self(
+        $next = new self(
             content: $this->content,
             position: $position,
             size: $this->size,
@@ -381,6 +367,9 @@ final class Drawer implements \SugarCraft\Dashboard\Foundation\SizedItem
             style: $this->style,
             footer: $this->footer,
         );
+        $next->width = $this->width;
+        $next->height = $this->height;
+        return $next;
     }
 
     /**
@@ -388,7 +377,7 @@ final class Drawer implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withSize(?int $size): self
     {
-        return new self(
+        $next = new self(
             content: $this->content,
             position: $this->position,
             size: $size,
@@ -397,6 +386,9 @@ final class Drawer implements \SugarCraft\Dashboard\Foundation\SizedItem
             style: $this->style,
             footer: $this->footer,
         );
+        $next->width = $this->width;
+        $next->height = $this->height;
+        return $next;
     }
 
     /**
@@ -404,7 +396,7 @@ final class Drawer implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withTitle(?string $title): self
     {
-        return new self(
+        $next = new self(
             content: $this->content,
             position: $this->position,
             size: $this->size,
@@ -413,6 +405,9 @@ final class Drawer implements \SugarCraft\Dashboard\Foundation\SizedItem
             style: $this->style,
             footer: $this->footer,
         );
+        $next->width = $this->width;
+        $next->height = $this->height;
+        return $next;
     }
 
     /**
@@ -420,7 +415,7 @@ final class Drawer implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withBorderColor(?Color $color): self
     {
-        return new self(
+        $next = new self(
             content: $this->content,
             position: $this->position,
             size: $this->size,
@@ -429,6 +424,9 @@ final class Drawer implements \SugarCraft\Dashboard\Foundation\SizedItem
             style: $this->style,
             footer: $this->footer,
         );
+        $next->width = $this->width;
+        $next->height = $this->height;
+        return $next;
     }
 
     /**
@@ -436,7 +434,7 @@ final class Drawer implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withStyle(string $style): self
     {
-        return new self(
+        $next = new self(
             content: $this->content,
             position: $this->position,
             size: $this->size,
@@ -445,6 +443,9 @@ final class Drawer implements \SugarCraft\Dashboard\Foundation\SizedItem
             style: $style,
             footer: $this->footer,
         );
+        $next->width = $this->width;
+        $next->height = $this->height;
+        return $next;
     }
 
     /**
@@ -452,7 +453,7 @@ final class Drawer implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withFooter(\SugarCraft\Dashboard\Foundation\Item|string|null $footer): self
     {
-        return new self(
+        $next = new self(
             content: $this->content,
             position: $this->position,
             size: $this->size,
@@ -461,5 +462,8 @@ final class Drawer implements \SugarCraft\Dashboard\Foundation\SizedItem
             style: $this->style,
             footer: $footer,
         );
+        $next->width = $this->width;
+        $next->height = $this->height;
+        return $next;
     }
 }
