@@ -99,6 +99,8 @@ final class RendererTest extends TestCase
             public function deleteBranch(string $_name): void {}
             public function restoreBranch(string $_name, string $_sha): void {}
             public function merge(string $branch): void {}
+            public function mergeAbort(): void {}
+            public function mergeContinue(): void {}
             public function fetch(): void {}
             public function pull(): void {}
             public function push(): void {}
@@ -163,6 +165,8 @@ final class RendererTest extends TestCase
             public function deleteBranch(string $_name): void {}
             public function restoreBranch(string $_name, string $_sha): void {}
             public function merge(string $branch): void {}
+            public function mergeAbort(): void {}
+            public function mergeContinue(): void {}
             public function fetch(): void {}
             public function pull(): void {}
             public function push(): void {}
@@ -259,6 +263,39 @@ final class RendererTest extends TestCase
         $this->assertStringContainsString('rebase', $out);
         $this->assertStringContainsString('continue', $out);
         $this->assertStringContainsString('abort', $out);
+    }
+
+    public function testRenderSequencerMenuForMergeStop(): void
+    {
+        // CG-14: the merge stop names itself and offers only the legs git
+        // actually has for a merge (skip is a rebase-only notion).
+        $g = new FixtureGit([], [], []);
+        $a = new \SugarCraft\Git\App($g, showRebaseMenu: true, rebaseMenuKind: 'merge');
+        $out = \SugarCraft\Git\Renderer::render($a);
+        $plain = preg_replace('/\x1b\[[0-9;]*m/', '', $out);
+        $this->assertStringContainsString('merge: [c]ontinue [a]bort', $plain);
+        $this->assertStringContainsString(' merge ', $plain, 'the box title names the merge');
+        $this->assertStringNotContainsString('skip', $plain, 'a merge menu must not offer skip');
+    }
+
+    public function testRenderSequencerMenuForCherryStopStillSkipsNothing(): void
+    {
+        $g = new FixtureGit([], [], []);
+        $a = new \SugarCraft\Git\App($g, showRebaseMenu: true, rebaseMenuKind: 'cherry');
+        $out = \SugarCraft\Git\Renderer::render($a);
+        $plain = preg_replace('/\x1b\[[0-9;]*m/', '', $out);
+        $this->assertStringContainsString('cherry-pick: [c]ontinue [a]bort', $plain);
+        $this->assertStringNotContainsString('skip', $plain);
+    }
+
+    public function testRenderRebaseMenuKeepsSkipForRebaseKind(): void
+    {
+        $g = new FixtureGit([], [], []);
+        $a = new \SugarCraft\Git\App($g, showRebaseMenu: true, rebaseMenuKind: 'rebase');
+        $out = \SugarCraft\Git\Renderer::render($a);
+        $plain = preg_replace('/\x1b\[[0-9;]*m/', '', $out);
+        $this->assertStringContainsString('rebase: [c]ontinue [a]bort [s]kip', $plain);
+        $this->assertStringContainsString('skip', $plain);
     }
 
     public function testRenderStashOverlayWithEntries(): void
@@ -416,6 +453,8 @@ final class RendererTest extends TestCase
             public function deleteBranch(string $_name): void {}
             public function restoreBranch(string $_name, string $_sha): void {}
             public function merge(string $branch): void {}
+            public function mergeAbort(): void {}
+            public function mergeContinue(): void {}
             public function fetch(): void {}
             public function pull(): void {}
             public function push(): void {}

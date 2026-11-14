@@ -175,17 +175,62 @@ final class SequenceMenuTest extends TestCase
         self::assertFalse($g->cherryPickContinueCalled);
     }
 
-    public function testRKeyDuringConflictedMergeGivesHonestHint(): void
+    public function testMergeMenuDrivesMergeLegsAndIgnoresSkip(): void
     {
+        // CG-14 (candy-git-012): 'c'/'a' on a merge stop drive the merge
+        // legs — not a rebase's — and the skip verb is not offered.
+        $g = new FixtureGit([], [], []);
+        $g->sequenceStateResult = 'merge';
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'r'));
+        self::assertSame('merge', $a->rebaseMenuKind);
+
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 's'));
+        self::assertFalse($g->rebaseSkipCalled, 'skip is not a merge verb');
+        self::assertTrue($a->showRebaseMenu, 'a key foreign to the kind leaves the menu up');
+
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'c'));
+        self::assertTrue($g->mergeContinueCalled, "'c' commits the recorded resolution");
+        self::assertFalse($g->rebaseContinueCalled, 'the merge menu never resumes a rebase');
+        self::assertFalse($a->showRebaseMenu, 'executing closes the menu');
+
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'r'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'a'));
+        self::assertTrue($g->mergeAbortCalled, "'a' abandons the merge");
+        self::assertFalse($g->rebaseAbortCalled);
+    }
+
+    public function testFailedMergeContinueKeepsTheMenuOpenForRetry(): void
+    {
+        // git refuses to commit unresolved paths; the stop is still live, so
+        // the menu must survive the error for a second press.
+        $g = new FixtureGit([], [], []);
+        $g->sequenceStateResult = 'merge';
+        $g->throwOn['mergeContinue'] = new RuntimeException(
+            'error: Committing is not possible because you have unmerged files.'
+        );
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'r'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'c'));
+        self::assertNotNull($a->error);
+        self::assertStringContainsString('unmerged files', $a->error);
+        self::assertTrue($a->showRebaseMenu, 'a failed continue keeps the menu for retry');
+    }
+
+    public function testRKeyDuringConflictedMergeOpensTheMenu(): void
+    {
+        // CG-14 (candy-git-012): a conflicted merge previously got a hint-only
+        // error and no in-app exit. It now joins rebase/cherry-pick behind the
+        // sequencer menu, so 'r' opens it (kind 'merge') and does not report an
+        // error — the continue/abort legs are driven elsewhere in this suite.
         $g = new FixtureGit([], [], []);
         $g->sequenceStateResult = 'merge';
         $a = App::start($g);
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'r'));
 
-        self::assertNotNull($a->error);
-        self::assertStringContainsString('conflicted merge is in progress', $a->error);
-        self::assertStringNotContainsString('no rebase', (string) $a->error, 'must not deny the merge stop');
-        self::assertFalse($a->showRebaseMenu);
+        self::assertTrue($a->showRebaseMenu, 'r on a merge stop must open the menu');
+        self::assertSame('merge', $a->rebaseMenuKind);
+        self::assertNull($a->error, 'the merge stop is not an error state any more');
     }
 
     // ------------------------------------------- real-git sequenceState probe

@@ -390,6 +390,32 @@ final class Git implements GitDriver
         $this->run(['merge', '--no-edit', '--', $branch]);
     }
 
+    /**
+     * Abandon a stopped merge: git restores the pre-merge index and worktree.
+     * Called from the sequencer menu while sequenceState() reports 'merge';
+     * on a clean repo git exits nonzero and the refusal surfaces as an error.
+     */
+    public function mergeAbort(): void
+    {
+        $this->run(['merge', '--abort']);
+    }
+
+    /**
+     * Commit the resolution of a conflicted merge.
+     *
+     * `git merge --continue` takes no arguments (QA on git 2.43) and opens
+     * $EDITOR for the prepared message when run bare — workable only
+     * because Process::childEnv() forces GIT_EDITOR=true; the plain merge
+     * commit (`git commit --no-edit` with MERGE_HEAD present reuses
+     * MERGE_MSG and the second parentage) does not lean on that seam at
+     * all. Unresolved paths make git exit nonzero — the error lane gets
+     * the verdict instead of a wedged merge.
+     */
+    public function mergeContinue(): void
+    {
+        $this->run(['commit', '--no-edit']);
+    }
+
     public function fetch(): void
     {
         // Plain `fetch` with no explicit remote: git resolves the branch's

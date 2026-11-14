@@ -621,18 +621,28 @@ final class Renderer
 
     private static function rebaseOverlay(App $a): string
     {
-        $cherry = $a->rebaseMenuKind === 'cherry';
+        $kind = $a->rebaseMenuKind;
+        $title = match ($kind) {
+            'cherry' => 'ui.title.cherry',
+            'merge' => 'ui.title.merge',
+            default => 'ui.title.rebase',
+        };
+        $prompt = match ($kind) {
+            'cherry' => 'rebase.cherry_prompt',
+            'merge' => 'rebase.merge_prompt',
+            default => 'rebase.prompt',
+        };
         $lines = [
             Style::new()->bold()->foreground(Color::hex('#a78bfa'))
-                ->render($cherry ? Lang::t('ui.title.cherry') : Lang::t('ui.title.rebase')),
+                ->render(Lang::t($title)),
             '',
             Style::new()->foreground(Color::hex('#c5b6dd'))
-                ->render(Lang::t($cherry ? 'rebase.cherry_prompt' : 'rebase.prompt')),
+                ->render(Lang::t($prompt)),
             '',
             '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('c') . '  ' . Lang::t('rebase.continue'),
             '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('a') . '  ' . Lang::t('rebase.abort'),
         ];
-        if (!$cherry) {
+        if ($kind === 'rebase') {
             $lines[] = '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('s') . '  ' . Lang::t('rebase.skip');
         }
         $lines[] = '';

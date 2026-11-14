@@ -102,6 +102,10 @@ final class FixtureGit implements GitDriver
     public function deleteBranch(string $name): void { $this->maybeThrow('deleteBranch'); $this->branchDeletions[] = $name; }
     public function restoreBranch(string $name, string $sha): void { $this->maybeThrow('restoreBranch'); $this->restoredBranches[] = ['name' => $name, 'sha' => $sha]; }
     public function merge(string $branch): void { $this->maybeThrow('merge'); $this->merges[] = $branch; }
+    public bool $mergeAbortCalled = false;
+    public bool $mergeContinueCalled = false;
+    public function mergeAbort(): void { $this->maybeThrow('mergeAbort'); $this->mergeAbortCalled = true; }
+    public function mergeContinue(): void { $this->maybeThrow('mergeContinue'); $this->mergeContinueCalled = true; }
     public function fetch(): void { $this->maybeThrow('fetch'); $this->fetchCalled = true; }
     public function pull(): void { $this->maybeThrow('pull'); $this->pullCalled = true; }
     public function push(): void { $this->maybeThrow('push'); $this->pushCalled = true; }
@@ -822,6 +826,11 @@ final class AppTest extends TestCase
         [$a, ] = $a->update(new KeyMsg(KeyType::Escape, ''));
         $this->assertFalse($a->showRebaseMenu, 'Escape must close the rebase menu, not quit');
     }
+
+
+
+
+
 
     public function testRKeySurvivesAFailingRebaseProbe(): void
     {

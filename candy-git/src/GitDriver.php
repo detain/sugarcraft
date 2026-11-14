@@ -99,6 +99,12 @@ interface GitDriver
     /** Merge a branch into the current branch. */
     public function merge(string $branch): void;
 
+    /** Abandon a stopped (conflicted) merge, restoring the pre-merge state. */
+    public function mergeAbort(): void;
+
+    /** Commit the resolution of a conflicted merge (continue leg). */
+    public function mergeContinue(): void;
+
     /** Fetch from the default remote: updates tracking refs, never the worktree. */
     public function fetch(): void;
 

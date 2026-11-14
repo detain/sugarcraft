@@ -317,15 +317,25 @@ final class App implements Model
         }
 
         // Sequencer menu: handle c/a/s keys against whichever operation stopped
+        // (a stopped merge drives c/a; skip is a rebase-only notion, so the
+        // row for it is only offered while kind is 'rebase').
         if ($this->showRebaseMenu) {
-            $cherry = $this->rebaseMenuKind === 'cherry';
+            $kind = $this->rebaseMenuKind;
             if ($msg->type === KeyType::Char && $msg->rune === 'c') {
-                return [$cherry ? $this->executeCherryPickContinue() : $this->executeRebaseContinue(), null];
+                return [match ($kind) {
+                    'cherry' => $this->executeCherryPickContinue(),
+                    'merge' => $this->executeMergeContinue(),
+                    default => $this->executeRebaseContinue(),
+                }, null];
             }
             if ($msg->type === KeyType::Char && $msg->rune === 'a') {
-                return [$cherry ? $this->executeCherryPickAbort() : $this->executeRebaseAbort(), null];
+                return [match ($kind) {
+                    'cherry' => $this->executeCherryPickAbort(),
+                    'merge' => $this->executeMergeAbort(),
+                    default => $this->executeRebaseAbort(),
+                }, null];
             }
-            if ($msg->type === KeyType::Char && $msg->rune === 's' && !$cherry) {
+            if ($msg->type === KeyType::Char && $msg->rune === 's' && $kind === 'rebase') {
                 return [$this->executeRebaseSkip(), null];
             }
             return [$this, null];
@@ -1385,22 +1395,20 @@ final class App implements Model
         }
     }
 
-    /** Handle 'r' key: show rebase menu if rebase in progress. */
+    /** Handle 'r' key: open the sequencer menu for whichever operation stopped. */
     private function handleRebaseKey(): self
     {
         // The probe shells out (git rev-parse); a failing git must land in the
         // error lane like every other operation, not as an uncaught fatal
         // that takes the TUI down.
         try {
-            // One menu serves every sequencer stop; 'r' during a conflicted
-            // merge gets an honest hint instead of a lie about rebasing
-            // (cherry-pick continue/abort had no callers at all).
+            // One menu serves every sequencer stop: rebase, cherry-pick, and
+            // a conflicted merge all leave continue/abort needs (CG-14 — the
+            // merge stop used to get a hint-only error, so a merge started
+            // in-app could not be finished or abandoned in-app).
             $state = $this->git->sequenceState();
-            if ($state === 'rebase' || $state === 'cherry') {
+            if ($state === 'rebase' || $state === 'cherry' || $state === 'merge') {
                 return $this->withRebaseMenu(true, $state);
-            }
-            if ($state === 'merge') {
-                return $this->withError(Lang::t('rebase.merge_state'));
             }
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
@@ -1467,6 +1475,32 @@ final class App implements Model
             $this->git->cherryPickAbort();
             return $this->withRebaseMenu(false)->refresh()->withAll(
                 successMessage: Lang::t('rebase.success', ['action' => Lang::t('rebase.abort')])
+            );
+        } catch (\RuntimeException $e) {
+            return $this->withError($e->getMessage());
+        }
+    }
+
+    /** Continue leg of a stopped merge: commits the recorded resolution. */
+    private function executeMergeContinue(): self
+    {
+        try {
+            $this->git->mergeContinue();
+            return $this->withRebaseMenu(false)->refresh()->withAll(
+                successMessage: Lang::t('merge.sequence_success', ['action' => Lang::t('rebase.continue')])
+            );
+        } catch (\RuntimeException $e) {
+            return $this->withError($e->getMessage());
+        }
+    }
+
+    /** Abort leg of a stopped merge: git restores the pre-merge state. */
+    private function executeMergeAbort(): self
+    {
+        try {
+            $this->git->mergeAbort();
+            return $this->withRebaseMenu(false)->refresh()->withAll(
+                successMessage: Lang::t('merge.sequence_success', ['action' => Lang::t('rebase.abort')])
             );
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());

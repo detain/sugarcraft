@@ -104,7 +104,7 @@ on one DWIMs the way git does: `--track` creates a local branch of that name,
 or — when the local already exists — checks it out. They are read-only for
 `D`: the branch family manages locals.
 | `M`                      | Merge — prompt for a branch/ref to merge into current (free text; the selected row is never read) |
-| `r`                      | Open rebase menu (continue / abort / skip) — when in progress only: opens while a rebase or cherry-pick has stopped; on an idle repo it reports "no rebase in progress" |
+| `r`                      | Open the sequencer menu (continue / abort; skip on a rebase) — when stopped only: opens while a rebase, cherry-pick, or conflicted merge is pending; on an idle repo it reports "no rebase in progress" |
 | `S`                      | Open stash manager (list / apply / drop; drop asks twice)   |
 | `V`                      | Cherry-pick — type a commit ref and press Enter       |
 | `w` (branches pane)     | Open worktrees manager (list / add / remove) — path collection refuses option-injection and `..` traversal; it does not jail the destination inside the repository |
@@ -136,14 +136,14 @@ newline-flattened) text, `Enter` confirms, and `Esc` cancels.
 
 ### Overlay keys
 
-**Sequencer menu** — opens on `r` while a rebase or cherry-pick has stopped
-on a conflict; the prompt names the armed operation:
+**Sequencer menu** — opens on `r` while a rebase, cherry-pick, or conflicted
+merge has stopped; the prompt names the armed operation:
 
 | Key              | Action                                          |
 |------------------|--------------------------------------------------|
-| `c`              | Continue the stopped rebase / cherry-pick       |
+| `c`              | Continue the stopped rebase / cherry-pick / merge (a merge continue is the plain merge commit) |
 | `a`              | Abort it                                        |
-| `s`              | Skip the stopped commit — rebases only; a cherry-pick stop is `c`/`a` only, dropping commits belongs to the interactive-rebase todo |
+| `s`              | Skip the stopped commit — rebases only; a cherry-pick or merge stop is `c`/`a` only, dropping commits belongs to the interactive-rebase todo |
 | `Esc`            | Close the menu (the operation stays stopped)    |
 
 **Stash manager** (`S`):
@@ -250,7 +250,7 @@ file key like `git.timeout` resolves through the core `T` registry as
 raw string.
 
 **Available keys** (`lang/en.php` — an excerpt; the file is the full roster
-of 150 keys):
+of 152 keys):
 
 | Key                    | Default string                                                    | Parameters  |
 |------------------------|-------------------------------------------------------------------|------------|
