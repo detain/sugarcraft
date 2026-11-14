@@ -10,6 +10,9 @@ use Symfony\Component\Console\Application as SymfonyApplication;
 /**
  * `candy-mdview` entry point. Registers a single default command so users
  * can invoke `candy-mdview <file>` without a subcommand name.
+ *
+ * Mirrors charmbracelet/glow's cmd/glow entry point: one root command,
+ * version stamped from the release tag.
  */
 final class Application extends SymfonyApplication
 {

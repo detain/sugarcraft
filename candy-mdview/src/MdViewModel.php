@@ -44,6 +44,10 @@ use SugarCraft\Core\Util\Width;
  * throwing re-renders never blank the pager: the last good frame stays, the
  * tuple is consumed, and the header marks `↻!` until the next accepted
  * reload.
+ *
+ * Mirrors charmbracelet/glow's fullscreen pager view (its bubbletea model's
+ * update loop: key messages in, a new immutable view state plus optional
+ * commands out).
  */
 final class MdViewModel implements Model
 {
@@ -67,7 +71,7 @@ final class MdViewModel implements Model
     public static function fromContent(string $content, int $width = 80, int $height = 24): self
     {
         $vp = Viewport::new($width, max(1, $height))->setContent($content);
-        // Sole genesis site: every later state change rides copy().
+        // Sole genesis site: every later state change rides mutate().
         return new self($vp, false);
     }
 
@@ -103,7 +107,7 @@ final class MdViewModel implements Model
      *
      * @param array{viewport?:Viewport,exited?:bool,watchPath?:?string,reRender?:?\Closure,watchMtime?:int,watchSize?:int,reloadCount?:int,documentName?:?string,reloadBlocked?:bool,pendingReload?:bool,reflowAt?:?\Closure,keymap?:array<string,string>,helpShown?:bool} $overrides
      */
-    private function copy(array $overrides = []): self
+    private function mutate(array $overrides = []): self
     {
         // array_key_exists, not ??: an override may explicitly carry null
         // (the quit branch drops the watch closure and path).
@@ -135,7 +139,7 @@ final class MdViewModel implements Model
     public function withDocument(string $name): self
     {
         $vp = $this->viewport->withSize($this->viewport->width, max(0, $this->viewport->height - 1));
-        return $this->copy(['viewport' => self::withIndicator($vp, $name), 'documentName' => $name]);
+        return $this->mutate(['viewport' => self::withIndicator($vp, $name), 'documentName' => $name]);
     }
 
     /**
@@ -169,7 +173,7 @@ final class MdViewModel implements Model
     {
         $baseline = FileWatcher::snapshot($path) ?? [0, 0];
 
-        return $this->copy([
+        return $this->mutate([
             'watchPath'  => $path,
             'reRender'   => $reRender,
             'watchMtime' => $baseline[0],
@@ -193,7 +197,7 @@ final class MdViewModel implements Model
      */
     public function withReflow(\Closure $reflowAt): self
     {
-        return $this->copy(['reflowAt' => $reflowAt]);
+        return $this->mutate(['reflowAt' => $reflowAt]);
     }
 
     /**
@@ -210,7 +214,7 @@ final class MdViewModel implements Model
         foreach ($overrides as $action => $chord) {
             $map[$action] = $chord;
         }
-        return $this->copy(['keymap' => $map]);
+        return $this->mutate(['keymap' => $map]);
     }
 
     /**
@@ -267,7 +271,7 @@ final class MdViewModel implements Model
                 $viewport = $viewport->setContent(($this->reflowAt)($msg->cols));
             }
             $viewport = self::withIndicator($viewport, $this->documentName);
-            return [$this->copy(['viewport' => $viewport]), null];
+            return [$this->mutate(['viewport' => $viewport]), null];
         }
         if ($msg instanceof ReloadTickMsg && $msg->id === ReloadTickMsg::ID && $this->watchPath !== null) {
             $next = $this->sweepForReload();
@@ -281,7 +285,7 @@ final class MdViewModel implements Model
                 || self::chordMatches($msg, $this->keymap['quit'])) {
                 // Quitting ends the watch chain too: nothing may keep
                 // sweeping a file the user has stopped reading.
-                return [$this->copy([
+                return [$this->mutate([
                     'exited'     => true,
                     'watchPath'  => null,
                     'reRender'   => null,
@@ -297,7 +301,7 @@ final class MdViewModel implements Model
                 // no-park shape the sweep uses. The quit gate stays q/Esc/Ctrl+C.
                 $now = FileWatcher::snapshot($this->watchPath) ?? [$this->watchMtime, $this->watchSize];
 
-                return [$this->copy([
+                return [$this->mutate([
                     'watchMtime'    => $now[0],
                     'watchSize'     => $now[1],
                     'pendingReload' => true,
@@ -308,11 +312,11 @@ final class MdViewModel implements Model
                 // row for the condensed key table — the frame keeps its
                 // exact line count, so no height invariant is disturbed and
                 // the strip is still skipped at zero body rows (finding 038).
-                return [$this->copy(['helpShown' => !$this->helpShown]), null];
+                return [$this->mutate(['helpShown' => !$this->helpShown]), null];
             }
         }
         [$next, $cmd] = $this->viewport->update($msg);
-        return [$this->copy(['viewport' => $next]), $cmd];
+        return [$this->mutate(['viewport' => $next]), $cmd];
     }
 
     /**
@@ -343,7 +347,7 @@ final class MdViewModel implements Model
         // only rewrite the baseline — the apply reads whatever bytes are
         // current, which coalesces a burst to its last save (drop-if-stale,
         // the (mtime, size) law already means last-write-wins).
-        return $this->copy([
+        return $this->mutate([
             'watchMtime'    => $changed[0],
             'watchSize'     => $changed[1],
             'pendingReload' => true,
@@ -381,7 +385,7 @@ final class MdViewModel implements Model
             return $this->refusedReload($seen);
         }
 
-        return $this->copy([
+        return $this->mutate([
             'viewport'      => self::withIndicator($this->viewport->setContent($content), $this->documentName),
             'watchMtime'    => $seen[0],
             'watchSize'     => $seen[1],
@@ -396,7 +400,7 @@ final class MdViewModel implements Model
      */
     private function refusedReload(array $seen): self
     {
-        return $this->copy([
+        return $this->mutate([
             'watchMtime'    => $seen[0],
             'watchSize'     => $seen[1],
             'pendingReload' => false,

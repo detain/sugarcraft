@@ -411,17 +411,17 @@ final class MdViewModelReloadTest extends TestCase
         self::assertNotNull($cmd);
     }
 
-    public function testStateDerivationGoesThroughASingleCopySite(): void
+    public function testStateDerivationGoesThroughASingleMutateSite(): void
     {
         // The 3-way hand-rolled ctor duplication silently zeroed watch state;
-        // every derived instance must now flow through copy() from the one
-        // genesis (fromContent) — the only other `new self(` is copy() itself.
+        // every derived instance must now flow through mutate() from the one
+        // genesis (fromContent) — the only other `new self(` is mutate() itself.
         $source = \file_get_contents(\dirname(__DIR__) . '/src/MdViewModel.php');
         self::assertIsString($source);
         self::assertSame(
             2,
             \substr_count($source, 'new self('),
-            'fromContent genesis + copy() body only; add state to the ctor, never a fourth copy',
+            'fromContent genesis + mutate() body only; add state to the ctor, never a hand-rolled derivation',
         );
     }
 

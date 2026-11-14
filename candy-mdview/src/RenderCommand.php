@@ -34,6 +34,9 @@ use Symfony\Component\Console\Output\OutputInterface;
  * binary/oversized input, unknown theme) exit {@see Command::INVALID} (2)
  * with a named message on STDERR; the process never writes an error into
  * a document stream. A successfully read document goes to STDOUT raw.
+ *
+ * Mirrors charmbracelet/glow's render path: document through glamour to
+ * styled ANSI, printed directly or handed to the pager.
  */
 #[AsCommand(name: 'render', description: 'Render Markdown and print or page it.')]
 final class RenderCommand extends Command
