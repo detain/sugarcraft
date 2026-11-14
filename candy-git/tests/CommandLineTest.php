@@ -195,8 +195,12 @@ final class CommandLineTest extends TestCase
 
         // stdout is a pipe for proc_open here — exactly the headless shape
         // the launcher must refuse before the alt-screen program starts.
+        // The named refusal is cli.piped_stdout (candy-git-055): the pipe is
+        // honored, not rescued onto /dev/tty, so the message says STDOUT was
+        // piped — not the old generic needs-an-interactive-terminal line.
         self::assertSame(1, $exit);
         self::assertStringContainsString('interactive terminal', $err);
+        self::assertStringContainsString('stdout was piped', $err);
         self::assertSame('', $out, 'no escape sequences may reach a piped stdout');
     }
 

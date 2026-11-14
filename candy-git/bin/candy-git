@@ -38,6 +38,7 @@ use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Git\App;
+use SugarCraft\Git\TerminalGate;
 use SugarCraft\Git\Git;
 use SugarCraft\Git\Lang;
 use SugarCraft\Git\Process;
@@ -131,15 +132,26 @@ if ($bare) {
     exit(1);
 }
 // The UI is a full-screen alt-buffer program; piping its output would emit
-// unlabelled escape-sequence soup and then block on a stdin it cannot read.
-if (!stream_isatty(STDOUT)) {
-    fwrite(STDERR, Lang::t('cli.needs_tty') . "\n");
+// unlabelled escape-sequence soup. But stream_isatty() only describes the
+// STREAM, so mintty-class consoles (whose std handles are named pipes with a
+// real console behind them) and one-sided redirects (< file, EOF stdin) get
+// their answer from sugar-core's terminal probe, not the raw flag: refuse
+// only when NO terminal is reachable (candy-git-055, candy-git-124).
+$gate = TerminalGate::decide(
+    stream_isatty(STDOUT),
+    stream_isatty(STDIN),
+    PHP_OS_FAMILY === 'Windows',
+    static fn(): ?array => \SugarCraft\Core\Util\Tty::openTty(),
+);
+if (!$gate['boot']) {
+    fwrite(STDERR, Lang::t((string) $gate['key']) . "\n");
     exit(1);
 }
+$gateStreams = $gate['streams'] ?? [STDIN, STDOUT];
 // candy-git-052: a dumb terminal cannot act on alt-screen or cursor
 // addressing at all — Program writes those sequences raw and sugar-style
 // never sees them. Boot inline (the cursor modeline and plain text carry
 // the UI) and hand Program the already-detected profile so detection runs
 // once, here, not a second time inside the loop.
-$profile = ColorProfile::detect(stdout: STDOUT);
-(new Program(App::start(new Git($cwd)), new ProgramOptions(useAltScreen: $profile !== ColorProfile::NoTty, bracketedPaste: true, colorProfile: $profile)))->run();
+$profile = ColorProfile::detect(stdout: $gateStreams[1]);
+(new Program(App::start(new Git($cwd)), new ProgramOptions(useAltScreen: $profile !== ColorProfile::NoTty, bracketedPaste: true, colorProfile: $profile, input: $gateStreams[0], output: $gateStreams[1])))->run();

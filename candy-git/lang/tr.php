@@ -26,6 +26,8 @@ return [
     'cli.old_git'             => 'candy-git: git {version} çok eski -- {min} veya yeni sürüm gerekli',
     'cli.bare_repo'           => 'candy-git: {cwd} çalışma ağacı olmayan bir bare depodur -- candy-git\'i çıkarılmış bir çalışma dizininde çalıştırın',
     'cli.needs_tty'           => 'candy-git: etkileşimli terminal gerekli (stdout bir tty değil)',
+    'cli.piped_stdout'    => 'candy-git: çıktı bir boruya yönlendirildi - tam ekran arayüz etkileşimli bir uçbirim ister',
+    'cli.needs_tty_input' => 'candy-git: girdi yönlendirildi - arayüzün tuşları okuması için etkileşimli bir uçbirim gerekiyor',
     'cli.help_summary'         => 'candy-git — terminal git arayüzü',
     'cli.help_usage'           => 'Kullanım:',
     'cli.help_browse'          => 'Geçerli dizindeki depoyu gez',

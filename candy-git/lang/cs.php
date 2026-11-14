@@ -26,6 +26,8 @@ return [
     'cli.old_git'             => 'candy-git: git {version} je příliš starý -- vyžadována verze {min} nebo novější',
     'cli.bare_repo'           => 'candy-git: {cwd} je bare repozitář bez pracovního stromu -- spusťte candy-git ve vypnuté pracovní složce',
     'cli.needs_tty'           => 'candy-git: je potřeba interaktivní terminál (stdout není tty)',
+    'cli.piped_stdout'    => 'candy-git: výstup byl převeden do roury - celoobrazovkové UI potřebuje interaktivní terminál',
+    'cli.needs_tty_input' => 'candy-git: vstup byl přesměrován - UI potřebuje interaktivní terminál ke čtení kláves',
     'cli.help_summary'         => 'candy-git — terminální rozhraní git',
     'cli.help_usage'           => 'Použití:',
     'cli.help_browse'          => 'Procházet repozitář aktuální adresáře',

@@ -26,6 +26,8 @@ return [
     'cli.old_git'             => 'candy-git: git {version} 太旧 -- 需要 {min} 或更新版本',
     'cli.bare_repo'           => 'candy-git: {cwd} 是没有工作树的裸仓库 -- 请在检出的工作目录中运行 candy-git',
     'cli.needs_tty'           => 'candy-git: 需要交互式终端 (stdout 不是 tty)',
+    'cli.piped_stdout'    => 'candy-git: 输出被重定向到管道 - 全屏界面需要交互式终端',
+    'cli.needs_tty_input' => 'candy-git: 输入被重定向 - 界面需要交互式终端来读取按键',
     'cli.help_summary'         => 'candy-git — 终端 git 界面',
     'cli.help_usage'           => '用法：',
     'cli.help_browse'          => '浏览当前目录的仓库',

@@ -26,6 +26,8 @@ return [
     'cli.old_git'             => 'candy-git: git {version} は古すぎます -- バージョン {min} 以上が必要です',
     'cli.bare_repo'           => 'candy-git: {cwd} はワークツリーのないベアシストレポジトリです -- チェックアウト済みの作業ディレクトリで実行してください',
     'cli.needs_tty'           => 'candy-git: 対話型ターミナルが必要です (stdout が tty でありません)',
+    'cli.piped_stdout'    => 'candy-git: 出力がパイプに - フルスクリーンUIには対話型ターミナルが必要です',
+    'cli.needs_tty_input' => 'candy-git: 入力がリダイレクトされました - UI はキー読み取りに対話型ターミナルが必要です',
     'cli.help_summary'         => 'candy-git — ターミナルの git インターフェース',
     'cli.help_usage'           => '使い方:',
     'cli.help_browse'          => '現在のディレクトリのリポジトリを閲覧',

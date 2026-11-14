@@ -26,6 +26,8 @@ return [
     'cli.old_git'             => 'candy-git: git {version} is te oud -- versie {min} of nieuwer is vereist',
     'cli.bare_repo'           => 'candy-git: {cwd} is een bare repository zonder werkboom -- draai candy-git vanuit een uitgecheckte werkmap',
     'cli.needs_tty'           => 'candy-git: een interactieve terminal is vereist (stdout is geen tty)',
+    'cli.piped_stdout'    => 'candy-git: uitvoer werd door een pijp gestuurd - de schermvullende UI heeft een interactieve terminal nodig',
+    'cli.needs_tty_input' => 'candy-git: invoer was omgeleid - de UI heeft een interactieve terminal nodig om toetsen te lezen',
     'cli.help_summary'         => 'candy-git — git-interface in de terminal',
     'cli.help_usage'           => 'Gebruik:',
     'cli.help_browse'          => 'Blader door de repository van de huidige map',

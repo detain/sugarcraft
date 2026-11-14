@@ -26,6 +26,8 @@ return [
     'cli.old_git'             => 'candy-git: git {version} قديم جدًا -- الإصدار {min} أو أحدث مطلوب',
     'cli.bare_repo'           => 'candy-git: {cwd} مستودر مجرد بلا شجرة عمل -- شغّل candy-git من دليل عمل مفحوص',
     'cli.needs_tty'           => 'candy-git: يلزم طرفية تفاعلية (stdout ليست tty)',
+    'cli.piped_stdout'    => 'candy-git: أُعيد توجيه الخَرج — واجهة الشاشة الكاملة تحتاج إلى طرفية تفاعلية',
+    'cli.needs_tty_input' => 'candy-git: أُعيد توجيه الدخل — تحتاج الواجهة إلى طرفية تفاعلية لقراءة المفاتيح',
     'cli.help_summary'         => 'candy-git — واجهة git في الطرفية',
     'cli.help_usage'           => 'الاستخدام:',
     'cli.help_browse'          => 'تصفح مستودع الدليل الحالي',

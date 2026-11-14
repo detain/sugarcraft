@@ -26,6 +26,8 @@ return [
     'cli.old_git'             => 'candy-git: git {version} ist zu alt -- Version {min} oder neuer wird benoetigt',
     'cli.bare_repo'           => 'candy-git: {cwd} ist ein Bare-Repository ohne Arbeitsverzeichnis -- candy-git in einem ausgecheckten Arbeitsverzeichnis starten',
     'cli.needs_tty'           => 'candy-git: interaktives Terminal erforderlich (stdout ist kein tty)',
+    'cli.piped_stdout'    => 'candy-git: Ausgabe war weitergeleitet - die Vollbild-Oberfläche braucht ein interaktives Terminal',
+    'cli.needs_tty_input' => 'candy-git: Eingabe war umgeleitet - die Oberfläche braucht ein interaktives Terminal zum Tastenlesen',
     'cli.help_summary'         => 'candy-git — Git-Oberfläche im Terminal',
     'cli.help_usage'           => 'Verwendung:',
     'cli.help_browse'          => 'Das Repository des aktuellen Verzeichnisses durchsuchen',
