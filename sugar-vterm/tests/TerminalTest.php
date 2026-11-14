@@ -195,6 +195,24 @@ final class TerminalTest extends TestCase
         $this->assertSame('C', $grid->cell(0, 2)->char);
     }
 
+    /**
+     * vterm-04: grid() is a LIVE borrow — put() through it changes the
+     * frame for every reader yet stays invisible to revision(), which
+     * counts parser writes (feed()/flush()) only.
+     */
+    public function testGridIsLiveBorrowAndPutDoesNotBumpRevision(): void
+    {
+        $t = Terminal::new();
+        $t->feed("A");
+        $revision = $t->revision();
+
+        $t->grid()->put(0, 5, new Cell(char: 'X'));
+
+        $this->assertSame('X', $t->grid()->cell(0, 5)->char);
+        $this->assertSame($revision, $t->revision());
+        $this->assertSame($revision + 1, $t->feed("B")->revision());
+    }
+
     public function testWindowTitleFromOSC(): void
     {
         $t = Terminal::new();

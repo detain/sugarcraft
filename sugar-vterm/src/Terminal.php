@@ -153,7 +153,9 @@ final class Terminal
     /**
      * Monotonic write counter: bumped once per {@see self::feed()} and
      * {@see self::flush()} call. Two snapshots with equal revision and
-     * equal grid are provably the same frame without a deep compare.
+     * equal grid are provably the same frame without a deep compare —
+     * for feeds and flushes: a direct {@see self::grid()} mutation
+     * changes the frame without bumping this counter.
      */
     public function revision(): int
     {
@@ -174,6 +176,16 @@ final class Terminal
         return $this->csi->wrapPending();
     }
 
+    /**
+     * The LIVE mutable grid — a borrow, not a snapshot. It is the very
+     * Buffer the parser writes into: callers that mutate it directly
+     * (put()/fillRow()/shift ops) BYPASS the write bookkeeping — such a
+     * change is visible to every later grid()/cursor() read but does NOT
+     * bump {@see self::revision()} and does not move the cursor. Take a
+     * {@see self::snapshot()} for a frozen copy. (The name predates this
+     * contract; a rename to mutableGrid() would break every consumer,
+     * so the contract is documented here — Phase 5 may upgrade.)
+     */
     public function grid(): Buffer
     {
         return $this->grid;
