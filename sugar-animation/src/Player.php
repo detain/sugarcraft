@@ -557,11 +557,34 @@ final class Player implements Model
         if ($probe === null) {
             return [$this, null];
         }
-        $reload = $probe();
+        // SA-P4 (audit 011): a throwing probe must not brick the pump — the
+        // display stays, the chain re-arms, and the next poll gets its
+        // chance (the same shape as the null "nothing changed" answer).
+        try {
+            $reload = $probe();
+        } catch (\Throwable) {
+            return [$this, $this->armWatch()];
+        }
         if ($reload === null || $reload['frames'] === []) {
             return [$this, $this->armWatch()];
         }
-        $next = $this->withFrames($reload['frames'])->withLoops($reload['loops']);
+        // SA-P4 (audit 011): a non-positive loop count from a host probe is
+        // read as forever, not handed raw to the withLoops() door (which
+        // throws) — bricking a watch reload over an ambiguous 0 would be the
+        // second bug. Netscape's own semantics spell 0 = forever; negatives
+        // are host confusion and get the same lenient reading.
+        $plays = $reload['loops'] !== null && $reload['loops'] < 1 ? null : $reload['loops'];
+        // SA-P4 (audit 018): unchanged-poll coalescing. A probe that re-arms
+        // with the IDENTICAL stream (element-identity frames from a memoised
+        // host probe, same loop bound) re-arms WITHOUT a rebind — index,
+        // epoch and display carry on. Only a real change restarts playback.
+        // chicle re-decodes every 10 ms and rebinds every time; a host that
+        // wants the coalescing memoises its probe (the identity test is
+        // reference-honest by design, not content-equality churn).
+        if ($reload['frames'] === $this->frames && $plays === $this->loops) {
+            return [$this, $this->armWatch()];
+        }
+        $next = $this->withFrames($reload['frames'])->withLoops($plays);
 
         return [$next, $this->armWatch()];
     }

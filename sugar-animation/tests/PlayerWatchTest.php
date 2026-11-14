@@ -50,6 +50,71 @@ final class PlayerWatchTest extends TestCase
     }
 
     /**
+     * SA-P4 (audit 011, arm -throw): a throwing probe keeps the pump alive —
+     * display untouched, chain re-armed, and the next poll runs again.
+     */
+    public function testThrowingProbeKeepsDisplayAndChain(): void
+    {
+        $calls = (object) ['n' => 0];
+        $probe = static function () use ($calls): ?array {
+            $calls->n++;
+            throw new \RuntimeException('probe exploded');
+        };
+        $player = new Player($this->frames(10, 3), now: fn (): float => $this->fakeNow, watch: $probe);
+
+        [$next, $cmd] = $player->update(new WatchMsg());
+
+        self::assertSame($player, $next, 'a throwing poll must not rebind anything');
+        self::assertNotNull($cmd, 'the chain must re-arm despite the throw');
+        self::assertSame(1, $calls->n);
+
+        // The pump survives to poll again.
+        [$next2, ] = $next->update(new WatchMsg());
+        self::assertSame(2, $calls->n, 'the watch chain continued past the throw');
+        self::assertSame($next, $next2);
+    }
+
+    /**
+     * SA-P4 (audit 011, arm -loops): a non-positive loop count from a host
+     * probe reads as forever — never handed raw to the throwing withLoops()
+     * door, never silently rewritten to one play.
+     */
+    public function testNonPositiveLoopBoundFromProbeReadsAsForever(): void
+    {
+        $fresh = $this->frames(20, 5);
+        $probe = static fn (): array => ['frames' => $fresh, 'loops' => 0];
+        $player = new Player($this->frames(10, 3), now: fn (): float => $this->fakeNow, watch: $probe);
+
+        [$next, ] = $player->update(new WatchMsg());
+
+        self::assertNull($next->loops, 'raw 0 means forever (Netscape law)');
+        self::assertCount(5, $next->frames, 'the frame swap itself still lands');
+    }
+
+    /**
+     * SA-P4 (audit 018): unchanged-poll coalescing — a memoised probe that
+     * re-answers with the IDENTICAL stream re-arms without a rebind: index,
+     * epoch and display carry on; only real change restarts playback.
+     */
+    public function testMemoisedUnchangedStreamDoesNotRebind(): void
+    {
+        $stream = $this->frames(10, 3);
+        $probe = static fn (): array => ['frames' => $stream, 'loops' => null];
+        $player = new Player($stream, now: fn (): float => $this->fakeNow, watch: $probe);
+
+        // Walk onto frame 2 so a spurious rebind (index -> 0) is visible.
+        $this->fakeNow += 0.1;
+        [$walked, ] = $player->update(new TickMsg());
+        self::assertSame(1, $walked->index, 'fixture walked');
+
+        [$held, $cmd] = $walked->update(new WatchMsg());
+
+        self::assertSame($walked, $held, 'an identical re-answer must not rebind');
+        self::assertSame(1, $held->index, 'position survives the unchanged poll');
+        self::assertNotNull($cmd, 'the 10 ms chain still re-arms (stat keeps running)');
+    }
+
+    /**
      * A probe replaying a script: each entry is returned in order, the last
      * one repeats forever. Counts invocations.
      *
