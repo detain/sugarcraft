@@ -9,6 +9,7 @@ use SugarCraft\Core\I18n\T;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\MdView\Lang;
 use SugarCraft\MdView\MdViewModel;
+use SugarCraft\MdView\RenderCommand;
 
 /**
  * KM6 rider (copywriter m7): with the locale finally adopted from the
@@ -45,6 +46,47 @@ final class TranslatedRenderingTest extends TestCase
             'russian'  => ['ru'],
             'chinese'  => ['zh-cn'],
         ];
+    }
+
+    /** @return array<string, array{0: string, 1: string, 2: string}> */
+    public static function stdinLabelProvider(): array
+    {
+        return [
+            // [locale, translated stdin label, English island to exclude]
+            'german'  => ['de', 'Standardeingabe', 'standard input'],
+            'russian' => ['ru', 'стандартный ввод', 'standard input'],
+        ];
+    }
+
+    /**
+     * Finding 021: the binary/stdin refusals used to embed the English
+     * literal 'standard input' into every locale's message — a translated
+     * sentence carrying an untranslated island. The label now rides the
+     * catalogue, so a localized refusal names the stream in its own tongue.
+     */
+    /** @dataProvider stdinLabelProvider */
+    public function testStdinRefusalNamesTheStreamInLocale(string $locale, string $label, string $english): void
+    {
+        T::setLocale($locale);
+
+        $stream = fopen('php://temp', 'r+');
+        $this->assertNotFalse($stream);
+        fwrite($stream, "\x00\x01\x02binary");
+        fseek($stream, 0);
+
+        $method = new \ReflectionMethod(RenderCommand::class, 'readDocument');
+        $method->setAccessible(true);
+        try {
+            $method->invoke(null, '', $stream);
+            $this->fail('binary stdin must refuse');
+        } catch (\InvalidArgumentException $refusal) {
+            $message = $refusal->getMessage();
+        } finally {
+            fclose($stream);
+        }
+
+        $this->assertStringContainsString($label, $message);
+        $this->assertStringNotContainsString($english, $message);
     }
 
     /** @dataProvider localeProvider */

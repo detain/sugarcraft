@@ -4,6 +4,7 @@
 
 > Formerly published as `sugarcraft/sugar-glow` (renamed 2026-10). <!-- @rename-keep -->
 > Namespace changed: `SugarCraft\Glow\` → `SugarCraft\MdView\`. <!-- @rename-keep -->
+> The old package name no longer receives updates — require `sugarcraft/candy-mdview`, and rename `SugarCraft\Glow\*` imports to `SugarCraft\MdView\*`.
 
 <!-- BADGES:BEGIN -->
 [![CI](https://github.com/detain/sugarcraft/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/detain/sugarcraft/actions/workflows/ci.yml)
@@ -16,7 +17,7 @@
 
 ![demo](.vhs/render.gif)
 
-candy-mdview — a Markdown CLI viewer for PHP 8.3+ that composes **SugarMarkdown** (rendering) and **SugarForms Viewport** (scrolling). It is the native-PHP counterpart of the Go viewer [glow](https://github.com/charmbracelet/glow): rendering, paging, themes, and live reload are ported; glow's directory browser, search, config UI, and presentation modes are not part of this tool.
+candy-mdview — a Markdown CLI viewer for PHP 8.3+ that composes **SugarMarkdown** (rendering) and **SugarForms Viewport** (the scrolling window over the rendered text). It is the native-PHP counterpart of the Go viewer [glow](https://github.com/charmbracelet/glow): rendering, paging, themes, and live reload are ported; glow's directory browser, search, config UI, presentation modes, and glow 3.0's `-a/--all`, `-l/--line-numbers`, `-n/--preserve-new-lines`, `-t/--tui`, and `--config` knobs are not part of this tool.
 
 ## Install
 
@@ -31,6 +32,21 @@ wget https://github.com/detain/sugarcraft/releases/download/candy-mdview/latest/
 php candy-mdview.phar README.md
 ```
 
+Verify the download against its published checksum — the `.sha256` sidecar
+ships next to the phar, and the `.phar.commit` sidecar names the exact tested
+commit every dev build was cut from (both are published only from CI-green
+pushes to master):
+
+```sh
+wget https://github.com/detain/sugarcraft/releases/download/candy-mdview/latest/candy-mdview.phar.sha256
+sha256sum -c candy-mdview.phar.sha256
+```
+
+Just cloned the monorepo? No install step is needed for a quick look —
+`cd candy-mdview && php bin/candy-mdview README.md` runs straight from the
+tree; a root `composer install` additionally lands the binary at
+`vendor/bin/candy-mdview`.
+
 ## CLI
 
 ```sh
@@ -43,6 +59,10 @@ candy-mdview --theme-config ./my-theme.json README.md
 candy-mdview https://example.com/README.md        # fetch a URL, then render it
 candy-mdview docs/                                # render docs/README.md (glow's directory form)
 ```
+
+One document per invocation; to batch a tree, drive it from the shell:
+`find docs/ -name '*.md' -print0 | xargs -0 -n1 candy-mdview --no-ansi >
+combined.txt`.
 
 A directory argument resolves to one document: `README.md`, then
 `README.markdown`, then `index.md`, then a single unambiguous `*.md` in that
@@ -92,7 +112,9 @@ Flags:
   checkout.
 - `--theme-config <path>` — load a custom JSON theme (up to 1 MB). Two shapes
   are detected automatically: a **glamour** config (top-level `"document"`
-  block with nested element/chroma maps, the shape of
+  block with nested element/chroma maps — *chroma* is the Go syntax-token
+  library glamour styles through, so its map is keyed by token family — the
+  shape of
   [charmbracelet/glamour's style files](https://github.com/charmbracelet/glamour/tree/master/styles))
   is mapped by `GlamourTheme` onto a SugarMarkdown `Theme`; the historic flat
   colour map goes through `Theme::fromJsonString`. (`Theme::fromJson` takes a
@@ -310,7 +332,8 @@ a refused-scheme gate in SugarMarkdown: `javascript:`, `data:` and
 render, visible and inert). Every other scheme — `file:` and `mailto:`
 included — reaches the terminal's opener unfiltered, so treat a hostile
 document's non-`http(s)`/`mailto` links the way you would treat raw terminal
-input. See the fleet [trust boundary](../docs/TRUST-BOUNDARY.md).
+input. See the fleet
+[trust boundary](https://github.com/detain/sugarcraft/blob/master/docs/TRUST-BOUNDARY.md).
 
 `--theme-config` files are untrusted input too, and the glamour adapter treats
 them that way at its parse door: the document/paragraph decoration slots
@@ -324,13 +347,18 @@ come from sources you trust.
 
 ## Output languages
 
-The CLI localizes its messages via `LANG` / `LC_ALL` / `LC_MESSAGES` across 16
-locales; `--help` and the document itself stay as-is.
+The CLI answers in 15 languages plus English (16 locale files). Selection
+follows the standard chain — `LC_ALL` beats `LC_MESSAGES` beats `LANG`; an
+unset, empty, `C` or `POSIX` value takes no position, and the default is
+English. `--help` and the document itself stay as-is, as do the two
+pre-autoload bootstrap refusals in `bin/` (missing phar vendor, and no
+autoloader found), which fire before the catalogue is even reachable.
 
 ## Library API
 
 Beyond the CLI, candy-mdview exposes three public pieces for integrating its
-behaviour into other PHP projects: the pager's TEA model (`MdViewModel`) and
+behaviour into other PHP projects: the pager's TEA model (a The-Elm-
+Architecture update loop, `MdViewModel`) and
 two utility helpers (`FileWatcher`, `GlamourTheme`). The deprecated
 `RenderCommand::set*Callback()` test seams and the legacy public
 `RenderCommand::loadInput()` are deliberately off this surface — kept for
@@ -380,6 +408,7 @@ $changed = FileWatcher::pollTuple($path, ...$base);  // new tuple or null
 
 // Instance API:
 $watcher = new FileWatcher('/path/to/file.md');
+$lastMtime = (int) @filemtime('/path/to/file.md');   // or the last value you recorded
 if ($watcher->hasChangedSince($lastMtime)) {
     // re-render
 }

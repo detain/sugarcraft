@@ -25,6 +25,7 @@ return [
     'glamour.value_too_large' => 'la clé {key} du thème dépasse le maximum de {limit}',
     'render.no_input_tty' => 'aucune entrée : indiquez un fichier, envoyez du Markdown sur l\'entrée standard ou lancez avec --help',
     'render.no_input_empty' => 'aucune entrée : l\'entrée standard est vide',
+    'render.stdin_label' => 'entrée standard',
     'render.pager_needs_tty' => 'le paginateur exige un terminal ; rendez plutôt en sortie standard (retirez -p)',
     'render.file_missing' => 'impossible d\'ouvrir {path} : fichier inexistant',
     'render.file_is_directory' => 'impossible d\'ouvrir {path} : c\'est un répertoire',

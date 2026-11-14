@@ -660,10 +660,11 @@ final class RenderCommandTest extends TestCase
     {
         // The product's biggest divergence from glow is now admitted at
         // line 1 of the intro: the out-of-scope enumeration names the
-        // directory browser next to search/config UI/presentation.
+        // directory browser next to search/config UI/presentation — and,
+        // since finding 083, glow 3.0's five extra knobs as well.
         $readme = (string) file_get_contents(__DIR__ . '/../README.md');
         $this->assertMatchesRegularExpression(
-            "/glow's directory browser, search, config UI, and presentation modes/",
+            "/glow's directory browser, search, config UI, presentation modes, and glow 3.0's/",
             $readme,
         );
     }

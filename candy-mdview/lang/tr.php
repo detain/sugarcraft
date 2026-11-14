@@ -25,6 +25,7 @@ return [
     'glamour.value_too_large' => 'tema anahtarı {key}, {limit} sınırını aşıyor',
     'render.no_input_tty' => 'girdi yok: bir dosya belirtin, Markdown\'ı standart girdiye yönlendirin veya --help ile çalıştırın',
     'render.no_input_empty' => 'girdi yok: standart girdi boş',
+    'render.stdin_label' => 'standart girdi',
     'render.pager_needs_tty' => 'sayfalayıcı bir terminal ister; -p olmadan standart çıktıya işleyin',
     'render.file_missing' => '{path} açılamadı: dosya yok',
     'render.file_is_directory' => '{path} açılamadı: bir dizin',

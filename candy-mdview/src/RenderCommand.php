@@ -468,7 +468,7 @@ final class RenderCommand extends Command
 
         $stream = $pipedStream ?? STDIN;
 
-        return DocumentGate::readStream($stream, 'standard input');
+        return DocumentGate::readStream($stream, Lang::t('render.stdin_label'));
     }
 
     private static function readDocumentFile(string $path): string

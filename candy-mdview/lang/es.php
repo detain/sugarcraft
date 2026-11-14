@@ -25,6 +25,7 @@ return [
     'glamour.value_too_large' => 'la clave {key} del tema supera el máximo de {limit}',
     'render.no_input_tty' => 'sin entrada: indique un archivo, envíe Markdown por la entrada estándar o ejecute con --help',
     'render.no_input_empty' => 'sin entrada: la entrada estándar está vacía',
+    'render.stdin_label' => 'entrada estándar',
     'render.pager_needs_tty' => 'el paginador necesita una terminal; renderizad a la salida estándar sin -p',
     'render.file_missing' => 'no se puede abrir {path}: el archivo no existe',
     'render.file_is_directory' => 'no se puede abrir {path}: es un directorio',
