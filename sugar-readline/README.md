@@ -239,10 +239,15 @@ staircase). `TextPrompt::withDisplayWidth($cells)` bounds the editable
 region to a window around the cursor (clipped ends marked `…`, cell-width
 aware; `0` renders the row unbounded). The state `run()` keys on is *unset*:
 only a prompt still at `null` (the default, restored by
-`withDisplayWidth(null)`) auto-adopts the `COLUMNS` environment value — and
-only that: `bash` does not export `COLUMNS` by default (zsh does), so under
-bash nothing is adopted unless the host exports it or probes the size itself
-(e.g. `stty size`) and passes the result to `withDisplayWidth()`. An
+`withDisplayWidth(null)`) auto-adopts a width — and only that. Adoption
+reads `COLUMNS` first when it carries a positive integer (the lever a
+headless or CI harness pulls to steer the layout); failing that, when the
+output stream is a real TTY it probes `TIOCGWINSZ` (via sugar-core `Tty`)
+and adopts the terminal's own columns. `bash` does not export `COLUMNS` by
+default (zsh does), so the probe is what covers the ordinary interactive
+case; when neither a usable `COLUMNS` nor a TTY is available nothing is
+adopted, and the host may still probe the size itself (e.g. `stty size`)
+and pass the result to `withDisplayWidth()`. An
 explicit width always survives: a non-zero bound is kept as given, and an
 explicit `0` is honoured as a deliberate unbounded choice, never
 overwritten by adoption.

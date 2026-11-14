@@ -12,6 +12,7 @@ use SugarCraft\Input\Event\FocusEvent;
 use SugarCraft\Input\Event\PasteEvent;
 use SugarCraft\Input\KeyModifier;
 use SugarCraft\Input\Driver\StreamInputDriver;
+use SugarCraft\Core\Util\Tty;
 
 /**
  * Run a sugar-readline prompt with real TTY input via sugar-input.
@@ -323,7 +324,7 @@ final class Readline
      */
     public function run(object $prompt, $output = null): object
     {
-        $prompt = $this->fitPromptToWidth($prompt);
+        $prompt = $this->fitPromptToWidth($prompt, $output);
         $bracketedPaste = $this->enableBracketedPaste($output);
         $kittyKeyboard = $this->enableKittyKeyboard($output);
         try {
@@ -341,6 +342,57 @@ final class Readline
     }
 
     /**
+     * Resolve the terminal column count for width auto-adoption.
+     *
+     * Precedence (documented at the README auto-fit block):
+     *  1. `$columnsOverride` — the test/resolution seam a caller (S-02's
+     *     resize re-probe) injects to pin a deterministic width;
+     *  2. `getenv('COLUMNS')` when it parses to a positive integer — keeps
+     *     headless/CI harnesses steering the layout explicitly;
+     *  3. a `TIOCGWINSZ` probe of the output stream via sugar-core
+     *     {@see Tty}, but only when that stream is a real TTY — the common
+     *     interactive case where `COLUMNS` was never exported (bash does
+     *     not export it by default);
+     *  4. `0` — no bound discovered, so the prompt renders unbounded and
+     *     `fitPromptToWidth()` leaves a still-null width untouched.
+     *
+     * A probe failure (unsupported platform, closed handle) is not an error
+     * the user should feel: it falls through to `0` exactly like the
+     * old env-only path that simply found no value.
+     *
+     * @param resource|null $output     Output stream to probe when non-null
+     *                                  and a TTY.
+     * @param int|null      $columnsOverride  Test seam; null = normal resolution.
+     */
+    private function resolveColumns($output, ?int $columnsOverride = null): int
+    {
+        if ($columnsOverride !== null) {
+            return $columnsOverride;
+        }
+
+        $env = getenv('COLUMNS');
+        if ($env !== false && $env !== '' && preg_match('/^\d+$/', $env) === 1) {
+            $columns = (int) $env;
+            if ($columns > 0) {
+                return $columns;
+            }
+        }
+
+        if (is_resource($output) && stream_isatty($output)) {
+            try {
+                $size = (new Tty($output))->size();
+                if (isset($size['cols']) && $size['cols'] > 0) {
+                    return (int) $size['cols'];
+                }
+            } catch (\Throwable $e) {
+                // Fall through to the unbounded default.
+            }
+        }
+
+        return 0;
+    }
+
+    /**
      * Give width-aware prompts a display viewport when the caller has not
      * chosen one and the environment reports a terminal width. This is what
      * keeps a long single-line buffer from wrapping the repaint into a
@@ -348,8 +400,12 @@ final class Readline
      * always wins — a non-zero bound clips and an explicit 0 renders
      * unbounded — and only the unset state (null) is eligible for
      * adoption, so custom prompt shapes pass their width through as given.
+     *
+     * The adopted value comes from {@see resolveColumns()}: `COLUMNS`
+     * precedence first (headless/CI control), then a TTY `TIOCGWINSZ` probe
+     * (the usual interactive case where bash never exported COLUMNS).
      */
-    private function fitPromptToWidth(object $prompt): object
+    private function fitPromptToWidth(object $prompt, $output = null, ?int $columnsOverride = null): object
     {
         if (!is_callable([$prompt, 'withDisplayWidth'])
             || !is_callable([$prompt, 'displayWidth'])
@@ -357,7 +413,7 @@ final class Readline
             return $prompt;
         }
 
-        $columns = (int) (getenv('COLUMNS') ?: 0);
+        $columns = $this->resolveColumns($output, $columnsOverride);
 
         return $columns > 0 ? $prompt->withDisplayWidth($columns) : $prompt;
     }
