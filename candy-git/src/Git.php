@@ -67,7 +67,7 @@ final class Git implements GitDriver
      * warning about THIS library's behavior, not UI chrome; the strict-mode
      * refusal (lang key git.unsafe_filter_driver) IS localized.
      */
-    public const FILTER_NOTICE_FORMAT = "candy-git: notice: this repository defines git filter drivers (%s) that execute whenever files move between the worktree and the index. candy-git runs them, because tools like git-lfs depend on their filters working; see the \"Trust boundary\" section of candy-git's README.md, or set %s=1 to refuse such commands instead.\n";
+    public const FILTER_NOTICE_FORMAT = "candy-git: notice: this repository defines git filter drivers (%s) that execute whenever files move between the worktree and the index. candy-git runs them, because tools like git-lfs depend on their filters working; see the \"Trust boundary\" section of candy-git's README.md, or set %s to 1, true, or yes to refuse such commands instead.\n";
 
     /** Hard mode: refuse (typed) instead of announce (sticky) filter-capable commands. */
     public readonly bool $strictFilters;
@@ -408,6 +408,88 @@ final class Git implements GitDriver
     public function stageAll(): void
     {
         $this->run(['add', '-A']);
+    }
+
+    /**
+     * Paths git still reports as unmerged whose FILE BYTES carry conflict
+     * markers. `git add -A` is marker-blind (it stages whatever is on disk,
+     * candy-git-090) - so staging-all during a conflicted merge can commit
+     * the literal <<<<<<< machinery as resolved content. The App arms a
+     * named confirm for exactly this list.
+     *
+     * The scan is a bounded heuristic: only unmerged paths are opened, and
+     * each only its first 256 KiB (markers sit at conflict hunks, and a
+     * warning class must never read the heap). Match shape is git's own:
+     * seven '<' at line start, then a space/tab label or end of line.
+     *
+     * @return list<string> repo-relative paths carrying markers, in status order
+     */
+    public function conflictedPathsCarryingMarkers(): array
+    {
+        $hits = [];
+        foreach ($this->status() as $row) {
+            if (!isset($row['path'])) {
+                continue;
+            }
+            // git's OWN porcelain-v1 unmerged table (DD AU UD UA DU AA UU) -
+            // a U-letter-only test would miss both-added conflicts, which are
+            // exactly the shape that carries markers.
+            $xy = ($row['index_status'] ?? '') . ($row['work_status'] ?? '');
+            if (!in_array($xy, ['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU'], true)) {
+                continue;
+            }
+            $file = $this->cwd . '/' . $row['path'];
+            if (!is_file($file)) {
+                // Deleted-in-one-side shapes: nothing on disk to carry markers.
+                continue;
+            }
+            $handle = @fopen($file, 'rb');
+            if ($handle === false) {
+                continue;
+            }
+            try {
+                $chunk = fread($handle, 262144);
+            } finally {
+                fclose($handle);
+            }
+            if (is_string($chunk) && preg_match('/^<{7}(?:[ \t]|$)/m', $chunk) === 1) {
+                $hits[] = (string) $row['path'];
+            }
+        }
+
+        return $hits;
+    }
+
+    /**
+     * Does this repository ship live hooks that git will run for us?
+     * `.git/hooks` is not cloned, but a supplied or dev-image repo can
+     * carry executable hooks, and every other repo-controlled execution
+     * channel candy-git either disarms or announces (candy-git-144) -
+     * hooks ride the all-verbs posture, so they get the same honesty:
+     * probe here, announce in-app, document in the trust boundary.
+     * Linked worktrees share the MAIN git dir, which is where the live
+     * hooks actually sit.
+     */
+    public function localHooksPresent(): bool
+    {
+        $dir = trim((string) ($this->run(['rev-parse', '--absolute-git-dir'])[0] ?? ''));
+        if ($dir === '') {
+            return false;
+        }
+        $hooks = $dir . '/hooks';
+        if (!is_dir($hooks)) {
+            return false;
+        }
+        foreach ((array) glob($hooks . '/*') as $file) {
+            if (!is_string($file) || !is_file($file) || str_ends_with($file, '.sample')) {
+                continue;
+            }
+            if (is_executable($file)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function unstageAll(): void

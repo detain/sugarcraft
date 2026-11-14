@@ -633,6 +633,8 @@ final class GitHardeningTest extends TestCase
             self::assertSame(0, $r['exit'], 'opt-out must not throw despite the strict env; child stderr: ' . $r['stderr']);
             self::assertStringContainsString('EXIT-OK', $r['stdout']);
             self::assertStringContainsString('notice: this repository defines git filter drivers', $r['stderr'], 'the announce must reach the child stderr');
+        // The candy-git-112 finalize: the runtime text must name every accepted spelling
+        self::assertStringContainsString('to 1, true, or yes to refuse such commands instead', $r['stderr'], 'the strict-mode spelling list in the notice rotted');
             self::assertFileExists($sentinel);
         } finally {
             putenv(Git::STRICT_FILTERS_ENV);
