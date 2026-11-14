@@ -8,6 +8,9 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Animation\Frame;
 use SugarCraft\Animation\Player;
 use SugarCraft\Animation\TickMsg;
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\QuitMsg;
 
 /**
  * E-03: schedule-identity pins for the Player's wrap re-anchor policy (rev
@@ -273,6 +276,133 @@ final class PlayerScheduleTest extends TestCase
         }
         $this->assertSame($lapHolds, array_slice($postArms, 0, 4), 'post-re-anchor cadence must equal the pre-stall lap holds');
         $this->assertSame([1, 2, 3, 0], $postIndices);
+    }
+
+    // ---------------------------------------------------------------- SA-P6
+
+    /**
+     * SA-P6 (audit 008): withMaxSeconds() bounds TOTAL play time — periodic
+     * pausing can no longer launder the bound. Five quarter-second frames
+     * under maxSeconds 1.0: play .5 s, freeze under a 100 s pause, resume,
+     * play .4 s more (total .9 — still under), and the tick at total 1.0
+     * quits. Under the pre-fix reading the bound restarted at every resume
+     * and this player played forever.
+     */
+    public function testMaxSecondsSurvivesAPauseBudgetIsTotal(): void
+    {
+        $player = $this->scheduledPlayer([25, 25, 25, 25])->withMaxSeconds(1.0);
+
+        $this->fakeNow = 0.25;
+        [$player, $cmd] = $player->update(new TickMsg());
+        $this->assertSame(1, $player->index);
+        $this->armSeconds($cmd);
+
+        $this->fakeNow = 0.5;
+        [$player, $cmd] = $player->update(new TickMsg());
+        $this->assertSame(2, $player->index);
+        $this->armSeconds($cmd);
+
+        // Pause at total .5 s played; 100 s of wall time elapse paused.
+        [$player, ] = $player->update(new KeyMsg(KeyType::Space, ''));
+        $this->assertTrue($player->paused);
+        $this->fakeNow = 100.5;
+
+        // Resume: the epoch re-bases, the carried half-second does not.
+        [$player, $cmd] = $player->update(new KeyMsg(KeyType::Space, ''));
+        $this->assertFalse($player->paused);
+        $this->armSeconds($cmd);
+
+        // Play .4 s on the fresh epoch: total .9 — under the bound.
+        $this->fakeNow = 100.9;
+        [$player, $cmd] = $player->update(new TickMsg());
+        $this->assertSame(3, $player->index, 'still playing below the total bound');
+        $this->armSeconds($cmd);
+
+        // Total crosses 1.0 at wall time 101.0 — the bound trips.
+        $this->fakeNow = 101.0;
+        [, $cmd] = $player->update(new TickMsg());
+        $this->assertSame(QuitMsg::class, $cmd()::class, 'the carried total trips the bound the pause cannot launder');
+    }
+
+    /**
+     * SA-P6 (audit 008): manual ←/→ stepping is the second laundering path
+     * the carry closes. Four steps, .25 s held each, walk a real 0.75 s of
+     * play into the carry; under maxSeconds 0.6 the next tick quits. Under
+     * the pre-fix position reading the schedule epoch re-based at every
+     * step, so the position seen at the tick was ~0.01 and no bound this
+     * far below the held total could ever fire — this never quitted.
+     */
+    public function testMaxSecondsSurvivesManualStepping(): void
+    {
+        $player = $this->scheduledPlayer([25, 25, 25, 25])->withMaxSeconds(0.6);
+
+        foreach ([0.2, 0.45, 0.7, 0.95] as $t) {
+            $this->fakeNow = $t;
+            [$player, ] = $player->update(new KeyMsg(KeyType::Right, ''));
+        }
+        $this->assertSame(0, $player->index, 'four steps walked the full lap');
+
+        $this->fakeNow = 0.96;
+        [, $cmd] = $player->update(new TickMsg());
+        $this->assertSame(QuitMsg::class, $cmd()::class, 'stepped segments sum into the bound');
+    }
+
+    /**
+     * SA-P6 (audit 008): a frame-stream reload is not a budget reset either
+     * — the live segment folds into the carry before the position restarts.
+     * A quarter-second of the old stream is banked (carried 0.25 s) against
+     * a 0.2 s bound, so the very first tick on the reloaded stream quits
+     * even though the new position had just reset to frame 0. Pre-fix the
+     * carried time was dropped and the fresh stream played unbounded.
+     */
+    public function testMaxSecondsSurvivesAStreamReload(): void
+    {
+        $player = $this->scheduledPlayer([25, 25, 25, 25])->withMaxSeconds(0.2);
+
+        $this->fakeNow = 0.25;
+        [$player, $cmd] = $player->update(new TickMsg());
+        $this->assertSame(1, $player->index);
+
+        // Swap streams after .25 s of real play on the old one.
+        $reloaded = $player->withFrames($this->scheduledPlayer([50, 50])->frames);
+        $this->assertSame(0, $reloaded->index, 'the position restarted');
+        $this->assertSame(0.0, $reloaded->playedSeconds() ?? 0.0, 'the schedule position restarted');
+
+        // The carried .25 s already exceeds the .2 s bound: the first tick
+        // on the fresh stream trips, with the bound the swap cannot erase.
+        $this->fakeNow = 0.45;
+        [, $cmd] = $reloaded->update(new TickMsg());
+        $this->assertSame(QuitMsg::class, $cmd()::class, 'the bound rode the carry across the stream swap');
+    }
+
+    /**
+     * SA-P6 (audit 059): the prefix-sum table is memoised against the
+     * immutable instance (a WeakMap keyed by Player — the table dies with
+     * its Player), and each cadence variant carries its own table, never a
+     * stale read across a mutate.
+     */
+    public function testCumulativeTableIsMemoisedPerInstance(): void
+    {
+        $player = $this->scheduledPlayer([25, 50, 25, 100]);
+        $read = static function (Player $p): array {
+            $m = new \ReflectionMethod(Player::class, 'cumulative');
+
+            return $m->invoke($p);
+        };
+
+        $table = $read($player);
+        $this->assertSame([0.0, 0.25, 0.75, 1.0, 2.0], $table, 'the prefix sums of the disclosed lap holds');
+        $this->assertSame($table, $read($player), 'the second read serves the identical table');
+
+        $prop = new \ReflectionProperty(Player::class, 'scheduleTables');
+        $tables = $prop->getValue();
+        $this->assertInstanceOf(\WeakMap::class, $tables, 'the memo is a WeakMap — it never pins a dead Player');
+        $this->assertTrue(isset($tables[$player]), 'the table is memoised against the instance');
+
+        $sped = $player->withFixedFps(10.0);
+        $this->assertNotSame($table, $read($sped), 'a cadence swap computes its own table');
+        $this->assertSame([0.0, 0.1, 0.2, 0.30000000000000004, 0.4], $read($sped), 'four uniform 0.1 s periods');
+        $this->assertSame($table, $read($player), 'and the original instance keeps its own');
     }
 
     /**

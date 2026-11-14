@@ -128,9 +128,11 @@ final class Player implements Model
     private const STATUS_UNICODE_FLOOR = 82;
 
     /**
-     * The four seam parameters — `$now`, `$anchor`, `$lapsCarried`, `$watch` —
-     * are internal wiring (test clock, schedule anchoring, lap carry across a
-     * reload, watch rebind), not caller vocabulary: hosts build Players via
+     * The six seam parameters — `$now`, `$anchor`, `$lapsCarried`, `$watch`,
+     * `$elapsedCarried`, `$epochBasePos` — are internal wiring (test clock,
+     * schedule anchoring, lap carry across a reload, watch rebind,
+     * played-time carry across a re-anchor, the live epoch's establishment
+     * position), not caller vocabulary: hosts build Players via
      * {@see self::start()} and the fluent setters, which thread the seams
      * themselves. They stay public in the signature deliberately — promoted
      * readonly state beats a parallel private-property ceremony — and the
@@ -165,6 +167,22 @@ final class Player implements Model
      *        already read and decoded the changed file — the Player only
      *        rebinds state). The closure must be cheap: it runs inside the
      *        event loop on every poll.
+     * @param float $elapsedCarried SA-P6 (audit 008): play time already carried
+     *        across every schedule re-anchor — pause/resume, manual ←/→, the
+     *        early-fire force-advance, withFixedFps rebases — so
+     *        {@see withMaxSeconds()} bounds TOTAL play time as documented:
+     *        periodic interaction cannot launder the bound. Paused wall time
+     *        never accrues (the pause freezes the played total into this carry
+     *        and drops the epoch, so the resume re-anchor folds nothing for
+     *        the paused span), and a frame-stream reload is not a budget reset
+     *        either. Derived state — threaded by mutate(), like $anchor.
+     * @param ?float $epochBasePos SA-P6 (audit 008): the schedule position
+     *        (C[k]) the current play epoch was established at. `now - $anchor`
+     *        is the schedule position, not elapsed play time — a re-anchor
+     *        hands the shown frame a fresh full window that sits `C[k]` into
+     *        the schedule, so the real play time of the live segment is
+     *        `(now - $anchor) - $epochBasePos`. Null whenever no epoch is live
+     *        (initial, paused, post-reload); derived, threaded by mutate().
      */
     public function __construct(
         public readonly array $frames,
@@ -179,6 +197,13 @@ final class Player implements Model
         public readonly ?int $loops = null,
         private readonly int $lapsCarried = 0,
         private readonly ?\Closure $watch = null,
+        // SA-P6 (audit 008): play time carried across schedule re-anchors —
+        // see the @param note above; derived state, threaded by mutate().
+        private readonly float $elapsedCarried = 0.0,
+        // SA-P6 (audit 008): the schedule position (C[k]) the live epoch was
+        // established at; (now - anchor) - basePos is the REAL play time of
+        // the live segment. Derived state, threaded by mutate().
+        private readonly ?float $epochBasePos = null,
     ) {
         // Fail fast: a Player that cannot display its start frame is a wiring
         // bug at construction time, not a state to carry into update()/view().
@@ -213,7 +238,17 @@ final class Player implements Model
             }
             if ($msg->type === KeyType::Space) {
                 if ($this->paused === false) {
-                    return [$this->mutate(['paused' => true]), null];
+                    // SA-P6 (audit 008): pausing freezes the played total
+                    // into the carry and drops the epoch — everything the
+                    // schedule accrued while playing survives the re-anchor,
+                    // and everything after this instant is paused wall time,
+                    // which the resume re-anchor folds nothing for.
+                    return [$this->mutate([
+                        'paused'         => true,
+                        'elapsedCarried' => $this->playSeconds($this->clockNow()) ?? 0.0,
+                        'anchor'         => null,
+                        'epochBasePos'   => null,
+                    ]), null];
                 }
                 // E-03: resume re-anchors the schedule so the frame shown
                 // when we paused gets a FRESH full period — paused wall time
@@ -247,9 +282,14 @@ final class Player implements Model
         if ($msg instanceof TickMsg && $this->paused === false && $this->frames !== []) {
             $now = $this->clockNow();
             // E-09: the duration bound is a position on the schedule, not a
-            // wall-clock timer: total play time is `now - anchor` (cycle-
-            // monotonic while unpaused), and crossing maxSeconds quits.
-            if ($this->anchor !== null && $this->maxSeconds !== null && ($now - $this->anchor) >= $this->maxSeconds) {
+            // wall-clock timer: no timer is armed, so a stalled loop cannot
+            // overshoot silently either. SA-P6 (audit 008): the position is
+            // the TOTAL played time — carried segments re-anchored away plus
+            // the current one — so pausing and stepping periodically no
+            // longer launder the bound; time spent paused never accrues
+            // (the pause froze the carry at the pause instant).
+            $played = $this->playSeconds($now);
+            if ($this->maxSeconds !== null && $played !== null && $played >= $this->maxSeconds) {
                 return [$this, Cmd::quit()];
             }
             return $this->advanceSchedule($now);
@@ -386,9 +426,13 @@ final class Player implements Model
 
     /**
      * E-09: stop playback once the schedule position (total play time; time
-     * spent paused never accrues) reaches $seconds. The bound lives in the
-     * model and is checked on each tick — no wall-clock timer is armed for
-     * it, so a stalled loop cannot overshoot silently either.
+     * spent paused never accrues) reaches $seconds. SA-P6 (audit 008) makes
+     * the "total" literal: every re-anchor — pause/resume, manual step, the
+     * early-fire force-advance, a cadence swap — folds its played segment
+     * into the elapsed carry the check compares (playSeconds()), so the
+     * bound can no longer be laundered by interacting with it. The bound
+     * lives in the model and is checked on each tick — no wall-clock timer
+     * is armed for it, so a stalled loop cannot overshoot silently either.
      */
     public function withMaxSeconds(float $seconds): self
     {
@@ -460,17 +504,26 @@ final class Player implements Model
      * {@see self::update()} re-derives the bound from the fresh bytes on
      * purpose, so a file whose loop extension changed mid-session gets its
      * new bound without the caller lifting a finger (pinned by
-     * PlayerWatchTest).
+     * PlayerWatchTest). SA-P6 (audit 008): the duration bound rides this
+     * survive-list as a carried total too — the live segment folds into the
+     * elapsed carry before the epoch drops, so swapping streams mid-run is
+     * not a budget reset either.
      *
      * @param list<Frame> $frames
      */
     public function withFrames(array $frames): self
     {
+        // SA-P6 (audit 008): fold the live segment first — a position
+        // restart must not launder the maxSeconds bound.
+        $carried = $this->playSeconds($this->clockNow()) ?? 0.0;
+
         return $this->mutate([
             'frames' => array_values($frames),
             'index' => 0,
             'lapsCarried' => 0,
             'anchor' => null,
+            'elapsedCarried' => $carried,
+            'epochBasePos' => null,
         ]);
     }
 
@@ -480,15 +533,37 @@ final class Player implements Model
     }
 
     /**
-     * E-09: the duration bound measured so far on the current schedule
-     * (null before the schedule is anchored, i.e. before the first tick).
+     * E-09: the duration bound measured so far ON THE CURRENT SCHEDULE
+     * (null before the schedule is anchored, i.e. before the first tick) —
+     * the raw epoch position the E-03 cadence pins observe. The maxSeconds
+     * BOUND proper measures total play time across re-anchors — see
+     * {@see self::playSeconds()}; SA-P6 (audit 008) fixed that bound to
+     * carry, not this accessor.
      */
     public function playedSeconds(): ?float
     {
         if ($this->anchor === null) {
             return null;
         }
+
         return max(0.0, $this->clockNow() - $this->anchor);
+    }
+
+    /**
+     * SA-P6 (audit 008): the total-play-time reading at $now — carried
+     * segments folded at every re-anchor plus the live epoch segment; null
+     * for a schedule that never anchored and carries nothing. This is what
+     * {@see withMaxSeconds()} bounds: paused wall time never accrues (the
+     * pause froze the carry at the pause instant), and periodic pausing or
+     * stepping no longer launders the bound.
+     */
+    private function playSeconds(float $now): ?float
+    {
+        if ($this->anchor === null) {
+            return $this->elapsedCarried > 0.0 ? $this->elapsedCarried : null;
+        }
+
+        return $this->elapsedCarried + max(0.0, ($now - $this->anchor) - ($this->epochBasePos ?? 0.0));
     }
 
     private function withPreset(string $preset): self
@@ -501,12 +576,32 @@ final class Player implements Model
      * due at clock time $now: the first tick, every manual step, and every
      * resume pass through here, which is what keeps the deadline
      * index-derived (E-03 pause/resume safety).
+     *
+     * SA-P6 (audit 008): a re-anchor moves the epoch, so the segment it
+     * replaces is folded into the elapsed carry first — the schedule
+     * position restarts, the total play time the bound measures does not.
+     * The fold is exactly what makes "cycle-monotonic while unpaused" true
+     * across re-anchors again: manual steps and the early-fire force-advance
+     * no longer zero out progress toward maxSeconds.
      */
     private function anchored(int $showing, float $now): self
     {
         $cumulative = $this->cumulative();
+        // SA-P6 (audit 008): fold the REAL play time of the epoch being
+        // replaced — its schedule position (now - anchor) minus the
+        // position the epoch was established at. A re-anchor gives the
+        // shown frame a fresh full window; that virtual head-start must
+        // not count as play.
+        $carried = $this->elapsedCarried + ($this->anchor === null
+            ? 0.0
+            : max(0.0, ($now - $this->anchor) - ($this->epochBasePos ?? 0.0)));
 
-        return $this->mutate(['index' => $showing, 'anchor' => $now - $cumulative[$showing]]);
+        return $this->mutate([
+            'index'          => $showing,
+            'anchor'         => $now - $cumulative[$showing],
+            'elapsedCarried' => $carried,
+            'epochBasePos'   => $cumulative[$showing],
+        ]);
     }
 
     /**
@@ -524,17 +619,37 @@ final class Player implements Model
     }
 
     /**
+     * SA-P6 (audit 059): per-instance prefix-sum memo. A Player is an
+     * immutable value — frames and cadence cannot move under a live
+     * instance — so cumulative() is a pure function of $this and pays at
+     * most once per instance (the force-advance leg reads it from both
+     * advanceSchedule and anchored). A WeakMap lets each table die with its
+     * Player, so the memo never pins a superseded schedule past its
+     * lifetime; per-tick garbage on the repaint path is what -059 named.
+     *
+     * @var \WeakMap<self, list<float>>|null
+     */
+    private static ?\WeakMap $scheduleTables = null;
+
+    /**
      * Prefix sums C[0..n] of the frame periods; C[n] is one full cycle.
      *
      * @return list<float>
      */
     private function cumulative(): array
     {
+        self::$scheduleTables ??= new \WeakMap();
+        $table = self::$scheduleTables[$this] ?? null;
+        if ($table !== null) {
+            return $table;
+        }
+
         $c = [0.0];
         $n = count($this->frames);
         for ($i = 0; $i < $n; $i++) {
             $c[] = $c[$i] + $this->framePeriod($i);
         }
+        self::$scheduleTables[$this] = $c;
 
         return $c;
     }
@@ -579,18 +694,34 @@ final class Player implements Model
             return [$this, Cmd::quit()];
         }
 
-        $landing = 0;
-        for ($k = $n - 1; $k >= 0; $k--) {
-            if ($within >= $cumulative[$k]) {
-                $landing = $k;
-                break;
+        // SA-P6 (audit 059): binary search for the landing frame — the table
+        // is strictly increasing (every period >= MIN_TICK_CS), so the
+        // largest k with C[k] <= within resolves in log2(n) probes; the
+        // result is identical to the old linear reverse scan, frame for
+        // frame (the catch-up corpus re-proved it unmoved at landing).
+        $lo = 0;
+        $hi = $n - 1;
+        while ($lo < $hi) {
+            $mid = intdiv($lo + $hi, 2) + 1;
+            if ($cumulative[$mid] <= $within) {
+                $lo = $mid;
+            } else {
+                $hi = $mid - 1;
             }
         }
+        $landing = $lo;
         if ($landing !== $this->index) {
             // Schedule-driven arrival: catch-up may have skipped frames.
             $changes = ['index' => $landing];
             if ($unanchored) {
                 $changes['anchor'] = $anchor;
+                // SA-P6 (audit 008): the first tick establishes the SCHEDULE
+                // ORIGIN, not a re-anchor — the epoch starts at position 0 and
+                // frame 0's window counts as real play time (this is exactly
+                // what the E-09 quit-on-tie bound measures: total play = raw
+                // schedule position on a clean stream). So the live segment's
+                // real play time is the full (now - anchor): basePos 0.
+                $changes['epochBasePos'] = 0.0;
             }
             $next = $this->mutate($changes);
 
