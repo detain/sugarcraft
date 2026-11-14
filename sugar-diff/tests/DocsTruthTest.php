@@ -34,14 +34,28 @@ final class DocsTruthTest extends TestCase
         return (string) file_get_contents(self::ROOT . '/README.md');
     }
 
-    private static function siteBody(): string
+    /**
+     * Every doc surface this guard family pins: the lib README always, plus
+     * the repo-root docs/_data body — which only exists in a monorepo
+     * checkout. In a standalone split-repo clone the arms run README-only
+     * instead of going red on a missing-file warning (sugar-diff-012); the
+     * monorepo keeps its fail-loud drift behaviour.
+     *
+     * @return non-empty-list<string>
+     */
+    private static function docsSurfaces(): array
     {
-        return (string) file_get_contents(self::ROOT . '/../docs/_data/sugar-diff.body.html');
+        $path = self::ROOT . '/../docs/_data/sugar-diff.body.html';
+        if (!is_file($path)) {
+            return [self::readme()];
+        }
+
+        return [self::readme(), (string) file_get_contents($path)];
     }
 
     public function test_the_docs_never_print_the_elision_less_hunk_header(): void
     {
-        foreach ([self::readme(), self::siteBody()] as $index => $document) {
+        foreach (self::docsSurfaces() as $index => $document) {
             self::assertStringNotContainsString(
                 self::FALSE_ELISION_LITERAL,
                 $document,
@@ -56,7 +70,7 @@ final class DocsTruthTest extends TestCase
 
         self::assertSame($expected, Diff::compute("Hello World\n", "Hello PHP\n")->unified('file.txt'));
 
-        foreach ([self::readme(), self::siteBody()] as $document) {
+        foreach (self::docsSurfaces() as $document) {
             self::assertStringContainsString("// @@ -1 +1 @@\n// -Hello World\n// +Hello PHP", $document);
         }
     }
@@ -67,7 +81,7 @@ final class DocsTruthTest extends TestCase
         // …and both docs now state the D1a fold as LANDED: the gutter
         // delegates, so the old own-copy disclosure must be gone while
         // delegation wording is present in every doc surface.
-        foreach ([self::readme(), self::siteBody()] as $document) {
+        foreach (self::docsSurfaces() as $document) {
             self::assertStringNotContainsString(
                 'keeps its own copy',
                 $document,
