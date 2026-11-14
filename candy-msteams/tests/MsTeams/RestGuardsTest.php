@@ -7,6 +7,8 @@ namespace CandyCode\Bundles\MsTeams\Tests\MsTeams;
 use CandyCode\Bundles\MsTeams\MsTeams\Rest;
 use CandyCode\Bundles\MsTeams\MsTeams\RestException;
 use CandyCode\Bundles\MsTeams\MsTeams\TokenBroker;
+use Psr\Http\Message\StreamInterface;
+use React\Http\Message\Response;
 use CandyCode\Bundles\MsTeams\Support\Log;
 use CandyCode\Bundles\MsTeams\Support\TextSafety;
 use CandyCode\Bundles\MsTeams\Tests\Fixture\FakeTeamsApi;
@@ -306,5 +308,345 @@ final class RestGuardsTest extends TestCase
         });
         $loop->run();
         $loop->cancelTimer($timer);
+    }
+    public function testADeclaredSizeOverTheBudgetRefusesBeforeAnyBodyByteIsRead(): void
+    {
+        // msteams-16 story one: trust-but-verify the Content-Length — an
+        // over-budget declaration refuses at the header door, and the body
+        // stream is never touched (the unreadable fake would throw).
+        $stream = new UnreadableTrackStream();
+        $http = new class ($stream) extends Browser {
+            public function __construct(private readonly StreamInterface $bodyStream)
+            {
+            }
+
+            public function get($url, array $headers = array())
+            {
+                return \React\Promise\resolve(new Response(200, ['Content-Length' => (string) (1024 * 1024)], $this->bodyStream));
+            }
+        };
+
+        $error = null;
+        $this->rest(true, null, null, $http)->fetchBinary('http://127.0.0.1:9/media/pic.png', 1024)->then(null, static function (\Throwable $e) use (&$error): void {
+            $error = $e;
+        });
+
+        self::assertInstanceOf(RestException::class, $error);
+        self::assertStringContainsString('declares 1048576 bytes against a 1024 byte budget', $error->getMessage());
+        self::assertSame(0, $stream->reads, 'the declared-size door must refuse before a single body byte is read');
+        self::assertTrue($stream->closed, 'the refused stream is closed, not left open on the wire');
+        self::assertStringNotContainsString('127.0.0.1:9', $error->getMessage(), 'content-free: the error names the PATH, never the target');
+    }
+
+    public function testALyingContentLengthStillTripsTheDrainCapWithinOneChunk(): void
+    {
+        // msteams-16 story two: a small header with an endless stream must
+        // die in the accumulator, at most one chunk past the cap — the old
+        // shape buffered the whole lie first.
+        $stream = new InfiniteZeroStream();
+        $http = new class ($stream) extends Browser {
+            public function __construct(private readonly StreamInterface $bodyStream)
+            {
+            }
+
+            public function get($url, array $headers = array())
+            {
+                return \React\Promise\resolve(new Response(200, ['Content-Length' => '8'], $this->bodyStream));
+            }
+        };
+
+        $error = null;
+        $this->rest(true, null, null, $http)->fetchBinary('http://127.0.0.1:9/media/pic.png', 100_000)->then(null, static function (\Throwable $e) use (&$error): void {
+            $error = $e;
+        });
+
+        self::assertInstanceOf(RestException::class, $error);
+        self::assertStringContainsString('exceeds the 100000 byte budget', $error->getMessage());
+        self::assertLessThanOrEqual(100_000 + Rest::MEDIA_CHUNK_BYTES, $stream->totalRead, 'the drain overshoot is bounded to one chunk');
+        self::assertTrue($stream->closed);
+    }
+
+    public function testAStreamedBodyWithinTheBudgetArrivesWhole(): void
+    {
+        // The green flow: declared == actual within budget — the cap must
+        // not shave a legal body (and an equality-edge declared size rides).
+        $stream = new FiniteStream(str_repeat('x', 512));
+        $http = new class ($stream) extends Browser {
+            public function __construct(private readonly StreamInterface $bodyStream)
+            {
+            }
+
+            public function get($url, array $headers = array())
+            {
+                return \React\Promise\resolve(new Response(200, ['Content-Length' => '512'], $this->bodyStream));
+            }
+        };
+
+        $bytes = null;
+        $this->rest(true, null, null, $http)->fetchBinary('http://127.0.0.1:9/media/pic.png', 512)->then(static function (string $b) use (&$bytes): void {
+            $bytes = $b;
+        });
+
+        self::assertSame(str_repeat('x', 512), $bytes);
+    }
+}
+
+/**
+ * PSR-7 fake for msteams-16 story one: any read is a LAW BREACH (the
+ * declared-size refusal must happen before the body is touched).
+ */
+final class UnreadableTrackStream implements StreamInterface
+{
+    public int $reads = 0;
+
+    public bool $closed = false;
+
+    public function __toString(): string
+    {
+        return '';
+    }
+
+    public function close(): void
+    {
+        $this->closed = true;
+    }
+
+    public function detach()
+    {
+        return null;
+    }
+
+    public function getSize(): ?int
+    {
+        return null;
+    }
+
+    public function isSeekable(): bool
+    {
+        return false;
+    }
+
+    public function tell(): int
+    {
+        return 0;
+    }
+
+    public function seek($offset, $whence = SEEK_SET): void
+    {
+    }
+
+    public function rewind(): void
+    {
+    }
+
+    public function isWritable(): bool
+    {
+        return false;
+    }
+
+    public function write($string): int
+    {
+        throw new \LogicException('not writable');
+    }
+
+    public function isReadable(): bool
+    {
+        return true;
+    }
+
+    public function read($length): string
+    {
+        $this->reads++;
+
+        throw new \LogicException('the declared-size door must refuse before any body byte is read');
+    }
+
+    public function getContents(): string
+    {
+        $this->reads++;
+
+        throw new \LogicException('getContents bypasses the streaming cap');
+    }
+
+    public function getMetadata($key = null)
+    {
+        return null;
+    }
+
+    public function eof(): bool
+    {
+        return false;
+    }
+}
+
+/** PSR-7 fake for msteams-16 story two: endless zero bytes, counted. */
+final class InfiniteZeroStream implements StreamInterface
+{
+    public int $totalRead = 0;
+
+    public bool $closed = false;
+
+    public function __toString(): string
+    {
+        return '';
+    }
+
+    public function close(): void
+    {
+        $this->closed = true;
+    }
+
+    public function detach()
+    {
+        return null;
+    }
+
+    public function getSize(): ?int
+    {
+        return null;
+    }
+
+    public function isSeekable(): bool
+    {
+        return false;
+    }
+
+    public function tell(): int
+    {
+        return 0;
+    }
+
+    public function seek($offset, $whence = SEEK_SET): void
+    {
+    }
+
+    public function rewind(): void
+    {
+    }
+
+    public function isWritable(): bool
+    {
+        return false;
+    }
+
+    public function write($string): int
+    {
+        throw new \LogicException('not writable');
+    }
+
+    public function isReadable(): bool
+    {
+        return true;
+    }
+
+    public function read($length): string
+    {
+        $this->totalRead += $length;
+
+        return \str_repeat("\0", $length);
+    }
+
+    public function getContents(): string
+    {
+        throw new \LogicException('getContents bypasses the streaming cap');
+    }
+
+    public function getMetadata($key = null)
+    {
+        return null;
+    }
+
+    public function eof(): bool
+    {
+        return false;
+    }
+}
+
+/** PSR-7 fake: a finite body read in caller-sized chunks. */
+final class FiniteStream implements StreamInterface
+{
+    private int $at = 0;
+
+    public function __construct(private readonly string $bytes)
+    {
+    }
+
+    public function __toString(): string
+    {
+        return $this->bytes;
+    }
+
+    public function close(): void
+    {
+    }
+
+    public function detach()
+    {
+        return null;
+    }
+
+    public function getSize(): ?int
+    {
+        return \strlen($this->bytes);
+    }
+
+    public function isSeekable(): bool
+    {
+        return false;
+    }
+
+    public function tell(): int
+    {
+        return $this->at;
+    }
+
+    public function seek($offset, $whence = SEEK_SET): void
+    {
+    }
+
+    public function rewind(): void
+    {
+        $this->at = 0;
+    }
+
+    public function isWritable(): bool
+    {
+        return false;
+    }
+
+    public function write($string): int
+    {
+        throw new \LogicException('not writable');
+    }
+
+    public function isReadable(): bool
+    {
+        return true;
+    }
+
+    public function read($length): string
+    {
+        $chunk = \substr($this->bytes, $this->at, $length);
+        $this->at += \strlen($chunk);
+
+        return $chunk;
+    }
+
+    public function getContents(): string
+    {
+        $rest = \substr($this->bytes, $this->at);
+        $this->at = \strlen($this->bytes);
+
+        return $rest;
+    }
+
+    public function getMetadata($key = null)
+    {
+        return null;
+    }
+
+    public function eof(): bool
+    {
+        return $this->at >= \strlen($this->bytes);
     }
 }

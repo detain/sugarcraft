@@ -797,7 +797,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
             }
             $jobs[] = [
                 'name' => $name,
-                'promise' => $this->rest->fetchBinary($url)->then(
+                'promise' => $this->rest->fetchBinary($url, $maxBytes)->then(
                     static fn (string $bytes): ?string => $bytes,
                     function (\Throwable $e) use ($name): ?string {
                         $this->log->warn('msteams_media_fetch_failed', ['name' => $name, 'error' => $e->getMessage()]);

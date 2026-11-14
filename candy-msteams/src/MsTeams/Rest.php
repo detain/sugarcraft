@@ -44,6 +44,9 @@ final class Rest
 
     public const MAX_POST_RETRIES = 2;
 
+    /** msteams-16: the drain quantum for a budgeted fetchBinary — one chunk is the most a lying header may overshoot. */
+    public const MEDIA_CHUNK_BYTES = 8192;
+
     public const RETRY_AFTER_CAP_SECONDS = 30.0;
 
     private const ERROR_BODY_LOG_BYTES = 200;
@@ -175,9 +178,16 @@ final class Rest
      * the allowlisted platform hosts. The signed query of a legit url is
      * bearer material: error prose carries the PATH only.
      *
+     * msteams-16: with a byte budget the cap binds WHILE STREAMING — a
+     * lying-or-huge Content-Length refuses before a single body byte is
+     * read, and the drain counts bytes in fixed chunks, aborting (and
+     * closing the stream) the moment the budget is crossed. Without the
+     * budget the old full-buffer read ships verbatim (the belt at the
+     * account layer stays for callers that pass no cap).
+     *
      * @return PromiseInterface<string>
      */
-    public function fetchBinary(string $url): PromiseInterface
+    public function fetchBinary(string $url, ?int $maxBytes = null): PromiseInterface
     {
         $scheme = \strtolower((string) (\parse_url($url, \PHP_URL_SCHEME) ?: ''));
         $host = \strtolower((string) (\parse_url($url, \PHP_URL_HOST) ?: ''));
@@ -194,13 +204,53 @@ final class Rest
             : $this->http->get($url);
 
         return $response->then(
-            function (ResponseInterface $response) use ($safeLabel): string {
+            function (ResponseInterface $response) use ($safeLabel, $maxBytes): string {
                 $status = $response->getStatusCode();
                 if ($status >= 400) {
                     throw new RestException("msteams media fetch {$status} for {$safeLabel}", $status);
                 }
+                $body = $response->getBody();
+                if ($maxBytes === null) {
+                    return (string) $body;
+                }
 
-                return (string) $response->getBody();
+                // msteams-16, story one — the DECLARED size, before a single
+                // body byte is read (this also closes the account layer's
+                // "declared size is a hint" trust at the fetch door):
+                $declared = $response->getHeaderLine('Content-Length');
+                if ($declared !== '' && \ctype_digit($declared) && (int) $declared > $maxBytes) {
+                    $body->close();
+
+                    throw new RestException(
+                        "msteams media body refused: declares {$declared} bytes against a {$maxBytes} byte budget for {$safeLabel}",
+                        0,
+                        $safeLabel,
+                    );
+                }
+
+                // msteams-16, story two — the ACTUAL drain in fixed chunks: a
+                // lying header (small claim, endless stream) trips HERE, at
+                // most one chunk past the cap, and the stream is closed at
+                // the door — no silent 100 MB buffer.
+                $bytes = '';
+                while (!$body->eof()) {
+                    $chunk = $body->read(self::MEDIA_CHUNK_BYTES);
+                    if ($chunk === '') {
+                        break;
+                    }
+                    $bytes .= $chunk;
+                    if (\strlen($bytes) > $maxBytes) {
+                        $body->close();
+
+                        throw new RestException(
+                            "msteams media body refused: exceeds the {$maxBytes} byte budget for {$safeLabel}",
+                            0,
+                            $safeLabel,
+                        );
+                    }
+                }
+
+                return $bytes;
             },
             function (\Throwable $e) use ($safeLabel): never {
                 // msteams-20 leg 028: a wire failure can embed the FULL
