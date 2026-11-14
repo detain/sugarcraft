@@ -179,11 +179,36 @@ final class GitGuardTest extends TestCase
     {
         // A legit relative path is anchored to the realpath'd repo root and the
         // worktree is actually created there — proving the guard resolves rather
-        // than rejects safe input.
+        // than rejects safe input. CG-24: the branch is now CREATED (-b), so the
+        // call names a fresh branch instead of pre-existing feature.
         exec('git -C ' . escapeshellarg($this->cwd) . " -c user.email=test@example.com -c user.name=Test commit --allow-empty -m 'first'" . self::nullSink());
-        exec('git -C ' . escapeshellarg($this->cwd) . ' branch feature' . self::nullSink());
         $git = new Git($this->cwd);
-        $git->worktreeAdd('wt-sub', 'feature');
+        $git->worktreeAdd('wt-sub', 'wtbranch');
         $this->assertDirectoryExists(realpath($this->cwd) . '/wt-sub');
+        $heads = trim((string) shell_exec('git -C ' . escapeshellarg(realpath($this->cwd) . '/wt-sub') . ' rev-parse --abbrev-ref HEAD'));
+        $this->assertSame('wtbranch', $heads, 'the new worktree sits on the created branch, not detached HEAD');
+    }
+
+    public function testWorktreeAddWithoutABranchNameUsesTheGitBasenameDefault(): void
+    {
+        // CG-24 empty-branch leg: git names the new branch from the path
+        // basename - a real branch, where the retired 'HEAD' pass-through
+        // produced a detached checkout.
+        exec('git -C ' . escapeshellarg($this->cwd) . " -c user.email=test@example.com -c user.name=Test commit --allow-empty -m 'first'" . self::nullSink());
+        $git = new Git($this->cwd);
+        $git->worktreeAdd('wt-auto', '');
+        $head = trim((string) shell_exec('git -C ' . escapeshellarg(realpath($this->cwd) . '/wt-auto') . ' rev-parse --abbrev-ref HEAD'));
+        $this->assertSame('wt-auto', $head, 'the worktree sits on a basename-named branch, not detached HEAD');
+    }
+
+    public function testWorktreeAddRefusesToShadowAnExistingBranch(): void
+    {
+        // CG-24: the branch is created with -b, so a name that already exists
+        // fails loudly in git instead of silently sharing a checked-out branch.
+        exec('git -C ' . escapeshellarg($this->cwd) . " -c user.email=test@example.com -c user.name=Test commit --allow-empty -m 'first'" . self::nullSink());
+        exec('git -C ' . escapeshellarg($this->cwd) . ' branch taken' . self::nullSink());
+        $git = new Git($this->cwd);
+        $this->expectException(\RuntimeException::class);
+        $git->worktreeAdd('wt-shadow', 'taken');
     }
 }

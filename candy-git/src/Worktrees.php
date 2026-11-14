@@ -21,6 +21,7 @@ final readonly class Worktrees
      * @param bool                 $adding     Whether we're collecting new worktree path
      * @param string               $newPath    The path being typed for new worktree
      * @param string               $newBranch  The branch for new worktree
+     * @param string               $addField   Which add-form field the keyboard edits: 'path' or 'branch' (CG-24)
      * @param bool                 $removing   Whether we're in remove-confirm mode
      */
     public function __construct(
@@ -29,6 +30,7 @@ final readonly class Worktrees
         public bool $adding = false,
         public string $newPath = '',
         public string $newBranch = '',
+        public string $addField = 'path',
         public bool $removing = false,
     ) {}
 
@@ -47,10 +49,10 @@ final readonly class Worktrees
     {
         $count = count($this->worktrees);
         if ($count === 0) {
-            return new self(worktrees: [], cursor: 0, adding: $this->adding, newPath: $this->newPath, newBranch: $this->newBranch, removing: $this->removing);
+            return new self(worktrees: [], cursor: 0, adding: $this->adding, newPath: $this->newPath, newBranch: $this->newBranch, addField: $this->addField, removing: $this->removing);
         }
         $newCursor = max(0, min($count - 1, $this->cursor + $dir));
-        return new self(worktrees: $this->worktrees, cursor: $newCursor, adding: $this->adding, newPath: $this->newPath, newBranch: $this->newBranch, removing: $this->removing);
+        return new self(worktrees: $this->worktrees, cursor: $newCursor, adding: $this->adding, newPath: $this->newPath, newBranch: $this->newBranch, addField: $this->addField, removing: $this->removing);
     }
 
     /**
@@ -58,7 +60,7 @@ final readonly class Worktrees
      */
     public function startAdding(): self
     {
-        return new self(worktrees: $this->worktrees, cursor: $this->cursor, adding: true, newPath: '', newBranch: '', removing: false);
+        return new self(worktrees: $this->worktrees, cursor: $this->cursor, adding: true, newPath: '', newBranch: '', addField: 'path', removing: false);
     }
 
     /**
@@ -66,7 +68,7 @@ final readonly class Worktrees
      */
     public function withNewPath(string $path): self
     {
-        return new self(worktrees: $this->worktrees, cursor: $this->cursor, adding: $this->adding, newPath: $path, newBranch: $this->newBranch, removing: $this->removing);
+        return new self(worktrees: $this->worktrees, cursor: $this->cursor, adding: $this->adding, newPath: $path, newBranch: $this->newBranch, addField: $this->addField, removing: $this->removing);
     }
 
     /**
@@ -74,7 +76,42 @@ final readonly class Worktrees
      */
     public function withNewBranch(string $branch): self
     {
-        return new self(worktrees: $this->worktrees, cursor: $this->cursor, adding: $this->adding, newPath: $this->newPath, newBranch: $branch, removing: $this->removing);
+        return new self(worktrees: $this->worktrees, cursor: $this->cursor, adding: $this->adding, newPath: $this->newPath, newBranch: $branch, addField: $this->addField, removing: $this->removing);
+    }
+
+    /**
+     * Flip which add-form field the keyboard edits (CG-24: the branch slot
+     * existed in the model but no surface could ever fill it).
+     */
+    public function toggleAddField(): self
+    {
+        return new self(
+            worktrees: $this->worktrees,
+            cursor: $this->cursor,
+            adding: $this->adding,
+            newPath: $this->newPath,
+            newBranch: $this->newBranch,
+            addField: $this->addField === 'path' ? 'branch' : 'path',
+            removing: $this->removing,
+        );
+    }
+
+    /** The buffer of the field currently being edited. */
+    public function activeText(): string
+    {
+        return $this->addField === 'branch' ? $this->newBranch : $this->newPath;
+    }
+
+    /** Replace the buffer of the field currently being edited. */
+    public function withActiveText(string $text): self
+    {
+        return $this->addField === 'branch' ? $this->withNewBranch($text) : $this->withNewPath($text);
+    }
+
+    /** Append to the buffer of the field currently being edited (pastes). */
+    public function appendActive(string $text): self
+    {
+        return $this->withActiveText($this->activeText() . $text);
     }
 
     /**
@@ -82,7 +119,7 @@ final readonly class Worktrees
      */
     public function cancelAdding(): self
     {
-        return new self(worktrees: $this->worktrees, cursor: $this->cursor, adding: false, newPath: '', newBranch: '', removing: false);
+        return new self(worktrees: $this->worktrees, cursor: $this->cursor, adding: false, newPath: '', newBranch: '', addField: 'path', removing: false);
     }
 
     /**
@@ -90,7 +127,7 @@ final readonly class Worktrees
      */
     public function startRemoving(): self
     {
-        return new self(worktrees: $this->worktrees, cursor: $this->cursor, adding: false, newPath: '', newBranch: '', removing: true);
+        return new self(worktrees: $this->worktrees, cursor: $this->cursor, adding: false, newPath: '', newBranch: '', addField: 'path', removing: true);
     }
 
     /**
@@ -98,7 +135,7 @@ final readonly class Worktrees
      */
     public function cancelRemoving(): self
     {
-        return new self(worktrees: $this->worktrees, cursor: $this->cursor, adding: false, newPath: '', newBranch: '', removing: false);
+        return new self(worktrees: $this->worktrees, cursor: $this->cursor, adding: false, newPath: '', newBranch: '', addField: 'path', removing: false);
     }
 
     /**

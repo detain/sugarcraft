@@ -192,7 +192,31 @@ final class TextInputTest extends TestCase
         $a = $a->update(new KeyMsg(KeyType::Backspace))[0]; // …removed again, exactly as typed
         $a = $this->type($a, 'q');
         $a = $a->update(new KeyMsg(KeyType::Enter))[0];
-        self::assertSame([['featureq', 'HEAD']], $adds);
+        // CG-24: an untouched branch field stays empty and git names the new
+        // branch from the path basename - the worktree is never born detached.
+        self::assertSame([['featureq', '']], $adds);
+    }
+
+    public function testWorktreeTabSwitchesTheCollectorToTheBranchField(): void
+    {
+        $adds = [];
+        $git = $this->createMock(GitDriver::class);
+        $git->method('worktreeAdd')->willReturnCallback(
+            static function (string $path, string $branch) use (&$adds): void {
+                $adds[] = [$path, $branch];
+            }
+        );
+        $a = (new App($git, pane: Pane::Branches))->update(new KeyMsg(KeyType::Char, 'w'))[0];
+        $a = $this->type($a, 'a');
+        $a = $this->type($a, 'wt-dir');
+        $a = $a->update(new KeyMsg(KeyType::Tab))[0];
+        self::assertSame('branch', $a->worktrees->addField);
+        self::assertSame('wt-dir', $a->worktrees->newPath, 'switching fields never moves the typed path');
+        $a = $this->type($a, 'nightly');
+        self::assertSame('nightly', $a->worktrees->newBranch);
+        self::assertSame('wt-dir', $a->worktrees->newPath);
+        $a = $a->update(new KeyMsg(KeyType::Enter))[0];
+        self::assertSame([['wt-dir', 'nightly']], $adds);
     }
 
     public function testWorktreePasteInsertsIntoAddBuffer(): void

@@ -209,7 +209,8 @@ return [
     'worktree.removed'      => 'removed worktree {path}',
     'worktree.add'           => 'add worktree',
     'worktree.remove'        => 'remove worktree',
-    'worktree.branch_head_default'=> '(from current HEAD)',
+    'worktree.branch_head_default'=> '(branch named from path)',
+    'worktree.switch_field'       => 'switch field',
 
     // Interactive rebase
     'rebase_i.select_count'  => 'select number of commits to rebase:',

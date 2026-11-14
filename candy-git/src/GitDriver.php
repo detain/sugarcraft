@@ -192,7 +192,11 @@ interface GitDriver
      */
     public function worktreeList(): array;
 
-    /** Add a new worktree at $path based on $branch. */
+    /**
+     * Add a new worktree at $path. A non-empty $branch is CREATED from HEAD
+     * (`-b`); an empty one lets git name the branch from the path basename.
+     * Neither leg detaches (CG-24).
+     */
     public function worktreeAdd(string $path, string $branch): void;
 
     /** Remove an existing worktree at $path. */

@@ -126,8 +126,8 @@ or — when the local already exists — checks it out. They are read-only for
 ### Text-entry keys
 
 While collecting text (commit message with `c`, branch name with `n`,
-merge target with `M`, cherry-pick ref with `V`, worktree path with `a`
-in the worktrees overlay): printable keys and `Space` append, `Backspace`
+merge target with `M`, cherry-pick ref with `V`, worktree path and branch
+with `a` + `tab` in the worktrees overlay): printable keys and `Space` append, `Backspace`
 deletes the last character, a bracketed `paste` inserts the (sanitized,
 newline-flattened) text, `Enter` confirms, and `Esc` cancels.
 
@@ -171,7 +171,8 @@ merge has stopped; the prompt names the armed operation:
 | Key              | Action                                          |
 |------------------|--------------------------------------------------|
 | `j/k` or `↑/↓`  | Move between worktrees                          |
-| `a`              | Start adding a worktree — type the path, `Enter` confirms (relative paths anchor to the repo root; an absolute path is used as given; `..` segments are refused) |
+| `a`              | Start adding a worktree — type the path, `Enter` confirms (relative paths anchor to the repo root; an absolute path is used as given; `..` segments are refused). An empty branch field lets git name the new branch from the path basename — the worktree is never born detached |
+| `tab` (while adding) | Switch the edit between the path and branch fields; a typed branch is created from HEAD with `-b`, so shadowing an existing branch fails loudly instead of sharing it |
 | `d`              | Start removing the selected worktree — `Enter` confirms |
 | `c`              | Cancel a pending add/remove                     |
 | `Esc`            | Close the whole overlay (even mid-add)          |
@@ -246,7 +247,7 @@ marker carries no color, so tab cycling stays visible under `NO_COLOR`,
 | `StashManager`     | Immutable stash list state — `stashes`, `cursor`, `withCursor()`, `withStashes()`, `current()`, `count()`.                        |
 | `CherryPick`       | Immutable cherry-pick state — `collecting` flag + `commitRef` accumulator + `withCommitRef()` (the only writer; App owns the buffer).                              |
 | `WorktreeEntry`    | Immutable worktree entry — `path`, `branch`, `isBare`, `HEAD`.                                                                     |
-| `Worktrees`        | Immutable worktree manager state — `worktrees`, `cursor`, `adding`/`removing` modes + path collection (new worktrees branch from HEAD).                     |
+| `Worktrees`        | Immutable worktree manager state — `worktrees`, `cursor`, `adding`/`removing` modes + two-field path/branch collection (new worktrees get a CREATED branch — typed with `-b`, or named by git from the path basename — never a detached checkout).                     |
 | `RebaseAction`      | Enum — `Pick`, `Reword`, `Edit`, `Squash`, `Drop`.                                                                               |
 | `RebaseCommit`      | Immutable rebase todo entry — `sha`, `subject`, `action` + `withAction()` / `displayLine()`.                                      |
 | `InteractiveRebase` | Immutable interactive-rebase state — `commits` todo list, `cursor`, `selectingN`/`countInput`, `cycleAction()`, `dropCurrent()`.    |
@@ -267,7 +268,7 @@ file key like `git.timeout` resolves through the core `T` registry as
 raw string.
 
 **Available keys** (`lang/en.php` — an excerpt; the file is the full roster
-of 169 keys):
+of 170 keys):
 
 | Key                    | Default string                                                    | Parameters  |
 |------------------------|-------------------------------------------------------------------|------------|

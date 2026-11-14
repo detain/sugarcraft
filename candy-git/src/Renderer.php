@@ -787,9 +787,18 @@ final class Renderer
 
         if ($wt->adding === TRUE) {
             $lines[] = Style::new()->foreground(Color::hex('#c5b6dd'))->render(Lang::t('worktree.add_prompt'));
-            $lines[] = '  ' . Lang::t('ui.label.path') . Style::new()->foreground(Color::hex('#fde68a'))->render(self::truncate(self::sanitize($wt->newPath), $inner - 8)) . '_';
-            $lines[] = '  ' . Lang::t('ui.label.branch') . Style::new()->foreground(Color::hex('#7d6e98'))->render(self::truncate(self::sanitize($wt->newBranch !== '' ? $wt->newBranch : Lang::t('worktree.branch_head_default')), $inner - 10));
+            // CG-24: Tab toggles which field edits; the caret and the hot
+            // label color follow it, so the branch slot is visibly fillable.
+            $onPath = $wt->addField === 'path';
+            $pathTxt  = Style::new()->foreground($onPath ? Color::hex('#fde68a') : Color::hex('#7d6e98'))
+                ->render(self::truncate(self::sanitize($wt->newPath), $inner - 8));
+            $lines[] = '  ' . Lang::t('ui.label.path') . $pathTxt . ($onPath ? '_' : '');
+            $branchShown = $wt->newBranch !== '' ? self::sanitize($wt->newBranch) : self::sanitize(Lang::t('worktree.branch_head_default'));
+            $branchTxt = Style::new()->foreground($onPath ? Color::hex('#7d6e98') : Color::hex('#fde68a'))
+                ->render(self::truncate($branchShown, $inner - 10));
+            $lines[] = '  ' . Lang::t('ui.label.branch') . $branchTxt . ($onPath ? '' : '_');
             $lines[] = '';
+            $lines[] = '  ' . Style::new()->foreground(Color::hex('#7d6e98'))->render('tab') . '  ' . Lang::t('worktree.switch_field');
             $lines[] = '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('enter') . '  ' . Lang::t('worktree.confirm_add');
             $lines[] = '  ' . Style::new()->foreground(Color::hex('#7d6e98'))->render('c') . '  ' . Lang::t('help.close_help');
         } elseif ($wt->removing === TRUE) {

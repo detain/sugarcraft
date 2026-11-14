@@ -578,8 +578,15 @@ final class Git implements GitDriver
     public function worktreeAdd(string $path, string $branch): void
     {
         $resolved = $this->guardWorktreePath($path);
+        if ($branch === '') {
+            // No name typed: git creates a branch named from the path
+            // basename, anchored at HEAD - a real branch, not a detached
+            // checkout (CG-24 retired the old 'HEAD' pass-through).
+            $this->run(['worktree', 'add', $resolved]);
+            return;
+        }
         $this->guardRef($branch);
-        $this->run(['worktree', 'add', $resolved, $branch]);
+        $this->run(['worktree', 'add', '-b', $branch, $resolved]);
     }
 
     public function worktreeRemove(string $path): void

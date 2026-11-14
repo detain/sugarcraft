@@ -263,14 +263,18 @@ final class App implements Model
         // block above — even mid-add; the old per-branch cancelAdding arms
         // sat behind that block and were unreachable).
         if ($this->worktrees !== null) {
-            // When adding, Enter confirms and text edits (Char/Space/Backspace) append to the active field
+            // When adding, Enter confirms and text edits (Char/Space/Backspace) append to the active field;
+            // Tab switches which field that is (CG-24, candy-git-030: the branch slot had no input path).
             if ($this->worktrees->adding === TRUE) {
                 if ($msg->type === KeyType::Enter) {
                     return [$this->executeWorktreeAdd(), null];
                 }
-                $edited = self::editBuffer($this->worktrees->newPath, $msg);
+                if ($msg->type === KeyType::Tab) {
+                    return [$this->withWorktrees($this->worktrees->toggleAddField()), null];
+                }
+                $edited = self::editBuffer($this->worktrees->activeText(), $msg);
                 if ($edited !== null) {
-                    return [$this->withWorktrees($this->worktrees->withNewPath($edited)), null];
+                    return [$this->withWorktrees($this->worktrees->withActiveText($edited)), null];
                 }
                 return [$this, null];
             }
@@ -764,7 +768,7 @@ final class App implements Model
             return [$this->withCherryPick($this->cherryPick->withCommitRef($this->cherryPick->commitRef . $text)), null];
         }
         if ($this->worktrees !== null && $this->worktrees->adding) {
-            return [$this->withWorktrees($this->worktrees->withNewPath($this->worktrees->newPath . $text)), null];
+            return [$this->withWorktrees($this->worktrees->appendActive($text)), null];
         }
         if ($this->collectingBranchName) {
             return [$this->withBranchName($this->branchName . $text), null];
@@ -1899,7 +1903,10 @@ final class App implements Model
             return $this->withError(Lang::t('worktree.empty_path'));
         }
         try {
-            $branch = $wt->newBranch !== '' ? $wt->newBranch : 'HEAD';
+            // An empty branch lets git name the new branch from the path
+            // basename; a typed one is created explicitly. Either way the
+            // worktree is born ON A BRANCH - 'HEAD' here meant detached.
+            $branch = $wt->newBranch;
             $this->git->worktreeAdd($wt->newPath, $branch);
             return $this->withWorktrees(null)->refresh()->withAll(
                 successMessage: Lang::t('worktree.added', ['path' => $wt->newPath])
