@@ -102,10 +102,27 @@ final readonly class HistoryEntry
 
     /**
      * Convenience factory for branch creation.
+     *
+     * `checkout -b` creates the ref AND moves HEAD, so the inverse must
+     * travel home first and only then delete: a bare deleteBranch inverse
+     * was refused by git while the fresh branch was current (every undo of
+     * `n` failed, candy-git-016) and, after a later manual switch, silently
+     * left HEAD where creation had put it. Mirrors the checkout() lesson
+     * above: record the origin, and when none is known (detached HEAD)
+     * refuse the undo honestly instead of guessing a way back.
      */
-    public static function createBranch(string $name): self
+    public static function createBranch(string $name, string $from): self
     {
-        return new self('createBranch', ['name' => $name], 'deleteBranch', ['name' => $name]);
+        if ($from === '') {
+            return new self('createBranch', ['name' => $name, 'from' => ''], self::UNRECOVERABLE_INVERSE, []);
+        }
+
+        return new self(
+            'createBranch',
+            ['name' => $name, 'from' => $from],
+            'removeBranch',
+            ['name' => $name, 'from' => $from],
+        );
     }
 
     /**

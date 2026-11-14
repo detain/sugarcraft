@@ -88,12 +88,25 @@ final class HistoryEntryTest extends TestCase
 
     public function testCreateBranchFactoryCreatesCorrectEntry(): void
     {
-        $entry = HistoryEntry::createBranch('new-feature');
+        $entry = HistoryEntry::createBranch('new-feature', 'main');
 
         $this->assertSame('createBranch', $entry->op);
-        $this->assertSame(['name' => 'new-feature'], $entry->args);
-        $this->assertSame('deleteBranch', $entry->inverseOp);
-        $this->assertSame(['name' => 'new-feature'], $entry->inverseArgs);
+        $this->assertSame(['name' => 'new-feature', 'from' => 'main'], $entry->args);
+        // candy-git-016: the inverse is the PAIRED walk-home-then-delete,
+        // not a bare deleteBranch (git refuses that while the fresh branch
+        // is current — every undo of `n` used to fail).
+        $this->assertSame('removeBranch', $entry->inverseOp);
+        $this->assertSame(['name' => 'new-feature', 'from' => 'main'], $entry->inverseArgs);
+    }
+
+    public function testCreateBranchWithoutOriginRefusesUndo(): void
+    {
+        // Detached HEAD has no home to return to: refuse, never guess
+        // (the checkout() lesson, mirrored per candy-git-016).
+        $entry = HistoryEntry::createBranch('new-feature', '');
+
+        $this->assertSame('createBranch', $entry->op);
+        $this->assertSame(HistoryEntry::UNRECOVERABLE_INVERSE, $entry->inverseOp);
     }
 
     public function testStageAllFactoryCreatesCorrectEntry(): void

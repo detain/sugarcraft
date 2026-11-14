@@ -1280,10 +1280,13 @@ final class App implements Model
         if ($this->branchName === '') {
             return $this->withError(Lang::t('branch.empty_name'));
         }
+        // Captured BEFORE checkout -b moves HEAD (candy-git-016): the
+        // inverse has to know which branch to walk back to.
+        $from = $this->currentBranchName();
         try {
             $this->git->createBranch($this->branchName);
             return $this
-                ->withAll(history: $this->requireHistory()->push(HistoryEntry::createBranch($this->branchName)))
+                ->withAll(history: $this->requireHistory()->push(HistoryEntry::createBranch($this->branchName, $from)))
                 ->withBranchCollection(false, '')
                 ->refresh();
         } catch (\RuntimeException $e) {
@@ -1370,6 +1373,7 @@ final class App implements Model
                 'reset' => $this->git->reset(),
                 'amend' => $this->git->amend(),
                 'createBranch' => $this->git->createBranch($args['name']),
+                'removeBranch' => $this->undoCreateBranch($args),
                 'deleteBranch' => $this->git->deleteBranch($args['name']),
                 'restoreBranch' => $this->git->restoreBranch($args['name'], $args['sha']),
                 'stageAll' => $this->git->stageAll(),
@@ -1410,6 +1414,21 @@ final class App implements Model
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
         }
+    }
+
+    /**
+     * Inverse of a branch creation (candy-git-016): walk back to the
+     * recorded origin first, then delete the fresh ref. Deleting while the
+     * new branch is checked out is exactly what git's `used by worktree`
+     * refusal punished; the paired order restores both the ref and HEAD to
+     * where they stood before `n` ran.
+     *
+     * @param array<string, mixed> $args
+     */
+    private function undoCreateBranch(array $args): void
+    {
+        $this->git->checkout((string) $args['from']);
+        $this->git->deleteBranch((string) $args['name']);
     }
 
     /**

@@ -780,6 +780,45 @@ final class AppTest extends TestCase
      * not re-checkout the destination (the old single-arg entry made "undo"
      * a silent no-op that still reported success).
      */
+    public function testUndoOfCreateBranchGoesHomeThenDeletes(): void
+    {
+        // candy-git-016 QA repro: n created AND switched (checkout -b), so
+        // the old bare-delete undo died on `used by worktree` EVERY time.
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'n'));
+        foreach (['f', 'e', 'a'] as $ch) {
+            [$a, ] = $a->update(new KeyMsg(KeyType::Char, $ch));
+        }
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertSame(['fea'], $g->branchCreations);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'u'));  // undo
+        // Paired inverse: back to the origin main FIRST, then delete.
+        $this->assertSame(['main'], $g->checkouts);
+        $this->assertSame(['fea'], $g->branchDeletions);
+        $this->assertStringContainsString('undone: branch creation', (string) $a->successMessage);
+    }
+
+    public function testUndoOfCreateBranchOnDetachedHeadRefuses(): void
+    {
+        // No current branch means no home to return to: the entry must be
+        // created UNRECOVERABLE and undo must refuse, never guess (016).
+        $g = new FixtureGit(
+            statusRows: [['branch_summary' => '(HEAD detached)']],
+            branchRows: [['name' => 'fea', 'sha' => 'abc1', 'current' => false]],
+            logRows: [],
+        );
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'n'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'f'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertSame(['f'], $g->branchCreations);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'u'));
+        $this->assertStringContainsString('cannot undo', (string) $a->error);
+        $this->assertSame([], $g->checkouts);
+        $this->assertSame([], $g->branchDeletions);
+    }
+
     public function testUndoCheckoutReturnsToOriginBranch(): void
     {
         $g = $this->git();
