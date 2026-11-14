@@ -25,4 +25,5 @@ return [
     'style.label_nonneg'    => '{label} hodnoty musí být >= 0',
     'style.border_toggles_count' => 'border() bere 0, 2 nebo 4 booleany; obdrženo: {count}',
     'style.expand_sides_count'   => '{label}() bere 1, 2 nebo 4 integery; obdrženo: {count}',
+    'style.border_rune_width' => 'hranový znak {rune} musí být široký přesně jeden znak, obdrženo: {value}'
 ];

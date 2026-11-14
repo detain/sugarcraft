@@ -25,4 +25,5 @@ return [
     'style.label_nonneg'    => '{label} 值必须 >= 0',
     'style.border_toggles_count' => 'border() 边切换需要 0、2 或 4 个布尔值；实际：{count}',
     'style.expand_sides_count'   => '{label}() 需要 1、2 或 4 个整数；实际：{count}',
+    'style.border_rune_width' => '边框字符 {rune} 必须恰好占一个单元格宽度，实际：{value}'
 ];

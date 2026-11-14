@@ -226,44 +226,44 @@ final class BorderTest extends TestCase
             bottom: 'B',
             left: 'L',
             right: 'R',
-            topLeft: 'TL',
-            topRight: 'TR',
-            bottomLeft: 'BL',
-            bottomRight: 'BR',
-            middleLeft: 'ML',
-            middleRight: 'MR',
+            topLeft: '↖',
+            topRight: '↗',
+            bottomLeft: '↙',
+            bottomRight: '↘',
+            middleLeft: '←',
+            middleRight: '→',
             middle: 'M',
-            middleTop: 'MT',
-            middleBottom: 'MB',
+            middleTop: '↑',
+            middleBottom: '↓',
         );
 
         $this->assertSame('T', $b->top);
         $this->assertSame('B', $b->bottom);
         $this->assertSame('L', $b->left);
         $this->assertSame('R', $b->right);
-        $this->assertSame('TL', $b->topLeft);
-        $this->assertSame('TR', $b->topRight);
-        $this->assertSame('BL', $b->bottomLeft);
-        $this->assertSame('BR', $b->bottomRight);
-        $this->assertSame('ML', $b->middleLeft);
-        $this->assertSame('MR', $b->middleRight);
+        $this->assertSame('↖', $b->topLeft);
+        $this->assertSame('↗', $b->topRight);
+        $this->assertSame('↙', $b->bottomLeft);
+        $this->assertSame('↘', $b->bottomRight);
+        $this->assertSame('←', $b->middleLeft);
+        $this->assertSame('→', $b->middleRight);
         $this->assertSame('M', $b->middle);
-        $this->assertSame('MT', $b->middleTop);
-        $this->assertSame('MB', $b->middleBottom);
+        $this->assertSame('↑', $b->middleTop);
+        $this->assertSame('↓', $b->middleBottom);
     }
 
     public function testCustomBorderWithMinimalArguments(): void
     {
-        $b = new Border('T', 'B', 'L', 'R', 'TL', 'TR', 'BL', 'BR');
+        $b = new Border('T', 'B', 'L', 'R', '↖', '↗', '↙', '↘');
 
         $this->assertSame('T', $b->top);
         $this->assertSame('B', $b->bottom);
         $this->assertSame('L', $b->left);
         $this->assertSame('R', $b->right);
-        $this->assertSame('TL', $b->topLeft);
-        $this->assertSame('TR', $b->topRight);
-        $this->assertSame('BL', $b->bottomLeft);
-        $this->assertSame('BR', $b->bottomRight);
+        $this->assertSame('↖', $b->topLeft);
+        $this->assertSame('↗', $b->topRight);
+        $this->assertSame('↙', $b->bottomLeft);
+        $this->assertSame('↘', $b->bottomRight);
         // Middle variants should default to space
         $this->assertSame(' ', $b->middleLeft);
         $this->assertSame(' ', $b->middleRight);
@@ -275,16 +275,43 @@ final class BorderTest extends TestCase
     public function testCustomBorderWithPartialMiddleVariants(): void
     {
         $b = new Border(
-            'T', 'B', 'L', 'R', 'TL', 'TR', 'BL', 'BR',
-            middleLeft: 'ML',
-            middleRight: 'MR',
+            'T', 'B', 'L', 'R', '↖', '↗', '↙', '↘',
+            middleLeft: '←',
+            middleRight: '→',
         );
 
-        $this->assertSame('ML', $b->middleLeft);
-        $this->assertSame('MR', $b->middleRight);
+        $this->assertSame('←', $b->middleLeft);
+        $this->assertSame('→', $b->middleRight);
         $this->assertSame(' ', $b->middle);  // Default
         $this->assertSame(' ', $b->middleTop);  // Default
         $this->assertSame(' ', $b->middleBottom);  // Default
+    }
+
+    public function testWideRuneIsRejected(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('border rune top must be exactly one cell wide');
+
+        new Border('─x', '─', '│', '│', '┌', '┐', '└', '┘');
+    }
+
+    public function testEmptyRuneIsRejected(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('border rune bottom must be exactly one cell wide');
+
+        new Border('─', '', '│', '│', '┌', '┐', '└', '┘');
+    }
+
+    public function testWideMiddleRuneIsRejected(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('border rune middleLeft must be exactly one cell wide');
+
+        new Border(
+            '─', '─', '│', '│', '┌', '┐', '└', '┘',
+            middleLeft: 'AB',
+        );
     }
 
     // =========================================================================

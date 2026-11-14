@@ -25,4 +25,5 @@ return [
     'style.label_nonneg'    => 'los valores de {label} deben ser >= 0',
     'style.border_toggles_count' => 'los toggles de lado de border() toman 0, 2 o 4 booleanos; obtenido: {count}',
     'style.expand_sides_count'   => '{label}() toma 1, 2 o 4 enteros; obtenido: {count}',
+    'style.border_rune_width' => 'el rune de borde {rune} debe ocupar exactamente una celda, recibido: {value}'
 ];

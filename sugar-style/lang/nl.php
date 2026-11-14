@@ -25,4 +25,5 @@ return [
     'style.label_nonneg'    => '{label}-waarden moeten >= 0 zijn',
     'style.border_toggles_count' => 'border() neemt 0, 2 of 4 booleans; gekregen: {count}',
     'style.expand_sides_count'   => '{label}() neemt 1, 2 of 4 integers; gekregen: {count}',
+    'style.border_rune_width' => 'rand-teken {rune} moet precies één cel breed zijn, gekregen: {value}'
 ];

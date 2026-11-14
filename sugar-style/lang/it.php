@@ -25,4 +25,5 @@ return [
     'style.label_nonneg'    => 'i valori di {label} devono essere >= 0',
     'style.border_toggles_count' => 'border() richiede 0, 2 o 4 booleani; ottenuto: {count}',
     'style.expand_sides_count'   => '{label}() richiede 1, 2 o 4 interi; ottenuto: {count}',
+    'style.border_rune_width' => 'il rune del bordo {rune} deve essere largo esattamente una cella, ottenuto: {value}'
 ];

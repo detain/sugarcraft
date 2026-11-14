@@ -25,4 +25,5 @@ return [
     'style.label_nonneg'    => 'wartości {label} muszą być >= 0',
     'style.border_toggles_count' => 'border() przyjmuje 0, 2 lub 4 wartości logiczne; otrzymano: {count}',
     'style.expand_sides_count'   => '{label}() przyjmuje 1, 2 lub 4 liczby całkowite; otrzymano: {count}',
+    'style.border_rune_width' => 'znak obramowania {rune} musi mieć szerokość dokładnie jednej komórki, otrzymano: {value}'
 ];

@@ -25,4 +25,5 @@ return [
     'style.label_nonneg'    => '{label}-Werte müssen >= 0 sein',
     'style.border_toggles_count' => 'border()-Seiten-Toggles benötigen 0, 2 oder 4 Booleans; erhalten: {count}',
     'style.expand_sides_count'   => '{label}() benötigt 1, 2 oder 4 Ganzzahlen; erhalten: {count}',
+    'style.border_rune_width' => 'Border-Rune {rune} muss genau eine Zelle breit sein, erhalten: {value}'
 ];

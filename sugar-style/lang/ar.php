@@ -25,4 +25,5 @@ return [
     'style.label_nonneg'    => 'قيم {label} يجب أن تكون >= 0',
     'style.border_toggles_count' => 'border() يأخذ 0 أو 2 أو 4 قيم منطقية; تم الحصول على: {count}',
     'style.expand_sides_count'   => '{label}() يأخذ 1 أو 2 أو 4 أعداد صحيحة; تم الحصول على: {count}',
+    'style.border_rune_width' => 'حرف الحدود {rune} يجب أن يكون بعرض خلية واحدة بالضبط؛ القيمة: {value}'
 ];

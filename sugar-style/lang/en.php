@@ -25,4 +25,5 @@ return [
     'style.label_nonneg'    => '{label} values must be >= 0',
     'style.border_toggles_count' => 'border() side toggles take 0, 2, or 4 bools; got {count}',
     'style.expand_sides_count'   => '{label}() takes 1, 2, or 4 ints; got {count}',
+    'style.border_rune_width' => 'border rune {rune} must be exactly one cell wide, got {value}'
 ];

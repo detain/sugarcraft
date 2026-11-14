@@ -25,4 +25,5 @@ return [
     'style.label_nonneg'    => 'значения {label} должны быть >= 0',
     'style.border_toggles_count' => ' side toggles принимают 0, 2 или 4 булевых значения; получено: {count}',
     'style.expand_sides_count'   => '{label}() принимает 1, 2 или 4 целых числа; получено: {count}',
+    'style.border_rune_width' => 'символ рамки {rune} должен занимать ровно одну ячейку, получено: {value}'
 ];

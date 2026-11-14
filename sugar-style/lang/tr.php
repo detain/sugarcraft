@@ -25,4 +25,5 @@ return [
     'style.label_nonneg'    => '{label} değerleri >= 0 olmalıdır',
     'style.border_toggles_count' => 'border() 0, 2 veya 4 boolean alır; alınan: {count}',
     'style.expand_sides_count'   => '{label}() 1, 2 veya 4 integer alır; alınan: {count}',
+    'style.border_rune_width' => '{rune} kenar karakteri tam olarak bir hücre genişliğinde olmalı, alınan: {value}'
 ];

@@ -25,4 +25,5 @@ return [
     'style.label_nonneg'    => 'les valeurs de {label} doivent être >= 0',
     'style.border_toggles_count' => 'border() prend 0, 2 ou 4 booléens ; reçu : {count}',
     'style.expand_sides_count'   => '{label}() prend 1, 2 ou 4 entiers ; reçu : {count}',
+    'style.border_rune_width' => 'le rune de bordure {rune} doit occuper exactement une cellule, reçu : {value}'
 ];

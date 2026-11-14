@@ -25,4 +25,5 @@ return [
     'style.label_nonneg'    => '{label} の値は >= 0 である必要があります',
     'style.border_toggles_count' => 'border() のサイドトグルは 0、2、または 4 つのブール値を取ります；取得：{count}',
     'style.expand_sides_count'   => '{label}() は 1、2、または 4 つの整数を取ります；取得：{count}',
+    'style.border_rune_width' => '境界文字 {rune} はちょうど1セル幅でなければなりませんが、{value} が指定されました'
 ];

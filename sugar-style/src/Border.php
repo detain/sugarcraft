@@ -25,6 +25,8 @@ final class Border
 {
     /**
      * @param array<string, list<BorderTitle>> $titles Keys are TitleAnchor case names
+     *
+     * @throws \InvalidArgumentException When any of the 13 runes is not exactly one cell wide
      */
     public function __construct(
         public readonly string $top,
@@ -41,7 +43,44 @@ final class Border
         public readonly string $middleTop = ' ',
         public readonly string $middleBottom = ' ',
         private readonly array $titles = [],
-    ) {}
+    ) {
+        $this->assertRunes();
+    }
+
+    /**
+     * Fail fast when any rune occupies other than exactly one terminal
+     * cell: docblock promises single-cell runes, and the renderer's box
+     * geometry (pad fills, junction seams, title embedding) silently
+     * misaligns otherwise. Mirrors upstream Go's rune-width contract.
+     *
+     * @throws \InvalidArgumentException When a rune is empty or wider than one cell
+     */
+    private function assertRunes(): void
+    {
+        $runes = [
+            'top' => $this->top,
+            'bottom' => $this->bottom,
+            'left' => $this->left,
+            'right' => $this->right,
+            'topLeft' => $this->topLeft,
+            'topRight' => $this->topRight,
+            'bottomLeft' => $this->bottomLeft,
+            'bottomRight' => $this->bottomRight,
+            'middleLeft' => $this->middleLeft,
+            'middleRight' => $this->middleRight,
+            'middle' => $this->middle,
+            'middleTop' => $this->middleTop,
+            'middleBottom' => $this->middleBottom,
+        ];
+        foreach ($runes as $name => $rune) {
+            if (Width::string($rune) !== 1) {
+                throw new \InvalidArgumentException(Lang::t('style.border_rune_width', [
+                    'rune' => $name,
+                    'value' => $rune,
+                ]));
+            }
+        }
+    }
 
     public static function normal(): self
     {
