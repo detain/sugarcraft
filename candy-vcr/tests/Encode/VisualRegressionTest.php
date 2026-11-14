@@ -100,7 +100,7 @@ final class VisualRegressionTest extends TestCase
         }
 
         $producedPath = $this->tmpDir . '/' . $name . '.php.gif';
-        TapeToGif::create(['encoder' => 'php'])->render($tapePath, $producedPath, [
+        TapeToGif::new(['encoder' => 'php'])->render($tapePath, $producedPath, [
             'encoder' => 'php',
         ]);
 
@@ -185,7 +185,7 @@ final class VisualRegressionTest extends TestCase
         }
 
         $producedPath = $this->tmpDir . '/' . $name . '.ffmpeg.gif';
-        TapeToGif::create(['encoder' => 'ffmpeg'])->render($tapePath, $producedPath, [
+        TapeToGif::new(['encoder' => 'ffmpeg'])->render($tapePath, $producedPath, [
             'encoder' => 'ffmpeg',
         ]);
 

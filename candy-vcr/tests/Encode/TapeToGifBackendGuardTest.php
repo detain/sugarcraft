@@ -52,7 +52,7 @@ final class TapeToGifBackendGuardTest extends TestCase
 
     public function testUnknownBackendIsProbedAsTheGdLegItWillTake(): void
     {
-        // create() routes anything not 'imagick' to GdRasterizer, so the
+        // new() routes anything not 'imagick' to GdRasterizer, so the
         // guard must refuse an unknown backend on the gd extension — the
         // same door the match() arm walks through.
         $this->expectException(\RuntimeException::class);
@@ -62,13 +62,13 @@ final class TapeToGifBackendGuardTest extends TestCase
     }
 
     /**
-     * Structural pin: create() actually consults the guard, so the door
+     * Structural pin: new() actually consults the guard, so the door
      * cannot be silently bypassed by a future refactor of the factory.
      */
-    public function testCreateConsultsTheBackendGuard(): void
+    public function testNewConsultsTheBackendGuard(): void
     {
         $source = (string) file_get_contents(__DIR__ . '/../../src/Encode/TapeToGif.php');
-        $start = strpos($source, 'public static function create(');
+        $start = strpos($source, 'public static function new(');
         $this->assertIsInt($start);
         $body = substr($source, $start, (int) strpos(substr($source, $start), 'return new self('));
 

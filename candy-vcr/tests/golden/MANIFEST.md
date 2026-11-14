@@ -7,7 +7,7 @@ distinct dimension of the rasterizer/encoder pipeline. Goldens render to
 
 ## Render command
 
-Every golden is rendered through `TapeToGif::create()` with the default
+Every golden is rendered through `TapeToGif::new()` with the default
 font (`JetBrainsMono` resolved by `FontLoader`), `fps = 30.0`, and
 `fontSize = 14`. Dimensions / theme / typing speed all come from inside
 the tape via `Set` directives — no CLI overrides. Equivalent to:

@@ -28,7 +28,7 @@ final class SerializerCassetteIntegrationTest extends TestCase
 {
     public function testKeyMsgEnvelopeRoundTripsThroughJsonl(): void
     {
-        $registry = Registry::default();
+        $registry = Registry::new();
         $original = new KeyMsg(KeyType::Char, 'q', alt: false, ctrl: true);
 
         $envelope = $registry->encode($original);
@@ -53,7 +53,7 @@ final class SerializerCassetteIntegrationTest extends TestCase
 
     public function testMixedInputEventsRoundTrip(): void
     {
-        $registry = Registry::default();
+        $registry = Registry::new();
 
         $cassette = new Cassette(
             new CassetteHeader(1, '2026-05-08T12:00:00Z', 80, 24, 'sugarcraft/candy-vcr@dev'),
@@ -81,7 +81,7 @@ final class SerializerCassetteIntegrationTest extends TestCase
 
     public function testUserJsonableMsgEnvelopeRoundTrips(): void
     {
-        $registry = Registry::default()->allow(UserJsonableMsg::class);
+        $registry = Registry::new()->allow(UserJsonableMsg::class);
         $original = new UserJsonableMsg(name: 'tap', count: 42);
 
         $envelope = $registry->encode($original);

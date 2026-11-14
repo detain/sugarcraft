@@ -26,7 +26,7 @@ if (!file_exists($path)) {
 }
 
 $cassette = (new JsonlFormat())->read($path);
-$registry = Registry::default();
+$registry = Registry::new();
 
 printf(
     "cassette v%d  %dx%d  runtime=%s\n%d event(s), duration %.3fs\n\n",

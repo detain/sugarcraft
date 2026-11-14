@@ -105,7 +105,7 @@ final class RenderTapeCommand extends Command
             $errorOutput->writeln(Lang::t('render.progress', ['frames' => $frames, 'w' => $cellW, 'h' => $cellH]));
         };
 
-        $tapeToGif = TapeToGif::create([
+        $tapeToGif = TapeToGif::new([
             'fps' => $fps,
             'backend' => $backend,
             'encoder' => $encoderType,

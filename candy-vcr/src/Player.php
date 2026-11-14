@@ -189,7 +189,7 @@ final class Player
      *        second resource for output frames.
      * @param Assertion|null $assertion        Defaults to {@see ByteAssertion}.
      * @param int            $speed            {@see self::SPEED_INSTANT} (default) or {@see self::SPEED_REALTIME}.
-     * @param Registry|null  $serializerRegistry For `input.msg`-form events. Defaults to {@see Registry::default}.
+     * @param Registry|null  $serializerRegistry For `input.msg`-form events. Defaults to {@see Registry::new}.
      * @param float          $timeoutSeconds   Hard cap on the loop. Default: cassette duration + 5s.
      * @param EventMatcher|null $matcher       Event matching policy. Defaults to null (no matcher-based filtering).
      * @param float|null      $idleThresholdSeconds If set in REALTIME mode, pauses longer than this (seconds) are clamped to this value for faster CI runs.
@@ -220,7 +220,7 @@ final class Player
         ?LoopInterface $loop = null,
     ): ReplayResult {
         $assertion ??= new ByteAssertion();
-        $registry = $serializerRegistry ?? Registry::default();
+        $registry = $serializerRegistry ?? Registry::new();
         $this->mouseModes = new MouseModeTracker();
         // Resolve idleThresholdSeconds: explicit parameter wins, otherwise
         // fall back to the fluent withIdleTrim() setting.

@@ -77,7 +77,6 @@ final class FpsOptionTest extends TestCase
             $this->assertStringContainsString('got 0', $e->getMessage());
         }
         try {
-            /** @phpstan-ignore-next-line intentional misuse arm for a non-scalar */
             FpsOption::parse(['x']);
             $this->fail('expected refusal');
         } catch (\InvalidArgumentException $e) {

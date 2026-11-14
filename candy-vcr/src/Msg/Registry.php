@@ -11,7 +11,7 @@ use SugarCraft\Core\Msg;
  * {@see decode()} walk the list and ask each serializer whether it
  * handles the given Msg / envelope.
  *
- * Use {@see default()} for a registry pre-loaded with the
+ * Use {@see new()} for a registry pre-loaded with the
  * {@see BuiltinSerializer} (sugar-core Msgs) and the
  * {@see JsonableSerializer} catch-all (user Msgs implementing
  * `\JsonSerializable`). The catch-all's DECODE side is allow-listed —
@@ -19,7 +19,7 @@ use SugarCraft\Core\Msg;
  * (finding 034). Order is priority: the first serializer that
  * claims a Msg / envelope wins. {@see register()} therefore lands a
  * custom serializer *behind* the catch-all — use {@see registerFirst()}
- * when a custom serializer has to outrank what `default()` already
+ * when a custom serializer has to outrank what `new()` already
  * installed.
  *
  * Mirrors charmbracelet/x/vcr Msg/Registry.
@@ -42,7 +42,7 @@ final class Registry
      * Prepend a serializer to the list, so it is consulted before every
      * already-registered one. Returns `$this` for chaining.
      *
-     * This is the hook for overriding what {@see default()} installs: an
+     * This is the hook for overriding what {@see new()} installs: an
      * appended serializer sits behind {@see JsonableSerializer}, whose
      * `canEncode()` claims every `\JsonSerializable` Msg, so a custom
      * codec for such a Msg has to be registered first to be seen at all.
@@ -110,7 +110,7 @@ final class Registry
      * {@see registerFirst()} to give a custom codec precedence over the
      * catch-all.
      */
-    public static function default(): self
+    public static function new(): self
     {
         return (new self())
             ->register(new BuiltinSerializer())

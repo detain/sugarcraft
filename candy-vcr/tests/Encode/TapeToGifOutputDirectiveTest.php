@@ -49,7 +49,7 @@ final class TapeToGifOutputDirectiveTest extends TestCase
     {
         $tape = $this->writeTape("Output custom.gif\nSet Width 700\nSet Height 200\nType \"hi\"\nSleep 200ms\n");
 
-        $written = TapeToGif::create(['encoder' => 'php'])->render($tape, null, ['encoder' => 'php']);
+        $written = TapeToGif::new(['encoder' => 'php'])->render($tape, null, ['encoder' => 'php']);
 
         // The compiler joins a relative directive under the tape dir with
         // the host separator.
@@ -66,7 +66,7 @@ final class TapeToGifOutputDirectiveTest extends TestCase
         $tape = $this->writeTape("Output custom.gif\nSet Width 700\nSet Height 200\nType \"hi\"\nSleep 200ms\n");
         $explicit = $this->dir . '/explicit.gif';
 
-        $written = TapeToGif::create(['encoder' => 'php'])->render($tape, $explicit, ['encoder' => 'php']);
+        $written = TapeToGif::new(['encoder' => 'php'])->render($tape, $explicit, ['encoder' => 'php']);
 
         $this->assertSame($explicit, $written);
         $this->assertFileExists($explicit);
@@ -81,7 +81,7 @@ final class TapeToGifOutputDirectiveTest extends TestCase
         $escapeTarget = dirname($this->dir) . '/evil.gif';
         $this->assertFileDoesNotExist($escapeTarget);
 
-        $written = TapeToGif::create(['encoder' => 'php'])->render($tape, null, ['encoder' => 'php']);
+        $written = TapeToGif::new(['encoder' => 'php'])->render($tape, null, ['encoder' => 'php']);
 
         $this->assertSame($this->dir . '/demo.gif', $written);
         $this->assertFileExists($this->dir . '/demo.gif');
@@ -108,7 +108,7 @@ final class TapeToGifOutputDirectiveTest extends TestCase
         $tape = $this->writeTape("Set Width 700\nSet Height 200\nType \"hi\"\nSleep 200ms\n");
 
         try {
-            $written = TapeToGif::create(['encoder' => 'php'])->render($tape, null, ['encoder' => 'php']);
+            $written = TapeToGif::new(['encoder' => 'php'])->render($tape, null, ['encoder' => 'php']);
 
             clearstatcache();
             $this->assertSame($default, $written);
@@ -138,7 +138,7 @@ final class TapeToGifOutputDirectiveTest extends TestCase
         $tape = $this->writeTape("Set Width 700\nSet Height 200\nType \"hi\"\nSleep 200ms\n");
 
         try {
-            $written = TapeToGif::create(['encoder' => 'php'])->render($tape, $explicit, ['encoder' => 'php']);
+            $written = TapeToGif::new(['encoder' => 'php'])->render($tape, $explicit, ['encoder' => 'php']);
 
             clearstatcache();
             $this->assertSame($explicit, $written);
@@ -174,7 +174,7 @@ final class TapeToGifOutputDirectiveTest extends TestCase
         $tape = $this->writeTape("Set Width 700\nSet Height 200\nType \"hi\"\nSleep 200ms\n");
 
         try {
-            $written = TapeToGif::create(['encoder' => 'php'])->render($tape, null, ['encoder' => 'php']);
+            $written = TapeToGif::new(['encoder' => 'php'])->render($tape, null, ['encoder' => 'php']);
 
             clearstatcache();
             $this->assertSame($default, $written);
@@ -205,7 +205,7 @@ final class TapeToGifOutputDirectiveTest extends TestCase
         $tape = $this->writeTape("Output out.gif\nSet Width 700\nSet Height 200\nType \"hi\"\nSleep 200ms\n");
 
         try {
-            $written = TapeToGif::create(['encoder' => 'php'])->render($tape, null, ['encoder' => 'php']);
+            $written = TapeToGif::new(['encoder' => 'php'])->render($tape, null, ['encoder' => 'php']);
 
             $this->assertSame($this->dir . '/demo.gif', $written, 'must fall back to the safe default');
             $this->assertFileExists($this->dir . '/demo.gif');

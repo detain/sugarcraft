@@ -63,7 +63,7 @@ foreach ($tapes as $tape) {
         $goldenPath = "{$goldenDir}/{$base}.{$encoder}.gif";
         $producedPath = "{$tmpDir}/{$base}.{$encoder}.gif";
 
-        TapeToGif::create(['encoder' => $encoder])->render($tape, $producedPath, [
+        TapeToGif::new(['encoder' => $encoder])->render($tape, $producedPath, [
             'encoder' => $encoder,
         ]);
 

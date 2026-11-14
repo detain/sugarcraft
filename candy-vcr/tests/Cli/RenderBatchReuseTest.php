@@ -12,14 +12,14 @@ use SugarCraft\Vcr\Encode\TapeToGif;
  * Regression: RenderBatchCommand reuses a single TapeToGif across the
  * whole batch.
  *
- * Bug fixed in d070e742: the old loop called `TapeToGif::create()`
+ * Bug fixed in d070e742: the old loop called `TapeToGif::new()`
  * inside the per-tape foreach, paying the rasterizer/encoder
  * construction cost N times and defeating any cache the rasterizer
- * builds internally. The fix hoists `TapeToGif::create()` above the
+ * builds internally. The fix hoists `TapeToGif::new()` above the
  * loop.
  *
  * Signals checked:
- * - Structural: `TapeToGif::create()` lives OUTSIDE the per-tape loop
+ * - Structural: `TapeToGif::new()` lives OUTSIDE the per-tape loop
  *   in {@see RenderBatchCommand::execute}. Caught by token-walking
  *   the file to assert at most one create() call appears, and it
  *   appears before the `foreach`.
@@ -30,7 +30,7 @@ use SugarCraft\Vcr\Encode\TapeToGif;
  */
 final class RenderBatchReuseTest extends TestCase
 {
-    public function testTapeToGifCreateLivesOutsideThePerTapeLoop(): void
+    public function testTapeToGifNewLivesOutsideThePerTapeLoop(): void
     {
         $source = file_get_contents(
             dirname(__DIR__, 2) . '/src/Cli/RenderBatchCommand.php',
@@ -39,31 +39,26 @@ final class RenderBatchReuseTest extends TestCase
 
         $tokens = \PhpToken::tokenize($source);
 
+        // `new` is a reserved word: after `::` it tokenizes as T_NEW, not
+        // T_STRING, so the factory-call census runs on the raw offsets.
         $createOffsets = [];
+        preg_match_all('/TapeToGif::new\(/', $source, $factoryHits, PREG_OFFSET_CAPTURE);
+        foreach ($factoryHits[0] as $hit) {
+            $createOffsets[] = $hit[1];
+        }
         $foreachOffsets = [];
-        foreach ($tokens as $i => $tok) {
-            if ($tok->is(T_DOUBLE_COLON)) {
-                // Look back for TapeToGif and forward for create.
-                $prev = $tokens[$i - 1] ?? null;
-                $next = $tokens[$i + 1] ?? null;
-                if (
-                    $prev !== null && $prev->is(T_STRING) && $prev->text === 'TapeToGif'
-                    && $next !== null && $next->is(T_STRING) && $next->text === 'create'
-                ) {
-                    $createOffsets[] = $tok->pos;
-                }
-            }
+        foreach ($tokens as $tok) {
             if ($tok->is(T_FOREACH)) {
                 $foreachOffsets[] = $tok->pos;
             }
         }
 
-        $this->assertCount(1, $createOffsets, 'Exactly one TapeToGif::create() call expected — got ' . count($createOffsets));
+        $this->assertCount(1, $createOffsets, 'Exactly one TapeToGif::new() call expected — got ' . count($createOffsets));
         $this->assertNotEmpty($foreachOffsets, 'execute() should iterate via foreach');
         $this->assertLessThan(
             min($foreachOffsets),
             $createOffsets[0],
-            'TapeToGif::create() must be hoisted above the per-tape foreach',
+            'TapeToGif::new() must be hoisted above the per-tape foreach',
         );
     }
 
@@ -85,7 +80,7 @@ final class RenderBatchReuseTest extends TestCase
         );
 
         try {
-            $renderer = TapeToGif::create(['encoder' => 'php', 'backend' => 'gd']);
+            $renderer = TapeToGif::new(['encoder' => 'php', 'backend' => 'gd']);
 
             $rasterizerProp = new \ReflectionProperty($renderer, 'rasterizer');
             $rasterizerProp->setAccessible(true);

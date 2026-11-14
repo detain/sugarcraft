@@ -36,7 +36,7 @@ final class TapeToGifTest extends TestCase
             $this->markTestSkipped('smoke.tape not found');
         }
 
-        $tapeToGif = TapeToGif::create(['encoder' => 'ffmpeg']);
+        $tapeToGif = TapeToGif::new(['encoder' => 'ffmpeg']);
 
         $outputPath = $this->tempDir . '/smoke_' . uniqid() . '.gif';
 
@@ -63,7 +63,7 @@ final class TapeToGifTest extends TestCase
             $this->markTestSkipped('smoke.tape not found');
         }
 
-        $tapeToGif = TapeToGif::create([
+        $tapeToGif = TapeToGif::new([
             'fps' => 30.0,
             'theme' => 'TokyoNight',
             'fontSize' => 14,
@@ -100,7 +100,7 @@ final class TapeToGifTest extends TestCase
             $this->markTestSkipped('smoke.tape not found');
         }
 
-        $tapeToGif = TapeToGif::create(['encoder' => 'ffmpeg']);
+        $tapeToGif = TapeToGif::new(['encoder' => 'ffmpeg']);
         $outputPath = (string) preg_replace('/\.tape$/', '.gif', $this->smokeTape);
 
         try {
@@ -122,7 +122,7 @@ final class TapeToGifTest extends TestCase
             $this->markTestSkipped('smoke.tape not found');
         }
 
-        $tapeToGif = TapeToGif::create(['encoder' => 'php']);
+        $tapeToGif = TapeToGif::new(['encoder' => 'php']);
 
         $outputPath = $this->tempDir . '/smoke_php_' . uniqid() . '.gif';
 
@@ -162,7 +162,7 @@ final class TapeToGifTest extends TestCase
         );
 
         try {
-            TapeToGif::create(['encoder' => 'php'])->render($tapePath, $outputPath, ['encoder' => 'php']);
+            TapeToGif::new(['encoder' => 'php'])->render($tapePath, $outputPath, ['encoder' => 'php']);
 
             $size = getimagesize($outputPath);
             $this->assertNotFalse($size, 'produced file is not a valid image');
@@ -188,7 +188,7 @@ final class TapeToGifTest extends TestCase
 
     public function testRenderThrowsForNonexistentTape(): void
     {
-        $tapeToGif = TapeToGif::create();
+        $tapeToGif = TapeToGif::new();
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('cannot read tape file');
@@ -198,7 +198,7 @@ final class TapeToGifTest extends TestCase
 
     public function testCreateWithPhpEncoderUsesPhpGifEncoder(): void
     {
-        $tapeToGif = TapeToGif::create(['encoder' => 'php']);
+        $tapeToGif = TapeToGif::new(['encoder' => 'php']);
 
         $reflection = new \ReflectionClass($tapeToGif);
         $encoderProp = $reflection->getProperty('encoder');
@@ -210,7 +210,7 @@ final class TapeToGifTest extends TestCase
 
     public function testCreateWithFfmpegEncoderUsesFfmpegGifEncoder(): void
     {
-        $tapeToGif = TapeToGif::create(['encoder' => 'ffmpeg']);
+        $tapeToGif = TapeToGif::new(['encoder' => 'ffmpeg']);
 
         $reflection = new \ReflectionClass($tapeToGif);
         $encoderProp = $reflection->getProperty('encoder');
@@ -226,7 +226,7 @@ final class TapeToGifTest extends TestCase
             $this->markTestSkipped('imagick extension not available');
         }
 
-        $tapeToGif = TapeToGif::create(['backend' => 'imagick']);
+        $tapeToGif = TapeToGif::new(['backend' => 'imagick']);
 
         $reflection = new \ReflectionClass($tapeToGif);
         $rasterizerProp = $reflection->getProperty('rasterizer');
@@ -260,7 +260,7 @@ final class TapeToGifTest extends TestCase
         file_put_contents($tapePath, $tapeContent);
 
         try {
-            $t2g = TapeToGif::create(['encoder' => 'php', 'backend' => 'gd']);
+            $t2g = TapeToGif::new(['encoder' => 'php', 'backend' => 'gd']);
             $outputPath = $tmpDir . '/out.gif';
             $t2g->render($tapePath, $outputPath);
 
@@ -297,7 +297,7 @@ final class TapeToGifTest extends TestCase
         file_put_contents($tapePath, $tapeContent);
 
         try {
-            $t2g = TapeToGif::create(['encoder' => 'ffmpeg', 'backend' => 'gd']);
+            $t2g = TapeToGif::new(['encoder' => 'ffmpeg', 'backend' => 'gd']);
             $outputPath = $tmpDir . '/out.gif';
             $t2g->render($tapePath, $outputPath);
 

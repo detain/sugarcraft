@@ -45,7 +45,7 @@ final class TapeToGifThemeTest extends TestCase
         );
 
         try {
-            $renderer = TapeToGif::create(['encoder' => 'php', 'backend' => 'gd']);
+            $renderer = TapeToGif::new(['encoder' => 'php', 'backend' => 'gd']);
             $renderer->render($tape, $gif, ['encoder' => 'php', 'backend' => 'gd']);
 
             $this->assertFileExists($gif);

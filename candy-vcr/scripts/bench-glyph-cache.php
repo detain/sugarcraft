@@ -55,7 +55,7 @@ foreach ([false, true] as $cacheDisabled) {
     $wallTimes = [];
 
     for ($i = 0; $i < $iters; $i++) {
-        $t2g = TapeToGif::create([
+        $t2g = TapeToGif::new([
             'encoder' => 'php',
             'backend' => 'gd',
         ]);

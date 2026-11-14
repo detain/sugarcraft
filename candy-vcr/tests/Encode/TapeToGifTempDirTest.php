@@ -24,7 +24,7 @@ final class TapeToGifTempDirTest extends TestCase
 {
     public function testCreateTempDirReturnsDistinctPathsAcrossCalls(): void
     {
-        $renderer = TapeToGif::create(['encoder' => 'php', 'backend' => 'gd']);
+        $renderer = TapeToGif::new(['encoder' => 'php', 'backend' => 'gd']);
 
         $method = new \ReflectionMethod($renderer, 'createTempDir');
         $method->setAccessible(true);

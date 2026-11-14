@@ -67,7 +67,7 @@ final class EnvelopeEnumHardeningTest extends TestCase
 
     public function testRegistryTagsTheRefusalWithTheEnvelopeType(): void
     {
-        $registry = Registry::default();
+        $registry = Registry::new();
         try {
             // A nested container where a scalar belongs: the serializer's
             // Scalars door throws InvalidArgumentException, the Registry
@@ -82,6 +82,6 @@ final class EnvelopeEnumHardeningTest extends TestCase
 
     public function testUnclaimedEnvelopeStillReturnsNull(): void
     {
-        $this->assertNull(Registry::default()->decode(['@type' => 'NoSuchType']));
+        $this->assertNull(Registry::new()->decode(['@type' => 'NoSuchType']));
     }
 }

@@ -83,7 +83,7 @@ final class TapeToGifScreenshotContainmentTest extends TestCase
         $tapePath = $this->root . '/tape.tape';
         file_put_contents($tapePath, "Set Theme TokyoNight\nSet FontSize 14\nSet Width 700\nSet Height 300\n" . $body);
 
-        TapeToGif::create(['encoder' => 'php', 'backend' => 'gd'])
+        TapeToGif::new(['encoder' => 'php', 'backend' => 'gd'])
             ->render($tapePath, $this->outDir . '/result.gif', ['encoder' => 'php']);
     }
 }

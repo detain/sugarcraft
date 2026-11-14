@@ -129,7 +129,7 @@ final class RenderBatchCommand extends Command
                 $progressBar,
             );
         } else {
-            $renderer = TapeToGif::create([
+            $renderer = TapeToGif::new([
                 'fps' => $fps,
                 'backend' => $backend,
                 'encoder' => $encoderType,

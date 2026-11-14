@@ -919,7 +919,7 @@ into an animated GIF:
 use SugarCraft\Vcr\Encode\FfmpegGifEncoder;
 use SugarCraft\Vcr\Encode\TapeToGif;
 
-$tapeToGif = TapeToGif::create(['encoder' => 'ffmpeg']);
+$tapeToGif = TapeToGif::new(['encoder' => 'ffmpeg']);
 $tapeToGif->render('demo.tape', 'demo.gif');
 ```
 
@@ -1187,7 +1187,7 @@ Invalid PCRE patterns throw `\InvalidArgumentException` at construction.
 
 ### Msg serializers
 
-`SugarCraft\Vcr\Msg\Registry::default()` is preloaded with:
+`SugarCraft\Vcr\Msg\Registry::new()` is preloaded with:
 
 - **`BuiltinSerializer`** — covers 17 Msgs: `KeyMsg`,
   `MouseClickMsg / MotionMsg / WheelMsg / ReleaseMsg`, `WindowSizeMsg`,
@@ -1206,7 +1206,7 @@ Invalid PCRE patterns throw `\InvalidArgumentException` at construction.
 
 ```php
 use SugarCraft\Vcr\Msg\Registry;
-$registry = Registry::default();
+$registry = Registry::new();
 $registry->allow(MyUserMsg::class);  // opt user classes in for decoding
 $envelope = $registry->encode($msg);  // ['@type' => 'KeyMsg', …] or null
 $decoded  = $registry->decode($envelope);  // Msg|null

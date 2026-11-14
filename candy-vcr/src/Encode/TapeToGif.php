@@ -663,18 +663,6 @@ final class TapeToGif
     }
 
     /**
-     * Create a TapeToGif with default components.
-     *
-     * @param array{
-     *   fps?: float,
-     *   theme?: string,
-     *   fontSize?: int,
-     *   fontFamily?: string,
-     *   backend?: 'gd'|'imagick',
-     *   encoder?: 'ffmpeg'|'php',
-     * } $options
-     */
-    /**
      * Fail loud at the backend-resolution choke when the PHP extension a
      * rasterizer backend needs is not loaded. Without this door a gd-less
      * install reaches `new GdRasterizer(...)` and dies later inside the
@@ -707,11 +695,27 @@ final class TapeToGif
         );
     }
 
-    public static function create(array $options = []): self
+    /**
+     * The default pipeline factory — the shape `candy-vcr render-tape`
+     * builds from. The factory seats agree with the render-time defaults:
+     * no `fontSize` here means {@see Compiler::DEFAULT_FONT_SIZE}, the same
+     * seat {@see self::render()} falls back to for tapes without a
+     * `Set FontSize`, so a bare factory never diverges from the CLI bytes.
+     * `fps` and `theme` are deliberately not factory options — they are
+     * resolved per render from the tape header and render options.
+     *
+     * @param array{
+     *   fontSize?: int,
+     *   fontFamily?: string,
+     *   backend?: 'gd'|'imagick',
+     *   encoder?: 'ffmpeg'|'php',
+     * } $options
+     */
+    public static function new(array $options = []): self
     {
         $backend = $options['backend'] ?? 'gd';
         $encoderType = $options['encoder'] ?? 'ffmpeg';
-        $fontSize = (int) ($options['fontSize'] ?? 14);
+        $fontSize = (int) ($options['fontSize'] ?? Compiler::DEFAULT_FONT_SIZE);
         $fontFamily = $options['fontFamily'] ?? 'JetBrainsMono';
 
         self::assertBackendAvailable($backend);

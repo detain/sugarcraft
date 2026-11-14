@@ -44,7 +44,7 @@ final class RegistryTest extends TestCase
      */
     public function testAppendedSerializerStaysBehindTheCatchAll(): void
     {
-        $r = Registry::default()->register($this->customUserCodec());
+        $r = Registry::new()->register($this->customUserCodec());
 
         $envelope = $r->encode(new UserJsonableMsg(name: 'r', count: 2));
 
@@ -59,7 +59,7 @@ final class RegistryTest extends TestCase
      */
     public function testRegisterFirstOutranksTheCatchAll(): void
     {
-        $r = Registry::default()->registerFirst($this->customUserCodec());
+        $r = Registry::new()->registerFirst($this->customUserCodec());
 
         $envelope = $r->encode(new UserJsonableMsg(name: 'r', count: 2));
         $this->assertNotNull($envelope);
@@ -160,7 +160,7 @@ final class RegistryTest extends TestCase
 
     public function testDefaultRegistryHandlesBuiltinAndJsonable(): void
     {
-        $r = Registry::default();
+        $r = Registry::new();
 
         // Builtin: KeyMsg
         $msg = new KeyMsg(KeyType::Char, 'q');
@@ -186,7 +186,7 @@ final class RegistryTest extends TestCase
 
     public function testDefaultRegistryDoesNotHandleQuitMsg(): void
     {
-        $r = Registry::default();
+        $r = Registry::new();
         // QuitMsg isn't in BuiltinSerializer's set and doesn't implement
         // JsonSerializable, so the default registry has no encoder.
         $this->assertNull($r->encode(new QuitMsg()));
@@ -194,7 +194,7 @@ final class RegistryTest extends TestCase
 
     public function testDecodeReturnsNullWhenNoSerializerClaims(): void
     {
-        $r = Registry::default();
+        $r = Registry::new();
         $this->assertNull($r->decode(['@type' => 'NoSuchMsg']));
     }
 }
