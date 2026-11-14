@@ -53,21 +53,38 @@ final class TextareaPrompt
     // Configuration
     // -------------------------------------------------------------------------
 
-    public function withDefault(string $value): self
+    /**
+     * The house value-object idiom (finding 027): every fluent with*
+     * returns a clone carrying the given property changes. sugar-core's
+     * generic Concerns\Mutable constructor-spreads promoted properties;
+     * this state lives in private fields, not constructor parameters, so
+     * the mutate is hand-rolled with an identical shape.
+     *
+     * @param array<string, mixed> $changes
+     */
+    private function mutate(array $changes): self
     {
         $clone = clone $this;
-        $clone->lines = explode("\n", $value);
-        // Order-independence law (finding 092): whichever of withDefault()
-        // and withMaxLines() is applied last enforces the line clamp. The
-        // former "maxLines must precede default" caveat cited upstream
-        // promptkit behavior no repo artifact could verify; the cite is
-        // dropped with the fix.
-        if ($clone->maxLines > 0 && count($clone->lines) > $clone->maxLines) {
-            $clone->lines = array_slice($clone->lines, 0, $clone->maxLines);
+        foreach ($changes as $property => $value) {
+            $clone->$property = $value;
         }
-        $clone->line  = count($clone->lines) - 1;
-        $clone->col   = self::charCount($clone->lines[$clone->line]);
         return $clone;
+    }
+
+    public function withDefault(string $value): self
+    {
+        // Order-independence law (finding 092): whichever of the limit
+        // setters runs last enforces the line clamp.
+        $lines = explode("\n", $value);
+        if ($this->maxLines > 0 && count($lines) > $this->maxLines) {
+            $lines = array_slice($lines, 0, $this->maxLines);
+        }
+        $line = count($lines) - 1;
+        return $this->mutate([
+            'lines' => $lines,
+            'line'  => $line,
+            'col'   => self::charCount($lines[$line]),
+        ]);
     }
 
     /**
@@ -79,14 +96,15 @@ final class TextareaPrompt
      */
     public function withMaxLines(int $max): self
     {
-        $clone = clone $this;
-        $clone->maxLines = max(0, $max);
-        if ($clone->maxLines > 0 && count($clone->lines) > $clone->maxLines) {
-            $clone->lines = array_slice($clone->lines, 0, $clone->maxLines);
-            $clone->line  = count($clone->lines) - 1;
-            $clone->col   = self::charCount($clone->lines[$clone->line]);
+        $max     = max(0, $max);
+        $changes = ['maxLines' => $max];
+        if ($max > 0 && count($this->lines) > $max) {
+            $lines            = array_slice($this->lines, 0, $max);
+            $changes['lines'] = $lines;
+            $changes['line']  = count($lines) - 1;
+            $changes['col']   = self::charCount($lines[$changes['line']]);
         }
-        return $clone;
+        return $this->mutate($changes);
     }
 
     // -------------------------------------------------------------------------
@@ -329,9 +347,7 @@ final class TextareaPrompt
      */
     public function withViewportRows(?int $rows): self
     {
-        $clone = clone $this;
-        $clone->viewportRows = $rows === null ? null : max(0, $rows);
-        return $clone;
+        return $this->mutate(['viewportRows' => $rows === null ? null : max(0, $rows)]);
     }
 
     /** Current row budget; null = unset (adoption-eligible), 0 = explicit unbounded. */
@@ -351,9 +367,7 @@ final class TextareaPrompt
      */
     public function withDisplayWidth(?int $cells): self
     {
-        $clone = clone $this;
-        $clone->displayWidth = $cells === null ? null : max(0, $cells);
-        return $clone;
+        return $this->mutate(['displayWidth' => $cells === null ? null : max(0, $cells)]);
     }
 
     /** Current display viewport width in cells; null = unset (adoption-eligible), 0 = explicit unbounded. */

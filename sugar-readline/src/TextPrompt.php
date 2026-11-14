@@ -209,22 +209,35 @@ final class TextPrompt
     // Configuration
     // -------------------------------------------------------------------------
 
-    public function withDefault(string $value): self
+    /**
+     * The house value-object idiom (finding 027): every fluent with*
+     * returns a clone carrying the given property changes. sugar-core's
+     * generic Concerns\Mutable constructor-spreads promoted properties;
+     * this carrier keeps its state in private fields, not constructor
+     * parameters, so the mutate is hand-rolled with an identical shape.
+     *
+     * @param array<string, mixed> $changes
+     */
+    private function mutate(array $changes): self
     {
         $clone = clone $this;
-        // Order-independence law (finding 092): whichever of withDefault()
-        // and withCharLimit() is applied last enforces the clamp, so the
-        // chain order no longer changes the outcome. The former "limit
-        // must precede default" caveat cited upstream promptkit behavior
-        // no repo artifact could verify; the cite is dropped with the fix.
-        if ($clone->charLimit > 0) {
-            $clone->buffer = self::sliceChars($value, 0, $clone->charLimit);
-            $clone->cursor = self::charCount($clone->buffer);
-        } else {
-            $clone->buffer = $value;
-            $clone->cursor = self::charCount($value);
+        foreach ($changes as $property => $value) {
+            $clone->$property = $value;
         }
         return $clone;
+    }
+
+    public function withDefault(string $value): self
+    {
+        // Order-independence law (finding 092): whichever of the limit
+        // setters runs last enforces the clamp.
+        $buffer = $this->charLimit > 0
+            ? self::sliceChars($value, 0, $this->charLimit)
+            : $value;
+        return $this->mutate([
+            'buffer' => $buffer,
+            'cursor' => self::charCount($buffer),
+        ]);
     }
 
     /**
@@ -241,30 +254,27 @@ final class TextPrompt
      */
     public function withHidden(bool $hidden = true, ?string $mask = null): self
     {
-        $clone = clone $this;
-        $clone->hidden = $hidden;
+        $changes = ['hidden' => $hidden];
         if ($mask !== null) {
-            $clone->hideMask = $mask;
+            $changes['hideMask'] = $mask;
         }
-        return $clone;
+        return $this->mutate($changes);
     }
 
     /** Set the glyph repeated in place of each buffered char when hidden. */
     public function withMask(string $mask): self
     {
-        $clone = clone $this;
-        $clone->hideMask = $mask;
-        return $clone;
+        return $this->mutate(['hideMask' => $mask]);
     }
 
     /** @param list<string> $completions */
     public function withCompletions(array $completions): self
     {
-        $clone = clone $this;
-        $clone->completions = array_values($completions);
         // A new candidate set invalidates any armed empty-buffer preview.
-        $clone->completionHint = null;
-        return $clone;
+        return $this->mutate([
+            'completions'    => array_values($completions),
+            'completionHint' => null,
+        ]);
     }
 
     /**
@@ -283,9 +293,7 @@ final class TextPrompt
      */
     public function withCompleter(?callable $completer): self
     {
-        $clone = clone $this;
-        $clone->completer = $completer;
-        return $clone;
+        return $this->mutate(['completer' => $completer]);
     }
 
     /**
@@ -306,9 +314,7 @@ final class TextPrompt
      */
     public function withValidator(callable $fn): self
     {
-        $clone = clone $this;
-        $clone->validator = $fn;
-        return $clone;
+        return $this->mutate(['validator' => $fn]);
     }
 
     /**
@@ -320,13 +326,14 @@ final class TextPrompt
      */
     public function withCharLimit(int $limit): self
     {
-        $clone = clone $this;
-        $clone->charLimit = max(0, $limit);
-        if ($clone->charLimit > 0 && self::charCount($clone->buffer) > $clone->charLimit) {
-            $clone->buffer = self::sliceChars($clone->buffer, 0, $clone->charLimit);
-            $clone->cursor = self::charCount($clone->buffer);
+        $limit   = max(0, $limit);
+        $changes = ['charLimit' => $limit];
+        if ($limit > 0 && self::charCount($this->buffer) > $limit) {
+            $buffer            = self::sliceChars($this->buffer, 0, $limit);
+            $changes['buffer'] = $buffer;
+            $changes['cursor'] = self::charCount($buffer);
         }
-        return $clone;
+        return $this->mutate($changes);
     }
 
     /**
@@ -343,10 +350,9 @@ final class TextPrompt
      */
     public function withHistory(HistoryInterface $history): self
     {
-        $clone = clone $this;
-        $clone->history = $history;
-        $clone->historyOriginal = $history;
-        return $clone;
+        // One live handle for both read paths (finding 082): Up/Down and
+        // Ctrl+R follow the store the caller keeps pushing into.
+        return $this->mutate(['history' => $history, 'historyOriginal' => $history]);
     }
 
     /**
@@ -360,9 +366,7 @@ final class TextPrompt
      */
     public function withMode(ModeInterface $mode): self
     {
-        $clone = clone $this;
-        $clone->mode = $mode;
-        return $clone;
+        return $this->mutate(['mode' => $mode]);
     }
 
     /**
@@ -373,23 +377,17 @@ final class TextPrompt
      */
     public function withModeIndicator(bool $enabled = true): self
     {
-        $clone = clone $this;
-        $clone->modeIndicator = $enabled;
-        return $clone;
+        return $this->mutate(['modeIndicator' => $enabled]);
     }
 
     public function withUndoManager(UndoManager $undoManager): self
     {
-        $clone = clone $this;
-        $clone->undoManager = $undoManager;
-        return $clone;
+        return $this->mutate(['undoManager' => $undoManager]);
     }
 
     public function withAutoSuggest(bool $enabled): self
     {
-        $clone = clone $this;
-        $clone->autoSuggestEnabled = $enabled;
-        return $clone;
+        return $this->mutate(['autoSuggestEnabled' => $enabled]);
     }
 
     /**
@@ -403,9 +401,7 @@ final class TextPrompt
      */
     public function withDisplayWidth(?int $cells): self
     {
-        $clone = clone $this;
-        $clone->displayWidth = $cells === null ? null : max(0, $cells);
-        return $clone;
+        return $this->mutate(['displayWidth' => $cells === null ? null : max(0, $cells)]);
     }
 
     /** Current display viewport width in cells; null = unset (COLUMNS-eligible), 0 = explicit unbounded. */
@@ -1353,13 +1349,9 @@ final class TextPrompt
             return $this;
         }
 
-        $clone = clone $this;
-        $clone->cursor = $clamped;
         // A caret jump closes any open insert run: typing after it starts
         // a fresh undo segment rather than folding into the previous run.
-        $clone->undoRunEnd = -1;
-
-        return $clone;
+        return $this->mutate(['cursor' => $clamped, 'undoRunEnd' => -1]);
     }
 
     private function moveCursor(int $delta): self

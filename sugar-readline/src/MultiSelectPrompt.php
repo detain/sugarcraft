@@ -52,16 +52,12 @@ final class MultiSelectPrompt
 
     public function withMinSelections(int $min): self
     {
-        $clone = clone $this;
-        $clone->minSelect = max(0, $min);
-        return $clone;
+        return $this->mutate(['minSelect' => max(0, $min)]);
     }
 
     public function withMaxSelections(int $max): self
     {
-        $clone = clone $this;
-        $clone->maxSelect = max(0, $max);
-        return $clone;
+        return $this->mutate(['maxSelect' => max(0, $max)]);
     }
 
     /** Chrome rows: label, selected-count hint, filter bar, page footer. */

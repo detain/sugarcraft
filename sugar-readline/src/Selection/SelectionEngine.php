@@ -82,27 +82,46 @@ trait SelectionEngine
     // Configuration
     // -------------------------------------------------------------------------
 
-    public function withPageSize(int $size): static
+    /**
+     * The house value-object idiom (finding 027): every fluent with*
+     * returns a clone carrying the given property changes. This engine is
+     * a trait, so one mutate serves both list prompts. sugar-core's
+     * generic Concerns\Mutable constructor-spreads promoted properties;
+     * this state lives in private fields, not constructor parameters, so
+     * the mutate is hand-rolled with an identical shape.
+     *
+     * @param array<string, mixed> $changes
+     */
+    private function mutate(array $changes): static
     {
         $clone = clone $this;
-        $clone->pageSize = max(1, $size);
+        foreach ($changes as $property => $value) {
+            $clone->$property = $value;
+        }
+        return $clone;
+    }
+
+    public function withPageSize(int $size): static
+    {
+        $clone = $this->mutate(['pageSize' => max(1, $size)]);
         $clone->reclampPage();
         return $clone;
     }
 
     public function withFilter(string $needle): static
     {
-        $clone = clone $this;
-        $clone->filter   = $needle;
-        $clone->filtered = $needle === ''
-            ? array_keys($clone->choices)
+        $filtered = $needle === ''
+            ? array_keys($this->choices)
             : array_values(array_filter(
-                array_keys($clone->choices),
-                fn(int $i): bool => stripos($clone->choices[$i], $needle) !== false,
+                array_keys($this->choices),
+                fn(int $i): bool => stripos($this->choices[$i], $needle) !== false,
             ));
-        $clone->cursor = 0;
-        $clone->page   = 0;
-        return $clone;
+        return $this->mutate([
+            'filter'   => $needle,
+            'filtered' => $filtered,
+            'cursor'   => 0,
+            'page'     => 0,
+        ]);
     }
 
     /**
@@ -126,15 +145,14 @@ trait SelectionEngine
     {
         $list = array_values(is_array($choices) ? $choices : iterator_to_array($choices));
 
-        $clone         = clone $this;
-        $clone->choices = $list;
-        $clone->filtered = $clone->filter === ''
+        $filtered = $this->filter === ''
             ? array_keys($list)
             : array_values(array_filter(
                 array_keys($list),
-                fn(int $i): bool => stripos($list[$i], $clone->filter) !== false,
+                fn(int $i): bool => stripos($list[$i], $this->filter) !== false,
             ));
 
+        $clone = $this->mutate(['choices' => $list, 'filtered' => $filtered]);
         if (!$preserveCursor) {
             $clone->cursor = 0;
             $clone->page   = 0;
@@ -164,9 +182,7 @@ trait SelectionEngine
      */
     public function withDisplayWidth(?int $cells): static
     {
-        $clone = clone $this;
-        $clone->displayWidth = $cells === null ? null : max(0, $cells);
-        return $clone;
+        return $this->mutate(['displayWidth' => $cells === null ? null : max(0, $cells)]);
     }
 
     /** Current display viewport width in cells; null = unset (adoption-eligible), 0 = explicit unbounded. */
@@ -185,8 +201,7 @@ trait SelectionEngine
      */
     public function withViewportRows(?int $rows): static
     {
-        $clone = clone $this;
-        $clone->viewportRows = $rows === null ? null : max(0, $rows);
+        $clone = $this->mutate(['viewportRows' => $rows === null ? null : max(0, $rows)]);
         $clone->reclampPage();
         return $clone;
     }

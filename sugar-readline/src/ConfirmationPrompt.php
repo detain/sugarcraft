@@ -55,25 +55,37 @@ final class ConfirmationPrompt
     // Configuration
     // -------------------------------------------------------------------------
 
-    public function withConfirmLabel(string $label): self
+    /**
+     * The house value-object idiom (finding 027): every fluent with*
+     * returns a clone carrying the given property changes. sugar-core's
+     * generic Concerns\Mutable constructor-spreads promoted properties;
+     * this state lives in private fields, not constructor parameters, so
+     * the mutate is hand-rolled with an identical shape.
+     *
+     * @param array<string, mixed> $changes
+     */
+    private function mutate(array $changes): self
     {
         $clone = clone $this;
-        $clone->confirmLabel = $label;
+        foreach ($changes as $property => $value) {
+            $clone->$property = $value;
+        }
         return $clone;
+    }
+
+    public function withConfirmLabel(string $label): self
+    {
+        return $this->mutate(['confirmLabel' => $label]);
     }
 
     public function withCancelLabel(string $label): self
     {
-        $clone = clone $this;
-        $clone->cancelLabel = $label;
-        return $clone;
+        return $this->mutate(['cancelLabel' => $label]);
     }
 
     public function withHint(string $hint): self
     {
-        $clone = clone $this;
-        $clone->hint = $hint;
-        return $clone;
+        return $this->mutate(['hint' => $hint]);
     }
 
     /**
@@ -85,9 +97,7 @@ final class ConfirmationPrompt
      */
     public function withAutoSubmit(bool $on = true): self
     {
-        $clone = clone $this;
-        $clone->autoSubmit = $on;
-        return $clone;
+        return $this->mutate(['autoSubmit' => $on]);
     }
 
     // -------------------------------------------------------------------------
@@ -206,9 +216,7 @@ final class ConfirmationPrompt
      */
     public function withDisplayWidth(?int $cells): self
     {
-        $clone = clone $this;
-        $clone->displayWidth = $cells === null ? null : max(0, $cells);
-        return $clone;
+        return $this->mutate(['displayWidth' => $cells === null ? null : max(0, $cells)]);
     }
 
     /** Current display viewport width in cells; null = unset (adoption-eligible), 0 = explicit unbounded. */
