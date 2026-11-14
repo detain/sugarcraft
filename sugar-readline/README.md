@@ -132,9 +132,10 @@ instance:
 
 ### Selection prompt
 
-Type to filter the list as you go; Backspace edits the filter, Ctrl+U clears
-it, and Space acts on the row under the cursor — a second Enter in
-SelectionPrompt (it submits the match), a mark toggle in MultiSelectPrompt.
+Type to filter the list as you go; Backspace edits the filter and Ctrl+U
+clears it. Space acts on the row under the cursor: in SelectionPrompt it is
+a second Enter, submitting the row under the cursor; in MultiSelectPrompt
+it toggles the mark.
 Space never joins the filter — it is a bound key, so a filter containing a
 space is unreachable and typing one acts on the row under the cursor
 instead. While the filter matches nothing, the list renders `(no matches)`
@@ -270,20 +271,17 @@ responsibility: sanitise or re-encode it before you emit it.
 makes it wrap and the cursor-up repaint maths desyncs (the classic
 staircase). `TextPrompt::withDisplayWidth($cells)` bounds the editable
 region to a window around the cursor (clipped ends marked `…`, cell-width
-aware; `0` renders the row unbounded). The state `run()` keys on is *unset*:
-only a prompt still at `null` (the default, restored by
-`withDisplayWidth(null)`) auto-adopts a width — and only that. Adoption
-reads `COLUMNS` first when it carries a positive integer (the lever a
-headless or CI harness pulls to steer the layout); failing that, when the
-output stream is a real TTY it probes `TIOCGWINSZ` (via sugar-core `Tty`)
-and adopts the terminal's own columns. `bash` does not export `COLUMNS` by
-default (zsh does), so the probe is what covers the ordinary interactive
-case; when neither a usable `COLUMNS` nor a TTY is available nothing is
-adopted, and the host may still probe the size itself (e.g. `stty size`)
-and pass the result to `withDisplayWidth()`. An
-explicit width always survives: a non-zero bound is kept as given, and an
-explicit `0` is honoured as a deliberate unbounded choice, never
-overwritten by adoption.
+aware; `0` renders the row unbounded). Only one of the width's three states can adopt: `null` (the default,
+restored by `withDisplayWidth(null)`) means *not given yet* and is the only
+value `run()` fills in; a positive cell count is an explicit bound and `0`
+an explicit unbounded choice — neither is ever overwritten.
+When adoption fires, it reads `COLUMNS` first if that carries a positive
+integer (the lever a headless or CI harness pulls); failing that, and if the
+output stream is a real TTY, it probes `TIOCGWINSZ` (via sugar-core `Tty`)
+and adopts the terminal's own columns. `bash` leaves `COLUMNS` unset (zsh
+exports it), so the TTY probe is what covers ordinary interactive use; when
+neither source answers, nothing is adopted and the host may probe the size
+itself (e.g. `stty size`) and pass it to `withDisplayWidth()`.
 The same adoption exists vertically: the list prompts (`SelectionPrompt`,
 `MultiSelectPrompt`) and `TextareaPrompt` accept `withViewportRows($rows)`
 / `viewportRows()`, and an unset state adopts the terminal's row count the
@@ -302,8 +300,9 @@ reports only bytes, so it never resizes; to get live reflow your input
 source must emit `ResizeEvent` (sugar-input's `SignalResizeDriver` detects
 SIGWINCH but carries no key bytes, so it is a resize source to merge, not a
 standalone driver).
-Multi-line textarea output and wrapped labels can still exceed the window —
-long **prompts** (labels) are the host's layout responsibility either way.
+Multi-line textarea output and wrapped labels can still exceed the window:
+the bound covers the editable region and the choice list, not the label —
+long labels are the host's layout responsibility, bounded width or not.
 
 ## Terminal mode (raw vs cooked)
 
@@ -401,10 +400,11 @@ $result = $readline->run(TextPrompt::new('> '));
 // $result->value === 'hello'
 ```
 
-An injected driver is reported "no event yet" and "stream ended" by the same
-`read() === null` answer (`InputDriver` cannot distinguish them), so the loop
-keeps idling until the prompt ends or `stop()` is called — close or drain the
-fixture stream and arm `stop()` from your test when it runs dry.
+An injected driver answers "no event yet" and "stream ended" with the same
+`read() === null`: the `InputDriver` contract cannot distinguish them. The
+loop therefore keeps idling until the prompt ends or `stop()` is called. To
+finish a fixture run, close or drain the stream and arm `stop()` from your
+test when it runs dry.
 
 ## Key bindings
 
@@ -417,18 +417,44 @@ sequence a terminal can send.
 - `Key::Left` / `Key::Right` — move cursor (text input); Ctrl+B / Ctrl+F alias them on `TextPrompt`
 - `Key::Up` / `Key::Down` — navigate selection list / history / textarea line; also Ctrl+P / Ctrl+N on every text and list surface
 - `Key::Home` / `Key::End` — jump within the current line / list; also Ctrl+A / Ctrl+E on every text and list surface
-- `Key::Enter` — submit text or select current choice (in the textarea, Shift+Enter, Alt+Enter and Ctrl+J break a line instead — reported as chords on terminals that honor the pump's kitty-protocol push, and plain Enter submits where the wire never distinguishes them; on the single-line prompts Alt+Enter submits like Enter, readline's accept-line law for the chord)
+- `Key::Enter` — submits: the row under the cursor on SelectionPrompt, the
+  highlighted answer on ConfirmationPrompt, the buffer on the text prompts.
+  In the textarea, Shift+Enter, Alt+Enter and Ctrl+J break a line instead;
+  those arrive as distinct chords only on terminals that honor the pump's
+  kitty-protocol push, and plain Enter submits where the wire never
+  distinguishes them. On single-line prompts Alt+Enter submits like Enter
+  (readline's accept-line law for the chord).
 - `Key::Space` — a second Enter in SelectionPrompt (submits the row under the cursor); toggles the mark in MultiSelectPrompt; toggles Yes/No in ConfirmationPrompt; inserts a literal space in text inputs
-- `Key::Tab` — autocomplete or toggle confirmation value; pressing Tab again cycles the matches (first Tab extends to their longest common prefix); `Key::ShiftTab` walks that cycle backwards, and on an empty buffer the first Tab paints a bounded candidate preview instead of committing one (press Tab again to enter the ring)
+- `Key::Tab` — autocompletes on the text prompts and toggles the confirmation
+  value. The first press extends the buffer to the longest common prefix;
+  further presses cycle the matches. `Key::ShiftTab` walks the cycle
+  backwards. On an empty buffer the first press paints a bounded preview of
+  the candidates instead of committing one — press Tab again to enter the
+  ring.
 - `y` / `n` (any case) — set Yes/No directly in ConfirmationPrompt (Enter still commits); there the Left/Right arrows alias to the same one-keystroke Yes/No picks
 - `ConfirmationPrompt::withAutoSubmit()` arms the immediate-answer reflex: y/n then **selects and submits** in one press (arrows and the Space/Tab toggle stay browse-only); off by default, so the Enter-to-commit contract above is the shipped behaviour
-- `Key::Backspace` / `Key::Delete` — delete characters; Ctrl+H erases before the cursor (both the BS 0x08 and DEL 0x7F spellings bind to Backspace); Ctrl+D deletes under the cursor and, on an empty buffer, aborts (like GNU `delete-char-or-eof`)
+- `Key::Backspace` / `Key::Delete` — delete characters. Ctrl+H erases
+  before the cursor; both the BS 0x08 and DEL 0x7F spellings bind to
+  Backspace. Ctrl+D deletes under the cursor, and on an empty buffer aborts
+  (GNU `delete-char-or-eof`).
 - `Key::CtrlU` / `Key::CtrlK` — delete to start / end of line; Ctrl+W deletes the previous word
-- `Key::CtrlR` / `Key::CtrlS` — reverse / forward incremental history search; without the `-ixon` recipe (see *Terminal mode* above) the discipline intercepts Ctrl+S as XOFF and freezes output instead of opening forward search — Ctrl+Q (XON) unfreezes it
+- `Key::CtrlR` / `Key::CtrlS` — reverse / forward incremental history
+  search. Ctrl+S needs the `-ixon` recipe (see *Terminal mode* above):
+  without it the discipline intercepts 0x13 as an XOFF stop-output request
+  instead of opening the search, and Ctrl+Q (XON) unfreezes output.
 - Ctrl+Z / Ctrl+Y — undo / redo the last edit run (a run of consecutive typing collapses into one undo step)
 - Ctrl+L — `Readline` clears the screen and repaints the prompt
 - `Key::PageUp` / `Key::PageDown` — jump the selection list by one page
-- `Key::Escape` / `Key::CtrlC` — abort. On a real tty the Ctrl+C chord requires the `-isig` recipe above — with signal generation still on, 0x03 raises SIGINT before the prompt sees it. Inside an attached `EmacsMode`, Escape is the meta prefix instead (a second Escape cancels it); use Ctrl+C to abort there. Inside an attached `ViMode`, Escape only switches submodes (insert→normal, visual→normal) and never aborts; Ctrl+C aborts from every submode, and bare `Q` additionally aborts from normal mode. While an incremental history search is active, Ctrl+C is reclaimed by the search: it cancels back to the pre-search line rather than aborting.
+- `Key::Escape` / `Key::CtrlC` — abort. Each surface keeps its exception:
+  - On a real tty the Ctrl+C chord requires the `-isig` recipe above; with
+    signal generation still on, 0x03 raises SIGINT before the prompt sees it.
+  - Inside an attached `EmacsMode`, Escape is the meta prefix instead
+    (a second Escape cancels it); use Ctrl+C to abort there.
+  - Inside an attached `ViMode`, Escape only switches submodes (insert to
+    normal, visual to normal) and never aborts; Ctrl+C aborts from every
+    submode, and bare `Q` additionally aborts from normal mode.
+  - While a history search is active, Ctrl+C is reclaimed: it cancels back
+    to the pre-search line rather than aborting.
 
 Not every `Ctrl+X` shown has a matching `Key::` constant — there is no
 `Key::CtrlD`, `CtrlL`, `CtrlZ` or `CtrlY`, for example. Those bindings are
@@ -453,16 +479,20 @@ $prompt = TextPrompt::new('> ')->withMode(new ViMode());    // modal vi bindings
 ```
 
 Every key fed to `TextPrompt::handleKey()` is delegated to the attached
-`Mode\ModeInterface` implementation — with two carve-outs: while an
-incremental search is active the search consumes keys before the mode is
-consulted, and a plain character the mode does not claim is inserted without
-going through its `handleKey()`. Typed characters are routed through the
-mode too while the mode is *claiming* them (`consumesCharacters()` — an armed
-Emacs meta prefix, or Vi outside insert mode), so `^W` never lands in the
-buffer while the prefix waits. The mode translates the key into prompt
-operations by calling back into `handleKeyDirect()` (the mode-bypassing
-entry point — using `handleKey()` would recurse), then re-attaches itself so
-its own state survives the prompt's immutable cloning.
+`Mode\ModeInterface` implementation. Two carve-outs: while an incremental
+search is active, the search consumes keys before the mode is consulted;
+and a plain character the mode does not claim is inserted without going
+through its `handleKey()`.
+
+While the mode is *claiming* characters (`consumesCharacters()` — an armed
+Emacs meta prefix, or Vi outside insert mode), typed characters are routed
+through the mode too, so `^W` never lands in the buffer while the prefix
+waits.
+
+The mode calls back into `handleKeyDirect()` (the mode-bypassing entry
+point — using `handleKey()` would recurse) to turn a key into prompt
+operations, then re-attaches itself so its own state survives the prompt's
+immutable cloning.
 
 - **`EmacsMode`** implements the classic readline chords — Ctrl+A/E (line
   start/end), Ctrl+B/F (char motion), Alt+B/F/D (word motion/delete, via the
@@ -478,21 +508,20 @@ its own state survives the prompt's immutable cloning.
   mode never aborts the prompt on its own — Escape only arms the prefix, while
   Ctrl+C still falls through to the prompt's abort binding; leave it detached
   if Escape-quit is what you want.
-- **`ViMode`** is a modal state machine (starts in insert; Escape → normal;
-  `V` opens a line-wise visual mode — motion-only scaffold, selection not
-  yet rendered or operated on; plain `v` is deliberately unbound). Pending
-  motions like `dd`/`yy`/`cc` are supported. In
-  normal mode `j`/`k` walk history, `x` cuts the char under the cursor, `D`
-  cuts to end-of-line, `p`
-  puts the unnamed register, `u` undoes the last edit, `Enter` submits the
-  line, space moves right, and Ctrl+R/Ctrl+S start incremental search just
-  like in insert mode. On a hidden prompt the unnamed register never
-  captures the secret text — the same posture undo frames already take. The
-  current submode is readable as the public `ViModeState` enum via
-  `viMode()`. It does
-  not hardcode vi bindings: normal/visual keys are mapped through sugar-forms'
-  `VimKeyHandler`, which returns a `VimAction` enum case that ViMode then
-  executes as TextPrompt operations. New vi bindings therefore belong in
+- **`ViMode`** is a modal state machine: it starts in insert mode, Escape
+  moves to normal, and `V` opens a line-wise visual mode (a motion-only
+  scaffold — selection is not yet rendered or operated on; plain `v` is
+  deliberately unbound). Pending motions like `dd`/`yy`/`cc` are supported.
+  In normal mode, `j`/`k` walk history, `x` cuts the char under the cursor,
+  `D` cuts to end-of-line, `p` puts the unnamed register, `u` undoes the
+  last edit, Enter submits the line, and space moves right. Ctrl+R and
+  Ctrl+S start incremental search in every submode, insert included. On a
+  hidden prompt the unnamed register never captures the secret text — the
+  same posture undo frames already take. `viMode()` reports the current
+  submode as the public `ViModeState` enum. Vi bindings are not hardcoded:
+  normal and visual keys are mapped through sugar-forms' `VimKeyHandler`,
+  which returns a `VimAction` enum case that ViMode then executes as
+  TextPrompt operations. New vi bindings therefore belong in
   sugar-forms (`VimAction` + `VimKeyHandler`), not in ViMode's branching.
   In normal mode the cursor rests **on** the last character (vi semantics), so
   `$` and Escape-at-end land on — not after — the final char.
@@ -510,8 +539,8 @@ its own state survives the prompt's immutable cloning.
   quotes pair up left-to-right (a cursor before a quoted region jumps
   forward to it), and unmatched/absent delimiters are a silent no-op
   (where vim would beep).
-  Escape cancels a half-typed sequence. Simplifications vs vim: `a"` does
-  not absorb trailing whitespace, escaped quotes are not special, and the
+  Escape cancels a half-typed sequence. Simplifications vs vim: `a"` does not
+  absorb trailing whitespace, escaped quotes are not special, and the
   unnamed register is a single slot (no named registers, no
   linewise/charwise distinction on put). `dd`, `cc` and `yy` store the
   affected line in the register before acting; `p` pastes register contents
@@ -535,9 +564,9 @@ still read the submode and paint it themselves.
 
 With a history attached (`withHistory()`), Ctrl+R enters reverse
 incremental search and Ctrl+S forward search, in any mode. Ctrl+S only
-arrives at all on a terminal with flow control switched off (the `-ixon`
-recipe above): otherwise the discipline takes 0x13 as an XOFF stop-output
-request and Ctrl+Q sends XON to resume. Typed characters
+arrives at all on a terminal with flow control switched off: without the
+`-ixon` recipe, 0x13 stops the output instead of opening the search (see
+*Key bindings*, Ctrl+R/Ctrl+S, for the recovery chord). Typed characters
 refine the query, repeated Ctrl+R/Ctrl+S steps through older/newer matches,
 Enter accepts the match into the buffer (without submitting), and
 Escape/Ctrl+G cancels back to the original line — and so does Ctrl+C while a
@@ -551,10 +580,13 @@ hidden prompt the line masks query and match alike, in the same idiom.
 
 Prompts start with **no** history attached: navigation and Ctrl+R do nothing
 until you pass a store via `withHistory()`. `InMemoryHistory` keeps entries
-for the process lifetime; `FileHistory` persists them across processes —
-`new FileHistory($filePath, $maxHistory, $tempDir, $deferWrites)`: the file is
-created (or tightened, if it exists) at mode `0600`, loaded on construction,
-and flushed at the latest on destruction. With `$deferWrites = true`, pushes
+for the process lifetime; `FileHistory` persists them across processes.
+`new FileHistory($filePath, $maxHistory, $tempDir, $deferWrites)` takes the
+file to persist to, an entry cap (`0` = unlimited), the directory for
+rewrite temp files, and a flag deferring writes to batch `flush()` (the
+paragraphs below spell out the durability contract): the file is created
+(or tightened, if it exists) at mode `0600`, loaded on construction, and
+flushed at the latest on destruction. With `$deferWrites = true`, pushes
 queue in memory until `flush()` batch-writes them — queued entries are lost
 if the process dies before any flush runs (e.g. SIGKILL), so call `flush()`
 at each submit if the history must survive a hard kill. Pass a `$maxHistory` and
@@ -589,8 +621,8 @@ applied at the write choke and undone on load — a value that somehow
 contains a raw newline survives a save/reload round-trip as **one** entry
 instead of splitting into two. A history file written before the escaping
 format existed can therefore have a literal `\n` two-character sequence
-decoded into a real newline on the first load — a documented consequence of
-adopting the escape format. An **unterminated final line** — a fragment left
+decoded into a real newline on the first load — the one decode trade-off the
+escape format introduces. An **unterminated final line** — a fragment left
 by a crash mid-write — is likewise not decoded as an entry: readers drop it,
 and the next rewrite truncates the file back to the last terminated line. A
 history path that is a **symlink** is
@@ -604,11 +636,14 @@ from disk) — zsh `HIST_IGNORE_ALL_DUPS` style — while plain
 `InMemoryHistory` collapses only **adjacent** duplicates (`HIST_IGNORE_DUPS`).
 All writers serialise on a sidecar `<file>.lock` (`flock` exclusive, held
 across read-write-rename), so two processes pushing at once never lose an
-entry; a write that cannot happen throws rather than dropping the line —
-but that guarantee covers `push()` and explicit `flush()` calls only: the
-automatic flush in `__destruct` cannot throw usefully, so it degrades to an
-`error_log` line and any queued `$deferWrites` entries are lost at exit. The
-writers `fsync` the content bytes before releasing the lock (where PHP exposes
+entry, and a write that cannot happen throws rather than dropping the line.
+
+**Note:** that throw guarantee covers `push()` and explicit `flush()` calls
+only. The automatic flush in `__destruct` cannot throw usefully: it degrades
+to an `error_log` line, and with `deferWrites` any entries still queued are
+lost at exit.
+
+The writers `fsync` the content bytes before releasing the lock (where PHP exposes
 `fsync`), so a process death cannot leave a half-flushed tail; a crash
 straddling the rename swap can roll the file back to the previous version but
 never surfaces a torn line — readers drop an unterminated final line.
@@ -633,9 +668,25 @@ what you type as a query never appears in clear text.
 Each prompt is a state machine with three states: pending, submitted, aborted.
 
 - `submit()` finalises the prompt; for `MultiSelectPrompt` it only succeeds when `canSubmit()` is true.
-- `abort()` (or feeding `Key::Escape` / `Key::CtrlC` on the default bindings; inside an attached `EmacsMode`, Ctrl+C) discards the prompt; `value()` / `selectedValues()` then return empty. The Ctrl+C chord on a live tty requires the `-isig` raw-mode recipe above — with signals on it is a SIGINT death, not an abort. During an active incremental history search these keys cancel the search back to the original line instead — abort resumes ownership on the next keypress.
+- `abort()` discards the prompt; `value()` / `selectedValues()` then return
+  empty. Default bindings reach it through `Key::Escape` or `Key::CtrlC`
+  (inside an attached `EmacsMode`, Ctrl+C — Escape is the meta prefix there).
+  Two exceptions: on a live tty the Ctrl+C chord requires the `-isig`
+  raw-mode recipe above — with signals on, it is a SIGINT death, not an abort;
+  and while an incremental history search is active, these keys cancel the
+  search back to the original line, with abort resuming ownership on the
+  next keypress.
 - `isSubmitted()` / `isAborted()` report status. `currentValue()` (Confirmation) always reflects the current choice, submitted or not. `selectedValue()` (Selection) tracks the cursor while one exists, but returns `null` after an abort and whenever the filter matches no choice — with no cursor to point at, there is no value to report, submitted state or not.
-- True end-of-input: when `Readline` owns the stdin pump and the stream reaches EOF after the decoder drains, `run()` returns a result with neither `submitted` nor `aborted` set, carrying the prompt's last state. The pump is per-`Readline`-instance, **not** per-`run()`: calling `run()` again feeds the next prompt from wherever the stream stands, so `printf 'a\nb\n' | php app.php` drives two successive prompts with `a` and `b`; once EOF is seen it stays seen. Injected drivers report EOF and "nothing yet" identically, so they cannot trigger this exit; end those loops by submitting, aborting, or `stop()`.
+- True end-of-input: when `Readline` owns the stdin pump and the stream
+  reaches EOF after the decoder drains, `run()` returns a result with
+  neither `submitted` nor `aborted` set, carrying the prompt's last state.
+  - The pump is per-`Readline`-instance, **not** per-`run()`: calling
+    `run()` again feeds the next prompt from wherever the stream stands —
+    `printf 'a\nb\n' | php app.php` drives two successive prompts with `a`
+    and `b`. Once EOF is seen it stays seen.
+  - Injected drivers report EOF and "nothing yet" identically, so they
+    cannot trigger this exit; end those loops by submitting, aborting, or
+    `stop()`.
 - `stop()` requests the loop exit; it lands within one idle poll interval (capped at 20 ms) **when the driver's read is non-blocking** (`min 1 time 0`, or an injected driver that returns `null` promptly). A driver blocking in `read()` is not interrupted — the stop takes effect on the first pass after it wakes.
 
 ## Internationalization
@@ -668,7 +719,7 @@ host that wants localized prompts supplies them pre-localized.
 
 ## Accessor deprecation (2026-10-24)
 
-Per the house bare-accessor convention (`AGENTS.md`: *"Bare accessors (no* `get`*)*), the history navigation pair `getPrevious()`/`getNext()` was renamed to its bare twins `previous()`/`next()`, with the whole family moved together with the interface: `HistoryInterface` now declares only the bare pair (PHP forbids interface method bodies, so the legacy spellings could not ride the contract as default forwarders). `InMemoryHistory` — and `FileHistory` by inheritance — keep the old names as byte-identical one-line BC forwarders, each marked `@deprecated` with `REMOVED-IN: 2.0.0` in its docblock — they will be removed in sugar-readline v2.0.0.
+Per the house bare-accessor convention (`AGENTS.md`: *"Bare accessors (no* `get`*)*), the history navigation pair `getPrevious()`/`getNext()` was renamed to its bare twins `previous()`/`next()`, and the interface moved with the whole family: `HistoryInterface` now declares only the bare pair (PHP forbids interface method bodies, so the legacy spellings could not ride the contract as default forwarders). `InMemoryHistory` — and `FileHistory` by inheritance — keep the old names as byte-identical one-line BC forwarders, each marked `@deprecated` with `REMOVED-IN: 2.0.0` in its docblock — they will be removed in sugar-readline v2.0.0.
 
 | Namespace | Class | Deprecated | Use instead |
 |-----------|-------|------------|-------------|

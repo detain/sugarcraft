@@ -41,8 +41,8 @@ use SugarCraft\Readline\Lang;
  * undone at load — `\\` for a backslash, `\n` / `\r` for embedded newlines
  * and carriage returns. Without escaping an entry containing a raw LF
  * reloads as TWO entries. Files written before escaping existed may
- * therefore decode a literal `\n` sequence into a newline on load
- * (documented consequence of adopting the format). The marker line itself
+ * therefore decode a literal `\n` sequence into a newline on load — the
+ * one decode trade-off the escape format introduces. The marker line itself
  * is skipped by every decoder; it is written by the bounded full rewrite
  * and NEVER by the append paths — a markerless file decodes identically
  * (the v2 escape rule is the only rule so far), so adoption is a
