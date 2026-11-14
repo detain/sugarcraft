@@ -636,3 +636,23 @@ tape already carries. `colorSgr()` stays a tested public parity bridge
 "diff two snapshots as coloured ANSI" view), build on it rather than
 hand-rolling `38;2;` sprintf. Silence is not an outcome — this entry closes
 the item.
+
+## Canonical vocabulary ledger — vterm-34 (2026-11-14)
+
+Three low-severity spellings the review wave adjudicated; recorded here so
+future edits converge instead of drifting again:
+
+- **`Color::equalsOrBothNull(?self $a, ?self $b): bool`** is the real
+  signature (the README's old `?a, ?b` shorthand is retired); roster cells
+  open with lowercase backticked verbs — match the Theme/Cell rows.
+- **Buffer dirty-box truth**: `resize()` carries content but marks the WHOLE
+  new grid dirty; `clear()` mints a pristine empty box (content discarded).
+  The old bundled sentence ("so their dirty box starts empty even though
+  content carried over") conflated the two — never reuse it.
+- **Cursor verbs differ by design**: the root snapshot `Cursor` carries
+  `at($r,$c)`/`hidden()`/`shown()`; the emulator `Cursor\Cursor` carries
+  `withRow()`/`withCol()`/`withVisible()`. Additive convergence (aliases on
+  the emulator class) was reviewed and DEFERRED — the two classes serve
+  different paths, and the emulator file is the wave's most-contested
+  hot-file. Known cost, not an oversight: if a third vocabulary appears,
+  fold it onto the emulator's `with*` set, not the root's.
