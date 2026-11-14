@@ -161,7 +161,12 @@ final class SettingsHelpKeyDriftTest extends TestCase
 
     private static function helpBlob(): string
     {
-        $lang = (include '/home/sites/sugarcraft/candy-code/lang/en.php');
+        // The host keyspace lives beside this bundle's dir in the monorepo —
+        // resolved repo-relative so the guard answers on any checkout root
+        // (CI runs at /home/runner/work/sugarcraft/sugarcraft, not the dev box).
+        $hostLang = dirname(__DIR__, 3) . '/candy-code/lang/en.php';
+        self::assertFileExists($hostLang, 'candy-code host catalog vanished from the monorepo checkout');
+        $lang = (include $hostLang);
         self::assertIsArray($lang);
         $blob = $lang['settings.channels.discord.help'] ?? null;
         self::assertIsString($blob, 'settings.channels.discord.help vanished from the en catalog');
