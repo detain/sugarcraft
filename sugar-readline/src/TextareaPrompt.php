@@ -98,9 +98,12 @@ final class TextareaPrompt
     }
 
     /**
-     * Insert pasted text as literal content: control bytes are stripped (they
-     * could forge submits/aborts through the char-by-char path) and newlines
-     * split into lines. Mode-agnostic by design — a paste is text, never a
+     * Insert pasted text as literal content: control bytes are stripped
+     * (they could forge submits/aborts through the char-by-char path) but
+     * TAB is deliberately kept — code pasting into a textarea needs its
+     * indentation, and the README promises TAB on both surfaces — and LF
+     * splits into lines. Each cleaned line then splices in ONE clone (see
+     * appendLiteral). Mode-agnostic by design — a paste is text, never a
      * stream of keystrokes.
      */
     public function insertPastedText(string $text): self
@@ -126,14 +129,31 @@ final class TextareaPrompt
         return $prompt;
     }
 
-    /** Insert a control-free run of characters at the cursor. */
+    /**
+     * Insert a control-free run of characters at the cursor in one splice.
+     *
+     * The run arrives pre-parsed from insertPastedText: control bytes are
+     * already stripped (only TAB survives, and TAB is CONTENT here, so
+     * handleChar's key gate must not see it) and LF has been exploded into
+     * lines. Replaying per character through handleChar applied a gate this
+     * path had already passed — silently eating every pasted TAB — and paid
+     * one immutable clone per character, each copying the whole lines array
+     * (the ~n² clipboard cost, measured 12k chars ≈ 144ms at annotation
+     * time). One splice copies it once.
+     */
     private function appendLiteral(string $text): self
     {
-        $prompt = $this;
-        foreach (\mb_str_split($text, 1, 'UTF-8') as $char) {
-            $prompt = $prompt->handleChar($char);
+        if ($text === '') {
+            return $this;
         }
-        return $prompt;
+
+        $clone = clone $this;
+        $current = $clone->lines[$clone->line];
+        $clone->lines[$clone->line] = self::sliceChars($current, 0, $clone->col)
+                                    . $text
+                                    . self::sliceChars($current, $clone->col);
+        $clone->col += self::charCount($text);
+        return $clone;
     }
 
     public function handleKey(string $key): self
