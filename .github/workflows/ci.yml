@@ -1093,6 +1093,19 @@ jobs:
             sleep 10
           done
 
+      # CI-CURE (2026-11-13): the channel-bundle coverage cells (candy-discord,
+      # candy-msteams) died at <bundle>/tests/bootstrap.php:18 with "bundle
+      # tests need the candy-code vendor tree present" — the test matrix
+      # installs the host vendor for exactly these libs (see "Install host
+      # vendor (channel bundle tests)" in the test job above) but the coverage
+      # job never mirrored that step, so the bootstrap's fail-closed guard
+      # fired before phpunit could load. Same gate, same command, same WHY as
+      # the test job — keep the two sites in step if the bundles ever grow
+      # their own manifests.
+      - name: Install host vendor (channel bundle tests)
+        if: matrix.lib == 'candy-msteams' || matrix.lib == 'candy-discord'
+        run: cd candy-code && composer install --prefer-dist --no-progress -n
+
       - name: Run tests with coverage (serial)
         if: matrix.lib != 'candy-code'
         env:
