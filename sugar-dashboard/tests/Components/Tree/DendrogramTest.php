@@ -259,6 +259,83 @@ final class DendrogramTest extends TestCase
         $this->assertSame(60, Width::string($borderRows[0]));
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // Connector emission (finding sugar-dashboard-157, D-87)
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testTwoChildTreePaintsConnectorsBetweenLabels(): void
+    {
+        $tree = (new DendrogramNode('r', 'Root'))
+            ->withChildren([new DendrogramNode('a', 'Alpha'), new DendrogramNode('b', 'Beta')]);
+        $rows = self::plainRows(Dendrogram::new()->withRoot($tree)->withStyle('single')->setSize(60, 20)->render());
+
+        $parentRow = array_key_first(array_filter($rows, static fn(string $r): bool => (bool) preg_match('/\[\s*Root\s*\]/', $r)));
+        $this->assertNotNull($parentRow, 'root label is painted');
+
+        $bridge = $rows[$parentRow + 1];
+        $this->assertMatchesRegularExpression('/┌─+┬─+┐/u', $bridge, 'corner-span-tee bridge row between parent and children');
+
+        // Both children sit on a lower row, in slot order.
+        for ($r = $parentRow + 2; $r < count($rows); $r++) {
+            if (preg_match('/\[\s*Alpha\s*\]/', $rows[$r])) {
+                $this->assertMatchesRegularExpression('/\[\s*Beta\s*\]/', $rows[$r], 'both children share their level row');
+                preg_match('/\[\s*Alpha\s*\]/', $rows[$r], $ma, PREG_OFFSET_CAPTURE);
+                preg_match('/\[\s*Beta\s*\]/', $rows[$r], $mb, PREG_OFFSET_CAPTURE);
+                $this->assertLessThan($mb[0][1], $ma[0][1], 'left slot keeps the left child');
+                return;
+            }
+        }
+        $this->fail('children labels never painted below their bridge');
+    }
+
+    public function testSingleChildTreeDropsAStraightStub(): void
+    {
+        $tree = (new DendrogramNode('r', 'Root'))
+            ->withChildren([(new DendrogramNode('a', 'OnlyChild'))]);
+        $rows = self::plainRows(Dendrogram::new()->withRoot($tree)->withStyle('single')->setSize(60, 20)->render());
+
+        $parentRow = array_key_first(array_filter($rows, static fn(string $r): bool => (bool) preg_match('/\[\s*Root\s*\]/', $r)));
+        $this->assertNotNull($parentRow);
+        preg_match('/\[\s*Root\s*\]/', $rows[$parentRow], $mp, PREG_OFFSET_CAPTURE);
+        $parentCol = $mp[0][1] + intdiv(12, 2); // centre of the 12-cell box
+
+        $stub = $rows[$parentRow + 1];
+        $this->assertNotFalse(strpos($stub, '│'), 'a vertical stub leaves the parent');
+        $this->assertSame(1, substr_count($stub, '│'), 'exactly one drop under a single child');
+        $this->assertSame($parentCol, strpos($stub, '│'), 'the stub sits under the parent centre');
+
+        $childRow = array_key_first(array_filter($rows, static fn(string $r): bool => (bool) preg_match('/\[\s*OnlyChild\s*\]/', $r)));
+        $this->assertNotNull($childRow, 'the child label is painted');
+        $this->assertGreaterThan($parentRow + 1, $childRow);
+        preg_match('/\[\s*OnlyChild\s*\]/', $rows[$childRow], $mc, PREG_OFFSET_CAPTURE);
+        $this->assertSame(strpos($stub, '│'), $mc[0][1] + intdiv(12, 2), 'stub column meets the child centre');
+    }
+
+    public function testBridgeUsesStyleGlyphs(): void
+    {
+        $tree = (new DendrogramNode('r', 'Root'))
+            ->withChildren([new DendrogramNode('a', 'Alpha'), new DendrogramNode('b', 'Beta')]);
+
+        $rounded = self::plainRows(Dendrogram::new()->withRoot($tree)->withStyle('rounded')->setSize(60, 20)->render());
+        $double = self::plainRows(Dendrogram::new()->withRoot($tree)->withStyle('double')->setSize(60, 20)->render());
+
+        $roundedBridge = implode('', array_filter($rounded, static fn(string $r): bool => str_contains($r, '╭') && str_contains($r, '╮')));
+        $this->assertStringContainsString('┬', $roundedBridge, 'rounded style keeps the single-weight tee');
+        $doubleBridge = implode('', array_filter($double, static fn(string $r): bool => str_contains($r, '╔') && str_contains($r, '╗')));
+        $this->assertStringContainsString('╥', $doubleBridge, 'double style carries its heavy tee');
+    }
+
+    /**
+     * Render rows with SGR stripped - connectors are always colored by
+     * default, geometry pins need plain cells.
+     *
+     * @return list<string>
+     */
+    private static function plainRows(string $block): array
+    {
+        return explode("\n", (string) preg_replace('/\x1b\[[0-9;]*m/', '', $block));
+    }
+
     /**
      * Widest painted line in cells - the geometry claim behind D-86.
      */

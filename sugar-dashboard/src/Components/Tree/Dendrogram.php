@@ -172,11 +172,10 @@ final class Dendrogram implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     private function renderVertical(int $width, int $height): string
     {
-        [$tl, $tr, $bl, $br, $_h, $v] = $this->getStyleChars();
+        [$tl, $tr, $bl, $br, $h, $v] = $this->getStyleChars();
 
         $nodeColor = $this->nodeColor ?? Color::hex('#89B4FA');
         $lineColor = $this->lineColor ?? Color::hex('#45475A');
-        $textColor = $this->textColor ?? Color::hex('#CDD6F4');
         $leafColor = $this->leafColor ?? Color::hex('#A6E3A1');
 
         $result = '';
@@ -189,12 +188,52 @@ final class Dendrogram implements \SugarCraft\Dashboard\Foundation\SizedItem
         $chartHeight = $height - 4;
         $chartWidth = $width - 4;
 
-        // Calculate tree layout
+        // Tree layout (finding sugar-dashboard-157): the old walk computed
+        // child coordinates ($_childY/$_lineStartX/$_lineEndX) and then
+        // never emitted them - the whole tree poured out as one flat stream
+        // of space-padded boxes with no rows at all. The vertical path now
+        // paints a row canvas: leaves take equal slots left to right, an
+        // internal node centres over its children, and every parent gap is
+        // bridged with a corner-span-tee row plus vertical drops onto the
+        // children (the class name finally promises what it renders).
         $depth = $this->root->depth();
         $levelHeight = max(2, intval($chartHeight / max(1, $depth)));
 
-        // Render tree from top to bottom
-        $this->renderTreeVertical($result, $this->root, 0, $chartWidth, 0, $levelHeight, $nodeColor, $lineColor, $textColor, $leafColor);
+        // Tee glyph where the parent stub lands on the sibling span; the
+        // frame corners already destructured above double as the down-face
+        // ends of the span in every style.
+        $tee = match ($this->style) {
+            'double' => '╥',
+            'bold' => '┯',
+            'empty' => ' ',
+            default => '┬',
+        };
+
+        /** @var array<int, list<array{0:int,1:string,2:?Color}>> $canvas */
+        $canvas = [];
+        $leafCursor = 0;
+        $this->paintVerticalTree(
+            $this->root,
+            0,
+            $levelHeight,
+            $chartWidth / max(1, count($this->collectLeaves($this->root))),
+            $leafCursor,
+            $canvas,
+            $chartWidth,
+            $nodeColor,
+            $lineColor,
+            $leafColor,
+            $tl,
+            $tr,
+            $h,
+            $v,
+            $tee,
+        );
+
+        ksort($canvas);
+        foreach ($canvas as $rowSegments) {
+            $result .= $this->paintCanvasRow($rowSegments, $chartWidth) . "\n";
+        }
 
         // Bottom border (finding 085 forensics: the tree walk leaves no
         // trailing break on its last row, so the border used to glue
@@ -209,94 +248,147 @@ final class Dendrogram implements \SugarCraft\Dashboard\Foundation\SizedItem
     }
 
     /**
-     * Render vertical tree structure.
+     * Paint one subtree onto the vertical row canvas, returning the column
+     * (in cells) the node centres on.
+     *
+     * Leaves consume equal slots left to right; an internal node centres
+     * over its children and gets its bridge row - down-face corner, span,
+     * tee where the parent stub lands - plus vertical drops from the bridge
+     * down to each child's row. Segments are appended in any order; the row
+     * composer sorts them, skips forward over overlaps and clips the chart.
+     *
+     * @param array<int, list<array{0:int,1:string,2:?\SugarCraft\Core\Util\Color}>> $canvas
      */
-    private function renderTreeVertical(
-        string &$result,
+    private function paintVerticalTree(
         DendrogramNode $node,
         int $depth,
-        int $maxWidth,
-        int $startX,
         int $levelHeight,
-        Color $nodeColor,
-        Color $lineColor,
-        Color $textColor,
-        Color $leafColor,
-    ): void {
+        float $slotWidth,
+        int &$leafCursor,
+        array &$canvas,
+        int $chartWidth,
+        \SugarCraft\Core\Util\Color $nodeColor,
+        \SugarCraft\Core\Util\Color $lineColor,
+        \SugarCraft\Core\Util\Color $leafColor,
+        string $tl,
+        string $tr,
+        string $h,
+        string $v,
+        string $tee,
+    ): float {
         if ($depth > 10) {
-            return; // Prevent infinite recursion
+            return 0.0; // Depth guard, kept from the old walk
         }
 
         $isLeaf = count($node->children) === 0;
-        $color = $node->color ?? ($isLeaf ? $leafColor : $nodeColor);
 
-        // Calculate node position
-        $nodeX = $startX + intval($maxWidth / 2);
-        $nodeY = $depth * $levelHeight + 1;
-
-        // Draw connecting lines to children
-        if (!$isLeaf) {
-            $childPositions = [];
-            $childWidth = intval($maxWidth / count($node->children));
-
-            foreach ($node->children as $index => $child) {
-                $childX = $startX + intval(($index + 0.5) * $childWidth);
-                $childPositions[] = $childX;
-
-                // Draw vertical line from parent to children
-                $_childY = ($depth + 1) * $levelHeight + 1;
-
-                if ($lineColor !== null) {
-                    $result .= $lineColor->toFg(ColorMode::profile());
-                }
-
-                // Draw horizontal line at child level connecting all children
-                $_lineStartX = min($childPositions);
-                $_lineEndX = max($childPositions);
-            }
-
-            // Draw vertical connector from parent center to child line
-            if (count($childPositions) > 0) {
-                $midX = array_sum($childPositions) / count($childPositions);
-                // Connector line (using box drawing chars)
-            }
-        }
-
-        // Draw node box
-        if ($color !== null) {
-            $result .= $color->toFg(ColorMode::profile());
-        }
-
-        // Node representation
-        $nodeLabel = $this->showLabels ? mb_substr($node->label, 0, $this->nodeWidth - 2, 'UTF-8') : '';
-        $nodeWidth = $this->nodeWidth;
-
-        $result .= str_repeat(' ', intval($nodeX - strlen($nodeLabel) / 2));
-        $result .= '[' . str_pad($nodeLabel, $nodeWidth - 2, ' ', STR_PAD_BOTH) . ']';
-
-        if ($color !== null) {
-            $result .= Ansi::reset();
-        }
-
-        // Draw child subtrees
-        if (!$isLeaf) {
-            $childWidth = intval($maxWidth / count($node->children));
-            foreach ($node->children as $index => $child) {
-                $childStartX = $startX + $index * $childWidth;
-                $this->renderTreeVertical(
-                    $result,
+        if ($isLeaf) {
+            $col = ($leafCursor + 0.5) * $slotWidth;
+            $leafCursor++;
+            $childCols = [];
+        } else {
+            $childCols = [];
+            foreach ($node->children as $child) {
+                $childCols[] = $this->paintVerticalTree(
                     $child,
                     $depth + 1,
-                    $childWidth,
-                    $childStartX,
                     $levelHeight,
+                    $slotWidth,
+                    $leafCursor,
+                    $canvas,
+                    $chartWidth,
                     $nodeColor,
                     $lineColor,
-                    $textColor,
                     $leafColor,
+                    $tl,
+                    $tr,
+                    $h,
+                    $v,
+                    $tee,
                 );
             }
+            $col = array_sum($childCols) / count($childCols);
         }
+
+        $row = $depth * $levelHeight;
+        $half = intdiv($this->nodeWidth, 2);
+        $boxX = max(0, min((int) round($col) - $half, max(0, $chartWidth - $this->nodeWidth)));
+
+        $label = $this->showLabels ? mb_substr($node->label, 0, $this->nodeWidth - 2, 'UTF-8') : '';
+        $box = '[' . str_pad($label, $this->nodeWidth - 2, ' ', STR_PAD_BOTH) . ']';
+        $canvas[$row][] = [$boxX, $box, $node->color ?? ($isLeaf ? $leafColor : $nodeColor)];
+
+        if ($isLeaf || count($childCols) === 0) {
+            return $col;
+        }
+
+        $childRow = $row + $levelHeight;
+        $bridge = $row + 1;
+        if ($bridge >= $childRow) {
+            return $col; // No gap row left; children sit directly under the parent
+        }
+
+        if (count($node->children) === 1) {
+            $mid = (int) round($col);
+            for ($r = $bridge; $r < $childRow; $r++) {
+                $canvas[$r][] = [$mid, $v, $lineColor];
+            }
+            return $col;
+        }
+
+        $left = (int) round(min($childCols));
+        $right = (int) round(max($childCols));
+        $mid = (int) round($col);
+
+        $span = '';
+        for ($x = max(0, $left); $x <= min($chartWidth - 1, $right); $x++) {
+            $span .= match (true) {
+                $x === max(0, $left) => $tl,
+                $x === min($chartWidth - 1, $right) => $tr,
+                $x === $mid => $tee,
+                default => $h,
+            };
+        }
+        $canvas[$bridge][] = [max(0, $left), $span, $lineColor];
+
+        for ($r = $bridge + 1; $r < $childRow; $r++) {
+            foreach ($childCols as $childCol) {
+                $canvas[$r][] = [(int) round($childCol), $v, $lineColor];
+            }
+        }
+
+        return $col;
+    }
+
+    /**
+     * Compose one canvas row from its segments: left to right with gaps as
+     * spaces, overlaps skipped forward, everything past the chart clipped.
+     *
+     * @param list<array{0:int,1:string,2:?\SugarCraft\Core\Util\Color}> $segments
+     */
+    private function paintCanvasRow(array $segments, int $chartWidth): string
+    {
+        usort($segments, static fn(array $a, array $b): int => $a[0] <=> $b[0]);
+
+        $line = '';
+        $cursor = 0;
+
+        foreach ($segments as [$x, $text, $color]) {
+            $x = max($x, $cursor);
+            if ($x >= $chartWidth) {
+                break;
+            }
+            if ($x > $cursor) {
+                $line .= str_repeat(' ', $x - $cursor);
+            }
+            $chunk = mb_substr($text, 0, $chartWidth - $x);
+            $line .= $color !== null
+                ? $color->toFg(ColorMode::profile()) . $chunk . Ansi::reset()
+                : $chunk;
+            $cursor = $x + mb_strlen($chunk);
+        }
+
+        return rtrim($line, ' ');
     }
 
     /**
