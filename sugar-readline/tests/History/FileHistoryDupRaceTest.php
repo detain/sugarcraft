@@ -106,12 +106,37 @@ final class FileHistoryDupRaceTest extends TestCase
     {
         file_put_contents($this->path, 'x'); // no trailing newline — forces the fallback
         $this->append(['x']);
-        $this->assertSame('x', file_get_contents($this->path), 'skip writes nothing, mirroring the outer guard');
+        // Finding 064 changed the shape: an unterminated 'x' is a crash
+        // fragment the rewrite DROPS, then writes the entry terminated. The
+        // old pin expected the fragment to count as the tail and be skipped,
+        // leaving "x" glued-on; either way no "xx" duplicate is ever created.
+        $this->assertSame("x\n", file_get_contents($this->path), 'fragment dropped, entry written terminated');
+    }
+
+    public function testRewriteArmDedupesAgainstTerminatedDuplicateBehindFragment(): void
+    {
+        // Fallback forced by a torn tail BEHIND a terminated duplicate: the
+        // in-lock guard answers with the last terminated line ("x"), shifts
+        // the batch, and discards the temp file without rewriting.
+        file_put_contents($this->path, "x\nfrag");
+        $this->append(['x']);
+        $this->assertSame("x\nfrag", file_get_contents($this->path), 'skip writes nothing, mirroring the outer guard');
     }
 
     public function testRewriteArmAppendsWhenTailDiffers(): void
     {
         file_put_contents($this->path, 'y');
+        $this->append(['x']);
+        // Finding 064: the unterminated 'y' is a fragment — dropped, never
+        // normalized. A glued "yx" is likewise impossible.
+        $this->assertSame("x\n", file_get_contents($this->path));
+    }
+
+    public function testRewriteArmRepairsTailAndAppendsWhenTailDiffers(): void
+    {
+        // A terminated different tail behind the fragment: guard appends,
+        // rewrite repairs the file to whole terminated records.
+        file_put_contents($this->path, "y\nfrag");
         $this->append(['x']);
         $this->assertSame("y\nx\n", file_get_contents($this->path));
     }

@@ -547,7 +547,10 @@ contains a raw newline survives a save/reload round-trip as **one** entry
 instead of splitting into two. A history file written before the escaping
 format existed can therefore have a literal `\n` two-character sequence
 decoded into a real newline on the first load — a documented consequence of
-adopting the escape format. A history path that is a **symlink** is
+adopting the escape format. An **unterminated final line** — a fragment left
+by a crash mid-write — is likewise not decoded as an entry: readers drop it,
+and the next rewrite truncates the file back to the last terminated line. A
+history path that is a **symlink** is
 refused loudly at construction and again under the write lock: without the
 check, an attacker-planted link turns every append (and the `0600` chmod)
 against, say, `~/.bashrc`.
@@ -562,8 +565,10 @@ entry; a write that cannot happen throws rather than dropping the line —
 but that guarantee covers `push()` and explicit `flush()` calls only: the
 automatic flush in `__destruct` cannot throw usefully, so it degrades to an
 `error_log` line and any queued `$deferWrites` entries are lost at exit. The
-rename makes torn reads impossible, but there is no `fsync` — a kernel crash
-can still lose the most recent writes.
+writers `fsync` the content bytes before releasing the lock (where PHP exposes
+`fsync`), so a process death cannot leave a half-flushed tail; a crash
+straddling the rename swap can roll the file back to the previous version but
+never surfaces a torn line — readers drop an unterminated final line.
 
 Hidden prompts (`withHidden()`) never push their value: a secret stays out of
 both in-memory and on-disk history, and it never enters an attached

@@ -354,17 +354,19 @@ final class FileHistoryTest extends TestCase
 
     /**
      * When the existing file lacks a trailing newline the fast-path check fails
-     * and the rewrite fallback must normalize it before appending — no glued
-     * "oldnew" line.
+     * and the rewrite fallback treats the unterminated tail as a crash
+     * fragment (finding 064): it is DROPPED, not terminated-and-promoted to an
+     * entry — and nothing is ever glued into the new line.
      */
-    public function testAppendNormalizesMissingTrailingNewline(): void
+    public function testAppendDropsUnterminatedTailFragment(): void
     {
         file_put_contents($this->historyFile, 'old'); // no trailing "\n"
 
         $h = new FileHistory($this->historyFile);
+        $this->assertSame([], $h->entries(), 'load drops the unterminated fragment too');
         $h->push('new');
 
-        $this->assertSame("old\nnew\n", file_get_contents($this->historyFile));
+        $this->assertSame("new\n", file_get_contents($this->historyFile));
     }
 
     /**

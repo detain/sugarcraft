@@ -67,6 +67,15 @@ namespace SugarCraft\Readline\History;
  * contradicts its own disk (finding 063). The automatic flush() on
  * destruct downgrades to an error_log line — throwing from a destructor
  * is fatal territory.
+ *
+ * Durability (finding 064): every write that carries content fsyncs the
+ * bytes before the lock is released (where the PHP build exposes fsync),
+ * and every decode of file content — load(), the bounded merge, and the
+ * duplicate guard's tail reads — treats an unterminated final line as a
+ * crash fragment and drops it rather than accepting it as an entry. The
+ * rename swap itself is not journaled from PHP: a crash landing exactly
+ * across the switch can roll the file back to its previous version,
+ * never surface a torn line as history.
  */
 final class FileHistory extends InMemoryHistory
 {
@@ -436,8 +445,10 @@ final class FileHistory extends InMemoryHistory
      * concurrent appender cannot slip a non-terminated tail past the check.
      *
      * Fallback (also the create-from-absent path): a secure temp + rename
-     * rewrite that copies existing content, normalizes a missing trailing
-     * newline, then renames over the target. The temp file is created with
+     * rewrite that copies existing content, DROPS an unterminated crash
+     * fragment at the tail (finding 064 — the old code terminated it and
+     * thereby promoted garbage into an entry), then renames over the target.
+     * The temp file is created with
      * tempnam() (unpredictable random name) and chmod 0600 BEFORE any history
      * content is written — history can contain sensitive shell commands, so
      * this closes two holes a predictable name (.history.tmp.<pid>) left open:
@@ -495,14 +506,20 @@ final class FileHistory extends InMemoryHistory
                                 fwrite($fp, self::escapeLine($line) . "\n");
                             }
                             fflush($fp);
+                            // Durability before unlock (finding 064): the
+                            // submit pace makes the sync cheap, and without
+                            // it a crash could leave the torn tail the
+                            // readers now refuse anyway.
+                            self::syncHandle($fp);
                         }
                         flock($fp, LOCK_UN);
                         fclose($fp);
                         chmod($this->filePath, 0600);
                         return;
                     }
-                    // Missing trailing newline — release and fall through to the
-                    // normalizing rewrite below.
+                    // Missing trailing newline — release and fall through to
+                    // the rewrite below, which DROPS the torn tail fragment
+                    // instead of terminating it (finding 064).
                     flock($fp, LOCK_UN);
                     fclose($fp);
                 }
@@ -544,6 +561,16 @@ final class FileHistory extends InMemoryHistory
             $existing = stream_get_contents($rp);
             fclose($rp);
             if ($existing !== false && $existing !== '') {
+                // Torn-tail drop (finding 064): an unterminated final line is
+                // a crash fragment, not an entry. The old normalization gave
+                // it a newline and re-permanentized the garbage — it now
+                // leaves the rewrite entirely.
+                if (!str_ends_with($existing, "\n")) {
+                    $cut = strrpos($existing, "\n");
+                    $existing = $cut === false ? '' : substr($existing, 0, $cut + 1);
+                }
+            }
+            if ($existing !== false && $existing !== '') {
                 // Finding 013, rewrite arm: the tail is re-checked against the
                 // content read under the sidecar lock, exactly like the append
                 // fast path re-checks under LOCK_EX. The temp file is discarded
@@ -558,16 +585,13 @@ final class FileHistory extends InMemoryHistory
                     return;
                 }
                 fwrite($fp, $existing);
-                // Ensure file ends with newline before appending.
-                if (substr($existing, -1) !== "\n") {
-                    fwrite($fp, "\n");
-                }
             }
         }
         foreach ($lines as $line) {
             fwrite($fp, self::escapeLine($line) . "\n");
         }
         fflush($fp);
+        self::syncHandle($fp); // durability before the rename swap (finding 064)
         flock($fp, LOCK_UN);
         fclose($fp);
         // rename() can fail when tempDir and the history file sit on
@@ -665,7 +689,14 @@ final class FileHistory extends InMemoryHistory
                 $raw = stream_get_contents($rp);
                 fclose($rp);
                 if ($raw !== false && $raw !== '') {
-                    foreach (explode("\n", $raw) as $fileLine) {
+                    $fileLines = explode("\n", $raw);
+                    if (!str_ends_with($raw, "\n")) {
+                        // Torn-tail law (finding 064): the unterminated
+                        // fragment must not enter the merged rewrite — that
+                        // would re-permanentize crash garbage as an entry.
+                        array_pop($fileLines);
+                    }
+                    foreach ($fileLines as $fileLine) {
                         $decoded = self::unescapeLine(rtrim($fileLine, "\r"));
                         if ($decoded !== '') {
                             $existing[] = $decoded;
@@ -737,6 +768,7 @@ final class FileHistory extends InMemoryHistory
             fwrite($fp, self::escapeLine($entry) . "\n");
         }
         fflush($fp);
+        self::syncHandle($fp); // durability before the rename swap (finding 064)
         flock($fp, LOCK_UN);
         fclose($fp);
         if (!@rename($tempFile, $this->filePath)) {
@@ -747,6 +779,21 @@ final class FileHistory extends InMemoryHistory
         // send the chmod to its target; refuse rather than follow.
         if (!is_link($this->filePath)) {
             chmod($this->filePath, 0600);
+        }
+    }
+
+    /**
+     * Push written bytes to the storage layer before the lock that guards
+     * them is released (finding 064). Guarded on function_exists: the call
+     * is the durability seam — builds without fsync() (or mocks that hide
+     * it) degrade to the fflush-then-unlock behaviour, never fatal.
+     *
+     * @param resource $fp
+     */
+    private static function syncHandle($fp): void
+    {
+        if (\function_exists('fsync')) {
+            @\fsync($fp);
         }
     }
 
@@ -817,6 +864,12 @@ final class FileHistory extends InMemoryHistory
         }
         $lines = [];
         while (($line = fgets($fp)) !== false) {
+            if (!str_ends_with($line, "\n")) {
+                // Torn-tail law (finding 064): an unterminated final line is
+                // a crash fragment — every writer path terminates, so it is
+                // dropped rather than decoded into a bogus entry.
+                break;
+            }
             $decoded = self::unescapeLine(rtrim($line, "\r\n"));
             if ($decoded !== '') {
                 $lines[] = $decoded;
@@ -890,6 +943,17 @@ final class FileHistory extends InMemoryHistory
         $stat = fstat($fp);
         $size = $stat !== false ? (int) ($stat['size'] ?? 0) : 0;
 
+        // Torn-tail law (finding 064): an unterminated final line is a crash
+        // fragment, never the duplicate-guard's answer — and it must not
+        // screen out the append of the very entry the crash was writing.
+        // Re-aim the window at the end of the last TERMINATED line.
+        if ($size > 0) {
+            fseek($fp, -1, SEEK_END);
+            if (fread($fp, 1) !== "\n") {
+                $size = self::lastNewlineOffset($fp, $size) + 1;
+            }
+        }
+
         $chunkSize = 4096;
         $tail = '';
         $pos = $size;
@@ -926,12 +990,43 @@ final class FileHistory extends InMemoryHistory
     }
 
     /**
+     * Position of the LAST newline at or before $endPos (searched
+     * back-to-front in bounded chunks), or -1 when the file holds no
+     * terminated line at all. Companion of the torn-tail law in
+     * {@see tailLineOfStream()} (finding 064).
+     *
+     * @param resource $fp
+     */
+    private static function lastNewlineOffset($fp, int $endPos): int
+    {
+        $chunkSize = 4096;
+        $pos = $endPos;
+        while ($pos > 0) {
+            $read = (int) min($chunkSize, $pos);
+            $pos -= $read;
+            fseek($fp, $pos, SEEK_SET);
+            $buf = (string) fread($fp, $read);
+            $nl = strrpos($buf, "\n");
+            if ($nl !== false) {
+                return $pos + $nl;
+            }
+        }
+        return -1;
+    }
+
+    /**
      * Same blank-skipping tail semantics as {@see tailLineOfStream()}, from a
      * content string already in hand (the rewrite path reads the whole file
      * under the sidecar lock anyway — no second windowed pass needed).
      */
     private static function tailLineOfContent(string $content): ?string
     {
+        // Torn-tail law (finding 064): an unterminated final line is a crash
+        // fragment — the last TERMINATED line is the guard's answer.
+        if ($content !== '' && !str_ends_with($content, "\n")) {
+            $cut = strrpos($content, "\n");
+            $content = $cut === false ? '' : substr($content, 0, $cut + 1);
+        }
         $trimmed = rtrim($content, "\r\n");
         if ($trimmed === '') {
             return null;
@@ -955,9 +1050,10 @@ final class FileHistory extends InMemoryHistory
     /**
      * Clear all entries from both in-memory history and the persistence file.
      * Uses an atomic write (temp + rename), so a reader never observes a
-     * half-erased file. No fsync — a kernel crash can still lose the most
-     * recent writes (and the rename), like every other persistence path in
-     * this class; the guarantee is against torn reads, not durability.
+     * half-erased file. The empty rewrite carries no content bytes to fsync,
+     * so a kernel crash can still resurrect the previous entries — as on the
+     * other paths (finding 064), the guarantee is against torn reads, not
+     * against the loss of the swap itself.
      *
      * The temp file is created with tempnam() (unpredictable random name) and
      * chmod 0600 BEFORE writing, then renamed over the target. A predictable
@@ -970,7 +1066,8 @@ final class FileHistory extends InMemoryHistory
     {
         $this->withWriteLock(function (): void {
             // Atomic write (temp + rename) so a reader never sees a half-erased
-            // file; no fsync, so a kernel crash can still lose recent writes.
+            // file; the empty write carries no content bytes to fsync, so a
+            // kernel crash can still resurrect the previous entries.
             // The memory swap (finding 063) rides AFTER this commit: a caught
             // lock/replace failure leaves entries, queue and file all intact —
             // a half-clear is exactly the divergence persist-then-swap kills.
