@@ -534,6 +534,10 @@ final class Diff
         $walk = 0;
         $oldIdx = 0;
         $newIdx = 0;
+        // sugar-diff-001: presentation shift for both number columns; 0 keeps
+        // every header and row number byte-identical to the ported engine.
+        $oldOff = $options->oldOffset;
+        $newOff = $options->newOffset;
 
         foreach ($groups as [$groupStart, $groupEnd]) {
             $start = max(0, $groupStart - $context);
@@ -560,7 +564,7 @@ final class Diff
                     $body[] = new Line(
                         kind: LineKind::Delete,
                         text: $beforeLines[$oldIdx],
-                        oldNumber: $oldIdx + 1,
+                        oldNumber: $oldIdx + 1 + $oldOff,
                         newNumber: null,
                     );
                     $oldIdx++;
@@ -570,7 +574,7 @@ final class Diff
                         kind: LineKind::Insert,
                         text: $afterLines[$newIdx],
                         oldNumber: null,
-                        newNumber: $newIdx + 1,
+                        newNumber: $newIdx + 1 + $newOff,
                     );
                     $newIdx++;
                     $newLen++;
@@ -578,8 +582,8 @@ final class Diff
                     $body[] = new Line(
                         kind: LineKind::Equal,
                         text: $beforeLines[$oldIdx],
-                        oldNumber: $oldIdx + 1,
-                        newNumber: $newIdx + 1,
+                        oldNumber: $oldIdx + 1 + $oldOff,
+                        newNumber: $newIdx + 1 + $newOff,
                     );
                     $oldIdx++;
                     $newIdx++;
@@ -596,9 +600,9 @@ final class Diff
             // counter STATE at the first row, i.e. one past the preceding line
             // when the hunk opens on an insertion, hence the -1.
             $hunks[] = new Hunk(
-                oldStart: $oldLen === 0 ? max(0, $oldAnchor - 1) : $oldAnchor,
+                oldStart: $oldLen === 0 ? max(0, $oldAnchor + $oldOff - 1) : $oldAnchor + $oldOff,
                 oldLines: $oldLen,
-                newStart: $newLen === 0 ? max(0, $newAnchor - 1) : $newAnchor,
+                newStart: $newLen === 0 ? max(0, $newAnchor + $newOff - 1) : $newAnchor + $newOff,
                 newLines: $newLen,
                 lines: $body,
             );

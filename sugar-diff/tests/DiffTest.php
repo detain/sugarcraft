@@ -325,6 +325,39 @@ final class DiffTest extends TestCase
         $this->assertSame(1, $diff->hunks[0]->removedCount());
     }
 
+    public function testOffsetsShiftHunkNumberingWithoutTouchingText(): void
+    {
+        // sugar-diff-001: the consumer's hunk-relocation use case as a first-
+        // class option — headers and row numbers shift together, payload
+        // bytes never do, and the '@@' grammar stays inside the library.
+        $shifted = Diff::compute("a\nb\nc\n", "a\nX\nc\n", DiffOptions::new()->withOldOffset(10)->withNewOffset(20));
+
+        $this->assertStringContainsString("@@ -11,3 +21,3 @@\n", $shifted->unified('f'));
+        $rows = $shifted->hunks[0]->lines();
+        $this->assertSame(11, $rows[0]->oldNumber);
+        $this->assertSame(21, $rows[0]->newNumber);
+        $this->assertSame(12, $rows[1]->oldNumber);
+        $this->assertSame('b', $rows[1]->text);
+        $this->assertSame('X', $rows[2]->text);
+        $this->assertNull($rows[2]->oldNumber);
+        $this->assertSame(22, $rows[2]->newNumber);
+
+        // Offset 0 (the default) keeps every header byte-identical to the
+        // ported engine — GnuHunkHeaderParityTest holds the oracle shape.
+        $this->assertStringContainsString("@@ -1,3 +1,3 @@\n", Diff::compute("a\nb\nc\n", "a\nX\nc\n")->unified('f'));
+    }
+
+    public function testOffsetsShiftZeroLengthSideAnchors(): void
+    {
+        // A zero-length side anchors at the line the hunk sits AFTER; the
+        // shift applies to that anchor too, keeping the patch applicable.
+        $insertTop = Diff::compute("a\nb\n", "x\na\nb\n", DiffOptions::new()->withContextLines(0)->withNewOffset(2));
+        $this->assertStringContainsString("@@ -0,0 +3 @@\n", $insertTop->unified('f'));
+
+        $deleteTop = Diff::compute("x\na\n", "a\n", DiffOptions::new()->withContextLines(0)->withOldOffset(4));
+        $this->assertStringContainsString("@@ -5 +0,0 @@\n", $deleteTop->unified('f'));
+    }
+
     public function testIgnoreWhitespaceFoldsComparisonOnly(): void
     {
         $options = DiffOptions::new()->withIgnoreWhitespace();

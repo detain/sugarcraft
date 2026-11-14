@@ -51,6 +51,8 @@ final class DiffOptions
         public readonly bool $ignoreCase,
         public readonly bool $noNewlineAnnotation,
         public readonly bool $devNullOnEmptySide,
+        public readonly int $oldOffset,
+        public readonly int $newOffset,
     ) {}
 
     /** The faithful-port defaults: 3 context lines, exact comparison, plain headers. */
@@ -63,6 +65,8 @@ final class DiffOptions
             ignoreCase: false,
             noNewlineAnnotation: false,
             devNullOnEmptySide: false,
+            oldOffset: 0,
+            newOffset: 0,
         );
     }
 
@@ -119,7 +123,25 @@ final class DiffOptions
         return $this->mutate(['devNullOnEmptySide' => $on]);
     }
 
-    /** @param array{contextLines?:int,maxLcsCells?:int,ignoreWhitespace?:bool,ignoreCase?:bool,noNewlineAnnotation?:bool,devNullOnEmptySide?:bool} $changes */
+    /**
+     * Shift every old-side number (hunk headers and row line numbers alike)
+     * by this many lines; negative requests clamp to 0. Lets a consumer
+     * present a hunk as living further down a file — the relocation the
+     * candy-code diff window used to do by regexing the private `@@` grammar
+     * — without the grammar ever leaving the library (sugar-diff-001).
+     */
+    public function withOldOffset(int $lines): self
+    {
+        return $this->mutate(['oldOffset' => max(0, $lines)]);
+    }
+
+    /** Shift every new-side number by this many lines; negative requests clamp to 0. */
+    public function withNewOffset(int $lines): self
+    {
+        return $this->mutate(['newOffset' => max(0, $lines)]);
+    }
+
+    /** @param array{contextLines?:int,maxLcsCells?:int,ignoreWhitespace?:bool,ignoreCase?:bool,noNewlineAnnotation?:bool,devNullOnEmptySide?:bool,oldOffset?:int,newOffset?:int} $changes */
     private function mutate(array $changes = []): self
     {
         return new self(
@@ -129,6 +151,8 @@ final class DiffOptions
             ignoreCase: $changes['ignoreCase'] ?? $this->ignoreCase,
             noNewlineAnnotation: $changes['noNewlineAnnotation'] ?? $this->noNewlineAnnotation,
             devNullOnEmptySide: $changes['devNullOnEmptySide'] ?? $this->devNullOnEmptySide,
+            oldOffset: $changes['oldOffset'] ?? $this->oldOffset,
+            newOffset: $changes['newOffset'] ?? $this->newOffset,
         );
     }
 }

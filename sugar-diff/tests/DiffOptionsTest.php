@@ -26,6 +26,16 @@ final class DiffOptionsTest extends TestCase
         $this->assertFalse($options->ignoreCase);
         $this->assertFalse($options->noNewlineAnnotation);
         $this->assertFalse($options->devNullOnEmptySide);
+        $this->assertSame(0, $options->oldOffset);
+        $this->assertSame(0, $options->newOffset);
+    }
+
+    public function testOffsetsClampAtZero(): void
+    {
+        $this->assertSame(0, DiffOptions::new()->withOldOffset(-9)->oldOffset);
+        $this->assertSame(0, DiffOptions::new()->withNewOffset(-9)->newOffset);
+        $this->assertSame(2, DiffOptions::new()->withOldOffset(2)->oldOffset);
+        $this->assertSame(3, DiffOptions::new()->withNewOffset(3)->newOffset);
     }
 
     public function testContextLinesClampAtZero(): void
@@ -63,6 +73,8 @@ final class DiffOptionsTest extends TestCase
             'withIgnoreCase' => $base->withIgnoreCase(),
             'withNoNewlineAnnotation' => $base->withNoNewlineAnnotation(),
             'withDevNullOnEmptySide' => $base->withDevNullOnEmptySide(),
+            'withOldOffset' => $base->withOldOffset(2),
+            'withNewOffset' => $base->withNewOffset(3),
         ];
 
         foreach ($cases as $name => $option) {
@@ -72,6 +84,8 @@ final class DiffOptionsTest extends TestCase
             $this->assertSame($name === 'withIgnoreCase', $option->ignoreCase);
             $this->assertSame($name === 'withNoNewlineAnnotation', $option->noNewlineAnnotation);
             $this->assertSame($name === 'withDevNullOnEmptySide', $option->devNullOnEmptySide);
+            $this->assertSame($name === 'withOldOffset' ? 2 : 0, $option->oldOffset);
+            $this->assertSame($name === 'withNewOffset' ? 3 : 0, $option->newOffset);
         }
     }
 
