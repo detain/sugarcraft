@@ -44,6 +44,13 @@ final class Surface
     /** Memo for {@see canonical()}; bounded so a hostile stream cannot grow it forever. */
     private const MEMO_LIMIT = 4096;
 
+    /**
+     * Candidate bytes for the control sweep in {@see put()}: every byte the
+     * sweep can strip, plus the \xc2 lead of the C1 pairs it matches. A
+     * string holding none of them cannot be changed by the sweep at all.
+     */
+    private const CONTROL_CANDIDATES = "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f\x7f\xc2";
+
     /** @var array<string, string> */
     private static array $memo = [];
 
@@ -97,7 +104,15 @@ final class Surface
         if ($text === '' || $y < $clip->y || $y >= $clip->bottom()) {
             return 0;
         }
-        $text = (string) preg_replace('/[\x00-\x1f\x7f]|\xc2[\x80-\x9f]/', '', $text);
+        // Finding 152: almost everything painted through here is clean text,
+        // and paying the full regex walk per put was hot. strpbrk is one
+        // C-level scan against the candidate bytes (verified binary-safe
+        // for the NUL in the needle on PHP 8.3); only candidates take the
+        // exact sweep, and a false positive lands on that same sweep, so
+        // the guarded and unguarded paths cannot disagree.
+        if (strpbrk($text, self::CONTROL_CANDIDATES) !== false) {
+            $text = (string) preg_replace('/[\x00-\x1f\x7f]|\xc2[\x80-\x9f]/', '', $text);
+        }
         $sgr = self::canonical($sgr);
         $col = $x;
         $len = strlen($text);
@@ -313,7 +328,13 @@ final class Surface
             return self::$memo[$sgr];
         }
         if (count(self::$memo) >= self::MEMO_LIMIT) {
-            self::$memo = [];
+            // Finding 153: the old cliff emptied the entire memo the moment
+            // a stream walked past the ceiling — even the working set the
+            // next call would need again. Insertion order is recency order
+            // here, so dropping the older half is an honest oldest-half
+            // eviction: the recent half survives, the bound holds, and the
+            // refill is halved instead of total.
+            self::$memo = array_slice(self::$memo, intdiv(self::MEMO_LIMIT, 2), null, true);
         }
 
         return self::$memo[$sgr] = self::emit(self::fold(self::PLAIN, $sgr));

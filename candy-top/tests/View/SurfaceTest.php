@@ -149,4 +149,26 @@ final class SurfaceTest extends TestCase
         $this->assertSame("\x1b[1;32m", $s->style(0, 0));
         $this->assertSame("\x1b[31m", $s->style(1, 0));
     }
+
+    public function testTheCanonicalMemoEvictsTheOlderHalfNotTheWholeTable(): void
+    {
+        // Finding 153: walking past the 4096-entry ceiling used to empty
+        // the memo in one cliff. The eviction is only observable in what
+        // the cache HOLDS — every public answer is identical either way —
+        // so the pin reaches the memo through reflection, which is exactly
+        // the surface the finding is about.
+        $memo = new \ReflectionProperty(Surface::class, 'memo');
+        $memo->setValue(null, []);
+        $keys = [];
+        for ($i = 0; $i < 4097; $i++) {
+            $keys[$i] = "\x1b[38;2;0;0;{$i}m";
+            Surface::canonical($keys[$i]);
+        }
+        $held = $memo->getValue();
+        self::assertCount(2049, $held, 'the surviving 2048 plus the key that forced the eviction');
+        self::assertArrayNotHasKey($keys[0], $held, 'the older half is dropped');
+        self::assertArrayHasKey($keys[4095], $held, 'the recent working set survives the eviction');
+        self::assertArrayHasKey($keys[4096], $held);
+        $memo->setValue(null, []);
+    }
 }

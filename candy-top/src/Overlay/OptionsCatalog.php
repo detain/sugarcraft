@@ -104,13 +104,35 @@ final class OptionsCatalog
     }
 
     /**
+     * Findings 154: the catalog is a pure function of the constants above,
+     * but every geometry() pass (paint, click, buttons — several per frame)
+     * re-diffed and re-listed it. The diffs of constant tables against
+     * constant lists are themselves constant per $gpu flag, so each is
+     * derived once per process and shared; PHP arrays are value types, so
+     * callers cannot corrupt the cached lists through the return.
+     *
+     * @var array<string, list<string>>
+     */
+    private static array $categoriesMemo = [];
+
+    /** @var array<string, list<string>> */
+    private static array $entriesMemo = [];
+
+    /** @var array<string, int> */
+    private static array $maxItemsMemo = [];
+
+    /**
      * The tabs shown: every category, gpu only with a GPU (#1411 order).
      *
      * @return list<string>
      */
     public static function categories(bool $gpu): array
     {
-        return $gpu ? self::CATEGORIES : array_values(array_diff(self::CATEGORIES, ['gpu']));
+        $key = $gpu ? 'gpu' : 'plain';
+
+        return self::$categoriesMemo[$key] ??= $gpu
+            ? self::CATEGORIES
+            : array_values(array_diff(self::CATEGORIES, ['gpu']));
     }
 
     /**
@@ -121,6 +143,16 @@ final class OptionsCatalog
      * @return list<string>
      */
     public static function entries(string $category, bool $gpu): array
+    {
+        $key = $category . '|' . ($gpu ? 'gpu' : 'plain');
+
+        return self::$entriesMemo[$key] ??= self::deriveEntries($category, $gpu);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function deriveEntries(string $category, bool $gpu): array
     {
         $entries = self::TABLE[$category] ?? [];
 
@@ -167,12 +199,16 @@ final class OptionsCatalog
     /** The largest tab (btop `max_items`, headings included) — sizes the menu box. */
     public static function maxItems(bool $gpu): int
     {
+        $key = $gpu ? 'gpu' : 'plain';
+        if (isset(self::$maxItemsMemo[$key])) {
+            return self::$maxItemsMemo[$key];
+        }
         $max = 0;
         foreach (self::categories($gpu) as $cat) {
             $max = max($max, count(self::entries($cat, $gpu)));
         }
 
-        return $max;
+        return self::$maxItemsMemo[$key] = $max;
     }
 
     /** True for an int option (btop isInt: `←`/`→` step and `↵` edits). */

@@ -771,8 +771,18 @@ final class App implements Model
     /** The boxes, panels and clock without any menu. Caller checks framed(). */
     private function frame(): Surface
     {
+        // Finding 151: the clock text, its reservation and the width they
+        // reserve were rebuilt at every call site — twice a frame here (the
+        // chrome pass and the clock pass) and three times more per click
+        // through chromeButtons()'s hit cascade. One frame lives and dies
+        // with a single wall time (update() advances $this->now once per
+        // tick), so the triple is computed exactly once per call and the
+        // passes share it.
         $surface = Surface::new($this->cols, $this->rows, $this->ink->base());
-        FrameBuilder::paintChrome($surface, $this->layout, $this->ink, $this->config, $this->host, $this->preset, FrameBuilder::clockWidth($this->layout, $this->clockText(), $this->clockReserved()));
+        $clockText = $this->clockText();
+        $clockReserved = $this->clockReserved();
+        $clockWidth = FrameBuilder::clockWidth($this->layout, $clockText, $clockReserved);
+        FrameBuilder::paintChrome($surface, $this->layout, $this->ink, $this->config, $this->host, $this->preset, $clockWidth);
         $border = FrameBuilder::border($this->config);
         foreach ($this->layout->ordered() as $box => $rect) {
             $panel = $this->panelFor($box);
@@ -781,7 +791,7 @@ final class App implements Model
                 new PanelFrame($this->layout, $rect, $this->ink, $border, $this->config, $this->host, $box),
             );
         }
-        FrameBuilder::paintClock($surface, $this->layout, $this->ink, $this->config, $this->clockText(), $this->clockReserved());
+        FrameBuilder::paintClock($surface, $this->layout, $this->ink, $this->config, $clockText, $clockReserved);
         BorderFlow::paint($surface, $this->layout, $this->ink, $this->config);
 
         return $surface;
@@ -928,20 +938,25 @@ final class App implements Model
         }
         $y = $this->layout->cpuBottom ? $cpu->bottom() - 1 : $cpu->y;
         $len = strlen($this->config->updateMs() . 'ms');
+        // Finding 151: one snapshot of the clock triple for the whole
+        // cascade — the ctr, vms and ipmi zones all needed the same
+        // clockWidth, and each had been rebuilding the text and the
+        // reservation (a panel walk) just to ask for it.
+        $clockWidth = FrameBuilder::clockWidth($this->layout, $this->clockText(), $this->clockReserved());
 
         return [
             'm' => [$cpu->x + 11, $y, Width::string(Lang::t('button.menu')), 1],
             'p' => [$cpu->x + 17, $y, Width::string(Lang::t('button.preset')) + 2, 1],
             // btop PR #1873 `{button_y, x + 27, 1, 5}`, only where it is drawn (or over the engine label).
-            ...(($ctr = FrameBuilder::ctrZone($cpu, $y, $this->host->containerEngine, FrameBuilder::clockWidth($this->layout, $this->clockText(), $this->clockReserved()))) !== null ? ['x' => $ctr] : []),
+            ...(($ctr = FrameBuilder::ctrZone($cpu, $y, $this->host->containerEngine, $clockWidth)) !== null ? ['x' => $ctr] : []),
             // The VM dashboard's `vms` button, right after `x ctr` (VM hosts, or while shown).
-            ...(($vms = FrameBuilder::vmsZone($cpu, $y, $this->host->containerEngine, FrameBuilder::clockWidth($this->layout, $this->clockText(), $this->clockReserved()), $this->host->vmHost || VmsMode::active($this->config->shownBoxes()))) !== null ? ['v' => $vms] : []),
+            ...(($vms = FrameBuilder::vmsZone($cpu, $y, $this->host->containerEngine, $clockWidth, $this->host->vmHost || VmsMode::active($this->config->shownBoxes()))) !== null ? ['v' => $vms] : []),
             // The ipmi box's `IPMI` button, after `vms` (hosts with a BMC device, or while shown).
             ...(($ipmi = FrameBuilder::ipmiZone(
                 $cpu,
                 $y,
                 $this->host->containerEngine,
-                FrameBuilder::clockWidth($this->layout, $this->clockText(), $this->clockReserved()),
+                $clockWidth,
                 $this->host->vmHost || VmsMode::active($this->config->shownBoxes()),
                 $this->host->bmcHost || \in_array('ipmi', $this->config->shownBoxes(), true),
             )) !== null ? [self::IPMI_KEY => $ipmi] : []),
