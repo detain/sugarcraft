@@ -327,6 +327,17 @@ final class Cli
                 return self::EXIT_USAGE;
             }
 
+            // A directory argument is the classic first-run confusion: the
+            // library's is_file() failure reports it as "File not found:
+            // /tmp/dir", which reads like a typo (candy-image-031). Name the
+            // real problem app-side, on both decode legs, without touching
+            // sugar-image's throw roster (a lib-side split is their lane).
+            if (\is_dir($file)) {
+                self::err($stderr, Lang::t('cli.not_a_file', ['path' => $file]));
+
+                return self::EXIT_INPUT;
+            }
+
             // The animation path steers only the viewport box: --width/--height/
             // --size apply to it, while the render dials below speak only to the
             // still-image path and would be silently dropped. Refuse the

@@ -425,6 +425,29 @@ final class CliTest extends TestCase
         $this->assertSame('', $out);
     }
 
+    /**
+     * candy-image-031: a directory argument is refused as "not a regular
+     * file", not disguised as a typo. Both decode legs (still and
+     * --animate) share the one app-side precheck, upstream of the lib's
+     * file_not_found wording.
+     */
+    public function testDirectoryArgumentIsRefusedAsNotARegularFile(): void
+    {
+        $dir = sys_get_temp_dir();
+
+        [$exit, $out, $err] = self::drive([$dir]);
+
+        $this->assertSame(Cli::EXIT_INPUT, $exit);
+        $this->assertStringContainsString('not a regular file: ' . $dir, $err);
+        $this->assertStringNotContainsString('File not found', $err, 'a directory must not be misreported as a typo');
+        $this->assertSame('', $out);
+
+        [$animateExit, , $animateErr] = self::drive(['--animate', $dir]);
+
+        $this->assertSame(Cli::EXIT_INPUT, $animateExit);
+        $this->assertStringContainsString('not a regular file: ' . $dir, $animateErr);
+    }
+
     public function testUndecodableFileExitsInput(): void
     {
         if (!extension_loaded('gd')) {
