@@ -128,14 +128,15 @@ final class LogoTest extends TestCase
     }
 
     /**
-     * Ingress contract: art is plain text. Escapes and controls die, line
-     * feeds survive (they ARE the layout), so a forged splash cannot ride a
+     * Ingress contract: art is plain text. Escapes and controls die (TAB
+     * folds to one space so word boundaries survive — SC-HT2), line feeds
+     * survive (they ARE the layout), so a forged splash cannot ride a
      * caller's logo page onto the terminal.
      */
     public function testFromAsciiStripsEscapesButKeepsLineStructure(): void
     {
         $logo = Logo::fromAscii("a\x1b[2Jb\nc\td\r\x1b]0;pwn\x07e");
-        $this->assertSame("ab\ncde", $logo->render());
+        $this->assertSame("ab\nc de", $logo->render());
     }
 
     /**

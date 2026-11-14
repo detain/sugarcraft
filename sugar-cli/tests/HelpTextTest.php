@@ -369,7 +369,9 @@ final class HelpTextTest extends TestCase
     {
         $page = "USAGE\x1b[2J\n  my\ta [flags]\r\n\x07FLAGS\n  -v  verbose\n";
 
-        $this->assertSame("USAGE\n  mya [flags]\nFLAGS\n  -v  verbose\n", HelpText::renderPage($page));
+        // TAB folds to a space (word boundary preserved, SC-HT2), BEL is
+        // deleted, CR is dropped so CRLF yields a bare LF row.
+        $this->assertSame("USAGE\n  my a [flags]\nFLAGS\n  -v  verbose\n", HelpText::renderPage($page));
     }
 
     /**

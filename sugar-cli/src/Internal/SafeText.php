@@ -118,16 +118,29 @@ final class SafeText
      * {@see line()} would remove still goes — escape sequences via
      * {@see Ansi::strip()}, the remaining C0 controls and DEL — except the
      * line feed (0x0a), which survives so the page keeps its rows. Tab
-     * (0x09) and carriage return (0x0d) are deliberately NOT exempt: tabs
-     * render at terminal-dependent widths a cell-grid cannot account for,
-     * and dropping CR means CRLF input normalizes to bare LF rows instead
-     * of leaving a stray control at each row end.
+     * (0x09) folds to a single space before that strip, matching the
+     * control-run→space behaviour of {@see line()}: silently DELETING the
+     * tab fused the words it separated (`clone\tfast` came out as
+     * `clonefast`), so the fold keeps the word boundary while removing the
+     * terminal-dependent width a cell-grid cannot account for. A run of
+     * tabs folds to one space too. Carriage return (0x0d) stays dropped:
+     * CRLF input normalizes to bare LF rows instead of leaving a stray
+     * control at each row end.
      *
      * @internal For the page-preserving presenters (HelpText::renderPage).
      */
     public static function page(string $s): string
     {
-        $stripped = preg_replace('/[\x00-\x09\x0b-\x1f\x7f]/', '', Ansi::strip($s));
+        $tabbed = preg_replace('/\t+/', ' ', Ansi::strip($s));
+
+        if ($tabbed === null) {
+            // Unreachable by construction, same as the strip below — guarded
+            // for the same fail-loud reason: a silent null here would drop
+            // the fold and ship fused words downstream.
+            throw new \RuntimeException('SafeText::page(): tab fold failed: ' . preg_last_error_msg());
+        }
+
+        $stripped = preg_replace('/[\x00-\x09\x0b-\x1f\x7f]/', '', $tabbed);
 
         if ($stripped === null) {
             // Same fail-loud shape as {@see line()}: a single-pass

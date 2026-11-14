@@ -23,7 +23,7 @@ use SugarCraft\Style\Style;
  *
  * Art is plain text by contract: terminal escapes and control bytes in a
  * caller-supplied page are stripped at ingress (line feeds survive — they
- * ARE the layout). Color is applied once, at {@see render()} time, so
+ * ARE the layout; tabs fold to a single space so word boundaries survive). Color is applied once, at {@see render()} time, so
  * styling can never be forged through the art and repeated
  * {@see withColor()} calls replace rather than stack.
  *
@@ -52,7 +52,7 @@ final class Logo
      *
      * The art keeps its line structure and printable characters; every
      * escape sequence and control byte except LF is stripped at ingress
-     * (see the class docblock contract).
+     * (tabs fold to a single space; see the class docblock contract).
      */
     public static function fromAscii(string $ascii): self
     {

@@ -190,14 +190,34 @@ final class SafeTextTest extends TestCase
     /**
      * The page variant keeps LF rows — the layout of an authored
      * multi-line page — while stripping everything {@see SafeText::line()}
-     * strips. Tab and CR are NOT exempt: tabs render at terminal-dependent
-     * widths, and dropping CR normalizes CRLF input to bare LF rows.
+     * strips, except that TAB folds to a single space (matching line()'s
+     * control-run→space behaviour) instead of vanishing: silently deleting
+     * it fused the words around it. CR stays dropped: CRLF input normalizes
+     * to bare LF rows.
      */
     public function testPageKeepsLineFeedsAndStripsEveryOtherControl(): void
     {
         $input = "a\x1b[2Jb\nc\td\x07e\r\nf\x7fg";
 
-        $this->assertSame("ab\ncde\nfg", SafeText::page($input));
+        // Note the space sits before 'de': BEL (0x07) is DELETED (it is a
+        // control with no boundary meaning), so the folded tab's space ends
+        // up adjacent to the surviving 'd'.
+        $this->assertSame("ab\nc de\nfg", SafeText::page($input));
+    }
+
+    public function testPageTabFoldKeepsWordBoundary(): void
+    {
+        // The finding's acceptance pin: a tab between words survives as the
+        // boundary, not as terminal-dependent whitespace and not as nothing.
+        $this->assertSame('clone fast', SafeText::page("clone\tfast"));
+
+        // A run of tabs is one boundary, exactly like line() folding
+        // [\x09-\x0d]+ runs.
+        $this->assertSame('clone fast', SafeText::page("clone\t\t\tfast"));
+
+        // A tab at a row edge leaves a single space on that row — it can
+        // never join words across the newline that {@see line()} would.
+        $this->assertSame("one \ntwo", SafeText::page("one\t\ntwo"));
     }
 
     public function testPageLeavesCleanMultiLineTextIdentical(): void
