@@ -129,4 +129,47 @@ final class ConfirmTest extends TestCase
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
         self::assertCount(1, $a->history->undoStack);
     }
+
+    public function testArmDoesNotOutliveItsWarningAcrossNavigation(): void
+    {
+        // candy-git-002 (critical): on a one-row status pane d arms the
+        // discard, j is a clamp no-op that still clobbers the red warning
+        // lane, and a lone d after that used to EXECUTE the stranded arm —
+        // bytes lost on a press the user could not have read as a confirm.
+        // The arm is now bound to its warning: after the no-op move it must
+        // be gone, the next d must re-arm visibly, and only the d after
+        // that discards.
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
+        self::assertSame('discard:src/A.php', $a->pendingConfirm);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'j'));
+        self::assertNull($a->pendingConfirm, 'the arm must die with the warning it rode');
+        self::assertNull($a->error, 'the vanished warning confirms the lane really clobbered');
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
+        self::assertSame([], $g->discards, 'first d after the move may only re-arm');
+        self::assertSame('discard:src/A.php', $a->pendingConfirm);
+        self::assertStringContainsString('press d again', (string) $a->error, 're-arm must warn again');
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
+        self::assertSame(['src/A.php'], $g->discards, 'the armed-then-confirmed pair still executes');
+    }
+
+    public function testPaneSwitchKillsAStaleArm(): void
+    {
+        // Same law through the other warning-clearing lane: tab flips panes,
+        // the discard warning is gone, so the arm is gone too.
+        $g = $this->git(status: [
+            ['index_status' => ' ', 'work_status' => 'M', 'path' => 'first.txt'],
+            ['index_status' => ' ', 'work_status' => 'M', 'path' => 'second.txt'],
+        ]);
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));       // arm first.txt
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));         // -> Branches, warning clobbered
+        self::assertNull($a->pendingConfirm, 'the tab lane must drop the arm with the warning');
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));         // -> Log
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));         // -> Status again (forward cycle)
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));       // must re-arm, not execute
+        self::assertSame([], $g->discards);
+        self::assertSame('discard:first.txt', $a->pendingConfirm);
+    }
 }

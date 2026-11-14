@@ -758,7 +758,13 @@ final class App implements Model
             mergeTarget: $mergeTarget ?? $this->mergeTarget,
             showRebaseMenu: $showRebaseMenu ?? $this->showRebaseMenu,
             rebaseMenuKind: $rebaseMenuKind ?? $this->rebaseMenuKind,
-            pendingConfirm: $pendingConfirmSet ? $pendingConfirm : ($pendingConfirm ?? $this->pendingConfirm),
+            // The armed confirm and its warning are one contract: armConfirm
+            // writes the pair together, and every OTHER lane here clobbers
+            // the warning (error is a pass-through), so an arm not explicitly
+            // re-set on this transition dies with its vanished warning —
+            // navigation could otherwise strand a live armed discard that the
+            // next press executed with no visible confirm (candy-git-002).
+            pendingConfirm: $pendingConfirmSet ? $pendingConfirm : null,
             stashManager: $stashManagerSet ? $stashManager : ($stashManager ?? $this->stashManager),
             cherryPick: $cherryPickSet ? $cherryPick : ($cherryPick ?? $this->cherryPick),
             worktrees: $worktreesSet ? $worktrees : ($worktrees ?? $this->worktrees),
