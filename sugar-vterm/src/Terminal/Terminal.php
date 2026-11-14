@@ -219,11 +219,15 @@ final class Terminal
      * {@see OperationCancelledException}, so a late `data` write can no longer
      * re-enter the parser. This closes the reviewer-agreed gap where the only
      * way to stop a pump was to end the promise's *consumer*, leaving the data
-     * listener attached until the stream itself ended or errored (n3, wave-6
-     * The race is single-shot: whichever of `end`/`error`/
-     * `close`/cancel arrives first owns the one settlement (the same
-     * settle-once latch the failure paths use), and cancellation is idempotent
-     * — a `cancel()` that arrives after the pump already settled is a no-op.
+     * listener attached until the stream itself ended or errored.
+     *
+     * The race is single-shot: whichever of `end`/`error`/`close`/cancel
+     * arrives first owns the one settlement (the same settle-once latch the
+     * failure paths use), and cancellation is idempotent — a `cancel()` that
+     * arrives after the pump already settled is a no-op. A token already
+     * cancelled at registration is not an exception: its `onCancel` fires
+     * synchronously inside `feedStream` itself, so the returned promise is
+     * born rejected and the pump never reads a byte.
      * The pump never closes or pauses `$input` (the stream belongs to the
      * caller), it only stops listening. Mirrors the token-cooperative bridge the
      * sugar-async consumers use (`CancellableQuery::wrap()`): `null` leaves
@@ -231,9 +235,9 @@ final class Terminal
      * settlement paths are untouched); a non-null token rejects promptly with an
      * {@see OperationCancelledException} (a `\RuntimeException` subclass, so
      * callers already catching stream rejections catch a cancel unchanged).
-     * Because {@see CancellationToken} offers no callback unregistration, a
-     * token reused across pumps accumulates one settled-guarded closure per
-     * pump — prefer one token per pump.
+     * The pump unsubscribes its cancellation callback when it settles (the
+     * sugar-async {@see \SugarCraft\Async\Subscription} seam), so a token
+     * reused across pumps retains nothing after each pump ends.
      *
      * @param (callable(string): void)|null $respond
      *
@@ -253,11 +257,20 @@ final class Terminal
         $listeners = [];
         /** @var bool $settled single-settlement latch, by-ref'd into every listener */
         $settled = false;
-        $detach = static function () use ($input, &$listeners): void {
+        /** @var \SugarCraft\Async\Subscription|null $cancelSubscription by-ref'd so $detach drops the token registration too */
+        $cancelSubscription = null;
+        $detach = static function () use ($input, &$listeners, &$cancelSubscription): void {
             foreach ($listeners as $event => $listener) {
                 $input->removeListener($event, $listener);
             }
             $listeners = [];
+            // A settlement without this leaves the cancel closure registered
+            // for the token's lifetime — sugar-async documents the duty on
+            // onCancel's returned handle; every settle path runs $detach.
+            if ($cancelSubscription !== null) {
+                $cancelSubscription->unsubscribe();
+                $cancelSubscription = null;
+            }
         };
         $listeners['data'] = function (string $chunk) use ($respond, $deferred, $detach, &$settled): void {
             if ($settled) {
@@ -341,13 +354,13 @@ final class Terminal
             // Cooperative abort: on `cancel()` the pump detaches exactly as the
             // natural settle paths do, then rejects with the sugar-async
             // cancellation signal, so a caller holding a CancellationSource can
-            // stop the pump mid-stream instead of only ending its consumer (n3).
+            // stop the pump mid-stream instead of only ending its consumer.
             // Registered AFTER the listeners attach so an already-cancelled token
             // — whose onCancel fires synchronously — still has live listeners to
             // remove. Guarded by the same $settled latch the failure paths use,
             // so a cancel racing end/error/close loses cleanly: exactly one
             // settlement, and a reject-after-settle is ignored regardless.
-            $cancellation->onCancel(static function () use ($deferred, $detach, &$settled): void {
+            $cancelSubscription = $cancellation->onCancel(static function () use ($deferred, $detach, &$settled): void {
                 if ($settled) {
                     return;
                 }

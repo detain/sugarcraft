@@ -500,6 +500,44 @@ final class AsyncFeedTest extends TestCase
         $this->assertSame([], $stream->listeners('data'));
     }
 
+    public function testSettledPumpReleasesItsTokenRegistrationForReuse(): void
+    {
+        $source = CancellationSource::new();
+        $token = $source->token();
+        $callbacks = (new \ReflectionClass($token))->getProperty('callbacks');
+
+        $a = Terminal::new(10, 3);
+        $streamA = new ThroughStream();
+        $settlesA = 0;
+        $a->feedStream($streamA, null, $token)->then(static function () use (&$settlesA): void {
+            $settlesA++;
+        });
+        /** @var mixed $registered */
+        $registered = $callbacks->getValue($token);
+        $this->assertIsArray($registered);
+        $this->assertCount(1, $registered, 'the live pump holds the single registration');
+
+        $streamA->end(); // natural settlement — no cancel ever happens
+        $this->assertSame(1, $settlesA, 'pump A resolved exactly once');
+        /** @var mixed $afterA */
+        $afterA = $callbacks->getValue($token);
+        $this->assertIsArray($afterA);
+        $this->assertCount(0, $afterA, 'settlement unsubscribed the closure: sugar-async documents the duty on the handle onCancel returns, and a token reused across pumps must accumulate nothing');
+
+        $b = Terminal::new(10, 3);
+        $streamB = new ThroughStream();
+        $rejectedB = null;
+        $b->feedStream($streamB, null, $token)->then(null, static function (Throwable $e) use (&$rejectedB): void {
+            $rejectedB = $e;
+        });
+        $source->cancel();
+
+        $this->assertInstanceOf(OperationCancelledException::class, $rejectedB, 'the still-live pump B takes the cancel');
+        // Pump A's immunity is already proven structurally: its closure left
+        // the token's list at settlement (count 0 above), so this cancel
+        // physically cannot reach it — no re-settle assertion needed.
+    }
+
     public function testCancelWinsRaceAgainstNaturalEnd(): void
     {
         $t = Terminal::new(10, 3);
