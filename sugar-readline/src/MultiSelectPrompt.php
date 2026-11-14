@@ -165,6 +165,9 @@ final class MultiSelectPrompt implements PromptInterface, SizingInterface
 
         if ($this->filtered === []) {
             $lines[] = RowFit::row([[Lang::t('selection.no_matches'), null]], $bound);
+            if (($notice = $this->noticeRowIfAny()) !== null) {
+                $lines[] = $notice;
+            }
             return implode("\n", $lines);
         }
 
@@ -179,6 +182,10 @@ final class MultiSelectPrompt implements PromptInterface, SizingInterface
 
         if ($this->totalPages() > 1) {
             $lines[] = RowFit::row([[Lang::t('selection.page', ['page' => $this->page + 1, 'of' => $this->totalPages()]), null]], $bound);
+        }
+
+        if (($notice = $this->noticeRowIfAny()) !== null) {
+            $lines[] = $notice;
         }
 
         return implode("\n", $lines);
@@ -205,6 +212,12 @@ final class MultiSelectPrompt implements PromptInterface, SizingInterface
             $oldest = array_key_first($clone->marked);
             if ($oldest !== null) {
                 unset($clone->marked[$oldest]);
+                // The README eviction policy announces at runtime
+                // (finding 084): a silent un-mark would read as data loss.
+                $clone->notice = Lang::t('multiselect.notice_unmarked', [
+                    'item' => $this->choices[$oldest],
+                    'max'  => $clone->maxSelect,
+                ]);
             }
         }
         $clone->marked[$choiceIdx] = true;

@@ -6,6 +6,7 @@ namespace SugarCraft\Readline\Selection;
 
 use SugarCraft\Readline\Ansi;
 use SugarCraft\Readline\Key;
+use SugarCraft\Readline\HasNotice;
 use SugarCraft\Readline\Lang;
 use SugarCraft\Readline\RowFit;
 use SugarCraft\Readline\Styles;
@@ -38,6 +39,8 @@ use SugarCraft\Style\Style;
  */
 trait SelectionEngine
 {
+    use HasNotice;
+
     /** @var list<string> */
     private array $choices;
 
@@ -249,6 +252,11 @@ trait SelectionEngine
      */
     public function handleKey(string $key): static
     {
+        if ($this->notice !== '') {
+            // Transient notice law (finding 033): any pump-visible key
+            // ends the previous announce before this one may replace it.
+            return $this->withoutNotice()->handleKey($key);
+        }
         if ($this->submitted || $this->aborted) {
             return $this;
         }
@@ -283,6 +291,11 @@ trait SelectionEngine
      */
     public function handleChar(string $char): static
     {
+        if ($this->notice !== '') {
+            // Transient notice law (finding 033): any pump-visible key
+            // ends the previous announce before this one may replace it.
+            return $this->withoutNotice()->handleChar($char);
+        }
         if ($this->submitted || $this->aborted) {
             return $this;
         }

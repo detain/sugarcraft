@@ -25,6 +25,8 @@ use SugarCraft\Style\Style;
  */
 final class TextareaPrompt implements PromptInterface, SizingInterface
 {
+    use HasNotice;
+
     /** @var list<string> */
     private array $lines = [''];
 
@@ -129,6 +131,11 @@ final class TextareaPrompt implements PromptInterface, SizingInterface
 
     public function handleChar(string $char): self
     {
+        if ($this->notice !== '') {
+            // Transient notice law (finding 033): any pump-visible key
+            // ends the previous announce before this one may replace it.
+            return $this->withoutNotice()->handleChar($char);
+        }
         if ($this->submitted || $this->aborted) {
             return $this;
         }
@@ -212,6 +219,11 @@ final class TextareaPrompt implements PromptInterface, SizingInterface
 
     public function handleKey(string $key): self
     {
+        if ($this->notice !== '') {
+            // Transient notice law (finding 033): any pump-visible key
+            // ends the previous announce before this one may replace it.
+            return $this->withoutNotice()->handleKey($key);
+        }
         if ($this->submitted || $this->aborted) {
             return $this;
         }
@@ -316,6 +328,10 @@ final class TextareaPrompt implements PromptInterface, SizingInterface
         if ($showIndicators && $last < count($this->lines)) {
             $out[] = RowFit::row([['…', null]], $bound);
         }
+        if (($notice = $this->noticeRowIfAny()) !== null) {
+            $out[] = $notice;
+        }
+
         return implode("\n", $out);
     }
 
@@ -484,7 +500,9 @@ final class TextareaPrompt implements PromptInterface, SizingInterface
     private function insertNewline(): self
     {
         if ($this->maxLines > 0 && count($this->lines) >= $this->maxLines) {
-            return $this;
+            // The refusal announces (finding 084) instead of swallowing
+            // the newline in silence.
+            return $this->withNotice(Lang::t('textarea.notice_max_lines', ['max' => $this->maxLines]));
         }
         $clone   = clone $this;
         $current = $clone->lines[$clone->line];

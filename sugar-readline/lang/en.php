@@ -52,6 +52,7 @@ return [
     'multiselect.hint_max' => '[multi-select] selected: {count} (max {max})',
     'multiselect.hint_min' => '[multi-select] selected: {count} (min {min})',
     'multiselect.hint_min_max' => '[multi-select] selected: {count} (min {min}) (max {max})',
+    'multiselect.notice_unmarked' => 'un-marked {item} to respect the limit of {max}',
 
     // SelectionEngine filter bar / page footer. matches_one/_other are
     // whole sentences chosen at the call site (LOCALES.md plural policy);
@@ -62,8 +63,12 @@ return [
     'selection.no_matches' => '(no matches)',
     'selection.page' => 'Page {page}/{of}',
 
+    // TextareaPrompt transient notices (S-31).
+    'textarea.notice_max_lines' => 'Cannot add a line: maximum {max} reached',
+
     // TextPrompt chrome.
     'text.invalid_input' => 'Invalid input',
+    'text.notice_no_history' => 'History is empty',
 
     // Incremental-search echo line — the whole line is the unit so the
     // failure wording and direction verb stay wherever the language needs

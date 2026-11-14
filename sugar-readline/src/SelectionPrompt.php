@@ -87,6 +87,9 @@ final class SelectionPrompt implements PromptInterface, SizingInterface
 
         if ($this->filtered === []) {
             $lines[] = RowFit::row([[Lang::t('selection.no_matches'), null]], $bound);
+            if (($notice = $this->noticeRowIfAny()) !== null) {
+                $lines[] = $notice;
+            }
             return implode("\n", $lines);
         }
 
@@ -101,6 +104,10 @@ final class SelectionPrompt implements PromptInterface, SizingInterface
 
         if ($this->totalPages() > 1) {
             $lines[] = RowFit::row([[Lang::t('selection.page', ['page' => $this->page + 1, 'of' => $this->totalPages()]), null]], $bound);
+        }
+
+        if (($notice = $this->noticeRowIfAny()) !== null) {
+            $lines[] = $notice;
         }
 
         return implode("\n", $lines);

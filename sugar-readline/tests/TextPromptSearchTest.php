@@ -92,14 +92,21 @@ final class TextPromptSearchTest extends TestCase
         $this->assertSame('x', $p->value());
     }
 
-    public function testCtrlRWithEmptyHistoryShowsFailedFeedback(): void
+    public function testCtrlRWithEmptyHistoryAnnouncesInsteadOfOpeningSearch(): void
     {
         $p = TextPrompt::new('> ')->withHistory(new InMemoryHistory())
             ->handleKey(Key::CtrlR);
 
-        // Search engages (not a broken/dead state) but immediately reports failure.
-        $this->assertTrue($p->isSearching());
-        $this->assertStringContainsString('failed reverse-i-search', $p->view());
+        // S-31 (finding 084) changed this law: an empty store does not open
+        // a search that can only fail — it announces in a transient notice
+        // row instead. The old '(failed i-search)' bar conflated 'no
+        // history' with 'no match'; the failure bar still serves the latter.
+        $this->assertFalse($p->isSearching());
+        $this->assertStringContainsString('History is empty', $p->view());
+
+        // The notice lives exactly one beat (transient law, finding 033).
+        $after = $p->handleKey(Key::Down);
+        $this->assertStringNotContainsString('History is empty', $after->view());
     }
 
     // =========================================================================

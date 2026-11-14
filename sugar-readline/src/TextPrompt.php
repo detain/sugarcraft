@@ -25,6 +25,8 @@ use SugarCraft\Style\Style;
  */
 final class TextPrompt implements PromptInterface, SizingInterface
 {
+    use HasNotice;
+
     /**
      * History search direction: toward older entries (readline Ctrl+R).
      *
@@ -452,6 +454,11 @@ final class TextPrompt implements PromptInterface, SizingInterface
 
     public function handleChar(string $char): self
     {
+        if ($this->notice !== '') {
+            // Transient notice law (finding 033): any pump-visible key
+            // ends the previous announce before this one may replace it.
+            return $this->withoutNotice()->handleChar($char);
+        }
         if ($this->submitted || $this->aborted) {
             return $this;
         }
@@ -556,6 +563,11 @@ final class TextPrompt implements PromptInterface, SizingInterface
 
     public function handleKey(string $key): self
     {
+        if ($this->notice !== '') {
+            // Transient notice law (finding 033): any pump-visible key
+            // ends the previous announce before this one may replace it.
+            return $this->withoutNotice()->handleKey($key);
+        }
         if ($this->submitted || $this->aborted) {
             return $this;
         }
@@ -829,6 +841,11 @@ final class TextPrompt implements PromptInterface, SizingInterface
     {
         if ($this->submitted || $this->aborted || $this->history === null) {
             return $this;
+        }
+        if ($this->searchSource()->entries() === []) {
+            // Ctrl+R over an empty store must not open a search that can
+            // only fail: announce instead (finding 084; the GNU bell seat).
+            return $this->withNotice(Lang::t('text.notice_no_history'));
         }
         $clone = clone $this;
         $clone->searching = true;
@@ -1148,6 +1165,10 @@ final class TextPrompt implements PromptInterface, SizingInterface
                 ViModeState::Visual => '--VISUAL--',
                 default             => '--INSERT--',
             }, '2');
+        }
+
+        if (($notice = $this->noticeRowIfAny()) !== null) {
+            $lines[] = $notice;
         }
 
         return implode("\n", $lines);
