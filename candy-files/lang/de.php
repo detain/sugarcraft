@@ -70,6 +70,7 @@ return [
     'undo.rename' => 'Umbenannte Objekte: {count}',
     'undo.move' => 'Verschobene Objekte: {count}',
     'undo.copy' => 'Kopierte Objekte: {count}',
+    'undo.capped' => ' — Rückgängig deckt die neuesten {kept} von {applied} Objekten ab',
     'keyhelp.default' => 'Tab Wechsel · ↑↓ jk bewegen · Home/End g/G springen · Enter öffnen · l Ansehen · ← h hoch · Space wählen · s sortieren · e Erweiterung · . versteckte · c kopieren · m verschieben · R umbenennen · d löschen · r neu laden · q beenden · / suchen · Esc Auswahl leeren · t Tab duplizieren · ^w Tab schließen · ^tab wechseln · ^PgUp/^PgDn Tabs · u/^z Rückgängig · ^y Wiederholen · ? Hilfe · Ctrl+O öffnen · 1-9 Tabs · Strg+a alle · v umkehren · * Muster · I Info · Maus Klick/Rad · y/Y merken · p einfügen · a anheften · B Lesezeichen · w/W Pfad/Name kopieren · Archiv: Enter durchsuchen · x entpacken · o Standard-App',
     'keyhelp.terse' => 'Tab Wechsel · ↑↓ jk bewegen · Enter öffnen · l Ansehen · ← h hoch · Space wählen · s sortieren · e Erweiterung · c kopieren · m verschieben · R umbenennen · d löschen · q beenden · / suchen · u/^z Rückgängig · ^y Wiederholen',
     'keyhelp.minimal' => 'Enter öffnen · l Ansehen · q beenden · / suchen',

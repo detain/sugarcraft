@@ -136,7 +136,7 @@ final class ManagerCopyTest extends TestCase
         $this->assertTrue($finalState->canUndo());
         $top = $finalState->undoStack[array_key_last($finalState->undoStack)];
         $this->assertSame(UndoActionType::Copy, $top->type);
-        $this->assertArrayHasKey($srcDir . '/subdir', $top->items);
+        $this->assertArrayHasKey($srcDir . '/subdir', $top->absolutePairs());
         // 4. Both panes re-read: the destination listing shows the copy.
         $dstNames = array_map(static fn(Entry $e): string => $e->name, $finalState->right->entries);
         $this->assertContains('subdir', $dstNames, 'destination pane must refresh after completion');
@@ -201,7 +201,7 @@ final class ManagerCopyTest extends TestCase
      */
     public function testCopyCompletedMsgIsACoreMsg(): void
     {
-        $msg = new CopyCompletedMsg([], 0, 0, 0);
+        $msg = new CopyCompletedMsg('', '', [], null, 0, 0, 0);
         $this->assertInstanceOf(Msg::class, $msg);
     }
 
@@ -426,7 +426,7 @@ final class ManagerCopyTest extends TestCase
         $this->assertFileDoesNotExist($dstDir . '/b.txt');
 
         $top = $final->undoStack[array_key_last($final->undoStack)];
-        $this->assertSame([$srcDir . '/a.txt'], array_keys($top->items), 'undo must carry the survived leg only');
+        $this->assertSame([$srcDir . '/a.txt'], array_keys($top->absolutePairs()), 'undo must carry the survived leg only');
     }
 
     /**
@@ -471,7 +471,7 @@ final class ManagerCopyTest extends TestCase
     public function testCompletedCopyStatusCarriesFirstErrorReason(): void
     {
         $m = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
-        [$done] = $m->update(new CopyCompletedMsg(['/a' => '/b'], 1, 0, 0, 'TypeError: must be of type string, int given'));
+        [$done] = $m->update(new CopyCompletedMsg('/a', '/b', ['a'], null, 1, 0, 0, 'TypeError: must be of type string, int given'));
         $this->assertSame(
             'copied 1 entries with 1 errors: TypeError: must be of type string, int given',
             $done->status,
@@ -481,7 +481,7 @@ final class ManagerCopyTest extends TestCase
     public function testCompletedCopyWithoutReasonKeepsBareCountFrame(): void
     {
         $m = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
-        [$done] = $m->update(new CopyCompletedMsg([], 1, 0, 0));
+        [$done] = $m->update(new CopyCompletedMsg('', '', [], null, 1, 0, 0));
         $this->assertSame('copied 0 entries with 1 errors', $done->status,
             'a pure disk-refusal batch stays at the count frame - no fabricated reason');
     }
@@ -493,9 +493,34 @@ final class ManagerCopyTest extends TestCase
     public function testErrorReasonIsSanitizedInStatus(): void
     {
         $m = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
-        [$done] = $m->update(new CopyCompletedMsg([], 1, 0, 0, "RuntimeException: cannot read \x1b]0;pwned\x07evil.txt"));
+        [$done] = $m->update(new CopyCompletedMsg('', '', [], null, 1, 0, 0, "RuntimeException: cannot read \x1b]0;pwned\x07evil.txt"));
         $this->assertStringNotContainsString("\x1b", $done->status);
         $this->assertStringNotContainsString("\x07", $done->status);
         $this->assertStringContainsString('RuntimeException: cannot read evil.txt', $done->status);
+    }
+
+    /**
+     * CF-40 (audit 064): a completed bulk copy must not pin its whole
+     * ok-map on the undo stack, and when the batch crosses the weight
+     * ceiling the OLDEST legs evict inside the record — with the stored
+     * count and the disclosure both honest (this is the completion-path
+     * wiring pin; the walker itself is unit-pinned in UndoActionTest).
+     */
+    public function testCompletedBulkCopyIsLegCappedWithHonestDisclosure(): void
+    {
+        $names = [];
+        for ($i = 0; $i < 26_001; $i++) {
+            $names[] = 'n' . $i . '.dat';
+        }
+        $m = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
+        [$done] = $m->update(new CopyCompletedMsg('/src', '/dst', $names, null, 0, 0, 0));
+
+        $this->assertCount(1, $done->undoStack);
+        $record = $done->undoStack[0];
+        $this->assertSame(26_001, $record->appliedLegs, 'the applied truth is immutable');
+        $this->assertSame(25_000, $record->legCount(), 'the stack memory is bounded by the ceiling');
+        $this->assertSame('n1001.dat', $record->items['names'][0], 'the eviction took the oldest legs');
+        $this->assertSame('n26000.dat', $record->items['names'][24999]);
+        $this->assertStringContainsString('newest 25000 of 26001 legs', $record->description);
     }
 }

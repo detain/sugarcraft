@@ -70,6 +70,7 @@ return [
     'undo.rename' => 'Éléments renommés : {count}',
     'undo.move' => 'Éléments déplacés : {count}',
     'undo.copy' => 'Éléments copiés : {count}',
+    'undo.capped' => ' — annuler couvre les {kept} éléments les plus récents sur {applied}',
     'keyhelp.default' => 'Tab permuter · ↑↓ jk déplacer · Home/End g/G sauter · Entrée ouvrir · l voir · ← h monter · Espace sélectionner · s trier · e extension · . cachés · c copier · m déplacer · R renommer · d supprimer · r rafraîchir · q quitter · / rechercher · Esc effacer · t dupliquer l’onglet · ^w fermer l’onglet · ^tab cycler · ^PgUp/^PgDn onglets · u/^z annuler · ^y rétablir · ? aide · Ctrl+O ouvrir · 1-9 onglets · Ctrl+a tous · v inverser · * motif · I infos · souris clic/molette · y/Y retenir · p coller · a épingler · B signets · w/W copier chemin/nom · archive : Entrée parcourt · x extrait · o appli par défaut',
     'keyhelp.terse' => 'Tab permuter · ↑↓ jk déplacer · Entrée ouvrir · l voir · ← h monter · Espace sélectionner · s trier · e extension · c copier · m déplacer · R renommer · d supprimer · q quitter · / rechercher · u/^z annuler · ^y rétablir',
     'keyhelp.minimal' => 'Entrée ouvrir · l voir · q quitter · / rechercher',

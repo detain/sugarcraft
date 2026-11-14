@@ -22,7 +22,19 @@ use SugarCraft\Core\Msg;
 final readonly class CopyCompletedMsg implements Msg
 {
     /**
-     * @param array<string, string> $copiedItems Map of source → destination for the legs that ACTUALLY copied (undo records these only)
+     * CF-40 (audit 064): the payload used to be the full absolute
+     * source => destination map of the ok-set — retained on the undo
+     * stack for the life of the session. The legs are homogeneous
+     * (one source dir, one destination dir), so the message now carries
+     * the compact spelling: the two directories plus the ok-set's leg
+     * names in schedule order.
+     *
+     * @param string $srcDir Source directory of the copied legs (staging root for extract)
+     * @param string $dstDir Destination directory
+     * @param list<string> $okNames Legs that ACTUALLY copied, relative to $srcDir (undo records these only)
+     * @param ?list<string> $okDstNames Destination basenames when they differ from the
+     *        $okNames spelling (the archive-extract circuit lands staged
+     *        members under their flat name); null means flat legs
      * @param int $errors Number of items that failed to copy
      * @param int $skipped Number of names filtered before scheduling (null/'..'/'' entries)
      * @param int $overwrote Number of successful legs that replaced a destination already existing at schedule time
@@ -30,7 +42,10 @@ final readonly class CopyCompletedMsg implements Msg
      *        from the batch, if any leg threw instead of being disk-refused
      */
     public function __construct(
-        public array $copiedItems,
+        public string $srcDir,
+        public string $dstDir,
+        public array $okNames,
+        public ?array $okDstNames,
         public int $errors,
         public int $skipped,
         public int $overwrote,

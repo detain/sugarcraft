@@ -93,6 +93,18 @@ final class Manager implements Model
 
     private const UNDO_LIMIT = 50;
 
+    /**
+     * CF-40 (audit 064): ceiling on the total file legs remembered across
+     * both undo stacks. UNDO_LIMIT bounds ACTIONS (the CF-11 lineage's
+     * count/trash quota); this bounds WEIGHT. A leg is one remembered
+     * name — the pair-map era cost ~2 absolute paths each. 25k names is
+     * a couple of MB worst case, comfortably above any real interactive
+     * batch and far below the hundreds-of-MB the finding measured.
+     * The two caps do not fight: the leg cap only trims inside actions
+     * the action slice left standing, oldest first.
+     */
+    private const UNDO_LEG_LIMIT = 25_000;
+
     /** @var int Result ceiling for a live-height-less search (CF-02's window math caps the real frame). */
     private const SEARCH_CAP = 20;
 
@@ -397,7 +409,7 @@ final class Manager implements Model
      *
      * The pre-completion state armed by performCopyAsync() says "copying…"
      * (nothing has landed yet); this is where the truth from the wire lands.
-     * Counts are ACTIONS APPLIED, never arm-time intentions: $copiedItems
+     * Counts are ACTIONS APPLIED, never arm-time intentions: $okNames
      * carries only the legs that really wrote, $errors counts failed legs,
      * $skipped counts names filtered before scheduling, and $overwrote
      * counts successful legs whose destination already existed at schedule
@@ -407,7 +419,7 @@ final class Manager implements Model
      */
     private function handleCopyCompleted(CopyCompletedMsg $msg): self
     {
-        $applied = count($msg->copiedItems);
+        $applied = count($msg->okNames);
         $status = match (true) {
             // CF-21: a thrown leg names its first reason after the localized
             // count frame (the diagnostic itself is untranslated technical
@@ -420,10 +432,11 @@ final class Manager implements Model
             default => Lang::t('status.copied', ['count' => $applied]),
         };
         $newUndoStack = $this->undoStack;
-        if ($msg->copiedItems !== []) {
-            $newUndoStack[] = UndoAction::copy($msg->copiedItems);
+        if ($msg->okNames !== []) {
+            $newUndoStack[] = UndoAction::copy($msg->srcDir, $msg->dstDir, $msg->okNames, $msg->okDstNames);
         }
         $newUndoStack = array_slice($newUndoStack, -self::UNDO_LIMIT);
+        [$newUndoStack] = $this->capUndoStacks($newUndoStack, []);
         return $this->refreshAllPanes()
             ->withConfirm(ConfirmState::None, $status)
             ->withUndoRedoStacks($newUndoStack, []) // Clear redo on new action
@@ -1241,26 +1254,31 @@ final class Manager implements Model
             try {
                 $staging = ArchiveExtractor::newStaging();
             } catch (\Throwable $e) {
-                return \React\Promise\resolve(new CopyCompletedMsg([], count($names), 0, 0, $e->getMessage()));
+                return \React\Promise\resolve(new CopyCompletedMsg('', '', [], null, count($names), 0, 0, $e->getMessage()));
             }
             $fail = static function (\Throwable $e) use ($staging, $names): CopyCompletedMsg {
                 ArchiveExtractor::discard($staging);
-                return new CopyCompletedMsg([], count($names), 0, 0, $e->getMessage());
+                return new CopyCompletedMsg($staging, '', [], null, count($names), 0, 0, $e->getMessage());
             };
             return ArchiveExtractor::extractAsync($archive, $wanted, $staging)->then(
                 static function (array $stats) use ($staging, $names, $dst, $existed, $rel, $fail): \React\Promise\PromiseInterface {
                     $map = [];
+                    $byStaged = [];
                     $missing = 0;
                     foreach ($names as $n) {
                         $staged = $staging . '/' . $rel($n);
                         if (file_exists($staged) || is_link($staged)) {
                             $map[$staged] = Pane::join($dst, $n);
+                            // CF-40: keep both spellings of the leg — the
+                            // staged (archive-relative) one and the flat
+                            // destination name — for the compact record.
+                            $byStaged[$staged] = [$rel($n), $n];
                         } else {
                             $missing++;
                         }
                     }
                     return (new AsyncOps())->copyManyAsync($map)->then(
-                        static function (array $results) use ($staging, $map, $existed, $names, $missing, $stats): CopyCompletedMsg {
+                        static function (array $results) use ($staging, $byStaged, $dst, $existed, $names, $missing, $stats): CopyCompletedMsg {
                             ArchiveExtractor::discard($staging);
                             $ok = array_filter($results, static fn($r): bool => $r === true);
                             $reason = null;
@@ -1270,15 +1288,18 @@ final class Manager implements Model
                                     break;
                                 }
                             }
-                            $okMap = [];
+                            $okNames = [];
+                            $okDstNames = [];
                             $overwrote = 0;
                             foreach ($ok as $staged => $_) {
-                                $okMap[$staged] = $map[$staged];
-                                if (isset($existed[basename($map[$staged])])) {
+                                [$relName, $dstName] = $byStaged[$staged];
+                                $okNames[] = $relName;
+                                $okDstNames[] = $dstName;
+                                if (isset($existed[$dstName])) {
                                     $overwrote++;
                                 }
                             }
-                            return new CopyCompletedMsg($okMap, count($results) - count($ok) + $missing, $stats['skipped'], $overwrote, $reason);
+                            return new CopyCompletedMsg($staging, $dst, $okNames, $okDstNames, count($results) - count($ok) + $missing, $stats['skipped'], $overwrote, $reason);
                         },
                         $fail,
                     );
@@ -1856,6 +1877,7 @@ final class Manager implements Model
             $newUndoStack[] = UndoAction::delete($deletedItems);
         }
         $newUndoStack = array_slice($newUndoStack, -self::UNDO_LIMIT);
+        [$newUndoStack] = $this->capUndoStacks($newUndoStack, []);
         // CF-20: a delete re-homes bytes (trash) — both panes re-read.
         return $this->refreshAllPanes()
             ->withConfirm(ConfirmState::None, $msg)
@@ -2128,6 +2150,7 @@ final class Manager implements Model
         $newUndoStack = $this->undoStack;
         $newUndoStack[] = UndoAction::insert([$full]);
         $newUndoStack = array_slice($newUndoStack, -self::UNDO_LIMIT);
+        [$newUndoStack] = $this->capUndoStacks($newUndoStack, []);
         $msg = Lang::t('status.created', ['count' => 1]);
 
         // CF-20: the new directory is visible through the twin cwd too.
@@ -2208,8 +2231,10 @@ final class Manager implements Model
             return [$this->withConfirm(ConfirmState::None, Lang::t('status.cancelled')), null];
         }
 
-        // Build the source→destination map synchronously (we have the names now)
-        $copiedItems = [];
+        // CF-40 (audit 064): collect leg NAMES only. The absolute pair
+        // map is expanded transiently for the engine call and dies with
+        // the batch — it is never captured by any stack-resident record.
+        $copyNames = [];
         foreach ($names as $name) {
             if ($name === null || $name === '..' || $name === '') {
                 continue;
@@ -2224,18 +2249,20 @@ final class Manager implements Model
             if (self::canonicalPath($src) === self::canonicalPath($target)) {
                 continue;
             }
-            $copiedItems[$src] = $target;
+            $copyNames[] = $name;
         }
-        $skipped = count($names) - count($copiedItems);
+        $skipped = count($names) - count($copyNames);
 
         // Which destinations already exist? copy() silently replaces them —
         // measured at SCHEDULE time (a race with a third party in between is
         // disclosed; the completion message is still honest about the bytes
-        // that landed over something that was there when we armed).
-        $existedSrcs = [];
-        foreach ($copiedItems as $src => $target) {
+        // that landed over something that was there when we armed). The
+        // roster is a name-keyed set: only existing legs cost anything.
+        $existedNames = [];
+        foreach ($copyNames as $name) {
+            $target = Pane::join($dst, $name);
             if (file_exists($target) || is_link($target)) {
-                $existedSrcs[$src] = true;
+                $existedNames[$name] = true;
             }
         }
 
@@ -2243,31 +2270,46 @@ final class Manager implements Model
         // in-flight counter is what makes CF-44's quit guard name a number:
         // one batch = one scheduled CopyCompletedMsg, whatever its size.
         $pendingManager = $this
-            ->withConfirm(ConfirmState::None, Lang::t('status.copy_pending', ['count' => count($copiedItems)]))
+            ->withConfirm(ConfirmState::None, Lang::t('status.copy_pending', ['count' => count($copyNames)]))
             ->mutate(['copyBatchesInFlight' => $this->copyBatchesInFlight + 1]);
 
         // Return a Cmd that runs the async copy via AsyncOps.
         $asyncOps = new AsyncOps();
-        $cmd = Cmd::promise(static function () use ($asyncOps, $copiedItems, $skipped, $existedSrcs): \React\Promise\PromiseInterface {
-            return $asyncOps->copyManyAsync($copiedItems)
-                ->then(static function (array $results) use ($copiedItems, $skipped, $existedSrcs): CopyCompletedMsg {
+        $cmd = Cmd::promise(static function () use ($asyncOps, $srcDir, $dst, $copyNames, $skipped, $existedNames): \React\Promise\PromiseInterface {
+            $map = [];
+            $srcToName = [];
+            foreach ($copyNames as $name) {
+                $src = Pane::join($srcDir, $name);
+                $map[$src] = Pane::join($dst, $name);
+                $srcToName[$src] = $name;
+            }
+            return $asyncOps->copyManyAsync($map)
+                ->then(static function (array $results) use ($srcDir, $dst, $srcToName, $skipped, $existedNames): CopyCompletedMsg {
                     // UNDO RECORDS SUCCESSES ONLY: a failed leg has nothing
                     // to forget, and an undo entry over the whole map
                     // pretended to have copied bytes that never landed.
-                    $okItems = array_filter($results, static fn($ok): bool => $ok === true);
-                    $errors = count($results) - count($okItems);
-                    // CF-21 (audit 029): the first exception diagnostic rides
-                    // to the status line. Disk refusals carry no reason, so a
-                    // plain-error batch keeps the bare count frame.
+                    // The ok-set is folded back to leg names as it is
+                    // counted — CF-21 keeps the first exception diagnostic
+                    // (disk refusals carry no reason, so a plain-error
+                    // batch keeps the bare count frame).
+                    $okNames = [];
+                    $errors = 0;
                     $reason = null;
-                    foreach ($results as $r) {
-                        if (is_string($r)) {
+                    foreach ($results as $src => $r) {
+                        if ($r === true) {
+                            $okNames[] = $srcToName[$src];
+                            continue;
+                        }
+                        $errors++;
+                        if ($reason === null && is_string($r)) {
                             $reason = $r;
-                            break;
                         }
                     }
-                    $overwrote = count(array_intersect_key($okItems, $existedSrcs));
-                    return new CopyCompletedMsg($okItems, $errors, $skipped, $overwrote, $reason);
+                    // The existed-flag folded into the legs roster (CF-40):
+                    // overwrote = ok-legs whose destination existed at
+                    // schedule time, from the name-keyed set — no map.
+                    $overwrote = count(array_intersect_key(array_flip($okNames), $existedNames));
+                    return new CopyCompletedMsg($srcDir, $dst, $okNames, null, $errors, $skipped, $overwrote, $reason);
                 });
         });
 
@@ -2284,7 +2326,10 @@ final class Manager implements Model
         }
         $errors = 0;
         $overwrote = 0;
-        $movedItems = [];
+        // CF-40 (audit 064): record leg NAMES, not absolute pairs — the
+        // circuit is homogeneous (one source dir, one destination dir,
+        // flat names on both ends), so the map is re-derived on demand.
+        $movedNames = [];
         foreach ($names as $name) {
             if ($name === null || $name === '..' || $name === '') {
                 continue;
@@ -2312,22 +2357,23 @@ final class Manager implements Model
             if ($clobbers) {
                 $overwrote++;
             }
-            $movedItems[$src] = $target;
+            $movedNames[] = $name;
         }
         // Counts report ACTIONS APPLIED; skipped names (filtered at the loop
         // head) are surfaced separately instead of inflating the total.
-        $skipped = count($names) - count($movedItems) - $errors;
+        $skipped = count($names) - count($movedNames) - $errors;
         $msg = match (true) {
-            $errors > 0 => Lang::t('status.moved_with_errors', ['count' => count($movedItems), 'errors' => $errors]),
-            $skipped > 0 => Lang::t('status.moved_skipped', ['count' => count($movedItems), 'skipped' => $skipped]),
-            $overwrote > 0 => Lang::t('status.moved_overwrote', ['count' => count($movedItems), 'overwrote' => $overwrote]),
-            default => Lang::t('status.moved', ['count' => count($movedItems)]),
+            $errors > 0 => Lang::t('status.moved_with_errors', ['count' => count($movedNames), 'errors' => $errors]),
+            $skipped > 0 => Lang::t('status.moved_skipped', ['count' => count($movedNames), 'skipped' => $skipped]),
+            $overwrote > 0 => Lang::t('status.moved_overwrote', ['count' => count($movedNames), 'overwrote' => $overwrote]),
+            default => Lang::t('status.moved', ['count' => count($movedNames)]),
         };
         $newUndoStack = $this->undoStack;
-        if ($movedItems !== []) {
-            $newUndoStack[] = UndoAction::move($movedItems);
+        if ($movedNames !== []) {
+            $newUndoStack[] = UndoAction::move($srcDir, $dst, $movedNames);
         }
         $newUndoStack = array_slice($newUndoStack, -self::UNDO_LIMIT);
+        [$newUndoStack] = $this->capUndoStacks($newUndoStack, []);
         // CF-20: a move lands bytes in the (possibly inactive) destination
         // pane — both panes re-read, no Tab+`r` dance to chase a phantom.
         $done = $this->refreshAllPanes()
@@ -2335,7 +2381,7 @@ final class Manager implements Model
             ->withUndoRedoStacks($newUndoStack, []);
         // CF-32: a cut is consumed by its paste (the bytes left the source);
         // a yank-for-copy stays staged so one yank can paste many places.
-        return $viaPaste && $movedItems !== [] ? $done->mutate(['yank' => null]) : $done;
+        return $viaPaste && $movedNames !== [] ? $done->mutate(['yank' => null]) : $done;
     }
 
     /**
@@ -2484,6 +2530,7 @@ final class Manager implements Model
         $newUndoStack = $this->undoStack;
         $newUndoStack[] = UndoAction::rename($renamedItems);
         $newUndoStack = array_slice($newUndoStack, -self::UNDO_LIMIT);
+        [$newUndoStack] = $this->capUndoStacks($newUndoStack, []);
         // Old and new names are raw filesystem bytes — a filename is
         // attacker-writable data and these strings ride straight into the
         // rendered status line. Sanitize at the message-build choke.
@@ -3103,6 +3150,21 @@ final class Manager implements Model
         return $this->mutate(['undoStack' => $undoStack, 'redoStack' => $redoStack]);
     }
 
+    /**
+     * CF-40: route both stacks through the weight cap after any push.
+     * Pure delegation to the unit-pinned walker — every mutation site
+     * that grows a stack ends with this, oldest-legs-first eviction
+     * inside the oldest compressible record (see UndoAction).
+     *
+     * @param list<UndoAction> $undo
+     * @param list<UndoAction> $redo
+     * @return array{0:list<UndoAction>,1:list<UndoAction>}
+     */
+    private function capUndoStacks(array $undo, array $redo): array
+    {
+        return UndoAction::enforceLegCap($undo, $redo, self::UNDO_LEG_LIMIT);
+    }
+
     /** Undo the last operation */
     public function undo(): self
     {
@@ -3119,6 +3181,7 @@ final class Manager implements Model
         if ($action->type === UndoActionType::Copy) {
             $msg = Lang::t('status.copy_undo_noop');
             $newRedoStack = [...$this->redoStack, $action];
+            [$newUndoStack, $newRedoStack] = $this->capUndoStacks($newUndoStack, $newRedoStack);
             return $this
                 ->relistAllPanes()
                 ->withStatus($msg)
@@ -3140,6 +3203,7 @@ final class Manager implements Model
         $msg = Lang::t('status.undone', ['description' => $action->description]);
         // Full success only: now the action may move to the redo stack.
         $newRedoStack = [...$this->redoStack, $action];
+        [$newUndoStack, $newRedoStack] = $this->capUndoStacks($newUndoStack, $newRedoStack);
         return $this
             ->relistAllPanes()
             ->withStatus($msg)
@@ -3171,6 +3235,7 @@ final class Manager implements Model
         // Full success only: push back to undo stack
         $newUndoStack = [...$this->undoStack, $action];
         $newUndoStack = array_slice($newUndoStack, -self::UNDO_LIMIT);
+        [$newUndoStack, $newRedoStack] = $this->capUndoStacks($newUndoStack, $newRedoStack);
         return $this
             ->relistAllPanes()
             ->withStatus($msg)
@@ -3183,7 +3248,7 @@ final class Manager implements Model
         $errors = 0;
         match ($action->type) {
             UndoActionType::Delete => $errors = $this->redoDelete($action->items),
-            UndoActionType::Move => $errors = $this->redoMove($action->items),
+            UndoActionType::Move => $errors = $this->redoMove($action->absolutePairs()),
             UndoActionType::Rename => $errors = $this->redoRename($action->items),
             // CF-10: redoing an undone mkdir recreates the empty directory.
             UndoActionType::Insert => $errors = $this->redoInsert($action->items),
@@ -3268,7 +3333,9 @@ final class Manager implements Model
         // Route by UndoActionType enum — no string prefix detection
         return match ($action->type) {
             UndoActionType::Delete => $this->reverseDelete($action->items),
-            UndoActionType::Move => $this->reverseMove($action->items),
+            // CF-40: the record is compact; the pair map is re-derived
+            // for the duration of the reversal, byte-identically.
+            UndoActionType::Move => $this->reverseMove($action->absolutePairs()),
             UndoActionType::Rename => $this->reverseRename($action->items),
             // CF-10: undoing a mkdir removes the created directory — but
             // only while it is empty; a filled one (or one replaced by

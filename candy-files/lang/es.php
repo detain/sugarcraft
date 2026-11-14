@@ -70,6 +70,7 @@ return [
     'undo.rename' => 'Elementos renombrados: {count}',
     'undo.move' => 'Elementos movidos: {count}',
     'undo.copy' => 'Elementos copiados: {count}',
+    'undo.capped' => ' — deshacer abarca los {kept} más recientes de {applied} elementos',
     'keyhelp.default' => 'Tab intercambiar · ↑↓ jk mover · Home/End g/G saltar · Enter abrir · l ver · ← h subir · espacio seleccionar · s ordenar · e extensión · . ocultos · c copiar · m mover · R renombrar · d eliminar · r refrescar · q salir · / buscar · Esc limpiar · t duplicar pestaña · ^w cerrar pestaña · ^tab ciclar · ^PgUp/^PgDn pestañas · u/^z deshacer · ^y rehacer · ? ayuda · Ctrl+O abrir · 1-9 pestañas · Ctrl+a todos · v invertir · * patrón · I info · ratón clic/rueda · y/Y marcar · p pegar · a fijar · B marcadores · w/W copiar ruta/nombre · archivo: Enter explora · x extrae · o app predeterminada',
     'keyhelp.terse' => 'Tab intercambiar · ↑↓ jk mover · Enter abrir · l ver · ← h subir · espacio seleccionar · s ordenar · e extensión · c copiar · m mover · R renombrar · d eliminar · q salir · / buscar · u/^z deshacer · ^y rehacer',
     'keyhelp.minimal' => 'Enter abrir · l ver · q salir · / buscar',

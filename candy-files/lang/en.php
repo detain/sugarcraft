@@ -75,6 +75,7 @@ return [
     'undo.rename' => 'items renamed: {count}',
     'undo.move'   => 'items moved: {count}',
     'undo.copy'   => 'items copied: {count}',
+    'undo.capped' => ' — undo covers the newest {kept} of {applied} legs',
 
     // Key help
     'keyhelp.default' => 'Tab swap · ↑↓ jk move · Home/End g/G jump · Enter open · l view · ← h up · space select · s sort · e ext · . hidden · c copy · m move · R rename · d delete · r refresh · q quit · / search · Esc clear · t duplicate tab · ^w close tab · ^tab cycle · ^PgUp/^PgDn tabs · u/^z undo · ^y redo · ? help · Ctrl+O open · 1-9 tabs · Ctrl+a all · v invert · * pattern · I info · mouse click/wheel · y/Y yank · p paste · a pin · B bookmarks · w/W copy path/name · archive: Enter browse · x extract · o default app',

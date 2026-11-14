@@ -70,6 +70,7 @@ return [
     'undo.rename' => 'Elementi rinominati: {count}',
     'undo.move' => 'Elementi spostati: {count}',
     'undo.copy' => 'Elementi copiati: {count}',
+    'undo.capped' => ' — annulla copre i {kept} più recenti di {applied} elementi',
     'keyhelp.default' => 'Tab scambia · ↑↓ jk muovi · Home/End g/G salta · Invio apri · l vista · ← h su · spazio seleziona · s ordina · e estensione · . nascosti · c copia · m sposta · R rinomina · d elimina · r aggiorna · q esci · / cerca · Esc cancella · t duplica scheda · ^w chiudi scheda · ^tab cicla · ^PgUp/^PgDn schede · u/^z annulla · ^y ripeti · ? aiuto · Ctrl+O apri · 1-9 schede · Ctrl+a tutti · v inverti · * motivo · I info · mouse clic/rotella · y/Y segna · p incolla · a fissa · B segnalibri · w/W copia percorso/nome · archivio: Invio sfoglia · x estrae · o app predefinita',
     'keyhelp.terse' => 'Tab scambia · ↑↓ jk muovi · Invio apri · l vista · ← h su · spazio seleziona · s ordina · e estensione · c copia · m sposta · R rinomina · d elimina · q esci · / cerca · u/^z annulla · ^y ripeti',
     'keyhelp.minimal' => 'Invio apri · l vista · q esci · / cerca',

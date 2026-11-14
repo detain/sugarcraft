@@ -333,7 +333,7 @@ final class ManagerMoveTest extends TestCase
             ->withLeft($pane)
             ->withRight($pane)
             ->withLister($this->lister)
-            ->withUndoStack([\SugarCraft\Files\UndoAction::copy([$this->tmpDir . '/src.txt' => $this->tmpDir . '/copy.txt'])])
+            ->withUndoStack([\SugarCraft\Files\UndoAction::copy($this->tmpDir, $this->tmpDir, ['src.txt'], ['copy.txt'])])
             ->build();
 
         [$undone] = $m->update(new KeyMsg(KeyType::Char, 'u'));

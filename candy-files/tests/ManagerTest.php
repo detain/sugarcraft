@@ -107,7 +107,7 @@ final class ManagerTest extends TestCase
         [$m, $cmd] = $m->update(new KeyMsg(KeyType::Char, 'y')); // confirm: batch scheduled
         $this->assertInstanceOf(\Closure::class, $cmd);
         $this->assertSame(1, $m->copyBatchesInFlight);
-        $done = $m->update(new CopyCompletedMsg(['/home' => '/home/home'], 0, 0, 0))[0];
+        $done = $m->update(new CopyCompletedMsg('/home', '/home', ['home'], null, 0, 0, 0))[0];
         $this->assertSame(0, $done->copyBatchesInFlight);
     }
 
@@ -422,7 +422,7 @@ final class ManagerTest extends TestCase
         }
 
         $this->assertCount(50, $m->undoStack, 'the ceiling is UNDO_LIMIT and nothing else');
-        $oldestKeys = array_keys($m->undoStack[0]->items);
+        $oldestKeys = array_keys($m->undoStack[0]->absolutePairs());
         $this->assertSame($left . '/f01', $oldestKeys[0], 'the FIRST record must be the second move — the oldest left the head, not the tail');
         $this->assertFileExists($right . '/f00', 'eviction forgets the record, it never unwinds the already-applied bytes');
 
