@@ -111,13 +111,17 @@ final class SahilmMatcher implements FuzzyMatcher
      */
     public function matchAll(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): array
     {
-        if ($query === '') {
+        // Batch-invariant query work resolved ONCE (finding sugar-fuzzy-020:
+        // the comparison split was rebuilt per candidate). A null covers the
+        // empty query — every candidate would fail — so the batch is empty.
+        $preparedQuery = $this->prepareQuery($query);
+        if ($preparedQuery === null) {
             return [];
         }
 
         $results = [];
         foreach ($candidates as $candidate) {
-            $result = $this->compute($query, $candidate);
+            $result = $this->compute($query, $candidate, $preparedQuery);
             if ($result !== null && $result->score >= $minScore) {
                 $results[] = $result;
             }
@@ -150,22 +154,52 @@ final class SahilmMatcher implements FuzzyMatcher
     }
 
     /**
-     * Compute match result with matched indices.
+     * Query-side preparation, hoisted out of the per-candidate loop (finding
+     * sugar-fuzzy-020).
+     *
+     * Per-char folded split, 1:1 with the ORIGINAL code points. Lowercasing
+     * the whole string first would expand U+0130 (İ → i + U+0307), shifting
+     * every later index and mis-addressing the $cOrig bonus reads in
+     * {@see self::compute()}. Case-sensitive mode compares original chars
+     * directly.
+     *
+     * @return array{0: list<string>, 1: int}|null [comparison chars, query length];
+     *                                             null for an empty query
      */
-    private function compute(string $query, string $candidate): ?MatchResult
+    private function prepareQuery(string $query): ?array
     {
         $queryLen = mb_strlen($query, 'UTF-8');
-        $candidateLen = mb_strlen($candidate, 'UTF-8');
-
-        if ($queryLen === 0 || $candidateLen === 0) {
+        if ($queryLen === 0) {
             return null;
         }
 
-        // Per-char folded split, 1:1 with the ORIGINAL code points. Lowercasing
-        // the whole string first would expand U+0130 (İ → i + U+0307), shifting
-        // every later index and mis-addressing the $cOrig bonus reads below
-        // (see CharFold). Case-sensitive mode compares original chars directly.
         $qLow = $this->caseSensitive ? mb_str_split($query, 1, 'UTF-8') : CharFold::foldSplit($query);
+
+        return [$qLow, $queryLen];
+    }
+
+    /**
+     * Compute match result with matched indices.
+     *
+     * @param array{0: list<string>, 1: int}|null $preparedQuery Batch-resolved query side
+     *                                                           ({@see self::prepareQuery()});
+     *                                                           resolved inline for single-pair callers
+     */
+    private function compute(string $query, string $candidate, ?array $preparedQuery = null): ?MatchResult
+    {
+        $preparedQuery ??= $this->prepareQuery($query);
+        if ($preparedQuery === null) {
+            return null;
+        }
+        [$qLow, $queryLen] = $preparedQuery;
+
+        $candidateLen = mb_strlen($candidate, 'UTF-8');
+        if ($candidateLen === 0) {
+            return null;
+        }
+
+        // The candidate side keeps its own per-char folded split for the same
+        // U+0130 index-alignment reason as the query (see prepareQuery()).
         $cLow = $this->caseSensitive ? mb_str_split($candidate, 1, 'UTF-8') : CharFold::foldSplit($candidate);
         $cOrig = mb_str_split($candidate, 1, 'UTF-8');
 

@@ -232,13 +232,22 @@ final class SmithWatermanMatcher implements FuzzyMatcher
      */
     public function matchAll(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): array
     {
-        if ($query === '') {
+        // Query-side preparation is batch-invariant: fold and flip it ONCE
+        // (finding sugar-fuzzy-020 — it used to be rebuilt per candidate).
+        // A null here covers the empty query and the full-query over-cap
+        // refusal; every candidate would be rejected, so the batch is empty.
+        $preparedQuery = $this->prepareQuery($query);
+        if ($preparedQuery === null) {
             return [];
         }
 
         $results = [];
         foreach ($candidates as $candidate) {
-            $result = $this->compute($query, $candidate, $minScore);
+            $prepared = $this->prepareCandidate($preparedQuery, $candidate);
+            if ($prepared === null) {
+                continue;
+            }
+            $result = $this->computePrepared($prepared, $query, $candidate, $minScore);
             if ($result !== null && $result->score >= $minScore) {
                 $results[] = $result;
             }
@@ -299,6 +308,20 @@ final class SmithWatermanMatcher implements FuzzyMatcher
         if ($prepared === null) {
             return null;
         }
+
+        return $this->computePrepared($prepared, $query, $candidate, $minScore);
+    }
+
+    /**
+     * The alignment half of {@see self::compute()} over a prepared pair.
+     *
+     * Split out for the {@see self::matchAll()} batch loop (finding
+     * sugar-fuzzy-020): everything query-invariant is hoisted into
+     * {@see self::prepareQuery()}, so a filter over N candidates pays the fold
+     * and the flip once instead of N times.
+     */
+    private function computePrepared(array $prepared, string $query, string $candidate, ?int $minScore): ?MatchResult
+    {
         [$q, $c] = $prepared;
 
         // Early-exit prune: the best possible local-alignment score is at most
@@ -349,6 +372,11 @@ final class SmithWatermanMatcher implements FuzzyMatcher
     /**
      * Fold, cap and pre-screen one query/candidate pair.
      *
+     * Thin wrapper composing {@see self::prepareQuery()} +
+     * {@see self::prepareCandidate()} for the single-pair callers
+     * (`match()`/`score()`); {@see self::matchAll()} hoists the query half
+     * across the whole batch (finding sugar-fuzzy-020).
+     *
      * Returns the folded per-code-point arrays — 1:1 with ORIGINAL code points,
      * so every alignment index names the same char the caller sees (whole-string
      * lowercasing expands U+0130 and desyncs the index space; see CharFold) —
@@ -358,10 +386,30 @@ final class SmithWatermanMatcher implements FuzzyMatcher
      */
     private function prepare(string $query, string $candidate): ?array
     {
-        $queryLen = mb_strlen($query, 'UTF-8');
-        $candidateLen = mb_strlen($candidate, 'UTF-8');
+        $preparedQuery = $this->prepareQuery($query);
+        if ($preparedQuery === null) {
+            return null;
+        }
 
-        if ($queryLen === 0 || $candidateLen === 0) {
+        return $this->prepareCandidate($preparedQuery, $candidate);
+    }
+
+    /**
+     * Query-side half of {@see self::prepare()} — length guard, full-query
+     * over-cap refusal, DoS-cap truncation, fold, and the flipped fold set the
+     * shared-char pre-screen needs.
+     *
+     * Batch-invariant, so {@see self::matchAll()} pays it once (finding
+     * sugar-fuzzy-020: the fold was redone and the flip table reallocated — a
+     * fresh ~cap-sized hashtable — on every candidate).
+     *
+     * @return array{0: list<string>, 1: array<string, int>}|null [folded query, folded-query flip set];
+     *                                                            null when the query can match nothing
+     */
+    private function prepareQuery(string $query): ?array
+    {
+        $queryLen = mb_strlen($query, 'UTF-8');
+        if ($queryLen === 0) {
             return null;
         }
 
@@ -371,15 +419,37 @@ final class SmithWatermanMatcher implements FuzzyMatcher
         }
 
         // DoS cap: truncate rather than switch algorithms (see class note).
-        // A prefix keeps every reported index valid in the original haystack.
         if ($queryLen > $this->maxQueryLength) {
             $query = mb_substr($query, 0, $this->maxQueryLength, 'UTF-8');
         }
+
+        $q = CharFold::foldSplit($query);
+
+        return [$q, array_flip($q)];
+    }
+
+    /**
+     * Candidate-side half of {@see self::prepare()} — truncation, fold and the
+     * joint pre-screens against the hoisted query.
+     *
+     * @param array{0: list<string>, 1: array<string, int>} $preparedQuery Output of {@see self::prepareQuery()}
+     * @return array{0: list<string>, 1: list<string>}|null the aligned pair, or null when the pair provably cannot match
+     */
+    private function prepareCandidate(array $preparedQuery, string $candidate): ?array
+    {
+        [$q, $qFlip] = $preparedQuery;
+
+        $candidateLen = mb_strlen($candidate, 'UTF-8');
+        if ($candidateLen === 0) {
+            return null;
+        }
+
+        // DoS cap: truncate rather than switch algorithms (see class note).
+        // A prefix keeps every reported index valid in the original haystack.
         if ($candidateLen > $this->maxCandidateLength) {
             $candidate = mb_substr($candidate, 0, $this->maxCandidateLength, 'UTF-8');
         }
 
-        $q = CharFold::foldSplit($query);
         $c = CharFold::foldSplit($candidate);
 
         // Every matched index is a distinct candidate column, so a query longer
@@ -393,13 +463,15 @@ final class SmithWatermanMatcher implements FuzzyMatcher
         // exactly the pairs a covering alignment exists for, under ANY profile
         // (coverage counts only genuine char matches). Otherwise, when no step
         // type other than a char match can be positive, a pair sharing no
-        // folded char scores 0 everywhere.
+        // folded char scores 0 everywhere. The intersect reads the HOISTED flip
+        // (finding sugar-fuzzy-020): same semantics, one less per-candidate
+        // hashtable built.
         if ($this->requireFullQuery) {
             if (!self::isSubsequence($q, $c)) {
                 return null;
             }
         } elseif ($this->noMatchMeansZero()) {
-            if (array_intersect_key(array_flip($q), array_flip($c)) === []) {
+            if (array_intersect_key($qFlip, array_flip($c)) === []) {
                 return null;
             }
         }
