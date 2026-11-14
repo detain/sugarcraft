@@ -67,7 +67,9 @@ final class VersionTest extends TestCase
 
     public function testFromPharMetadataRefusesEveryShapeThatIsNotAStampedArchive(): void
     {
-        $plain = \tempnam(\sys_get_temp_dir(), 'ciimg') . '.phar';
+        // Single-component random name: tempnam() + a suffixed path creates
+        // two files and strands the base on every run (candy-image-012).
+        $plain = \sys_get_temp_dir() . '/candy-image-test-' . \bin2hex(\random_bytes(8)) . '.phar';
         self::assertNotFalse(\file_put_contents($plain, 'not a phar, a plain file wearing its name'));
         $dir = \sys_get_temp_dir() . '/ciimg-dir-' . \bin2hex(\random_bytes(4));
         self::assertTrue(\mkdir($dir, 0o700, true));

@@ -39,6 +39,23 @@ final class CliTest extends TestCase
         $this->artifacts = [];
     }
 
+    /**
+     * One-component temp fixture path, created exclusively (candy-image-012:
+     * the old tempnam()+suffix shape created a second file per run and
+     * orphaned the zero-byte base — the canonical single-name form from
+     * examples/candy-image.php, registered for tearDown before anything else).
+     */
+    private function uniqueTempPath(string $suffix): string
+    {
+        $path = sys_get_temp_dir() . '/candy-image-test-' . bin2hex(random_bytes(8)) . $suffix;
+        $handle = fopen($path, 'x');
+        self::assertIsResource($handle, "fixture path {$path} must be creatable exclusively");
+        fclose($handle);
+        $this->artifacts[] = $path;
+
+        return $path;
+    }
+
     /** @return array{resource, resource} fresh in-memory out/err pair */
     private static function pipes(): array
     {
@@ -413,8 +430,7 @@ final class CliTest extends TestCase
             $this->markTestSkipped('ext-gd is required to reach the decode refusal path.');
         }
 
-        $path = tempnam(sys_get_temp_dir(), 'sc_candyimage_') . '.png';
-        $this->artifacts[] = $path;
+        $path = $this->uniqueTempPath('.png');
         file_put_contents($path, 'this is not an image');
 
         [$exit, , $err] = self::drive([$path]);
@@ -681,8 +697,7 @@ final class CliTest extends TestCase
             $this->markTestSkipped('ext-gd is required to mint the fixture.');
         }
 
-        $path = tempnam(sys_get_temp_dir(), 'sc_candyimage_') . '.png';
-        $this->artifacts[] = $path;
+        $path = $this->uniqueTempPath('.png');
         $im = imagecreatetruecolor(16, 8);
         imagefilledrectangle($im, 0, 0, 15, 7, imagecolorallocate($im, 10, 120, 200));
         imagepng($im, $path);
@@ -719,8 +734,7 @@ final class CliTest extends TestCase
             $this->markTestSkipped('ext-gd is required to mint the fixture.');
         }
 
-        $path = tempnam(sys_get_temp_dir(), 'sc_candyimage_') . '.png';
-        $this->artifacts[] = $path;
+        $path = $this->uniqueTempPath('.png');
         $im = imagecreatetruecolor(64, 48);
         imagefilledrectangle($im, 0, 0, 63, 47, imagecolorallocate($im, 200, 30, 90));
         imagepng($im, $path);

@@ -78,6 +78,27 @@ final class RenderSmokeTest extends TestCase
         $this->artifacts = [];
     }
 
+    /**
+     * One-component temp fixture path, created exclusively.
+     *
+     * The old `tempnam(...) . '.png'` shape created the tempnam base file
+     * AND a suffixed one, then tracked only the suffix — every suite run
+     * orphaned a zero-byte `sc_candyimage_*` base in /tmp (candy-image-012).
+     * The examples/ fixture is the canonical cure: random single name, 'x'
+     * mode so a planted path is refused, registered for tearDown cleanup
+     * before any failure-prone step can strand it.
+     */
+    private function uniqueTempPath(string $suffix): string
+    {
+        $path = sys_get_temp_dir() . '/candy-image-test-' . bin2hex(random_bytes(8)) . $suffix;
+        $handle = fopen($path, 'x');
+        self::assertIsResource($handle, "fixture path {$path} must be creatable exclusively");
+        fclose($handle);
+        $this->artifacts[] = $path;
+
+        return $path;
+    }
+
     /** @return array{resource, resource} fresh in-memory out/err pair */
     private static function pipes(): array
     {
@@ -103,8 +124,7 @@ final class RenderSmokeTest extends TestCase
             $this->markTestSkipped('ext-gd is required to decode image fixtures.');
         }
 
-        $path = tempnam(sys_get_temp_dir(), 'sc_candyimage_') . '.png';
-        $this->artifacts[] = $path;
+        $path = $this->uniqueTempPath('.png');
 
         $im = imagecreatetruecolor(16, 8);
         for ($x = 0; $x < 16; ++$x) {
@@ -124,8 +144,7 @@ final class RenderSmokeTest extends TestCase
             $this->markTestSkipped('ext-gd is required to decode the fixture GIF.');
         }
 
-        $path = tempnam(sys_get_temp_dir(), 'sc_candyimage_') . '.gif';
-        $this->artifacts[] = $path;
+        $path = $this->uniqueTempPath('.gif');
 
         $im = imagecreatetruecolor(4, 4);
         imagefill($im, 0, 0, imagecolorallocate($im, 10, 20, 30));
