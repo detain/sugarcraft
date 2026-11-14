@@ -27,6 +27,9 @@ final class ExamplesPtyTest extends TestCase
 {
     private const TIMEOUT_SECONDS = 8.0;
 
+    /** Host-native null device — the Windows runners cannot open /dev/null (F12a). */
+    private const NULL_DEVICE = \PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
+
     private function examplePath(string $script): string
     {
         return \dirname(__DIR__, 3) . '/examples/' . $script . '.php';
@@ -202,12 +205,13 @@ final class ExamplesPtyTest extends TestCase
     }
 
     /**
-     * No terminal + dead input (file /dev/null): the sc-05 silent-exit shape
+     * No terminal + dead input (file, host-native null device — /dev/null
+     * on POSIX, NUL on the Windows runners): the sc-05 silent-exit shape
      * becomes a named refusal — exit 1, message on stderr naming the script.
      */
     public function testNoTerminalDeadInputRefusesLoudly(): void
     {
-        [$rc, $out, $err] = $this->runGuardProbe('counter', ['TERM' => 'xterm'], ['file', '/dev/null', 'r']);
+        [$rc, $out, $err] = $this->runGuardProbe('counter', ['TERM' => 'xterm'], ['file', self::NULL_DEVICE, 'r']);
 
         self::assertSame(1, $rc);
         self::assertStringContainsString('counter: this interactive demo needs a terminal', $err);

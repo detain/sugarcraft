@@ -24,7 +24,15 @@ use PHPUnit\Framework\TestCase;
  */
 final class EnvDetectTest extends TestCase
 {
-    /** Every arm's stdin is /dev/null: not a console, in every fake host shape. */
+    /**
+     * Every arm's stdin is the host-native null device: not a console, in
+     * every fake host shape. /dev/null is unopenable through the Windows
+     * runner's proc_open (F12a), so the spec must name what THAT host has:
+     * NUL there, /dev/null everywhere else.
+     */
+    private const NULL_DEVICE = \PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
+
+    /** Every arm's stdin is the null device: not a console, in every fake host shape. */
     private const CONSOLE_STDIN_EXPECT = false;
 
     public function testCleanNonWslLinuxHostDetectsNothing(): void
@@ -32,8 +40,9 @@ final class EnvDetectTest extends TestCase
         $result = $this->runProbe([]);
 
         // This is the arm that would be WRONG if the box were secretly WSL;
-        // the probe reads the real osrelease and tells us which truth applies.
-        $this->assertFalse($result['osrelease_microsoft'], 'this runner must be a clean non-WSL Linux host for the negative arms to mean anything');
+        // the probe reads the real osrelease and tells us which truth applies
+        // (no /proc on Windows answers false, which is the honest clean shape).
+        $this->assertFalse($result['osrelease_microsoft'], 'this runner must be a clean non-WSL host for the negative arms to mean anything');
 
         $this->assertFalse($result['is_wsl'], 'a Linux host with no WSL variables and no microsoft in osrelease is not WSL');
         $this->assertFalse($result['is_mintty']);
@@ -88,8 +97,9 @@ final class EnvDetectTest extends TestCase
 
     public function testStdinIsNeverAConsoleUnderTheHarness(): void
     {
-        // Every arm runs with descriptor 0 pointed at /dev/null; that is the
-        // one environmental constant across the whole matrix, and isConsole-
+        // Every arm runs with descriptor 0 pointed at the host-native null
+        // device; that is the one environmental constant across the whole
+        // matrix, and isConsole-
         // Stdin is the method the closed-descriptor family guards, so the
         // row proves the child really had a non-tty stdin while the env was
         // being faked around it.
@@ -120,7 +130,7 @@ final class EnvDetectTest extends TestCase
         }
 
         $descriptors = [
-            0 => ['file', '/dev/null', 'r'],
+            0 => ['file', self::NULL_DEVICE, 'r'],
             1 => ['pipe', 'w'],
             2 => ['pipe', 'w'],
         ];
