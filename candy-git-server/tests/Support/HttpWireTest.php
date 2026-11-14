@@ -63,28 +63,104 @@ final class HttpWireTest extends TestCase
 
     public function testWriteAllDeliversLargePayloadsSliceBySliceWithByteFidelity(): void
     {
-        // S02: the write loop feeds one 64 KiB chunk per fwrite instead of
-        // re-slicing the whole remainder per attempt. The remainder must
-        // still land verbatim — no truncation, no reordering, no
-        // duplication across slice boundaries.
-        [$reader, $writer] = \stream_socket_pair(\STREAM_PF_UNIX, \STREAM_SOCK_STREAM, \STREAM_IPPROTO_IP);
-        self::assertIsResource($reader);
-        self::assertIsResource($writer);
+        // S02 + F19 (CI ubuntu-26.04, jobs 81240709/83122655/81601034 @1be):
+        // the original AF_UNIX-pair form asked writeAll to hand a 328914-byte
+        // payload to a socket NOBODY READS before the stall grace expires —
+        // deliverable only on hosts whose pair buffers absorb the whole
+        // payload (this devbox does; the runners stopped deterministically at
+        // 233152 = their kernel buffer ceiling, turning the 'delivers' leg
+        // into 'false is identical to true'). That ceiling is the very physics
+        // the two stall tests around this one pin as the CONTRACT (zero
+        // progress past the grace ⇒ return the partial, never claim
+        // delivery). So src is right and the pin was host-dependent: the
+        // multi-slice feed loop can only be exercised against a peer that
+        // actually drains. The child below reads its stdin pipe to EOF and
+        // reports length+md5 of everything it received — the 64 KiB kernel
+        // pipe cap (already this file's cited wedge, used here in the
+        // opposite direction) guarantees the 64 KiB quantum slicing and the
+        // zero-accept select ticks run under real backpressure on every
+        // Linux leg, and byte fidelity — no truncation, duplication or
+        // reordering across slice boundaries — is asserted end-to-end
+        // THROUGH the kernel buffer instead of beside it.
+        $payload = \random_bytes(5 * 65536 + 1234); // 4+ slices, non-aligned tail
+        $child = self::startDrainingPeer();
+        $writer = null;
         try {
+            $writer = $child['pipes'][0];
             \stream_set_blocking($writer, false);
-            $payload = \random_bytes(5 * 65536 + 1234); // 4+ slices, non-aligned tail
 
-            $written = HttpWire::writeAll($writer, $payload, 5.0);
+            $written = HttpWire::writeAll($writer, $payload, 10.0, 120.0);
+            self::assertSame(\strlen($payload), $written, 'the drain-retry loop stopped short under backpressure');
 
-            self::assertSame(\strlen($payload), $written);
-            @\fclose($writer); // half-close so the blocking drain below sees EOF
-            self::assertSame($payload, (string) \stream_get_contents($reader));
+            \fclose($writer);
+            $writer = null; // half-close: the draining child sees EOF
+
+            $report = self::collectBounded($child, 20.0);
+            self::assertSame(
+                \strlen($payload) . ' ' . \md5($payload),
+                $report,
+                'the draining peer did not report the payload it received (slice-boundary fidelity broken)',
+            );
         } finally {
-            @\fclose($reader);
             if (\is_resource($writer)) {
                 @\fclose($writer);
             }
+            @\fclose($child['pipes'][1]);
+            @\fclose($child['pipes'][2]);
+            @\proc_terminate($child['proc']);
+            @\proc_close($child['proc']);
         }
+    }
+
+    /**
+     * A php child that drains its stdin pipe and echoes 'length md5' of
+     * everything it read — the live-peer counterpart to the sleeping
+     * `sleep 30` children the stall pins above use.
+     *
+     * @return array{proc: resource, pipes: array{0: resource, 1: resource, 2: resource}}
+     */
+    private static function startDrainingPeer(): array
+    {
+        $code = '$in=fopen("php://stdin","rb");$h="";'
+            . 'while(($c=fread($in,65536))!==false&&$c!==""){$h.=$c;}'
+            . 'echo strlen($h)." ".md5($h);';
+        $proc = \proc_open([PHP_BINARY, '-r', $code], [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ], $pipes);
+        self::assertIsResource($proc);
+
+        return ['proc' => $proc, 'pipes' => $pipes];
+    }
+
+    /**
+     * Bounded read of the child's stdout — a child that never finishes is a
+     * red, never a hang (the CI must be able to see which pin died).
+     *
+     * @param array{proc: resource, pipes: array{0: resource, 1: resource, 2: resource}} $child
+     */
+    private static function collectBounded(array $child, float $deadlineSeconds): string
+    {
+        $out = $child['pipes'][1];
+        \stream_set_blocking($out, false);
+        $report = '';
+        $deadline = \microtime(true) + $deadlineSeconds;
+        while (\microtime(true) < $deadline) {
+            $chunk = \fread($out, 4096);
+            if ($chunk !== false && $chunk !== '') {
+                $report .= $chunk;
+                continue;
+            }
+            if (\feof($out)) {
+                break;
+            }
+            $read = [$out];
+            $write = $except = null;
+            @\stream_select($read, $write, $except, 0, 100_000);
+        }
+
+        return $report;
     }
 
     public function testWriteAllStallsOnANonConsumingPeerAndReportsPartialProgress(): void
