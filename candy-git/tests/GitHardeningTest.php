@@ -624,7 +624,15 @@ final class GitHardeningTest extends TestCase
             self::assertTrue((new Git($repo))->strictFilters, 'yes must read as truthy');
             $relaxed = (new Git($repo))->withStrictFilters(false);
             self::assertFalse($relaxed->strictFilters);
-            $relaxed->stageAll(); // announces (parent-stderr noise is fine), never throws
+            // candy-git-119: the opt-out call ANNOUNCES, and announcing
+            // writes raw STDERR - so run it where that stderr is captured
+            // instead of splattered through PHPUnit's own output. The pin
+            // is stronger than the old seat's silence: the notice must
+            // actually arrive.
+            $r = Process::run(['php', $this->filterNoticeChild(), $repo, 'relaxed-optout'], null, 30.0);
+            self::assertSame(0, $r['exit'], 'opt-out must not throw despite the strict env; child stderr: ' . $r['stderr']);
+            self::assertStringContainsString('EXIT-OK', $r['stdout']);
+            self::assertStringContainsString('notice: this repository defines git filter drivers', $r['stderr'], 'the announce must reach the child stderr');
             self::assertFileExists($sentinel);
         } finally {
             putenv(Git::STRICT_FILTERS_ENV);

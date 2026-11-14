@@ -81,59 +81,11 @@ final class RendererTest extends TestCase
 
     public function testRenderShowsErrorBanner(): void
     {
-        $g = new class implements \SugarCraft\Git\GitDriver {
-            public function status(): array   { throw new \RuntimeException('fatal: not a git repository'); }
-            public function branches(): array { return []; }
-            public function log(int $_limit = 25): array { return []; }
-            public function stage(string $path): void {}
-            public function unstage(string $path): void {}
-            public function checkout(string $branch): void {}
-            public function checkoutRemote(string $remoteBranch): void {}
-            public function commit(string $_message): void {}
-            public function stageAll(): void {}
-            public function unstageAll(): void {}
-            public function diff(string $path, bool $cached = false): array { return []; }
-            public function discard(string $path): void {}
-            public function untrackedDiff(string $path): array { return []; }
-            public function deleteUntracked(string $path): void {}
-            public function amend(): void {}
-            public function amendWith(string $message): void {}
-            public function lastCommitMessage(): string { return ""; }
-            public function commitGpgSigns(): bool { return false; }
-            public function stagePatch(string $path, string $hunk): void {}
-            public function unstagePatch(string $path, string $hunk): void {}
-            public function createBranch(string $name, ?string $from = null): void {}
-            public function commitDetails(string $ref): array { return []; }
-            public function revert(string $ref): void {}
-            public function resetHard(string $ref): void {}
-            public function deleteBranch(string $_name): void {}
-            public function restoreBranch(string $_name, string $_sha): void {}
-            public function merge(string $branch): void {}
-            public function mergeAbort(): void {}
-            public function mergeContinue(): void {}
-            public function fetch(): void {}
-            public function pull(): void {}
-            public function push(): void {}
-            public function rebaseContinue(): void {}
-            public function rebaseAbort(): void {}
-            public function rebaseSkip(): void {}
-            public function reset(): void {}
-            public function stashList(): array { return []; }
-            public function stashApply(string $_stashRef): void {}
-            public function stashDrop(string $_stashRef): void {}
-            public function stashSha(string $stashRef): string { return ''; }
-
-            public function stashSubject(string $stashRef): string { return ''; }
-            public function stashRestore(string $sha, string $subject = ''): void {}
-            public function stashPush(?string $message, bool $keepIndex = false, bool $includeUntracked = false): void {}
-            public function stashPop(string $_stashRef): void {}
-            public function cherryPick(string $_commit): void {}
-            public function cherryPickContinue(): void {}
-            public function cherryPickAbort(): void {}
-            public function worktreeList(): array { return []; }
-            public function worktreeAdd(string $_path, string $_branch): void {}
-            public function worktreeRemove(string $_path): void {}
-            public function sequenceState(): string { return ''; }
+        $g = new class extends \SugarCraft\Git\Tests\Support\NullGit {
+            public function status(): array
+            {
+                throw new \RuntimeException('fatal: not a git repository');
+            }
         };
         $a = App::start($g);
         $out = Renderer::render($a);
@@ -151,68 +103,24 @@ final class RendererTest extends TestCase
     public function testSanitizesControlBytes(): void
     {
         // Create a git that returns paths and subjects with control bytes
-        $g = new class implements \SugarCraft\Git\GitDriver {
-            public function status(): array {
+        $g = new class extends \SugarCraft\Git\Tests\Support\NullGit {
+            public function status(): array
+            {
                 return [
                     ['branch_summary' => 'main'],
                     ['index_status' => 'M', 'work_status' => ' ', 'path' => "src/\x07bell.php"],
                 ];
             }
-            public function branches(): array {
+
+            public function branches(): array
+            {
                 return [['name' => "branch-\x07bell", 'sha' => 'abc', 'current' => true]];
             }
-            public function log(int $limit = 25): array {
+
+            public function log(int $limit = 25): array
+            {
                 return [['sha' => 'abc', 'subject' => "evil\x07bell", 'author' => 'Joe', 'ago' => '5m']];
             }
-            public function stage(string $path): void {}
-            public function unstage(string $path): void {}
-            public function checkout(string $branch): void {}
-            public function checkoutRemote(string $remoteBranch): void {}
-            public function commit(string $_message): void {}
-            public function stageAll(): void {}
-            public function unstageAll(): void {}
-            public function diff(string $path, bool $cached = false): array { return []; }
-            public function discard(string $path): void {}
-            public function untrackedDiff(string $path): array { return []; }
-            public function deleteUntracked(string $path): void {}
-            public function amend(): void {}
-            public function amendWith(string $message): void {}
-            public function lastCommitMessage(): string { return ""; }
-            public function commitGpgSigns(): bool { return false; }
-            public function stagePatch(string $path, string $hunk): void {}
-            public function unstagePatch(string $path, string $hunk): void {}
-            public function createBranch(string $name, ?string $from = null): void {}
-            public function commitDetails(string $ref): array { return []; }
-            public function revert(string $ref): void {}
-            public function resetHard(string $ref): void {}
-            public function deleteBranch(string $_name): void {}
-            public function restoreBranch(string $_name, string $_sha): void {}
-            public function merge(string $branch): void {}
-            public function mergeAbort(): void {}
-            public function mergeContinue(): void {}
-            public function fetch(): void {}
-            public function pull(): void {}
-            public function push(): void {}
-            public function rebaseContinue(): void {}
-            public function rebaseAbort(): void {}
-            public function rebaseSkip(): void {}
-            public function reset(): void {}
-            public function stashList(): array { return []; }
-            public function stashApply(string $stashRef): void {}
-            public function stashDrop(string $stashRef): void {}
-    public function stashSha(string $stashRef): string { return ''; }
-
-    public function stashSubject(string $stashRef): string { return ''; }
-    public function stashRestore(string $sha, string $subject = ''): void {}
-            public function stashPush(?string $message, bool $keepIndex = false, bool $includeUntracked = false): void {}
-            public function stashPop(string $stashRef): void {}
-            public function cherryPick(string $commit): void {}
-            public function cherryPickContinue(): void {}
-            public function cherryPickAbort(): void {}
-            public function worktreeList(): array { return []; }
-            public function worktreeAdd(string $path, string $branch): void {}
-            public function worktreeRemove(string $path): void {}
-            public function sequenceState(): string { return ''; }
         };
         $a = App::start($g);
         $out = Renderer::render($a);

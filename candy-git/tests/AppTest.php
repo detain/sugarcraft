@@ -1852,10 +1852,15 @@ final class AppTest extends TestCase
         // Enter a digit to go into selectingN mode
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, '3'));
         $this->assertSame('3', $a->interactiveRebase->countInput);
-        // Confirm count - should call git->log which throws
+        // Confirm count - should call git->log which throws. The contract is
+        // BOTH halves together (candy-git-115 — the old OR-disjunction let
+        // either half alone pass, pinning nothing): the thrown message
+        // surfaces verbatim as the error, AND the count input survives so
+        // the user can retry the same page after fixing whatever failed.
         [$a, ] = $a->update(new KeyMsg(KeyType::Enter, ''));
-        // The error should be set (either selectingN still true or error set)
-        $this->assertTrue($a->interactiveRebase->selectingN || $a->error !== null);
+        $this->assertStringContainsString('log failed', (string) $a->error);
+        $this->assertTrue($a->interactiveRebase->selectingN, 'a failed log read must not silently advance the picker');
+        $this->assertSame('3', $a->interactiveRebase->countInput);
     }
 
     public function testNavigateHunkClampWhenCountIsOne(): void

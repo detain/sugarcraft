@@ -6,6 +6,7 @@ namespace SugarCraft\Git\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Git\Git;
+use SugarCraft\Git\Tests\Concerns\GitSpawn;
 use SugarCraft\Git\Tests\Concerns\RecursiveDirCleanup;
 
 /**
@@ -18,18 +19,21 @@ use SugarCraft\Git\Tests\Concerns\RecursiveDirCleanup;
 final class GpgSigningProbeIntegrationTest extends TestCase
 {
     use RecursiveDirCleanup;
+    use GitSpawn;
 
     private string $cwd;
     private Git $git;
 
     protected function setUp(): void
     {
-        if (!exec('git --version 2>/dev/null')) {
+        // candy-git-123: argv-array spawn, no shell - the POSIX shapes this
+        // suite used to build (`2>/dev/null`) have no Windows reading.
+        if (self::gitSpawn(['--version'])['exit'] !== 0) {
             $this->markTestSkipped('git not available');
         }
         $this->cwd = sys_get_temp_dir() . '/gpgprobe_' . uniqid();
         mkdir($this->cwd, 0o777, true);
-        exec('git init -q ' . escapeshellarg($this->cwd) . ' 2>/dev/null');
+        $this->gitMust(['init', '-q', $this->cwd]);
         $this->git = new Git($this->cwd);
     }
 
@@ -40,7 +44,7 @@ final class GpgSigningProbeIntegrationTest extends TestCase
 
     private function setConfig(string $key, string $value): void
     {
-        exec('git -C ' . escapeshellarg($this->cwd) . ' config ' . escapeshellarg($key) . ' ' . escapeshellarg($value) . ' 2>/dev/null');
+        $this->gitMust(['-C', $this->cwd, 'config', $key, $value]);
     }
 
     public function test_unset_signing_config_means_no_pinentry(): void

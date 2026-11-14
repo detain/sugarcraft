@@ -30,6 +30,8 @@ use SugarCraft\Git\Support\Version;
  */
 final class PharCompatTest extends TestCase
 {
+    use \SugarCraft\Git\Tests\Concerns\GitSpawn;
+
     private const STAMP = 'v9.9.9-test';
 
     private static ?string $archive = null;
@@ -42,7 +44,7 @@ final class PharCompatTest extends TestCase
 
             return;
         }
-        if (!exec('git --version 2>/dev/null')) {
+        if (self::gitSpawn(['--version'])['exit'] !== 0) {
             self::$skipReason = 'git unavailable';
 
             return;

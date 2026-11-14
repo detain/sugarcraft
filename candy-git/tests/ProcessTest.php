@@ -22,6 +22,11 @@ final class ProcessTest extends TestCase
         $elapsed = microtime(true) - $start;
 
         $this->assertTrue($r['timedOut'], 'slow command should report timedOut');
+        // candy-git-117: the 2.0s ceiling over a 0.2s budget is deliberately
+        // generous (kill grace + CI scheduler jitter), pinned documented-not-
+        // tightened; the lower bound proves the deadline was actually WAITED
+        // on rather than the child dying instantly.
+        $this->assertGreaterThanOrEqual(0.15, $elapsed, 'the kill must ride the 0.2s deadline, not beat it');
         $this->assertLessThan(
             2.0,
             $elapsed,
@@ -99,10 +104,15 @@ final class ProcessTest extends TestCase
      */
     public function testWritePhaseStaysWithinTimeoutBudget(): void
     {
+        // candy-git-117: no `sh -c 'sleep N; exit 0'` wrapper — the shell dies
+        // at the deadline and would orphan the sleep it spawned; the direct
+        // argv child IS the sleeper, so the kill reaps everything. (sleep is
+        // on Git-bash PATH on Windows runners, same as the old sh arm.)
         $start = microtime(true);
-        $r     = Process::run(['sh', '-c', 'sleep 5; exit 0'], str_repeat('w', 200_000), 0.5);
+        $r     = Process::run(['sleep', '5'], str_repeat('w', 200_000), 0.5);
 
         $this->assertTrue($r['timedOut'], 'a full pipe plus idle child must hit the deadline');
+        // Generous ceiling, deliberately not tightened (candy-git-117).
         $this->assertLessThan(2.5, microtime(true) - $start);
     }
 
@@ -286,8 +296,12 @@ final class ProcessTest extends TestCase
      */
     public function testAliveChildAfterPipeEofIsKilledAtTheDeadline(): void
     {
+        // candy-git-117: the second `exec` REPLACES the shell with sleep, so
+        // the bounded kill ladder at the deadline reaps the sleeper itself —
+        // the old `sh -c 'exec ...; sleep 4'` shape detached its fds in the
+        // shell and left a grandchild sleep running past the test.
         $start = microtime(true);
-        $r     = Process::run(['sh', '-c', 'exec >/dev/null 2>&1; sleep 4'], null, 0.5);
+        $r     = Process::run(['sh', '-c', 'exec 1>/dev/null 2>&1; exec sleep 4'], null, 0.5);
         $elapsed = microtime(true) - $start;
 
         $this->assertTrue($r['timedOut'], 'a child that outlives the budget after pipe-EOF must report timedOut');

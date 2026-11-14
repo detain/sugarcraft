@@ -44,10 +44,20 @@ try {
         // DISTINCT from the sandbox global's `cat` (an identical value is
         // the disclosed notice-silent shadow and would never re-announce).
         $git->checkout($argv[3] ?? 'other-r3');
-        exec('git -C ' . escapeshellarg($repo) . ' config filter.lfs.clean "cat -" 2>/dev/null');
+        $cfg = \SugarCraft\Git\Process::run(['git', '-C', $repo, 'config', 'filter.lfs.clean', 'cat -'], null, 10.0);
+        if ($cfg['exit'] !== 0) {
+            fwrite(STDERR, 'child: config failed: ' . $cfg['stderr']);
+            exit(5);
+        }
         $git->checkout($argv[4] ?? 'master');
         $git->checkout($argv[3] ?? 'other-r3');
         $git->checkout($argv[4] ?? 'master');
+    } elseif ($mode === 'relaxed-optout') {
+        // candy-git-119: withStrictFilters(false) beats the environment's
+        // strict request, so the call must ANNOUNCE only - never throw. It
+        // ran in a child precisely because announcing writes raw STDERR; the
+        // parent used to eat that noise in PHPUnit's own output.
+        (new Git($repo))->withStrictFilters(false)->stageAll();
     } else {
         // Both verbs sit in FILTER_CAPABLE_DISPATCH ('add', 'diff'). Two calls
         // on ONE instance pin the per-instance one-shot latch.

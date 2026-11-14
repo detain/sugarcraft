@@ -83,12 +83,26 @@ final class GitSpawnPreludeGuardTest extends TestCase
      * `Process::run(['git', ...])` beside the funnel — and prove the census
      * sees it and the funnel predicate rejects it. The plant is deleted in
      * finally and never committed.
+     *
+     * candy-git-118: the plant carries a FIXED name and a stale copy is
+     * unlinked before the walk runs. A random name meant a run SIGKILLed
+     * between write and finally left a permanent extra spawn site behind —
+     * poisoning the census (6 -> 7 forever) with a file no edit created.
+     * Self-healing on the next run is the contract.
      */
     public function testTheRecursiveWalkCatchesANestedRawSpawnSite(): void
     {
         $dir   = dirname((string) (new \ReflectionClass(Git::class))->getFileName());
-        $name  = 'GuardProbePlant' . bin2hex(random_bytes(4));
+        $name  = 'GuardProbePlant';
         $plant = $dir . '/Support/' . $name . '.php';
+
+        // Self-heal proof (candy-git-118): drop the worst-case residue of an
+        // interrupted run, watch the census choke on it, and watch the sweep
+        // at the real plant's head restore the roster.
+        file_put_contents($plant, "<?php\n\ndeclare(strict_types=1);\n\nuse SugarCraft\\Git\\Process;\n\n\$evaded = Process::run(['git', 'status'], null, 1.0);\n");
+        self::assertCount(self::EXPECTED_SPAWN_SITES + 1, $this->spawnSites(), 'the walk must see a residual plant - if it does not, this test proves nothing');
+        @unlink($plant);
+        self::assertCount(self::EXPECTED_SPAWN_SITES, $this->spawnSites(), 'sweeping the residual must return the census to the roster');
 
         try {
             file_put_contents($plant, "<?php\n\ndeclare(strict_types=1);\n\nnamespace SugarCraft\\Git\\Support;\n\nuse SugarCraft\\Git\\Process;\n\nfinal class {$name}\n{\n    public static function evaded(): array\n    {\n        return Process::run(['git', 'status'], null, 1.0);\n    }\n}\n");
