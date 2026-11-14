@@ -13,6 +13,7 @@ use SugarCraft\Git\App;
 use SugarCraft\Git\CherryPick;
 use SugarCraft\Git\DiffViewer;
 use SugarCraft\Git\InteractiveRebase;
+use SugarCraft\Git\Pane;
 use SugarCraft\Git\RebaseAction;
 use SugarCraft\Git\RebaseCommit;
 use SugarCraft\Git\Renderer;
@@ -525,12 +526,21 @@ final class RendererTest extends TestCase
             public function worktreeRemove(string $path): void {}
             public function sequenceState(): string { return ''; }
         };
-        $a = App::start($g);
+        $a = (new App($g, width: 80, height: 24, history: new \SugarCraft\Git\HistoryManager()))->refresh();
         $out = Renderer::render($a);
         // Long path should be truncated with ellipsis
         $this->assertStringContainsString('…', $out);
-        // The long string of 'a' characters should not appear in full - it should be truncated
-        $this->assertStringNotContainsString(str_repeat('a', 50), $out);
+        // CG-22 re-pin (candy-git-022): the cursor modeline re-states the
+        // selected path on its own row, so the old "no run of 50 a's" pin
+        // could never hold once the modeline shipped — the row simply repeats
+        // the selection up to the bar budget. What must stay forbidden is
+        // UNBOUNDED overflow: the full 200-character path may not appear, and
+        // no physical row may exceed the 80-cell frame.
+        $this->assertStringNotContainsString(str_repeat('a', 200), $out);
+        foreach (explode("\n", $out) as $line) {
+            $cells = Width::of((string) preg_replace('/\x1b\[[0-9;]*m/', '', $line));
+            $this->assertLessThanOrEqual(80, $cells, 'a frame row overflowed the width budget');
+        }
     }
 
     /**
@@ -716,5 +726,56 @@ final class RendererTest extends TestCase
         $tall = new App($this->git(), error: str_repeat("some git detail line ", 40) . "\nAborting", width: 80, height: 24);
         $tallPlain = (string) preg_replace('/\x1b\[[0-9;]*m/', '', Renderer::render($tall));
         $this->assertSame(1, preg_match_all('/(?m)^.*error:.*$/', $tallPlain), 'a twelve-hundred-cell stderr blob still owns a single row');
+    }
+
+    // ---- CG-22 (candy-git-022): the cursor channel on a styleless palette --
+
+    public function testTheNoTtyFrameCarriesNoEscapesYetStillNamesTheCursor(): void
+    {
+        $app = new App(
+            $this->git(),
+            status: [['index_status' => 'M', 'work_status' => ' ', 'path' => 'src/A.php']],
+            width: 80,
+            height: 24,
+        );
+
+        Style::setDefaultProfile(ColorProfile::NoTty);
+        try {
+            $frame = Renderer::render($app);
+        } finally {
+            Style::setDefaultProfile(null);
+        }
+
+        $this->assertStringNotContainsString(chr(27), $frame, 'a TERM=dumb frame must be pure text');
+        $this->assertStringContainsString('cursor: src/A.php', $frame, 'the modeline names the selection on every palette');
+    }
+
+    public function testTheModelineCoexistsWithTheStyledFrame(): void
+    {
+        $frame = Renderer::render(new App(
+            $this->git(),
+            status: [['index_status' => 'M', 'work_status' => ' ', 'path' => 'src/A.php']],
+            width: 80,
+            height: 24,
+        ));
+
+        $this->assertStringContainsString('cursor: src/A.php', $frame);
+        $this->assertStringContainsString(chr(27) . '[', $frame, 'styling terminals keep their palette');
+    }
+
+    public function testAHostileRowCannotForgeEscapesThroughTheModeline(): void
+    {
+        $app = new App(
+            $this->git(),
+            branches: [['name' => "evil\x1b[1;1Hgate", 'sha' => 'x', 'current' => true]],
+            pane: Pane::Branches,
+            width: 80,
+            height: 24,
+        );
+
+        $frame = Renderer::render($app);
+
+        $this->assertStringNotContainsString(chr(27) . '[1;1H', $frame);
+        $this->assertStringContainsString('cursor: evilgate', $frame);
     }
 }

@@ -36,6 +36,7 @@ declare(strict_types=1);
 use SugarCraft\Core\I18n\T;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
+use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Git\App;
 use SugarCraft\Git\Git;
 use SugarCraft\Git\Lang;
@@ -135,4 +136,10 @@ if (!stream_isatty(STDOUT)) {
     fwrite(STDERR, Lang::t('cli.needs_tty') . "\n");
     exit(1);
 }
-(new Program(App::start(new Git($cwd)), new ProgramOptions(useAltScreen: true, bracketedPaste: true)))->run();
+// candy-git-052: a dumb terminal cannot act on alt-screen or cursor
+// addressing at all — Program writes those sequences raw and sugar-style
+// never sees them. Boot inline (the cursor modeline and plain text carry
+// the UI) and hand Program the already-detected profile so detection runs
+// once, here, not a second time inside the loop.
+$profile = ColorProfile::detect(stdout: STDOUT);
+(new Program(App::start(new Git($cwd)), new ProgramOptions(useAltScreen: $profile !== ColorProfile::NoTty, bracketedPaste: true, colorProfile: $profile)))->run();

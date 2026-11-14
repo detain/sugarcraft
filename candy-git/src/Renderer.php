@@ -160,6 +160,21 @@ final class Renderer
                 ->render(self::truncate(self::oneLine(self::sanitize($a->successMessage)), $a->barWidth()));
         }
 
+        // candy-git-022: the cursor modeline carries deliberately NO Style
+        // wrapper. Under TERM=dumb sugar-style answers every decoration
+        // with the empty string, so a styled line here would vanish
+        // exactly when the reverse-video row cursor also vanishes — and
+        // mutating keys would act on invisible rows. Plain text survives
+        // every palette; sanitize still fences hostile repo content.
+        $cursor = '';
+        $cursorTarget = $a->cursorTarget();
+        if ($cursorTarget !== null) {
+            $cursor = "\n " . self::truncate(
+                Lang::t('ui.cursor_line', ['target' => self::sanitize($cursorTarget)]),
+                $a->barWidth()
+            );
+        }
+
         $commitBar = '';
         if ($a->collectingCommit) {
             // candy-git-013: multi-line buffer, single-row preview; the amend
@@ -229,7 +244,7 @@ final class Renderer
             $interactiveRebaseOverlay = self::interactiveRebaseOverlay($a);
         }
 
-        $frame = $header . "\n" . $body . "\n " . $help . $err . $notice . $success . $commitBar . $branchBar . $mergeBar . $stashBar . $diffOverlay . $rebaseOverlay . $stashOverlay . $cherryPickBar . $worktreeOverlay . $interactiveRebaseOverlay . $overlay;
+        $frame = $header . "\n" . $body . "\n " . $help . $err . $notice . $success . $cursor . $commitBar . $branchBar . $mergeBar . $stashBar . $diffOverlay . $rebaseOverlay . $stashOverlay . $cherryPickBar . $worktreeOverlay . $interactiveRebaseOverlay . $overlay;
 
         // Hard ceiling: whatever the per-pane budgets missed, the frame never
         // ships more rows than the terminal has. The trailing empty

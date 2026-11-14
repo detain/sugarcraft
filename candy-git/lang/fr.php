@@ -121,6 +121,7 @@ return [
     // Notice lane (amber confirmation/hint state, candy-git-047)
     'notice.collect_hint' => 'Entrée confirme · Échap annule',
     'notice.commit_hint' => 'Entrée valide le commit · Tab nouvelle ligne · Échap annule',
+    'ui.cursor_line'     => 'curseur : {target}',
 
 
     // Remotes (fetch / pull / push)

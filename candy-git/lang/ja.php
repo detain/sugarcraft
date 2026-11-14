@@ -121,6 +121,7 @@ return [
     // Notice lane (amber confirmation/hint state, candy-git-047)
     'notice.collect_hint' => 'Enter で確定 · Esc でキャンセル',
     'notice.commit_hint' => 'Enter でコミット · Tab で改行 · Esc でキャンセル',
+    'ui.cursor_line'     => 'カーソル: {target}',
 
 
     // Remotes (fetch / pull / push)

@@ -46,8 +46,9 @@ usage line rather than being silently ignored.
   and unstage engine); the `--porcelain=v1` status engine predates it. candy-git
   checks `git --version` at launch and refuses older binaries (or a missing git)
   with one readable sentence, exit code 1.
-- An interactive terminal: the UI is a full-screen alt-buffer program, so a
-  piped stdout is refused instead of rendering escape-sequence soup.
+- An interactive terminal: the UI is a full-screen program (alt buffer on
+  styling terminals, inline under `TERM=dumb`), so a piped stdout is refused
+  instead of rendering escape-sequence soup.
 - A checked-out work tree — bare repositories have no status pane to show and
   are refused at launch.
 
@@ -204,8 +205,14 @@ border *and* a `▸` text marker prefixed to the focused pane's title — the
 marker carries no color, so tab cycling stays visible under `NO_COLOR`,
 `TERM=dumb`, and an ASCII-only palette.
 
-- **Row cursor** — the selected row is rendered with reverse video (SGR 7),
-  a channel that survives color stripping on every terminal we target.
+- **Row cursor** — on styling terminals the selected row is rendered with
+  reverse video (SGR 7). That channel alone would vanish on `TERM=dumb`,
+  where sugar-style emits no escape sequences at all, so the frame also
+  carries a plain-text `cursor: <target>` modeline row naming the selected
+  file, branch, commit, or overlay entry — the same information, on every
+  palette. Under `TERM=dumb` the launcher further boots in inline mode (no
+  alt buffer, no cursor addressing), so a styleless terminal gets text
+  rather than control-sequence garbage.
 - **Text buffers** — commit messages, branch names, and merge/cherry-pick
   targets are append-only: printable keys and `Space` append, `Backspace`
   deletes the last character, and a bracketed `paste` inserts the whole
@@ -260,7 +267,7 @@ file key like `git.timeout` resolves through the core `T` registry as
 raw string.
 
 **Available keys** (`lang/en.php` — an excerpt; the file is the full roster
-of 168 keys):
+of 169 keys):
 
 | Key                    | Default string                                                    | Parameters  |
 |------------------------|-------------------------------------------------------------------|------------|

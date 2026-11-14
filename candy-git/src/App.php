@@ -559,6 +559,7 @@ final class App implements Model
         if ($this->collectingMergeTarget)   { $used++; }
         if ($this->collectingStash)         { $used++; }
         if ($this->cherryPick !== null && $this->cherryPick->collecting) { $used++; }
+        if ($this->cursorTarget() !== null)               { $used++; } // candy-git-022 modeline row
         return max(1, $this->height - $used);
     }
 
@@ -618,6 +619,52 @@ final class App implements Model
             return PHP_INT_MAX;
         }
         return max(1, $rows - $this->paneArea());
+    }
+
+    /**
+     * The plain-text cursor modeline: what the keyboard currently acts on.
+     *
+     * Reverse video (SGR 7) carries the row cursor on styling terminals, but
+     * sugar-style answers TERM=dumb (ColorProfile::NoTty) by emitting NO
+     * escape at all — the selected row would become invisible while s/d/
+     * Enter/Space kept acting on it (candy-git-022). This line names the
+     * same target as untruncated text, and the Renderer prints it WITHOUT
+     * any Style wrapper so it survives every palette.
+     */
+    public function cursorTarget(): ?string
+    {
+        if ($this->showHelp || $this->showRebaseMenu) {
+            return null;
+        }
+        if ($this->isTyping()) {
+            // A buffer bar owns the keyboard; its label already names itself.
+            return null;
+        }
+        if ($this->diffViewer !== null) {
+            return $this->diffViewer->path;
+        }
+        if ($this->stashManager !== null) {
+            $entry = $this->stashManager->current();
+            return $entry === null ? null : $entry->stashRef() . ': ' . $entry->message;
+        }
+        if ($this->worktrees !== null) {
+            return $this->worktrees->current()?->path;
+        }
+        if ($this->interactiveRebase !== null) {
+            $row = $this->interactiveRebase->commits[$this->interactiveRebase->cursor] ?? null;
+            return $row === null ? null : $row->sha . ' ' . $row->subject;
+        }
+        if ($this->cherryPick !== null) {
+            return null;
+        }
+        return match ($this->pane) {
+            Pane::Status => isset($this->status[$this->statusCursor]['path'])
+                ? (string) $this->status[$this->statusCursor]['path'] : null,
+            Pane::Branches => isset($this->branches[$this->branchesCursor]['name'])
+                ? (string) $this->branches[$this->branchesCursor]['name'] : null,
+            Pane::Log => isset($this->log[$this->logCursor]['sha'])
+                ? (string) $this->log[$this->logCursor]['sha'] . ' ' . (string) ($this->log[$this->logCursor]['subject'] ?? '') : null,
+        };
     }
 
     /** Horizontal budget for full-width prompt/notice bars. */

@@ -121,6 +121,7 @@ return [
     // Notice lane (amber confirmation/hint state, candy-git-047)
     'notice.collect_hint' => 'Enter bestätigt · Esc bricht ab',
     'notice.commit_hint' => 'Enter committet · Tab neue Zeile · Esc bricht ab',
+    'ui.cursor_line'     => 'Cursor: {target}',
 
 
     // Remotes (fetch / pull / push)

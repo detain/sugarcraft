@@ -1474,4 +1474,63 @@ final class AppTest extends TestCase
         $this->assertStringContainsString('patch boom', $a->error);
         $this->assertSame([], $g->stagePatches);
     }
+
+    // ---- CG-22 (candy-git-022): the cursor modeline's target -------------
+
+    public function testCursorTargetNamesTheFocusedRowInEveryPane(): void
+    {
+        $a = App::start($this->git());
+        $this->assertSame('src/A.php', $a->cursorTarget());
+
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
+        $this->assertSame('main', $a->cursorTarget());
+
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
+        $this->assertSame('abc1 first commit', $a->cursorTarget());
+    }
+
+    public function testCursorTargetFollowsTheSelection(): void
+    {
+        $a = App::start($this->git());
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'j'));
+        $this->assertSame('src/B.php', $a->cursorTarget());
+
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'j'));
+        $this->assertSame('def2 second commit', $a->cursorTarget());
+    }
+
+    public function testCursorTargetIsNullWhileABufferOwnsTheKeyboard(): void
+    {
+        $a = App::start($this->git());
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'c'));
+        $this->assertTrue($a->collectingCommit);
+        $this->assertNull($a->cursorTarget());
+    }
+
+    public function testCursorTargetTracksTheStashSelection(): void
+    {
+        $g = $this->git();
+        $g->stashListResult = [new \SugarCraft\Git\StashEntry(0, 'abc1234', 'main', 'WIP thing')];
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'S'));
+        $this->assertNotNull($a->stashManager);
+        $this->assertSame('stash@{0}: WIP thing', $a->cursorTarget());
+    }
+
+    public function testCursorTargetIsNullForHelpAndForEmptyLists(): void
+    {
+        $a = App::start($this->git());
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, '?'));
+        $this->assertTrue($a->showHelp);
+        $this->assertNull($a->cursorTarget());
+
+        $empty = App::start(new FixtureGit(
+            statusRows: [['branch_summary' => 'main...origin/main']],
+            branchRows: [],
+            logRows: [],
+        ));
+        $this->assertNull($empty->cursorTarget());
+    }
 }

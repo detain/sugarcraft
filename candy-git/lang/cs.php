@@ -121,6 +121,7 @@ return [
     // Notice lane (amber confirmation/hint state, candy-git-047)
     'notice.collect_hint' => 'Enter potvrzuje · Esc ruší',
     'notice.commit_hint' => 'Enter odesílá · Tab nový řádek · Esc ruší',
+    'ui.cursor_line'     => 'kurzor: {target}',
 
 
     // Remotes (fetch / pull / push)

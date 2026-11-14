@@ -228,7 +228,9 @@ final class CommandLineTest extends TestCase
      * arrives as raw keystrokes and submits a commit mid-paste. A piped test
      * runner cannot boot the TUI at all (the refusal is pinned above), so the
      * contract is pinned at the launcher source: the boot line must carry
-     * bracketedPaste: true alongside useAltScreen: true.
+     * bracketedPaste: true, and the alt screen must be gated on the detected
+     * color profile (candy-git-052: a TERM=dumb terminal cannot act on alt
+     * screen or cursor addressing, so the launcher boots it inline).
      */
     public function testTheLauncherBootsWithBracketedPasteEnabled(): void
     {
@@ -237,7 +239,7 @@ final class CommandLineTest extends TestCase
         $src = (string) file_get_contents($bin);
 
         self::assertMatchesRegularExpression(
-            '/new ProgramOptions\([^)]*useAltScreen: true[^)]*bracketedPaste: true[^)]*\)/',
+            '/new ProgramOptions\([^)]*useAltScreen: \$profile !== ColorProfile::NoTty[^)]*bracketedPaste: true[^)]*\)/',
             $src,
         );
         self::assertDoesNotMatchRegularExpression(
