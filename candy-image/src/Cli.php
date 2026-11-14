@@ -85,6 +85,15 @@ final class Cli
     public const MAX_CELL_DIM = 100_000;
 
     /**
+     * Product ceiling for the whole render box (candy-image-030): the
+     * per-leg cap admits --size=5000x5000 = 25M cells, which measured
+     * no output in 20 s and mimics a freeze. Rendering scales with
+     * width × height, so boxes reaching this product are refused; the
+     * bound is exclusive so the measured-frozen 25M box itself refuses.
+     */
+    public const MAX_CELL_PRODUCT = 25_000_000;
+
+    /**
      * --format vocabulary: every chicle vocabulary word mapped by
      * {@see Mosaic::fromModeString()} on this base EXCEPT 'chafa' (refused
      * separately with its own message) — and except the library's extra
@@ -344,6 +353,21 @@ final class Cli
             // combination with the named list instead (M4).
             if ($animate && $animateDials !== []) {
                 self::err($stderr, Lang::t('cli.animate_dials_refused', ['flags' => implode(', ', array_keys($animateDials))]));
+
+                return self::EXIT_USAGE;
+            }
+
+            // The per-leg cap alone admits multi-minute boxes (each leg
+            // up to 100,000); render time scales with the product, so a
+            // box reaching MAX_CELL_PRODUCT is refused up front instead
+            // of looking frozen (candy-image-030). Only explicit pairs
+            // reach the check: a single leg rides the viewport on the
+            // other, and no viewport is wide enough to matter.
+            if ($width !== null && $height !== null && $width * $height >= self::MAX_CELL_PRODUCT) {
+                self::err($stderr, Lang::t('cli.box_too_large', [
+                    'cells' => number_format($width * $height),
+                    'limit' => number_format(self::MAX_CELL_PRODUCT),
+                ]));
 
                 return self::EXIT_USAGE;
             }

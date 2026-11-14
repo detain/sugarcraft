@@ -385,6 +385,39 @@ final class CliTest extends TestCase
         $this->assertStringContainsString('invalid value', $err);
     }
 
+    /**
+     * candy-image-030: the per-leg 100,000 cap alone admitted boxes that
+     * render for multiple minutes (5000x5000 = 25M cells measured no
+     * output in 20 s). The product ceiling refuses them as a named usage
+     * error instead; in-bounds boxes keep their measured budget.
+     */
+    public function testOversizedBoxProductIsRefusedAsTooLarge(): void
+    {
+        foreach (['--size=5000x5000', '--size=50000x500'] as $raw) {
+            [$exit, $out, $err] = self::drive([$raw, 'x.png']);
+
+            $this->assertSame(Cli::EXIT_USAGE, $exit, $raw);
+            $this->assertStringContainsString('box too large', $err, $raw);
+            $this->assertStringContainsString('25,000,000', $err, $raw);
+            $this->assertSame('', $out, $raw);
+        }
+
+        // The explicit-leg spelling reaches the same guard as --size.
+        [$exit, , $err] = self::drive(['--width=5000', '--height=5000', 'x.png']);
+        $this->assertSame(Cli::EXIT_USAGE, $exit);
+        $this->assertStringContainsString('box too large', $err);
+
+        // Boundary: 24,999,999 cells is in bounds (bad value, not too
+        // large), and a single oversized leg rides the viewport.
+        [$exit, , $err] = self::drive(['--size=4999x5001', 'x.png']);
+        $this->assertSame(Cli::EXIT_INPUT, $exit, '4999x5001 = 24,999,999 parses through');
+        $this->assertStringNotContainsString('box too large', $err);
+
+        [$exit, , $err] = self::drive(['--width=100000', 'x.png']);
+        $this->assertSame(Cli::EXIT_INPUT, $exit, 'a lone leg is not a product');
+        $this->assertStringNotContainsString('box too large', $err);
+    }
+
     public function testScaleAcceptsEverySpellingCaseInsensitively(): void
     {
         foreach (['fit', 'shrink', 'FILL', 'stretch', 'none', 'Crop'] as $raw) {

@@ -28,4 +28,5 @@ return [
     'cli.not_a_file'   => 'candy-image: not a regular file: {path}',
     'cli.animate_dials_refused' => 'candy-image: --animate ignores {flags} — they steer the still-image render path; drop them, or drop --animate',
     'cli.animate_requires_terminal' => 'candy-image: --animate needs an interactive terminal (stdin and stdout are both redirected); render a still image instead, or run it from a tty',
+    'cli.box_too_large'  => 'candy-image: box too large: {cells} cells (width x height) reaches the {limit}-cell ceiling; render time scales with the product — lower --width/--height or use a smaller --size box',
 ];
