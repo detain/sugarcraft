@@ -117,7 +117,11 @@ final class Alert implements \SugarCraft\Dashboard\Foundation\SizedItem
         $border = $this->borderChar ?? '│';
 
         $width = $this->width ?? 40;
-        $contentWidth = $width - 4; // Account for border chars and padding
+        // Finding sugar-dashboard-060 family clamp (D-66): below width 4 the
+        // border/interior arithmetic went negative and str_repeat threw.
+        // The border loop now carries the max(0,...) its siblings already
+        // had; wordWrap/padRight are 0-width safe.
+        $contentWidth = max(0, $width - 4); // Account for border chars and padding
 
         $lines = [];
         $coloredLines = [];

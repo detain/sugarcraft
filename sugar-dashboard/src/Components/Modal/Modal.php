@@ -128,26 +128,38 @@ final class Modal implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Top border with title or centered
         $result .= $tl;
         if ($this->title !== null) {
-            $titleWidth = Width::string($this->title);
+            // Finding sugar-dashboard-060 (D-66): the dash padding around an
+            // embedded title was unclamped arithmetic - a long title (or a
+            // close label) at a floor width made the counts negative and
+            // str_repeat threw ValueError. Truncate the title to the
+            // interior budget first, then clamp every pad non-negative. At
+            // healthy widths both legs are byte no-ops.
             $closeWidth = $this->showClose ? Width::string($this->closeLabel) : 0;
-            $paddingWidth = $modalW - 2 - $titleWidth - ($this->showClose ? $closeWidth + 1 : 0);
+            $titleBudget = max(0, $modalW - 2 - $closeWidth - 3);
+            $title = $this->title;
+            $titleWidth = Width::string($title);
+            if ($titleWidth > $titleBudget) {
+                $title = Width::truncateAnsi($title, $titleBudget);
+                $titleWidth = Width::string($title);
+            }
+            $paddingWidth = max(0, $modalW - 2 - $titleWidth - ($this->showClose ? $closeWidth + 1 : 0));
             $leftPad = (int) floor($paddingWidth / 2);
             $rightPad = $paddingWidth - $leftPad;
 
             $result .= str_repeat($h, $leftPad);
-            $result .= ' ' . $this->title . ' ';
+            $result .= ' ' . $title . ' ';
             if ($this->showClose) {
-                $result .= str_repeat($h, $rightPad - $closeWidth - 1);
+                $result .= str_repeat($h, max(0, $rightPad - $closeWidth - 1));
                 $result .= $this->closeLabel;
             } else {
                 $result .= str_repeat($h, $rightPad);
             }
         } else {
             if ($this->showClose) {
-                $result .= str_repeat($h, $modalW - 4);
+                $result .= str_repeat($h, max(0, $modalW - 4));
                 $result .= ' ' . $this->closeLabel . ' ';
             } else {
-                $result .= str_repeat($h, $modalW - 2);
+                $result .= str_repeat($h, max(0, $modalW - 2));
             }
         }
         $result .= $tr . "\n";
@@ -185,9 +197,14 @@ final class Modal implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         foreach ($renderedLines as $line) {
             $lineWidth = Width::string($line);
-            $leftPad = (int) floor(($allocW - $modalW) / 2);
+            // Finding sugar-dashboard-166 (D-66): with modalW at its 20-cell
+            // floor inside an allocation narrower than 25, the centering
+            // left pad and the residual gap both went negative - another
+            // ValueError from str_repeat. Both clamped; healthy widths are
+            // byte-identical. (Row-overflow TRUTH is D-67's cell budget leg.)
+            $leftPad = max(0, (int) floor(($allocW - $modalW) / 2));
             $padding = str_repeat(' ', $leftPad);
-            $output[] = $padding . str_pad($line, $modalW, ' ') . str_repeat(' ', $allocW - $leftPad - $modalW);
+            $output[] = $padding . str_pad($line, $modalW, ' ') . str_repeat(' ', max(0, $allocW - $leftPad - $modalW));
         }
 
         $outputCount = count($output);
