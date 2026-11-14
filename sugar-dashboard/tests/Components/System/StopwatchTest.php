@@ -65,7 +65,7 @@ final class StopwatchTest extends TestCase
 
     public function testWithElapsed(): void
     {
-        $stopwatch = Stopwatch::new()->withElapsed(65000); // 65 seconds
+        $stopwatch = Stopwatch::new()->withElapsedMillis(65000); // 65 seconds
         $rendered = $stopwatch->render();
 
         // Should contain 01:05 or similar
@@ -118,7 +118,7 @@ final class StopwatchTest extends TestCase
 
     public function testGetElapsedSeconds(): void
     {
-        $stopwatch = Stopwatch::new()->withElapsed(125000); // 125 seconds
+        $stopwatch = Stopwatch::new()->withElapsedMillis(125000); // 125 seconds
         $seconds = $stopwatch->getElapsedSeconds();
 
         $this->assertSame(125, $seconds);
@@ -126,7 +126,7 @@ final class StopwatchTest extends TestCase
 
     public function testGetElapsedMilliseconds(): void
     {
-        $stopwatch = Stopwatch::new()->withElapsed(125000);
+        $stopwatch = Stopwatch::new()->withElapsedMillis(125000);
         $ms = $stopwatch->getElapsedMilliseconds();
 
         $this->assertSame(125000, $ms);
@@ -192,7 +192,7 @@ final class StopwatchTest extends TestCase
     public function testWithElapsedReturnsNewInstance(): void
     {
         $original = Stopwatch::new();
-        $updated = $original->withElapsed(5000);
+        $updated = $original->withElapsedMillis(5000);
 
         $this->assertNotSame($original, $updated);
     }
@@ -251,7 +251,7 @@ final class StopwatchTest extends TestCase
 
     public function testNegativeElapsedClamped(): void
     {
-        $stopwatch = Stopwatch::new()->withElapsed(-100);
+        $stopwatch = Stopwatch::new()->withElapsedMillis(-100);
         $ms = $stopwatch->getElapsedMilliseconds();
 
         // Should be clamped to 0
@@ -260,10 +260,41 @@ final class StopwatchTest extends TestCase
 
     public function testLongDuration(): void
     {
-        $stopwatch = Stopwatch::new()->withElapsed(3600000); // 1 hour
+        $stopwatch = Stopwatch::new()->withElapsedMillis(3600000); // 1 hour
         $rendered = $stopwatch->render();
 
         // Should show hours
         $this->assertMatchesRegularExpression('/\d+:\d{2}:\d{2}/', $rendered);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // D-81 (finding sugar-dashboard-180): unit-honest setter name
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testWithElapsedMillisCountsMillisecondsExactly(): void
+    {
+        // Raw colorless ctor - digits only. The SAME literal 999 that
+        // Timer::withElapsedSeconds reads as 999 SECONDS is 999 ms here.
+        $sw = new Stopwatch(0, true, false, null);
+        $this->assertSame('00:00.99', $sw->withElapsedMillis(999)->render());
+        $this->assertSame('1:01:01.00', $sw->withElapsedMillis(3661 * 1000)->render());
+    }
+
+    public function testDeprecatedWithElapsedForwardsToMillisName(): void
+    {
+        $this->assertSame(
+            (new Stopwatch(0, true, false, null))->withElapsedMillis(5000)->render(),
+            (new Stopwatch(0, true, false, null))->withElapsed(5000)->render(),
+        );
+    }
+
+    public function testRenderDelegatesToSharedDurationFormat(): void
+    {
+        $source = (string) file_get_contents(
+            (new \ReflectionClass(Stopwatch::class))->getFileName()
+        );
+        $this->assertStringNotContainsString("%d:%02d:%02d", $source);
+        $this->assertStringNotContainsString("%02d:%02d", $source);
+        $this->assertStringContainsString('DurationFormat::hms(', $source);
     }
 }

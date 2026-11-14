@@ -7,12 +7,13 @@ namespace SugarCraft\Dashboard\Components\System;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Dashboard\Foundation\ColorMode;
+use SugarCraft\Dashboard\Support\DurationFormat;
 
 /**
  * A stopwatch component.
  *
  * Displays elapsed time in HH:MM:SS.ms format.
- * Does not run automatically - use withElapsed() to update.
+ * Does not run automatically - use withElapsedMillis() to update.
  *
  * Mirrors stopwatch concepts adapted to PHP with wither-style immutable setters.
  */
@@ -70,24 +71,10 @@ final class Stopwatch implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function render(): string
     {
-        $totalSeconds = (int) floor($this->elapsedMilliseconds / 1000);
-        $milliseconds = $this->elapsedMilliseconds % 1000;
-        $hours = (int) floor($totalSeconds / 3600);
-        $minutes = (int) floor(($totalSeconds % 3600) / 60);
-        $seconds = $totalSeconds % 60;
-
-        $timeStr;
-        if ($hours > 0) {
-            if ($this->showMilliseconds) {
-                $timeStr = sprintf('%d:%02d:%02d.%02d', $hours, $minutes, $seconds, (int) ($milliseconds / 10));
-            } else {
-                $timeStr = sprintf('%d:%02d:%02d', $hours, $minutes, $seconds);
-            }
-        } elseif ($this->showMilliseconds) {
-            $timeStr = sprintf('%02d:%02d.%02d', $minutes, $seconds, (int) ($milliseconds / 10));
-        } else {
-            $timeStr = sprintf('%02d:%02d', $minutes, $seconds);
-        }
+        $hundredths = $this->showMilliseconds
+            ? (int) (($this->elapsedMilliseconds % 1000) / 10)
+            : null;
+        $timeStr = DurationFormat::hms((int) floor($this->elapsedMilliseconds / 1000), $hundredths);
 
         if ($this->isRunning) {
             $timeStr .= ' ▶';
@@ -152,9 +139,13 @@ final class Stopwatch implements \SugarCraft\Dashboard\Foundation\SizedItem
     // ─── Withers ──────────────────────────────────────────────────
 
     /**
-     * Set the elapsed time in milliseconds.
+     * Set the elapsed time in MILLISECONDS.
+     *
+     * The unit is in the name because finding sugar-dashboard-180 caught
+     * a 1000x trap: `Timer::withElapsedSeconds()` counts SECONDS under
+     * the same bare name. Pass milliseconds here.
      */
-    public function withElapsed(int $milliseconds): self
+    public function withElapsedMillis(int $milliseconds): self
     {
         return new self(
             elapsedMilliseconds: max(0, $milliseconds),
@@ -162,6 +153,19 @@ final class Stopwatch implements \SugarCraft\Dashboard\Foundation\SizedItem
             isRunning: $this->isRunning,
             color: $this->color,
         );
+    }
+
+    /**
+     * Set the elapsed time in milliseconds.
+     *
+     * @deprecated The unit-less name hid a 1000x mismatch with
+     *     {@see Timer::withElapsedSeconds()}; kept only as a BC
+     *     forwarder. Use {@see self::withElapsedMillis()} instead.
+     *     REMOVED-IN: 2.0.0.
+     */
+    public function withElapsed(int $milliseconds): self
+    {
+        return $this->withElapsedMillis($milliseconds);
     }
 
     /**

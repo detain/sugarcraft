@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Components\System;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Dashboard\Foundation\ColorMode;
+use SugarCraft\Dashboard\Support\DurationFormat;
 
 /**
  * A countdown timer component.
@@ -72,16 +73,7 @@ final class Timer implements \SugarCraft\Dashboard\Foundation\SizedItem
     public function render(): string
     {
         $remaining = max(0, $this->totalSeconds - $this->elapsedSeconds);
-        $hours = (int) floor($remaining / 3600);
-        $minutes = (int) floor(($remaining % 3600) / 60);
-        $seconds = $remaining % 60;
-
-        $timeStr;
-        if ($hours > 0) {
-            $timeStr = sprintf('%d:%02d:%02d', $hours, $minutes, $seconds);
-        } else {
-            $timeStr = sprintf('%02d:%02d', $minutes, $seconds);
-        }
+        $timeStr = DurationFormat::hms($remaining);
 
         // 074: $isRunning was stored and withered but render never read
         // it — mirror Stopwatch's contract and show the running marker,
@@ -149,9 +141,14 @@ final class Timer implements \SugarCraft\Dashboard\Foundation\SizedItem
     // ─── Withers ──────────────────────────────────────────────────
 
     /**
-     * Set the elapsed time (for ticking).
+     * Set the elapsed time in SECONDS (for ticking).
+     *
+     * The unit is in the name because finding sugar-dashboard-180 caught
+     * a 1000x trap: `Stopwatch::withElapsed()` takes MILLISECONDS under
+     * the same bare name. Use {@see self::withElapsedMillis()} wording
+     * there; this setter only ever counts seconds.
      */
-    public function withElapsed(int $seconds): self
+    public function withElapsedSeconds(int $seconds): self
     {
         return new self(
             totalSeconds: $this->totalSeconds,
@@ -161,6 +158,19 @@ final class Timer implements \SugarCraft\Dashboard\Foundation\SizedItem
             warningColor: $this->warningColor,
             warningThreshold: $this->warningThreshold,
         );
+    }
+
+    /**
+     * Set the elapsed time in seconds.
+     *
+     * @deprecated The unit-less name hid a 1000x mismatch with
+     *     {@see Stopwatch::withElapsedMillis()}; kept only as a BC
+     *     forwarder. Use {@see self::withElapsedSeconds()} instead.
+     *     REMOVED-IN: 2.0.0.
+     */
+    public function withElapsed(int $seconds): self
+    {
+        return $this->withElapsedSeconds($seconds);
     }
 
     /**

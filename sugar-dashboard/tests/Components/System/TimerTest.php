@@ -74,7 +74,7 @@ final class TimerTest extends TestCase
 
     public function testExpiredTimer(): void
     {
-        $timer = Timer::new(60)->withElapsed(120);
+        $timer = Timer::new(60)->withElapsedSeconds(120);
         $rendered = $timer->render();
 
         // Should show 00:00 or 0:00
@@ -87,8 +87,8 @@ final class TimerTest extends TestCase
 
     public function testWithElapsedUpdatesDisplay(): void
     {
-        $timer1 = Timer::new(60)->withElapsed(0);
-        $timer2 = Timer::new(60)->withElapsed(30);
+        $timer1 = Timer::new(60)->withElapsedSeconds(0);
+        $timer2 = Timer::new(60)->withElapsedSeconds(30);
 
         $rendered1 = $timer1->render();
         $rendered2 = $timer2->render();
@@ -99,7 +99,7 @@ final class TimerTest extends TestCase
 
     public function testNegativeElapsedClampedToZero(): void
     {
-        $timer = Timer::new(60)->withElapsed(-10);
+        $timer = Timer::new(60)->withElapsedSeconds(-10);
         $rendered = $timer->render();
 
         // Should not show negative time
@@ -112,7 +112,7 @@ final class TimerTest extends TestCase
 
     public function testGetRemainingSeconds(): void
     {
-        $timer = Timer::new(60)->withElapsed(25);
+        $timer = Timer::new(60)->withElapsedSeconds(25);
         $remaining = $timer->getRemainingSeconds();
 
         $this->assertSame(35, $remaining);
@@ -120,7 +120,7 @@ final class TimerTest extends TestCase
 
     public function testGetRemainingSecondsAtZero(): void
     {
-        $timer = Timer::new(60)->withElapsed(100);
+        $timer = Timer::new(60)->withElapsedSeconds(100);
         $remaining = $timer->getRemainingSeconds();
 
         $this->assertSame(0, $remaining);
@@ -128,9 +128,9 @@ final class TimerTest extends TestCase
 
     public function testIsExpired(): void
     {
-        $timer1 = Timer::new(60)->withElapsed(30);
-        $timer2 = Timer::new(60)->withElapsed(60);
-        $timer3 = Timer::new(60)->withElapsed(120);
+        $timer1 = Timer::new(60)->withElapsedSeconds(30);
+        $timer2 = Timer::new(60)->withElapsedSeconds(60);
+        $timer3 = Timer::new(60)->withElapsedSeconds(120);
 
         $this->assertFalse($timer1->isExpired());
         $this->assertTrue($timer2->isExpired());
@@ -161,7 +161,7 @@ final class TimerTest extends TestCase
 
     public function testWarningColorWhenLowTime(): void
     {
-        $timer = Timer::new(120)->withElapsed(100)->withWarningThreshold(30);
+        $timer = Timer::new(120)->withElapsedSeconds(100)->withWarningThreshold(30);
         $rendered = $timer->render();
 
         // With 20 seconds remaining and threshold of 30, should use warning color
@@ -198,7 +198,7 @@ final class TimerTest extends TestCase
     public function testWithElapsedReturnsNewInstance(): void
     {
         $original = Timer::new(60);
-        $updated = $original->withElapsed(30);
+        $updated = $original->withElapsedSeconds(30);
 
         $this->assertNotSame($original, $updated);
     }
@@ -291,7 +291,43 @@ final class TimerTest extends TestCase
 
     public function testExactlyAtExpiry(): void
     {
-        $timer = Timer::new(60)->withElapsed(60);
+        $timer = Timer::new(60)->withElapsedSeconds(60);
         $this->assertTrue($timer->isExpired());
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // D-81 (finding sugar-dashboard-180): unit-honest setter name
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testWithElapsedSecondsCountsSecondsExactly(): void
+    {
+        // Raw colorless ctor: the unit trap is painted in digits, not hues.
+        $timer = new Timer(3661, 0, false, null, null);
+        $this->assertSame('1:01:00', $timer->withElapsedSeconds(1)->render());
+        // Feeding the SAME literal 999 that Stopwatch::withElapsedMillis
+        // would read as 999 ms paints 999 SECONDS here - the 1000x trap
+        // made visible.
+        $this->assertSame('00:01', (new Timer(1000, 0, false, null, null))->withElapsedSeconds(999)->render());
+    }
+
+    public function testDeprecatedWithElapsedForwardsToSecondsName(): void
+    {
+        $this->assertSame(
+            (new Timer(60, 0, false, null, null))->withElapsedSeconds(25)->render(),
+            (new Timer(60, 0, false, null, null))->withElapsed(25)->render(),
+        );
+    }
+
+    public function testRenderDelegatesToSharedDurationFormat(): void
+    {
+        // Dedup pin: no hand-rolled face literals survive in the
+        // component; the formatter owns them now. (Timer still mentions
+        // 3600 in its width estimate - that is sizing, not face math.)
+        $source = (string) file_get_contents(
+            (new \ReflectionClass(Timer::class))->getFileName()
+        );
+        $this->assertStringNotContainsString("%d:%02d:%02d", $source);
+        $this->assertStringNotContainsString("%02d:%02d'", $source);
+        $this->assertStringContainsString('DurationFormat::hms($remaining)', $source);
     }
 }
