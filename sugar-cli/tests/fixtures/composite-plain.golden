@@ -1,0 +1,9 @@
+─ Flags ──────────────────────────────────────────────────────────────
+USAGE
+  myapp [flags]
+
+FLAGS
+  --verbose  enable verbose logging
+  --out <p>  write the report to path p
+✓ all done
+▸ 3/3 running

@@ -14,6 +14,7 @@ use SugarCraft\Cli\StatusLine;
 use SugarCraft\Cli\Stage;
 use SugarCraft\Cli\Theme;
 use SugarCraft\Cli\Tests\Support\SandboxTerminalColumns;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Style;
 use SugarCraft\Testing\Snapshot\Assertions;
 
@@ -87,6 +88,68 @@ final class GoldenRenderTest extends TestCase
             $this->fixturesDir . '/banner-title.golden',
             $output,
         );
+    }
+
+    /**
+     * Finding 044 arm 1 — plain composite: one golden carrying a page built
+     * from several presenters under Theme::plain(), so the zero-escape
+     * contract is pinned end-to-end, not only per-presenter.
+     */
+    public function testPlainCompositeGolden(): void
+    {
+        $output = Section::header('Flags', Theme::plain(), 1, 70) . "\n"
+            . HelpText::render('myapp [flags]', ['flags' => [
+                '--verbose' => 'enable verbose logging',
+                '--out <p>' => 'write the report to path p',
+            ]], theme: Theme::plain(), width: 70) . "\n"
+            . StatusLine::success('all done', Theme::plain()) . "\n"
+            . Stage::step('running', 3, 3, Theme::plain(), width: 70);
+
+        Assertions::assertGoldenAnsi($this->fixturesDir . '/composite-plain.golden', $output);
+        self::assertStringNotContainsString("\x1b", $output, 'the plain composite must be escape-free');
+    }
+
+    /**
+     * Finding 044 arm 2 — pinned-60 Auto reflow: the same page measured at
+     * the DEFAULT 80 would capture nothing about re-flow; captured with
+     * COLUMNS pinned to 60 and the width left omitted (the Auto leg), this
+     * golden pins exactly how the default page reflows to a narrow terminal.
+     */
+    public function testPinnedSixtyAutoReflowGolden(): void
+    {
+        $this->pinTerminalColumns(60);
+
+        $output = HelpText::render('myapp [flags]', ['flags' => [
+            '--enable-verbose-logging' => 'turn on verbose diagnostic output for every stage of the run',
+        ]], theme: Theme::plain());
+
+        Assertions::assertGoldenAnsi($this->fixturesDir . '/helptext-pin60.golden', $output);
+
+        // The bytes alone could be any width's output; pin what this case
+        // exists to capture: the Auto leg resolved to 60, so rows stay
+        // within 60 cells and the over-long description re-flowed.
+        $lines = explode("\n", $output);
+        self::assertGreaterThan(3, count($lines), 'the long description must wrap at 60');
+        foreach ($lines as $line) {
+            self::assertLessThanOrEqual(60, Width::string($line));
+        }
+    }
+
+    /**
+     * Finding 044 arm 3 — dracula accent path: the preset actually used by
+     * themed apps; its accent colour runs were never golden-pinned, so a
+     * palette regression could only ever be caught by eye.
+     */
+    public function testDraculaAccentGolden(): void
+    {
+        $output = Section::header('Commands', Theme::dracula(), 1, 70) . "\n"
+            . HelpText::render('myapp', ['commands' => [
+                'build' => 'compile the project',
+            ]], theme: Theme::dracula(), width: 70) . "\n"
+            . StatusLine::error('failed', Theme::dracula());
+
+        Assertions::assertGoldenAnsi($this->fixturesDir . '/dracula-accent.golden', $output);
+        self::assertStringContainsString("\x1b[", $output, 'the dracula path must carry colour runs');
     }
 
     public function testSectionHeaderRendersAnsi(): void

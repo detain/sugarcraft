@@ -1,0 +1,7 @@
+USAGE
+  myapp [flags]
+
+FLAGS
+  --enable-verbose-logging  turn on verbose diagnostic
+                            output for every stage of the
+                            run
