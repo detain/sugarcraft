@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/candy-vcr",
-    "description": "Record and replay sugar-core Program sessions into cassettes \u2014 bug-repro / regression / fuzzing.",
+    "description": "Record and replay sugar-core Program sessions into cassettes, render VHS .tape scripts to GIFs \u2014 bug-repro / regression / fuzzing.",
     "type": "library",
     "license": "MIT",
     "keywords": [
@@ -11,7 +11,11 @@
         "record",
         "replay",
         "cassette",
-        "sugarcraft"
+        "sugarcraft",
+        "vhs",
+        "gif",
+        "tape",
+        "asciinema"
     ],
     "homepage": "https://github.com/sugarcraft/candy-vcr",
     "authors": [
