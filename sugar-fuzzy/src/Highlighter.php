@@ -15,17 +15,53 @@ final class Highlighter
     /**
      * Highlight matched runs in a candidate string.
      *
-     * @param MatchResult            $result The match result containing matched indices
-     * @param \Closure(string):string $styler Closure that wraps matched text
+     * The styler is any callable — plain callables like `'strtoupper'` and
+     * first-class callables are as valid as closures (finding sugar-fuzzy-023:
+     * the previous `\Closure`-only typing forced the sole real consumer to
+     * smuggle runs through a NUL-sentinel string and re-parse them).
+     *
+     * @param MatchResult                $result The match result containing matched indices
+     * @param callable(string):string    $styler Callable that wraps matched text
      * @return string The candidate with matched runs styled
      */
-    public function highlight(MatchResult $result, \Closure $styler): string
+    public function highlight(MatchResult $result, callable $styler): string
     {
-        if ($result->isEmpty()) {
-            return $result->haystack;
+        $parts = [];
+
+        foreach ($this->segments($result) as $segment) {
+            $parts[] = $segment['matched'] ? $styler($segment['text']) : $segment['text'];
         }
 
+        return implode('', $parts);
+    }
+
+    /**
+     * Split the candidate into presentation-neutral matched/unmatched segments.
+     *
+     * Returns `list<array{text: string, matched: bool}>` in reading order:
+     * consecutive matched code points collapse into one segment; unmatched
+     * gaps become their own. Index normalization (drop out-of-range, dedupe,
+     * sort) is identical to {@see self::highlight()}, so `segments()` is the
+     * single source of truth for the run structure — consumers that need a
+     * different presentation (or want to feed a list view row by row) can use
+     * it directly instead of styling and re-parsing.
+     *
+     * Single forward pass: each segment of the ORIGINAL haystack is sliced
+     * exactly once and concatenated once (finding sugar-fuzzy-019: the old
+     * reverse-order applyRuns() re-copied the whole string per run, quadratic
+     * in run count — 11.5x measured on 1000 chars/100 runs).
+     *
+     * @return list<array{text: string, matched: bool}>
+     */
+    public function segments(MatchResult $result): array
+    {
         $candidate = $result->haystack;
+        $len = mb_strlen($candidate, 'UTF-8');
+
+        if ($result->isEmpty()) {
+            return $len === 0 ? [] : [['text' => $candidate, 'matched' => false]];
+        }
+
         $indices = $result->indices();
 
         // Normalize: MatchResult is publicly constructible, so external callers
@@ -33,7 +69,6 @@ final class Highlighter
         // outside [0, len) first — a negative or past-end index would otherwise
         // make mb_substr slice the wrong bytes and corrupt/duplicate output —
         // then dedupe and sort to satisfy groupIntoRuns()'s ascending invariant.
-        $len = mb_strlen($candidate, 'UTF-8');
         $indices = array_values(array_filter(
             $indices,
             static fn(int $idx): bool => $idx >= 0 && $idx < $len,
@@ -42,14 +77,26 @@ final class Highlighter
         sort($indices);
 
         if ($indices === []) {
-            return $candidate;
+            return $len === 0 ? [] : [['text' => $candidate, 'matched' => false]];
         }
 
-        // Group consecutive indices into runs
-        $runs = $this->groupIntoRuns($indices);
+        $segments = [];
+        $cursor = 0;
 
-        // Build result by applying styler to each run
-        return $this->applyRuns($candidate, $runs, $styler);
+        foreach ($this->groupIntoRuns($indices) as $run) {
+            if ($run['start'] > $cursor) {
+                $segments[] = ['text' => mb_substr($candidate, $cursor, $run['start'] - $cursor, 'UTF-8'), 'matched' => false];
+            }
+
+            $segments[] = ['text' => mb_substr($candidate, $run['start'], $run['end'] - $run['start'] + 1, 'UTF-8'), 'matched' => true];
+            $cursor = $run['end'] + 1;
+        }
+
+        if ($cursor < $len) {
+            $segments[] = ['text' => mb_substr($candidate, $cursor, null, 'UTF-8'), 'matched' => false];
+        }
+
+        return $segments;
     }
 
     /**
@@ -85,31 +132,5 @@ final class Highlighter
         $runs[] = ['start' => $runStart, 'end' => $runEnd];
 
         return $runs;
-    }
-
-    /**
-     * Apply styler to each run in the candidate string.
-     *
-     * @param string                            $candidate The haystack string
-     * @param list<array{start: int, end: int}> $runs     List of [start, end] inclusive ranges
-     * @param \Closure(string):string          $styler   Closure that wraps matched text
-     * @return string The candidate with matched runs styled
-     */
-    private function applyRuns(string $candidate, array $runs, \Closure $styler): string
-    {
-        // Build the result by iterating through runs in reverse order
-        // (to preserve string positions when inserting)
-        $result = $candidate;
-
-        for ($i = count($runs) - 1; $i >= 0; $i--) {
-            $run = $runs[$i];
-            $matched = mb_substr($candidate, $run['start'], $run['end'] - $run['start'] + 1, 'UTF-8');
-            $styled = $styler($matched);
-            $result = mb_substr($result, 0, $run['start'], 'UTF-8')
-                . $styled
-                . mb_substr($result, $run['end'] + 1, null, 'UTF-8');
-        }
-
-        return $result;
     }
 }

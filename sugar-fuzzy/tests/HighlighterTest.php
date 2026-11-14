@@ -182,4 +182,53 @@ final class HighlighterTest extends TestCase
 
         $this->assertSame('[abc]', $output);
     }
+
+    #[Test]
+    public function testSegmentsExposeRunStructureAcrossCodePoints(): void
+    {
+        // Multi-run Unicode haystack (finding sugar-fuzzy-023 structure API):
+        // indices are code-point positions, so the 3-byte '✓' is one element.
+        $result = new MatchResult('är', 'föoBär✓x', 10, [1, 4, 5]);
+
+        $this->assertSame([
+            ['text' => 'f', 'matched' => false],
+            ['text' => 'ö', 'matched' => true],
+            ['text' => 'oB', 'matched' => false],
+            ['text' => 'är', 'matched' => true],
+            ['text' => '✓x', 'matched' => false],
+        ], $this->highlighter->segments($result));
+    }
+
+    #[Test]
+    public function testSegmentsEmptyResultIsOneUnmatchedSegment(): void
+    {
+        $result = new MatchResult('zz', 'abc', 0, []);
+
+        $this->assertSame([['text' => 'abc', 'matched' => false]], $this->highlighter->segments($result));
+    }
+
+    #[Test]
+    public function testSegmentsOfEmptyHaystackYieldNothing(): void
+    {
+        $result = new MatchResult('', '', 0, []);
+
+        $this->assertSame([], $this->highlighter->segments($result));
+        $this->assertSame('', $this->highlighter->highlight($result, fn($m) => "[$m]"));
+    }
+
+    #[Test]
+    public function testHighlightAcceptsPlainCallable(): void
+    {
+        // finding sugar-fuzzy-023: the styler param was \Closure-only, so
+        // 'strtoupper' TypeErrored and the sole consumer smuggled runs through
+        // NUL sentinels. A plain callable must now just work.
+        $result = new MatchResult('foo', 'foobar', 19, [0, 1, 2]);
+
+        $this->assertSame('FOObar', $this->highlighter->highlight($result, 'strtoupper'));
+        // Same output through the closure spelling (BC pin).
+        $this->assertSame(
+            'FOObar',
+            $this->highlighter->highlight($result, static fn(string $m): string => strtoupper($m)),
+        );
+    }
 }

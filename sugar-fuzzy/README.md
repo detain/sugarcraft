@@ -58,6 +58,11 @@ $highQuality = $matcher->matchAll('app', $candidates, minScore: 10);
 $highlighter = new Highlighter();
 $styled = $highlighter->highlight($result, fn($matched) => "\033[1m$matched\033[0m");
 // Returns 'foobar' with matched chars styled
+
+// Structure without styling: presentation-neutral matched/unmatched segments
+$segments = $highlighter->segments($result);
+// [['text' => 'foo', 'matched' => true], ['text' => 'bar', 'matched' => false]]
+// The styler is any callable — 'strtoupper' works as well as a closure.
 ```
 
 Both construction idioms below build the same object: `new SmithWatermanMatcher(...)`
