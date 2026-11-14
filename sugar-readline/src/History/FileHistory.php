@@ -97,6 +97,11 @@ final class FileHistory extends InMemoryHistory
      *                            Trade-off: submit/keystroke latency stays free of
      *                            blocking file I/O, but queued entries are lost if
      *                            the process dies before flush (e.g. SIGKILL).
+     *
+     * WARNING (finding 020): the positional order is (path, maxHistory,
+     * tempDir, deferWrites) - maxHistory comes BEFORE tempDir. Both
+     * middle parameters are defaults of different types, so a swap
+     * compiles and misbehaves silently; prefer named arguments.
      */
     public function __construct(
         string $filePath,
@@ -126,6 +131,50 @@ final class FileHistory extends InMemoryHistory
             throw new \RuntimeException('sugar-readline: cannot set 0600 on history file ' . $this->filePath);
         }
         $this->load();
+    }
+
+    /**
+     * Graceful-degradation entry point for host startup (finding 020).
+     *
+     * The constructor is loud BY DESIGN: a symlinked path, an unwritable
+     * directory or a foreign-owned file are conditions the library must
+     * refuse (see the class docblock). That is the right contract for a
+     * caller that asked for file history and means it - and the wrong one
+     * for an application that only wants persistence when it can have it.
+     * tryOpen() turns one failed open into one logged line and a null
+     * result, so the classic host idiom stays total:
+     *
+     *     $history = $preferFile
+     *         ? (FileHistory::tryOpen($path) ?? new InMemoryHistory())
+     *         : new InMemoryHistory();
+     *
+     * Parameter order mirrors the constructor - maxHistory BEFORE
+     * tempDir; the same arg-swap warning applies (both are strings with
+     * defaults, so a swap is silent).
+     */
+    public static function tryOpen(
+        string $filePath,
+        int $maxHistory = 0,
+        string $tempDir = '',
+        bool $deferWrites = false,
+    ): ?self {
+        try {
+            return new self($filePath, $maxHistory, $tempDir, $deferWrites);
+        } catch (\Throwable $e) {
+            \error_log('sugar-readline: FileHistory::tryOpen declined ' . $filePath . ': ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * The path this history file was opened over. Lets a host report
+     * WHERE persistence failed (after a null tryOpen) or where a loaded
+     * session's history actually lives, without catching and parsing an
+     * exception message out of a constructor call.
+     */
+    public function path(): string
+    {
+        return $this->filePath;
     }
 
     /**
