@@ -1603,6 +1603,42 @@ final class AppTest extends TestCase
         $this->assertNotNull($a->worktrees);
     }
 
+    public function testCTypesIntoTheWorktreeAddBufferInsteadOfCancelling(): void
+    {
+        // candy-git-031: the collector owns the keyboard mid-add, so c is a
+        // path letter - it appends, and it does NOT cancel the add.
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'w'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'a')); // start adding
+        $this->assertTrue($a->worktrees->adding);
+
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'c'));
+        $this->assertTrue($a->worktrees->adding, 'c must not cancel a pending add');
+        $this->assertSame('c', $a->worktrees->activeText(), 'c typed into the path buffer');
+    }
+
+    public function testCCancelsAPendingRemove(): void
+    {
+        // The remove arm really does answer to c (App dispatch, not-adding
+        // branch) - the half of the README row that stays true.
+        $g = $this->git();
+        $g->worktreeListResult = [
+            new \SugarCraft\Git\WorktreeEntry('/repo', 'main'),
+            new \SugarCraft\Git\WorktreeEntry('/repo/.wt/feature', 'feature'),
+        ];
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'w'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'j')); // off the main row
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd')); // arm remove
+        $this->assertTrue($a->worktrees->removing);
+
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'c'));
+        $this->assertFalse($a->worktrees->removing, 'c disarms a pending remove');
+    }
+
     /**
      * candy-git-089: the main worktree (porcelain row 0) is not removable -
      * the d key refuses it outright instead of arming a confirm that git

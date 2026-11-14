@@ -388,6 +388,19 @@ final class RendererTest extends TestCase
         $this->assertStringContainsString('(detached)', $plain, 'the surfaced state replaces the old blank branch column (candy-git-082)');
     }
 
+    public function testWorktreeAddFooterLabelsTheExitThatWorks(): void
+    {
+        $g = new FixtureGit([], [], []);
+        // candy-git-031: mid-add, c is a path letter, so the footer must not
+        // advertise it as the close key. Esc is the labeled exit.
+        $wt = (new \SugarCraft\Git\Worktrees([new \SugarCraft\Git\WorktreeEntry('/path/one', 'trunk')]))->startAdding();
+        $a = new \SugarCraft\Git\App($g, worktrees: $wt);
+        $plain = (string) preg_replace('/\x1b\[[0-9;]*m/', '', \SugarCraft\Git\Renderer::render($a));
+
+        $this->assertStringContainsString('esc  close', $plain, 'add mode names esc');
+        $this->assertStringNotContainsString(' c  close', $plain, 'the false c affordance must not render mid-add (leading space: esc  close legitimately ends in c  close)');
+    }
+
     public function testRenderWorktreeOverlayAddingState(): void
     {
         $g = new FixtureGit([], [], []);

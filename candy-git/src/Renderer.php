@@ -1094,7 +1094,10 @@ final class Renderer
             $lines[] = '';
             $lines[] = '  ' . Style::new()->foreground(Color::hex('#7d6e98'))->render('tab') . '  ' . Lang::t('worktree.switch_field');
             $lines[] = '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('enter') . '  ' . Lang::t('worktree.confirm_add');
-            $lines[] = '  ' . Style::new()->foreground(Color::hex('#7d6e98'))->render('c') . '  ' . Lang::t('help.close_help');
+            // candy-git-031: mid-add, c IS a path letter - the collector owns
+            // the keyboard and the cancel arm only stands when not adding.
+            // The labeled exit for this mode is the one that actually works.
+            $lines[] = '  ' . Style::new()->foreground(Color::hex('#7d6e98'))->render('esc') . '  ' . Lang::t('help.close_help');
         } elseif ($wt->removing === true) {
             $current = $wt->current();
             $lines[] = Style::new()->foreground(Color::hex('#ff5f87'))->render(Lang::t('worktree.remove_confirm', ['path' => self::truncate(self::sanitize($current?->path ?? ''), $inner)]));

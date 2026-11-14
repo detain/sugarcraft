@@ -284,7 +284,7 @@ throws the query away untouched.
 | `a`              | Start adding a worktree — type the path, `Enter` confirms (relative paths anchor to the repo root; an absolute path is used as given; `..` segments are refused). An empty branch field lets git name the new branch from the path basename — the worktree is never born detached |
 | `tab` (while adding) | Switch the edit between the path and branch fields; a typed branch is created from HEAD with `-b`, so shadowing an existing branch fails loudly instead of sharing it |
 | `d`              | Start removing the selected worktree — `Enter` confirms. The main worktree (the list's first row) is refused outright: it cannot be removed |
-| `c`              | Cancel a pending add/remove                     |
+| `c`              | Cancel a pending remove — a pending add closes with `Esc` (mid-add, `c` types into the path) |
 | `Esc`            | Close the whole overlay (even mid-add)          |
 
 **Interactive rebase** (`i`) — opens asking for a commit count:
