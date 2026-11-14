@@ -22,7 +22,7 @@ use SugarCraft\Image\Symbol\SymbolMap;
 use SugarCraft\Image\TermDb;
 
 /**
- * Command-line entry point: parse argv, detect the terminal (or honour the
+ * Command-line entry point: parse argv, detect the terminal (or honor the
  * explicit --format), decode the image through sugar-image, and write the
  * rendered bytes to stdout.
  *
@@ -34,7 +34,8 @@ use SugarCraft\Image\TermDb;
  * seam swaps the blocking animation Program for a callback, mirroring
  * candy-gifview's harness shape.
  *
- * Chafa flag-compat vocabulary (chicle's chafa.c option table) and what this base honors:
+ * Chafa flag-compat vocabulary (the option table in chicle's
+ * chicle-options.c) and what this base honors:
  * --format/--size/--scale/--dump-detect are wired; --polite is
  * an accepted no-op (this viewer always renders inline and synchronously);
  * --symbols=CLASS[+CLASS...], --canvas=MODE and --work=N thread the
@@ -55,8 +56,8 @@ final class Cli
      * executing inside one (InstalledVersions lies under the frozen
      * vendor/), else the compiled-in {@see VERSION} constant. The archive is
      * identified by \Phar::running(false), which is exactly the real path the
-     * \Phar constructor wants here (the class file only ever runs required
-     * from inside the archive, never as the stub).
+     * \Phar constructor wants here (the class file only ever runs when
+     * required from inside the archive, never as the stub itself).
      */
     public static function runningVersion(): string
     {
@@ -84,9 +85,12 @@ final class Cli
     public const MAX_CELL_DIM = 100_000;
 
     /**
-     * --format vocabulary: every {@see Mosaic::fromModeString()} arm on this
-     * base EXCEPT 'chafa', which is refused separately with its own message.
-     * Text-grid tiers are spelled with chicle's short names as aliases.
+     * --format vocabulary: every chicle vocabulary word mapped by
+     * {@see Mosaic::fromModeString()} on this base EXCEPT 'chafa' (refused
+     * separately with its own message) — and except the library's extra
+     * 'ansi' alias for halfblock, deliberately off the CLI surface so the
+     * documented words stay chicle's own. Text-grid tiers are spelled
+     * with chicle's short names as aliases.
      */
     private const FORMATS = [
         'auto', 'sixel', 'kitty', 'iterm2',
@@ -580,15 +584,11 @@ final class Cli
      * chafa's --work normalization. The option
      * is an INTeger 1..9 (G_OPTION_ARG_INT at tools/chafa/
      * chicle-options.c:1989, range check :2420) mapped onto the config
-     * float as (n - 1) / 8.0 (tools/chafa/chafa.c:570): `--work=1` is the
+     * float `(N−1)/8` (tools/chafa/chafa.c:570): `--work=1` is the
      * CHEAPEST render (0.0 → chafa's 1-candidate window), `--work=9` the
      * most exhaustive (1.0 → the >= 8 slow path). Decimals, 0, 10+ and
      * junk all return null — the caller reports the usage error, exactly
-     * where chafa's own parser bails. (The pre-fix spelling divided by
-     * 10 with a bare-float passthrough for <= 1, which inverted the
-     * polarity at the documented cheap end — --work=1 answered 1.0, the
-     * MOST work, not 0.0 — and made the dial non-monotonic across the
-     * 1.0 boundary: 1 -> 1.0 but 1.5 -> 0.15.)
+     * where chafa's own parser bails.
      *
      * @return ?float the config work factor, null when invalid
      */

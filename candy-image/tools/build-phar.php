@@ -25,9 +25,11 @@ declare(strict_types=1);
  * `SugarCraft\CandyImage\Support\Version::fromPharMetadata()` — candy-code's
  * DST-1 lesson: the frozen vendor/ inside the artifact makes Composer's
  * InstalledVersions report the build root's dev guess, so a stamp NOTHING
- * consumes means `--version` lies. PharBuildScriptTest pins the stamp field
- * and tests/Support/VersionTest.php pins the reader — grammar matrix plus a
- * real-stamp round-trip.
+ * consumes means `--version` lies. The reader side is pinned by
+ * tests/Support/VersionTest.php — grammar matrix plus a
+ * real-stamp round-trip; the build side's SOURCE_DATE_EPOCH honor is
+ * asserted nowhere yet, so treat its byte-stability as documented, not
+ * tested.
  *
  * WHY THE BUILD MUST RUN FROM A CLEAN PUBLISHED VENDOR
  * ====================================================

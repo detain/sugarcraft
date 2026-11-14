@@ -132,7 +132,7 @@ final class CliTest extends TestCase
     public function testProbeFlagIsRefusedAsUnknownOnThisBase(): void
     {
         // Kept --probe off the surface: Detect exposes no env-only
-        // probe seam, so honouring the spelling here would be a lie.
+        // probe seam, so honoring the spelling here would be a lie.
         [, , $err] = self::drive(['--probe=off', 'x.png']);
 
         $this->assertStringContainsString('unknown option --probe', $err);
