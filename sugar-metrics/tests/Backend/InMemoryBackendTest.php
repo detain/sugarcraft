@@ -141,6 +141,27 @@ final class InMemoryBackendTest extends TestCase
         $this->assertSame(array_values($b->histogramValues('lat')), $b->histogramValues('lat'));
     }
 
+    public function testPostCapReservoirDrawStaysInBoundsAndKeepsReplacing(): void
+    {
+        // 046 (MET-RAND): the post-cap Algorithm R draw moved random_int →
+        // mt_rand. Same inclusive [0, seen-1] range, identical uniform quality
+        // — the bounds are what the swap must not break. Two ways the range
+        // can rot: an upper bound that excludes replaceable slots (never
+        // replaces — the reservoir fossilizes the first cap samples), or a
+        // negative draw (a stray key corrupts the zero-indexed list).
+        // mt_srand keeps the check deterministic.
+        mt_srand(42);
+        $b = new InMemoryBackend(maxSamplesPerKey: 8);
+        for ($i = 0; $i < 100; $i++) {
+            $b->histogram('lat', (float) $i);
+        }
+        $values = $b->histogramValues('lat');
+        $this->assertCount(8, $values);
+        $this->assertSame(array_values($values), $values);
+        $late = array_filter($values, static fn (float $v): bool => $v >= 8.0);
+        $this->assertNotEmpty($late, 'post-cap draws must keep replacing slots: flood values land in the reservoir');
+    }
+
     public function testHistogramKeepsEverythingBelowCap(): void
     {
         // Below the cap, Algorithm R degenerates to append-in-order, so callers

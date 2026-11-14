@@ -146,7 +146,13 @@ final class InMemoryBackend implements Backend
         // probability maxSamplesPerKey/seen so the retained set stays a
         // uniform random sample of the whole stream. Array length is pinned
         // at the cap, so memory can't grow further under a sample flood.
-        $j = random_int(0, $seen - 1);
+        // mt_rand (not random_int): statistical sampling quality is identical
+        // over the same inclusive [0, seen-1] range, and the CSPRNG is a
+        // several-fold per-call tax exactly on the flood path the reservoir
+        // exists to guard (finding 046). Bounds are load-bearing — the draw
+        // must stay inside the slot range — pinned by
+        // testPostCapReservoirDrawStaysInBoundsAndKeepsReplacing.
+        $j = mt_rand(0, $seen - 1);
         if ($j < $this->maxSamplesPerKey) {
             $this->histograms[$key][$j] = $value;
         }
