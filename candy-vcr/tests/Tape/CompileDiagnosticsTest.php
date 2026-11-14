@@ -146,6 +146,16 @@ final class CompileDiagnosticsTest extends TestCase
 
     public function testRenderDefaultSurfacesDroppedDirectiveAsWarning(): void
     {
+        // The DEFAULT render path selects the ffmpeg backend; hosts whose
+        // image lacks ffmpeg (the ubuntu-26.04 CI runners, 2026-11-14)
+        // abort in the encoder probe before the tape is even compiled,
+        // so the dropped-directive warning under test is unreachable
+        // there — same env-gate idiom as VisualRegressionTest.
+        $ffmpeg = shell_exec('command -v ffmpeg 2>/dev/null');
+        if (!is_string($ffmpeg) || trim($ffmpeg) === '') {
+            $this->markTestSkipped('ffmpeg not on PATH');
+        }
+
         $tape = $this->write('rd.tape', "Type \"ok\"\nsleep 1s\n");
         [$exit, $stdout, $stderr] = $this->runCli(['render-tape', $tape, '-o', $this->tmpDir . '/out.gif']);
 

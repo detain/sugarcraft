@@ -19,10 +19,12 @@ use SugarCraft\Vcr\Tests\Support\Stream;
  * compare via:
  *
  *   1) A host-capability probe (ext-gd round-trip + the bundled font
- *      file). A host that CANNOT render like the golden host is skipped —
- *      it has no business judging pixels. A host that CAN render and then
- *      diverges is failing the gate, no matter how large the divergence:
- *      whole-frame and single-row damage both fail loudly (VCR-S44).
+ *      file) AND a golden-host raster fingerprint (FreeType build —
+ *      see {@see self::rasterGate()}). A host that CANNOT render like
+ *      the golden host is skipped — it has no business judging pixels.
+ *      A host that CAN render and then diverges is failing the gate, no
+ *      matter how large the divergence: whole-frame and single-row
+ *      damage both fail loudly (VCR-S44).
  *   2) SHA-256 fast-path — bit-identical means we're done.
  *   3) Pixel-tolerance walk — pixels differing by more than 8 in any
  *      channel count; the total may reach 2% of the canvas AND no single
@@ -65,6 +67,10 @@ final class VisualRegressionTest extends TestCase
     private const ROW_DIFF_SUB_BUDGET = 0.15;
 
     private string $tmpDir;
+
+    /** Memoised golden-host raster gate reason (one FreeType probe per process). */
+    private static ?string $rasterGateReason = null;
+    private static bool $rasterGateComputed = false;
 
     protected function setUp(): void
     {
@@ -111,6 +117,11 @@ final class VisualRegressionTest extends TestCase
         $probe = self::capabilityProbe();
         if ($probe !== null) {
             self::markTestSkipped($probe);
+        }
+
+        $rasterGate = self::rasterGate();
+        if ($rasterGate !== null) {
+            self::markTestSkipped($rasterGate);
         }
 
         $name = preg_replace('/\.tape$/', '', basename($tapePath)) ?? basename($tapePath);
@@ -194,6 +205,11 @@ final class VisualRegressionTest extends TestCase
         $probe = self::capabilityProbe();
         if ($probe !== null) {
             self::markTestSkipped($probe);
+        }
+
+        $rasterGate = self::rasterGate();
+        if ($rasterGate !== null) {
+            self::markTestSkipped($rasterGate);
         }
 
         $name = preg_replace('/\.tape$/', '', basename($tapePath)) ?? basename($tapePath);
@@ -334,6 +350,106 @@ final class VisualRegressionTest extends TestCase
             return 'GD channel reads are unreliable on this host';
         }
         return null;
+    }
+
+    /**
+     * Golden-host raster fingerprint (CI-env gate, 2026-11-14): SHA-256
+     * over the RGB pixels of a fixed `imagettftext` canvas — the same
+     * FreeType primitive {@see \SugarCraft\Vcr\Raster\Glyphs} uses to
+     * paint the tapes. The goldens encode the glyph raster of the host
+     * they were blessed on; hosts whose FreeType/GD build rasterizes
+     * that face differently (the ubuntu-26.04 CI runners diverge on
+     * every text-bearing golden at ~99.98% of whole-frame pixels while
+     * the non-text datasets pass) must skip, not fail, and above all
+     * must not re-bless the goldens to a degraded raster (no-silent-
+     * golden law). The fingerprint covers ONLY the host raster stack:
+     * an encoder or pipeline regression does not move it, so a capable
+     * host still judges every tape golden (VCR-S44 fail-loud intact).
+     *
+     * Re-pin together with the goldens: run scripts/refresh-goldens.php
+     * on the blessed host, then
+     *   php -r '$i=imagecreatetruecolor(220,40);$b=imagecolorallocate($i,15,17,26);$f=imagecolorallocate($i,255,255,255);imagefilledrectangle($i,0,0,219,39,$b);imagettftext($i,22.0,0.0,4,30,$f,"candy-vcr/fonts/JetBrainsMono-Regular.ttf","Hq5g/|~@");$s="";for($y=0;$y<40;$y++){for($x=0;$x<220;$x++){$p=imagecolorat($i,$x,$y);$s.=chr(($p>>16)&255).chr(($p>>8)&255).chr($p&255);}}echo hash("sha256",$s),"\n";'
+     * and paste the digest into {@see self::GOLDEN_RASTER_FINGERPRINT}.
+     */
+    private const GOLDEN_RASTER_FINGERPRINT = 'd63183649397c38f9ded7f32531ec3f8e7741106c7cdb203093652db7fb063c7';
+
+    /**
+     * @return null when this host rasterizes like the golden host, else
+     *               the skip reason
+     */
+    private static function rasterGate(): ?string
+    {
+        if (!self::$rasterGateComputed) {
+            self::$rasterGateComputed = true;
+            self::$rasterGateReason = self::computeRasterGate();
+        }
+        return self::$rasterGateReason;
+    }
+
+    private static function computeRasterGate(): ?string
+    {
+        if (!function_exists('imagettftext')) {
+            return 'PHP GD lacks FreeType (imagettftext); this host cannot reproduce the golden renderer';
+        }
+        $fontPath = dirname(__DIR__, 2) . '/fonts/JetBrainsMono-Regular.ttf';
+        if (!is_file($fontPath)) {
+            return 'the bundled JetBrainsMono face is missing; this host cannot reproduce the golden renderer';
+        }
+        $fingerprint = self::rasterFingerprint($fontPath);
+        if ($fingerprint === null) {
+            return 'FreeType could not rasterize the bundled JetBrainsMono face on this host';
+        }
+        if ($fingerprint !== self::GOLDEN_RASTER_FINGERPRINT) {
+            return sprintf(
+                'this host rasterizes the bundled face as %s, but the goldens were blessed on a %s host: '
+                . 'its FreeType/GD build cannot reproduce the golden renderer, so it has no business judging golden pixels',
+                $fingerprint,
+                self::GOLDEN_RASTER_FINGERPRINT,
+            );
+        }
+        return null;
+    }
+
+    /**
+     * @return null 64-char hex digest of the probe canvas, or null when
+     *               the host could not produce one
+     */
+    private static function rasterFingerprint(string $fontPath): ?string
+    {
+        $canvas = imagecreatetruecolor(220, 40);
+        if ($canvas === false) {
+            return null;
+        }
+        $background = imagecolorallocate($canvas, 15, 17, 26);
+        $foreground = imagecolorallocate($canvas, 255, 255, 255);
+        if ($background === false || $foreground === false || !imagefilledrectangle($canvas, 0, 0, 219, 39, $background)) {
+            imagedestroy($canvas);
+            return null;
+        }
+        // Ascenders, descenders, curves, hinting-sensitive strokes. The
+        // point size is a LITERAL 22.0 — deliberately NOT Compiler's
+        // DEFAULT_FONT_SIZE read live: the fingerprint must depend only
+        // on the host raster stack, so an intentional font-size change
+        // still fails the goldens loudly instead of silently shifting
+        // the probe and hiding the regression (the literal then re-pins
+        // with the goldens on the blessed host).
+        if (@imagettftext($canvas, 22.0, 0.0, 4, 30, $foreground, $fontPath, 'Hq5g/|~@') === false) {
+            imagedestroy($canvas);
+            return null;
+        }
+        $raw = '';
+        for ($y = 0; $y < 40; $y++) {
+            for ($x = 0; $x < 220; $x++) {
+                $pixel = imagecolorat($canvas, $x, $y);
+                if (!is_int($pixel)) {
+                    imagedestroy($canvas);
+                    return null;
+                }
+                $raw .= chr(($pixel >> 16) & 0xff) . chr(($pixel >> 8) & 0xff) . chr($pixel & 0xff);
+            }
+        }
+        imagedestroy($canvas);
+        return hash('sha256', $raw);
     }
 
     /**

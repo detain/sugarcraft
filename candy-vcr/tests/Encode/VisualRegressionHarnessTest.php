@@ -54,6 +54,31 @@ final class VisualRegressionHarnessTest extends TestCase
         $this->assertNull($reason, 'capability probe must pass on a gd+font host, got: ' . var_export($reason, true));
     }
 
+    public function testRasterFingerprintIsADeterministicDigest(): void
+    {
+        if (!function_exists('imagettftext')) {
+            $this->markTestSkipped('the raster fingerprint needs GD built with FreeType');
+        }
+        $fontPath = dirname(__DIR__, 2) . '/fonts/JetBrainsMono-Regular.ttf';
+        if (!is_file($fontPath)) {
+            $this->markTestSkipped('the raster fingerprint needs the bundled face');
+        }
+
+        $first = self::call('rasterFingerprint', $fontPath);
+        $second = self::call('rasterFingerprint', $fontPath);
+
+        $this->assertIsString($first, 'a gd+Freetype+font host must produce a raster fingerprint');
+        $this->assertMatchesRegularExpression('/^[0-9a-f]{64}$/', (string) $first);
+        $this->assertSame($first, $second, 'the fingerprint must be stable within a process');
+    }
+
+    public function testRasterGateReportsAReasonOrNothingNeverJunk(): void
+    {
+        $reason = self::call('rasterGate');
+        $this->assertTrue($reason === null || (is_string($reason) && $reason !== ''));
+        $this->assertSame($reason, self::call('rasterGate'), 'the gate is memoised per process');
+    }
+
     public function testIdenticalCanvasesWalkZero(): void
     {
         $png = $this->solidPng('a', 60, 60, [10, 20, 30]);
