@@ -53,7 +53,7 @@ final class RenderTapeProgressTest extends TestCase
 
         self::assertStringContainsString('Rendering short.tape', $output);
         self::assertStringContainsString('GIF written to', $output);
-        self::assertStringNotContainsString(' frames rendered', $output, 'a sub-hundred-frame tape needs no progress rows');
+        self::assertStringNotContainsString(' frame(s) rendered', $output, 'a sub-hundred-frame tape needs no progress rows');
     }
 
     public function testLongRenderReportsProgressWhileItWorks(): void
@@ -68,7 +68,7 @@ final class RenderTapeProgressTest extends TestCase
 
         $output = $this->render($this->writeTape('long', $lines));
 
-        self::assertStringContainsString(' frames rendered', $output);
+        self::assertStringContainsString(' frame(s) rendered', $output);
         self::assertStringContainsString('GIF written to', $output);
     }
 

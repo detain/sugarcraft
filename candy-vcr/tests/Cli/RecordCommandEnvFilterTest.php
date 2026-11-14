@@ -284,7 +284,7 @@ final class RecordCommandEnvFilterTest extends TestCase
 
         $this->assertStringContainsString('--env-all', $warning);
         $this->assertStringContainsString('WITHOUT secret filtering', $warning);
-        $this->assertStringContainsString('(3 vars)', $warning);
+        $this->assertStringContainsString('(3 var(s))', $warning);
         $this->assertStringContainsString('GITHUB_TOKEN', $warning);
         $this->assertStringContainsString('AWS_SECRET_ACCESS_KEY', $warning);
         $this->assertStringContainsString('PATH', $warning);

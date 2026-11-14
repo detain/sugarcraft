@@ -149,7 +149,14 @@ final class ReplayCommand implements DocumentedCommand
             } elseif ($arg === '--no-trim') {
                 $noTrim = true;
             } elseif (str_starts_with($arg, '--idle-trim=')) {
-                $idleTrim = (float) substr($arg, 12);
+                $trimRaw = substr($arg, 12);
+                if (!is_numeric($trimRaw)) {
+                    // Naming the actual fault: `abc` was silently cast to
+                    // 0.0 and reported under the wrong sign (COPY-10).
+                    fwrite($stderr, Lang::t('cli.err', ['verb' => 'replay', 'message' => Lang::t('cli.idle_trim_number', ['value' => $trimRaw])]) . "\n");
+                    return 2;
+                }
+                $idleTrim = (float) $trimRaw;
                 if ($idleTrim <= 0.0) {
                     fwrite($stderr, Lang::t('cli.err', ['verb' => 'replay', 'message' => Lang::t('cli.idle_trim_positive')]) . "\n");
                     return 2;
@@ -161,6 +168,10 @@ final class ReplayCommand implements DocumentedCommand
                     return 2;
                 }
                 $i++;
+                if (!is_numeric($next)) {
+                    fwrite($stderr, Lang::t('cli.err', ['verb' => 'replay', 'message' => Lang::t('cli.idle_trim_number', ['value' => $next])]) . "\n");
+                    return 2;
+                }
                 $idleTrim = (float) $next;
                 if ($idleTrim <= 0.0) {
                     fwrite($stderr, Lang::t('cli.err', ['verb' => 'replay', 'message' => Lang::t('cli.idle_trim_positive')]) . "\n");

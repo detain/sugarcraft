@@ -216,6 +216,23 @@ final class ReplayCommandTest extends TestCase
         }
     }
 
+    public function testReplayIdleTrimNonNumericNamesTheActualFault(): void
+    {
+        // COPY-10: `abc` was cast to 0.0 and reported under the sign
+        // complaint — the non-numeric arm now speaks for itself.
+        foreach ([['--idle-trim=abc'], ['--idle-trim', 'abc']] as $arm) {
+            $stdout = Stream::memory('w+');
+            $stderr = Stream::memory('w+');
+            $exit = (new ReplayCommand())->run(['/does/not/matter.cas', ...$arm], $stdout, $stderr);
+            rewind($stderr);
+            $err = (string) stream_get_contents($stderr);
+
+            $this->assertSame(2, $exit, implode(' ', $arm));
+            $this->assertStringContainsString('--idle-trim must be a number, got abc', $err, implode(' ', $arm));
+            $this->assertStringNotContainsString('> 0', $err);
+        }
+    }
+
     public function testReplayIdleTrimNegative(): void
     {
         $path = tempnam(sys_get_temp_dir(), 'cv-replay-');

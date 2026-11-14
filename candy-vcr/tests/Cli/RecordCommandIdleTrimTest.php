@@ -59,6 +59,88 @@ final class RecordCommandIdleTrimTest extends TestCase
         }
     }
 
+    public function testIdleTrimNonNumericNamesTheActualFaultEqualsForm(): void
+    {
+        // COPY-10: `--idle-trim=abc` used to cast to 0.0 and complain the
+        // value was not > 0 — a wrong-signed diagnosis for a word.
+        $cmd = new RecordCommand(Stream::devNull());
+        $stdout = Stream::memory();
+        $stderr = Stream::memory();
+        try {
+            $rc = $cmd->run(['--idle-trim=abc', '--', '/bin/echo'], $stdout, $stderr);
+            $this->assertSame(2, $rc);
+            \rewind($stderr);
+            $err = (string) \stream_get_contents($stderr);
+            $this->assertStringContainsString('--idle-trim must be a number, got abc', $err);
+            $this->assertStringNotContainsString('> 0', $err);
+        } finally {
+            \fclose($stdout);
+            \fclose($stderr);
+        }
+    }
+
+    public function testIdleTrimNonNumericNamesTheActualFaultSpaceForm(): void
+    {
+        $cmd = new RecordCommand(Stream::devNull());
+        $stdout = Stream::memory();
+        $stderr = Stream::memory();
+        try {
+            $rc = $cmd->run(['--idle-trim', 'abc', '--', '/bin/echo'], $stdout, $stderr);
+            $this->assertSame(2, $rc);
+            \rewind($stderr);
+            $err = (string) \stream_get_contents($stderr);
+            $this->assertStringContainsString('--idle-trim must be a number, got abc', $err);
+        } finally {
+            \fclose($stdout);
+            \fclose($stderr);
+        }
+    }
+
+    public function testSizeFlagsRefuseNonNumericTokensBothForms(): void
+    {
+        // COPY-10: `--cols abc` silently degraded to cols=0; the door now
+        // refuses with the bad token named.
+        $cases = [
+            ['--cols=wide', 'cols must be a whole number, got wide'],
+            ['--rows=deep', 'rows must be a whole number, got deep'],
+        ];
+        foreach ($cases as [$flag, $needle]) {
+            $cmd = new RecordCommand(Stream::devNull());
+            $stdout = Stream::memory();
+            $stderr = Stream::memory();
+            try {
+                $rc = $cmd->run([$flag, '--', '/bin/echo'], $stdout, $stderr);
+                $this->assertSame(2, $rc, $flag);
+                \rewind($stderr);
+                $err = (string) \stream_get_contents($stderr);
+                $this->assertStringContainsString($needle, $err);
+            } finally {
+                \fclose($stdout);
+                \fclose($stderr);
+            }
+        }
+    }
+
+    public function testNumericSizeFlagsStillParseThroughTheDoor(): void
+    {
+        // The door must not eat legitimate geometry: numeric values pass
+        // parseArgs untouched (the run then dies at the missing-binary
+        // door — what matters is the size message never appears).
+        $cmd = new RecordCommand(Stream::devNull());
+        $stdout = Stream::memory();
+        $stderr = Stream::memory();
+        try {
+            $cmd->run(['--cols=100', '--rows=40', '--idle-trim=2', '--no-ctty', '/definitely/not/a/binary'], $stdout, $stderr);
+            \rewind($stderr);
+            $err = (string) \stream_get_contents($stderr);
+            $this->assertStringNotContainsString('whole number', $err);
+            $this->assertStringNotContainsString('idle-trim must be a number', $err);
+        } finally {
+            \fclose($stdout);
+            \fclose($stderr);
+        }
+    }
+
     public function testReplayUsageStringMentionsNoTrim(): void
     {
         $cmd = new ReplayCommand();

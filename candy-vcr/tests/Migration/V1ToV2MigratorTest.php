@@ -34,8 +34,11 @@ final class V1ToV2MigratorTest extends TestCase
     {
         $desc = $this->migrator->describe();
         $this->assertNotEmpty($desc);
-        $this->assertStringContainsString('v1', $desc);
-        $this->assertStringContainsString('v2', $desc);
+        // COPY-13: describe() carries payload only — every printer names
+        // the step as `v1 → v2:` already, restating it here doubled it.
+        $this->assertStringContainsString('event ids', $desc);
+        $this->assertStringNotContainsString('v1', $desc);
+        $this->assertStringNotContainsString('v2', $desc);
     }
 
     public function testCanMigrateV1Cassette(): void

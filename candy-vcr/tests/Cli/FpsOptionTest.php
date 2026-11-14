@@ -56,6 +56,35 @@ final class FpsOptionTest extends TestCase
         FpsOption::parse($raw);
     }
 
+    public function testOffendingValueReadsAsTypedNotAsAPhpLiteral(): void
+    {
+        // COPY-11: var_export used to print got 'abc'. — quotes and a
+        // period no other message carries, and a mixed-type call could
+        // dump whole arrays into CLI copy.
+        try {
+            FpsOption::parse('abc');
+            $this->fail('expected refusal');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertSame(
+                "--fps must be a positive finite number of frames per second, got abc",
+                $e->getMessage(),
+            );
+        }
+        try {
+            FpsOption::parse(0);
+            $this->fail('expected refusal');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('got 0', $e->getMessage());
+        }
+        try {
+            /** @phpstan-ignore-next-line intentional misuse arm for a non-scalar */
+            FpsOption::parse(['x']);
+            $this->fail('expected refusal');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('got array', $e->getMessage());
+        }
+    }
+
     public function testRenderTapeDoorAbortsBeforeRenderingZeroFps(): void
     {
         [$exit, $out] = $this->runRenderTape('--fps', '0');

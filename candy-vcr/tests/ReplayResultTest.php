@@ -22,7 +22,7 @@ final class ReplayResultTest extends TestCase
             programQuitCleanly: true,
         );
         $this->assertSame(
-            'replay OK — 5 events (3 input, 1 resize, 0 output, 1 quit)',
+            'replay OK — 5 event(s) (3 input, 1 resize, 0 output, 1 quit)',
             $silent->diffSummary(),
             'zero-suppressed: the historical byte shape survives untouched',
         );
@@ -39,7 +39,7 @@ final class ReplayResultTest extends TestCase
             undecodedInputCount: 2,
         );
         $summary = $refused->diffSummary();
-        $this->assertStringStartsWith('replay OK — 5 events (3 input, 1 resize, 0 output, 1 quit)', $summary);
+        $this->assertStringStartsWith('replay OK — 5 event(s) (3 input, 1 resize, 0 output, 1 quit)', $summary);
         $this->assertStringContainsString(
             '2 input event(s) produced no decodable message and were skipped',
             $summary,
@@ -60,7 +60,7 @@ final class ReplayResultTest extends TestCase
         );
         $summary = $r->diffSummary();
         $this->assertStringContainsString('replay OK', $summary);
-        $this->assertStringContainsString('7 events', $summary);
+        $this->assertStringContainsString('7 event(s)', $summary);
         $this->assertStringContainsString('1 input', $summary);
         $this->assertStringContainsString('1 resize', $summary);
         $this->assertStringContainsString('4 output', $summary);

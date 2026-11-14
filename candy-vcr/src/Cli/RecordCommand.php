@@ -406,13 +406,19 @@ final class RecordCommand implements DocumentedCommand
                         throw new \InvalidArgumentException(Lang::t('record.output_requires'));
                     }
                 } elseif (\str_starts_with($a, '--cols=')) {
+                    $this->requireSizeNumber('cols', \substr($a, 7));
                     $cols = (int) \substr($a, 7);
                 } elseif ($a === '--cols') {
-                    $cols = (int) ($args[++$i] ?? 0);
+                    $raw = (string) ($args[++$i] ?? '');
+                    $this->requireSizeNumber('cols', $raw);
+                    $cols = (int) $raw;
                 } elseif (\str_starts_with($a, '--rows=')) {
+                    $this->requireSizeNumber('rows', \substr($a, 7));
                     $rows = (int) \substr($a, 7);
                 } elseif ($a === '--rows') {
-                    $rows = (int) ($args[++$i] ?? 0);
+                    $raw = (string) ($args[++$i] ?? '');
+                    $this->requireSizeNumber('rows', $raw);
+                    $rows = (int) $raw;
                 } elseif ($a === '--no-ctty') {
                     $ctty = false;
                 } elseif ($a === '--shell') {
@@ -437,7 +443,13 @@ final class RecordCommand implements DocumentedCommand
                     $captureEnv = true;
                     $captureAll = true;
                 } elseif (\str_starts_with($a, '--idle-trim=')) {
-                    $idleTrim = (float) \substr($a, 12);
+                    $trimRaw = \substr($a, 12);
+                    if (!\is_numeric($trimRaw)) {
+                        // COPY-10: `abc` cast to 0.0 and was reported under
+                        // the wrong sign — name the actual fault first.
+                        throw new \InvalidArgumentException(Lang::t('cli.idle_trim_number', ['value' => $trimRaw]));
+                    }
+                    $idleTrim = (float) $trimRaw;
                     if ($idleTrim <= 0.0) {
                         throw new \InvalidArgumentException(Lang::t('cli.idle_trim_positive'));
                     }
@@ -445,6 +457,9 @@ final class RecordCommand implements DocumentedCommand
                     $next = $args[++$i] ?? null;
                     if ($next === null) {
                         throw new \InvalidArgumentException(Lang::t('cli.idle_trim_requires'));
+                    }
+                    if (!\is_numeric($next)) {
+                        throw new \InvalidArgumentException(Lang::t('cli.idle_trim_number', ['value' => $next]));
                     }
                     $idleTrim = (float) $next;
                     if ($idleTrim <= 0.0) {
@@ -504,6 +519,20 @@ final class RecordCommand implements DocumentedCommand
      *
      * @return list<string>
      */
+    /**
+     * COPY-10 door: `--cols abc` used to cast to 0 and the run reported a
+     * `(cols=0 rows=24)` geometry nobody typed. The flag takes a whole
+     * number or the parse refuses with the value named.
+     *
+     * @throws \InvalidArgumentException when the raw token is not numeric
+     */
+    private function requireSizeNumber(string $flag, string $raw): void
+    {
+        if (!\is_numeric($raw)) {
+            throw new \InvalidArgumentException(Lang::t('record.size_number', ['flag' => $flag, 'value' => $raw]));
+        }
+    }
+
     private static function shellCommand(): array
     {
         $shell = (string) (\getenv('SHELL') ?: '');

@@ -79,8 +79,9 @@ final class V1ToV2Migrator implements CassetteMigrator
 
     public function describe(): string
     {
-        return 'Upgrades cassette format v1 to v2: adds event ids and '
-            . 'explicit encoding on output events.';
+        // COPY-13: every printer already prefixes the step with
+        // `v1 → v2:`, so restating the versions here doubled them per line.
+        return 'adds event ids and explicit encoding on output events';
     }
 
     private function migrateHeader(CassetteHeader $header): CassetteHeader

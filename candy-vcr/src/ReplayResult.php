@@ -47,7 +47,7 @@ final readonly class ReplayResult
     {
         if ($this->ok) {
             $summary = sprintf(
-                'replay OK — %d events (%d input, %d resize, %d output, %d quit)',
+                'replay OK — %d event(s) (%d input, %d resize, %d output, %d quit)',
                 $this->eventCount,
                 $this->inputCount,
                 $this->resizeCount,
@@ -65,7 +65,7 @@ final readonly class ReplayResult
         }
         $clean = $this->programQuitCleanly ? 'clean' : 'unclean (timed out / crashed)';
         return sprintf(
-            "replay FAILED — %d events processed, program exit: %s\n%s",
+            "replay FAILED — %d event(s) processed, program exit: %s\n%s",
             $this->eventCount,
             $clean,
             $this->diff,

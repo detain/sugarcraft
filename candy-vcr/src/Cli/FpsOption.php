@@ -41,16 +41,26 @@ final class FpsOption
         }
         if (!is_numeric($raw)) {
             throw new \InvalidArgumentException(
-                Lang::t('fps.not_numeric', ['value' => var_export($raw, true)])
+                Lang::t('fps.not_numeric', ['value' => self::valueWord($raw)])
             );
         }
         $fps = (float) $raw;
         if (!is_finite($fps) || $fps <= 0.0) {
             throw new \InvalidArgumentException(
-                Lang::t('fps.not_positive', ['value' => var_export($raw, true)])
+                Lang::t('fps.not_positive', ['value' => self::valueWord($raw)])
             );
         }
         return $fps;
+    }
+
+    /**
+     * COPY-11: the offending token goes into user copy as itself, never as
+     * a PHP var_export literal — quotes and array dumps were the tell that
+     * a debug printer, not the CLI, wrote the sentence.
+     */
+    private static function valueWord(mixed $raw): string
+    {
+        return is_scalar($raw) ? (string) $raw : gettype($raw);
     }
 
     private function __construct()

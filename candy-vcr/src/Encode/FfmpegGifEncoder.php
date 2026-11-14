@@ -43,9 +43,13 @@ final class FfmpegGifEncoder implements GifEncoder
         ?array $durations = null,
     ): bool {
         if (!$this->available) {
+            // COPY-12: the door a `render-tape` user hits must name the
+            // flag that fixes it; the class-level hint stays, aimed at API
+            // callers, in the second sentence.
             throw new \RuntimeException(
-                'FfmpegGifEncoder requires ffmpeg but it is not available. ' .
-                'Use PhpGifEncoder as a fallback.'
+                'ffmpeg is not available on this host: install ffmpeg, or pass ' .
+                '--encoder=php (the pure-PHP encoder). ' .
+                'API callers may select a different GifEncoder implementation instead of FfmpegGifEncoder.'
             );
         }
 
