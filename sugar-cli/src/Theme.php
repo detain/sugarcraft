@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Cli;
 
 use SugarCraft\Cli\Internal\SafeText;
+use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Core\Msg\BackgroundColorMsg;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
@@ -31,6 +32,8 @@ use SugarCraft\Style\Style;
  */
 final class Theme
 {
+    use Mutable;
+
     /**
      * All seven slots are non-nullable: a theme without a style for a level
      * is an illegal state, so the type system enforces it at the boundary
@@ -187,15 +190,15 @@ final class Theme
                 ->unsetOverline()->unsetInvisible()->unsetHyperlink()
             : static fn (Style $s): Style => $s->colorProfile($profile);
 
-        return new self(
-            success: $fit($this->success),
-            error:   $fit($this->error),
-            warn:    $fit($this->warn),
-            info:    $fit($this->info),
-            prompt:  $fit($this->prompt),
-            accent:  $fit($this->accent),
-            muted:   $fit($this->muted),
-        );
+        return $this->mutate([
+            'success' => $fit($this->success),
+            'error'   => $fit($this->error),
+            'warn'    => $fit($this->warn),
+            'info'    => $fit($this->info),
+            'prompt'  => $fit($this->prompt),
+            'accent'  => $fit($this->accent),
+            'muted'   => $fit($this->muted),
+        ]);
     }
 
     public static function plain(): self

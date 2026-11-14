@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Cli;
 
+use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Style\Style;
 
@@ -38,6 +39,8 @@ use SugarCraft\Style\Style;
  */
 final class Logo
 {
+    use Mutable;
+
     private function __construct(
         private readonly string $art,
         private readonly ?Color $color = null,
@@ -99,7 +102,7 @@ ART;
      */
     public function withColor(string|Color $color): self
     {
-        return new self($this->art, $color instanceof Color ? $color : Color::hex($color));
+        return $this->mutate(['color' => $color instanceof Color ? $color : Color::hex($color)]);
     }
 
     /**

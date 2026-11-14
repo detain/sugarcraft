@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Cli;
 
+use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
@@ -49,6 +50,8 @@ use SugarCraft\Style\Style;
  */
 final class Frame
 {
+    use Mutable;
+
     /**
      * Non-content lines the frame always emits: top border + title + the two
      * dividers + status + bottom border. The content rows sit *between* the two
@@ -72,7 +75,7 @@ final class Frame
     /** The (pre-rendered) title-bar string, centred on the top row. */
     public function withTitle(string $title): self
     {
-        return new self(Internal\SafeText::styledLine($title), $this->status, $this->borderStyle);
+        return $this->mutate(['title' => Internal\SafeText::styledLine($title)]);
     }
 
     /**
@@ -89,13 +92,13 @@ final class Frame
     /** The (pre-rendered) status-bar string, left-aligned on the bottom row. */
     public function withStatus(string $status): self
     {
-        return new self($this->title, Internal\SafeText::styledLine($status), $this->borderStyle);
+        return $this->mutate(['status' => Internal\SafeText::styledLine($status)]);
     }
 
     /** Override the box-drawing border colour (defaults to slate). */
     public function withBorderStyle(Style $style): self
     {
-        return new self($this->title, $this->status, $style);
+        return $this->mutate(['borderStyle' => $style]);
     }
 
     /**
