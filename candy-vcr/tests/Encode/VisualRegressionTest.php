@@ -12,18 +12,27 @@ use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
  * Visual regression: re-render each curated tape and diff against the
- * committed golden GIFs. PhpGifEncoder is byte-deterministic in
- * principle, but the rendered bytes depend on the host libgd / GD
- * font-cache build, which varies between local-dev hosts and CI
- * runners. To keep the regression signal without forcing per-runner
- * golden refreshes we compare via:
+ * committed golden GIFs. PhpGifEncoder is byte-deterministic on a given
+ * host, but the rendered bytes depend on the host libgd / GD font-cache
+ * build, which varies between local-dev hosts and CI runners. To keep the
+ * regression signal without forcing per-runner golden refreshes we
+ * compare via:
  *
- *   1) SHA-256 fast-path — bit-identical means we're done.
- *   2) Pixel-tolerance walk — count pixels that differ by more than
- *      8 in any channel; fail when the count exceeds 2% of the frame.
+ *   1) A host-capability probe (ext-gd round-trip + the bundled font
+ *      file). A host that CANNOT render like the golden host is skipped —
+ *      it has no business judging pixels. A host that CAN render and then
+ *      diverges is failing the gate, no matter how large the divergence:
+ *      whole-frame and single-row damage both fail loudly (VCR-S44).
+ *   2) SHA-256 fast-path — bit-identical means we're done.
+ *   3) Pixel-tolerance walk — pixels differing by more than 8 in any
+ *      channel count; the total may reach 2% of the canvas AND no single
+ *      row may reach 15% of itself, so localized damage hidden in the
+ *      average is caught too.
  *
- * FfmpegGifEncoder gets an SSIM check (>= 0.95) with a pixel-diff
- * fallback when the SSIM filter can't parse cleanly.
+ * FfmpegGifEncoder gets an SSIM check (>= 0.95); when the SSIM filter
+ * can't parse cleanly the fallback walks EVERY frame (ffmpeg passthrough
+ * extraction; a changed frame count is itself a failure), not just the
+ * composed canvas.
  *
  * Refresh procedure documented in candy-vcr/CALIBER_LEARNINGS.md.
  */
@@ -40,13 +49,20 @@ final class VisualRegressionTest extends TestCase
      */
     private const PHP_PIXEL_DIFF_PCT_THRESHOLD = 0.02;
     /**
-     * Sanity ceiling above which we conclude the test host renders the
-     * GIF fundamentally differently from the golden host (missing
-     * fonts, completely different libgd, etc.) and skip rather than
-     * fail. Anything above this is essentially a different image, not
-     * a regression.
+     * Divergence at which we declare the whole frame broken (fallback
+     * font, inverted palette, theme plumbing failure). Since VCR-S44
+     * this is a FAIL band, not a skip: "too broken to be a regression"
+     * is backwards for a gate whose job is catching breakage — hosts
+     * that merely render differently are excluded by
+     * {@see self::capabilityProbe()} BEFORE any pixel is judged.
      */
-    private const PHP_PIXEL_DIFF_SANITY_CAP = 0.50;
+    private const WHOLE_FRAME_DIFF = 0.50;
+    /**
+     * No single row of the canvas may differ by more than this fraction
+     * of its own pixels, even when the all-frame average stays under the
+     * total budget (one corrupted text row is ~0.1% of a 480-row canvas).
+     */
+    private const ROW_DIFF_SUB_BUDGET = 0.15;
 
     private string $tmpDir;
 
@@ -60,10 +76,18 @@ final class VisualRegressionTest extends TestCase
 
     protected function tearDown(): void
     {
-        foreach (glob($this->tmpDir . '/*') ?: [] as $f) {
-            @unlink($f);
+        // The frame-pair extractor writes subdirectories; clean deepest
+        // first so every rmdir sees an empty directory.
+        $dirs = array_merge([$this->tmpDir], glob($this->tmpDir . '/*', GLOB_ONLYDIR) ?: []);
+        usort($dirs, static fn (string $a, string $b): int => strlen($b) <=> strlen($a));
+        foreach ($dirs as $dir) {
+            foreach (glob($dir . '/*') ?: [] as $f) {
+                if (!is_dir($f)) {
+                    @unlink($f);
+                }
+            }
+            @rmdir($dir);
         }
-        @rmdir($this->tmpDir);
     }
 
     /**
@@ -80,18 +104,15 @@ final class VisualRegressionTest extends TestCase
         }
     }
 
-    /**
-     * Compare the PHP encoder's rendered GIF against the committed
-     * golden using SHA-256 fast-path, falling back to a per-pixel
-     * tolerance walk. Reason for the tolerance: libgd / GD font cache
-     * builds differ between local-dev (where the golden was rendered)
-     * and Ubuntu CI runners, producing visually-identical but
-     * byte-different GIFs.
-     */
     #[DataProvider('tapeProvider')]
     #[Group('golden')]
     public function testPhpGoldenWithinTolerance(string $tapePath): void
     {
+        $probe = self::capabilityProbe();
+        if ($probe !== null) {
+            self::markTestSkipped($probe);
+        }
+
         $name = preg_replace('/\.tape$/', '', basename($tapePath)) ?? basename($tapePath);
         $goldenPath = __DIR__ . '/../golden/' . $name . '.php.gif';
 
@@ -117,9 +138,11 @@ final class VisualRegressionTest extends TestCase
 
         // Slow-path: pixel-walk tolerance check. Pixels differing by >8
         // in any channel count as "different"; <= PHP_PIXEL_DIFF_PCT_THRESHOLD
-        // of total pixels may differ.
-        $diffPct = self::pixelDiffPct($producedPath, $goldenPath);
-        if ($diffPct === null) {
+        // of total pixels may differ, AND no single row may exceed the
+        // sub-budget of itself (VCR-S44: localized row damage hid in the
+        // canvas average before).
+        $stats = self::pixelDiffStats($producedPath, $goldenPath);
+        if ($stats === null) {
             $diffNotePath = $this->writeDiffNote($name, $goldenPath, $producedPath);
             self::fail(sprintf(
                 "PHP golden hash mismatch for %s and pixel-diff could not be computed\n"
@@ -133,31 +156,22 @@ final class VisualRegressionTest extends TestCase
             ));
         }
 
-        if ($diffPct >= self::PHP_PIXEL_DIFF_SANITY_CAP) {
-            // Whole frame differs — host's libgd / font cache renders
-            // a fundamentally different image than the golden host.
-            // This is not a regression; skip rather than fail, but
-            // leave a diff PNG behind so operators can confirm.
-            $diffImagePath = $this->writeDiffImage($name, $goldenPath, $producedPath);
-            self::markTestSkipped(sprintf(
-                "PHP golden pixel-diff for %s: %.4f%% exceeds sanity cap %.2f%%; "
-                . 'host renders fundamentally different from golden host '
-                . '(likely libgd / font cache mismatch). diff: %s',
-                $name,
-                $diffPct * 100.0,
-                self::PHP_PIXEL_DIFF_SANITY_CAP * 100.0,
-                $diffImagePath,
-            ));
-        }
-
-        if ($diffPct >= self::PHP_PIXEL_DIFF_PCT_THRESHOLD) {
+        $verdict = self::classifyDiff(
+            $stats,
+            self::PHP_PIXEL_DIFF_PCT_THRESHOLD,
+            self::ROW_DIFF_SUB_BUDGET,
+            self::WHOLE_FRAME_DIFF,
+        );
+        if ($verdict !== null) {
+            // Capability probe passed, so ANY magnitude — including the
+            // old ≥50% "fundamentally different image" band — is a real
+            // regression signal and fails. (findings 098-era law: the
+            // gate's job is catching breakage.)
             $diffImagePath = $this->writeDiffImage($name, $goldenPath, $producedPath);
             self::fail(sprintf(
-                "PHP golden pixel-diff for %s: %.4f%% >= threshold %.2f%%\n"
-                . "  golden  : %s\n  produced: %s\n  diff    : %s",
+                "%s for %s\n  golden  : %s\n  produced: %s\n  diff    : %s",
+                $verdict,
                 $name,
-                $diffPct * 100.0,
-                self::PHP_PIXEL_DIFF_PCT_THRESHOLD * 100.0,
                 $goldenPath,
                 $producedPath,
                 $diffImagePath,
@@ -166,7 +180,7 @@ final class VisualRegressionTest extends TestCase
 
         // Within tolerance — record an explicit assertion so PHPUnit
         // doesn't flag the test as "risky / no assertions".
-        self::assertLessThan(self::PHP_PIXEL_DIFF_PCT_THRESHOLD, $diffPct);
+        self::assertLessThan(self::PHP_PIXEL_DIFF_PCT_THRESHOLD, $stats['pct']);
     }
 
     #[DataProvider('tapeProvider')]
@@ -175,6 +189,11 @@ final class VisualRegressionTest extends TestCase
     {
         if (!self::ffmpegAvailable()) {
             self::markTestSkipped('ffmpeg not on PATH');
+        }
+
+        $probe = self::capabilityProbe();
+        if ($probe !== null) {
+            self::markTestSkipped($probe);
         }
 
         $name = preg_replace('/\.tape$/', '', basename($tapePath)) ?? basename($tapePath);
@@ -209,16 +228,27 @@ final class VisualRegressionTest extends TestCase
             return;
         }
 
-        // SSIM parse failed — fall back to pixel-diff count.
-        $diffPct = self::pixelDiffPct($producedPath, $goldenPath);
-        if ($diffPct === null) {
+        // SSIM parse failed. VCR-S44: the old fallback judged the FIRST
+        // composed frame only — setup chrome on the sleep-heavy/animation
+        // idles waved through later-frame regressions. Walk every frame
+        // pair instead; a changed frame count is itself a hard failure.
+        $pair = self::compareFramePairs($producedPath, $goldenPath, $this->tmpDir);
+        if ($pair['performed']) {
+            self::assertNull($pair['reason'], 'every extracted frame pair sat within budget');
+            return;
+        }
+
+        // Extraction was impossible on this host — last-resort single
+        // canvas walk, judged with the same fail-loud classifier.
+        $stats = self::pixelDiffStats($producedPath, $goldenPath);
+        if ($stats === null) {
             self::markTestSkipped("Cannot compute either SSIM or pixel-diff for {$name}");
         }
-        self::assertLessThan(
-            self::PIXEL_DIFF_PCT_THRESHOLD,
-            $diffPct,
-            sprintf('Pixel-diff %.4f%% >= threshold %.2f%% for %s', $diffPct * 100.0, self::PIXEL_DIFF_PCT_THRESHOLD * 100.0, $name),
-        );
+        $verdict = self::classifyDiff($stats, self::PIXEL_DIFF_PCT_THRESHOLD, self::ROW_DIFF_SUB_BUDGET, self::WHOLE_FRAME_DIFF);
+        if ($verdict !== null) {
+            self::fail(sprintf('%s for %s', $verdict, $name));
+        }
+        self::assertLessThan(self::PIXEL_DIFF_PCT_THRESHOLD, $stats['pct']);
     }
 
     private static function ffmpegAvailable(): bool
@@ -251,17 +281,79 @@ final class VisualRegressionTest extends TestCase
     }
 
     /**
-     * Decode two GIFs, walk pixels, return the fraction (0..1) of pixels that
-     * differ by more than 8 in any channel. Compares the FIRST frame only —
-     * cheap sanity check when SSIM is unavailable.
+     * Host-capability probe (VCR-S44, finding TEST-04 layer 1). A host
+     * that cannot render like the golden host has no business judging
+     * pixels — it skips. Once the probe passes, EVERY divergence
+     * magnitude is a fail: the old ≥50% "fundamentally different image"
+     * skip band waved through exactly the whole-frame bugs the gate
+     * exists to catch (fallback font, inverted palette, theme plumbing).
+     *
+     * @return null when the host may judge pixels, else the skip reason
      */
-    private static function pixelDiffPct(string $a, string $b): ?float
+    private static function capabilityProbe(): ?string
     {
-        if (!function_exists('imagecreatefromgif')) {
+        if (!function_exists('imagecreatefromstring') || !function_exists('imagepng')) {
+            return 'ext-gd is unavailable; the pixel walk cannot run on this host';
+        }
+        if (!is_file(dirname(__DIR__, 2) . '/fonts/JetBrainsMono-Regular.ttf')) {
+            return 'the bundled JetBrainsMono face is missing; this host cannot reproduce the golden renderer';
+        }
+        // GD round-trip self-test: a known red pixel must survive encode+decode.
+        $src = imagecreatetruecolor(4, 4);
+        if ($src === false) {
+            return 'imagecreatetruecolor failed on this host';
+        }
+        $red = imagecolorallocate($src, 255, 0, 0);
+        if ($red !== false) {
+            imagesetpixel($src, 1, 1, $red);
+        }
+        $tmp = tempnam(sys_get_temp_dir(), 'vcr-probe');
+        if ($tmp === false) {
+            imagedestroy($src);
+            return 'tempnam failed; cannot run the GD self-test';
+        }
+        $tmp .= '.png';
+        $encoded = imagepng($src, $tmp);
+        imagedestroy($src);
+        if (!$encoded) {
+            @unlink($tmp);
+            return 'GD could not encode a PNG on this host';
+        }
+        $bytes = @file_get_contents($tmp);
+        @unlink($tmp);
+        if (!is_string($bytes)) {
+            return 'GD could not read back its own PNG output';
+        }
+        $back = @imagecreatefromstring($bytes);
+        if ($back === false) {
+            return 'GD could not decode its own PNG output';
+        }
+        $px = imagecolorat($back, 1, 1);
+        imagedestroy($back);
+        if (!is_int($px) || (($px >> 16) & 0xff) < 200) {
+            return 'GD channel reads are unreliable on this host';
+        }
+        return null;
+    }
+
+    /**
+     * Decode two images (any GD-readable format — GIF or PNG), walk
+     * pixels, and report the fraction (0..1) differing by more than 8 in
+     * any channel, plus the worst single row's own-diff fraction.
+     * imagecreatefromstring keeps this helper usable for synthetic PNG
+     * fixtures in the harness test as well as real GIFs.
+     *
+     * @return array{pct:float,worstRow:float,worstRowY:int}|null
+     */
+    private static function pixelDiffStats(string $a, string $b): ?array
+    {
+        $bytesA = @file_get_contents($a);
+        $bytesB = @file_get_contents($b);
+        if (!is_string($bytesA) || !is_string($bytesB)) {
             return null;
         }
-        $imgA = @imagecreatefromgif($a);
-        $imgB = @imagecreatefromgif($b);
+        $imgA = @imagecreatefromstring($bytesA);
+        $imgB = @imagecreatefromstring($bytesB);
         if ($imgA === false || $imgB === false) {
             if ($imgA !== false) {
                 imagedestroy($imgA);
@@ -278,7 +370,7 @@ final class VisualRegressionTest extends TestCase
                 return null;
             }
             $diff = 0;
-            $total = $w * $h;
+            $rowDiffs = array_fill(0, $h, 0);
             for ($y = 0; $y < $h; $y++) {
                 for ($x = 0; $x < $w; $x++) {
                     $ca = imagecolorat($imgA, $x, $y);
@@ -294,14 +386,138 @@ final class VisualRegressionTest extends TestCase
                     $bb = $cb & 0xff;
                     if (abs($ra - $rb) > 8 || abs($ga - $gb) > 8 || abs($ba - $bb) > 8) {
                         $diff++;
+                        $rowDiffs[$y]++;
                     }
                 }
             }
-            return $total > 0 ? $diff / $total : null;
+            $total = $w * $h;
+            if ($total <= 0) {
+                return null;
+            }
+            $worstRowY = 0;
+            for ($y = 1; $y < $h; $y++) {
+                if ($rowDiffs[$y] > $rowDiffs[$worstRowY]) {
+                    $worstRowY = $y;
+                }
+            }
+            return [
+                'pct' => (float) ($diff / $total),
+                'worstRow' => (float) ($rowDiffs[$worstRowY] / $w),
+                'worstRowY' => $worstRowY,
+            ];
         } finally {
             imagedestroy($imgA);
             imagedestroy($imgB);
         }
+    }
+
+    /**
+     * Pure classifier over one canvas walk — the whole failure policy of
+     * the tolerance walk lives here so the harness test can judge it
+     * without rendering a tape. Whole-frame band first (its message must
+     * say so — operators previously read it as a skip invitation).
+     *
+     * @param array{pct:float,worstRow:float,worstRowY:int} $stats
+     * @return null when within budget, else the failure reason
+     */
+    private static function classifyDiff(array $stats, float $totalBudget, float $rowBudget, float $wholeFrameFloor): ?string
+    {
+        if ($stats['pct'] >= $wholeFrameFloor) {
+            return sprintf(
+                'whole-frame divergence: %.4f%% of pixels differ (floor %.2f%%) — a host that passed the capability probe must not paint like this',
+                $stats['pct'] * 100.0,
+                $wholeFrameFloor * 100.0,
+            );
+        }
+        if ($stats['worstRow'] >= $rowBudget) {
+            return sprintf(
+                'localized row damage: row %d differs %.4f%% of its own pixels (sub-budget %.2f%%) while the canvas total sat at %.4f%%',
+                $stats['worstRowY'],
+                $stats['worstRow'] * 100.0,
+                $rowBudget * 100.0,
+                $stats['pct'] * 100.0,
+            );
+        }
+        if ($stats['pct'] >= $totalBudget) {
+            return sprintf(
+                'pixel-diff %.4f%% >= threshold %.2f%%',
+                $stats['pct'] * 100.0,
+                $totalBudget * 100.0,
+            );
+        }
+        return null;
+    }
+
+    /**
+     * ffmpeg passthrough-extract every frame of a GIF as PNGs.
+     *
+     * @return list<string> sorted frame paths, or null when extraction is impossible
+     */
+    private static function extractFrames(string $gif, string $outDir): ?array
+    {
+        if (!is_dir($outDir) && !mkdir($outDir, 0700, true) && !is_dir($outDir)) {
+            return null;
+        }
+        $pattern = $outDir . '/f_%05d.png';
+        $cmd = sprintf(
+            'ffmpeg -hide_banner -loglevel error -y -i %s -fps_mode passthrough %s 2>/dev/null',
+            escapeshellarg($gif),
+            escapeshellarg($pattern),
+        );
+        exec($cmd, $ignored, $status);
+        if ($status !== 0) {
+            return null;
+        }
+        $frames = glob($outDir . '/f_*.png');
+        if ($frames === false || $frames === []) {
+            return null;
+        }
+        sort($frames);
+        return $frames;
+    }
+
+    /**
+     * Full-frame comparison for the SSIM-unparseable fallback: extract
+     * both GIFs frame-by-frame, demand equal frame counts (animation
+     * length IS structure — a changed count fails the gate), and walk
+     * each pair. `performed:false` means extraction was impossible on
+     * this host and the caller must fall back to the composed canvas.
+     *
+     * @return array{performed:bool,reason:?string}
+     */
+    private static function compareFramePairs(string $produced, string $golden, string $scratch): array
+    {
+        $dirA = $scratch . '/pairs-produced';
+        $dirB = $scratch . '/pairs-golden';
+        $framesA = self::extractFrames($produced, $dirA);
+        $framesB = self::extractFrames($golden, $dirB);
+        if ($framesA === null || $framesB === null) {
+            return ['performed' => false, 'reason' => null];
+        }
+        if (count($framesA) !== count($framesB)) {
+            return [
+                'performed' => true,
+                'reason' => sprintf(
+                    'animation length changed: produced %d frames, golden %d',
+                    count($framesA),
+                    count($framesB),
+                ),
+            ];
+        }
+        foreach ($framesA as $i => $frameA) {
+            $stats = self::pixelDiffStats($frameA, $framesB[$i]);
+            if ($stats === null) {
+                return ['performed' => false, 'reason' => null];
+            }
+            $verdict = self::classifyDiff($stats, self::PIXEL_DIFF_PCT_THRESHOLD, self::ROW_DIFF_SUB_BUDGET, self::WHOLE_FRAME_DIFF);
+            if ($verdict !== null) {
+                return [
+                    'performed' => true,
+                    'reason' => sprintf('%s (frame %d of %d)', $verdict, $i + 1, count($framesA)),
+                ];
+            }
+        }
+        return ['performed' => true, 'reason' => null];
     }
 
     /**

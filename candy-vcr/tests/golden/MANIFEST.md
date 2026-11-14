@@ -55,8 +55,17 @@ us tight control over content and let each golden stay under ~60 KB.
 
 ## Determinism
 
-`PhpGifEncoder` is byte-deterministic for these inputs: rendering the
-same tape twice produces an identical SHA-256 hash. `FfmpegGifEncoder`
+`PhpGifEncoder` is byte-deterministic **on a given host**: rendering the
+same tape twice here produces an identical SHA-256 hash. Across hosts it
+is not — the bytes depend on libgd and the GD font-cache build.
+`VisualRegressionTest` therefore compares via a SHA-256 fast-path and,
+when that misses, a pixel-tolerance walk: at most 2% of the canvas may
+differ by >8 per channel AND no single row may differ by more than 15%
+of its own pixels (one corrupted text row is invisible to the canvas
+average). Since VCR-S44 the walk fails loudly at any magnitude — a
+host-capability probe (ext-gd round-trip + the bundled JetBrainsMono
+face) decides whether this host may judge pixels at all, and only probe
+failure skips. `FfmpegGifEncoder`
 is also deterministic in this environment (ffmpeg 6.1.1, palettegen +
 paletteuse give bit-identical results across runs), but the
 `VisualRegressionTest` allows up to a small SSIM tolerance for the
@@ -66,5 +75,8 @@ a different runner.
 ## SSIM threshold
 
 `VisualRegressionTest` asserts SSIM `>= 0.95` for the ffmpeg goldens,
-matching `vcr_use.md` §8 ("SSIM threshold if we need fuzziness"). The
-test is auto-skipped when ffmpeg is not on `PATH`.
+matching `vcr_use.md` §8 ("SSIM threshold if we need fuzziness"). When
+the SSIM filter cannot parse, the fallback walks EVERY extracted frame
+pair — a changed frame count is itself a failure — instead of judging
+one composed frame (VCR-S44). The test is auto-skipped when ffmpeg is
+not on `PATH`.
