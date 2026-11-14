@@ -155,6 +155,15 @@ final class DefaultThemeTest extends TestCase
         $this->assertDoesNotMatchRegularExpression('/\x1b\[(?:3[0-9]|9[0-7]|38;)/', $out, 'no foreground colour SGR');
         if (!stream_isatty(\STDOUT)) {
             $this->assertSame($render(Theme::plain()), $out);
+        } else {
+            // Finding 043: the equality above is detect() compared with
+            // detect() — true by construction for any answer, including a
+            // broken one. On a tty the NO_COLOR answer is Ascii (attributes
+            // kept, colour dropped), so the compared bytes MUST carry SGR
+            // runs; without this arm the equality could be satisfied by two
+            // identically-blanked renders and a detect() that over-strips
+            // every attribute would pass unnoticed.
+            $this->assertStringContainsString("\x1b[", $out, 'the tty NO_COLOR answer is Ascii, not plain');
         }
     }
 
