@@ -6,7 +6,6 @@ namespace SugarCraft\Dashboard\Components\StatusBar;
 
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Bar\StatusBar as StyleStatusBar;
 use SugarCraft\Dashboard\Foundation\ColorMode;

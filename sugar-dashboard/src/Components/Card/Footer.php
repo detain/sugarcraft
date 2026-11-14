@@ -6,7 +6,6 @@ namespace SugarCraft\Dashboard\Components\Card;
 
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Dashboard\Output\Truncate;
 use SugarCraft\Dashboard\Foundation\ColorMode;
@@ -62,7 +61,7 @@ final class Footer implements \SugarCraft\Dashboard\Foundation\SizedItem
     /**
      * Create a footer with copyright notice.
      */
-    public static function copyright(string $holder = '', int $year = null): self
+    public static function copyright(string $holder = '', ?int $year = null): self
     {
         $year = $year ?? (int) date('Y');
         $content = $holder !== ''

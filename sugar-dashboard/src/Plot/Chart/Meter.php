@@ -6,7 +6,6 @@ namespace SugarCraft\Dashboard\Plot\Chart;
 
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Dashboard\Plot\Gradient101;
 use SugarCraft\Dashboard\Foundation\ColorMode;
 

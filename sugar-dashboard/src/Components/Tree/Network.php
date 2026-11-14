@@ -6,7 +6,6 @@ namespace SugarCraft\Dashboard\Components\Tree;
 
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Core\Util\ColorProfile;
 
 /**
  * A network diagram component for visualizing connected data.

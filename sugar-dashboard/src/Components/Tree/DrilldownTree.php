@@ -6,7 +6,6 @@ namespace SugarCraft\Dashboard\Components\Tree;
 
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Dashboard\Components\Nav\Breadcrumb;
 use SugarCraft\Dashboard\Layout\StackLayout;
 use SugarCraft\Dashboard\Foundation\ColorMode;

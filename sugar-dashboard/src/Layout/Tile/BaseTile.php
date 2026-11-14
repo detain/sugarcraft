@@ -11,6 +11,11 @@ use SugarCraft\Dashboard\Foundation\Theme;
 
 /**
  * Base tile implementation.
+ *
+ * Intentionally NOT final: composition through extension is this class's
+ * contract — {@see Tile} extends it, the themed fan ({@see ThemedTile})
+ * and consumer dashboards subclass it to carry extra state, and a final
+ * base would break every one of those seats. Dated ruling: 2026-11-14.
  */
 class BaseTile implements Item, SizedItem, ThemedTile
 {

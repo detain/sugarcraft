@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dashboard\Output;
 
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Dashboard\Foundation\ColorMode;
@@ -62,7 +63,7 @@ final class RenderBar
             }
             $result .= str_repeat($filled, $filledWidth);
             if ($open !== '') {
-                $result .= "\x1b[0m";
+                $result .= Ansi::reset();
             }
         }
 
@@ -74,7 +75,7 @@ final class RenderBar
             }
             $result .= str_repeat($empty, $emptyWidth);
             if ($open !== '') {
-                $result .= "\x1b[0m";
+                $result .= Ansi::reset();
             }
         }
 
@@ -126,7 +127,7 @@ final class RenderBar
         }
 
         if ($open !== '') {
-            $result .= "\x1b[0m";
+            $result .= Ansi::reset();
         }
 
         return $result;

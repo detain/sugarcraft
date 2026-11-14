@@ -6,7 +6,6 @@ namespace SugarCraft\Dashboard\Components\Media;
 
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Core\Util\ColorProfile;
 
 /**
  * A video player component with playback controls and progress bar.

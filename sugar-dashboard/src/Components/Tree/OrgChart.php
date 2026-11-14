@@ -6,7 +6,6 @@ namespace SugarCraft\Dashboard\Components\Tree;
 
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Core\Util\ColorProfile;
 
 /**
  * An organizational chart component for hierarchy visualization.

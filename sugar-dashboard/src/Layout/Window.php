@@ -9,7 +9,6 @@ use SugarCraft\Style\Border;
 use SugarCraft\Style\VAlign;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Dashboard\Output\Truncate;
 
