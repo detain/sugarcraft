@@ -50,10 +50,19 @@ non-GIF bytes outright.
 
 ## Install
 
-**Requirements.** PHP 8.3+ and the `gd` extension (`ext-gd`). The `gd`
-requirement is a hard requirement of this app: composer consumers get the
-platform check transitively through `sugar-image`, but a downloaded phar
-carries no platform check at all — so this sentence is the guardrail.
+**Requirements.** PHP 8.3+ and `ext-gd` are enforced on every channel:
+composer consumers get both from this package's `require` (a host without
+`gd` fails the install), and a downloaded phar embeds the vendor tree, whose
+`vendor/composer/platform_check.php` hard-fails any PHP older than 8.3 the
+moment the bundled autoloader loads. The phar carries **no extension check**
+though — run it on a PHP built with `ext-gd`, or the first decode fails.
+`ext-ffi` is not required to install, but interactive runs want it: without
+FFI the winsize ioctl cannot answer and the size falls back to
+`COLUMNS`/`LINES`, then to the fixed 60×24 viewport; Windows raw-terminal
+input needs it outright (it is sugar-pty's termios backend). Two external
+binaries are consulted opportunistically: `stty(1)` answers the
+terminal-size rescue rungs, and being inside `tmux` is what makes the
+default `--passthrough=auto` wrap frames in its envelope.
 
 **No released version yet.** Packagist serves `dev-master` only — there is
 no tag and no branch-alias — so under a default `minimum-stability: stable`
