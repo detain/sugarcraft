@@ -13,6 +13,7 @@ use SugarCraft\Vcr\Raster\GdRasterizer;
 use SugarCraft\Vcr\Raster\ImagickRasterizer;
 use SugarCraft\Vcr\Raster\Rasterizer;
 use SugarCraft\Vcr\Tape\Compiler;
+use SugarCraft\Vcr\Tape\InlineTheme;
 use SugarCraft\Vcr\Tape\Lexer;
 use SugarCraft\Vcr\Tape\Parser;
 use SugarCraft\Vterm\Snapshot;
@@ -576,6 +577,21 @@ final class TapeToGif
 
     private function resolveTheme(string $name, bool $strict = false): Theme
     {
+        // An inline `Set Theme {…}` object is a theme, not a name to look up:
+        // parse it here so its colours reach the raster instead of degrading
+        // to a stock palette.
+        if (InlineTheme::looksLikeJson($name)) {
+            try {
+                return InlineTheme::fromJson($name);
+            } catch (\InvalidArgumentException $e) {
+                if ($strict) {
+                    throw $e;
+                }
+                error_log('candy-vcr: ' . $e->getMessage() . ', falling back to TokyoNight');
+                return Theme::tokyoNight();
+            }
+        }
+
         return match ($name) {
             'TokyoNight' => Theme::tokyoNight(),
             'TokyoNightLight' => Theme::tokyoNightLight(),
