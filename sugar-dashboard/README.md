@@ -107,7 +107,7 @@ composer require sugarcraft/sugar-dashboard
 | `Screen` | Full-screen host: alternate-buffer entry, cursor/mouse enable, teardown that reverses exactly what setup armed (size negotiates `COLUMNS`/`LINES`, never ioctls) | | |
 | `Viewport` | Clip-and-scroll container: renders a sized window over content taller or wider than it | | |
 | `Sidebar` | Navigation column over labeled items with optional icons, active highlight and dividers | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/sidebar.gif) |
-| `Breakpoint` | Static helpers for responsive breakpoints — `narrow()`/`medium()`/`wide()`/`pick()` (default thresholds 90/140, Homedash convention) | `narrow(int $width, int $threshold = 90): bool`, `medium(int $width, int $narrow = 90, int $wide = 140): bool`, `wide(int $width, int $threshold = 140): bool`, `pick(int $width, array $thresholds): string` | |
+| `Breakpoint` | Static helpers for responsive breakpoints — `narrow()`/`medium()`/`wide()`/`pick()` (default thresholds 90/140) | `narrow(int $width, int $threshold = 90): bool`, `medium(int $width, int $narrow = 90, int $wide = 140): bool`, `wide(int $width, int $threshold = 140): bool`, `pick(int $width, array $thresholds): string` | |
 | `Pad` | Padding wrapper — CSS-style padding with optional borders (for the tree-structured focus split, see the live `Layout\Boxer` subtree) | | |
 
 ### Layout Subsystems (Tile, Boxer, RatioGrid, Focus)

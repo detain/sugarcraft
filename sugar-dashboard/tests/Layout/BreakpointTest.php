@@ -127,16 +127,61 @@ final class BreakpointTest extends TestCase
         $this->assertSame('expanded', Breakpoint::pick(150, $thresholds));
     }
 
-    public function testPickFallsBackToNarrowWhenNoCatchall(): void
+    public function testPickAboveEveryBoundStaysInWidestBucketWhenNoCatchall(): void
     {
-        // When no null-boundary catch-all is provided, return 'narrow' as safe default.
+        // Finding sugar-dashboard-125 (flipped pin, disclosed): a width
+        // above every bound used to fall back to the magic 'narrow'
+        // bucket - desktop terminals received the phone layout. The
+        // widest numeric bucket is the correct above-max answer.
         $thresholds = [
             'small' => 90,
             'large' => 140,
         ];
 
         $this->assertSame('small', Breakpoint::pick(80, $thresholds));
-        $this->assertSame('narrow', Breakpoint::pick(200, $thresholds));
+        $this->assertSame('small', Breakpoint::pick(89, $thresholds));
+        $this->assertSame('large', Breakpoint::pick(90, $thresholds));
+        $this->assertSame('large', Breakpoint::pick(139, $thresholds));
+        $this->assertSame('large', Breakpoint::pick(140, $thresholds));
+        $this->assertSame('large', Breakpoint::pick(141, $thresholds));
+        $this->assertSame('large', Breakpoint::pick(4000, $thresholds));
+    }
+
+    public function testPickIgnoresMapLiteralOrder(): void
+    {
+        // Same buckets declared out of sequence must resolve identically
+        // (finding 125: iteration used to trust map-literal order).
+        $ordered = ['narrow' => 90, 'medium' => 140, 'wide' => null];
+        $shuffled = ['wide' => null, 'medium' => 140, 'narrow' => 90];
+        $middleOut = ['medium' => 140, 'narrow' => 90, 'wide' => null];
+
+        foreach ([1, 80, 89, 90, 139, 140, 141, 4000] as $width) {
+            $this->assertSame(
+                Breakpoint::pick($width, $ordered),
+                Breakpoint::pick($width, $shuffled),
+                "shuffled map must match at width {$width}"
+            );
+            $this->assertSame(
+                Breakpoint::pick($width, $ordered),
+                Breakpoint::pick($width, $middleOut),
+                "middle-out map must match at width {$width}"
+            );
+        }
+
+        $this->assertSame('narrow', Breakpoint::pick(89, $shuffled));
+        $this->assertSame('medium', Breakpoint::pick(140 - 1, $shuffled));
+        $this->assertSame('wide', Breakpoint::pick(140, $shuffled));
+    }
+
+    public function testPickCatchallWinsOnlyAfterAllBoundsFail(): void
+    {
+        // A null-bound entry placed FIRST in the map must not swallow
+        // widths that belong to a narrower bucket.
+        $catchallFirst = ['wide' => null, 'narrow' => 90];
+
+        $this->assertSame('narrow', Breakpoint::pick(80, $catchallFirst));
+        $this->assertSame('wide', Breakpoint::pick(90, $catchallFirst));
+        $this->assertSame('wide', Breakpoint::pick(4000, $catchallFirst));
     }
 
     public function testPickWithEmptyThresholds(): void

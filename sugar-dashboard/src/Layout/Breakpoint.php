@@ -7,8 +7,9 @@ namespace SugarCraft\Dashboard\Layout;
 /**
  * Static helpers for responsive layout breakpoints.
  *
- * Defaults (90 / 140) are the Homedash convention values and serve
- * as a sensible baseline for terminal UI layouts.
+ * The 90 / 140 cell defaults are the fleet-wide values every layout
+ * component consumes when it does not override them; they split
+ * terminal widths into narrow / medium / wide bands.
  */
 final class Breakpoint
 {
@@ -61,34 +62,51 @@ final class Breakpoint
      *   Breakpoint::pick(80, ['narrow' => 90, 'medium' => 140, 'wide' => null])
      *   // → 'narrow'
      *
-     * Thresholds are treated as lower-inclusive bounds. The last entry
-     * with a null threshold is the catch-all "wide" bucket.
+     * Each bound is an UPPER BOUND EXCLUSIVE of its bucket: a width is
+     * assigned to the bucket with the smallest bound it does not reach.
+     * Buckets are compared in bound order, never map-literal order, so a
+     * map declared out of sequence still resolves correctly.
      *
-     * @param array<string, int|null> $thresholds  Map of bucket name to lower bound (null = catch-all).
-     * @param int                     $width      Current terminal width in cells.
+     * A null bound is the catch-all bucket. When the map carries none, a
+     * width above every bound falls into the WIDEST bucket rather than a
+     * magic name: a desktop terminal must not receive the narrow layout,
+     * and the 'narrow' string is only a fallback when the map has no
+     * bounds to choose from at all.
      *
-     * @return string The matched bucket name, or 'narrow' as fallback.
+     * @param int                     $width       Current terminal width in cells.
+     * @param array<string, int|null> $thresholds  Map of bucket name to upper bound, exclusive (null = catch-all).
+     *
+     * @return string The matched bucket name, or 'narrow' when the map is empty.
      */
     public static function pick(int $width, array $thresholds): string
     {
-        foreach ($thresholds as $name => $bound) {
-            if ($bound === null) {
-                continue;
-            }
-            if ($width >= $bound) {
-                continue;
-            }
-            return $name;
+        if ($thresholds === []) {
+            return 'narrow';
         }
 
-        // No threshold matched — fall back to the catch-all (null bound) if present,
-        // otherwise 'narrow' as a safe default.
-        foreach ($thresholds as $name => $bound) {
+        // Buckets ordered by ascending bound so iteration tests the
+        // narrowest bound first regardless of declaration order.
+        $ordered = $thresholds;
+        uasort($ordered, static function (int|null $a, int|null $b): int {
+            if ($a === null) {
+                return $b === null ? 0 : 1;   // catch-all sorts last
+            }
+            if ($b === null) {
+                return -1;
+            }
+            return $a <=> $b;
+        });
+
+        foreach ($ordered as $name => $bound) {
             if ($bound === null) {
+                return $name;  // nothing narrower matched
+            }
+            if ($width < $bound) {
                 return $name;
             }
         }
 
-        return 'narrow';
+        // Above every bound with no catch-all: stay in the widest bucket.
+        return (string) array_key_last($ordered);
     }
 }
