@@ -562,4 +562,23 @@ final class ReviewFixPinsTest extends TestCase
         $this->assertInstanceOf(Gauge::class, Gauge::new($registry, 'g'));
         $this->assertInstanceOf(Histogram::class, Histogram::new($registry, 'h'));
     }
+    public function testExamplesReadThroughTheStructuredSurfaceNotRawKeys(): void
+    {
+        // 022 (MET-SNAPSHOT): the examples once hand-rolled key printing and
+        // a per-histogram array_sum/count aggregation pass — example code
+        // gets copied into production, and naive key handling breaks exactly
+        // on the adversarial bytes. They must ride snapshot()/histogramSummary.
+        $seen = 0;
+        foreach (glob(__DIR__ . '/../examples/*.php') ?: [] as $example) {
+            $body = (string) file_get_contents($example);
+            $this->assertStringNotContainsString('array_sum(', $body, basename($example) . ' must not hand-aggregate reservoirs');
+            if (str_contains($body, 'InMemoryBackend')) {
+                $seen++;
+                $this->assertStringContainsString('->snapshot()', $body, basename($example) . ' must read via snapshot()');
+                $this->assertStringContainsString('histogramSummary(', $body, basename($example) . ' must summarize histograms via histogramSummary()');
+            }
+        }
+        $this->assertSame(2, $seen, 'both inspection examples must still exist for this guard');
+    }
+
 }

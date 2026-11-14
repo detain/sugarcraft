@@ -69,10 +69,22 @@ Server::new()
     ->serve();
 
 fwrite(STDERR, "\n--- session totals ---\n");
-foreach ($tally->counters() as $key => $val) {
-    fwrite(STDERR, '  counter   ' . Util::displaySafe((string) $key) . "  {$val}\n");
-}
-foreach ($tally->histograms() as $key => $samples) {
-    $sum = array_sum($samples);
-    fwrite(STDERR, sprintf("  histogram %s  count=%d sum=%.6f\n", Util::displaySafe((string) $key), count($samples), $sum));
+// One loop over the structured read surface (sugar-metrics-022): snapshot
+// decodes the faithful name + tags, histogramSummary owns the reservoir
+// aggregation — no hand-rolled key parsing or reservoir aggregation here.
+foreach ($tally->snapshot() as $row) {
+    $shown = Util::displaySafe($row['name']);
+    if ($row['tags'] !== []) {
+        $parts = [];
+        foreach ($row['tags'] as $k => $v) {
+            $parts[] = Util::displaySafe((string) $k) . '=' . Util::displaySafe((string) $v);
+        }
+        $shown .= '{' . implode(',', $parts) . '}';
+    }
+    if ($row['kind'] === 'histogram') {
+        $summary = $tally->histogramSummary($row['name'], $row['tags']) ?? ['count' => 0, 'sum' => 0.0];
+        fwrite(STDERR, sprintf("  histogram %s  count=%d sum=%.6f\n", $shown, $summary['count'], $summary['sum']));
+        continue;
+    }
+    fwrite(STDERR, '  ' . $row['kind'] . '   ' . $shown . "  {$row['value']}\n");
 }

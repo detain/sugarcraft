@@ -37,7 +37,7 @@ $stop = $registry->time('demo.work_s');
 usleep(7_500);  // 7.5 ms of fake work
 $stop();
 
-// Storage keys fold caller-supplied tag values in, and those values can
+// Snapshot rows carry the caller-supplied tag values back, and they can
 // carry hostile bytes (usernames, request ids). Sweep control characters
 // through Util::displaySafe — the shared door — before printing so a
 // labelled metric can never forge terminal escape sequences or line
@@ -51,24 +51,46 @@ function padCell(string $text, int $width): string
     return $text . \str_repeat(' ', max(0, $width - mb_strwidth($text)));
 }
 
+// Render one snapshot row (sugar-metrics-022 read surface) as `name{k=v,…}`
+// with every token swept through the shared displaySafe door.
+$renderRow = static function (array $row): string {
+    $shown = Util::displaySafe($row['name']);
+    if ($row['tags'] !== []) {
+        $parts = [];
+        foreach ($row['tags'] as $k => $v) {
+            $parts[] = Util::displaySafe((string) $k) . '=' . Util::displaySafe((string) $v);
+        }
+        $shown .= '{' . implode(',', $parts) . '}';
+    }
+    return $shown;
+};
+
 echo "=== Counters ===\n";
-foreach ($tally->counters() as $key => $val) {
-    $shown = Util::displaySafe((string) $key);
-    echo "  {$shown}  →  {$val}\n";
+foreach ($tally->snapshot() as $row) {
+    if ($row['kind'] !== 'counter') {
+        continue;
+    }
+    echo '  ' . padCell($renderRow($row), 44) . "  {$row['value']}\n";
 }
 
 echo "\n=== Gauges ===\n";
-foreach ($tally->gauges() as $key => $val) {
-    $shown = Util::displaySafe((string) $key);
-    echo "  {$shown}  →  {$val}\n";
+foreach ($tally->snapshot() as $row) {
+    if ($row['kind'] !== 'gauge') {
+        continue;
+    }
+    echo '  ' . padCell($renderRow($row), 44) . "  {$row['value']}\n";
 }
 
 echo "\n=== Histograms ===\n";
-foreach ($tally->histograms() as $key => $samples) {
-    $sum   = array_sum($samples);
-    $count = count($samples);
-    $avg   = $count > 0 ? $sum / $count : 0.0;
-    echo '  ' . padCell(Util::displaySafe((string) $key), 44) . sprintf('  count=%d  sum=%.6f  avg=%.6f', $count, $sum, $avg) . "\n";
+foreach ($tally->snapshot() as $row) {
+    if ($row['kind'] !== 'histogram') {
+        continue;
+    }
+    // The reservoir aggregation is the backend's job (sugar-metrics-022):
+    // histogramSummary returns count/observed/sum/mean — no hand-rolled
+    // aggregation pass in the example any more.
+    $summary = $tally->histogramSummary($row['name'], $row['tags']) ?? ['count' => 0, 'sum' => 0.0, 'mean' => 0.0];
+    echo '  ' . padCell($renderRow($row), 44) . sprintf('  count=%d  sum=%.6f  avg=%.6f', $summary['count'], $summary['sum'], $summary['mean']) . "\n";
 }
 
 echo "\nBackends ship: InMemoryBackend, JsonStreamBackend, StatsdBackend,\n";

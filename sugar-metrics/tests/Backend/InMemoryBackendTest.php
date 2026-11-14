@@ -269,4 +269,82 @@ final class InMemoryBackendTest extends TestCase
         $b->clear();
         self::assertSame([], $ref->getValue($b));
     }
+    public function testSnapshotDecodesAdversarialStorageKeysFaithfully(): void
+    {
+        // sugar-metrics-022 fold-proof read surface: the consumer-side twin
+        // of the 013 guard — a raw name carrying separators and a tag fold
+        // of the same bytes must return as TWO rows with faithful names and
+        // tags, exactly what hand-splitting `name|k=v` on every '|' gets
+        // wrong.
+        $b = new InMemoryBackend();
+        $b->counter('x|y=1', 5.0);
+        $b->counter('x', 3.0, ['y' => '1']);
+        $b->gauge("a\\b\0c", 1.0, ['we=ird' => 'va|lue\\x']);
+        $rows = $b->snapshot();
+        $this->assertCount(3, $rows);
+        $this->assertSame(
+            [['x|y=1', []], ['x', ['y' => '1']], ["a\\b\0c", ['we=ird' => 'va|lue\\x']]],
+            [[$rows[0]['name'], $rows[0]['tags']], [$rows[1]['name'], $rows[1]['tags']], [$rows[2]['name'], $rows[2]['tags']]],
+            'decoded name+tags must be byte-identical to what was emitted'
+        );
+        $this->assertSame('counter', $rows[0]['kind']);
+        $this->assertSame(5.0, $rows[0]['value']);
+        $this->assertSame('gauge', $rows[2]['kind']);
+    }
+
+    public function testSnapshotCoversAllSixKindsWithHistogramValuesAsSums(): void
+    {
+        $b = new InMemoryBackend();
+        $b->counter('c', 1.0);
+        $b->gauge('g', 2.0);
+        $b->histogram('h', 0.1, ['q' => 'a']);
+        $b->histogram('h', 0.2, ['q' => 'a']);
+        $b->upDownCounter('u', 3.0);
+        $b->asyncCounter('ac', 4.0);
+        $b->asyncGauge('ag', 5.0);
+        $rows = $b->snapshot();
+        $this->assertCount(6, $rows);
+        $byKind = [];
+        foreach ($rows as $row) {
+            $byKind[$row['kind']] = $row;
+        }
+        $this->assertSame(['counter', 'gauge', 'histogram', 'upDownCounter', 'asyncCounter', 'asyncGauge'], array_keys($byKind));
+        $this->assertSame('h', $byKind['histogram']['name']);
+        $this->assertSame(['q' => 'a'], $byKind['histogram']['tags']);
+        $this->assertEqualsWithDelta(0.3, $byKind['histogram']['value'], 1e-12, 'the histogram row value is the reservoir sum');
+        $this->assertSame(2.0, $byKind['gauge']['value']);
+    }
+
+    public function testHistogramSummaryReportsReservoirAndObservedSeparately(): void
+    {
+        $b = new InMemoryBackend(2);
+        $b->histogram('lat', 1.0);
+        $b->histogram('lat', 2.0);
+        $summary = $b->histogramSummary('lat');
+        $this->assertIsArray($summary);
+        $this->assertSame(2, $summary['count']);
+        $this->assertSame(2, $summary['observed']);
+        $this->assertSame(3.0, $summary['sum']);
+        $this->assertSame(1.5, $summary['mean']);
+        $b->histogram('lat', 30.0); // reservoir full: one replacement draw may or may not land
+        $after = $b->histogramSummary('lat');
+        $this->assertSame(2, $after['count'], 'the reservoir stays capped');
+        $this->assertSame(3, $after['observed'], 'observed counts the whole stream, not the reservoir');
+        $this->assertNull($b->histogramSummary('absent'));
+        $b->remove('lat');
+        $this->assertNull($b->histogramSummary('lat'), 'removed series summarize as null');
+    }
+
+    public function testSnapshotIsSweptByClearAndRemove(): void
+    {
+        $b = new InMemoryBackend();
+        $b->counter('one', 1.0);
+        $b->gauge('two', 2.0, ['t' => 'v']);
+        $this->assertCount(2, $b->snapshot());
+        $b->remove('one');
+        $this->assertCount(1, $b->snapshot());
+        $b->clear();
+        $this->assertSame([], $b->snapshot());
+    }
+
 }

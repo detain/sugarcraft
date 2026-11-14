@@ -220,6 +220,137 @@ final class InMemoryBackend implements Backend
     public function asyncGauges(): array { return $this->asyncGauges; }
 
     /**
+     * Structured read surface (sugar-metrics-022): every accumulated series
+     * as its own row, with the internal storage key decoded back into the
+     * faithful name + tags the caller emitted. The raw maps above stay for
+     * zero-copy access, but they are keyed by the {@see self::key()}
+     * grammar — consumers parsing `name|k=v` by hand re-implement the
+     * escaper wrong exactly when a payload carries a separator (an adversar-
+     * ial name like 'x|y=1' is indistinguishable from a fold once you split
+     * naively), and histogram consumers re-implement the reservoir aggre-
+     * gation. Additive: no existing behavior moves.
+     *
+     * Row shape: name is the emitted name, byte-faithful (this is the con-
+     * sumer-side twin of the finding-013 fold guard); tags are in storage
+     * (ksort-sorted) order; value is the accumulated scalar — for the
+     * histogram kind it is the SUM over the retained reservoir (count and
+     * mean ride {@see self::histogramSummary()}).
+     *
+     * @return list<array{name:string,kind:string,tags:array<string,string>,value:float}>
+     */
+    public function snapshot(): array
+    {
+        $rows = [];
+        foreach ([
+            'counter' => $this->counters,
+            'gauge' => $this->gauges,
+            'histogram' => $this->histograms,
+            'upDownCounter' => $this->upDownCounters,
+            'asyncCounter' => $this->asyncCounters,
+            'asyncGauge' => $this->asyncGauges,
+        ] as $kind => $map) {
+            foreach ($map as $key => $sample) {
+                [$name, $tags] = self::decodeKey((string) $key);
+                $rows[] = [
+                    'name' => $name,
+                    'kind' => $kind,
+                    'tags' => $tags,
+                    'value' => $kind === 'histogram'
+                        ? array_sum($sample)
+                        : (float) $sample,
+                ];
+            }
+        }
+        return $rows;
+    }
+
+    /**
+     * Aggregate view of one histogram series, or null when the series is
+     * absent. count/sum/mean describe the RETAINED RESERVOIR (bounded at
+     * maxSamplesPerKey); observed is the total number of samples ever seen
+     * for the series, so post-cap the two axes are honestly distinct — a
+     * reservoir mean is not a stream mean, and pretending otherwise would
+     * just move the consumer-boilerplate problem inside the library.
+     *
+     * @param array<string,string> $tags
+     * @return ?array{name:string,tags:array<string,string>,count:int,observed:int,sum:float,mean:float}
+     */
+    public function histogramSummary(string $name, array $tags = []): ?array
+    {
+        $key = $this->key($name, $tags);
+        if (!isset($this->histograms[$key])) {
+            return null;
+        }
+        $samples = $this->histograms[$key];
+        $count = count($samples);
+        $sum = array_sum($samples);
+        return [
+            'name' => $name,
+            'tags' => $tags,
+            'count' => $count,
+            'observed' => $this->histogramSeen[$key] ?? $count,
+            'sum' => $sum,
+            'mean' => $count > 0 ? $sum / $count : 0.0,
+        ];
+    }
+
+    /**
+     * Invert {@see self::key()} exactly: split on UNESCAPED separators only
+     * (backslash leads an escape pair and is skipped as a unit), then un-
+     * escape each token. The round-trip property snapshot needs is
+     * decodeKey(key($name, $tags)) === [$name, $tags] for every input,
+     * adversarial ones included — pinned on the fold twins from finding 013.
+     *
+     * @return array{0:string,1:array<string,string>}
+     */
+    private static function decodeKey(string $key): array
+    {
+        $parts = self::splitUnescaped($key, '|');
+        $name = self::decodeToken((string) array_shift($parts));
+        $tags = [];
+        foreach ($parts as $pair) {
+            $kv = self::splitUnescaped($pair, '=');
+            $tags[self::decodeToken($kv[0])] = self::decodeToken($kv[1] ?? '');
+        }
+        return [$name, $tags];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function splitUnescaped(string $subject, string $separator): array
+    {
+        $out = [];
+        $buffer = '';
+        $length = strlen($subject);
+        for ($i = 0; $i < $length; $i++) {
+            $char = $subject[$i];
+            if ($char === '\\' && $i + 1 < $length) {
+                // An escape pair rides together; its second byte is payload.
+                $buffer .= $char . $subject[++$i];
+                continue;
+            }
+            if ($char === $separator) {
+                $out[] = $buffer;
+                $buffer = '';
+                continue;
+            }
+            $buffer .= $char;
+        }
+        $out[] = $buffer;
+        return $out;
+    }
+
+    private static function decodeToken(string $token): string
+    {
+        return (string) preg_replace_callback(
+            '/\\\\([\\\\|=0])/',
+            static fn(array $m): string => ['\\' => '\\', '|' => '|', '=' => '=', '0' => "\0"][$m[1]],
+            $token
+        );
+    }
+
+    /**
      * @return float the accumulated value; a NEVER-COUNTED counter reads
      *               0.0 — indistinguishable from one that counted zero
      *               (007: polarity stated rather than flipped, the flip
