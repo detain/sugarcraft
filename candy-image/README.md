@@ -50,6 +50,25 @@ host-independent) apply to the embedded `fromString` route.
 `--animate` plays animated **GIF** only: the sugar-animation decoder rejects
 non-GIF bytes outright.
 
+## Platform support
+
+- **Linux** — the primary target: winsize via the TIOCGWINSZ ioctl through
+  sugar-core, live terminal queries on a tty, sixel/kitty/iTerm2 protocols
+  exercised on every push in CI.
+- **macOS** — works through the same POSIX path with the environment
+  fallback rungs behind it, but candy-image itself has never joined the
+  macOS CI pool (the phar pipeline above runs Linux-only), so treat it
+  as supported-untested rather than proven.
+- **Windows** — graceful but unproven. A render never hard-crashes on
+  geometry any more: the console size falls back to `COLUMNS`/`LINES`,
+  then to the fixed 60×24 viewport, and a still render arms the console
+  output codepage to UTF-8 before writing the text tiers. Interactive
+  paths (`--animate`, live capability queries) need `ext-ffi` — without
+  it they degrade to the same fallback viewport, not a signal-255 death
+  — and sixel under Windows Terminal is untested. In one line: still
+  renders should work, animations are a gamble, and none of it is
+  CI-pinned for this app.
+
 ## Environment
 
 Detection reads the environment before it queries the terminal: sugar-image's
