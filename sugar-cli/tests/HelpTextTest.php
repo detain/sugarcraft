@@ -102,6 +102,52 @@ final class HelpTextTest extends TestCase
         $this->assertStringNotContainsString("\x1b", $out);
     }
 
+    /**
+     * `titleCase: false` hands both heading slots back to the caller as
+     * authored — lossy-uppercase locales (German ß, Turkish ı/İ) keep their
+     * words intact instead of growing or mismatching under mb_strtoupper.
+     */
+    public function testTitleCaseFalseKeepsHeadingsAsGiven(): void
+    {
+        $out = HelpText::render(
+            'myapp',
+            ['Größe Straße' => ['-k' => 'x']],
+            theme: Theme::plain(),
+            usageLabel: 'straße',
+            titleCase: false,
+        );
+        $this->assertStringContainsString('straße', $out);
+        $this->assertStringContainsString('Größe Straße', $out);
+        $this->assertStringNotContainsString('STRASSE', $out);
+        $this->assertStringNotContainsString('GRÖSSE', $out);
+    }
+
+    /** The default path stays byte-identical to explicit `true` (BC pin). */
+    public function testTitleCaseDefaultMatchesExplicitTrue(): void
+    {
+        $default = HelpText::render('myapp', ['straße' => ['-k' => 'x']], theme: Theme::plain());
+        $explicit = HelpText::render('myapp', ['straße' => ['-k' => 'x']], theme: Theme::plain(), titleCase: true);
+        $this->assertSame($default, $explicit);
+        // mb_strtoupper grows ß to SS: the documented hazard, pinned here.
+        $this->assertStringContainsString('STRASSE', $default);
+    }
+
+    /** A callable mapping is applied to the usage label and every title. */
+    public function testTitleCaseCallableMapsBothHeadingSlots(): void
+    {
+        $out = HelpText::render(
+            'myapp',
+            ['flags' => ['-v' => 'x']],
+            theme: Theme::plain(),
+            usageLabel: 'usage',
+            titleCase: static fn (string $title): string => '[' . $title . ']',
+        );
+        $this->assertStringStartsWith("[usage]\n", $out);
+        $this->assertStringContainsString("[flags]", $out);
+        $this->assertStringNotContainsString('USAGE', $out);
+        $this->assertStringNotContainsString('FLAGS', $out);
+    }
+
     /** Narrow canvases squeeze the continuation indent instead of overflowing it. */
     public function testStackedIndentIsClampedToWidth(): void
     {

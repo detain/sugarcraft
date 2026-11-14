@@ -46,7 +46,9 @@ final class HelpText
      * two lines would no longer be the flag — so one that is itself wider
      * than `$width` still overflows. Note that a title's cell width can grow
      * under uppercasing (`ß` becomes `SS` in UTF-8); it is measured after the
-     * growth but never re-wrapped.
+     * growth but never re-wrapped. Hosts that own their typography can opt out
+     * of the uppercasing entirely with `titleCase: false`, or supply their own
+     * locale mapping as a callable.
      *
      * @param string $usage  one-line synopsis, e.g. `myapp [flags] <file>`
      * @param array<string, array<string, string>> $sections
@@ -62,6 +64,16 @@ final class HelpText
      *                     section title; default `USAGE`. Pass a translated
      *                     string for localized help, or `''` to drop the
      *                     heading line and print the synopsis alone.
+     * @param bool|callable $titleCase  styling of the usage label and every
+     *                     section title. `true` (default) uppercases with
+     *                     `mb_strtoupper` exactly as before. `false` prints
+     *                     titles exactly as given — the right answer for
+     *                     locales where uppercasing is a lossy transform:
+     *                     German `ß` grows to `SS` (and its capital `ẞ` is
+     *                     not what readers expect), Turkish dotted `ı`/`İ`
+     *                     collide, and Greek loses breathings. A callable
+     *                     replaces the mapping entirely and receives (and
+     *                     must return) the sanitized title string.
      *
      * @throws \InvalidArgumentException when `$width` is less than 1
      */
@@ -72,6 +84,7 @@ final class HelpText
         ?Theme $theme = null,
         int|AutoWidth|null $width = AutoWidth::Auto,
         string $usageLabel = 'USAGE',
+        bool|callable $titleCase = true,
     ): string {
         $width = WidthProbe::resolve($width);
         self::assertWidth($width);
@@ -81,7 +94,7 @@ final class HelpText
         // raw into the help page — neutralize escape/control injection on each.
         if ($usage !== '') {
             $label = SafeText::line($usageLabel);
-            $label = $label === '' ? '' : mb_strtoupper($label, 'UTF-8');
+            $label = $label === '' ? '' : self::applyTitleCase($label, $titleCase);
             $synopsis = self::indentLines(
                 self::wrap(SafeText::line($usage), self::shrink($width, self::clampedIndent($width, 2))),
                 self::clampedIndent($width, 2),
@@ -98,12 +111,36 @@ final class HelpText
                 // it (and a dangling separator in the join) — skip the block.
                 continue;
             }
-            // mb_strtoupper, not strtoupper: the byte-wise ASCII version left
-            // non-ASCII titles (`café`) half-lowercase beside their siblings.
-            $blocks[] = $theme->accent->render(mb_strtoupper(SafeText::line((string) $title), 'UTF-8')) . "\n"
+            // mb_strtoupper (via applyTitleCase), not strtoupper: the byte-wise
+            // ASCII version left non-ASCII titles (`café`) half-lowercase
+            // beside their siblings.
+            $blocks[] = $theme->accent->render(self::applyTitleCase(SafeText::line((string) $title), $titleCase)) . "\n"
                       . $renderedRows;
         }
         return implode("\n\n", $blocks);
+    }
+
+    /**
+     * Apply the caller's title-case policy to one sanitized title.
+     *
+     * The three arms exist because {@see mb_strtoupper()} is lossy in both
+     * directions: it grows German `ß` to `SS` (a wider string than the
+     * caller authored, and a different word to a German reader for
+     * `Straße`→`STRASSE`-style cases) and it leaves Turkish dotted/dotless
+     * `ı`/`İ` pairs mismatched under a generic Latin mapping. A host that
+     * owns its typography passes `titleCase: false` (as-given) or a
+     * callable (locale table); the default keeps the fleet-wide shouty
+     * heading look byte-identical.
+     */
+    private static function applyTitleCase(string $title, bool|callable $titleCase): string
+    {
+        if ($titleCase === false) {
+            return $title;
+        }
+        if ($titleCase === true) {
+            return mb_strtoupper($title, 'UTF-8');
+        }
+        return (string) $titleCase($title);
     }
 
     /**

@@ -156,7 +156,10 @@ echo StatusLine::error('connection refused'), "\n";
   key overflows the width on its own line, and in grid mode it widens
   the whole key column (pushing descriptions toward their one-cell wrap
   floor), so keep keys short either way; the stacked continuation indent is
-  `HelpText::STACKED_INDENT` (6 cells). `renderRows()` renders
+  `HelpText::STACKED_INDENT` (6 cells). Section titles and the usage label are
+  upper-cased with `mb_strtoupper` (a title can grow — `ß` → `SS`); pass
+  `titleCase: false`, or a callable mapping, to `render()` to own the casing.
+  `renderRows()` renders
   just the key/description grid, and `renderPage()` renders a complete
   pre-composed page without re-wrapping it by default (`null`); pass an
   `int`/`AutoWidth` to word-wrap over-long rows.
