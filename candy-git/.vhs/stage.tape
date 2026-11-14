@@ -1,7 +1,8 @@
 # VHS tape — CandyGit git staging workflow.
 # s key stages/unstages the highlighted file.
-# NOTE: drives the REAL ./bin/candy-git against the CI checkout — output is
-# environment-dependent (see README Demos).
+# Drives the hermetic staging fixture (php examples/stage.php): the s presses
+# visibly change staged/unstaged letters on a deterministic row set, so the
+# render no longer depends on the checked-out repository's git state.
 # Render with: `vhs candy-git/.vhs/stage.tape`
 Output .vhs/stage.gif
 
@@ -11,15 +12,14 @@ Set Height 400
 Set TypingSpeed 60ms
 Set Theme "TokyoNight"
 
-Type "./bin/candy-git"
+Type "php examples/stage.php"
 Enter
-Sleep 1s
+Sleep 1500ms
 
-Down  Sleep 300ms     # move cursor
-Type "s" Sleep 400ms  # stage
+Type "s" Sleep 400ms  # stage src/Renderer.php (M -> staged)
 Down  Sleep 300ms
-Type "s" Sleep 400ms  # stage another
-Type "s" Sleep 400ms  # unstage
+Type "s" Sleep 400ms  # stage src/DiffViewer.php
+Type "s" Sleep 400ms  # unstage it again
 Sleep 500ms
 Type "R" Sleep 600ms  # refresh
 Type "q"
