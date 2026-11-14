@@ -16,6 +16,7 @@ namespace SugarCraft\CandyImage\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\CandyImage\Cli;
+use SugarCraft\Core\Util\Tty\Kernel32Interface;
 use SugarCraft\Core\Util\Tty\PosixBackend;
 use SugarCraft\Image\Detect;
 use SugarCraft\Image\Renderer\SymbolMapRenderer;
@@ -765,5 +766,102 @@ final class CliTest extends TestCase
 
         $this->assertSame(Cli::EXIT_INPUT, $rc, 'truncated delivery must exit 2 — stderr was: ' . $stderr . ' — stdout prefix was: ' . $seen);
         $this->assertStringContainsString('write failed', $stderr);
+    }
+
+    /**
+     * IMG-14 (candy-image-023): the arm-selection predicate is the whole
+     * Linux/macOS safety story, so its truth table is pinned in-process.
+     */
+    public function testConsoleCodepageIsArmedOnlyOnWindowsConsoles(): void
+    {
+        $this->assertTrue(Cli::shouldArmConsoleCodepage(true, true));
+        $this->assertFalse(Cli::shouldArmConsoleCodepage(true, false), 'redirected output has no console codepage to arm');
+        $this->assertFalse(Cli::shouldArmConsoleCodepage(false, true), 'POSIX consoles do not speak CP65001');
+        $this->assertFalse(Cli::shouldArmConsoleCodepage(false, false));
+    }
+
+    /**
+     * IMG-14: the capture/arm/restore sequence, driven through a fake
+     * seam so it is exercised on every host (same injection style as
+     * sugar-core's own WindowsBackend tests).
+     */
+    public function testCodepageArmCapturesPreviousPageAndRestoresIt(): void
+    {
+        $seen = [];
+        $kernel32 = $this->createMock(Kernel32Interface::class);
+        $kernel32->method('getConsoleOutputCP')->willReturnCallback(static function () use (&$seen): int {
+            $seen[] = 'get';
+
+            return 850;
+        });
+        $kernel32->method('setConsoleOutputCP')->willReturnCallback(static function (int $cp) use (&$seen): bool {
+            $seen[] = $cp;
+
+            return true;
+        });
+
+        $restore = $this->armConsoleCodepage($kernel32);
+        $this->assertNotNull($restore, 'a successful arm must hand back a restore closure');
+        $this->assertSame(['get', 65001], $seen, 'the arm must read the previous page before switching to UTF-8');
+
+        $restore();
+        $this->assertSame(['get', 65001, 850], $seen, 'restore must put back exactly the captured page');
+    }
+
+    public function testFailedCodepageArmReportsUnarmedAndNeverClaimsARestore(): void
+    {
+        $kernel32 = $this->createMock(Kernel32Interface::class);
+        $kernel32->method('getConsoleOutputCP')->willReturn(437);
+        $kernel32->expects($this->once())->method('setConsoleOutputCP')->willReturn(false);
+
+        $this->assertNull($this->armConsoleCodepage($kernel32), 'a refused arm has nothing to undo — reporting a restore closure would promise a page switch that never happened');
+    }
+
+    /**
+     * IMG-14: on this (non-Windows) host the gated helper must short-circuit
+     * to null without resolving the Kernel32 seam at all.
+     */
+    public function testWindowsGateShortCircuitsOffWindows(): void
+    {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('this arm pins the non-Windows short circuit');
+        }
+
+        $method = new \ReflectionMethod(Cli::class, 'armWindowsOutputCodepage');
+        $method->setAccessible(true);
+
+        $this->assertNull($method->invoke(null));
+    }
+
+    /**
+     * IMG-14 structural: the still-write block must actually consult the
+     * gate and restore in a finally — the behavioural arms above prove
+     * the pieces, this pins their wiring into main().
+     */
+    public function testStillRenderPathWiresTheCodepageArmAroundTheWrites(): void
+    {
+        $source = (string) file_get_contents(__DIR__ . '/../src/Cli.php');
+
+        $this->assertMatchesRegularExpression(
+            '/armWindowsOutputCodepage\(\);\s*try\s*\{.*?writePayload\(\$stdout, \$bytes\).*?finally\s*\{\s*if \(\$restoreCodepage !== null\)/s',
+            $source,
+            'the payload writes must sit between the arm and its finally-restore'
+        );
+        $this->assertMatchesRegularExpression(
+            '/if \(!self::shouldArmConsoleCodepage\(\\\\PHP_OS_FAMILY === \'Windows\'[^\n]*\n\s*return null;/s',
+            $source,
+            'the gated helper must return null the moment the predicate refuses'
+        );
+    }
+
+    private function armConsoleCodepage(Kernel32Interface $kernel32): ?callable
+    {
+        $method = new \ReflectionMethod(Cli::class, 'armConsoleCodepage');
+        $method->setAccessible(true);
+
+        /** @var null|callable():void $restore */
+        $restore = $method->invoke(null, $kernel32);
+
+        return $restore;
     }
 }

@@ -10,6 +10,8 @@ use SugarCraft\Animation\Renderer;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\Core\Util\Tty\Kernel32;
+use SugarCraft\Core\Util\Tty\Kernel32Interface;
 use SugarCraft\Core\Util\Tty\PosixBackend;
 use SugarCraft\Image\Detect;
 use SugarCraft\Image\ImageSource;
@@ -68,6 +70,9 @@ final class Cli
     /** Viewport used when STDOUT is not a tty (piped output, CI, examples). */
     public const FALLBACK_CELLS_W = 60;
     public const FALLBACK_CELLS_H = 24;
+
+    /** Windows console codepage that decodes UTF-8 (candy-image-023). */
+    private const UTF8_OUTPUT_CP = 65001;
 
     /**
      * Ceiling for a single --width/--height/--size leg. Arbitrary digits
@@ -376,10 +381,24 @@ final class Cli
                 return self::EXIT_INPUT;
             }
 
-            $delivery = self::writePayload($stdout, $bytes);
-            if ($delivery === null && !str_ends_with($bytes, "\n")) {
-                $delivery = self::writePayload($stdout, "\n");
+            // Windows console decodes bytes by the current OUTPUT codepage,
+            // which is an OEM page (CP437/850/936…) by default; the text
+            // tiers print UTF-8 multibyte glyphs, so an unarmed console
+            // would mojibake the still render (candy-image-023). The arm
+            // restores the previous page before the exit code is returned;
+            // off Windows (or without the FFI seam) it is a no-op.
+            $restoreCodepage = self::armWindowsOutputCodepage();
+            try {
+                $delivery = self::writePayload($stdout, $bytes);
+                if ($delivery === null && !str_ends_with($bytes, "\n")) {
+                    $delivery = self::writePayload($stdout, "\n");
+                }
+            } finally {
+                if ($restoreCodepage !== null) {
+                    $restoreCodepage();
+                }
             }
+
             if ($delivery !== null) {
                 self::err($stderr, $delivery);
 
@@ -647,5 +666,62 @@ final class Cli
         }
 
         return [self::FALLBACK_CELLS_W, self::FALLBACK_CELLS_H];
+    }
+
+    /**
+     * Arm-selection predicate for the Windows console codepage fix
+     * (candy-image-023): the output page only needs arming to UTF-8 when
+     * the process actually runs on Windows AND is writing to a console.
+     * A piped redirected file has no console codepage to speak of, so a
+     * tty is part of the contract. Public so the truth table is pinned
+     * in-process on every platform, not only on the Windows runner.
+     */
+    public static function shouldArmConsoleCodepage(bool $isWindows, bool $isTty): bool
+    {
+        return $isWindows && $isTty;
+    }
+
+    /**
+     * Gate + resolution around the codepage arm: consults the predicate
+     * first (Linux/macOS never touch the seam), then resolves sugar-core's
+     * Kernel32 lazily inside a catch — an FFI-less or non-Windows failure
+     * degrades to shipping the render in the console's own page rather
+     * than crashing, mirroring the viewportCells ladder's philosophy.
+     *
+     * @return null|callable():void restore closure, or null when unarmed
+     */
+    private static function armWindowsOutputCodepage(): ?callable
+    {
+        if (!self::shouldArmConsoleCodepage(\PHP_OS_FAMILY === 'Windows', \is_resource(\STDOUT) && \stream_isatty(STDOUT))) {
+            return null;
+        }
+
+        try {
+            return self::armConsoleCodepage(Kernel32::self());
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Capture-previous / arm-UTF-8 / restore sequence, split out so a
+     * fake seam can drive it byte-for-byte off Windows (the same
+     * injection style sugar-core's WindowsBackend uses for its own
+     * tests). Returns null — and changes nothing — when the arm call
+     * itself fails, because there is then no responsibility to undo.
+     *
+     * @return null|callable():void
+     */
+    private static function armConsoleCodepage(Kernel32Interface $kernel32): ?callable
+    {
+        $previous = $kernel32->getConsoleOutputCP();
+
+        if (!$kernel32->setConsoleOutputCP(self::UTF8_OUTPUT_CP)) {
+            return null;
+        }
+
+        return static function () use ($kernel32, $previous): void {
+            $kernel32->setConsoleOutputCP($previous);
+        };
     }
 }
