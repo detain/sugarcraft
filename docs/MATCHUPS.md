@@ -229,7 +229,7 @@ maps each package to its upstream.
 | SugarTable (sugar-table/) | [bubble-table](https://github.com/Evertras/bubble-table) (no mouse integration; upstream's WithHorizontalFreezeColumnCount column-prefix freeze IS ported here as withFrozenCols — upstream has no row-freeze concept) |
 | SugarTesting (sugar-testing/) | [x/exp/golden](https://github.com/charmbracelet/x-exp-golden) + [teatest](https://github.com/charmbracelet/teatest) (nearest prior art — first-party hardened; tape dialect charmbracelet/vhs) |
 | SugarToast (sugar-toast/) | [bubbleup](https://github.com/DaltonSW/bubbleup) |
-| SugarTreelist (sugar-treelist/) | [bubblelister](https://github.com/treilik/bubblelister) |
+| SugarTreelist (sugar-treelist/) | [bubbles/list](https://github.com/charmbracelet/bubbles/tree/main/list) (primary design source — the ported cursor/filter/render surface) · naming and tree-gutter context from [bubblelister](https://github.com/treilik/bubblelister) (the Go wrapper whose gutter vocabulary it keeps) |
 | SugarVideo (sugar-video/) | [tplay](https://github.com/maxcurzi/tplay) · [glyph](https://github.com/seatedro/glyph) · [video-to-ascii](https://github.com/joelibaceta/video-to-ascii) |
 | SugarVterm (sugar-vterm/) | [x/vt](https://github.com/charmbracelet/x/tree/main/vt) |
 | SugarWidgets (sugar-widgets/) | [bubbles](https://github.com/charmbracelet/bubbles) |
