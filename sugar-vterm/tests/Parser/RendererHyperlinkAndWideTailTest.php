@@ -11,7 +11,7 @@ use SugarCraft\Vterm\Terminal;
 /**
  * Renderer-path (vcr) pins for the ESC-2 hyperlink pen and the ESC-3 wide
  * tail unification: bytes go through {@see Terminal::feed()} — parser →
- * HandlerAdapter → OscHandlerImpl/CsiHandlerImpl — and the observable is the
+ * HandlerAdapter → PenForwardingOscHandler/CsiHandlerImpl — and the observable is the
  * cell grid, mirroring what candy-vcr snapshots.
  *
  * @see https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h3-hyperlinks

@@ -6,7 +6,6 @@ namespace SugarCraft\Vterm;
 
 use SugarCraft\Vterm\Buffer\Buffer;
 use SugarCraft\Vterm\Parser\CsiHandlerImpl;
-use SugarCraft\Vterm\Parser\OscHandlerImpl;
 
 /**
  * Frozen frame from the terminal emulator.

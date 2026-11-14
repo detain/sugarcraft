@@ -9,16 +9,16 @@ use SugarCraft\Vterm\Buffer\Buffer;
 use SugarCraft\Vterm\Cursor;
 use SugarCraft\Vterm\Hyperlink\Hyperlink;
 use SugarCraft\Vterm\Parser\CsiHandlerImpl;
-use SugarCraft\Vterm\Parser\OscHandlerImpl;
+use SugarCraft\Vterm\Parser\PenForwardingOscHandler;
 use SugarCraft\Vterm\Theme;
 
-final class OscHandlerImplTest extends TestCase
+final class PenForwardingOscHandlerTest extends TestCase
 {
-    private OscHandlerImpl $osc;
+    private PenForwardingOscHandler $osc;
 
     protected function setUp(): void
     {
-        $this->osc = new OscHandlerImpl();
+        $this->osc = new PenForwardingOscHandler();
     }
 
     public function testTitleStoresLastSeenTitle(): void
@@ -62,7 +62,7 @@ final class OscHandlerImplTest extends TestCase
     public function testForwardsLinkToGridPen(): void
     {
         $csi = new CsiHandlerImpl(new Buffer(10, 2), new Cursor(), new Theme());
-        $osc = new OscHandlerImpl($csi);
+        $osc = new PenForwardingOscHandler($csi);
 
         $osc->hyperlink('https://example.com', 'x');
         $this->assertTrue((new Hyperlink('x', 'https://example.com'))->equals($csi->hyperlink()));
@@ -77,5 +77,22 @@ final class OscHandlerImplTest extends TestCase
         $this->osc->title('Second');
 
         $this->assertSame('Second', $this->osc->lastTitle());
+    }
+
+    public function testOldNameIsTheSameClass(): void
+    {
+        // class_alias targets are invisible to static analysis, so the
+        // façade is spelled as a runtime string and asserted into its type.
+        $legacyName = 'SugarCraft\Vterm\Parser\OscHandlerImpl';
+        $this->assertTrue(\class_exists($legacyName));
+
+        $legacy = new $legacyName();
+        $this->assertInstanceOf(PenForwardingOscHandler::class, $legacy);
+        $this->assertSame(PenForwardingOscHandler::class, \get_class($legacy));
+
+        $legacy->title('through the old spelling');
+        $legacy->hyperlink('https://example.com', 'a');
+        $this->assertSame('through the old spelling', $legacy->lastTitle());
+        $this->assertNotNull($legacy->currentHyperlink());
     }
 }

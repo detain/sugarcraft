@@ -14,7 +14,7 @@ use SugarCraft\Vterm\Cell as RendererCell;
 use SugarCraft\Vterm\Cell;
 use SugarCraft\Vterm\Cursor;
 use SugarCraft\Vterm\Parser\CsiHandlerImpl;
-use SugarCraft\Vterm\Parser\OscHandlerImpl;
+use SugarCraft\Vterm\Parser\PenForwardingOscHandler;
 use SugarCraft\Vterm\Screen\Screen;
 use SugarCraft\Vterm\Screen\Scrollback;
 use SugarCraft\Vterm\Terminal as RendererTerminal;
@@ -176,7 +176,7 @@ final class AllocationTest extends TestCase
         $grid = new Buffer(160, 50);
         $handler = new HandlerAdapter(
             new CsiHandlerImpl($grid, new Cursor(), new Theme()),
-            new OscHandlerImpl(),
+            new PenForwardingOscHandler(),
         );
         $parser = new Parser($handler, maxStringBuffer: 65536);
 

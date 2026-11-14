@@ -8,14 +8,14 @@ use SugarCraft\AnsiParser\Parser\HandlerAdapter;
 use SugarCraft\AnsiParser\Parser\Parser;
 use SugarCraft\Vterm\Buffer\Buffer;
 use SugarCraft\Vterm\Parser\CsiHandlerImpl;
-use SugarCraft\Vterm\Parser\OscHandlerImpl;
+use SugarCraft\Vterm\Parser\PenForwardingOscHandler;
 use SugarCraft\Vterm\Parser\RendererHandler;
 
 /**
  * Public terminal surface for the vcr renderer path.
  *
  * Holds a Buffer, Cursor, and sugar-ansi-parser's Parser with CsiHandlerImpl +
- * OscHandlerImpl wired through sugar-ansi-parser's HandlerAdapter. Feed bytes
+ * PenForwardingOscHandler wired through sugar-ansi-parser's HandlerAdapter. Feed bytes
  * through `feed()` (mutates in place, returns `$this` for chaining), capture
  * frames via `snapshot()` — which deep-copies the grid so a captured frame
  * is frozen against all later feeds.
@@ -36,7 +36,7 @@ final class Terminal
     private Cursor $cursor;
     private Parser $parser;
     private CsiHandlerImpl $csi;
-    private OscHandlerImpl $osc;
+    private PenForwardingOscHandler $osc;
     private Theme $theme;
     private int $revision = 0;
 
@@ -47,7 +47,7 @@ final class Terminal
         Cursor $cursor,
         Parser $parser,
         CsiHandlerImpl $csi,
-        OscHandlerImpl $osc,
+        PenForwardingOscHandler $osc,
         ?Theme $theme = null,
     ) {
         $this->grid = $grid;
@@ -68,7 +68,7 @@ final class Terminal
         // The OSC handler feeds the CSI pen: OSC 8 links must reach the cells
         // printable() writes (ESC-2), mirroring the emulator's single-handler
         // wiring where both live inside ScreenHandler.
-        $osc = new OscHandlerImpl($csi);
+        $osc = new PenForwardingOscHandler($csi);
 
         $handler = new RendererHandler($csi, new HandlerAdapter($csi, $osc));
         // 64 KiB string-buffer cap bounds OSC/DCS payload memory. The value
