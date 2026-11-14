@@ -971,6 +971,13 @@ final class Readline
         }
         $view = $prompt->view();
         if ($view === '') {
+            // Empty view: the paint is EXPLICITLY PRESERVED (finding 031
+            // asymmetry decision). Nothing new was drawn, so there is
+            // nothing to erase; lastPaintedRows keeps counting the stale
+            // frame because it is still on screen. Zeroing it here would
+            // strand that frame — the next repaint would climb past it and
+            // scroll a staircase. Foreign prompts may flash '' between
+            // frames; the climb arithmetic survives it.
             return;
         }
         if ($this->dumbTerm !== null) {
