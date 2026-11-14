@@ -84,7 +84,7 @@ final class ReadlinePollLoopTest extends TestCase
         $sleeps = [];
         $readline = $this->recordingReadline($driver, 6, $sleeps);
 
-        $final = $readline->run(TextPrompt::new('> '));
+        $final = $readline->run(TextPrompt::new('> '), null);
 
         $this->assertSame([1_000, 2_000, 4_000, 1_000, 2_000, 4_000], $sleeps);
         $this->assertSame('a', $final->value(), 'the dispatched key must still reach the prompt');
@@ -98,7 +98,7 @@ final class ReadlinePollLoopTest extends TestCase
         $sleeps = [];
         $readline = $this->recordingReadline($driver, 5, $sleeps);
 
-        $readline->run(TextPrompt::new('> '));
+        $readline->run(TextPrompt::new('> '), null);
 
         $this->assertSame([1_000, 2_000, 1_000, 2_000, 4_000], $sleeps, 'mouse events count as activity');
     }
@@ -109,7 +109,7 @@ final class ReadlinePollLoopTest extends TestCase
         $sleeps = [];
         $readline = $this->recordingReadline($driver, 1, $sleeps);
 
-        $final = $readline->run(TextPrompt::new('> '));
+        $final = $readline->run(TextPrompt::new('> '), null);
 
         $this->assertSame([], $sleeps, 'a prompt that keeps receiving keys must never sleep');
         $this->assertTrue($final->isSubmitted());
@@ -128,7 +128,7 @@ final class ReadlinePollLoopTest extends TestCase
         });
         $readline->stop();
 
-        $final = $readline->run(TextPrompt::new('> '));
+        $final = $readline->run(TextPrompt::new('> '), null);
 
         $this->assertSame(0, $driver->reads);
         $this->assertSame('', $final->value());
@@ -148,7 +148,7 @@ final class ReadlinePollLoopTest extends TestCase
             });
         $holder->rl = $readline;
 
-        $final = $readline->run(TextPrompt::new('> '));
+        $final = $readline->run(TextPrompt::new('> '), null);
 
         $this->assertSame('ab', $final->value());
         $this->assertFalse($final->isSubmitted());
@@ -165,7 +165,7 @@ final class ReadlinePollLoopTest extends TestCase
         $sleeps = [];
         $readline = $this->recordingReadline($driver, 3, $sleeps);
 
-        $final = $readline->run(TextPrompt::new('> '));
+        $final = $readline->run(TextPrompt::new('> '), null);
 
         $this->assertCount(3, $sleeps);
         $this->assertSame([1_000, 2_000, 4_000], $sleeps);
@@ -191,7 +191,7 @@ final class ReadlinePollLoopTest extends TestCase
             new KeyEvent('c', KeyModifier::ctrl(), "\x03"),
         ]);
 
-        $final = (new Readline($driver))->run(TextPrompt::new('> '));
+        $final = (new Readline($driver))->run(TextPrompt::new('> '), null);
 
         $this->assertTrue($final->isAborted());
         $this->assertFalse($final->isSubmitted());
@@ -203,7 +203,7 @@ final class ReadlinePollLoopTest extends TestCase
         // floor keeps that at 1ms, so the suite pays nothing measurable.
         $driver = $this->scriptedDriver([null, null, $this->enterEvent()]);
 
-        $final = (new Readline($driver))->run(TextPrompt::new('> ')->handleChar('x'));
+        $final = (new Readline($driver))->run(TextPrompt::new('> ')->handleChar('x'), null);
 
         $this->assertTrue($final->isSubmitted());
         $this->assertSame('x', $final->value());

@@ -92,6 +92,18 @@ final class Readline
      *
      * @var resource|null
      */
+    /**
+     * Sentinel default of {@see run()}: OMITTING the output argument now
+     * paints to STDOUT (finding 039 — the safest-looking call was the
+     * broken one: a fresh user typed blind). An explicit `null` keeps the
+     * old headless driving contract exactly. Sentinel value is a string no
+     * real stream handle can equal.
+     */
+    public const PAINT_DEFAULT = "\0readline-paint-default";
+
+    /** One-time steering notice for the new omitted-default behavior. */
+    private static bool $paintDefaultNoted = false;
+
     private $ownedStream = null;
 
     private ?StreamInputDriver $ownedDriver = null;
@@ -393,11 +405,12 @@ final class Readline
      * canonical key name — see {@see Key::normalize()}) and also invokes the
      * prompt's handleChar() for printable keys or handleKey() otherwise.
      *
-     * Painting: pass $output (e.g. STDOUT) to make the loop repaint after
-     * each state change whenever the prompt exposes a view() method. With
-     * $output null — the default — NOTHING is written: the loop still
-     * mutates prompt state from injected input, but an interactive caller
-     * that passes no stream will type blind.
+     * Painting: omit $output and frames paint to STDOUT; pass your own
+     * stream handle to paint elsewhere; pass an explicit null for headless
+     * driving (state advances, NOTHING is written). The omitted default is
+     * {@see self::PAINT_DEFAULT} — a sentinel, so 'not passed' and 'passed
+     * null' are distinguishable. The loop repaints after each state change
+     * whenever the prompt exposes a view() method.
      *
      * Terminal mode contract: run() does not touch termios. In a cooked
      * (default) TTY the line discipline owns Enter/Backspace/arrows and
@@ -482,8 +495,19 @@ final class Readline
      * @return object  The final prompt state after the user submits, aborts,
      *                 stop() fires, or the owned pump reaches EOF
      */
-    public function run(object $prompt, $output = null): object
+    public function run(object $prompt, mixed $output = self::PAINT_DEFAULT): object
     {
+        if ($output === self::PAINT_DEFAULT) {
+            // Paint-by-default (finding 039): stdout is the interactive
+            // answer; headless drivers pass an explicit null.
+            $output = self::stdoutHandle();
+            if (!self::$paintDefaultNoted) {
+                self::$paintDefaultNoted = true;
+                \error_log('sugar-readline: run() paints to STDOUT when the output'
+                    . ' argument is omitted; pass an explicit null to keep headless driving.');
+            }
+        }
+
         // Boundary check (finding 038): the pump used to duck-type every
         // call, so a partial prompt object failed silently — no view()
         // never painted, no handleKey() dropped controls, no
@@ -984,6 +1008,16 @@ final class Readline
      * with TextPrompt::withDisplayWidth() (which clips the visible window
      * instead of letting the row wrap).
      */
+    /** Resolved paint target for the omitted-default path (STDOUT where defined). */
+    private static function stdoutHandle(): mixed
+    {
+        if (\defined('STDOUT')) {
+            return \STDOUT;
+        }
+        $h = @\fopen('php://stdout', 'w');
+        return $h === false ? null : $h;
+    }
+
     private function repaint(object $prompt, mixed $output): void
     {
         if ($output === null) {

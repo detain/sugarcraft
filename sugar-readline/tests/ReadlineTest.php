@@ -1058,7 +1058,7 @@ final class ReadlineTest extends TestCase
             });
 
         $prompt = new TextPrompt('> ');
-        $finalPrompt = $readline->run($prompt);
+        $finalPrompt = $readline->run($prompt, null);
 
         $this->assertTrue($ctrlCHandlerFired, 'ctrl_c handler should have fired');
         $this->assertTrue($finalPrompt->isAborted(), 'Prompt should be aborted after Ctrl+C');
@@ -1108,7 +1108,7 @@ final class ReadlineTest extends TestCase
             });
 
         $prompt = TextPrompt::new('> ');
-        $finalPrompt = $readline->run($prompt);
+        $finalPrompt = $readline->run($prompt, null);
 
         $this->assertTrue($enterHandlerFired, 'enter handler should have fired');
         $this->assertTrue($finalPrompt->isSubmitted(), 'Prompt should be submitted on Enter');
@@ -1187,7 +1187,7 @@ final class ReadlineTest extends TestCase
         $driver = new StreamInputDriver($readEnd);
         $readline = new Readline($driver);
         $prompt = TextPrompt::new('> ');
-        $finalPrompt = $readline->run($prompt);
+        $finalPrompt = $readline->run($prompt, null);
 
         $this->assertSame('Alice', $finalPrompt->value());
         $this->assertTrue($finalPrompt->isSubmitted());
@@ -1211,7 +1211,7 @@ final class ReadlineTest extends TestCase
         $driver = new StreamInputDriver($readEnd);
         $readline = new Readline($driver);
         $prompt = ConfirmationPrompt::new('Continue?');
-        $finalPrompt = $readline->run($prompt);
+        $finalPrompt = $readline->run($prompt, null);
 
         $this->assertFalse($finalPrompt->result());
         $this->assertTrue($finalPrompt->isSubmitted());
@@ -1274,7 +1274,7 @@ final class ReadlineTest extends TestCase
         $driver = new StreamInputDriver($readEnd);
         $readline = new Readline($driver);
         $prompt = TextPrompt::new('> ');
-        $finalPrompt = $readline->run($prompt);
+        $finalPrompt = $readline->run($prompt, null);
 
         $this->assertSame('hello', $finalPrompt->value());
         $this->assertTrue($finalPrompt->isSubmitted());
@@ -1496,7 +1496,7 @@ final class ReadlineTest extends TestCase
         try {
             fwrite($pair[1], "hi\r");
             $driver = new StreamInputDriver($pair[0]);
-            $final = (new Readline($driver))->run(new TextPrompt('> '));
+            $final = (new Readline($driver))->run(new TextPrompt('> '), null);
             $this->assertSame(40, $final->displayWidth(), 'unset width adopts COLUMNS');
         } finally {
             if ($previous === false) {
@@ -1517,7 +1517,7 @@ final class ReadlineTest extends TestCase
         try {
             fwrite($pair[1], "hi\r");
             $driver = new StreamInputDriver($pair[0]);
-            $final = (new Readline($driver))->run((new TextPrompt('> '))->withDisplayWidth(0));
+            $final = (new Readline($driver))->run((new TextPrompt('> '))->withDisplayWidth(0), null);
             $this->assertSame(0, $final->displayWidth(), 'explicit 0 is never overwritten');
         } finally {
             if ($previous === false) {

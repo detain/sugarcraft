@@ -44,7 +44,9 @@ Each prompt is a pure state machine: feed it key characters and it returns a
 new prompt. `Readline` is the terminal loop that does the feeding — it reads
 keypresses through `sugar-input`'s `InputDriver`, repaints the prompt's
 `view()` after every change, and returns the prompt once it is submitted or
-aborted. Pass an output stream to `run()` or nothing is painted. On a live
+aborted. `run()` paints to STDOUT when the output argument is omitted;
+pass your own stream handle to paint elsewhere, or an explicit `null` to advance
+state without writing anything (the headless shape the tests use). On a live
 terminal, reach for `Readline::interactive()` instead of `run()`: it wraps
 the loop with the raw-mode flip and restore the key chords need (see
 "Terminal mode" below).

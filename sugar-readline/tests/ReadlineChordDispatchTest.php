@@ -256,7 +256,7 @@ final class ReadlineChordDispatchTest extends TestCase
             ->onKey('escape', static function () use (&$fired): void {
                 $fired = true;
             });
-        $final = $readline->run(TextPrompt::new('> '));
+        $final = $readline->run(TextPrompt::new('> '), null);
 
         fclose($pair[0]);
         $this->assertTrue($fired, "onKey('escape') must reach the ESC dispatch (name normalized at registration)");
@@ -354,7 +354,7 @@ final class ReadlineChordDispatchTest extends TestCase
         $readline = new Readline(new StreamInputDriver($pair[0]));
         $prompt = SelectionPrompt::new('Fruit: ', ['Apple', 'Banana', 'Cherry']);
         /** @var SelectionPrompt $final */
-        $final = $readline->run($prompt);
+        $final = $readline->run($prompt, null);
 
         fclose($pair[0]);
         $this->assertTrue($final->isSubmitted());
@@ -403,7 +403,7 @@ final class ReadlineChordDispatchTest extends TestCase
                 }
             },
         );
-        $final = $readline->run(TextPrompt::new('> '));
+        $final = $readline->run(TextPrompt::new('> '), null);
         fclose($pair[0]);
 
         $this->assertSame('z', $final->value(), 'bytes before the EOF must still be delivered');

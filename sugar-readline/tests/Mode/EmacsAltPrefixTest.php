@@ -104,7 +104,7 @@ final class EmacsAltPrefixTest extends TestCase
         };
 
         $prompt = TextPrompt::new('> ')->withMode(new EmacsMode());
-        $final = (new Readline($driver))->run($prompt);
+        $final = (new Readline($driver))->run($prompt, null);
 
         $this->assertTrue($final->isAborted(), 'ESC + Ctrl+C through the pump aborts (finding 010 repro)');
     }
@@ -132,7 +132,7 @@ final class EmacsAltPrefixTest extends TestCase
         };
 
         $prompt = TextPrompt::new('> ')->withMode(new EmacsMode());
-        $final = (new Readline($driver))->run($prompt);
+        $final = (new Readline($driver))->run($prompt, null);
 
         $this->assertSame('x', $final->value());
         $this->assertTrue($final->isSubmitted());
