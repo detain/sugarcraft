@@ -29,10 +29,12 @@ final class ReadlineEofTest extends TestCase
         // popen rather than proc_open: on this box proc_open's pipe
         // descriptors read back EBADF in the parent (measured), while the
         // child itself runs fine — popen streams are reliable here.
-        $command = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($child) . ' < /dev/null 2>&1';
+        $command = 'timeout 30 ' . escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($child) . ' < /dev/null 2>&1';
 
         $handle = popen($command, 'r');
         self::assertIsResource($handle);
+        // S-62 parity bound: a stalled child must strand nothing.
+        stream_set_timeout($handle, 30);
 
         $output = '';
         while (!feof($handle)) {

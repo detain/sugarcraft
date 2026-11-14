@@ -24,7 +24,7 @@ final class ReadlineInteractiveTest extends TestCase
 
         // PATH=/nonexistent makes any stty exec loud-by-absence: the guard
         // must return BEFORE reaching it, so no STDERR warning is printed.
-        $command = 'env PATH=/nonexistent ' . escapeshellarg(PHP_BINARY) . ' '
+        $command = 'timeout 30 env PATH=/nonexistent ' . escapeshellarg(PHP_BINARY) . ' '
             . escapeshellarg($child) . ' < /dev/null 2>&1';
 
         $output = self::runChild($command);
@@ -88,7 +88,7 @@ final class ReadlineInteractiveTest extends TestCase
         // device before the byte arrives — then hold the master open through
         // processing. Feeding instantly would raise SIGINT against the still
         // canonical discipline even when interactive() works correctly.
-        $command = '{ sleep 1; printf \'' . $octalFeed . '\'; sleep 2; } | script -q -e -c ' . escapeshellarg('env -u COLUMNS -u LINES ' . $inner)
+        $command = '{ sleep 1; printf \'' . $octalFeed . '\'; sleep 2; } | timeout 30 script -q -e -c ' . escapeshellarg('env -u COLUMNS -u LINES ' . $inner)
             . ' ' . escapeshellarg($session) . ' >/dev/null 2>&1';
 
         try {

@@ -33,11 +33,13 @@ final class ReadlinePumpReuseTest extends TestCase
 
         // Same popen choice as ReadlineEofTest (proc_open pipe descriptors
         // read back EBADF in the parent on this box — measured).
-        $command = "printf 'one\\ntwo\\n' | "
+        $command = "printf 'one\\ntwo\\n' | timeout 30 "
             . escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($child) . ' 2>&1';
 
         $handle = popen($command, 'r');
         self::assertIsResource($handle);
+        // S-62 parity bound: a stalled child must strand nothing.
+        stream_set_timeout($handle, 30);
 
         $output = '';
         while (!feof($handle)) {

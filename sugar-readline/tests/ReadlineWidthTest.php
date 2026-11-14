@@ -184,12 +184,13 @@ final class ReadlineWidthTest extends TestCase
         self::assertIsString($session);
 
         $inner = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($child);
-        $command = 'printf \'\\r\' | script -q -e -c ' . escapeshellarg('env -u COLUMNS ' . $inner)
+        $command = 'printf \'\\r\' | timeout 30 script -q -e -c ' . escapeshellarg('env -u COLUMNS ' . $inner)
             . ' ' . escapeshellarg($session) . ' >/dev/null 2>&1';
 
         try {
             $handle = popen($command, 'r');
             self::assertIsResource($handle);
+            stream_set_timeout($handle, 30); // S-62 bound
             while (!feof($handle)) {
                 fgets($handle);
             }
