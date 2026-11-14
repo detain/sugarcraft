@@ -432,6 +432,64 @@ final class AppTest extends TestCase
         $this->assertTrue($g->stageAllCalled);
     }
 
+    // ------------------------------------------- CG-34: stageAll undo (candy-git-042)
+
+    public function testUndoOfStageAllRestoresAPriorCleanSelection(): void
+    {
+        // The default fixture stages src/A.php ahead of the sweep while
+        // src/B.php is a plain worktree change. The old blanket reset --
+        // undo would have erased A's selection; the capture-set inverse
+        // resets and re-adds exactly it.
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'a'));
+        self::assertTrue($g->stageAllCalled);
+
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'u'));
+        self::assertTrue($g->unstageAllCalled, 'the sweep is reset away first');
+        self::assertSame(['src/A.php'], $g->stages, 'and only the pre-existing pick comes back');
+        self::assertStringContainsString('undone', (string) $a->successMessage);
+    }
+
+    public function testUndoOfStageAllRefusesWhenAStagedFileWasPartiallyStaged(): void
+    {
+        // index != worktree means the staged version lives ONLY in the
+        // index - any blanket or re-add inverse would destroy it. Refuse.
+        $g = new FixtureGit(
+            statusRows: [
+                ['branch_summary' => 'main...origin/main'],
+                ['index_status' => 'M', 'work_status' => 'M', 'path' => 'src/C.php'],
+            ],
+            branchRows: [['name' => 'main', 'sha' => 'abc1', 'current' => true]],
+            logRows: [],
+        );
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'a'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'u'));
+        self::assertStringContainsString('cannot undo', (string) $a->error);
+        self::assertStringContainsString('stage all', (string) $a->error);
+        self::assertFalse($g->unstageAllCalled, 'the refusal touches nothing');
+        self::assertSame([], $g->stages);
+    }
+
+    public function testUndoOfStageAllWithoutPriorSelectionKeepsThePlainInverse(): void
+    {
+        $g = new FixtureGit(
+            statusRows: [
+                ['branch_summary' => 'main...origin/main'],
+                ['index_status' => ' ', 'work_status' => 'M', 'path' => 'src/B.php'],
+                ['index_status' => '?', 'work_status' => '?', 'path' => 'new/F.php'],
+            ],
+            branchRows: [['name' => 'main', 'sha' => 'abc1', 'current' => true]],
+            logRows: [],
+        );
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'a'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'u'));
+        self::assertTrue($g->unstageAllCalled);
+        self::assertSame([], $g->stages, 'nothing to re-add - no selection games');
+    }
+
     public function testStageAllOnlyInStatusPane(): void
     {
         $g = $this->git();

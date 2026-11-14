@@ -167,9 +167,38 @@ final readonly class HistoryEntry
     /**
      * Convenience factory for stage all.
      */
-    public static function stageAll(): self
+    /**
+     * Convenience factory for stage-all, carrying what the index looked like
+     * BEFORE the sweep (candy-git-042).
+     *
+     * `git reset --` as a blanket inverse destroyed every selective staged
+     * pick along with the sweep it was supposed to undo - and a partially
+     * staged file (index differs from worktree) loses its staged content
+     * FOREVER, because only the index ever held that version. So the undo
+     * has three honest shapes:
+     *  - a partial pick existed: refuse (UNRECOVERABLE; refusing beats
+     *    guessing),
+     *  - nothing was staged before: the plain unstageAll inverse is exact,
+     *  - a clean selection existed (staged == worktree per path): reset --
+     *    then re-add exactly those paths, restoring the selection shape.
+     * Re-add stages the worktree bytes, so a worktree edit made BETWEEN the
+     * sweep and the undo lands as it is now - the entry restores what was
+     * SELECTED, not a frozen blob; that boundary is why the partial case
+     * refuses outright instead of guessing per file.
+     *
+     * @param list<string> $stagedPaths paths that were staged before the sweep
+     */
+    public static function stageAll(array $stagedPaths = [], bool $partial = false): self
     {
-        return new self('stageAll', [], 'unstageAll', []);
+        if ($partial) {
+            return new self('stageAll', [], self::UNRECOVERABLE_INVERSE, []);
+        }
+
+        if ($stagedPaths === []) {
+            return new self('stageAll', [], 'unstageAll', []);
+        }
+
+        return new self('stageAll', [], 'restoreSelection', ['paths' => $stagedPaths]);
     }
 
     /**

@@ -238,4 +238,31 @@ final class HistoryEntryTest extends TestCase
         $this->assertSame('stage', $entry->op);
         $this->assertSame('unstage', $entry->inverseOp);
     }
+
+    // ------------------------------------------- CG-34 (candy-git-042)
+
+    public function testStageAllCarriesTheSelectionForItsUndo(): void
+    {
+        $entry = HistoryEntry::stageAll(['a.php', 'b.php'], false);
+
+        $this->assertSame('stageAll', $entry->op);
+        $this->assertSame('restoreSelection', $entry->inverseOp);
+        $this->assertSame(['paths' => ['a.php', 'b.php']], $entry->inverseArgs);
+    }
+
+    public function testStageAllWithAPartialPickRefusesItsUndo(): void
+    {
+        $entry = HistoryEntry::stageAll(['a.php'], true);
+
+        $this->assertSame(HistoryEntry::UNRECOVERABLE_INVERSE, $entry->inverseOp,
+            'a staged version that exists only in the index cannot be re-derived');
+    }
+
+    public function testStageAllOnAnEmptyIndexKeepsThePlainInverse(): void
+    {
+        $entry = HistoryEntry::stageAll([], false);
+
+        $this->assertSame('unstageAll', $entry->inverseOp);
+        $this->assertSame([], $entry->inverseArgs);
+    }
 }

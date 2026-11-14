@@ -1221,12 +1221,50 @@ final class App implements Model
     /** Runs `git add -A` via the GitDriver, then refreshes the status list. */
     private function stageAll(): self
     {
+        // The sweep must record what it is covering (candy-git-042): the
+        // pre-existing staged set becomes the undo recipe, and a partially
+        // staged file (index and worktree both dirty) makes the old state
+        // unreconstructable - that undo refuses instead of resetting it away.
+        [$select, $partial] = $this->stagedSelection();
         try {
             $this->git->stageAll();
-            return $this->withAll(history: $this->requireHistory()->push(HistoryEntry::stageAll()))->refresh();
+            return $this->withAll(history: $this->requireHistory()->push(HistoryEntry::stageAll($select, $partial)))->refresh();
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
         }
+    }
+
+    /**
+     * The index as it stands before a stage-all sweep.
+     *
+     * @return array{0: list<string>, 1: bool} staged paths and whether any
+     *                                        of them is partially staged
+     */
+    private function stagedSelection(): array
+    {
+        $select  = [];
+        $partial = false;
+        foreach ($this->status as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $idx  = (string) ($row['index_status'] ?? ' ');
+            $work = (string) ($row['work_status'] ?? ' ');
+            if ($idx === ' ' || $idx === '?') {
+                continue; // unstaged or untracked: nothing was in the index
+            }
+            $path = (string) ($row['path'] ?? '');
+            if ($path === '') {
+                continue;
+            }
+            $select[] = $path;
+            if ($work !== ' ' && $work !== '?') {
+                $partial = true; // index content != worktree content - the
+                                 // staged version exists ONLY in the index
+            }
+        }
+
+        return [$select, $partial];
     }
 
     /** Checks out the branch at the current branches cursor via GitDriver::checkout(). */
@@ -1656,6 +1694,7 @@ final class App implements Model
                 'restoreBranch' => $this->git->restoreBranch($args['name'], $args['sha']),
                 'stageAll' => $this->git->stageAll(),
                 'unstageAll' => $this->git->unstageAll(),
+                'restoreSelection' => $this->restoreStagedSelection($args['paths']),
                 'stagePatch' => $this->git->stagePatch($args['path'], $args['hunk']),
                 'unstagePatch' => $this->git->unstagePatch($args['path'], $args['hunk']),
                 'merge' => $this->git->merge($args['branch']),
@@ -1717,6 +1756,23 @@ final class App implements Model
      * fall back to the raw identifier — Lang::t returns the key itself
      * when no translation exists, so the substitution is detectable.
      */
+    /**
+     * Undo lane for a stage-all that covered a clean selection
+     * (candy-git-042): reset the index to HEAD, then re-add exactly the
+     * paths that were staged before the sweep. Staging replays the
+     * worktree bytes - see HistoryEntry::stageAll for why the partial
+     * shape refuses instead of reaching this lane.
+     *
+     * @param array<array-key, string> $paths
+     */
+    private function restoreStagedSelection(array $paths): void
+    {
+        $this->git->unstageAll();
+        foreach ($paths as $path) {
+            $this->git->stage((string) $path);
+        }
+    }
+
     private function opLabel(string $op): string
     {
         $key = 'history.op.' . $op;

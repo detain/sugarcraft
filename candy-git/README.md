@@ -104,7 +104,7 @@ remotes cannot stall rendering) remains the v2 direction.
 | `c`                      | Commit — the message collector owns the keyboard: `Tab` inserts a newline (subject+body are typable, and pastes keep their line structure), `Enter` commits, `Esc` cancels |
 | `A`                      | Amend the last commit — opens the collector pre-filled with its message; editing it rewrites HEAD, submitting unchanged is the old keep-the-message amend |
 | `n`                      | Create and switch to a new branch — opened while the log pane is focused, the branch starts at THAT commit (the collector says so: `new branch from <sha>:`) |
-| `u`                      | Undo last operation — undoing a commit resets the boundary and re-arms the collector with the typed message (nothing authored is lost) |
+| `u`                      | Undo last operation — undoing a commit resets the boundary and re-arms the collector with the typed message (nothing authored is lost); undoing stage-all restores the exact prior selection, and refuses when a file was partially staged (its staged version lived only in the index) |
 | `Ctrl+r`                 | Redo last undone operation                             |
 | `D` (branches pane)      | Delete the selected branch (press twice) — refuses to delete the current branch |
 
