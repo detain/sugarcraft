@@ -14,8 +14,12 @@ namespace SugarCraft\Diff;
  *
  * One deliberate divergence from the ported engine: hunk headers are
  * GNU-faithful — zero-length sides anchor at the preceding line and
- * single-line ranges drop their `,1` count — so the output is
- * `patch`-tool-compatible. Hunk BODIES and grouping remain byte-for-byte.
+ * single-line ranges drop their `,1` count — so a hunk that IS triggered
+ * is `patch`-tool-compatible. Hunk BODIES and grouping remain
+ * byte-for-byte, which (by default, marker OFF) includes the ported
+ * blindness to a final-line terminator difference: enable
+ * {@see self::withNoNewlineMarker()} for the GNU pair rendering that makes
+ * such a change visible and applicable.
  *
  * Mirrors the hardcoded behaviour of
  * candy-code/src/Tools/Concerns/BuildsUnifiedDiff.php
@@ -96,7 +100,10 @@ final class DiffOptions
 
     /**
      * Annotate rows that sit at an unterminated end-of-file with
-     * `\ No newline at end of file`. Only meaningful for STRING sides of
+     * `\ No newline at end of file`, and — with it on — treat a differing
+     * final-line terminator as a change: the boundary line renders GNU's
+     * `-c` / `+c` pair with the annotation under the unterminated side,
+     * `patch`-faithful (sugar-diff-022). Only meaningful for STRING sides of
      * {@see Diff::compute()} — a `list<string>` side is always read as
      * terminated (elements may not carry newlines at all), so no row on it
      * can ever sit at an unterminated end and this marker stays inert.

@@ -87,7 +87,16 @@ final class Diff
         [$beforeLines, $beforeNewline] = self::parseSide($before, 'before');
         [$afterLines, $afterNewline] = self::parseSide($after, 'after');
 
-        [$kinds, $degraded] = self::diffLines($beforeLines, $afterLines, $options);
+        [$kinds, $degraded] = self::diffLines(
+            $beforeLines,
+            $afterLines,
+            $options,
+            // sugar-diff-022: with the annotation ON, a differing final-line
+            // terminator is a change GNU renders as a delete/insert pair —
+            // fold it into equality only while the marker option is off
+            // (byte-identical legacy path below).
+            $options->noNewlineMarker && $beforeNewline !== $afterNewline,
+        );
         $hunks = self::assemble($kinds, $beforeLines, $afterLines, $options);
 
         return new self(
@@ -287,10 +296,25 @@ final class Diff
      *
      * @param list<string> $old
      * @param list<string> $new
+     * @param bool $terminatorMismatch the sides end with different newline
+     *        facts under the no-newline-marker option: the final row of the
+     *        old side carries an unreachable comparison flag below, so every
+     *        fold path (prefix, suffix, LCS) treats the EOF pair as an
+     *        explicit delete/insert — GNU's `-c`/`+c` pair — while emitted
+     *        text stays verbatim (sugar-diff-022).
      * @return array{0:string,1:bool}
      */
-    private static function diffLines(array $old, array $new, DiffOptions $options): array
+    private static function diffLines(array $old, array $new, DiffOptions $options, bool $terminatorMismatch = false): array
     {
+        // The flag begins with "\n": no engine row can contain one (string
+        // sides are split on it, list sides refuse it), so the marked row can
+        // NEVER accidentally equal a row of the other side — and the "\x01"
+        // anchor survives whitespace folding. Emission reads the raw sides,
+        // never these copies.
+        if ($terminatorMismatch && $old !== [] && $new !== []) {
+            $old[count($old) - 1] .= "\n\x01";
+        }
+
         $oldCount = count($old);
         $newCount = count($new);
 

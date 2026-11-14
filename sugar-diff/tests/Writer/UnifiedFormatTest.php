@@ -80,18 +80,22 @@ final class UnifiedFormatTest extends TestCase
         );
     }
 
-    public function testNoNewlineMarkerFiresOnceForSharedContextEofRow(): void
+    public function testNoNewlineMarkerTurnsATerminatorMismatchIntoAGnuPair(): void
     {
-        // Old side runs out without a newline while the new side continues:
-        // the shared context row sits at the old EOF, so it gets ONE
-        // annotation (the fold emits per-row, not per-side).
+        // sugar-diff-022: the old side runs out WITHOUT a newline while the
+        // new side ends the same row WITH one — GNU does not fold that to a
+        // context row (the terminators differ), it emits a delete/insert
+        // pair with the annotation under the old-side row. The pre-022
+        // shared-context fold mis-applied under /usr/bin/patch; the shape
+        // below is oracle-pinned by UnifiedFormatApplyTest.
         $options = DiffOptions::new()->withNoNewlineMarker();
         $diff = Diff::compute("one\ntwo", "zero\none\ntwo\n", $options);
 
         $this->assertSame(
             "@@ -1,2 +1,3 @@\n"
-            . "+zero\n one\n two\n"
-            . "\\ No newline at end of file\n",
+            . "+zero\n one\n"
+            . "-two\n\\ No newline at end of file\n"
+            . "+two\n",
             $diff->hunkText(),
         );
     }

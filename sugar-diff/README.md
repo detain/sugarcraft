@@ -103,8 +103,9 @@ channels diff differently once a final newline is missing: a `list<string>`
 side is terminated by construction, so `beforeHasFinalNewline`/
 `afterHasFinalNewline` report `true` there whatever the file held, and when
 some other change triggers a hunk only a string side can carry the
-`\ No newline at end of file` annotation (a terminator-only change stays
-zero hunks on either channel — see the Fidelity notes).
+`\ No newline at end of file` annotation, and a terminator-only change is
+zero hunks while the marker is off — with it on it renders GNU's
+`-c`/`+c` pair (see the Fidelity notes).
 
 ### Consuming rows side by side
 
@@ -136,8 +137,8 @@ Colour never has to carry a change alone, and the model refuses to make it carry
 - git appends an optional function-context heading after the closing `@@`; this engine has no enclosing-function notion, emits none, and the scanner ignores anything there.
 - File headers are git-style `--- a/<path>` / `+++ b/<path>` with no timestamps; GNU's own shape is bare paths tab-separated from a date column. The `a/`/`b/` prefix is prepended by literal concatenation: an absolute path `/etc/passwd` renders `--- a//etc/passwd`, and a path already beginning `a/` doubles it (`--- a/a/lib.php`) — GNU prints paths as given and git's prefixes are repo-root-relative, so pass root-relative paths if you care how the label reads (the scanner's sibling-header logic is unbothered by the doubled slash).
 - Path quoting is `core.quotePath`-*style*, not a git clone, in two deliberate ways: bytes ≥ 0x80 pass through raw (git octal-escapes every byte above 0x7E — high bytes can carry no control code, and raw UTF-8 filenames stay readable), and the `a/`/`b/` prefix rides *inside* the quoted string (git quotes the path and keeps the prefix outside). Only labels carrying control bytes, `"` or `\` are quoted at all, so clean paths — and their prefixes — stay byte-identical.
-- A line's newline termination is invisible to the line diff: `"a\n"` vs `"a"` compare equal and produce **no hunks at all**, and a terminator-only change stays silent whether or not the marker is enabled — with no hunk triggered there is no row for a `\ No newline at end of file` annotation to ride on. The `beforeHasFinalNewline`/`afterHasFinalNewline` facts are exposed so a caller can surface such a change itself.
-- `withNoNewlineMarker()` governs *triggered* hunks instead: with it ON, a hunk that ends on an unterminated final row carries the same `\ No newline at end of file` line GNU `diff -u` and git emit, and that annotated shape is what `patch`-style consumers expect to read; with it OFF (the default) the row prints without the annotation. The annotation is a `string`-side affair only — a `list<string>` side is terminated by construction, so the marker is inert there.
+- A terminator-only change is invisible to the line diff **only while the marker option is off**: with `withNoNewlineMarker()` OFF (the default), `"a\n"` vs `"a"` folds to no hunks at all — the ported behaviour, kept byte-for-byte — and the `beforeHasFinalNewline`/`afterHasFinalNewline` facts are exposed so a caller can surface such a change itself.
+- With the marker ON the terminator is part of the last line's equality: a side that ends without a newline against a side that ends with one renders GNU's `-c` / `+c` pair with the `\ No newline at end of file` annotation under the unterminated side (oracle-verified and apply-tested via `patch` — `tests/Writer/UnifiedFormatApplyTest.php`), and any triggered hunk that ends on an unterminated final row carries the same annotation. With it OFF the row prints without the annotation. The annotation is a `string`-side affair only — a `list<string>` side is terminated by construction, so the marker is inert there.
 - CRLF vs LF differ in **every** line under default exact comparison (`\r` is content); `withIgnoreWhitespace()` folds `\r` away — deliberately stronger than git's `--strip-trailing-cr`.
 - Binary files are out of scope: `git diff --binary` payloads are not modelled — binary content would diff as text by design.
 - git's rename/mode/CIM extended headers (`similarity index`, `rename from`, `old mode`, …) are not modelled either, and the scanner does not prettify them: they are
