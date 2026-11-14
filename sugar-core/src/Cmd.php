@@ -138,8 +138,10 @@ final class Cmd
      * Write raw escape-sequence bytes to the Program's output stream.
      * The renderer's diff state is *not* invalidated, so callers should
      * use this for cursor-area-neutral effects (window title, OSC
-     * inline images, etc.) and call `Renderer::reset()` themselves if
-     * they intentionally clobber the painted region.
+     * inline images, etc.) and call {@see Program::forceRepaint()}
+     * themselves if they intentionally clobber the painted region.
+     * (Pre-sc-35 this instruction named Renderer::reset(), which no
+     * public path reaches — forceRepaint() is the reachable seam, DX-05.)
      *
      * Mirrors charmbracelet/bubbletea.Raw.
      */

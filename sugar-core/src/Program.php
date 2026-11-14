@@ -316,6 +316,18 @@ final class Program
      * Attach a logger to receive program lifecycle events.
      * Returns a cloned program with the logger stored.
      *
+     * sc-35 (sugar-core-037/DX-04): the CLONE is the point — a discarded
+     * return is a silent no-op on the instance you threw away, and once
+     * run() is live the loop keeps reading the fields of the instance it
+     * was started on, so this builder must be applied BEFORE run(). The
+     * three mutator shapes that coexist here (void setRecorder, deprecated
+     * self-returning shim withRecorder, clone-and-return builders like
+     * this one) are deliberate: the recorder is a live identity sink that
+     * cannot fork (its rationale sits at {@see setRecorder()}), while the
+     * logger and handler are pure configuration slots. Program is a
+     * runtime, not a value object; nothing here is a fluent chain to
+     * carry across a running loop.
+     *
      * @param object $logger Object with PSR-3 style log methods (info, error, warning, etc.)
      */
     public function withLogger(object $logger): self
@@ -347,6 +359,31 @@ final class Program
     public function lastFrameDuration(): float
     {
         return $this->lastFrameDuration;
+    }
+
+    /**
+     * Force a full repaint on the next update cycle: reset the
+     * renderer's diff state and drop the frame caches WITHOUT writing
+     * any extra bytes, so the next frame re-emits the whole body even
+     * though it is identical to the last one the runtime remembers.
+     *
+     * sc-35 (sugar-core-037/DX-05): this is the reachable half of the
+     * {@see Cmd::raw()} contract — a caller that clobbers the painted
+     * region with raw escape bytes restores diff correctness with
+     * `$program->forceRepaint()` instead of the old un-actionable
+     * instruction to "call Renderer::reset()" (no public path reached
+     * the private renderer). Semantics match the PrintMsg dispatch arm
+     * minus its newline write: reset + caches + dirty, applied when the
+     * next update cycle renders. Safe on a stopped program — it merely
+     * clears state that the next run() rebuilds anyway.
+     */
+    public function forceRepaint(): void
+    {
+        $this->renderer->reset();
+        $this->lastRenderedBody = null;
+        $this->lastImageSignature = '';
+        $this->lastImageRows = [];
+        $this->dirty = true;
     }
 
     /**
@@ -658,8 +695,15 @@ final class Program
     /**
      * Hard-stop the program. Unlike {@see quit()} (which routes through
      * the message queue and lets the model react to {@see QuitMsg} on
-     * its next update tick), {@see kill()} stops the loop synchronously,
-     * tears down the terminal, and returns. The model is not notified.
+     * its next update tick), {@see kill()} stops the loop synchronously
+     * without notifying the model.
+     *
+     * sc-35 (sugar-core-037/DX-07): the previous claim that kill()
+     * "tears down the terminal, and returns" was false in ordering —
+     * the body only flips the flag and stops the loop; the terminal
+     * teardown happens as run()'s finally unwinds. A kill() called
+     * outside an in-flight run() (signal handler, test harness)
+     * therefore touches no terminal state at all.
      */
     public function kill(): void
     {
@@ -769,26 +813,30 @@ final class Program
      * Enable bracketed paste mode at runtime.
      *
      * Writes Ansi::bracketedPasteOn() to the output and sets
-     * $activeBracketedPaste to true. Returns true on success.
+     * $activeBracketedPaste to true.
+     *
+     * sc-35 (sugar-core-037/DX-12): the old bool return was vestigial —
+     * the write path has no failure limb to report, so it returned hard
+     * true forever. Void is the honest contract; no caller ever branched
+     * on it (monorepo census: zero consumers of the return).
      */
-    public function enableBracketedPaste(): bool
+    public function enableBracketedPaste(): void
     {
         $this->writeOutput(Ansi::bracketedPasteOn());
         $this->activeBracketedPaste = true;
-        return true;
     }
 
     /**
      * Disable bracketed paste mode at runtime.
      *
      * Writes Ansi::bracketedPasteOff() to the output and sets
-     * $activeBracketedPaste to false. Returns true on success.
+     * $activeBracketedPaste to false. Void per the sc-35 DX-12 note on
+     * {@see enableBracketedPaste()} (mirror leg of the same pair).
      */
-    public function disableBracketedPaste(): bool
+    public function disableBracketedPaste(): void
     {
         $this->writeOutput(Ansi::bracketedPasteOff());
         $this->activeBracketedPaste = false;
-        return true;
     }
 
     /**

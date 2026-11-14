@@ -43,6 +43,17 @@ final class ProgramOptions
          * program still needs to read keys. Falls back to
          * STDIN/STDOUT when `/dev/tty` isn't available (Windows,
          * sandboxed envs).
+         *
+         * sc-35 (sugar-core-037/DX-18): the pairing rule, surfaced from
+         * the constructor where it is implemented — openTty is BOTH-OR-
+         * NOTHING: it only engages when NEITHER `$input` NOR `$output`
+         * was supplied, so a single caller-supplied stream (a harness
+         * memory buffer, a capture pipe) disables the auto-open entirely.
+         * The flag cannot pair with a partial override; deferring the
+         * open to run() was the other sketch arm and is NOT taken —
+         * construction-time IO is the documented trade sugar-testing's
+         * ProgramSimulator relies on (it passes an output capture, which
+         * this rule already switches the auto-open off for).
          */
         public readonly bool $openTty = false,
         public readonly mixed $input = null,

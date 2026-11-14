@@ -54,6 +54,19 @@ final readonly class Pane
 
     /**
      * Render the pane's content positioned at its bounds origin.
+     *
+     * sc-35 (sugar-core-037/DX-11): when the model returns a rich View,
+     * ONLY the clipped body is composed. Every other View field —
+     * cursor, windowTitle, progressBar, foregroundColor, backgroundColor,
+     * mouseMode, reportFocus, bracketedPaste, images — is DROPPED here
+     * by design: they are whole-screen side effects a sub-region cannot
+     * arbitrate between sibling panes, and the composition root's own
+     * View is what the runtime consumes (the sc-11 seam in
+     * Program::renderFrame). Consequences callers must know: images
+     * declared inside a pane never paint (the marker escapes resolve to
+     * nothing against an empty root layer), and per-frame mode toggles
+     * inside a pane are invisible. Models that need those effects must
+     * surface them at the root View, not inside a pane body.
      */
     public function view(): string
     {
@@ -65,8 +78,8 @@ final readonly class Pane
         $positioned = Ansi::cursorTo($this->bounds->y + 1, $this->bounds->x + 1);
 
         // For the common case of string output, prepend positioning.
-        // View objects are passed through as-is; callers composing Panes
-        // with View-returning models should handle positioning themselves.
+        // View bodies are positioned like strings; the dropped extras are
+        // the sc-35 enumeration above, not an oversight in this line.
         return $positioned . $content;
     }
 

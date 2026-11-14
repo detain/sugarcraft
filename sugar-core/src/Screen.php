@@ -14,7 +14,11 @@ final class Screen
     /**
      * @param Model $model The Elm-architecture model for this screen.
      * @param string|null $title Optional title for breadcrumb display.
-     * @param \Closure(): void|null $onEnter Fired when the screen becomes active.
+     * @param \Closure(): void|null $onEnter Fired when the screen becomes
+     *     active — by {@see RootModelWithScreenStack::update()} on a
+     *     ScreenStackPushedMsg; the ScreenStack builder itself never fires
+     *     hooks, so a direct stack owner must invoke it (sc-35 wording for
+     *     the sugar-core-034/RUN-10 contract, DX-10).
      * @param \Closure(): void|null $onExit Fired when the screen is popped.
      */
     public function __construct(

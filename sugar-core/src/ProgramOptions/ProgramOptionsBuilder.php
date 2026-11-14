@@ -13,8 +13,10 @@ use React\EventLoop\LoopInterface;
 /**
  * Fluent builder for {@see ProgramOptions}.
  *
- * Example:
- *   $opts = (new ProgramOptionsBuilder())
+ * Example (sc-35/DX-22: discover the builder through the entry point,
+ * not the class name — `new ProgramOptionsBuilder()` also works but the
+ * static factory is the documented door):
+ *   $opts = ProgramOptions::builder()
  *       ->withUseAltScreen(true)
  *       ->withFramerate(30.0)
  *       ->build();
@@ -178,9 +180,27 @@ final class ProgramOptionsBuilder
         return $this->mutate('catchPanics', $catchPanics);
     }
 
+    /**
+     * Set the withoutRenderer knob (headless: view() runs, nothing paints).
+     *
+     * sc-35/DX-22: this is the honest name — the old `withWithoutRenderer`
+     * was a Go carryover read as a double negative ("with without").
+     * The knob itself is still a bool so `withoutRenderer(false)` turns
+     * the renderer back ON; the deprecated alias below stays for BC.
+     */
+    public function withoutRenderer(bool $without = true): self
+    {
+        return $this->mutate('withoutRenderer', $without);
+    }
+
+    /**
+     * @deprecated sc-35 (sugar-core-037/DX-22): double-negative Go
+     *             carryover — use {@see withoutRenderer()}. Kept for BC;
+     *             zero callers outside sugar-core's own tests (census).
+     */
     public function withWithoutRenderer(bool $withoutRenderer): self
     {
-        return $this->mutate('withoutRenderer', $withoutRenderer);
+        return $this->withoutRenderer($withoutRenderer);
     }
 
     public function withFilter(?\Closure $filter): self
@@ -193,9 +213,25 @@ final class ProgramOptionsBuilder
         return $this->mutate('cellDiffRenderer', $cellDiffRenderer);
     }
 
+    /**
+     * Set the withoutSignalHandler knob (host owns SIGINT/SIGTERM).
+     *
+     * sc-35/DX-22: honest name replacing the double-negative Go
+     * carryover; `withoutSignalHandler(false)` restores our handler.
+     */
+    public function withoutSignalHandler(bool $without = true): self
+    {
+        return $this->mutate('withoutSignalHandler', $without);
+    }
+
+    /**
+     * @deprecated sc-35 (sugar-core-037/DX-22): use
+     *             {@see withoutSignalHandler()}. Kept for BC; zero
+     *             callers outside sugar-core's own tests (census).
+     */
     public function withWithoutSignalHandler(bool $withoutSignalHandler): self
     {
-        return $this->mutate('withoutSignalHandler', $withoutSignalHandler);
+        return $this->withoutSignalHandler($withoutSignalHandler);
     }
 
     public function withTermios(?Termios $termios): self

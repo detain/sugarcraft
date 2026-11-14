@@ -73,8 +73,15 @@ final class Subscriptions
     /**
      * Add a custom subscription.
      *
+     * sc-35/DX-14: the engine consumes `params['interval']` (poll seconds,
+     * default 1.0) — the same rate key the Key kind reads; Tick's own key
+     * is `seconds`. Unifying the two names is a BREAKING choice this row
+     * deliberately does not take; until the owner rules, document-and-
+     * prefer-the-factories is the shipped contract. Any other key in
+     * $params is caller-private.
+     *
      * @param non-empty-string $id
-     * @param array<string,mixed> $params
+     * @param array<string,mixed> $params consumed schema: interval
      * @param \Closure(): Msg $produce
      */
     public function withCustom(string $id, array $params, \Closure $produce): self

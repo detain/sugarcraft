@@ -1178,4 +1178,75 @@ final class ProgramTest extends TestCase
         fclose($in);
         fclose($out);
     }
+
+    /**
+     * sc-35 (sugar-core-037/DX-05): forceRepaint() is the reachable seam
+     * Cmd::raw's docblock always implied but never named. The control arm
+     * pins the diff-cache truth — a constant body paints exactly once,
+     * later update cycles stay silent; the arm with forceRepaint clears
+     * the renderer state and caches so the next cycle re-emits the body.
+     */
+    public function testForceRepaintReEmitsAnUnchangedBodyAndTheDiffCachesSilenceItOtherwise(): void
+    {
+        // Control: identical timing, no forced reset — one paint only.
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+        $control = new Program(new StaticRepaintModel(), $this->makeOptions($in, $out, $loop));
+        $loop->addTimer(0.05, static function () use ($control): void {
+            $control->send(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Char, 'x'));
+        });
+        $loop->addTimer(0.10, static fn () => $control->quit());
+        $loop->addTimer(2.0, static fn () => $loop->stop());
+        $control->run();
+        rewind($out);
+        $controlBytes = (string) stream_get_contents($out);
+        $this->assertSame(1, substr_count($controlBytes, 'static-body'),
+            'an unchanged body must not re-paint without a forced reset (diff-cache truth)');
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+
+        // Arm: forceRepaint at .03, the .05 update cycle re-paints.
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+        $program = new Program(new StaticRepaintModel(), $this->makeOptions($in, $out, $loop));
+        $loop->addTimer(0.03, static fn () => $program->forceRepaint());
+        $loop->addTimer(0.05, static function () use ($program): void {
+            $program->send(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Char, 'x'));
+        });
+        $loop->addTimer(0.10, static fn () => $program->quit());
+        $loop->addTimer(2.0, static fn () => $loop->stop());
+        $program->run();
+        rewind($out);
+        $bytes = (string) stream_get_contents($out);
+        $this->assertSame(2, substr_count($bytes, 'static-body'),
+            'forceRepaint must make exactly the next cycle re-emit the unchanged body');
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+}
+
+/**
+ * sc-35 harness: a view() that never changes, so any second emission of
+ * the body proves the diff caches were genuinely cleared.
+ */
+final class StaticRepaintModel implements \SugarCraft\Core\Model
+{
+    use \SugarCraft\Core\SubscriptionCapable;
+
+    public function init(): ?\Closure
+    {
+        return null;
+    }
+
+    public function update(\SugarCraft\Core\Msg $msg): array
+    {
+        return [$this, null];
+    }
+
+    public function view(): string
+    {
+        return 'static-body';
+    }
 }

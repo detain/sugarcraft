@@ -348,4 +348,35 @@ final class ProgramOptionsBuilderTest extends TestCase
 
         $this->assertNull($options->subscriptions);
     }
+
+    /**
+     * sc-35 (sugar-core-037/DX-22): the honest without* names own the
+     * knobs, the bool arm can switch them back off, and the deprecated
+     * double-negative aliases keep producing byte-identical options.
+     */
+    public function testWithoutKnobsAndTheirDeprecatedAliasesAgree(): void
+    {
+        $primary = ProgramOptions::builder()
+            ->withoutRenderer()
+            ->withoutSignalHandler()
+            ->build();
+        $this->assertTrue($primary->withoutRenderer);
+        $this->assertTrue($primary->withoutSignalHandler);
+
+        $reset = ProgramOptions::builder()
+            ->withoutRenderer(true)
+            ->withoutRenderer(false)
+            ->withoutSignalHandler(true)
+            ->withoutSignalHandler(false)
+            ->build();
+        $this->assertFalse($reset->withoutRenderer);
+        $this->assertFalse($reset->withoutSignalHandler);
+
+        $alias = (new ProgramOptionsBuilder())
+            ->withWithoutRenderer(true)
+            ->withWithoutSignalHandler(true)
+            ->build();
+        $this->assertTrue($alias->withoutRenderer);
+        $this->assertTrue($alias->withoutSignalHandler);
+    }
 }

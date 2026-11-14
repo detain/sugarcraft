@@ -21,7 +21,11 @@ namespace SugarCraft\Core;
  *      before {@see InputReader::parse()}.
  *   3. {@see recordOutput()} — every chunk written to the output stream by
  *      the renderer, RawMsg / PrintMsg, and the per-frame cursor / title /
- *      mode emitters in Program.
+ *      mode emitters in Program. Post-sc-06 flush contract (stated sc-35):
+ *      the tees sit where bytes FLUSH — the renderer's writeAll tees only
+ *      the flushed prefix of a short write (sugar-core-018) — so the
+ *      concatenation over a session equals the byte-for-byte terminal
+ *      receipt, never an un-written wish.
  *   4. {@see recordQuit()} — once when QuitMsg is dispatched.
  *   5. {@see close()} — once after recordQuit, idempotent.
  */

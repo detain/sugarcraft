@@ -16,6 +16,16 @@ use SugarCraft\Core\Util\Color;
  * optional and only emitted when it changes between frames so the
  * terminal isn't spammed with redundant escapes.
  *
+ * WHERE THE EXTRAS ARE CONSUMED (sc-35, restating the sc-11 seam): the
+ * side-effect fields are read once per frame from the ROOT view the
+ * runtime renders — Program::renderFrame/applyViewSideEffects. The
+ * screen-stack path (sc-11's RootModelWithScreenStack) forwards the
+ * active screen's View intact, so pushed screens keep their extras;
+ * anything composed through {@see Pane::view()} loses all of them
+ * except the clipped body (enumerated there). Root-View-only is the
+ * contract, not an oversight: window title or mouse mode are per-
+ * screen decisions siblings cannot arbitrate.
+ *
  * For the simple case, `Model::view()` keeps returning a string and
  * nothing changes — the runtime auto-wraps it.
  */
