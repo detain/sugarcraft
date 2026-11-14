@@ -69,6 +69,58 @@ final class RendererTest extends TestCase
         $this->assertInstanceOf(ColorProfile::class, $r->colorProfile);
     }
 
+    public function testFromEnvironmentMemoisesPerEnvironmentFingerprint(): void
+    {
+        $originalTerm = getenv('TERM');
+        Renderer::resetEnvironmentMemoForTesting();
+
+        try {
+            $a = Renderer::fromEnvironment();
+            // Unchanged environment → the identical immutable Renderer; the
+            // detection ladder ran exactly once for this fingerprint.
+            $this->assertSame($a, Renderer::fromEnvironment());
+            // Contract leg: the memoised value matches a live detect().
+            $this->assertSame(ColorProfile::detect(), $a->colorProfile);
+
+            putenv('TERM=zz-nostalgic-terminal');
+            $b = Renderer::fromEnvironment();
+            // A changed environment recomputes into its own slot instead of
+            // serving the stale instance.
+            $this->assertNotSame($a, $b);
+            $this->assertSame($b, Renderer::fromEnvironment());
+
+            if ($originalTerm === false) {
+                putenv('TERM');
+            } else {
+                putenv("TERM={$originalTerm}");
+            }
+            // The original key survived the unrelated flip → reused.
+            $this->assertSame($a, Renderer::fromEnvironment());
+
+            // The memo is bounded: crossing the cap evicts, so a repeated
+            // original environment re-memoises instead of aliasing $a.
+            for ($i = 0; $i < 40; $i++) {
+                putenv("TERM=zz-churn-{$i}");
+                Renderer::fromEnvironment();
+            }
+            if ($originalTerm === false) {
+                putenv('TERM');
+            } else {
+                putenv("TERM={$originalTerm}");
+            }
+            $c = Renderer::fromEnvironment();
+            $this->assertNotSame($a, $c);
+            $this->assertSame($c, Renderer::fromEnvironment());
+        } finally {
+            if ($originalTerm === false) {
+                putenv('TERM');
+            } else {
+                putenv("TERM={$originalTerm}");
+            }
+            Renderer::resetEnvironmentMemoForTesting();
+        }
+    }
+
     public function testImmutability(): void
     {
         $a = Renderer::new();
