@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dashboard\Tests\Components\StatusBar;
 
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Dashboard\Components\StatusBar\StatusBar;
 use SugarCraft\Dashboard\Foundation\Item;
 use SugarCraft\Dashboard\Foundation\Sizer;
@@ -215,8 +216,39 @@ final class StatusBarTest extends TestCase
             ->setSize(15, 1);
         $rendered = $bar->render();
 
-        // Should be truncated to fit
-        $this->assertNotSame('', $rendered);
+        // Pinned hard now (D-153): the painted row occupies EXACTLY the
+        // allocation - the pre-delegation era padded but never clipped.
+        $this->assertSame(15, Width::string($rendered));
+        $this->assertStringContainsString('This is', $rendered);
+    }
+
+    public function testPaintedWidthMatchesAllocationAcrossWidthsWithOverlongSegments(): void
+    {
+        // D-153 (finding 175): segments are measured AFTER clipping - a
+        // total that once summed raw widths now sums against the
+        // StyleStatusBar delegate, which truncates by priority
+        // left > right > center and pads to the allocation.
+        $segments = [str_repeat('L', 30), str_repeat('C', 25), str_repeat('R', 35)];
+        foreach ([40, 20, 15, 12, 7] as $w) {
+            $rendered = StatusBar::new()
+                ->withSegments(...$segments)
+                ->setSize($w, 1)
+                ->render();
+            $this->assertSame($w, Width::string($rendered), "painted width at allocation $w");
+            $this->assertSame($w, StatusBar::new()->withSegments(...$segments)->setSize($w, 1)->innerSize()[0]);
+        }
+
+        // Priority accounting: left survives longest, center is sacrificed
+        // first, right fills what is left.
+        $at40 = preg_replace('/\x1b\[[0-9;]*m/', '', StatusBar::new()->withSegments(...$segments)->setSize(40, 1)->render());
+        $this->assertSame(30, substr_count((string) $at40, 'L'));
+        $this->assertSame(0, substr_count((string) $at40, 'C'));
+        $this->assertSame(10, substr_count((string) $at40, 'R'));
+
+        $at15 = preg_replace('/\x1b\[[0-9;]*m/', '', StatusBar::new()->withSegments(...$segments)->setSize(15, 1)->render());
+        $this->assertSame(15, substr_count((string) $at15, 'L'));
+        $this->assertSame(0, substr_count((string) $at15, 'C'));
+        $this->assertSame(0, substr_count((string) $at15, 'R'));
     }
 
     // ═══════════════════════════════════════════════════════════════
