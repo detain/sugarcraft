@@ -42,13 +42,16 @@ Each prompt is a pure state machine: feed it key characters and it returns a
 new prompt. `Readline` is the terminal loop that does the feeding — it reads
 keypresses through `sugar-input`'s `InputDriver`, repaints the prompt's
 `view()` after every change, and returns the prompt once it is submitted or
-aborted. Pass an output stream to `run()` or nothing is painted.
+aborted. Pass an output stream to `run()` or nothing is painted. On a live
+terminal, reach for `Readline::interactive()` instead of `run()`: it wraps
+the loop with the raw-mode flip and restore the key chords need (see
+"Terminal mode" below).
 
 ```php
 use SugarCraft\Readline\Readline;
 use SugarCraft\Readline\TextPrompt;
 
-$prompt = Readline::fromStdin()->run(TextPrompt::new('Enter your name: '), STDOUT);
+$prompt = Readline::interactive(TextPrompt::new('Enter your name: '), STDOUT);
 
 if ($prompt->isSubmitted()) {
     echo $prompt->value() . "\n";
@@ -267,10 +270,15 @@ long **prompts** (labels) are the host's layout responsibility either way.
 ## Terminal mode (raw vs cooked)
 
 `run()` never touches termios — the library deliberately leaves terminal
-settings to the host program. On a **cooked** TTY the line discipline
-consumes Enter, Backspace, and Ctrl+ combinations, so arrow keys and
-multi-key chords cannot reach the prompt. For the full editing experience put
-the terminal in non-canonical mode around the loop and restore it afterwards:
+settings to the host program. `Readline::interactive()` carries the flip for
+the common case: it captures the `stty -g` snapshot, runs the recipe below
+around `run()`, and restores on every exit path — the `finally` and a
+shutdown backstop for hard exits — guarded by `stream_isatty(STDIN)` so
+piped and CI hosts never shell out at all. On a **cooked** TTY the line
+discipline consumes Enter, Backspace, and Ctrl+ combinations, so arrow keys
+and multi-key chords cannot reach the prompt — which is why the quick start
+uses `interactive()`. Hosts that own their loop can compose the recipe
+directly:
 
 ```php
 $isTty = stream_isatty(STDIN);
@@ -290,8 +298,11 @@ try {
 The `stream_isatty(STDIN)` guard is load-bearing, not ceremony: run the
 unguarded recipe with piped stdin and `stty` errors "Inappropriate ioctl for
 device" on every call — the captured state is empty and the restore degrades
-to a usage dump (this is the shape `examples/interactive.php` carries). `stty`
-is also POSIX-only — there is no such command on Windows.
+to a usage dump (`interactive()` carries this guard; so did the hand-rolled
+ritual `examples/interactive.php` used to run before the entry point existed).
+`stty` is also POSIX-only — there is no such command on Windows, where
+`interactive()` is a documented no-op today (a loud console-API warning is
+planned there).
 
 `-isig` matters: with signals left enabled, Ctrl+C raises SIGINT, which
 kills the process **before** the `finally` restore runs — the shell is then
@@ -314,8 +325,9 @@ and delivers the same transition. `sugar-core`'s
 `SugarCraft\Core\Util\RawMode` delivers the same flow-control half — it
 runs `-ixon` — but deliberately leaves signal generation ON: Ctrl+C
 raises SIGINT there, and the abort chords documented below remain the
-stty `-isig` recipe's contract; only that recipe — carried by
-`examples/interactive.php` with a shutdown-safe restore — delivers them.
+stty `-isig` recipe's contract; only that recipe — shipped as
+`Readline::interactive()` with the `stream_isatty` guard, finally-restore and
+shutdown backstop built in — delivers them.
 Over a pipe or socket (no tty at all) no stty is needed — the bytes
 arrive as written, which is exactly how the test-suite drives chords.
 

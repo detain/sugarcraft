@@ -22,7 +22,9 @@ use SugarCraft\Core\Util\Tty;
  *    php://stdin (that is also what fromStdin() builds).
  * 2. Register handlers via onKey(), onMouse(), onFocus(), onPaste().
  * 3. Call run() with a prompt that has a handleKey(string) method, passing
- *    an output stream (e.g. STDOUT) whenever the prompt should repaint.
+ *    an output stream (e.g. STDOUT) whenever the prompt should repaint. For
+ *    an interactive TTY run, prefer {@see Readline::interactive()} — it wraps
+ *    run() with the raw-mode flip and restore the loop needs.
  *
  * The decode loop reads bytes from the InputDriver, emits typed Events, and
  * routes KeyEvents to the symbolic key handler map. Key names reaching
@@ -100,6 +102,134 @@ final class Readline
     {
         return new self();
     }
+
+    // -------------------------------------------------------------------------
+    // Encapsulated raw mode (the quick-start entry)
+    // -------------------------------------------------------------------------
+
+    /** @var bool True while this process holds an unrestored raw-mode flip. */
+    private static bool $rawOwned = false;
+
+    /** @var string The stty `-g` snapshot exitRawMode() hands back. */
+    private static string $rawSaved = '';
+
+    /** @var bool Whether the shutdown backstop is already registered. */
+    private static bool $rawBackstopArmed = false;
+
+    /**
+     * Run a prompt interactively: flip the terminal into raw mode for the
+     * duration of run(), then restore whatever settings it had.
+     *
+     * run() deliberately never touches termios — a repaint loop must not
+     * rewrite the host's terminal behind its back — but that leaves the
+     * raw-mode ritual to the caller, and skipping it is the adoption cliff:
+     * on a cooked TTY the discipline consumes Ctrl+C as SIGINT (killing the
+     * process before any restore can run) and Ctrl+S as XOFF (freezing
+     * output). interactive() carries the README's recipe so the simplest
+     * possible program gets working chords on day one:
+     *
+     *     $prompt = Readline::interactive(TextPrompt::new('> '), STDOUT);
+     *
+     * The recipe, and why each part is load-bearing:
+     *  - `stream_isatty(STDIN)` guard: piped or CI input never shells out —
+     *    bytes arrive as written there, and stty on a non-tty only errors;
+     *  - `stty -g` snapshot captured BEFORE the flip and restored in a
+     *    finally — never `stty sane`, which would overwrite the host's own
+     *    settings with a generic guess;
+     *  - `-isig` so Ctrl+C arrives as an ordinary byte the prompt aborts
+     *    on, instead of raising SIGINT and stranding the shell with echo
+     *    off; `-ixon` so Ctrl+S opens forward search instead of XOFF-freezing
+     *    the terminal until Ctrl+Q;
+     *  - a shutdown backstop for hard exits (exit() or a fatal inside a
+     *    handler): the snapshot is restored on the way out regardless.
+     *
+     * Nesting is safe: only the outermost call owns the flip. On Windows —
+     * where there is no stty — this is a documented no-op for now; the
+     * console-API path and its loud warning are S-61's.
+     *
+     * @param object    $prompt   Object with a handleKey(string): object method.
+     * @param resource|null $output Paint stream (e.g. STDOUT); null paints nothing.
+     * @param self|null $readline Optional configured pump — pass an instance
+     *                            carrying onKey()/onPaste() handlers, or reuse
+     *                            one across a host loop so the owned STDIN pump
+     *                            (and its already-decoded trailing bytes, see
+     *                            run()) survives between iterations. Null
+     *                            builds a fromStdin().
+     * @return object The final prompt state, exactly as run() returns it.
+     */
+    public static function interactive(object $prompt, $output = null, ?self $readline = null): object
+    {
+        self::enterRawMode();
+        try {
+            return ($readline ?? new self())->run($prompt, $output);
+        } finally {
+            self::exitRawMode();
+        }
+    }
+
+    /** Flip STDIN's terminal to raw, remembering its snapshot. Guarded no-op off a TTY. */
+    private static function enterRawMode(): void
+    {
+        if (self::$rawOwned) {
+            return; // Outer call owns the flip; never snapshot an already-raw device.
+        }
+        if (PHP_OS_FAMILY === 'Windows' || !stream_isatty(STDIN)) {
+            // Windows: no stty — documented no-op until S-61's console path.
+            return;
+        }
+        $saved = self::stty(['-g']);
+        if ($saved === null || $saved === '') {
+            // No snapshot to restore means no safe flip: leave it cooked.
+            fwrite(STDERR, "sugar-readline: stty unavailable; running with cooked discipline (chords may be eaten)\n");
+            return;
+        }
+        if (self::stty(['-icanon', '-echo', '-isig', '-ixon', 'min', '1', 'time', '0']) === null) {
+            fwrite(STDERR, "sugar-readline: raw-mode flip failed; running with cooked discipline\n");
+            return;
+        }
+        self::$rawSaved = $saved;
+        self::$rawOwned = true;
+        if (!self::$rawBackstopArmed) {
+            self::$rawBackstopArmed = true;
+            register_shutdown_function(static function (): void {
+                self::exitRawMode();
+            });
+        }
+    }
+
+    /** Hand STDIN's terminal back the snapshot enterRawMode() captured. */
+    private static function exitRawMode(): void
+    {
+        if (!self::$rawOwned) {
+            return;
+        }
+        self::$rawOwned = false;
+        $saved = self::$rawSaved;
+        self::$rawSaved = '';
+        if (self::stty([$saved]) === null) {
+            fwrite(STDERR, "sugar-readline: raw-mode restore failed; run 'stty sane' if the terminal looks wrong\n");
+        }
+    }
+
+    /**
+     * Run stty against this process's inherited STDIN — the same device the
+     * owned pump reads — with every token escaped.
+     *
+     * @param list<string> $args stty argument tokens (each one may carry a
+     *                           whole snapshot string, which stty parses as a
+     *                           settings sequence on GNU and BSD alike).
+     * @return string|null stdout on success, null when stty failed
+     */
+    private static function stty(array $args): ?string
+    {
+        $command = 'stty ' . implode(' ', array_map('escapeshellarg', $args)) . ' 2>/dev/null';
+        $lines = [];
+        $status = 0;
+        exec($command, $lines, $status);
+
+        return $status === 0 ? implode("\n", $lines) : null;
+    }
+
 
     // -------------------------------------------------------------------------
     // Handler registration

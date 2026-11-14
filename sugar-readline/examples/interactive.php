@@ -6,10 +6,10 @@ declare(strict_types=1);
  * SugarReadline — interactive TTY demo via sugar-input.
  *
  * Demonstrates real TTY keypress handling: arrow keys, Ctrl+chars,
- * Escape, and bracketed paste — with the terminal put in non-canonical
- * mode so those bytes reach the prompt at all (cooked line discipline
- * would eat Enter, Backspace and Ctrl+ chords; see the README's
- * "Terminal mode" section).
+ * Escape, and bracketed paste — through Readline::interactive(), which
+ * flips the terminal out of canonical mode around the loop and restores it
+ * on every exit path (cooked discipline would eat Enter, Backspace and
+ * Ctrl+ chords; see the README's "Terminal mode" section).
  *
  * Run: php examples/interactive.php
  * (Requires a TTY — on a pipe the raw-mode step is skipped and the loop
@@ -27,30 +27,13 @@ echo "Try: type text, arrow keys, Ctrl+A/E, Ctrl+R search, Tab, Enter to submit,
 echo "Paste: select text and paste (bracketed paste mode)\n";
 echo "Type 'quit' to exit.\n\n";
 
-// Raw-ish mode: keep the line discipline out of the way, restore on the way
-// out. `stty -g` prints a settings string that re-applies everything as-is —
-// note the format is implementation-specific (GNU single tokens like -icanon,
-// BSD/macOS space-separated words), so this save/restore pair stays on one
-// machine within one run.
-// -isig is REQUIRED for the Ctrl+C story: with signals left on, Ctrl+C
-// raises SIGINT and kills this process BEFORE the shutdown restore runs,
-// leaving the shell with echo off. With -isig, Ctrl+C arrives as an ordinary
-// byte that the prompt aborts on.
-// -ixon is REQUIRED for the Ctrl+S story: with flow control left on, the
-// discipline swallows 0x13 as an XOFF stop-output request — forward history
-// search never opens and output freezes until Ctrl+Q sends XON. With -ixon,
-// Ctrl+S arrives as an ordinary byte that opens forward search.
-$isTty = stream_isatty(STDIN);
-$savedMode = '';
-if ($isTty) {
-    $savedMode = trim((string) shell_exec('stty -g'));
-    shell_exec('stty -icanon -echo -isig -ixon min 1 time 0');
-    register_shutdown_function(static function () use ($isTty, $savedMode): void {
-        if ($isTty && $savedMode !== '') {
-            shell_exec('stty ' . escapeshellarg($savedMode));
-        }
-    });
-}
+// Raw-mode handling is the library's job: Readline::interactive() around
+// each run captures the `stty -g` snapshot, flips -icanon -echo -isig -ixon
+// for the duration (Ctrl+C and Ctrl+S must arrive as ordinary bytes — the
+// README's "Terminal mode" section explains why each flag is load-bearing),
+// and restores on every exit path, shutdown backstop included. Passing the
+// configured $readline keeps the owned STDIN pump — and its already-decoded
+// trailing bytes — alive between iterations.
 
 $history = new InMemoryHistory();
 
@@ -71,7 +54,7 @@ $readline = Readline::fromStdin()
 $prompt = TextPrompt::new('> ')->withHistory($history);
 
 while (true) {
-    $prompt = $readline->run($prompt, STDOUT);
+    $prompt = Readline::interactive($prompt, STDOUT, $readline);
 
     if ($prompt->isAborted()) {
         echo "\n[aborted — empty input]\n";
