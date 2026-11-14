@@ -40,7 +40,9 @@ final class AnonymousReadLeverTest extends TestCase
         parent::setUp();
         $this->tmpDir = \sys_get_temp_dir() . '/cgs-lever-' . \uniqid('', true);
         \mkdir($this->tmpDir . '/repos', 0755, true);
-        // tests/bootstrap.php resets the singleton per test; be explicit anyway.
+        // No bootstrap-level reset exists (phpunit's bootstrap is
+        // vendor/autoload.php): this file's own setUp/tearDown discipline
+        // owns the process-global posture, so arm it explicitly.
         AccessControl::instance()->setAllowAnonymousRead(false);
     }
 
@@ -256,9 +258,31 @@ final class AnonymousReadLeverTest extends TestCase
     {
         $pubPath = $this->tmpDir . '/repos/pub.git';
         \mkdir($pubPath, 0755, true);
-        \exec('git init --bare -q ' . \escapeshellarg($pubPath) . ' 2>/dev/null');
 
-        $main = \trim((string) \shell_exec('git -C ' . \escapeshellarg($pubPath) . ' rev-parse refs/heads/master 2>/dev/null'));
+        // Seed a REAL commit (015): the old fixture pushed a garbage loose
+        // ref — on an unborn HEAD rev-parse echoes the literal ref name,
+        // the 2>/dev/null mask swallowed the non-zero exit, and git's
+        // NULL-SHA advertisement made the refs/heads/ keystone below pass
+        // vacuously with nothing real ever served. Same work-repo → push
+        // pattern as SmartHttpReadPathTest, with a loud 40-hex guard and
+        // unchecked exec retired.
+        $work = $this->tmpDir . '/pub-work';
+        \mkdir($work, 0755, true);
+        $rc = 0;
+        \exec('git init -q -b main ' . \escapeshellarg($work), $o, $rc);
+        self::assertSame(0, $rc, 'fixture: git init (work) failed');
+        \file_put_contents($work . '/a.txt', "hello\n");
+        \exec('git -C ' . \escapeshellarg($work) . ' add a.txt && git -C ' . \escapeshellarg($work) . ' -c user.email=t@t -c user.name=t commit -q -m seed', $o, $rc);
+        self::assertSame(0, $rc, 'fixture: seed commit failed');
+        \exec('git init -q --bare ' . \escapeshellarg($pubPath), $o, $rc);
+        self::assertSame(0, $rc, 'fixture: git init --bare failed');
+        \exec('git -C ' . \escapeshellarg($work) . ' push -q ' . \escapeshellarg($pubPath) . ' main', $o, $rc);
+        self::assertSame(0, $rc, 'fixture: seed push failed');
+
+        \exec('git -C ' . \escapeshellarg($pubPath) . ' rev-parse refs/heads/main', $out, $rc);
+        $main = \trim($out[0] ?? '');
+        self::assertSame(0, $rc, 'fixture: rev-parse on the seeded ref failed');
+        self::assertMatchesRegularExpression('/^[0-9a-f]{40}$/', $main, 'fixture seed commit failed — rev-parse did not return a real sha (015)');
         \file_put_contents($pubPath . '/refs/heads/feature', $main . "\n");
 
         // Lever tests arm the process-global matrix, so the fixture's

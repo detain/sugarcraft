@@ -1,5 +1,10 @@
 <?php
 
+// (093) strict_types rides the file head: below the explanatory block it
+// read as an afterthought and a stray leading statement would silently
+// disqualify it. The handshake docblock follows, as the file's preamble.
+declare(strict_types=1);
+
 /**
  * Daemon e2e child harness for GitDaemonWireConformanceTest.
  *
@@ -13,8 +18,6 @@
  * "PORT <n>" on stdout. serve() then blocks in the fixed mainLoop until the
  * parent kills it in teardown.
  */
-
-declare(strict_types=1);
 
 require __DIR__ . '/../../vendor/autoload.php';
 

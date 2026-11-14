@@ -28,10 +28,12 @@ final class GitDaemonTest extends TestCase
         // Create a custom config for testing with a temp data path
         $this->config = $this->createTestConfig($this->tmpDir);
 
-        // The daemon path exercises anonymous READ of published repos. The
-        // fail-closed lever restores in tests/bootstrap.php per test, so
-        // the private-repo refusal pins below still run in the default
-        // world (the lever never unlocks a private repo anyway).
+        // The daemon path exercises anonymous READ of published repos.
+        // This file's own tearDown restores the fail-closed posture per
+        // test (there is no bootstrap-level reset — phpunit's bootstrap is
+        // vendor/autoload.php), so the private-repo refusal pins below
+        // still run in the default world (the lever never unlocks a
+        // private repo anyway).
         \SugarCraft\GitServer\AccessControl::instance()->setAllowAnonymousRead(true);
     }
 

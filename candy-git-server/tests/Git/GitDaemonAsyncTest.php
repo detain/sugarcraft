@@ -46,6 +46,10 @@ final class GitDaemonAsyncTest extends TestCase
 
     protected function tearDown(): void
     {
+        // The lever armed in setUp is process-global; leaving it on let
+        // later tests in the same process run against a permissive world
+        // they never asked for (066).
+        \SugarCraft\GitServer\AccessControl::instance()->setAllowAnonymousRead(false);
         $this->removeDirectory($this->tmpDir);
         parent::tearDown();
     }
