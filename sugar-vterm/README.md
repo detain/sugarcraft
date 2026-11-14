@@ -148,6 +148,11 @@ is a `class_alias` shim resolving to the canonical root `Cell`.
 | `SugarCraft\Vterm\Terminal\Terminal` | Full VT500 emulator — parses CSI/OSC/DCS, maintains Sgr/Mode/Hyperlink/Scrollback. | `new(cols, rows, ?scrollbackSize, ?buffer, ?cursor, ?mode, ?onFocusEvent)` factory — every param after `rows` is optional and named, so focus-event wiring or a pre-set DEC mode never needs positional fillers (`Terminal::new(cols: 80, rows: 24, scrollbackSize: 5000)`; the constructor behind it is `__construct(cols, rows, ?Buffer, ?Cursor, ?Mode, scrollbackSize = 1000, ?onFocusEvent)`, so direct `new Terminal(80, 24, 5000)` TypeErrors on `?Buffer`, not `?int`), `feed(bytes, ?respond)`, `feedAsync(bytes): PromiseInterface<string>`, `feedStream(ReadableStreamInterface, ?respond, ?cancellation): PromiseInterface<string>`, `replies()`, `flush()`, `screen()`, `cursor()`, `cols()`/`rows()` (live grid dimensions read straight from the handler buffer — current after a `resize()`, no `screen()` rebuild), `mode()`, `windowTitle()` (null until the first title), `palette()`, `clipboardEvents()` and `focusEvents()` (both drain-on-read), `resize(cols, rows)`, `isWrapPending()`, `bells(): int` (emulator-only, monotonic across RIS — see the §BEL note), `enableAltScreen()`/`disableAltScreen()`/`isAltScreen()`, plus `with*()` builders — `withTabStops`, `withScrollbackSize` and `withCellPixels` are supported API (`withCellPixels($widthPx, $heightPx)` sizes the advisory XTWINOPS 14t/16t replies), while `withBuffer`, `withCursor`, `withMode` and `withWindowTitle` carry an `@internal` mark in `src/Terminal/Terminal.php`: they are composition seams for tests and the parser path, not supported entry points. Grid intake is bounded by `MAX_COLS`/`MAX_ROWS` (4096 per axis) and `MAX_SCROLLBACK` (1 000 000 rows): `new`, `resize()` and `withScrollbackSize()` reject larger with `InvalidArgumentException` before allocating anything (see §Limits). `create()` is deprecated — use `new()`. |
 | `SugarCraft\Vterm\Terminal` (root) | Lightweight emulator used by candy-vcr's renderer — produces `Snapshot` value objects directly. | `new(cols, rows, ?Theme)` factory (e.g. `Terminal::new(80, 24, $theme)` or named `theme:`; the constructor behind it is `__construct(cols, rows, Buffer, Cursor, Parser, CsiHandlerImpl, OscHandlerImpl, ?Theme)` — five required injected collaborators, so a positional scrollback int like the full-path idiom `new(80, 24, 5000)` TypeErrors on `?Theme` here), `theme()`, `feed(bytes): self` (mutates in place, returns `$this`), `snapshot(float $time = 0.0): Snapshot` (deep-copies the grid), `revision(): int` (counts `feed()`/`flush()` calls only — a direct `grid()` mutation does not bump it), `cursor(): Cursor`, `grid(): Buffer` (the LIVE mutable grid — a borrow, not a snapshot: `put()` through it changes the frame invisibly to `revision()`), `windowTitle(): string` (empty until the first title), `isWrapPending(): bool`, `flush(): void` (drains the parser so trailing OSC side effects land before the next `snapshot()`). `enableAltScreen()`/`disableAltScreen()` exist for interface parity but ALWAYS throw `\LogicException` — alt-screen machinery lives only on the full `Terminal\Terminal`. |
 
+Grid dimensions read live on both facades; only the shape differs: the root
+exposes public readonly properties (`$term->cols`, `$term->rows`), the full
+emulator exposes accessors (`$term->cols()`, `$term->rows()`) that track its
+buffer across `resize()` without rebuilding a screen.
+
 ```php
 use SugarCraft\Vterm\Terminal;       // root — renderer path
 use SugarCraft\Vterm\Theme;
@@ -724,9 +729,11 @@ re-adopted when origin mode is re-enabled.
 ## Cursor shape (DECSCUSR)
 
 DECSCUSR (`CSI Ps SP q`) sets the terminal cursor shape. The handler records it
-on **two** fields — `Cursor::$shape`, the copy a renderer would read, and
-`Mode::$cursorShape`, the copy mode state carries — which the handler writes
-together and keeps equal across every rebuild of the cursor. `Mode` exposes the
+on **two** fields — `Cursor::$shape`, the copy a snapshot host reads, and
+`Mode::$cursorShape`, the copy the mode state carries — which the handler writes
+together and keeps equal across every rebuild of the cursor; the parser-side
+renderer never reaches this sequence (`SP q` is discarded there — see the
+renderer-silences roster under the CSI table). `Mode` exposes the
 value as an integer:
 
 ```php
@@ -766,7 +773,9 @@ Across the reset and screen-swap paths the shape follows xterm-411: RIS
 (`ESC c`) and DECSTR (`CSI ! p`) reset it to `0` on both fields, while DECALN
 (`ESC # 8`) and the alt-screen swaps (DECSET 1048/1049) preserve it. Injecting
 both a `Cursor` and a `Mode` into `ScreenHandler` is the one documented case
-where the pair is taken exactly as supplied. DECSTR
+where the pair is taken exactly as supplied — nothing reconciles a disagreeing
+pair there, which is why the two fields are guaranteed equal only for
+terminals the facade built itself. DECSTR
 resets it because xterm's soft reset shares RIS's cursor block and
 `InitCursorShape()` recomputes the style from resources, so a DECSCUSR setting
 does not outlive a soft reset.
@@ -857,9 +866,9 @@ var_dump($vt->screen()->cell(0, 0)->grapheme);  // 'A'
 Mutations are queued on the handler's internal synchronized-output queue and replayed
 atomically when the window closes. BCE erase
 and combining-char attachments are both eligible for queued writes.
-The queue is bounded: past 16384 pending mutations a partial flush lands
-to the grid, so an adversarial flood costs memory safety before it costs
-content — all-or-nothing is surrendered only under hostile pressure.
+The queue is bounded: past 16384 pending mutations a partial flush lands:
+memory stays bounded, the price is a torn frame, not lost bytes —
+all-or-nothing is surrendered only under hostile pressure.
 
 ## Theme catalog
 
@@ -915,8 +924,8 @@ Attribute constants on `Theme` match `Cell::ATTR_*` for SGR bitfield constructio
 |--------|---------|
 | `$theme->color($index)` (instance) | `int` — packed 24-bit RGB for palette slot 0..255. When a slot is absent, falls back through `Theme::rgb()` for any index — the standard xterm mapping (cube 16..231 and grayscale 232..255), not only the grayscale ramp. |
 | `Theme::rgb($index)` | `array{int,int,int}` — `[R,G,B]` resolution for any 256-color index, including the 6x6x6 color cube (16..231) and the 24-step grayscale ramp (232..255). |
-| `Theme::fgIndex($slot)` | `int` — Map an ANSI 0..15 slot to its 256-color index (currently a no-op identity, kept for spec parity). |
-| `Theme::bgIndex($slot)` | `int` — Same for background slot. |
+| `Theme::fgIndex($slot)` | `int` — map an ANSI 0..15 slot to its 256-color index (currently a no-op identity, kept for spec parity). |
+| `Theme::bgIndex($slot)` | `int` — same for background slot. |
 | `Theme::defaultPalette()` | `array<int,int>` — Bootstrap palette (xterm defaults); the `Theme` constructor falls back to it when no palette is passed (`Themes::ansi()` does not exist). |
 | `Theme::ANSI_OFFSET` / `Theme::CUBE_OFFSET` / `Theme::GRAYSCALE_OFFSET` | int constants 0 / 16 / 232 — palette region boundaries. |
 
@@ -926,7 +935,7 @@ Each subdirectory of `src/` owns a small piece of VT state:
 
 | Namespace | Purpose | Public surface |
 |-----------|---------|----------------|
-| `Buffer\Buffer` | Cell grid storage (`rows × cols` array of `Cell`). | `cell($row, $col)` (either coordinate out of bounds → `Cell::empty()`), `put($row, $col, $cell)` (out-of-grid writes silently ignored), `insertRows($count, $from, ?$top, ?$bottom)`, `deleteRows($count, $from, ?$top, ?$bottom)`, `dirtyRegion()`, `each(): Generator`, `copy(): array`, `clear(): self` (blank the grid in place), `equals(self $other): bool` (grid-for-grid comparison), `resize($cols, $rows): self` (refuses dims < 1, repairs wide pairs at the cut, marks the whole viewport dirty). |
+| `Buffer\Buffer` | Cell grid storage (`rows × cols` array of `Cell`). | `cell($row, $col)` (either coordinate out of bounds → `Cell::empty()`), `put($row, $col, $cell)` (out-of-grid writes silently ignored), `insertRows($count, $from, ?$top, ?$bottom)`, `deleteRows($count, $from, ?$top, ?$bottom)`, `dirtyRegion()`, `each(): Generator`, `copy(): array`, `clear(): self` (a NEW blank grid of the same size — the receiver is untouched and its dirty box resets; contrast `resize($cols, $rows): self`, which keeps in-bounds content), `equals(self $other): bool` (grid-for-grid comparison), `resize($cols, $rows): self` (refuses dims < 1, repairs wide pairs at the cut, marks the whole viewport dirty). Writes are split by intent: `put()` and the range operations mutate the receiver, while `resize()` and `clear()` return new grids. The silent out-of-bounds behaviour (`cell()` → `Cell::empty()`, out-of-grid `put()` ignored) is load-bearing, not an oversight: the emulator's scroll-region arithmetic reads and clips through these bounds-checked accesses and relies on them never throwing (the cross-lib throw-vs-silent note in `docs/MATCHUPS.md` resolves on the vterm side as documented behaviour). |
 | `Screen\Screen` | Immutable snapshot of Buffer + Scrollback — `fromBuffer()` copies the grid AND clones the ring, so captured screens keep the history they were born with; cell-level diff API. | `fromBuffer($buf, ?$scrollback)`, `lines()` (Generator: full-width rows, combining marks re-appended), `linesWithHistory()` (Generator: scrolled-off rows oldest-first, then visible), `cell($row, $col)` (out-of-bounds in EITHER coordinate returns `Cell::empty()`), `scrollback()` (`?Scrollback` — null when built via `fromBuffer($buf)` without a ring; the full `Terminal\Terminal::screen()` path always wires one), `diff($other)`. |
 | `Screen\Scrollback` | Ring buffer (default 1000 rows) for rows scrolled off the top. | `push($row)` (record a scrolled-off line, evicting the oldest at capacity), `count()`, `maxSize()`, `at($n)`, `all()`, `clear()` (drop every saved row — what `ED 3` calls). |
 | `Cell\Cell` | `class_alias` shim over the canonical root `SugarCraft\Vterm\Cell` — the ONE cell class for both engines (char + grapheme aliases, palette `fg`/`bg`, `attrs` bitfield, optional `Sgr`/truecolour/hyperlink/`Rendition`/combining payload). | Static `empty()`, `continuation($prev)`; `withFg($i)`, `withBg($i)`, `withAttrs($flags)`, `withFgTruecolor(?int)`, `withBgTruecolor(?int)`, `withRendition(Rendition)`, `withCombining($s)`; `sgr()`, `foreground()`/`background()` (`?Color`), `fgRgb()`/`bgRgb()` (`?array`), `colorSgr()`, `equals($other)`. |
@@ -938,7 +947,7 @@ Each subdirectory of `src/` owns a small piece of VT state:
 | `Mode\Mode` | DEC private modes. `altScreenVariant` (consts `ALT_NONE`/`ALT_NO_SAVE`/`ALT_CURSOR_ONLY`/`ALT_FULL`) records which of the four alt-screen meanings (`47`/`1047` swap only, `1048` cursor save only, `1049` full save+restore) a switch came from; `withAltScreen(bool)` maps to `ALT_FULL`/`ALT_NONE`. | `withAltScreen/AltScreenVariant/CursorVisible/MouseEncoding/MouseHighlights/MouseAny/MouseCellMotion/MouseExtended/BracketedPaste/SyncUpdate/AutoWrap/OriginMode/CursorShape/ReportFocusEvents`, `isAltScreen()`, `isMouseReporting()`, `equals()`. |
 | `Hyperlink\Hyperlink` | OSC 8 URI + id state. | `fromRaw($id, $uri)`, `equals()`. |
 | `Msg\FocusInMsg` / `FocusOutMsg` | Focus event records — land in the emulator's bounded focus ring (DEC mode `1004`) and drain via `Terminal::focusEvents()`. | Plain DTOs. |
-| `Color\Color` | Color value object — palette index or truecolor RGB. | `default()`, `indexed16($i)`, `indexed256($i)`, `truecolor($r,$g,$b)`, `fromInt($kind,$v)`, `red()`, `green()`, `blue()`, `equals()`, `equalsOrBothNull(?a, ?b): bool` (static null-safe comparison: two nulls are equal, one null never is). |
+| `Color\Color` | Color value object — palette index or truecolor RGB. | `default()`, `indexed16($i)`, `indexed256($i)`, `truecolor($r,$g,$b)`, `fromInt($kind,$v)`, `red()`, `green()`, `blue()`, `equals()`, `equalsOrBothNull(?self $a, ?self $b): bool` (static null-safe comparison: two nulls are equal, one null never is). |
 | `CursorShape` (root enum) | `BlinkingBlock` (0/1) / `SteadyBlock` (2) / `BlinkingUnderline` (3) / `SteadyUnderline` (4) / `BlinkingBar` (5) / `SteadyBar` (6). | `fromInt()`, `toInt()`. |
 
 ## Trust boundary and hostile input
@@ -958,8 +967,10 @@ window titles and OSC 8 URIs riding on grid cells — are called out below):
   `Buffer` bypasses the ceiling because its bytes were paid for above the
   library.
 - **Parser string buffer** — `Terminal::MAX_STRING_BUFFER` (64 KiB, shared by
-  both facade parsers). OSC/DCS payloads past the cap are truncated, so no
-  per-stream allocation grows with attacker-chosen length.
+  both facade parsers). OSC payloads past the cap are truncated, so no
+  per-stream allocation grows with attacker-chosen length; DCS bytes never
+  ride this path — their payloads are discarded outright (see *Discarded
+  without parsing* below). One model per byte class.
 - **Replies** — the emulator's query-reply queue is a 1024-entry drop-oldest
   ring; under a DA/DSR flood an awaited reply can be evicted, so drain
   `replies()` (or pass the `?respond` callback) promptly.
