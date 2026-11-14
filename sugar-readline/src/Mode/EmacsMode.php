@@ -134,7 +134,7 @@ final class EmacsMode implements ModeInterface
 
         // If we are in Alt-prefix waiting mode, handle Alt+B / Alt+F / Alt+D
         if ($this->isAltPrefix()) {
-            return $this->handleAltKey($prompt, $key);
+            return $this->handleAltKey($prompt, $key, true);
         }
 
         // Otherwise, delegate to standard TextPrompt handling via handleKeyDirect
@@ -163,7 +163,18 @@ final class EmacsMode implements ModeInterface
         return $clone;
     }
 
-    private function handleAltKey(TextPrompt $prompt, string $key): TextPrompt
+    /**
+     * Resolve a key arriving under the meta (Alt) prefix.
+     *
+     * Bound chords (B/F/D) consume the keystroke. An UNBOUND key while the
+     * prefix was armed by Escape must not be silently eaten — GNU readline
+     * dispatches it as if the Escape had never been typed, which is what
+     * keeps Ctrl+C, Enter, arrows and plain characters working between the
+     * prefix and its binding ($forwardUnmatched). Kitty-style `alt_x`
+     * chords never armed a prefix to begin with, so their unbound members
+     * stay no-ops: there is no "the user meant the plain key" story to tell.
+     */
+    private function handleAltKey(TextPrompt $prompt, string $key, bool $forwardUnmatched = false): TextPrompt
     {
         // Clear alt prefix state
         $next = $this->withAltPrefix(false);
@@ -183,7 +194,19 @@ final class EmacsMode implements ModeInterface
             return $next->attachTo($this->deleteWordAfter($prompt));
         }
 
-        // Unknown Alt+key — no-op
+        // Unknown Alt+key while armed: the Escape is spent, the key is not.
+        // Printable characters land in the buffer (the pump routes real
+        // typing through handleChar, and keys reaching this arm are already
+        // symbolic names); everything else re-enters normal mode handling
+        // with the prefix cleared, so it cannot loop back here.
+        if ($forwardUnmatched) {
+            $base = $next->attachTo($prompt);
+            return mb_strlen($key, 'UTF-8') === 1
+                ? $base->handleChar($key)
+                : $base->handleKey($key);
+        }
+
+        // Unbound kitty-style alt_ chord — no-op.
         return $next->attachTo($prompt);
     }
 
