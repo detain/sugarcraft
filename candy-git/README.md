@@ -29,21 +29,27 @@ branch until a stable tag is cut, so the bare requirement dies with
 `does not match your minimum-stability`. This composer channel is distinct from
 the GitHub release tags: `candy-git/v*` tags (and the rolling `candy-git/latest`
 prerelease) are the phar channel, and until a stable `candy-git/v*` tag is cut
-the only release artifact is that prerelease phar.
+the only release artifact is that prerelease phar. Each release publishes two
+lines of provenance next to the archive: `candy-git.phar.sha256` (check with
+`sha256sum -c candy-git.phar.sha256` in the download directory) and
+`candy-git.phar.commit`, naming the tested commit the bytes were built at.
 
 From a clone of this repository, run `composer install` inside `candy-git/`
 first — `vendor/` is gitignored, and without it the launcher exits with
 `candy-git: cannot find composer autoload.php`. Then `php candy-git/bin/candy-git`
 works. Release users can grab the `candy-git.phar` from the GitHub release and run
 `php candy-git.phar`. `--version`, `--help`, and the
-`-h` alias short-circuit and exit 0 anywhere; any *other* argument exits 2 with a
-usage line rather than being silently ignored.
+`-h` alias short-circuit and exit 0 anywhere — even outside a git repository.
+Any *other* argument is refused outright: the program exits 2, and its two
+error lines name the unknown argument and point at `--help` (the argument
+itself never "exits" — the launcher does).
 
 ## Requirements
 
 - PHP 8.3+
 - git **2.23 or newer** — the hard floor is `git restore` (candy-git's discard
-  and unstage engine); the `--porcelain=v1` status engine predates it. candy-git
+  and unstage engine); the `--porcelain=v1` status engine is much older than
+  that and adds no floor of its own. candy-git
   checks `git --version` at launch and refuses older binaries (or a missing git)
   with one readable sentence, exit code 1.
 - An interactive terminal: the UI is a full-screen program (alt buffer on
@@ -79,7 +85,8 @@ and undo / redo of the last operation.
 
 Not in v1 (absent, not hidden behind a key): **remote management** (add /
 rename / remove remotes), **tags**, **reflog**, **bisect**, **submodules**,
-hunk- and line-level **patch staging**, an in-app **conflict-resolution** view,
+line-level **patch staging** (hunk-level staging ships in the diff viewer), an
+in-app **conflict-resolution** view,
 and *executing* the interactive-rebase todo (it is a preview
 today). Every git call is a synchronous, timeout-bounded subprocess on the UI
 thread; moving git work onto the ReactPHP loop as async commands (so slow
@@ -87,44 +94,82 @@ remotes cannot stall rendering) remains the v2 direction.
 
 ## Keys
 
-| Key                      | Action                                                  |
-|--------------------------|---------------------------------------------------------|
-| `Tab`                    | Cycle pane focus                                        |
-| `↑/↓` or `k/j`           | Move cursor in active pane                             |
-| `PageUp/PageDown`        | Jump the cursor a paneful in active pane                |
-| `Home/End`               | Jump the cursor to the first / last entry               |
-| `s` (status pane)        | Stage / unstage the highlighted entry — on conflicted or untracked rows the first press stages (there is no staged side to reverse) |
-| `a` (status pane)        | Stage all files                                         |
-| `d` (status pane)        | Discard changes to the highlighted file (press twice) — on an untracked row it **deletes the file from disk** (press twice; unrecoverable) |
-| `Enter` (status pane)    | Open diff viewer for the highlighted file — untracked rows open as an all-additions diff (git's own new-file shape), stageable hunk by hunk |
-| `Enter` (log pane)       | Open the commit under the cursor — a read-only details view of `git show --stat --format=full --patch` |
-| `f` (press twice)        | Fetch from the remote                                  |
-| `p` (press twice)        | Pull from the remote                                   |
-| `P` (press twice)        | Push to the remote — the first push of an untracked branch bootstraps `origin` with `--set-upstream`; refuses on detached HEAD |
-| `Space` (branches pane)  | Checkout branch                                         |
-| `c`                      | Commit — the message collector owns the keyboard: `Tab` inserts a newline (subject+body are typable, and pastes keep their line structure), `Enter` commits, `Esc` cancels. Commits ONLY what you staged — unstaged edits stay in the work tree (stage first with `s` / `a`) |
-| `A`                      | Amend the last commit — opens the collector pre-filled with its message; editing it rewrites HEAD, submitting unchanged is the old keep-the-message amend |
-| `n`                      | Create and switch to a new branch — opened while the log pane is focused, the branch starts at THAT commit (the collector says so: `new branch from <sha>:`) |
-| `u`                      | Undo last operation — undoing a commit resets the boundary and re-arms the collector with the typed message (nothing authored is lost); undoing stage-all restores the exact prior selection, and refuses when a file was partially staged (its staged version lived only in the index). Remembers the last 100 operations — older ones fall off the lane silently — and refuses outright where the inverse would lie: discard, untracked-file delete, amend, merge, revert, and reset --hard, plus the conditional ones: a checkout with no origin to return to, a branch delete whose prior SHA was not recorded, and the partial-stage-all above |
-| `Ctrl+r`                 | Redo last undone operation (same 100-entry lane; a fresh operation clears it) |
-| `D` (branches pane)      | Delete the selected branch (press twice) — refuses to delete the current branch |
+| Key                    | Action                                                       |
+|------------------------|--------------------------------------------------------------|
+| `Tab`                  | Cycle pane focus                                              |
+| `↑/↓` or `k/j`         | Move cursor in the active pane                                |
+| `PageUp/PageDown`      | Jump the cursor a paneful in the active pane                  |
+| `Home/End`             | Jump the cursor to the first / last entry                     |
+| `s` (status pane)      | Stage / unstage the highlighted file                          |
+| `a` (status pane)      | Stage all files                                               |
+| `d` (status pane)      | Discard changes to the highlighted file (press twice)         |
+| `Enter` (status pane)  | Open the diff viewer for the highlighted file                 |
+| `Enter` (log pane)     | Open the commit under the cursor (read-only details)          |
+| `f` (press twice)      | Fetch from the remote                                         |
+| `p` (press twice)      | Pull from the remote                                          |
+| `P` (press twice)      | Push to the remote (refuses on detached HEAD)                 |
+| `Space` (branches)     | Checkout branch                                               |
+| `c`                    | Commit **what you staged** through the message collector      |
+| `A`                    | Amend the last commit (collector pre-filled with its message) |
+| `n`                    | Create and switch to a new branch                             |
+| `u`                    | Undo the last operation (see fine print below)                |
+| `Ctrl+r`               | Redo the last undone operation                                |
+| `D` (branches pane)    | Delete the selected branch (press twice; never the current one) |
+| `M`                    | Merge a typed branch/ref into the current branch              |
+| `r`                    | Sequencer menu — only while a rebase, cherry-pick, or conflicted merge is stopped |
+| `S`                    | Stash manager: create / apply / pop / drop                    |
+| `V`                    | Cherry-pick a commit ref (pre-filled from the cursor in log views) |
+| `w` (branches pane)    | Worktrees manager: list / add / remove                        |
+| `i`                    | Interactive rebase todo list — preview only                   |
+| `R`                    | Refresh from disk                                             |
+| `?`                    | Context-sensitive help (general keys + the focused pane's verbs) |
+| `q`                    | Quit — closes the innermost overlay first                     |
+| `Ctrl+C`               | Same chord as `q` while idle; acts like `Esc` while typing (a half-typed draft is dropped) |
+| `Esc`                  | Cancel the innermost overlay/collection; quits when nothing is open |
+
+Key fine print:
+
+- `c` commits only what is staged — unstaged edits stay in the work tree
+  (stage first with `s` / `a`). Inside the collector `Tab` inserts a newline
+  (subject and body are typable; pastes keep their line structure), `Enter`
+  commits, `Esc` cancels.
+- `s` on a conflicted or untracked row stages: those rows have no staged side
+  to reverse. `d` on an untracked row **deletes the file from disk** (press
+  twice; unrecoverable). Untracked rows open in the diff viewer as an
+  all-additions diff — git's own new-file shape — stageable hunk by hunk.
+- The commit details view is `git show --stat --format=full --patch`,
+  read-only; revert / reset --hard / cherry-pick act inside it on the commit
+  already on screen.
+- `P`'s first push of an untracked branch bootstraps `origin` with
+  `--set-upstream`.
+- `A` opens the collector pre-filled: editing the message rewrites HEAD,
+  submitting it unchanged is the old keep-the-message amend.
+- `n` opened while the log pane is focused starts the branch at THAT commit —
+  the collector says so (`new branch from <sha>:`).
+- `u` undoes a commit by moving the boundary back and re-arming the collector
+  with your typed message (nothing authored is lost), and undoing stage-all
+  restores the exact prior selection — unless a file was partially staged,
+  which it refuses. The lane remembers 100 operations; older ones fall off
+  silently, and a fresh operation clears the redo side (`Ctrl+r`). It refuses
+  outright where the inverse would lie: discard, untracked-file delete, amend,
+  merge, revert, and reset --hard — plus a checkout with no origin to return
+  to and a branch delete whose prior SHA was never recorded.
+- `r` on an idle repo answers "no rebase in progress"; while stopped it lists
+  continue / abort (and skip on a rebase).
+- `S`: push takes an optional message, `u` inside the overlay includes
+  untracked files, pop and drop ask twice, a drop is undoable from the main
+  view, and the overlay stays open after apply so it remains usable.
+- `w` refuses option-injection and `..` traversal in collected paths; it does
+  not jail the destination inside the repository.
+- `?` deliberately does not list the Log pane: its actions live inside the
+  read-only commit details view.
+- While a text buffer owns the keyboard, `q` is just a letter.
 
 Remote-tracking branches (`~ origin/feature`) are listed under the locals with
 per-branch divergence badges (`[↑2 ↓1]`, `[!]` for a vanished upstream). Space
 on one DWIMs the way git does: `--track` creates a local branch of that name,
 or — when the local already exists — checks it out. They are read-only for
 `D`: the branch family manages locals.
-| `M`                      | Merge — prompt for a branch/ref to merge into current, seeded with the branch under the cursor when the branches pane has a non-current row selected (still editable) |
-| `r`                      | Open the sequencer menu (continue / abort; skip on a rebase) — when stopped only: opens while a rebase, cherry-pick, or conflicted merge is pending; on an idle repo it reports "no rebase in progress" |
-| `S`                      | Open stash manager (create / apply / pop / drop; push takes an optional message, `u` includes untracked; pop and drop ask twice, and a drop is undoable from the main view; the overlay stays open after apply so it remains usable) |
-| `V`                      | Cherry-pick — type a commit ref and press Enter; from the log pane or the commit details view the ref is pre-filled from the cursor |
-| `w` (branches pane)     | Open worktrees manager (list / add / remove) — path collection refuses option-injection and `..` traversal; it does not jail the destination inside the repository |
-| `i`                      | Interactive rebase todo list — preview only; the todo is not yet executed |
-| `R`                      | Refresh from disk                                       |
-| `?`                      | Context-sensitive help — lists the general keys and the focused pane's verbs; the Log pane is deliberately not listed (its actions live inside the read-only commit details view) |
-| `q`                      | Quit — while an overlay is open it closes the innermost one (same chain as `Esc`), and while typing in a text buffer `q` is just a letter |
-| `Ctrl+C`                 | Quit — the same chord as `q` while idle; while a text buffer owns the keyboard it rides the `Esc` chain instead and CANCELS the innermost overlay (a half-typed commit draft is dropped — `q` would only have typed a letter) |
-| `Esc`                    | Cancel the innermost overlay/collection; quits when nothing is open    |
 
 ### Signed commits
 
@@ -265,13 +310,13 @@ question mark.
 Every state the UI needs you to know is carried by **text**, not by color
 alone: status rows show git's porcelain `XY` codes, diff lines keep their
 leading `+`/`-` markers, the rebase todo spells its actions as words
-(`pick`/`reword`/`edit`/`squash`/`drop`), and the ahead/behind summary is git's own
-`## …[ahead N, behind M]` upstream header rendered verbatim — so the panes
-stay readable under `NO_COLOR`, `TERM=dumb`, or an ASCII-only palette. Pane
-**focus** rides two channels too: the accent
+(`pick`/`reword`/`edit`/`squash`/`drop`), and the ahead/behind summary is git's
+own `## main...origin/main [ahead N, behind M]` header, rendered with every
+byte git printed — so the panes stay readable under `NO_COLOR`, `TERM=dumb`,
+or an ASCII-only palette. Pane **focus** rides two channels too: the accent
 border *and* a `▸` text marker prefixed to the focused pane's title — the
-marker carries no color, so tab cycling stays visible under `NO_COLOR`,
-`TERM=dumb`, and an ASCII-only palette.
+marker carries no color, so tab cycling survives every degenerate case just
+named.
 
 - **Row cursor** — on styling terminals the selected row is rendered with
   reverse video (SGR 7). That channel alone would vanish on `TERM=dumb`,
