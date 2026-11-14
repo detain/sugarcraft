@@ -21,7 +21,16 @@ use SugarCraft\Style\Style;
  */
 final class DumbPostureTest extends TestCase
 {
-    private const GATED_ENVS = ['NO_COLOR', 'FORCE_COLOR', 'CLICOLOR', 'CLICOLOR_FORCE', 'TERM'];
+    // H1 (CI-watch 2026-11-13): the full roster ColourGate::cap() and core's
+    // ladder consult — a dev shell exporting COLORTERM=truecolor (or a CI
+    // box exporting CI=1) used to decide the rich-posture leg's answer for
+    // it. Every input is now cleared in setUp and re-declared per leg.
+    private const GATED_ENVS = [
+        'NO_COLOR', 'FORCE_COLOR', 'CLICOLOR', 'CLICOLOR_FORCE',
+        'TERM', 'COLORTERM', 'TERM_PROGRAM', 'WT_SESSION',
+        'CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'BUILDKITE',
+        ColourGate::NO_DECORATION_ENV,
+    ];
 
     /** @var array<string,string|false> */
     private array $savedEnv = [];
@@ -98,7 +107,11 @@ final class DumbPostureTest extends TestCase
 
     public function testARealTerminalKeepsTheRichPosture(): void
     {
+        // The rich posture belongs to a terminal that ADVERTISES TrueColor;
+        // a plain xterm-256color ladder answer is Ansi256. Say so here
+        // instead of inheriting the developer's COLORTERM (H1: CI has none).
         putenv('TERM=xterm-256color');
+        putenv('COLORTERM=truecolor');
 
         self::assertFalse(ColourGate::termIsDumb());
         self::assertSame(ColorProfile::TrueColor, ColourGate::cap());

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\ScriptUi\Tests\Model;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\ScriptUi\Tests\Support\AmbientIsolation;
+use SugarCraft\ScriptUi\Tests\Support\TrueColorTerminalEnv;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Ansi;
@@ -23,9 +25,20 @@ use Symfony\Component\Console\Output\BufferedOutput;
  */
 final class MicroFlagsTest extends TestCase
 {
+    use AmbientIsolation;
+    use TrueColorTerminalEnv;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->isolateAmbient();
+        $this->scriptTrueColorTerminal();
+    }
+
     protected function tearDown(): void
     {
-        ColourGate::resetAmbient();
+        $this->releaseAmbient();
+        $this->restoreTerminalEnv();
     }
 
     public function testHardWrapBreaksMidWordAtExactWidth(): void

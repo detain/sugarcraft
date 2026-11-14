@@ -11,6 +11,7 @@ use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 use SugarCraft\Fuzzy\MatchResult;
 use SugarCraft\ScriptUi\Model\FilterModel;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\ScriptUi\Tests\Support\AmbientIsolation;
 
 /**
  * Delegating stub that counts matchAll() invocations so tests can observe
@@ -45,6 +46,19 @@ final class CountingMatcher implements FuzzyMatcher
 
 final class FilterModelTest extends TestCase
 {
+    use AmbientIsolation;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->isolateAmbient();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->releaseAmbient();
+        parent::tearDown();
+    }
     private function model(): FilterModel
     {
         return FilterModel::fromOptions(['apple', 'banana', 'cherry', 'date']);

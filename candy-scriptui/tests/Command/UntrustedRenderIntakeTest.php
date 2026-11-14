@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\ScriptUi\Tests\Command;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\ScriptUi\Tests\Support\AmbientIsolation;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\ScriptUi\Command\JoinCommand;
 use SugarCraft\ScriptUi\Command\StyleCommand;
@@ -20,16 +21,21 @@ use Symfony\Component\Console\Tester\CommandTester;
  */
 final class UntrustedRenderIntakeTest extends TestCase
 {
+    use AmbientIsolation;
+
     private string $tmpDir = '';
 
     protected function setUp(): void
     {
+        parent::setUp();
+        $this->isolateAmbient();
         $this->tmpDir = sys_get_temp_dir() . '/scriptui-24-' . bin2hex(random_bytes(4));
         mkdir($this->tmpDir, 0700, true);
     }
 
     protected function tearDown(): void
     {
+        $this->releaseAmbient();
         foreach (glob($this->tmpDir . '/*') ?: [] as $f) {
             @unlink($f);
         }

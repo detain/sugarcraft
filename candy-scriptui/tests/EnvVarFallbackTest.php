@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\ScriptUi\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\ScriptUi\Tests\Support\AmbientIsolation;
+use SugarCraft\ScriptUi\Tests\Support\TrueColorTerminalEnv;
 use SugarCraft\ScriptUi\Application;
 use Symfony\Component\Console\Input\ArgvInput;
 use Symfony\Component\Console\Output\BufferedOutput;
@@ -12,12 +14,18 @@ use Symfony\Component\Console\Tester\CommandTester;
 
 final class EnvVarFallbackTest extends TestCase
 {
+    use AmbientIsolation;
+    use TrueColorTerminalEnv;
+
     private string $originalEnvVerbose;
     private string $originalEnvForeground;
     private string $originalEnvTimeout;
 
     protected function setUp(): void
     {
+        parent::setUp();
+        $this->isolateAmbient();
+        $this->scriptTrueColorTerminal();
         $this->originalEnvVerbose = getenv('CANDY_SCRIPTUI_VERBOSE') ?: '';
         $this->originalEnvForeground = getenv('CANDY_SCRIPTUI_FOREGROUND') ?: '';
         $this->originalEnvTimeout = getenv('CANDY_SCRIPTUI_TIMEOUT') ?: '';
@@ -25,6 +33,8 @@ final class EnvVarFallbackTest extends TestCase
 
     protected function tearDown(): void
     {
+        $this->releaseAmbient();
+        $this->restoreTerminalEnv();
         foreach (['CANDY_SCRIPTUI_VERBOSE', 'CANDY_SCRIPTUI_FOREGROUND', 'CANDY_SCRIPTUI_TIMEOUT'] as $var) {
             $orig = match ($var) {
                 'CANDY_SCRIPTUI_VERBOSE' => $this->originalEnvVerbose,

@@ -6,12 +6,27 @@ namespace SugarCraft\ScriptUi\Tests\Command;
 
 use SugarCraft\ScriptUi\Application;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\ScriptUi\Tests\Support\AmbientIsolation;
 use Symfony\Component\Console\Input\ArgvInput;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Tester\CommandTester;
 
 final class StyleCommandTest extends TestCase
 {
+    use AmbientIsolation;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->isolateAmbient();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->releaseAmbient();
+        parent::tearDown();
+    }
+
     public function testStripAnsiClearsInlineEscapes(): void
     {
         $cmd = (new Application())->find('style');

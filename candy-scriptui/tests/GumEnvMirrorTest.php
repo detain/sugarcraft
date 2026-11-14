@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\ScriptUi\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\ScriptUi\Tests\Support\AmbientIsolation;
+use SugarCraft\ScriptUi\Tests\Support\TrueColorTerminalEnv;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\ScriptUi\Application;
 use Symfony\Component\Console\Input\ArgvInput;
@@ -15,13 +17,25 @@ use Symfony\Component\Console\Output\BufferedOutput;
  */
 final class GumEnvMirrorTest extends TestCase
 {
+    use AmbientIsolation;
+    use TrueColorTerminalEnv;
+
     private const VARS = [
         'GUM_STYLE_FOREGROUND', 'GUM_STYLE_BOLD', 'GUM_STYLE_TEXT', 'GUM_FORMAT_FOREGROUND',
         'CANDY_SCRIPTUI_FOREGROUND', 'GUM_CONFIRM_DEFAULT', 'GUM_STYLE_ALLOW_ENV',
     ];
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->isolateAmbient();
+        $this->scriptTrueColorTerminal();
+    }
+
     protected function tearDown(): void
     {
+        $this->releaseAmbient();
+        $this->restoreTerminalEnv();
         foreach (self::VARS as $name) {
             putenv($name);
         }

@@ -8,9 +8,23 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\ScriptUi\Model\PagerModel;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\ScriptUi\Tests\Support\AmbientIsolation;
 
 final class PagerModelTest extends TestCase
 {
+    use AmbientIsolation;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->isolateAmbient();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->releaseAmbient();
+        parent::tearDown();
+    }
     private function content(int $n): string
     {
         $lines = [];

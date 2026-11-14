@@ -7,6 +7,7 @@ namespace SugarCraft\ScriptUi\Tests\Command;
 use SugarCraft\ScriptUi\Application;
 use SugarCraft\ScriptUi\Command\PagerCommand;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\ScriptUi\Tests\Support\AmbientIsolation;
 use Symfony\Component\Console\Tester\CommandTester;
 
 /**
@@ -17,6 +18,19 @@ use Symfony\Component\Console\Tester\CommandTester;
  */
 final class PagerCommandTest extends TestCase
 {
+    use AmbientIsolation;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->isolateAmbient();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->releaseAmbient();
+        parent::tearDown();
+    }
     /**
      * Verify PagerCommand is registered in the application and has the
      * expected name.

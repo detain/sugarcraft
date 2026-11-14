@@ -57,12 +57,43 @@ final class LoopPinTest extends TestCase
         // scriptui-53 KEEP (manifest-pin): the declared dependency shape is
         // an install-time contract (path-repo closure law), not a runtime
         // observable.
-        $json = json_decode((string) file_get_contents(__DIR__ . '/../../composer.json'), true);
+        //
+        // H1 (CI-watch 2026-11-13): the law binds the COMMITTED manifest.
+        // CI's `check-path-repos.php --fix` step legitimately injects
+        // repositories[] into the working tree before composer install, so
+        // reading the on-disk file made this pin red in CI for the very
+        // mutation the law permits CI to perform. Ask HEAD's blob instead;
+        // outside a git checkout there are no committed bytes to police.
+        $committed = self::committedManifestBytes();
+        if ($committed === null) {
+            self::markTestSkipped('committed manifest bytes are unavailable without a git checkout');
+        }
+
+        $json = json_decode($committed, true);
 
         self::assertIsArray($json);
         self::assertArrayHasKey('sugarcraft/sugar-testing', $json['require-dev'] ?? []);
         // path-repo closure law: the committed manifest never carries
         // sibling repositories — CI injects them.
         self::assertArrayNotHasKey('repositories', $json);
+    }
+
+    /** Composer.json bytes as committed at HEAD, or null when unresolvable. */
+    private static function committedManifestBytes(): ?string
+    {
+        $dir = \dirname(__DIR__, 2);
+        $toplevel = rtrim((string) shell_exec('git -C ' . escapeshellarg($dir) . ' rev-parse --show-toplevel 2>/dev/null'));
+        if ($toplevel === '') {
+            return null;
+        }
+
+        // Path inside the repo root: 'candy-scriptui/composer.json' in the
+        // monorepo, plain 'composer.json' in a split-repo checkout.
+        $relative = trim(substr(\realpath($dir . '/composer.json'), \strlen(\realpath($toplevel))), '/\\');
+        $relative = $relative !== '' ? $relative : 'composer.json';
+
+        $bytes = shell_exec('git -C ' . escapeshellarg($dir) . ' show HEAD:' . escapeshellarg($relative) . ' 2>/dev/null');
+
+        return \is_string($bytes) && $bytes !== '' ? $bytes : null;
     }
 }

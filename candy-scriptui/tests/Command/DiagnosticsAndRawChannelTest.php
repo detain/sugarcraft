@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\ScriptUi\Tests\Command;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\ScriptUi\Tests\Support\AmbientIsolation;
 
 /**
  * End-to-end shape of the two channels: DATA (the rendered result, raw —
@@ -15,6 +16,19 @@ use PHPUnit\Framework\TestCase;
  */
 final class DiagnosticsAndRawChannelTest extends TestCase
 {
+    use AmbientIsolation;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->isolateAmbient();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->releaseAmbient();
+        parent::tearDown();
+    }
     private const BIN = __DIR__ . '/../../bin/candy-scriptui';
 
     /** @param array<string,string> $env @param array{0:int,1:string,2:string} $_ */

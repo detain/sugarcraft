@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\ScriptUi\Tests\Model;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\ScriptUi\Tests\Support\AmbientIsolation;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\ScriptUi\Model\FilterModel;
@@ -22,6 +23,14 @@ use Symfony\Component\Console\Input\ArgvInput;
  */
 final class PlaceholderGhostTest extends TestCase
 {
+    use AmbientIsolation;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->isolateAmbient();
+    }
+
     protected function tearDown(): void
     {
         ColourGate::resetAmbient();
