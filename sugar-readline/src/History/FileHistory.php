@@ -26,7 +26,11 @@ namespace SugarCraft\Readline\History;
  * Deduplication is stricter than HistoryInterface's "differs from the last
  * entry" floor: a line already present anywhere in the retained history is
  * skipped (zsh `HIST_IGNORE_ALL_DUPS`-style; the weaker adjacent-only rule
- * GNU/zsh `HIST_IGNORE_DUPS` describe is what InMemoryHistory enforces).
+ * GNU/zsh `HIST_IGNORE_DUPS` describe is what InMemoryHistory enforces). The
+ * cross-process tail guard for the append path runs INSIDE the write-lock
+ * critical section, not off the pre-append peek (finding 013), so a racing
+ * duplicate can no longer survive concurrent append — including the batch
+ * flush() of deferred writes.
  *
  * On-disk format: one entry per line, with backslash escapes (mirroring
  * bash history-file conventions) applied at the write choke and undone at
@@ -235,9 +239,10 @@ final class FileHistory extends InMemoryHistory
             return;
         }
 
-        // Sync path also guards against another process having appended the
-        // same line since we loaded. peekLastOnDisk() answers with the raw
-        // (escaped) tail line, so compare against the escaped candidate.
+        // Sync path screens first against another process having appended the
+        // same line since we loaded (raw escaped tail vs escaped candidate).
+        // This peek is a lock-free fast path only; the authoritative re-check
+        // runs inside appendLinesAtomically's write-lock section (finding 013).
         if ($this->peekLastOnDisk() === self::escapeLine($line)) {
             return;
         }
@@ -321,10 +326,24 @@ final class FileHistory extends InMemoryHistory
                         $endsWithNewline = fread($fp, 1) === "\n";
                     }
                     if ($endsWithNewline) {
-                        foreach ($lines as $line) {
-                            fwrite($fp, self::escapeLine($line) . "\n");
+                        // Finding 013: peek-and-append is ONE critical section.
+                        // push()'s outer peek is lock-free and races any writer
+                        // landing between it and this lock — re-verify the tail
+                        // HERE, under the same LOCK_EX that guards the write,
+                        // and drop a leading entry that became a duplicate in
+                        // the window. Same blank-skipping tail semantics as the
+                        // outer peek, so the two checks cannot disagree.
+                        $tail = $size > 0 ? self::tailLineOfStream($fp) : null;
+                        if ($tail !== null && $tail === self::escapeLine($lines[0])) {
+                            array_shift($lines);
                         }
-                        fflush($fp);
+                        if ($lines !== []) {
+                            fseek($fp, 0, SEEK_END);
+                            foreach ($lines as $line) {
+                                fwrite($fp, self::escapeLine($line) . "\n");
+                            }
+                            fflush($fp);
+                        }
                         flock($fp, LOCK_UN);
                         fclose($fp);
                         chmod($this->filePath, 0600);
@@ -373,6 +392,19 @@ final class FileHistory extends InMemoryHistory
             $existing = stream_get_contents($rp);
             fclose($rp);
             if ($existing !== false && $existing !== '') {
+                // Finding 013, rewrite arm: the tail is re-checked against the
+                // content read under the sidecar lock, exactly like the append
+                // fast path re-checks under LOCK_EX. The temp file is discarded
+                // untouched when that leaves nothing to append.
+                if ($lines !== [] && self::tailLineOfContent($existing) === self::escapeLine($lines[0])) {
+                    array_shift($lines);
+                }
+                if ($lines === []) {
+                    flock($fp, LOCK_UN);
+                    fclose($fp);
+                    @unlink($tempFile);
+                    return;
+                }
                 fwrite($fp, $existing);
                 // Ensure file ends with newline before appending.
                 if (substr($existing, -1) !== "\n") {
@@ -674,6 +706,25 @@ final class FileHistory extends InMemoryHistory
             fclose($fp);
             throw new \RuntimeException('sugar-readline: cannot acquire history read lock on ' . $this->filePath);
         }
+        $result = self::tailLineOfStream($fp);
+        flock($fp, LOCK_UN);
+        fclose($fp);
+
+        return $result;
+    }
+
+    /**
+     * Last content line of an open history stream, read back-to-front in
+     * bounded chunks — O(tail), and an arbitrarily long final line is still
+     * resolved by extending the window. Blank/newline-only trailing lines are
+     * skipped; null when the file holds no content line. The CALLER holds
+     * whatever lock makes the answer meaningful (LOCK_SH in peek, LOCK_EX in
+     * the append fast path — one implementation, no drift, finding 013).
+     *
+     * @param resource $fp
+     */
+    private static function tailLineOfStream($fp): ?string
+    {
         $stat = fstat($fp);
         $size = $stat !== false ? (int) ($stat['size'] ?? 0) : 0;
 
@@ -708,10 +759,25 @@ final class FileHistory extends InMemoryHistory
             // No delimiter yet and more file remains: the last line is longer
             // than the buffer so far — read another chunk further back.
         }
-        flock($fp, LOCK_UN);
-        fclose($fp);
 
         return ($result === null || $result === '') ? null : $result;
+    }
+
+    /**
+     * Same blank-skipping tail semantics as {@see tailLineOfStream()}, from a
+     * content string already in hand (the rewrite path reads the whole file
+     * under the sidecar lock anyway — no second windowed pass needed).
+     */
+    private static function tailLineOfContent(string $content): ?string
+    {
+        $trimmed = rtrim($content, "\r\n");
+        if ($trimmed === '') {
+            return null;
+        }
+        $nlPos = strrpos($trimmed, "\n");
+        $tail = $nlPos === false ? $trimmed : substr($trimmed, $nlPos + 1);
+
+        return $tail === '' ? null : $tail;
     }
 
     /**
