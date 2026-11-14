@@ -49,19 +49,48 @@ use SugarCraft\Image\TermDb;
  */
 final class Cli
 {
+    /** Last-resort answer for non-Composer runtime shapes (see runningVersion). */
     public const VERSION = '0.1.0';
 
     /**
      * The version this run reports: the phar archive's build stamp when
      * executing inside one (InstalledVersions lies under the frozen
-     * vendor/), else the compiled-in {@see VERSION} constant. The archive is
+     * vendor/), else what Composer's install metadata says the package IS,
+     * else the compiled-in {@see VERSION} constant. The archive is
      * identified by \Phar::running(false), which is exactly the real path the
      * \Phar constructor wants here (the class file only ever runs when
      * required from inside the archive, never as the stub itself).
      */
     public static function runningVersion(): string
     {
-        return Support\Version::resolve(\Phar::running(false) ?: '', self::VERSION);
+        return Support\Version::resolve(\Phar::running(false) ?: '', self::installedVersion());
+    }
+
+    /**
+     * The frozen VERSION constant rots the day a real tag ships: composer
+     * installs and git clones would keep reporting 0.1.0 while Packagist
+     * serves something else. InstalledVersions is derived from what actually
+     * got installed, so it answers `dev-master` in a checkout (today's only
+     * truth — no release exists), the real tag once one ships, and the
+     * constant survives purely as the last resort for non-Composer runtime
+     * shapes (preference order and dev-version honesty follow candy-top's
+     * Help::versionString precedent).
+     */
+    private static function installedVersion(): string
+    {
+        // Guarded, not assumed: vendoring this package under a non-Composer
+        // autoloader must make --version diagnostic, not fatal.
+        if (!\class_exists(\Composer\InstalledVersions::class)) {
+            return self::VERSION;
+        }
+
+        try {
+            $pretty = \Composer\InstalledVersions::getPrettyVersion('sugarcraft/candy-image');
+        } catch (\OutOfBoundsException) {
+            return self::VERSION;
+        }
+
+        return \is_string($pretty) && $pretty !== '' ? $pretty : self::VERSION;
     }
 
     public const EXIT_OK = 0;

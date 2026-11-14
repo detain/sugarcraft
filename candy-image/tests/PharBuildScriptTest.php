@@ -214,9 +214,10 @@ final class PharBuildScriptTest extends TestCase
 
         self::assertSame(0, $rc, "shim stderr: {$err}");
         self::assertSame('', $err);
-        // Byte-exact: the exit(Cli::main(...)) shim, the 'candy-image <v>'
-        // grammar, and the compiled VERSION (no archive => no stamp).
-        self::assertSame("candy-image " . \SugarCraft\CandyImage\Cli::VERSION . "\n", $out);
+        // Byte-exact: the exit(Cli::main(...)) shim and the 'candy-image <v>'
+        // grammar; outside an archive the number is Composer's install
+        // metadata (IMG-28), which for this dev checkout answers dev-master.
+        self::assertSame("candy-image dev-master\n", $out);
     }
 
     public function testTheBinShimAnswersHelpWithUsageOnStdout(): void

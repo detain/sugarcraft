@@ -108,8 +108,19 @@ final class CliTest extends TestCase
         [$exit, $out, $err] = self::drive(['--version']);
 
         $this->assertSame(Cli::EXIT_OK, $exit);
-        $this->assertSame('candy-image ' . Cli::VERSION . "\n", $out);
+        $this->assertSame('candy-image ' . Cli::runningVersion() . "\n", $out);
         $this->assertSame('', $err);
+    }
+
+    public function testRunningVersionFollowsComposerMetadataNotTheFrozenConstant(): void
+    {
+        // IMG-28 (candy-image-050): a frozen constant turns composer installs
+        // and git clones into liars the day a real tag ships. Outside an
+        // archive the installed version speaks — for this suite's own vendor
+        // tree (a dev checkout of the package as install root) that is
+        // 'dev-master'. The test RUNS inside the archive only in the phar
+        // smoke lanes, so the metadata arm is what answers here.
+        $this->assertSame('dev-master', Cli::runningVersion());
     }
 
     public function testMissingFileExitsUsageWithHelpOnStderr(): void
