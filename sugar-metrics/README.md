@@ -10,6 +10,8 @@
 [![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
+![showcase](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-metrics/.vhs/showcase.gif)
+
 Lightweight telemetry primitives for SugarCraft / SugarSshServer servers. Six instrument kinds — counters, gauges, histograms, up/down counters, async counters and async gauges — with pluggable backends and drop-in middleware for SSH session metrics.
 
 > Formerly published as `sugarcraft/candy-metrics` (renamed 2026-10). <!-- @rename-keep -->
