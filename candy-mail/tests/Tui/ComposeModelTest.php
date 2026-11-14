@@ -24,6 +24,7 @@ final class ComposeModelTest extends TestCase
     /** @var list<Email> */
     private array $sent = [];
 
+    /** @param array<string, string> $prefill field name => initial text (the shape ComposeModel::new consumes) */
     private function model(array $prefill = [], ?\Closure $send = null): ComposeModel
     {
         $send ??= function (Email $e): string {
