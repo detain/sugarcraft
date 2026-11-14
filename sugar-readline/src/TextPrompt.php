@@ -44,8 +44,15 @@ final class TextPrompt
     /** History search direction: toward newer entries (readline Ctrl+S). */
     public const SEARCH_FORWARD = -1;
 
-    /** Default rejection painted when a validator says no without a reason. */
-    private const INVALID_INPUT = 'Invalid input';
+    /**
+     * Default rejection painted when a validator says no without a reason.
+     * Rides the lang/ catalog (key text.invalid_input); en value is the
+     * original baked 'Invalid input' — zero render diff (S-09).
+     */
+    private static function invalidInputMessage(): string
+    {
+        return Lang::t('text.invalid_input');
+    }
 
     /** Text typed by the user. The label is rendered separately by {@see view()}. */
     private string $buffer = '';
@@ -553,7 +560,7 @@ final class TextPrompt
         try {
             $verdict = $validator($buffer);
         } catch (\Throwable) {
-            return self::INVALID_INPUT;
+            return self::invalidInputMessage();
         }
 
         if ($verdict === true) {
@@ -561,10 +568,10 @@ final class TextPrompt
         }
 
         if (is_string($verdict)) {
-            return $verdict === '' ? self::INVALID_INPUT : $verdict;
+            return $verdict === '' ? self::invalidInputMessage() : $verdict;
         }
 
-        return $verdict ? null : self::INVALID_INPUT;
+        return $verdict ? null : self::invalidInputMessage();
     }
 
     public function abort(): self
@@ -1023,8 +1030,10 @@ final class TextPrompt
      */
     private function searchView(): string
     {
-        $direction = $this->searchDirection === self::SEARCH_REVERSE ? 'reverse-i-search' : 'i-search';
-        $indicator = ($this->searchFailed ? 'failed ' : '') . $direction;
+        $direction = $this->searchDirection === self::SEARCH_REVERSE
+            ? Lang::t('text.search_reverse')
+            : Lang::t('text.search_forward');
+        $indicator = ($this->searchFailed ? Lang::t('text.search_failed') : '') . $direction;
         $labelRaw = Ansi::sanitize($this->label);
         $display = $this->hidden
             ? str_repeat($this->hideMask, self::charCount($this->buffer))

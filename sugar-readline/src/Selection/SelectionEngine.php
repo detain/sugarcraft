@@ -6,6 +6,7 @@ namespace SugarCraft\Readline\Selection;
 
 use SugarCraft\Readline\Ansi;
 use SugarCraft\Readline\Key;
+use SugarCraft\Readline\Lang;
 use SugarCraft\Readline\RowFit;
 
 /**
@@ -313,9 +314,9 @@ trait SelectionEngine
      */
     protected function renderFilterBar(): string
     {
-        $segments = [['[filter] ' . Ansi::sanitize($this->filter), null]];
+        $segments = [[Lang::t('selection.filter_prefix') . Ansi::sanitize($this->filter), null]];
         if ($this->filter !== '') {
-            $segments[] = [sprintf(' (%d match%s)', count($this->filtered), count($this->filtered) === 1 ? '' : 'es'), null];
+            $segments[] = [sprintf(Lang::t('selection.match_count'), count($this->filtered), count($this->filtered) === 1 ? '' : 'es'), null];
         }
         return RowFit::row($segments, $this->displayWidth);
     }

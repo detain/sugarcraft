@@ -23,6 +23,7 @@ sugar-readline — an interactive line-editing prompt library for terminal UIs o
 - **Immutable state** — every input-handling method returns a new instance; `view()` returns the ANSI string while each prompt exposes its own data accessor (`value()` on TextPrompt/TextareaPrompt, `selectedValue()` on SelectionPrompt, `selectedValues()` on MultiSelectPrompt, `result()` on ConfirmationPrompt), and the `Readline` pump owns all terminal writes
 - **Vim keybindings** — vi-mode (Insert/Normal, plus a motion-only Visual scaffold); `ViMode` delegates its key-to-operation mapping to `VimKeyHandler` in `sugar-forms` — the same handler that the `sugar-forms` widgets drive and whose widgets `sugar-widgets` re-exports through its `class_alias` facade; new bindings in the `VimAction` enum land in `sugar-forms` and benefit all three libs. Includes text objects: `ci"`, `di(`, `da{`, `yiw` and friends, with a working unnamed register (`x`/`dd`/`yy`/text-object yanks feed `p`)
 - **NO_COLOR respected** — when the `NO_COLOR` environment variable is set to a non-empty value, every decoration (colour and style alike) falls away and prompts print as plain text
+- **Translated chrome** — filter bar, page footer, Yes/No, the search indicator and the default validation message ride a `lang/` catalog (namespace `readline`); your labels, choices and validator messages stay opaque (see Internationalization)
 - **Terminal requirements** — the `Readline` pump repaints every frame with cursor escapes it emits unconditionally: carriage-return `\r`, cursor-up `CSI nA`, and clear-below `CSI 0J` (Ctrl+L adds `CSI 2J CSI H`). A real terminal consumes them silently; under `TERM=dumb` and inside some assistive or logging wrappers they pile up as visible noise — on those surfaces drive the prompts as pure state machines instead (see the Quick Start's terminal-free shape)
 
 ## Install
@@ -576,6 +577,28 @@ Each prompt is a state machine with three states: pending, submitted, aborted.
 - `isSubmitted()` / `isAborted()` report status. `currentValue()` (Confirmation) always reflects the current choice, submitted or not. `selectedValue()` (Selection) tracks the cursor while one exists, but returns `null` after an abort and whenever the filter matches no choice — with no cursor to point at, there is no value to report, submitted state or not.
 - True end-of-input: when `Readline` owns the stdin pump and the stream reaches EOF after the decoder drains, `run()` returns the prompt in its current state — neither submitted nor aborted. The pump is per-`Readline`-instance, **not** per-`run()`: calling `run()` again feeds the next prompt from wherever the stream stands, so `printf 'a\nb\n' | php app.php` drives two successive prompts with `a` and `b`; once EOF is seen it stays seen. Injected drivers report EOF and "nothing yet" identically, so they cannot trigger this exit; end those loops by submitting, aborting, or `stop()`.
 - `stop()` requests the loop exit; it lands within one idle poll interval (capped at 20 ms) **when the driver's read is non-blocking** (`min 1 time 0`, or an injected driver that returns `null` promptly). A driver blocking in `read()` is not interrupted — the stop takes effect on the first pass after it wakes.
+
+## Internationalization
+
+The painted chrome — filter bar, page footer, `(no matches)`, Yes/No labels,
+the search indicator, the default validation message — is translated. User
+content is not: labels, choices, and your validator's own rejection strings
+are opaque strings; translating them is your layer's job. A `examples/`-style
+host that wants localized prompts supplies them pre-localized.
+
+- The catalog lives in `lang/en.php` (source of truth, per `LOCALES.md`)
+  with the fleet's 16 sibling locales. `SugarCraft\Readline\Lang::t($key)`
+  is the internal facade over the shared `SugarCraft\Core\I18n\T` registry,
+  namespace `readline`.
+- Lookup follows the house law: exact locale → base language (so `fr.php`
+  covers `fr-ca`) → `en` → the raw key, which makes a missing translation
+  surface visibly instead of rendering blank.
+- Switch languages with `T::setLocale('de')` (process-wide) or per call via
+  `T::t('readline.confirm.yes', [], 'ja')`. Applications re-theme any string
+  with `T::overrideNamespace('readline', $dir)`.
+- `'confirm.hint'` stays `[y/n]` in every locale: it names the literal keys
+  you press, not a word. The match-count line currently carries English
+  plural morphology; full per-language count keys are a known follow-up.
 
 ## Accessor deprecation (2026-10-24)
 

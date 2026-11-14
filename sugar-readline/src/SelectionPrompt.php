@@ -84,7 +84,7 @@ final class SelectionPrompt
         $lines[] = $this->renderFilterBar();
 
         if ($this->filtered === []) {
-            $lines[] = RowFit::row([['(no matches)', null]], $bound);
+            $lines[] = RowFit::row([[Lang::t('selection.no_matches'), null]], $bound);
             return implode("\n", $lines);
         }
 
@@ -98,7 +98,7 @@ final class SelectionPrompt
         }
 
         if ($this->totalPages() > 1) {
-            $lines[] = RowFit::row([[sprintf('Page %d/%d', $this->page + 1, $this->totalPages()), null]], $bound);
+            $lines[] = RowFit::row([[sprintf(Lang::t('selection.page'), $this->page + 1, $this->totalPages()), null]], $bound);
         }
 
         return implode("\n", $lines);

@@ -143,19 +143,19 @@ final class MultiSelectPrompt
         $bound = $this->displayWidth;
         $lines = [RowFit::row([[Ansi::sanitize($this->label), $this->labelStyle]], $bound)];
 
-        $hintSegments = [[sprintf('[multi-select] selected: %d', count($this->marked)), null]];
+        $hintSegments = [[sprintf(Lang::t('multiselect.selected'), count($this->marked)), null]];
         if ($this->minSelect > 0) {
-            $hintSegments[] = [sprintf(' (min %d)', $this->minSelect), null];
+            $hintSegments[] = [sprintf(Lang::t('multiselect.min'), $this->minSelect), null];
         }
         if ($this->maxSelect > 0) {
-            $hintSegments[] = [sprintf(' (max %d)', $this->maxSelect), null];
+            $hintSegments[] = [sprintf(Lang::t('multiselect.max'), $this->maxSelect), null];
         }
         $lines[] = RowFit::row($hintSegments, $bound);
 
         $lines[] = $this->renderFilterBar();
 
         if ($this->filtered === []) {
-            $lines[] = RowFit::row([['(no matches)', null]], $bound);
+            $lines[] = RowFit::row([[Lang::t('selection.no_matches'), null]], $bound);
             return implode("\n", $lines);
         }
 
@@ -169,7 +169,7 @@ final class MultiSelectPrompt
         }
 
         if ($this->totalPages() > 1) {
-            $lines[] = RowFit::row([[sprintf('Page %d/%d', $this->page + 1, $this->totalPages()), null]], $bound);
+            $lines[] = RowFit::row([[sprintf(Lang::t('selection.page'), $this->page + 1, $this->totalPages()), null]], $bound);
         }
 
         return implode("\n", $lines);

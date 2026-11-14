@@ -23,9 +23,16 @@ final class ConfirmationPrompt
     /** Opt-in y/n-commits-immediately; OFF preserves the Enter-to-commit contract. */
     private bool $autoSubmit = false;
 
-    private string $confirmLabel = 'Yes';
-    private string $cancelLabel  = 'No';
-    private string $hint         = '[y/n]';
+    /**
+     * Chrome labels ride the lang/ catalog; null = "unoverridden" (render
+     * Lang::t), an explicit string — including '' — is opaque host text and
+     * renders as given. The nullable-sentinel exemption (AGENTS: null is
+     * itself the meaning) is why these are ?string and not translated
+     * property defaults: PHP property initialisers cannot call Lang::t().
+     */
+    private ?string $confirmLabel = null;
+    private ?string $cancelLabel  = null;
+    private ?string $hint         = null;
     private string $labelStyle    = '1;36';
     private string $selectedStyle = '1;32';
 
@@ -165,12 +172,16 @@ final class ConfirmationPrompt
 
     public function view(): string
     {
+        // null = unoverridden -> catalog chrome (byte-identical to the old
+        // baked 'Yes'/'No'/'[y/n]' under the default en locale).
+        $yesLabel = $this->confirmLabel ?? Lang::t('confirm.yes');
+        $noLabel  = $this->cancelLabel ?? Lang::t('confirm.no');
         $yes = $this->value
-            ? ['[' . Ansi::sanitize($this->confirmLabel) . ']', $this->selectedStyle]
-            : [' ' . Ansi::sanitize($this->confirmLabel) . ' ', null];
+            ? ['[' . Ansi::sanitize($yesLabel) . ']', $this->selectedStyle]
+            : [' ' . Ansi::sanitize($yesLabel) . ' ', null];
         $no  = !$this->value
-            ? ['[' . Ansi::sanitize($this->cancelLabel) . ']', $this->selectedStyle]
-            : [' ' . Ansi::sanitize($this->cancelLabel) . ' ', null];
+            ? ['[' . Ansi::sanitize($noLabel) . ']', $this->selectedStyle]
+            : [' ' . Ansi::sanitize($noLabel) . ' ', null];
 
         return RowFit::row([
             [Ansi::sanitize($this->label), $this->labelStyle],
@@ -179,7 +190,7 @@ final class ConfirmationPrompt
             [' / ', null],
             $no,
             [' ', null],
-            [Ansi::sanitize($this->hint), null],
+            [Ansi::sanitize($this->hint ?? Lang::t('confirm.hint')), null],
         ], $this->displayWidth);
     }
 
