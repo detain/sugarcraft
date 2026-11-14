@@ -633,4 +633,123 @@ final class CliTest extends TestCase
             $this->restoreColumnsLines($stashed);
         }
     }
+
+    /**
+     * A userland stream whose writes are always accepted, but only half at
+     * a time: the loop drives every payload to a deterministic 1-byte
+     * shortfall with zero warnings — the delivery-accounting contract
+     * without a pipe-buffer race.
+     */
+    private static function halfDeliveringStream()
+    {
+        $definition = <<<'PHP'
+            final class CandyImageHalfWriter
+            {
+                public $context;
+
+                public function stream_open(string $path, string $mode, int $options, ?string &$opened_path): bool
+                {
+                    return true;
+                }
+
+                public function stream_write(string $data): int
+                {
+                    return (int) floor(strlen($data) / 2);
+                }
+
+                public function stream_close(): void
+                {
+                }
+            }
+            PHP;
+        if (!class_exists('CandyImageHalfWriter', false)) {
+            eval($definition);
+        }
+
+        $unique = 'cimg-half-' . bin2hex(random_bytes(4));
+        $registered = stream_wrapper_register($unique, 'CandyImageHalfWriter');
+        self::assertTrue($registered);
+        $stream = fopen($unique . '://render', 'w');
+        self::assertIsResource($stream);
+
+        return $stream;
+    }
+
+    public function testStillRenderWithShortDeliveryExitsDeliveryFailure(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('ext-gd is required to mint the fixture.');
+        }
+
+        $path = tempnam(sys_get_temp_dir(), 'sc_candyimage_') . '.png';
+        $this->artifacts[] = $path;
+        $im = imagecreatetruecolor(16, 8);
+        imagefilledrectangle($im, 0, 0, 15, 7, imagecolorallocate($im, 10, 120, 200));
+        imagepng($im, $path);
+
+        [, $stderr] = self::pipes();
+        $exit = Cli::main(['candy-image', '--format=ascii', $path], self::halfDeliveringStream(), $stderr);
+
+        $this->assertSame(Cli::EXIT_INPUT, $exit, 'a render that does not fully land must not exit 0');
+        $this->assertStringContainsString('write failed', self::drain($stderr));
+    }
+
+    public function testDumpDetectWithShortDeliveryExitsDeliveryFailure(): void
+    {
+        [, $stderr] = self::pipes();
+        $exit = Cli::main(['candy-image', '--dump-detect'], self::halfDeliveringStream(), $stderr);
+
+        $this->assertSame(Cli::EXIT_INPUT, $exit);
+        $err = self::drain($stderr);
+        $this->assertStringContainsString('write failed', $err);
+        $this->assertLessThanOrEqual(1, substr_count($err, 'write failed'), 'once the reader is gone the dump stops stacking shortfalls');
+    }
+
+    /**
+     * The candy-image-011 repro: a huge render piped to a reader that stops
+     * early. PHP ignores SIGPIPE, so the child learns about the closed
+     * reader only through the delivery accounting — exit 2 with
+     * 'write failed' on stderr. If the machine finishes the whole payload
+     * into the pipe before the reader closes, there is nothing to fail and
+     * the test skips.
+     */
+    public function testRenderIntoEarlyClosedPipeExitsNonzero(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('ext-gd is required to mint the fixture.');
+        }
+
+        $path = tempnam(sys_get_temp_dir(), 'sc_candyimage_') . '.png';
+        $this->artifacts[] = $path;
+        $im = imagecreatetruecolor(64, 48);
+        imagefilledrectangle($im, 0, 0, 63, 47, imagecolorallocate($im, 200, 30, 90));
+        imagepng($im, $path);
+
+        $proc = proc_open(
+            [\PHP_BINARY, __DIR__ . '/../bin/candy-image', '--format=ascii', '--size=2000x1500', $path],
+            ['1' => ['pipe', 'w'], '2' => ['pipe', 'w']],
+            $pipes,
+            \dirname(__DIR__),
+        );
+        self::assertIsResource($proc);
+
+        // Close the read end while the payload is still in flight.
+        $seen = (string) stream_get_contents($pipes[1], 4096);
+        fclose($pipes[1]);
+
+        $stderr = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[2]);
+        $status = proc_get_status($proc);
+        if ($status['running']) {
+            proc_terminate($proc);
+        }
+        $rc = proc_close($proc);
+
+        if ($rc === 0) {
+            $this->markTestSkipped('the whole payload was delivered before the reader closed; nothing to fail on this run');
+        }
+
+        $this->assertSame(Cli::EXIT_INPUT, $rc, 'truncated delivery must exit 2 — stderr was: ' . $stderr . ' — stdout prefix was: ' . $seen);
+        $this->assertStringContainsString('write failed', $stderr);
+    }
 }

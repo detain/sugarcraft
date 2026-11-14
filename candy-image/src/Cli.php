@@ -309,7 +309,7 @@ final class Cli
 
         try {
             if ($dump) {
-                return self::dumpDetect($stdout);
+                return self::dumpDetect($stdout, $stderr);
             }
 
             if ($file === null) {
@@ -376,9 +376,14 @@ final class Cli
                 return self::EXIT_INPUT;
             }
 
-            \fwrite($stdout, $bytes);
-            if (!str_ends_with($bytes, "\n")) {
-                \fwrite($stdout, "\n");
+            $delivery = self::writePayload($stdout, $bytes);
+            if ($delivery === null && !str_ends_with($bytes, "\n")) {
+                $delivery = self::writePayload($stdout, "\n");
+            }
+            if ($delivery !== null) {
+                self::err($stderr, $delivery);
+
+                return self::EXIT_INPUT;
             }
 
             return self::EXIT_OK;
@@ -397,7 +402,32 @@ final class Cli
      */
     private static function err($stderr, string $message): void
     {
-        \fwrite($stderr, Sanitize::untrusted($message) . "\n");
+        // Best-effort by construction: stderr IS the last channel, so a
+        // failed write here has nowhere left to report itself — the
+        // accounting lives in writePayload's return for the payload lanes.
+        self::writePayload($stderr, Sanitize::untrusted($message) . "\n");
+    }
+
+    /**
+     * Delivery-accounted payload write. PHP ignores SIGPIPE, so a render
+     * truncated by an early-closed reader (`… | head -c10`) would
+     * otherwise exit 0 with half its bytes delivered: every payload
+     * fwrite's return must agree with strlen, or the caller reports the
+     * shortfall and exits 2 (the delivery-failure class — a new code
+     * would breach the documented 0/1/2 contract). Help and version
+     * writes stay unguarded on purpose: one cosmetic line into a closed
+     * pager is not worth a branch. Returns null when the whole payload
+     * landed, the human-readable failure otherwise.
+     *
+     * @param resource $stream
+     */
+    private static function writePayload($stream, string $bytes): ?string
+    {
+        $written = @\fwrite($stream, $bytes);
+
+        return $written === \strlen($bytes)
+            ? null
+            : 'write failed: ' . ($written === false ? 0 : $written) . '/' . \strlen($bytes) . ' bytes delivered';
     }
 
     /**
@@ -407,11 +437,16 @@ final class Cli
      * Detect capability, DA1 reply, auto() selection, palette report.
      *
      * @param resource $stdout
+     * @param resource $stderr
      */
-    private static function dumpDetect($stdout): int
+    private static function dumpDetect($stdout, $stderr): int
     {
-        $write = static function (string $line) use ($stdout): void {
-            \fwrite($stdout, Sanitize::untrusted($line) . "\n");
+        $failure = null;
+        $write = static function (string $line) use ($stdout, &$failure): void {
+            if ($failure !== null) {
+                return; // the reader is gone; every later line would just stack shortfalls
+            }
+            $failure = self::writePayload($stdout, Sanitize::untrusted($line) . "\n");
         };
 
         $write('candy-image ' . self::runningVersion() . ' — terminal detection dump');
@@ -457,6 +492,12 @@ final class Cli
             $write('palette: ' . ($lines === [] ? '(no capabilities)' : implode(', ', $lines)));
         } catch (\Throwable) {
             $write('palette: (probe failed)');
+        }
+
+        if ($failure !== null) {
+            self::err($stderr, $failure);
+
+            return self::EXIT_INPUT;
         }
 
         return self::EXIT_OK;
