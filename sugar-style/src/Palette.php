@@ -14,6 +14,14 @@ use SugarCraft\Core\Util\Color;
  * Each colour factory returns a fresh {@see Color} value. This is a thin
  * convenience wrapper so callers don't need to remember the 16 ANSI indices;
  * use `Color::rgb()` / `Color::hex()` / `Color::hsl()` for everything else.
+ * Positioning notes (finding 051): the real polarity signal arrives through
+ * sugar-core's {@see \SugarCraft\Core\Msg\BackgroundColorMsg::isDark()} and
+ * the `COLORFGBG` read in {@see Theme::adaptive()}, and the named theme
+ * rosters live in sugar-core's {@see \SugarCraft\Core\Util\Palettes} — this
+ * class is neither, and {@see self::hasDarkBackground()} is only a forward
+ * to {@see Color::isDark()}. Folding that forward into core (or deleting it
+ * in favour of `Color::isDark()`) is a delegation candidate for 2.0 under
+ * the owner ruling; the default is to keep the notes and the surface.
  *
  * Example:
  *

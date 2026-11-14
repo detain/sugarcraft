@@ -389,7 +389,11 @@ echo Tree::new()
   **Layout helpers**). `Palette::hasDarkBackground(?Color $background)`
   answers `true`/`false` for a *given* background colour and returns `null`
   when you pass `null` (meaning “unknown — don't switch schemes”); it does
-  not probe the terminal by itself.
+  not probe the terminal by itself — it is a thin forward to
+  `Color::isDark()`, while the real detection rides sugar-core's
+  `BackgroundColorMsg::isDark()` plus the `COLORFGBG` read in
+  `Theme::adaptive()`, and the named theme rosters live in sugar-core's
+  `Util\Palettes`.
 - **`UnderlineStyle`** — enum (None / Single / Double / Curly /
   Dotted / Dashed) for SGR `4:N` sub-style emit. `Style::underlineStyle()`
   with a non-None shape also switches `underline()` on (a later
