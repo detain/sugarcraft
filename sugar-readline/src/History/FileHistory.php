@@ -76,6 +76,13 @@ namespace SugarCraft\Readline\History;
  * rename swap itself is not journaled from PHP: a crash landing exactly
  * across the switch can roll the file back to its previous version,
  * never surface a torn line as history.
+ *
+ * A failed LOCK_SH on the read paths (finding 068) means the filesystem
+ * cannot do advisory locks at all - an active writer makes the blocking
+ * call wait, not fail - so load() and the duplicate guard's peek degrade
+ * to an unlocked read with a once-per-store error_log disclosure instead
+ * of denying a view the rename-atomic content makes safe. Writers stay
+ * fail-closed: they cannot serialize without the lock.
  */
 final class FileHistory extends InMemoryHistory
 {
@@ -99,6 +106,9 @@ final class FileHistory extends InMemoryHistory
 
     /** @var int Entries evicted from memory since the last bounded trim rewrite (finding 016). */
     private int $trimOverflow = 0;
+
+    /** @var bool The read-lock degradation of finding 068 has been disclosed (once per store). */
+    private bool $readLockDegraded = false;
 
     /**
      * @param string $filePath    Path to the history file.  Created automatically if absent.
@@ -797,6 +807,22 @@ final class FileHistory extends InMemoryHistory
         }
     }
 
+    /**
+     * Disclose the read-lock degradation exactly once per store (finding
+     * 068). error_log, not an exception: the constructor path that first
+     * trips this cannot deny the caller a view the file is safe to give,
+     * and a per-read notice would turn a filesystem limitation into
+     * output spam. The flag makes the repeat cost a bool test.
+     */
+    private function noteReadLockDegraded(): void
+    {
+        if ($this->readLockDegraded) {
+            return;
+        }
+        $this->readLockDegraded = true;
+        error_log('sugar-readline: history read lock unavailable on ' . $this->filePath . '; continuing with unlocked reads (disclosed once per store)');
+    }
+
     /** Encode one entry for the history file (backslash escapes, bash-style). */
     private static function escapeLine(string $line): string
     {
@@ -858,9 +884,15 @@ final class FileHistory extends InMemoryHistory
         if ($fp === false) {
             return;
         }
-        if (!flock($fp, LOCK_SH)) {
-            fclose($fp);
-            throw new \RuntimeException('sugar-readline: cannot acquire history read lock on ' . $this->filePath);
+        // Degrade-not-deny (finding 068): a LOCK_SH that FAILS means the
+        // filesystem cannot do advisory locks at all — an active writer makes
+        // this blocking call WAIT, not fail. rename-atomic content is safe to
+        // read unlocked (at worst a stale version, never a torn one), so the
+        // reader discloses once and proceeds; writers keep fail-closed because
+        // they cannot serialize without the lock.
+        $locked = flock($fp, LOCK_SH);
+        if (!$locked) {
+            $this->noteReadLockDegraded();
         }
         $lines = [];
         while (($line = fgets($fp)) !== false) {
@@ -875,7 +907,9 @@ final class FileHistory extends InMemoryHistory
                 $lines[] = $decoded;
             }
         }
-        flock($fp, LOCK_UN);
+        if ($locked) {
+            flock($fp, LOCK_UN);
+        }
         fclose($fp);
 
         // File is oldest→newest; parent::push() prepends (newest-first), so
@@ -917,12 +951,17 @@ final class FileHistory extends InMemoryHistory
         if ($fp === false) {
             return null;
         }
-        if (!flock($fp, LOCK_SH)) {
-            fclose($fp);
-            throw new \RuntimeException('sugar-readline: cannot acquire history read lock on ' . $this->filePath);
+        // Degrade-not-deny (finding 068) — see load() for the law; a failed
+        // LOCK_SH here likewise means a filesystem that cannot lock, so the
+        // tail peek proceeds unlocked after the once-per-store disclosure.
+        $locked = flock($fp, LOCK_SH);
+        if (!$locked) {
+            $this->noteReadLockDegraded();
         }
         $result = self::tailLineOfStream($fp);
-        flock($fp, LOCK_UN);
+        if ($locked) {
+            flock($fp, LOCK_UN);
+        }
         fclose($fp);
 
         return $result;
@@ -933,7 +972,8 @@ final class FileHistory extends InMemoryHistory
      * bounded chunks — O(tail), and an arbitrarily long final line is still
      * resolved by extending the window. Blank/newline-only trailing lines are
      * skipped; null when the file holds no content line. The CALLER holds
-     * whatever lock makes the answer meaningful (LOCK_SH in peek, LOCK_EX in
+     * whatever lock makes the answer meaningful (LOCK_SH in peek, or unlocked
+      * under the finding-068 read degradation, LOCK_EX in
      * the append fast path — one implementation, no drift, finding 013).
      *
      * @param resource $fp

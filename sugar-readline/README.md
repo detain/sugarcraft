@@ -569,6 +569,13 @@ writers `fsync` the content bytes before releasing the lock (where PHP exposes
 `fsync`), so a process death cannot leave a half-flushed tail; a crash
 straddling the rename swap can roll the file back to the previous version but
 never surfaces a torn line — readers drop an unterminated final line.
+Reads themselves **degrade, not deny**: on a filesystem where `flock` fails
+outright (NFS without lockd, some FUSE/9p/container mounts — an active
+writer makes the blocking call *wait*, never fail), `load()` and the
+duplicate guard's peek proceed **unlocked** with a one-time `error_log`
+disclosure per store, because rename-atomic content is safe to read without
+the advisory lock (at worst a stale version). Writers keep the fail-closed
+contract: without a usable lock they cannot serialize, so they still throw.
 
 Hidden prompts (`withHidden()`) never push their value: a secret stays out of
 both in-memory and on-disk history, and it never enters an attached
