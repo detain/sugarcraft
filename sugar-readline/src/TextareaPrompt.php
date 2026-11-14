@@ -169,7 +169,7 @@ final class TextareaPrompt implements PromptInterface, SizingInterface
      */
     public function insertPastedText(string $text): self
     {
-        $clean = \preg_replace('/[\x00-\x08\x0b-\x1f\x7f]/u', '', $text) ?? '';
+        $clean = Ansi::sanitize($text);
         if ($clean === '') {
             return $this;
         }

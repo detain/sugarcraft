@@ -935,6 +935,7 @@ goes red.
 | `Styles::LABEL` / `CURSOR` / `ERROR` / `COMPLETION` / `SELECTED` | the shared default SGR codes |
 | `Styles::code()` | `Style|string` → SGR code; refuses non-collapsible styles loudly |
 | `Ansi::sanitize()` | strips control bytes from host-supplied content |
+| `Ansi::sanitizeForSingleLine()` | the same sweep, with LF eaten too — a pasted newline must not forge a submit in a one-line prompt |
 | `Ansi::wrap()` | paints a code over text |
 | `RowFit::row()` | cell-clips a segment run to a width |
 | `RowFit::clip()` | single-cell clipping helper |

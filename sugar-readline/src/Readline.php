@@ -868,7 +868,7 @@ final class Readline
                     // Prompts without the seam (custom callers): insert the
                     // pasted run as plain text, never as keystrokes —
                     // control bytes stripped so the paste cannot forge keys.
-                    $sanitized = preg_replace('/[\x00-\x08\x0b-\x1f\x7f]/', '', $event->content) ?? '';
+                    $sanitized = Ansi::sanitize($event->content);
                     foreach (mb_str_split($sanitized, 1, 'UTF-8') as $char) {
                         $next = $prompt->handleChar($char);
                         if (is_callable([$next, 'isSubmitted']) && $next->isSubmitted()) {

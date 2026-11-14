@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Readline\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\Util\Ansi as CoreAnsi;
 use SugarCraft\Readline\Ansi;
 
 final class AnsiTest extends TestCase
@@ -124,5 +125,24 @@ final class AnsiTest extends TestCase
     public function testSanitizeKeepsMultibyteText(): void
     {
         $this->assertSame('héllo ✓', Ansi::sanitize('héllo ✓'));
+    }
+
+    public function testTheSingleLineVariantEatsTheLineFeedAndNothingElse(): void
+    {
+        // The whole divergence from the multi-line posture is LF: a pasted
+        // newline must not forge a submit in a one-line prompt. TAB survives.
+        $dirty = "keep\x00\x07\x09tail\x0aend\x0d\x7f";
+        $this->assertSame("keep\ttailend", Ansi::sanitizeForSingleLine($dirty));
+        $this->assertSame("keeptail\nend", Ansi::sanitize("keep\x07tail\x0aend"));
+    }
+
+    public function testTheWrapComposesCanonicalCoreSequences(): void
+    {
+        // S-48: the decoration bytes come from the fleet's canonical source,
+        // not a re-spelling — byte equality with the core helpers is the pin.
+        $this->assertSame(
+            CoreAnsi::sgr(1, 31) . 'error' . CoreAnsi::reset(),
+            Ansi::wrap('error', '1;31'),
+        );
     }
 }

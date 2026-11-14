@@ -524,7 +524,7 @@ final class TextPrompt implements PromptInterface, SizingInterface
     {
         // Single-line prompt: drop every control byte except TAB — including
         // newlines, which would otherwise forge a multi-line value.
-        $clean = preg_replace('/[\x00-\x08\x0a-\x1f\x7f]/u', '', $text) ?? '';
+        $clean = Ansi::sanitizeForSingleLine($text);
         if ($clean === '') {
             return $this;
         }
