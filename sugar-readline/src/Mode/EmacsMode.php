@@ -233,7 +233,7 @@ final class EmacsMode implements ModeInterface
             $cursor++;
         }
 
-        return $this->moveCursorTo($prompt, $cursor);
+        return $prompt->withCursor($cursor);
     }
 
     private function wordBack(TextPrompt $prompt): TextPrompt
@@ -254,28 +254,13 @@ final class EmacsMode implements ModeInterface
             $cursor--;
         }
 
-        return $this->moveCursorTo($prompt, $cursor);
+        return $prompt->withCursor($cursor);
     }
 
     private function isWordChar(string $buffer, int $pos): bool
     {
         $char = mb_substr($buffer, $pos, 1, 'UTF-8');
         return $char !== '' && preg_match('/[a-zA-Z0-9_\p{L}]/u', $char) === 1;
-    }
-
-    private function moveCursorTo(TextPrompt $prompt, int $position): TextPrompt
-    {
-        $current = $prompt->cursor();
-        $delta = $position - $current;
-        if ($delta === 0) {
-            return $prompt;
-        }
-        $key = $delta < 0 ? Key::Left : Key::Right;
-        $count = abs($delta);
-        foreach (range(1, $count) as $_) {
-            $prompt = $prompt->handleKeyDirect($key);
-        }
-        return $prompt;
     }
 
     // -------------------------------------------------------------------------
@@ -306,20 +291,9 @@ final class EmacsMode implements ModeInterface
             return $prompt;
         }
 
-        // Delete from $start to $cursor using handleKeyDirect to avoid re-entry
-        $clone = clone $prompt;
-        $clone = $clone->handleKeyDirect(Key::Home); // move to start
-        // Walk cursor from home to $start
-        for ($i = 0; $i < $start; $i++) {
-            $clone = $clone->handleKeyDirect(Key::Right);
-        }
-        // Now delete everything from $start to original cursor
-        $diff = $cursor - $start;
-        for ($i = 0; $i < $diff; $i++) {
-            $clone = $clone->handleKeyDirect(Key::Delete);
-        }
-
-        return $clone;
+        // One atomic kill: a single undo frame for the whole word
+        // (finding 017 - the old replay pushed one frame per character).
+        return $prompt->deleteRange($start, $cursor);
     }
 
     private function deleteWordAfter(TextPrompt $prompt): TextPrompt
@@ -347,13 +321,9 @@ final class EmacsMode implements ModeInterface
             return $prompt;
         }
 
-        // Apply the deletion by calling handleKeyDirect to avoid re-entry
-        $diff = $end - $cursor;
-        $p = $prompt;
-        for ($i = 0; $i < $diff; $i++) {
-            $p = $p->handleKeyDirect(Key::Delete);
-        }
-        return $p;
+        // One atomic kill (deleteRange keeps the cursor at $cursor -
+        // exactly where the replay chain left it, but in one undo frame).
+        return $prompt->deleteRange($cursor, $end);
     }
 
     // -------------------------------------------------------------------------
@@ -370,9 +340,9 @@ final class EmacsMode implements ModeInterface
      *   and leave the cursor at end of line.
      * - Empty buffer, single character, or cursor at column 0: no-op.
      *
-     * Implemented as a key replay (rewind to the pair, two Deletes, two
-     * inserts) so buffer/cursor/undo stay inside TextPrompt's own mutation
-     * path — modes never touch prompt state directly.
+     * Implemented as one range-delete of the pair plus two re-inserts, so
+     * buffer/cursor/undo stay inside TextPrompt's own mutation path — modes
+     * never touch prompt state directly.
      */
     private function transposeChars(TextPrompt $prompt): TextPrompt
     {
@@ -394,20 +364,13 @@ final class EmacsMode implements ModeInterface
         $first  = mb_substr($buffer, $pairStart, 1, 'UTF-8');
         $second = mb_substr($buffer, $pairStart + 1, 1, 'UTF-8');
 
-        // Rewind to the pair start, delete both characters forward, then
-        // re-insert them swapped. Each Delete consumes the character AT the
-        // cursor, and each handleChar appends at the cursor, so the cursor
-        // lands immediately after the swapped pair.
-        $p = $prompt->handleKeyDirect(Key::Home);
-        for ($i = 0; $i < $pairStart; $i++) {
-            $p = $p->handleKeyDirect(Key::Right);
-        }
-        $p = $p->handleKeyDirect(Key::Delete);
-        $p = $p->handleKeyDirect(Key::Delete);
-        $p = $p->handleChar($second);
-        $p = $p->handleChar($first);
+        // Delete the pair as one range, then re-insert it swapped: each
+        // handleChar appends at the cursor, so the cursor lands right
+        // after the swapped pair - the same terminal state the old
+        // Home+Right+Delete replay produced, without its per-column clones.
+        $p = $prompt->deleteRange($pairStart, $pairStart + 2);
 
-        return $p;
+        return $p->handleChar($second)->handleChar($first);
     }
 
     // -------------------------------------------------------------------------

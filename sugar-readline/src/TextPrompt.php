@@ -1176,6 +1176,62 @@ final class TextPrompt
         return [$window, $windowCursor];
     }
 
+    /**
+     * Delete the codepoint range [from, to) in ONE snapshot.
+     *
+     * The atomic-kill law (GNU readline): a kill is a single edit - one
+     * undo frame, never a replay of per-character Deletes that would make
+     * the user mash Ctrl+Z to walk it back. Modes and hosts use this
+     * instead of synthesising motion+Delete key sequences; the default
+     * map's word-kill is the same shape implemented over the buffer
+     * directly (see deleteWordBefore).
+     *
+     * Both bounds are clamped to the buffer; an empty or inverted range
+     * returns the prompt untouched (no undo frame is pushed). The cursor
+     * lands at `from`, where the deleted text used to start.
+     */
+    public function deleteRange(int $from, int $to): self
+    {
+        $len = self::charCount($this->buffer);
+        $from = max(0, min($len, $from));
+        $to = max(0, min($len, $to));
+        if ($to <= $from) {
+            return $this;
+        }
+
+        $clone = clone $this;
+        $this->pushUndoOn($clone);
+        $clone->buffer = self::sliceChars($this->buffer, 0, $from)
+            . self::sliceChars($this->buffer, $to);
+        $clone->cursor = $from;
+        $clone->error = '';
+
+        return $clone;
+    }
+
+    /**
+     * Jump the caret straight to a codepoint index - O(1), not a replay of
+     * Left/Right presses (finding 017: word motions under EmacsMode walked
+     * one clone per column). Clamped to the buffer; a no-op jump returns
+     * the same instance. As with the arrow keys, a caret jump closes any
+     * open insert run so typing after it starts a fresh undo segment.
+     */
+    public function withCursor(int $position): self
+    {
+        $clamped = max(0, min(self::charCount($this->buffer), $position));
+        if ($clamped === $this->cursor) {
+            return $this;
+        }
+
+        $clone = clone $this;
+        $clone->cursor = $clamped;
+        // A caret jump closes any open insert run: typing after it starts
+        // a fresh undo segment rather than folding into the previous run.
+        $clone->undoRunEnd = -1;
+
+        return $clone;
+    }
+
     private function moveCursor(int $delta): self
     {
         $target = $this->cursor + $delta;
@@ -1184,16 +1240,7 @@ final class TextPrompt
 
     private function moveCursorTo(int $position): self
     {
-        $clamped = max(0, min(self::charCount($this->buffer), $position));
-        if ($clamped === $this->cursor) {
-            return $this;
-        }
-        $clone = clone $this;
-        $clone->cursor = $clamped;
-        // A caret jump closes any open insert run: typing after it starts a
-        // fresh undo segment rather than folding into the previous run.
-        $clone->undoRunEnd = -1;
-        return $clone;
+        return $this->withCursor($position);
     }
 
     private function deleteBeforeCursor(): self
