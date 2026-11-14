@@ -224,5 +224,29 @@ final class RendererSanitizeTest extends TestCase
         $this->assertStringNotContainsString("\x1b[0mirsubject", $out, 'subject must never sit outside the band');
         $this->assertMatchesRegularExpression('/\x1b\[7m[^\x1b]*irsubject/', $out);
     }
+
+    /**
+     * candy-git-009: the collect bars render user-typed buffers. Whatever
+     * reaches them — bytes from a programmatic buffer, a paste, a future
+     * code path — the render border must strip escape payloads the same way
+     * every other lane already demands.
+     */
+    public function testCollectBarsStripForgedEscapesAndControls(): void
+    {
+        $a = new App(new FixtureGit([], [], []), width: 80, height: 24,
+            collectingCommit: true, commitMessage: "ev1\x1b[1;1Hil\x07",
+            collectingBranchName: true, branchName: "ev2\x1b[1;1Hil\x07",
+            collectingMergeTarget: true, mergeTarget: "ev3\x1b[1;1Hil\x07",
+            cherryPick: new \SugarCraft\Git\CherryPick(collecting: true, commitRef: "ev4\x1b[1;1Hil\x07"),
+        );
+        $out = Renderer::render($a);
+
+        $this->assertStringNotContainsString("\x1b[1;1H", $out);
+        $this->assertStringNotContainsString("\x07", $out);
+        $this->assertStringContainsString('commit message: ev1il', $out);
+        $this->assertStringContainsString('branch name: ev2il', $out);
+        $this->assertStringContainsString('merge: ev3il', $out);
+        $this->assertStringContainsString('cherry-pick: ev4il', $out);
+    }
 }
 

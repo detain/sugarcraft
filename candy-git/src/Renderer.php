@@ -94,19 +94,19 @@ final class Renderer
         $commitBar = '';
         if ($a->collectingCommit) {
             $commitBar = "\n " . Style::new()->foreground(Color::hex('#6ee7b7'))
-                ->render(self::truncate(Lang::t('commit.prompt') . $a->commitMessage . '_', $a->barWidth()));
+                ->render(self::truncate(Lang::t('commit.prompt') . self::sanitize($a->commitMessage) . '_', $a->barWidth()));
         }
 
         $branchBar = '';
         if ($a->collectingBranchName) {
             $branchBar = "\n " . Style::new()->foreground(Color::hex('#fde68a'))
-                ->render(self::truncate(Lang::t('branch.prompt') . $a->branchName . '_', $a->barWidth()));
+                ->render(self::truncate(Lang::t('branch.prompt') . self::sanitize($a->branchName) . '_', $a->barWidth()));
         }
 
         $mergeBar = '';
         if ($a->collectingMergeTarget === TRUE) {
             $mergeBar = "\n " . Style::new()->foreground(Color::hex('#a78bfa'))
-                ->render(self::truncate(Lang::t('merge.prompt') . $a->mergeTarget . '_', $a->barWidth()));
+                ->render(self::truncate(Lang::t('merge.prompt') . self::sanitize($a->mergeTarget) . '_', $a->barWidth()));
         }
 
         $diffOverlay = '';
@@ -132,7 +132,7 @@ final class Renderer
         $cherryPickBar = '';
         if ($a->cherryPick !== null && $a->cherryPick->collecting) {
             $cherryPickBar = "\n " . Style::new()->foreground(Color::hex('#fde68a'))
-                ->render(self::truncate(Lang::t('cherry_pick.prompt') . $a->cherryPick->commitRef . '_', $a->barWidth()));
+                ->render(self::truncate(Lang::t('cherry_pick.prompt') . self::sanitize($a->cherryPick->commitRef) . '_', $a->barWidth()));
         }
 
         $worktreeOverlay = '';

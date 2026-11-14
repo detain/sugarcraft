@@ -196,6 +196,32 @@ final class CommandLineTest extends TestCase
         self::assertStringContainsString('unknown argument', $err);
     }
 
+    /**
+     * candy-git-xp-02: the App's paste defenses (applyPaste/flattenPaste) are
+     * only reachable if the terminal was asked to wrap pastes in a bracketed
+     * envelope (CSI ?2004h) — without the option a "subject\n\nbody" paste
+     * arrives as raw keystrokes and submits a commit mid-paste. A piped test
+     * runner cannot boot the TUI at all (the refusal is pinned above), so the
+     * contract is pinned at the launcher source: the boot line must carry
+     * bracketedPaste: true alongside useAltScreen: true.
+     */
+    public function testTheLauncherBootsWithBracketedPasteEnabled(): void
+    {
+        $bin = realpath(__DIR__ . '/../bin/candy-git');
+        self::assertIsString($bin);
+        $src = (string) file_get_contents($bin);
+
+        self::assertMatchesRegularExpression(
+            '/new ProgramOptions\([^)]*useAltScreen: true[^)]*bracketedPaste: true[^)]*\)/',
+            $src,
+        );
+        self::assertDoesNotMatchRegularExpression(
+            '/new ProgramOptions\((?![^)]*bracketedPaste)[^)]*\)/',
+            $src,
+            'no ProgramOptions construction may boot without the paste envelope',
+        );
+    }
+
     // ------------------------------------------------------------- plumbing
 
     /**

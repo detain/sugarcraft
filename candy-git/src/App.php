@@ -597,6 +597,14 @@ final class App implements Model
      * buffer, or null when the key is not an edit key (ctrl/alt chords never
      * insert text). Space arrives as KeyType::Space from the input parser,
      * never as Char ' ' — both shapes are handled.
+     *
+     * candy-git-009: the ctrl/alt FLAG guard alone is not enough. sugar-core's
+     * InputReader maps raw C0 bytes (0x00, 0x1c-0x1f) to Char runes with
+     * ctrl=false — pastes outside a bracketed envelope and rare keycodes both
+     * deliver them — so the printable test is applied to the rune itself.
+     * Any codepoint in Unicode general category C (Cc/Cf/Cn/Co/Cs) except \n
+     * is dropped: NUL through DEL, but also zero-width and other invisibles,
+     * which garble cells, desync the line-diff model, and ride into git argv.
      */
     private static function editBuffer(string $buffer, KeyMsg $msg): ?string
     {
@@ -604,6 +612,13 @@ final class App implements Model
             return null;
         }
         if ($msg->type === KeyType::Char && $msg->rune !== '') {
+            // !== 0, not === 1: a lone continuation byte makes preg_match return
+            // FALSE, and FALSE must also be refused — the same fail-closed rule
+            // that governs Renderer::sanitize (audit #7).
+            if (preg_match('/[^\P{C}\n]/u', $msg->rune) !== 0) {
+                return null;
+            }
+
             return $buffer . $msg->rune;
         }
         if ($msg->type === KeyType::Space) {

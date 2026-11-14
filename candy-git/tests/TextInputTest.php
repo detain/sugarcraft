@@ -189,4 +189,62 @@ final class TextInputTest extends TestCase
         $a = $a->update(new PasteMsg("/tmp/wt\n"))[0];
         self::assertSame('/tmp/wt ', $a->worktrees->newPath);
     }
+
+    /**
+     * candy-git-009: sugar-core's decoder hands 0x00 and 0x1c-0x1f through as
+     * Char runes with ctrl=false, so the modifier guard alone let raw C0 bytes
+     * into every collecting buffer (and from there into `git commit -m`).
+     */
+    public function testRawControlBytesCannotEnterCommitBuffer(): void
+    {
+        $a = $this->commitCollector();
+        foreach (["\x00", "\x1c", "\x1d", "\x1e", "\x1f", "\x07", "\x7f"] as $rune) {
+            $a = $a->update(new KeyMsg(KeyType::Char, $rune))[0];
+            self::assertSame('', $a->commitMessage, 'control byte ' . dechex(ord($rune)) . ' must not append');
+            self::assertTrue($a->collectingCommit, 'the collector stays open; the key is simply not an edit');
+        }
+    }
+
+    public function testControlGateAppliesToEveryCollectBuffer(): void
+    {
+        $branch = $this->app()->update(new KeyMsg(KeyType::Char, 'n'))[0];
+        $branch = $this->type($branch, 'ma');
+        $branch = $branch->update(new KeyMsg(KeyType::Char, "\x1c"))[0];
+        self::assertSame('ma', $branch->branchName);
+
+        $merge = $this->app()->update(new KeyMsg(KeyType::Char, 'M'))[0];
+        $merge = $merge->update(new KeyMsg(KeyType::Char, "\x00"))[0];
+        self::assertSame('', $merge->mergeTarget);
+
+        $cherry = $this->app()->update(new KeyMsg(KeyType::Char, 'V'))[0];
+        $cherry = $cherry->update(new KeyMsg(KeyType::Char, "\x1f"))[0];
+        self::assertSame('', $cherry->cherryPick->commitRef);
+
+        $wt = (new App($this->git(), pane: Pane::Branches))->update(new KeyMsg(KeyType::Char, 'w'))[0];
+        $wt = $this->type($wt, 'a');
+        $wt = $wt->update(new KeyMsg(KeyType::Char, "\x1e"))[0];
+        self::assertSame('', $wt->worktrees->newPath);
+    }
+
+    /**
+     * The gate is the Unicode category-C rule, so invisibles are refused too
+     * (they corrupt cells and travel into argv); printable non-ASCII — the
+     * regular subject case for every non-Latin user — keeps flowing.
+     */
+    public function testInvisibleFormatRunesRefusedPrintableUnicodeAccepted(): void
+    {
+        $a = $this->commitCollector();
+        $a = $this->type($a, 'fix ✨');
+        $a = $a->update(new KeyMsg(KeyType::Char, "\u{200b}"))[0]; // zero-width space (Cf)
+        $a = $a->update(new KeyMsg(KeyType::Char, "\u{feff}"))[0];  // BOM (Cf)
+        self::assertSame('fix ✨', $a->commitMessage);
+    }
+
+    public function testMalformedUtf8RuneIsRefusedNotPassedThrough(): void
+    {
+        // preg with /u returns FALSE on a lone continuation byte; the gate must
+        // fail CLOSED (Renderer::sanitize audit #7 precedent), not accept.
+        $a = $this->commitCollector()->update(new KeyMsg(KeyType::Char, "\xff"))[0];
+        self::assertSame('', $a->commitMessage);
+    }
 }

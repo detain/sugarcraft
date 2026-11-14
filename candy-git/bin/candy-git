@@ -131,4 +131,4 @@ if (!stream_isatty(STDOUT)) {
     fwrite(STDERR, Lang::t('cli.needs_tty') . "\n");
     exit(1);
 }
-(new Program(App::start(new Git($cwd)), new ProgramOptions(useAltScreen: true)))->run();
+(new Program(App::start(new Git($cwd)), new ProgramOptions(useAltScreen: true, bracketedPaste: true)))->run();
