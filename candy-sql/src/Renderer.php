@@ -146,7 +146,7 @@ final class Renderer
             $help = Style::new()->foreground(Color::hex('#7d6e98'))
                 ->render(Lang::t('ui.help.admin', ['count' => $paneCount]));
             $status = '';
-            $ioPrompt = self::ioPrompt($a) ?? self::editPrompt($a);
+            $ioPrompt = self::ioPrompt($a) ?? self::paramPrompt($a) ?? self::editPrompt($a);
             if ($ioPrompt !== null) {
                 $status = "\n " . Style::new()->foreground(Color::hex('#6ee7b7'))
                     ->render($ioPrompt);
@@ -192,7 +192,7 @@ final class Renderer
         }
 
         $status = '';
-        $ioPrompt = self::ioPrompt($a) ?? self::editPrompt($a);
+        $ioPrompt = self::ioPrompt($a) ?? self::paramPrompt($a) ?? self::editPrompt($a);
         if ($ioPrompt !== null) {
             // SQL-O07: an open file line out-ranks the plain status echo —
             // it IS the input surface, and its text is user bytes.
@@ -547,5 +547,25 @@ final class Renderer
             ExportState::STAGE_IMPORT_TABLE => Lang::t('io.prompt_import_table', ['source' => CellValue::sanitize($a->io->path), 'table' => $line]),
             default => null,
         };
+    }
+
+    /**
+     * SQL-O23: the parameter prompt line — label, step counter and the live
+     * typed buffer (sanitized: the value is untrusted input until it is
+     * BOUND, and binding keeps it off the wire as data anyway).
+     */
+    private static function paramPrompt(App $a): ?string
+    {
+        $prompt = $a->query->paramPrompt;
+        if ($prompt === null) {
+            return null;
+        }
+
+        return Lang::t('param.line', [
+            'label' => $prompt->labels[$prompt->index],
+            'index' => (string) ($prompt->index + 1),
+            'total' => (string) count($prompt->labels),
+            'value' => CellValue::sanitize($prompt->buffer),
+        ]);
     }
 }

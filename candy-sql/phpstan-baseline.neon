@@ -31,6 +31,9 @@
 # SQL-O13 (2026-11-13): the `H` history-trend arm adds one direct
 # array{App, Cmd|null} return to update(); same documented contract mismatch,
 # re-censused at 10.
+# SQL-O23 (2026-11-13): the parameter-prompt intercept returns handleParamKey's
+# array{App, ?Cmd} straight out of update(); one more site of the identical
+# documented Cmd-vs-Closure mismatch, re-censused at 11.
 parameters:
 	ignoreErrors:
 		-
@@ -132,7 +135,7 @@ parameters:
 		-
 			message: '#^Method SugarCraft\\Sql\\App\:\:update\(\) should return array\{SugarCraft\\Core\\Model, Closure\|null\} but returns array\{SugarCraft\\Sql\\App, SugarCraft\\Core\\Cmd\|null\}\.$#'
 			identifier: return.type
-			count: 10
+			count: 11
 			path: src/App.php
 
 		-

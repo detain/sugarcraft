@@ -38,6 +38,19 @@ final class QueryState
         public readonly int $queryGen = 0,
         public readonly ?int $recallIndex = null,
         public readonly ?string $plan = null,
+        /**
+         * SQL-O23 (once-030): the open per-parameter prompt line; null when
+         * no prompt owns the keyboard.
+         */
+        public readonly ?ParamPrompt $paramPrompt = null,
+        /**
+         * SQL-O23: collected bind values for the NEXT dispatch of the
+         * placeholder statement (null = unbound, plain text run). The run
+         * that consumes them clears the slot again.
+         *
+         * @var array<array-key, string|null>|null
+         */
+        public readonly ?array $paramValues = null,
     ) {}
 
     public static function new(): self
@@ -111,5 +124,21 @@ final class QueryState
     public function withPlan(?string $plan): self
     {
         return $this->mutate(['plan' => $plan]);
+    }
+
+    /** SQL-O23: open/close the per-parameter prompt line. */
+    public function withParamPrompt(?ParamPrompt $prompt): self
+    {
+        return $this->mutate(['paramPrompt' => $prompt]);
+    }
+
+    /**
+     * SQL-O23: the bind array the next dispatch consumes (null = unbound).
+     *
+     * @param array<array-key, string|null>|null $values
+     */
+    public function withParamValues(?array $values): self
+    {
+        return $this->mutate(['paramValues' => $values]);
     }
 }

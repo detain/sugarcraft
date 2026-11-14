@@ -62,11 +62,13 @@ use SugarCraft\Sql\App\ConnectionState;
 use SugarCraft\Sql\App\EditPlanner;
 use SugarCraft\Sql\App\EditState;
 use SugarCraft\Sql\App\ExportState;
+use SugarCraft\Sql\App\ParamPrompt;
 use SugarCraft\Sql\App\QueryState;
 use SugarCraft\Sql\App\UiState;
 use SugarCraft\Sql\Admin\History\HistoryRecorder;
 use SugarCraft\Sql\Admin\QueryLogger;
 use SugarCraft\Sql\Admin\StatusSnapshot;
+use SugarCraft\Sql\QueryParams;
 use SugarCraft\Sql\Core\Msg\AdminDataLoadedMsg;
 use SugarCraft\Sql\Core\Msg\AdminDrainCompletedMsg;
 use SugarCraft\Sql\Core\Msg\AdminFetchStartedMsg;
@@ -279,6 +281,13 @@ final class App implements Model
                 }
             }
             return [$this, null];
+        }
+        // SQL-O23: while the parameter prompt is open it owns the keyboard
+        // above every chord — even Ctrl+C answers the ENTRY (it cancels the
+        // run preparation), never the app.
+        if ($this->query->paramPrompt !== null
+            && ($msg instanceof KeyMsg || $msg instanceof PasteMsg)) {
+            return $this->handleParamKey($msg);
         }
         if ($msg instanceof PasteMsg) {
             // D-M13: bracketed paste (enabled by bin) arrives as a PasteMsg,
@@ -630,6 +639,81 @@ final class App implements Model
         }
 
         return [$this, null];
+    }
+
+    /**
+     * SQL-O23 (once-030): keys while the parameter prompt is open.
+     *
+     * Enter commits the buffer — an EMPTY submit binds NULL, the same unset-
+     * means-NULL mental model the cell editor's Ctrl+N leg carries; the raw
+     * text is never quoted or escaped, the driver does the value leg. Esc and
+     * Ctrl+C cancel the prepared run (never quit — the intercept rides above
+     * the quit chord). Backspace edits, printables and bracketed paste
+     * append. After the last label the collected bind rides beginRunQuery()
+     * again — which skips detection because paramValues is set — so the D-M27
+     * destructive gate and history still see the original statement text.
+     *
+     * @return array{0:self, 1:?Cmd}
+     */
+    private function handleParamKey(KeyMsg|PasteMsg $msg): array
+    {
+        $prompt = $this->query->paramPrompt;
+        if ($prompt === null) {
+            return [$this, null];
+        }
+        if ($msg instanceof PasteMsg) {
+            return [$this->mutate([
+                'query' => $this->query->withParamPrompt($prompt->withBuffer($prompt->buffer . $msg->content)),
+            ]), null];
+        }
+        if ($msg->type === KeyType::Escape || ($msg->ctrl && $msg->rune === 'c')) {
+            return [$this->mutate([
+                'query' => $this->query->withParamPrompt(null)->withParamValues(null),
+                'ui' => $this->ui->withError(null)->withStatus(Lang::t('param.cancel')),
+            ]), null];
+        }
+        if ($msg->type === KeyType::Enter) {
+            $values = [...$prompt->values, $prompt->buffer === '' ? null : $prompt->buffer];
+            if ($prompt->index + 1 < count($prompt->labels)) {
+                $next = $prompt->withStepped($values);
+
+                return [$this->mutate([
+                    'query' => $this->query->withParamPrompt($next),
+                    'ui' => $this->ui->withError(null)->withStatus(self::paramStatus($next)),
+                ]), null];
+            }
+
+            return $this->mutate([
+                'query' => $this->query
+                    ->withParamPrompt(null)
+                    ->withParamValues($prompt->bindForm($values)),
+            ])->beginRunQuery();
+        }
+        if ($msg->type === KeyType::Backspace) {
+            if ($prompt->buffer === '') {
+                return [$this, null];
+            }
+
+            return [$this->mutate(['query' => $this->query->withParamPrompt(
+                $prompt->withBuffer(mb_substr($prompt->buffer, 0, mb_strlen($prompt->buffer) - 1)),
+            )]), null];
+        }
+        if ($msg->type === KeyType::Char && !$msg->ctrl && $msg->rune !== '') {
+            return [$this->mutate(['query' => $this->query->withParamPrompt(
+                $prompt->withBuffer($prompt->buffer . $msg->rune),
+            )]), null];
+        }
+
+        return [$this, null];
+    }
+
+    private static function paramStatus(ParamPrompt $prompt): string
+    {
+        return Lang::t('param.prompt', [
+            'label' => $prompt->labels[$prompt->index],
+            'index' => (string) ($prompt->index + 1),
+            'total' => (string) count($prompt->labels),
+        ]);
     }
 
     /**
@@ -1352,13 +1436,28 @@ final class App implements Model
         // Record in history (front = newest); dedupe + cap live in one
         // place, QueryState::withRecordedQuery (client-016). A plain run
         // also replaces any live EXPLAIN plan (SQL-O09).
-        $query = $this->query->withRecordedQuery($trimmed)->withPlan(null);
+        $query = $this->query->withRecordedQuery($trimmed)->withPlan(null)->withParamValues(null);
         try {
             // SQL-C11: the sync leg runs on the UI loop (that is what "sync
             // transport" means here) — the shared wall-clock cap turns an
             // unbounded server stall into a named error inside 30 s.
+            // SQL-O23: a collected bind runs the statement through
+            // prepare/execute — the values never touch the statement text.
+            $bound = $this->query->paramValues;
             $rows = $this->syncTimeout()->run(
-                fn (): ?array => $this->connection->db->query($sql),
+                function () use ($sql, $bound): ?array {
+                    if ($bound === null) {
+                        return $this->connection->db->query($sql);
+                    }
+                    $stmt = $this->connection->db->prepare($sql);
+                    if ($stmt === null) {
+                        // Same closed-connection shape the plain leg reports.
+                        return null;
+                    }
+                    $stmt->execute($bound);
+
+                    return $stmt->fetchAll();
+                },
             );
             // Guard against null (e.g., connection lost after handled reconnect).
             if ($rows === null) {
@@ -1534,6 +1633,36 @@ final class App implements Model
         // reaches any SQL path (a `:tx` is a command, not a statement).
         if (str_starts_with($trimmed, ':')) {
             return $this->handleColonCommand($trimmed);
+        }
+
+        // SQL-O23 (once-030): placeholders prompt. The statement travels to
+        // the server BOUND (prepare/execute) instead of shipping a hand-
+        // interpolated literal, so hostile input rides the value leg. The
+        // prompt re-entering beginRunQuery() carries paramValues and skips
+        // this arm, letting the collected bind reach the D-M27 gate below.
+        if ($this->query->paramValues === null) {
+            $detected = QueryParams::detect($trimmed);
+            if ($detected !== []) {
+                if (QueryParams::isMixed($detected)) {
+                    return [$this->mutate([
+                        'ui' => $this->ui->withError(null)->withStatus(Lang::t('param.mixed')),
+                    ]), null];
+                }
+                $labels = [];
+                foreach ($detected as $pos => $name) {
+                    // A repeated :name prompts once (unique labels).
+                    $label = $name === null ? '#' . ($pos + 1) : $name;
+                    if (!in_array($label, $labels, true)) {
+                        $labels[] = $label;
+                    }
+                }
+                $prompt = new ParamPrompt($trimmed, $labels);
+
+                return [$this->mutate([
+                    'query' => $this->query->withParamPrompt($prompt),
+                    'ui' => $this->ui->withError(null)->withStatus(self::paramStatus($prompt)),
+                ]), null];
+            }
         }
 
         // D-M27: the editor's run keys used to fire DROP/TRUNCATE/… with zero
@@ -1721,15 +1850,17 @@ final class App implements Model
         $sql = $this->editor()->value();
         $trimmed = trim($sql);
 
-        // SQL-O09: a leading EXPLAIN is answered with the coloured plan tree,
+        // SQL-O23: a leading EXPLAIN is answered with the coloured plan tree,
         // not the flat provider grid the statement used to produce. The
         // inspector never executes what it inspects: an 'ANALYZE' modifier
         // (and any explicit FORMAT clause — the providers speak their own
         // dialect) is STRIPPED here, never honoured, because PostgreSQL's
         // EXPLAIN ANALYZE RUNS the statement. The plan fetch is the
         // statement-analysis leg, so it rides the same bounded sync path the
-        // MDL-tab [3] explain already uses.
-        if (($inner = self::explainInner($trimmed)) !== null) {
+        // MDL-tab [3] explain already uses. Bound statements (SQL-O23) skip
+        // the interception and reach the server as a prepared EXPLAIN —
+        // the provider's plan fetch has no parameter surface.
+        if (($inner = self::explainInner($trimmed)) !== null && $this->query->paramValues === null) {
             return $this->runExplainPlan($inner, $this->query->withRecordedQuery($trimmed));
         }
 
@@ -1745,8 +1876,11 @@ final class App implements Model
         // and there is no React driver for it. A TLS-verified MySQL-family
         // connection runs synchronously too: the React mysql:// transport
         // cannot carry TLS, so the sync PDO session (which can) is the only
-        // honest path — see asyncTransportRefusedByTls().
-        if (!$this->asyncTransportAvailable()) {
+        // honest path — see asyncTransportRefusedByTls(). SQL-O23 v1: a
+        // placeholder-bound statement always runs on the sync session — the
+        // React transports have no bound-parameter leg yet, and shipping a
+        // silently-unbound statement would be worse than a slower honest one.
+        if (!$this->asyncTransportAvailable() || $this->query->paramValues !== null) {
             // Run synchronously and return without a pending command.
             // runQuery() handles null-safety, error state and its own
             // history recording — beginRunQuery() already refused the
