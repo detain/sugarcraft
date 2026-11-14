@@ -28,7 +28,13 @@ use SugarCraft\SshLauncher\Support\Version;
  *     stamp→metadata→reader→bin chain in one byte-exact assertion), and
  *     `--help` + `--list` must work — proving the stub's phar:// autoload
  *     guard and the `__DIR__/../lang` data path THROUGH the archive, the two
- *     internal shapes the old greps could only name.
+ *     internal shapes the old greps could only name;
+ *  3. keeps the scratch build itself honest: a DANGLING vendor symlink is a
+ *     skipped CI-environment artifact (never package content), and a build
+ *     that throws mid-walk is DISCARDED, never memoized — CI run 5047's
+ *     three deep_copy boot fatals were the exact noise of an interrupted
+ *     half-package (maps unfiltered, dev trees skipped) reused by the
+ *     archive legs. Both properties are pinned by their own legs below.
  *
  * Minimal lexical residue stays only for genuinely runtime-unreachable
  * internals: the shebang + open-tag stub shape itself (what makes the file a
@@ -91,17 +97,30 @@ final class PharBuildScriptTest extends TestCase
             return self::$package;
         }
         $base = sys_get_temp_dir() . '/sshlaunch-phar-' . bin2hex(random_bytes(6));
-        mkdir($base . '/package', 0o777, true);
         self::$base = $base;
-        self::$package = $base . '/package';
+        try {
+            mkdir($base . '/package', 0o777, true);
+            foreach (['bin', 'src', 'lang', 'tools'] as $root) {
+                self::copyTree(self::APP_ROOT . '/' . $root, $base . '/package/' . $root);
+            }
+            if (is_file(self::APP_ROOT . '/LICENSE')) {
+                copy(self::APP_ROOT . '/LICENSE', $base . '/package/LICENSE');
+            }
+            self::copyVendor(self::APP_ROOT . '/vendor', $base . '/package/vendor');
+        } catch (\Throwable $e) {
+            // A half-materialized scratch must never reach the memo: the
+            // vendor walk ends by filtering the composer autoload maps, so a
+            // throw mid-walk leaves a package whose maps still REQUIRE the
+            // skipped dev trees while the trees are absent — exactly CI run
+            // 5047's poisoned-partial shape (one real error, three misleading
+            // deep_copy boot fatals downstream). Discard and rethrow so every
+            // leg answers with the true cause or a complete package.
+            self::removeTree($base);
+            self::$base = null;
 
-        foreach (['bin', 'src', 'lang', 'tools'] as $root) {
-            self::copyTree(self::APP_ROOT . '/' . $root, self::$package . '/' . $root);
+            throw $e;
         }
-        if (is_file(self::APP_ROOT . '/LICENSE')) {
-            copy(self::APP_ROOT . '/LICENSE', self::$package . '/LICENSE');
-        }
-        self::copyVendor(self::APP_ROOT . '/vendor', self::$package . '/vendor');
+        self::$package = $base . '/package';
 
         return self::$package;
     }
@@ -151,7 +170,20 @@ final class PharBuildScriptTest extends TestCase
             if (is_link($src)) {
                 $real = realpath($src);
                 if ($real === false || !is_dir($real)) {
-                    throw new \RuntimeException("unresolvable symlink {$src}");
+                    // A DANGLING vendor link is a CI-environment artifact,
+                    // not package content: the path-repo injection can leave
+                    // vendor/sugarcraft/<name> pointing at a sibling that was
+                    // renamed away (the pre-rename sugarcraft/candy-ansi →
+                    // sugar-ansi-parser cascade, owned by the OD-7 sync gate
+                    // upstream). There is no code behind it to materialize and
+                    // no code to freeze, so skipping is the honest answer —
+                    // build-phar's own guard 4 still refuses every link in a
+                    // REAL packaged tree; this walk only mirrors what a clean
+                    // published install contains, and that never contains a
+                    // broken link. (A throw here was CI run 5047's single real
+                    // error; it aborted the walk before the map filter ran and
+                    // produced three misleading boot fatals downstream.)
+                    continue;
                 }
                 mkdir($dst, 0o777, true);
                 if (is_file($real . '/composer.json')) {
@@ -440,5 +472,118 @@ final class PharBuildScriptTest extends TestCase
 
         self::assertSame(0, $code, "stderr: {$err}");
         self::assertStringContainsString("web1\tweb.example.com:2200\tops\n", $out);
+    }
+
+    public function testADanglingVendorLinkIsSkippedAndTheMapFilterStillRuns(): void
+    {
+        // CI run 5047's vendor shape, synthesized hermetically: a RESOLVABLE
+        // linked sibling (materialize as before), a DANGLING path-repo
+        // artifact — the stale-Packagist sugarcraft/candy-ansi cascade, an
+        // environment fact the repo cannot fix from here — and the composer
+        // maps whose dev entries the end-of-walk filter must still prune.
+        // The old throw-on-dangling aborted the walk before that filter ran,
+        // so this leg pins BOTH halves: no exception, and a filtered result.
+        $base = sys_get_temp_dir() . '/sshlaunch-vendorwalk-' . bin2hex(random_bytes(6));
+        $from = $base . '/vendor';
+        $to = $base . '/scratch/vendor';
+        mkdir($from . '/symfony/polyfill-a', 0o777, true);
+        mkdir($from . '/composer', 0o777, true);
+        mkdir($from . '/phpunit/php-timer', 0o777, true);
+        mkdir($base . '/linked-sibling/src', 0o777, true);
+        file_put_contents($from . '/autoload.php', "<?php\n");
+        file_put_contents($from . '/symfony/polyfill-a/f.php', "<?php\n");
+        file_put_contents($from . '/phpunit/php-timer/x.php', "<?php\n");
+        file_put_contents($base . '/linked-sibling/composer.json', "{}\n");
+        file_put_contents($base . '/linked-sibling/src/File.php', "<?php\n");
+        if (
+            !symlink($base . '/linked-sibling', $from . '/sugar-core')
+            || !symlink($base . '/no-such-directory', $from . '/candy-ansi')
+        ) {
+            self::removeTree($base);
+            self::markTestSkipped('this filesystem cannot create symlinks');
+        }
+        file_put_contents($from . '/composer/autoload_files.php', "<?php\n\n\$vendorDir = dirname(__DIR__);\n\$baseDir = dirname(\$vendorDir);\n\nreturn array(\n"
+            . "    'a1' => \$vendorDir . '/symfony/polyfill-a/f.php',\n"
+            . "    'a2' => \$vendorDir . '/myclabs/deep-copy/src/DeepCopy/deep_copy.php',\n);\n");
+        file_put_contents($from . '/composer/autoload_static.php', "<?php\n\nclass ComposerStaticInitFake\n{\n    public static \$files = array (\n"
+            . "        'a1' => __DIR__ . '/..' . '/symfony/polyfill-a/f.php',\n"
+            . "        'a2' => __DIR__ . '/..' . '/myclabs/deep-copy/src/DeepCopy/deep_copy.php',\n"
+            . "        'a3' => __DIR__ . '/../..' . '/nikic/php-parser/lib/bootstrap.php',\n"
+            . "    );\n}\n");
+
+        try {
+            self::copyVendor($from, $to); // must not throw: the dangling candy-ansi is skipped
+
+            self::assertFalse(is_link($to . '/candy-ansi'), 'the dangling entry is not carried into the scratch tree');
+            self::assertFalse(is_dir($to . '/candy-ansi'));
+            self::assertFileExists($to . '/sugar-core/composer.json', 'a resolvable linked sibling still materializes');
+            self::assertFileExists($to . '/sugar-core/src/File.php');
+            self::assertFileExists($to . '/symfony/polyfill-a/f.php', 'real published trees copy verbatim');
+            self::assertFalse(is_dir($to . '/phpunit'), 'dev trees stay skipped');
+
+            $filesMap = (string) file_get_contents($to . '/composer/autoload_files.php');
+            $staticMap = (string) file_get_contents($to . '/composer/autoload_static.php');
+            self::assertStringNotContainsString('myclabs', $filesMap, 'the walk COMPLETED, so the end-of-walk filter ran');
+            self::assertStringContainsString('symfony/polyfill-a', $filesMap, 'production entries survive the prune');
+            self::assertStringNotContainsString('myclabs', $staticMap);
+            self::assertStringNotContainsString('nikic', $staticMap);
+            self::assertStringContainsString('symfony/polyfill-a', $staticMap);
+        } finally {
+            self::removeTree($base);
+        }
+    }
+
+    public function testAPartialScratchBuildIsDiscardedAndNeverReusedByLaterLegs(): void
+    {
+        // The memo contract behind the run-5047 cascade: a scratch build that
+        // throws mid-walk must leave NOTHING behind for the next caller —
+        // CI's three deep_copy boot fatals were not separate bugs but an
+        // interrupted half-package (vendor maps unfiltered, dev trees absent)
+        // being reused by every later leg. Poison the walk with a symlink in
+        // src/ (copyTree refuses links on purpose), watch packageDir() refuse
+        // to answer, and prove the rebuild after the poison is whole.
+        $poison = self::APP_ROOT . '/src/PharHarnessPoison.php';
+        if (is_link($poison)) {
+            unlink($poison); // defensive: a crashed earlier run left one
+        }
+        if (!symlink('/nonexistent-poison-of-a-deterministic-shape', $poison)) {
+            self::markTestSkipped('this filesystem cannot create symlinks');
+        }
+
+        $previous = self::$base;
+        self::$package = null;
+        self::$base = null;
+        self::$archive = null;
+        self::$archiveDev = null;
+        if ($previous !== null && is_dir($previous)) {
+            self::removeTree($previous);
+        }
+
+        try {
+            $threw = false;
+            try {
+                self::packageDir();
+            } catch (\RuntimeException $e) {
+                $threw = true;
+                self::assertStringContainsString('unexpected symlink', $e->getMessage());
+                self::assertStringContainsString('PharHarnessPoison.php', $e->getMessage(), 'the refusal names the drifted entry');
+            }
+            self::assertTrue($threw, 'a poisoned src walk must not answer with a package');
+            self::assertNull(self::$package, 'the half-built package was never memoized');
+            self::assertNull(self::$base, 'the discarded scratch root was released too');
+        } finally {
+            unlink($poison);
+            self::assertFalse(is_link($poison), 'the poison never survives the leg');
+        }
+
+        $package = self::packageDir(); // poison gone: the rebuild must be COMPLETE
+        self::assertFileExists($package . '/tools/build-phar.php', 'the retry carries the roots the first attempt never reached');
+        self::assertFileExists($package . '/vendor/composer/autoload_static.php');
+        self::assertStringNotContainsString(
+            'myclabs',
+            (string) file_get_contents($package . '/vendor/composer/autoload_static.php'),
+            'the retried package went through the full walk, map filter included',
+        );
+        self::assertSame($package, self::$package, 'the healthy package is memoized for later legs');
     }
 }
