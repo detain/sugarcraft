@@ -9,6 +9,7 @@ use SugarCraft\Dashboard\Components\Tree\Dendrogram;
 use SugarCraft\Dashboard\Components\Tree\DendrogramNode;
 use SugarCraft\Dashboard\Foundation\Sizer;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Width;
 
 final class DendrogramTest extends TestCase
 {
@@ -221,10 +222,52 @@ final class DendrogramTest extends TestCase
     public function testSetSizeAffectsRendered(): void
     {
         $root = new DendrogramNode('1', 'Root', 100);
-        $dendrogram = Dendrogram::new()->withRoot($root)->setSize(60, 20);
 
-        $rendered = $dendrogram->render();
-        $this->assertNotSame('', $rendered);
+        $wide = Dendrogram::new()->withRoot($root)->setSize(60, 20)->render();
+        $this->assertNotSame('', $wide);
+        // Presence asserts stay as secondary evidence (finding 085: the box
+        // characters used to be the ENTIRE claim - a component that ignored
+        // the allocation and painted a constant frame stayed green).
+        $this->assertStringContainsString('╭', $wide);
+        $this->assertStringContainsString('╰', $wide);
+        $this->assertSame(
+            60,
+            self::maxLineWidth($wide),
+            'a 60-wide allocation must paint exactly 60 cells of frame',
+        );
+
+        $narrow = Dendrogram::new()->withRoot($root)->setSize(40, 20)->render();
+        $this->assertSame(
+            40,
+            self::maxLineWidth($narrow),
+            'the requested width is honored, not a hard-coded frame',
+        );
+
+        // A real tree must paint its bottom border as its OWN row - the
+        // glued-border shape hid it inside a 257-cell content line.
+        // (Full width-clipping of oversized tree rows is the D-24 clip
+        // family; evidence banked in HANDOFF.)
+        $sampleLines = array_map(
+            static fn(string $line): string => preg_replace('/\x1b\[[0-9;]*m/', '', $line) ?? $line,
+            explode("\n", Dendrogram::sample()->setSize(60, 20)->render()),
+        );
+        $borderRows = array_values(array_filter(
+            $sampleLines,
+            static fn(string $line): bool => str_starts_with($line, '╰'),
+        ));
+        $this->assertNotEmpty($borderRows, 'the bottom border must start its own row');
+        $this->assertSame(60, Width::string($borderRows[0]));
+    }
+
+    /**
+     * Widest painted line in cells - the geometry claim behind D-86.
+     */
+    private static function maxLineWidth(string $block): int
+    {
+        return max(array_map(
+            static fn(string $line): int => Width::string($line),
+            explode("\n", $block),
+        ));
     }
 
     public function testGetInnerSize(): void

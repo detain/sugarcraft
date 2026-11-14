@@ -196,7 +196,13 @@ final class Dendrogram implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Render tree from top to bottom
         $this->renderTreeVertical($result, $this->root, 0, $chartWidth, 0, $levelHeight, $nodeColor, $lineColor, $textColor, $leafColor);
 
-        // Bottom border
+        // Bottom border (finding 085 forensics: the tree walk leaves no
+        // trailing break on its last row, so the border used to glue
+        // itself onto the final content line - a 60x20 box painted a
+        // 98-cell line).
+        if (!str_ends_with($result, "\n")) {
+            $result .= "\n";
+        }
         $result .= $bl . str_repeat('─', $width - 2) . $br;
 
         return $result;
@@ -321,7 +327,10 @@ final class Dendrogram implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Draw root on the left and leaves on the right
         $this->renderTreeHorizontal($result, $this->root, 2, $chartWidth - 4, 1, $leafSpacing, $nodeColor, $lineColor, $textColor, $leafColor, $leaves, 0);
 
-        // Bottom border
+        // Bottom border (same trailing-break gap as the vertical path).
+        if (!str_ends_with($result, "\n")) {
+            $result .= "\n";
+        }
         $result .= $bl . str_repeat('─', $width - 2) . $br;
 
         return $result;
