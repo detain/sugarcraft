@@ -880,21 +880,70 @@ final class TextPrompt
             $lines[] = Ansi::wrap(Ansi::sanitize($this->error), $this->errorStyle);
         }
 
+        // Auxiliary rows (completion hint, fish-style autosuggest) sit under
+        // the main line: pad to the END of the visible window (cell-aware,
+        // wide glyphs included), never to the caret column, so the dim tail
+        // marks where the buffer actually stops on screen. With a bound set,
+        // the tail is clipped into the remaining cells exactly like the main
+        // row — an auxiliary row must never wrap the repaint the windowing
+        // exists to protect.
+        $padCells = Width::of(Ansi::sanitize($this->label)) + Width::of($display);
+        $pad = str_repeat(' ', max(0, $padCells));
+        $tailCells = ($this->displayWidth !== null && $this->displayWidth > 0)
+            ? $this->displayWidth - $padCells
+            : null;
+
         $hint = $this->suggestion();
         if (!$this->hidden && $hint !== null && $hint !== $this->buffer) {
             // Character-aware tail (substr/strlen would split UTF-8).
             $tail = self::sliceChars($hint, self::charCount($this->buffer));
-            $lines[] = str_repeat(' ', self::charCount($this->label) + $viewCursor)
-                     . Ansi::wrap(Ansi::sanitize($tail), $this->completionStyle);
+            $tail = Ansi::sanitize($tail);
+            if ($tailCells !== null) {
+                if ($tailCells < 1) {
+                    // No room under the pad: the hint row cannot paint.
+                } else {
+                    $lines[] = $pad . Ansi::wrap(self::clipToCells($tail, $tailCells), $this->completionStyle);
+                }
+            } else {
+                $lines[] = $pad . Ansi::wrap($tail, $this->completionStyle);
+            }
         }
 
         // Render fish-style autosuggestion in dim gray.
-        if ($autoSuggestText !== '') {
-            $lines[] = str_repeat(' ', self::charCount($this->label) + $viewCursor)
-                     . Ansi::wrap($autoSuggestText, '2'); // dim style
+        if ($autoSuggestText !== '' && ($tailCells === null || $tailCells >= 1)) {
+            $lines[] = $pad . Ansi::wrap(
+                $tailCells !== null ? self::clipToCells($autoSuggestText, $tailCells) : $autoSuggestText,
+                '2', // dim style
+            );
         }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * Clip to at most $cells display columns (cell-aware, same per-cluster
+     * measurement as fitToDisplay()). On truncation the last usable cell is
+     * replaced by '…' so the clipped end is visible, never silently lost.
+     */
+    private static function clipToCells(string $text, int $cells): string
+    {
+        if ($cells < 1) {
+            return '';
+        }
+        if (Width::of($text) <= $cells) {
+            return $text;
+        }
+        $out = '';
+        $used = 0;
+        foreach (mb_str_split($text, 1, 'UTF-8') as $ch) {
+            $w = max(1, Width::of($ch));
+            if ($used + $w > $cells - 1) {
+                break;
+            }
+            $out .= $ch;
+            $used += $w;
+        }
+        return $out . '…';
     }
 
     /**
@@ -908,6 +957,7 @@ final class TextPrompt
     {
         $direction = $this->searchDirection === self::SEARCH_REVERSE ? 'reverse-i-search' : 'i-search';
         $indicator = ($this->searchFailed ? 'failed ' : '') . $direction;
+        $labelRaw = Ansi::sanitize($this->label);
         $display = $this->hidden
             ? str_repeat($this->hideMask, self::charCount($this->buffer))
             : Ansi::sanitize($this->buffer);
@@ -915,7 +965,31 @@ final class TextPrompt
             ? str_repeat($this->hideMask, self::charCount($this->searchQuery))
             : Ansi::sanitize($this->searchQuery);
 
-        return Ansi::wrap(Ansi::sanitize($this->label), $this->labelStyle)
+        // The whole line — label, `(reverse-i-search)`q': ` chrome, the
+        // matched entry, and one cursor cell — must fit the bound like any
+        // other row: it is painted through the same repaint() maths and a
+        // wrapped search line desyncs the frame exactly like a wrapped
+        // buffer. The expendable tail is the entry echo, so it clips first;
+        // when even the fixed chrome cannot fit (a 19-cell indicator in a
+        // tiny window), the whole plain line falls back to one last-resort
+        // clip that sacrifices the label's style to keep the row on one
+        // line — a bound is a promise the prompt never makes the host wrap
+        // on.
+        $bound = $this->displayWidth;
+        if ($bound !== null && $bound > 0) {
+            $head = $labelRaw . '(' . $indicator . ')`' . $query . "': ";
+            $avail = $bound - Width::of($head) - 1;
+            if ($avail >= 0) {
+                return Ansi::wrap($labelRaw, $this->labelStyle)
+                    . '(' . $indicator . ')`' . $query . "': "
+                    . self::clipToCells($display, $avail)
+                    . Ansi::wrap(' ', $this->cursorStyle);
+            }
+            return self::clipToCells($head . $display, max(0, $bound - 1))
+                . Ansi::wrap(' ', $this->cursorStyle);
+        }
+
+        return Ansi::wrap($labelRaw, $this->labelStyle)
             . '(' . $indicator . ')`' . $query . "': "
             . $display
             . Ansi::wrap(' ', $this->cursorStyle);
