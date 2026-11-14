@@ -35,6 +35,9 @@ final class App implements Model
     /** Floor so a very narrow terminal still renders a usable pane. */
     private const MIN_PANE_WIDTH = 20;
 
+    /** Commits fetched per deepening page of the Log pane (candy-git-100). */
+    private const LOG_CHUNK = 20;
+
     /**
      * @param list<array<string,mixed>> $status
      * @param list<array{name:string,sha:string,current:bool,remote:bool,ahead:?int,behind:?int,gone:bool}> $branches
@@ -50,6 +53,10 @@ final class App implements Model
         public readonly int $statusCursor   = 0,
         public readonly int $branchesCursor = 0,
         public readonly int $logCursor      = 0,
+        /** How many commits the Log pane has fetched (candy-git-100): the
+         *  window deepens one LOG_CHUNK at a time when the cursor walks off
+         *  the bottom of a full window, and stays deepened across refreshes. */
+        public readonly int $logDepth       = self::LOG_CHUNK,
         public readonly ?string $error = null,
         /** Whether the help overlay is currently displayed. */
         public readonly bool $showHelp = false,
@@ -1069,7 +1076,9 @@ final class App implements Model
         try {
             $status   = $this->git->status();
             $branches = $this->git->branches();
-            $log      = $this->git->log(20);
+            // The window starts at one page and deepens on demand
+            // (candy-git-100); refreshes keep the grown depth.
+            $log      = $this->git->log($this->logDepth);
             $summary  = '';
             $rows = [];
             foreach ($status as $row) {
@@ -1138,6 +1147,7 @@ final class App implements Model
         ?int $statusCursor = null,
         ?int $branchesCursor = null,
         ?int $logCursor = null,
+        ?int $logDepth = null,
         ?string $error = null,
         ?bool $showHelp = null,
         ?int $helpScroll = null,
@@ -1186,6 +1196,7 @@ final class App implements Model
             statusCursor: $statusCursor ?? $this->statusCursor,
             branchesCursor: $branchesCursor ?? $this->branchesCursor,
             logCursor: $logCursor ?? $this->logCursor,
+            logDepth: $logDepth ?? $this->logDepth,
             error: $error,
             showHelp: $showHelp ?? $this->showHelp,
             helpScroll: $helpScroll ?? $this->helpScroll,
@@ -1231,6 +1242,19 @@ final class App implements Model
 
     private function moveCursor(int $dir): self
     {
+        // Walking off the bottom of a FULL log window deepens it one page
+        // (candy-git-100). A window that came back short of its limit is the
+        // true end of history, so the cursor stays pinned there and "(no
+        // more)" is no longer a lie past commit twenty. The press that loads
+        // the page does not also move: this fetch is synchronous, and
+        // recursing into moveCursor here would page again before any new rows
+        // were seen (a short repo answers short, a long one answers full and
+        // the next press moves).
+        if ($dir > 0 && $this->pane === Pane::Log && $this->log !== []
+            && count($this->log) >= $this->logDepth
+            && $this->logCursor >= count($this->log) - 1) {
+            return $this->withAll(logDepth: $this->logDepth + self::LOG_CHUNK)->refresh();
+        }
         // Navigation is neither an answer to an arm nor a reading of a
         // message: the amber notice, the red error, and the green success
         // all persist until an action acks them (candy-git-047/098). The

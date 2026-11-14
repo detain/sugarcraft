@@ -17,6 +17,8 @@ final class FixtureGit implements GitDriver
     public array $statusRows;
     public array $branchRows;
     public array $logRows;
+    /** @var list<int> limits the App requested from log() (candy-git-100) */
+    public array $logLimits = [];
     public array $stages = [];
     public array $unstages = [];
     public array $checkouts = [];
@@ -90,7 +92,9 @@ final class FixtureGit implements GitDriver
     public function branches(): array { return $this->branchRows; }
     public function log(int $limit = 25): array {
         $this->maybeThrow('log');
-        return $this->logRows;
+        $this->logLimits[] = $limit;
+
+        return array_slice($this->logRows, 0, $limit);
     }
     public function stage(string $path): void   { $this->maybeThrow('stage'); $this->stages[]   = $path; }
     public function unstage(string $path): void { $this->maybeThrow('unstage'); $this->unstages[] = $path; }
