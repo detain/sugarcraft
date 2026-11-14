@@ -37,6 +37,10 @@ final readonly class DiffViewer
      *                             empty on file diffs; the revert/reset/v
      *                             prefill reads it INSTEAD of asking the user
      *                             to retype what is on screen.
+     * @param bool         $partialTail The capture hit the 4 MiB ceiling and
+     *                             lost everything past it (candy-git-040):
+     *                             the LAST hunk is beheaded and must not be
+     *                             staged; earlier hunks are complete bytes.
      */
     public function __construct(
         public array $lines,
@@ -48,6 +52,7 @@ final readonly class DiffViewer
         public int $scrollOffset = 0,
         public bool $readOnly = false,
         public string $commitSha = '',
+        public bool $partialTail = false,
     ) {}
 
     /**
@@ -92,6 +97,16 @@ final readonly class DiffViewer
      */
     public static function fromRawDiff(string $path, array $lines, bool $cached = false): self
     {
+        // candy-git-040: a head-truncated capture ends with the notice line.
+        // It is metadata, not diff content - keep it out of the display
+        // lines, but REMEMBER it: the old code parsed the beheaded tail hunk
+        // as if whole and handed a partial patch to git apply.
+        $partialTail = false;
+        if ($lines !== [] && $lines[count($lines) - 1] === Process::CAPTURE_NOTICE) {
+            array_pop($lines);
+            $partialTail = true;
+        }
+
         $hunkStarts = [];
         $header = [];
         $inHeader = true;
@@ -106,7 +121,7 @@ final readonly class DiffViewer
         // Default cursor to first hunk, or 0 if no hunks
         $cursor = $hunkStarts[0] ?? 0;
 
-        return new self(lines: $lines, hunkCursor: $cursor, path: $path, hunkStarts: $hunkStarts, header: $header, cached: $cached);
+        return new self(lines: $lines, hunkCursor: $cursor, path: $path, hunkStarts: $hunkStarts, header: $header, cached: $cached, partialTail: $partialTail);
     }
 
     /** Returns the hunk lines around hunkCursor, for rendering and staging. */
@@ -173,7 +188,7 @@ final readonly class DiffViewer
     public function withHunkIndex(int $index): self
     {
         if ($this->hunkStarts === []) {
-            return new self(lines: $this->lines, hunkCursor: 0, path: $this->path, hunkStarts: [], header: $this->header, cached: $this->cached, scrollOffset: 0, readOnly: $this->readOnly, commitSha: $this->commitSha);
+            return new self(lines: $this->lines, hunkCursor: 0, path: $this->path, hunkStarts: [], header: $this->header, cached: $this->cached, scrollOffset: 0, readOnly: $this->readOnly, commitSha: $this->commitSha, partialTail: $this->partialTail);
         }
         $max = count($this->hunkStarts) - 1;
         $newIdx = max(0, min($index, $max >= 0 ? $max : 0));
@@ -189,6 +204,7 @@ final readonly class DiffViewer
             cached: $this->cached,
             readOnly: $this->readOnly,
             commitSha: $this->commitSha,
+            partialTail: $this->partialTail,
             // Jumping to a hunk brings it into view (candy-git-045: the
             // scroll window follows selection; scrolling never moves
             // selection).
@@ -210,6 +226,7 @@ final readonly class DiffViewer
             cached: $this->cached,
             readOnly: $this->readOnly,
             commitSha: $this->commitSha,
+            partialTail: $this->partialTail,
             scrollOffset: max(0, min($offset, $max)),
         );
     }

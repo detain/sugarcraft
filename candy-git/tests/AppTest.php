@@ -1953,4 +1953,65 @@ final class AppTest extends TestCase
         $this->assertSame(['src/A.php'], $g->discards);
         $this->assertSame([], $g->deletes);
     }
+
+    public function testStagingTheBeheadedTailHunkIsRefusedWithoutTouchingGit(): void
+    {
+        // candy-git-040: the truncated capture's last hunk is a fragment;
+        // staging it would hand git apply a partial patch.
+        $g = $this->git();
+        $g->diffs = [
+            'diff --git a/src/B.php b/src/B.php',
+            '@@ -1,1 +1,1 @@',
+            '-one',
+            '+ONE',
+            '@@ -9,1 +9,1 @@',
+            '-two',
+            '+TW',
+            \SugarCraft\Git\Process::CAPTURE_NOTICE,
+        ];
+
+        $a  = App::start($g);
+        [$a] = $a->update(new KeyMsg(KeyType::Char, 'j')); // to the worktree-side row
+        [$a] = $a->update(new KeyMsg(KeyType::Enter));
+        $this->assertNotNull($a->diffViewer);
+
+        [$a] = $a->update(new KeyMsg(KeyType::Space)); // first hunk: complete bytes
+        $this->assertArrayHasKey('src/B.php', $g->stagePatches);
+        $this->assertStringContainsString('-one', $g->stagePatches['src/B.php']);
+
+        [$a] = $a->update(new KeyMsg(KeyType::Char, ']')); // hop to the tail hunk
+        $this->assertSame(1, $a->diffViewer->hunkIndex());
+        [$a] = $a->update(new KeyMsg(KeyType::Space));
+
+        $this->assertStringContainsString('tail truncated', (string) $a->error);
+        $this->assertStringContainsString('-one', $g->stagePatches['src/B.php'], 'the refusal never reached git');
+        $this->assertNotNull($a->diffViewer, 'the viewer stays open - earlier hunks remain actionable');
+    }
+
+    public function testUnstagingTheBeheadedTailHunkIsRefusedToo(): void
+    {
+        $g = $this->git();
+        $g->diffs = [
+            'diff --git a/src/A.php b/src/A.php',
+            '@@ -1,1 +1,1 @@',
+            '-one',
+            '+ONE',
+            '@@ -9,1 +9,1 @@',
+            '-two',
+            '+TW',
+            \SugarCraft\Git\Process::CAPTURE_NOTICE,
+        ];
+
+        $a = App::start($g);                          // src/A.php is the staged-only row
+        [$a] = $a->update(new KeyMsg(KeyType::Enter)); // cached side opens
+        [$a] = $a->update(new KeyMsg(KeyType::Space)); // arm the first hunk
+        [$a] = $a->update(new KeyMsg(KeyType::Space)); // unstaged - same fixture comes back
+        [$a] = $a->update(new KeyMsg(KeyType::Char, ']'));
+
+        $this->assertSame(1, $a->diffViewer->hunkIndex());
+        [$a] = $a->update(new KeyMsg(KeyType::Space));
+
+        $this->assertStringContainsString('tail truncated', (string) $a->error);
+        $this->assertNull($a->pendingConfirm, 'the refusal is not an arm');
+    }
 }

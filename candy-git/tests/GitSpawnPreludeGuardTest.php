@@ -213,8 +213,12 @@ final class GitSpawnPreludeGuardTest extends TestCase
     public function testRunAndRunPatchRouteThroughTheDisarmingAssembler(): void    {
         $src = $this->sourceOf(Git::class);
 
-        self::assertStringContainsString('Process::run($this->argvWithDisarms($args), null, $this->timeout)', $src);
-        self::assertStringContainsString('Process::run($this->argvWithDisarms($args), $hunk, $this->timeout)', $src);
+        // RE-ANCHORED by candy-git-121: the budgets split per verb, so the
+        // funnel pins follow the shape. A third un-budgeted Process::run in
+        // this class would fail the spawn-site census anyway.
+        self::assertStringContainsString('Process::run($this->argvWithDisarms($args), null, $budget)', $src);
+        self::assertStringContainsString('Process::run($this->argvWithDisarms($args), $hunk, $this->mutateTimeout)', $src);
+        self::assertStringNotContainsString('null, $this->timeout)', $src, 'no lane may bypass the budget split');
         // The disarm value is `false`, never an empty string (git noise lane)
         // and never `true` (silent keep-ours data loss) — pin the override
         // shape at its construction site.

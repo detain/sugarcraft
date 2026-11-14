@@ -1405,6 +1405,13 @@ final class App implements Model
             // refuse cleanly instead of piping an unapplyable blob to git.
             return $this->withError(Lang::t('diff.no_hunks'));
         }
+        if ($dv->partialTail && $dv->hunkIndex() === $dv->hunkCount() - 1) {
+            // candy-git-040: the capture lost everything past 4 MiB, so the
+            // LAST hunk is a beheaded fragment - applying it would feed git a
+            // partial blob and fail confusingly. Earlier hunks are complete
+            // bytes and stay stageable.
+            return $this->withError(Lang::t('diff.partial_tail'));
+        }
         try {
             $patch = $dv->currentHunkPatch();
             $this->git->stagePatch($dv->path, $patch);
@@ -1434,6 +1441,11 @@ final class App implements Model
         }
         if ($dv->hunkCount() === 0) {
             return $this->withError(Lang::t('diff.no_hunks'));
+        }
+        if ($dv->partialTail && $dv->hunkIndex() === $dv->hunkCount() - 1) {
+            // candy-git-040: same beheaded-tail refusal on the index side -
+            // a reverse patch of a partial hunk would damage the index.
+            return $this->withError(Lang::t('diff.partial_tail'));
         }
         $arm = 'unstagehunk:' . $dv->path . ':' . $dv->hunkIndex();
         if ($this->pendingConfirm !== $arm) {

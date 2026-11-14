@@ -20,6 +20,39 @@ final class Git implements GitDriver
     public const DEFAULT_TIMEOUT = 30.0;
 
     /**
+     * Wall-clock ceiling (seconds) for MUTATING invocations (candy-git-121).
+     * The 30s read budget is too tight for a huge checkout or add -A, and a
+     * mutator killed mid-flight can leave the repository mid-operation -
+     * stale .git/index.lock, half-applied checkout - so the mutator timeout
+     * message points at that repair instead of just reporting lateness.
+     */
+    public const MUTATE_TIMEOUT = 120.0;
+
+    /**
+     * Verbs that rewrite repository state (candy-git-121): they get the
+     * mutate budget and the repair-aware timeout notice. Classification is
+     * by verb; anything feeding a patch through runPatch() is a mutator
+     * regardless of verb position.
+     */
+    public const MUTATING_VERBS = [
+        'add',
+        'amend',
+        'checkout',
+        'cherry-pick',
+        'commit',
+        'fetch',
+        'merge',
+        'pull',
+        'push',
+        'rebase',
+        'restore',
+        'revert',
+        'reset',
+        'stash',
+        'worktree',
+    ];
+
+    /**
      * Environment switch for strict filter mode: a truthy value (1, true, yes)
      * makes every filter-capable command REFUSE to run when the repository
      * defines any `filter.<name>.clean|smudge|process` driver, instead of
@@ -45,6 +78,7 @@ final class Git implements GitDriver
     public function __construct(
         public readonly string $cwd,
         public readonly float $timeout = self::DEFAULT_TIMEOUT,
+        public readonly float $mutateTimeout = self::MUTATE_TIMEOUT,
         ?bool $strictFilters = null,
     ) {
         $this->strictFilters = $strictFilters ?? self::strictFiltersFromEnv();
@@ -53,7 +87,42 @@ final class Git implements GitDriver
     /** Immutable derive: the same instance in strict (or relaxed) filter mode. */
     public function withStrictFilters(bool $strict = true): self
     {
-        return new self($this->cwd, $this->timeout, $strict);
+        return new self($this->cwd, $this->timeout, $this->mutateTimeout, $strict);
+    }
+
+    /**
+     * The git verb of an argv: the first non-flag argument (candy-git-091 -
+     * global flags like --no-optional-locks may now precede it). '' when the
+     * invocation carries no verb at all.
+     */
+    public static function verbOf(array $args): string
+    {
+        foreach ($args as $arg) {
+            if (!str_starts_with($arg, '-')) {
+                return $arg;
+            }
+        }
+
+        return '';
+    }
+
+    public static function isMutatingVerb(string $verb): bool
+    {
+        return in_array($verb, self::MUTATING_VERBS, true);
+    }
+
+    /** Wall-clock budget for this argv (candy-git-121): reads vs mutators. */
+    public function budgetFor(array $args): float
+    {
+        return self::isMutatingVerb(self::verbOf($args)) ? $this->mutateTimeout : $this->timeout;
+    }
+
+    /** Timeout copy for a lane (candy-git-121): the mutator warns about repair. */
+    public static function timeoutMessage(bool $mutator, float $budget): string
+    {
+        return $mutator
+            ? Lang::t('git.timeout_mutator', ['seconds' => (string) $budget])
+            : Lang::t('git.timeout', ['seconds' => (string) $budget]);
     }
 
     private static function strictFiltersFromEnv(): bool
@@ -68,7 +137,11 @@ final class Git implements GitDriver
 
     public function status(): array
     {
-        $out = $this->run(['status', '--porcelain=v1', '-b']);
+        // candy-git-091: plain `git status` takes the index lock to refresh
+        // the stat cache, racing the user's own git operations. The read lane
+        // opts out; --no-optional-locks only affects OPTIONAL locks, so
+        // operations that genuinely need the lock still wait for it.
+        $out = $this->run(['--no-optional-locks', 'status', '--porcelain=v1', '-b']);
         $rows = [];
         foreach ($out as $line) {
             if ($line === '') continue;
@@ -331,7 +404,7 @@ final class Git implements GitDriver
      */
     public function diff(string $path, bool $cached = false): array
     {
-        $args = ['diff', '--no-color', '--no-ext-diff'];
+        $args = ['--no-optional-locks', 'diff', '--no-color', '--no-ext-diff']; // candy-git-091: same lock race as status(); verbOf() indexing keeps the filter- guard firing
         if ($cached) {
             $args[] = '--cached';
         }
@@ -979,7 +1052,14 @@ final class Git implements GitDriver
      */
     private static function dispatchMatches(array $table, array $args): bool
     {
-        $head = $args[0] ?? '';
+        // Global flags (candy-git-091's --no-optional-locks) may precede the
+        // verb; matching on position 0 would blind the guard entirely.
+        $verbIndex = 0;
+        while (isset($args[$verbIndex]) && str_starts_with($args[$verbIndex], '-')) {
+            $verbIndex++;
+        }
+
+        $head  = $args[$verbIndex] ?? '';
         if (!array_key_exists($head, $table)) {
             return false;
         }
@@ -987,7 +1067,7 @@ final class Git implements GitDriver
         if ($tails === null) {
             return true;
         }
-        $next = $args[1] ?? '';
+        $next = $args[$verbIndex + 1] ?? '';
         if ($tails === ['__not_abort__']) {
             return $next !== '--abort';
         }
@@ -1149,9 +1229,9 @@ final class Git implements GitDriver
             ['config'],
             $scope === '' ? [] : [$scope],
             ['--list', '-z', '--show-origin'],
-        ), null, $this->timeout);
+        ), null, $this->budgetFor(['config'])); // candy-git-121: reads ride the read budget
         if ($probe['timedOut']) {
-            throw new \RuntimeException(Lang::t('git.timeout', ['seconds' => $this->timeout]));
+            throw new \RuntimeException(self::timeoutMessage(false, $this->timeout));
         }
         if ($probe['exit'] === 1) {
             return []; // scope has no config file at all
@@ -1271,11 +1351,11 @@ final class Git implements GitDriver
         $probe = Process::run(
             array_merge(self::gitBase($this->cwd), ['config', '--get-regexp', '^merge\\..*\\.driver$']),
             null,
-            $this->timeout,
+            $this->budgetFor(['config']), // candy-git-121: reads ride the read budget
         );
         if ($probe['timedOut']) {
             // Cannot verify which drivers exist => cannot allow one to run.
-            throw new \RuntimeException(Lang::t('git.timeout', ['seconds' => $this->timeout]));
+            throw new \RuntimeException(self::timeoutMessage(false, $this->timeout));
         }
         if ($probe['exit'] === 1) {
             return []; // no merge.<name>.driver defined anywhere — nothing to disarm
@@ -1380,8 +1460,9 @@ final class Git implements GitDriver
     /** @return list<string> */
     private function run(array $args): array
     {
-        $r = Process::run($this->argvWithDisarms($args), null, $this->timeout);
-        $this->assertNotTimedOut($r);
+        $budget = $this->budgetFor($args); // candy-git-121
+        $r      = Process::run($this->argvWithDisarms($args), null, $budget);
+        $this->assertNotTimedOut($r, $budget, self::isMutatingVerb(self::verbOf($args)));
         if ($r['exit'] !== 0) {
             throw new \RuntimeException(Lang::t('git.error', ['stderr' => self::errorDetail($r)]));
         }
@@ -1391,8 +1472,8 @@ final class Git implements GitDriver
     /** Like run() but passes $input via stdin and does not capture stdout. */
     private function runPatch(string $path, string $hunk, array $args): void
     {
-        $r = Process::run($this->argvWithDisarms($args), $hunk, $this->timeout);
-        $this->assertNotTimedOut($r);
+        $r = Process::run($this->argvWithDisarms($args), $hunk, $this->mutateTimeout);
+        $this->assertNotTimedOut($r, $this->mutateTimeout, true); // patch lanes always mutate (candy-git-121)
         if ($r['exit'] !== 0) {
             throw new \RuntimeException(Lang::t('git.error', ['stderr' => self::errorDetail($r)]));
         }
@@ -1412,13 +1493,13 @@ final class Git implements GitDriver
     }
 
     /**
-     * @param array{stdout: string, stderr: string, exit: int, timedOut: bool, interrupted: bool} $result
+     * @param array{stdout: string, stderr: string, exit: int, timedOut: bool, interrupted: bool, truncated: bool} $result
      * @throws \RuntimeException
      */
-    private function assertNotTimedOut(array $result): void
+    private function assertNotTimedOut(array $result, ?float $budget = null, bool $mutator = false): void
     {
         if ($result['timedOut'] === TRUE) {
-            throw new \RuntimeException(Lang::t('git.timeout', ['seconds' => (string) $this->timeout]));
+            throw new \RuntimeException(self::timeoutMessage($mutator, $budget ?? $this->timeout));
         }
         // candy-git-006: a child we abandoned to a signal storm was killed,
         // not merely late — say so with a distinct marker instead of letting a

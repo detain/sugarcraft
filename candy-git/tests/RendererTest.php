@@ -12,6 +12,7 @@ use SugarCraft\Style\Style;
 use SugarCraft\Git\App;
 use SugarCraft\Git\CherryPick;
 use SugarCraft\Git\DiffViewer;
+use SugarCraft\Git\Process;
 use SugarCraft\Git\InteractiveRebase;
 use SugarCraft\Git\Pane;
 use SugarCraft\Git\RebaseAction;
@@ -987,5 +988,26 @@ final class RendererTest extends TestCase
         $this->assertStringContainsString('+one', $plain);
         $this->assertStringContainsString('+two', $plain);
         $this->assertStringContainsString('new/F.php', $plain);
+    }
+
+    public function testThePartialTailWarningRidesTheViewerFrame(): void
+    {
+        // candy-git-040: name the damage where the user reads it, instead of
+        // letting the beheaded last hunk look complete.
+        $dv = DiffViewer::fromRawDiff('src/B.php', [
+            'diff --git a/src/B.php b/src/B.php',
+            '@@ -1 +1 @@',
+            '-b',
+            '+B',
+            Process::CAPTURE_NOTICE,
+        ]);
+
+        $a     = new App($this->git(), diffViewer: $dv, width: 80, height: 24);
+        $frame = Renderer::render($a);
+        $plain = (string) preg_replace('/\x1b\[[0-9;]*m/', '', $frame);
+
+        $this->assertTrue($dv->partialTail, 'the fixture must actually carry the flag');
+        $this->assertStringContainsString('tail truncated at 4 MiB', $plain);
+        $this->assertStringNotContainsString(Process::CAPTURE_NOTICE, $plain, 'the raw notice stays out of the frame');
     }
 }

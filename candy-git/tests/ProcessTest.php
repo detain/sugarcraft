@@ -127,6 +127,7 @@ final class ProcessTest extends TestCase
         );
         $this->assertStringContainsString('[candy-git: output truncated at 4 MiB]', $r['stdout']);
         $this->assertStringStartsWith('xxxx', $r['stdout']);
+        $this->assertTrue($r['truncated'], 'the flag must say what the notice says (candy-git-040)');
     }
 
     public function testStderrOverTheCapCarriesTheSameNotice(): void
@@ -142,6 +143,7 @@ final class ProcessTest extends TestCase
             Process::MAX_CAPTURE + strlen("\n[candy-git: output truncated at 4 MiB]"),
             strlen($r['stderr']),
         );
+        $this->assertTrue($r['truncated']);
     }
 
     public function testOutputUnderTheCapCarriesNoTruncationNotice(): void
@@ -154,6 +156,7 @@ final class ProcessTest extends TestCase
 
         $this->assertSame(100_000, strlen($r['stdout']));
         $this->assertStringNotContainsString('truncated', $r['stdout']);
+        $this->assertFalse($r['truncated']);
     }
 
     /** The Windows ladder, exercised on any host by injecting the null device. */
@@ -224,6 +227,7 @@ final class ProcessTest extends TestCase
 
         $this->assertStringEndsWith('[candy-git: output truncated at 4 MiB]', $r['stdout']);
         $this->assertSame(1, substr_count($r['stdout'], 'truncated at 4 MiB'));
+        $this->assertTrue($r['truncated'], 'the polled ladder reports the same flag (candy-git-040)');
     }
 
     public function testSpawnFailureCarriesTheReasonNotTheMissingGitHint(): void
@@ -299,10 +303,48 @@ final class ProcessTest extends TestCase
         $this->assertFalse($posix['timedOut']);
         $this->assertFalse($posix['interrupted']);
         $this->assertSame("hi\n", $posix['stdout']);
+        $this->assertFalse($posix['truncated']);
 
         $polled = Process::run(['sh', '-c', 'echo hi'], null, 5.0, self::windowsLadder());
         $this->assertFalse($polled['timedOut']);
         $this->assertFalse($polled['interrupted']);
         $this->assertSame("hi\n", $polled['stdout']);
+        $this->assertFalse($polled['truncated']);
+    }
+
+    public function testTheGitRedirectFamilyIsStrippedFromTheChildEnv(): void
+    {
+        // candy-git-041: `git -C` does not outvote these; a hook-inherited
+        // redirect would silently aim every operation at another repository.
+        $env = Process::childEnv([
+            'GIT_DIR'           => '/evil/.git',
+            'GIT_INDEX_FILE'    => '/evil/index',
+            'GIT_WORK_TREE'     => '/evil',
+            'GIT_COMMON_DIR'    => '/evil/common',
+            'GIT_OBJECT_DIRECTORY' => '/evil/objects',
+            'GIT_ALTERNATE_OBJECT_DIRECTORIES' => '/evil/alt',
+            'GIT_NAMESPACE'     => 'evil',
+            'GIT_PREFIX'        => 'evil/',
+            'GIT_CONFIG_GLOBAL' => '/mine/config',
+            'PATH'              => '/usr/bin',
+        ]);
+
+        foreach (Process::GIT_REDIRECT_VARS as $name) {
+            $this->assertArrayNotHasKey($name, $env, $name . ' must never reach the child');
+        }
+
+        $this->assertSame('/mine/config', $env['GIT_CONFIG_GLOBAL'], 'operator config choice survives the strip');
+        $this->assertSame('/usr/bin', $env['PATH']);
+        $this->assertSame('0', $env['GIT_TERMINAL_PROMPT']);
+        $this->assertSame('cat', $env['GIT_PAGER']);
+        $this->assertSame('C', $env['LC_ALL']);
+    }
+
+    public function testThePinnedOverridesWinOverTheInheritedEnvironment(): void
+    {
+        $env = Process::childEnv(['GIT_EDITOR' => 'vim', 'LC_ALL' => 'de_DE.UTF-8']);
+
+        $this->assertSame('true', $env['GIT_EDITOR']);
+        $this->assertSame('C', $env['LC_ALL']);
     }
 }

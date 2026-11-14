@@ -148,6 +148,12 @@ leading `…`, so the caret and the text you just typed are always visible.
 | `Esc`            | Close diff viewer               |
 | `d`              | Close diff viewer (same action as `Esc`) |
 
+A diff whose capture hit the 4 MiB ceiling shows a `tail truncated at 4
+MiB` line in the viewer, and the last hunk of such a diff refuses to
+stage or unstage - its bytes are incomplete, and a partial patch would
+fail in `git apply` with a confusing error. Earlier hunks are complete
+and stay actionable.
+
 The overlay title carries a side chip — `worktree` for the unstaged diff,
 `staged` for the index diff opened from a staged-only row — so `Space`
 can never act on a side you are not looking at.

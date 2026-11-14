@@ -654,6 +654,23 @@ final class GitHardeningTest extends TestCase
         }
     }
 
+    public function testTheFilterGuardStillFiresThroughLeadingGlobalFlags(): void
+    {
+        // candy-git-091/040 plumbing: Git::diff() now prefixes the read-lane
+        // flag --no-optional-locks. If the dispatch matcher keyed on argv
+        // position 0, that prefix would BLIND the filter guard exactly on the
+        // diff lane - a repo-defined driver would run unsupervised. The verb
+        // matcher skips leading flags, so strict mode still refuses here.
+        $this->requireGit();
+
+        $repo = $this->makeRepo();
+        exec('git -C ' . escapeshellarg($repo) . ' config filter.evildrv.process ' . escapeshellarg('/bin/true'));
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage(\SugarCraft\Git\Lang::t('git.unsafe_filter_driver'));
+        (new Git($repo))->withStrictFilters(true)->diff('file.txt');
+    }
+
     /**
      * Sandbox for the baseline-subtraction discriminator (round-2 review
      * M1): a synthetic OPERATOR config with filter.lfs.clean|smudge = `cat`,

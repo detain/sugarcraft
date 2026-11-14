@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Git\Tests;
 
 use SugarCraft\Git\DiffViewer;
+use SugarCraft\Git\Process;
 use PHPUnit\Framework\TestCase;
 
 final class DiffViewerTest extends TestCase
@@ -220,5 +221,51 @@ final class DiffViewerTest extends TestCase
         $this->assertSame('+++ b/src/A.php', $dv->header[2]);
         // Hunk starts at line index 3
         $this->assertSame(3, $dv->hunkStarts[0]);
+    }
+
+    public function testFromRawDiffStripsTheCaptureNoticeAndMarksTheTail(): void
+    {
+        // candy-git-040: the notice is capture metadata, not diff content -
+        // it must leave the lines and set the flag instead.
+        $lines = [
+            'diff --git a/x b/x',
+            '--- a/x',
+            '+++ b/x',
+            '@@ -1 +1 @@',
+            '-a',
+            '+b',
+            Process::CAPTURE_NOTICE,
+        ];
+
+        $dv = DiffViewer::fromRawDiff('x', $lines);
+
+        $this->assertTrue($dv->partialTail);
+        $this->assertCount(6, $dv->lines);
+        $this->assertNotSame(Process::CAPTURE_NOTICE, $dv->lines[5]);
+        $this->assertSame(1, $dv->hunkCount());
+    }
+
+    public function testFromRawDiffWithoutTheNoticeIsNotPartial(): void
+    {
+        $dv = DiffViewer::fromRawDiff('x', ['diff --git a/x b/x', '@@ -1 +1 @@', '-a', '+b']);
+
+        $this->assertFalse($dv->partialTail);
+    }
+
+    public function testThePartialFlagSurvivesNavigationRebuilds(): void
+    {
+        $dv = DiffViewer::fromRawDiff('x', [
+            'diff --git a/x b/x',
+            '@@ -1 +1 @@', '-a', '+b',
+            '@@ -9 +9 @@', '-y', '+z',
+            Process::CAPTURE_NOTICE,
+        ]);
+
+        $this->assertTrue($dv->withHunkIndex(1)->partialTail);
+        $this->assertTrue($dv->withScrollOffset(1)->partialTail);
+
+        $headerless = DiffViewer::fromRawDiff('x', ['diff --git a/x b/x', Process::CAPTURE_NOTICE]);
+        $this->assertTrue($headerless->partialTail, 'a notice-only blob is still a partial capture');
+        $this->assertTrue($headerless->withHunkIndex(5)->partialTail);
     }
 }

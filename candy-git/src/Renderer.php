@@ -735,6 +735,14 @@ final class Renderer
             $lines[] = self::scrollHint(Lang::t('viewport.below', ['n' => $below]));
         }
 
+        if ($dv->partialTail === true) {
+            // candy-git-040: the capture hit the 4 MiB ceiling; say so where
+            // the user reads it, before the hint line. Post-window append,
+            // so it cannot displace diff content (same lane as scrollHint).
+            $lines[] = Style::new()->foreground(Color::hex('#fde68a'))
+                ->render(self::truncate('  ' . Lang::t('diff.partial_tail'), $inner));
+        }
+
         $hint = Style::new()->foreground(Color::hex('#7d6e98'))
             ->render($dv->readOnly
                 ? Lang::t('diff.details_hint')

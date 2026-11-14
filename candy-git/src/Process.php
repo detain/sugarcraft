@@ -35,7 +35,23 @@ final class Process
      */
     public const MAX_CAPTURE = 4 * 1024 * 1024;
 
-    private const CAPTURE_NOTICE = '[candy-git: output truncated at 4 MiB]';
+    /**
+     * Environment variables that redirect git at another repository or
+     * object store (candy-git-041). Stripped from every child; -C alone
+     * does not outvote them, and hooks inherit them by design.
+     */
+    public const GIT_REDIRECT_VARS = [
+        'GIT_DIR',
+        'GIT_WORK_TREE',
+        'GIT_INDEX_FILE',
+        'GIT_COMMON_DIR',
+        'GIT_OBJECT_DIRECTORY',
+        'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+        'GIT_NAMESPACE',
+        'GIT_PREFIX',
+    ];
+
+    public const CAPTURE_NOTICE = '[candy-git: output truncated at 4 MiB]';
 
     /**
      * candy-git-006: an EINTR (stream_select() returning false) is almost
@@ -62,10 +78,28 @@ final class Process
      * - LC_ALL / LANG=C        — the porcelain parsers in {@see Git} expect
      *   git's canonical English byte shapes; on a localized machine they are
      *   not negotiable.
+     *
+     * candy-git-041: the parent's GIT_ REDIRECT family is stripped before the
+     * overrides land. `git -C <cwd>` does NOT outvote GIT_DIR/GIT_INDEX_FILE/
+     * GIT_WORK_TREE in the environment — and git itself exports those into
+     * hook children. Launched from a hook or wrapper, every operation (every
+     * stage, discard, drop, reset) would silently act on ANOTHER repository
+     * while the TUI browsed this one. GIT_CONFIG_GLOBAL/GIT_CONFIG_SYSTEM
+     * deliberately survive the strip: they name the operator's own config
+     * files, a choice the operator made in their shell, not a redirect a
+     * hook inherited.
+     *
+     * @param array<string,string>|null $inherit parent environment to derive
+     *                                           from; null reads the real one
      */
-    public static function childEnv(): array
+    public static function childEnv(?array $inherit = null): array
     {
-        return array_merge(getenv() ?: [], [
+        $env = $inherit ?? (getenv() ?: []);
+        foreach (self::GIT_REDIRECT_VARS as $name) {
+            unset($env[$name]);
+        }
+
+        return array_merge($env, [
             'GIT_TERMINAL_PROMPT' => '0',
             'GIT_PAGER' => 'cat',
             'GIT_EDITOR' => 'true',
@@ -83,7 +117,7 @@ final class Process
      * @param float        $timeout Seconds before the child is killed; <= 0 disables the timeout.
      * @param Platform|null $platform OS seam; null = the host. Windows takes the polled temp-file ladder.
      *
-     * @return array{stdout: string, stderr: string, exit: int, timedOut: bool, interrupted: bool}
+     * @return array{stdout: string, stderr: string, exit: int, timedOut: bool, interrupted: bool, truncated: bool}
      */
     public static function run(array $argv, ?string $stdin = null, float $timeout = 30.0, ?Platform $platform = null): array
     {
@@ -280,6 +314,9 @@ final class Process
             'exit'        => $exit,
             'timedOut'    => $timedOut,
             'interrupted' => $interrupted,
+            // candy-git-040: callers must be able to tell a complete answer
+            // from a head-kept one WITHOUT string-matching the notice.
+            'truncated'   => $stdoutTruncated || $stderrTruncated,
         ];
     }
 
@@ -347,7 +384,7 @@ final class Process
      *
      * @param list<string> $argv
      *
-     * @return array{stdout: string, stderr: string, exit: int, timedOut: bool, interrupted: bool}
+     * @return array{stdout: string, stderr: string, exit: int, timedOut: bool, interrupted: bool, truncated: bool}
      */
     private static function runPolled(array $argv, ?string $stdin, float $timeout, Platform $platform): array
     {
@@ -401,7 +438,8 @@ final class Process
         $closed = proc_close($proc);
         $exit = $exit !== null && $exit !== -1 ? $exit : $closed;
 
-        $read = static function (string $file): string {
+        $capHit = false;
+        $read   = static function (string $file) use (&$capHit): string {
             $h = @fopen($file, 'rb');
             if ($h === false) {
                 return '';
@@ -409,7 +447,8 @@ final class Process
             $data = (string) stream_get_contents($h, self::MAX_CAPTURE + 1);
             fclose($h);
             if (strlen($data) > self::MAX_CAPTURE) {
-                $data = substr($data, 0, self::MAX_CAPTURE) . "\n" . self::CAPTURE_NOTICE;
+                $data  = substr($data, 0, self::MAX_CAPTURE) . "\n" . self::CAPTURE_NOTICE;
+                $capHit = true;
             }
 
             return $data;
@@ -423,6 +462,7 @@ final class Process
             // strand this lane, only the deadline can. The key is present for
             // shape parity with the POSIX return.
             'interrupted' => false,
+            'truncated'   => $capHit,
         ];
         $cleanup();
 
