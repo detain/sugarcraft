@@ -81,7 +81,10 @@ final class Screen implements \SugarCraft\Dashboard\Foundation\SizedItem
         if ($content instanceof \SugarCraft\Dashboard\Foundation\Sizer) {
             $content = $content->setSize($this->resolvedWidth(), $this->resolvedHeight());
         }
-        $result .= $content->render();
+        // The frame prints exactly its rows (finding sugar-dashboard-030):
+        // content taller than the screen used to append past getHeight and
+        // scroll the terminal on every frame.
+        $result .= Layout::clipToHeight($content->render(), $this->resolvedHeight());
 
         return $result;
     }

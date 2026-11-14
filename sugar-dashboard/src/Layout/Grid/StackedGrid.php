@@ -251,7 +251,7 @@ final class StackedGrid implements \SugarCraft\Dashboard\Foundation\Sizer
             $renderedItems[] = $rendered;
         }
 
-        return implode("\n", $renderedItems);
+        return \SugarCraft\Dashboard\Layout\Layout::clipToHeight(implode("\n", $renderedItems), $this->height);
     }
 
     /**
@@ -296,7 +296,11 @@ final class StackedGrid implements \SugarCraft\Dashboard\Foundation\Sizer
             $styledCount++;
         }
 
-        return implode("\n", $styledLines);
+        // A natural-sized child can hand back more lines than the slot it
+        // was measured into - the pad grew short rows, but nothing trimmed
+        // long ones, so tall content stranded past the frame (finding
+        // sugar-dashboard-030). The slot is the budget: slice it.
+        return implode("\n", array_slice($styledLines, 0, max(1, $height)));
     }
 
     /**

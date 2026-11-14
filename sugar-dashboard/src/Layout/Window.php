@@ -136,8 +136,10 @@ final class Window implements \SugarCraft\Dashboard\Foundation\SizedItem, \Sugar
 
         $paddedInner = $paddedStyle->render($innerContent);
 
-        // Wrap in bordered frame
-        $result = $frameStyle->render($paddedInner);
+        // Wrap in bordered frame - and the window prints exactly its
+        // allocated rows (finding sugar-dashboard-030; the shadow, if on,
+        // still decorates below the clip line as documented).
+        $result = Layout::clipToHeight($frameStyle->render($paddedInner), $h);
 
         // Add shadow if enabled
         if ($this->showShadow) {

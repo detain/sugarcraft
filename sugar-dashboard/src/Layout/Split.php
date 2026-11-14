@@ -287,7 +287,7 @@ final class Split implements \SugarCraft\Dashboard\Foundation\SizedItem
             $result[] = implode('', $rowParts);
         }
 
-        return implode("\n", $result);
+        return Layout::clipToHeight(implode("\n", $result), $this->height ?? 0);
     }
 
     /**
@@ -326,7 +326,7 @@ final class Split implements \SugarCraft\Dashboard\Foundation\SizedItem
             }
         }
 
-        return implode("\n", $result);
+        return Layout::clipToHeight(implode("\n", $result), $this->height ?? 0);
     }
 
     /**

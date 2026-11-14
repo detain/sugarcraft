@@ -64,7 +64,7 @@ final class StackLayout implements Item, SizedItem
             // blobs; $spacing then adds its blank rows on top, matching the
             // vertical path (old max(1, spacing) silently swallowed every
             // blank row past the first).
-            return implode(str_repeat("\n", 1 + max(0, $this->spacing)), $lines);
+            return Layout::clipToHeight(implode(str_repeat("\n", 1 + max(0, $this->spacing)), $lines), $this->height ?? 0);
         }
 
         if ($this->direction === LayoutDirection::Vertical) {
@@ -107,7 +107,7 @@ final class StackLayout implements Item, SizedItem
             }
         }
 
-        return implode("\n", $lines);
+        return Layout::clipToHeight(implode("\n", $lines), $height);
     }
 
     private function renderHorizontal(int $width, int $height): string
@@ -177,7 +177,7 @@ final class StackLayout implements Item, SizedItem
             $result[] = $row;
         }
 
-        return implode("\n", $result);
+        return Layout::clipToHeight(implode("\n", $result), $height);
     }
 
     /**

@@ -173,7 +173,7 @@ final class Layout implements \SugarCraft\Dashboard\Foundation\SizedItem
             $currentX += $childWidth + ($index < count($this->children) - 1 ? $this->gap : 0);
         }
 
-        return implode("\n", $lines);
+        return self::clipToHeight(implode("\n", $lines), $height);
     }
 
     /**
@@ -249,7 +249,7 @@ final class Layout implements \SugarCraft\Dashboard\Foundation\SizedItem
             $result[] = $this->alignHorizontal($line, $width, $this->horizontalAlign);
         }
 
-        return implode("\n", $result);
+        return self::clipToHeight(implode("\n", $result), $height);
     }
 
     /**
@@ -466,6 +466,29 @@ final class Layout implements \SugarCraft\Dashboard\Foundation\SizedItem
     /**
      * The allocated width for this layout (0 = unsized).
      */
+    /**
+     * Shared height discipline for render exits (finding sugar-dashboard-030):
+     * a box that was given a real allocation prints exactly that many rows.
+     * Content taller than the frame clips here - once, at the exit - instead
+     * of stranding rows past the bottom of the frame (and past the bottom of
+     * the terminal, when the box is the screen itself). A zero or unset
+     * allocation is a pass-through: unallocated boxes answer with their
+     * natural height, never a clipped one.
+     */
+    public static function clipToHeight(string $block, int $height): string
+    {
+        if ($height <= 0 || $block === '') {
+            return $block;
+        }
+
+        $lines = explode("\n", $block);
+        if (count($lines) <= $height) {
+            return $block;
+        }
+
+        return implode("\n", array_slice($lines, 0, $height));
+    }
+
     private function allocatedWidth(): int
     {
         return $this->width ?? 0;

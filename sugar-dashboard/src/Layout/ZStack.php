@@ -157,7 +157,7 @@ final class ZStack implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Take the last (top) rendered item as the result
         // ZStack in most UI systems shows the top-most element
-        return array_pop($renderedItems) ?? '';
+        return Layout::clipToHeight(array_pop($renderedItems) ?? '', $useHeight);
     }
 
     /**

@@ -134,7 +134,7 @@ final class Frame implements \SugarCraft\Dashboard\Foundation\SizedItem, \SugarC
             ->width($w - 2)
             ->height($h - 2);
 
-        return $boxStyle->render($styledContent);
+        return \SugarCraft\Dashboard\Layout\Layout::clipToHeight($boxStyle->render($styledContent), $h);
     }
 
     /**

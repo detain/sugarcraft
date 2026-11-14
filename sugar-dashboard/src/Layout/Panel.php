@@ -186,7 +186,7 @@ final class Panel implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Reset ANSI
         $result .= Ansi::reset();
 
-        return rtrim($result, "\n");
+        return rtrim(Layout::clipToHeight($result, $this->height ?? 0), "\n");
     }
 
     /**

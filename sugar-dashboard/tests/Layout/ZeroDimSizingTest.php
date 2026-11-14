@@ -167,13 +167,18 @@ final class ZeroDimSizingTest extends TestCase
     public function testStackedGridExpandWithoutLeftoverHeightKeepsFramedChildChrome(): void
     {
         // Height 2 fully eaten by the fixed neighbour: the expanding framed
-        // child's share is 0. Old code sent setSize(w, 0) and the frame
-        // dropped its chrome; the guard leaves it at its natural extent.
+        // child's share is 0. The guard leaves it at its natural extent for
+        // measurement; D-37 then caps the exit at the allocation, so the
+        // frame's chrome needs actual room - no rows strand past it.
         $grid = (new StackedGrid())
             ->withItem($this->strItem("a\nb"))
             ->withItem(Frame::new($this->strItem('exp')), new ItemOptions(column: 0, expandVertical: true))
             ->setSize(80, 2);
 
-        $this->assertStringContainsString('╭', $grid->render());
+        $this->assertCount(2, explode("\n", $grid->render()));
+
+        $roomy = $grid->setSize(80, 8);
+        $this->assertStringContainsString('╭', $roomy->render());
+        $this->assertCount(8, explode("\n", $roomy->render()));
     }
 }

@@ -142,7 +142,7 @@ final class VStack implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         $spacer = $this->spacing > 0 ? str_repeat("\n", $this->spacing) : "\n";
 
-        return implode($spacer, $results);
+        return Layout::clipToHeight(implode($spacer, $results), $this->height ?? 0);
     }
 
     /**

@@ -88,7 +88,7 @@ final class Stack implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         $spacer = $this->spacing > 0 ? str_repeat("\n", $this->spacing) : "\n";
 
-        return implode($spacer, $renderedItems);
+        return Layout::clipToHeight(implode($spacer, $renderedItems), $this->height ?? 0);
     }
 
     /**

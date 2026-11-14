@@ -177,7 +177,7 @@ final class Sidebar implements \SugarCraft\Dashboard\Foundation\SizedItem
             $output[] = $borderPrefix . $borderChar . $clipped . $borderChar . $borderSuffix;
         }
 
-        return implode("\n", $output);
+        return Layout::clipToHeight(implode("\n", $output), $this->height ?? 0);
     }
 
     /**
