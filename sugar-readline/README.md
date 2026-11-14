@@ -22,7 +22,7 @@ docs/MATCHUPS.md row (🟡) records the open G5 adoption call.
 - **SelectionPrompt** — filtered list with type-to-filter, cursor navigation and pagination
 - **MultiSelectPrompt** — filtered multi-choice with min/max enforcement and FIFO rollover at the cap
 - **Dynamic choice lists** — `withChoices($choices, $preserveCursor = true)` on both list prompts replaces the options at runtime, re-applying the active filter and keeping (clamped to what survives) or homing the cursor on request
-- **ConfirmationPrompt** — Yes/No with customisable labels: choose with arrows/Tab/Space or pick directly with `y`/`n` (one keystroke to set), commit with Enter
+- **ConfirmationPrompt** — Yes/No with customizable labels (`withConfirmLabel()` / `withCancelLabel()`): choose with arrows/Tab/Space or pick directly with `y`/`n` (one keystroke to set), commit with Enter
 - **TextareaPrompt** — multi-line text input with line/column cursor and optional max-line cap; Enter submits and Shift+Enter, Alt+Enter or Ctrl+J break lines
 - **Immutable state** — every input-handling method returns a new instance and `view()` returns the ANSI string; the answer rides a per-shape accessor (`value()`/`selectedValue()`/`selectedValues()`/`result()`), and the `Readline` pump owns all terminal writes
 - **Vim keybindings** — `ViMode` (Insert/Normal, plus a motion-only Visual scaffold) maps keys through `VimKeyHandler` in `sugar-forms` — shared with the sugar-forms widgets — with text objects (`ci"`, `di(`, `da{`, `yiw`) and a working unnamed register (`x`/`dd`/`yy`/text-object yanks feed `p`)
@@ -726,6 +726,227 @@ host that wants localized prompts supplies them pre-localized.
   (`'Enter your name: '` and friends) because caller-supplied labels are the
   CORRECT layering — the host that needs a French session passes French
   labels; the library translates only its own chrome.
+
+## API reference
+
+<!-- api:begin -->
+
+Every public symbol of `src/`, class by class. Behavior lives in the
+sections above; this is the index. Backtick tokens are method names,
+constants, or enum cases; the roster is pinned by
+`tests/ReadmeApiRosterTest.php`, so a new public symbol without a row here
+goes red.
+
+### `TextPrompt` — single-line text input
+
+| symbol | what it does |
+| --- | --- |
+| `__construct()` / `new()` | `(string $label = '> ')`; the static factory mirrors upstream |
+| `withDefault()` | initial buffer text; re-clamped by `withCharLimit()` whenever the later setter runs (finding 092) |
+| `withCharLimit()` | buffer cap in characters; order-independent against `withDefault()` |
+| `withHidden()` | secret mode: masks rendering, never pushes history, never frames undo; optional second `?string $mask` argument sets the mask glyph as it enables |
+| `withMask()` | replaces the mask glyph alone (`withHidden(false)` keeps it — the S-60 split) |
+| `withValidator()` | `callable(string): bool|string`; a string return is painted as the error row (sanitized, clipped) |
+| `withCompletions()` | candidate list for Tab |
+| `withCompleter()` | lazy candidate source `(string $buffer, int $cursor): list<string>`, consulted per Tab; `null` restores the static list (finding 089) |
+| `withHistory()` | attaches a live `HistoryInterface` store — Up/Down and Ctrl+R/Ctrl+S read the same entries the caller pushes (finding 082) |
+| `withMode()` | attaches an `EmacsMode`/`ViMode` key-mapping object |
+| `withModeIndicator()` | paints the mode's name beside the prompt |
+| `withUndoManager()` | attaches an undo stack; typing folds into runs, structural edits snapshot |
+| `withAutoSuggest()` | inline grey suggestion from history ahead of the cursor |
+| `withLabelStyle()` / `withCursorStyle()` / `withErrorStyle()` / `withCompletionStyle()` | SGR code or `Style` for each chrome slot (collapsed by `Styles::code()`) |
+| `withDisplayWidth()` / `displayWidth()` | the width seat of `SizingInterface` |
+| `withCursor()` | position the caret (clamped) |
+| `cursor()` | caret index, characters |
+| `handleKey()` | full dispatch through the attached mode |
+| `handleKeyDirect()` | mode-bypassing entry point (what modes call back into) |
+| `handleChar()` | printable-character entry (paste-safe, search-aware) |
+| `insertPastedText()` | multi-character paste ingestion, control bytes refused |
+| `deleteRange()` | structural delete `[start,end)`; snapshots undo |
+| `value()` | current buffer text (submitted or not) |
+| `submit()` / `abort()` | finalise / discard |
+| `startHistorySearch()` | opens incremental search with a `SearchDirection` |
+| `isSearching()` / `searchQuery()` | search bar state |
+| `suggestion()` | current autosuggest completion text |
+| `error()` | last validator rejection message (or `null`) |
+| `isHidden()` | secret-mode state |
+| `isSubmitted()` / `isAborted()` | terminal state |
+| `mode()` | the attached mode object (or `null`) |
+| `view()` | the painted frame (see *Long lines and repaint*) |
+| `SEARCH_REVERSE` / `SEARCH_FORWARD` | direction constants for `startHistorySearch()` |
+| `AUTOSUGGEST_SCAN_WINDOW` | how far back autosuggest scans history |
+| `EMACS_MOVEMENT_ALIASES` | the `ctrl_b`-style alias table the movement map carries |
+
+### `TextareaPrompt` — multi-line input
+
+| symbol | what it does |
+| --- | --- |
+| `__construct()` / `new()` | `(string $label = '')` |
+| `withDefault()` | seeds the lines; order-independent against `withMaxLines()` |
+| `withMaxLines()` | hard line cap; slicing on shrink, caret follows (finding 092) |
+| `withLabelStyle()` / `withCursorStyle()` | chrome style slots |
+| `withViewportRows()` / `viewportRows()` | windowed rows; unset adopts `LINES`/TTY |
+| `withDisplayWidth()` / `displayWidth()` | the width seat |
+| `handleKey()` / `handleChar()` / `insertPastedText()` | same dispatch law as `TextPrompt`; Enter submits, Shift+Enter/Alt+Enter/Ctrl+J break lines |
+| `submit()` / `abort()` | finalise / discard |
+| `value()` | the joined text |
+| `lines()` | the line list |
+| `lineCount()` | lines present |
+| `cursorLine()` / `cursorCol()` | caret position |
+| `isSubmitted()` / `isAborted()` | terminal state |
+| `view()` | the painted frame |
+
+### `SelectionPrompt` — one choice from a filtered list
+
+| symbol | what it does |
+| --- | --- |
+| `__construct()` / `new()` | `(string $label = '', array<string> $choices = [])` |
+| `submit()` | commits the row under the cursor |
+| `selectedValue()` | cursor-following value; `null` after abort or with an empty filter |
+| `view()` | the painted frame |
+
+### `MultiSelectPrompt` — marked subset of a list
+
+| symbol | what it does |
+| --- | --- |
+| `__construct()` / `new()` | `(string $label = '', array<string> $choices = [])` |
+| `submit()` | commits the marked set; refuses (transient notice) when the filter matches nothing |
+| `selectedValues()` | marks in list order |
+| `selectionCount()` | marks held |
+| `marked()` | index map of marks |
+| `withMinSelections()` / `withMaxSelections()` | the selection-count bounds `canSubmit()` enforces |
+| `canSubmit()` | `min`/`max` selection gate |
+| `view()` | the painted frame |
+
+### `SelectionEngine` — trait behind both list prompts
+
+| symbol | what it does |
+| --- | --- |
+| `withChoices()` | replaces the choice list |
+| `withFilter()` | seeds the filter string |
+| `withPageSize()` | choices per page |
+| `withViewportRows()` / `viewportRows()` | height seat of `SizingInterface` |
+| `withDisplayWidth()` / `displayWidth()` | width seat |
+| `withCursorStyle()` / `withLabelStyle()` | chrome style slots |
+| `cursor()` | current row index |
+| `filteredCount()` / `totalChoices()` | filter width vs whole list |
+| `currentPage()` / `totalPages()` / `currentPageItems()` | pagination surface |
+| `handleKey()` / `handleChar()` | filter editing + motion dispatch |
+| `abort()` | discard |
+| `isSubmitted()` / `isAborted()` | terminal state |
+
+### `ConfirmationPrompt` — Yes/No
+
+| symbol | what it does |
+| --- | --- |
+| `__construct()` / `new()` | `(string $label = '')` |
+| `withConfirmLabel()` / `withCancelLabel()` | replace the Yes/No words |
+| `withHint()` | the grey hint line |
+| `withAutoSubmit()` | y/n answers submit in one press |
+| `withLabelStyle()` / `withSelectedStyle()` | chrome style slots |
+| `withDisplayWidth()` / `displayWidth()` | width seat |
+| `handleKey()` | letters, arrows, Tab/Space all land here (no `handleChar` — printable keys must reach the mapping) |
+| `submit()` / `abort()` | finalise / discard |
+| `result()` | `?bool` — true Yes, false No, null undecided |
+| `currentValue()` | live Yes/No regardless of submission |
+| `isSubmitted()` / `isAborted()` | terminal state |
+| `view()` | the painted frame |
+
+### `Readline` — the driving loop
+
+| symbol | what it does |
+| --- | --- |
+| `__construct()` | `(?SugarCraft\Input\InputDriver $input = null, ?callable $idleSleeper = null)` — inject a driver for headless use; the sleeper is the idle-backoff test seam |
+| `fromStdin()` | the ordinary-interactive factory |
+| `interactive()` | canonical recipe: guarded `stty` raw-mode flip, run, restore |
+| `run()` | drives one prompt to submit/abort/EOF; `mixed $output = self::PAINT_DEFAULT` (omitted paints STDOUT with a one-time notice, explicit `null` stays headless); returns a `ReadlineResult` |
+| `onKey()` / `onMouse()` / `onFocus()` / `onPaste()` | extra event handlers, additive, latest registration wins |
+| `stop()` | requests loop exit within one idle poll (non-blocking drivers) |
+| `isStopped()` | whether a stop is pending |
+| `idlePollDelayMicroseconds()` | current adaptive idle backoff |
+| `__destruct()` | releases a lazily-owned stdin pump |
+| `PAINT_DEFAULT` | the paint-sentinel constant |
+| `IDLE_POLL_MIN_MICROSECONDS` / `IDLE_POLL_MAX_MICROSECONDS` | the backoff bounds |
+
+### `ReadlineResult` — typed `run()` outcome
+
+| symbol | what it does |
+| --- | --- |
+| `__construct()` | the full record (hosts rarely build it; `fromPrompt()` is the ergonomic path) |
+| `fromPrompt()` | `(object $prompt, bool $stopped)` — resolves `value()` / `selectedValues()` / `selectedValue()` / null in that order |
+| `submitted` / `aborted` / `stopped` | the three exits |
+| `value` | the answer (resolution order above) |
+| `prompt` | the final prompt object |
+
+### Contracts
+
+| symbol | what it does |
+| --- | --- |
+| `PromptInterface::view()` / `::handleKey()` / `::isSubmitted()` / `::isAborted()` | the four methods `run()` boundary-checks; a missing one throws by name at entry |
+| `SizingInterface::displayWidth()` / `::withDisplayWidth()` | the width pair prompts may answer |
+| `HistoryInterface::push()` / `::previous()` / `::next()` / `::reset()` / `::clear()` / `::entries()` / `::count()` / `::search()` | the history contract (`previous()`/`next()` bare per the accessor law) |
+| `ModeInterface::handleKey()` / `::consumesCharacters()` / `::name()` | the attached-keymap contract |
+
+### History stores
+
+| symbol | what it does |
+| --- | --- |
+| `InMemoryHistory::__construct()` | `(int $maxHistory = 0)`; negative throws fail-fast |
+| `InMemoryHistory::push()` | newest-first insert; adjacent-dup collapse; cap trim + cursor re-clamp |
+| `InMemoryHistory::setMaxHistory()` | the live cap, mutated (findings 012/032); negative throws |
+| `InMemoryHistory::withMaxHistory()` | `@deprecated` one-line forwarder (`REMOVED-IN: 2.0.0`) |
+| `InMemoryHistory::previous()` / `next()` | history walking; `getPrevious()` / `getNext()` are the deprecated spellings of the same pair |
+| `InMemoryHistory::entries()` / `count()` | newest-first view |
+| `InMemoryHistory::search()` | incremental search from a position in a `SearchDirection` |
+| `InMemoryHistory::reset()` / `clear()` | cursor rewind / wipe |
+| `FileHistory::__construct()` | `(string $filePath, int $maxHistory = 0, string $tempDir = '', bool $deferWrites = false)`; refuses symlinks and un-tightenable files loudly |
+| `FileHistory::tryOpen()` | graceful-degradation entry: returns null instead of throwing when file history is unavailable |
+| `FileHistory::path()` | the history file location |
+| `FileHistory::push()` | persist-then-swap append (finding 063) |
+| `FileHistory::setMaxHistory()` | live cap; shrinking commits a bounded rewrite before memory follows (finding 065) |
+| `FileHistory::flush()` | drains the deferred queue; throws loudly on refusal |
+| `FileHistory::clear()` | file + memory + queue, atomically |
+| `FileHistory::__destruct()` | auto-flush best effort; queued entries are lost at exit (README Note) |
+| `FileHistory::__clone()` | clones never re-flush the original's queue |
+| `FileHistory::FORMAT_HEADER` | the optional `#sugar-readline-history/v2` first line |
+| `FileHistory::armRenameSeamForTests()` | `@internal` swap-ladder test seam (finding 022) |
+| `SearchDirection::Reverse` / `SearchDirection::Forward` | the two walk directions (`cases()`/`from()`/`tryFrom()` are the standard enum API) |
+| `SearchHit::new()` | the search result pair |
+| `SearchHit::index` / `::entry` | position and text of the hit |
+
+### Modes
+
+| symbol | what it does |
+| --- | --- |
+| `EmacsMode::__construct()` | default readline chord set |
+| `EmacsMode::handleKey()` / `consumesCharacters()` / `name()` | the mode contract (`'emacs'`) |
+| `ViMode::__construct()` | modal state machine, starts insert |
+| `ViMode::handleKey()` / `consumesCharacters()` / `name()` | the mode contract (`'vi'`) |
+| `ViMode::viMode()` | current submode as `ViModeState` |
+| `ViMode::register()` | the unnamed register's content (secret-scrubbed on hidden prompts) |
+| `ViModeState::Insert` / `Normal` / `Visual` | the public submode enum (`cases()`/`from()`/`tryFrom()` standard) |
+
+### Support classes
+
+| symbol | what it does |
+| --- | --- |
+| `Key::normalize()` | raw byte/string → canonical `'ctrl_x'`-style spelling |
+| `Key` constants | `Up`, `Down`, `Left`, `Right`, `Home`, `End`, `PageUp`, `PageDown`, `Tab`, `Enter`, `ShiftTab`, `ShiftEnter`, `AltEnter`, `Backspace`, `Delete`, `Space`, `Escape`, `CtrlA`, `CtrlB`, `CtrlC`, `CtrlD`, `CtrlE`, `CtrlF`, `CtrlG`, `CtrlH`, `CtrlI`, `CtrlJ`, `CtrlK`, `CtrlL`, `CtrlM`, `CtrlN`, `CtrlO`, `CtrlP`, `CtrlQ`, `CtrlR`, `CtrlS`, `CtrlT`, `CtrlU`, `CtrlV`, `CtrlW`, `CtrlX`, `CtrlY`, `CtrlZ`, `Undo`, `Redo` — the full ctrl letter set (finding 074) |
+| `Styles::LABEL` / `CURSOR` / `ERROR` / `COMPLETION` / `SELECTED` | the shared default SGR codes |
+| `Styles::code()` | `Style|string` → SGR code; refuses non-collapsible styles loudly |
+| `Ansi::sanitize()` | strips control bytes from host-supplied content |
+| `Ansi::wrap()` | paints a code over text |
+| `RowFit::row()` | cell-clips a segment run to a width |
+| `RowFit::clip()` | single-cell clipping helper |
+| `UndoManager::__construct()` | `(int $cap = self::MAX_STATES)` |
+| `UndoManager::push()` | records a frame pair; coalesces typing runs |
+| `UndoManager::undo()` / `redo()` | node-chain walk (finding 078) |
+| `UndoManager::canUndo()` / `canRedo()` | stack state |
+| `UndoManager::MAX_STATES` | the visible-window cap (512) |
+| `UndoState::__construct()` | `@internal` cons node (`state`, `older`) |
+| `Lang::NAMESPACE` / `Lang::DIR` | the i18n registration constants |
+
+<!-- api:end -->
 
 ## Accessor deprecation (2026-10-24)
 
