@@ -267,7 +267,7 @@ final class CliTest extends TestCase
         [$exit, , $err] = self::drive(['--passthrough=screen', 'x.png']);
 
         $this->assertSame(Cli::EXIT_USAGE, $exit);
-        $this->assertStringContainsString('--passthrough=screen is not available on this base', $err);
+        $this->assertStringContainsString('--passthrough=screen is not supported by this viewer', $err);
         $this->assertStringContainsString('applied automatically by detection', $err);
     }
 
@@ -276,7 +276,7 @@ final class CliTest extends TestCase
         [$exit, , $err] = self::drive(['--passthrough=tmux', 'x.png']);
 
         $this->assertSame(Cli::EXIT_USAGE, $exit);
-        $this->assertStringContainsString('not available on this base', $err);
+        $this->assertStringContainsString('not supported by this viewer', $err);
     }
 
     public function testPassthroughNoneDisablesTheTransactionForItsRunOnly(): void

@@ -22,7 +22,7 @@ return [
     'cli.bad_format'   => 'candy-image: unknown render format \'{value}\' (--help lists the formats available on this build)',
     'cli.chafa_refused' => 'candy-image: --format=chafa is deliberately unsupported (this viewer is chafa-independent; use sixel|kitty|iterm2 for pixel protocols)',
     'cli.bad_symbols'  => 'candy-image: unknown symbol class or selector in \'{value}\' (chafa classes: all, none, space, solid, stipple, block, border, diagonal, dot, quad, half, hhalf, vhalf, inverted, braille, sextant, octant, wedge, technical, geometric, ascii, alpha, digit, narrow, wide, ambiguous, ugly, extra, alnum, bad, legacy, latin, import, imported)',
-    'cli.passthrough_refused' => 'candy-image: --passthrough={value} is not available on this base (the GNU Screen and tmux passthrough envelopes are applied automatically by detection; they cannot be forced from here — use auto or none)',
+    'cli.passthrough_refused' => 'candy-image: --passthrough={value} is not supported by this viewer (the GNU Screen and tmux passthrough envelopes are applied automatically by detection; they cannot be forced from here — use auto or none)',
     'cli.too_many'     => 'candy-image: unexpected argument \'{arg}\' (this viewer takes one image file)',
     'cli.no_frames'    => 'candy-image: no animation frames decoded from \'{path}\'',
     'cli.not_a_file'   => 'candy-image: not a regular file: {path}',

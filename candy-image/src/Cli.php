@@ -35,7 +35,7 @@ use SugarCraft\Image\TermDb;
  * candy-gifview's harness shape.
  *
  * Chafa flag-compat vocabulary (the option table in chicle's
- * chicle-options.c) and what this base honors:
+ * chicle-options.c) and what this viewer honors:
  * --format/--size/--scale/--dump-detect are wired; --polite is
  * an accepted no-op (this viewer always renders inline and synchronously);
  * --symbols=CLASS[+CLASS...], --canvas=MODE and --work=N thread the
