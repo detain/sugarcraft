@@ -60,9 +60,9 @@ use SugarCraft\Dashboard\Layout\Boxer\Boxer;
 use SugarCraft\Dashboard\Layout\Boxer\Node;
 use SugarCraft\Dashboard\Layout\FocusManager;
 use SugarCraft\Dashboard\Modules\Clock\ClockModule;
-use SugarCraft\Dashboard\Modules\Weather\TickMsg as ClockTickMsg;
-use SugarCraft\Dashboard\Modules\System\{SystemModule,RefreshMsg as SystemRefreshMsg};
-use SugarCraft\Dashboard\Modules\Weather\{WeatherModule as RealWeatherModule,TickMsg as WeatherTickMsg,WttrInClient};
+use SugarCraft\Dashboard\Modules\System\SystemModule;
+use SugarCraft\Dashboard\Modules\Weather\{WttrInClient, WeatherModule as RealWeatherModule};
+use SugarCraft\Dashboard\Msg\TickMsg;
 
 /**
  * Read an env var regardless of `variables_order`: PHP's default GPCS build
@@ -237,9 +237,9 @@ final class DashboardModel implements Model
      *
      * ## Message routing
      *
-     *   - ClockTickMsg   → ClockModule (address "0")
-     *   - SystemRefreshMsg → SystemModule (address "1")
-     *   - WeatherTickMsg  → WeatherModule (address "2")
+     *   - TickMsg{source:'clock'}  → ClockModule (address "0")
+     *   - TickMsg{source:'system'} → SystemModule (address "1")
+     *   - TickMsg{source:'weather'}→ WeatherModule (address "2")
      *   - FocusMsgs (Tab/arrows) → FocusManager
      *   - QuitMsg / InterruptMsg → quit the program
      *
@@ -350,12 +350,16 @@ final class DashboardModel implements Model
      */
     private function msgToAddress(Msg $msg): ?string
     {
-        return match (true) {
-            $msg instanceof ClockTickMsg => '0',
-            $msg instanceof SystemRefreshMsg => '1',
-            $msg instanceof WeatherTickMsg => '2',
-            default => null,
-        };
+        if ($msg instanceof TickMsg) {
+            return match ($msg->source) {
+                'clock' => '0',
+                'system' => '1',
+                'weather' => '2',
+                default => null, // source-less broadcast: every module serves it
+            };
+        }
+
+        return null;
     }
 
     /** Keys and ticks flow through Program defaults; no custom subscriptions. */

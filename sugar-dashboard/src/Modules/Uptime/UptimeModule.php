@@ -6,6 +6,7 @@ namespace SugarCraft\Dashboard\Modules\Uptime;
 
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Msg;
+use SugarCraft\Dashboard\Msg\TickMsg;
 use SugarCraft\Dashboard\Module\BaseModule;
 use SugarCraft\Dashboard\Module\ProcAvailability;
 
@@ -38,7 +39,7 @@ final class UptimeModule extends BaseModule
         // the tick gate only — key presses and forwarded messages must not
         // re-sample the system. Non-tick returns an equal-valued fresh
         // instance, zero syscalls.
-        if ($msg instanceof TickMsg) {
+        if ($msg instanceof TickMsg && $msg->isFor($this->name())) {
             return [$this->withUptime($this->readUptimeFromProc()), $this->selfTickCmd()];
         }
         return [$this->withUptime($this->uptime), null];
@@ -52,7 +53,7 @@ final class UptimeModule extends BaseModule
     protected function tickProducer(): ?\Closure
     {
         static $produce = null;
-        return $produce ??= static fn(): Msg => new TickMsg();
+        return $produce ??= static fn(): Msg => TickMsg::for('uptime');
     }
 
     public function view(): string

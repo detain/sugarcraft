@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Modules\Weather;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Util\AtomicJsonFile;
+use SugarCraft\Dashboard\Msg\TickMsg;
 use SugarCraft\Dashboard\Module\BaseModule;
 use SugarCraft\Core\Util\Sanitize;
 
@@ -58,14 +59,14 @@ class WeatherModule extends BaseModule
         // freshly launched dashboard showed no weather for a full
         // interval even when a perfectly good cache file was on disk.
         return Cmd::batch(
-            Cmd::send(new TickMsg()),
+            Cmd::send(TickMsg::for('weather')),
             $this->makeTickCmd(),
         );
     }
 
     public function update(Msg $msg): array
     {
-        if ($msg instanceof TickMsg) {
+        if ($msg instanceof TickMsg && $msg->isFor($this->name())) {
             // Fast path: fresh cache on disk — apply immediately, no I/O
             // beyond the cache read.
             $cached = $this->loadCache();
@@ -231,7 +232,7 @@ class WeatherModule extends BaseModule
     protected function tickProducer(): ?\Closure
     {
         static $produce = null;
-        return $produce ??= static fn(): Msg => new TickMsg();
+        return $produce ??= static fn(): Msg => TickMsg::for('weather');
     }
 
     private function loadCache(): ?WeatherSnapshot

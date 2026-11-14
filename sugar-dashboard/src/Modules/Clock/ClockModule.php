@@ -6,6 +6,7 @@ namespace SugarCraft\Dashboard\Modules\Clock;
 
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Msg;
+use SugarCraft\Dashboard\Msg\TickMsg;
 use SugarCraft\Dashboard\Module\BaseModule;
 
 /**
@@ -43,7 +44,7 @@ final class ClockModule extends BaseModule
         // + zone on every message is the same sin as per-event /proc I/O —
         // the wall read belongs behind the tick gate. Non-tick returns an
         // equal-valued fresh instance, zero time constructions.
-        if ($msg instanceof TickMsg) {
+        if ($msg instanceof TickMsg && $msg->isFor($this->name())) {
             return [$this->withTime($this->createTime()), $this->selfTickCmd()];
         }
         return [$this->withTime($this->time), null];
@@ -57,7 +58,7 @@ final class ClockModule extends BaseModule
     protected function tickProducer(): ?\Closure
     {
         static $produce = null;
-        return $produce ??= static fn(): Msg => new TickMsg();
+        return $produce ??= static fn(): Msg => TickMsg::for('clock');
     }
 
     public function view(): string

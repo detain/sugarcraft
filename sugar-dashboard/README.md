@@ -23,7 +23,7 @@ composer require sugarcraft/sugar-dashboard
 | `Registry\` | Registry pattern for modules |
 | `Plugin\` | Plugin system with JSON protocol |
 | `Modules\` | Built-in modules (Clock, System, Weather, etc.) |
-| `Msg\` | Host-traffic message types — `AdapterTickMsg`, the scheduled refresh tick that drives legacy panel updates (kept a dedicated type so unrelated traffic, keystrokes above all, passes through without a blocking plugin round-trip) |
+| `Msg\` | Host-traffic message types — `TickMsg`, the one shared module refresh tick (addressed via `TickMsg::for($module)` it drives a single module; source-less it serves every ticking module — the five legacy per-module markers `Modules\{Clock,Uptime,Weather,Generic}\TickMsg` and `Modules\System\RefreshMsg` are `class_alias` shims, REMOVED-IN: 2.0.0), and `AdapterTickMsg`, the scheduled refresh tick that drives legacy panel updates (kept a dedicated type so unrelated traffic, keystrokes above all, passes through without a blocking plugin round-trip) |
 | `Keys\` | Key registry and mappings |
 | `Position\` | ANSI-aware geometry helpers |
 | `Output\` | Extracted helpers (truncate, render bar) |
@@ -1003,7 +1003,7 @@ drives from its own key map.
 | ![GridTable](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/gridtable.gif) | **Sortable/filterable GridTable** — pagination, column sort, text filter across 25 rows |
 | ![Plot Braille](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/plot-braille.gif) | **Plot marker comparison** — side-by-side MarkerDot vs MarkerBraille rendering |
 | ![Dashboard](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/dashboard.gif) | Dashboard basics (`examples/dashboard.php`) |
-| ![Dashboard Modules](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/dashboard-modules.gif) | Module-registry dashboard (`examples/dashboard-modules.php`) |
+| ![Dashboard Modules](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/dashboard-modules.gif) | Dashboard component grid (`examples/dashboard.php`) |
 | ![Dashboard Showcase](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/dashboard-showcase.gif) | Full component showcase (`examples/dashboard-showcase.php`) |
 | ![Tag](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/tag.gif) | Tag component (`examples/tag.php`) |
 | ![State](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/state.gif) | Status indicator states (`examples/state.php`) |

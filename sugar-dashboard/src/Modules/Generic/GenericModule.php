@@ -6,6 +6,7 @@ namespace SugarCraft\Dashboard\Modules\Generic;
 
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Msg;
+use SugarCraft\Dashboard\Msg\TickMsg;
 use SugarCraft\Dashboard\Module\BaseModule;
 use SugarCraft\Dashboard\Module\BoundedCommand;
 use SugarCraft\Core\Util\Sanitize;
@@ -54,7 +55,7 @@ final class GenericModule extends BaseModule
 
     public function update(Msg $msg): array
     {
-        if ($msg instanceof TickMsg) {
+        if ($msg instanceof TickMsg && $msg->isFor($this->name())) {
             $newOutput = $this->runCommand();
             $nextModule = $this->withOutput($newOutput);
             return [$nextModule, $this->selfTickCmd()];
@@ -70,7 +71,7 @@ final class GenericModule extends BaseModule
     protected function tickProducer(): ?\Closure
     {
         static $produce = null;
-        return $produce ??= static fn(): Msg => new TickMsg();
+        return $produce ??= static fn(): Msg => TickMsg::for('generic');
     }
 
     public function view(): string

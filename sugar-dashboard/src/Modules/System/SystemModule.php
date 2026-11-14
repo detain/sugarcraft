@@ -6,6 +6,7 @@ namespace SugarCraft\Dashboard\Modules\System;
 
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Msg;
+use SugarCraft\Dashboard\Msg\TickMsg;
 use SugarCraft\Dashboard\Module\BaseModule;
 use SugarCraft\Dashboard\Module\BoundedCommand;
 use SugarCraft\Dashboard\Module\ProcAvailability;
@@ -14,9 +15,9 @@ use SugarCraft\Dashboard\Module\ProcAvailability;
  * System module that displays CPU, memory, GPU, and uptime statistics.
  *
  * Uses Cmd::tick() for periodic refresh; sampling happens ONLY on the
- * RefreshMsg the tick mints, so an unrelated message (every keystroke)
- * returns the module untouched — a Model update must not do /proc I/O
- * or spawn children per event.
+ * shared TickMsg addressed to this module, so an unrelated message
+ * (every keystroke) returns the module untouched — a Model update must
+ * not do /proc I/O or spawn children per event.
  *
  * The state array is the single source of truth for everything view()
  * renders; the only direct properties are the internal sampler memos
@@ -67,9 +68,9 @@ final class SystemModule extends BaseModule
 
     public function update(Msg $msg): array
     {
-        // Only the tick-minted RefreshMsg samples. Everything else — keys,
+        // Only ticks addressed to this module sample. Everything else — keys,
         // focus changes, resizes — passes through with zero I/O.
-        if (!$msg instanceof RefreshMsg) {
+        if (!$msg instanceof TickMsg || !$msg->isFor($this->name())) {
             return [$this, null];
         }
 
@@ -87,7 +88,7 @@ final class SystemModule extends BaseModule
     protected function tickProducer(): ?\Closure
     {
         static $produce = null;
-        return $produce ??= static fn(): Msg => new RefreshMsg();
+        return $produce ??= static fn(): Msg => TickMsg::for('system');
     }
 
     public function view(): string
