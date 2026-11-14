@@ -55,41 +55,44 @@ final class BareAccessorEraTest extends TestCase
      * spelling is their canonical name, so they are neither renamed nor
      * deprecated. Value rows: [bare, disposition, evidence] — disposition
      * is 'exception' for every collider (each carries the canonical
-     * exception sentence in its own docblock) and evidence is the
-     * accessor's declaration line in the current source.
+     * exception sentence in its own docblock) and evidence is the source
+     * file carrying the accessor. Declaration LINE numbers were dropped
+     * (finding 040): every edit to a cited file rotted them while the guard
+     * stayed green, because the real invariant is symbol set-equality plus
+     * the reflection legs below — arithmetic against the disk was decorative.
      */
     private const COLLIDER_EXCEPTIONS = [
-        'Style::getUnderlineColor'=> ['underlineColor', 'exception', 'Style.php:208'],
-        'Style::getUnderlineStyle'=> ['underlineStyle', 'exception', 'Style.php:229'],
-        'Style::getPaddingChar'   => ['paddingChar', 'exception', 'Style.php:248'],
-        'Style::getMarginChar'    => ['marginChar', 'exception', 'Style.php:266'],
-        'Style::getHyperlink'     => ['hyperlink', 'exception', 'Style.php:565'],
-        'Style::getForeground'    => ['foreground', 'exception', 'Style.php:740'],
-        'Style::getBackground'    => ['background', 'exception', 'Style.php:746'],
-        'Style::getWidth'         => ['width', 'exception', 'Style.php:762'],
-        'Style::getHeight'        => ['height', 'exception', 'Style.php:768'],
-        'Style::getMaxWidth'      => ['maxWidth', 'exception', 'Style.php:774'],
-        'Style::getMaxHeight'     => ['maxHeight', 'exception', 'Style.php:780'],
-        'Style::getAlign'         => ['align', 'exception', 'Style.php:786'],
-        'Style::getVerticalAlign' => ['verticalAlign', 'exception', 'Style.php:792'],
-        'Style::getBorder'        => ['border', 'exception', 'Style.php:798'],
-        'Style::getBorderForeground'=> ['borderForeground', 'exception', 'Style.php:804'],
-        'Style::getBorderBackground'=> ['borderBackground', 'exception', 'Style.php:810'],
-        'Style::getColorProfile'  => ['colorProfile', 'exception', 'Style.php:816'],
-        'Style::getTabWidth'      => ['tabWidth', 'exception', 'Style.php:823'],
-        'Style::getMarginBackground'=> ['marginBackground', 'exception', 'Style.php:829'],
-        'Style::getPadding'       => ['padding', 'exception', 'Style.php:838'],
-        'Style::getMargin'        => ['margin', 'exception', 'Style.php:846'],
-        'HelpBar::getKeySeparator'=> ['keySeparator', 'exception', 'HelpBar.php:160'],
-        'HelpBar::getSeparator'   => ['separator', 'exception', 'HelpBar.php:170'],
-        'HelpBar::getKeyStyle'    => ['keyStyle', 'exception', 'HelpBar.php:180'],
-        'HelpBar::getLabelStyle'  => ['labelStyle', 'exception', 'HelpBar.php:190'],
-        'HelpBar::getWidth'       => ['width', 'exception', 'HelpBar.php:200'],
-        'StatusBar::getSeparator' => ['separator', 'exception', 'StatusBar.php:183'],
-        'StatusBar::getWidth'     => ['width', 'exception', 'StatusBar.php:193'],
-        'StatusBar::getStyle'     => ['style', 'exception', 'StatusBar.php:203'],
-        'StatusBar::getCaps'      => ['caps', 'exception', 'StatusBar.php:215'],
-        'StatusBar::getFillChar'  => ['fillChar', 'exception', 'StatusBar.php:225'],
+        'Style::getUnderlineColor'=> ['underlineColor', 'exception', 'Style.php'],
+        'Style::getUnderlineStyle'=> ['underlineStyle', 'exception', 'Style.php'],
+        'Style::getPaddingChar'   => ['paddingChar', 'exception', 'Style.php'],
+        'Style::getMarginChar'    => ['marginChar', 'exception', 'Style.php'],
+        'Style::getHyperlink'     => ['hyperlink', 'exception', 'Style.php'],
+        'Style::getForeground'    => ['foreground', 'exception', 'Style.php'],
+        'Style::getBackground'    => ['background', 'exception', 'Style.php'],
+        'Style::getWidth'         => ['width', 'exception', 'Style.php'],
+        'Style::getHeight'        => ['height', 'exception', 'Style.php'],
+        'Style::getMaxWidth'      => ['maxWidth', 'exception', 'Style.php'],
+        'Style::getMaxHeight'     => ['maxHeight', 'exception', 'Style.php'],
+        'Style::getAlign'         => ['align', 'exception', 'Style.php'],
+        'Style::getVerticalAlign' => ['verticalAlign', 'exception', 'Style.php'],
+        'Style::getBorder'        => ['border', 'exception', 'Style.php'],
+        'Style::getBorderForeground'=> ['borderForeground', 'exception', 'Style.php'],
+        'Style::getBorderBackground'=> ['borderBackground', 'exception', 'Style.php'],
+        'Style::getColorProfile'  => ['colorProfile', 'exception', 'Style.php'],
+        'Style::getTabWidth'      => ['tabWidth', 'exception', 'Style.php'],
+        'Style::getMarginBackground'=> ['marginBackground', 'exception', 'Style.php'],
+        'Style::getPadding'       => ['padding', 'exception', 'Style.php'],
+        'Style::getMargin'        => ['margin', 'exception', 'Style.php'],
+        'HelpBar::getKeySeparator'=> ['keySeparator', 'exception', 'HelpBar.php'],
+        'HelpBar::getSeparator'   => ['separator', 'exception', 'HelpBar.php'],
+        'HelpBar::getKeyStyle'    => ['keyStyle', 'exception', 'HelpBar.php'],
+        'HelpBar::getLabelStyle'  => ['labelStyle', 'exception', 'HelpBar.php'],
+        'HelpBar::getWidth'       => ['width', 'exception', 'HelpBar.php'],
+        'StatusBar::getSeparator' => ['separator', 'exception', 'StatusBar.php'],
+        'StatusBar::getWidth'     => ['width', 'exception', 'StatusBar.php'],
+        'StatusBar::getStyle'     => ['style', 'exception', 'StatusBar.php'],
+        'StatusBar::getCaps'      => ['caps', 'exception', 'StatusBar.php'],
+        'StatusBar::getFillChar'  => ['fillChar', 'exception', 'StatusBar.php'],
     ];
 
     public function testEveryPublicGetAccessorCarriesAKnownDisposition(): void
