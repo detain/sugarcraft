@@ -260,10 +260,17 @@ final class Glyphs
 
         imagefilledrectangle($tile, 0, 0, $width - 1, $this->cellH - 1, $bgColor);
 
-        $style = $bold ? 'bold' : 'regular';
-        if ($italic) {
-            $style = 'italic';
-        }
+        // Both attributes set selects the family's real BoldItalic face
+        // (VCR-S42: weight used to collapse to italic, silently dropping
+        // bold). FontLoader carries the `bolditalic` candidate chain for
+        // every family, and the fallback families are consulted by the
+        // same path.
+        $style = match (true) {
+            $bold && $italic => 'bolditalic',
+            $bold => 'bold',
+            $italic => 'italic',
+            default => 'regular',
+        };
 
         $fontPath = $this->resolveFontPath($style);
 

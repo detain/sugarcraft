@@ -162,7 +162,7 @@ final class ImagickRasterizer implements Rasterizer
         }
 
         if ($renderCursor && $cursor->visible) {
-            $this->renderCursor($imagick, $cursor, $grid, $cellW, $cellH);
+            $this->renderCursor($imagick, $cursor, $grid, $cellW, $cellH, $fonts);
         }
 
         return $imagick;
@@ -282,7 +282,19 @@ final class ImagickRasterizer implements Rasterizer
             $draw->setFontStyle(\Imagick::STYLE_NORMAL);
         }
 
-        $fontPath = $fonts->resolve($this->fontFamily, 'regular');
+        // VCR-S42: the face follows the cell's style bits exactly like the
+        // GD path (Glyphs::renderTile). The tile cache key already carried
+        // the bold/italic flags — resolving every one of them against the
+        // regular face meant bold text was rendered as regular under two
+        // different keys.
+        $style = match (true) {
+            $bold && $italic => 'bolditalic',
+            $bold => 'bold',
+            $italic => 'italic',
+            default => 'regular',
+        };
+
+        $fontPath = $fonts->resolve($this->fontFamily, $style);
         if ($fontPath !== null) {
             $draw->setFont($fontPath);
         }
@@ -316,6 +328,7 @@ final class ImagickRasterizer implements Rasterizer
         Buffer $grid,
         int $cellW,
         int $cellH,
+        FontLoader $fonts,
     ): void {
         $row = $cursor->row;
         $col = $cursor->col;
@@ -328,38 +341,69 @@ final class ImagickRasterizer implements Rasterizer
         $x = $col * $cellW;
         $y = $row * $cellH;
 
+        // VCR-S42: the cursor sits on a wide-cell head — a 2-cell glyph's
+        // head is followed by its continuation tail in the grid, and a real
+        // terminal inverts the WHOLE wide cell. One-cell-wide paint used to
+        // corrupt the head by covering only its left half.
+        $isWide = $col + 1 < $grid->cols && $grid->cell($row, $col + 1)->continuation;
+        $w = $isWide ? 2 * $cellW : $cellW;
+
+        if ($cursor->shape !== 2 && $cursor->shape !== 3) {
+            // Block (shape 1 and the default): reverse-video of the cell's
+            // OWN glyph, matching GdRasterizer::renderBlockCursor — raw slot
+            // swap, so a cursor parked on an inverse cell flips it back to
+            // normal (xterm behaviour) instead of double-swapping through
+            // the cache's inverse arm. The old solid rectangle hid the
+            // glyph entirely.
+            $bold = ($cell->attrs & Cell::ATTR_BOLD) !== 0;
+            $italic = ($cell->attrs & Cell::ATTR_ITALIC) !== 0;
+            $underline = ($cell->attrs & Cell::ATTR_UNDERLINE) !== 0;
+            $tile = $this->renderCellTile(
+                $cell->char,
+                $cell->bg,
+                $cell->fg,
+                $bold,
+                $italic,
+                $underline,
+                $cellW,
+                $cellH,
+                $fonts,
+                $w,
+                CellColor::pack($cell->bgRgb()),
+                CellColor::pack($cell->fgRgb()),
+            );
+            $imagick->compositeImage($tile, \Imagick::COMPOSITE_OVER, $x, $y);
+            $tile->clear();
+            return;
+        }
+
         $draw = new \ImagickDraw();
         $draw->setFillColor(new \ImagickPixel($this->hexFromRgb($this->cursorRgb($cell))));
 
-        match ($cursor->shape) {
-            1 => $this->drawBlockCursor($draw, $x, $y, $cellW, $cellH),
-            2 => $this->drawUnderlineCursor($draw, $x, $y, $cellW, $cellH),
-            3 => $this->drawBarCursor($draw, $x, $y, $cellW, $cellH),
-            default => $this->drawBlockCursor($draw, $x, $y, $cellW, $cellH),
-        };
+        if ($cursor->shape === 2) {
+            $this->drawUnderlineCursor($draw, $x, $y, $w, $cellH);
+        } else {
+            $this->drawBarCursor($draw, $x, $y, $cellW, $cellH);
+        }
 
         $imagick->drawImage($draw);
     }
 
     /**
-     * On-screen cursor colour as an exact 24-bit value, honouring SGR 38;2 on the
-     * channel painted and preserving this rasterizer's own palette legacy: the
-     * inverse case paints the background slot (unlike GdRasterizer, which paints
-     * the foreground — a pre-existing cross-rasterizer difference kept intact).
+     * On-screen cursor colour for the underline/bar shapes as an exact
+     * 24-bit value, honouring SGR 38;2 on the channel painted. VCR-S42
+     * unified the inverse-cell arm on the GD rasterizer's channel choice
+     * (the foreground slot): the previous background-paint was a
+     * cross-backend divergence, not a feature.
      */
     private function cursorRgb(Cell $cell): int
     {
         if (($cell->attrs & Cell::ATTR_INVERSE) !== 0) {
-            return CellColor::background($cell, $this->theme);
+            return CellColor::foreground($cell, $this->theme);
         }
 
         return CellColor::pack($cell->fgRgb())
             ?? $this->theme->color($cell->fg === 0 ? $this->theme->defaultFg : $cell->fg);
-    }
-
-    private function drawBlockCursor(\ImagickDraw $draw, int $x, int $y, int $w, int $h): void
-    {
-        $draw->rectangle($x, $y, $x + $w - 1, $y + $h - 1);
     }
 
     private function drawUnderlineCursor(\ImagickDraw $draw, int $x, int $y, int $w, int $h): void

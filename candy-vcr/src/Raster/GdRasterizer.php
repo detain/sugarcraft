@@ -245,12 +245,23 @@ final class GdRasterizer implements Rasterizer
         $x = $col * $cellW;
         $y = $row * $cellH;
 
-        match ($cursor->shape) {
-            1 => $this->renderBlockCursor($canvas, $x, $y, $cellW, $cellH, $cell, $glyphs),
-            2 => $this->renderUnderlineCursor($canvas, $x, $y, $cellW, $cellH, $cell),
-            3 => $this->renderBarCursor($canvas, $x, $y, $cellW, $cellH, $cell),
-            default => $this->renderBlockCursor($canvas, $x, $y, $cellW, $cellH, $cell, $glyphs),
-        };
+        // VCR-S42: a wide glyph's head owns the next column too (its
+        // continuation tail) — the real terminal inverts the whole two-cell
+        // box, so the cursor footprint follows the grid contract the same
+        // way the tile walk above does.
+        $isWide = $col + 1 < $grid->cols && $grid->cell($row, $col + 1)->continuation;
+
+        if ($cursor->shape === 2) {
+            $this->renderUnderlineCursor($canvas, $x, $y, $isWide ? 2 * $cellW : $cellW, $cellH, $cell);
+            return;
+        }
+
+        if ($cursor->shape === 3) {
+            $this->renderBarCursor($canvas, $x, $y, $cellW, $cellH, $cell);
+            return;
+        }
+
+        $this->renderBlockCursor($canvas, $x, $y, $cellW, $cellH, $cell, $glyphs, $isWide);
     }
 
     private function renderBlockCursor(
@@ -261,20 +272,32 @@ final class GdRasterizer implements Rasterizer
         int $cellH,
         Cell $cell,
         Glyphs $glyphs,
+        bool $isWide = false,
     ): void {
         $style = $this->styleFromAttrs($cell->attrs);
         // Block cursor paints the cell in reverse video — the tile's foreground is
         // the cell's background channel (and vice-versa), truecolor included.
-        $tile = $glyphs->tile(
-            $cell->char,
-            $cell->bg,
-            $cell->fg,
-            $style['bold'],
-            $style['italic'],
-            $style['underline'],
-            CellColor::pack($cell->bgRgb()),
-            CellColor::pack($cell->fgRgb()),
-        );
+        $tile = $isWide
+            ? $glyphs->tileWide(
+                $cell->char,
+                $cell->bg,
+                $cell->fg,
+                $style['bold'],
+                $style['italic'],
+                $style['underline'],
+                CellColor::pack($cell->bgRgb()),
+                CellColor::pack($cell->fgRgb()),
+            )
+            : $glyphs->tile(
+                $cell->char,
+                $cell->bg,
+                $cell->fg,
+                $style['bold'],
+                $style['italic'],
+                $style['underline'],
+                CellColor::pack($cell->bgRgb()),
+                CellColor::pack($cell->fgRgb()),
+            );
         imagecopy($canvas, $tile, $x, $y, 0, 0, imagesx($tile), imagesy($tile));
     }
 
