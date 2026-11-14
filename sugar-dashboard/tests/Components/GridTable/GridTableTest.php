@@ -63,7 +63,7 @@ final class GridTableTest extends TestCase
 
     public function testSortTogglesDirection(): void
     {
-        $nameCol = new Column('name', 'Name', sortable: true);
+        $nameCol = Column::new('name', 'Name', sortable: true);
         $grid = GridTable::new(
             [$nameCol],
             [
@@ -88,8 +88,8 @@ final class GridTableTest extends TestCase
 
     public function testSortDifferentColumnResetsToAsc(): void
     {
-        $nameCol = new Column('name', 'Name', sortable: true);
-        $ageCol = new Column('age', 'Age', sortable: true);
+        $nameCol = Column::new('name', 'Name', sortable: true);
+        $ageCol = Column::new('age', 'Age', sortable: true);
 
         $grid = GridTable::new(
             [$nameCol, $ageCol],
@@ -112,7 +112,7 @@ final class GridTableTest extends TestCase
 
     public function testSortNonSortableColumnDoesNothing(): void
     {
-        $nameCol = new Column('name', 'Name', sortable: false);
+        $nameCol = Column::new('name', 'Name', sortable: false);
         $grid = GridTable::new(
             [$nameCol],
             [new Row(['name' => 'Alice'])],
@@ -128,7 +128,7 @@ final class GridTableTest extends TestCase
 
     public function testFilterNarrowsRows(): void
     {
-        $nameCol = new Column('name', 'Name', filterable: true);
+        $nameCol = Column::new('name', 'Name', filterable: true);
 
         $grid = GridTable::new(
             [$nameCol],
@@ -149,7 +149,7 @@ final class GridTableTest extends TestCase
 
     public function testFilterCaseInsensitive(): void
     {
-        $nameCol = new Column('name', 'Name', filterable: true);
+        $nameCol = Column::new('name', 'Name', filterable: true);
 
         $grid = GridTable::new(
             [$nameCol],
@@ -170,7 +170,7 @@ final class GridTableTest extends TestCase
 
     public function testEmptyFilterShowsAllRows(): void
     {
-        $nameCol = new Column('name', 'Name', filterable: true);
+        $nameCol = Column::new('name', 'Name', filterable: true);
 
         $grid = GridTable::new(
             [$nameCol],
@@ -192,7 +192,7 @@ final class GridTableTest extends TestCase
 
     public function testPageBoundaries(): void
     {
-        $nameCol = new Column('name', 'Name');
+        $nameCol = Column::new('name', 'Name');
 
         // Create 50 rows
         $rows = array_map(
@@ -230,7 +230,7 @@ final class GridTableTest extends TestCase
 
     public function testScrollToClampedToMax(): void
     {
-        $nameCol = new Column('name', 'Name');
+        $nameCol = Column::new('name', 'Name');
         $rows = [
             new Row(['name' => 'User1']),
             new Row(['name' => 'User2']),
@@ -253,9 +253,9 @@ final class GridTableTest extends TestCase
 
     public function testFreezeColumnsRendersFrozenThenScrollable(): void
     {
-        $nameCol = new Column('name', 'Name', sortable: true);
-        $ageCol = new Column('age', 'Age');
-        $cityCol = new Column('city', 'City');
+        $nameCol = Column::new('name', 'Name', sortable: true);
+        $ageCol = Column::new('age', 'Age');
+        $cityCol = Column::new('city', 'City');
 
         $grid = GridTable::new(
             [$nameCol, $ageCol, $cityCol],
@@ -274,8 +274,8 @@ final class GridTableTest extends TestCase
 
     public function testFreezeColumnsZeroShowsNoDivider(): void
     {
-        $nameCol = new Column('name', 'Name');
-        $ageCol = new Column('age', 'Age');
+        $nameCol = Column::new('name', 'Name');
+        $ageCol = Column::new('age', 'Age');
 
         $grid = GridTable::new(
             [$nameCol, $ageCol],
@@ -296,8 +296,8 @@ final class GridTableTest extends TestCase
 
     public function testRenderAt80x24(): void
     {
-        $nameCol = new Column('name', 'Name', sortable: true);
-        $ageCol = new Column('age', 'Age');
+        $nameCol = Column::new('name', 'Name', sortable: true);
+        $ageCol = Column::new('age', 'Age');
 
         $grid = GridTable::new(
             [$nameCol, $ageCol],
@@ -316,9 +316,9 @@ final class GridTableTest extends TestCase
 
     public function testRenderAt120x40(): void
     {
-        $nameCol = new Column('name', 'Name');
-        $ageCol = new Column('age', 'Age');
-        $cityCol = new Column('city', 'City');
+        $nameCol = Column::new('name', 'Name');
+        $ageCol = Column::new('age', 'Age');
+        $cityCol = Column::new('city', 'City');
 
         $grid = GridTable::new(
             [$nameCol, $ageCol, $cityCol],
@@ -344,7 +344,7 @@ final class GridTableTest extends TestCase
 
     public function testColumnMinWidthRespected(): void
     {
-        $nameCol = new Column('name', 'Name', minWidth: 30);
+        $nameCol = Column::new('name', 'Name', minWidth: 30);
         $grid = GridTable::new(
             [$nameCol],
             [new Row(['name' => 'X'])],
@@ -358,7 +358,7 @@ final class GridTableTest extends TestCase
 
     public function testColumnMaxWidthRespected(): void
     {
-        $longTextCol = new Column('desc', 'Description', maxWidth: 10);
+        $longTextCol = Column::new('desc', 'Description', maxWidth: 10);
         $grid = GridTable::new(
             [$longTextCol],
             [new Row(['desc' => 'This is a very long description that should be truncated'])],
@@ -373,7 +373,7 @@ final class GridTableTest extends TestCase
 
     public function testRenderContainsBorderCharacters(): void
     {
-        $nameCol = new Column('name', 'Name');
+        $nameCol = Column::new('name', 'Name');
 
         $grid = GridTable::new(
             [$nameCol],
@@ -393,7 +393,7 @@ final class GridTableTest extends TestCase
 
     public function testRenderWithNumericSorting(): void
     {
-        $ageCol = new Column('age', 'Age', sortable: true);
+        $ageCol = Column::new('age', 'Age', sortable: true);
 
         $grid = GridTable::new(
             [$ageCol],
@@ -423,7 +423,7 @@ final class GridTableTest extends TestCase
 
     public function testFilterOnlyAffectsVisibleRows(): void
     {
-        $nameCol = new Column('name', 'Name', filterable: true);
+        $nameCol = Column::new('name', 'Name', filterable: true);
 
         $grid = GridTable::new(
             [$nameCol],
@@ -444,7 +444,7 @@ final class GridTableTest extends TestCase
 
     public function testBorderlessRendersWithoutBorderChars(): void
     {
-        $nameCol = new Column('name', 'Name');
+        $nameCol = Column::new('name', 'Name');
 
         $grid = GridTable::new(
             [$nameCol],
@@ -463,8 +463,8 @@ final class GridTableTest extends TestCase
 
     public function testWithColumnsReturnsNewInstance(): void
     {
-        $nameCol = new Column('name', 'Name');
-        $ageCol = new Column('age', 'Age');
+        $nameCol = Column::new('name', 'Name');
+        $ageCol = Column::new('age', 'Age');
 
         $grid1 = GridTable::new([$nameCol], [new Row(['name' => 'Alice'])]);
         $grid2 = $grid1->withColumns([$ageCol]);
@@ -475,7 +475,7 @@ final class GridTableTest extends TestCase
 
     public function testWithRowsReturnsNewInstance(): void
     {
-        $nameCol = new Column('name', 'Name');
+        $nameCol = Column::new('name', 'Name');
 
         $grid1 = GridTable::new([$nameCol], [new Row(['name' => 'Alice'])]);
         $grid2 = $grid1->withRows([new Row(['name' => 'Bob'])]);
@@ -580,8 +580,8 @@ final class GridTableTest extends TestCase
     public function testCalculateColumnWidths(): void
     {
         $columns = [
-            new Column('name', 'Name', minWidth: 5),
-            new Column('age', 'Age'),
+            Column::new('name', 'Name', minWidth: 5),
+            Column::new('age', 'Age'),
         ];
 
         $rows = [
@@ -673,7 +673,7 @@ final class GridTableTest extends TestCase
 
     public function testColumnFluentSetters(): void
     {
-        $col = new Column('name', 'Name');
+        $col = Column::new('name', 'Name');
 
         $col = $col->sortable();
         $this->assertTrue($col->sortable);
@@ -694,7 +694,7 @@ final class GridTableTest extends TestCase
 
     public function testColumnRenderer(): void
     {
-        $col = new Column(
+        $col = Column::new(
             'name',
             'Name',
             renderer: fn($v) => strtoupper((string) $v),
@@ -703,5 +703,42 @@ final class GridTableTest extends TestCase
         $this->assertNotNull($col->renderer);
         $rendered = ($col->renderer)('alice');
         $this->assertSame('ALICE', $rendered);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // D-141: named factory, private ctor, house-callable renderer seam
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testConstructorIsPrivateAndFactoryCarriesEveryField(): void
+    {
+        $this->assertTrue(
+            (new \ReflectionMethod(Column::class, '__construct'))->isPrivate(),
+            'Column is constructed via Column::new only (positional mixup class unreachable)',
+        );
+
+        $renderer = static fn (mixed $v): string => '<' . $v . '>';
+        $column = Column::new('k', 'K', minWidth: 4, maxWidth: 40, sortable: true, filterable: true, renderer: $renderer);
+
+        $this->assertSame('k', $column->key);
+        $this->assertSame('K', $column->label);
+        $this->assertSame(4, $column->minWidth);
+        $this->assertSame(40, $column->maxWidth);
+        $this->assertTrue($column->sortable);
+        $this->assertTrue($column->filterable);
+        $this->assertInstanceOf(\Closure::class, $column->renderer);
+    }
+
+    public function testPlainCallableRendererIsAcceptedNotFatalled(): void
+    {
+        // The old seam typed the parameter callable but the property
+        // ?\Closure, so a plain callable fataled at construction (D-141).
+        $column = Column::new('name', 'Name', renderer: 'strtoupper');
+        $this->assertInstanceOf(\Closure::class, $column->renderer);
+
+        $grid = GridTable::new([$column], [new Row(['name' => 'alice'])]);
+        $this->assertStringContainsString('ALICE', $grid->render());
+
+        $swapped = $column->withRenderer('strrev');
+        $this->assertInstanceOf(\Closure::class, $swapped->renderer);
     }
 }

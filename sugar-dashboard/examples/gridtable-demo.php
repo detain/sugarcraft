@@ -16,12 +16,12 @@ use SugarCraft\Dashboard\Components\GridTable\{GridTable,Column,Row};
  * Run: php examples/gridtable-demo.php
  */
 $cols = [
-    new Column('id', 'ID', sortable: true),
-    new Column('name', 'Name', sortable: true, filterable: true),
-    new Column('email', 'Email', filterable: true),
-    new Column('dept', 'Department', sortable: true),
-    new Column('score', 'Score', sortable: true),
-    new Column('status', 'Status', sortable: true),
+    Column::new('id', 'ID', sortable: true),
+    Column::new('name', 'Name', sortable: true, filterable: true),
+    Column::new('email', 'Email', filterable: true),
+    Column::new('dept', 'Department', sortable: true),
+    Column::new('score', 'Score', sortable: true),
+    Column::new('status', 'Status', sortable: true),
 ];
 
 $rows = [];
