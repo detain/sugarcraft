@@ -539,10 +539,11 @@ final class DocSurfaceTruthTest extends TestCase
 
         $flat = (string) \preg_replace('/\s+/', ' ', $readme);
 
-        // PasswordAuth: the variable it reads is one no OpenSSH exports.
+        // PasswordAuth: this repo does not set the variable it reads, and the
+        // ForceCommand export is unverified; no absolute claim about OpenSSH.
         self::assertStringContainsString('Compares a password from `SSH_PASSWORD`', $flat);
         self::assertStringContainsString('This repo does not set `SSH_PASSWORD`, and whether sshd\'s ForceCommand path exports it is unverified against OpenSSH', $flat);
-        self::assertStringNotContainsString('Nothing in OpenSSH ever sets that variable', $flat);
+        self::assertDoesNotMatchRegularExpression('/nothing in openssh ever sets/i', $flat);
         self::assertStringNotContainsString('against a caller-supplied callback (`SSH_PASSWORD` env var).', $flat);
 
         // CertificateAuth: same story, and the silence was the defect (audit K6).
@@ -729,11 +730,13 @@ final class DocSurfaceTruthTest extends TestCase
     }
 
     /**
-     * AUD §2 #58 / P0-A13: PasswordAuth reads a variable that the stock
-     * daemon never sets, so the gate is only usable behind a wrapper. That
-     * must be stated on the class (where a reader of the code lands) and in
-     * the README (where an operator lands), and the statement must not be
-     * dropped by a later rewrite of either.
+     * AUD §2 #58 / P0-A13: PasswordAuth reads `SSH_PASSWORD`, which this repo
+     * does not set, and whether a ForceCommand wrapper exports it is unverified
+     * against OpenSSH, so the gate is only usable behind a wrapper. That must
+     * be stated on the class (where a reader of the code lands) and in the
+     * README (where an operator lands), and the statement must not be dropped
+     * by a later rewrite of either. Absolute claims about what OpenSSH never
+     * sets are asserted absent, case-insensitively, so they cannot come back.
      */
     public function testPasswordAuthIsDocumentedAsWrapperOnly(): void
     {
@@ -744,7 +747,7 @@ final class DocSurfaceTruthTest extends TestCase
         self::assertStringContainsString('**Wrapper-only.**', $doc);
         self::assertStringContainsString('This repo does not set `SSH_PASSWORD`, and whether sshd\'s ForceCommand path exports it is unverified against OpenSSH.', $doc);
         self::assertStringContainsString('does not authenticate the peer', $doc);
-        self::assertStringNotContainsString('Nothing in OpenSSH ever sets', $doc);
+        self::assertDoesNotMatchRegularExpression('/nothing in openssh ever sets/i', $doc);
 
         $readme = $this->readme();
         if ($readme === null) {
@@ -754,7 +757,7 @@ final class DocSurfaceTruthTest extends TestCase
         self::assertStringContainsString('**Wrapper-only.** Compares a password from `SSH_PASSWORD`', $flat);
         self::assertStringContainsString('**Wrapper-only:** reads `SSH_PASSWORD`', $flat);
         self::assertStringContainsString('This repo does not set `SSH_PASSWORD`, and whether sshd\'s ForceCommand path exports it is unverified against OpenSSH', $flat);
-        self::assertStringNotContainsString('Nothing in OpenSSH ever sets that variable', $flat);
+        self::assertDoesNotMatchRegularExpression('/nothing in openssh ever sets/i', $flat);
     }
 
     public function testTheChildEnvironmentContractIsWrittenWhereItIsUsed(): void
