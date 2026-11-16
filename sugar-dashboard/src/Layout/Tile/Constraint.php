@@ -15,7 +15,7 @@ final class Constraint
         public readonly int $fixedSize = 0,
         public readonly float $flexWeight = 0.0,
         public readonly int $minSize = 0,
-        public readonly int $maxSize = -1, // -1 = unbounded
+        public readonly ?int $maxSize = null, // null = unbounded (finding sugar-dashboard-217: the -1 sentinel made maxSize 0 a silent clamp-to-zero)
         public readonly bool $optional = false,
         public readonly bool $minSizeFit = false,
     ) {}
@@ -48,6 +48,11 @@ final class Constraint
         );
     }
 
+    /**
+     * Cap the size at $max. A non-positive cap means no cap: sizing a
+     * visible tile to a zero maximum was the silent clamp-to-zero half of
+     * finding sugar-dashboard-217, so 0 now reads as honest no-max.
+     */
     public function withMaxSize(int $max): self
     {
         return new self(
@@ -55,7 +60,7 @@ final class Constraint
             fixedSize: $this->fixedSize,
             flexWeight: $this->flexWeight,
             minSize: $this->minSize,
-            maxSize: $max,
+            maxSize: $max <= 0 ? null : $max,
             optional: $this->optional,
             minSizeFit: $this->minSizeFit,
         );

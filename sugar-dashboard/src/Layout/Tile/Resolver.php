@@ -67,10 +67,9 @@ final class Resolver
         $n = \count($constraints);
 
         // Apply minSizeFit: query hinters for effective minimums.
-        $work = [];
-        for ($i = 0; $i < $n; $i++) {
-            $work[$i] = $constraints[$i];
-        }
+        // Finding sugar-dashboard-217: the element-wise copy was a redundant
+        // re-query of a plain array assignment.
+        $work = $constraints;
         for ($i = 0; $i < $n; $i++) {
             $c = $work[$i];
             if ($c->minSizeFit && $hinters[$i] !== null) {
@@ -263,7 +262,7 @@ final class Resolver
         if ($val < $c->minSize) {
             $val = $c->minSize;
         }
-        if ($c->maxSize >= 0 && $val > $c->maxSize) {
+        if ($c->maxSize !== null && $val > $c->maxSize) {
             $val = $c->maxSize;
         }
         return $val;
@@ -278,71 +277,10 @@ final class Resolver
         if (!$c->optional && $val < $c->minSize) {
             $val = $c->minSize;
         }
-        if ($c->maxSize >= 0 && $val > $c->maxSize) {
+        if ($c->maxSize !== null && $val > $c->maxSize) {
             $val = $c->maxSize;
         }
         return $val;
     }
 
-    /**
-     * Calculate tile dimensions based on layout direction and available space.
-     */
-    public static function resolveTile(
-        Tile $tile,
-        Direction $direction,
-        int $availableWidth,
-        int $availableHeight,
-        int $totalFixedWidth = 0,
-        int $totalFixedHeight = 0,
-    ): array {
-        $size = $tile->size();
-
-        if ($direction === Direction::Horizontal) {
-            $tileWidth = self::decideWidth($size, $availableWidth, $totalFixedWidth);
-            $tileHeight = self::decideHeight($size, $availableHeight);
-            return [$tileWidth, $tileHeight];
-        }
-
-        $tileWidth = self::decideWidth($size, $availableWidth);
-        $tileHeight = self::decideHeight($size, $availableHeight, $totalFixedHeight);
-        return [$tileWidth, $tileHeight];
-    }
-
-    private static function decideWidth(Size $size, int $available, int $fixedSubtract = 0): int
-    {
-        $avail = $available - $fixedSubtract;
-
-        if ($size->fixedWidth !== null) {
-            return min($avail, $size->fixedWidth);
-        }
-
-        $w = $avail;
-        if ($size->maxWidth !== null && $w > $size->maxWidth) {
-            $w = $size->maxWidth;
-        }
-        if ($size->minWidth !== null && $w < $size->minWidth) {
-            $w = $size->minWidth;
-        }
-
-        return max(0, $w);
-    }
-
-    private static function decideHeight(Size $size, int $available, int $fixedSubtract = 0): int
-    {
-        $avail = $available - $fixedSubtract;
-
-        if ($size->fixedHeight !== null) {
-            return min($avail, $size->fixedHeight);
-        }
-
-        $h = $avail;
-        if ($size->maxHeight !== null && $h > $size->maxHeight) {
-            $h = $size->maxHeight;
-        }
-        if ($size->minHeight !== null && $h < $size->minHeight) {
-            $h = $size->minHeight;
-        }
-
-        return max(0, $h);
-    }
 }

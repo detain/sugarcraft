@@ -169,11 +169,17 @@ final class TileLayout implements Item, SizedItem
             $views[] = $tile->setSize($tileW, $tileH)->render();
         }
 
+        // Finding sugar-dashboard-034: the resolver subtracts gap cells
+        // from the budget but the join painted none of them, so a gapped
+        // layout came back narrower (horizontal) or shorter (vertical) than
+        // its allocation. Emit real spacer cells at each split; gap 0 keeps
+        // the legacy joins byte-for-byte.
+        $gap = max(0, $this->gap);
         if ($this->direction === Direction::Horizontal) {
-            return implode('', $views);
+            return implode(str_repeat(' ', $gap), $views);
         }
 
-        return implode("\n", $views);
+        return implode(str_repeat("\n", $gap + 1), $views);
     }
 
     public function innerSize(): array
@@ -238,7 +244,7 @@ final class TileLayout implements Item, SizedItem
             direction: $this->direction,
             tiles: $this->tiles,
             baseSize: $this->baseSize,
-            gap: $gap,
+            gap: max(0, $gap), // finding sugar-dashboard-132
         );
         if ($this->width !== null && $this->height !== null) {
             return $layout->setSize($this->width, $this->height);
