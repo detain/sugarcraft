@@ -363,10 +363,11 @@ Beyond the CLI, candy-mdview exposes three public pieces for integrating its
 behavior into other PHP projects: the pager's TEA model (a The-Elm-
 Architecture update loop, `MdViewModel`) and
 two utility helpers (`FileWatcher`, `GlamourTheme`). The deprecated
-`RenderCommand::set*Callback()` test seams and the legacy public
-`RenderCommand::loadInput()` are deliberately not part of the supported
-API; they remain for the package's own tests, and any integrator using
-them does so at their own risk. Visual width measuring
+`RenderCommand::set*Callback()` test seams are deliberately not part of the
+supported API; they remain for the package's own tests, and any integrator
+using them does so at their own risk. The document input door is the
+private `readDocument()`, which every real input path shares with the
+`DocumentGate` size and binary guards. Visual width measuring
 (CJK/emoji) is delegated to `SugarCraft\Core\Util\Width` in **sugar-core** —
 use that directly; this package ships no local width helpers.
 
