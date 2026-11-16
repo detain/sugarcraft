@@ -388,14 +388,11 @@ final class CubicBezierTest extends TestCase
     }
 
     /**
-     * BC leg of the rename: the deprecated evaluate() sampler alias returns
-     * byte-identical values to ease(), warning once per use with the dated
-     * REMOVED-IN stamp. The legacy STATIC ease() is a different story: no
-     * forwarder is dispatchable (the engine resolves it to the instance
-     * sampler and raises an Error), so the pin here is that it fails LOUDLY
-     * — never quietly returning a preset.
+     * ease() is the one sampler: it answers the endpoints exactly and raises
+     * no deprecation notice (the evaluate() alias it replaced was removed in
+     * 2.0.0).
      */
-    public function testLegacyNamesAnswerDeprecatedOrLoud(): void
+    public function testEaseIsTheOnlySamplerAndEmitsNoNotice(): void
     {
         $captured = [];
         set_error_handler(static function (int $errno, string $errstr) use (&$captured): bool {
@@ -404,19 +401,22 @@ final class CubicBezierTest extends TestCase
         }, E_USER_DEPRECATED);
         try {
             $cb = CubicBezier::easeInOutCubic();
-            foreach ([0.0, 0.25, 0.5, 0.75, 1.0] as $t) {
-                $this->assertSame($cb->ease($t), $cb->evaluate($t), 'evaluate() alias byte-equals ease() at t=' . $t);
-            }
+            $this->assertEqualsWithDelta(0.0, $cb->ease(0.0), 1e-9);
+            $this->assertEqualsWithDelta(1.0, $cb->ease(1.0), 1e-9);
         } finally {
             restore_error_handler();
         }
 
-        $this->assertCount(5, $captured);
-        foreach ($captured as [$errno, $errstr]) {
-            $this->assertSame(E_USER_DEPRECATED, $errno);
-            $this->assertStringContainsString('REMOVED-IN: 2.0.0', $errstr);
-        }
+        $this->assertSame([], $captured);
+    }
 
+    /**
+     * The legacy STATIC ease() has no forwarder: PHP resolves the call to the
+     * instance sampler and raises an Error, so it must fail LOUDLY — never
+     * quietly returning a preset.
+     */
+    public function testLegacyStaticEaseFailsLoudly(): void
+    {
         $this->expectException(\Error::class);
         $this->expectExceptionMessage('cannot be called statically');
 

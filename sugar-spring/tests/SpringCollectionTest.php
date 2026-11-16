@@ -317,90 +317,27 @@ final class SpringCollectionTest extends TestCase
         );
     }
 
-    // ── Deprecated shims (REMOVED-IN: 2.0.0) ────────────────────────────────
-
     /**
-     * SPR-17 (finding 019 ruling): the shims are now copy-on-write — they
-     * return the NEW collection and leave the receiver untouched, so the old
-     * `$c = $c->add(...)` null-assignment footgun is dead and the plain
-     * `$c->add(...)` mutation half is honestly disclosed as gone. The
-     * deprecation notices themselves are asserted in the legs below.
+     * The with-prefixed builders compose copy-on-write: each returns the NEW
+     * collection and leaves the receiver untouched, so a chained rebuild
+     * never needs to reassign a mutated receiver. (Moved from the pre-2.0
+     * add()/remove()/setTarget() shims, which this now mirrors.)
      */
-    public function testDeprecatedShimsAreCopyOnWrite(): void
+    public function testWithMutatorsComposeCopyOnWrite(): void
     {
         $spring = new Spring(1.0 / 60.0, 6.0, 1.0);
         $collection = new SpringCollection();
 
-        set_error_handler(static fn(): bool => true, E_USER_DEPRECATED);
-        try {
-            $added = $collection->add('spring1', $spring, 0.0, 0.0, 10.0);
-            $this->assertFalse($collection->has('spring1'), 'add() must NOT mutate the receiver anymore');
-            $this->assertTrue($added->has('spring1'), 'add() returns the grown collection');
+        $added = $collection->withSpring('spring1', $spring, 0.0, 0.0, 10.0);
+        $this->assertFalse($collection->has('spring1'), 'withSpring() must NOT mutate the receiver');
+        $this->assertTrue($added->has('spring1'), 'withSpring() returns the grown collection');
 
-            $retargeted = $added->setTarget('spring1', 42.0);
-            $this->assertEqualsWithDelta(10.0, $added->target('spring1'), 1e-9, 'setTarget() must not touch the receiver');
-            $this->assertEqualsWithDelta(42.0, $retargeted->target('spring1'), 1e-9, 'setTarget() returns the retargeted collection');
+        $retargeted = $added->withTarget('spring1', 42.0);
+        $this->assertEqualsWithDelta(10.0, $added->target('spring1'), 1e-9, 'withTarget() must not touch the receiver');
+        $this->assertEqualsWithDelta(42.0, $retargeted->target('spring1'), 1e-9, 'withTarget() returns the retargeted collection');
 
-            $removed = $retargeted->remove('spring1');
-            $this->assertTrue($retargeted->has('spring1'), 'remove() must not touch the receiver');
-            $this->assertFalse($removed->has('spring1'), 'remove() returns the shrunk collection');
-        } finally {
-            restore_error_handler();
-        }
-    }
-
-    /**
-     * @dataProvider deprecatedCalls
-     */
-    public function testDeprecatedShimsEmitDeprecation(callable $call, string $replacement): void
-    {
-        $captured = [];
-        set_error_handler(static function (int $errno, string $errstr) use (&$captured): bool {
-            $captured[] = [$errno, $errstr];
-            return true;
-        }, E_USER_DEPRECATED);
-        try {
-            $call();
-        } finally {
-            restore_error_handler();
-        }
-
-        $this->assertCount(1, $captured, 'shim must emit exactly one deprecation');
-        $this->assertSame(E_USER_DEPRECATED, $captured[0][0]);
-        $this->assertStringContainsStringIgnoringCase('deprecated', $captured[0][1]);
-        $this->assertStringContainsString($replacement, $captured[0][1]);
-        // SPR-17 (finding 054): one expiry vocabulary across the whole lib.
-        $this->assertStringContainsString('REMOVED-IN: 2.0.0', $captured[0][1]);
-    }
-
-    /** @return iterable<string, array{0: callable, 1: string}> */
-    public static function deprecatedCalls(): iterable
-    {
-        // withSpring() is used for setup because it does not emit a deprecation,
-        // so only the shim under test contributes to the captured notice.
-        yield 'add' => [
-            static fn() => (new SpringCollection())->add('x', new Spring(1.0 / 60.0, 6.0, 1.0)),
-            'withSpring()',
-        ];
-        yield 'remove' => [
-            static fn() => (new SpringCollection())
-                ->withSpring('x', new Spring(1.0 / 60.0, 6.0, 1.0))
-                ->remove('x'),
-            'without()',
-        ];
-        yield 'setTarget' => [
-            static fn() => (new SpringCollection())
-                ->withSpring('x', new Spring(1.0 / 60.0, 6.0, 1.0))
-                ->setTarget('x', 5.0),
-            'withTarget()',
-        ];
-        // SPR-17 (finding 051): the read-side forwarder is loud too — no
-        // silent migration lingers on the getter while every writer warns.
-        yield 'getTarget' => [
-            static fn() => (new SpringCollection())
-                ->withSpring('x', new Spring(1.0 / 60.0, 6.0, 1.0), 0.0, 0.0, 5.0)
-                ->getTarget('x'),
-            'target()',
-        ];
+        $removed = $retargeted->without('spring1');
+        $this->assertTrue($retargeted->has('spring1'), 'without() must not touch the receiver');
+        $this->assertFalse($removed->has('spring1'), 'without() returns the shrunk collection');
     }
 }

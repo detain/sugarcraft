@@ -299,19 +299,6 @@ final class CubicBezier implements EasingFunction
     }
 
     /**
-     * @deprecated Use {@see ease()}, the seam sampler. REMOVED-IN: 2.0.0.
-     */
-    public function evaluate(float $t): float
-    {
-        trigger_error(
-            'CubicBezier::evaluate() is deprecated; use ease() which satisfies the EasingFunction seam. REMOVED-IN: 2.0.0.',
-            E_USER_DEPRECATED,
-        );
-
-        return $this->ease($t);
-    }
-
-    /**
      * Solve x(t) = $x for t using Newton-Raphson with a binary-search fallback.
      */
     private function solveCubicX(float $x): float

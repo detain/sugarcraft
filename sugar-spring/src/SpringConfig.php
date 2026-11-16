@@ -112,19 +112,4 @@ final readonly class SpringConfig
     {
         return new Spring($deltaTime, $this->angularFrequency, $this->dampingRatio, $reducedMotionOverride);
     }
-
-    /**
-     * @deprecated Use {@see spring()} — at its default frame time that is
-     *             exactly this method (finding 072: two spellings, one door).
-     *             REMOVED-IN: 2.0.0.
-     */
-    public function springAt60Fps(?bool $reducedMotionOverride = null): Spring
-    {
-        trigger_error(
-            'SpringConfig::springAt60Fps() is deprecated; use spring() with its 1/60 default. REMOVED-IN: 2.0.0.',
-            E_USER_DEPRECATED,
-        );
-
-        return $this->spring(1.0 / 60.0, $reducedMotionOverride);
-    }
 }

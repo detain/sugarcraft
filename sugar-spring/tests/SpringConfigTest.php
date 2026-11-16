@@ -54,41 +54,33 @@ final class SpringConfigTest extends TestCase
     }
 
     /**
-     * SPR-29 (finding 072): springAt60Fps() is exactly spring() with the
-     * 1/60 default — the twin door still answers, loudly deprecated, byte-
-     * identical to the canonical spelling (ADT-style roster entry for a
-     * non-get surface, kept in this file because the src get* census
-     * deliberately does not see it).
+     * The default frame time of spring() is 1/60 s: the call with no
+     * arguments produces the exact bytes of the explicit 1/60 call. This
+     * behaviour was previously reached through springAt60Fps(), removed in
+     * 2.0.0 (finding 072: one door, not two).
      */
-    public function testSpringAt60FpsIsTheLoudDeprecatedTwinOfTheDefaultDoor(): void
+    public function testSpringDefaultFrameTimeIsOneSixtieth(): void
     {
         $config = new SpringConfig(tension: 100.0, friction: 10.0, mass: 1.0);
 
-        $message = null;
-        set_error_handler(static function (int $severity, string $text) use (&$message): bool {
-            if ($severity === E_USER_DEPRECATED) {
-                $message = $text;
-                return true;
-            }
-            return false;
+        $captured = [];
+        set_error_handler(static function (int $errno, string $errstr) use (&$captured): bool {
+            $captured[] = $errstr;
+            return true;
         }, E_USER_DEPRECATED);
         try {
-            $viaAlias = $config->springAt60Fps();
+            $default = $config->spring();
+            $explicit = $config->spring(1.0 / 60.0);
         } finally {
             restore_error_handler();
         }
 
-        $this->assertStringContainsString('REMOVED-IN: 2.0.0', (string) $message);
-        $this->assertStringContainsString('use spring()', (string) $message);
-
+        $this->assertSame([], $captured, 'spring() must not emit any deprecation notice');
         $this->assertSame(
-            $config->spring(1.0 / 60.0)->update(0.0, 0.0, 100.0),
-            $viaAlias->update(0.0, 0.0, 100.0),
-            'the deprecated alias must answer with the exact bytes of the canonical door',
+            $explicit->update(0.0, 0.0, 100.0),
+            $default->update(0.0, 0.0, 100.0),
+            'spring() with no arguments must match the explicit 1/60 frame time',
         );
-
-        $doc = (string) (new \ReflectionMethod($config, 'springAt60Fps'))->getDocComment();
-        $this->assertStringContainsString('@deprecated', $doc);
     }
 
     // M-A (review 1102): the old `max(0.0, ·)` clamps manufactured exactly
