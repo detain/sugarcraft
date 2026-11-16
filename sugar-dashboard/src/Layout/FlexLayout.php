@@ -193,37 +193,65 @@ final class FlexLayout implements \SugarCraft\Dashboard\Foundation\SizedItem
     private function renderWrappedRow(int $totalWidth, int $totalHeight, array $itemSizes): string
     {
         $lines = [];
-        $currentLine = '';
+        $rowCells = [];
         $currentLineWidth = 0;
-        $currentLineItems = [];
+
+        // Compose one wrapped row from its cells (finding 035): each cell
+        // contributes its FULL line stack and the row is as tall as its
+        // tallest cell, so the seam between rows lands between the last line
+        // of one child and the first line of the next. The old glue appended
+        // whole render() blobs into one string slot, letting multi-line
+        // children bleed across the seam.
+        $flushRow = function (array $cells) use (&$lines): void {
+            $rowHeight = 1;
+
+            foreach ($cells as $cell) {
+                $rowHeight = max($rowHeight, count($cell['lines']));
+            }
+
+            for ($row = 0; $row < $rowHeight; $row++) {
+                $composed = '';
+
+                foreach ($cells as $cellIndex => $cell) {
+                    if ($cellIndex > 0 && $this->gap > 0) {
+                        $composed .= str_repeat(' ', $this->gap);
+                    }
+
+                    $line = $cell['lines'][$row] ?? '';
+
+                    if (Width::string($line) > $cell['width']) {
+                        $line = Truncate::truncate($line, $cell['width'], '');
+                    } else {
+                        $line = Width::padRight($line, $cell['width']);
+                    }
+
+                    $composed .= $line;
+                }
+
+                $lines[] = $composed;
+            }
+        };
 
         foreach ($this->items as $index => $item) {
+            $rendered = $item->render();
             $itemWidth = $itemSizes[$index]['width'];
 
             // Check if item fits in current line
             $itemWithGap = $currentLineWidth > 0 ? $this->gap : 0;
-            if ($currentLineWidth + $itemWithGap + $itemWidth <= $totalWidth) {
-                // Add to current line
-                if ($currentLineWidth > 0) {
-                    $currentLine .= str_repeat(' ', $this->gap);
-                }
-                $currentLine .= $item->render();
-                $currentLineWidth += $itemWithGap + $itemWidth;
-                $currentLineItems[] = $index;
-            } else {
-                // Start new line
-                if ($currentLine !== '') {
-                    $lines[] = $currentLine;
-                }
-                $currentLine = $item->render();
-                $currentLineWidth = $itemWidth;
-                $currentLineItems = [$index];
+
+            if ($currentLineWidth + $itemWithGap + $itemWidth > $totalWidth && $currentLineWidth > 0) {
+                $flushRow($rowCells);
+                $rowCells = [];
+                $currentLineWidth = 0;
+                $itemWithGap = 0;
             }
+
+            $rowCells[] = ['lines' => explode("\n", $rendered), 'width' => $itemWidth];
+            $currentLineWidth += $itemWithGap + $itemWidth;
         }
 
-        // Add last line
-        if ($currentLine !== '') {
-            $lines[] = $currentLine;
+        if ($rowCells !== []) {
+            $flushRow($rowCells);
         }
 
         // Truncate lines to total width and pad to totalHeight
