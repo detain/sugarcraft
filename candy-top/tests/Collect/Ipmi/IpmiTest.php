@@ -38,6 +38,9 @@ final class IpmiTest extends TestCase
     {
         $this->dir = sys_get_temp_dir() . '/candy-top-ipmi-' . bin2hex(random_bytes(5));
         mkdir($this->dir);
+        // Darwin /var is a symlink to /private/var and the absolute roster
+        // realpaths PATH dirs by design: carry the resolved spelling (wave-4 F11).
+        $this->dir = (string) realpath($this->dir);
         touch($this->dir . '/ipmi0');
         $fixtures = \dirname(__DIR__, 2) . '/fixtures/ipmi/skynet2';
         $ok = static fn (string $f): CommandResult => new CommandResult(CommandOutcome::Ok, (string) file_get_contents("$fixtures/$f"), 0);
