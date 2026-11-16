@@ -231,7 +231,7 @@ final class MaskIngestTest extends TestCase
     public function testEachScanlineReadsItsPredictorFromTheRowAlreadyUnfiltered(): void
     {
         // 3x3 gray. Row 1 Up adds row 0 (10,20,30) → 11,22,33. Row 2 Average
-        // predicts from the row above (11,22,33) and the left neighbour in the
+        // predicts from the row above (11,22,33) and the left neighbor in the
         // same row: x0 = 0 + 11/2 = 5, x1 = 0 + (5+22)/2 = 13, x2 = 0 + (13+33)/2 = 23.
         // The linear unfilter writes into one buffer by offset, so this pins
         // that the "previous" row it reads is the one it just wrote.
