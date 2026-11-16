@@ -26,11 +26,22 @@ final class PharBuildScriptTest extends TestCase
 {
     public function testTheBinaryCarriesTheStubShapeAndThePharGuard(): void
     {
-        $bin = file_get_contents(__DIR__ . '/../bin/candy-git');
-        self::assertIsString($bin);
+        $raw = file_get_contents(__DIR__ . '/../bin/candy-git');
+        self::assertIsString($raw);
+        // The pinned law is the stub SHAPE - shebang line, then <?php - not
+        // the per-host newline spelling: a Windows runner with the global
+        // core.autocrlf=true checks this file out with CRLF bytes (ci-wave-3
+        // L4). Normalize before the shape pins, and prove the normalization
+        // non-vacuous with a synthetic re-CRLF leg that must re-satisfy the
+        // same prefix on every host.
+        $bin = str_replace("\r\n", "\n", $raw);
         self::assertTrue(
             str_starts_with($bin, "#!/usr/bin/env php\n<?php"),
             'bin must keep the shebang+<?php stub shape the build script pins',
+        );
+        self::assertTrue(
+            str_starts_with(str_replace("\r\n", "\n", str_replace("\n", "\r\n", $raw)), "#!/usr/bin/env php\n<?php"),
+            'the CRLF checkout spelling must satisfy the same stub pin the LF spelling does',
         );
         self::assertStringContainsString(
             "'phar://' . __FILE__",

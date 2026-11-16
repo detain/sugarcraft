@@ -198,9 +198,18 @@ final class CommandLineTest extends TestCase
         // The named refusal is cli.piped_stdout (candy-git-055): the pipe is
         // honored, not rescued onto /dev/tty, so the message says STDOUT was
         // piped — not the old generic needs-an-interactive-terminal line.
+        // That naming law is POSIX-side only: TerminalGate cannot distinguish
+        // a console-less child stdout from a tty behind a mintty-class rescue
+        // without the delegation, so on Windows the honest refusal after a
+        // failed Tty::openTty is the needs-tty line (ci-wave-3 L4). Exit and
+        // silence — the actual contract — stay unconditional.
         self::assertSame(1, $exit);
         self::assertStringContainsString('interactive terminal', $err);
-        self::assertStringContainsString('stdout was piped', $err);
+        if (DIRECTORY_SEPARATOR === '\\') {
+            self::assertStringContainsString('not a tty', $err);
+        } else {
+            self::assertStringContainsString('stdout was piped', $err);
+        }
         self::assertSame('', $out, 'no escape sequences may reach a piped stdout');
     }
 

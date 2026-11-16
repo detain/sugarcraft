@@ -37,6 +37,12 @@ final class HistoryUndoIntegrationTest extends TestCase
         $this->gitMust(['init', '-q', '-b', 'main', $this->cwd]);
         $this->gitMust(['-C', $this->cwd, 'config', 'user.email', 'test@test.com']);
         $this->gitMust(['-C', $this->cwd, 'config', 'user.name', 'Test']);
+        // The Windows runners carry a global core.autocrlf=true, which turns
+        // LF payloads into CRLF working bytes on checkout and stash-apply -
+        // the pins below measure the undo lane's behaviour, not the machine's
+        // gitconfig (ci-wave-3 L4: the stash round-trip was red on both
+        // runner arms for exactly this). Pin the byte promise repo-locally.
+        $this->gitMust(['-C', $this->cwd, 'config', 'core.autocrlf', 'false']);
         $this->git = new Git($this->cwd);
     }
 
@@ -94,6 +100,10 @@ final class HistoryUndoIntegrationTest extends TestCase
 
     public function test_stash_apply_round_trip_leaves_the_entry_standing(): void
     {
+        // Witness the fixture's EOL promise itself: if this ever answers
+        // anything else, the round-trip byte pins below stop measuring the
+        // driver and start measuring the machine.
+        $this->assertSame('false', $this->gitStdout(['-C', $this->cwd, 'config', '--get', 'core.autocrlf']), 'the fixture pins its own autocrlf honesty');
         $this->commitFile('base');
         file_put_contents($this->cwd . '/f.txt', "dirty\n");
 

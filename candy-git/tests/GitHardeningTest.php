@@ -77,9 +77,19 @@ final class GitHardeningTest extends TestCase
         try {
             $env = Process::childEnv();
 
-            // Parent environment rides through (PATH etc.)...
+            // Parent environment rides through (PATH etc.). The PATH-named
+            // key check is case-insensitive on purpose: Windows stores the
+            // search path as 'Path' in the environment block, and getenv()
+            // hands back the spelling as stored, so an exact-case hasKey was
+            // a POSIX-only assumption (ci-wave-3 L4). The invariant is that a
+            // PATH-named key rides through non-empty, whatever its case.
             self::assertSame('yes', $env['CANDY_GIT_HARDENING_CARRIED'] ?? null);
-            self::assertArrayHasKey('PATH', $env);
+            $pathKeys = array_values(array_filter(
+                array_keys($env),
+                static fn ($name): bool => is_string($name) && strcasecmp($name, 'PATH') === 0,
+            ));
+            self::assertNotEmpty($pathKeys, 'the child environment must carry a PATH-named key');
+            self::assertNotSame('', trim((string) $env[$pathKeys[0]]), 'the carried PATH must be usable');
 
             // ...and every interactive surface git could reach is closed.
             self::assertSame('0', $env['GIT_TERMINAL_PROMPT']);

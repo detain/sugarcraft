@@ -484,9 +484,18 @@ final class Git implements GitDriver
             if (!is_string($file) || !is_file($file) || str_ends_with($file, '.sample')) {
                 continue;
             }
-            if (is_executable($file)) {
-                return true;
+            // Git-for-Windows has no usable NTFS mode bit (core.filemode is
+            // meaningless there): it treats every non-.sample hook file as
+            // executable and RUNS it on the next committing verb. PHP's
+            // is_executable answers false exactly where git answers live, so
+            // on Windows existence IS liveness - mirror git's verdict, not the
+            // filesystem's impression, or the candy-git-144 warning misses the
+            // very hooks it exists to surface. [ci-wave-3 L4, 2026-11-16]
+            if (!Platform::new()->isWindows() && !is_executable($file)) {
+                continue;
             }
+
+            return true;
         }
 
         return false;

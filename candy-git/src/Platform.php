@@ -173,6 +173,36 @@ final class Platform
         return null;
     }
 
+    /**
+     * Rewrite a bare argv[0] to its OS-resolved path, the way cmd.exe would.
+     * CreateProcess appends only `.exe` to a bare program name, so a git that
+     * ships as git.cmd - a shim, or a PATH wrapper - dies with error 2 at spawn
+     * time on the very hosts where it IS installed. Resolving through
+     * findExecutable walks the same PATHEXT family. Best-effort by contract:
+     * tokens that already spell a path, and names nothing resolves, are handed
+     * back untouched so spawnFailure's reason stays honest.
+     *
+     * @param list<string> $argv
+     *
+     * @return list<string>
+     */
+    public function resolveSpawnProgram(array $argv): array
+    {
+        if (!$this->windows || $argv === []) {
+            return $argv;
+        }
+        $program = $argv[0];
+        if ($program === '' || str_contains($program, '/') || str_contains($program, '\\')) {
+            return $argv;
+        }
+        $resolved = $this->findExecutable($program);
+        if ($resolved !== null) {
+            $argv[0] = $resolved;
+        }
+
+        return $argv;
+    }
+
     /** Force-stop the process tree rooted at $pid (Windows ladder only). */
     public function killTree(int $pid): void
     {

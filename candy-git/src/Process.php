@@ -412,6 +412,11 @@ final class Process
             1 => ['file', $outFile, 'w'],
             2 => ['file', $errFile, 'w'],
         ];
+        // The seam answers the difference (Platform docblock): a bare argv[0]
+        // must reach proc_open the way cmd.exe would see it, or a git.cmd shim
+        // is a CreateProcess error 2 on Windows. Linux-injected ladders resolve
+        // nothing (their ';' PATH split matches no candidate) - argv unchanged.
+        $argv = $platform->resolveSpawnProgram($argv);
         $proc = @proc_open($argv, $spec, $pipes, null, self::childEnv());
         if (!is_resource($proc)) {
             $cleanup();

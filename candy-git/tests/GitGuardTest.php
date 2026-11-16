@@ -183,8 +183,17 @@ final class GitGuardTest extends TestCase
         $this->assertContains('+bbb', $lines);
         $this->assertContains('\\ No newline at end of file', $lines);
 
+        // The mirror contract is git's verdict on a POSIX-mode filesystem.
+        // NTFS has no executable bit at all - PHP chmod() there only toggles
+        // the read-only attribute and fileperms() never reports 0o111 - so the
+        // 755 leg below is unattainable by construction on Windows; the honest
+        // observable there is that the mode line stays 100644 (ci-wave-3 L4).
+        // Whether Git-for-Windows should instead synthesize 100755 from the
+        // writable flag is a design question for an interactive-Windows seat,
+        // not a runner guess.
         chmod($this->cwd . '/plain.txt', 0o755);
-        $this->assertContains('new file mode 100755', $git->untrackedDiff('plain.txt'));
+        $mode = DIRECTORY_SEPARATOR === '\\' ? '100644' : '100755';
+        $this->assertContains('new file mode ' . $mode, $git->untrackedDiff('plain.txt'));
     }
 
     public function testUntrackedDiffOfAMissingFileThrows(): void

@@ -191,9 +191,46 @@ final class ProcessTest extends TestCase
 
     public function testFindExecutableResolvesOnPathAndAnswersNullWhenAbsent(): void
     {
-        $this->assertNotNull(Platform::posix()->findExecutable('sh', '/bin:/usr/bin'));
-        $this->assertNull(Platform::posix()->findExecutable('sh', '/nonexistent-dir'));
-        $this->assertNull(Platform::posix()->findExecutable('definitely-not-a-binary-xyz', '/bin:/usr/bin'));
+        // The old fixture hardcoded '/bin:/usr/bin' + 'sh' - POSIX host data
+        // that was itself the Windows red (ci-wave-3 L4). Ask the seam for the
+        // host's own truth instead: a probe file this OS actually considers
+        // spawnable, plus the negative legs (absent name, absent dir, and on
+        // POSIX the mode-bit law: a 644 file must NOT resolve).
+        $windows  = DIRECTORY_SEPARATOR === '\\';
+        $platform = $windows ? Platform::windows() : Platform::posix();
+        $dir      = sys_get_temp_dir() . '/cgprobe_' . bin2hex(random_bytes(4));
+        mkdir($dir);
+        $name = 'candygit_probe';
+        $file = $dir . DIRECTORY_SEPARATOR . $name . ($windows ? '.cmd' : '');
+        try {
+            file_put_contents($file, $windows ? "@echo off\r\nexit /b 0\r\n" : "#!/bin/sh\nexit 0\n");
+            if (!$windows) {
+                chmod($file, 0o755);
+            }
+            $this->assertNotNull(
+                $platform->findExecutable($name, $dir . ($windows ? ';' . $dir : '')),
+                'a host-native executable on the search path must resolve',
+            );
+            $this->assertNull(
+                $platform->findExecutable('definitely-not-a-binary-xyz', $dir),
+                'an absent name must answer null, not false-negative into a path',
+            );
+            $this->assertNull(
+                $platform->findExecutable($name, $dir . '-nonexistent' . ($windows ? ';' . $dir . '-also-absent' : '')),
+                'searching only absent directories must answer null',
+            );
+            if (!$windows) {
+                chmod($file, 0o644);
+                clearstatcache();
+                $this->assertNull(
+                    $platform->findExecutable($name, $dir),
+                    'POSIX must not resolve a file without the mode bit',
+                );
+            }
+        } finally {
+            @unlink($file);
+            @rmdir($dir);
+        }
     }
 
     public function testPolledLadderCapturesStdoutStderrExitAndStdin(): void
@@ -219,7 +256,19 @@ final class ProcessTest extends TestCase
         $killed = [];
         $platform = self::windowsLadder()->withKillTree(static function (int $pid) use (&$killed): void {
             $killed[] = $pid;
-            exec('kill -9 ' . $pid);
+            // This leg exercises the LADDER honouring the seam, so the closure
+            // has to actually stop the child on whatever host runs the test:
+            // kill -9 is POSIX-only, and cmd.exe answers it with "The system
+            // cannot find the path specified." while the 2.0s terminate grace
+            // burns the budget (ci-wave-3 L4 runner red). The real Windows
+            // stop path - Platform's default msys group-kill killTree - is
+            // survivor-roster territory that needs an interactive box, and is
+            // deliberately NOT what this injected stand-in stands in for.
+            if (DIRECTORY_SEPARATOR === '\\') {
+                exec('taskkill /F /T /PID ' . $pid . ' 2>NUL');
+            } else {
+                exec('kill -9 ' . $pid);
+            }
         });
 
         $start = microtime(true);

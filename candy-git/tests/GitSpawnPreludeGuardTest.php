@@ -344,13 +344,29 @@ final class GitSpawnPreludeGuardTest extends TestCase
         // The walk must actually reach nested directories (review m-2): a
         // top-level-only glob reads like a pass while src/Support/** is
         // invisible to it. Pin that a known nested source file is enumerated.
+        // Both sides are slash-normalized first: the iterator yields native
+        // separators while the $dir . '/Support/...' concat is mixed, and a
+        // strict compare can never hold on Windows (ci-wave-3 L4: this pin was
+        // the guard-test double red on both runner arms). The synthetic leg
+        // below non-vacuities the normalization itself, on every host.
+        self::assertSame(
+            'X:/fake/src/Support/Version.php',
+            self::slashes('X:\fake\src\Support\Version.php'),
+            'slashes() must collapse backslash separators to the slash form',
+        );
         self::assertContains(
-            $dir . '/Support/Version.php',
-            $files,
+            self::slashes($dir . '/Support/Version.php'),
+            array_map(self::slashes(...), $files),
             'the src/ walk is not recursive — nested spawn sites would evade the roster',
         );
 
         return $files;
+    }
+
+    /** One path in the comparison-normalized (slash) spelling. */
+    private static function slashes(string $path): string
+    {
+        return str_replace('\\', '/', $path);
     }
 
     /** @param class-string $class */
