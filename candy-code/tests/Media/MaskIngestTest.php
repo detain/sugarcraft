@@ -266,6 +266,28 @@ final class MaskIngestTest extends TestCase
         $this->assertLessThan(15.0, $seconds, sprintf('1024x1024 RGBA classified in %.2f s; budget 15 s', $seconds));
     }
 
+    public function testAnUnknownFilterByteDeclinesBeforeTheBufferIsAllocated(): void
+    {
+        // 4000x4000 gray: the sample buffer is 16M slots (~256 MB as a PHP
+        // array), past the default 128M memory_limit. A bad filter byte on row 0
+        // must decline before that allocation, so the caller falls through to GD
+        // instead of hitting an uncatchable fatal. The raw stream here is far
+        // shorter than the header claims; the decline must not read past row 0.
+        $raw = "\x05" . \str_repeat("\x00", 16);
+        $unfilter = new \ReflectionMethod(MaskIngest::class, 'unfilter');
+        $unfilter->setAccessible(true);
+
+        $peakBefore = \memory_get_peak_usage();
+        $this->assertNull($unfilter->invoke(null, $raw, 4000, 4000, 1));
+        $grew = \memory_get_peak_usage() - $peakBefore;
+
+        $this->assertLessThan(
+            16 * 1024 * 1024,
+            $grew,
+            sprintf('declining a bad filter byte grew peak memory by %d bytes; the buffer was allocated first', $grew),
+        );
+    }
+
     // ---- GD fallback paths ----------------------------------------------------
 
     public function testAPalettePngWithTransparentIndexClassifiesAsAlphaViaGd(): void

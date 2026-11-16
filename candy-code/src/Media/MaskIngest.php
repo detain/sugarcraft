@@ -257,6 +257,17 @@ final readonly class MaskIngest
     private static function unfilter(string $raw, int $width, int $height, int $channels): ?array
     {
         $rowLen = $width * $channels;
+        // The caller has already checked strlen($raw) === height * (rowLen + 1),
+        // so every filter byte sits at a known offset. Scanning them before the
+        // buffer exists keeps a malformed stream a cheap decline: a 4000x4000
+        // gray header would otherwise reserve ~16M slots (~256 MB) before the
+        // bad byte was seen, past the default memory_limit.
+        for ($y = 0, $stride = $rowLen + 1; $y < $height; $y++) {
+            if (ord($raw[$y * $stride]) > 4) {
+                return null;
+            }
+        }
+
         // One buffer, written by offset: row $y lives at [$y * $rowLen, ($y + 1) * $rowLen)
         // and the "previous" row is read back from it. Growing the list per
         // scanline ([...$samples, ...$current]) re-copied every earlier row
@@ -266,9 +277,6 @@ final readonly class MaskIngest
 
         for ($y = 0; $y < $height; $y++) {
             $filter = ord($raw[$offset++]);
-            if ($filter > 4) {
-                return null;
-            }
             $base = $y * $rowLen;
             $upBase = $base - $rowLen;
             for ($x = 0; $x < $rowLen; $x++) {
