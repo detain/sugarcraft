@@ -98,6 +98,104 @@ final class DisplayCellWidthTest extends TestCase
         self::assertSame(12, Width::string($rendered));
     }
 
+    public function testComboBoxOptionLabelClipsInDisplayCells(): void
+    {
+        // Option labels go through the same clip as the placeholder. Inside a
+        // twelve-cell allocation the "▶ " prefix leaves ten cells: the label is
+        // cut to eight cells (日本語テ) plus the ellipsis. The code-point rule
+        // saw seven characters, fit them, and overran the box.
+        $combo = $this->plainCombo([['label' => '日本語テキスト']], 12);
+
+        $lines = explode("\n", $combo->render());
+
+        self::assertSame('▶ 日本語テ…', $lines[1]);
+        self::assertSame(11, Width::string($lines[1]));
+    }
+
+    public function testComboBoxOptionLabelChargesATabFourCells(): void
+    {
+        // Budget four cells: "a" is one, the tab would be four more, so the
+        // label is cut before the tab. The code-point rule kept "a<TAB>b" and
+        // overran the allocation.
+        $combo = $this->plainCombo([['label' => "a\tbcdefg"]], 6);
+
+        $lines = explode("\n", $combo->render());
+
+        self::assertSame('▶ a…', $lines[1]);
+        self::assertStringNotContainsString("\t", $lines[1]);
+    }
+
+    public function testComboBoxOptionLabelDropsSgrOnlyWhenClipped(): void
+    {
+        // A clipped label loses its SGR (the old mb_substr cut could leave the
+        // escape open). A label that fits keeps its SGR, returned untouched.
+        $clipped = $this->plainCombo([['label' => "\x1b[31mred alert\x1b[0m"]], 8);
+        $clippedLine = explode("\n", $clipped->render())[1];
+
+        self::assertSame('▶ red a…', $clippedLine);
+        self::assertStringNotContainsString("\x1b", $clippedLine);
+
+        $fits = $this->plainCombo([['label' => "\x1b[31mred\x1b[0m"]], 20);
+        $fitsLine = explode("\n", $fits->render())[1];
+
+        self::assertSame("▶ \x1b[31mred\x1b[0m", $fitsLine);
+    }
+
+    public function testFrozenHalfOfARowPadsCjkCellsByDisplayWidth(): void
+    {
+        // The frozen cell 日本 is four cells but six bytes. str_pad pads by
+        // bytes, so it would stop two cells short of the column width that
+        // Calc computed; Width::padRight pads to the full width.
+        $columns = [Column::new('name', 'Name'), Column::new('city', 'City')];
+        $rows = [
+            new Row(['name' => '日本語', 'city' => '東京都']),
+            new Row(['name' => '日本', 'city' => '東京']),
+        ];
+        $widths = Calc::calculateColumnWidths($rows, $columns, 30);
+
+        $rendered = GridTable::new($columns, $rows)->freezeColumns(1)->setSize(30, 10)->render();
+
+        self::assertStringContainsString(Width::padRight('日本', $widths[0]), $rendered);
+    }
+
+    public function testScrollingHalfOfAFrozenRowPadsCjkCellsByDisplayWidth(): void
+    {
+        // The scrolling half is the cells after the freeze divider. 東京 is six
+        // bytes and four cells, the same byte/cell gap as the frozen half.
+        $columns = [Column::new('name', 'Name'), Column::new('city', 'City')];
+        $rows = [
+            new Row(['name' => '日本語', 'city' => '東京都']),
+            new Row(['name' => '日本', 'city' => '東京']),
+        ];
+        $widths = Calc::calculateColumnWidths($rows, $columns, 30);
+
+        $rendered = GridTable::new($columns, $rows)->freezeColumns(1)->setSize(30, 10)->render();
+
+        self::assertStringContainsString(Width::padRight('東京', $widths[1]), $rendered);
+    }
+
+    public function testNoticeRowPadsByDisplayWidth(): void
+    {
+        // The notice text is a fixed ASCII message, so the rendered notice
+        // cannot show a byte/cell gap. The helper is pinned with a multibyte
+        // message to catch a return to str_pad. Its widths are six then three.
+        $grid = GridTable::new([Column::new('name', 'Name'), Column::new('city', 'City')]);
+        $notice = new \ReflectionMethod(GridTable::class, 'renderNoticeRow');
+
+        $line = (string) $notice->invoke($grid, '日本', [6, 3]);
+
+        self::assertSame(12, Width::string($line));
+        self::assertStringContainsString(Width::padRight('日本', 6), $line);
+
+        // Only filterable columns match, so the filter needs one to empty the set.
+        // The minimum width keeps the whole notice visible rather than ellipsised.
+        $filtered = GridTable::new(
+            [Column::new('name', 'Name', minWidth: 24, filterable: true)],
+            [new Row(['name' => 'alpha'])],
+        )->filter('nomatch')->setSize(30, 10);
+        self::assertStringContainsString('no rows match filter', $filtered->render());
+    }
+
     public function testPlainAsciiTruncationMatchesTheCodePointRule(): void
     {
         // Oracle: the rule before the display-cell change. It agrees with the
@@ -146,6 +244,17 @@ final class DisplayCellWidthTest extends TestCase
         self::assertSame(['k' => 3], self::columnWidthsOf([$styled]));
         self::assertSame($styled, Calc::truncate($styled, 3));
         self::assertSame('r…', Calc::truncate($styled, 2));
+    }
+
+    /**
+     * A ComboBox with the default selected-row colour removed, so the option
+     * line carries only the clipped label and its own SGR.
+     *
+     * @param list<array{label: string}> $options
+     */
+    private function plainCombo(array $options, int $width): ComboBox
+    {
+        return ComboBox::new('Search', $options)->withSelectedColor(null)->setSize($width, 6);
     }
 
     /**
