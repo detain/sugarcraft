@@ -512,16 +512,6 @@ final class LineChart extends Chart
         );
     }
 
-    /**
-     * @deprecated use {@see self::withLegendIndicator()}: the argument is
-     *             the indicator RUNE, not a style. Kept one minor as the
-     *             house alias window; REMOVED-IN 2.0.0.
-     */
-    public function withLegendStyle(?string $indicatorChar = null): self
-    {
-        return $this->withLegendIndicator($indicatorChar);
-    }
-
     /** Set the X-axis label (rendered at bottom). */
     public function withXLabel(?string $label = null): self
     {

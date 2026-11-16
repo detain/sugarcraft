@@ -150,19 +150,11 @@ final class ChromeParityTest extends TestCase
         $this->assertFalse(BarChart::new()->supportsAnimation());
     }
 
-    public function testWithAxesIsCanonicalAndShowAxisWindowStillWorks(): void
+    public function testWithAxesAndItsShortFormRenderIdentically(): void
     {
         $viaNew = BarChart::new([['a', 1.0], ['b', 2.0]], 30, 4)->withAxes(true)->view();
-        $viaOld = BarChart::new([['a', 1.0], ['b', 2.0]], 30, 4)->withShowAxis(true)->view();
-        $viaAlias = BarChart::new([['a', 1.0], ['b', 2.0]], 30, 4)->showAxis(true)->view();
-        $this->assertSame($viaNew, $viaOld);
+        $viaAlias = BarChart::new([['a', 1.0], ['b', 2.0]], 30, 4)->axes(true)->view();
         $this->assertSame($viaNew, $viaAlias);
-
-        foreach (['withShowAxis', 'showAxis'] as $windowName) {
-            $doc = (new ReflectionMethod(BarChart::class, $windowName))->getDocComment();
-            $this->assertIsString($doc);
-            $this->assertStringContainsString('@deprecated', $doc);
-        }
     }
 
     public function testChartBaseCarriesWithLegendItemsAndAliasRoutesThroughIt(): void
@@ -179,13 +171,6 @@ final class ChromeParityTest extends TestCase
             ->withLegend(true)
             ->view();
         $this->assertSame($line, $viaAlias);
-    }
-
-    public function testNoAutoMaxValueIsMarkedDeprecated(): void
-    {
-        $doc = (new ReflectionMethod(\SugarCraft\Charts\Sparkline\Sparkline::class, 'withNoAutoMaxValue'))->getDocComment();
-        $this->assertIsString($doc);
-        $this->assertStringContainsString('@deprecated', $doc);
     }
 
     public function testAccessorsCarryStoredValues(): void

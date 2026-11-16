@@ -69,8 +69,8 @@ final class LineChartAnimationTest extends TestCase
         $chart = LineChart::new([1, 2, 3])
             ->withAnimationDuration(500)
             ->withAnimationProgress(0.5);
-        $this->assertSame(500, $chart->getAnimationDuration());
-        $this->assertSame(0.5, $chart->getAnimationProgress());
+        $this->assertSame(500, $chart->animationDuration());
+        $this->assertSame(0.5, $chart->animationProgress());
     }
 
     public function testAnimationDurationChainedPreservesDuration(): void
@@ -80,8 +80,8 @@ final class LineChartAnimationTest extends TestCase
             ->withAnimationProgress(0.5)
             ->withLegend(true)
             ->withAxes();
-        $this->assertSame(300, $chart->getAnimationDuration());
-        $this->assertSame(0.5, $chart->getAnimationProgress());
+        $this->assertSame(300, $chart->animationDuration());
+        $this->assertSame(0.5, $chart->animationProgress());
     }
 
     public function testAnimationProgressWithDatasets(): void
@@ -128,8 +128,8 @@ final class LineChartAnimationTest extends TestCase
     public function testAnimationProgressDefaultIsFull(): void
     {
         $chart = LineChart::new([1, 2, 3, 4, 5], 20, 6);
-        $this->assertSame(1.0, $chart->getAnimationProgress());
-        $this->assertSame(0, $chart->getAnimationDuration());
+        $this->assertSame(1.0, $chart->animationProgress());
+        $this->assertSame(0, $chart->animationDuration());
     }
 
     public function testAnimationProgressPartialDeterministic(): void
@@ -162,7 +162,7 @@ final class LineChartAnimationTest extends TestCase
      */
     public function testAnimationProgressIsClampedAtTheDoor(): void
     {
-        self::assertSame(1.0, LineChart::new([1, 2, 3])->withAnimationProgress(5.0)->getAnimationProgress());
-        self::assertSame(0.0, LineChart::new([1, 2, 3])->withAnimationProgress(-2.0)->getAnimationProgress());
+        self::assertSame(1.0, LineChart::new([1, 2, 3])->withAnimationProgress(5.0)->animationProgress());
+        self::assertSame(0.0, LineChart::new([1, 2, 3])->withAnimationProgress(-2.0)->animationProgress());
     }
 }

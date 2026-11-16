@@ -9,7 +9,7 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * Coverage for the new Canvas mutators added in audit #15:
- * setCellStyle / getCellStyle / setRunes / setString / setLines /
+ * setCellStyle / cellStyle / setRunes / setString / setLines /
  * fill / fillLine / shiftUp / shiftDown / shiftLeft / shiftRight.
  */
 final class CanvasOpsTest extends TestCase
@@ -89,10 +89,10 @@ final class CanvasOpsTest extends TestCase
     {
         $c = new Canvas(2, 1);
         $c->setCell(0, 0, 'X');
-        $this->assertNull($c->getCellStyle(0, 0));
+        $this->assertNull($c->cellStyle(0, 0));
         $style = \SugarCraft\Style\Style::new()->bold();
         $c->setCellStyle(0, 0, $style);
-        $this->assertSame($style, $c->getCellStyle(0, 0));
+        $this->assertSame($style, $c->cellStyle(0, 0));
     }
 
     public function testSetRunesPlacesIterable(): void

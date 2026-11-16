@@ -54,7 +54,6 @@ return [
         'ohlc.high_below_low' => 'Invalid OHLC bar: high ({high}) must not be below low ({low})',
         'markline.empty_dataset' => 'Cannot derive MarkLine from empty dataset',
         'markline.invalid_type' => 'Invalid MarkLine type: {type} (expected one of: {allowed})',
-        'markline.invalid_style' => 'Invalid MarkLine style: {style} (expected one of: {allowed})',
         'movingaverage.window_positive' => 'Window size must be > 0, got {given}',
         'movingaverage.alpha_range' => 'EMA alpha must be in (0, 1], got {given}',
         'bucketbytime.interval_positive' => 'Bucket interval must be > 0, got {given}',

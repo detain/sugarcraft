@@ -116,13 +116,4 @@ final class CandleTest extends TestCase
         yield 'zero' => [0, 10, -5, 5];
     }
 
-    /** CH-57: the pre-rename FQN keeps resolving, to the canonical class. */
-    public function testDeprecatedBarAliasResolvesToCandle(): void
-    {
-        self::assertTrue(class_exists(\SugarCraft\Charts\OHLC\Bar::class));
-        self::assertSame(Candle::class, (new \ReflectionClass(\SugarCraft\Charts\OHLC\Bar::class))->getName());
-        $old = new \SugarCraft\Charts\OHLC\Bar(1.0, 2.0, 0.5, 1.5);
-        self::assertInstanceOf(Candle::class, $old);
-        self::assertTrue($old->isBullish());
-    }
 }

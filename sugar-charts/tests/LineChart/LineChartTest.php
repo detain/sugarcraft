@@ -516,7 +516,7 @@ final class LineChartTest extends TestCase
     {
         $runes = [];
         for ($y = 0; $y < $canvas->height; $y++) {
-            $runes[] = $canvas->getCell($x, $y)->rune;
+            $runes[] = $canvas->cell($x, $y)->rune;
         }
         return $runes;
     }

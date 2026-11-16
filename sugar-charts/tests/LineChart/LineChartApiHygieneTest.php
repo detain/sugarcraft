@@ -68,8 +68,8 @@ final class LineChartApiHygieneTest extends TestCase
 
     public function testZeroAndPositiveAnimationDurationAccepted(): void
     {
-        $this->assertSame(0, LineChart::new()->withAnimationDuration(0)->getAnimationDuration());
-        $this->assertSame(1200, LineChart::new()->withAnimationDuration(1200)->getAnimationDuration());
+        $this->assertSame(0, LineChart::new()->withAnimationDuration(0)->animationDuration());
+        $this->assertSame(1200, LineChart::new()->withAnimationDuration(1200)->animationDuration());
     }
 
     public function testStyleForColorCatchIsNarrowedNotThrowable(): void

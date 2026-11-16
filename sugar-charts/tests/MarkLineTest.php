@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts\Tests;
 
+use SugarCraft\Charts\LineStyle;
 use SugarCraft\Charts\MarkLine;
 use PHPUnit\Framework\TestCase;
 
@@ -11,10 +12,10 @@ final class MarkLineTest extends TestCase
 {
     public function testAtCreatesExplicitMarkLine(): void
     {
-        $ml = MarkLine::at(42.0, 'answer', MarkLine::STYLE_SOLID);
+        $ml = MarkLine::at(42.0, 'answer', LineStyle::Solid);
         $this->assertSame(42.0, $ml->value);
         $this->assertSame('answer', $ml->label);
-        $this->assertSame(MarkLine::STYLE_SOLID, $ml->style->value, 'legacy constant input must land on the matching LineStyle case');
+        $this->assertSame(LineStyle::Solid, $ml->style);
     }
 
     public function testFromDatasetMin(): void
@@ -74,6 +75,6 @@ final class MarkLineTest extends TestCase
     public function testDashedStyleIsDefault(): void
     {
         $ml = MarkLine::at(5.0);
-        $this->assertSame(MarkLine::STYLE_DASHED, $ml->style->value, 'default style must be LineStyle::Dashed via its legacy spelling');
+        $this->assertSame(LineStyle::Dashed, $ml->style);
     }
 }

@@ -237,12 +237,6 @@ final class Heatmap
     }
 
     /**
-     * @deprecated use {@see self::cellStyle()} (bare read form) — kept
-     *             one minor as the house alias window (sugar-charts-016).
-     */
-    public function getCellStyle(): ?Style { return $this->cellStyle(); }
-
-    /**
      * Toggle the implicit `min` / `max` rescale done at {@see view()}
      * time. With auto-range off, the configured {@see $min} /
      * {@see $max} are used verbatim and out-of-band values clamp at
@@ -285,16 +279,6 @@ final class Heatmap
         }
         return implode("\n", $lines);
     }
-
-    /**
-     * @deprecated use {@see self::autoValueRange()} (bare read form).
-     */
-    public function getAutoValueRange(): bool { return $this->autoValueRange(); }
-
-    /**
-     * @deprecated use {@see self::monoRamp()} (bare read form).
-     */
-    public function getMonoRamp(): bool { return $this->monoRamp(); }
 
     // Short-form aliases.
     public function size(int $w, int $h): self    { return $this->withSize($w, $h); }

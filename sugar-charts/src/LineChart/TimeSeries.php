@@ -333,19 +333,6 @@ final class TimeSeries
     public function point(string $rune): self                     { return $this->withPoint($rune); }
     public function axes(bool $on = true): self                   { return $this->withAxes($on); }
 
-    /**
-     * @deprecated use {@see self::timeRange()} (bare read form) — kept
-     *             one minor as the house alias window (sugar-charts-016).
-     *
-     * @return array{0: ?\DateTimeImmutable, 1: ?\DateTimeImmutable}
-     */
-    public function getTimeRange(): array
-    {
-        /** @var array{0: ?\DateTimeImmutable, 1: ?\DateTimeImmutable} $pair */
-        $pair = $this->timeRange();
-        return $pair;
-    }
-
     public function view(): string
     {
         // CH-34 (sugar-charts-112): compose once, serve repeats from the
