@@ -10,11 +10,11 @@ No prose (prior status file, lane reports, or memory) was trusted without a disk
 
 | bucket | rows | share |
 |---|---|---|
-| **LANDED** (target-prefixed or ID-led subject on master; incl. 145 cc-executed) | 2981 | 92.1% |
+| **LANDED** (target-prefixed or ID-led subject on master; incl. 145 cc-executed; +12 FINAL-DISPOSAL) | 2993 | 92.4% |
 | OWNER-GATED (queue `owner_gate` col + in-lane park/gate residual, zero landing commit) | 128 | 4.0% |
 | OWNER-SIDE (cc territory owed 74, Windows/macOS legs 6, trio 1) | 81 | 2.5% |
-| REPORT-ONLY (incl. 17 `RIDERS` packets + honest-zero/no-op/phantom rows) | 34 | 1.1% |
-| **STILL-OPEN** (disk contradiction — see §2) | 14 | 0.4% |
+| REPORT-ONLY (incl. 17 `RIDERS` packets + honest-zero/no-op/phantom rows; +2 FINAL-DISPOSAL phantoms D-85/D-163) | 36 | 1.1% |
+| **STILL-OPEN** (disk contradiction — see §2; FINAL DISPOSAL lane 2026-11-16: all 14 disposed) | 0 | 0% |
 | total | 3238 | 100% |
 
 ### Census method (mechanical)
@@ -65,7 +65,7 @@ No prose (prior status file, lane reports, or memory) was trusted without a disk
 | candy-ssh-launcher | 43 | 42 | 1 | 0 | 0 | 0 | 0 |
 | candy-starter | 18 | 17 | 1 | 0 | 0 | 0 | 0 |
 | candy-tetris | 44 | 39 | 5 | 0 | 0 | 0 | 0 |
-| candy-top | 105 | 100 | 0 | 0 | 1 | 4 | 0 |
+| candy-top | 105 | 104 | 0 | 0 | 1 | 0 | 0 |
 | candy-vcr | 76 | 61 | 7 | 5 | 3 | 0 | 0 |
 | ccweb-parity | 18 | 0 | 0 | 18 | 0 | 0 | 0 |
 | phar-fleet | 1 | 1 | 0 | 0 | 0 | 0 | 0 |
@@ -80,7 +80,7 @@ No prose (prior status file, lane reports, or memory) was trusted without a disk
 | sugar-colorprofile | 56 | 53 | 3 | 0 | 0 | 0 | 0 |
 | sugar-constraints | 19 | 17 | 2 | 0 | 0 | 0 | 0 |
 | sugar-core | 45 | 44 | 1 | 0 | 0 | 0 | 0 |
-| sugar-dashboard | 165 | 133 | 22 | 0 | 1 | 9 | 0 |
+| sugar-dashboard | 165 | 140 | 22 | 0 | 3 | 0 | 0 |
 | sugar-datepicker | 36 | 35 | 1 | 0 | 0 | 0 | 0 |
 | sugar-diff | 29 | 25 | 4 | 0 | 0 | 0 | 0 |
 | sugar-flexbox | 51 | 51 | 0 | 0 | 0 | 0 | 0 |
@@ -109,10 +109,10 @@ No prose (prior status file, lane reports, or memory) was trusted without a disk
 | sugar-toast | 34 | 34 | 0 | 0 | 0 | 0 | 0 |
 | sugar-treelist | 33 | 33 | 0 | 0 | 0 | 0 | 0 |
 | sugar-video | 76 | 75 | 1 | 0 | 0 | 0 | 0 |
-| sugar-vterm | 41 | 31 | 7 | 1 | 1 | 1 | 0 |
+| sugar-vterm | 41 | 32 | 7 | 1 | 1 | 0 | 0 |
 | sugar-widgets | 48 | 47 | 0 | 0 | 1 | 0 | 0 |
 
-Expected queue-zero-open everywhere. **Disk contradicts on 3 targets (§2) — reported, not smoothed.** Landed-total {L} supersedes v1's 2,838 by absorbing the post-v1 waves
+Queue-zero-open fleet-wide after the FINAL DISPOSAL lane (2026-11-16): the 3 contradicting targets were disposed row-by-row — see §2 end-state. Landed-total {L} supersedes v1's 2,838 by absorbing the post-v1 waves
 (candy-code owner wave 11-12/13 on master: {cc} rows of the 169; candy-top TAIL+go-wave;
 dashboard middle-tail; msteams re-cut; ssh-server drain; readline/style tails).
 
@@ -120,27 +120,22 @@ dashboard middle-tail; msteams re-cut; ssh-server drain; readline/style tails).
 
 14 rows have no landing witness of any kind. Every row below is file:line + why:
 
-- `candy-top:S-C10` — reviews/annotations/candy-top.md:170 — TAIL stand-down remainder: 6 of the 10 open rows landed in the 11-14 go-wave (S-X13/X16/X17/X18/X19/X20); these 4 have no landing commit (title: Collector `with*()` → house private `mutate()` migration)
-- `candy-top:S-X04` — reviews/annotations/candy-top.md:373 — TAIL stand-down remainder: 6 of the 10 open rows landed in the 11-14 go-wave (S-X13/X16/X17/X18/X19/X20); these 4 have no landing commit (title: Real-roster full-frame size sweeps)
-- `candy-top:S-X09` — reviews/annotations/candy-top.md:391 — TAIL stand-down remainder: 6 of the 10 open rows landed in the 11-14 go-wave (S-X13/X16/X17/X18/X19/X20); these 4 have no landing commit (title: Shell low PHP trio)
-- `candy-top:S-X11` — reviews/annotations/candy-top.md:397 — TAIL stand-down remainder: 6 of the 10 open rows landed in the 11-14 go-wave (S-X13/X16/X17/X18/X19/X20); these 4 have no landing commit (title: Extract Cli/Reporter; executable stderr-choke tests)
-- `sugar-dashboard:D-109` — reviews/annotations/sugar-dashboard.md:734 — dashboard drain/middle lanes never cited this row-id or its finding-number in any master commit; closed-at-queue-zero claims not corroborated by disk (title: covers sugar-dashboard-098 (+104, 210))
-- `sugar-dashboard:D-118` — reviews/annotations/sugar-dashboard.md:792 — dashboard drain/middle lanes never cited this row-id or its finding-number in any master commit; closed-at-queue-zero claims not corroborated by disk (title: covers sugar-dashboard-109)
-- `sugar-dashboard:D-125` — reviews/annotations/sugar-dashboard.md:834 — dashboard drain/middle lanes never cited this row-id or its finding-number in any master commit; closed-at-queue-zero claims not corroborated by disk (title: covers sugar-dashboard-117 (+216))
-- `sugar-dashboard:D-13` — reviews/annotations/sugar-dashboard.md:152 — dashboard drain/middle lanes never cited this row-id or its finding-number in any master commit; closed-at-queue-zero claims not corroborated by disk (title: covers sugar-dashboard-013)
-- `sugar-dashboard:D-147` — reviews/annotations/sugar-dashboard.md:966 — dashboard drain/middle lanes never cited this row-id or its finding-number in any master commit; closed-at-queue-zero claims not corroborated by disk (title: covers sugar-dashboard-162 (+174))
-- `sugar-dashboard:D-163` — reviews/annotations/sugar-dashboard.md:1066 — ADJUDICATED PHANTOM-SEAT 2026-11-16 (disposal lane): the cited ModuleRegistry.php never existed on any committed ref (`git log --all --diff-filter=A '*sugar-dashboard*ModuleRegistry*'` zero; the dir is src/Modules/), and the php_binary / `php -d` config substrate it describes is nowhere in the lib's history (`-S php_binary` zero, `-S 'php -d'` zero, no phpBinary hit in src/ today). The only runCommand on disk is GenericModule::runCommand — already BoundedCommand-hardened (deadline/cap/TERM→KILL, trusted-only shell-string doctrine documented; it spawns no PHP subprocess), and src/Registry/Registry.php carries neither runCommand nor php settings. Zero-actionable; annotation authored against a non-disk state (SL-20 class).
-- `sugar-dashboard:D-164` — reviews/annotations/sugar-dashboard.md:1072 — dashboard drain/middle lanes never cited this row-id or its finding-number in any master commit; closed-at-queue-zero claims not corroborated by disk (title: covers sugar-dashboard-207)
-- `sugar-dashboard:D-63` — reviews/annotations/sugar-dashboard.md:458 — dashboard drain/middle lanes never cited this row-id or its finding-number in any master commit; closed-at-queue-zero claims not corroborated by disk (title: covers sugar-dashboard-150)
-- `sugar-dashboard:D-85` — reviews/annotations/sugar-dashboard.md:590 — ADJUDICATED PHANTOM-SEAT 2026-11-16 (disposal lane): the cited seat never existed on any committed ref — `git log --all -S axisLabels` zero, `--diff-filter=A '*ScatterPlotTest.php'` zero, and no `substr_count` pipe-assertion exists anywhere under tests/ today (SL-20 never-minted class); current scatter coverage is substantive behavior pins (PlotTest::testScatterPlotMode, PlotDrawIntoBufferTest dot-writing). Zero-actionable; annotation was authored against a non-disk state.
-- `sugar-vterm:vterm-09` — reviews/annotations/sugar-vterm.md:103 — vterm successor scope never landed it; no row-id or finding proof on master (title: Cursor vocabulary convergence: `at()`/`hidden()`/`shown()` aliases on )
+- `sugar-dashboard:D-13` — reviews/annotations/sugar-dashboard.md:152 — **DISPOSED LANDED** 7807f4191 (README audit-vocab purged; docs-only, suite 8657T/24837A exact baseline).
+- `sugar-dashboard:D-63` — reviews/annotations/sugar-dashboard.md:458 — **DISPOSED LANDED** edb752e14 (GridTable freeze-junction dead arms collapsed, byte-neutral 15-render matrix cmp EXACT; FrozenJunctionTest 7T/19A; two follow-up flaws report-only in the commit body: BorderConfig raw-ctor readonly trap, renderFrozenRow dangling tail).
+- `sugar-dashboard:D-85` — reviews/annotations/sugar-dashboard.md:590 — **DISPOSED REPORT-ONLY** verdict commit 9658db2be: PHANTOM-SEAT, zero-actionable (axisLabels/ScatterPlotTest never minted on any ref; SL-20 class).
+- `sugar-dashboard:D-109` — reviews/annotations/sugar-dashboard.md:734 — **DISPOSED LANDED** 6159e3f79 (weather 1MiB bound, typed WeatherTransportFailure/WeatherParseFailure, ?float temp UNMEASURED honest, render-clock behind update doors; 15T/33A pins incl source-leg guard; D-106[OG-12] transport-route owner-gate NOT preempted).
+- `sugar-dashboard:D-118` — reviews/annotations/sugar-dashboard.md:792 — **DISPOSED LANDED** 96a9dc174 (README Dependencies + Security & trust boundaries, optional-integrations census-corrected to disk; OG-1 posture sentence, gate stays open).
+- `sugar-dashboard:D-125` — reviews/annotations/sugar-dashboard.md:834 — **DISPOSED LANDED** e5ca15c4c (MATCHUPS full 8-antecedent roster + REMOVED-IN note; D-14 misbooking = closeout erratum; docs/_data chips 3/8 = site-mirror closeout row).
+- `sugar-dashboard:D-147` — reviews/annotations/sugar-dashboard.md:966 — **DISPOSED LANDED** b6fd90973 (Foundation EnumCoerce + Header/Footer HAlign convergence; residual legs disclosed in-row: Modal/Drawer/Tooltip/Profile/D-L11 enum seats NEVER MINTED on disk (accept-both has no target — report-only), Level/NoticePosition legs ride gated D-74[OG-10], Jumbotron/Stats outliers out of named scope).
+- `sugar-dashboard:D-163` — reviews/annotations/sugar-dashboard.md:1066 — **DISPOSED REPORT-ONLY** verdict commit 89133a908: PHANTOM-SEAT, zero-actionable (ModuleRegistry.php + php_binary/-d substrate never minted; GenericModule::runCommand already BoundedCommand-hardened).
+- `sugar-dashboard:D-164` — reviews/annotations/sugar-dashboard.md:1072 — **DISPOSED LANDED** 0edc48664 (ClockModule ctor resolves zone, invalid → UTC fallback + honest-disable view reason; 3T/7A).
+- `candy-top:S-C10` — reviews/annotations/candy-top.md:170 — **DISPOSED LANDED** c563478d7 (seven carriers → Concerns\Mutable named changes, zero positional re-listings in cited files; equivalence pin closes a pre-existing fresh-enable-clears coverage gap, mutants exact-red disclosed).
+- `candy-top:S-X04` — reviews/annotations/candy-top.md:373 — **DISPOSED LANDED** f8f20ca6b (standardRoster boot in Harness, 6-size sweep to 1x1 — degenerate combos throw NOTHING, disclosed; NEW golden real-roster-120x40.txt DISCLOSED).
+- `candy-top:S-X09` — reviews/annotations/candy-top.md:391 — **DISPOSED LANDED** 3da93b7a9 (roster() hoist both paired-guard seats; non-curl connect ceiling bridged, mutant exact-1F; leg132 constant()-Help.php PHANTOM, -S zero, disclosed in-row).
+- `candy-top:S-X11` — reviews/annotations/candy-top.md:397 — **DISPOSED LANDED** 8bcc928fa (src/Cli/Reporter.php extracted, BinTest law re-anchored, ReporterChokeTest 2T real-pty byte pins; mutant strip-Sanitize exactly 1F; m28 keeps structural ride).
+- `sugar-vterm:vterm-09` — reviews/annotations/sugar-vterm.md:103 — **DISPOSED LANDED** 4c9b06613 (emulator Cursor gains additive at()/hidden()/shown() aliases; 3T/16A alias≡primitive pins, 2 mutants exact-red; phpstan level-max baseline-clean ZERO-DELTA, goldens untouched).
 
-Class note: `sugar-dashboard`'s nine rows are the queue's `covers sugar-dashboard-NNN`
-middle-tail ids; the DASH lanes closed queue-zero per their dossiers, but neither the
-D-id nor the finding-number token appears in any master commit — these are findings
-never fixed (or landed under commits citing none of their ids); treat as the true
-residual actionable list. The four `candy-top` rows + `vterm-09` are dead-seat stand-down
-residue (tails stopped clean; go-wave drained siblings, not these).
+Class note (disposal): all 14 rows carry a reflog-quoted disposal commit on master; 12 executed (incl. D-147 core-legs-only with residuals disclosed in-row), 2 honest-zero phantom adjudications. Suite gates at disposal: sugar-dashboard 8694T/24924A, candy-top 2485T (A in disclosed pty-jitter band)/1S, sugar-vterm 1170T/14773A — all LOCAL-ONLY on top of 765e30278.
 
 ## 3. OWNER-GATED ROWS (by target; queue `owner_gate` label where the queue carries one)
 
@@ -193,7 +188,7 @@ queue gate column, and the mission carry-over list — each re-checked against d
 - **D-24 G4 arm (report-only legs)** — D-24 LANDED 765e30278 default legs only; the Window::addShadow
   1x+1 disclosure + Layout.php zero-allocation D-15-notice routing arms were NOT executed by design — owner row.
 - **D-61/D-62** — gate (blocked family), zero disk hits — owner row.
-- **VTM G1-G7 parks** — vterm-01/02/08/19/23/25/26 still gate columns on disk (vterm-09: see §2 open) — owner rows.
+- **VTM G1-G7 parks** — vterm-01/02/08/19/23/25/26 still gate columns on disk (vterm-09 LANDED 4c9b06613) — owner rows.
 - **S-19-G3 (readline)** — gate column intact, unlanded — owner row.
 - **CG-05/12/26/45/49 (+65[G8], 39)** — candy-git gates on disk; CG-39 (lang-wave-A propagation) sits in
   the gated bucket on the era census note + foreign `M candy-git/lang/*` WIP; verify that WIP's fate before re-firing — owner rows.
@@ -274,13 +269,9 @@ Cumulative welder duties on disk today:
 ## 7. PUSHED-HEAD NOTE
 
 - `refs/remotes/origin/master` = **a913bd187** (vhs: regenerate demo GIFs, 2026-11-16).
-- Local `HEAD` = **765e30278** (sugar-dashboard: D-24 …, 2026-11-16 13:04 -0500).
-- Ahead/behind: **11 / 0** (origin is an ancestor of HEAD — merge-base verified; the 11:
-  D-24, D-45, D-44, D-47, D-43, org-mapping b35a41ab6, ci-wave-3 L1-L4 (70ecedb4d, 8755ef4d7, b02aaa8e1, ec9bb2480),
-  merge 32ba8f638, + this EXEC-STATUS commit).
-- The mission brief's `d84c86d52` as origin-head is **wrong on disk**: it exists (sugar-cli: SC-TR3 …) but as an
-  in-history commit, not the remote head.
-- **Cluster-push owed by owner** (PULL-EMBARGO: push-only; then workflow_dispatch re-oracle, §4).
+- Local HEAD = FINAL-DISPOSAL tip: 14 disposal commits + v2 census commit 05e9c6736 + this dispositions commit on top of 765e30278 → ahead/behind **27 / 0** (origin is an ancestor of HEAD; merge-base verified at 26 pre-dispositions).
+- The mission brief's `d84c86d52` as origin-head is **wrong on disk**: it exists (sugar-cli: SC-TR3 …) but as an in-history commit, not the remote head.
+- **Cluster-push owed by owner** (PULL-EMBARGO: push-only; then workflow_dispatch re-oracle, §4). Disposal-era trio cells owed by welder: sugar-dashboard 8,657→8,694T, candy-top 2,445→2,485T (+new durations rows ReporterChokeTest, SelfUpdateHttpOptionsTest, EmulatorCursorAliasesTest, RealRosterFrameTest, FrozenJunctionTest, WttrInClient*Tests, WeatherModuleIdempotenceTest), sugar-vterm 1,167→1,170T + one new golden (candy-top tests/fixtures/frames/real-roster-120x40.txt, disclosed).
 
 ## 8. CLASS NOTES (what v1's own verdicts got right/wrong vs disk)
 
