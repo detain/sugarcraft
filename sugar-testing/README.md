@@ -199,8 +199,7 @@ execution must not happen — or reach for the direct capture arms:
 call it on and marks it sent; the `with*()` configuration setters return a
 **clone**. Configure first, then queue — calling a `with*()` setter on a handle
 that has already queued messages throws `RuntimeException` rather than silently
-running without its queue. (`send()` remains as a deprecated alias of
-`addMsgs()`.) `run()` replay semantics: see [Simulation subset](#simulation-subset).
+running without its queue. `run()` replay semantics: see [Simulation subset](#simulation-subset).
 
 ### Simulation subset
 
@@ -265,7 +264,7 @@ $input = ScriptedInput::new()
     ->ticks(5, factory: static fn (int $i, float $s) => new \SugarCraft\Testing\Input\TickMsg($s))  // factory required — see the tick note below
     ->resize(120, 40)
     ->key('q')
-    ->build();              // list<Msg>, feed with $sim->send(...$input)
+    ->build();              // list<Msg>, feed with $sim->addMsgs(...$input)
 ```
 
 Builders: `new()`, `key(char, shift:, ctrl:, alt:)`, `namedKey(KeyType, rune,

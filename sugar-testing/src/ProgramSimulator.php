@@ -117,7 +117,7 @@ final class ProgramSimulator
     /** Messages skipped because the drain had already stopped. */
     private int $dropped = 0;
 
-    /** Set by addMsgs()/send(): with*() configuration must happen before it. */
+    /** Set by addMsgs(): with*() configuration must happen before it. */
     private bool $hasSent = false;
 
     /** When false, run() keeps only output bytes — no per-frame view() list. */
@@ -179,12 +179,10 @@ final class ProgramSimulator
     /**
      * Enqueue messages for the {@see run()} cycle, mutating this handle.
      *
-     * The primary spelling (renamed from send(), which remains as a
-     * deprecated alias). Mutates and returns $this: the queue lives on this
-     * instance, so the handle you configured is the handle you run. The
-     * with*() configuration setters CLONE — call them BEFORE the first
-     * addMsgs(), or reconfigure a fresh handle (the class docblock states
-     * the enforced discipline).
+     * Mutates and returns $this: the queue lives on this instance, so the
+     * handle you configured is the handle you run. The with*() configuration
+     * setters CLONE — call them BEFORE the first addMsgs(), or reconfigure a
+     * fresh handle (the class docblock states the enforced discipline).
      *
      * @return $this
      */
@@ -196,17 +194,6 @@ final class ProgramSimulator
         $this->hasSent = true;
 
         return $this;
-    }
-
-    /**
-     * @deprecated since 2026-11 — use {@see addMsgs()}; identical behaviour,
-     *             kept as an alias so consumers migrate deliberately.
-     *
-     * @return $this
-     */
-    public function send(Msg ...$msgs): self
-    {
-        return $this->addMsgs(...$msgs);
     }
 
     /**
@@ -474,7 +461,7 @@ final class ProgramSimulator
      *
      * The set is read once, from the model as it stands now; the produced
      * messages are then applied in turn. They are applied here rather than
-     * appended to the send() queue: a fixed-length drain of that queue left
+     * appended to the addMsgs() queue: a fixed-length drain of that queue left
      * them unprocessed, and the queue outlived run(), so the next run()
      * replayed them on top of its own.
      *
