@@ -262,16 +262,6 @@ abstract class Chart implements ChromeAccessors
     }
 
     /**
-     * @deprecated use {@see self::withLegendIndicator()}: the argument is
-     *             the indicator RUNE, not a style. Kept one minor as the
-     *             house alias window; REMOVED-IN 2.0.0.
-     */
-    public function withLegendStyle(?string $indicatorChar = null): self
-    {
-        return $this->withLegendIndicator($indicatorChar);
-    }
-
-    /**
      * Replace the legend entries.
      *
      * @param list<array{label: string, color: string}> $items
@@ -413,8 +403,6 @@ abstract class Chart implements ChromeAccessors
         return func_num_args() === 0 ? $this->legendIndicatorChar : $this->withLegendIndicator($char);
     }
 
-    /** @deprecated use {@see self::legendIndicator()}; REMOVED-IN 2.0.0. */
-    public function legendStyle(?string $char): self { return $this->withLegendIndicator($char); }
     public function xLabel(string $label): self     { return $this->withXLabel($label); }
     public function yLabel(string $label): self     { return $this->withYLabel($label); }
     public function dataLabels(bool $on = true): self { return $this->withDataLabels($on); }
@@ -448,7 +436,7 @@ abstract class Chart implements ChromeAccessors
      * duration is the wall-clock budget a CALLER's driver loop should pace
      * progress across — no renderer here owns a clock (chart libraries
      * must not spawn timers; the embedding program does). Read it back with
-     * `getAnimationDuration()` / drive the frames with your own loop.
+     * `animationDuration()` / drive the frames with your own loop.
      *
      * @throws \InvalidArgumentException on negative milliseconds (sugar-charts-057 —
      *                                  the last numeric door in the family without a leg)
@@ -484,24 +472,6 @@ abstract class Chart implements ChromeAccessors
             return $this->animationDuration;
         }
         return $this->withAnimationDuration($durationMs);
-    }
-
-    /**
-     * @deprecated use {@see self::animationProgress()} (bare read form) —
-     *             kept one minor as the house alias window.
-     */
-    public function getAnimationProgress(): float
-    {
-        return $this->animationProgress();
-    }
-
-    /**
-     * @deprecated use {@see self::animationDuration()} (bare read form) —
-     *             kept one minor as the house alias window.
-     */
-    public function getAnimationDuration(): int
-    {
-        return $this->animationDuration();
     }
 
     /**

@@ -134,7 +134,7 @@ final class AliasCompletenessTest extends TestCase
         // OHLCChart::withDojiColor added by CH-10 (sugar-charts-101 doji arm),
         // including every documented deviation. A count collapse here would
         // mean the reflection silently stopped seeing withers.
-        $this->assertSame(157, $checked, 'wither census drifted from the documented 157 (152 plus the five CH-58 withLegendIndicator canonicals)');
+        $this->assertSame(150, $checked, 'wither census drifted from the documented 150 (157 less the seven withers retired in C2: five withLegendStyle, withShowAxis, withNoAutoMaxValue)');
         $this->assertGreaterThanOrEqual(5, $exception, 'documented alias deviations must all be present');
     }
 
@@ -150,7 +150,6 @@ final class AliasCompletenessTest extends TestCase
         $this->assertSame('title', self::expectedAlias('withTitle'));
         $this->assertSame('canvas', self::expectedAlias('withCanvas'));
         $this->assertSame('noAutoBarWidth', self::expectedAlias('withNoAutoBarWidth'));
-        $this->assertSame('noAutoMaxValue', self::expectedAlias('withNoAutoMaxValue'));
         $this->assertSame('datasetPoint', self::expectedAlias('withDatasetPoint'));
         $this->assertSame('xLabelFormatter', self::expectedAlias('withXLabelFormatter'));
     }

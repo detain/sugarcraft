@@ -127,25 +127,13 @@ final class Canvas implements \SugarCraft\Charts\Support\CellGrid
      * return an empty placeholder Cell.
      *
      * @return Cell
-     *
-     * @deprecated Use {@see self::cell()} — the house law is bare
-     *             accessors (no `get` prefix).
      */
-    public function getCell(int $x, int $y): Cell
+    public function cell(int $x, int $y): Cell
     {
         if ($x < 0 || $y < 0 || $x >= $this->width || $y >= $this->height) {
             return new Cell();
         }
         return $this->cells[$y][$x] ?? new Cell();
-    }
-
-    /**
-     * Bare-name accessor for {@see self::getCell()} — the house law is
-     * accessors without a `get` prefix.
-     */
-    public function cell(int $x, int $y): Cell
-    {
-        return $this->getCell($x, $y);
     }
 
     /**
@@ -166,22 +154,10 @@ final class Canvas implements \SugarCraft\Charts\Support\CellGrid
     /**
      * Read a cell's style (or null when unset). Mirrors ntcharts'
      * `GetCellStyle`.
-     *
-     * @deprecated Use {@see self::cellStyle()} — the house law is bare
-     *             accessors (no `get` prefix).
-     */
-    public function getCellStyle(int $x, int $y): ?Style
-    {
-        return $this->getCell($x, $y)->style;
-    }
-
-    /**
-     * Bare-name accessor for {@see self::getCellStyle()} — the house
-     * law is accessors without a `get` prefix.
      */
     public function cellStyle(int $x, int $y): ?Style
     {
-        return $this->getCell($x, $y)->style;
+        return $this->cell($x, $y)->style;
     }
 
     /**

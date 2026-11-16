@@ -390,7 +390,7 @@ final class Graph
 
     /**
      * Sample the full perimeter of the circle, deduplicated. Equivalent
-     * to {@see getCirclePoints()} with the canonical 4×radius sample
+     * to {@see circlePoints()} with the canonical 4×radius sample
      * count that ntcharts uses for "complete coverage" — every integer
      * lattice point on the perimeter is hit at least once. Mirrors
      * ntcharts' `GetFullCirclePoints`.
@@ -461,42 +461,6 @@ final class Graph
             if ($e2 <= $dx) { $err += $dx; $y0 += $sy; }
         }
         return $pts;
-    }
-
-    /**
-     * @deprecated the bare spelling is primary (sugar-charts-016); the
-     *             ntcharts mirror name is kept one minor as the house
-     *             alias window.
-     *
-     * @return list<array{0:int,1:int}>
-     */
-    public static function getCirclePoints(int $cx, int $cy, int $radius, int $samples = 32): array
-    {
-        return self::circlePoints($cx, $cy, $radius, $samples);
-    }
-
-    /** @deprecated bare spelling is primary (sugar-charts-016). */
-    public static function getCirclePointsWithLimit(int $cx, int $cy, int $radius, int $limit, int $samples = 32): array
-    {
-        return self::circlePointsWithLimit($cx, $cy, $radius, $limit, $samples);
-    }
-
-    /** @deprecated bare spelling is primary (sugar-charts-016). */
-    public static function getFullCirclePoints(int $cx, int $cy, int $radius): array
-    {
-        return self::fullCirclePoints($cx, $cy, $radius);
-    }
-
-    /** @deprecated bare spelling is primary (sugar-charts-016). */
-    public static function getFullCirclePointsWithLimit(int $cx, int $cy, int $radius, int $limit): array
-    {
-        return self::fullCirclePointsWithLimit($cx, $cy, $radius, $limit);
-    }
-
-    /** @deprecated bare spelling is primary (sugar-charts-016). */
-    public static function getLinePointsWithLimit(int $x0, int $y0, int $x1, int $y1, int $limit): array
-    {
-        return self::linePointsWithLimit($x0, $y0, $x1, $y1, $limit);
     }
 
     /**

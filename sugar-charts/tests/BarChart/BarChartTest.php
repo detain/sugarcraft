@@ -112,7 +112,7 @@ final class BarChartTest extends TestCase
     public function testWithShowAxisDrawsAxisRunes(): void
     {
         $out = BarChart::new([['a', 0.7], ['b', 0.3]], 8, 4)
-            ->withShowAxis()
+            ->withAxes()
             ->view();
         $this->assertStringContainsString('┤', $out);
         $this->assertStringContainsString('└', $out);

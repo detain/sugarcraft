@@ -124,18 +124,16 @@ final class SparklineTest extends TestCase
         $this->assertStringContainsString("\x1b[", $rendered);
     }
 
-    public function testWithNoAutoMaxValueClampsToConfiguredMax(): void
+    public function testPinnedMaxClampsSamplesAboveIt(): void
     {
-        // Without no-auto-max, max() comes from data: range 1..100,
+        // Without a pinned max, max() comes from data: range 1..100,
         // so 50 is mid (▄) and 100 is top (█).
         $auto = Sparkline::new([1, 50, 100], 3)->withMin(0.0)->view();
-        // With no-auto-max + a configured max of 50, the 100 sample
-        // also clamps to the top glyph (█), and 50 also reaches the
-        // top because it is the configured max.
+        // With a configured max of 50, the 100 sample clamps to the top
+        // glyph (█), and 50 also reaches the top because it is the max.
         $clamped = Sparkline::new([1, 50, 100], 3)
             ->withMin(0.0)
             ->withMax(50.0)
-            ->withNoAutoMaxValue()
             ->view();
         // Both contain the top glyph from the auto-rescaled 100.
         $this->assertStringContainsString('█', $auto);
