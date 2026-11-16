@@ -101,8 +101,8 @@ final class FlexLayout implements \SugarCraft\Dashboard\Foundation\SizedItem
         }
 
         return match ($this->direction) {
-            FlexDirection::Row => $this->renderRow($w, $h),
-            FlexDirection::Column => $this->renderColumn($w, $h),
+            FlexDirection::Row, FlexDirection::RowReverse => $this->renderRow($w, $h),
+            FlexDirection::Column, FlexDirection::ColumnReverse => $this->renderColumn($w, $h),
         };
     }
 
@@ -116,13 +116,13 @@ final class FlexLayout implements \SugarCraft\Dashboard\Foundation\SizedItem
         }
 
         $parts = [];
-        foreach ($this->items as $item) {
+        foreach ($this->orderedItems() as $item) {
             $parts[] = $item->render();
         }
 
         return match ($this->direction) {
-            FlexDirection::Row => implode(str_repeat(' ', max(1, $this->gap)), $parts),
-            FlexDirection::Column => implode("\n", $parts),
+            FlexDirection::Row, FlexDirection::RowReverse => implode(str_repeat(' ', max(1, $this->gap)), $parts),
+            FlexDirection::Column, FlexDirection::ColumnReverse => implode("\n", $parts),
         };
     }
 
@@ -149,7 +149,7 @@ final class FlexLayout implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Render each item and collect lines
         $lines = array_fill(0, $totalHeight, '');
 
-        foreach ($this->items as $index => $item) {
+        foreach ($this->orderedItems() as $index => $item) {
             $itemWidth = $itemWidths[$index];
             $itemHeight = $itemSizes[$index]['height'];
 
@@ -232,7 +232,7 @@ final class FlexLayout implements \SugarCraft\Dashboard\Foundation\SizedItem
             }
         };
 
-        foreach ($this->items as $index => $item) {
+        foreach ($this->orderedItems() as $index => $item) {
             $rendered = $item->render();
             $itemWidth = $itemSizes[$index]['width'];
 
@@ -287,7 +287,7 @@ final class FlexLayout implements \SugarCraft\Dashboard\Foundation\SizedItem
         $lines = [];
         $currentY = 0;
 
-        foreach ($this->items as $index => $item) {
+        foreach ($this->orderedItems() as $index => $item) {
             $itemHeight = $itemHeights[$index];
 
             if ($item instanceof \SugarCraft\Dashboard\Foundation\Sizer) {
@@ -352,12 +352,28 @@ final class FlexLayout implements \SugarCraft\Dashboard\Foundation\SizedItem
     /**
      * Measure all items to get their natural dimensions.
      *
+     * Items in render order: the reverse directions lay the same list backwards
+     * (finding 038). array_reverse re-indexes, so positional size lookups stay
+     * aligned with every loop that consumes it.
+     *
+     * @return list<\SugarCraft\Dashboard\Foundation\Item>
+     */
+    private function orderedItems(): array
+    {
+        if ($this->direction === FlexDirection::RowReverse || $this->direction === FlexDirection::ColumnReverse) {
+            return array_reverse($this->items);
+        }
+
+        return $this->items;
+    }
+
+    /**
      * @return list<array{width:int,height:int}>
      */
     private function measureItems(): array
     {
         $sizes = [];
-        foreach ($this->items as $item) {
+        foreach ($this->orderedItems() as $item) {
             if ($item instanceof \SugarCraft\Dashboard\Foundation\SizedItem) {
                 [$w, $h] = $item->innerSize();
                 if ($w === 0 || $h === 0) {
@@ -580,15 +596,20 @@ final class FlexLayout implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Calculate natural size
         $sizes = $this->measureItems();
+
+        if ($sizes === []) {
+            return [0, 0];
+        }
+
         $totalGapWidth = $this->gap * max(0, count($this->items) - 1);
         $totalGapHeight = $this->gap * max(0, count($this->items) - 1);
 
         return match ($this->direction) {
-            FlexDirection::Row => [
+            FlexDirection::Row, FlexDirection::RowReverse => [
                 array_sum(array_column($sizes, 'width')) + $totalGapWidth,
                 max(array_column($sizes, 'height')),
             ],
-            FlexDirection::Column => [
+            FlexDirection::Column, FlexDirection::ColumnReverse => [
                 max(array_column($sizes, 'width')),
                 array_sum(array_column($sizes, 'height')) + $totalGapHeight,
             ],
