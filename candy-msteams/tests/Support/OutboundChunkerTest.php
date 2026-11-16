@@ -199,29 +199,26 @@ final class OutboundChunkerTest extends TestCase
 
     public function testWordSplitCostGrowsLinearlyWithTheLength(): void
     {
-        // Wall-clock ratios are unstable on shared runners, so this runs only when
-        // asked for (SUGARCRAFT_PERF=1). Both fixtures sit above the single-pass cutoff.
-        if (getenv('SUGARCRAFT_PERF') !== '1') {
-            self::markTestSkipped('set SUGARCRAFT_PERF=1 to run the wall-clock scaling check');
-        }
-        // A 4x longer line costs about 4x as much when linear, and about 12x as
-        // much under the original quadratic cut. Noise only ever adds time, so the
-        // fastest of five runs per side is a stable floor and a loaded runner
-        // cannot fail the ratio on one slow sample.
-        $small = str_repeat("word \u{1F600} chunk ", 25000);
-        $large = str_repeat("word \u{1F600} chunk ", 75000);
-        $best = static function (string $line): float {
+        // The single pass is timed directly, so the fixtures can stay small enough
+        // for the default suite (both well under a second). A 4x longer line costs
+        // about 4x as much when linear, and 10x to 13x under the original quadratic
+        // cut. Noise only ever adds time, so the fastest of five runs per side is a
+        // stable floor and a loaded runner cannot fail the ratio on one slow sample.
+        $small = str_repeat("word \u{1F600} chunk ", 5000);  // about 65k codepoints, above the cutoff
+        $large = str_repeat("word \u{1F600} chunk ", 20000); // about 260k codepoints
+        $singlePass = new \ReflectionMethod(OutboundChunker::class, 'wordSplitSinglePass');
+        $best = static function (string $line) use ($singlePass): float {
             $fastest = INF;
             for ($run = 0; $run < 5; $run++) {
                 $started = hrtime(true);
-                OutboundChunker::split($line, 3800, 40);
+                $singlePass->invoke(null, $line, 3800);
                 $fastest = min($fastest, (hrtime(true) - $started) / 1e9);
             }
 
             return $fastest;
         };
         $ratio = $best($large) / max($best($small), 1e-6);
-        self::assertLessThan(6.0, $ratio, sprintf('3x the line cost %.1fx the time: the cut is no longer linear', $ratio));
+        self::assertLessThan(6.0, $ratio, sprintf('4x the line cost %.1fx the time: the cut is no longer linear', $ratio));
     }
 
     public function testInvalidUtf8KeepsTheOriginalCutAndItsStrayByteHandling(): void

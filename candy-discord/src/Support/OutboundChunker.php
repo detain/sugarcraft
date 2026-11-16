@@ -20,8 +20,8 @@ namespace CandyCode\Bundles\Discord\Support;
  */
 final class OutboundChunker
 {
-    /** The characters PHP's ltrim/rtrim strip by default, as codepoints. */
-    private const TRIM = [' ', "\t", "\n", "\r", "\0", "\x0B"];
+    /** The bytes PHP's ltrim/rtrim strip by default. All are ASCII, so each is one byte and one codepoint. */
+    private const TRIM_BYTES = " \t\n\r\0\x0B";
 
     /**
      * @return list<string>
@@ -187,68 +187,63 @@ final class OutboundChunker
     }
 
     /**
-     * The same cut as wordSplitOriginal on valid UTF-8, in one decode and one
-     * scan. $win is the UTF-16 width of the codepoints in [$start, $end), kept
-     * incrementally so no prefix-sum array is built: a long line costs O(n)
-     * with about 16 bytes per codepoint less memory than a prefix-sum form.
+     * The same cut as wordSplitOriginal on valid UTF-8, in one scan with no
+     * per-codepoint array. Positions are byte offsets. $win is the UTF-16 width
+     * of [$start, $end), kept incrementally. The lead byte gives each codepoint's
+     * byte length and unit width, and the piece and trim measurements run in C
+     * (mb_convert_encoding, strspn), so a long line costs O(n).
      *
      * @return list<string>
      */
     private static function wordSplitSinglePass(string $line, int $limit): array
     {
         $room = \max(16, $limit - 16); // headroom for the fence decoration
-        $cps = \mb_str_split($line, 1, 'UTF-8');
-        $n = \count($cps);
+        $bytes = \strlen($line);
         $total = self::len($line);
 
         $pieces = [];
         $consumed = 0; // UTF-16 units before $start
-        $start = 0;    // first codepoint of the piece being cut
-        $end = 0;      // window end, exclusive: first codepoint that no longer fits
+        $start = 0;    // byte offset of the piece being cut
+        $end = 0;      // byte offset of the window end, exclusive: first codepoint that no longer fits
         $win = 0;      // UTF-16 units of [$start, $end)
-        $space = -1;   // last ' ' below $end; $end only grows, so this never rescans
+        $space = -1;   // byte offset of the last ' ' below $end; $end only grows, so this never rescans
         while ($total - $consumed > $room) {
-            while ($end < $n && $win + self::unitsOf($cps[$end]) <= $room) {
-                if ($cps[$end] === ' ') {
+            while ($end < $bytes) {
+                $lead = \ord($line[$end]);
+                $step = $lead < 0x80 ? 1 : ($lead < 0xE0 ? 2 : ($lead < 0xF0 ? 3 : 4));
+                $width = $step === 4 ? 2 : 1;
+                if ($win + $width > $room) {
+                    break;
+                }
+                if ($lead === 0x20) {
                     $space = $end;
                 }
-                $win += self::unitsOf($cps[$end]);
-                ++$end;
+                $win += $width;
+                $end += $step;
             }
             $cut = $space >= $start ? $space + 1 : $end;
-            $pieces[] = \rtrim(\implode('', \array_slice($cps, $start, $cut - $start)));
-            for ($i = $start; $i < $cut; ++$i) {
-                $width = self::unitsOf($cps[$i]);
-                $consumed += $width;
-                $win -= $width;
-            }
+            $taken = \substr($line, $start, $cut - $start);
+            $units = self::len($taken);
+            $consumed += $units;
+            $win -= $units;
+            $pieces[] = \rtrim($taken);
 
             $start = $cut;
-            while ($start < $n && \in_array($cps[$start], self::TRIM, true)) {
-                $width = self::unitsOf($cps[$start]);
-                $consumed += $width;
-                if ($start < $end) {
-                    $win -= $width;
-                }
-                ++$start;
+            $skip = $start < $bytes ? \strspn($line, self::TRIM_BYTES, $start) : 0;
+            $consumed += $skip; // TRIM is ASCII: one unit per byte
+            if ($start < $end) {
+                $win -= \min($skip, $end - $start);
             }
+            $start += $skip;
             $end = \max($end, $start);
         }
-        if ($start < $n) {
-            $pieces[] = \implode('', \array_slice($cps, $start));
+        if ($start < $bytes) {
+            $pieces[] = \substr($line, $start);
         }
 
         return $pieces;
     }
 
-    /**
-     * UTF-16 width of one valid UTF-8 codepoint: a 4-byte sequence is an
-     * astral character, two units, and no shorter sequence is.
-     */
-    private static function unitsOf(string $codepoint): int
-    {
-        return \strlen($codepoint) === 4 ? 2 : 1;
-    }
 
     /**
      * Discord measures content in UTF-16 code units — its own client

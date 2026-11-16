@@ -23,8 +23,8 @@ namespace CandyCode\Bundles\MsTeams\Support;
  */
 final class OutboundChunker
 {
-    /** The characters PHP's ltrim/rtrim strip by default, as codepoints. */
-    private const TRIM = [' ', "\t", "\n", "\r", "\0", "\x0B"];
+    /** The bytes PHP's ltrim/rtrim strip by default. All are ASCII, so each is one byte and one codepoint. */
+    private const TRIM_BYTES = " \t\n\r\0\x0B";
 
     /**
      * @return list<string>
@@ -197,45 +197,58 @@ final class OutboundChunker
     }
 
     /**
-     * The same cut as wordSplitOriginal on valid UTF-8, in one decode and one
-     * scan. Each window's end and its last space are read off a single forward
-     * cursor, so a long line costs O(n).
+     * The same cut as wordSplitOriginal on valid UTF-8, in one scan with no
+     * per-codepoint array. Positions are byte offsets. $win counts the codepoints
+     * in [$start, $end), so the window never rescans. A piece's codepoints are
+     * measured in C (mb_strlen) and its trim run with strspn, so a long line
+     * costs O(n).
      *
      * @return list<string>
      */
     private static function wordSplitSinglePass(string $line, int $limit): array
     {
         $room = \max(16, $limit - 16); // headroom for the fence decoration
-        $cps = \mb_str_split($line, 1, 'UTF-8');
-        $n = \count($cps);
+        $bytes = \strlen($line);
+        $total = self::len($line);
 
         $pieces = [];
-        $start = 0;   // first codepoint of the piece being cut
-        $end = 0;     // scan cursor: every codepoint below it has been seen
-        $space = -1;  // last ' ' below $end; $end only grows, so this never rescans
-        while ($n - $start > $room) {
-            $fitEnd = $start + $room;
-            while ($end < $fitEnd) {
-                if ($cps[$end] === ' ') {
+        $consumed = 0; // codepoints before $start
+        $start = 0;    // byte offset of the piece being cut
+        $end = 0;      // byte offset of the window end, exclusive
+        $win = 0;      // codepoints in [$start, $end)
+        $space = -1;   // byte offset of the last ' ' below $end; $end only grows, so this never rescans
+        while ($total - $consumed > $room) {
+            while ($win < $room && $end < $bytes) {
+                $lead = \ord($line[$end]);
+                if ($lead === 0x20) {
                     $space = $end;
                 }
-                ++$end;
+                $end += $lead < 0x80 ? 1 : ($lead < 0xE0 ? 2 : ($lead < 0xF0 ? 3 : 4));
+                ++$win;
             }
-            $cut = $space >= $start ? $space + 1 : $fitEnd;
-            $pieces[] = \rtrim(\implode('', \array_slice($cps, $start, $cut - $start)));
+            $cut = $space >= $start ? $space + 1 : $end;
+            $taken = \substr($line, $start, $cut - $start);
+            $codepoints = self::len($taken);
+            $consumed += $codepoints;
+            $win -= $codepoints;
+            $pieces[] = \rtrim($taken);
 
             $start = $cut;
-            while ($start < $n && \in_array($cps[$start], self::TRIM, true)) {
-                ++$start;
+            $skip = $start < $bytes ? \strspn($line, self::TRIM_BYTES, $start) : 0;
+            $consumed += $skip; // TRIM is ASCII: one codepoint per byte
+            if ($start < $end) {
+                $win -= \min($skip, $end - $start);
             }
+            $start += $skip;
             $end = \max($end, $start);
         }
-        if ($start < $n) {
-            $pieces[] = \implode('', \array_slice($cps, $start));
+        if ($start < $bytes) {
+            $pieces[] = \substr($line, $start);
         }
 
         return $pieces;
     }
+
 
     public static function len(string $text): int
     {
