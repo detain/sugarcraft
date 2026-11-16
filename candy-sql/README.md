@@ -1048,7 +1048,8 @@ Pre-1.0 gaps to be aware of, mostly on the async (ReactPHP) query path:
   `Ctrl+C` quits the app only when nothing is in flight (SQL-O08, see the key
   table above). A superseded run is cancelled when the next one dispatches,
   and the per-query timeout
-  (`QueryTimeout`, default 30 s) still bounds every leg.
+  (`QueryTimeout`, default 30 s) still bounds every leg, rejecting its promise
+  when it fires.
 - **Query-pane results are buffered in full.** A `SELECT` executed from the
   editor materialises every returned row into the in-process result table.
   The schema-browse preview pages instead: `PreviewQuery` fetches 100 rows per
