@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\App;
 
 use SugarCraft\Core\Cmd as CoreCmd;
+use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg as CoreMsg;
@@ -161,6 +162,14 @@ use DateTimeImmutable;
  */
 final class App implements Model
 {
+    /**
+     * The shared immutable-with splat. Every `with*()` names only what it
+     * changes; a nullable field is reset by passing null explicitly, which
+     * the splat carries as a present key (no `??` fallback to the old value).
+     * The drift guard holds the constructor and the properties in step.
+     */
+    use Mutable;
+
     /** Rows a wheel notch scrolls a docked pane — the transcript's own step. */
     private const PANE_WHEEL_ROWS = 3;
 
@@ -748,27 +757,27 @@ final class App implements Model
     // Immutable with*() builders
     public function withProvider(ProviderInterface $v): self
     {
-        return $this->mutate(provider: $v);
+        return $this->mutate(['provider' => $v]);
     }
 
     public function withModel(string $v): self
     {
-        return $this->mutate(model: $v);
+        return $this->mutate(['model' => $v]);
     }
 
     public function withMessages(array $v): self
     {
-        return $this->mutate(messages: $v);
+        return $this->mutate(['messages' => $v]);
     }
 
     public function withTools(array $v): self
     {
-        return $this->mutate(tools: $v);
+        return $this->mutate(['tools' => $v]);
     }
 
     public function withPane(Pane $v): self
     {
-        return $this->mutate(pane: $v);
+        return $this->mutate(['pane' => $v]);
     }
 
     /**
@@ -781,10 +790,10 @@ final class App implements Model
     {
         $expand = !$this->contextPaneExpanded;
 
-        return $this->mutate(
-            contextPaneExpanded: $expand,
-            contextDrill: $expand ? $this->contextDrill : null,
-        );
+        return $this->mutate([
+            'contextPaneExpanded' => $expand,
+            'contextDrill' => $expand ? $this->contextDrill : null,
+        ]);
     }
 
     /**
@@ -794,53 +803,53 @@ final class App implements Model
      */
     public function contextPaneDrill(?ContextCategory $v): self
     {
-        return $this->mutate(contextPaneExpanded: true, contextDrill: $v);
+        return $this->mutate(['contextPaneExpanded' => true, 'contextDrill' => $v]);
     }
 
     public function withError(?string $v): self
     {
-        return $this->mutate(error: $v);
+        return $this->mutate(['error' => $v]);
     }
 
     public function withStatus(?string $v): self
     {
-        return $this->mutate(status: $v);
+        return $this->mutate(['status' => $v]);
     }
 
     public function withSessionId(?string $v): self
     {
-        return $this->mutate(sessionId: $v);
+        return $this->mutate(['sessionId' => $v]);
     }
 
     /** @see $reasoningEffort */
     public function withReasoningEffort(string|float|null $v): self
     {
-        return $this->mutate(reasoningEffort: $v);
+        return $this->mutate(['reasoningEffort' => $v]);
     }
 
     public function withContextFiles(array $v): self
     {
-        return $this->mutate(contextFiles: $v);
+        return $this->mutate(['contextFiles' => $v]);
     }
 
     public function withEnabledSkills(array $v): self
     {
-        return $this->mutate(enabledSkills: $v);
+        return $this->mutate(['enabledSkills' => $v]);
     }
 
     public function withAvailableSkills(SkillRegistry $registry): self
     {
-        return $this->mutate(availableSkills: $registry);
+        return $this->mutate(['availableSkills' => $registry]);
     }
 
     public function withActiveHooks(array $v): self
     {
-        return $this->mutate(activeHooks: $v);
+        return $this->mutate(['activeHooks' => $v]);
     }
 
     public function withSelectedAgentIndex(int $v): self
     {
-        return $this->mutate(selectedAgentIndex: $v);
+        return $this->mutate(['selectedAgentIndex' => $v]);
     }
 
     /** Expand a delegated run's row, or collapse it if it was expanded. */
@@ -853,7 +862,7 @@ final class App implements Model
             $expanded[$runId] = true;
         }
 
-        return $this->mutate(expandedAgents: $expanded);
+        return $this->mutate(['expandedAgents' => $expanded]);
     }
 
     public function isAgentExpanded(string $runId): bool
@@ -877,7 +886,7 @@ final class App implements Model
     /** Give the strip the keyboard on run $id, or with null hand it back to the input. */
     public function withAgentStripFocus(?string $id): self
     {
-        return $this->mutate(agentStripFocus: $id);
+        return $this->mutate(['agentStripFocus' => $id]);
     }
 
     /** Take a run off the strip (`x` on a finished run); focus moves to a neighbour. */
@@ -890,7 +899,7 @@ final class App implements Model
         $left = array_values(array_filter($items, static fn ($state): bool => $state->id !== $id));
         $focus = $left === [] ? null : $left[min(max(0, $at), count($left) - 1)]->id;
 
-        return $this->mutate(agentStripDismissed: $dismissed, agentStripFocus: $focus);
+        return $this->mutate(['agentStripDismissed' => $dismissed, 'agentStripFocus' => $focus]);
     }
 
     /**
@@ -1033,19 +1042,19 @@ final class App implements Model
         $chat = $this->chat;
         $activeTab = $this->deck?->activeKey();
 
-        $next = $this->mutate(
-            pane: Pane::Chat,
-            agentViewMode: AgentViewMode::Attach,
-            agentStripFocus: null,
-            agentViewTarget: $id,
-            agentViewTail: null,
-            agentViewItems: [],
-            agentViewRows: [],
-            agentViewName: $name,
-            chat: $chat === null ? null : $chat->withDraft($incoming->draft, $incoming->cursor)->withScrollOffset($incoming->scrollOffset),
-            windowViewports: $store,
-            agentViewByTab: $activeTab === null ? $this->agentViewByTab : [...$this->agentViewByTab, $activeTab => $id],
-        );
+        $next = $this->mutate([
+            'pane' => Pane::Chat,
+            'agentViewMode' => AgentViewMode::Attach,
+            'agentStripFocus' => null,
+            'agentViewTarget' => $id,
+            'agentViewTail' => null,
+            'agentViewItems' => [],
+            'agentViewRows' => [],
+            'agentViewName' => $name,
+            'chat' => $chat === null ? null : $chat->withDraft($incoming->draft, $incoming->cursor)->withScrollOffset($incoming->scrollOffset),
+            'windowViewports' => $store,
+            'agentViewByTab' => $activeTab === null ? $this->agentViewByTab : [...$this->agentViewByTab, $activeTab => $id],
+        ]);
         foreach (\SugarCraft\Code\Tui\Components\AgentDashboardPane::entries($next) as $index => $entry) {
             if (($entry->key ?? $entry->name) === $id) {
                 $next = $next->withSelectedAgentIndex($index);
@@ -1055,7 +1064,7 @@ final class App implements Model
 
         $log = $next->agentViewLog();
         if ($log !== null) {
-            $next = $next->mutate(agentViewTail: \SugarCraft\Code\Agents\Live\AgentTranscriptTail::of($log));
+            $next = $next->mutate(['agentViewTail' => \SugarCraft\Code\Agents\Live\AgentTranscriptTail::of($log)]);
             for ($read = 0; $read < self::AGENT_VIEW_OPEN_READS; $read++) {
                 $before = $next->agentViewTail;
                 $next = $next->refreshAgentView();
@@ -1106,11 +1115,11 @@ final class App implements Model
             $all = \array_slice($all, -self::AGENT_VIEW_MAX_ITEMS);
         }
 
-        return $this->mutate(
-            agentViewTail: $advanced,
-            agentViewItems: $all,
-            agentViewRows: \SugarCraft\Code\Agents\Live\AgentTranscriptTail::messages($all),
-        );
+        return $this->mutate([
+            'agentViewTail' => $advanced,
+            'agentViewItems' => $all,
+            'agentViewRows' => \SugarCraft\Code\Agents\Live\AgentTranscriptTail::messages($all),
+        ]);
     }
 
     /**
@@ -1130,16 +1139,16 @@ final class App implements Model
         if ($id === null) {
             // A dashboard worker attached without a run id has no window of
             // its own to keep: nothing was ever swapped into the chat.
-            return $this->mutate(
-                agentViewMode: AgentViewMode::List,
-                agentViewTarget: null,
-                agentViewTail: null,
-                agentViewItems: [],
-                agentViewRows: [],
-                agentViewName: null,
-                agentBroadcast: false,
-                agentViewLeader: false,
-            );
+            return $this->mutate([
+                'agentViewMode' => AgentViewMode::List,
+                'agentViewTarget' => null,
+                'agentViewTail' => null,
+                'agentViewItems' => [],
+                'agentViewRows' => [],
+                'agentViewName' => null,
+                'agentBroadcast' => false,
+                'agentViewLeader' => false,
+            ]);
         }
 
         $store = $this->viewportStore()->stash('a:' . $id, $this->currentViewport());
@@ -1147,19 +1156,19 @@ final class App implements Model
         $chat = $this->chat;
         $activeTab = $this->deck?->activeKey();
 
-        return $this->mutate(
-            agentViewMode: AgentViewMode::List,
-            agentViewTarget: null,
-            agentViewTail: null,
-            agentViewItems: [],
-            agentViewRows: [],
-            agentViewName: null,
-            agentBroadcast: false,
-            agentViewLeader: false,
-            chat: $chat === null ? null : $chat->withDraft($main->draft, $main->cursor)->withScrollOffset($main->scrollOffset),
-            windowViewports: $store,
-            agentViewByTab: $activeTab === null ? $this->agentViewByTab : array_diff_key($this->agentViewByTab, [$activeTab => true]),
-        );
+        return $this->mutate([
+            'agentViewMode' => AgentViewMode::List,
+            'agentViewTarget' => null,
+            'agentViewTail' => null,
+            'agentViewItems' => [],
+            'agentViewRows' => [],
+            'agentViewName' => null,
+            'agentBroadcast' => false,
+            'agentViewLeader' => false,
+            'chat' => $chat === null ? null : $chat->withDraft($main->draft, $main->cursor)->withScrollOffset($main->scrollOffset),
+            'windowViewports' => $store,
+            'agentViewByTab' => $activeTab === null ? $this->agentViewByTab : array_diff_key($this->agentViewByTab, [$activeTab => true]),
+        ]);
     }
 
     /**
@@ -1248,7 +1257,7 @@ final class App implements Model
     /** The same shell with the Agent View's `Ctrl+X` leader down or up ({@see $agentViewLeader}). */
     public function withAgentViewLeader(bool $down): self
     {
-        return $down === $this->agentViewLeader ? $this : $this->mutate(agentViewLeader: $down);
+        return $down === $this->agentViewLeader ? $this : $this->mutate(['agentViewLeader' => $down]);
     }
 
     /**
@@ -1257,7 +1266,7 @@ final class App implements Model
      */
     public function withAgentsStopArmedAt(?float $at): self
     {
-        return $at === $this->agentsStopArmedAt ? $this : $this->mutate(agentsStopArmedAt: $at);
+        return $at === $this->agentsStopArmedAt ? $this : $this->mutate(['agentsStopArmedAt' => $at]);
     }
 
     /** Whether the user paused run $id and has not let it go ({@see $agentPaused}). */
@@ -1277,7 +1286,7 @@ final class App implements Model
     public function toggleAgentBroadcast(): self
     {
         if ($this->agentBroadcast) {
-            return $this->mutate(agentBroadcast: false)->withStatus(Lang::t('tui.app.broadcast_off'));
+            return $this->mutate(['agentBroadcast' => false])->withStatus(Lang::t('tui.app.broadcast_off'));
         }
 
         $running = $this->runningAgentIds();
@@ -1288,7 +1297,7 @@ final class App implements Model
         $app = $this->agentViewTarget === null || !\in_array($this->agentViewTarget, $running, true)
             ? $this->openAgentView($running[\count($running) - 1])
             : $this;
-        $app = $app->mutate(agentBroadcast: true);
+        $app = $app->mutate(['agentBroadcast' => true]);
 
         return $app->withStatus(Lang::t('tui.app.broadcast_on', ['count' => \count($app->agentComposerTargets())]));
     }
@@ -1315,7 +1324,7 @@ final class App implements Model
             }), null];
         }
 
-        $app = $this->mutate(agentCancelArmed: null);
+        $app = $this->mutate(['agentCancelArmed' => null]);
         $names = $this->agentNames($control->agentIds);
         $now = microtime(true);
         switch ($control->verb) {
@@ -1325,16 +1334,16 @@ final class App implements Model
                     $control = new \SugarCraft\Code\App\AgentControlMsg(\SugarCraft\Code\App\AgentControlMsg::STOP, $control->agentIds);
                     $app = $app->withStatus(Lang::t('tui.app.agent_stopping', ['names' => $names]));
                 } else {
-                    $app = $app->mutate(agentCancelArmed: ['ids' => $control->agentIds, 'at' => $now])
+                    $app = $app->mutate(['agentCancelArmed' => ['ids' => $control->agentIds, 'at' => $now]])
                         ->withStatus(Lang::t('tui.app.agent_cancel_armed', ['names' => $names]));
                 }
                 break;
             case \SugarCraft\Code\App\AgentControlMsg::PAUSE:
-                $app = $app->mutate(agentPaused: array_values(array_unique([...$this->agentPaused, ...$control->agentIds])))
+                $app = $app->mutate(['agentPaused' => array_values(array_unique([...$this->agentPaused, ...$control->agentIds]))])
                     ->withStatus(Lang::t('tui.app.agent_pausing', ['names' => ucfirst($names)]));
                 break;
             case \SugarCraft\Code\App\AgentControlMsg::RESUME:
-                $app = $app->mutate(agentPaused: array_values(array_diff($this->agentPaused, $control->agentIds)))
+                $app = $app->mutate(['agentPaused' => array_values(array_diff($this->agentPaused, $control->agentIds))])
                     ->withStatus(Lang::t('tui.app.agent_resumed', ['names' => ucfirst($names)]));
                 break;
             case \SugarCraft\Code\App\AgentControlMsg::OPEN_SESSION:
@@ -1399,7 +1408,7 @@ final class App implements Model
         }
         $kept[] = $sent;
 
-        return $this->mutate(agentMessages: \array_slice($kept, -self::AGENT_MESSAGES_KEPT));
+        return $this->mutate(['agentMessages' => \array_slice($kept, -self::AGENT_MESSAGES_KEPT)]);
     }
 
     /**
@@ -1513,7 +1522,7 @@ final class App implements Model
             return $this;
         }
 
-        return $rows === [] ? $this : $this->mutate(agentViewRows: array_values($rows));
+        return $rows === [] ? $this : $this->mutate(['agentViewRows' => array_values($rows)]);
     }
 
     /** How far the surface $id is scrolled down; 0 is the top. */
@@ -1541,23 +1550,23 @@ final class App implements Model
             $scroll[$id] = $offset;
         }
 
-        return $this->mutate(paneScroll: $scroll);
+        return $this->mutate(['paneScroll' => $scroll]);
     }
 
     /** Set (or with null, release) the live-agent column's dragged width. */
     public function withAgentSplitCols(?int $cols): self
     {
-        return $this->mutate(agentSplitCols: $cols === null ? null : max(1, $cols));
+        return $this->mutate(['agentSplitCols' => $cols === null ? null : max(1, $cols)]);
     }
 
     public function withAgentViewMode(AgentViewMode $v): self
     {
-        return $this->mutate(agentViewMode: $v);
+        return $this->mutate(['agentViewMode' => $v]);
     }
 
     public function withLastActivity(DateTimeImmutable $lastActivityAt): self
     {
-        return $this->mutate(lastActivityAt: $lastActivityAt);
+        return $this->mutate(['lastActivityAt' => $lastActivityAt]);
     }
 
     /**
@@ -1565,7 +1574,7 @@ final class App implements Model
      */
     public function withSkillPickerOptions(array $v): self
     {
-        return $this->mutate(skillPickerOptions: $v);
+        return $this->mutate(['skillPickerOptions' => $v]);
     }
 
     /**
@@ -1577,7 +1586,7 @@ final class App implements Model
     {
         $max = count($this->skillPickerOptions) - 1;
 
-        return $this->mutate(skillPickerIndex: $max < 0 ? 0 : max(0, min($v, $max)));
+        return $this->mutate(['skillPickerIndex' => $max < 0 ? 0 : max(0, min($v, $max))]);
     }
 
     /**
@@ -1593,7 +1602,7 @@ final class App implements Model
      */
     public function withInstructionLoader(?InstructionFileLoader $v): self
     {
-        return $this->mutate(instructionLoader: $v);
+        return $this->mutate(['instructionLoader' => $v]);
     }
 
     /**
@@ -1612,7 +1621,7 @@ final class App implements Model
         // condition (armDeck arms on exactly it), and withTabHosted is
         // identity-preserving, so a factory-less launch keeps its historic
         // object flow byte-identically.
-        return $this->mutate(chat: $v === null ? null : $v->withTabHosted($this->tabFactory !== null));
+        return $this->mutate(['chat' => $v === null ? null : $v->withTabHosted($this->tabFactory !== null)]);
     }
 
     /**
@@ -1624,12 +1633,12 @@ final class App implements Model
      */
     public function withRoot(?string $v): self
     {
-        return $this->mutate(root: $v);
+        return $this->mutate(['root' => $v]);
     }
 
     public function withMemoryStore(?MemoryStore $v): self
     {
-        return $this->mutate(memoryStore: $v);
+        return $this->mutate(['memoryStore' => $v]);
     }
 
     /**
@@ -1644,54 +1653,54 @@ final class App implements Model
      */
     public function withRulesState(?RulesState $v): self
     {
-        return $this->mutate(rulesState: $v);
+        return $this->mutate(['rulesState' => $v]);
     }
 
     /** @param ?\Closure(): SettingsSources $v what the settings view reads when it opens */
     public function withSettingsSources(?\Closure $v): self
     {
-        return $this->mutate(settingsSources: $v);
+        return $this->mutate(['settingsSources' => $v]);
     }
 
     /** Replace the open settings view's state (null closes it). */
     public function withSettingsEditor(?SettingsEditor $v): self
     {
-        return $this->mutate(settingsEditor: $v);
+        return $this->mutate(['settingsEditor' => $v]);
     }
 
     /** Replace the open media form's state (null closes it). */
     public function withMediaForm(?MediaForm $v): self
     {
-        return $this->mutate(mediaForm: $v);
+        return $this->mutate(['mediaForm' => $v]);
     }
 
     /** Replace the open player's state (null closes it — WITHOUT stopping; prefer closeVideoPlayer()). */
     public function withVideoPlayer(?VideoPlayerScreen $v): self
     {
-        return $this->mutate(videoPlayer: $v);
+        return $this->mutate(['videoPlayer' => $v]);
     }
 
     public function withSettingsWriter(?SettingsWriter $v): self
     {
-        return $this->mutate(settingsWriter: $v);
+        return $this->mutate(['settingsWriter' => $v]);
     }
 
     /** Replace the open launch trust dialog's state (null closes it). */
     public function withTrustDialog(?TrustDialog $v): self
     {
-        return $this->mutate(trustDialog: $v);
+        return $this->mutate(['trustDialog' => $v]);
     }
 
     /** Replace the open diff review's state (null closes it). */
     public function withDiffReview(?DiffReview $v): self
     {
-        return $this->mutate(diffReview: $v);
+        return $this->mutate(['diffReview' => $v]);
     }
 
     /** Replace the open first-run wizard's state (null closes it; C-TUI-5.e). */
     public function withFirstRunWizard(?FirstRunWizard $v): self
     {
-        return $this->mutate(firstRunWizard: $v);
+        return $this->mutate(['firstRunWizard' => $v]);
     }
 
     /**
@@ -1709,17 +1718,17 @@ final class App implements Model
         $writer = $this->settingsWriter;
         $tier = $editor->tier;
         if ($writer === null) {
-            return $this->mutate(settingsEditor: $editor->withPreview(
+            return $this->mutate(['settingsEditor' => $editor->withPreview(
                 SettingsSavePreview::blocked($tier, null, Lang::t('tui.app.settings_unsavable')),
-            ));
+            )]);
         }
 
         try {
             $before = $writer->current($tier);
         } catch (\RuntimeException $e) {
-            return $this->mutate(settingsEditor: $editor->withPreview(
+            return $this->mutate(['settingsEditor' => $editor->withPreview(
                 SettingsSavePreview::blocked($tier, $writer->targetPath($tier), $e->getMessage()),
-            ));
+            )]);
         }
 
         $preview = SettingsSavePreview::new(
@@ -1734,9 +1743,9 @@ final class App implements Model
 
         // The running turn keeps the settings it began with; the preview says
         // so (Appendix N §4.8), and only the shell knows a turn is running.
-        return $this->mutate(settingsEditor: $editor->withPreview(
+        return $this->mutate(['settingsEditor' => $editor->withPreview(
             $preview->withNotes(self::settingsShadowNotes($editor))->withTurnRunning($this->chat?->inFlight ?? false),
-        ));
+        )]);
     }
 
     /**
@@ -1819,7 +1828,7 @@ final class App implements Model
                     : SettingsSources::bestEffort($this->root));
             }
 
-            $app = $this->mutate(settingsEditor: $editor);
+            $app = $this->mutate(['settingsEditor' => $editor]);
         }
 
         if (!$msg->ok() || $app->chat === null) {
@@ -1846,12 +1855,12 @@ final class App implements Model
 
         MenuBar::closeMenu();
 
-        return $this->mutate(settingsEditor: SettingsEditor::open($sources, $query));
+        return $this->mutate(['settingsEditor' => SettingsEditor::open($sources, $query)]);
     }
 
     public function closeSettings(): self
     {
-        return $this->settingsEditor === null ? $this : $this->mutate(settingsEditor: null);
+        return $this->settingsEditor === null ? $this : $this->mutate(['settingsEditor' => null]);
     }
 
     /**
@@ -1890,7 +1899,7 @@ final class App implements Model
             $writer->write(SettingsTier::You, [MediaPresets::SETTINGS_KEY => $map]);
         };
 
-        return $this->mutate(mediaForm: MediaForm::open(
+        return $this->mutate(['mediaForm' => MediaForm::open(
             $request,
             ChoiceFeed::forForm(),
             // Absent on a young config = an EMPTY store, so the first save
@@ -1904,7 +1913,7 @@ final class App implements Model
             savePattern: \is_string($settings['sd.savePattern'] ?? null) && trim($settings['sd.savePattern']) !== ''
                 ? $settings['sd.savePattern']
                 : null,
-        ));
+        )]);
     }
 
     /** The layered user config for form open; a failed read is an empty map. */
@@ -1919,7 +1928,7 @@ final class App implements Model
 
     public function closeMediaForm(): self
     {
-        return $this->mediaForm === null ? $this : $this->mutate(mediaForm: null);
+        return $this->mediaForm === null ? $this : $this->mutate(['mediaForm' => null]);
     }
 
     /**
@@ -1952,7 +1961,7 @@ final class App implements Model
             ?? static fn (string $p, int $w, int $h, VideoMode $m): VideoPlayer => VideoPlayer::open($p, $w, $h, mode: $m);
 
         return [
-            $this->mutate(videoPlayer: VideoPlayerScreen::preparing($path, $mode)),
+            $this->mutate(['videoPlayer' => VideoPlayerScreen::preparing($path, $mode)]),
             CoreCmd::promise(static function () use ($factory, $path, $cellsW, $cellsH, $mode): \React\Promise\PromiseInterface {
                 try {
                     $player = $factory($path, $cellsW, $cellsH, $mode);
@@ -1977,7 +1986,7 @@ final class App implements Model
 
         $this->videoPlayer->stop();
 
-        return $this->mutate(videoPlayer: null);
+        return $this->mutate(['videoPlayer' => null]);
     }
 
     /**
@@ -1991,13 +2000,13 @@ final class App implements Model
     {
         MenuBar::closeMenu();
 
-        return $this->mutate(diffReview: $review);
+        return $this->mutate(['diffReview' => $review]);
     }
 
     /** Drop the diff review if one stands (C-TUI-2.e); idempotent. */
     public function closeDiffReview(): self
     {
-        return $this->diffReview === null ? $this : $this->mutate(diffReview: null);
+        return $this->diffReview === null ? $this : $this->mutate(['diffReview' => null]);
     }
 
     /**
@@ -2019,13 +2028,13 @@ final class App implements Model
 
         MenuBar::closeMenu();
 
-        return $this->mutate(firstRunWizard: FirstRunWizard::open(null, '', $this->cols));
+        return $this->mutate(['firstRunWizard' => FirstRunWizard::open(null, '', $this->cols)]);
     }
 
     /** Drop the first-run wizard if one stands (C-TUI-5.e); idempotent. */
     public function closeFirstRunWizard(): self
     {
-        return $this->firstRunWizard === null ? $this : $this->mutate(firstRunWizard: null);
+        return $this->firstRunWizard === null ? $this : $this->mutate(['firstRunWizard' => null]);
     }
 
     /**
@@ -2148,7 +2157,7 @@ final class App implements Model
 
         [$nextChat, $cmd] = $this->chat->switchProvider($provider);
 
-        return [$closed->mutate(chat: $nextChat), $cmd];
+        return [$closed->mutate(['chat' => $nextChat]), $cmd];
     }
 
     /**
@@ -2170,7 +2179,7 @@ final class App implements Model
             return $this->applyDiffReviewAction($action, $next);
         }
 
-        return [$this->mutate(diffReview: $next), null];
+        return [$this->mutate(['diffReview' => $next]), null];
     }
 
     /**
@@ -2192,14 +2201,14 @@ final class App implements Model
 
         $dialled = $this->dialDiffReview($action->stepsBack, $action->turnOnly);
         if ($dialled instanceof DiffReview) {
-            return [$this->mutate(diffReview: $dialled), null];
+            return [$this->mutate(['diffReview' => $dialled]), null];
         }
 
         if (is_string($dialled)) {
             return [$this->closeDiffReview(), static fn (): CoreMsg => new StatusMsg($dialled)];
         }
 
-        return [$this->mutate(diffReview: $next), null];
+        return [$this->mutate(['diffReview' => $next]), null];
     }
 
     /**
@@ -2233,13 +2242,13 @@ final class App implements Model
     {
         MenuBar::closeMenu();
 
-        return $this->mutate(messagePicker: MessagePicker::open($promptsNewestFirst));
+        return $this->mutate(['messagePicker' => MessagePicker::open($promptsNewestFirst)]);
     }
 
     /** Drop the message picker if one stands (C-TUI-3.d); idempotent. */
     public function closeMessagePicker(): self
     {
-        return $this->messagePicker === null ? $this : $this->mutate(messagePicker: null);
+        return $this->messagePicker === null ? $this : $this->mutate(['messagePicker' => null]);
     }
 
     /**
@@ -2261,7 +2270,7 @@ final class App implements Model
             return $this->applyMessagePickerAction($action, $next);
         }
 
-        return [$this->mutate(messagePicker: $next), null];
+        return [$this->mutate(['messagePicker' => $next]), null];
     }
 
     /**
@@ -2290,7 +2299,7 @@ final class App implements Model
         $app = $settled instanceof Chat && $settled !== $chat
             ? $this->withChat($settled)->autoEnablePanes()->rekeyDeck()
             : $this;
-        $app = $app->mutate(messagePicker: null);
+        $app = $app->mutate(['messagePicker' => null]);
 
         return [$app, $app->scopeForegroundCmd($chatCmd)];
     }
@@ -2386,7 +2395,7 @@ final class App implements Model
 
         [$screen, $cmd] = $this->videoPlayer->update($msg);
 
-        return [$screen === $this->videoPlayer ? $this : $this->mutate(videoPlayer: $screen), $cmd];
+        return [$screen === $this->videoPlayer ? $this : $this->mutate(['videoPlayer' => $screen]), $cmd];
     }
 
     /**
@@ -2437,7 +2446,7 @@ final class App implements Model
 
         $serverInfo = static fn (string $base64): ?string => ImportPng::serverInfoFor($base64);
 
-        return [$this->mutate(mediaForm: $form->importAttachedPng($serverInfo)), null];
+        return [$this->mutate(['mediaForm' => $form->importAttachedPng($serverInfo)]), null];
     }
 
     /**
@@ -2450,7 +2459,7 @@ final class App implements Model
             return [$this, null];
         }
 
-        return [$this->mutate(mediaForm: $form->saveFocusedPreset()), null];
+        return [$this->mutate(['mediaForm' => $form->saveFocusedPreset()]), null];
     }
 
     /** One ceiling sentence for both the stat cap and the strlen backstop (R10-m2). */
@@ -2481,16 +2490,16 @@ final class App implements Model
         // for temps whose size cannot be stat'ed.
         $size = $msg->path === null ? false : @filesize($msg->path);
         if ($size !== false && $size > ImageSource::MAX_BYTES) {
-            return [$this->mutate(mediaForm: $form->withStatus(self::PASTE_CEILING_STATUS)), null];
+            return [$this->mutate(['mediaForm' => $form->withStatus(self::PASTE_CEILING_STATUS)]), null];
         }
 
         $bytes = $msg->path === null ? false : @file_get_contents($msg->path);
         if ($bytes === false || $bytes === '') {
-            return [$this->mutate(mediaForm: $form->withStatus(Lang::t('chat.clipboard.no_image'))), null];
+            return [$this->mutate(['mediaForm' => $form->withStatus(Lang::t('chat.clipboard.no_image'))]), null];
         }
 
         if (\strlen($bytes) > ImageSource::MAX_BYTES) {
-            return [$this->mutate(mediaForm: $form->withStatus(self::PASTE_CEILING_STATUS)), null];
+            return [$this->mutate(['mediaForm' => $form->withStatus(self::PASTE_CEILING_STATUS)]), null];
         }
 
         try {
@@ -2500,10 +2509,10 @@ final class App implements Model
             $ingress = ImageIngress::fromBytes($bytes, MediaForm::CLIPBOARD_ORIGIN);
             MediaStore::forSession($this->sessionId ?? 'clipboard')->put($ingress->bytes, 'png', []);
         } catch (\InvalidArgumentException | \RuntimeException $error) {
-            return [$this->mutate(mediaForm: $form->withStatus('! ' . $error->getMessage())), null];
+            return [$this->mutate(['mediaForm' => $form->withStatus('! ' . $error->getMessage())]), null];
         }
 
-        return [$this->mutate(mediaForm: $form->withClipboardImage($ingress->bytes)), null];
+        return [$this->mutate(['mediaForm' => $form->withClipboardImage($ingress->bytes)]), null];
     }
 
     /**
@@ -2647,12 +2656,12 @@ final class App implements Model
 
     public function withDock(?DockLayout $v): self
     {
-        return $this->mutate(dock: $v);
+        return $this->mutate(['dock' => $v]);
     }
 
     public function withOnLayoutChange(?\Closure $v): self
     {
-        return $this->mutate(onLayoutChange: $v);
+        return $this->mutate(['onLayoutChange' => $v]);
     }
 
     /**
@@ -2663,7 +2672,7 @@ final class App implements Model
      */
     public function withPaneAutoShow(PaneAutoShow $v): self
     {
-        return $this->mutate(paneAutoShow: $v);
+        return $this->mutate(['paneAutoShow' => $v]);
     }
 
     /**
@@ -2672,18 +2681,18 @@ final class App implements Model
      */
     public function withTabFactory(?\Closure $v): self
     {
-        return $this->mutate(tabFactory: $v);
+        return $this->mutate(['tabFactory' => $v]);
     }
 
     public function withCompactorConfig(?CompactorConfig $v): self
     {
-        return $this->mutate(compactorConfig: $v);
+        return $this->mutate(['compactorConfig' => $v]);
     }
 
     /** See {@see $contextLedger}. */
     public function withContextLedger(?\SugarCraft\Code\Context\Pruning\ContextLedger $v): self
     {
-        return $this->mutate(contextLedger: $v);
+        return $this->mutate(['contextLedger' => $v]);
     }
 
     /**
@@ -2723,10 +2732,10 @@ final class App implements Model
             ? $dock->withSlotMovedTo($pane->value, $side, $drop)
             : $dock->withSlotAdded($side, $pane->value, $drop);
 
-        return $this->persistDock($this->mutate(
-            dock: $next,
-            paneAutoShow: $this->paneAutoShow->withUserToggled($pane),
-        ));
+        return $this->persistDock($this->mutate([
+            'dock' => $next,
+            'paneAutoShow' => $this->paneAutoShow->withUserToggled($pane),
+        ]));
     }
 
     /**
@@ -2795,11 +2804,11 @@ final class App implements Model
             $dock = self::seedSharesFromFrame($this->dock(), $this->cols ?? 0);
             $next = $dock->withSlotRemoved($pane->value);
 
-            return $this->persistDock($this->mutate(
-                dock: $next,
-                pane: $this->pane === $pane ? Pane::Chat : $this->pane,
-                paneAutoShow: $this->paneAutoShow->withUserToggled($pane),
-            ));
+            return $this->persistDock($this->mutate([
+                'dock' => $next,
+                'pane' => $this->pane === $pane ? Pane::Chat : $this->pane,
+                'paneAutoShow' => $this->paneAutoShow->withUserToggled($pane),
+            ]));
         }
 
         $side = $pane->dockSide();
@@ -2807,10 +2816,10 @@ final class App implements Model
 
         $dock = self::seedSharesFromFrame($this->dock(), $this->cols ?? 0, $side);
 
-        return $this->persistDock($this->mutate(
-            dock: $dock->withSlotAdded($side, $pane->value),
-            paneAutoShow: $this->paneAutoShow->withUserToggled($pane),
-        ));
+        return $this->persistDock($this->mutate([
+            'dock' => $dock->withSlotAdded($side, $pane->value),
+            'paneAutoShow' => $this->paneAutoShow->withUserToggled($pane),
+        ]));
     }
 
     /**
@@ -2825,10 +2834,10 @@ final class App implements Model
      */
     public function layoutReset(): self
     {
-        return $this->persistDock($this->mutate(
-            dock: self::defaultDock(),
-            paneAutoShow: PaneAutoShow::new(),
-        ));
+        return $this->persistDock($this->mutate([
+            'dock' => self::defaultDock(),
+            'paneAutoShow' => PaneAutoShow::new(),
+        ]));
     }
 
     /**
@@ -2940,10 +2949,10 @@ final class App implements Model
             return $this;
         }
 
-        $next = $this->mutate(
-            dock: $trial,
-            paneAutoShow: $this->paneAutoShow->withAutoShown($pane),
-        );
+        $next = $this->mutate([
+            'dock' => $trial,
+            'paneAutoShow' => $this->paneAutoShow->withAutoShown($pane),
+        ]);
 
         return $this->persistDock($next);
     }
@@ -3336,7 +3345,7 @@ final class App implements Model
      */
     public function withMessage(Message $msg): self
     {
-        return $this->mutate(messages: [...$this->messages, $msg]);
+        return $this->mutate(['messages' => [...$this->messages, $msg]]);
     }
 
     /**
@@ -3753,7 +3762,7 @@ final class App implements Model
                 default => 0,
             };
 
-            return [$notch === 0 ? $this : $this->mutate(settingsEditor: $this->settingsEditor->wheel($notch)), null];
+            return [$notch === 0 ? $this : $this->mutate(['settingsEditor' => $this->settingsEditor->wheel($notch)]), null];
         }
 
         // The media form covers the band the same way (W3.1): its rows take
@@ -3765,7 +3774,7 @@ final class App implements Model
                 default => 0,
             };
 
-            return [$notch === 0 ? $this : $this->mutate(mediaForm: $this->mediaForm->wheel($notch)), null];
+            return [$notch === 0 ? $this : $this->mutate(['mediaForm' => $this->mediaForm->wheel($notch)]), null];
         }
 
         // C-TUI-2.e: the review covers the band too — the wheel pages its
@@ -4191,7 +4200,7 @@ final class App implements Model
             return $this;
         }
 
-        return $this->mutate(dock: self::applyMeasuredColumnShare($dock, $side, $px, $usable));
+        return $this->mutate(['dock' => self::applyMeasuredColumnShare($dock, $side, $px, $usable)]);
     }
 
     /**
@@ -4319,14 +4328,14 @@ final class App implements Model
     {
         if (str_starts_with($zoneId, SettingsEditor::ZONE_PREFIX)) {
             return [
-                $this->settingsEditor === null ? $this : $this->mutate(settingsEditor: $this->settingsEditor->click($zoneId)),
+                $this->settingsEditor === null ? $this : $this->mutate(['settingsEditor' => $this->settingsEditor->click($zoneId)]),
                 null,
             ];
         }
 
         if (str_starts_with($zoneId, MediaForm::ZONE_PREFIX)) {
             return [
-                $this->mediaForm === null ? $this : $this->mutate(mediaForm: $this->mediaForm->click($zoneId)),
+                $this->mediaForm === null ? $this : $this->mutate(['mediaForm' => $this->mediaForm->click($zoneId)]),
                 null,
             ];
         }
@@ -4652,7 +4661,7 @@ final class App implements Model
             self::$paneDrag = null;
             self::$splitDragOrigin = null;
 
-            return [$origin === null ? $this : $this->mutate(agentSplitCols: $origin['override']), null];
+            return [$origin === null ? $this : $this->mutate(['agentSplitCols' => $origin['override']]), null];
         }
 
         if (!self::paneDragController()->isIdle() && $msg->type === KeyType::Escape) {
@@ -4660,7 +4669,7 @@ final class App implements Model
             self::$paneDrag = null;
             self::$paneDragOrigin = null;
 
-            return [$origin === null ? $this : $this->mutate(dock: $origin), null];
+            return [$origin === null ? $this : $this->mutate(['dock' => $origin]), null];
         }
 
         // The launch trust dialog (C-SEC-5.d) is MODAL on the same law, and
@@ -4672,7 +4681,7 @@ final class App implements Model
         if ($this->trustDialog !== null && !self::trustDialogYields($msg)) {
             $next = $this->trustDialog->update($msg);
             if (!$next->isResolved()) {
-                return [$this->mutate(trustDialog: $next), null];
+                return [$this->mutate(['trustDialog' => $next]), null];
             }
 
             return $this->resolveTrustDialog($next);
@@ -4690,7 +4699,7 @@ final class App implements Model
                 return $this->applyFirstRunWizardAction($action);
             }
 
-            return [$next === null ? $this->closeFirstRunWizard() : $this->mutate(firstRunWizard: $next), null];
+            return [$next === null ? $this->closeFirstRunWizard() : $this->mutate(['firstRunWizard' => $next]), null];
         }
 
         // The settings view is MODAL while it is open: every key is its own,
@@ -4708,7 +4717,7 @@ final class App implements Model
 
             $next = $this->settingsEditor->update($msg);
 
-            return [$next === null ? $this->closeSettings() : $this->mutate(settingsEditor: $next), null];
+            return [$next === null ? $this->closeSettings() : $this->mutate(['settingsEditor' => $next]), null];
         }
 
         // The media form is MODAL on the same law (crush-media W3.1,
@@ -4729,7 +4738,7 @@ final class App implements Model
                 return $this->applyMediaFormAction($action);
             }
 
-            return [$next === null ? $this->closeMediaForm() : $this->mutate(mediaForm: $next), null];
+            return [$next === null ? $this->closeMediaForm() : $this->mutate(['mediaForm' => $next]), null];
         }
 
         // The video player is MODAL on the same law (crush-media W5.4):
@@ -4760,7 +4769,7 @@ final class App implements Model
                 return $this->applyDiffReviewAction($action, $next);
             }
 
-            return [$this->mutate(diffReview: $next), null];
+            return [$this->mutate(['diffReview' => $next]), null];
         }
 
         // C-TUI-3.d: the picker owns the keys on the review's yield law
@@ -4871,8 +4880,8 @@ final class App implements Model
         if ($editor->isIdle()) {
             return match ($rune) {
                 'e' => $this->editSettingsFile(),
-                'x' => [$this->mutate(settingsEditor: $editor->withProfilePrompt(SettingsEditor::PROFILE_EXPORT, $this->defaultProfilePath())), null],
-                'p' => [$this->mutate(settingsEditor: $editor->withProfilePrompt(SettingsEditor::PROFILE_IMPORT, $this->defaultProfilePath())), null],
+                'x' => [$this->mutate(['settingsEditor' => $editor->withProfilePrompt(SettingsEditor::PROFILE_EXPORT, $this->defaultProfilePath())]), null],
+                'p' => [$this->mutate(['settingsEditor' => $editor->withProfilePrompt(SettingsEditor::PROFILE_IMPORT, $this->defaultProfilePath())]), null],
                 default => null,
             };
         }
@@ -4907,16 +4916,16 @@ final class App implements Model
         if ($path === null) {
             $writer = $this->settingsWriter;
             if ($writer === null) {
-                return [$this->mutate(settingsEditor: $editor->withNotice(SettingsEditor::failure('tui.settings.failed.opened', Lang::t('tui.app.settings_unsavable')))), null];
+                return [$this->mutate(['settingsEditor' => $editor->withNotice(SettingsEditor::failure('tui.settings.failed.opened', Lang::t('tui.app.settings_unsavable')))]), null];
             }
 
             if ($editor->tier === SettingsTier::Session) {
-                return [$this->mutate(settingsEditor: $editor->withNotice(SettingsEditor::failure('tui.settings.failed.opened', Lang::t('tui.app.settings_tier_no_file', ['tier' => SettingsTier::Session->label()])))), null];
+                return [$this->mutate(['settingsEditor' => $editor->withNotice(SettingsEditor::failure('tui.settings.failed.opened', Lang::t('tui.app.settings_tier_no_file', ['tier' => SettingsTier::Session->label()])))]), null];
             }
 
             $path = $writer->targetPath($editor->tier);
             if ($path === null) {
-                return [$this->mutate(settingsEditor: $editor->withNotice(SettingsEditor::failure('tui.settings.failed.opened', (string) $writer->tierRefusal($editor->tier)))), null];
+                return [$this->mutate(['settingsEditor' => $editor->withNotice(SettingsEditor::failure('tui.settings.failed.opened', (string) $writer->tierRefusal($editor->tier)))]), null];
             }
 
             // A project tier's `.candy-code` may not exist yet; the writer
@@ -4924,7 +4933,7 @@ final class App implements Model
             // would make it, or the editor could not write the file.
             $dir = \dirname($path);
             if (!is_dir($dir) && !@mkdir($dir, 0o700, true) && !is_dir($dir)) {
-                return [$this->mutate(settingsEditor: $editor->withNotice(SettingsEditor::failure('tui.settings.failed.opened', Lang::t('tui.settings.profile.dir_not_created', ['dir' => $dir])))), null];
+                return [$this->mutate(['settingsEditor' => $editor->withNotice(SettingsEditor::failure('tui.settings.failed.opened', Lang::t('tui.settings.profile.dir_not_created', ['dir' => $dir])))]), null];
             }
         }
 
@@ -4945,7 +4954,7 @@ final class App implements Model
     {
         $editor = $this->settingsEditor;
         if (!$msg->ok()) {
-            return [$editor === null ? $this : $this->mutate(settingsEditor: $editor->withNotice(SettingsEditor::failure('tui.settings.failed.reread', (string) $msg->error))), null];
+            return [$editor === null ? $this : $this->mutate(['settingsEditor' => $editor->withNotice(SettingsEditor::failure('tui.settings.failed.reread', (string) $msg->error))]), null];
         }
 
         // Read strictly: a file the edit left unparseable is said so, and
@@ -4985,7 +4994,7 @@ final class App implements Model
                     'keys' => implode(', ', $changed),
                 ]),
             };
-            $app = $this->mutate(settingsEditor: $editor->withNotice($status));
+            $app = $this->mutate(['settingsEditor' => $editor->withNotice($status)]);
         }
 
         if ($broken || $changed === [] || $app->chat === null) {
@@ -5016,13 +5025,13 @@ final class App implements Model
         $path = SettingsProfile::expand((string) $editor->profilePath(), HomeDirectory::owned());
         $editor = $editor->cancelEdit();
         if ($path === '') {
-            return [$this->mutate(settingsEditor: $editor->withNotice(SettingsEditor::failure('tui.settings.failed.done', Lang::t('tui.app.settings_no_file_named')))), null];
+            return [$this->mutate(['settingsEditor' => $editor->withNotice(SettingsEditor::failure('tui.settings.failed.done', Lang::t('tui.app.settings_no_file_named')))]), null];
         }
 
         if ($action === SettingsEditor::PROFILE_EXPORT) {
             $values = SettingsProfile::values($editor->resolved);
 
-            return [$this->mutate(settingsEditor: $editor), static function () use ($path, $values): SettingsProfileMsg {
+            return [$this->mutate(['settingsEditor' => $editor]), static function () use ($path, $values): SettingsProfileMsg {
                 try {
                     SettingsProfile::write($path, $values);
 
@@ -5033,7 +5042,7 @@ final class App implements Model
             }];
         }
 
-        return [$this->mutate(settingsEditor: $editor), static function () use ($path): SettingsProfileMsg {
+        return [$this->mutate(['settingsEditor' => $editor]), static function () use ($path): SettingsProfileMsg {
             try {
                 return SettingsProfileMsg::imported($path, SettingsProfile::read($path));
             } catch (\Throwable $e) {
@@ -5044,7 +5053,7 @@ final class App implements Model
 
     private function settingsProfileDone(SettingsProfileMsg $msg): self
     {
-        return $this->settingsEditor === null ? $this : $this->mutate(settingsEditor: $this->settingsEditor->withProfileResult($msg));
+        return $this->settingsEditor === null ? $this : $this->mutate(['settingsEditor' => $this->settingsEditor->withProfileResult($msg)]);
     }
 
     /**
@@ -5068,14 +5077,14 @@ final class App implements Model
         $writer = $this->settingsWriter;
         $root = $this->root;
         if ($writer === null || $root === null || $root === '') {
-            return [$this->mutate(settingsEditor: $editor->withSaved(SettingsSavedMsg::failed(
+            return [$this->mutate(['settingsEditor' => $editor->withSaved(SettingsSavedMsg::failed(
                 SettingsTier::You,
                 [$key],
                 Lang::t($writer === null ? 'tui.app.settings_unsavable' : 'tui.app.settings_no_root'),
-            ))), null];
+            ))]), null];
         }
 
-        return [$this->mutate(settingsEditor: $editor), static function () use ($writer, $key, $root): SettingsSavedMsg {
+        return [$this->mutate(['settingsEditor' => $editor]), static function () use ($writer, $key, $root): SettingsSavedMsg {
             try {
                 return SettingsSavedMsg::saved(SettingsTier::You, [$key], $writer->grantTrust($key, $root));
             } catch (\Throwable $e) {
@@ -5106,7 +5115,7 @@ final class App implements Model
             }
         }
 
-        $closed = $this->mutate(trustDialog: null);
+        $closed = $this->mutate(['trustDialog' => null]);
         if ($granted === []) {
             return [$closed, null];
         }
@@ -5664,14 +5673,14 @@ final class App implements Model
         // (null) width. Sizing first also means every instance the
         // delegation can hand back (its identity short-circuits included)
         // already carries the new frame, so no re-mutate is needed on the way out.
-        $sized = $this->mutate(rows: $msg->rows, cols: $msg->cols);
+        $sized = $this->mutate(['rows' => $msg->rows, 'cols' => $msg->cols]);
         [$next, $cmd] = $sized->delegateToChat($msg);
 
         // An open Player resizes itself: the same WindowSizeMsg is its own
         // rebuild contract (decode geometry follows the band).
         if ($next->videoPlayer !== null) {
             [$screen, $playerCmd] = $next->videoPlayer->update($msg);
-            $next = $screen === $next->videoPlayer ? $next : $next->mutate(videoPlayer: $screen);
+            $next = $screen === $next->videoPlayer ? $next : $next->mutate(['videoPlayer' => $screen]);
             $cmd ??= $playerCmd;
         }
 
@@ -5868,12 +5877,12 @@ final class App implements Model
 
             $app = $chat === $this->chat ? $this : $this->withChat($chat)->autoEnablePanes();
 
-            return [$app->mutate(toolWalkState: [
+            return [$app->mutate(['toolWalkState' => [
                 'at' => $now,
                 'index' => $focused,
                 'settled' => true,
                 'key' => $units[$focused][0],
-            ]), null];
+            ]]), null];
         }
 
         $index = ($state !== null && $now - $state['at'] <= self::TOOL_WALK_WINDOW_SECONDS
@@ -5886,7 +5895,7 @@ final class App implements Model
                 ? $this->withChat($next)->autoEnablePanes()
                 : $this;
 
-            return [$app->mutate(toolWalkState: ['at' => $now, 'index' => 0]), $cmd];
+            return [$app->mutate(['toolWalkState' => ['at' => $now, 'index' => 0]]), $cmd];
         }
 
         $chat = $this->chat;
@@ -5899,7 +5908,7 @@ final class App implements Model
 
         $app = $chat === $this->chat ? $this : $this->withChat($chat)->autoEnablePanes();
 
-        return [$app->mutate(toolWalkState: ['at' => $now, 'index' => $index]), null];
+        return [$app->mutate(['toolWalkState' => ['at' => $now, 'index' => $index]]), null];
     }
 
     /**
@@ -5931,12 +5940,12 @@ final class App implements Model
             : 0);
         $index = ($current + 1) % count($units);
 
-        return [$this->mutate(toolWalkState: [
+        return [$this->mutate(['toolWalkState' => [
             'at' => $now,
             'index' => $index,
             'settled' => true,
             'key' => $units[$index][0],
-        ]), null];
+        ]]), null];
     }
 
     /**
@@ -5997,12 +6006,12 @@ final class App implements Model
     {
         foreach ($this->toolWalkUnits() as $index => $unit) {
             if (in_array($key, $unit, true)) {
-                return $this->mutate(toolWalkState: [
+                return $this->mutate(['toolWalkState' => [
                     'at' => microtime(true),
                     'index' => $index,
                     'settled' => true,
                     'key' => $unit[0],
-                ]);
+                ]]);
             }
         }
 
@@ -6140,12 +6149,12 @@ final class App implements Model
     private function handleOpenSkillPicker(): array
     {
         $options = $this->userInvocableSkills();
-        $next = $this->mutate(
-            pane: Pane::Skills,
-            skillPickerOptions: $options,
-            skillPickerIndex: 0,
-            error: null,
-        );
+        $next = $this->mutate([
+            'pane' => Pane::Skills,
+            'skillPickerOptions' => $options,
+            'skillPickerIndex' => 0,
+            'error' => null,
+        ]);
 
         if ($options === []) {
             $next = $next->withStatus(Lang::t('tui.app.no_skills'));
@@ -6197,12 +6206,12 @@ final class App implements Model
         // documented split (the picker is the session half of the switch).
         $manager = new SkillManager(new SkillLoader(), $this->availableSkills);
         if ($alreadyEnabled) {
-            $closed = $manager->disable($this, $skill->name)->mutate(
-                skillPickerOptions: [],
-                skillPickerIndex: 0,
-                status: Lang::t('tui.app.skill_disabled', ['name' => $skill->name]),
-                error: null,
-            );
+            $closed = $manager->disable($this, $skill->name)->mutate([
+                'skillPickerOptions' => [],
+                'skillPickerIndex' => 0,
+                'status' => Lang::t('tui.app.skill_disabled', ['name' => $skill->name]),
+                'error' => null,
+            ]);
 
             return [$this->dropSelectedSkill($skill, $closed), null];
         }
@@ -6219,12 +6228,12 @@ final class App implements Model
             ? Lang::t('tui.app.skill_fork', ['name' => $skill->name])
             : Lang::t('tui.app.skill_enabled', ['name' => $skill->name]);
 
-        $next = $manager->enable($this, $skill->name)->mutate(
-            skillPickerOptions: [],
-            skillPickerIndex: 0,
-            status: $status,
-            error: null,
-        );
+        $next = $manager->enable($this, $skill->name)->mutate([
+            'skillPickerOptions' => [],
+            'skillPickerIndex' => 0,
+            'status' => $status,
+            'error' => null,
+        ]);
 
         // ISS-035: enabling a skill at the palette has to reach the MODEL.
         // Every turn's sessionApp() splices EngineBackend::$skills — fixed at
@@ -6337,14 +6346,14 @@ final class App implements Model
         // switching in place under the deck key armDeck is about to write.
         $activeTab = $this->chat->openTabs()->activeTab();
 
-        return $this->mutate(
-            chat: $this->chat->withTabHosted(true),
-            deck: SessionDeck::forLaunch(
+        return $this->mutate([
+            'chat' => $this->chat->withTabHosted(true),
+            'deck' => SessionDeck::forLaunch(
                 'tab-1',
                 $this->chat->currentSessionId() ?? '',
                 $activeTab === null ? Lang::t('tabs.name_new') : $activeTab->sessionName,
             ),
-        );
+        ]);
     }
 
     /** The next minted deck key — deck keys are stable, never reused. */
@@ -6389,7 +6398,7 @@ final class App implements Model
             return $this;
         }
 
-        return $this->mutate(deck: $this->deck->rekey($key, $session));
+        return $this->mutate(['deck' => $this->deck->rekey($key, $session)]);
     }
 
     /**
@@ -6500,7 +6509,7 @@ final class App implements Model
 
         $title = $app->deckTitleFor($list);
         if ($title !== $app->deckTitle) {
-            $app = $app->mutate(deckTitle: $title);
+            $app = $app->mutate(['deckTitle' => $title]);
             $cmd = CoreCmd::batch($cmd, CoreCmd::setWindowTitle($title));
         }
 
@@ -6548,7 +6557,7 @@ final class App implements Model
         }
 
         if ($notified !== $app->tabNotified) {
-            $app = $app->mutate(tabNotified: $notified);
+            $app = $app->mutate(['tabNotified' => $notified]);
         }
 
         return [$app, $cmd];
@@ -6586,7 +6595,7 @@ final class App implements Model
         $openRun = $this->agentViewTarget;
         if ($openRun !== null) {
             $leaving = $leaving->closeAgentView();
-            $leaving = $leaving->mutate(agentViewByTab: [...$leaving->agentViewByTab, (string) $from => $openRun]);
+            $leaving = $leaving->mutate(['agentViewByTab' => [...$leaving->agentViewByTab, (string) $from => $openRun]]);
             $restored = $leaving->chat;
             if ($restored instanceof Chat) {
                 $outgoing = $restored;
@@ -6618,13 +6627,13 @@ final class App implements Model
         // P-TABS.g: mutate the deck BEFORE autoEnablePanes so the Sessions
         // auto-dock arm sees the count this very route produced, and hand the
         // settled app through the deck choke for the title + notices.
-        $app = $leaving->withChat($target)->mutate(deck: $deck, pendingTabClose: null)->autoEnablePanes();
+        $app = $leaving->withChat($target)->mutate(['deck' => $deck, 'pendingTabClose' => null])->autoEnablePanes();
 
         // P-AGENT.b: prune the per-tab memory to the deck's live keys (a
         // closed tab's remembered run must not outlive the tab, on the
         // $tabNotified law) and re-open the view this tab left, when its run
         // is still registered with the incoming chat.
-        $app = $app->mutate(agentViewByTab: array_intersect_key($app->agentViewByTab, array_fill_keys($deck->keys(), null)));
+        $app = $app->mutate(['agentViewByTab' => array_intersect_key($app->agentViewByTab, array_fill_keys($deck->keys(), null))]);
         $remembered = $app->agentViewByTab[$toKey] ?? null;
         $rememberedState = $remembered === null ? null : $target->agentLive()->get($remembered);
         if ($remembered !== null && $rememberedState !== null) {
@@ -6668,7 +6677,7 @@ final class App implements Model
         $inner = $msg->inner();
         if ($inner instanceof OpenMediaFormMsg || $inner instanceof OpenSettingsMsg
             || $inner instanceof \SugarCraft\Code\App\OpenAgentViewMsg) {
-            return $this->withDeckEffects($this->mutate(deck: $deck->attention($msg->tabKey(), SessionDeck::ATTENTION_WAITING)), null);
+            return $this->withDeckEffects($this->mutate(['deck' => $deck->attention($msg->tabKey(), SessionDeck::ATTENTION_WAITING)]), null);
         }
 
         if ($inner instanceof \SugarCraft\Code\App\AgentMessageSentMsg) {
@@ -6691,7 +6700,7 @@ final class App implements Model
             $deck = $deck->rekey($msg->tabKey(), $session);
         }
 
-        return $this->withDeckEffects($this->mutate(deck: $deck), TabScope::cmd($msg->tabKey(), $cmd));
+        return $this->withDeckEffects($this->mutate(['deck' => $deck]), TabScope::cmd($msg->tabKey(), $cmd));
     }
 
     /** The attention state a parked tab deserves after one routed message. */
@@ -6750,7 +6759,7 @@ final class App implements Model
             $target = $sized;
         }
 
-        return $this->withDeckEffects($this->withChat($target)->mutate(deck: $deck)->autoEnablePanes(), $sizeCmd);
+        return $this->withDeckEffects($this->withChat($target)->mutate(['deck' => $deck])->autoEnablePanes(), $sizeCmd);
     }
 
     /**
@@ -6787,7 +6796,7 @@ final class App implements Model
             if (!is_array($armed) || $armed['key'] !== $key || (microtime(true) - $armed['at']) > self::TAB_CLOSE_ARM_SECONDS) {
                 return $this->withDeckEffects(
                     $this
-                        ->mutate(pendingTabClose: ['key' => $key, 'at' => microtime(true)])
+                        ->mutate(['pendingTabClose' => ['key' => $key, 'at' => microtime(true)]])
                         ->withStatus(Lang::t('tabs.close_arm')),
                     null,
                 );
@@ -6809,7 +6818,7 @@ final class App implements Model
             // switch is a fresh action); the recursion into the parked branch
             // must still carry it, or press two would only re-arm instead of
             // closing the tab the user just confirmed away.
-            $carried = $switched->mutate(pendingTabClose: $this->pendingTabClose);
+            $carried = $switched->mutate(['pendingTabClose' => $this->pendingTabClose]);
 
             [$closed, $closeCmd] = $carried->handleCloseTab(new CloseTabMsg($key));
 
@@ -6839,7 +6848,7 @@ final class App implements Model
 
         [$closed] = $deck->close($key);
 
-        return $this->withDeckEffects($this->mutate(deck: $closed, pendingTabClose: null), null);
+        return $this->withDeckEffects($this->mutate(['deck' => $closed, 'pendingTabClose' => null]), null);
     }
 
     /**
@@ -6873,7 +6882,7 @@ final class App implements Model
     private function handleQuit(\SugarCraft\Core\Msg\QuitMsg $msg): array
     {
         if ($this->deck !== null && !$this->tabQuitWarned && $this->deckHasBusyBackground()) {
-            return [$this->mutate(tabQuitWarned: true)->withStatus(Lang::t('tabs.quit_arm')), null];
+            return [$this->mutate(['tabQuitWarned' => true])->withStatus(Lang::t('tabs.quit_arm')), null];
         }
 
         return $this->delegateToChat($msg);
@@ -6898,86 +6907,5 @@ final class App implements Model
         }
 
         return false;
-    }
-
-    /**
-     * Rebuild the immutable App with the named changes applied.
-     *
-     * Uses array_key_exists (not ??) so that nullable fields — error,
-     * status, sessionId — can be reset to null. A readonly property
-     * cannot be reassigned after construction, so we always go through
-     * the constructor rather than clone-and-mutate.
-     */
-    private function mutate(mixed ...$changes): self
-    {
-        return new self(
-            provider: array_key_exists('provider', $changes) ? $changes['provider'] : $this->provider,
-            model: array_key_exists('model', $changes) ? $changes['model'] : $this->model,
-            messages: array_key_exists('messages', $changes) ? $changes['messages'] : $this->messages,
-            tools: array_key_exists('tools', $changes) ? $changes['tools'] : $this->tools,
-            pane: array_key_exists('pane', $changes) ? $changes['pane'] : $this->pane,
-            error: array_key_exists('error', $changes) ? $changes['error'] : $this->error,
-            status: array_key_exists('status', $changes) ? $changes['status'] : $this->status,
-            sessionId: array_key_exists('sessionId', $changes) ? $changes['sessionId'] : $this->sessionId,
-            contextFiles: array_key_exists('contextFiles', $changes) ? $changes['contextFiles'] : $this->contextFiles,
-            enabledSkills: array_key_exists('enabledSkills', $changes) ? $changes['enabledSkills'] : $this->enabledSkills,
-            availableSkills: array_key_exists('availableSkills', $changes) ? $changes['availableSkills'] : $this->availableSkills,
-            activeHooks: array_key_exists('activeHooks', $changes) ? $changes['activeHooks'] : $this->activeHooks,
-            selectedAgentIndex: array_key_exists('selectedAgentIndex', $changes) ? $changes['selectedAgentIndex'] : $this->selectedAgentIndex,
-            agentViewMode: array_key_exists('agentViewMode', $changes) ? $changes['agentViewMode'] : $this->agentViewMode,
-            lastActivityAt: array_key_exists('lastActivityAt', $changes) ? $changes['lastActivityAt'] : $this->lastActivityAt,
-            skillPickerOptions: array_key_exists('skillPickerOptions', $changes) ? $changes['skillPickerOptions'] : $this->skillPickerOptions,
-            skillPickerIndex: array_key_exists('skillPickerIndex', $changes) ? $changes['skillPickerIndex'] : $this->skillPickerIndex,
-            instructionLoader: array_key_exists('instructionLoader', $changes) ? $changes['instructionLoader'] : $this->instructionLoader,
-            chat: array_key_exists('chat', $changes) ? $changes['chat'] : $this->chat,
-            rows: array_key_exists('rows', $changes) ? $changes['rows'] : $this->rows,
-            cols: array_key_exists('cols', $changes) ? $changes['cols'] : $this->cols,
-            root: array_key_exists('root', $changes) ? $changes['root'] : $this->root,
-            memoryStore: array_key_exists('memoryStore', $changes) ? $changes['memoryStore'] : $this->memoryStore,
-            rulesState: array_key_exists('rulesState', $changes) ? $changes['rulesState'] : $this->rulesState,
-            dock: array_key_exists('dock', $changes) ? $changes['dock'] : $this->dock,
-            onLayoutChange: array_key_exists('onLayoutChange', $changes) ? $changes['onLayoutChange'] : $this->onLayoutChange,
-            compactorConfig: array_key_exists('compactorConfig', $changes) ? $changes['compactorConfig'] : $this->compactorConfig,
-            contextLedger: array_key_exists('contextLedger', $changes) ? $changes['contextLedger'] : $this->contextLedger,
-            expandedAgents: array_key_exists('expandedAgents', $changes) ? $changes['expandedAgents'] : $this->expandedAgents,
-            agentStripFocus: array_key_exists('agentStripFocus', $changes) ? $changes['agentStripFocus'] : $this->agentStripFocus,
-            agentStripDismissed: array_key_exists('agentStripDismissed', $changes) ? $changes['agentStripDismissed'] : $this->agentStripDismissed,
-            paneScroll: array_key_exists('paneScroll', $changes) ? $changes['paneScroll'] : $this->paneScroll,
-            agentSplitCols: array_key_exists('agentSplitCols', $changes) ? $changes['agentSplitCols'] : $this->agentSplitCols,
-            settingsEditor: array_key_exists('settingsEditor', $changes) ? $changes['settingsEditor'] : $this->settingsEditor,
-            settingsSources: array_key_exists('settingsSources', $changes) ? $changes['settingsSources'] : $this->settingsSources,
-            settingsWriter: array_key_exists('settingsWriter', $changes) ? $changes['settingsWriter'] : $this->settingsWriter,
-            mediaForm: array_key_exists('mediaForm', $changes) ? $changes['mediaForm'] : $this->mediaForm,
-            videoPlayer: array_key_exists('videoPlayer', $changes) ? $changes['videoPlayer'] : $this->videoPlayer,
-            trustDialog: array_key_exists('trustDialog', $changes) ? $changes['trustDialog'] : $this->trustDialog,
-            reasoningEffort: array_key_exists('reasoningEffort', $changes) ? $changes['reasoningEffort'] : $this->reasoningEffort,
-            agentViewTarget: array_key_exists('agentViewTarget', $changes) ? $changes['agentViewTarget'] : $this->agentViewTarget,
-            agentViewTail: array_key_exists('agentViewTail', $changes) ? $changes['agentViewTail'] : $this->agentViewTail,
-            agentViewItems: array_key_exists('agentViewItems', $changes) ? $changes['agentViewItems'] : $this->agentViewItems,
-            agentViewRows: array_key_exists('agentViewRows', $changes) ? $changes['agentViewRows'] : $this->agentViewRows,
-            agentViewName: array_key_exists('agentViewName', $changes) ? $changes['agentViewName'] : $this->agentViewName,
-            agentMessages: array_key_exists('agentMessages', $changes) ? $changes['agentMessages'] : $this->agentMessages,
-            agentBroadcast: array_key_exists('agentBroadcast', $changes) ? $changes['agentBroadcast'] : $this->agentBroadcast,
-            agentViewLeader: array_key_exists('agentViewLeader', $changes) ? $changes['agentViewLeader'] : $this->agentViewLeader,
-            agentCancelArmed: array_key_exists('agentCancelArmed', $changes) ? $changes['agentCancelArmed'] : $this->agentCancelArmed,
-            agentsStopArmedAt: array_key_exists('agentsStopArmedAt', $changes) ? $changes['agentsStopArmedAt'] : $this->agentsStopArmedAt,
-            toolWalkState: array_key_exists('toolWalkState', $changes) ? $changes['toolWalkState'] : $this->toolWalkState,
-            agentPaused: array_key_exists('agentPaused', $changes) ? $changes['agentPaused'] : $this->agentPaused,
-            paneAutoShow: array_key_exists('paneAutoShow', $changes) ? $changes['paneAutoShow'] : $this->paneAutoShow,
-            tabFactory: array_key_exists('tabFactory', $changes) ? $changes['tabFactory'] : $this->tabFactory,
-            contextPaneExpanded: array_key_exists('contextPaneExpanded', $changes) ? $changes['contextPaneExpanded'] : $this->contextPaneExpanded,
-            contextDrill: array_key_exists('contextDrill', $changes) ? $changes['contextDrill'] : $this->contextDrill,
-            deck: array_key_exists('deck', $changes) ? $changes['deck'] : $this->deck,
-            pendingTabClose: array_key_exists('pendingTabClose', $changes) ? $changes['pendingTabClose'] : $this->pendingTabClose,
-            tabQuitWarned: array_key_exists('tabQuitWarned', $changes) ? $changes['tabQuitWarned'] : $this->tabQuitWarned,
-            deckTitle: array_key_exists('deckTitle', $changes) ? $changes['deckTitle'] : $this->deckTitle,
-            tabNotified: array_key_exists('tabNotified', $changes) ? $changes['tabNotified'] : $this->tabNotified,
-            windowViewports: array_key_exists('windowViewports', $changes) ? $changes['windowViewports'] : $this->windowViewports,
-            agentViewByTab: array_key_exists('agentViewByTab', $changes) ? $changes['agentViewByTab'] : $this->agentViewByTab,
-            diffReview: array_key_exists('diffReview', $changes) ? $changes['diffReview'] : $this->diffReview,
-            messagePicker: array_key_exists('messagePicker', $changes) ? $changes['messagePicker'] : $this->messagePicker,
-            firstRunWizard: array_key_exists('firstRunWizard', $changes) ? $changes['firstRunWizard'] : $this->firstRunWizard,
-            paintedDockFrame: array_key_exists('paintedDockFrame', $changes) ? $changes['paintedDockFrame'] : $this->paintedDockFrame,
-        );
     }
 }
