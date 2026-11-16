@@ -1,0 +1,40 @@
+╭─┐¹cpu┌──┐menu┌┐preset *┌┐x ctr┌───────────────────────┐22:13:20┌───────┐BAT▼ 87% ■■■■■■■■■■ 02:54 12.87W┌- 2000ms +┌─╮
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                             ╭─┐Ryzen 7 5800X┌──────────────┐3.8 GHz┌╮│
+│                                                                            ⢸│CPU ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■  51%││
+│                                                                            ⢸│C0  ⣀⣀⣀⣀⣀⣀⣀⣀⣀⢠  50%│C4  ⣀⣀⣀⣀⣀⣀⣀⣀⣀⢠  51%││
+│                                                                            ⣸│C1  ⣀⣀⣀⣀⣀⣀⣀⣀⣀⢸  88%│C5  ⣀⣀⣀⣀⣀⣀⣀⣀⣀⢀  20%││
+├───────────────────────────total─▲▼─gpu-totals───────────────────────────────┤C2  ⣀⣀⣀⣀⣀⣀⣀⣀⣀⢰  70%│C6  ⣀⣀⣀⣀⣀⣀⣀⣀⣀⢀  13%││
+│                                     ⢹│                                     ⢹│C3  ⣀⣀⣀⣀⣀⣀⣀⣀⣀⢠  54%│C7  ⣀⣀⣀⣀⣀⣀⣀⣀⣀⢰  60%││
+│                                     ⢸│                                     ⢸│           Load average: 5.42 5.66 3.29││
+│ GPU0                                ⢸│ GPU1                                ⢸│GPU0 ■■■■■■■■ 50% ⣀⣀⣀⢰  16G/24G   205W ││
+│                                      │                                     ⢸│GPU1 ■■■■■■■■ 74% ⣀⣀⣀⢰ 8.9G/16G   289W ││
+│                                      │                                     ⠘╰───────────────────────────────────────╯│
+│ up 1d 00:00                          │                                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─┐²mem┌──────────────────┬─┐disks┌─────────────┐io┌─╮╭─┐⁴proc┌┐filter┌────────┐per-core┌┐reverse┌┐tree┌┐← cpu lazy →┌─╮
+│ Total:         16.0 GiB ├─root─────────────476─GiB─┤│     Pid Program  Command               User    Mem       Cpu%  │
+├─Used:──────────10.1─GiB─┤ IO% ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ ││    5120 containe /usr/bin/containerd-s root   398M ⣀⣀⣀⣀⢠ 31.7  │
+│                   ⢰ 64% │ Used: 42% ■■■■■  199 GiB ││     412 sshd     sshd: /usr/sbin/sshd  root   198M ⣀⣀⣀⣀⢀ 27.8  │
+├─Available:─────5.80─GiB─├─swap────────────2.00─GiB─┤│    5133 python3  [docker:3f2a1b9c0d1e] root   691M ⣀⣀⣀⣀⢀ 21.1  │
+│                   ⢠ 36% │ Used: 10% ■■■■■  204 MiB ││    6969 web01    [kvm:web01] /usr/bin/ libv+  961M ⣀⣀⣀⣀⢀ 11.5  │
+├─Cached:────────3.19─GiB─├─efi──────────────512─MiB─┤│       1 systemd  /sbin/init splash     root    90M ⣀⣀⣀⣀⢀ 25.0  │
+│                   ⢀ 20% │ IO% ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ ││    7110 postgres [docker:b7e14c0a9d22] post+   58M ⣀⣀⣀⣀⢀  8.5  │
+├─Free:──────────2.60─GiB─┤ Used:  9% ■■■■■ 44.8 MiB ││    2290 php      php bin/candy-top     joe    398M ⣀⣀⣀⣀⢀ 11.5  │
+│                   ⢀ 16% ├─home────────────1.81─TiB─┤│    4410 node     node server.js        joe    612M ⣀⣀⣀⣀⢀  6.6  │
+├─────────────────────────┤ IO% ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ ││    1203 nginx    nginx: worker process www-+  304M ⣀⣀⣀⣀⢀  7.2  │
+│                         │ Used: 64% ■■■■■ 1.16 TiB ││    7111 postgres [docker:b7e14c0a9d22] post+  149M ⣀⣀⣀⣀⢀  9.1  │
+╰─────────────────────────┴──────────────────────────╯│     880 postgres postgres -D /var/lib/ post+  244M ⣀⣀⣀⣀⢀ 13.6  │
+╭─┐³net┌┐192.0.2.10┌───┐sync┌┐auto┌┐zero┌┐←b eth0 n→┌╮│    7130 coredns  [k8s:9a0c5e21b7d4] /c root   212M ⣀⣀⣀⣀⢀  5.9  │
+│1.6M                                                ││    3105 redis-se redis-server 127.0.0. redis  502M ⣀⣀⣀⣀⢀  7.9  │
+│                        ⢰╭─┐download┌──────────────╮││    7141 make     [lxc:build] /usr/bin/ joe    285M ⣀⣀⣀⣀⢀  0.9  │
+│                        ⢸│▼ 1.21 MiB/s (9.70 Mibps)│││    7001 vim      /usr/bin/vim notes.md joe    1.3G ⣀⣀⣀⣀⢀  1.6  │
+│                        ⢸│▼ Top:       (9.70 Mibps)│││    7120 caddy    [podman:c41d9e7f0a13] joe    209M ⣀⣀⣀⣀⢀  8.4  │
+│                        ⣸│▼ Total:         2.42 MiB│││    2210 bash     -bash                 joe    360M ⣀⣀⣀⣀⢀  2.6  │
+│                        ⢹│                         │││       2 kthreadd                       root     0B ⣀⣀⣀⣀⣀  0.0  │
+│                         │▲ 294 KiB/s  (2.29 Mibps)│││    7140 systemd  [lxc:build] /sbin/ini root   247M ⣀⣀⣀⣀⢀  2.8  │
+│                         │▲ Top:       (2.29 Mibps)│││    7150 systemd  [nspawn:arch] /usr/li root   319M ⣀⣀⣀⣀⢀  0.9  │
+│                         │▲ Total:          588 KiB│││                                                                │
+│1.6M                     ╰─┘upload└────────────────╯││                                                                │
+╰────────────────────────────────────────────────────╯╰┘↑ select ↓└┘info ↵└┘terminate└┘kill└┘signals└┘Nice└──────┘0/20└╯

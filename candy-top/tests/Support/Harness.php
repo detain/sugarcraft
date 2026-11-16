@@ -30,7 +30,7 @@ final class Harness
         return HostInfo::new('Ryzen 7 5800X', 8, 'joe', 'box');
     }
 
-    public static function app(?Config $config = null): App
+    public static function app(?Config $config = null, bool $standardRoster = false): App
     {
         $host = self::host();
         $config ??= Config::new()->with('color_theme', 'Default');
@@ -39,16 +39,19 @@ final class Harness
             $config,
             ThemeConfig::new(),
             $host,
-            Panels::placeholders($host, $config, true),
+            // The fake real roster (S-X04): the shipped panel set with frozen
+            // fake sources — deterministic, and it exercises the layouts the
+            // placeholder roster never reaches (DualSampleGraph, ctr/vms/ipmi).
+            $standardRoster ? Panels::standard($host, $config, true) : Panels::placeholders($host, $config, true),
             static fn (): ClockTickMsg => new ClockTickMsg(self::TIME, 3600.0),
             ColorProfile::TrueColor,
         );
     }
 
     /** Sized, clock-ticked and sampled once — a fully painted first frame. */
-    public static function running(int $cols, int $rows, ?Config $config = null): App
+    public static function running(int $cols, int $rows, ?Config $config = null, bool $standardRoster = false): App
     {
-        [$app] = self::app($config)->update(new WindowSizeMsg($cols, $rows));
+        [$app] = self::app($config, $standardRoster)->update(new WindowSizeMsg($cols, $rows));
         [$app] = $app->update(new ClockTickMsg(self::TIME, 3600.0));
         foreach (Cmds::of(SampledMsg::class, (static fn (App $a): ?\Closure => $a->init())($app)) as $msg) {
             [$app] = $app->update($msg);
