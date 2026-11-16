@@ -1140,6 +1140,28 @@ Internal call sites in `src/` and `examples/` were switched to the bare forms in
 | `Plot\Chart` | `PartitionSegment` | `getDepth()` | `depth()` |
 | `Plot\Chart` | `PartitionSegment` | `getTotalValue()` | `totalValue()` |
 
+## Dependencies
+
+- PHP **8.3+** (`^8.3`).
+- Composer runtime deps (spelled as the committed manifest does):
+  - `sugarcraft/sugar-cellbuffer` `dev-master` — the cell-grid surface the renderers emit into.
+  - `sugarcraft/sugar-core` `dev-master` — the TEA runtime: `Model`/`Msg`/`Cmd`, `Width`, `Truncate`, and `Util\Sanitize` this lib's trust posture leans on (see Security below).
+  - `sugarcraft/sugar-focus` `dev-master` — focus traversal for the interactive components.
+  - `sugarcraft/sugar-style` `dev-master` — the SGR style value objects every styled cell routes through.
+  - `sugarcraft/sugar-toast` `dev-master` — transient notification surface shared with the host app.
+  - `react/promise` `^3.3` — the promise adapter `Cmd::promise` results are handed back on (the weather fetch door resolves through it).
+- Dev-only: `phpunit/phpunit` `^10.5`, `sugarcraft/candy-vcr` (`@dev`), `sugarcraft/sugar-pty` — recording/PTY test support, never a runtime need.
+- Sibling deps are `require` entries only: standalone installs resolve them from Packagist, and CI injects the monorepo path-repo closure before each install (no path repositories are committed to this manifest).
+- Optional integrations (inbound consumers, not deps): **candy-top** imports the plot and foundation vocabulary (`Plot\Braille\DualSampleGraph`, `Plot\DistanceFade`, `Plot\ProcRow\*`, `Foundation\NetAutoScale`, `Foundation\GradientStore`) across its `Panel/` family — `NetPanel`, `ProcPanel`, and the Cpu/Mem/Gpu/Proc/Vms/Ctr views; **candy-sql** imports the card components and chart primitives (`Components\Card\*`, `Plot\Chart\AreaChart`, `Plot\Braille\BrailleMatrix`, `Foundation\Threshold`) in its `Admin/ServerStatus/` pages — `SidebarGauge`, `StatusGraphCell`, `ServerInfoCard`.
+
+## Security & trust boundaries
+
+- **Plugin discovery fails closed, never open to the neighborhood.** `Plugin\Discovery` scans only a directory you opted into: `CANDY_DASHBOARD_PLUGINS_DIR` first, then the XDG config and HOME-derived plugin dirs. A candidate directory that is group/world-writable, owned by another uid, or missing from all three env homes is **refused with a logged reason** (`error_log`) — discovery never falls back to a world-writable `/tmp` and never loads code it cannot attribute.
+- **Unencodable plugin state disables the panel, it does not corrupt the frame.** The module state store refuses non-UTF-8 payloads at the send seam and normalizes reply bytes at the store seam, so a hostile plugin cannot push broken sequences through persisted state.
+- **Every untrusted string is swept before it renders.** Plugin view content, module labels, the GenericModule output buffer, weather condition/location text, and plot legend/label data all pass through sugar-core's `SugarCraft\Core\Util\Sanitize::untrusted()` (or `untrustedForDisplay()` plus `stripZoneSentinels()` on marked-frame chrome) at their choke points — control bytes cannot escape a panel onto the wire, and forged PUA zone markers cannot reach a host's zone parser.
+- **The weather transport is bounded.** The wttr.in client refuses replies above the lib's own 1 MiB doctrine (`Module\BoundedCommand::MAX_OUTPUT_BYTES`) — declared Content-Length up front, byte-counted during the read — and failure reasons are typed (`WeatherTransportFailure` vs `WeatherParseFailure`), so a black-holed or hostile endpoint stalls nothing and the card says why it is empty.
+- **The layout subsystem is documented as experimental.** The `Layout`, `Keys`, and `State` namespaces carry an evolving surface ahead of the 2.0.0 freeze; the alternative — dogfooding them onto the Module render path first — is a standing owner decision, and the frames stay valid either way. Nothing in this section is a promise that today's layout API is the shipped one.
+
 ## License
 
 MIT License - See LICENSE file for details.
