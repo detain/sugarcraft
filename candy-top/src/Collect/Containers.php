@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Collect;
 
+use SugarCraft\Core\Concerns\Mutable;
+
 /**
  * The live container collector — btop PR #1873 `Ctr::collect` (Linux).
  *
@@ -43,6 +45,8 @@ namespace SugarCraft\Top\Collect;
  */
 final class Containers implements ContainerCollector
 {
+    use Mutable;
+
     public const CGROUP_ROOT = Cgroup::DEFAULT_V2_ROOT;
 
     /** Reuse a good /containers/json reply this long (candy-top-034). */
@@ -121,7 +125,7 @@ final class Containers implements ContainerCollector
     {
         return $vms === $this->vms
             ? $this
-            : new self($this->root, $this->docker, $this->clock, $this->enabled, $this->current, $this->oldTime, $vms, $this->dockerCache);
+            : $this->mutate(['vms' => $vms]);
     }
 
     public function vms(): bool
@@ -187,7 +191,7 @@ final class Containers implements ContainerCollector
             new ContainerSnapshot($out, $memTotal, $cores, $out === []
                 ? (self::engineRunning($processes) ? 'none' : 'unavailable')
                 : null),
-            new self($this->root, $this->docker, $this->clock, true, $out, $now, $this->vms, $cache),
+            $this->mutate(['enabled' => true, 'current' => $out, 'oldTime' => $now, 'dockerCache' => $cache]),
         ];
     }
 

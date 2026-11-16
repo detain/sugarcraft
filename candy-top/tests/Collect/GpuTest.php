@@ -976,4 +976,44 @@ final class GpuTest extends TestCase
             @rmdir($base);
         }
     }
+
+    /**
+     * S-C10 equivalence pin: the fresh-enable arms of withProcesses() clear
+     * the apps and pmon backoff trio and pull the next query forward (the
+     * `g`-key "I want rows NOW" contract), while a no-op or opt-out re-lists
+     * the state unchanged — behaviour-neutral under the Concerns\Mutable
+     * rewrite, which removed the 20-line positional re-listing.
+     */
+    public function testWithProcessesFreshEnableClearsBackoffsOptOutPreserves(): void
+    {
+        $prop = static fn (object $o, string $name): mixed => (new \ReflectionProperty(Gpu::class, $name))->getValue($o);
+        $with = new \ReflectionMethod(Gpu::class, 'with');
+
+        $base = Gpu::new(static fn (array $argv): array => [GpuOutcome::Unavailable, '']);
+        // Arm the backoff state through the internal carrier-change choke.
+        $armed = $with->invokeArgs($base, [
+            'appsTimeouts' => 3,
+            'appsNextAt' => 123.0,
+            'pmon' => [4, 45.0, 5],
+            'nextQueryAt' => 99.0,
+        ]);
+
+        $on = $armed->withProcesses(true);
+        $this->assertTrue($prop($on, 'processes'));
+        $this->assertSame(0, $prop($on, 'appsTimeouts'), 'a fresh opt-in clears the apps backoff');
+        $this->assertSame(-INF, $prop($on, 'appsNextAt'));
+        $this->assertSame(0, $prop($on, 'pmonTimeouts'), 'a fresh opt-in clears the pmon backoff');
+        $this->assertSame(-INF, $prop($on, 'pmonNextAt'));
+        $this->assertSame(0, $prop($on, 'pmonFailures'));
+        $this->assertNull($prop($on, 'nextQueryAt'), 'device query is due at once (no device backoff armed)');
+
+        // Opt-out from the off state preserves every memo; and the source
+        // carrier is never mutated (immutability law).
+        $noop = $armed->withProcesses(false);
+        $this->assertSame(3, $prop($noop, 'appsTimeouts'));
+        $this->assertSame(123.0, $prop($noop, 'appsNextAt'));
+        $this->assertSame(4, $prop($noop, 'pmonTimeouts'));
+        $this->assertSame(99.0, $prop($noop, 'nextQueryAt'));
+        $this->assertSame(3, $prop($armed, 'appsTimeouts'), 'withProcesses returns a new carrier');
+    }
 }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Collect;
 
+use SugarCraft\Core\Concerns\Mutable;
+
 /**
  * CPU frequency from cpufreq policies, falling back to /proc/cpuinfo.
  *
@@ -38,6 +40,8 @@ namespace SugarCraft\Top\Collect;
  */
 final class Freq implements TunableFreq
 {
+    use Mutable;
+
     private function __construct(
         private readonly Paths $paths,
         private readonly FreqMode $mode,
@@ -53,7 +57,7 @@ final class Freq implements TunableFreq
     /** Toggle the per-core read (btop show_core_freq != "off"). */
     public function withPerCore(bool $perCore): self
     {
-        return $perCore === $this->perCore ? $this : new self($this->paths, $this->mode, $perCore);
+        return $perCore === $this->perCore ? $this : $this->mutate(['perCore' => $perCore]);
     }
 
     /**

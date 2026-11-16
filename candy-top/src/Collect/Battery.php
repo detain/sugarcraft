@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Collect;
 
+use SugarCraft\Core\Concerns\Mutable;
+
 /**
  * Battery percent/status/time/power from /sys/class/power_supply.
  *
@@ -30,6 +32,8 @@ namespace SugarCraft\Top\Collect;
  */
 final class Battery implements SelectableBattery
 {
+    use Mutable;
+
     private function __construct(
         private readonly Paths $paths,
         private readonly ?string $selected,
@@ -47,7 +51,7 @@ final class Battery implements SelectableBattery
     /** The same reader for another `selected_battery` (null or "Auto" = auto-select). */
     public function withSelected(?string $battery): self
     {
-        return new self($this->paths, $battery === null || $battery === 'Auto' ? null : $battery);
+        return $this->mutate(['selected' => $battery === null || $battery === 'Auto' ? null : $battery]);
     }
 
     public function selected(): ?string

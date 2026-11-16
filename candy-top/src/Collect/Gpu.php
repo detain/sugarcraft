@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Top\Collect;
 
 use React\Promise\PromiseInterface;
+use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Top\Collect\Gpu\Backend;
 use SugarCraft\Top\Collect\Gpu\DrmScan;
 use SugarCraft\Top\Collect\Gpu\Settled;
@@ -77,6 +78,8 @@ use function React\Promise\resolve;
  */
 final class Gpu implements Backend
 {
+    use Mutable;
+
     /**
      * The base query every nvidia-smi since the 2010s answers. `name` is
      * last on purpose: it is the only free-text column and may contain
@@ -231,29 +234,15 @@ final class Gpu implements Backend
     {
         $fresh = $on && !$this->processes;
 
-        return new self(
-            $this->runner,
-            $this->clock,
-            $this->interval,
-            $this->absent,
-            $fresh && $this->timeouts === 0 ? null : $this->nextQueryAt,
-            $this->timeouts,
-            $this->last,
-            $this->everSucceeded,
-            $this->candidates,
-            $this->queries,
-            $this->pinnedBinary,
-            $this->pinnedQuery,
-            $on,
-            $on && !$this->processes ? 0 : $this->appsTimeouts,
-            $on && !$this->processes ? -INF : $this->appsNextAt,
-            $this->pinFailures,
-            $this->discovered,
-            $on && !$this->processes ? 0 : $this->pmonTimeouts,
-            $on && !$this->processes ? -INF : $this->pmonNextAt,
-            $on && !$this->processes ? 0 : $this->pmonFailures,
-            $this->asyncRunner,
-        );
+        return $this->mutate([
+            'nextQueryAt' => $fresh && $this->timeouts === 0 ? null : $this->nextQueryAt,
+            'processes' => $on,
+            'appsTimeouts' => $fresh ? 0 : $this->appsTimeouts,
+            'appsNextAt' => $fresh ? -INF : $this->appsNextAt,
+            'pmonTimeouts' => $fresh ? 0 : $this->pmonTimeouts,
+            'pmonNextAt' => $fresh ? -INF : $this->pmonNextAt,
+            'pmonFailures' => $fresh ? 0 : $this->pmonFailures,
+        ]);
     }
 
     public function processesEnabled(): bool
@@ -798,29 +787,22 @@ final class Gpu implements Backend
         // binary moved by a driver upgrade is found at its new path.
         $candidates = $unpin && $this->discovered ? array_values(self::candidates()) : $this->candidates;
 
-        return new self(
-            $this->runner,
-            $this->clock,
-            $this->interval,
-            $absent ?? $this->absent,
-            $nextQueryAt ?? $this->nextQueryAt,
-            $timeouts ?? $this->timeouts,
-            $last ?? $this->last,
-            $everSucceeded ?? $this->everSucceeded,
-            $candidates,
-            $this->queries,
-            $unpin ? null : ($pinnedBinary ?? $this->pinnedBinary),
-            $unpin ? null : ($pinnedQuery ?? $this->pinnedQuery),
-            $this->processes,
-            $appsTimeouts ?? $this->appsTimeouts,
-            $appsNextAt ?? $this->appsNextAt,
-            $unpin ? 0 : ($pinFailures ?? $this->pinFailures),
-            $this->discovered,
-            $pmon[0] ?? $this->pmonTimeouts,
-            $pmon[1] ?? $this->pmonNextAt,
-            $pmon[2] ?? $this->pmonFailures,
-            $this->asyncRunner,
-        );
+        return $this->mutate([
+            'absent' => $absent ?? $this->absent,
+            'nextQueryAt' => $nextQueryAt ?? $this->nextQueryAt,
+            'timeouts' => $timeouts ?? $this->timeouts,
+            'last' => $last ?? $this->last,
+            'everSucceeded' => $everSucceeded ?? $this->everSucceeded,
+            'candidates' => $candidates,
+            'pinnedBinary' => $unpin ? null : ($pinnedBinary ?? $this->pinnedBinary),
+            'pinnedQuery' => $unpin ? null : ($pinnedQuery ?? $this->pinnedQuery),
+            'appsTimeouts' => $appsTimeouts ?? $this->appsTimeouts,
+            'appsNextAt' => $appsNextAt ?? $this->appsNextAt,
+            'pinFailures' => $unpin ? 0 : ($pinFailures ?? $this->pinFailures),
+            'pmonTimeouts' => $pmon[0] ?? $this->pmonTimeouts,
+            'pmonNextAt' => $pmon[1] ?? $this->pmonNextAt,
+            'pmonFailures' => $pmon[2] ?? $this->pmonFailures,
+        ]);
     }
 
     /**

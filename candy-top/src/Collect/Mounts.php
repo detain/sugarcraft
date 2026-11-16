@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Collect;
 
+use SugarCraft\Core\Concerns\Mutable;
+
 /**
  * Mounted filesystems with total/free/used space.
  *
@@ -48,6 +50,8 @@ namespace SugarCraft\Top\Collect;
  */
 final class Mounts implements SelectableMounts
 {
+    use Mutable;
+
     private const array ALWAYS_PHYSICAL = ['zfs', 'wslfs', 'drvfs'];
     private const array NEVER_PHYSICAL = ['squashfs', 'nullfs'];
 
@@ -92,7 +96,7 @@ final class Mounts implements SelectableMounts
     /** The same collector (ignore list kept) under another disks selection. */
     public function withSelection(MountSelection $selection): self
     {
-        return new self($this->paths, $this->space, $this->clock, $selection, $this->ignored, $this->fstab, $this->probed);
+        return $this->mutate(['selection' => $selection]);
     }
 
     public function selection(): MountSelection
@@ -182,7 +186,7 @@ final class Mounts implements SelectableMounts
         }
 
         // Ignores for mount points that disappeared are dropped with them.
-        return [new MountsSnapshot($mounts), new self($this->paths, $this->space, $this->clock, $this->selection, $ignored, $cache, $probed)];
+        return [new MountsSnapshot($mounts), $this->mutate(['ignored' => $ignored, 'fstab' => $cache, 'probed' => $probed])];
     }
 
     /**

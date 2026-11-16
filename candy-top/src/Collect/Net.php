@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Collect;
 
+use SugarCraft\Core\Concerns\Mutable;
+
 /**
  * Per-interface rx/tx counters and rates from /proc/net/dev.
  *
@@ -31,6 +33,8 @@ namespace SugarCraft\Top\Collect;
  */
 final class Net
 {
+    use Mutable;
+
     /** Link state changes rarely (candy-top-033): probe each iface at most this often. */
     private const CARRIER_TTL = 5.0;
 
@@ -78,7 +82,7 @@ final class Net
      */
     public function withInterface(?string $iface): self
     {
-        return new self($this->paths, $this->clock, $this->state, $this->lastAt, $iface, $iface, $this->addresses);
+        return $this->mutate(['selected' => $iface, 'pinned' => $iface]);
     }
 
     /**
@@ -97,7 +101,7 @@ final class Net
         }
         $state[$iface] = $s;
 
-        return new self($this->paths, $this->clock, $state, $this->lastAt, $this->selected, $this->pinned, $this->addresses);
+        return $this->mutate(['state' => $state]);
     }
 
     /**
@@ -179,7 +183,7 @@ final class Net
 
         return [
             new NetSnapshot($interfaces, $selected),
-            new self($this->paths, $this->clock, $state, $now, $selected, $this->pinned, $this->addresses),
+            $this->mutate(['state' => $state, 'lastAt' => $now, 'selected' => $selected]),
         ];
     }
 

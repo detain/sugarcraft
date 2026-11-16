@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Collect;
 
+use SugarCraft\Core\Concerns\Mutable;
+
 /**
  * The process table from /proc/[pid]/{stat,status,cmdline}.
  *
@@ -72,6 +74,8 @@ namespace SugarCraft\Top\Collect;
  */
 final class ProcList implements TunableProcList
 {
+    use Mutable;
+
     // Opt-ins (withPerCore / withFilterKernel / withDetail): the proc
     // panel re-applies proc_per_core, proc_filter_kernel and the detailed
     // pid from the CURRENT config before every scan; withDetail reads
@@ -336,22 +340,7 @@ final class ProcList implements TunableProcList
      */
     private function copy(array $o): self
     {
-        return new self(
-            $this->paths,
-            $this->userLookup,
-            $o['perCore'] ?? $this->perCore,
-            $o['filterKernel'] ?? $this->filterKernel,
-            $this->pageSize,
-            $this->clkTck,
-            array_key_exists('previousTotal', $o) ? $o['previousTotal'] : $this->previousTotal,
-            $o['known'] ?? $this->known,
-            $o['users'] ?? $this->users,
-            $o['readIo'] ?? $this->readIo,
-            array_key_exists('previousUptime', $o) ? $o['previousUptime'] : $this->previousUptime,
-            array_key_exists('detailPid', $o) ? $o['detailPid'] : $this->detailPid,
-            $o['scanBudgetUs'] ?? $this->scanBudgetUs,
-            $o['pending'] ?? $this->pending,
-        );
+        return $this->mutate($o);
     }
 
     /**
