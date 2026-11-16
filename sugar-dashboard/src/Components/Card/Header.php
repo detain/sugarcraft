@@ -8,6 +8,8 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Dashboard\Foundation\ColorMode;
+use SugarCraft\Dashboard\Foundation\EnumCoerce;
+use SugarCraft\Dashboard\Layout\HAlign;
 
 /**
  * A page header component for displaying titles and subtitles.
@@ -23,15 +25,19 @@ final class Header implements \SugarCraft\Dashboard\Foundation\SizedItem
     private ?int $width = null;
     private ?int $height = null;
 
+    private readonly HAlign $alignment;
+
     public function __construct(
         private readonly string $title = '',
         private readonly string $subtitle = '',
-        private readonly string $alignment = 'left',
+        HAlign|string $alignment = HAlign::Left,
         private readonly ?Color $titleColor = null,
         private readonly ?Color $subtitleColor = null,
         private readonly ?Color $borderColor = null,
         private readonly bool $showDivider = false,
-    ) {}
+    ) {
+        $this->alignment = EnumCoerce::from($alignment, HAlign::class, 'header alignment');
+    }
 
     /**
      * Create a new header with default styling.
@@ -41,7 +47,7 @@ final class Header implements \SugarCraft\Dashboard\Foundation\SizedItem
         return new self(
             title: $title,
             subtitle: '',
-            alignment: 'left',
+            alignment: HAlign::Left,
             titleColor: Color::hex('#FAFAFA'),
             subtitleColor: Color::hex('#A1A1AA'),
             borderColor: Color::hex('#3F3F46'),
@@ -57,7 +63,7 @@ final class Header implements \SugarCraft\Dashboard\Foundation\SizedItem
         return new self(
             title: $title,
             subtitle: '',
-            alignment: 'center',
+            alignment: HAlign::Center,
             titleColor: Color::hex('#FAFAFA'),
             subtitleColor: Color::hex('#A1A1AA'),
             borderColor: Color::hex('#3F3F46'),
@@ -73,7 +79,7 @@ final class Header implements \SugarCraft\Dashboard\Foundation\SizedItem
         return new self(
             title: $title,
             subtitle: $subtitle,
-            alignment: 'center',
+            alignment: HAlign::Center,
             titleColor: Color::hex('#FAFAFA'),
             subtitleColor: Color::hex('#A1A1AA'),
             borderColor: null,
@@ -106,9 +112,9 @@ final class Header implements \SugarCraft\Dashboard\Foundation\SizedItem
         $result = '';
 
         // Title line
-        if ($this->alignment === 'center') {
+        if ($this->alignment === HAlign::Center) {
             $result .= $this->renderCenteredLine($useWidth);
-        } elseif ($this->alignment === 'right') {
+        } elseif ($this->alignment === HAlign::Right) {
             $result .= $this->renderRightAlignedLine($useWidth);
         } else {
             $result .= $this->renderLeftAlignedLine($useWidth);
@@ -117,9 +123,9 @@ final class Header implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Subtitle line
         if ($this->subtitle !== '') {
             $result .= "\n";
-            if ($this->alignment === 'center') {
+            if ($this->alignment === HAlign::Center) {
                 $result .= $this->renderCenteredSubtitle($useWidth);
-            } elseif ($this->alignment === 'right') {
+            } elseif ($this->alignment === HAlign::Right) {
                 $result .= $this->renderRightAlignedSubtitle($useWidth);
             } else {
                 $result .= $this->renderLeftAlignedSubtitle($useWidth);
@@ -381,9 +387,9 @@ final class Header implements \SugarCraft\Dashboard\Foundation\SizedItem
     }
 
     /**
-     * Set the alignment.
+     * Set the alignment (HAlign case; legacy strings accepted with a deprecation notice).
      */
-    public function withAlignment(string $alignment): self
+    public function withAlignment(HAlign|string $alignment): self
     {
         return new self(
             title: $this->title,

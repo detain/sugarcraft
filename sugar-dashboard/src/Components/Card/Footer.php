@@ -7,6 +7,8 @@ namespace SugarCraft\Dashboard\Components\Card;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\EnumCoerce;
+use SugarCraft\Dashboard\Layout\HAlign;
 use SugarCraft\Dashboard\Output\Truncate;
 use SugarCraft\Dashboard\Foundation\ColorMode;
 
@@ -28,18 +30,25 @@ final class Footer implements \SugarCraft\Dashboard\Foundation\SizedItem
     private ?int $width = null;
     private ?int $height = null;
 
+    /** @deprecated stringly vocabulary; pass {@see HAlign::Left} (D-147). */
     public const ALIGN_LEFT = 'left';
+    /** @deprecated stringly vocabulary; pass {@see HAlign::Center} (D-147). */
     public const ALIGN_CENTER = 'center';
+    /** @deprecated stringly vocabulary; pass {@see HAlign::Right} (D-147). */
     public const ALIGN_RIGHT = 'right';
+
+    private readonly HAlign $align;
 
     public function __construct(
         private readonly string $content = '',
-        private readonly string $align = self::ALIGN_LEFT,
+        HAlign|string $align = HAlign::Left,
         private readonly ?Color $borderColor = null,
         private readonly ?Color $textColor = null,
         private readonly ?Color $bgColor = null,
         private readonly string $borderPosition = 'top', // 'top', 'bottom', 'both', 'none'
-    ) {}
+    ) {
+        $this->align = EnumCoerce::from($align, HAlign::class, 'footer alignment');
+    }
 
     /**
      * Create a new footer with default styling.
@@ -50,7 +59,7 @@ final class Footer implements \SugarCraft\Dashboard\Foundation\SizedItem
     {
         return new self(
             content: $content,
-            align: self::ALIGN_LEFT,
+            align: HAlign::Left,
             borderColor: Color::hex('#874BFD'),
             textColor: null,
             bgColor: null,
@@ -70,7 +79,7 @@ final class Footer implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         return new self(
             content: $content,
-            align: self::ALIGN_CENTER,
+            align: HAlign::Center,
             borderColor: Color::hex('#874BFD'),
             textColor: null,
             bgColor: null,
@@ -171,11 +180,12 @@ final class Footer implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         $padding = $width - $contentWidth;
 
+        // Exhaustive over the enum: an unknown knob value can no longer reach
+        // here, so the silent left-fallback default arm is gone (D-147).
         return match ($this->align) {
-            self::ALIGN_LEFT => $this->content . str_repeat(' ', $padding),
-            self::ALIGN_RIGHT => str_repeat(' ', $padding) . $this->content,
-            self::ALIGN_CENTER => $this->centerAlign($this->content, $contentWidth, $width),
-            default => $this->content . str_repeat(' ', $padding),
+            HAlign::Left => $this->content . str_repeat(' ', $padding),
+            HAlign::Right => str_repeat(' ', $padding) . $this->content,
+            HAlign::Center => $this->centerAlign($this->content, $contentWidth, $width),
         };
     }
 
@@ -229,9 +239,9 @@ final class Footer implements \SugarCraft\Dashboard\Foundation\SizedItem
     }
 
     /**
-     * Set the text alignment.
+     * Set the text alignment (HAlign case; legacy strings accepted with a deprecation notice).
      */
-    public function withAlign(string $align): self
+    public function withAlign(HAlign|string $align): self
     {
         return new self(
             content: $this->content,

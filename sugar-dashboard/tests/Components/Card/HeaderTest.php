@@ -310,4 +310,61 @@ final class HeaderTest extends TestCase
 
         $this->assertSame(50, $w);
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    // D-147 enum convergence: accept-both with a loud unknown
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testEnumAlignmentRendersByteIdenticalToLegacyString(): void
+    {
+        $viaEnum = Header::new('D-147')->withSubtitle('sub')->withAlignment(\SugarCraft\Dashboard\Layout\HAlign::Right)->render();
+
+        $notices = [];
+        set_error_handler(static function (int $errno, string $message) use (&$notices): bool {
+            if ($errno !== E_USER_DEPRECATED) {
+                return false;
+            }
+            $notices[] = $message;
+
+            return true;
+        });
+        try {
+            $viaString = Header::new('D-147')->withSubtitle('sub')->withAlignment('right')->render();
+        } finally {
+            restore_error_handler();
+        }
+
+        self::assertSame($viaString, $viaEnum);
+        self::assertSame(
+            ['Passing the string "right" as header alignment is deprecated; pass SugarCraft\Dashboard\Layout\HAlign::Right instead.'],
+            $notices,
+        );
+    }
+
+    public function testUnknownAlignmentThrowsAtTheBoundary(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unknown header alignment "middle"');
+
+        Header::new('x')->withAlignment('middle');
+    }
+
+    public function testEnumAlignmentArmsPlaceTitleExactly(): void
+    {
+        $titleLine = static fn (\SugarCraft\Dashboard\Layout\HAlign $align): string => explode(
+            "\n",
+            (new Header(
+                title: 'AB',
+                subtitle: 's',
+                alignment: $align,
+                titleColor: null,
+                subtitleColor: null,
+                borderColor: null,
+            ))->setSize(40, 3)->render(),
+        )[0];
+
+        self::assertStringStartsWith('AB' . str_repeat(' ', 38), $titleLine(\SugarCraft\Dashboard\Layout\HAlign::Left));
+        self::assertStringStartsWith(str_repeat(' ', 38) . 'AB', $titleLine(\SugarCraft\Dashboard\Layout\HAlign::Right));
+        self::assertStringStartsWith(str_repeat(' ', 19) . 'AB' . str_repeat(' ', 19), $titleLine(\SugarCraft\Dashboard\Layout\HAlign::Center));
+    }
 }

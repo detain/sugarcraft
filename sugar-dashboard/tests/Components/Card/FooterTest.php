@@ -277,4 +277,57 @@ final class FooterTest extends TestCase
 
         $this->assertStringContainsString('日本語', $rendered);
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    // D-147 enum convergence: accept-both with a loud unknown
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testEnumAlignRendersByteIdenticalToLegacyString(): void
+    {
+        $viaEnum = Footer::new('D-147')->withAlign(\SugarCraft\Dashboard\Layout\HAlign::Center)->setSize(40, 2)->render();
+
+        $notices = [];
+        set_error_handler(static function (int $errno, string $message) use (&$notices): bool {
+            if ($errno !== E_USER_DEPRECATED) {
+                return false;
+            }
+            $notices[] = $message;
+
+            return true;
+        });
+        try {
+            $viaString = Footer::new('D-147')->withAlign('center')->setSize(40, 2)->render();
+        } finally {
+            restore_error_handler();
+        }
+
+        self::assertSame($viaString, $viaEnum);
+        self::assertSame(
+            ['Passing the string "center" as footer alignment is deprecated; pass SugarCraft\Dashboard\Layout\HAlign::Center instead.'],
+            $notices,
+        );
+    }
+
+    public function testUnknownAlignThrowsAtTheBoundary(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unknown footer alignment "sideways"');
+
+        Footer::new('x')->withAlign('sideways');
+    }
+
+    public function testEnumAlignArmsPlaceContentExactly(): void
+    {
+        // Default allocation is 80 columns; line 0 is the top border, line 1
+        // the (uncolored) content line. Position-exact so no arm can be
+        // silently swapped — the legacy tests only assert containment.
+        $line = static fn (\SugarCraft\Dashboard\Layout\HAlign $align): string => explode(
+            "\n",
+            Footer::new('AB')->withAlign($align)->render(),
+        )[1];
+
+        self::assertSame('AB' . str_repeat(' ', 78), $line(\SugarCraft\Dashboard\Layout\HAlign::Left));
+        self::assertSame(str_repeat(' ', 78) . 'AB', $line(\SugarCraft\Dashboard\Layout\HAlign::Right));
+        self::assertSame(str_repeat(' ', 39) . 'AB' . str_repeat(' ', 39), $line(\SugarCraft\Dashboard\Layout\HAlign::Center));
+    }
 }
