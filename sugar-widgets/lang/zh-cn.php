@@ -12,6 +12,7 @@ return [
     'column.width_nonneg'         => '列宽必须 >= 0',
     'tabs.bad_index'              => '标签索引超出范围',
     'tabs.neg_width'              => '标签宽度必须 >= 0',
+    'tabs.zone_key_empty'         => '标签页区域键不能为空',
     'table.dim_nonneg'            => '表格宽/高必须 >= 0',
     'table.page_size_nonneg'      => '页面大小必须 >= 0',
     'table.set_columns_type'      => '列必须是列实例',

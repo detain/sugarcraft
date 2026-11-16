@@ -12,6 +12,7 @@ return [
     'column.width_nonneg'         => 'A largura da coluna tem de ser >= 0',
     'tabs.bad_index'              => 'índice de aba fora do intervalo',
     'tabs.neg_width'              => 'a largura das abas deve ser >= 0',
+    'tabs.zone_key_empty'         => 'a chave de zona do separador não pode estar vazia',
     'table.dim_nonneg'            => 'a largura/altura da tabela tem de ser >= 0',
     'table.page_size_nonneg'      => 'o tamanho da página deve ser >= 0',
     'table.set_columns_type'      => 'as colunas devem ser instâncias de coluna',

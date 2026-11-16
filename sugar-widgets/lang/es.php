@@ -12,6 +12,7 @@ return [
     'column.width_nonneg'         => 'El ancho de columna debe ser >= 0',
     'tabs.bad_index'              => 'índice de pestaña fuera de rango',
     'tabs.neg_width'              => 'el ancho de pestañas debe ser >= 0',
+    'tabs.zone_key_empty'         => 'la clave de zona de pestaña no debe estar vacía',
     'table.dim_nonneg'            => 'el ancho/alto de la tabla debe ser >= 0',
     'table.page_size_nonneg'      => 'el tamaño de página debe ser >= 0',
     'table.set_columns_type'      => 'las columnas deben ser instancias de columna',

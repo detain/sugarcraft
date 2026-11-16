@@ -12,6 +12,7 @@ return [
     'column.width_nonneg'         => 'Spaltenbreite muss >= 0 sein',
     'tabs.bad_index'              => 'Tabellenindex außerhalb des Bereichs',
     'tabs.neg_width'              => 'Tabs-Breite muss >= 0 sein',
+    'tabs.zone_key_empty'         => 'Zonenschlüssel des Tabs darf nicht leer sein',
     'table.dim_nonneg'            => 'Tabellen-Breite/-Höhe muss >= 0 sein',
     'table.page_size_nonneg'      => 'Seitengröße muss >= 0 sein',
     'table.set_columns_type'      => 'Spalten müssen Spalten-Instanzen sein',

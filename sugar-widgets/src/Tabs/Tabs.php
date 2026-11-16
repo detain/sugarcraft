@@ -440,12 +440,24 @@ final class Tabs implements Model
      *
      * {@see new()} mints a fresh key, so a bar rebuilt from scratch on every
      * frame would emit new ids and lose the clicks scanned from the previous
-     * frame. Pass the same key to every rebuild to keep the ids stable. The
-     * key must match the sugar-mouse id charset `[A-Za-z0-9._:-]`; an illegal
-     * key is rejected by {@see Manager::mark()} when the bar is rendered.
+     * frame. Pass the same key to every rebuild to keep the ids stable.
+     *
+     * Bars that share a template share a key: `$tpl->withLabels(A)` and
+     * `$tpl->withLabels(B)` both carry the template's key, so a click aimed at
+     * one bar's tab can activate the same-numbered tab on the other. When bars
+     * share a {@see Manager}, give each bar its own `withZoneKey()`. Keys must
+     * be non-empty and unique per manager.
+     *
+     * The key must match the sugar-mouse id charset `[A-Za-z0-9._:-]`; an
+     * illegal key is rejected by {@see Manager::mark()} when the bar is rendered.
+     *
+     * @throws \InvalidArgumentException when $key is empty
      */
     public function withZoneKey(string $key): self
     {
+        if ($key === '') {
+            throw new \InvalidArgumentException(Lang::t('tabs.zone_key_empty'));
+        }
         return $this->copy(zoneKey: $key);
     }
 
