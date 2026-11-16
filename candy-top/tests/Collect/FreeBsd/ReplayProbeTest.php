@@ -185,7 +185,14 @@ final class ReplayProbeTest extends TestCase
         $loop->cancelTimer($beat);
 
         $this->assertGreaterThanOrEqual(0.2, $elapsed, 'the slow child really was pending');
-        $this->assertGreaterThan(8, $beats, 'the heartbeat fired through the wait (a blocking sample would give ~0)');
+        // F15c measurement (wave-4 F11, 2026-11-16): local Linux gives 25 beats
+        // per run (3-run census; 0.25 s child / 0.01 s heartbeat) and a blocking
+        // sample gives 0. Shared-arm64 macOS CI gave 7 and then 8 beats on the
+        // same build (~30 ms loop slices starve the 10 ms periodic), making the
+        // old floor of >8 blind-red without any pump failure. A floor of >3
+        // keeps ~7x discrimination against the blocking signature and 2.3x
+        // headroom under the worst CI observation.
+        $this->assertGreaterThan(3, $beats, 'the heartbeat fired through the wait (a blocking sample would give ~0)');
     }
 
     public function testCpuPanelDeliversItsSampleThroughAnAsyncCmdOnAReplayProbe(): void
