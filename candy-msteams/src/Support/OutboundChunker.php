@@ -23,6 +23,9 @@ namespace CandyCode\Bundles\MsTeams\Support;
  */
 final class OutboundChunker
 {
+    /** The characters PHP's ltrim/rtrim strip by default, as codepoints. */
+    private const TRIM = [' ', "\t", "\n", "\r", "\0", "\x0B"];
+
     /**
      * @return list<string>
      */
@@ -137,21 +140,47 @@ final class OutboundChunker
     }
 
     /**
+     * Cuts a line that cannot fit alone into pieces of at most $room
+     * codepoints: each piece ends after the last space inside its window, or
+     * at the window's edge when there is no space. Leading whitespace of the
+     * remainder is dropped, the first piece keeps the line's own left edge.
+     *
+     * One decode and one scan. Each window's end and its last space are read
+     * off a single forward cursor, so a long line costs O(n). The earlier form
+     * re-measured and re-split the whole remaining body for every piece, which
+     * is O(n^2 / room).
+     *
      * @return list<string>
      */
     private static function wordSplit(string $line, int $limit): array
     {
         $room = \max(16, $limit - 16); // headroom for the fence decoration
+        $cps = \mb_str_split($line, 1, 'UTF-8');
+        $n = \count($cps);
+
         $pieces = [];
-        $body = $line;
-        while (self::len($body) > $room) {
-            $cut = \mb_strrpos(\mb_substr($body, 0, $room), ' ');
-            $cut = $cut === false ? $room : $cut + 1;
-            $pieces[] = \rtrim(\mb_substr($body, 0, $cut));
-            $body = \ltrim(\mb_substr($body, $cut));
+        $start = 0;   // first codepoint of the piece being cut
+        $end = 0;     // scan cursor: every codepoint below it has been seen
+        $space = -1;  // last ' ' below $end; $end only grows, so this never rescans
+        while ($n - $start > $room) {
+            $fitEnd = $start + $room;
+            while ($end < $fitEnd) {
+                if ($cps[$end] === ' ') {
+                    $space = $end;
+                }
+                ++$end;
+            }
+            $cut = $space >= $start ? $space + 1 : $fitEnd;
+            $pieces[] = \rtrim(\implode('', \array_slice($cps, $start, $cut - $start)));
+
+            $start = $cut;
+            while ($start < $n && \in_array($cps[$start], self::TRIM, true)) {
+                ++$start;
+            }
+            $end = \max($end, $start);
         }
-        if ($body !== '') {
-            $pieces[] = $body;
+        if ($start < $n) {
+            $pieces[] = \implode('', \array_slice($cps, $start));
         }
 
         return $pieces;
