@@ -120,8 +120,10 @@ final class Tabs implements Model
      */
     public function update(Msg $msg): array
     {
-        // Mouse click on a tab zone — activate that tab.
-        if ($msg instanceof MsgZoneInBounds && $this->focused) {
+        // Mouse click on a tab zone — activate that tab. Clicks are not gated
+        // on focus: a bar is clickable before any keyboard focus lands on it.
+        // Keyboard input still requires focus (it is routed to the focused bar).
+        if ($msg instanceof MsgZoneInBounds) {
             $tabIndex = $this->tabIndexFromZoneId($msg->zone->id);
             if ($tabIndex !== null && $tabIndex >= $this->scrollOffset && $tabIndex <= $this->scrollEnd) {
                 return [$this->withActive($tabIndex), null];

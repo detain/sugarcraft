@@ -382,18 +382,38 @@ final class TabsTest extends TestCase
         $this->assertSame(1, $t->active());
     }
 
-    public function testMsgZoneInBoundsIgnoredWhenUnfocused(): void
+    /**
+     * Regression: a click on an unfocused bar used to be dropped by a focus
+     * gate in update(), so the first click on a tab strip did nothing. Clicks
+     * now activate the tab regardless of focus, and do not grant focus — the
+     * parent still owns keyboard routing.
+     */
+    public function testMsgZoneInBoundsActivatesTabWhenUnfocused(): void
     {
         $manager = \SugarCraft\Mouse\Zones\Manager::newPrefix('test');
         $t = $this->tabs()->withZoneManager($manager);
-        // Not focused.
+        $this->assertFalse($t->focused);
 
         $zone = new \SugarCraft\Mouse\Zones\Zone('test-tab-1', 7, 1, 14, 1);
         $mouse = new \SugarCraft\Core\Msg\MouseMsg(10, 1, \SugarCraft\Core\MouseButton::Left, \SugarCraft\Core\MouseAction::Press);
         $msg = new \SugarCraft\Mouse\Zones\MsgZoneInBounds($zone, $mouse);
         [$t, ] = $t->update($msg);
 
-        $this->assertSame(0, $t->active()); // unchanged
+        $this->assertSame(1, $t->active());
+        $this->assertFalse($t->focused, 'a click activates the tab without taking focus');
+    }
+
+    public function testMsgZoneInBoundsOutsideVisibleRangeIgnoredWhenUnfocused(): void
+    {
+        $manager = \SugarCraft\Mouse\Zones\Manager::newPrefix('test');
+        $t = $this->tabs()->withWidth(15)->withZoneManager($manager);
+        $this->assertFalse($t->focused);
+
+        $zone = new \SugarCraft\Mouse\Zones\Zone('test-tab-2', 30, 1, 38, 1);
+        $mouse = new \SugarCraft\Core\Msg\MouseMsg(35, 1, \SugarCraft\Core\MouseButton::Left, \SugarCraft\Core\MouseAction::Press);
+        [$t, ] = $t->update(new \SugarCraft\Mouse\Zones\MsgZoneInBounds($zone, $mouse));
+
+        $this->assertSame(0, $t->active()); // tab-2 is not in the visible window
     }
 
     public function testMsgZoneInBoundsOutsideVisibleRangeIgnored(): void
