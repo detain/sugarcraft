@@ -60,10 +60,17 @@ final class Tabs implements Model
     /** Last tab index visible in the current scroll window (0-based). */
     public readonly int $scrollEnd;
 
+    /** Process-wide counter that mints a distinct {@see $zoneKey} per bar. */
+    private static int $zoneKeySeq = 0;
+
     /**
      * Private on purpose (W-09): a direct `new Tabs(...)` fails with PHP's
      * "Call to private Tabs::__construct()" Error; use {@see self::new()}
      * plus `with*()`.
+     *
+     * `$zoneKey` scopes this bar's zone ids. Two bars that share one
+     * {@see Manager} would otherwise mint identical `tab-N` ids, and a click
+     * on one bar would activate a tab on every bar that received it.
      *
      * @param list<string> $labels
      */
@@ -77,6 +84,7 @@ final class Tabs implements Model
         public readonly bool $wrap,
         public readonly int $width,
         public readonly ?Manager $zoneManager,
+        public readonly string $zoneKey,
         array $labels = [],
         int $scrollOffset = 0,
     ) {
@@ -110,6 +118,7 @@ final class Tabs implements Model
             wrap: true,
             width: $width,
             zoneManager: null,
+            zoneKey: 'tabs' . (++self::$zoneKeySeq) . '-',
             labels: $labels,
             scrollOffset: 0,
         );
@@ -293,7 +302,7 @@ final class Tabs implements Model
         $rendered = [];
         foreach ($parts as [$text, $style, $tabIndex]) {
             if ($tabIndex !== null) {
-                $text = $this->zoneManager->mark("tab-{$tabIndex}", $text);
+                $text = $this->zoneManager->mark($this->zoneKey . "tab-{$tabIndex}", $text);
             }
             $rendered[] = $style?->render($text) ?? $text;
         }
@@ -416,7 +425,7 @@ final class Tabs implements Model
      * Attach a {@see Manager} for mouse-click zone tracking.
      *
      * When a manager is attached, each tab label is wrapped in a named
-     * APC zone (`tab-0`, `tab-1`, …). The parent should call
+     * APC zone (`<zoneKey>tab-0`, `<zoneKey>tab-1`, …). The parent should call
      * `Manager::scan()` on the {@see view()} output to record zone
      * bounds, then route {@see MouseMsg} through
      * `Manager::anyInBoundsAndUpdate($tabs, $mouseMsg)`.
@@ -424,6 +433,20 @@ final class Tabs implements Model
     public function withZoneManager(?Manager $manager): self
     {
         return $this->copy(zoneManager: $manager, zoneManagerSet: true);
+    }
+
+    /**
+     * Pin this bar's zone key (the per-bar prefix of its tab zone ids).
+     *
+     * {@see new()} mints a fresh key, so a bar rebuilt from scratch on every
+     * frame would emit new ids and lose the clicks scanned from the previous
+     * frame. Pass the same key to every rebuild to keep the ids stable. The
+     * key must match the sugar-mouse id charset `[A-Za-z0-9._:-]`; an illegal
+     * key is rejected by {@see Manager::mark()} when the bar is rendered.
+     */
+    public function withZoneKey(string $key): self
+    {
+        return $this->copy(zoneKey: $key);
     }
 
     /**
@@ -460,20 +483,25 @@ final class Tabs implements Model
     // ── Internal helpers ─────────────────────────────────────────────────────
 
     /**
-     * Parse a tab zone ID (e.g. "tab-3" or "prefixtab-3") and return the
-     * tab index, or null if the ID does not match the expected format.
+     * Parse a zone ID minted by THIS bar and return its tab index, or null.
      *
-     * The minted segment is always the LAST "tab-" in the id (zone ids are
-     * minted as "[prefix]tab-N"); scanning for the first occurrence let a
-     * prefix containing "tab-<digits>" mis-route clicks to the wrong tab (N13).
+     * Ids are minted as "[manager prefix][zoneKey]tab-N". The bar only
+     * accepts an id that carries its own manager prefix and zone key, so a
+     * click aimed at a sibling bar on the same manager (or at a bar on a
+     * different manager) never lands here. The match is exact on the
+     * prefix and key, so a manager prefix that itself contains "tab-<digits>"
+     * cannot mis-route the click (N13).
      */
     private function tabIndexFromZoneId(string $id): ?int
     {
-        $pos = strrpos($id, 'tab-');
-        if ($pos === false) {
+        if ($this->zoneManager === null) {
             return null;
         }
-        $suffix = substr($id, $pos + 4);
+        $expected = $this->zoneManager->prefix() . $this->zoneKey . 'tab-';
+        if (!str_starts_with($id, $expected)) {
+            return null;
+        }
+        $suffix = substr($id, strlen($expected));
         if ($suffix === '' || !ctype_digit($suffix)) {
             return null;
         }
@@ -614,6 +642,7 @@ final class Tabs implements Model
         ?int $width = null,
         ?Manager $zoneManager = null,
         bool $zoneManagerSet = false,
+        ?string $zoneKey = null,
         ?array $labels = null,
         ?int $scrollOffset = null,
     ): self {
@@ -630,6 +659,7 @@ final class Tabs implements Model
             // "detach" — withZoneManager(null) was a silent no-op (M10).
             // The paired sentinel makes an explicit null sticky.
             zoneManager: $zoneManagerSet ? $zoneManager : $this->zoneManager,
+            zoneKey: $zoneKey ?? $this->zoneKey,
             labels: $labels ?? $this->labels,
             scrollOffset: $scrollOffset ?? $this->scrollOffset,
         );
