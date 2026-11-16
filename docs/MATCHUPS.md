@@ -200,7 +200,7 @@ maps each package to its upstream.
 | SugarColorprofile (sugar-colorprofile/) | [colorprofile](https://github.com/charmbracelet/colorprofile) |
 | SugarConstraints (sugar-constraints/) | [ratatui](https://github.com/ratatui/ratatui) |
 | SugarCraft (sugar-core/) | [Bubble Tea](https://github.com/charmbracelet/bubbletea) |
-| SugarDashboard (sugar-dashboard/) | [bubble-grid](https://github.com/shahar3/bubble-grid) · [btop](https://github.com/aristocratos/btop) · [termui](https://github.com/gizak/termui) (multi-antecedent) |
+| SugarDashboard (sugar-dashboard/) | [bubble-grid](https://github.com/shahar3/bubble-grid) · [btop](https://github.com/aristocratos/btop) · [bubbleboxer](https://github.com/treilik/bubbleboxer) · [termui](https://github.com/gizak/termui) · [lattice](https://github.com/floatpane/lattice) · [bubbletea-tilelayout](https://github.com/mko88/bubbletea-tilelayout) · [go-tealeaves](https://github.com/mikeschinkel/go-tealeaves) · [Homedash2](https://github.com/lamarios/Homedash2) (multi-antecedent — patterns adapted across the lineage, not a class-for-class port of any single one; roster as spelled in the package description; API is 2.0-era: the legacy `get*()` accessors are deprecated BC forwarders, REMOVED-IN 2.0.0) |
 | SugarDatepicker (sugar-datepicker/) | [bubble-datepicker](https://github.com/EthanEFung/bubble-datepicker) |
 | SugarDiff (sugar-diff/) | none — first-party |
 | SugarFlexbox (sugar-flexbox/) | [stickers](https://github.com/76creates/stickers) |
