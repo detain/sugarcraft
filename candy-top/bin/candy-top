@@ -47,9 +47,9 @@ namespace SugarCraft\Top\bin;
 
 use SugarCraft\Core\Program;
 use SugarCraft\Core\Util\ColorProfile;
-use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Top\App;
 use SugarCraft\Top\Cli\Help;
+use SugarCraft\Top\Cli\Reporter;
 use SugarCraft\Top\Cli\SelfUpdate;
 use SugarCraft\Top\Collect\Platform;
 use SugarCraft\Top\Config\ConfigFile;
@@ -67,14 +67,12 @@ use SugarCraft\Top\Theme\ThemeRegistry;
 // Every pre-TUI write goes through here. Until the cell-buffered Program
 // exists there is no Surface to strip control characters, and several of
 // these messages interpolate text this binary does not own: a config warning
-// embeds the offending VALUE (ConfigReader → Option → Lang::t), whose token
-// splitter refuses only `"`/CR/LF — ESC and BEL ride straight through, so a
-// planted `graph_symbol = \x1b]0;pwned\x07evil` writes a live OSC (window
-// title, OSC 52 clipboard) that outlives the process. A copied-over btop.conf
-// is an advertised input, so those bytes are untrusted by definition; a path
-// from $HOME/$XDG_* is the same class (audit M6).
+// embeds the offending VALUE and the path comes from $HOME/$XDG_* (audit M6);
+// the sanitizer lives in one class now (S-X11) so the law survives any
+// reformat of this file, and tests/Cli/ReporterChokeTest.php pins it with
+// hostile bytes on a real pty instead of by source text alone.
 $report = static function (string $message): void {
-    @fwrite(STDERR, 'candy-top: ' . Sanitize::untrustedForDisplay($message) . "\n");
+    Reporter::report($message);
 };
 
 $args = array_slice($argv ?? [], 1);

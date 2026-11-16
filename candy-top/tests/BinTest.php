@@ -119,10 +119,17 @@ final class BinTest extends TestCase
         $source = implode("\n", $lines);
 
         // One writer, sanitizing, with the program-name prefix built in.
+        // S-X11: the choke body moved to src/Cli/Reporter.php; bin may only
+        // delegate to it. The behavioral law (hostile bytes never reach the
+        // terminal) rides tests/Cli/ReporterChokeTest.php, so reformatting
+        // either file can no longer silently unwire the sanitizer.
+        $this->assertSame(1, substr_count($source, 'Reporter::report($message);'), '$report delegates to the Reporter choke');
+        $this->assertStringNotContainsString('Sanitize::', $source, 'no raw sanitizer call survives in bin');
+        $reporter = (string) file_get_contents(__DIR__ . '/../src/Cli/Reporter.php');
         $this->assertStringContainsString(
-            "@fwrite(STDERR, 'candy-top: ' . Sanitize::untrustedForDisplay(\$message) . \"\\n\");",
-            $source,
-            '$report is the single stderr choke',
+            "@\\fwrite(STDERR, 'candy-top: ' . Sanitize::untrustedForDisplay(\$message) . \"\\n\");",
+            $reporter,
+            'Reporter is the single stderr choke',
         );
 
         // Raw writes outside the choke are exactly the two fixed literals that
@@ -132,11 +139,6 @@ final class BinTest extends TestCase
         $inChoke = 0;
         foreach ($lines as $index => $line) {
             if (!str_contains($line, 'fwrite(STDERR')) {
-                continue;
-            }
-
-            if (str_contains($line, 'Sanitize::untrustedForDisplay($message)')) {
-                ++$inChoke;
                 continue;
             }
 
@@ -150,7 +152,7 @@ final class BinTest extends TestCase
 
             $this->assertTrue($known, 'unattributed raw stderr write at bin/candy-top:' . ($index + 1));
         }
-        $this->assertSame(1, $inChoke, 'the choke owns exactly one raw write');
+        $this->assertSame(0, $inChoke, 'the choke lives in Reporter, not in bin');
 
         // The startup diagnostics route through it: two flag refusals, the
         // config-path refusal, every load warning, the box-layout reset
