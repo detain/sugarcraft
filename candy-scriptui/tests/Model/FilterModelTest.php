@@ -32,6 +32,20 @@ final class CountingMatcher implements FuzzyMatcher
         return $this->inner->match($query, $candidate);
     }
 
+    /**
+     * Fulfils the score() door added to FuzzyMatcher at 0e4861c89 (FUZZY-31):
+     * a plain delegation to the inner matcher, so the uniform contract
+     * `score == match()?->score ?? 0` holds for this stub exactly as it does
+     * for SmithWatermanMatcher. Deliberately NOT counted — the counting
+     * contract of this class is matchAll() only (cache-short-circuit legs
+     * pin matchAllCalls to exact values), and routing score() through a
+     * counter would inflate what those pins measure.
+     */
+    public function score(string $query, string $candidate): int
+    {
+        return $this->inner->score($query, $candidate);
+    }
+
     public function matchAll(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): array
     {
         $this->matchAllCalls++;
@@ -225,6 +239,34 @@ final class FilterModelTest extends TestCase
 
         $this->assertNotEmpty($m->fuzzyResults);
         $this->assertSame(1, $matcher->matchAllCalls);
+    }
+
+    /**
+     * CountingMatcher fulfils the score() door promoted to FuzzyMatcher at
+     * 0e4861c89 (FUZZY-31) as a faithful delegation: identical value to the
+     * inner SmithWatermanMatcher, the interface's uniform contract holds
+     * through this stub's own match() leg, and the counting contract is
+     * untouched (only matchAll() increments).
+     */
+    public function testCountingMatcherScoreDelegatesInnerWithoutTouchingCounter(): void
+    {
+        $stub = new CountingMatcher();
+        $reference = new SmithWatermanMatcher();
+
+        foreach ([['bna', 'banana'], ['a', 'apple'], ['zzz', 'apple'], ['', 'cherry']] as [$query, $candidate]) {
+            $this->assertSame(
+                $reference->score($query, $candidate),
+                $stub->score($query, $candidate),
+                "score() must delegate the inner value for ({$query}, {$candidate})"
+            );
+            $this->assertSame(
+                $stub->match($query, $candidate)?->score ?? 0,
+                $stub->score($query, $candidate),
+                "uniform contract score == match()?->score ?? 0 must hold for ({$query}, {$candidate})"
+            );
+        }
+        $this->assertSame(0, $stub->score('', 'cherry'), 'empty query scores 0 per the interface rule');
+        $this->assertSame(0, $stub->matchAllCalls, 'score()/match() legs must not touch the matchAll counter');
     }
 
     public function testFuzzyViewEmphasisesMatchedCharacters(): void
