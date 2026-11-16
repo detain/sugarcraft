@@ -1,193 +1,3544 @@
-# EXEC-STATUS — review→plan→EXEC program final census rollup
+# EXEC-STATUS v2 (final, disk-census 2026-11-16)
 
-Generated 2026-11-14/15 by the FINAL CENSUS + ROLLUP lane (read-only forensics; this file is the lane's only write).
-Inputs: `plan_review.queue.tsv` (3,238 data rows, col-2 target), the full commit corpus (18,961 commits, `git log --format='%H%x1f%ad%x1f%s%x1f%b'` plus `--name-only` touched-dirs dump), `reviews/OWNER-GATES.md`, `reviews/P5-GATE-PACKET-2.md` (`reviews/OWNER-GATE-PACKET.md` and `reviews/DECISIONS-PACKET.md` do not exist on disk), per-target `reviews/annotations/*.md` covers/closes/Findings headers, and per-lane dossiers under `/tmp/opencode/*-exec-1113|1114/`.
+Definitive closeout of the review→plan→EXEC program over `plan_review.queue.tsv`
+(3,238 rows, 68 targets, executed 2026-11-12 .. 2026-11-16).
+**Produced DISK-ONLY**: every claim below is re-derivable from `git log` on master
+(19,021-commit message corpus), per-path dir logs, the queue TSV, and file content probes.
+No prose (prior status file, lane reports, or memory) was trusted without a disk witness.
 
-Method: for every queue row-id token, whole-word subject+body grep (CENSUS-v4) with padded numeric variants, per-target dir-scoring, subject-lead anchoring, annotation finding-alias expansion (covers/closes/Findings, including padded 3-digit finding shapes like `gifview-020`, `tetris-025`, `sugar-dashboard-098`, the `MDV-SNN`↔`MDV-NN` form, the `ssrv-NN`↔`SSHS-NN` dual shapes, and queue-title cover-maps), era floor 2026-11-08 (pre-era hits disclosed separately), then residual-by-residual manual adjudication against dossiers. Known traps screened: substring false positives (`msteams-01` inside `msteams-013`, `RT-01` inside unrelated bodies, `ST-37` inside `PB-TOAST-37`), phantom SHAs in lane prose, subject-mislabels, absorbed multi-row commits.
+## 0. Headline
 
-## TOTALS
-
-| bucket | rows | note |
+| bucket | rows | share |
 |---|---|---|
-| **queue rows (col-2 target set = 68 targets)** | **3,238** | |
-| git-proven landed | 2,838 | incl. 7 pre-era (2026-11-05/06 harvest-wave) landings, 11 dossier content-proven reclassifications below |
-| gated / parked (packet + queue owner_gate + dossier parks) | 92 | 10 packet-matched from residual set (incl. tetris 20/21/27/42, flappy 08/21, vterm-09, CH-56, ST-69, SD-S34, D-90) |
-| owner-side (candy-code/** = 168+1rdrs, candy-code-web = 31+1, ccweb-parity 18, Windows/macOS legs, host-keyspace fans, closeout WELD-TRIO) | 225 | |
-| report-only riders + verified no-ops | 29 | 19 queue RIDERS rows + 10 adjudicated no-op/verified/phantom/absorbed rows below |
-| **ACTIONABLE RESIDUAL** | **54** | enumerated in full at the bottom — the program is NOT drained to zero |
+| **LANDED** (target-prefixed or ID-led subject on master; incl. 145 cc-executed) | 2981 | 92.1% |
+| OWNER-GATED (queue `owner_gate` col + in-lane park/gate residual, zero landing commit) | 128 | 4.0% |
+| OWNER-SIDE (cc territory owed 74, Windows/macOS legs 6, trio 1) | 81 | 2.5% |
+| REPORT-ONLY (incl. 17 `RIDERS` packets + honest-zero/no-op/phantom rows) | 34 | 1.1% |
+| **STILL-OPEN** (disk contradiction — see §2) | 14 | 0.4% |
+| total | 3238 | 100% |
 
-## Contradictions (loudly reported)
+### Census method (mechanical)
 
-1. **sugar-dashboard — declared CLOSED queue-zero; disk proves 45 never-landed rows.** The lane chain landed 101 of 165 rows (gated 18 incl. packet D-90 + D3-composer owner-gates + blocked D-111/D-145; D-160 phantom). The 45 open middle rows (D-24…D-99, D-128/135/137/151) cite NO landing: their D-token has zero whole-word hits anywhere in the 18,961-commit corpus AND each row's `covers sugar-dashboard-NNN` finding number has zero hits in ANY commit message repo-wide. The DASH-rung HANDOFF itself classed the middles as "sibling D1/unowned"; no sibling lane ever executed them. These are real work (layout/render-correctness/perf fixes with file:line seats in `reviews/annotations/sugar-dashboard.md`).
-2. **candy-mdview — declared FULLY CLOSED 26/26; MDV-S19 + MDV-S20 never landed.** No commit cites either token (all forms checked); `candy-mdview/` has zero commits after `eed4a8936` (2026-11-13, itself a follow-up); the dir log shows S01–S18 + S21–S24 each landed once, S19/S20 absent — and MDV-S05's own body says "S19 owns the final reconciliation", a promise never kept on disk. S20's title marks `(G6)`; if G6 is an owner gate the row is gated, not closed.
-3. **sugar-readline — declared CLOSED with remaining=NONE except S-19-G3; S-48 is unlanded.** `sugar-readline/src/Ansi.php` exists, has zero commits in the EXEC era (last touched 2026-11-03), and carries no `SugarCraft\Core` delegation — the row (delegate to sugar-core, covers 072) was never executed.
-4. **candy-top — ADOPTION lane CLOSED, but 6 S-X rows remain actionable.** Not a silent contradiction: the lane's own closeout `REPORT.md:37` lists them "Unlanded, non-parked: … S-X13 … S-X16 … S-X17 … S-X18 … S-X19, S-X20 …" and flags "S-X18 needs era-line re-anchor". Disk confirms zero citations. Counted in the residual list.
-5. **Phantom-SHA class confirmed again (memory/prose vs object DB):** `51946a856` and `6f998815e` (discord-01/03 booking shas) are ABSENT; the rows are nonetheless LANDED with content proof at `30b8eccba` (approver gate on pairing) and `716f835d8`+`d4075435b` (bundle CI cells). `fb652c759`/`425065af8` (flappy-era) likewise ABSENT from the object DB — the two flappy rows in question are packet-GATED anyway, not landed.
-6. **Minor count drifts vs the orchestrator's closed-list notes** (not disk contradictions): queue truth is sugar-gallery 38 rows all accounted (the "S-26 hold" id has no queue row; SG-S33 attribution stamp 922d3b158 present); mcp queue name is sugar-mcp-client (41); mail queue = 69 (harvest-note said 78); candy-codetime (63) appears as a queue target never named in the closed list — 63/63 landed, zero residual.
+1. **Per-target subject census**: for every queue row-id, whole-word scan of the full
+   master commit-message corpus (`git log --format=%H\x1f%ad\x1f%s\x1f%b`) for
+   `target: ID` and bare `ID:` subject shapes, plus padding variants (`CB-2`/`CB-02`,
+   `SSHS-NN` for `ssrv-NN`, `S45` for `KV-S45`) — the dual/loose subject conventions
+   the program itself established.
+2. **Finding-number aliases**: queue titles + `reviews/annotations/<target>.md` sections
+   yield the covered `sugar-x-NNN` finding ids; an anchored landing commit citing any
+   covered finding counts (the `titles-vs-finding-numbers` reconcile law).
+3. **Gate markers**: `[gate <id> default-leg]` trailer shapes and body-tag markers count
+   as landed-per-packet-2-default; bare body mentions of a gated id are rejected
+   (7 body-only false-landings caught and re-bucketed by the audit pass).
+4. **Absorbed-in-multi-row commits** verified by content: `git show -s --name-only` dir
+   gate + subject/body content match (RT-01 ecd1ca25f, SD-29 b9b241e67, KV-S45 e42624ab0,
+   CB-family, MET-JSONSTREAM 04b268845, FUZZY-01/03 3c8189dfc, SM-S01/02 ed15c3401,
+   discord-01/03 30b8eccba/716f835d8, gifview finding-map rows — all re-verified,
+   predecessors' proof shas confirmed present as master ancestors).
+5. Cross-target id collisions (`SI-24` input vs image, `SM-S20` markdown vs mouse,
+   `SF-1x` focus vs forms, `ST-NN` style vs table, `S-NN` six targets) were adjudicated
+   by target-anchor or dir-anchored proof, never by token coincidence.
 
-## Landed-by-dossier reclassifications (mechanical token gap closed with content proof)
+## 1. TARGET DIGEST (queue col-2)
 
-| row | proof |
-|---|---|
-| candy-gifview:gifview-13 | `3cc82b615` copy sweep subject cites `(gifview-020/021/022/045)` compound form |
-| candy-kv:KV-S45 | `e42624ab0` "candy-kv: S45 — pt becomes European Portuguese" (bare-suffix lead) |
-| sugar-fuzzy:FUZZY-01/02/03 | `3c8189dfc` cures exactly the three named SahilmMatcherTest oracles (#96-#98) |
-| repo-tooling:RT-01 | `ecd1ca25f` "ci: kill matrix.lib script-injection in ci.yml run bodies (SEC-01 #92)"; RT dossier records the content-proof |
-| sugar-diff:SD-01 | `ff092fe0f` kills the O(k²) array_shift storm in SideBySideFormat (#103); disk `:157` confirms cursor consumption |
-| sugar-diff:SD-29 | repo-root rule rewritten by `b9b241e67` (SF-16, same .claude/rules/composer-conventions.md seat) — absorbed |
-| candy-discord:discord-01/03 | `30b8eccba` / `716f835d8`+`d4075435b` |
-| sugar-metrics:MET-JSONSTREAM | absorbed into `04b268845`, attribution stamp `5d5882da1` proves it |
-| sugar-cellbuffer:CB-02/06/07/08/09/10/14 | real pre-era (2026-11-05/06) subject-lead landings (e.g. `f0db6f388` CB-10, `0a215d029` CB-14) |
+| target | rows | landed | gated | owner-side | report-only | **open** | landed(cc-exec) |
+|---|---|---|---|---|---|---|---|
+| candy-ansi-inspect | 42 | 42 | 0 | 0 | 0 | 0 | 0 |
+| candy-code | 169 | 0 | 0 | 25 | 0 | 0 | 144 |
+| candy-code-web | 32 | 0 | 0 | 31 | 0 | 0 | 1 |
+| candy-codeshot | 35 | 35 | 0 | 0 | 0 | 0 | 0 |
+| candy-codetime | 63 | 63 | 0 | 0 | 0 | 0 | 0 |
+| candy-discord | 27 | 27 | 0 | 0 | 0 | 0 | 0 |
+| candy-files | 55 | 53 | 2 | 0 | 0 | 0 | 0 |
+| candy-flappy | 90 | 85 | 5 | 0 | 0 | 0 | 0 |
+| candy-gifview | 26 | 25 | 0 | 0 | 1 | 0 | 0 |
+| candy-git | 65 | 57 | 8 | 0 | 0 | 0 | 0 |
+| candy-git-server | 48 | 48 | 0 | 0 | 0 | 0 | 0 |
+| candy-image | 28 | 28 | 0 | 0 | 0 | 0 | 0 |
+| candy-kv | 47 | 40 | 6 | 0 | 1 | 0 | 0 |
+| candy-mail | 69 | 68 | 0 | 0 | 1 | 0 | 0 |
+| candy-mdview | 25 | 24 | 0 | 0 | 1 | 0 | 0 |
+| candy-minesweeper | 40 | 39 | 1 | 0 | 0 | 0 | 0 |
+| candy-msteams | 27 | 23 | 0 | 1 | 3 | 0 | 0 |
+| candy-scriptui | 85 | 84 | 1 | 0 | 0 | 0 | 0 |
+| candy-sql | 76 | 75 | 0 | 0 | 1 | 0 | 0 |
+| candy-ssh-launcher | 43 | 42 | 1 | 0 | 0 | 0 | 0 |
+| candy-starter | 18 | 17 | 1 | 0 | 0 | 0 | 0 |
+| candy-tetris | 44 | 39 | 5 | 0 | 0 | 0 | 0 |
+| candy-top | 105 | 100 | 0 | 0 | 1 | 4 | 0 |
+| candy-vcr | 76 | 61 | 7 | 5 | 3 | 0 | 0 |
+| ccweb-parity | 18 | 0 | 0 | 18 | 0 | 0 | 0 |
+| phar-fleet | 1 | 1 | 0 | 0 | 0 | 0 | 0 |
+| repo-tooling | 50 | 48 | 2 | 0 | 0 | 0 | 0 |
+| site-docs | 35 | 35 | 0 | 0 | 0 | 0 | 0 |
+| sugar-animation | 27 | 18 | 5 | 0 | 4 | 0 | 0 |
+| sugar-ansi-parser | 22 | 19 | 2 | 0 | 1 | 0 | 0 |
+| sugar-async | 38 | 37 | 0 | 0 | 1 | 0 | 0 |
+| sugar-cellbuffer | 37 | 37 | 0 | 0 | 0 | 0 | 0 |
+| sugar-charts | 59 | 57 | 0 | 0 | 2 | 0 | 0 |
+| sugar-cli | 31 | 31 | 0 | 0 | 0 | 0 | 0 |
+| sugar-colorprofile | 56 | 53 | 3 | 0 | 0 | 0 | 0 |
+| sugar-constraints | 19 | 17 | 2 | 0 | 0 | 0 | 0 |
+| sugar-core | 45 | 44 | 1 | 0 | 0 | 0 | 0 |
+| sugar-dashboard | 165 | 133 | 22 | 0 | 1 | 9 | 0 |
+| sugar-datepicker | 36 | 35 | 1 | 0 | 0 | 0 | 0 |
+| sugar-diff | 29 | 25 | 4 | 0 | 0 | 0 | 0 |
+| sugar-flexbox | 51 | 51 | 0 | 0 | 0 | 0 | 0 |
+| sugar-focus | 17 | 14 | 0 | 0 | 3 | 0 | 0 |
+| sugar-forms | 57 | 54 | 2 | 0 | 1 | 0 | 0 |
+| sugar-fuzzy | 31 | 30 | 1 | 0 | 0 | 0 | 0 |
+| sugar-gallery | 38 | 37 | 1 | 0 | 0 | 0 | 0 |
+| sugar-image | 55 | 47 | 8 | 0 | 0 | 0 | 0 |
+| sugar-input | 41 | 41 | 0 | 0 | 0 | 0 | 0 |
+| sugar-log | 48 | 42 | 5 | 0 | 1 | 0 | 0 |
+| sugar-markdown | 61 | 60 | 0 | 0 | 1 | 0 | 0 |
+| sugar-mcp-client | 41 | 41 | 0 | 0 | 0 | 0 | 0 |
+| sugar-metrics | 39 | 32 | 7 | 0 | 0 | 0 | 0 |
+| sugar-mouse | 36 | 35 | 0 | 0 | 1 | 0 | 0 |
+| sugar-navstack | 31 | 28 | 3 | 0 | 0 | 0 | 0 |
+| sugar-overlay | 38 | 38 | 0 | 0 | 0 | 0 | 0 |
+| sugar-panels | 36 | 36 | 0 | 0 | 0 | 0 | 0 |
+| sugar-pty | 55 | 54 | 0 | 0 | 1 | 0 | 0 |
+| sugar-quickpick | 40 | 40 | 0 | 0 | 0 | 0 | 0 |
+| sugar-readline | 67 | 66 | 1 | 0 | 0 | 0 | 0 |
+| sugar-spring | 36 | 36 | 0 | 0 | 0 | 0 | 0 |
+| sugar-ssh-server | 37 | 33 | 3 | 0 | 1 | 0 | 0 |
+| sugar-style | 42 | 34 | 8 | 0 | 0 | 0 | 0 |
+| sugar-table | 79 | 76 | 2 | 0 | 1 | 0 | 0 |
+| sugar-testing | 27 | 26 | 0 | 0 | 1 | 0 | 0 |
+| sugar-toast | 34 | 34 | 0 | 0 | 0 | 0 | 0 |
+| sugar-treelist | 33 | 33 | 0 | 0 | 0 | 0 | 0 |
+| sugar-video | 76 | 75 | 1 | 0 | 0 | 0 | 0 |
+| sugar-vterm | 41 | 31 | 7 | 1 | 1 | 1 | 0 |
+| sugar-widgets | 48 | 47 | 0 | 0 | 1 | 0 | 0 |
 
-## Report-only / verified-no-op dispositions (excluded from residual)
+Expected queue-zero-open everywhere. **Disk contradicts on 3 targets (§2) — reported, not smoothed.** Landed-total {L} supersedes v1's 2,838 by absorbing the post-v1 waves
+(candy-code owner wave 11-12/13 on master: {cc} rows of the 169; candy-top TAIL+go-wave;
+dashboard middle-tail; msteams re-cut; ssh-server drain; readline/style tails).
 
-- candy-vcr VCR-S46/S56 — `[root seat]` rows, report-only per vcr close; VCR-S48…S52 — Windows legs, owner-side.
-- candy-msteams 01/03/13/17 — honest-zero (pre-lane verification, msteams close ledger); 07/09 — host-side (PLUGINS.md / host keyspace; lane REPORT lines 39/41) → owner-side.
-- candy-mail CM-59 — guards already tested at HEAD (transport test files carry cancel pins).
-- sugar-log SL-20 — PHANTOM finding (sample line never existed; byte forensics per log close).
-- sugar-pty PTY-43 — healed-prior (marker leg on disk, `InteractiveShellTestCase.php:54`; pty dossier :38).
-- sugar-vterm vterm-35 — Windows-lane CI leg → owner-side (win/macOS exclusion rule).
-- sugar-dashboard D-160 — phantom finding (cited files never existed, dash rung-3 adjudication).
+## 2. STILL-OPEN ROWS — the census finding
 
-## Per-target table
+14 rows have no landing witness of any kind. Every row below is file:line + why:
 
-| target | rows | landed | gated/parked | owner-side | report-only | ACTIONABLE |
-|---|---|---|---|---|---|---|
-| candy-ansi-inspect | 42 | 42 | 0 | 0 | 0 | 0 |
-| candy-code | 169 | 0 | 0 | 168 | 1 | 0 |
-| candy-code-web | 32 | 0 | 0 | 31 | 1 | 0 |
-| candy-codeshot | 35 | 35 | 0 | 0 | 0 | 0 |
-| candy-codetime | 63 | 63 | 0 | 0 | 0 | 0 |
-| candy-discord | 27 | 27 | 0 | 0 | 0 | 0 |
-| candy-files | 55 | 54 | 1 | 0 | 0 | 0 |
-| candy-flappy | 90 | 85 | 5 | 0 | 0 | 0 |
-| candy-gifview | 26 | 25 | 0 | 0 | 1 | 0 |
-| candy-git | 65 | 61 | 4 | 0 | 0 | 0 |
-| candy-git-server | 48 | 48 | 0 | 0 | 0 | 0 |
-| candy-image | 28 | 28 | 0 | 0 | 0 | 0 |
-| candy-kv | 47 | 45 | 1 | 0 | 1 | 0 |
-| candy-mail | 69 | 68 | 0 | 0 | 1 | 0 |
-| candy-mdview | 25 | 22 | 0 | 0 | 1 | 2 |
-| candy-minesweeper | 40 | 40 | 0 | 0 | 0 | 0 |
-| candy-msteams | 27 | 21 | 0 | 2 | 4 | 0 |
-| candy-scriptui | 85 | 85 | 0 | 0 | 0 | 0 |
-| candy-sql | 76 | 75 | 0 | 0 | 1 | 0 |
-| candy-ssh-launcher | 43 | 43 | 0 | 0 | 0 | 0 |
-| candy-starter | 18 | 17 | 1 | 0 | 0 | 0 |
-| candy-tetris | 44 | 39 | 5 | 0 | 0 | 0 |
-| candy-top | 105 | 98 | 0 | 0 | 1 | 6 |
-| candy-vcr | 76 | 61 | 7 | 5 | 3 | 0 |
-| ccweb-parity | 18 | 0 | 0 | 18 | 0 | 0 |
-| phar-fleet | 1 | 1 | 0 | 0 | 0 | 0 |
-| repo-tooling | 50 | 49 | 1 | 0 | 0 | 0 |
-| site-docs | 35 | 34 | 1 | 0 | 0 | 0 |
-| sugar-animation | 27 | 18 | 8 | 0 | 1 | 0 |
-| sugar-ansi-parser | 22 | 21 | 0 | 0 | 1 | 0 |
-| sugar-async | 38 | 37 | 0 | 0 | 1 | 0 |
-| sugar-cellbuffer | 37 | 37 | 0 | 0 | 0 | 0 |
-| sugar-charts | 59 | 57 | 1 | 0 | 1 | 0 |
-| sugar-cli | 31 | 31 | 0 | 0 | 0 | 0 |
-| sugar-colorprofile | 56 | 54 | 2 | 0 | 0 | 0 |
-| sugar-constraints | 19 | 17 | 2 | 0 | 0 | 0 |
-| sugar-core | 45 | 44 | 1 | 0 | 0 | 0 |
-| sugar-dashboard | 165 | 101 | 18 | 0 | 1 | 45 |
-| sugar-datepicker | 36 | 36 | 0 | 0 | 0 | 0 |
-| sugar-diff | 29 | 26 | 3 | 0 | 0 | 0 |
-| sugar-flexbox | 51 | 51 | 0 | 0 | 0 | 0 |
-| sugar-focus | 17 | 16 | 0 | 0 | 1 | 0 |
-| sugar-forms | 57 | 54 | 2 | 0 | 1 | 0 |
-| sugar-fuzzy | 31 | 30 | 1 | 0 | 0 | 0 |
-| sugar-gallery | 38 | 38 | 0 | 0 | 0 | 0 |
-| sugar-image | 55 | 55 | 0 | 0 | 0 | 0 |
-| sugar-input | 41 | 41 | 0 | 0 | 0 | 0 |
-| sugar-log | 48 | 42 | 5 | 0 | 1 | 0 |
-| sugar-markdown | 61 | 60 | 0 | 0 | 1 | 0 |
-| sugar-mcp-client | 41 | 41 | 0 | 0 | 0 | 0 |
-| sugar-metrics | 39 | 33 | 6 | 0 | 0 | 0 |
-| sugar-mouse | 36 | 36 | 0 | 0 | 0 | 0 |
-| sugar-navstack | 31 | 26 | 5 | 0 | 0 | 0 |
-| sugar-overlay | 38 | 38 | 0 | 0 | 0 | 0 |
-| sugar-panels | 36 | 36 | 0 | 0 | 0 | 0 |
-| sugar-pty | 55 | 53 | 1 | 0 | 1 | 0 |
-| sugar-quickpick | 40 | 40 | 0 | 0 | 0 | 0 |
-| sugar-readline | 67 | 66 | 0 | 0 | 0 | 1 |
-| sugar-spring | 36 | 36 | 0 | 0 | 0 | 0 |
-| sugar-ssh-server | 37 | 36 | 0 | 0 | 1 | 0 |
-| sugar-style | 42 | 41 | 1 | 0 | 0 | 0 |
-| sugar-table | 79 | 76 | 3 | 0 | 0 | 0 |
-| sugar-testing | 27 | 26 | 0 | 0 | 1 | 0 |
-| sugar-toast | 34 | 34 | 0 | 0 | 0 | 0 |
-| sugar-treelist | 33 | 33 | 0 | 0 | 0 | 0 |
-| sugar-video | 76 | 76 | 0 | 0 | 0 | 0 |
-| sugar-vterm | 41 | 32 | 7 | 1 | 1 | 0 |
-| sugar-widgets | 48 | 47 | 0 | 0 | 1 | 0 |
-| **TOTAL** | **3,238** | **2,838** | **92** | **225** | **29** | **54** |
+- `candy-top:S-C10` — reviews/annotations/candy-top.md:170 — TAIL stand-down remainder: 6 of the 10 open rows landed in the 11-14 go-wave (S-X13/X16/X17/X18/X19/X20); these 4 have no landing commit (title: Collector `with*()` → house private `mutate()` migration)
+- `candy-top:S-X04` — reviews/annotations/candy-top.md:373 — TAIL stand-down remainder: 6 of the 10 open rows landed in the 11-14 go-wave (S-X13/X16/X17/X18/X19/X20); these 4 have no landing commit (title: Real-roster full-frame size sweeps)
+- `candy-top:S-X09` — reviews/annotations/candy-top.md:391 — TAIL stand-down remainder: 6 of the 10 open rows landed in the 11-14 go-wave (S-X13/X16/X17/X18/X19/X20); these 4 have no landing commit (title: Shell low PHP trio)
+- `candy-top:S-X11` — reviews/annotations/candy-top.md:397 — TAIL stand-down remainder: 6 of the 10 open rows landed in the 11-14 go-wave (S-X13/X16/X17/X18/X19/X20); these 4 have no landing commit (title: Extract Cli/Reporter; executable stderr-choke tests)
+- `sugar-dashboard:D-109` — reviews/annotations/sugar-dashboard.md:734 — dashboard drain/middle lanes never cited this row-id or its finding-number in any master commit; closed-at-queue-zero claims not corroborated by disk (title: covers sugar-dashboard-098 (+104, 210))
+- `sugar-dashboard:D-118` — reviews/annotations/sugar-dashboard.md:792 — dashboard drain/middle lanes never cited this row-id or its finding-number in any master commit; closed-at-queue-zero claims not corroborated by disk (title: covers sugar-dashboard-109)
+- `sugar-dashboard:D-125` — reviews/annotations/sugar-dashboard.md:834 — dashboard drain/middle lanes never cited this row-id or its finding-number in any master commit; closed-at-queue-zero claims not corroborated by disk (title: covers sugar-dashboard-117 (+216))
+- `sugar-dashboard:D-13` — reviews/annotations/sugar-dashboard.md:152 — dashboard drain/middle lanes never cited this row-id or its finding-number in any master commit; closed-at-queue-zero claims not corroborated by disk (title: covers sugar-dashboard-013)
+- `sugar-dashboard:D-147` — reviews/annotations/sugar-dashboard.md:966 — dashboard drain/middle lanes never cited this row-id or its finding-number in any master commit; closed-at-queue-zero claims not corroborated by disk (title: covers sugar-dashboard-162 (+174))
+- `sugar-dashboard:D-163` — reviews/annotations/sugar-dashboard.md:1066 — dashboard drain/middle lanes never cited this row-id or its finding-number in any master commit; closed-at-queue-zero claims not corroborated by disk (title: covers sugar-dashboard-239)
+- `sugar-dashboard:D-164` — reviews/annotations/sugar-dashboard.md:1072 — dashboard drain/middle lanes never cited this row-id or its finding-number in any master commit; closed-at-queue-zero claims not corroborated by disk (title: covers sugar-dashboard-207)
+- `sugar-dashboard:D-63` — reviews/annotations/sugar-dashboard.md:458 — dashboard drain/middle lanes never cited this row-id or its finding-number in any master commit; closed-at-queue-zero claims not corroborated by disk (title: covers sugar-dashboard-150)
+- `sugar-dashboard:D-85` — reviews/annotations/sugar-dashboard.md:590 — dashboard drain/middle lanes never cited this row-id or its finding-number in any master commit; closed-at-queue-zero claims not corroborated by disk (title: covers sugar-dashboard-084)
+- `sugar-vterm:vterm-09` — reviews/annotations/sugar-vterm.md:103 — vterm successor scope never landed it; no row-id or finding proof on master (title: Cursor vocabulary convergence: `at()`/`hidden()`/`shown()` aliases on )
 
-## ACTIONABLE RESIDUAL LIST (54 rows — the successor queue; do-not-execute here: census lane)
+Class note: `sugar-dashboard`'s nine rows are the queue's `covers sugar-dashboard-NNN`
+middle-tail ids; the DASH lanes closed queue-zero per their dossiers, but neither the
+D-id nor the finding-number token appears in any master commit — these are findings
+never fixed (or landed under commits citing none of their ids); treat as the true
+residual actionable list. The four `candy-top` rows + `vterm-09` are dead-seat stand-down
+residue (tails stopped clean; go-wave drained siblings, not these).
 
-### sugar-readline (1)
-- `S-48` — Ansi.php: delegate to sugar-core · covers 072. File untouched since 2026-11-03; no Core import on disk.
+## 3. OWNER-GATED ROWS (by target; queue `owner_gate` label where the queue carries one)
 
-### candy-mdview (2)
-- `MDV-S19` — LOW×16 cluster · README + i18n surface completion (the parity reconciliation S05 deferred to it: "S19 owns the final reconciliation").
-- `MDV-S20` — README/body.html/.vhs/vhs-tape/help prose sweep · LAST-WRITER `(G6)` — execute only if G6 proves not an owner gate; adjudicate first.
+```
+candy-files: CF-55[CF-03/CF-17/CF-30/CF-32/CF-55 NO-DEFAULT], CF-51
+candy-flappy: flappy-74, flappy-08, flappy-21, flappy-53, flappy-76
+candy-git: CG-05[G5], CG-12[G4], CG-13[G1], CG-26, CG-45[G11], CG-49[G6], CG-65[G8], CG-39
+candy-kv: KV-S46[CIT/kv], KV-S03[G2], KV-S06[G3], KV-S20[G8], KV-S39[G13], KV-S44[G14]
+candy-minesweeper: msw-09[G5 NO-DEFAULT]
+candy-scriptui: scriptui-39[G6]
+candy-ssh-launcher: sshl-10[sshl-G2]
+candy-starter: CS-03[OG-5 NO-DEFAULT]
+candy-tetris: tetris-14, tetris-20, tetris-21, tetris-27, tetris-42
+candy-vcr: VCR-S20[G1], VCR-S24[G9], VCR-S35[G2], VCR-S62[G5], VCR-S63[G6], VCR-S72[G4], VCR-S73[G3]
+repo-tooling: RT-30[OG-7], RT-50[OG-1/OG-2/OG-3/OG-4/OG-5/OG-6/OG-7/OG-8]
+sugar-animation: SA-A2[AN-2], SA-P3[AN-1], SA-X1[AN-3], SA-L1[AN-4], SA-R1[AN-5]
+sugar-ansi-parser: sap-13[G3], sap-18[G6]
+sugar-colorprofile: CP-04, CP-24, CP-30
+sugar-constraints: SC-18[SC-18], SC-19[SC-19]
+sugar-core: sc-27
+sugar-dashboard: D-108[OG-14], D-49[OG-7], D-09[OG-2], D-61, D-111, D-74[OG-10], D-105[OG-13], D-91[OG-11], D-60[OG-8], D-73[OG-9], D-90, D-27[OG-4], D-36[OG-6], D-33[OG-5], D-106[OG-12], D-154[OG-18], D-62, D-155[OG-19], D-126[OG-15], D-132[OG-17], D-145, D-129[OG-16]
+sugar-datepicker: dp-26[dp-26]
+sugar-diff: SD-07[OG-2], SD-15[OG-4], SD-19[OG-6], SD-20[OG-3]
+sugar-forms: SF-37[SF-37], SF-45
+sugar-fuzzy: FUZZY-27[FUZZY-27]
+sugar-gallery: SG-S24[G-3]
+sugar-image: SI-10[G3], SI-18[G10], SI-28[G5], SI-31[G6], SI-46[G8], SI-21[G4], SI-37[G7], SI-42[G9]
+sugar-log: SL-09[SL-09], SL-15[SL-15], SL-19[SL-19], SL-25[SL-25], SL-34[SL-34]
+sugar-metrics: MET-PRIVATECTOR[MET-G4], MET-STATSDBATCH[MET-G2], MET-BUCKETS[MET-G3], MET-RULEFIX[MET-G1], MET-RECLAIM[MET-G5], MET-PARAMS[MET-G6], MET-MAXFAMILIES[MET-G7]
+sugar-navstack: NS-04[NS-04], NS-05[NS-05], NS-27[NS-27]
+sugar-readline: S-19[G3]
+sugar-ssh-server: ssrv-16[G3], ssrv-17[G3], ssrv-28[G2]
+sugar-style: ST-29[G18], ST-04[G4], ST-17[G15], ST-37, ST-09[G8], ST-33, ST-38, ST-31[G19]
+sugar-table: ST-37[OG-5], ST-68[OG-5]
+sugar-video: SV-M44[SV-M44]
+sugar-vterm: vterm-01[G1], vterm-02[G2], vterm-08[G3], vterm-23[G5], vterm-25[G6], vterm-26[G7], vterm-19[G4]
+```
 
-### candy-top (6 — all listed "Unlanded, non-parked" by the adopt lane's own closeout report)
-- `S-X13` — Shell UXD four-pack.
-- `S-X16` — Shell SEC trio.
-- `S-X17` — Help git deadline escalation + loop-thread IO measure/disclose.
-- `S-X18` — Windows data-path trio (report note: needs era-line re-anchor before execution).
-- `S-X19` — Shell perf four-pack.
-- `S-X20` — Config/data honesty trio.
+Note: the prior carried prose named D-15/23/26 as gates; disk shows those rows LANDED
+and the actual dashboard gate column reads D-09/27/33/36/49/60/61/62/73/74/90/91/105/
+106/108/111/126/129/132/145/154/155 (+D-160 phantom report-only). Disk governs.
 
-### sugar-dashboard (45 — file:line seats live in reviews/annotations/sugar-dashboard.md; several rows carry annotated prereq chains incl. owner-gated ones, e.g. D-24 behind D-15(OG), so a successor must serialize D-43→D-47, D-44→D-45 and re-verify prereqs before executing)
-- `D-24` covers 031 — RatioGrid :112-115, addShadow :227-255, FlexLayout :370-372 clip, Layout zero-alloc path.
-- `D-25` covers 019 — StackLayout :126,143-147.
-- `D-31` covers 048 — DrilldownTree :275,326-333.
-- `D-32` covers 032 — Stack/StackLayout/VStack/ZStack/Panel size-propagation legs.
-- `D-37` covers 030 — 13 render paths (Layout :172-206, Panel :109-188, Sidebar, Window, Frame, Stack).
-- `D-41` covers 121(+143) — Boxer :136-161 stale-findNode read, persistState/restoreState 3-copy family.
-- `D-43` covers 034(+132,217) — TileLayout :150-177, Resolver :94-99,170 dead-helper leg.
-- `D-44` covers 035 — FlexLayout :192-244.
-- `D-45` covers 038 — FlexLayout :571-595 match arms + max() on empty.
-- `D-47` covers 041 — Resolver :170,77 minSizeFit leg (coordinate lock: D-43 first).
-- `D-51` covers 044(+144,148,151) — GridTable :130-134,337-352 dead `$totalFiltered`.
-- `D-52` covers 045 — GridTable :68-72 perPage=height-2, chrome emit set.
-- `D-53` covers 046 — Support/Calc :24-28,56-60 overflow-lie returns minimums.
-- `D-54` covers 047 — DrilldownTree :253-282,301,315,329-333.
-- `D-56` covers 050 — Dropdown :86-95 closed trigger, setSize clone no-op :63-66.
-- `D-57` covers 051 — Select :24-28,79-84 height stored-never-read; ComboBox leg.
-- `D-58` covers 052 — Tabs :129-141.
-- `D-61` covers 058 — GridTable :337-391 full refilter per repaint (perf memo seam).
-- `D-62` covers 149 — GridTable sort comparator + Sort-era remnants.
-- `D-66` covers 060(+166,182) — Modal :131-145,187-196, Drawer :267,283 guarded padders.
-- `D-67` covers 061 — Modal :126,170-179 byte str_pad vs cell budget, Width::string discard.
-- `D-68` covers 063 — Modal :36,53,357 interior build sites.
-- `D-69` covers 064 — ListModal :73-81,127-146,151 (+wither legs from D-18 carry).
-- `D-70` covers 069(+173,182) — ConfirmModal/MultiselectModal/ProgressModal contract migration.
-- `D-71` covers 062 — Drawer title/footer never rendered, borderColor :147-243.
-- `D-77` covers 072 — Popover :124-136 title neither padded nor clipped, width discard.
-- `D-80` covers 075(+206) — Clock :34-42,74 12h-vs-docblock lie, time() no seam.
-- `D-81` covers 180 — Timer/Stopwatch withElapsed seconds-vs-milliseconds same name.
-- `D-82` covers 076(+077) — BrailleMatrix :33-42,74-79 duplicated row-map vs 4-row cells.
-- `D-83` covers 078(+193,238,186) — BrailleCanvas :144-165 per-dot double-grid copy.
-- `D-84` covers 079 — Braille Canvas :102-108,257-315 setSize stored-never-read, defaultFg/Bg dead.
-- `D-85` covers 084 — ScatterPlotTest :227-232 vacuous substr_count pin.
-- `D-86` covers 085 — DendrogramTest :1004-1010 45-line fixture asserting '│' presence only.
-- `D-87` covers 157 — Dendrogram :240-310 connector geometry computed-never-used.
-- `D-88` covers 086 — Bresenham :97-117 octant table ABS-vs-indexing mismatch.
-- `D-92` covers 082(+183,184,197,234) — Plot.php :100-371 draw/render near-duplicates.
-- `D-93` covers 185 — Plot/Graph range footguns (no min≤max guard; auto-range).
-- `D-94` covers 195 — Plot.php :60-66,399-412.
-- `D-97` covers 191(+194) — legend/label surfaces Graph.php :226-237, Donut :586-603, Partition :398-400.
-- `D-98` covers 192 — Chart.php :194-216 hidden mutable frame/delta-history across renders.
-- `D-99` covers 087(+211) — Modules name() hardcoded per type + Module/Registry leg.
-- `D-128` covers 125 — Breakpoint :36-45 (+brand-name docblock leg).
-- `D-135` covers 135 — Layout/Panel border color TOP-only, wrapText newline flatten.
-- `D-137` covers 138 — Foundation/Theme inverted dependency arrows (imports Plot/Components).
-- `D-151` covers 170 — Highlight :455-468 merged regex rebuilt per line (~100 alternations).
+## 4. OWNER DECISION LIST (aggregated)
 
-## Rider / owner-side counts (for the record)
-candy-code/** 169 (incl. WELD riders), candy-code-web 32, ccweb-parity 18, plus Windows/macOS legs (candy-vcr×5, sugar-vterm×1, sugar-msteams host-keyspace fans×2) and trio/ci.yml:621 weld rows (closeout:WELD-TRIO). zh-tw copy rows sit inside their target's gated columns (e.g. tetris-27, KV-S45-era waves) or the adopt-adjacent report.
+Sources: reviews/P5-GATE-PACKET-2.md (313 lines; 42 MUST-ACT + 70 ALT-ARM),
+reviews/OWNER-GATES.md (hard 43 / defaulting 396 / welder 18 / wont_fix 17 at :515),
+queue gate column, and the mission carry-over list — each re-checked against disk:
 
-Verdict: the program is 87.6% landed + 2.8% gated + 6.9% owner-side + 0.9% report-only; **54 queue rows (1.7%) remain genuinely actionable**, concentrated in sugar-dashboard's unowned middles, and three CLOSED-claims (dashboard, mdview, readline) are contradicted by disk as detailed above.
+- **OG-8 / D-60 delete-vs-fold** — sugar-dashboard D-60 still gate-col [OG-8], unlanded: owner call.
+- **D-24 G4 arm (report-only legs)** — D-24 LANDED 765e30278 default legs only; the Window::addShadow
+  1x+1 disclosure + Layout.php zero-allocation D-15-notice routing arms were NOT executed by design — owner row.
+- **D-61/D-62** — gate (blocked family), zero disk hits — owner row.
+- **VTM G1-G7 parks** — vterm-01/02/08/19/23/25/26 still gate columns on disk (vterm-09: see §2 open) — owner rows.
+- **S-19-G3 (readline)** — gate column intact, unlanded — owner row.
+- **CG-05/12/26/45/49 (+65[G8], 39)** — candy-git gates on disk; CG-39 (lang-wave-A propagation) sits in
+  the gated bucket on the era census note + foreign `M candy-git/lang/*` WIP; verify that WIP's fate before re-firing — owner rows.
+- **metrics G1-G7 parks** — MET-RULEFIX/STATSDBATCH/BUCKETS/PRIVATECTOR/RECLAIM/PARAMS/MAXFAMILIES all gate columns ✓.
+- **zh-tw posture** — CM-65 ruled landed (dated exception); tetris-27 [zh-tw roster] still gated; KV-S45 LANDED
+  e42624ab0 (pt→EU base, pt-br kept) — residual decision is tetris-27 + any fleet-wide zh-tw roster call.
+- **SC-18/SC-19 (sugar-constraints)** — both still gate-col [SC-18]/[SC-19]; SC-18 files live in the forms
+  seat's territory (Form.php consumer legs). Owner gate-6 decisions, unchanged from the constraints close.
+- **CS-03** (packet MUST-ACT) — still gated [OG-5 NO-DEFAULT]; the other 40 MUST-ACT ids are LANDED on disk
+  (CH-57/58, CB-15/20/29, SO-21 436a2af66, SF-12 both, msw-09 residual LR, SG-S26 b0adbf6fa, SQL-C01/C25/O03/O04/O05/P05,
+  CF-03/33/50/52/55, WF-CURE, CG-43, CS-16, VCR-S23, S-P01 f7ec1a152 / S-P03 35ab31594, SD-S34, W-29, CM-11/33,
+  FBX-06/21/43, CP-22, S-X06, S-T06, S-L01/02). Packet ids **DIS-1/DIS-2/KV-062 match no queue row** (packet-reference
+  slippage class) — DIS-1/2 ride the discord/msteams host-keyspace legs (§4 host rows); KV-062 as kv-062 ratify-or-revert below.
+- **NS parks** — NS-04/05/27 gate columns ✓. **DParks** — dp-26 [dp-26] gate ✓ (dp-21/22 landed).
+- **SA arms** — SA-A2/P3/X1/L1/R1 gate [AN-1..5] ✓. SA-R2/Y1/D5 have no gate col and no landing: bucketed
+  REPORT-ONLY as pre-final planning-class rows (perf internals + README pass); if the owner wants them executed,
+  they are effectively open work — flag preserved here.
+- **CF-40 census note** — CF-40 was era-parked (files close) then LANDED by a sibling (3db85688a, leg-weighted undo):
+  a park-released without ruling. Ratify or revert at owner's discretion. **kv-062 ratify-or-revert** — no row id on
+  queue (see packet slip note); treat as the candy-kv CIT gate row KV-S46 [CIT/kv] which is live-gated.
+- **perp bf3e0b969 probe** — DONE this census: `sugar-treelist: treelist-22 — do-not-confu…`, author
+  Joe Huss <detain@interserver.net>, 2026-11-13 12:18:44 -0500. The eight-victim absorption roster's perp seat = this commit.
+- **framed-chrome deferral design** (D-37-era Window::addShadow decorate-below-clip) — stands documented; owner ratification row.
+- **BorderConfig raw-ctor promoted-readonly FATAL** — promoted row candidate in dashmid HANDOFF (/tmp/opencode/dashmid-1115/HANDOFF.md); not a queue row.
+- **OverflowClipTest frame-1x1 future row** — D-24 pin family left a separate zero-allocation-strip family (`max(1,*)` floor at Layout.php:407) deliberately untouched — future row.
+- **FUZZY-31 quickpick score() rewire** — interface promotion landed; scriptui stub cured (8755ef4d7) + quickpick doubles cured (70ecedb4d).
+  Remaining rider: quickpick **hot-path consumption** of score() (currently match()/matchAll() only) — rider row for fuzzy/quickpick seats.
+- **vterm-35 affected-libs leg** — Windows-lane owner-side ✓ (also in OS bucket §5); WINDOWS_LIBS roster edit is owner-side.
+- **MATCHUPS/research stale figures** — e.g. docs/MATCHUPS.md sugar-metrics row cites the 240T-era suite while disk now runs 291T
+  (list-tests census) and the 7 lib cells below all moved post-pin; research doc figures likewise. Closeout doc sweep row.
+- **sync-libs isEmpty-seed arm** — proposed-not-shipped (msteams-sync close, b35a41ab6 era) — owner row.
+- **Packagist webhooks** for sugar-releases/sugar-ignore (fresh repos auto-provisioned by force_all sync) + first-content sync:
+  owner activation list (push → one green CI at pushed SHA triggers force_all; 3 fixed files in FORCE_ALL_FILES).
+- **OD-7 wall** — sync-sugarcraft fail-closed gate ruling (scoped amendment vs interactive-Windows closure) — still owner-call.
+- **PULL-EMBARGO law** — in force while lanes live: cluster-push uses PUSH only (no pull --rebase); lanes commit LOCAL-ONLY.
+- **workflow_dispatch full-matrix re-oracle** — the closure proof still owed for F13-W (unmasked by L2), F12b-deeper adjudication,
+  and L4's 6 Windows confirm-round legs (ec9bb2480-era) — owner dispatch after cluster-push.
+
+## 5. OWNER-SIDE ledger (owed OUTSIDE this program's lanes)
+
+- candy-code/cc-web/ccweb territory unlanded: 74 rows: candy-code: 24; candy-code-web: 31; candy-msteams: 1; ccweb-parity: 18.
+  (candy-code has 145 of its 169 rows LANDED by the owner's 11-12/13 cc wave on master; residual = RIDERS, S-A10, S-H07, S-H09, S-L10, S-N02, S-O08, S-O09, S-O11, S-O24, S-O26, S-O40, S-O49, S-O51, S-O55, S-P02, S-P07, S-P10, S-T03, S-T08, S-U10, S-U14, S-V08, S-X08 + RIDERS packet.)
+- Windows/macOS legs (6): candy-vcr:VCR-S48, candy-vcr:VCR-S49, candy-vcr:VCR-S50, candy-vcr:VCR-S51, candy-vcr:VCR-S52, sugar-vterm:vterm-35 (vcr S48-52 cross-OS/Win bundle + vterm-35 Windows-lane CI).
+- trio (1): candy-code:WELD-TRIO (weld duties in §6).
+- msteams-09 host-side approval-UX leg — cc territory.
+
+## 6. WELDER-OWED CUMULATIVE
+
+**FINDING: the v1 predecessor file contained NO welder table.** Its only welder-adjacent
+content (preserved verbatim from reviews/EXEC-STATUS.md v1 :190-191):
+
+> ## Rider / owner-side counts (for the record)
+> candy-code/** 169 (incl. WELD riders), candy-code-web 32, ccweb-parity 18, plus
+> Windows/macOS legs (candy-vcr×5, sugar-vterm×1, sugar-msteams host-keyspace fans×2)
+> and trio/ci.yml:621 weld rows (closeout:WELD-TRIO). zh-tw copy rows sit inside their
+> target's gated columns (e.g. tetris-27, KV-S45-era waves) or the adopt-adjacent report.
+
+Cumulative welder duties on disk today:
+
+1. **Frozen trio** (candy-code/tests/Config/Support/suite-figure.json + README headline + scripts/parallel-tests-durations.tsv) —
+   pinned 33,106T / 801,698A / 0F / 9S measured_at 2026-11-13. The fleet grew past it (post-pin eras:
+   dashboard D-44/D-45/D-24 +12T, D-71..D-24 middle-tail 15 landings, top TAIL P16-P24 + go-wave S-X13/16-20,
+   vcr tail 5 + follow 5, msteams re-cut, style ST-16/20/28, ci-wave-1/2/3 incl L1-L4, org-mapping b35a41ab6 …).
+   **Action: ONE fresh full battery at the post-push head; re-derive figure + headline from it.** No lane may touch the trio (law).
+2. **durations.tsv**: 2,124 lines on disk; new test files from the eras above (dashboard OverflowClipTest,
+   FlexInnerSizeReverseTest, FlexWrapMultiLineTest, SizeHintersTest-era, ci-wave cures …) need rows — unlisted files run in
+   ZERO shards. Enumerate + refresh from battery run (**re-derive from battery**).
+3. **.github/workflows/ci.yml:621 TSV-PIN comment is STALE**: says `tests=33094 files=2123` vs tsv 2,124 lines / figure 33,106 —
+   re-pin comment row with the same battery (F1-family welder row).
+4. **Packet welder duties** (P5-GATE-PACKET-2): scriptui `DiagnosticsTest` durations-trio row; sugar-toast suite-figure row — both still owed.
+5. **Per-lib suite figures differ from their closeout-era pins** (current `--list-tests` counts, fresh today:
+   assertions/paths re-derive from battery): sugar-dashboard 8,657T; candy-vcr 1,628T; sugar-core 1,981T;
+   sugar-image 1,555T; sugar-fuzzy 1,031T; sugar-metrics 291T; sugar-readline 787T.
+   (Eras cited: core 1,980→+1; vcr 1,621→1,623→1,628; image 1,551→1,553→1,555; metrics 238/240→291; fuzzy 1,019→1,031;
+   dashboard baseline 8,645→8,657 per D-44/D-45/D-24 commit bodies, disk list-tests concurs.)
+6. research/INDEX.md + docs/MATCHUPS.md stale-figure cells (§4) — closeout doc sweep by welder/owner only.
+
+## 7. PUSHED-HEAD NOTE
+
+- `refs/remotes/origin/master` = **a913bd187** (vhs: regenerate demo GIFs, 2026-11-16).
+- Local `HEAD` = **765e30278** (sugar-dashboard: D-24 …, 2026-11-16 13:04 -0500).
+- Ahead/behind: **11 / 0** (origin is an ancestor of HEAD — merge-base verified; the 11:
+  D-24, D-45, D-44, D-47, D-43, org-mapping b35a41ab6, ci-wave-3 L1-L4 (70ecedb4d, 8755ef4d7, b02aaa8e1, ec9bb2480),
+  merge 32ba8f638, + this EXEC-STATUS commit).
+- The mission brief's `d84c86d52` as origin-head is **wrong on disk**: it exists (sugar-cli: SC-TR3 …) but as an
+  in-history commit, not the remote head.
+- **Cluster-push owed by owner** (PULL-EMBARGO: push-only; then workflow_dispatch re-oracle, §4).
+
+## 8. CLASS NOTES (what v1's own verdicts got right/wrong vs disk)
+
+- v1's residual-54 list: post-v1 waves drained 40 of it (top S-X13-20, dashboard middles, readline S-48,
+  mdview S19/S20 all landed — disk-verified); 14 remain exactly as §2.
+- v1's 11 landed-by-dossier reclassifications: all re-verified from disk this census (proof shas are master ancestors):
+  gifview-13 3cc82b615, KV-S45 e42624ab0, FUZZY-01/02/03 3c8189dfc, RT-01 ecd1ca25f, SD-01 ff092fe0f,
+  SD-29 b9b241e67, discord-01 30b8eccba, discord-03 716f835d8, MET-JSONSTREAM 04b268845, CB-family 11-05 wave.
+- Phantom-SHA class from v1 (51946a856, 6f998815e absent): stays excluded from proofs — re-confirmed.
+- candy-code: v1 said 0 of 169 landed; disk shows 145 landed by the owner's cc wave + 24 owed rows. That is
+  the single biggest v1→v2 delta and it is a bucket-definition fact, not a regression.
+
+## Appendix A — Full per-row census (3,238 rows)
+
+Format: `target:ID  bucket  proof`. Landed-cc = cc-territory row with a landing commit on master.
+PROOF tokens: S1/PREF = subject-anchored; B*/F* = body/finding-anchored (dir-gated); V1 = predecessor-claim-verified;
+gate rows carry their label in §3.
+
+```
+candy-ansi-inspect:AIP-01	LANDED	B1df2ea5f2
+candy-ansi-inspect:AIP-02	LANDED	Bf925f394f
+candy-ansi-inspect:AIP-03	LANDED	S2708acd4c
+candy-ansi-inspect:AIP-04	LANDED	B2708acd4c
+candy-ansi-inspect:AIP-05	LANDED	Bf925f394f
+candy-ansi-inspect:AIP-06	LANDED	Sf925f394f
+candy-ansi-inspect:AIP-07	LANDED	Bf2e089e13
+candy-ansi-inspect:AIP-08	LANDED	S932440b61
+candy-ansi-inspect:AIP-09	LANDED	Sf2e089e13
+candy-ansi-inspect:AIP-10	LANDED	B1df2ea5f2
+candy-ansi-inspect:AIP-11	LANDED	S1df2ea5f2
+candy-ansi-inspect:AIP-12	LANDED	Sb21bec094
+candy-ansi-inspect:AIP-13	LANDED	S9586e30f2
+candy-ansi-inspect:AIP-14	LANDED	S5f8cdf98a
+candy-ansi-inspect:AIP-15	LANDED	S3b43c1891
+candy-ansi-inspect:AIP-16	LANDED	S117553c08
+candy-ansi-inspect:AIP-17	LANDED	Bb633f7ac6
+candy-ansi-inspect:AIP-18	LANDED	B0f8015067
+candy-ansi-inspect:AIP-19	LANDED	Bda4a98567
+candy-ansi-inspect:AIP-20	LANDED	B3836cfc5a
+candy-ansi-inspect:AIP-21	LANDED	Be954bfbba
+candy-ansi-inspect:AIP-22	LANDED	Se954bfbba
+candy-ansi-inspect:AIP-23	LANDED	S18cb29112
+candy-ansi-inspect:AIP-24	LANDED	S689b39fab
+candy-ansi-inspect:AIP-25	LANDED	S545dc1759
+candy-ansi-inspect:AIP-26	LANDED	S9dabbf5e3
+candy-ansi-inspect:AIP-27	LANDED	S522afa1b4
+candy-ansi-inspect:AIP-28	LANDED	S522afa1b4
+candy-ansi-inspect:AIP-29	LANDED	Sda4a98567
+candy-ansi-inspect:AIP-30	LANDED	S904f2770f
+candy-ansi-inspect:AIP-31	LANDED	B904f2770f
+candy-ansi-inspect:AIP-32	LANDED	S310dfa16f
+candy-ansi-inspect:AIP-33	LANDED	S310dfa16f
+candy-ansi-inspect:AIP-34	LANDED	S6ad1a6f52
+candy-ansi-inspect:AIP-35	LANDED	S626a54177
+candy-ansi-inspect:AIP-36	LANDED	Sa5c21e82d
+candy-ansi-inspect:AIP-37	LANDED	Sc491ca076
+candy-ansi-inspect:AIP-38	LANDED	Sd03599c8e
+candy-ansi-inspect:AIP-39	LANDED	Sf62f5f2f1
+candy-ansi-inspect:AIP-40	LANDED	Sb633f7ac6
+candy-ansi-inspect:AIP-41	LANDED	Scdbf688a7
+candy-ansi-inspect:AIP-42	LANDED	Scdbf688a7
+candy-code:CODE-TEST-01	LANDED-cc	S17c38eee0
+candy-code:CODE-TEST-02	LANDED-cc	S3aaaac7fa
+candy-code:CODE-TEST-03	LANDED-cc	S836f440b3
+candy-code:RIDERS	OWNER-SIDE-cc	-
+candy-code:S-A01	LANDED-cc	S637cafd71
+candy-code:S-A02	LANDED-cc	S35123ff12
+candy-code:S-A03	LANDED-cc	S3ff1e098a
+candy-code:S-A04	LANDED-cc	S3b0d27f44
+candy-code:S-A05	LANDED-cc	Sb3a136bf0
+candy-code:S-A06	LANDED-cc	Sb3f824775
+candy-code:S-A07	LANDED-cc	S4717cb66b
+candy-code:S-A08	LANDED-cc	S4a7f113e1
+candy-code:S-A09	LANDED-cc	S0279449b9
+candy-code:S-A10	OWNER-SIDE-cc	S29942ec77
+candy-code:S-A11	LANDED-cc	S2d649c00d
+candy-code:S-A12	LANDED-cc	Scad2f944e
+candy-code:S-A13	LANDED-cc	Sb79c007c9
+candy-code:S-H01	LANDED-cc	Sd65f816dc
+candy-code:S-H02	LANDED-cc	S5d28d1879
+candy-code:S-H03	LANDED-cc	S56e15ac27
+candy-code:S-H04	LANDED-cc	Sbe0cc99dc
+candy-code:S-H05	LANDED-cc	S6c910169e
+candy-code:S-H06	LANDED-cc	S7902fb421
+candy-code:S-H07	OWNER-SIDE-cc	S53e285b00
+candy-code:S-H08	LANDED-cc	S483a91da6
+candy-code:S-H09	OWNER-SIDE-cc	Sd2fa6d90d
+candy-code:S-H10	LANDED-cc	S14c1a7b63
+candy-code:S-H11	LANDED-cc	S69446b62f
+candy-code:S-L01	LANDED-cc	Sd72922cf0
+candy-code:S-L02	LANDED-cc	S64df64102
+candy-code:S-L03	LANDED-cc	S1fb58978e
+candy-code:S-L04	LANDED-cc	Sd65f816dc
+candy-code:S-L05	LANDED-cc	Sa9eca48d6
+candy-code:S-L06	LANDED-cc	Se18544caa
+candy-code:S-L07	LANDED-cc	Scdca93e96
+candy-code:S-L08	LANDED-cc	Sa9a05f94d
+candy-code:S-L09	LANDED-cc	S6e7123c8b
+candy-code:S-L10	OWNER-SIDE-cc	S959f19cf8
+candy-code:S-L11	LANDED-cc	S87a7b4bc4
+candy-code:S-L12	LANDED-cc	Se18544caa
+candy-code:S-N01	LANDED-cc	S9a99644ce
+candy-code:S-N02	OWNER-SIDE-cc	Ra1b80afda
+candy-code:S-N03	LANDED-cc	Sdad0808cc
+candy-code:S-N04	LANDED-cc	S4d4b2516e
+candy-code:S-N05	LANDED-cc	S6cf72994b
+candy-code:S-N06	LANDED-cc	S27d567c87
+candy-code:S-N07	LANDED-cc	Saf2b33d99
+candy-code:S-N08	LANDED-cc	Sfa1bd53e1
+candy-code:S-N09	LANDED-cc	S6b5139eae
+candy-code:S-N10	LANDED-cc	S1316d2dd1
+candy-code:S-N11	LANDED-cc	Sd19b110a4
+candy-code:S-O01	LANDED-cc	Sa09a0054e
+candy-code:S-O02	LANDED-cc	Sf7f959892
+candy-code:S-O03	LANDED-cc	S787a1a43b
+candy-code:S-O04	LANDED-cc	S078e4601e
+candy-code:S-O05	LANDED-cc	S64b7a64fc
+candy-code:S-O06	LANDED-cc	Sfc97da854
+candy-code:S-O07	LANDED-cc	Sd07bdc152
+candy-code:S-O08	OWNER-SIDE-cc	Saab17d303
+candy-code:S-O09	OWNER-SIDE-cc	Sa93c5213f
+candy-code:S-O10	LANDED-cc	S5b65d7895
+candy-code:S-O11	OWNER-SIDE-cc	S0f9bbe23c
+candy-code:S-O12	LANDED-cc	S057ef68e8
+candy-code:S-O13	LANDED-cc	S3ffdb4aff
+candy-code:S-O14	LANDED-cc	S29549969c
+candy-code:S-O15	LANDED-cc	S1e722a236
+candy-code:S-O16	LANDED-cc	S7d7eae413
+candy-code:S-O17	LANDED-cc	S810289e96
+candy-code:S-O18	LANDED-cc	S7fd75aae5
+candy-code:S-O19	LANDED-cc	P8ae1f66cc
+candy-code:S-O20	LANDED-cc	Sb5ec385ec
+candy-code:S-O21	LANDED-cc	S7ce3e20e6
+candy-code:S-O22	LANDED-cc	Saa3980e65
+candy-code:S-O23	LANDED-cc	S7780dcc2c
+candy-code:S-O24	OWNER-SIDE-cc	Rd7190f4ac
+candy-code:S-O25	LANDED-cc	Saedae7bd7
+candy-code:S-O26	OWNER-SIDE-cc	-
+candy-code:S-O27	LANDED-cc	S8a42a88f6
+candy-code:S-O28	LANDED-cc	S4b3cc4bf0
+candy-code:S-O29	LANDED-cc	S09000e004
+candy-code:S-O30	LANDED-cc	Sc7919fb1e
+candy-code:S-O31	LANDED-cc	S2b956156e
+candy-code:S-O32	LANDED-cc	S600775c0a
+candy-code:S-O33	LANDED-cc	Seeafa38f2
+candy-code:S-O34	LANDED-cc	Sbf553c27d
+candy-code:S-O35	LANDED-cc	Se397686ad
+candy-code:S-O36	LANDED-cc	S155891e63
+candy-code:S-O37	LANDED-cc	S53a9b1fa4
+candy-code:S-O38	LANDED-cc	S81a54736e
+candy-code:S-O39	LANDED-cc	Sb0378318d
+candy-code:S-O40	OWNER-SIDE-cc	Ra8035d755
+candy-code:S-O41	LANDED-cc	S4bfe4936a
+candy-code:S-O42	LANDED-cc	Sb79c007c9
+candy-code:S-O43	LANDED-cc	Se3f267ae3
+candy-code:S-O44	LANDED-cc	S38ea4545a
+candy-code:S-O45	LANDED-cc	S30ae1bec4
+candy-code:S-O46	LANDED-cc	S6c5eae7a0
+candy-code:S-O47	LANDED-cc	S612203ac8
+candy-code:S-O48	LANDED-cc	Scc002bf96
+candy-code:S-O49	OWNER-SIDE-cc	Saa5ee2f89
+candy-code:S-O50	LANDED-cc	S3aaaac7fa
+candy-code:S-O51	OWNER-SIDE-cc	S69fd04b13
+candy-code:S-O52	LANDED-cc	Sc77e8fc56
+candy-code:S-O53	LANDED-cc	S35b646f7b
+candy-code:S-O54	LANDED-cc	S45cf5a58e
+candy-code:S-O55	OWNER-SIDE-cc	S8fcd4e6ac
+candy-code:S-O56	LANDED-cc	S464765861
+candy-code:S-O57	LANDED-cc	Sbd9706a27
+candy-code:S-P01	LANDED-cc	S25d4415da
+candy-code:S-P02	OWNER-SIDE-cc	S53c9a15e7
+candy-code:S-P03	LANDED-cc	S9edebbdf2
+candy-code:S-P04	LANDED-cc	S353e44b6e
+candy-code:S-P05	LANDED-cc	Sf8de927c6
+candy-code:S-P06	LANDED-cc	S5d0190a3f
+candy-code:S-P07	OWNER-SIDE-cc	-
+candy-code:S-P08	LANDED-cc	S7b86f7d15
+candy-code:S-P09	LANDED-cc	Sb79c007c9
+candy-code:S-P10	OWNER-SIDE-cc	S20a98ce89
+candy-code:S-P11	LANDED-cc	S439abde57
+candy-code:S-P12	LANDED-cc	Se14636b85
+candy-code:S-T01	LANDED-cc	S83a5e66d8
+candy-code:S-T02	LANDED-cc	S9982ff00a
+candy-code:S-T03	OWNER-SIDE-cc	Ra846ceb14
+candy-code:S-T04	LANDED-cc	S20cf1d42c
+candy-code:S-T05	LANDED-cc	S619734e0f
+candy-code:S-T06	LANDED-cc	S9625cf42b
+candy-code:S-T07	LANDED-cc	Sdcd4d79c1
+candy-code:S-T08	OWNER-SIDE-cc	S131f23bc9
+candy-code:S-T09	LANDED-cc	Sc63636fc4
+candy-code:S-T10	LANDED-cc	Sf680cfb8a
+candy-code:S-T11	LANDED-cc	S136c92ab2
+candy-code:S-T12	LANDED-cc	S37d81c439
+candy-code:S-U01	LANDED-cc	S9faae059d
+candy-code:S-U02	LANDED-cc	Sd3ee42d64
+candy-code:S-U03	LANDED-cc	S90c870063
+candy-code:S-U04	LANDED-cc	Sfabc322f7
+candy-code:S-U05	LANDED-cc	S473a62e42
+candy-code:S-U06	LANDED-cc	Sad8e4dc15
+candy-code:S-U07	LANDED-cc	Seacef7366
+candy-code:S-U08	LANDED-cc	S50b1e0689
+candy-code:S-U09	LANDED-cc	S5dd4654b2
+candy-code:S-U10	OWNER-SIDE-cc	R02199b9d3
+candy-code:S-U11	LANDED-cc	Sb1f5604aa
+candy-code:S-U12	LANDED-cc	S0d341b7e2
+candy-code:S-U13	LANDED-cc	S5356d5c9f
+candy-code:S-U14	OWNER-SIDE-cc	Rc54e843fa
+candy-code:S-V01	LANDED-cc	S16bdf7d87
+candy-code:S-V02	LANDED-cc	Sb46a2d498
+candy-code:S-V03	LANDED-cc	Sa7f144d05
+candy-code:S-V04	LANDED-cc	Sb2bd95015
+candy-code:S-V05	LANDED-cc	Sc5f33873d
+candy-code:S-V06	LANDED-cc	S9cd1e86e5
+candy-code:S-V07	LANDED-cc	S41563240a
+candy-code:S-V08	OWNER-SIDE-cc	S005ccaa35
+candy-code:S-V09	LANDED-cc	S4ef911065
+candy-code:S-V10	LANDED-cc	S03ef7386f
+candy-code:S-V11	LANDED-cc	S43f5a3d86
+candy-code:S-X01	LANDED-cc	S63de746d7
+candy-code:S-X02	LANDED-cc	S5019ac825
+candy-code:S-X03	LANDED-cc	Se18544caa
+candy-code:S-X04	LANDED-cc	Sc852feeb1
+candy-code:S-X05	LANDED-cc	Sec69691b9
+candy-code:S-X06	LANDED-cc	Se18544caa
+candy-code:S-X07	LANDED-cc	S2919fb5cc
+candy-code:S-X08	OWNER-SIDE-cc	Rdd357cc3a
+candy-code:S-X09	LANDED-cc	S63fabd3c3
+candy-code:S-X10	LANDED-cc	S986c36bc7
+candy-code:S-X11	LANDED-cc	S80b316329
+candy-code:WELD-TRIO	OWNER-SIDE-trio	-
+candy-code-web:RIDERS	OWNER-SIDE-cc	-
+candy-code-web:S-01	OWNER-SIDE-cc	-
+candy-code-web:S-02	OWNER-SIDE-cc	R924bf5776
+candy-code-web:S-03	OWNER-SIDE-cc	R18949d3c2
+candy-code-web:S-04	LANDED-cc	P6e8f8c849
+candy-code-web:S-05	OWNER-SIDE-cc	Rc74bcd30c
+candy-code-web:S-06	OWNER-SIDE-cc	R77386ca89
+candy-code-web:S-07	OWNER-SIDE-cc	R7fe72c757
+candy-code-web:S-08	OWNER-SIDE-cc	R3a67fa0df
+candy-code-web:S-09	OWNER-SIDE-cc	Rf31b28bb8
+candy-code-web:S-10	OWNER-SIDE-cc	Rd1e15f6ee
+candy-code-web:S-11	OWNER-SIDE-cc	Rd7ccb197d
+candy-code-web:S-12	OWNER-SIDE-cc	Rd5074434e
+candy-code-web:S-13	OWNER-SIDE-cc	Re5c5131fa
+candy-code-web:S-14	OWNER-SIDE-cc	-
+candy-code-web:S-15	OWNER-SIDE-cc	-
+candy-code-web:S-16	OWNER-SIDE-cc	R4d7755fa1
+candy-code-web:S-17	OWNER-SIDE-cc	R68a8d0e03
+candy-code-web:S-18	OWNER-SIDE-cc	-
+candy-code-web:S-19	OWNER-SIDE-cc	-
+candy-code-web:S-20	OWNER-SIDE-cc	-
+candy-code-web:S-21	OWNER-SIDE-cc	-
+candy-code-web:S-22	OWNER-SIDE-cc	-
+candy-code-web:S-23	OWNER-SIDE-cc	-
+candy-code-web:S-24	OWNER-SIDE-cc	-
+candy-code-web:S-25	OWNER-SIDE-cc	Rfc03e9f68
+candy-code-web:S-26	OWNER-SIDE-cc	-
+candy-code-web:S-27	OWNER-SIDE-cc	R78865ba92
+candy-code-web:S-28	OWNER-SIDE-cc	-
+candy-code-web:S-29	OWNER-SIDE-cc	-
+candy-code-web:S-30	OWNER-SIDE-cc	-
+candy-code-web:S-31	OWNER-SIDE-cc	-
+candy-codeshot:cs-01	LANDED	S75f7d8a48
+candy-codeshot:cs-02	LANDED	S52e79c565
+candy-codeshot:cs-03	LANDED	S5886e9313
+candy-codeshot:cs-04	LANDED	Se909578ee
+candy-codeshot:cs-05	LANDED	S01bce2057
+candy-codeshot:cs-06	LANDED	Sd960f23f9
+candy-codeshot:cs-07	LANDED	Seed5c6a1c
+candy-codeshot:cs-08	LANDED	S901d82574
+candy-codeshot:cs-09	LANDED	S74681d250
+candy-codeshot:cs-10	LANDED	Secac43517
+candy-codeshot:cs-11	LANDED	S4262b1d59
+candy-codeshot:cs-12	LANDED	B4eaa88761
+candy-codeshot:cs-13	LANDED	Se6762e1db
+candy-codeshot:cs-14	LANDED	S59df96752
+candy-codeshot:cs-15	LANDED	S7668740ab
+candy-codeshot:cs-16	LANDED	S0b60a6f54
+candy-codeshot:cs-17	LANDED	Bf7d24cd6e
+candy-codeshot:cs-18	LANDED	Sc1531f230
+candy-codeshot:cs-19	LANDED	Be6762e1db
+candy-codeshot:cs-20	LANDED	S8420e07c7
+candy-codeshot:cs-21	LANDED	R99768140c
+candy-codeshot:cs-22	LANDED	Sa5c9b9ab0
+candy-codeshot:cs-23	LANDED	S78a2d66e2
+candy-codeshot:cs-24	LANDED	S7e248a061
+candy-codeshot:cs-25	LANDED	S4eaa88761
+candy-codeshot:cs-26	LANDED	S689dc18d2
+candy-codeshot:cs-27	LANDED	Sba91a25db
+candy-codeshot:cs-28	LANDED	S132bada94
+candy-codeshot:cs-29	LANDED	S02225ede9
+candy-codeshot:cs-30	LANDED	S0e0d85279
+candy-codeshot:cs-31	LANDED	S22f14c119
+candy-codeshot:cs-32	LANDED	S6b08aec74
+candy-codeshot:cs-33	LANDED	S211e628e4
+candy-codeshot:cs-34	LANDED	Sbc9822fd5
+candy-codeshot:cs-35	LANDED	Sf7d24cd6e
+candy-codetime:CT-S01	LANDED	S7ab43bae2
+candy-codetime:CT-S02	LANDED	Sf1a248348
+candy-codetime:CT-S03	LANDED	S8dff40da7
+candy-codetime:CT-S04	LANDED	S21b7b3e29
+candy-codetime:CT-S05	LANDED	Sfb63fc052
+candy-codetime:CT-S06	LANDED	S2eae0ea1d
+candy-codetime:CT-S07	LANDED	S27d14d4db
+candy-codetime:CT-S08	LANDED	S017155e45
+candy-codetime:CT-S09	LANDED	S98b12e56d
+candy-codetime:CT-S10	LANDED	Sb994440b1
+candy-codetime:CT-S11	LANDED	S27d14d4db
+candy-codetime:CT-S12	LANDED	S4bd1ad965
+candy-codetime:CT-S13	LANDED	S843436a8a
+candy-codetime:CT-S14	LANDED	S59b3c8c19
+candy-codetime:CT-S15	LANDED	S92a53e351
+candy-codetime:CT-S16	LANDED	S047e033ce
+candy-codetime:CT-S17	LANDED	S46f76e118
+candy-codetime:CT-S18	LANDED	Sa6e5d8994
+candy-codetime:CT-S19	LANDED	S1d812a014
+candy-codetime:CT-S20	LANDED	Se88f6024f
+candy-codetime:CT-S21	LANDED	Sac92ba37c
+candy-codetime:CT-S22	LANDED	S0d5826c03
+candy-codetime:CT-S23	LANDED	Scdc1863a8
+candy-codetime:CT-S24	LANDED	Sc6b408e1f
+candy-codetime:CT-S25	LANDED	S1876e0767
+candy-codetime:CT-S26	LANDED	S7e03e6583
+candy-codetime:CT-S27	LANDED	S2e5e39c00
+candy-codetime:CT-S28	LANDED	S89b2bdc86
+candy-codetime:CT-S29	LANDED	S077e6ec47
+candy-codetime:CT-S30	LANDED	S71aba0742
+candy-codetime:CT-S31	LANDED	Sd3991fe7c
+candy-codetime:CT-S32	LANDED	S2570bdd73
+candy-codetime:CT-S33	LANDED	Scb8d75b90
+candy-codetime:CT-S34	LANDED	S935d64f54
+candy-codetime:CT-S35	LANDED	Se2e750007
+candy-codetime:CT-S36	LANDED	Sdf86e48ce
+candy-codetime:CT-S37	LANDED	S79dd10ede
+candy-codetime:CT-S38	LANDED	S812e0a3b3
+candy-codetime:CT-S39	LANDED	Sdaf22018c
+candy-codetime:CT-S40	LANDED	Sc40b6b0f0
+candy-codetime:CT-S41	LANDED	Sef25ec1af
+candy-codetime:CT-S42	LANDED	S7d1fec6d0
+candy-codetime:CT-S43	LANDED	Sb00bdb3b5
+candy-codetime:CT-S44	LANDED	S04c49cdc7
+candy-codetime:CT-S45	LANDED	Sd595a1c4b
+candy-codetime:CT-S46	LANDED	Sdb925c979
+candy-codetime:CT-S47	LANDED	Sb879a67cf
+candy-codetime:CT-S48	LANDED	S83dcac3c2
+candy-codetime:CT-S49	LANDED	Saba45b247
+candy-codetime:CT-S50	LANDED	Sfd814488b
+candy-codetime:CT-S51	LANDED	S6db31419b
+candy-codetime:CT-S52	LANDED	S2f8d3173a
+candy-codetime:CT-S53	LANDED	Sdbc672564
+candy-codetime:CT-S54	LANDED	S9f33eabbf
+candy-codetime:CT-S55	LANDED	S35c35befa
+candy-codetime:CT-S56	LANDED	Sf4dc6a155
+candy-codetime:CT-S57	LANDED	S068f119ba
+candy-codetime:CT-S58	LANDED	S488cb0a45
+candy-codetime:CT-S59	LANDED	Sea23e335c
+candy-codetime:CT-S60	LANDED	S417a3a6e5
+candy-codetime:CT-S61	LANDED	Se0ecb1aed
+candy-codetime:CT-S62	LANDED	S4835e443c
+candy-codetime:CT-S63	LANDED	Sf1b8f334f
+candy-discord:discord-01	LANDED	V30b8eccba
+candy-discord:discord-02	LANDED	S681244f86
+candy-discord:discord-03	LANDED	V716f835d8
+candy-discord:discord-04	LANDED	S014020f40
+candy-discord:discord-05	LANDED	S8d675c44f
+candy-discord:discord-06	LANDED	S4a95141bb
+candy-discord:discord-07	LANDED	S4870bf2ce
+candy-discord:discord-08	LANDED	S52e5ea5b8
+candy-discord:discord-09	LANDED	S2401128c9
+candy-discord:discord-10	LANDED	S28b5a576b
+candy-discord:discord-11	LANDED	S98cdc085e
+candy-discord:discord-12	LANDED	S3056d7fbc
+candy-discord:discord-13	LANDED	Sd79535e2a
+candy-discord:discord-14	LANDED	Sb9c025f4a
+candy-discord:discord-15	LANDED	S29fecb2a0
+candy-discord:discord-16	LANDED	S77733087d
+candy-discord:discord-17	LANDED	Sd20f2b59b
+candy-discord:discord-18	LANDED	Sa220a0ef1
+candy-discord:discord-19	LANDED	S31836f5ed
+candy-discord:discord-20	LANDED	Saa39f618b
+candy-discord:discord-21	LANDED	S3ed64651d
+candy-discord:discord-22	LANDED	S9934a4fbc
+candy-discord:discord-23	LANDED	S9d19d5888
+candy-discord:discord-24	LANDED	S4cf523913
+candy-discord:discord-25	LANDED	Sa2073b762
+candy-discord:discord-26	LANDED	Sa595997ec
+candy-discord:discord-27	LANDED	Sd64f921b2
+candy-files:CF-01	LANDED	B60f68bc60
+candy-files:CF-02	LANDED	S089601fef
+candy-files:CF-03	LANDED	Sa63e95b6d
+candy-files:CF-04	LANDED	Sb5f17bfcd
+candy-files:CF-05	LANDED	S318ef5d33
+candy-files:CF-06	LANDED	S6a9fe3269
+candy-files:CF-07	LANDED	Sb4700ed3b
+candy-files:CF-08	LANDED	Bb3a579173
+candy-files:CF-09	LANDED	S09c7b76e6
+candy-files:CF-10	LANDED	Sb3a579173
+candy-files:CF-11	LANDED	S089601fef
+candy-files:CF-12	LANDED	Sfaf931c64
+candy-files:CF-13	LANDED	Sa9dd96bde
+candy-files:CF-14	LANDED	Sff7e8bdf8
+candy-files:CF-15	LANDED	Sb4700ed3b
+candy-files:CF-16	LANDED	S756a515de
+candy-files:CF-17	LANDED	S09c7b76e6
+candy-files:CF-18	LANDED	Scb755f1cd
+candy-files:CF-19	LANDED	Sdf865d22b
+candy-files:CF-20	LANDED	S4d1e73fe5
+candy-files:CF-21	LANDED	Bdbeba71cf
+candy-files:CF-22	LANDED	Sa99968e5e
+candy-files:CF-23	LANDED	Sba7b4a01d
+candy-files:CF-24	LANDED	S1a903975d
+candy-files:CF-25	LANDED	S77cda33fc
+candy-files:CF-26	LANDED	Sfae00c5f4
+candy-files:CF-27	LANDED	Sd69be9f1e
+candy-files:CF-28	LANDED	Sf7e1b4229
+candy-files:CF-29	LANDED	S337f3c32d
+candy-files:CF-30	LANDED	S337f3c32d
+candy-files:CF-31	LANDED	Sb7984d537
+candy-files:CF-32	LANDED	S64aee0fb3
+candy-files:CF-33	LANDED	S53c2b982b
+candy-files:CF-34	LANDED	Sdf865d22b
+candy-files:CF-35	LANDED	Sb09ced339
+candy-files:CF-36	LANDED	Sf1955e731
+candy-files:CF-37	LANDED	Sbf82adcea
+candy-files:CF-38	LANDED	Sb7984d537
+candy-files:CF-39	LANDED	Sbc032433d
+candy-files:CF-40	LANDED	S3db85688a
+candy-files:CF-41	LANDED	S09c7b76e6
+candy-files:CF-42	LANDED	S56ffc6c78
+candy-files:CF-43	LANDED	S0c989244b
+candy-files:CF-44	LANDED	S77f6778f8
+candy-files:CF-45	LANDED	S41869a418
+candy-files:CF-46	LANDED	S0547c9200
+candy-files:CF-47	LANDED	Sf1d268187
+candy-files:CF-48	LANDED	S42d9e7757
+candy-files:CF-49	LANDED	Sc0f617b66
+candy-files:CF-50	LANDED	Sb3493fe81
+candy-files:CF-51	OWNER-GATED	-
+candy-files:CF-52	LANDED	S946820418
+candy-files:CF-53	LANDED	S40fdf4da3
+candy-files:CF-54	LANDED	Sfaf931c64
+candy-files:CF-55	OWNER-GATED	Rb51e00351
+candy-flappy:flappy-01	LANDED	S2dca0c2dc
+candy-flappy:flappy-02	LANDED	Sa3891e759
+candy-flappy:flappy-03	LANDED	S82d59f740
+candy-flappy:flappy-04	LANDED	Scb33cd5e1
+candy-flappy:flappy-05	LANDED	S2af0d2c4c
+candy-flappy:flappy-06	LANDED	Sb53ff301f
+candy-flappy:flappy-07	LANDED	S0ef14dcc9
+candy-flappy:flappy-08	OWNER-GATED	-
+candy-flappy:flappy-09	LANDED	Se8505f2c2
+candy-flappy:flappy-10	LANDED	S760cf1f80
+candy-flappy:flappy-11	LANDED	Sd5d629a1c
+candy-flappy:flappy-12	LANDED	Sa94803a3a
+candy-flappy:flappy-13	LANDED	Scff2c12b5
+candy-flappy:flappy-14	LANDED	S61235607f
+candy-flappy:flappy-15	LANDED	Sa6c635286
+candy-flappy:flappy-16	LANDED	S191847328
+candy-flappy:flappy-17	LANDED	S8ca7e4471
+candy-flappy:flappy-18	LANDED	S8ca7e4471
+candy-flappy:flappy-19	LANDED	S9f7700a17
+candy-flappy:flappy-20	LANDED	Sedded02f6
+candy-flappy:flappy-21	OWNER-GATED	-
+candy-flappy:flappy-22	LANDED	Sd20bdc16b
+candy-flappy:flappy-23	LANDED	S2d3472b92
+candy-flappy:flappy-24	LANDED	S421331711
+candy-flappy:flappy-25	LANDED	Sc68066584
+candy-flappy:flappy-26	LANDED	Sb735f528a
+candy-flappy:flappy-27	LANDED	Se57e2153c
+candy-flappy:flappy-28	LANDED	Sfb702d466
+candy-flappy:flappy-29	LANDED	Scc64013fe
+candy-flappy:flappy-30	LANDED	Sbcaefd44c
+candy-flappy:flappy-31	LANDED	S40567b01e
+candy-flappy:flappy-32	LANDED	Sd20bdc16b
+candy-flappy:flappy-33	LANDED	Sbf5189711
+candy-flappy:flappy-34	LANDED	S848db0a8b
+candy-flappy:flappy-35	LANDED	S0d66b499e
+candy-flappy:flappy-36	LANDED	S0e18b1a30
+candy-flappy:flappy-37	LANDED	Sd20bdc16b
+candy-flappy:flappy-38	LANDED	S8ca7e4471
+candy-flappy:flappy-39	LANDED	S3dc24ba91
+candy-flappy:flappy-40	LANDED	S6bffffbaa
+candy-flappy:flappy-41	LANDED	Sc04f3e08d
+candy-flappy:flappy-42	LANDED	S25a32889d
+candy-flappy:flappy-43	LANDED	S4e234c808
+candy-flappy:flappy-44	LANDED	S4053f7c31
+candy-flappy:flappy-45	LANDED	Sdaddc846e
+candy-flappy:flappy-46	LANDED	Se4031a731
+candy-flappy:flappy-47	LANDED	S1d91c99d8
+candy-flappy:flappy-48	LANDED	Sad5ad2ca3
+candy-flappy:flappy-49	LANDED	S5a603178a
+candy-flappy:flappy-50	LANDED	S2af0d2c4c
+candy-flappy:flappy-51	LANDED	Se69707275
+candy-flappy:flappy-52	LANDED	Sd893c545f
+candy-flappy:flappy-53	OWNER-GATED	-
+candy-flappy:flappy-54	LANDED	Sae3a3fce3
+candy-flappy:flappy-55	LANDED	S9dcaf4417
+candy-flappy:flappy-56	LANDED	S63bcbb72c
+candy-flappy:flappy-57	LANDED	S596c4e736
+candy-flappy:flappy-58	LANDED	Sac58baf40
+candy-flappy:flappy-59	LANDED	Sc2f5205fc
+candy-flappy:flappy-60	LANDED	Secf273220
+candy-flappy:flappy-61	LANDED	Sa8d390446
+candy-flappy:flappy-62	LANDED	S26d7d5d6e
+candy-flappy:flappy-63	LANDED	S14a239be4
+candy-flappy:flappy-64	LANDED	S2dca0c2dc
+candy-flappy:flappy-65	LANDED	Sebe05ff7a
+candy-flappy:flappy-66	LANDED	Sbade907db
+candy-flappy:flappy-67	LANDED	S0b3aeb78b
+candy-flappy:flappy-68	LANDED	S7efa31e87
+candy-flappy:flappy-69	LANDED	S411b665ce
+candy-flappy:flappy-70	LANDED	Scc64013fe
+candy-flappy:flappy-71	LANDED	S19cd5e40f
+candy-flappy:flappy-72	LANDED	S8b09970f5
+candy-flappy:flappy-73	LANDED	Sb735f528a
+candy-flappy:flappy-74	OWNER-GATED	-
+candy-flappy:flappy-75	LANDED	S0ef14dcc9
+candy-flappy:flappy-76	OWNER-GATED	-
+candy-flappy:flappy-77	LANDED	S73d2bd20e
+candy-flappy:flappy-78	LANDED	S628eda4cd
+candy-flappy:flappy-79	LANDED	S19f3f5a29
+candy-flappy:flappy-80	LANDED	S14ed36b85
+candy-flappy:flappy-81	LANDED	S38e7a1ff3
+candy-flappy:flappy-82	LANDED	S421331711
+candy-flappy:flappy-83	LANDED	S1f2440565
+candy-flappy:flappy-84	LANDED	Sc17d132a3
+candy-flappy:flappy-85	LANDED	S42cc13851
+candy-flappy:flappy-86	LANDED	Rdd273d702
+candy-flappy:flappy-87	LANDED	S1a627dfe2
+candy-flappy:flappy-88	LANDED	Sfb4f2f9ca
+candy-flappy:flappy-89	LANDED	S07295307b
+candy-flappy:flappy-90	LANDED	S412d26a59
+candy-gifview:RIDERS	REPORT-ONLY	-
+candy-gifview:gifview-01	LANDED	S2d7f9482c
+candy-gifview:gifview-02	LANDED	S81d6818fa
+candy-gifview:gifview-03	LANDED	S5ae9453af
+candy-gifview:gifview-04	LANDED	S78fd6f595
+candy-gifview:gifview-05	LANDED	Sbd1ecf226
+candy-gifview:gifview-06	LANDED	F09b582a0d
+candy-gifview:gifview-07	LANDED	S56812f3dc
+candy-gifview:gifview-08	LANDED	S56812f3dc
+candy-gifview:gifview-09	LANDED	Rad186ff97
+candy-gifview:gifview-10	LANDED	S560375b92
+candy-gifview:gifview-11	LANDED	R482033ec6
+candy-gifview:gifview-12	LANDED	S56812f3dc
+candy-gifview:gifview-13	LANDED	F26b483e61
+candy-gifview:gifview-14	LANDED	S56812f3dc
+candy-gifview:gifview-15	LANDED	S56812f3dc
+candy-gifview:gifview-16	LANDED	Sabd7c0441
+candy-gifview:gifview-17	LANDED	S696f839a4
+candy-gifview:gifview-18	LANDED	Sf6851a629
+candy-gifview:gifview-19	LANDED	Rf11d948d4
+candy-gifview:gifview-20	LANDED	R26b483e61
+candy-gifview:gifview-21	LANDED	R5c227d7c7
+candy-gifview:gifview-22	LANDED	S9a2939c5f
+candy-gifview:gifview-23	LANDED	S36f7caabc
+candy-gifview:gifview-24	LANDED	S379c26d8e
+candy-gifview:gifview-25	LANDED	Sd2bcadf51
+candy-git:CG-01	LANDED	S10c10da7c
+candy-git:CG-02	LANDED	S10c10da7c
+candy-git:CG-03	LANDED	Bae59a92e4
+candy-git:CG-04	LANDED	Sca656012b
+candy-git:CG-05	OWNER-GATED	Rb5f72c0d0
+candy-git:CG-06	LANDED	Bfb56cba27
+candy-git:CG-07	LANDED	Bbffe7cd4e
+candy-git:CG-08	LANDED	Sb02e50456
+candy-git:CG-09	LANDED	Sbffe7cd4e
+candy-git:CG-10	LANDED	Sff8060579
+candy-git:CG-11	LANDED	Sae59a92e4
+candy-git:CG-12	OWNER-GATED	-
+candy-git:CG-13	OWNER-GATED	S47dba7d22
+candy-git:CG-14	LANDED	S3d822d7ac
+candy-git:CG-15	LANDED	B5ca45d285
+candy-git:CG-16	LANDED	S47dba7d22
+candy-git:CG-17	LANDED	S71a4f17a3
+candy-git:CG-18	LANDED	S3c6fa900c
+candy-git:CG-19	LANDED	Bb6437ed58
+candy-git:CG-20	LANDED	S49e2e1b47
+candy-git:CG-21	LANDED	S9d313f110
+candy-git:CG-22	LANDED	Bb5f72c0d0
+candy-git:CG-23	LANDED	Sa1894ce0d
+candy-git:CG-24	LANDED	Sb5f72c0d0
+candy-git:CG-25	LANDED	S49b1bbd86
+candy-git:CG-26	OWNER-GATED	-
+candy-git:CG-27	LANDED	Ffb56cba27
+candy-git:CG-28	LANDED	S4e7cbdc65
+candy-git:CG-29	LANDED	S5ca45d285
+candy-git:CG-30	LANDED	S10ee6152f
+candy-git:CG-31	LANDED	S47dba7d22
+candy-git:CG-32	LANDED	S11026f443
+candy-git:CG-33	LANDED	Bb6437ed58
+candy-git:CG-34	LANDED	Scb2015336
+candy-git:CG-35	LANDED	Sb6437ed58
+candy-git:CG-36	LANDED	Se54301876
+candy-git:CG-37	LANDED	S32bb8931d
+candy-git:CG-38	LANDED	S47dba7d22
+candy-git:CG-39	OWNER-GATED	-
+candy-git:CG-40	LANDED	S3d822d7ac
+candy-git:CG-41	LANDED	S3d822d7ac
+candy-git:CG-42	LANDED	Sc4eb46098
+candy-git:CG-43	LANDED	S0fcd79bda
+candy-git:CG-44	LANDED	S1d44bcfd9
+candy-git:CG-45	OWNER-GATED	-
+candy-git:CG-46	LANDED	S3d822d7ac
+candy-git:CG-47	LANDED	Saa0b91083
+candy-git:CG-48	LANDED	S15028165b
+candy-git:CG-49	OWNER-GATED	-
+candy-git:CG-50	LANDED	S69130e1f9
+candy-git:CG-51	LANDED	S3fb5498aa
+candy-git:CG-52	LANDED	Se12994b8f
+candy-git:CG-53	LANDED	Se12994b8f
+candy-git:CG-54	LANDED	S3281dad90
+candy-git:CG-55	LANDED	Sc8a1131da
+candy-git:CG-56	LANDED	B71a4f17a3
+candy-git:CG-57	LANDED	Se4a722589
+candy-git:CG-58	LANDED	S5f53008f5
+candy-git:CG-59	LANDED	S98e153720
+candy-git:CG-60	LANDED	S3f5760d6b
+candy-git:CG-61	LANDED	Sb100e1002
+candy-git:CG-62	LANDED	Sc8a1131da
+candy-git:CG-63	LANDED	S3f5760d6b
+candy-git:CG-64	LANDED	S247d4dd42
+candy-git:CG-65	OWNER-GATED	-
+candy-git-server:S01	LANDED	Sd14d54f96
+candy-git-server:S02	LANDED	Sd14d54f96
+candy-git-server:S03	LANDED	S6e3045d42
+candy-git-server:S04	LANDED	S14836dd50
+candy-git-server:S05	LANDED	Sec7a52553
+candy-git-server:S06	LANDED	Sb8ac66b95
+candy-git-server:S07	LANDED	S96e508597
+candy-git-server:S08	LANDED	S13e5381de
+candy-git-server:S09	LANDED	S13e5381de
+candy-git-server:S10	LANDED	S050dbe41e
+candy-git-server:S11	LANDED	S688d32f9a
+candy-git-server:S12	LANDED	S425cd5d8a
+candy-git-server:S13	LANDED	S508e7a902
+candy-git-server:S14	LANDED	Se6551dfdb
+candy-git-server:S15	LANDED	S8171d79ac
+candy-git-server:S16	LANDED	S2d419f7af
+candy-git-server:S17	LANDED	Sd06e9ade6
+candy-git-server:S18	LANDED	S123f46fc2
+candy-git-server:S19	LANDED	S0d5a43f3b
+candy-git-server:S20	LANDED	S6e4a85639
+candy-git-server:S21	LANDED	S654e2b496
+candy-git-server:S22	LANDED	S7bcf06874
+candy-git-server:S23	LANDED	S688d32f9a
+candy-git-server:S24	LANDED	Scfbca17b1
+candy-git-server:S25	LANDED	S96e508597
+candy-git-server:S26	LANDED	Sb0db3bf5c
+candy-git-server:S27	LANDED	Sb0db3bf5c
+candy-git-server:S28	LANDED	S508e7a902
+candy-git-server:S29	LANDED	S50302684c
+candy-git-server:S30	LANDED	S50302684c
+candy-git-server:S31	LANDED	S354c35618
+candy-git-server:S32	LANDED	S787c5de2a
+candy-git-server:S33	LANDED	S7bcf06874
+candy-git-server:S34	LANDED	S6e4a85639
+candy-git-server:S35	LANDED	S3c18d0593
+candy-git-server:S36	LANDED	S654e2b496
+candy-git-server:S37	LANDED	Sbbf6facee
+candy-git-server:S38	LANDED	Sa5af8944e
+candy-git-server:S39	LANDED	Sde8ff1623
+candy-git-server:S40	LANDED	Sff3b83275
+candy-git-server:S41	LANDED	Be700db0e5
+candy-git-server:S42	LANDED	S9703dff65
+candy-git-server:S43	LANDED	S9f654304e
+candy-git-server:S44	LANDED	S72e8ae7eb
+candy-git-server:S45	LANDED	S72e8ae7eb
+candy-git-server:S46	LANDED	Se700db0e5
+candy-git-server:S47	LANDED	Sacf239781
+candy-git-server:S48	LANDED	S4afde4ff5
+candy-image:IMG-01	LANDED	B627122318
+candy-image:IMG-02	LANDED	S1f469af72
+candy-image:IMG-03	LANDED	B2efbd2adf
+candy-image:IMG-04	LANDED	S63c6b9731
+candy-image:IMG-05	LANDED	Sd0f4db824
+candy-image:IMG-06	LANDED	S773b55f91
+candy-image:IMG-07	LANDED	S7f842046e
+candy-image:IMG-08	LANDED	Seb5a29fb2
+candy-image:IMG-09	LANDED	S6eb774676
+candy-image:IMG-10	LANDED	Se3e5fa7f2
+candy-image:IMG-11	LANDED	Sc10ec2199
+candy-image:IMG-12	LANDED	S4301ce47d
+candy-image:IMG-13	LANDED	S03c8fff19
+candy-image:IMG-14	LANDED	B627122318
+candy-image:IMG-15	LANDED	S0663fea7f
+candy-image:IMG-16	LANDED	S627122318
+candy-image:IMG-17	LANDED	S2efbd2adf
+candy-image:IMG-18	LANDED	S25fb3d98c
+candy-image:IMG-19	LANDED	S6df1763e6
+candy-image:IMG-20	LANDED	Sbfaf76ded
+candy-image:IMG-21	LANDED	S7d49b71c9
+candy-image:IMG-22	LANDED	Sc5916c6a6
+candy-image:IMG-23	LANDED	Sb17d8995c
+candy-image:IMG-24	LANDED	S14508d11d
+candy-image:IMG-25	LANDED	Scb8214da5
+candy-image:IMG-26	LANDED	Sf16366ec7
+candy-image:IMG-27	LANDED	Sd27ad7fa3
+candy-image:IMG-28	LANDED	Sda246808a
+candy-kv:KV-S01	LANDED	Sc46656595
+candy-kv:KV-S02	LANDED	Sf96a2b190
+candy-kv:KV-S03	OWNER-GATED	S4e2f8c59c
+candy-kv:KV-S04	LANDED	S54377878b
+candy-kv:KV-S05	LANDED	Sb6e859924
+candy-kv:KV-S06	OWNER-GATED	S4a75e826e
+candy-kv:KV-S07	LANDED	Sc499d40b2
+candy-kv:KV-S08	LANDED	S42204d538
+candy-kv:KV-S09	LANDED	S00d75f87a
+candy-kv:KV-S10	LANDED	S5397f5b8b
+candy-kv:KV-S11	LANDED	S7c11c428e
+candy-kv:KV-S12	LANDED	S567e6f58a
+candy-kv:KV-S13	LANDED	S917c02f38
+candy-kv:KV-S14	LANDED	S061d60fb8
+candy-kv:KV-S15	LANDED	Scc803e5af
+candy-kv:KV-S16	LANDED	Sb51d39851
+candy-kv:KV-S17	LANDED	S39c63c4fb
+candy-kv:KV-S18	LANDED	S0b8db201d
+candy-kv:KV-S19	LANDED	Sea7a8202f
+candy-kv:KV-S20	OWNER-GATED	S02ee34c3d
+candy-kv:KV-S21	LANDED	S3ed4bc7f3
+candy-kv:KV-S22	LANDED	S6ad3e96bd
+candy-kv:KV-S23	LANDED	Sc6c170006
+candy-kv:KV-S24	LANDED	Sc6f3014b9
+candy-kv:KV-S25	LANDED	S9901cf655
+candy-kv:KV-S26	LANDED	S7c8b68d05
+candy-kv:KV-S27	LANDED	R31d992b7f
+candy-kv:KV-S28	LANDED	Sf2d8d97fb
+candy-kv:KV-S29	LANDED	Scf66b72ba
+candy-kv:KV-S30	LANDED	Sd5dc10cfa
+candy-kv:KV-S31	LANDED	Sc07ce2b12
+candy-kv:KV-S32	LANDED	Bf2d8d97fb
+candy-kv:KV-S33	LANDED	S0fcf35e94
+candy-kv:KV-S34	LANDED	S495635cd3
+candy-kv:KV-S35	LANDED	S3802b86ca
+candy-kv:KV-S36	LANDED	S131560f2e
+candy-kv:KV-S37	LANDED	Sbb63b8233
+candy-kv:KV-S38	LANDED	S7b59a6071
+candy-kv:KV-S39	OWNER-GATED	-
+candy-kv:KV-S40	LANDED	S1b8910931
+candy-kv:KV-S41	LANDED	B3802b86ca
+candy-kv:KV-S42	LANDED	Sa07052b8d
+candy-kv:KV-S43	LANDED	S6fb72e6b7
+candy-kv:KV-S44	OWNER-GATED	-
+candy-kv:KV-S45	LANDED	-
+candy-kv:KV-S46	OWNER-GATED	-
+candy-kv:RIDERS	REPORT-ONLY	-
+candy-mail:CM-01	LANDED	Sdeabbdefc
+candy-mail:CM-02	LANDED	S4310878ef
+candy-mail:CM-03	LANDED	Sa56b150d4
+candy-mail:CM-04	LANDED	S5ab472dbe
+candy-mail:CM-05	LANDED	Sb92898223
+candy-mail:CM-06	LANDED	S84dfa75b1
+candy-mail:CM-07	LANDED	S921cb2cfc
+candy-mail:CM-08	LANDED	S68b8eebd2
+candy-mail:CM-09	LANDED	Sa675fae5c
+candy-mail:CM-10	LANDED	Sa82082301
+candy-mail:CM-11	LANDED	S15fb1deef
+candy-mail:CM-12	LANDED	S38984bc99
+candy-mail:CM-13	LANDED	S9ae977094
+candy-mail:CM-14	LANDED	Sc73bd4a69
+candy-mail:CM-15	LANDED	S4e0eba2d7
+candy-mail:CM-16	LANDED	S4a03c07d4
+candy-mail:CM-17	LANDED	See4053fe1
+candy-mail:CM-18	LANDED	S55be75846
+candy-mail:CM-19	LANDED	Seb1885fdc
+candy-mail:CM-20	LANDED	Sc0c16f8a4
+candy-mail:CM-21	LANDED	S1cf4b5d49
+candy-mail:CM-22	LANDED	Scbd94c138
+candy-mail:CM-23	LANDED	S08c84ec67
+candy-mail:CM-24	LANDED	Sd7aa5bd9f
+candy-mail:CM-25	LANDED	S6bb7db755
+candy-mail:CM-26	LANDED	S6bb7db755
+candy-mail:CM-27	LANDED	S08c84ec67
+candy-mail:CM-28	LANDED	S4654a7dbb
+candy-mail:CM-29	LANDED	S78a78ba3b
+candy-mail:CM-30	LANDED	Sc7295975d
+candy-mail:CM-31	LANDED	S7ec3d1897
+candy-mail:CM-32	LANDED	S6ae0f309d
+candy-mail:CM-33	LANDED	S15fb1deef
+candy-mail:CM-34	LANDED	S30f17b517
+candy-mail:CM-35	LANDED	S71ba4b403
+candy-mail:CM-36	LANDED	S9450efbeb
+candy-mail:CM-37	LANDED	S1fe196dee
+candy-mail:CM-38	LANDED	S6dc0f9a92
+candy-mail:CM-39	LANDED	S9ae977094
+candy-mail:CM-40	LANDED	Sd848a1885
+candy-mail:CM-41	LANDED	S91f6e5130
+candy-mail:CM-42	LANDED	S2dcd68e26
+candy-mail:CM-43	LANDED	S8f8359730
+candy-mail:CM-44	LANDED	S2e1f03896
+candy-mail:CM-45	LANDED	S04e95ab28
+candy-mail:CM-46	LANDED	S0df116fa1
+candy-mail:CM-47	LANDED	S3b2e3d756
+candy-mail:CM-48	LANDED	S24ba31e60
+candy-mail:CM-49	LANDED	Sce3b3248f
+candy-mail:CM-50	LANDED	Sce3b3248f
+candy-mail:CM-51	LANDED	S101aef1b6
+candy-mail:CM-52	LANDED	S5afd4ed42
+candy-mail:CM-53	LANDED	S577c86429
+candy-mail:CM-54	LANDED	S777adb04f
+candy-mail:CM-55	LANDED	S9c639934e
+candy-mail:CM-56	LANDED	S80c1bdfdd
+candy-mail:CM-57	LANDED	S34dc3da8d
+candy-mail:CM-58	LANDED	S7e3d92f7d
+candy-mail:CM-59	REPORT-ONLY	-
+candy-mail:CM-60	LANDED	R5e396eb95
+candy-mail:CM-61	LANDED	S0c799fc10
+candy-mail:CM-62	LANDED	S643e16c23
+candy-mail:CM-63	LANDED	Se300a30e0
+candy-mail:CM-64	LANDED	S6b1dc870f
+candy-mail:CM-65	LANDED	S15fb1deef
+candy-mail:CM-66	LANDED	Sb6003dc08
+candy-mail:CM-67	LANDED	S2340feb1d
+candy-mail:CM-68	LANDED	Sa27f4c41c
+candy-mail:CM-69	LANDED	Sbd33736de
+candy-mdview:MDV-S01	LANDED	S80e35c6f4
+candy-mdview:MDV-S02	LANDED	Seb85bc2d2
+candy-mdview:MDV-S03	LANDED	S963b58c45
+candy-mdview:MDV-S04	LANDED	S976ee4a34
+candy-mdview:MDV-S05	LANDED	Sf6d03f6fd
+candy-mdview:MDV-S06	LANDED	S42164bd15
+candy-mdview:MDV-S07	LANDED	Seed4a8936
+candy-mdview:MDV-S08	LANDED	S60083e557
+candy-mdview:MDV-S09	LANDED	S1b80e19bf
+candy-mdview:MDV-S10	LANDED	S30c415168
+candy-mdview:MDV-S11	LANDED	S2cb34a32f
+candy-mdview:MDV-S12	LANDED	S7c60af9c6
+candy-mdview:MDV-S13	LANDED	S17d8aff26
+candy-mdview:MDV-S14	LANDED	Se58b33af9
+candy-mdview:MDV-S15	LANDED	S0e2b34328
+candy-mdview:MDV-S16	LANDED	Se5d613b5c
+candy-mdview:MDV-S17	LANDED	Sc860932d6
+candy-mdview:MDV-S18	LANDED	S3af441934
+candy-mdview:MDV-S19	LANDED	Sd1e4b6bd5
+candy-mdview:MDV-S20	LANDED	S269a8051d
+candy-mdview:MDV-S21	LANDED	S787188aa3
+candy-mdview:MDV-S22	LANDED	S0e48f04a7
+candy-mdview:MDV-S23	LANDED	S5fa3ba806
+candy-mdview:MDV-S24	LANDED	S6e5f9e80a
+candy-mdview:RIDERS	REPORT-ONLY	-
+candy-minesweeper:msw-01	LANDED	S7971188bc
+candy-minesweeper:msw-02	LANDED	Sac8640946
+candy-minesweeper:msw-03	LANDED	S5709259df
+candy-minesweeper:msw-04	LANDED	S1ae11773f
+candy-minesweeper:msw-05	LANDED	Se000e4889
+candy-minesweeper:msw-06	LANDED	Sb8431d9ec
+candy-minesweeper:msw-07	LANDED	S8e4a85e94
+candy-minesweeper:msw-08	LANDED	S842fb1607
+candy-minesweeper:msw-09	OWNER-GATED	S2ee39ae0b
+candy-minesweeper:msw-10	LANDED	S56e3d1053
+candy-minesweeper:msw-11	LANDED	S73b1d8106
+candy-minesweeper:msw-12	LANDED	S3a25889fc
+candy-minesweeper:msw-13	LANDED	Sff1479e79
+candy-minesweeper:msw-14	LANDED	Sd5cfee444
+candy-minesweeper:msw-15	LANDED	S9a405f1a9
+candy-minesweeper:msw-16	LANDED	Sdf9883e96
+candy-minesweeper:msw-17	LANDED	Sdf9883e96
+candy-minesweeper:msw-18	LANDED	S4ba7e0636
+candy-minesweeper:msw-19	LANDED	Sf447c2cd8
+candy-minesweeper:msw-20	LANDED	S79f0cd3b1
+candy-minesweeper:msw-21	LANDED	Sa233659d2
+candy-minesweeper:msw-22	LANDED	Sb70f99745
+candy-minesweeper:msw-23	LANDED	S74ce2c3e4
+candy-minesweeper:msw-24	LANDED	S17fadf4dc
+candy-minesweeper:msw-25	LANDED	S71f3bef71
+candy-minesweeper:msw-26	LANDED	S239304a4e
+candy-minesweeper:msw-27	LANDED	S7971188bc
+candy-minesweeper:msw-28	LANDED	S3207a8b07
+candy-minesweeper:msw-29	LANDED	Se79fa1336
+candy-minesweeper:msw-30	LANDED	S58e51e414
+candy-minesweeper:msw-31	LANDED	S966e06fa8
+candy-minesweeper:msw-32	LANDED	S3207a8b07
+candy-minesweeper:msw-33	LANDED	S9e912d505
+candy-minesweeper:msw-34	LANDED	S3207a8b07
+candy-minesweeper:msw-35	LANDED	S952c9921b
+candy-minesweeper:msw-36	LANDED	S952c9921b
+candy-minesweeper:msw-37	LANDED	S37b42dd45
+candy-minesweeper:msw-38	LANDED	S748c781ee
+candy-minesweeper:msw-39	LANDED	S6eedd2d92
+candy-minesweeper:msw-40	LANDED	S035cb781d
+candy-msteams:msteams-01	REPORT-ONLY	-
+candy-msteams:msteams-02	LANDED	S9e84dc967
+candy-msteams:msteams-03	REPORT-ONLY	-
+candy-msteams:msteams-04	LANDED	Fc190c09c8
+candy-msteams:msteams-05	LANDED	Fa6351ace7
+candy-msteams:msteams-06	LANDED	Sf367c763b
+candy-msteams:msteams-07	LANDED	Rc190c09c8
+candy-msteams:msteams-08	LANDED	S12d6b90f3
+candy-msteams:msteams-09	OWNER-SIDE-cc	-
+candy-msteams:msteams-10	LANDED	R19d172672
+candy-msteams:msteams-11	LANDED	S2866b7108
+candy-msteams:msteams-12	LANDED	S7c2f3c4b2
+candy-msteams:msteams-13	LANDED	R12d6b90f3
+candy-msteams:msteams-14	LANDED	Sed37db801
+candy-msteams:msteams-15	LANDED	S24b2bd02f
+candy-msteams:msteams-16	LANDED	S19d172672
+candy-msteams:msteams-17	REPORT-ONLY	-
+candy-msteams:msteams-18	LANDED	Sa6351ace7
+candy-msteams:msteams-19	LANDED	Sf40a7f94a
+candy-msteams:msteams-20	LANDED	Se5ae731ef
+candy-msteams:msteams-21	LANDED	S96f10be51
+candy-msteams:msteams-22	LANDED	Sc190c09c8
+candy-msteams:msteams-23	LANDED	Se74a06654
+candy-msteams:msteams-24	LANDED	Sb8be34531
+candy-msteams:msteams-25	LANDED	Sd12bf7916
+candy-msteams:msteams-26	LANDED	Sf5e6cda52
+candy-msteams:msteams-27	LANDED	S09bd7cfb4
+candy-scriptui:scriptui-01	LANDED	Bb2ead1807
+candy-scriptui:scriptui-02	LANDED	Se8c748261
+candy-scriptui:scriptui-03	LANDED	S606e93ca7
+candy-scriptui:scriptui-04	LANDED	Sb2ead1807
+candy-scriptui:scriptui-05	LANDED	S86ebe1812
+candy-scriptui:scriptui-06	LANDED	Sb6baa92a2
+candy-scriptui:scriptui-07	LANDED	S92dcad3bd
+candy-scriptui:scriptui-08	LANDED	S94c8ce9da
+candy-scriptui:scriptui-09	LANDED	Sbea700518
+candy-scriptui:scriptui-10	LANDED	Sf0f52833b
+candy-scriptui:scriptui-11	LANDED	S2f491a4e0
+candy-scriptui:scriptui-12	LANDED	B8c7ce8b3c
+candy-scriptui:scriptui-13	LANDED	B8c7ce8b3c
+candy-scriptui:scriptui-14	LANDED	S36169ea9e
+candy-scriptui:scriptui-15	LANDED	S7a72f00d5
+candy-scriptui:scriptui-16	LANDED	S0cd4b621e
+candy-scriptui:scriptui-17	LANDED	S7d7558e36
+candy-scriptui:scriptui-18	LANDED	S71f53a357
+candy-scriptui:scriptui-19	LANDED	Sd36315a46
+candy-scriptui:scriptui-20	LANDED	S4034c2982
+candy-scriptui:scriptui-21	LANDED	Seac8d28a1
+candy-scriptui:scriptui-22	LANDED	S7d1425eec
+candy-scriptui:scriptui-23	LANDED	Se4f44d964
+candy-scriptui:scriptui-24	LANDED	S53d73a230
+candy-scriptui:scriptui-25	LANDED	S461a2a525
+candy-scriptui:scriptui-26	LANDED	S9327d23a1
+candy-scriptui:scriptui-27	LANDED	S72774029d
+candy-scriptui:scriptui-28	LANDED	Sfb7a586f0
+candy-scriptui:scriptui-29	LANDED	S9b087c2d7
+candy-scriptui:scriptui-30	LANDED	S3cf9c4f94
+candy-scriptui:scriptui-31	LANDED	S530985cfe
+candy-scriptui:scriptui-32	LANDED	Sdcb6b8a2e
+candy-scriptui:scriptui-33	LANDED	Sc51cf0f1c
+candy-scriptui:scriptui-34	LANDED	S2f78ca09b
+candy-scriptui:scriptui-35	LANDED	Scb13d5eac
+candy-scriptui:scriptui-36	LANDED	Sae5b63c53
+candy-scriptui:scriptui-37	LANDED	S91c4b7b02
+candy-scriptui:scriptui-38	LANDED	S376730aff
+candy-scriptui:scriptui-39	OWNER-GATED	B20d6f3252
+candy-scriptui:scriptui-40	LANDED	S20d6f3252
+candy-scriptui:scriptui-41	LANDED	S249410c6a
+candy-scriptui:scriptui-42	LANDED	Sec2d8a1f9
+candy-scriptui:scriptui-43	LANDED	S57b233fc5
+candy-scriptui:scriptui-44	LANDED	S7439fdcf3
+candy-scriptui:scriptui-45	LANDED	Se59f42047
+candy-scriptui:scriptui-46	LANDED	S6ff369c4d
+candy-scriptui:scriptui-47	LANDED	S2b5e42757
+candy-scriptui:scriptui-48	LANDED	Sa0e41d508
+candy-scriptui:scriptui-49	LANDED	R4f935b9ac
+candy-scriptui:scriptui-50	LANDED	Scebffa8e5
+candy-scriptui:scriptui-51	LANDED	S9be52fd85
+candy-scriptui:scriptui-52	LANDED	S064c3e1d4
+candy-scriptui:scriptui-53	LANDED	Scefd72320
+candy-scriptui:scriptui-54	LANDED	S97ebd6699
+candy-scriptui:scriptui-55	LANDED	S6d4866b4d
+candy-scriptui:scriptui-56	LANDED	B72774029d
+candy-scriptui:scriptui-57	LANDED	Sb00765b2c
+candy-scriptui:scriptui-58	LANDED	S2410d744e
+candy-scriptui:scriptui-59	LANDED	S78d9b76b4
+candy-scriptui:scriptui-60	LANDED	B20d6f3252
+candy-scriptui:scriptui-61	LANDED	S01901207e
+candy-scriptui:scriptui-62	LANDED	Sa904442ab
+candy-scriptui:scriptui-63	LANDED	Sd7ed5761c
+candy-scriptui:scriptui-64	LANDED	S840b0a37c
+candy-scriptui:scriptui-65	LANDED	S073563ca5
+candy-scriptui:scriptui-66	LANDED	S9e64f9563
+candy-scriptui:scriptui-67	LANDED	S4a77f1e00
+candy-scriptui:scriptui-68	LANDED	S845718265
+candy-scriptui:scriptui-69	LANDED	Sa57ec9fb9
+candy-scriptui:scriptui-70	LANDED	Sd7705fbf8
+candy-scriptui:scriptui-71	LANDED	S37889753e
+candy-scriptui:scriptui-72	LANDED	S0454eeb98
+candy-scriptui:scriptui-73	LANDED	Se67effc3c
+candy-scriptui:scriptui-74	LANDED	S6667f854c
+candy-scriptui:scriptui-75	LANDED	S56209fec0
+candy-scriptui:scriptui-76	LANDED	Se4f1e685e
+candy-scriptui:scriptui-77	LANDED	S37889753e
+candy-scriptui:scriptui-78	LANDED	Sf0ed2f3b9
+candy-scriptui:scriptui-79	LANDED	S0e4a3be80
+candy-scriptui:scriptui-80	LANDED	S3bdfa8cb8
+candy-scriptui:scriptui-81	LANDED	S04c0a522c
+candy-scriptui:scriptui-82	LANDED	Se0c478934
+candy-scriptui:scriptui-83	LANDED	S8d1268fe1
+candy-scriptui:scriptui-84	LANDED	Se2ebc3dbe
+candy-scriptui:scriptui-85	LANDED	Sa8e7a6ff9
+candy-sql:RIDERS	REPORT-ONLY	-
+candy-sql:SQL-A01	LANDED	Scfde6b89d
+candy-sql:SQL-A02	LANDED	G13b8d5924
+candy-sql:SQL-A03	LANDED	Gbde144f34
+candy-sql:SQL-A04	LANDED	S5264691b6
+candy-sql:SQL-A05	LANDED	Se163e4901
+candy-sql:SQL-A06	LANDED	S1a5ebb935
+candy-sql:SQL-A07	LANDED	S05bbc3673
+candy-sql:SQL-A08	LANDED	S7a516f55f
+candy-sql:SQL-A09	LANDED	S1a3d0e989
+candy-sql:SQL-C01	LANDED	Scffc5cc25
+candy-sql:SQL-C02	LANDED	G79e46df54
+candy-sql:SQL-C03	LANDED	Ge2ecccb9c
+candy-sql:SQL-C04	LANDED	G57d2bf81b
+candy-sql:SQL-C05	LANDED	S09882a43d
+candy-sql:SQL-C06	LANDED	S32cfd8f79
+candy-sql:SQL-C07	LANDED	Sa4bda720a
+candy-sql:SQL-C08	LANDED	S23257c9bd
+candy-sql:SQL-C09	LANDED	S27c6fb309
+candy-sql:SQL-C10	LANDED	S94a4fff8a
+candy-sql:SQL-C11	LANDED	S6acbb9f7e
+candy-sql:SQL-C12	LANDED	Be9730afec
+candy-sql:SQL-C13	LANDED	Sa58ec409b
+candy-sql:SQL-C14	LANDED	Se9730afec
+candy-sql:SQL-C15	LANDED	Se89fc7c17
+candy-sql:SQL-C16	LANDED	Sacd96c5a7
+candy-sql:SQL-C17	LANDED	S6c9c3cfd3
+candy-sql:SQL-C18	LANDED	S42c7d7e60
+candy-sql:SQL-C19	LANDED	Sd362b2472
+candy-sql:SQL-C20	LANDED	S7cf729a5c
+candy-sql:SQL-C21	LANDED	S4ad1f54c6
+candy-sql:SQL-C22	LANDED	S0b59a7561
+candy-sql:SQL-C23	LANDED	S690f397f5
+candy-sql:SQL-C24	LANDED	Sd05827500
+candy-sql:SQL-C25	LANDED	S562297cf8
+candy-sql:SQL-O01	LANDED	Sacd96c5a7
+candy-sql:SQL-O02	LANDED	S925cf6226
+candy-sql:SQL-O03	LANDED	S5afffd366
+candy-sql:SQL-O04	LANDED	S088787121
+candy-sql:SQL-O05	LANDED	S02a1d7127
+candy-sql:SQL-O06	LANDED	S2be7cd083
+candy-sql:SQL-O07	LANDED	S55b398725
+candy-sql:SQL-O08	LANDED	Bc4601fad8
+candy-sql:SQL-O09	LANDED	Se407e032e
+candy-sql:SQL-O10	LANDED	S9becb2543
+candy-sql:SQL-O11	LANDED	S18436613f
+candy-sql:SQL-O12	LANDED	Sd515c32ac
+candy-sql:SQL-O13	LANDED	Se165fa964
+candy-sql:SQL-O14	LANDED	S4950f70ee
+candy-sql:SQL-O15	LANDED	S339d8c869
+candy-sql:SQL-O16	LANDED	Bc499766e7
+candy-sql:SQL-O17	LANDED	S848fc73f7
+candy-sql:SQL-O18	LANDED	S848fc73f7
+candy-sql:SQL-O19	LANDED	Sc4601fad8
+candy-sql:SQL-O20	LANDED	S78886b125
+candy-sql:SQL-O21	LANDED	Sc499766e7
+candy-sql:SQL-O22	LANDED	Sb655c41ce
+candy-sql:SQL-O23	LANDED	Bc499766e7
+candy-sql:SQL-P01	LANDED	S2e752dd5f
+candy-sql:SQL-P02	LANDED	Se165fa964
+candy-sql:SQL-P03	LANDED	Bcb5af30a1
+candy-sql:SQL-P04	LANDED	S2c71672e4
+candy-sql:SQL-P05	LANDED	S2e5e7a791
+candy-sql:SQL-P06	LANDED	Sd38e2d7a6
+candy-sql:SQL-P07	LANDED	S0f6a4304f
+candy-sql:SQL-P08	LANDED	S9f7eb9f5b
+candy-sql:SQL-P09	LANDED	S955d648a6
+candy-sql:SQL-P10	LANDED	S10338a8f4
+candy-sql:SQL-P11	LANDED	S428ce9b37
+candy-sql:SQL-P12	LANDED	Sbb70214cd
+candy-sql:SQL-P13	LANDED	Be73204008
+candy-sql:SQL-P14	LANDED	S005c34810
+candy-sql:SQL-P16	LANDED	S2bbc579f6
+candy-sql:SQL-P17	LANDED	Ge73204008
+candy-sql:SQL-P18	LANDED	Sa6355516d
+candy-sql:SQL-P19	LANDED	S5e31f026e
+candy-ssh-launcher:sshl-01	LANDED	Sb7ec7f7e3
+candy-ssh-launcher:sshl-02	LANDED	S4324f3f7d
+candy-ssh-launcher:sshl-03	LANDED	S89625d380
+candy-ssh-launcher:sshl-04	LANDED	S1d1468e61
+candy-ssh-launcher:sshl-05	LANDED	Sb2452c592
+candy-ssh-launcher:sshl-06	LANDED	S40e94f113
+candy-ssh-launcher:sshl-07	LANDED	S3b5efb7b5
+candy-ssh-launcher:sshl-08	LANDED	S5d9f053e0
+candy-ssh-launcher:sshl-09	LANDED	Se7641b765
+candy-ssh-launcher:sshl-10	OWNER-GATED	S269b99913
+candy-ssh-launcher:sshl-11	LANDED	Sf259a56d6
+candy-ssh-launcher:sshl-12	LANDED	Babc8ea1c4
+candy-ssh-launcher:sshl-13	LANDED	S494588f5f
+candy-ssh-launcher:sshl-14	LANDED	S4068553dc
+candy-ssh-launcher:sshl-15	LANDED	Sdd31490c0
+candy-ssh-launcher:sshl-16	LANDED	S363f176f3
+candy-ssh-launcher:sshl-17	LANDED	S5341eddde
+candy-ssh-launcher:sshl-18	LANDED	Secbb85605
+candy-ssh-launcher:sshl-19	LANDED	Se8d5a4137
+candy-ssh-launcher:sshl-20	LANDED	S4c2e09ad8
+candy-ssh-launcher:sshl-21	LANDED	S9b818196c
+candy-ssh-launcher:sshl-22	LANDED	Sfdf3a4173
+candy-ssh-launcher:sshl-23	LANDED	S78384d1d9
+candy-ssh-launcher:sshl-24	LANDED	Bd618cad69
+candy-ssh-launcher:sshl-25	LANDED	Sed1036f70
+candy-ssh-launcher:sshl-26	LANDED	Sa0144e35e
+candy-ssh-launcher:sshl-27	LANDED	Sb5d974773
+candy-ssh-launcher:sshl-28	LANDED	Sabc8ea1c4
+candy-ssh-launcher:sshl-29	LANDED	S094336648
+candy-ssh-launcher:sshl-30	LANDED	Sd618cad69
+candy-ssh-launcher:sshl-31	LANDED	Sc081db538
+candy-ssh-launcher:sshl-32	LANDED	S096501c2b
+candy-ssh-launcher:sshl-33	LANDED	S21d746931
+candy-ssh-launcher:sshl-34	LANDED	Sa9526b375
+candy-ssh-launcher:sshl-35	LANDED	S609a1524c
+candy-ssh-launcher:sshl-36	LANDED	S89f40f063
+candy-ssh-launcher:sshl-37	LANDED	S096bb5341
+candy-ssh-launcher:sshl-38	LANDED	S37354bc74
+candy-ssh-launcher:sshl-39	LANDED	Sb76293c62
+candy-ssh-launcher:sshl-40	LANDED	Sbe6be5adb
+candy-ssh-launcher:sshl-41	LANDED	S197213aeb
+candy-ssh-launcher:sshl-42	LANDED	S0c0da0a6b
+candy-ssh-launcher:sshl-43	LANDED	Sb5d974773
+candy-starter:CS-01	LANDED	S66a49a32a
+candy-starter:CS-02	LANDED	Se2b7cfc48
+candy-starter:CS-03	OWNER-GATED	-
+candy-starter:CS-04	LANDED	Sc39d53681
+candy-starter:CS-05	LANDED	S205ac13f9
+candy-starter:CS-06	LANDED	Sc4ce4d921
+candy-starter:CS-07	LANDED	Sd23a7a2e8
+candy-starter:CS-08	LANDED	S33eb28817
+candy-starter:CS-09	LANDED	Sd6109618b
+candy-starter:CS-10	LANDED	S09b55a70a
+candy-starter:CS-11	LANDED	S2e6f8489c
+candy-starter:CS-12	LANDED	S678c8a633
+candy-starter:CS-13	LANDED	S2117432f8
+candy-starter:CS-14	LANDED	S33eb28817
+candy-starter:CS-15	LANDED	S25420582d
+candy-starter:CS-16	LANDED	S33eb28817
+candy-starter:CS-17	LANDED	Sbdd502695
+candy-starter:CS-18	LANDED	F2117432f8
+candy-tetris:tetris-01	LANDED	Bb0883c065
+candy-tetris:tetris-02	LANDED	Sfc26f3b80
+candy-tetris:tetris-03	LANDED	S75e34fd5b
+candy-tetris:tetris-04	LANDED	S3d9975060
+candy-tetris:tetris-05	LANDED	S2b4021641
+candy-tetris:tetris-06	LANDED	Se39ff680b
+candy-tetris:tetris-07	LANDED	Ff25c083c3
+candy-tetris:tetris-08	LANDED	S1a9f15ed5
+candy-tetris:tetris-09	LANDED	Fbeb36c8b7
+candy-tetris:tetris-10	LANDED	B97fc9f22b
+candy-tetris:tetris-11	LANDED	F8467cd5c5
+candy-tetris:tetris-12	LANDED	S94a672777
+candy-tetris:tetris-13	LANDED	S97fc9f22b
+candy-tetris:tetris-14	OWNER-GATED	Rab90fe311
+candy-tetris:tetris-15	LANDED	S5f5bb03c6
+candy-tetris:tetris-16	LANDED	Fab90fe311
+candy-tetris:tetris-17	LANDED	Sf25c083c3
+candy-tetris:tetris-18	LANDED	Bb8efb758d
+candy-tetris:tetris-19	LANDED	Sb1bd66347
+candy-tetris:tetris-20	OWNER-GATED	-
+candy-tetris:tetris-21	OWNER-GATED	R1670bf2f6
+candy-tetris:tetris-22	LANDED	S0cf9606e3
+candy-tetris:tetris-23	LANDED	S454e7b8ab
+candy-tetris:tetris-24	LANDED	S19a1151f8
+candy-tetris:tetris-25	LANDED	Sc4f05921e
+candy-tetris:tetris-26	LANDED	F06079cdd8
+candy-tetris:tetris-27	OWNER-GATED	R06079cdd8
+candy-tetris:tetris-28	LANDED	Fd86aebefb
+candy-tetris:tetris-29	LANDED	F9980833c3
+candy-tetris:tetris-30	LANDED	S49c94d24c
+candy-tetris:tetris-31	LANDED	Sf7b1ade52
+candy-tetris:tetris-32	LANDED	S64e7eec41
+candy-tetris:tetris-33	LANDED	Sae35124c5
+candy-tetris:tetris-34	LANDED	Fc010d706d
+candy-tetris:tetris-35	LANDED	Fb2293c986
+candy-tetris:tetris-36	LANDED	S0e5a3e141
+candy-tetris:tetris-37	LANDED	Fc70a43217
+candy-tetris:tetris-38	LANDED	Sb0883c065
+candy-tetris:tetris-39	LANDED	F3b444f5be
+candy-tetris:tetris-40	LANDED	F86823765b
+candy-tetris:tetris-41	LANDED	Sc407b5c8f
+candy-tetris:tetris-42	OWNER-GATED	-
+candy-tetris:tetris-43	LANDED	Fb0793b682
+candy-tetris:tetris-44	LANDED	Fbeb36c8b7
+candy-top:RIDERS	REPORT-ONLY	-
+candy-top:S-C01	LANDED	B008c40050
+candy-top:S-C02	LANDED	S85a512197
+candy-top:S-C03	LANDED	Sde08c0e50
+candy-top:S-C04	LANDED	Sfd05a0402
+candy-top:S-C05	LANDED	S430976377
+candy-top:S-C06	LANDED	Sea72cde39
+candy-top:S-C07	LANDED	R02e2c0ed2
+candy-top:S-C08	LANDED	S510d5f40b
+candy-top:S-C09	LANDED	S41cb865a3
+candy-top:S-C10	STILL-OPEN	-
+candy-top:S-C11	LANDED	S3b0910db9
+candy-top:S-C12	LANDED	S6490fd5b5
+candy-top:S-C13	LANDED	S9cb5d7efc
+candy-top:S-C14	LANDED	Scd9b49000
+candy-top:S-C15	LANDED	S020109e9b
+candy-top:S-C16	LANDED	S2d5f9dd46
+candy-top:S-C17	LANDED	Sd2d08d6c3
+candy-top:S-N01	LANDED	Se02315d5d
+candy-top:S-N02	LANDED	S1dc6ffc76
+candy-top:S-N03	LANDED	S1dc6ffc76
+candy-top:S-N04	LANDED	S46134361a
+candy-top:S-N05	LANDED	Sd828719d1
+candy-top:S-N06	LANDED	R17a29f674
+candy-top:S-N07	LANDED	Sec151d8c3
+candy-top:S-N08	LANDED	S9254c016e
+candy-top:S-N09	LANDED	R1320b7151
+candy-top:S-N10	LANDED	Sb8d6e1274
+candy-top:S-N11	LANDED	S9a79292f7
+candy-top:S-N12	LANDED	Sfd9be44f1
+candy-top:S-N13	LANDED	S3972b9401
+candy-top:S-N14	LANDED	S898d77e0d
+candy-top:S-N15	LANDED	S7f29043d9
+candy-top:S-N16	LANDED	S444a0a6de
+candy-top:S-N17	LANDED	S464af9aa9
+candy-top:S-N18	LANDED	S387c03177
+candy-top:S-N19	LANDED	S387c03177
+candy-top:S-N20	LANDED	Sfebdc56a5
+candy-top:S-O01	LANDED	S74d5c671d
+candy-top:S-O02	LANDED	S4af4c14e1
+candy-top:S-O03	LANDED	S8e24310de
+candy-top:S-O04	LANDED	Sa00df1bb0
+candy-top:S-O05	LANDED	S8bf40be25
+candy-top:S-O06	LANDED	Sfaa394852
+candy-top:S-O07	LANDED	S322c1b769
+candy-top:S-O08	LANDED	S7c2282bdb
+candy-top:S-O09	LANDED	S0e424f17c
+candy-top:S-O10	LANDED	S5b65d7895
+candy-top:S-O11	LANDED	S057322d61
+candy-top:S-O12	LANDED	P60b304d3f
+candy-top:S-O13	LANDED	S3e619ba3e
+candy-top:S-O14	LANDED	Sf6325e477
+candy-top:S-O15	LANDED	Sdf1f9671b
+candy-top:S-O16	LANDED	S33815fc4d
+candy-top:S-O17	LANDED	Sb26c06f74
+candy-top:S-O18	LANDED	S2db4938a3
+candy-top:S-O19	LANDED	S4c5235291
+candy-top:S-O20	LANDED	Se6a6ce582
+candy-top:S-O21	LANDED	S94db9323e
+candy-top:S-O22	LANDED	S23a83d799
+candy-top:S-O23	LANDED	Sd0acce722
+candy-top:S-P01	LANDED	Sf7ec1a152
+candy-top:S-P02	LANDED	S9383d1279
+candy-top:S-P03	LANDED	S35ab31594
+candy-top:S-P04	LANDED	S044c11af7
+candy-top:S-P05	LANDED	S599deec45
+candy-top:S-P06	LANDED	Sce54b9015
+candy-top:S-P07	LANDED	S044c11af7
+candy-top:S-P08	LANDED	S00f38bb32
+candy-top:S-P09	LANDED	Sb9b6b1634
+candy-top:S-P10	LANDED	S1e9f68633
+candy-top:S-P11	LANDED	Sac8762acb
+candy-top:S-P12	LANDED	S9b2ae388c
+candy-top:S-P13	LANDED	S3abed924d
+candy-top:S-P14	LANDED	Sa09258a66
+candy-top:S-P15	LANDED	Sa09258a66
+candy-top:S-P16	LANDED	S78cc5ad59
+candy-top:S-P17	LANDED	Sf3bb4f736
+candy-top:S-P18	LANDED	S91420f38c
+candy-top:S-P19	LANDED	S6a8455ec8
+candy-top:S-P20	LANDED	Sa4848d3c1
+candy-top:S-P21	LANDED	Se15bf92d0
+candy-top:S-P22	LANDED	Sfd05a0402
+candy-top:S-P23	LANDED	S765705d86
+candy-top:S-P24	LANDED	S2f8d2b70e
+candy-top:S-X01	LANDED	Sb22725dc4
+candy-top:S-X02	LANDED	S0eb67c387
+candy-top:S-X03	LANDED	S249329f7b
+candy-top:S-X04	STILL-OPEN	-
+candy-top:S-X05	LANDED	Se0e3c31fd
+candy-top:S-X06	LANDED	S5e1396c60
+candy-top:S-X07	LANDED	S5c63f6c55
+candy-top:S-X08	LANDED	S7076eeedf
+candy-top:S-X09	STILL-OPEN	-
+candy-top:S-X10	LANDED	Sbbea08e83
+candy-top:S-X11	STILL-OPEN	-
+candy-top:S-X12	LANDED	S3e2fa9de8
+candy-top:S-X13	LANDED	S4e3df1bd3
+candy-top:S-X14	LANDED	Sa23c2ffa4
+candy-top:S-X15	LANDED	S09ed6e9cf
+candy-top:S-X16	LANDED	S40a93dce7
+candy-top:S-X17	LANDED	S008c40050
+candy-top:S-X18	LANDED	S3c15fa9d3
+candy-top:S-X19	LANDED	S83bb41646
+candy-top:S-X20	LANDED	S31f921c40
+candy-vcr:RIDERS	REPORT-ONLY	-
+candy-vcr:VCR-S01	LANDED	B0173a291f
+candy-vcr:VCR-S02	LANDED	B85a98ef96
+candy-vcr:VCR-S03	LANDED	B0ffdf5eba
+candy-vcr:VCR-S04	LANDED	B114dbffa5
+candy-vcr:VCR-S05	LANDED	Sf84e0ea2c
+candy-vcr:VCR-S06	LANDED	S342bc209f
+candy-vcr:VCR-S07	LANDED	S4252e322d
+candy-vcr:VCR-S08	LANDED	S6d0640aa6
+candy-vcr:VCR-S09	LANDED	S990191428
+candy-vcr:VCR-S10	LANDED	S9a0be45ca
+candy-vcr:VCR-S11	LANDED	S883a82295
+candy-vcr:VCR-S12	LANDED	Sbf46c7b42
+candy-vcr:VCR-S13	LANDED	S4614b0407
+candy-vcr:VCR-S14	LANDED	S3b24c6e41
+candy-vcr:VCR-S15	LANDED	S4187bfee7
+candy-vcr:VCR-S16	LANDED	S651ad8725
+candy-vcr:VCR-S17	LANDED	S0ca2ec3a4
+candy-vcr:VCR-S18	LANDED	Sc86b202fa
+candy-vcr:VCR-S19	LANDED	S44812ae11
+candy-vcr:VCR-S20	OWNER-GATED	-
+candy-vcr:VCR-S21	LANDED	Scab1e18c1
+candy-vcr:VCR-S22	LANDED	Saefc0ba18
+candy-vcr:VCR-S23	LANDED	S4676bd5b7
+candy-vcr:VCR-S24	OWNER-GATED	-
+candy-vcr:VCR-S25	LANDED	Sa2615b572
+candy-vcr:VCR-S26	LANDED	S35f3796b8
+candy-vcr:VCR-S27	LANDED	Sa2e8ad2a8
+candy-vcr:VCR-S28	LANDED	Ba2e8ad2a8
+candy-vcr:VCR-S29	LANDED	S38956ebe8
+candy-vcr:VCR-S30	LANDED	S086441770
+candy-vcr:VCR-S31	LANDED	S714799e68
+candy-vcr:VCR-S32	LANDED	Sbf00ad158
+candy-vcr:VCR-S33	LANDED	S7b6588e47
+candy-vcr:VCR-S34	LANDED	S08cfc62ee
+candy-vcr:VCR-S35	OWNER-GATED	-
+candy-vcr:VCR-S36	LANDED	Sc4e1e7ee2
+candy-vcr:VCR-S37	LANDED	S4244b2881
+candy-vcr:VCR-S38	LANDED	S2eb686cde
+candy-vcr:VCR-S39	LANDED	B96805097c
+candy-vcr:VCR-S40	LANDED	B96805097c
+candy-vcr:VCR-S41	LANDED	Sa1ad869e7
+candy-vcr:VCR-S42	LANDED	S058ae0340
+candy-vcr:VCR-S43	LANDED	B84fe75551
+candy-vcr:VCR-S44	LANDED	R8948039e3
+candy-vcr:VCR-S45	LANDED	Sb1cfb7bfb
+candy-vcr:VCR-S46	REPORT-ONLY	-
+candy-vcr:VCR-S47	LANDED	Scbcb9583a
+candy-vcr:VCR-S48	OWNER-SIDE-win	-
+candy-vcr:VCR-S49	OWNER-SIDE-win	-
+candy-vcr:VCR-S50	OWNER-SIDE-win	-
+candy-vcr:VCR-S51	OWNER-SIDE-win	-
+candy-vcr:VCR-S52	OWNER-SIDE-win	-
+candy-vcr:VCR-S53	LANDED	Sbc8ec0c12
+candy-vcr:VCR-S54	LANDED	Sa08c26dca
+candy-vcr:VCR-S55	LANDED	S945df0306
+candy-vcr:VCR-S56	REPORT-ONLY	-
+candy-vcr:VCR-S57	LANDED	Sdbea7fa34
+candy-vcr:VCR-S58	LANDED	S6daa1e669
+candy-vcr:VCR-S59	LANDED	Sef51b2dfc
+candy-vcr:VCR-S60	LANDED	S50ff62267
+candy-vcr:VCR-S61	LANDED	S37a7d06d4
+candy-vcr:VCR-S62	OWNER-GATED	-
+candy-vcr:VCR-S63	OWNER-GATED	-
+candy-vcr:VCR-S64	LANDED	Sc61ca4abc
+candy-vcr:VCR-S65	LANDED	Sf61e2a448
+candy-vcr:VCR-S66	LANDED	S8c8ac8cc1
+candy-vcr:VCR-S67	LANDED	S03c92515e
+candy-vcr:VCR-S68	LANDED	S7df0d03b4
+candy-vcr:VCR-S69	LANDED	S120512b17
+candy-vcr:VCR-S70	LANDED	S15b01ad28
+candy-vcr:VCR-S71	LANDED	S1be77c37e
+candy-vcr:VCR-S72	OWNER-GATED	-
+candy-vcr:VCR-S73	OWNER-GATED	-
+candy-vcr:VCR-S74	LANDED	S674397b3e
+candy-vcr:VCR-S75	LANDED	S3452a557f
+ccweb-parity:CP-S01	OWNER-SIDE-cc	-
+ccweb-parity:CP-S02	OWNER-SIDE-cc	-
+ccweb-parity:CP-S03	OWNER-SIDE-cc	-
+ccweb-parity:CP-S04	OWNER-SIDE-cc	-
+ccweb-parity:CP-S05	OWNER-SIDE-cc	-
+ccweb-parity:CP-S06	OWNER-SIDE-cc	-
+ccweb-parity:CP-S07	OWNER-SIDE-cc	-
+ccweb-parity:CP-S08	OWNER-SIDE-cc	-
+ccweb-parity:CP-S09	OWNER-SIDE-cc	-
+ccweb-parity:CP-S10	OWNER-SIDE-cc	-
+ccweb-parity:CP-S11	OWNER-SIDE-cc	-
+ccweb-parity:CP-S12	OWNER-SIDE-cc	-
+ccweb-parity:CP-S13	OWNER-SIDE-cc	-
+ccweb-parity:CP-S14	OWNER-SIDE-cc	-
+ccweb-parity:CP-S15	OWNER-SIDE-cc	-
+ccweb-parity:CP-S16	OWNER-SIDE-cc	-
+ccweb-parity:CP-S17	OWNER-SIDE-cc	-
+ccweb-parity:CP-S18	OWNER-SIDE-cc	-
+phar-fleet:WF-CURE	LANDED	S191ccd566
+repo-tooling:RT-01	LANDED	-
+repo-tooling:RT-02	LANDED	S9ec13cb0f
+repo-tooling:RT-03	LANDED	Sf55103adf
+repo-tooling:RT-04	LANDED	Se985b1567
+repo-tooling:RT-05	LANDED	Sc2640203f
+repo-tooling:RT-06	LANDED	Scc7078483
+repo-tooling:RT-07	LANDED	S73463c89b
+repo-tooling:RT-08	LANDED	S90d14da30
+repo-tooling:RT-09	LANDED	S6f27522a1
+repo-tooling:RT-10	LANDED	S8acc52819
+repo-tooling:RT-11	LANDED	Sc8065a486
+repo-tooling:RT-12	LANDED	S71ae288ce
+repo-tooling:RT-13	LANDED	S0e59b3c69
+repo-tooling:RT-14	LANDED	S9430a642c
+repo-tooling:RT-15	LANDED	S9ddf8ca25
+repo-tooling:RT-16	LANDED	S032a6a649
+repo-tooling:RT-17	LANDED	S83bdea453
+repo-tooling:RT-18	LANDED	Sa7e2f9777
+repo-tooling:RT-19	LANDED	S617db6e95
+repo-tooling:RT-20	LANDED	S27d4767b5
+repo-tooling:RT-21	LANDED	S5726fab56
+repo-tooling:RT-22	LANDED	S24c32a45e
+repo-tooling:RT-23	LANDED	S233cd7d3f
+repo-tooling:RT-24	LANDED	S45844ce2e
+repo-tooling:RT-25	LANDED	S9a1814dab
+repo-tooling:RT-26	LANDED	Se690405dc
+repo-tooling:RT-27	LANDED	S9c12ba749
+repo-tooling:RT-28	LANDED	R824bf6b44
+repo-tooling:RT-29	LANDED	Sb20232766
+repo-tooling:RT-30	OWNER-GATED	-
+repo-tooling:RT-31	LANDED	R64badc9fa
+repo-tooling:RT-32	LANDED	S4d8cf32dc
+repo-tooling:RT-33	LANDED	S8c03c9cfa
+repo-tooling:RT-34	LANDED	Sfd9aaa65f
+repo-tooling:RT-35	LANDED	S4efef7f0c
+repo-tooling:RT-36	LANDED	Se4e8bd658
+repo-tooling:RT-37	LANDED	S32c90bfcb
+repo-tooling:RT-38	LANDED	Sa5037b2db
+repo-tooling:RT-39	LANDED	S616f3a982
+repo-tooling:RT-40	LANDED	S7ee5793b3
+repo-tooling:RT-41	LANDED	S6e1b3504f
+repo-tooling:RT-42	LANDED	S68b7ed5f0
+repo-tooling:RT-43	LANDED	Sfd9aaa65f
+repo-tooling:RT-44	LANDED	S395846a75
+repo-tooling:RT-45	LANDED	S34102e8b3
+repo-tooling:RT-46	LANDED	Sccbd33883
+repo-tooling:RT-47	LANDED	S3b2353ac2
+repo-tooling:RT-48	LANDED	S9c12ba749
+repo-tooling:RT-49	LANDED	Sed29fa945
+repo-tooling:RT-50	OWNER-GATED	Rb51a22d49
+site-docs:SD-S01	LANDED	S9b1f3f96c
+site-docs:SD-S02	LANDED	S279efa07c
+site-docs:SD-S03	LANDED	Sbbff01150
+site-docs:SD-S04	LANDED	S0ae838706
+site-docs:SD-S05	LANDED	S158cb4cce
+site-docs:SD-S06	LANDED	S82742922a
+site-docs:SD-S07	LANDED	Sdd7764e3f
+site-docs:SD-S08	LANDED	Sfdb7b8b64
+site-docs:SD-S09	LANDED	S9d99b5094
+site-docs:SD-S10	LANDED	S74912c8de
+site-docs:SD-S11	LANDED	S25b30fc3f
+site-docs:SD-S12	LANDED	S7e9747aa0
+site-docs:SD-S13	LANDED	Scc7a8ccba
+site-docs:SD-S14	LANDED	S111465c0a
+site-docs:SD-S15	LANDED	S8d8c535f3
+site-docs:SD-S16	LANDED	Sc2852f335
+site-docs:SD-S17	LANDED	R72c54dce0
+site-docs:SD-S18	LANDED	Sc011c162d
+site-docs:SD-S19	LANDED	S54eb33dce
+site-docs:SD-S20	LANDED	S466431048
+site-docs:SD-S21	LANDED	S7d943faa0
+site-docs:SD-S22	LANDED	S31ef41bac
+site-docs:SD-S23	LANDED	Sf8f23a1ec
+site-docs:SD-S24	LANDED	S0c5b9b942
+site-docs:SD-S25	LANDED	Sfdbf72c80
+site-docs:SD-S26	LANDED	S158cb4cce
+site-docs:SD-S27	LANDED	S249b94fae
+site-docs:SD-S28	LANDED	S97b53bd58
+site-docs:SD-S29	LANDED	Sffe56b091
+site-docs:SD-S30	LANDED	R9430a642c
+site-docs:SD-S31	LANDED	S1510d66e8
+site-docs:SD-S32	LANDED	S5a97316fc
+site-docs:SD-S33	LANDED	S0155a207a
+site-docs:SD-S34	LANDED	Sd4c89128b
+site-docs:SD-S35	LANDED	S8f17d6930
+sugar-animation:RIDERS	REPORT-ONLY	-
+sugar-animation:SA-A1	LANDED	Sae414b9c3
+sugar-animation:SA-A2	OWNER-GATED	-
+sugar-animation:SA-C1	LANDED	S419fe3e22
+sugar-animation:SA-D1	LANDED	S27dec24bb
+sugar-animation:SA-D2	LANDED	S3c3a954ed
+sugar-animation:SA-D3	LANDED	S95367a08e
+sugar-animation:SA-D4	LANDED	S4c402d125
+sugar-animation:SA-D5	REPORT-ONLY	-
+sugar-animation:SA-E1	LANDED	Sb5e7eafca
+sugar-animation:SA-G1	LANDED	Sd2126382f
+sugar-animation:SA-L1	OWNER-GATED	-
+sugar-animation:SA-L2	LANDED	Sa2cd9503b
+sugar-animation:SA-P1	LANDED	Sa2cd9503b
+sugar-animation:SA-P2	LANDED	S9c569c1ba
+sugar-animation:SA-P3	OWNER-GATED	-
+sugar-animation:SA-P4	LANDED	Sc2f358b7a
+sugar-animation:SA-P5	LANDED	Sd4c712edc
+sugar-animation:SA-P6	LANDED	Bae414b9c3
+sugar-animation:SA-R1	OWNER-GATED	-
+sugar-animation:SA-R2	REPORT-ONLY	-
+sugar-animation:SA-T1	LANDED	S033f00bf7
+sugar-animation:SA-V1	LANDED	S7f1f5f76e
+sugar-animation:SA-X1	OWNER-GATED	-
+sugar-animation:SA-X2	LANDED	S8d58d5296
+sugar-animation:SA-X3	LANDED	S9579576af
+sugar-animation:SA-Y1	REPORT-ONLY	-
+sugar-ansi-parser:RIDERS	REPORT-ONLY	-
+sugar-ansi-parser:sap-01	LANDED	R8322bc2e7
+sugar-ansi-parser:sap-02	LANDED	S225790499
+sugar-ansi-parser:sap-03	LANDED	Sa3b7165a8
+sugar-ansi-parser:sap-04	LANDED	S6cbf3fb9a
+sugar-ansi-parser:sap-05	LANDED	Sfb9bb6a5d
+sugar-ansi-parser:sap-06	LANDED	S225790499
+sugar-ansi-parser:sap-07	LANDED	S9dfc82a1e
+sugar-ansi-parser:sap-08	LANDED	S0d0f9da41
+sugar-ansi-parser:sap-09	LANDED	S0ff3eb0ee
+sugar-ansi-parser:sap-10	LANDED	S02710f91f
+sugar-ansi-parser:sap-11	LANDED	Bf61f213da
+sugar-ansi-parser:sap-12	LANDED	S02710f91f
+sugar-ansi-parser:sap-13	OWNER-GATED	Se9ff22c54
+sugar-ansi-parser:sap-14	LANDED	S94282b78d
+sugar-ansi-parser:sap-15	LANDED	Sfb9bb6a5d
+sugar-ansi-parser:sap-16	LANDED	S2a2939101
+sugar-ansi-parser:sap-17	LANDED	Se894dd8eb
+sugar-ansi-parser:sap-18	OWNER-GATED	Sefa94e19a
+sugar-ansi-parser:sap-19	LANDED	Bf61f213da
+sugar-ansi-parser:sap-20	LANDED	S277e1d242
+sugar-ansi-parser:sap-21	LANDED	S2a2939101
+sugar-async:RIDERS	REPORT-ONLY	-
+sugar-async:SA-01	LANDED	S6264fa0d5
+sugar-async:SA-02	LANDED	S1642a3992
+sugar-async:SA-03	LANDED	S1642a3992
+sugar-async:SA-04	LANDED	S32feaa015
+sugar-async:SA-05	LANDED	Sfdb552509
+sugar-async:SA-06	LANDED	S6264fa0d5
+sugar-async:SA-07	LANDED	S80b618e44
+sugar-async:SA-08	LANDED	Se014f4abc
+sugar-async:SA-09	LANDED	S512ace86a
+sugar-async:SA-10	LANDED	Sf9d6bc297
+sugar-async:SA-11	LANDED	Sfef2f0d9d
+sugar-async:SA-12	LANDED	Bc86c57241
+sugar-async:SA-13	LANDED	S70de7866e
+sugar-async:SA-14	LANDED	S43980db3a
+sugar-async:SA-15	LANDED	S98cb24457
+sugar-async:SA-16	LANDED	S175798ea4
+sugar-async:SA-17	LANDED	Sd9ab74630
+sugar-async:SA-18	LANDED	Sa1bbd47e3
+sugar-async:SA-19	LANDED	Ba9dc62c38
+sugar-async:SA-20	LANDED	B1fad701f5
+sugar-async:SA-21	LANDED	S68a844a60
+sugar-async:SA-22	LANDED	S6f30c0148
+sugar-async:SA-23	LANDED	S471c5b3c5
+sugar-async:SA-24	LANDED	S4f0fca41d
+sugar-async:SA-25	LANDED	S1968f1a69
+sugar-async:SA-26	LANDED	Scccbb3f0e
+sugar-async:SA-27	LANDED	S4c9689779
+sugar-async:SA-28	LANDED	Bc460b50fc
+sugar-async:SA-29	LANDED	Se8ab04299
+sugar-async:SA-30	LANDED	S9d8a509cb
+sugar-async:SA-31	LANDED	S689dc18d2
+sugar-async:SA-32	LANDED	S54e39e90f
+sugar-async:SA-33	LANDED	Sde56bdda8
+sugar-async:SA-34	LANDED	S854b4b20e
+sugar-async:SA-35	LANDED	S86525f49f
+sugar-async:SA-36	LANDED	S14c26766d
+sugar-async:SA-37	LANDED	Sc460b50fc
+sugar-cellbuffer:CB-01	LANDED	Bc7ef2005d
+sugar-cellbuffer:CB-02	LANDED	R39e52ff9b
+sugar-cellbuffer:CB-03	LANDED	Sa5d42cd67
+sugar-cellbuffer:CB-04	LANDED	S0da98ee05
+sugar-cellbuffer:CB-05	LANDED	Sc7ef2005d
+sugar-cellbuffer:CB-06	LANDED	Rf98a7af0e
+sugar-cellbuffer:CB-07	LANDED	V0a965859b
+sugar-cellbuffer:CB-08	LANDED	R4a890ea80
+sugar-cellbuffer:CB-09	LANDED	Rd949e7b71
+sugar-cellbuffer:CB-10	LANDED	Sf0db6f388
+sugar-cellbuffer:CB-11	LANDED	S30d47eaac
+sugar-cellbuffer:CB-12	LANDED	S5f7c0a80f
+sugar-cellbuffer:CB-13	LANDED	Sdf5a22ff1
+sugar-cellbuffer:CB-14	LANDED	S0a215d029
+sugar-cellbuffer:CB-15	LANDED	S4ad91cd42
+sugar-cellbuffer:CB-16	LANDED	Sd81c41c48
+sugar-cellbuffer:CB-17	LANDED	S3b80046f5
+sugar-cellbuffer:CB-18	LANDED	Scc9809c00
+sugar-cellbuffer:CB-19	LANDED	S140bc1668
+sugar-cellbuffer:CB-20	LANDED	S9c95153a3
+sugar-cellbuffer:CB-21	LANDED	Sbc9822fd5
+sugar-cellbuffer:CB-22	LANDED	Bc7ef2005d
+sugar-cellbuffer:CB-23	LANDED	S39e52ff9b
+sugar-cellbuffer:CB-24	LANDED	Sb730af565
+sugar-cellbuffer:CB-25	LANDED	S23cbfe233
+sugar-cellbuffer:CB-26	LANDED	Sd88e02fa2
+sugar-cellbuffer:CB-27	LANDED	S87fc218f4
+sugar-cellbuffer:CB-28	LANDED	S197550c7e
+sugar-cellbuffer:CB-29	LANDED	Sd62b16ef7
+sugar-cellbuffer:CB-30	LANDED	S340889735
+sugar-cellbuffer:CB-31	LANDED	S2a07523cd
+sugar-cellbuffer:CB-32	LANDED	S83a722f59
+sugar-cellbuffer:CB-33	LANDED	S4ee00311c
+sugar-cellbuffer:CB-34	LANDED	Sdf5a22ff1
+sugar-cellbuffer:CB-35	LANDED	Scaa98eca0
+sugar-cellbuffer:CB-36	LANDED	S429ec218e
+sugar-cellbuffer:CB-37	LANDED	Scc3c94c39
+sugar-charts:CH-01	LANDED	S16c36b550
+sugar-charts:CH-02	LANDED	Sc1808420a
+sugar-charts:CH-03	LANDED	B440c11ee8
+sugar-charts:CH-04	LANDED	S0e1cb6687
+sugar-charts:CH-05	LANDED	B440c11ee8
+sugar-charts:CH-06	LANDED	S95c49faa3
+sugar-charts:CH-07	LANDED	Baf7971d8f
+sugar-charts:CH-08	LANDED	S5bf0aa1e2
+sugar-charts:CH-09	LANDED	Saf7971d8f
+sugar-charts:CH-10	LANDED	Scf9a2ea69
+sugar-charts:CH-11	LANDED	Sb9b48d9ea
+sugar-charts:CH-12	LANDED	Sf2da1de6b
+sugar-charts:CH-13	LANDED	S18eae23bf
+sugar-charts:CH-14	LANDED	S724dd24af
+sugar-charts:CH-15	LANDED	S6abd02d00
+sugar-charts:CH-16	LANDED	Sffc0e2c98
+sugar-charts:CH-17	LANDED	Saedf9d972
+sugar-charts:CH-18	LANDED	S896c7f066
+sugar-charts:CH-19	LANDED	S33454817a
+sugar-charts:CH-20	LANDED	S58cfa37dd
+sugar-charts:CH-21	LANDED	S4ff0c252f
+sugar-charts:CH-22	LANDED	S95c49faa3
+sugar-charts:CH-23	LANDED	S261a07a8b
+sugar-charts:CH-24	LANDED	S724dd24af
+sugar-charts:CH-25	LANDED	S261a07a8b
+sugar-charts:CH-26	LANDED	S1fea18990
+sugar-charts:CH-27	LANDED	S58f7c7f22
+sugar-charts:CH-28	LANDED	S1dfd3df1c
+sugar-charts:CH-29	LANDED	Sa3f64c9a8
+sugar-charts:CH-30	LANDED	S2b0922043
+sugar-charts:CH-31	LANDED	S16c36b550
+sugar-charts:CH-32	LANDED	S8770e8497
+sugar-charts:CH-33	LANDED	R527ce0285
+sugar-charts:CH-34	LANDED	Se0eb20636
+sugar-charts:CH-35	LANDED	S9eec261bf
+sugar-charts:CH-36	LANDED	S2b0922043
+sugar-charts:CH-37	LANDED	S9e73f7024
+sugar-charts:CH-38	LANDED	S7473dc414
+sugar-charts:CH-39	LANDED	S160f82ca7
+sugar-charts:CH-40	LANDED	S7473dc414
+sugar-charts:CH-41	LANDED	S6e4b38ccf
+sugar-charts:CH-42	LANDED	S2b0922043
+sugar-charts:CH-43	LANDED	Sa7565908f
+sugar-charts:CH-44	LANDED	Sfc5c59816
+sugar-charts:CH-45	LANDED	S031598171
+sugar-charts:CH-46	LANDED	S22ec53fd8
+sugar-charts:CH-47	LANDED	S210293457
+sugar-charts:CH-48	LANDED	S38c9e5e4d
+sugar-charts:CH-49	LANDED	Sfee0d992b
+sugar-charts:CH-50	LANDED	S2b0922043
+sugar-charts:CH-51	LANDED	S2b0922043
+sugar-charts:CH-52	LANDED	Sc0ae4f854
+sugar-charts:CH-53	LANDED	Sa59280928
+sugar-charts:CH-54	LANDED	S6abd02d00
+sugar-charts:CH-55	LANDED	Saedf9d972
+sugar-charts:CH-56	REPORT-ONLY	-
+sugar-charts:CH-57	LANDED	Sc6ef47b37
+sugar-charts:CH-58	LANDED	S0b4ccc456
+sugar-charts:RIDERS	REPORT-ONLY	-
+sugar-cli:SC-B1	LANDED	S5170869fe
+sugar-cli:SC-CL1	LANDED	Sdbd36de07
+sugar-cli:SC-D1	LANDED	S3e7e787cb
+sugar-cli:SC-F1	LANDED	S0a681263e
+sugar-cli:SC-F2	LANDED	Se871eb589
+sugar-cli:SC-F3	LANDED	Sc08aa7080
+sugar-cli:SC-G1	LANDED	B3e7e787cb
+sugar-cli:SC-G2	LANDED	B3e7e787cb
+sugar-cli:SC-HT1	LANDED	S22ff94e15
+sugar-cli:SC-HT2	LANDED	S71bb1052d
+sugar-cli:SC-HT3	LANDED	S08307a74f
+sugar-cli:SC-L1	LANDED	S0a4dd76d7
+sugar-cli:SC-P1	LANDED	Sa047ad35d
+sugar-cli:SC-R1	LANDED	B5170869fe
+sugar-cli:SC-SE1	LANDED	S671b2e2d7
+sugar-cli:SC-SE2	LANDED	S295fcbcba
+sugar-cli:SC-SE3	LANDED	S80dc62a6a
+sugar-cli:SC-SL2	LANDED	S9d5c658d1
+sugar-cli:SC-ST1	LANDED	Sc18a0c6a6
+sugar-cli:SC-ST2	LANDED	S28284be80
+sugar-cli:SC-T1	LANDED	S01539f273
+sugar-cli:SC-T2	LANDED	Sb99c29a28
+sugar-cli:SC-T3	LANDED	B295fcbcba
+sugar-cli:SC-TB1	LANDED	S6c239f2f3
+sugar-cli:SC-TR1	LANDED	Sa46443e53
+sugar-cli:SC-TR2	LANDED	Sc22b181b5
+sugar-cli:SC-TR3	LANDED	Sd84c86d52
+sugar-cli:SC-TR4	LANDED	Sfdf4aa4e7
+sugar-cli:SC-TR5	LANDED	Sc18a0c6a6
+sugar-cli:SC-TR6	LANDED	Sfc9cbcce1
+sugar-cli:SC-U1	LANDED	S7e0479ffb
+sugar-colorprofile:CP-01	LANDED	S1680542cb
+sugar-colorprofile:CP-02	LANDED	Sc9b856765
+sugar-colorprofile:CP-03	LANDED	S5de444b7d
+sugar-colorprofile:CP-04	OWNER-GATED	R5204ff9b2
+sugar-colorprofile:CP-05	LANDED	S7800e9a00
+sugar-colorprofile:CP-06	LANDED	S68083048e
+sugar-colorprofile:CP-07	LANDED	Sfae2d702b
+sugar-colorprofile:CP-08	LANDED	Sa15a657ca
+sugar-colorprofile:CP-09	LANDED	S40b36da50
+sugar-colorprofile:CP-10	LANDED	Se9fa5fb80
+sugar-colorprofile:CP-11	LANDED	Sf82d21af4
+sugar-colorprofile:CP-12	LANDED	Sd80aecbe6
+sugar-colorprofile:CP-13	LANDED	S502c48c42
+sugar-colorprofile:CP-14	LANDED	S3e7741e81
+sugar-colorprofile:CP-15	LANDED	S7800e9a00
+sugar-colorprofile:CP-16	LANDED	S4368f48dc
+sugar-colorprofile:CP-17	LANDED	S5196e4d4f
+sugar-colorprofile:CP-18	LANDED	S30a07cfde
+sugar-colorprofile:CP-19	LANDED	S4461e46ca
+sugar-colorprofile:CP-20	LANDED	S7800e9a00
+sugar-colorprofile:CP-21	LANDED	Sf86d82695
+sugar-colorprofile:CP-22	LANDED	B23681366f
+sugar-colorprofile:CP-23	LANDED	Se75d217d4
+sugar-colorprofile:CP-24	OWNER-GATED	S8f1ac76ae
+sugar-colorprofile:CP-25	LANDED	S23681366f
+sugar-colorprofile:CP-26	LANDED	Sc9b856765
+sugar-colorprofile:CP-27	LANDED	S6077cdb7d
+sugar-colorprofile:CP-28	LANDED	S3e7741e81
+sugar-colorprofile:CP-29	LANDED	S1680542cb
+sugar-colorprofile:CP-30	OWNER-GATED	B26c5cbc9a
+sugar-colorprofile:CP-31	LANDED	S552189296
+sugar-colorprofile:CP-32	LANDED	S2bfd2d8a4
+sugar-colorprofile:CP-33	LANDED	S8194982fb
+sugar-colorprofile:CP-34	LANDED	S552189296
+sugar-colorprofile:CP-35	LANDED	S7800e9a00
+sugar-colorprofile:CP-36	LANDED	S23681366f
+sugar-colorprofile:CP-37	LANDED	S2bc8ebcc5
+sugar-colorprofile:CP-38	LANDED	Sdcaae7c33
+sugar-colorprofile:CP-39	LANDED	Sf4c30e218
+sugar-colorprofile:CP-40	LANDED	Sb10bb1788
+sugar-colorprofile:CP-41	LANDED	S09dd2bff5
+sugar-colorprofile:CP-42	LANDED	B5196e4d4f
+sugar-colorprofile:CP-43	LANDED	Sc0022b9e6
+sugar-colorprofile:CP-44	LANDED	Sd6690d24b
+sugar-colorprofile:CP-45	LANDED	S175d73ed8
+sugar-colorprofile:CP-46	LANDED	S745398e9a
+sugar-colorprofile:CP-47	LANDED	Sa6746cb47
+sugar-colorprofile:CP-48	LANDED	Se5700dc18
+sugar-colorprofile:CP-49	LANDED	S4461e46ca
+sugar-colorprofile:CP-50	LANDED	S88457afaa
+sugar-colorprofile:CP-51	LANDED	Sb239b9ea1
+sugar-colorprofile:CP-52	LANDED	R0cc3adda7
+sugar-colorprofile:CP-53	LANDED	Sffc949a4c
+sugar-colorprofile:CP-54	LANDED	S88bf13ba7
+sugar-colorprofile:CP-55	LANDED	S2bfd2d8a4
+sugar-colorprofile:CP-56	LANDED	S26c5cbc9a
+sugar-constraints:SC-01	LANDED	S8772d8f42
+sugar-constraints:SC-02	LANDED	S751aba2ef
+sugar-constraints:SC-03	LANDED	S538e9c0b9
+sugar-constraints:SC-04	LANDED	Se8020a67a
+sugar-constraints:SC-05	LANDED	Sf6908756e
+sugar-constraints:SC-06	LANDED	S94069ee80
+sugar-constraints:SC-07	LANDED	Sbe35f1b35
+sugar-constraints:SC-08	LANDED	S3ca6a9714
+sugar-constraints:SC-09	LANDED	S52c46c4d1
+sugar-constraints:SC-10	LANDED	S51808eaa8
+sugar-constraints:SC-11	LANDED	S91742f19d
+sugar-constraints:SC-12	LANDED	S15343d470
+sugar-constraints:SC-13	LANDED	S91742f19d
+sugar-constraints:SC-14	LANDED	S8b1e98be0
+sugar-constraints:SC-15	LANDED	S3bbb83a59
+sugar-constraints:SC-16	LANDED	Sc9f83df53
+sugar-constraints:SC-17	LANDED	S688463857
+sugar-constraints:SC-18	OWNER-GATED	-
+sugar-constraints:SC-19	OWNER-GATED	-
+sugar-core:sc-01	LANDED	B6a68a451a
+sugar-core:sc-02	LANDED	Sf6a4ec984
+sugar-core:sc-03	LANDED	S0e150bb9a
+sugar-core:sc-04	LANDED	S6280f7379
+sugar-core:sc-05	LANDED	B2e525d449
+sugar-core:sc-06	LANDED	Sf555a61f5
+sugar-core:sc-07	LANDED	B19ee0f96a
+sugar-core:sc-08	LANDED	Sb1931ef29
+sugar-core:sc-09	LANDED	S99ecdc074
+sugar-core:sc-10	LANDED	S2618d4e1f
+sugar-core:sc-11	LANDED	Sf555a61f5
+sugar-core:sc-12	LANDED	Sb1931ef29
+sugar-core:sc-13	LANDED	S377be3458
+sugar-core:sc-14	LANDED	Sae07f782c
+sugar-core:sc-15	LANDED	Sc32b42dae
+sugar-core:sc-16	LANDED	Sae07f782c
+sugar-core:sc-17	LANDED	Sc5aade17f
+sugar-core:sc-18	LANDED	S749d02a86
+sugar-core:sc-19	LANDED	B0039f0690
+sugar-core:sc-20	LANDED	S583d69b0a
+sugar-core:sc-21	LANDED	Sc5aade17f
+sugar-core:sc-22	LANDED	S583d69b0a
+sugar-core:sc-23	LANDED	S3f193f399
+sugar-core:sc-24	LANDED	B0039f0690
+sugar-core:sc-25	LANDED	Sb1931ef29
+sugar-core:sc-26	LANDED	B79ccfa585
+sugar-core:sc-27	OWNER-GATED	-
+sugar-core:sc-28	LANDED	Sb1931ef29
+sugar-core:sc-29	LANDED	Sb1931ef29
+sugar-core:sc-30	LANDED	S8d4aab7e9
+sugar-core:sc-31	LANDED	S8d4aab7e9
+sugar-core:sc-32	LANDED	Sb1931ef29
+sugar-core:sc-33	LANDED	S583d69b0a
+sugar-core:sc-34	LANDED	S6111b0dfb
+sugar-core:sc-35	LANDED	B0039f0690
+sugar-core:sc-36	LANDED	S9b68db344
+sugar-core:sc-37	LANDED	Sb1931ef29
+sugar-core:sc-38	LANDED	Sf6a4ec984
+sugar-core:sc-39	LANDED	S76a2d0ae0
+sugar-core:sc-40	LANDED	S377be3458
+sugar-core:sc-41	LANDED	Sc5aade17f
+sugar-core:sc-42	LANDED	Sf6a4ec984
+sugar-core:sc-43	LANDED	Sf6a4ec984
+sugar-core:sc-44	LANDED	S2e525d449
+sugar-core:sc-45	LANDED	S0039f0690
+sugar-dashboard:D-01	LANDED	Sc641fba39
+sugar-dashboard:D-02	LANDED	S2499e90ad
+sugar-dashboard:D-03	LANDED	Sdd1593df1
+sugar-dashboard:D-04	LANDED	Sb26891c71
+sugar-dashboard:D-05	LANDED	S5d75648bb
+sugar-dashboard:D-06	LANDED	S2d5f11043
+sugar-dashboard:D-07	LANDED	S7c33c8868
+sugar-dashboard:D-08	LANDED	S0541f6cd8
+sugar-dashboard:D-09	OWNER-GATED	-
+sugar-dashboard:D-10	LANDED	S49352cfd9
+sugar-dashboard:D-100	LANDED	S4890e04b2
+sugar-dashboard:D-101	LANDED	Sd591b9d37
+sugar-dashboard:D-102	LANDED	Sd591b9d37
+sugar-dashboard:D-103	LANDED	S9919a974f
+sugar-dashboard:D-104	LANDED	S07a542306
+sugar-dashboard:D-105	OWNER-GATED	-
+sugar-dashboard:D-106	OWNER-GATED	-
+sugar-dashboard:D-107	LANDED	Sba391cd72
+sugar-dashboard:D-108	OWNER-GATED	-
+sugar-dashboard:D-109	STILL-OPEN	-
+sugar-dashboard:D-11	LANDED	Sfd580ea48
+sugar-dashboard:D-110	LANDED	Sf1d38af9e
+sugar-dashboard:D-111	OWNER-GATED	-
+sugar-dashboard:D-112	LANDED	S4562b609f
+sugar-dashboard:D-113	LANDED	S789162cc7
+sugar-dashboard:D-114	LANDED	S93eb8462a
+sugar-dashboard:D-115	LANDED	S9ca901571
+sugar-dashboard:D-116	LANDED	S705d9dbdf
+sugar-dashboard:D-117	LANDED	S69b6555bb
+sugar-dashboard:D-118	STILL-OPEN	-
+sugar-dashboard:D-119	LANDED	S705d9dbdf
+sugar-dashboard:D-12	LANDED	Fb5459efb3
+sugar-dashboard:D-120	LANDED	S705d9dbdf
+sugar-dashboard:D-121	LANDED	S69b6555bb
+sugar-dashboard:D-122	LANDED	S0a20466bc
+sugar-dashboard:D-123	LANDED	Fff634bd24
+sugar-dashboard:D-124	LANDED	Sc641fba39
+sugar-dashboard:D-125	STILL-OPEN	-
+sugar-dashboard:D-126	OWNER-GATED	-
+sugar-dashboard:D-127	LANDED	S77ce4cd37
+sugar-dashboard:D-128	LANDED	Sea81d5ef9
+sugar-dashboard:D-129	OWNER-GATED	-
+sugar-dashboard:D-13	STILL-OPEN	-
+sugar-dashboard:D-130	LANDED	S0541f6cd8
+sugar-dashboard:D-131	LANDED	S2f9bcef7c
+sugar-dashboard:D-132	OWNER-GATED	-
+sugar-dashboard:D-133	LANDED	S0d2e5c7d9
+sugar-dashboard:D-134	LANDED	S77ce4cd37
+sugar-dashboard:D-135	LANDED	S6a0cd4309
+sugar-dashboard:D-136	LANDED	S2499e90ad
+sugar-dashboard:D-137	LANDED	S33c3c455f
+sugar-dashboard:D-138	LANDED	S28ea7db15
+sugar-dashboard:D-139	LANDED	S18dd540fa
+sugar-dashboard:D-14	LANDED	S0b87fd8ab
+sugar-dashboard:D-140	LANDED	Sb3a7d81bb
+sugar-dashboard:D-141	LANDED	S740493f84
+sugar-dashboard:D-142	LANDED	S508c87004
+sugar-dashboard:D-143	LANDED	Sdd1593df1
+sugar-dashboard:D-144	LANDED	Sd6d48fb76
+sugar-dashboard:D-145	OWNER-GATED	-
+sugar-dashboard:D-146	LANDED	Sbc5a5a306
+sugar-dashboard:D-147	STILL-OPEN	-
+sugar-dashboard:D-148	LANDED	S7d70f5c3f
+sugar-dashboard:D-149	LANDED	S512128c40
+sugar-dashboard:D-15	LANDED	Sf5884f8e4
+sugar-dashboard:D-150	LANDED	Sf7d1e5f01
+sugar-dashboard:D-151	LANDED	Sf5c20ee6d
+sugar-dashboard:D-152	LANDED	S34398a1ba
+sugar-dashboard:D-153	LANDED	Sbdb8ff130
+sugar-dashboard:D-154	OWNER-GATED	-
+sugar-dashboard:D-155	OWNER-GATED	-
+sugar-dashboard:D-156	LANDED	S701f8796e
+sugar-dashboard:D-157	LANDED	S15bb7e303
+sugar-dashboard:D-158	LANDED	S783baab9b
+sugar-dashboard:D-159	LANDED	S480b299bf
+sugar-dashboard:D-16	LANDED	S4890e04b2
+sugar-dashboard:D-160	REPORT-ONLY	-
+sugar-dashboard:D-161	LANDED	S74ec4e77b
+sugar-dashboard:D-162	LANDED	Sa1851419b
+sugar-dashboard:D-163	STILL-OPEN	-
+sugar-dashboard:D-164	STILL-OPEN	-
+sugar-dashboard:D-165	LANDED	S2499e90ad
+sugar-dashboard:D-17	LANDED	S740493f84
+sugar-dashboard:D-18	LANDED	Sf7d1e5f01
+sugar-dashboard:D-19	LANDED	S2417b11c7
+sugar-dashboard:D-20	LANDED	Sf7d1e5f01
+sugar-dashboard:D-21	LANDED	S271c41311
+sugar-dashboard:D-22	LANDED	S0b87fd8ab
+sugar-dashboard:D-23	LANDED	S705d9dbdf
+sugar-dashboard:D-24	LANDED	S765e30278
+sugar-dashboard:D-25	LANDED	Sd264635ea
+sugar-dashboard:D-26	LANDED	Sb29111ef6
+sugar-dashboard:D-27	OWNER-GATED	-
+sugar-dashboard:D-28	LANDED	Sce302bda4
+sugar-dashboard:D-29	LANDED	S49352cfd9
+sugar-dashboard:D-30	LANDED	Sc29b5b6ff
+sugar-dashboard:D-31	LANDED	Sa38287e28
+sugar-dashboard:D-32	LANDED	S82392c1da
+sugar-dashboard:D-33	OWNER-GATED	S480b299bf
+sugar-dashboard:D-34	LANDED	S705d9dbdf
+sugar-dashboard:D-35	LANDED	S914ba3c2d
+sugar-dashboard:D-36	OWNER-GATED	-
+sugar-dashboard:D-37	LANDED	S765e30278
+sugar-dashboard:D-38	LANDED	S1b9398394
+sugar-dashboard:D-39	LANDED	S0d2e5c7d9
+sugar-dashboard:D-40	LANDED	S58d1d7480
+sugar-dashboard:D-41	LANDED	S742fb35a7
+sugar-dashboard:D-42	LANDED	S480b299bf
+sugar-dashboard:D-43	LANDED	S0036524b5
+sugar-dashboard:D-44	LANDED	S408bc7c89
+sugar-dashboard:D-45	LANDED	S1b9ae892c
+sugar-dashboard:D-46	LANDED	S77ce4cd37
+sugar-dashboard:D-47	LANDED	S026f295a7
+sugar-dashboard:D-48	LANDED	S77ce4cd37
+sugar-dashboard:D-49	OWNER-GATED	-
+sugar-dashboard:D-50	LANDED	Sef88372a8
+sugar-dashboard:D-51	LANDED	S179c5b929
+sugar-dashboard:D-52	LANDED	S179c5b929
+sugar-dashboard:D-53	LANDED	Sbeefe7c9f
+sugar-dashboard:D-54	LANDED	Sc29f75df1
+sugar-dashboard:D-55	LANDED	Sd6d48fb76
+sugar-dashboard:D-56	LANDED	Sa114c0f1e
+sugar-dashboard:D-57	LANDED	S8db8fb15b
+sugar-dashboard:D-58	LANDED	S030163a6a
+sugar-dashboard:D-59	LANDED	S2d2c1b2aa
+sugar-dashboard:D-60	OWNER-GATED	S512128c40
+sugar-dashboard:D-61	OWNER-GATED	-
+sugar-dashboard:D-62	OWNER-GATED	-
+sugar-dashboard:D-63	STILL-OPEN	-
+sugar-dashboard:D-64	LANDED	Se55612e2e
+sugar-dashboard:D-65	LANDED	Sb3a7d81bb
+sugar-dashboard:D-66	LANDED	Sb4a3f7b2b
+sugar-dashboard:D-67	LANDED	Sd321d4b6b
+sugar-dashboard:D-68	LANDED	S726a7ef57
+sugar-dashboard:D-69	LANDED	Sca0719335
+sugar-dashboard:D-70	LANDED	Se3d1133ab
+sugar-dashboard:D-71	LANDED	Sa114c0f1e
+sugar-dashboard:D-72	LANDED	Se9298a262
+sugar-dashboard:D-73	OWNER-GATED	-
+sugar-dashboard:D-74	OWNER-GATED	-
+sugar-dashboard:D-75	LANDED	Sd591b9d37
+sugar-dashboard:D-76	LANDED	S0b87fd8ab
+sugar-dashboard:D-77	LANDED	Sa114c0f1e
+sugar-dashboard:D-78	LANDED	S6f3c14949
+sugar-dashboard:D-79	LANDED	Sedb634e63
+sugar-dashboard:D-80	LANDED	Sf66e3a8cf
+sugar-dashboard:D-81	LANDED	S4b802d030
+sugar-dashboard:D-82	LANDED	Sdcfbc1e21
+sugar-dashboard:D-83	LANDED	Sf53b8a28f
+sugar-dashboard:D-84	LANDED	Saf00c9b37
+sugar-dashboard:D-85	STILL-OPEN	-
+sugar-dashboard:D-86	LANDED	Se1c709a0c
+sugar-dashboard:D-87	LANDED	S701f93a7b
+sugar-dashboard:D-88	LANDED	Sa09fd4675
+sugar-dashboard:D-89	LANDED	S63da812c1
+sugar-dashboard:D-90	OWNER-GATED	-
+sugar-dashboard:D-91	OWNER-GATED	-
+sugar-dashboard:D-92	LANDED	Sdcfbc1e21
+sugar-dashboard:D-93	LANDED	S05695a931
+sugar-dashboard:D-94	LANDED	S03ba8c3ae
+sugar-dashboard:D-95	LANDED	S366b291fd
+sugar-dashboard:D-96	LANDED	Sd321d4b6b
+sugar-dashboard:D-97	LANDED	S799d607e4
+sugar-dashboard:D-98	LANDED	Sd321d4b6b
+sugar-dashboard:D-99	LANDED	S435485766
+sugar-datepicker:dp-01	LANDED	S2f25786c6
+sugar-datepicker:dp-02	LANDED	S2f25786c6
+sugar-datepicker:dp-03	LANDED	S1ee249f9d
+sugar-datepicker:dp-04	LANDED	Seb95a056b
+sugar-datepicker:dp-05	LANDED	S5abc4c5f8
+sugar-datepicker:dp-06	LANDED	Sfbbecf8f3
+sugar-datepicker:dp-07	LANDED	S806878f06
+sugar-datepicker:dp-08	LANDED	Scfb6ee016
+sugar-datepicker:dp-09	LANDED	S91178f4a3
+sugar-datepicker:dp-10	LANDED	S25a09a31e
+sugar-datepicker:dp-11	LANDED	Sf238e0fd9
+sugar-datepicker:dp-12	LANDED	S8eba56aa9
+sugar-datepicker:dp-13	LANDED	S38223834f
+sugar-datepicker:dp-14	LANDED	Sb72749306
+sugar-datepicker:dp-15	LANDED	Sab260a18f
+sugar-datepicker:dp-16	LANDED	Sb7c81ca8e
+sugar-datepicker:dp-17	LANDED	S71e6e7377
+sugar-datepicker:dp-18	LANDED	S57b858653
+sugar-datepicker:dp-19	LANDED	Sd468e60f5
+sugar-datepicker:dp-20	LANDED	S011a5b28d
+sugar-datepicker:dp-21	LANDED	Sfda98e243
+sugar-datepicker:dp-22	LANDED	S2f25786c6
+sugar-datepicker:dp-23	LANDED	S51563d4aa
+sugar-datepicker:dp-24	LANDED	Saa36b9fc3
+sugar-datepicker:dp-25	LANDED	Sf2a847918
+sugar-datepicker:dp-26	OWNER-GATED	S9c8e89e30
+sugar-datepicker:dp-27	LANDED	S628893092
+sugar-datepicker:dp-28	LANDED	Sb13e12931
+sugar-datepicker:dp-29	LANDED	S3f00062b2
+sugar-datepicker:dp-30	LANDED	Sc5b3488cf
+sugar-datepicker:dp-31	LANDED	S51295f6bc
+sugar-datepicker:dp-32	LANDED	S063fd36bc
+sugar-datepicker:dp-33	LANDED	S7bee7ce01
+sugar-datepicker:dp-34	LANDED	S1ee249f9d
+sugar-datepicker:dp-35	LANDED	S07a6eac22
+sugar-datepicker:dp-36	LANDED	S91178f4a3
+sugar-diff:SD-01	LANDED	Vff092fe0f
+sugar-diff:SD-02	LANDED	Re49516ea5
+sugar-diff:SD-03	LANDED	R3bb59d9ad
+sugar-diff:SD-04	LANDED	F6af8601fc
+sugar-diff:SD-05	LANDED	S6acdcaf57
+sugar-diff:SD-06	LANDED	Fe0773f344
+sugar-diff:SD-07	OWNER-GATED	-
+sugar-diff:SD-08	LANDED	Fe49516ea5
+sugar-diff:SD-09	LANDED	Fe14b437d9
+sugar-diff:SD-10	LANDED	Fe14b437d9
+sugar-diff:SD-11	LANDED	Feaca5953f
+sugar-diff:SD-12	LANDED	F107c578a4
+sugar-diff:SD-13	LANDED	Be09dae036
+sugar-diff:SD-14	LANDED	Rb9c145340
+sugar-diff:SD-15	OWNER-GATED	-
+sugar-diff:SD-16	LANDED	Fcecbf28d5
+sugar-diff:SD-17	LANDED	Fcecbf28d5
+sugar-diff:SD-18	LANDED	Scecbf28d5
+sugar-diff:SD-19	OWNER-GATED	-
+sugar-diff:SD-20	OWNER-GATED	S6acdcaf57
+sugar-diff:SD-21	LANDED	F4ce238a38
+sugar-diff:SD-22	LANDED	Fd4236b6f3
+sugar-diff:SD-23	LANDED	F4a0e5ea17
+sugar-diff:SD-24	LANDED	F71112621a
+sugar-diff:SD-25	LANDED	R0662ef543
+sugar-diff:SD-26	LANDED	Fe49516ea5
+sugar-diff:SD-27	LANDED	Sc83cffd1f
+sugar-diff:SD-28	LANDED	F6acdcaf57
+sugar-diff:SD-29	LANDED	-
+sugar-flexbox:FBX-01	LANDED	S5db0c9254
+sugar-flexbox:FBX-02	LANDED	B965214f3f
+sugar-flexbox:FBX-03	LANDED	R62bbff866
+sugar-flexbox:FBX-04	LANDED	Sd800f2c86
+sugar-flexbox:FBX-05	LANDED	S65f6ec14a
+sugar-flexbox:FBX-06	LANDED	S78fcdfaed
+sugar-flexbox:FBX-07	LANDED	S2100db756
+sugar-flexbox:FBX-08	LANDED	S96ac0d116
+sugar-flexbox:FBX-09	LANDED	Bb7004dc7a
+sugar-flexbox:FBX-10	LANDED	S96ac0d116
+sugar-flexbox:FBX-11	LANDED	S27da7775b
+sugar-flexbox:FBX-12	LANDED	S16fcbc9a6
+sugar-flexbox:FBX-13	LANDED	S4fa186875
+sugar-flexbox:FBX-14	LANDED	S922d3b158
+sugar-flexbox:FBX-15	LANDED	S0283a5f06
+sugar-flexbox:FBX-16	LANDED	B801b298d1
+sugar-flexbox:FBX-17	LANDED	S035696578
+sugar-flexbox:FBX-18	LANDED	Bb7004dc7a
+sugar-flexbox:FBX-19	LANDED	B0691f2205
+sugar-flexbox:FBX-20	LANDED	Bc6a8678db
+sugar-flexbox:FBX-21	LANDED	Sfbd4a3db6
+sugar-flexbox:FBX-22	LANDED	B0de6fd4a7
+sugar-flexbox:FBX-23	LANDED	B8f2a74050
+sugar-flexbox:FBX-24	LANDED	Scfac0b27e
+sugar-flexbox:FBX-25	LANDED	S915cff396
+sugar-flexbox:FBX-26	LANDED	Bc6a8678db
+sugar-flexbox:FBX-27	LANDED	B77bdd1352
+sugar-flexbox:FBX-28	LANDED	S1c2d61d75
+sugar-flexbox:FBX-29	LANDED	Sb7004dc7a
+sugar-flexbox:FBX-30	LANDED	S4a4b11c83
+sugar-flexbox:FBX-31	LANDED	B12d463d26
+sugar-flexbox:FBX-32	LANDED	S035696578
+sugar-flexbox:FBX-33	LANDED	S1502b6574
+sugar-flexbox:FBX-34	LANDED	S801b298d1
+sugar-flexbox:FBX-35	LANDED	S0691f2205
+sugar-flexbox:FBX-36	LANDED	Seb788ccb8
+sugar-flexbox:FBX-37	LANDED	S12d463d26
+sugar-flexbox:FBX-38	LANDED	S8ef4fe8d3
+sugar-flexbox:FBX-39	LANDED	S035696578
+sugar-flexbox:FBX-40	LANDED	B1c2d61d75
+sugar-flexbox:FBX-41	LANDED	Sd9cf8325d
+sugar-flexbox:FBX-42	LANDED	Sdb442c66b
+sugar-flexbox:FBX-43	LANDED	S084aed80c
+sugar-flexbox:FBX-44	LANDED	S965214f3f
+sugar-flexbox:FBX-45	LANDED	Sbc6f76c0a
+sugar-flexbox:FBX-46	LANDED	Bc6a8678db
+sugar-flexbox:FBX-47	LANDED	B1c2d61d75
+sugar-flexbox:FBX-48	LANDED	S9a5c4c814
+sugar-flexbox:FBX-49	LANDED	Sc64b77f4b
+sugar-flexbox:FBX-50	LANDED	S8f2a74050
+sugar-flexbox:FBX-51	LANDED	S5b1335ff0
+sugar-focus:RIDERS	REPORT-ONLY	-
+sugar-focus:SF-01	LANDED	S36ed0d9cb
+sugar-focus:SF-02	LANDED	Sc45087603
+sugar-focus:SF-03	LANDED	S1ff85e5b3
+sugar-focus:SF-04	LANDED	S5ec5a3817
+sugar-focus:SF-05	LANDED	S1f27631a1
+sugar-focus:SF-06	LANDED	S90ee5b41a
+sugar-focus:SF-07	REPORT-ONLY	-
+sugar-focus:SF-08	LANDED	S36ed0d9cb
+sugar-focus:SF-09	LANDED	Scf9d6b2c5
+sugar-focus:SF-10	LANDED	R464c27b16
+sugar-focus:SF-11	LANDED	S4e29958e7
+sugar-focus:SF-12	LANDED	S7e4b67352
+sugar-focus:SF-13	LANDED	S36ed0d9cb
+sugar-focus:SF-14	LANDED	S36ed0d9cb
+sugar-focus:SF-15	REPORT-ONLY	P4e29958e7
+sugar-focus:SF-16	LANDED	Sb9b241e67
+sugar-forms:RIDERS	REPORT-ONLY	-
+sugar-forms:SF-05	LANDED	S57294ca0a
+sugar-forms:SF-06	LANDED	S1c17d8fe2
+sugar-forms:SF-07	LANDED	Sfd047fb21
+sugar-forms:SF-08	LANDED	S372965a36
+sugar-forms:SF-09	LANDED	S07b22c457
+sugar-forms:SF-10	LANDED	S3af9aa0e6
+sugar-forms:SF-11	LANDED	S7c46e4b30
+sugar-forms:SF-12	LANDED	S936be1171
+sugar-forms:SF-13	LANDED	Sbcd19803d
+sugar-forms:SF-14	LANDED	Seb9b76af9
+sugar-forms:SF-15	LANDED	S932c48312
+sugar-forms:SF-16	LANDED	S1ea9b6dad
+sugar-forms:SF-17	LANDED	Sab57b2fea
+sugar-forms:SF-18	LANDED	S79f4c3a5f
+sugar-forms:SF-19	LANDED	Bc20b9b2a9
+sugar-forms:SF-20	LANDED	Sb6be9ee2f
+sugar-forms:SF-21	LANDED	Sfc57c2a69
+sugar-forms:SF-22	LANDED	S89d117ec8
+sugar-forms:SF-23	LANDED	S89d117ec8
+sugar-forms:SF-24	LANDED	Sc20b9b2a9
+sugar-forms:SF-25	LANDED	S14acd0a2c
+sugar-forms:SF-26	LANDED	S1ea9b6dad
+sugar-forms:SF-27	LANDED	B70bbb7390
+sugar-forms:SF-28	LANDED	Sb8d65524c
+sugar-forms:SF-29	LANDED	Sd909782a2
+sugar-forms:SF-30	LANDED	S6e78edd45
+sugar-forms:SF-31	LANDED	Bf850cc6cb
+sugar-forms:SF-32	LANDED	Sf850cc6cb
+sugar-forms:SF-33	LANDED	S528999747
+sugar-forms:SF-34	LANDED	S908b2be3c
+sugar-forms:SF-35	LANDED	Sc54646d1d
+sugar-forms:SF-36	LANDED	B70bbb7390
+sugar-forms:SF-37	OWNER-GATED	-
+sugar-forms:SF-38	LANDED	Be838cbf44
+sugar-forms:SF-39	LANDED	S14acd0a2c
+sugar-forms:SF-40	LANDED	S4d9b1e260
+sugar-forms:SF-41	LANDED	S932c48312
+sugar-forms:SF-42	LANDED	S9565b6135
+sugar-forms:SF-43	LANDED	Sc1b4f85ad
+sugar-forms:SF-44	LANDED	Sb3c554a9b
+sugar-forms:SF-45	OWNER-GATED	-
+sugar-forms:SF-46	LANDED	Sc54646d1d
+sugar-forms:SF-47	LANDED	S1caf02639
+sugar-forms:SF-48	LANDED	S14acd0a2c
+sugar-forms:SF-49	LANDED	S349dc7e0c
+sugar-forms:SF-50	LANDED	S55b873fa3
+sugar-forms:SF-51	LANDED	Sfd99d1b68
+sugar-forms:SF-52	LANDED	Sc19768c20
+sugar-forms:SF-53	LANDED	S1ea9b6dad
+sugar-forms:SF-54	LANDED	S85d3c9cbc
+sugar-forms:SF-55	LANDED	S70bbb7390
+sugar-forms:SF-56	LANDED	S908b2be3c
+sugar-forms:SF-S01	LANDED	Se08ba884e
+sugar-forms:SF-S02	LANDED	S9565b6135
+sugar-forms:SF-S03	LANDED	Sb2448edf3
+sugar-forms:SF-S04	LANDED	S5c0ef1a55
+sugar-fuzzy:FUZZY-01	LANDED	V3c8189dfc
+sugar-fuzzy:FUZZY-02	LANDED	S5ccaa115d
+sugar-fuzzy:FUZZY-03	LANDED	V3c8189dfc
+sugar-fuzzy:FUZZY-04	LANDED	S2a391cfd3
+sugar-fuzzy:FUZZY-05	LANDED	S7defc4857
+sugar-fuzzy:FUZZY-06	LANDED	Sa2dd3fd12
+sugar-fuzzy:FUZZY-07	LANDED	S14291e0f6
+sugar-fuzzy:FUZZY-08	LANDED	Sfeb98621f
+sugar-fuzzy:FUZZY-09	LANDED	S50daa291c
+sugar-fuzzy:FUZZY-10	LANDED	S9c9875ed0
+sugar-fuzzy:FUZZY-11	LANDED	Scd4214793
+sugar-fuzzy:FUZZY-12	LANDED	S88a16065f
+sugar-fuzzy:FUZZY-13	LANDED	S936ab52ec
+sugar-fuzzy:FUZZY-14	LANDED	S8d02c704d
+sugar-fuzzy:FUZZY-15	LANDED	Sfeb98621f
+sugar-fuzzy:FUZZY-16	LANDED	Sceb611c0f
+sugar-fuzzy:FUZZY-17	LANDED	S80c49a7b6
+sugar-fuzzy:FUZZY-18	LANDED	S51fe87431
+sugar-fuzzy:FUZZY-19	LANDED	Sa682c0abd
+sugar-fuzzy:FUZZY-20	LANDED	S82283bcb6
+sugar-fuzzy:FUZZY-21	LANDED	S69bfc58ca
+sugar-fuzzy:FUZZY-22	LANDED	S69bfc58ca
+sugar-fuzzy:FUZZY-23	LANDED	Sc25595b5c
+sugar-fuzzy:FUZZY-24	LANDED	S697ec6258
+sugar-fuzzy:FUZZY-25	LANDED	S936ab52ec
+sugar-fuzzy:FUZZY-26	LANDED	S2a391cfd3
+sugar-fuzzy:FUZZY-27	OWNER-GATED	-
+sugar-fuzzy:FUZZY-28	LANDED	S8d02c704d
+sugar-fuzzy:FUZZY-29	LANDED	S936ab52ec
+sugar-fuzzy:FUZZY-30	LANDED	Sf123955ea
+sugar-fuzzy:FUZZY-31	LANDED	S8755ef4d7
+sugar-gallery:SG-S01	LANDED	S04198c8e3
+sugar-gallery:SG-S02	LANDED	Sf01596cd4
+sugar-gallery:SG-S03	LANDED	Sf2b08b8d0
+sugar-gallery:SG-S04	LANDED	Scaa54b7f8
+sugar-gallery:SG-S05	LANDED	S3330a6f21
+sugar-gallery:SG-S06	LANDED	Sc69329da5
+sugar-gallery:SG-S07	LANDED	Sc91afc186
+sugar-gallery:SG-S08	LANDED	S8f150b950
+sugar-gallery:SG-S09	LANDED	S3330a6f21
+sugar-gallery:SG-S10	LANDED	S0946ffbd5
+sugar-gallery:SG-S11	LANDED	S2c6a7bf40
+sugar-gallery:SG-S12	LANDED	Sc973b8efb
+sugar-gallery:SG-S13	LANDED	S30ffa2f0f
+sugar-gallery:SG-S14	LANDED	Sd1d5de16f
+sugar-gallery:SG-S15	LANDED	B19449d503
+sugar-gallery:SG-S16	LANDED	S84dbe01d4
+sugar-gallery:SG-S17	LANDED	Sd06e9ade6
+sugar-gallery:SG-S18	LANDED	S82aaaf554
+sugar-gallery:SG-S19	LANDED	B84dbe01d4
+sugar-gallery:SG-S20	LANDED	Se97e08597
+sugar-gallery:SG-S21	LANDED	S31270a07b
+sugar-gallery:SG-S22	LANDED	Sa2258e538
+sugar-gallery:SG-S23	LANDED	B31270a07b
+sugar-gallery:SG-S24	OWNER-GATED	S19449d503
+sugar-gallery:SG-S25	LANDED	Scb1e6c6ef
+sugar-gallery:SG-S26	LANDED	Sb0adbf6fa
+sugar-gallery:SG-S27	LANDED	Sb637fcf9e
+sugar-gallery:SG-S28	LANDED	Saaf1fef76
+sugar-gallery:SG-S29	LANDED	Sf2b08b8d0
+sugar-gallery:SG-S30	LANDED	S1b3e80533
+sugar-gallery:SG-S31	LANDED	Sa4e2d742a
+sugar-gallery:SG-S32	LANDED	S2660db263
+sugar-gallery:SG-S33	LANDED	S922d3b158
+sugar-gallery:SG-S34	LANDED	Sffd73dda7
+sugar-gallery:SG-S35	LANDED	Sf51d0b1af
+sugar-gallery:SG-S36	LANDED	Sf1ded1248
+sugar-gallery:SG-S37	LANDED	Sae110a5af
+sugar-gallery:SG-S38	LANDED	S695edc3e4
+sugar-image:SI-01	LANDED	Sc232481cf
+sugar-image:SI-02	LANDED	S74cefa95e
+sugar-image:SI-03	LANDED	S9b4961fcf
+sugar-image:SI-04	LANDED	Sa6d66e845
+sugar-image:SI-05	LANDED	Sa6d66e845
+sugar-image:SI-06	LANDED	S74cefa95e
+sugar-image:SI-07	LANDED	S7206a4fb3
+sugar-image:SI-08	LANDED	S5c508d4c1
+sugar-image:SI-09	LANDED	S60390aafa
+sugar-image:SI-10	OWNER-GATED	S472c13cf5
+sugar-image:SI-11	LANDED	S3f6832a04
+sugar-image:SI-12	LANDED	Sc232481cf
+sugar-image:SI-13	LANDED	S7206a4fb3
+sugar-image:SI-14	LANDED	S075a93e9e
+sugar-image:SI-15	LANDED	S26038b091
+sugar-image:SI-16	LANDED	S13eb4e728
+sugar-image:SI-17	LANDED	S0aea202a8
+sugar-image:SI-18	OWNER-GATED	R472c13cf5
+sugar-image:SI-19	LANDED	Sc767db946
+sugar-image:SI-20	LANDED	S94116e063
+sugar-image:SI-21	OWNER-GATED	R472c13cf5
+sugar-image:SI-22	LANDED	S222941591
+sugar-image:SI-23	LANDED	S82a7311c2
+sugar-image:SI-24	LANDED	S916cfdfff
+sugar-image:SI-25	LANDED	S222941591
+sugar-image:SI-26	LANDED	S892b015e2
+sugar-image:SI-27	LANDED	S36bbbce51
+sugar-image:SI-28	OWNER-GATED	R472c13cf5
+sugar-image:SI-29	LANDED	Sbeb076e39
+sugar-image:SI-30	LANDED	Sab890f2e5
+sugar-image:SI-31	OWNER-GATED	R472c13cf5
+sugar-image:SI-32	LANDED	S8dc39392b
+sugar-image:SI-33	LANDED	Sc767db946
+sugar-image:SI-34	LANDED	S472c13cf5
+sugar-image:SI-35	LANDED	S467923c8c
+sugar-image:SI-36	LANDED	S5c25503cb
+sugar-image:SI-37	OWNER-GATED	R472c13cf5
+sugar-image:SI-38	LANDED	S890805296
+sugar-image:SI-39	LANDED	S2f8111b3f
+sugar-image:SI-40	LANDED	S97e3567a1
+sugar-image:SI-41	LANDED	S312abe5b1
+sugar-image:SI-42	OWNER-GATED	R472c13cf5
+sugar-image:SI-43	LANDED	S0897cb63b
+sugar-image:SI-44	LANDED	S898b000b2
+sugar-image:SI-45	LANDED	S890805296
+sugar-image:SI-46	OWNER-GATED	R472c13cf5
+sugar-image:SI-47	LANDED	Sf1b39ddda
+sugar-image:SI-48	LANDED	S5c508d4c1
+sugar-image:SI-49	LANDED	S8a74e77b8
+sugar-image:SI-50	LANDED	S472c13cf5
+sugar-image:SI-51	LANDED	S2f8111b3f
+sugar-image:SI-52	LANDED	Sa8b4dea45
+sugar-image:SI-53	LANDED	Se17fd2d16
+sugar-image:SI-54	LANDED	Se17fd2d16
+sugar-image:SI-55	LANDED	S472c13cf5
+sugar-input:SI-01	LANDED	S385d54e16
+sugar-input:SI-02	LANDED	S712247b9d
+sugar-input:SI-03	LANDED	S18f04cb6d
+sugar-input:SI-04	LANDED	S8b19005c3
+sugar-input:SI-05	LANDED	S600a20f72
+sugar-input:SI-06	LANDED	R818d3510b
+sugar-input:SI-07	LANDED	S669681136
+sugar-input:SI-08	LANDED	S3020f844d
+sugar-input:SI-09	LANDED	S7fd9e1f56
+sugar-input:SI-10	LANDED	S1e9f4c0dd
+sugar-input:SI-11	LANDED	Sf28b5b84a
+sugar-input:SI-12	LANDED	S10d73feed
+sugar-input:SI-13	LANDED	S39fdd5599
+sugar-input:SI-14	LANDED	S8ab60f0ae
+sugar-input:SI-15	LANDED	S108009014
+sugar-input:SI-16	LANDED	S7fd9e1f56
+sugar-input:SI-17	LANDED	S699036ad5
+sugar-input:SI-18	LANDED	S6b6daa703
+sugar-input:SI-19	LANDED	S010059b23
+sugar-input:SI-20	LANDED	S67d3548f8
+sugar-input:SI-21	LANDED	S501adebdc
+sugar-input:SI-22	LANDED	Secded0dfd
+sugar-input:SI-23	LANDED	S3a0ff2f72
+sugar-input:SI-24	LANDED	Reeb8e3d05
+sugar-input:SI-25	LANDED	Scd3e54a96
+sugar-input:SI-26	LANDED	S8b8aaeb00
+sugar-input:SI-27	LANDED	Sd72e5a292
+sugar-input:SI-28	LANDED	S6a09d39d5
+sugar-input:SI-29	LANDED	Sc70734a91
+sugar-input:SI-30	LANDED	Sc70734a91
+sugar-input:SI-31	LANDED	S73d9baaef
+sugar-input:SI-32	LANDED	S836250bb6
+sugar-input:SI-33	LANDED	Sd3900463c
+sugar-input:SI-34	LANDED	S9aaf24cc8
+sugar-input:SI-35	LANDED	S69101a2b3
+sugar-input:SI-36	LANDED	R7c7952751
+sugar-input:SI-37	LANDED	S0c8665f93
+sugar-input:SI-38	LANDED	S28476bfae
+sugar-input:SI-39	LANDED	S95fdb902b
+sugar-input:SI-40	LANDED	S385d54e16
+sugar-input:SI-41	LANDED	S385d54e16
+sugar-log:SL-01	LANDED	S6b076561f
+sugar-log:SL-02	LANDED	S3ecbc9d51
+sugar-log:SL-03	LANDED	S8de904c15
+sugar-log:SL-04	LANDED	Sc7b7ade80
+sugar-log:SL-05	LANDED	S5c7c4e36d
+sugar-log:SL-06	LANDED	S1aebc08fe
+sugar-log:SL-07	LANDED	S8ad51c851
+sugar-log:SL-08	LANDED	S3819cba83
+sugar-log:SL-09	OWNER-GATED	-
+sugar-log:SL-10	LANDED	S7383c3a0f
+sugar-log:SL-11	LANDED	S3d0cd52cf
+sugar-log:SL-12	LANDED	S54dcaceb6
+sugar-log:SL-13	LANDED	Sf4ea244a0
+sugar-log:SL-14	LANDED	S4b7770416
+sugar-log:SL-15	OWNER-GATED	-
+sugar-log:SL-16	LANDED	S8bdf69d83
+sugar-log:SL-17	LANDED	S3d326a792
+sugar-log:SL-18	LANDED	S4a716388c
+sugar-log:SL-19	OWNER-GATED	-
+sugar-log:SL-20	REPORT-ONLY	-
+sugar-log:SL-21	LANDED	S1832ae5c2
+sugar-log:SL-22	LANDED	S5de1ba196
+sugar-log:SL-23	LANDED	Sd0ea457e3
+sugar-log:SL-24	LANDED	Sec81fad6b
+sugar-log:SL-25	OWNER-GATED	-
+sugar-log:SL-26	LANDED	Sf1cabc674
+sugar-log:SL-27	LANDED	S3c232be47
+sugar-log:SL-28	LANDED	S80da817f8
+sugar-log:SL-29	LANDED	S7f7029e8b
+sugar-log:SL-30	LANDED	Sf4ea244a0
+sugar-log:SL-31	LANDED	Sec81fad6b
+sugar-log:SL-32	LANDED	Sc8944e3f7
+sugar-log:SL-33	LANDED	S6357c4475
+sugar-log:SL-34	OWNER-GATED	-
+sugar-log:SL-35	LANDED	Sa383d8856
+sugar-log:SL-36	LANDED	S3819cba83
+sugar-log:SL-37	LANDED	S07926e762
+sugar-log:SL-38	LANDED	Sd7ecbd342
+sugar-log:SL-39	LANDED	S249a402cf
+sugar-log:SL-40	LANDED	S5ee55e307
+sugar-log:SL-41	LANDED	Sfccf67798
+sugar-log:SL-42	LANDED	S6357c4475
+sugar-log:SL-43	LANDED	Sa5c1819e6
+sugar-log:SL-44	LANDED	R7018b062a
+sugar-log:SL-45	LANDED	S3819cba83
+sugar-log:SL-46	LANDED	Sce547a9cf
+sugar-log:SL-47	LANDED	S391efa5df
+sugar-log:SL-48	LANDED	Sec81fad6b
+sugar-markdown:RIDERS	REPORT-ONLY	-
+sugar-markdown:SM-S01	LANDED	Ved15c3401
+sugar-markdown:SM-S02	LANDED	Ved15c3401
+sugar-markdown:SM-S03	LANDED	S7af9d75d3
+sugar-markdown:SM-S04	LANDED	Sedb4fd8f2
+sugar-markdown:SM-S05	LANDED	S816336f7d
+sugar-markdown:SM-S06	LANDED	S3e11e3c32
+sugar-markdown:SM-S07	LANDED	S32d41e73c
+sugar-markdown:SM-S08	LANDED	S0ba1d412d
+sugar-markdown:SM-S09	LANDED	S7b49d3933
+sugar-markdown:SM-S10	LANDED	S5aeaa729e
+sugar-markdown:SM-S11	LANDED	S717c23102
+sugar-markdown:SM-S12	LANDED	Sc0986bb75
+sugar-markdown:SM-S13	LANDED	Scf06e0ccf
+sugar-markdown:SM-S14	LANDED	Se92d296f6
+sugar-markdown:SM-S15	LANDED	Sc91afc186
+sugar-markdown:SM-S16	LANDED	Scf06e0ccf
+sugar-markdown:SM-S17	LANDED	Se0beed388
+sugar-markdown:SM-S18	LANDED	Se0beed388
+sugar-markdown:SM-S19	LANDED	S271d9b21c
+sugar-markdown:SM-S20	LANDED	Rab2d10171
+sugar-markdown:SM-S21	LANDED	Sd87f52c15
+sugar-markdown:SM-S22	LANDED	Scf06e0ccf
+sugar-markdown:SM-S23	LANDED	Scf06e0ccf
+sugar-markdown:SM-S24	LANDED	Scf06e0ccf
+sugar-markdown:SM-S25	LANDED	Scf06e0ccf
+sugar-markdown:SM-S26	LANDED	Sde959f0da
+sugar-markdown:SM-S27	LANDED	S77fc462f9
+sugar-markdown:SM-S28	LANDED	Scf06e0ccf
+sugar-markdown:SM-S29	LANDED	S177b76fca
+sugar-markdown:SM-S30	LANDED	Scf06e0ccf
+sugar-markdown:SM-S31	LANDED	S56d6b8d89
+sugar-markdown:SM-S32	LANDED	Sd40e4009c
+sugar-markdown:SM-S33	LANDED	Sa6a59bc52
+sugar-markdown:SM-S34	LANDED	Scf06e0ccf
+sugar-markdown:SM-S35	LANDED	Sa6a59bc52
+sugar-markdown:SM-S36	LANDED	S9cabc838c
+sugar-markdown:SM-S37	LANDED	Sd269c8b16
+sugar-markdown:SM-S38	LANDED	S56c961ee7
+sugar-markdown:SM-S39	LANDED	S67e160f69
+sugar-markdown:SM-S40	LANDED	S56c961ee7
+sugar-markdown:SM-S41	LANDED	S1719c1744
+sugar-markdown:SM-S42	LANDED	S4dd0f7e9e
+sugar-markdown:SM-S43	LANDED	S5bfdcd30f
+sugar-markdown:SM-S44	LANDED	Sca59f17e0
+sugar-markdown:SM-S45	LANDED	S985c05146
+sugar-markdown:SM-S46	LANDED	S8606fe3ad
+sugar-markdown:SM-S47	LANDED	S7b20138c2
+sugar-markdown:SM-S48	LANDED	S717c23102
+sugar-markdown:SM-S49	LANDED	S509bd217b
+sugar-markdown:SM-S50	LANDED	Sa34c453fd
+sugar-markdown:SM-S51	LANDED	S8e746da87
+sugar-markdown:SM-S52	LANDED	Sf7b3228f9
+sugar-markdown:SM-S53	LANDED	Sf2d2bc0b0
+sugar-markdown:SM-S54	LANDED	S50d7cd203
+sugar-markdown:SM-S55	LANDED	S6f437c13a
+sugar-markdown:SM-S56	LANDED	S40e89f778
+sugar-markdown:SM-S57	LANDED	S4cd9a3147
+sugar-markdown:SM-S58	LANDED	S417bba67e
+sugar-markdown:SM-S59	LANDED	S79e7a4a39
+sugar-markdown:SM-S60	LANDED	Scf06e0ccf
+sugar-mcp-client:S-01	LANDED	Sc3377db60
+sugar-mcp-client:S-02	LANDED	R9c88a3e0f
+sugar-mcp-client:S-03	LANDED	S8b470f5dc
+sugar-mcp-client:S-04	LANDED	S60bc52a21
+sugar-mcp-client:S-05	LANDED	Sf8ab3d424
+sugar-mcp-client:S-06	LANDED	Bf6dcb8f6c
+sugar-mcp-client:S-07	LANDED	Sa4f408e06
+sugar-mcp-client:S-08	LANDED	S90e77af31
+sugar-mcp-client:S-09	LANDED	S68dde556d
+sugar-mcp-client:S-10	LANDED	S53c11f1ea
+sugar-mcp-client:S-11	LANDED	S9171ed2c9
+sugar-mcp-client:S-12	LANDED	S9a4ac03c9
+sugar-mcp-client:S-13	LANDED	S057478424
+sugar-mcp-client:S-14	LANDED	S727148984
+sugar-mcp-client:S-15	LANDED	Sc3ce8d15a
+sugar-mcp-client:S-16	LANDED	S13f796676
+sugar-mcp-client:S-17	LANDED	S292bf5e7f
+sugar-mcp-client:S-18	LANDED	S9a4ac03c9
+sugar-mcp-client:S-19	LANDED	S38a34150f
+sugar-mcp-client:S-20	LANDED	S8328e434b
+sugar-mcp-client:S-21	LANDED	Sdee1f216b
+sugar-mcp-client:S-22	LANDED	Sf6dcb8f6c
+sugar-mcp-client:S-23	LANDED	Seb31928b9
+sugar-mcp-client:S-24	LANDED	S38b201cea
+sugar-mcp-client:S-25	LANDED	S58294911d
+sugar-mcp-client:S-26	LANDED	Sdd41f1e45
+sugar-mcp-client:S-27	LANDED	S96fb6f51d
+sugar-mcp-client:S-28	LANDED	S194025b15
+sugar-mcp-client:S-29	LANDED	S8081ada9f
+sugar-mcp-client:S-30	LANDED	Se894dd8eb
+sugar-mcp-client:S-31	LANDED	S39e9a9797
+sugar-mcp-client:S-32	LANDED	S67e2c69e2
+sugar-mcp-client:S-33	LANDED	Sd42c0c21a
+sugar-mcp-client:S-34	LANDED	S0a33dbb04
+sugar-mcp-client:S-35	LANDED	S727148984
+sugar-mcp-client:S-36	LANDED	S063e4a513
+sugar-mcp-client:S-37	LANDED	S458d39d9c
+sugar-mcp-client:S-38	LANDED	S75bb9ae2d
+sugar-mcp-client:S-39	LANDED	S063e4a513
+sugar-mcp-client:S-40	LANDED	Se65392fab
+sugar-mcp-client:S-41	LANDED	S5ddac241e
+sugar-metrics:MET-BUCKETS	OWNER-GATED	-
+sugar-metrics:MET-CLOSURE	LANDED	S5c992fd07
+sugar-metrics:MET-DESCRIBE	LANDED	S028c04b91
+sugar-metrics:MET-DIRTYGATE	LANDED	Se09c9783e
+sugar-metrics:MET-DOCDOC	LANDED	S810305276
+sugar-metrics:MET-EMITGUARD	LANDED	S46f67fc22
+sugar-metrics:MET-EXCSWEEP	LANDED	S0f12208a6
+sugar-metrics:MET-FACTORIES	LANDED	S59d6d2575
+sugar-metrics:MET-FLUSHPIN	LANDED	Sf58dd5c5d
+sugar-metrics:MET-INSTRUMENTS	LANDED	Sb24f51f5f
+sugar-metrics:MET-JSONSTREAM	LANDED	V04b268845
+sugar-metrics:MET-LOCALEFMT	LANDED	Sc768f7aec
+sugar-metrics:MET-MAXFAMILIES	OWNER-GATED	-
+sugar-metrics:MET-MEMOIZE	LANDED	S52a0ee30a
+sugar-metrics:MET-MEMORYFOLD	LANDED	S0cc9cee0e
+sugar-metrics:MET-MIRROR	LANDED	S88e73059c
+sugar-metrics:MET-MULTIASSERT	LANDED	S5c992fd07
+sugar-metrics:MET-NAMEGATE	LANDED	S1ffb4796d
+sugar-metrics:MET-NONFINITE	LANDED	Sa0f17f45b
+sugar-metrics:MET-PARAMS	OWNER-GATED	-
+sugar-metrics:MET-PRIVATECTOR	OWNER-GATED	Rb24f51f5f
+sugar-metrics:MET-RAND	LANDED	Sf19e8bda7
+sugar-metrics:MET-RECLAIM	OWNER-GATED	-
+sugar-metrics:MET-REGCONFLICT	LANDED	S124b64f1f
+sugar-metrics:MET-REGSHORTHAND	LANDED	S59d6d2575
+sugar-metrics:MET-RULEFIX	OWNER-GATED	-
+sugar-metrics:MET-SAFEEX	LANDED	Safb043090
+sugar-metrics:MET-SEAMS	LANDED	S99dc5be2c
+sugar-metrics:MET-SECMERGE	LANDED	Sc668482d0
+sugar-metrics:MET-SNAPSHOT	LANDED	Sc99635989
+sugar-metrics:MET-SPLITKEY	LANDED	Sa161800cd
+sugar-metrics:MET-STAGING	LANDED	S10daff558
+sugar-metrics:MET-STATSDBATCH	OWNER-GATED	-
+sugar-metrics:MET-STDERRTEST	LANDED	S0882d03bf
+sugar-metrics:MET-TAPEGIF	LANDED	S2477598df
+sugar-metrics:MET-UDPTIMEOUT	LANDED	Sffabf96ee
+sugar-metrics:MET-UNISWEEP	LANDED	S9a39d3fa8
+sugar-metrics:MET-WIREGRAMMAR	LANDED	S8c44d3bad
+sugar-metrics:MET-WITHTAGS	LANDED	S028c04b91
+sugar-mouse:SM-S01	LANDED	S89892feff
+sugar-mouse:SM-S02	LANDED	Sa3794152f
+sugar-mouse:SM-S03	LANDED	Sbe94abd29
+sugar-mouse:SM-S04	LANDED	Sfb91260ec
+sugar-mouse:SM-S05	LANDED	S6005e2853
+sugar-mouse:SM-S06	LANDED	Sa60ea2770
+sugar-mouse:SM-S07	LANDED	S0fd18308e
+sugar-mouse:SM-S08	LANDED	S1632578e4
+sugar-mouse:SM-S09	LANDED	Sf105625bc
+sugar-mouse:SM-S10	LANDED	Sab7f08941
+sugar-mouse:SM-S11	LANDED	S6005e2853
+sugar-mouse:SM-S12	LANDED	S3ae18f59e
+sugar-mouse:SM-S13	LANDED	S3f581dbf3
+sugar-mouse:SM-S14	LANDED	S852825941
+sugar-mouse:SM-S15	LANDED	S75ba2b791
+sugar-mouse:SM-S16	LANDED	S85353b8a2
+sugar-mouse:SM-S17	LANDED	Sc21b4d236
+sugar-mouse:SM-S18	LANDED	Sdbc79f88c
+sugar-mouse:SM-S19	REPORT-ONLY	-
+sugar-mouse:SM-S20	LANDED	Sa01a467fd
+sugar-mouse:SM-S21	LANDED	S2410b1666
+sugar-mouse:SM-S22	LANDED	S3f581dbf3
+sugar-mouse:SM-S23	LANDED	S86b77f327
+sugar-mouse:SM-S24	LANDED	Sc85ba485f
+sugar-mouse:SM-S25	LANDED	S8421f2456
+sugar-mouse:SM-S26	LANDED	S45226ef61
+sugar-mouse:SM-S27	LANDED	S53f5053e6
+sugar-mouse:SM-S28	LANDED	S21a298ce2
+sugar-mouse:SM-S29	LANDED	Sba3f379d7
+sugar-mouse:SM-S30	LANDED	Sa60ea2770
+sugar-mouse:SM-S31	LANDED	Sbe3c5f89d
+sugar-mouse:SM-S32	LANDED	Sa60ea2770
+sugar-mouse:SM-S33	LANDED	Sba3f379d7
+sugar-mouse:SM-S34	LANDED	Sfa9666c88
+sugar-mouse:SM-S35	LANDED	Sa60ea2770
+sugar-mouse:SM-S36	LANDED	Sfda78a0af
+sugar-navstack:NS-01	LANDED	Sda5302a0b
+sugar-navstack:NS-02	LANDED	S6cf75aa23
+sugar-navstack:NS-03	LANDED	Sa13bc433b
+sugar-navstack:NS-04	OWNER-GATED	-
+sugar-navstack:NS-05	OWNER-GATED	-
+sugar-navstack:NS-06	LANDED	S7f34c463a
+sugar-navstack:NS-07	LANDED	Scab672aa8
+sugar-navstack:NS-08	LANDED	S5f08a353d
+sugar-navstack:NS-09	LANDED	Sbd881dd50
+sugar-navstack:NS-10	LANDED	S850bc6499
+sugar-navstack:NS-11	LANDED	S8a4b1bd8a
+sugar-navstack:NS-12	LANDED	S57c8548b2
+sugar-navstack:NS-13	LANDED	S5d33dbaf8
+sugar-navstack:NS-14	LANDED	S4e70e671e
+sugar-navstack:NS-15	LANDED	Sd47dc32a5
+sugar-navstack:NS-16	LANDED	S0084c1c57
+sugar-navstack:NS-17	LANDED	S0084c1c57
+sugar-navstack:NS-18	LANDED	S66b987185
+sugar-navstack:NS-19	LANDED	S5fbd00c41
+sugar-navstack:NS-20	LANDED	S1a9ffe5c5
+sugar-navstack:NS-21	LANDED	Se9b8890cd
+sugar-navstack:NS-22	LANDED	S315906c52
+sugar-navstack:NS-23	LANDED	Sdfefdd709
+sugar-navstack:NS-24	LANDED	S714059ea8
+sugar-navstack:NS-25	LANDED	S27a778d59
+sugar-navstack:NS-26	LANDED	S172b0d6cc
+sugar-navstack:NS-27	OWNER-GATED	-
+sugar-navstack:NS-28	LANDED	S14b12e31a
+sugar-navstack:NS-29	LANDED	S9083764a3
+sugar-navstack:NS-30	LANDED	S4042d673b
+sugar-navstack:NS-31	LANDED	S0f781cd7e
+sugar-overlay:SO-01	LANDED	S31780144a
+sugar-overlay:SO-02	LANDED	Sfd464f672
+sugar-overlay:SO-03	LANDED	Bbcecb542d
+sugar-overlay:SO-04	LANDED	S320d2ea89
+sugar-overlay:SO-05	LANDED	S007c7b427
+sugar-overlay:SO-06	LANDED	Sb7d025353
+sugar-overlay:SO-07	LANDED	Sb711b6411
+sugar-overlay:SO-08	LANDED	Sff39f812f
+sugar-overlay:SO-09	LANDED	S9fa0874b6
+sugar-overlay:SO-10	LANDED	S123cd0570
+sugar-overlay:SO-11	LANDED	S85412ce52
+sugar-overlay:SO-12	LANDED	B963d1ddb7
+sugar-overlay:SO-13	LANDED	Sea29d36d3
+sugar-overlay:SO-14	LANDED	Bc4f8be9ea
+sugar-overlay:SO-15	LANDED	Sc4f8be9ea
+sugar-overlay:SO-16	LANDED	Sd86c2f63e
+sugar-overlay:SO-17	LANDED	S21b8ae410
+sugar-overlay:SO-18	LANDED	Sb189857cf
+sugar-overlay:SO-19	LANDED	S30f2e8414
+sugar-overlay:SO-20	LANDED	Sd68855d8b
+sugar-overlay:SO-21	LANDED	S436a2af66
+sugar-overlay:SO-22	LANDED	S8ec55a609
+sugar-overlay:SO-23	LANDED	S625b65fa3
+sugar-overlay:SO-24	LANDED	S185ad2549
+sugar-overlay:SO-25	LANDED	S2b2736c5b
+sugar-overlay:SO-26	LANDED	S2669b4840
+sugar-overlay:SO-27	LANDED	Sc927ad547
+sugar-overlay:SO-28	LANDED	Bd7d999c3b
+sugar-overlay:SO-29	LANDED	B410e83aec
+sugar-overlay:SO-30	LANDED	S195b02971
+sugar-overlay:SO-31	LANDED	Sd86c2f63e
+sugar-overlay:SO-32	LANDED	B2669b4840
+sugar-overlay:SO-33	LANDED	Saddf3d875
+sugar-overlay:SO-34	LANDED	S625b65fa3
+sugar-overlay:SO-35	LANDED	Sc90457ac9
+sugar-overlay:SO-36	LANDED	Sbcecb542d
+sugar-overlay:SO-37	LANDED	S9c8cbea9e
+sugar-overlay:SO-38	LANDED	S8177fea98
+sugar-panels:S-01	LANDED	S875388775
+sugar-panels:S-02	LANDED	S0688fd597
+sugar-panels:S-03	LANDED	Sb96f4ccc9
+sugar-panels:S-04	LANDED	S2ac9e3156
+sugar-panels:S-05	LANDED	Sddac6e86f
+sugar-panels:S-06	LANDED	S898d5ba1d
+sugar-panels:S-07	LANDED	Se145cd194
+sugar-panels:S-08	LANDED	S554621058
+sugar-panels:S-09	LANDED	S88b954a29
+sugar-panels:S-10	LANDED	S9651f5618
+sugar-panels:S-11	LANDED	Sf35e85a90
+sugar-panels:S-12	LANDED	S4def79268
+sugar-panels:S-13	LANDED	Se3eac6252
+sugar-panels:S-14	LANDED	Seaea02cdc
+sugar-panels:S-15	LANDED	S31b38faba
+sugar-panels:S-16	LANDED	Sc57107e38
+sugar-panels:S-17	LANDED	Se89a80169
+sugar-panels:S-18	LANDED	S3bc968c55
+sugar-panels:S-19	LANDED	Saf78fb44d
+sugar-panels:S-20	LANDED	S66cf93762
+sugar-panels:S-21	LANDED	S82d648753
+sugar-panels:S-22	LANDED	S000a01bbe
+sugar-panels:S-23	LANDED	Scbd4482a7
+sugar-panels:S-24	LANDED	S85af0c83f
+sugar-panels:S-25	LANDED	S0258df400
+sugar-panels:S-26	LANDED	Sfa2046fb6
+sugar-panels:S-27	LANDED	Se2cccd98e
+sugar-panels:S-28	LANDED	S807d33e83
+sugar-panels:S-29	LANDED	Sb7f94bc27
+sugar-panels:S-30	LANDED	S8c493a5ca
+sugar-panels:S-31	LANDED	Sacfd399b8
+sugar-panels:S-32	LANDED	S07c420015
+sugar-panels:S-33	LANDED	Sa4682015f
+sugar-panels:S-34	LANDED	S807d33e83
+sugar-panels:S-35	LANDED	S5e1d8e600
+sugar-panels:S-36	LANDED	S87da92399
+sugar-pty:PTY-01	LANDED	S3e4423408
+sugar-pty:PTY-02	LANDED	Sbbac45439
+sugar-pty:PTY-03	LANDED	Sd7ca81b88
+sugar-pty:PTY-04	LANDED	S7ceda6df4
+sugar-pty:PTY-05	LANDED	S7a16bd0b7
+sugar-pty:PTY-06	LANDED	S1af9e5555
+sugar-pty:PTY-07	LANDED	S679efae8d
+sugar-pty:PTY-08	LANDED	Sb7372e02b
+sugar-pty:PTY-09	LANDED	Scf371786b
+sugar-pty:PTY-10	LANDED	S3fa40301b
+sugar-pty:PTY-11	LANDED	S5cea6bcd4
+sugar-pty:PTY-12	LANDED	Se045f0d71
+sugar-pty:PTY-13	LANDED	S170464440
+sugar-pty:PTY-14	LANDED	Sa613d5a8e
+sugar-pty:PTY-15	LANDED	Sc6f8ea6c4
+sugar-pty:PTY-16	LANDED	S66c6fca46
+sugar-pty:PTY-17	LANDED	Sa7989f235
+sugar-pty:PTY-18	LANDED	S06011ffb2
+sugar-pty:PTY-19	LANDED	Sa7b51af8a
+sugar-pty:PTY-20	LANDED	S466431048
+sugar-pty:PTY-21	LANDED	S9a1256dec
+sugar-pty:PTY-22	LANDED	Sb686282e4
+sugar-pty:PTY-23	LANDED	Sac26f64da
+sugar-pty:PTY-24	LANDED	S151e3af14
+sugar-pty:PTY-25	LANDED	Sb7b72df4d
+sugar-pty:PTY-26	LANDED	Sa1196b8ac
+sugar-pty:PTY-27	LANDED	Sc6f8ea6c4
+sugar-pty:PTY-28	LANDED	S168660497
+sugar-pty:PTY-29	LANDED	S54231365a
+sugar-pty:PTY-30	LANDED	Sba9871713
+sugar-pty:PTY-31	LANDED	Sbf8d0ed3b
+sugar-pty:PTY-32	LANDED	Sb7b72df4d
+sugar-pty:PTY-33	LANDED	S4e9c554b3
+sugar-pty:PTY-34	LANDED	S74bd74cd1
+sugar-pty:PTY-35	LANDED	Sa090c0fcb
+sugar-pty:PTY-36	LANDED	S61e336754
+sugar-pty:PTY-37	LANDED	Sa758aeea6
+sugar-pty:PTY-38	LANDED	Sb7b72df4d
+sugar-pty:PTY-39	LANDED	Sf171a7d41
+sugar-pty:PTY-40	LANDED	Sb1931ef29
+sugar-pty:PTY-41	LANDED	Sd7ca81b88
+sugar-pty:PTY-42	LANDED	S4e1180518
+sugar-pty:PTY-43	REPORT-ONLY	-
+sugar-pty:PTY-44	LANDED	Sbf8d0ed3b
+sugar-pty:PTY-45	LANDED	Sd7ca81b88
+sugar-pty:PTY-46	LANDED	Rf4dd311cc
+sugar-pty:PTY-47	LANDED	S076c4a271
+sugar-pty:PTY-48	LANDED	S438555714
+sugar-pty:PTY-49	LANDED	S492a4f782
+sugar-pty:PTY-50	LANDED	Sa7989f235
+sugar-pty:PTY-51	LANDED	Sb0c819d5d
+sugar-pty:PTY-52	LANDED	S01bfcb0aa
+sugar-pty:PTY-53	LANDED	S7ec8268d9
+sugar-pty:PTY-54	LANDED	Sbf4a85394
+sugar-pty:PTY-55	LANDED	-
+sugar-quickpick:S-01	LANDED	Sd4260ee6f
+sugar-quickpick:S-02	LANDED	S924bf5776
+sugar-quickpick:S-03	LANDED	Bc74bcd30c
+sugar-quickpick:S-04	LANDED	S6e8f8c849
+sugar-quickpick:S-05	LANDED	Sc74bcd30c
+sugar-quickpick:S-06	LANDED	S77386ca89
+sugar-quickpick:S-07	LANDED	B2088b7f66
+sugar-quickpick:S-08	LANDED	S3a67fa0df
+sugar-quickpick:S-09	LANDED	Sf31b28bb8
+sugar-quickpick:S-10	LANDED	S5d3fcfeb5
+sugar-quickpick:S-11	LANDED	Sd7ccb197d
+sugar-quickpick:S-12	LANDED	Sd5074434e
+sugar-quickpick:S-13	LANDED	Se5c5131fa
+sugar-quickpick:S-14	LANDED	S878268c9f
+sugar-quickpick:S-15	LANDED	S98e77d266
+sugar-quickpick:S-16	LANDED	S98e77d266
+sugar-quickpick:S-17	LANDED	S68a8d0e03
+sugar-quickpick:S-18	LANDED	S2b75b5190
+sugar-quickpick:S-19	LANDED	S1c0ab4377
+sugar-quickpick:S-20	LANDED	Sa0be9a97c
+sugar-quickpick:S-21	LANDED	Sc8b4d19fa
+sugar-quickpick:S-22	LANDED	Sf9a5130da
+sugar-quickpick:S-23	LANDED	S98e77d266
+sugar-quickpick:S-24	LANDED	Sf9a5130da
+sugar-quickpick:S-25	LANDED	Sfc03e9f68
+sugar-quickpick:S-26	LANDED	S8350834ea
+sugar-quickpick:S-27	LANDED	S78865ba92
+sugar-quickpick:S-28	LANDED	Sf9a5130da
+sugar-quickpick:S-29	LANDED	S8350834ea
+sugar-quickpick:S-30	LANDED	Se17ca6204
+sugar-quickpick:S-31	LANDED	S98e77d266
+sugar-quickpick:S-32	LANDED	S3685f6d6d
+sugar-quickpick:S-33	LANDED	S52a72d876
+sugar-quickpick:S-34	LANDED	Sb047daf81
+sugar-quickpick:S-35	LANDED	S8350834ea
+sugar-quickpick:S-36	LANDED	S98e77d266
+sugar-quickpick:S-37	LANDED	S0a4e628c2
+sugar-quickpick:S-38	LANDED	S2088b7f66
+sugar-quickpick:S-39	LANDED	R8a3fb5b11
+sugar-quickpick:S-40	LANDED	Se17ca6204
+sugar-readline:S-01	LANDED	S51556a6b3
+sugar-readline:S-02	LANDED	S55f912913
+sugar-readline:S-03	LANDED	S3576fcae6
+sugar-readline:S-04	LANDED	Sda21c3ee6
+sugar-readline:S-05	LANDED	S5df48c257
+sugar-readline:S-06	LANDED	S7c98c49c1
+sugar-readline:S-07	LANDED	S2ef275409
+sugar-readline:S-08	LANDED	Se9c8f9dd6
+sugar-readline:S-09	LANDED	Sdda881944
+sugar-readline:S-10	LANDED	Se7c0c3bbe
+sugar-readline:S-11	LANDED	S4d2c4a93c
+sugar-readline:S-12	LANDED	S059197632
+sugar-readline:S-13	LANDED	Sdfbb58c39
+sugar-readline:S-14	LANDED	Sa5590d527
+sugar-readline:S-15	LANDED	S6022e0b59
+sugar-readline:S-16	LANDED	S0b5ba737e
+sugar-readline:S-17	LANDED	Sa214b8840
+sugar-readline:S-18	LANDED	Sf8f5dbf70
+sugar-readline:S-19	OWNER-GATED	Sb7e8a118a
+sugar-readline:S-20	LANDED	S23b86a4ea
+sugar-readline:S-21	LANDED	Sf99bcb66d
+sugar-readline:S-22	LANDED	S5b367a82d
+sugar-readline:S-23	LANDED	S978105f60
+sugar-readline:S-24	LANDED	Sbb6ba998b
+sugar-readline:S-25	LANDED	Scd6310f49
+sugar-readline:S-26	LANDED	Sbb6ba998b
+sugar-readline:S-27	LANDED	Se602b7aea
+sugar-readline:S-28	LANDED	S978105f60
+sugar-readline:S-29	LANDED	Sf8c3ba1ff
+sugar-readline:S-30	LANDED	S291899a6d
+sugar-readline:S-31	LANDED	S6500b30d9
+sugar-readline:S-32	LANDED	S6500b30d9
+sugar-readline:S-33	LANDED	Sd7c9f0499
+sugar-readline:S-34	LANDED	S820b0b763
+sugar-readline:S-35	LANDED	Sb4cd24020
+sugar-readline:S-36	LANDED	Se98649988
+sugar-readline:S-37	LANDED	S63134323c
+sugar-readline:S-38	LANDED	Se602b7aea
+sugar-readline:S-39	LANDED	S978105f60
+sugar-readline:S-40	LANDED	S48c7dee6d
+sugar-readline:S-41	LANDED	Sa1859b159
+sugar-readline:S-42	LANDED	S6022e0b59
+sugar-readline:S-43	LANDED	Se010a186a
+sugar-readline:S-44	LANDED	Sf47cbdf8f
+sugar-readline:S-45	LANDED	S7c98c49c1
+sugar-readline:S-46	LANDED	Ref0c29ac1
+sugar-readline:S-47	LANDED	Sefb1ce179
+sugar-readline:S-48	LANDED	Sb1db57a8e
+sugar-readline:S-49	LANDED	S8f1c549c5
+sugar-readline:S-50	LANDED	S1ed7f6931
+sugar-readline:S-51	LANDED	S774ac9e33
+sugar-readline:S-52	LANDED	Sad4818807
+sugar-readline:S-53	LANDED	S13c8059cc
+sugar-readline:S-54	LANDED	S2cb443c44
+sugar-readline:S-55	LANDED	S95b3037db
+sugar-readline:S-56	LANDED	Sf03b74913
+sugar-readline:S-57	LANDED	S314b6cdba
+sugar-readline:S-58	LANDED	S598453033
+sugar-readline:S-59	LANDED	Sdd7e9c66e
+sugar-readline:S-60	LANDED	S2438b494e
+sugar-readline:S-61	LANDED	P7c98c49c1
+sugar-readline:S-62	LANDED	Sfbcb6d102
+sugar-readline:S-63	LANDED	S68fcb3d47
+sugar-readline:S-64	LANDED	Sd7905cef9
+sugar-readline:S-65	LANDED	Sb7e8a118a
+sugar-readline:S-66	LANDED	S32713d224
+sugar-readline:S-67	LANDED	Sb4cd24020
+sugar-spring:SPR-01	LANDED	B9c68f6bde
+sugar-spring:SPR-02	LANDED	S9c68f6bde
+sugar-spring:SPR-03	LANDED	Sefda382b7
+sugar-spring:SPR-04	LANDED	S4a73d0231
+sugar-spring:SPR-05	LANDED	Sc77370dda
+sugar-spring:SPR-06	LANDED	S573c1376b
+sugar-spring:SPR-07	LANDED	Sfdaec9724
+sugar-spring:SPR-08	LANDED	Sf27210bd7
+sugar-spring:SPR-09	LANDED	Sc3f1ac8ae
+sugar-spring:SPR-10	LANDED	S2ed012e37
+sugar-spring:SPR-11	LANDED	S01f15a3ad
+sugar-spring:SPR-12	LANDED	S8f75e0070
+sugar-spring:SPR-13	LANDED	Sd07c59e6e
+sugar-spring:SPR-14	LANDED	S375329aca
+sugar-spring:SPR-15	LANDED	S701752305
+sugar-spring:SPR-16	LANDED	S9b3604ea4
+sugar-spring:SPR-17	LANDED	S1255aa4ba
+sugar-spring:SPR-18	LANDED	S511076895
+sugar-spring:SPR-19	LANDED	S3493470a6
+sugar-spring:SPR-20	LANDED	S6bc55d394
+sugar-spring:SPR-21	LANDED	Sd1fb18b0f
+sugar-spring:SPR-22	LANDED	S60f86b3d0
+sugar-spring:SPR-23	LANDED	Se2619b2b4
+sugar-spring:SPR-24	LANDED	S77a7d89de
+sugar-spring:SPR-25	LANDED	S52b5d08fb
+sugar-spring:SPR-26	LANDED	Sa6bfd2a0d
+sugar-spring:SPR-27	LANDED	Sfa1a0343e
+sugar-spring:SPR-28	LANDED	Sf84ffa0e8
+sugar-spring:SPR-29	LANDED	S4a404a4e2
+sugar-spring:SPR-30	LANDED	S60f86b3d0
+sugar-spring:SPR-31	LANDED	S789d2aedf
+sugar-spring:SPR-32	LANDED	Sc3f1ac8ae
+sugar-spring:SPR-33	LANDED	S3bfb15b12
+sugar-spring:SPR-34	LANDED	S56a13e124
+sugar-spring:SPR-35	LANDED	S1e3156405
+sugar-spring:SPR-36	LANDED	S452c65e67
+sugar-ssh-server:RIDERS	REPORT-ONLY	-
+sugar-ssh-server:ssrv-01	LANDED	R9862014da
+sugar-ssh-server:ssrv-02	LANDED	R22301166c
+sugar-ssh-server:ssrv-03	LANDED	R4bcf707b9
+sugar-ssh-server:ssrv-04	LANDED	Sa1c2f4a8b
+sugar-ssh-server:ssrv-05	LANDED	Ra256e9b75
+sugar-ssh-server:ssrv-06	LANDED	B0b5d333b2
+sugar-ssh-server:ssrv-07	LANDED	S0198a4ee3
+sugar-ssh-server:ssrv-08	LANDED	Ra1c2f4a8b
+sugar-ssh-server:ssrv-09	LANDED	Rbd2543968
+sugar-ssh-server:ssrv-10	LANDED	R3c0fd856f
+sugar-ssh-server:ssrv-11	LANDED	F648dce6f5
+sugar-ssh-server:ssrv-12	LANDED	B33d73af7e
+sugar-ssh-server:ssrv-13	LANDED	R33d73af7e
+sugar-ssh-server:ssrv-14	LANDED	R01f34fab2
+sugar-ssh-server:ssrv-15	LANDED	R2f4014e33
+sugar-ssh-server:ssrv-16	OWNER-GATED	Ra403ff476
+sugar-ssh-server:ssrv-17	OWNER-GATED	Rfa53cf043
+sugar-ssh-server:ssrv-18	LANDED	Rdf17074ed
+sugar-ssh-server:ssrv-19	LANDED	R44c25705a
+sugar-ssh-server:ssrv-20	LANDED	Rccd1a4763
+sugar-ssh-server:ssrv-21	LANDED	R877929f69
+sugar-ssh-server:ssrv-22	LANDED	R543bfb5e1
+sugar-ssh-server:ssrv-23	LANDED	B17466d4d2
+sugar-ssh-server:ssrv-24	LANDED	B17466d4d2
+sugar-ssh-server:ssrv-25	LANDED	Bfea16096a
+sugar-ssh-server:ssrv-26	LANDED	B877929f69
+sugar-ssh-server:ssrv-27	LANDED	B33a6e5d6e
+sugar-ssh-server:ssrv-28	OWNER-GATED	S31b4a9d54
+sugar-ssh-server:ssrv-29	LANDED	Bad1700fa6
+sugar-ssh-server:ssrv-30	LANDED	B00970d48b
+sugar-ssh-server:ssrv-31	LANDED	B1e99d4297
+sugar-ssh-server:ssrv-32	LANDED	S165dffbd5
+sugar-ssh-server:ssrv-33	LANDED	Bdf873bfd9
+sugar-ssh-server:ssrv-34	LANDED	B14fdc9c2c
+sugar-ssh-server:ssrv-35	LANDED	S31b4a9d54
+sugar-ssh-server:ssrv-36	LANDED	S2d118e014
+sugar-style:ST-01	LANDED	S618b46f69
+sugar-style:ST-02	LANDED	Sc4f8ef0ad
+sugar-style:ST-03	LANDED	S9ed381424
+sugar-style:ST-04	OWNER-GATED	-
+sugar-style:ST-05	LANDED	S1359b62d2
+sugar-style:ST-06	LANDED	Sb3f9472e8
+sugar-style:ST-07	LANDED	Se75645f0e
+sugar-style:ST-08	LANDED	S81b4efeac
+sugar-style:ST-09	OWNER-GATED	S7a1e0fa52
+sugar-style:ST-10	LANDED	S7118eda5b
+sugar-style:ST-11	LANDED	Sd9dac13a6
+sugar-style:ST-12	LANDED	S858519516
+sugar-style:ST-13	LANDED	S2cac5d296
+sugar-style:ST-14	LANDED	S1a22320b0
+sugar-style:ST-15	LANDED	S14bf5eab8
+sugar-style:ST-16	LANDED	S39b46a3f3
+sugar-style:ST-17	OWNER-GATED	-
+sugar-style:ST-18	LANDED	Sf67be1d6e
+sugar-style:ST-19	LANDED	Sd93f809a0
+sugar-style:ST-20	LANDED	Sc4f8ef0ad
+sugar-style:ST-21	LANDED	Sd9dac13a6
+sugar-style:ST-22	LANDED	Sa9fb0b479
+sugar-style:ST-23	LANDED	S9ebaea18a
+sugar-style:ST-24	LANDED	S354369cf2
+sugar-style:ST-25	LANDED	S3b7ee1e3f
+sugar-style:ST-26	LANDED	S4793d5511
+sugar-style:ST-27	LANDED	S30325c65e
+sugar-style:ST-28	LANDED	S3c758cc12
+sugar-style:ST-29	OWNER-GATED	-
+sugar-style:ST-30	LANDED	S81b4efeac
+sugar-style:ST-31	OWNER-GATED	-
+sugar-style:ST-32	LANDED	S0475f71cb
+sugar-style:ST-33	OWNER-GATED	-
+sugar-style:ST-34	LANDED	S457fa1053
+sugar-style:ST-35	LANDED	S0f409098d
+sugar-style:ST-36	LANDED	S39b46a3f3
+sugar-style:ST-37	OWNER-GATED	-
+sugar-style:ST-38	OWNER-GATED	-
+sugar-style:ST-39	LANDED	S7a1e0fa52
+sugar-style:ST-40	LANDED	Sbb75f384c
+sugar-style:ST-41	LANDED	S9ed381424
+sugar-style:ST-42	LANDED	S31dddfca1
+sugar-table:ST-01	LANDED	S727cb9d05
+sugar-table:ST-02	LANDED	S2d2f0f1c4
+sugar-table:ST-03	LANDED	S8f2e0f0af
+sugar-table:ST-04	LANDED	S0319242fd
+sugar-table:ST-05	LANDED	S7c22b201a
+sugar-table:ST-06	LANDED	Sb87472900
+sugar-table:ST-07	LANDED	S2bdd8fb29
+sugar-table:ST-08	LANDED	Sac85c77bf
+sugar-table:ST-09	LANDED	Sfcbe19058
+sugar-table:ST-10	LANDED	S3c6725588
+sugar-table:ST-11	LANDED	S1ad63d629
+sugar-table:ST-12	LANDED	S0fbc1c694
+sugar-table:ST-13	LANDED	S656cc0b54
+sugar-table:ST-14	LANDED	S23726b80f
+sugar-table:ST-15	LANDED	S0f9268eee
+sugar-table:ST-16	LANDED	S39b46a3f3
+sugar-table:ST-17	LANDED	S61e1fe7d5
+sugar-table:ST-18	LANDED	S734ed58ab
+sugar-table:ST-19	LANDED	S1dc83b4c5
+sugar-table:ST-20	LANDED	Sf5520aa0a
+sugar-table:ST-21	LANDED	Sb808d6e54
+sugar-table:ST-22	LANDED	S784c617b5
+sugar-table:ST-23	LANDED	S882fe7333
+sugar-table:ST-24	LANDED	S287e59337
+sugar-table:ST-25	LANDED	Sded80227a
+sugar-table:ST-26	LANDED	Se236dd809
+sugar-table:ST-27	LANDED	S85e712680
+sugar-table:ST-28	LANDED	Sde6a4f15b
+sugar-table:ST-29	LANDED	S23edae94e
+sugar-table:ST-30	LANDED	S7c22b201a
+sugar-table:ST-31	LANDED	Sd097771c8
+sugar-table:ST-32	LANDED	S99e788bc6
+sugar-table:ST-33	LANDED	Sa201fa097
+sugar-table:ST-34	LANDED	S287e59337
+sugar-table:ST-35	LANDED	S59d154038
+sugar-table:ST-36	LANDED	S39b46a3f3
+sugar-table:ST-37	OWNER-GATED	-
+sugar-table:ST-38	LANDED	S704efcb6d
+sugar-table:ST-39	LANDED	S39b46a3f3
+sugar-table:ST-40	LANDED	S23edae94e
+sugar-table:ST-41	LANDED	Sca9a2e5e5
+sugar-table:ST-42	LANDED	Sfc5e84d3b
+sugar-table:ST-43	LANDED	S78a16ea38
+sugar-table:ST-44	LANDED	S4b1da1010
+sugar-table:ST-45	LANDED	S882fe7333
+sugar-table:ST-46	LANDED	S2942da749
+sugar-table:ST-47	LANDED	S36f72fb62
+sugar-table:ST-48	LANDED	S3eb14fb26
+sugar-table:ST-49	LANDED	S33aafc291
+sugar-table:ST-50	LANDED	S6bc0f83cc
+sugar-table:ST-51	LANDED	S89e0c5f0f
+sugar-table:ST-52	LANDED	Sc1518cd18
+sugar-table:ST-53	LANDED	S125655ff6
+sugar-table:ST-54	LANDED	S59d154038
+sugar-table:ST-55	LANDED	S4df26e57d
+sugar-table:ST-56	LANDED	S7e29bba28
+sugar-table:ST-57	LANDED	S61e1fe7d5
+sugar-table:ST-58	LANDED	S4748da31e
+sugar-table:ST-59	LANDED	S1c6a898f2
+sugar-table:ST-60	LANDED	Sb5033077f
+sugar-table:ST-61	LANDED	S40462b9d1
+sugar-table:ST-62	LANDED	S3915de1da
+sugar-table:ST-63	LANDED	S7a2873970
+sugar-table:ST-64	LANDED	Sdb6c916d7
+sugar-table:ST-65	LANDED	S08e7465b2
+sugar-table:ST-66	LANDED	Sa42983aa1
+sugar-table:ST-67	LANDED	S4aeb15a44
+sugar-table:ST-68	OWNER-GATED	-
+sugar-table:ST-69	REPORT-ONLY	-
+sugar-table:ST-70	LANDED	S725e736f7
+sugar-table:ST-71	LANDED	Sdd19e2f03
+sugar-table:ST-72	LANDED	S6bc0f83cc
+sugar-table:ST-73	LANDED	S415aa7b0f
+sugar-table:ST-74	LANDED	S85e712680
+sugar-table:ST-75	LANDED	Sfc5e84d3b
+sugar-table:ST-76	LANDED	S2d69595c0
+sugar-table:ST-77	LANDED	Sde6a4f15b
+sugar-table:ST-78	LANDED	S9be23809a
+sugar-table:ST-79	LANDED	Sb60e1cd23
+sugar-testing:RIDERS	REPORT-ONLY	-
+sugar-testing:testing-01	LANDED	S4c674b924
+sugar-testing:testing-02	LANDED	Sc32890872
+sugar-testing:testing-03	LANDED	S49df8577a
+sugar-testing:testing-04	LANDED	Sb1655958a
+sugar-testing:testing-05	LANDED	Sc76e00c54
+sugar-testing:testing-06	LANDED	S05431ef43
+sugar-testing:testing-07	LANDED	Se6e803eac
+sugar-testing:testing-08	LANDED	S40dc122bb
+sugar-testing:testing-09	LANDED	S5651a484a
+sugar-testing:testing-10	LANDED	S20b48704e
+sugar-testing:testing-11	LANDED	S69f7d5c7e
+sugar-testing:testing-12	LANDED	S04e7fb294
+sugar-testing:testing-13	LANDED	S38d75ce72
+sugar-testing:testing-14	LANDED	Sbb028e6a4
+sugar-testing:testing-15	LANDED	S2b24d0984
+sugar-testing:testing-16	LANDED	Sfc9e3316a
+sugar-testing:testing-17	LANDED	Sbe7fab1db
+sugar-testing:testing-18	LANDED	Se7d72cfac
+sugar-testing:testing-19	LANDED	Sdbe4f8d40
+sugar-testing:testing-20	LANDED	S49ae11d15
+sugar-testing:testing-21	LANDED	Sef6297ea6
+sugar-testing:testing-22	LANDED	Sddf07fb81
+sugar-testing:testing-23	LANDED	Sd724d5430
+sugar-testing:testing-24	LANDED	Sb1655958a
+sugar-testing:testing-25	LANDED	Se2595a710
+sugar-testing:testing-26	LANDED	Sb69c97f9d
+sugar-toast:TST-A11Y-DOC	LANDED	Sfed733eec
+sugar-toast:TST-ACTIONS	LANDED	S2c04aa6fd
+sugar-toast:TST-ALIAS	LANDED	S8e80c78d4
+sugar-toast:TST-API-TABLE	LANDED	Sd118b7391
+sugar-toast:TST-ASCII	LANDED	Sdbf9f3718
+sugar-toast:TST-BOUNDS	LANDED	Sac0aa1b8c
+sugar-toast:TST-CHROME	LANDED	S3ab54ad23
+sugar-toast:TST-CONV	LANDED	Sa9b579dd2
+sugar-toast:TST-CSI	LANDED	S7e019f84b
+sugar-toast:TST-CUSTTYPE	LANDED	S874b8dd39
+sugar-toast:TST-DOC-A	LANDED	S1f86c2858
+sugar-toast:TST-DOC-B	LANDED	Sf6e83a3cb
+sugar-toast:TST-DOCB	LANDED	S16ad0e5f1
+sugar-toast:TST-DOCSERIAL	LANDED	S5e72072e4
+sugar-toast:TST-DROPINFO	LANDED	S6f61eed04
+sugar-toast:TST-ENVPERF	LANDED	Se75123718
+sugar-toast:TST-FOLDROW	LANDED	S7bcd80264
+sugar-toast:TST-FRAME	LANDED	S513ed32f2
+sugar-toast:TST-HYGIENE	LANDED	S60734e196
+sugar-toast:TST-LAYOUT	LANDED	Sd2179308f
+sugar-toast:TST-MEDIA	LANDED	Sbb6702268
+sugar-toast:TST-MINFIT	LANDED	Sb22074b2c
+sugar-toast:TST-PARITY	LANDED	S0401a4cbb
+sugar-toast:TST-PLURALS	LANDED	S2745b984c
+sugar-toast:TST-RESEARCH	LANDED	S70b200993
+sugar-toast:TST-SEVCH	LANDED	S1d777e84f
+sugar-toast:TST-SGRRE	LANDED	S0d810e0bb
+sugar-toast:TST-TTL	LANDED	Sc906e9c1e
+sugar-toast:TST-VALID	LANDED	Saaa5144d5
+sugar-toast:TST-WIDTH	LANDED	S3fcb6a183
+sugar-toast:TST-WRAP	LANDED	S7eeb9d873
+sugar-toast:TST-XOFF	LANDED	S3f4d00028
+sugar-toast:TST-XSET	LANDED	S4490158c6
+sugar-toast:TST-ZONECARRY	LANDED	S91d2d0917
+sugar-treelist:treelist-01	LANDED	S933be8ad9
+sugar-treelist:treelist-02	LANDED	S9b58ea8d1
+sugar-treelist:treelist-03	LANDED	Sc3b2d1a7d
+sugar-treelist:treelist-04	LANDED	Sa70eb62ef
+sugar-treelist:treelist-05	LANDED	S695f3dfd1
+sugar-treelist:treelist-06	LANDED	S9a3f8a458
+sugar-treelist:treelist-07	LANDED	S93358fec5
+sugar-treelist:treelist-08	LANDED	S5d9861bbd
+sugar-treelist:treelist-09	LANDED	S45ae16d0c
+sugar-treelist:treelist-10	LANDED	S695f3dfd1
+sugar-treelist:treelist-11	LANDED	S88929efc6
+sugar-treelist:treelist-12	LANDED	S2b420d5ec
+sugar-treelist:treelist-13	LANDED	Rbeee2e2dc
+sugar-treelist:treelist-14	LANDED	S097d626fb
+sugar-treelist:treelist-15	LANDED	S3589a38c0
+sugar-treelist:treelist-16	LANDED	S0ee24fa8e
+sugar-treelist:treelist-17	LANDED	Sc9d2e8438
+sugar-treelist:treelist-18	LANDED	S5b6df00dc
+sugar-treelist:treelist-19	LANDED	Sd983ac42a
+sugar-treelist:treelist-20	LANDED	S27a7f9362
+sugar-treelist:treelist-21	LANDED	Sbbea08e83
+sugar-treelist:treelist-22	LANDED	S9768710e5
+sugar-treelist:treelist-23	LANDED	S0ee24fa8e
+sugar-treelist:treelist-24	LANDED	Sd8fc05ffd
+sugar-treelist:treelist-25	LANDED	Sc6923fdfc
+sugar-treelist:treelist-26	LANDED	S7f7bb8200
+sugar-treelist:treelist-27	LANDED	S69a155fd8
+sugar-treelist:treelist-28	LANDED	Sef6f6d592
+sugar-treelist:treelist-29	LANDED	S97e771dc5
+sugar-treelist:treelist-30	LANDED	Sc9d2e8438
+sugar-treelist:treelist-31	LANDED	S6e4a54c83
+sugar-treelist:treelist-32	LANDED	Sd328443c5
+sugar-treelist:treelist-33	LANDED	S64ca13385
+sugar-video:SV-C1	LANDED	Sbd83648e6
+sugar-video:SV-CAL	LANDED	Se4f97eaf6
+sugar-video:SV-DOC-1	LANDED	S448e26bf6
+sugar-video:SV-DOC-2	LANDED	S6b4797e09
+sugar-video:SV-DOC-3	LANDED	S49031bb64
+sugar-video:SV-DOC-4	LANDED	S40ea27b5a
+sugar-video:SV-H10	LANDED	S6c4d80f5e
+sugar-video:SV-H11	LANDED	Seec44c9cd
+sugar-video:SV-H12	LANDED	S9768710e5
+sugar-video:SV-H2	LANDED	S7355882a0
+sugar-video:SV-H3	LANDED	Sf36089674
+sugar-video:SV-H4	LANDED	S1103f6920
+sugar-video:SV-H5	LANDED	Scd4b8e756
+sugar-video:SV-H6	LANDED	Sdfc12ed4a
+sugar-video:SV-H7	LANDED	S4b99c08ea
+sugar-video:SV-H8	LANDED	Sa00b439b5
+sugar-video:SV-H9	LANDED	S6009625da
+sugar-video:SV-L48	LANDED	Sdabe95cd8
+sugar-video:SV-L49	LANDED	Sa1627083f
+sugar-video:SV-L50	LANDED	S83d8df33f
+sugar-video:SV-L51	LANDED	S45673e4b2
+sugar-video:SV-L53	LANDED	S73a10f47b
+sugar-video:SV-L54	LANDED	Sb42e5860f
+sugar-video:SV-L55	LANDED	Sfab1a695e
+sugar-video:SV-L56	LANDED	Sc0c9e7bd0
+sugar-video:SV-L63	LANDED	B50e9fbb07
+sugar-video:SV-L64	LANDED	S9dc3b3a59
+sugar-video:SV-L65	LANDED	S807aaffe4
+sugar-video:SV-L66	LANDED	S1b8b49247
+sugar-video:SV-L70	LANDED	Sb4aaf5d9d
+sugar-video:SV-L72	LANDED	S1b8b49247
+sugar-video:SV-L73	LANDED	Sc2a586be7
+sugar-video:SV-L75	LANDED	Sdabe95cd8
+sugar-video:SV-L77	LANDED	S1a7142ec7
+sugar-video:SV-L79	LANDED	Sd684f0307
+sugar-video:SV-L82	LANDED	S15d3b8145
+sugar-video:SV-L83	LANDED	S3c8b16375
+sugar-video:SV-L86	LANDED	Sac057f467
+sugar-video:SV-L87	LANDED	S17ed6d1f9
+sugar-video:SV-L88	LANDED	Sb2f3f5063
+sugar-video:SV-L89	LANDED	S2a00823e3
+sugar-video:SV-L91	LANDED	Rfeb002f42
+sugar-video:SV-L92	LANDED	S2b02b2f77
+sugar-video:SV-LANG	LANDED	S6ec04aef8
+sugar-video:SV-M14	LANDED	Sdafde9e36
+sugar-video:SV-M15	LANDED	S07ec32c80
+sugar-video:SV-M16	LANDED	S0e7f735b7
+sugar-video:SV-M17	LANDED	Bfab1a695e
+sugar-video:SV-M18	LANDED	S583a3c000
+sugar-video:SV-M19	LANDED	S8daf7bef4
+sugar-video:SV-M20	LANDED	Sb9927d9fd
+sugar-video:SV-M21	LANDED	S9cd2f2344
+sugar-video:SV-M22	LANDED	S2018d9efa
+sugar-video:SV-M23	LANDED	S54d80bfb4
+sugar-video:SV-M25	LANDED	Sa615b2705
+sugar-video:SV-M34	LANDED	Seecae06e7
+sugar-video:SV-M35	LANDED	S807aaffe4
+sugar-video:SV-M36	LANDED	Sf10ddcabe
+sugar-video:SV-M37	LANDED	Sdafde9e36
+sugar-video:SV-M38	LANDED	S8f8351ec6
+sugar-video:SV-M39	LANDED	Bb2f3f5063
+sugar-video:SV-M40	LANDED	S11405a601
+sugar-video:SV-M41	LANDED	S3c3424df9
+sugar-video:SV-M42	LANDED	S753b6f48d
+sugar-video:SV-M43	LANDED	S1d22218ac
+sugar-video:SV-M44	OWNER-GATED	Sf97e4a074
+sugar-video:SV-M46	LANDED	S50e9fbb07
+sugar-video:SV-M47	LANDED	Se4f97eaf6
+sugar-video:SV-PGEO	LANDED	Sc2b88dc6d
+sugar-video:SV-PPAINT	LANDED	S340889735
+sugar-video:SV-SEC1	LANDED	S74c9e7297
+sugar-video:SV-VTT	LANDED	Sd134e8a92
+sugar-video:SV-X94	LANDED	S0a1a4f3a3
+sugar-video:SV-X95	LANDED	S913b405eb
+sugar-video:SV-X96	LANDED	S8f0f1d795
+sugar-video:SV-X97	LANDED	S3eb03f855
+sugar-vterm:RIDERS	REPORT-ONLY	-
+sugar-vterm:vterm-01	OWNER-GATED	-
+sugar-vterm:vterm-02	OWNER-GATED	S21df98558
+sugar-vterm:vterm-03	LANDED	Saeec10bcf
+sugar-vterm:vterm-04	LANDED	S64db33d05
+sugar-vterm:vterm-05	LANDED	S683b2bf60
+sugar-vterm:vterm-06	LANDED	S10630bb40
+sugar-vterm:vterm-07	LANDED	S2adfc237e
+sugar-vterm:vterm-08	OWNER-GATED	R04b268845
+sugar-vterm:vterm-09	STILL-OPEN	-
+sugar-vterm:vterm-10	LANDED	Sb4a0c56b8
+sugar-vterm:vterm-11	LANDED	Sc9cd0cf2a
+sugar-vterm:vterm-12	LANDED	Sd7522eeec
+sugar-vterm:vterm-13	LANDED	Sd46c68b9b
+sugar-vterm:vterm-14	LANDED	S0fb888c1a
+sugar-vterm:vterm-15	LANDED	S044624690
+sugar-vterm:vterm-16	LANDED	S66f454e04
+sugar-vterm:vterm-17	LANDED	S20651346a
+sugar-vterm:vterm-18	LANDED	Sf1079f8c4
+sugar-vterm:vterm-19	OWNER-GATED	-
+sugar-vterm:vterm-20	LANDED	S2c13bece4
+sugar-vterm:vterm-21	LANDED	S360cd1961
+sugar-vterm:vterm-22	LANDED	S91beb91c7
+sugar-vterm:vterm-23	OWNER-GATED	-
+sugar-vterm:vterm-24	LANDED	S4add71b26
+sugar-vterm:vterm-25	OWNER-GATED	-
+sugar-vterm:vterm-26	OWNER-GATED	-
+sugar-vterm:vterm-27	LANDED	S2c13bece4
+sugar-vterm:vterm-28	LANDED	Sa40c044b7
+sugar-vterm:vterm-29	LANDED	S2bad3a956
+sugar-vterm:vterm-30	LANDED	S749de466e
+sugar-vterm:vterm-31	LANDED	Sd46c68b9b
+sugar-vterm:vterm-32	LANDED	S21df98558
+sugar-vterm:vterm-33	LANDED	Sceafd90af
+sugar-vterm:vterm-34	LANDED	S5f4cec472
+sugar-vterm:vterm-35	OWNER-SIDE-win	-
+sugar-vterm:vterm-36	LANDED	S6cf4cf8ce
+sugar-vterm:vterm-37	LANDED	S376f4e019
+sugar-vterm:vterm-38	LANDED	S96c93524f
+sugar-vterm:vterm-39	LANDED	Sdf030daa8
+sugar-vterm:vterm-40	LANDED	S749de466e
+sugar-widgets:RIDERS	REPORT-ONLY	-
+sugar-widgets:W-01	LANDED	S9efccc363
+sugar-widgets:W-02	LANDED	B7520523a0
+sugar-widgets:W-03	LANDED	S5a6ae7831
+sugar-widgets:W-04	LANDED	B7520523a0
+sugar-widgets:W-05	LANDED	Bb5a84f8a5
+sugar-widgets:W-06	LANDED	Sd1c01aeee
+sugar-widgets:W-07	LANDED	S4fcebc846
+sugar-widgets:W-08	LANDED	Bfb47083df
+sugar-widgets:W-09	LANDED	S70027751a
+sugar-widgets:W-10	LANDED	B13244cb9c
+sugar-widgets:W-11	LANDED	B6f5bca58b
+sugar-widgets:W-12	LANDED	B423e610bc
+sugar-widgets:W-13	LANDED	S5a6ae7831
+sugar-widgets:W-14	LANDED	S95551c687
+sugar-widgets:W-15	LANDED	B7ef85cbd0
+sugar-widgets:W-16	LANDED	S7ef85cbd0
+sugar-widgets:W-17	LANDED	Sd25aff6f9
+sugar-widgets:W-18	LANDED	S423e610bc
+sugar-widgets:W-19	LANDED	B7520523a0
+sugar-widgets:W-20	LANDED	B6f5bca58b
+sugar-widgets:W-21	LANDED	S88cdbba65
+sugar-widgets:W-22	LANDED	Bd522378a4
+sugar-widgets:W-23	LANDED	Sb5a84f8a5
+sugar-widgets:W-24	LANDED	B7520523a0
+sugar-widgets:W-25	LANDED	Sf8b8fe8b3
+sugar-widgets:W-26	LANDED	S05995a5e0
+sugar-widgets:W-27	LANDED	B7520523a0
+sugar-widgets:W-28	LANDED	S366708e60
+sugar-widgets:W-29	LANDED	S7a7e9591e
+sugar-widgets:W-30	LANDED	B7520523a0
+sugar-widgets:W-31	LANDED	S4626c9517
+sugar-widgets:W-32	LANDED	B7520523a0
+sugar-widgets:W-33	LANDED	B7520523a0
+sugar-widgets:W-34	LANDED	B7520523a0
+sugar-widgets:W-35	LANDED	S7e5e05428
+sugar-widgets:W-36	LANDED	Bfe8bdeac3
+sugar-widgets:W-37	LANDED	S030006a3f
+sugar-widgets:W-38	LANDED	Sfe3435366
+sugar-widgets:W-39	LANDED	Sfe8bdeac3
+sugar-widgets:W-40	LANDED	B7520523a0
+sugar-widgets:W-41	LANDED	S4f29bd5b3
+sugar-widgets:W-42	LANDED	S19369f3f1
+sugar-widgets:W-43	LANDED	B7520523a0
+sugar-widgets:W-44	LANDED	Sd522378a4
+sugar-widgets:W-45	LANDED	Sab8e9a92b
+sugar-widgets:W-46	LANDED	S7520523a0
+sugar-widgets:W-47	LANDED	S22163362e
+```
+
+— EXEC-STATUS v2, generated 2026-11-16 by the final rollout census lane;
+local-only, pathspec-committed; trio files untouched; reviews/** fence honored as a single-file exception per mission brief.
