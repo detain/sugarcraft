@@ -734,7 +734,7 @@ final class WorkflowLivePaneTest extends TestCase
 
     /**
      * And the pump really does track the whole published stream rather than
-     * the latest chunk — the reason the file is read in full each poll.
+     * the latest chunk — the reason it keeps a byte offset into the stream.
      */
     public function testThePumpTracksTheWholePublishedStreamNotTheLatestChunk(): void
     {
@@ -756,6 +756,129 @@ final class WorkflowLivePaneTest extends TestCase
         (new \ReflectionMethod(AgentWorkerPool::class, 'discardProgress'))->invoke($pool, 'a-3');
         $this->assertFileDoesNotExist(
             (new \ReflectionMethod(AgentWorkerPool::class, 'progressFile'))->invoke($pool, 'a-3'),
+        );
+    }
+
+    /**
+     * A poll reads only the bytes published since the last poll.
+     *
+     * The prefix already mirrored is rewritten underneath the pump. A pump that
+     * re-reads the whole file would show the rewrite; a tail reads the appended
+     * bytes from its offset and leaves the mirrored prefix alone. (The rewrite
+     * stands in for any change to bytes the pump has already passed; the
+     * publisher only ever appends, so this shape is never produced in practice.)
+     */
+    public function testPumpTailsOnlyTheBytesPublishedSinceTheLastPoll(): void
+    {
+        $pool = new AgentWorkerPool();
+        $agent = $this->subAgent('a-4');
+        $this->putRunning($pool, $agent, 4245);
+
+        $publish = new \ReflectionMethod(AgentWorkerPool::class, 'publishProgress');
+        $pump = new \ReflectionMethod(AgentWorkerPool::class, 'pumpProgress');
+        $path = (new \ReflectionMethod(AgentWorkerPool::class, 'progressFile'))->invoke($pool, 'a-4');
+
+        $publish->invoke($pool, 'a-4', 'first');
+        $pump->invoke($pool);
+        $this->assertSame('first', $agent->output);
+
+        file_put_contents($path, 'XXXXX/second');
+        $pump->invoke($pool);
+
+        $this->assertSame(
+            'first/second',
+            $agent->output,
+            'The pump re-read the mirrored prefix instead of tailing from its offset.',
+        );
+    }
+
+    /**
+     * A poll that finds the file no larger than what it has mirrored does not
+     * read it at all.
+     *
+     * The size is checked before any read, so an unchanged file costs one stat.
+     * Same-size rewrites are not seen, which is the trade the append-only
+     * publisher makes: nothing it does produces one.
+     */
+    public function testPumpDoesNotReadAProgressFileThatHasNotGrown(): void
+    {
+        $pool = new AgentWorkerPool();
+        $agent = $this->subAgent('a-5');
+        $this->putRunning($pool, $agent, 4246);
+
+        $publish = new \ReflectionMethod(AgentWorkerPool::class, 'publishProgress');
+        $pump = new \ReflectionMethod(AgentWorkerPool::class, 'pumpProgress');
+        $path = (new \ReflectionMethod(AgentWorkerPool::class, 'progressFile'))->invoke($pool, 'a-5');
+
+        $publish->invoke($pool, 'a-5', 'steady');
+        $pump->invoke($pool);
+        $this->assertSame('steady', $agent->output);
+
+        file_put_contents($path, 'STEADY');
+        $pump->invoke($pool);
+
+        $this->assertSame('steady', $agent->output);
+    }
+
+    /**
+     * A retry clears the buffer to '' before re-queueing the agent, and the
+     * next poll must mirror the file from its first byte again — the offset
+     * alone would silently skip everything published so far.
+     */
+    public function testPumpResyncsWhenTheBufferWasClearedByARetry(): void
+    {
+        $pool = new AgentWorkerPool();
+        $agent = $this->subAgent('a-6');
+        $this->putRunning($pool, $agent, 4247);
+
+        $publish = new \ReflectionMethod(AgentWorkerPool::class, 'publishProgress');
+        $pump = new \ReflectionMethod(AgentWorkerPool::class, 'pumpProgress');
+
+        $publish->invoke($pool, 'a-6', 'attempt one');
+        $pump->invoke($pool);
+
+        $agent->output = '';
+        $pump->invoke($pool);
+        $this->assertSame(
+            'attempt one',
+            $agent->output,
+            'A cleared buffer was not re-mirrored from the start of the progress file.',
+        );
+
+        $publish->invoke($pool, 'a-6', ' and more');
+        $pump->invoke($pool);
+        $this->assertSame('attempt one and more', $agent->output);
+    }
+
+    /**
+     * A recycled id starts its mirror from byte 0, not from the previous run's
+     * offset.
+     *
+     * The new run is longer than the old one, so a size check alone would not
+     * notice the recycle: a stale offset of 3 would tail " run text" onto
+     * "old" and report "old run text" for a run whose output is "new run text".
+     */
+    public function testARecycledIdMirrorsTheNewRunFromItsFirstByte(): void
+    {
+        $pool = new AgentWorkerPool();
+        $agent = $this->subAgent('a-7');
+        $this->putRunning($pool, $agent, 4248);
+
+        $publish = new \ReflectionMethod(AgentWorkerPool::class, 'publishProgress');
+        $pump = new \ReflectionMethod(AgentWorkerPool::class, 'pumpProgress');
+
+        $publish->invoke($pool, 'a-7', 'old');
+        $pump->invoke($pool);
+        $this->assertSame('old', $agent->output);
+
+        (new \ReflectionMethod(AgentWorkerPool::class, 'discardProgress'))->invoke($pool, 'a-7');
+        $publish->invoke($pool, 'a-7', 'new run text');
+        $pump->invoke($pool);
+
+        $this->assertSame(
+            'new run text',
+            $agent->output,
+            'The recycled id tailed from the previous run\'s offset.',
         );
     }
 

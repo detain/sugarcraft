@@ -100,6 +100,15 @@ final class AgentWorkerPool
     private array $stallDeadlines = [];
 
     /**
+     * Bytes of each running agent's progress file already mirrored into its
+     * SubAgent::$output, keyed by agent id. Dropped with the file at every
+     * dispatch ({@see discardProgress()}), so a recycled id starts from byte 0.
+     *
+     * @var array<string, int>
+     */
+    private array $progressOffsets = [];
+
+    /**
      * Wall-clock budget, in seconds, for one {@see executeAll()} run as a
      * whole — set by {@see withTimeBudget()}; null means no run-level bound.
      *
@@ -2482,10 +2491,11 @@ final class AgentWorkerPool
      * sufficient for the pane to appear: a frame that painted mid-run would
      * have had nothing to paint. This is the other half.
      *
-     * The whole file is re-read rather than tailed from an offset: a live
-     * agent's buffer is bounded by what it can say in one task, the read is
-     * once per poll per RUNNING agent, and an offset would have to be
-     * invalidated on every path that recycles an id.
+     * The file is tailed, not re-read: a worker only ever appends, so each poll
+     * stats the file and reads just the bytes past {@see $progressOffsets}. A
+     * poll with no growth costs one stat, and a long run reads each byte once.
+     * The offset is tied to the buffer (see the invariant in the body) and is
+     * dropped with the file on every dispatch.
      */
     protected function pumpProgress(): void
     {
@@ -2495,12 +2505,45 @@ final class AgentWorkerPool
                 continue;
             }
 
-            $published = @file_get_contents($this->progressFile((string) $agentId));
-            if ($published === false || $published === '' || $published === $agent->output) {
+            $id = (string) $agentId;
+            $path = $this->progressFile($id);
+
+            // Stat first. PHP caches stat results for the last file touched,
+            // so the cache is cleared for this path before reading its size.
+            clearstatcache(true, $path);
+            $size = @filesize($path);
+            if ($size === false) {
                 continue;
             }
 
-            $agent->output = $published;
+            // The mirror invariant: while the agent runs, $agent->output is
+            // exactly the first $offset bytes of its progress file. When that
+            // stops holding (the file was replaced, or the buffer was rewritten,
+            // as a retry does by clearing it to '') start again from byte 0,
+            // which is what re-reading the whole file used to do on every poll.
+            $offset = $this->progressOffsets[$id] ?? 0;
+            $resync = $size < $offset || \strlen($agent->output) !== $offset;
+            if ($resync) {
+                $offset = 0;
+            }
+            if ($size <= $offset) {
+                continue;
+            }
+
+            $delta = self::readProgressRange($path, $offset, $size - $offset);
+            if ($delta === '') {
+                continue;
+            }
+
+            // `.=` on a buffer the pump owns reuses it in place, so a long run
+            // costs O(output) in total rather than O(output) per chunk.
+            if ($resync) {
+                $agent->output = $delta;
+            } else {
+                $agent->output .= $delta;
+            }
+            $this->progressOffsets[$id] = $offset + \strlen($delta);
+
             // Only now, and only for an agent that has actually said
             // something: `pending` is what settleAbandoned() distinguishes a
             // never-dispatched task by, and `streaming` is what every
@@ -2520,10 +2563,35 @@ final class AgentWorkerPool
         }
     }
 
+    /**
+     * The $length bytes of a progress file from $offset, or '' when it cannot
+     * be opened or read. Only {@see pumpProgress()} calls this, and only for a
+     * range it has just stat'd, so a short read is left for the next poll.
+     */
+    private static function readProgressRange(string $path, int $offset, int $length): string
+    {
+        $handle = @fopen($path, 'rb');
+        if ($handle === false) {
+            return '';
+        }
+
+        try {
+            if (fseek($handle, $offset) !== 0) {
+                return '';
+            }
+            $chunk = fread($handle, $length);
+        } finally {
+            fclose($handle);
+        }
+
+        return \is_string($chunk) ? $chunk : '';
+    }
+
     /** Drop one agent's progress file; its result supersedes it. */
     protected function discardProgress(string $agentId): void
     {
         @unlink($this->progressFile($agentId));
+        unset($this->progressOffsets[$agentId]);
     }
 
     /**
