@@ -266,13 +266,34 @@ final class MaskIngestTest extends TestCase
         $this->assertLessThan(15.0, $seconds, sprintf('1024x1024 RGBA classified in %.2f s; budget 15 s', $seconds));
     }
 
+    public function testAMalformedLateRowDeclinesWithoutWalkingTheEarlierRows(): void
+    {
+        // 4000x400 gray, filter byte 5 on the last row. The per-scanline walk
+        // re-copied every earlier row before it reached the bad byte (quadratic:
+        // ~3e8 element copies here, several seconds). The pre-scan declines before
+        // any sample is written, so the budget is generous for any runner.
+        $width = 4000;
+        $height = 400;
+        $raw = \str_repeat("\x00" . \str_repeat("\x00", $width), $height - 1)
+            . "\x05" . \str_repeat("\x00", $width);
+        $unfilter = new \ReflectionMethod(MaskIngest::class, 'unfilter');
+        $unfilter->setAccessible(true);
+
+        $start = \hrtime(true);
+        $result = $unfilter->invoke(null, $raw, $width, $height, 1);
+        $seconds = (\hrtime(true) - $start) / 1e9;
+
+        $this->assertNull($result);
+        $this->assertLessThan(1.0, $seconds, sprintf('declining a late bad filter byte took %.2f s; budget 1 s', $seconds));
+    }
+
     public function testAnUnknownFilterByteDeclinesBeforeTheBufferIsAllocated(): void
     {
-        // 4000x4000 gray: the sample buffer is 16M slots (~256 MB as a PHP
-        // array), past the default 128M memory_limit. A bad filter byte on row 0
-        // must decline before that allocation, so the caller falls through to GD
-        // instead of hitting an uncatchable fatal. The raw stream here is far
-        // shorter than the header claims; the decline must not read past row 0.
+        // 4000x4000 gray: a sample buffer for it is 16M slots (~256 MB as a PHP
+        // array). A bad filter byte on row 0 must decline without allocating it,
+        // and must not read past row 0 although the raw stream is far shorter
+        // than the header claims. Master also declines here (it never allocates
+        // for row 0); the late-row test above is the one that fails on master.
         $raw = "\x05" . \str_repeat("\x00", 16);
         $unfilter = new \ReflectionMethod(MaskIngest::class, 'unfilter');
         $unfilter->setAccessible(true);
