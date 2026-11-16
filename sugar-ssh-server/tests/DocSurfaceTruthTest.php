@@ -757,6 +757,7 @@ final class DocSurfaceTruthTest extends TestCase
         self::assertStringContainsString('**Wrapper-only.** Compares a password from `SSH_PASSWORD`', $flat);
         self::assertStringContainsString('**Wrapper-only:** reads `SSH_PASSWORD`', $flat);
         self::assertStringContainsString('This repo does not set `SSH_PASSWORD`, and whether sshd\'s ForceCommand path exports it is unverified against OpenSSH', $flat);
+        self::assertStringContainsString('| `SSH_PASSWORD` | **not set by this repo; whether sshd\'s ForceCommand path exports it is unverified against OpenSSH** |', $flat);
         self::assertDoesNotMatchRegularExpression('/nothing in openssh ever sets/i', $flat);
     }
 

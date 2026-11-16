@@ -258,9 +258,8 @@ membership uses `hash_equals()` across every entry rather than an
 `in_array()` early-out, so list position is not measurable.
 
 **`PasswordAuth` / `SSH_PASSWORD` caveat.** `PasswordAuth` reads the
-password from `SSH_PASSWORD` via `$_SERVER`/`getenv`. This repo does not
-set this variable, and whether sshd's ForceCommand path exports it is
-**unverified against OpenSSH**.
+password from `SSH_PASSWORD` via `$_SERVER`/`getenv`. sshd **never sets
+this variable** — OpenSSH does not hand passwords to forced commands.
 To use this middleware you must inject the secret yourself (for
 example from a wrapper or PAM exec), which means the password is
 visible in that process's `/proc/<pid>/environ`, is inherited by any
