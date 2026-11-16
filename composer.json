@@ -103,7 +103,9 @@
         "sugarcraft/sugar-toast": "dev-master",
         "sugarcraft/sugar-overlay": "dev-master",
         "sugarcraft/candy-ssh-launcher": "dev-master",
-        "sugarcraft/candy-files": "dev-master"
+        "sugarcraft/candy-files": "dev-master",
+        "sugarcraft/candy-discord": "dev-master",
+        "sugarcraft/candy-msteams": "dev-master"
     },
     "repositories": [
         {
@@ -550,6 +552,20 @@
         {
             "type": "path",
             "url": "candy-files",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "candy-discord",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "candy-msteams",
             "options": {
                 "symlink": true
             }

@@ -105,14 +105,16 @@ const FORCE_ALL_FILES = [
  * tripwire's counterpart — a phpunit.xml dir off this list must carry a
  * composer.json or discovery fails loud.
  *
- * candy-discord/candy-msteams are composer-less BY OWNER RULING D2 of the
- * code-chat program (no-composer plugin bundles; disclosed standing fact in
- * the scsite closeout — not re-litigated here, this entry only records it).
+ * History: candy-discord/candy-msteams sat here as "composer-less by owner
+ * ruling D2 (code-chat program)". D2 was superseded on 2026-11-12 when both
+ * bundles gained their own composer.json manifests (9516914a1, 74718c308),
+ * which is exactly what made them discoverable for CI and the split publish;
+ * the entries went inert the day the manifests landed and were retired with
+ * the msteams-sync root-composer roster fix of 2026-11-16. The tripwire
+ * itself stays: a NEW composer-less phpunit.xml dir must be named-and-reasoned
+ * here, or discovery fails loud as designed.
  */
-const COMPOSER_LESS_TEST_DIRS = [
-    'candy-discord'  => 'plugin bundle, composer-less by owner ruling D2 (code-chat program)',
-    'candy-msteams'  => 'plugin bundle, composer-less by owner ruling D2 (code-chat program)',
-];
+const COMPOSER_LESS_TEST_DIRS = [];
 
 function fail(string $msg): never
 {

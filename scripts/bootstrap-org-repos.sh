@@ -51,8 +51,6 @@ declare -A DESCRIPTIONS=(
     [candy-gifview]="Terminal GIF + .ansi-art viewer — port of gifterm."
     [candy-top]="btop-style terminal system monitor — port of aristocratos/btop on the SugarCraft stack."
     [candy-flappy]="Flappy-Bird-style game — port of kbrgl/flapioca on the SugarCraft stack."
-    [candy-msteams]="Microsoft Teams channel bundle for candy-code serve — webhook inbound, Bot Framework JWT checks, pairing gates, adaptive-card approvals."
-    [candy-discord]="Discord channel bundle for candy-code serve — WebSocket dialogs, pairing gates, guild allowlists, approval buttons, slash commands."
 )
 
 # plan_rename.md step 2.4: offline metadata mode — print one description and
