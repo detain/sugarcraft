@@ -31,18 +31,36 @@ final class PharBuildScriptTest extends TestCase
         // The pinned law is the stub SHAPE - shebang line, then <?php - not
         // the per-host newline spelling: a Windows runner with the global
         // core.autocrlf=true checks this file out with CRLF bytes (ci-wave-3
-        // L4). Normalize before the shape pins, and prove the normalization
-        // non-vacuous with a synthetic re-CRLF leg that must re-satisfy the
-        // same prefix on every host.
+        // L4). Normalize before the shape pins.
         $bin = str_replace("\r\n", "\n", $raw);
         self::assertTrue(
             str_starts_with($bin, "#!/usr/bin/env php\n<?php"),
             'bin must keep the shebang+<?php stub shape the build script pins',
         );
+        // ci-wave-4: the old synthetic-CRLF leg round-tripped from $raw, so on
+        // a host whose checkout ALREADY speaks CRLF it doubled the carriage
+        // returns and went red for the wrong reason. Synthesize the other
+        // spelling from the normalized bytes instead - that tests the fold on
+        // every host - and prove the fold is load-bearing: the literal pin
+        // must reject the CRLF bytes it is fed before normalizing.
+        $stub  = "#!/usr/bin/env php\n<?php";
+        $crlf  = str_replace("\n", "\r\n", $bin);
         self::assertTrue(
-            str_starts_with(str_replace("\r\n", "\n", str_replace("\n", "\r\n", $raw)), "#!/usr/bin/env php\n<?php"),
+            str_starts_with(str_replace("\r\n", "\n", $crlf), $stub),
             'the CRLF checkout spelling must satisfy the same stub pin the LF spelling does',
         );
+        self::assertFalse(
+            str_starts_with($crlf, $stub),
+            'the unnormalized literal must reject CRLF bytes - the fold carries the weight',
+        );
+        // The build script must apply the same fold before its own raw-bytes
+        // pin, or a Windows-host build would refuse a valid CRLF checkout.
+        $script    = (string) file_get_contents(realpath(__DIR__ . '/../tools/build-phar.php'));
+        $foldPos   = strpos($script, 'str_replace("\r\n", "\n", $binSource)');
+        $pinPos    = strpos($script, 'str_starts_with($binSource');
+        self::assertIsInt($foldPos, 'the build script must fold the stub pin input like this test does');
+        self::assertIsInt($pinPos);
+        self::assertLessThan($pinPos, $foldPos, 'the fold must happen before the build script pins the shape');
         self::assertStringContainsString(
             "'phar://' . __FILE__",
             $bin,

@@ -258,6 +258,11 @@ if ($binSource === false) {
     fwrite(STDERR, "build-phar: cannot read bin/candy-git.\n");
     exit(2);
 }
+// ci-wave-4: a core.autocrlf=true checkout ships CRLF working bytes; the stub
+// LAW is the shebang+<?php SHAPE, not the per-host newline spelling. Fold once
+// here so the pin, the embedded stub, and PharBuildScriptTest all speak LF on
+// every host (the Windows runner otherwise refused its own valid checkout).
+$binSource = str_replace("\r\n", "\n", $binSource);
 if (!str_starts_with($binSource, "#!/usr/bin/env php\n<?php")) {
     // The stub IS this file; the shebang+open-tag shape is what makes the
     // archive directly executable. A respell that breaks the shape must not
