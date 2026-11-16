@@ -13,7 +13,7 @@ namespace SugarCraft\Dashboard\Modules\Weather;
 final class WeatherSnapshot
 {
     public function __construct(
-        public readonly float $tempC,
+        public readonly ?float $tempC,
         public readonly string $condition,
         public readonly string $location,
         public readonly \DateTimeImmutable $fetchedAt,
@@ -22,12 +22,15 @@ final class WeatherSnapshot
     /**
      * Deserialize from cache JSON array.
      *
-     * @param array{tempC: float, condition: string, location: string, fetchedAt: string}
+     * A null tempC round-trips as null (an unmeasured reading stays
+     * unmeasured on disk too — D-109); legacy float caches load unchanged.
+     *
+     * @param array{tempC: float|null, condition: string, location: string, fetchedAt: string}
      */
     public static function fromArray(array $data): self
     {
         return new self(
-            tempC: (float) $data['tempC'],
+            tempC: ($data['tempC'] ?? null) === null ? null : (float) $data['tempC'],
             condition: (string) $data['condition'],
             location: (string) $data['location'],
             fetchedAt: new \DateTimeImmutable($data['fetchedAt']),
@@ -37,7 +40,7 @@ final class WeatherSnapshot
     /**
      * Serialize for cache JSON.
      *
-     * @return array{tempC: float, condition: string, location: string, fetchedAt: string}
+     * @return array{tempC: float|null, condition: string, location: string, fetchedAt: string}
      */
     public function toArray(): array
     {

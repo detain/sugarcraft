@@ -18,6 +18,13 @@ use SugarCraft\Core\Util\Sanitize;
  * stale disk cache when a lookup fails, and records the failure reason
  * when there is nothing stale to show. A cold start fetches immediately
  * instead of waiting a full interval to consult the cache.
+ *
+ * Deliberately NOT final (finding sugar-dashboard-210, adjudicated
+ * in-step 2026-11-16): cachePath() stays the documented test seam and the
+ * suite subclasses the module to redirect it — finalizing would trade a
+ * live seam for an unproven ctor-injection retrofit. A future cache-path
+ * ctor arg may retire the seam; until then this class remains
+ * subclassable-for-tests only, not an extension point for consumers.
  */
 class WeatherModule extends BaseModule
 {
@@ -26,6 +33,18 @@ class WeatherModule extends BaseModule
 
     private ?WeatherSnapshot $current;
     private \DateTimeImmutable $lastFetch;
+
+    /**
+     * The wall reading view() is allowed to age the snapshot against.
+     *
+     * Sampled at the update door ONLY (tick / result / failure messages) —
+     * a raw wall read inside render would make every repaint a new byte
+     * (the D-80 idempotence law this fold ports to the weather panel).
+     */
+    private int $renderClock = 0;
+
+    /** Test seam (ClockModule::timeBuildCountForTesting pattern): counts sampleWall() bodies so the render-side zero-wall-read law is pinned directly. */
+    private static int $wallReadCount = 0;
 
     /** Reason of the most recent failed lookup, or null if none failed. */
     private ?string $lastFailure = null;
@@ -69,12 +88,13 @@ class WeatherModule extends BaseModule
     {
         if ($msg instanceof TickMsg && $msg->isFor($this->name())) {
             // Fast path: fresh cache on disk — apply immediately, no I/O
-            // beyond the cache read.
+            // beyond the cache read. One wall sample for the whole door.
+            $now = $this->sampleWall();
             $cached = $this->loadCache();
             if ($cached !== null) {
-                $age = time() - $cached->fetchedAt->getTimestamp();
+                $age = $now - $cached->fetchedAt->getTimestamp();
                 if ($age < $this->ttlSeconds) {
-                    $next = $this->withSnapshot($cached);
+                    $next = $this->withSnapshot($cached, $now);
                     return [$next, $this->makeTickCmd()];
                 }
             }
@@ -98,7 +118,7 @@ class WeatherModule extends BaseModule
         }
 
         if ($msg instanceof WeatherResultMsg) {
-            $next = $this->withSnapshot($msg->snapshot);
+            $next = $this->withSnapshot($msg->snapshot, $this->sampleWall());
             return [$next, null];
         }
 
@@ -127,12 +147,14 @@ class WeatherModule extends BaseModule
             );
         }
 
-        $temp = $this->current->tempC;
+        $temp = $this->current->tempC === null
+            ? '—°C'
+            : sprintf('%.0f°C', $this->current->tempC);
         $condition = $this->current->condition;
         $location = $this->current->location;
 
         return sprintf(
-            "%.0f°C %s\n%s (%s)",
+            "%s %s\n%s (%s)",
             $temp,
             Sanitize::untrusted($condition),
             Sanitize::untrusted($location),
@@ -147,7 +169,10 @@ class WeatherModule extends BaseModule
      */
     private function ageLabel(): string
     {
-        $age = max(0, time() - $this->lastFetch->getTimestamp());
+        // No wall read here by design (D-109): the age is computed against
+        // the renderClock sampled at the last update door, so repainting
+        // the same state is byte-idempotent.
+        $age = max(0, $this->renderClock - $this->lastFetch->getTimestamp());
 
         if ($age < 90) {
             return 'just now';
@@ -165,15 +190,37 @@ class WeatherModule extends BaseModule
         return strlen($text) > 80 ? substr($text, 0, 80) . '…' : $text;
     }
 
+    /**
+     * The module's ONLY wall read (D-109, ClockModule::createTime seam
+     * pattern): counted so the "view() never reads the clock" law is
+     * pinned at the counter, not inferred from bytes.
+     */
+    private function sampleWall(): int
+    {
+        ++self::$wallReadCount;
+        return time();
+    }
+
+    public static function wallReadCountForTesting(): int
+    {
+        return self::$wallReadCount;
+    }
+
+    public static function resetWallReadCountForTesting(): void
+    {
+        self::$wallReadCount = 0;
+    }
+
     public function minSize(): array
     {
         return [20, 4];
     }
 
-    private function withSnapshot(WeatherSnapshot $snapshot): static
+    private function withSnapshot(WeatherSnapshot $snapshot, int $now): static
     {
         $clone = clone $this;
         $clone->current = $snapshot;
+        $clone->renderClock = $now;
         // The snapshot carries when IT was fetched — trusting that (rather
         // than stamping "now") is what keeps the displayed age honest when
         // a stale cache or a network fallback path supplies it.

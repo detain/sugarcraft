@@ -16,7 +16,9 @@ interface HttpClient
      * Fetch the current weather for the given location.
      *
      * @param string $location e.g. "Seattle" or "auto" for IP-based detection
-     * @throws \RuntimeException on network failure
+     * @throws WeatherTransportFailure when the network channel failed
+     *     (open, mid-stream abort, or over-cap reply)
+     * @throws WeatherParseFailure when the reply is not a wttr.in j1 document
      * @return WeatherSnapshot
      */
     public function fetch(string $location): WeatherSnapshot;
