@@ -602,26 +602,24 @@ the `Output format` transcript above.
 
 candy-kv uses [sugar-fuzzy](https://github.com/detain/sugarcraft/tree/master/sugar-fuzzy/README.md) for Smith-Waterman scored matching: `Store::fuzzyFilter()` is a live API that ranks keys against a free-text query. Glob-to-SQLite `LIKE` pattern filtering remains the active filter path for `list`/`delete`.
 
-## Accessor deprecation (2026-10-24)
+## Accessor removal (2026-11-16)
 
-The house naming rule is bare accessors — no `get` prefix — and two public
-accessors were renamed into it. The paragraphs below explain each rename, and
-`tests/AccessorDeprecationTest.php` (described under the table) pins the rule;
-the rename history lives in [CHANGELOG.md](CHANGELOG.md). `Database::getRaw()` became `raw()` — `raw` was unclaimed on the class (the store verbs `get`/`set`/`list` are the canonical vocabulary, no `raw` among them). `Store::getFile()` became `saveTo()`: the operation writes store data out to disk, so a direction verb describes it better than a getter; `saveTo()` won over `export()` because the package's own CLI already owns the `export` command (a whole-database dump) and a per-entry `Store::export()` would blur that vocabulary. The store-side mutator `setFile()` keeps its name — it is the file form of the canonical `set()` verb. The legacy spellings stayed as byte-identical one-line BC forwarders, each marked `@deprecated` with `REMOVED-IN: 2.0.0`; they will be removed in candy-kv v2.0.0 (see [CHANGELOG.md](CHANGELOG.md)).
+The house naming rule is bare accessors, with no `get` prefix. Two public
+forwarders that broke it were removed on 2026-11-16, ahead of their scheduled
+v2.0.0 removal, because nothing in the monorepo called them. Use the canonical
+methods instead:
 
-| Namespace | Class | Deprecated | Use instead |
-|-----------|-------|------------|-------------|
-| `Kv` | `Database` | `getRaw()` | `raw()` |
-| `Kv` | `Store` | `getFile()` | `saveTo()` |
+| Class | Removed | Use instead |
+|-------|---------|-------------|
+| `Database` | `getRaw()` | `raw()` (returns the entry, bypassing the expiry filter) |
+| `Store` | `getFile()` | `saveTo()` (writes the entry bytes to a file, returns a bool) |
 
-`tests/AccessorDeprecationTest.php` pins each BC leg on live objects (entry
-equality through `getRaw()`/`raw()` including the missing-key path; identical
-bool and landed bytes through `getFile()`/`saveTo()` on a hit and a miss), the
-forwarder shape (single return line + markers), a discovery-first `src/`
-census with an inverse leg that reddens any unmarked public `get*()`, and this
-table's agreement with the census. Internal call sites in `src/` and
-`examples/` use the bare forms. The CLI `get` command is unrelated to the
-accessor rule and stays.
+`saveTo()` is named for the direction of the write: store data goes out to
+disk. The store-side mutator `setFile()` keeps its name as the file form of
+`set()`. The CLI `get` command is unrelated to the accessor rule and stays.
+`tests/AccessorDeprecationTest.php` pins the removal, the canonical behaviour,
+and the `src/` census that keeps any public `get*()` accessor out. The history
+is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Contributing & extending
 

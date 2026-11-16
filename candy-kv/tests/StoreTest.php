@@ -169,14 +169,14 @@ final class StoreTest extends TestCase
         [...$this->store->list(null, null, mode: 'all-keys')];
     }
 
-    public function testSetFileAndGetFile(): void
+    public function testSetFileAndSaveTo(): void
     {
         $srcPath = $this->tmpDir . '/source.txt';
         $dstPath = $this->tmpDir . '/dest.txt';
         \file_put_contents($srcPath, "binary-like\x00\xff\xfe");
 
         $this->store->setFile('myfile', $srcPath);
-        $ok = $this->store->getFile('myfile', $dstPath);
+        $ok = $this->store->saveTo('myfile', $dstPath);
 
         $this->assertTrue($ok);
         $this->assertSame(\file_get_contents($srcPath), \file_get_contents($dstPath));
@@ -639,19 +639,19 @@ final class StoreTest extends TestCase
         }
     }
 
-    // ─── Step 15 (b): getFile returns false for missing key ──────────────────
+    // ─── Step 15 (b): saveTo returns false for missing key ───────────────────
 
-    public function testGetFileReturnsFalseForMissingKey(): void
+    public function testSaveToReturnsFalseForMissingKey(): void
     {
         $dst = $this->tmpDir . '/dst.txt';
-        $ok = $this->store->getFile('nonexistent-key', $dst);
+        $ok = $this->store->saveTo('nonexistent-key', $dst);
         $this->assertFalse($ok);
         $this->assertFileDoesNotExist($dst);
     }
 
-    // ─── Step 15 (c): getFile returns false when destination unwritable ───────
+    // ─── Step 15 (c): saveTo returns false when destination unwritable ───────
 
-    public function testGetFileReturnsFalseWhenDestinationUnwritable(): void
+    public function testSaveToReturnsFalseWhenDestinationUnwritable(): void
     {
         // Skip if running as root (root bypasses permission checks).
         if (\function_exists('posix_getuid') && posix_getuid() === 0) {
@@ -663,7 +663,7 @@ final class StoreTest extends TestCase
         \mkdir($readonlyDir, 0o500);
         $dst = $readonlyDir . '/out.txt';
 
-        $ok = $this->store->getFile('writable-key', $dst);
+        $ok = $this->store->saveTo('writable-key', $dst);
         $this->assertFalse($ok);
     }
 

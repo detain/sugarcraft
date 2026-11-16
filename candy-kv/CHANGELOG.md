@@ -3,6 +3,16 @@
 All notable changes to candy-kv are documented here. Dates are the day the
 change landed in the monorepo.
 
+## 2026-11-16 — BC forwarders removed
+
+### Removed
+
+- `Database::getRaw()` and `Store::getFile()`, the `@deprecated` forwarders
+  left by the 2026-10-24 accessor sweep. Use `Database::raw()` and
+  `Store::saveTo()`. Removed before the scheduled v2.0.0 because no caller
+  exists in the monorepo; a consumer still on the old names gets a fatal
+  "undefined method" on upgrade.
+
 ## 2026-11-03 — CLI & storage contract hardening
 
 A full audit round (multi-persona review + fix wave). Changes consumers can
