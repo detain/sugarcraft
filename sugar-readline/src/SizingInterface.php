@@ -25,5 +25,5 @@ interface SizingInterface
     public function displayWidth(): ?int;
 
     /** Immutable setter for the display bound (see the tri-state above). */
-    public function withDisplayWidth(?int $cells): self;
+    public function withDisplayWidth(?int $cells): static;
 }

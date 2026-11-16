@@ -120,7 +120,7 @@ final class ConfirmationPrompt implements PromptInterface, SizingInterface
     // Input
     // -------------------------------------------------------------------------
 
-    public function handleKey(string $key): self
+    public function handleKey(string $key): static
     {
         if ($this->submitted || $this->aborted) {
             return $this;
@@ -230,7 +230,7 @@ final class ConfirmationPrompt implements PromptInterface, SizingInterface
      * When the budget ends mid-row the trailing segments (the hint last)
      * are dropped rather than wrapped.
      */
-    public function withDisplayWidth(?int $cells): self
+    public function withDisplayWidth(?int $cells): static
     {
         return $this->mutate(['displayWidth' => $cells === null ? null : max(0, $cells)]);
     }

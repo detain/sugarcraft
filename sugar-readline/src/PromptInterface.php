@@ -38,7 +38,7 @@ interface PromptInterface
     public function view(): string;
 
     /** Interpret a normalized symbolic key name (e.g. 'enter', 'up', 'ctrl_r'). */
-    public function handleKey(string $key): self;
+    public function handleKey(string $key): static;
 
     /** True once the prompt holds a final accepted answer. */
     public function isSubmitted(): bool;

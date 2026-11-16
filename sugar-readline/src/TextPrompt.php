@@ -427,7 +427,7 @@ final class TextPrompt implements PromptInterface, SizingInterface
      * bookkeeping repaint() relies on, so long values are windowed around
      * the cursor instead. Cells (not chars) — CJK/emoji widths are honored.
      */
-    public function withDisplayWidth(?int $cells): self
+    public function withDisplayWidth(?int $cells): static
     {
         return $this->mutate(['displayWidth' => $cells === null ? null : max(0, $cells)]);
     }
@@ -452,7 +452,7 @@ final class TextPrompt implements PromptInterface, SizingInterface
     // Input
     // -------------------------------------------------------------------------
 
-    public function handleChar(string $char): self
+    public function handleChar(string $char): static
     {
         if ($this->notice !== '') {
             // Transient notice law (finding 033): any pump-visible key
@@ -562,7 +562,7 @@ final class TextPrompt implements PromptInterface, SizingInterface
         return $clone;
     }
 
-    public function handleKey(string $key): self
+    public function handleKey(string $key): static
     {
         if ($this->notice !== '') {
             // Transient notice law (finding 033): any pump-visible key
@@ -596,7 +596,7 @@ final class TextPrompt implements PromptInterface, SizingInterface
      * Handle a key directly, bypassing the active mode.
      * Used internally by modes to apply standard TextPrompt operations.
      */
-    public function handleKeyDirect(string $key): self
+    public function handleKeyDirect(string $key): static
     {
         if ($this->submitted || $this->aborted) {
             return $this;

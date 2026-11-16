@@ -129,7 +129,7 @@ final class TextareaPrompt implements PromptInterface, SizingInterface
     // Input
     // -------------------------------------------------------------------------
 
-    public function handleChar(string $char): self
+    public function handleChar(string $char): static
     {
         if ($this->notice !== '') {
             // Transient notice law (finding 033): any pump-visible key
@@ -217,7 +217,7 @@ final class TextareaPrompt implements PromptInterface, SizingInterface
         return $clone;
     }
 
-    public function handleKey(string $key): self
+    public function handleKey(string $key): static
     {
         if ($this->notice !== '') {
             // Transient notice law (finding 033): any pump-visible key
@@ -397,7 +397,7 @@ final class TextareaPrompt implements PromptInterface, SizingInterface
      * cursor column inside the window on such lines is the cell-aware
      * cursor model's job (S-24 tracks it separately).
      */
-    public function withDisplayWidth(?int $cells): self
+    public function withDisplayWidth(?int $cells): static
     {
         return $this->mutate(['displayWidth' => $cells === null ? null : max(0, $cells)]);
     }
