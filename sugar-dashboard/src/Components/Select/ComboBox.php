@@ -282,6 +282,9 @@ final class ComboBox implements \SugarCraft\Dashboard\Foundation\SizedItem
             return $text;
         }
 
+        // P0-A11: this clip is in display cells, and a clipped text drops its ANSI
+        // (text that fits is returned as-is). The placeholder and query are clipped
+        // here; the option labels are clipped through this same method. See the docblock.
         return Calc::truncate($text, max(1, $this->width - $chrome));
     }
 

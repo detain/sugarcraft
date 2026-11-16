@@ -63,6 +63,38 @@ final class DisplayCellWidthTest extends TestCase
         self::assertStringContainsString('┃名前' . str_repeat(' ', 9) . '▲┃', $rendered);
     }
 
+    public function testSortedHeaderKeepsTheSgrOfALabelThatFits(): void
+    {
+        // Width 12 leaves 10 cells beside the two-cell indicator; the styled
+        // "Name" fits in them, so its SGR must survive the sorted-header cut.
+        $name = Column::new('name', "\e[1mName\e[0m", sortable: true);
+        $grid = GridTable::new([$name], [new Row(['name' => 'abcdefghijkl'])])
+            ->sort($name)
+            ->setSize(30, 10);
+
+        $rendered = $grid->render();
+
+        $this->assertFrameIsRectangular($rendered);
+        self::assertStringContainsString("┃\e[1mName\e[0m" . str_repeat(' ', 7) . '▲┃', $rendered);
+    }
+
+    public function testSortedHeaderDropsSgrOnlyWhenTheLabelIsClipped(): void
+    {
+        // The column is the label's 25 cells wide, so the indicator leaves 23 for
+        // the label; the styled label is cut there and its SGR goes with the cut.
+        $name = Column::new('name', "\e[1mNameIsLongerThanTheColumn\e[0m", sortable: true);
+        $grid = GridTable::new([$name], [new Row(['name' => 'abcdefghijkl'])])
+            ->sort($name)
+            ->setSize(30, 10);
+
+        $rendered = $grid->render();
+        $header = explode("\n", $rendered)[1];
+
+        $this->assertFrameIsRectangular($rendered);
+        self::assertStringNotContainsString("\e[", $header);
+        self::assertStringContainsString('NameIsLongerThanTheColu ▲┃', $header);
+    }
+
     public function testTruncateCountsDisplayCellsNotCodePoints(): void
     {
         // Five cells: two CJK ideographs (four cells) plus the one-cell ellipsis.
