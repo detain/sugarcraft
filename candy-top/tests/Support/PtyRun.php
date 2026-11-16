@@ -105,7 +105,12 @@ final class PtyRun
     {
         $until = microtime(true) + $seconds;
         while (substr_count($this->output, $needle) < $times) {
-            if (microtime(true) >= $until || $this->child->exited()) {
+            if ($this->child->exited()) {
+                $this->drainUntilQuiet();
+
+                return substr_count($this->output, $needle) >= $times;
+            }
+            if (microtime(true) >= $until) {
                 $this->drain();
 
                 return substr_count($this->output, $needle) >= $times;
@@ -114,6 +119,26 @@ final class PtyRun
         }
 
         return true;
+    }
+
+    /**
+     * Live/exit snapshot for failure messages: a bare 'false is true' cannot
+     * tell a crashed child from a stalled loop (wave-4 F11, macOS CI).
+     */
+    public function liveState(): string
+    {
+        $pid = $this->child->pid();
+        if (!$this->child->exited()) {
+            return "child {$pid} still running";
+        }
+        $code = $this->child->exitCode();
+        if ($code === null) {
+            return "child {$pid} exited, code unavailable (reaped elsewhere)";
+        }
+
+        return $code > 128
+            ? "child {$pid} exited code {$code} (signal " . ($code - 128) . ' under the 128+sig convention)'
+            : "child {$pid} exited code {$code}";
     }
 
     public function write(string $bytes): void
@@ -153,6 +178,23 @@ final class PtyRun
         $chunk = $this->pty->read(65536, 0.05);
         if (is_string($chunk)) {
             $this->output .= $chunk;
+        }
+    }
+
+    /**
+     * Flush what is still in flight after the child is gone: a dead child
+     * cannot write further, so the first empty read ends the stream. Without
+     * this, output written just before the exit sits unseen in the pty buffer
+     * and a late frame reads like a stall (wave-4 F11).
+     */
+    private function drainUntilQuiet(): void
+    {
+        for ($i = 0; $i < 8; $i++) {
+            $length = strlen($this->output);
+            $this->drain();
+            if (strlen($this->output) === $length) {
+                return;
+            }
         }
     }
 }

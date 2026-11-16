@@ -56,7 +56,15 @@ final class SignalExitTest extends TestCase
         // (a stop requested in that gap is lost: sugar-core's Program stops
         // the loop before run() sets it running), so the second proves the
         // loop itself is turning and the signal arms are live.
-        $this->assertTrue($run->readUntilCount("\x1b[?2026l", 2, 15.0), 'the loop is running (second frame drawn)');
+        // macOS CI went red here deterministically on BOTH datasets (wave-4
+        // F11, job 133516230296 at 05e9c6736): the alt screen was entered and
+        // frame two never arrived inside the 15 s deadline, while Linux draws
+        // both in ~1 s. The message now names the shape — crashed child (exit
+        // code) vs. live stalled loop (frames counted vs. expected two) — so
+        // the next red is diagnosable from CI output alone.
+        $this->assertTrue($run->readUntilCount("\x1b[?2026l", 2, 15.0), 'the loop is running (second frame drawn); ' . $run->liveState()
+            . '; sync-out frames seen: ' . substr_count($run->output(), "\x1b[?2026l")
+            . '; tail: ' . substr(json_encode(substr($run->output(), -200)) ?: '', 0, 240));
 
         $run->signal($signal);
         $code = $run->reap(10.0);
