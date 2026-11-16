@@ -11,10 +11,8 @@ use SugarCraft\Core\Concerns\Mutable;
  *
  * Immutable: {@see withSpring()}, {@see without()} and {@see withTarget()}
  * each return a NEW collection, matching {@see tick()}'s copy-on-write
- * contract. The legacy mutator spellings — add()/remove()/setTarget() — are
- * deprecated shims (REMOVED-IN: 2.0.0) that now delegate to their with-*()
- * twins: copy-on-write like everything else, notice-emitting like
- * {@see getTarget()}.
+ * contract. The pre-2.0 mutator and accessor aliases (add, remove, setTarget,
+ * get, getTarget) were removed in 2.0.0; use the instance API above.
  */
 final class SpringCollection
 {
@@ -158,71 +156,6 @@ final class SpringCollection
     }
 
     /**
-     * Add a spring to the collection.
-     *
-     * @deprecated Use {@see withSpring()}, which returns a new instance.
-     *             REMOVED-IN: 2.0.0. Since this release the shim is also
-     *             copy-on-write: it returns the NEW collection and no longer
-     *             mutates the receiver (finding 019 — the old mixed contract
-     *             made `$c = $c->add(...)` assign null while a plain
-     *             `$c->add(...)` mutated; one footgun at a time).
-     */
-    public function add(string $id, Spring $spring, float $position = 0.0, float $velocity = 0.0, float $target = 0.0): self
-    {
-        $this->emitShimDeprecation('add()', 'withSpring()');
-
-        return $this->withSpring($id, $spring, $position, $velocity, $target);
-    }
-
-    /**
-     * Remove a spring from the collection by id.
-     *
-     * @deprecated Use {@see without()}, which returns a new instance.
-     *             REMOVED-IN: 2.0.0. Copy-on-write like {@see add()}.
-     */
-    public function remove(string $id): self
-    {
-        $this->emitShimDeprecation('remove()', 'without()');
-
-        return $this->without($id);
-    }
-
-    /**
-     * Set the target for a specific spring.
-     *
-     * @deprecated Use {@see withTarget()}, which returns a new instance.
-     *             REMOVED-IN: 2.0.0. Copy-on-write like {@see add()};
-     *             unknown ids still throw OutOfBoundsException.
-     */
-    public function setTarget(string $id, float $target): self
-    {
-        $this->emitShimDeprecation('setTarget()', 'withTarget()');
-
-        return $this->withTarget($id, $target);
-    }
-
-    /**
-     * The ONE deprecation-notice shape for every deprecated surface here.
-     *
-     * These trigger_error strings are deliberately NOT routed through
-     * Lang::t (finding 055): the i18n law's scope is USER-facing runtime
-     * text; a deprecation notice is a developer-facing compiler-era message
-     * read in stack traces — translating it would scatter migration
-     * instructions across 16 files while making them harder to grep.
-     */
-    private function emitShimDeprecation(string $legacy, string $replacement): void
-    {
-        trigger_error(
-            sprintf(
-                'SpringCollection::%s is deprecated; use %s instead. REMOVED-IN: 2.0.0.',
-                $legacy,
-                $replacement,
-            ),
-            E_USER_DEPRECATED,
-        );
-    }
-
-    /**
      * Advance every UNSETTLED spring by one step; settled members keep their
      * floats untouched (finding 006 — cost follows motion, not collection
      * size). Returns a NEW SpringCollection when anything advanced, leaving
@@ -235,8 +168,7 @@ final class SpringCollection
      * outputs — whose non-finite INPUT door plus finite coefficient belt
      * make re-checking them redundant. No foreign input can ride through
      * unexamined: every value reaches the planes via the constructor or the
-     * with-prefix mutators (full validation) — and the deprecated shims
-     * delegate to those, so the door covers them too.
+     * with-prefix mutators (full validation), so the door covers them all.
      *
      * @return self New collection when motion happened; the same collection
      *              once nothing can move.
@@ -313,21 +245,6 @@ final class SpringCollection
             throw new \OutOfBoundsException(Lang::t('spring.unknown_id', ['id' => $id]));
         }
         return $this->positions[$id];
-    }
-
-    /**
-     * BC forwarder for the pre-rename accessor name.
-     *
-     * @deprecated The `get`-prefixed form breaks the house bare-accessor
-     *             convention (finding 020 — the last surviving `get`
-     *             accessor here). Use {@see self::position()} instead.
-     *             REMOVED-IN: 2.0.0, loud like the other shims.
-     */
-    public function get(string $id): float
-    {
-        $this->emitShimDeprecation('get()', 'position()');
-
-        return $this->position($id);
     }
 
     /**
@@ -414,21 +331,5 @@ final class SpringCollection
             throw new \OutOfBoundsException(Lang::t('spring.unknown_id', ['id' => $id]));
         }
         return $this->targets[$id];
-    }
-
-    /**
-     * BC forwarder for the pre-rename accessor name.
-     *
-     * @deprecated The `get`-prefixed form breaks the house bare-accessor
-     *             convention. Use {@see self::target()} instead.
-     *             REMOVED-IN: 2.0.0. Emits E_USER_DEPRECATED like the mutator
-     *             shims (finding 051) so the read-side migration can no
-     *             longer linger silently.
-     */
-    public function getTarget(string $id): float
-    {
-        $this->emitShimDeprecation('getTarget()', 'target()');
-
-        return $this->target($id);
     }
 }
