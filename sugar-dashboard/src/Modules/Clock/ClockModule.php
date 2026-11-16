@@ -19,6 +19,11 @@ final class ClockModule extends BaseModule
 {
     private \DateTimeImmutable $time;
 
+    private readonly \DateTimeZone $zone;
+
+    /** Visible bad-config reason when the configured timezone is invalid (D-164). */
+    private readonly ?string $zoneError;
+
     private static int $timeBuildCount = 0;
 
     public function __construct(
@@ -26,6 +31,25 @@ final class ClockModule extends BaseModule
         private readonly ?string $timezone = null,
         private readonly ?string $name = null,
     ) {
+        // Config trust boundary (D-164): one timezone typo must cost the
+        // clock panel, never the whole dashboard at startup. Bad zones fall
+        // back to UTC and record the reason; the honest-disable doctrine
+        // (D-08, ported to first-party modules) renders that reason in the
+        // frame instead of crashing or silently lying with the wrong clock.
+        try {
+            $this->zone = $timezone !== null
+                ? new \DateTimeZone($timezone)
+                : new \DateTimeZone(date_default_timezone_get());
+            $this->zoneError = null;
+        } catch (\Exception $e) {
+            $this->zone = new \DateTimeZone('UTC');
+            $this->zoneError = sprintf(
+                'unknown timezone "%s" (%s)',
+                (string) $timezone,
+                $e->getMessage(),
+            );
+        }
+
         $this->time = $this->createTime();
     }
 
@@ -58,6 +82,10 @@ final class ClockModule extends BaseModule
 
     public function view(): string
     {
+        if ($this->zoneError !== null) {
+            return "—\nClock disabled: {$this->zoneError}; showing UTC time was suppressed to avoid a misleading clock.";
+        }
+
         $timeStr = $this->time->format('H:i:s');
 
         if ($this->showDate) {
@@ -100,10 +128,7 @@ final class ClockModule extends BaseModule
     private function createTime(): \DateTimeImmutable
     {
         ++self::$timeBuildCount;
-        $timezone = $this->timezone !== null
-            ? new \DateTimeZone($this->timezone)
-            : new \DateTimeZone(date_default_timezone_get());
 
-        return new \DateTimeImmutable('now', $timezone);
+        return new \DateTimeImmutable('now', $this->zone);
     }
 }

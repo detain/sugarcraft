@@ -141,4 +141,36 @@ final class ClockModuleTest extends TestCase
         // Tick arm keeps re-arming while unconsulted (legacy chain shape).
         $this->assertNotNull($cmd);
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    // D-164: bad timezone config must not brick the dashboard
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testInvalidTimezoneDoesNotThrowAtConstruction(): void
+    {
+        $module = new ClockModule(timezone: 'Mars/Phobos');
+
+        $view = $module->view();
+        $this->assertStringStartsWith('—', $view);
+        $this->assertStringContainsString('unknown timezone "Mars/Phobos"', $view);
+    }
+
+    public function testInvalidTimezoneSurvivesTheTickLoop(): void
+    {
+        $module = new ClockModule(timezone: 'Mars/Phobos');
+
+        [$next, $cmd] = $module->update(new TickMsg());
+
+        $this->assertInstanceOf(ClockModule::class, $next);
+        $this->assertStringStartsWith('—', $next->view());
+        $this->assertStringContainsString('Mars/Phobos', $next->view());
+        $this->assertNotNull($cmd);
+    }
+
+    public function testValidTimezoneStillRendersTimeNotADisableNotice(): void
+    {
+        $module = new ClockModule(timezone: 'Asia/Tokyo');
+
+        $this->assertMatchesRegularExpression('/^\d{2}:\d{2}:\d{2}$/', $module->view());
+    }
 }
