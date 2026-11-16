@@ -541,7 +541,8 @@ final class DocSurfaceTruthTest extends TestCase
 
         // PasswordAuth: the variable it reads is one no OpenSSH exports.
         self::assertStringContainsString('Compares a password from `SSH_PASSWORD`', $flat);
-        self::assertStringContainsString('Nothing in OpenSSH ever sets that variable', $flat);
+        self::assertStringContainsString('This repo does not set `SSH_PASSWORD`, and whether sshd\'s ForceCommand path exports it is unverified against OpenSSH', $flat);
+        self::assertStringNotContainsString('Nothing in OpenSSH ever sets that variable', $flat);
         self::assertStringNotContainsString('against a caller-supplied callback (`SSH_PASSWORD` env var).', $flat);
 
         // CertificateAuth: same story, and the silence was the defect (audit K6).
@@ -738,9 +739,12 @@ final class DocSurfaceTruthTest extends TestCase
     {
         $doc = (new \ReflectionClass(\SugarCraft\SshServer\Middleware\Auth\PasswordAuth::class))->getDocComment();
         self::assertIsString($doc, 'PasswordAuth must carry a class docblock');
+        $doc = (string) \preg_replace('/^\s*\*\s?/m', '', $doc);
         $doc = (string) \preg_replace('/\s+/', ' ', $doc);
         self::assertStringContainsString('**Wrapper-only.**', $doc);
+        self::assertStringContainsString('This repo does not set `SSH_PASSWORD`, and whether sshd\'s ForceCommand path exports it is unverified against OpenSSH.', $doc);
         self::assertStringContainsString('does not authenticate the peer', $doc);
+        self::assertStringNotContainsString('Nothing in OpenSSH ever sets', $doc);
 
         $readme = $this->readme();
         if ($readme === null) {
@@ -749,6 +753,8 @@ final class DocSurfaceTruthTest extends TestCase
         $flat = (string) \preg_replace('/\s+/', ' ', $readme);
         self::assertStringContainsString('**Wrapper-only.** Compares a password from `SSH_PASSWORD`', $flat);
         self::assertStringContainsString('**Wrapper-only:** reads `SSH_PASSWORD`', $flat);
+        self::assertStringContainsString('This repo does not set `SSH_PASSWORD`, and whether sshd\'s ForceCommand path exports it is unverified against OpenSSH', $flat);
+        self::assertStringNotContainsString('Nothing in OpenSSH ever sets that variable', $flat);
     }
 
     public function testTheChildEnvironmentContractIsWrittenWhereItIsUsed(): void
