@@ -109,7 +109,11 @@ use SugarCraft\Top\Support\Version;
  * TIME BOUNDS follow the E646 rule: a connect ceiling and a per-read
  * ceiling, deliberately no total request timeout — a large TUI phar download
  * on a slow link is legitimate work that a blanket clock would abort. The
- * read ceiling is what kills a stalled transfer.
+ * read ceiling is what kills a stalled transfer. On hosts without ext-curl
+ * the connect ceiling additionally rides the request `timeout` option
+ * (S-X09): StreamHandler ignores `connect_timeout` outright, and its
+ * `stream_set_timeout` still re-bounds every read — ceilings stay
+ * per-operation there too.
  *
  * The $http / $releasesUrl / $pharPath / $currentVersion / $publicKey
  * parameters exist for the suite: `SelfUpdateTest` mounts a fake release
@@ -868,7 +872,22 @@ final class SelfUpdate
 
     private static function httpClient(): ClientInterface
     {
-        return new Client([
+        return new Client(self::httpOptions());
+    }
+
+    /**
+     * @return array<string, mixed>
+     * @internal seam for the suite (S-X09); production dispatch calls httpClient().
+     */
+    public static function httpOptionsForTesting(): array
+    {
+        return self::httpOptions();
+    }
+
+    /** @return array<string, mixed> */
+    private static function httpOptions(): array
+    {
+        $options = [
             // E646: ceilings on the two blocking operations, not a clock on
             // the whole request — see the class docblock.
             'connect_timeout' => self::CONNECT_TIMEOUT_SECONDS,
@@ -882,7 +901,22 @@ final class SelfUpdate
                 // The GitHub API rejects a request with no user agent.
                 'User-Agent' => 'candy-top-self-update',
             ],
-        ]);
+        ];
+
+        if (!\extension_loaded('curl')) {
+            // 'connect_timeout' is a curl-only Guzzle option: StreamHandler
+            // (the non-curl default handler) silently ignored it, so a
+            // black-holed host used to stall on open up to the ini
+            // default_socket_timeout — the E646 connect ceiling evaporating
+            // with the extension. 'timeout' maps to the stream context open
+            // deadline, and StreamHandler's stream_set_timeout(read_timeout)
+            // still governs every later read, so the per-operation ceilings
+            // survive on hosts without ext-curl and no total-request clock
+            // is ever introduced (a slow-but-live phar download stays legal).
+            $options['timeout'] = self::CONNECT_TIMEOUT_SECONDS;
+        }
+
+        return $options;
     }
 
     private static function forget(string $path): void

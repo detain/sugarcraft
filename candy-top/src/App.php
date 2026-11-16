@@ -1240,13 +1240,16 @@ final class App implements Model
             } catch (InvalidOptionValue) {
                 continue;
             }
-            if ($key === 'shown_boxes' && !$this->gpusExist($next->shownBoxes())) {
-                // btop set_boxes: a gpuN beyond Gpu::count is invalid.
-                continue;
-            }
-            if ($key === 'shown_boxes' && $this->cols > 0 && !$this->fitsBoxes($next->shownBoxes(), $next)) {
-                $refused = true;
-                continue;
+            if ($key === 'shown_boxes') {
+                $roster = $this->roster();
+                if (!$this->gpusExist($next->shownBoxes(), $roster)) {
+                    // btop set_boxes: a gpuN beyond Gpu::count is invalid.
+                    continue;
+                }
+                if ($this->cols > 0 && !$this->fitsBoxes($next->shownBoxes(), $next, $roster)) {
+                    $refused = true;
+                    continue;
+                }
             }
             $config = $next;
         }
@@ -1272,9 +1275,9 @@ final class App implements Model
      *
      * @param list<string> $boxes
      */
-    private function fitsBoxes(array $boxes, ?Config $config = null): bool
+    private function fitsBoxes(array $boxes, ?Config $config = null, ?GpuRoster $roster = null): bool
     {
-        return FrameBuilder::fits($this->cols, $this->rows, $boxes, $this->roster(), ($config ?? $this->config)->gpuBoxColumns(), ($config ?? $this->config)->string('show_gpu_info'));
+        return FrameBuilder::fits($this->cols, $this->rows, $boxes, $roster ?? $this->roster(), ($config ?? $this->config)->gpuBoxColumns(), ($config ?? $this->config)->string('show_gpu_info'));
     }
 
     /**
@@ -1283,9 +1286,11 @@ final class App implements Model
      *
      * @param list<string> $boxes
      */
-    private function gpusExist(array $boxes): bool
+    private function gpusExist(array $boxes, ?GpuRoster $roster = null): bool
     {
-        $count = $this->roster()->count();
+        // S-X09: the roster is a per-call merge over every panel; paired
+        // guards hoist one roster() and hand it down instead of re-merging.
+        $count = ($roster ?? $this->roster())->count();
         foreach (GpuPanels::targets($boxes) as $gpu) {
             if ($gpu >= $count) {
                 return false;
@@ -1712,7 +1717,10 @@ final class App implements Model
         // btop: apply_preset fails on a gpuN beyond Gpu::count (set_boxes)
         // or a terminal too small — the size-error box opens and the old
         // preset stays current, so `p` does not move past it.
-        if (!$this->gpusExist($preset->boxNames()) || ($this->cols > 0 && !$this->fitsBoxes($preset->boxNames()))) {
+        // S-X09: one roster merge feeds both guards (the paired checks used to
+        // re-merge the panel set per call).
+        $roster = $this->roster();
+        if (!$this->gpusExist($preset->boxNames(), $roster) || ($this->cols > 0 && !$this->fitsBoxes($preset->boxNames(), null, $roster))) {
             return [$this->withOverlay(Menus::sizeError()), null];
         }
         try {
