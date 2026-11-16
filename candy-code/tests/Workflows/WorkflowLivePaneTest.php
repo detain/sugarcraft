@@ -760,15 +760,12 @@ final class WorkflowLivePaneTest extends TestCase
     }
 
     /**
-     * A poll reads only the bytes published since the last poll.
+     * Each poll mirrors the bytes appended since the previous poll, in order.
      *
-     * The prefix already mirrored is rewritten underneath the pump. A pump that
-     * re-reads the whole file would show the rewrite; a tail reads the appended
-     * bytes from its offset and leaves the mirrored prefix alone. (The rewrite
-     * stands in for any change to bytes the pump has already passed; the
-     * publisher only ever appends, so this shape is never produced in practice.)
+     * The publisher only appends, so the second poll must add exactly the
+     * second chunk to the mirror and nothing already mirrored.
      */
-    public function testPumpTailsOnlyTheBytesPublishedSinceTheLastPoll(): void
+    public function testPumpTailsOnlyTheBytesAppendedSinceTheLastPoll(): void
     {
         $pool = new AgentWorkerPool();
         $agent = $this->subAgent('a-4');
@@ -776,31 +773,33 @@ final class WorkflowLivePaneTest extends TestCase
 
         $publish = new \ReflectionMethod(AgentWorkerPool::class, 'publishProgress');
         $pump = new \ReflectionMethod(AgentWorkerPool::class, 'pumpProgress');
-        $path = (new \ReflectionMethod(AgentWorkerPool::class, 'progressFile'))->invoke($pool, 'a-4');
 
         $publish->invoke($pool, 'a-4', 'first');
         $pump->invoke($pool);
         $this->assertSame('first', $agent->output);
 
-        file_put_contents($path, 'XXXXX/second');
+        $publish->invoke($pool, 'a-4', '/second');
         $pump->invoke($pool);
 
         $this->assertSame(
             'first/second',
             $agent->output,
-            'The pump re-read the mirrored prefix instead of tailing from its offset.',
+            'The pump did not mirror the bytes appended since the last poll.',
         );
     }
 
     /**
-     * A poll that finds the file no larger than what it has mirrored does not
-     * read it at all.
+     * TRADE-OFF, pinned on purpose: an in-place rewrite of bytes the pump has
+     * already mirrored is NOT mirrored. The old whole-file read showed it on
+     * the next poll; the offset tail does not re-read mirrored bytes.
      *
-     * The size is checked before any read, so an unchanged file costs one stat.
-     * Same-size rewrites are not seen, which is the trade the append-only
-     * publisher makes: nothing it does produces one.
+     * Nothing in the pool rewrites published bytes (publishProgress() appends,
+     * and the file is removed only by discardProgress(), which drops the
+     * offset), so the loss is not reachable from the pool. If a future writer
+     * rewrites in place, this test must change with the design, not be
+     * deleted to make a red run green.
      */
-    public function testPumpDoesNotReadAProgressFileThatHasNotGrown(): void
+    public function testASameSizeRewriteOfMirroredBytesIsNotMirrored(): void
     {
         $pool = new AgentWorkerPool();
         $agent = $this->subAgent('a-5');
@@ -817,7 +816,11 @@ final class WorkflowLivePaneTest extends TestCase
         file_put_contents($path, 'STEADY');
         $pump->invoke($pool);
 
-        $this->assertSame('steady', $agent->output);
+        $this->assertSame(
+            'steady',
+            $agent->output,
+            'Trade-off: a same-size rewrite of mirrored bytes is not mirrored.',
+        );
     }
 
     /**

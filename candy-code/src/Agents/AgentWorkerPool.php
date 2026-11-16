@@ -2496,6 +2496,12 @@ final class AgentWorkerPool
      * poll with no growth costs one stat, and a long run reads each byte once.
      * The offset is tied to the buffer (see the invariant in the body) and is
      * dropped with the file on every dispatch.
+     *
+     * Trade-off, stated because it is a behaviour change: the old whole-file
+     * read also mirrored an in-place rewrite of bytes already mirrored, so a
+     * same-size rewrite was picked up on the next poll. The tail does not
+     * re-read mirrored bytes, so that rewrite is not mirrored. Nothing in the
+     * pool produces one (see the invariant in the body).
      */
     protected function pumpProgress(): void
     {
@@ -2517,10 +2523,16 @@ final class AgentWorkerPool
             }
 
             // The mirror invariant: while the agent runs, $agent->output is
-            // exactly the first $offset bytes of its progress file. When that
-            // stops holding (the file was replaced, or the buffer was rewritten,
-            // as a retry does by clearing it to '') start again from byte 0,
-            // which is what re-reading the whole file used to do on every poll.
+            // exactly the first $offset bytes of its progress file. The check
+            // that enforces it is length-only. It resyncs from byte 0 when the
+            // file is now shorter than the offset, or when the buffer no longer
+            // holds exactly $offset bytes (a retry clears it to ''). It does not
+            // compare bytes, so a file replaced by one that is not shorter than
+            // the offset, with the buffer still at offset length, is not
+            // detected. The pool never produces that: publishProgress() only
+            // appends, and the file is removed only by discardProgress() at
+            // dispatch, which also drops the offset, so the next run starts
+            // from byte 0 whatever the length check says.
             $offset = $this->progressOffsets[$id] ?? 0;
             $resync = $size < $offset || \strlen($agent->output) !== $offset;
             if ($resync) {
