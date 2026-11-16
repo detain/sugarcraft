@@ -41,7 +41,16 @@ declare(strict_types=1);
  * the box that matters the thread state and sample stack carry the diagnosis.
  *
  * @see \SugarCraft\Core\Tests\Support\HangWatchdog — the parent-side half
+ * @see \SugarCraft\Core\Tests\Support\HangKill — signal delivery seam (posix
+ *      when loaded, /bin/kill otherwise — CI-wave-5 5B: the macOS runners have
+ *      no ext-posix, and both the old install() gate and this script's own
+ *      posix_kill calls were hard requirements on it, so on exactly those
+ *      runners the watchdog never armed and never fired)
  */
+
+require_once __DIR__ . '/HangKill.php';
+
+use SugarCraft\Core\Tests\Support\HangKill;
 
 $parentPid = isset($argv[1]) ? (int) $argv[1] : 0;
 $heartbeat = $argv[2] ?? '';
@@ -171,7 +180,7 @@ while (true) {
     \usleep(500_000);
 
     // Parent gone (normal end of run, or someone else killed it) -> we are done.
-    if (!@\posix_kill($parentPid, 0)) {
+    if (!HangKill::alive($parentPid)) {
         exit(0);
     }
 
@@ -212,6 +221,6 @@ while (true) {
         $forensics($parentPid),
     ));
 
-    @\posix_kill($parentPid, \SIGKILL);
+    HangKill::kill($parentPid);
     exit(1);
 }

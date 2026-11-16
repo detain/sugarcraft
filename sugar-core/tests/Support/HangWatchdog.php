@@ -63,6 +63,12 @@ use PHPUnit\Event\TestRunner\ExecutionFinishedSubscriber;
  * through the mutation-proving cycle below, and its inherited-state trap,
  * armedAt filter and graceful platform no-ops are each measured, not styled.
  *
+ * The one place the port DIVERGES (CI-wave-5 5B): signal delivery goes through
+ * {@see HangKill} instead of calling posix_kill() directly. The original's hard
+ * requirement on ext-posix is what kept this instrument from ever arming on the
+ * macOS runners it was ported for; /bin/kill covers every POSIX runner where
+ * the extension is missing.
+ *
  * Opt out with `SUGAR_CORE_HANG_BUDGET=0`; override the per-test budget in
  * seconds with any other positive value.
  *
@@ -110,9 +116,19 @@ final class HangWatchdog
      * two watchdogs racing to kill the same pid.
      *
      * Silently does nothing (returns false) when the platform cannot support
-     * it — non-POSIX, no ext-posix, no `proc_open` — because a missing
-     * watchdog must never be the reason a suite fails to start. That no-op is
-     * what keeps the Windows runners' behavior identical pre- and post-port.
+     * it — Windows, no `proc_open`, or no way to deliver a signal at all —
+     * because a missing watchdog must never be the reason a suite fails to
+     * start. That no-op is what keeps the Windows runners' behavior identical
+     * pre- and post-port.
+     *
+     * THE GATE USED TO DEMAND ext-posix (CI-wave-5 5B). That demand is why the
+     * instrument never armed where it was needed: the macOS runners ship no
+     * ext-posix (not in the default brew PHP, not in ci.yml:30's
+     * PHP_EXTENSIONS), so the three blind 35:00 cancellations it was ported
+     * to bound ran with the watchdog switched off by its own pre-flight.
+     * Signal delivery now goes through {@see HangKill}, which falls back to
+     * /bin/kill on any POSIX box; only Windows and a POSIX box with neither
+     * ext-posix nor /bin/kill still refuse to arm.
      */
     public static function install(?float $budgetSec = null): bool
     {
@@ -120,8 +136,8 @@ final class HangWatchdog
             return false;
         }
         if (\PHP_OS_FAMILY === 'Windows'
-            || !\function_exists('posix_kill')
             || !\function_exists('proc_open')
+            || !HangKill::supported()
         ) {
             return false;
         }
@@ -259,7 +275,7 @@ final class HangWatchdog
         if (\is_resource($this->process)) {
             $status = @\proc_get_status($this->process);
             if (\is_array($status) && ($status['running'] ?? false) === true && ($status['pid'] ?? 0) > 0) {
-                @\posix_kill((int) $status['pid'], \SIGKILL);
+                HangKill::kill((int) $status['pid']);
             }
             @\proc_close($this->process);
         }
