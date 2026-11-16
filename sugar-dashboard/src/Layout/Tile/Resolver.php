@@ -25,6 +25,7 @@ final class Resolver
         int $gap,
         ?array $hinters = null,
         bool $horizontal = true,
+        int $crossBudget = 0,
     ): array {
         $n = \count($constraints);
         if ($n === 0) {
@@ -43,7 +44,7 @@ final class Resolver
         $sizes = array_fill(0, $n, 0);
         $active = array_fill(0, $n, true);
 
-        [$sizes, ] = self::resolveWithOptionalRemoval($available, $constraints, $gap, $hinters, $sizes, $active, $horizontal);
+        [$sizes, ] = self::resolveWithOptionalRemoval($available, $constraints, $gap, $hinters, $sizes, $active, $horizontal, $crossBudget);
         return $sizes;
     }
 
@@ -63,6 +64,7 @@ final class Resolver
         array $sizes,
         array $active,
         bool $horizontal,
+        int $crossBudget = 0,
     ): array {
         $n = \count($constraints);
 
@@ -73,7 +75,13 @@ final class Resolver
         for ($i = 0; $i < $n; $i++) {
             $c = $work[$i];
             if ($c->minSizeFit && $hinters[$i] !== null) {
-                $hint = $hinters[$i]->sizeHint($available, $available);
+                // Finding sugar-dashboard-041: the same primary-axis budget was
+                // handed to both axes, so a vertical hinter received a
+                // height where its width belongs.
+                $hint = $hinters[$i]->sizeHint(
+                    $horizontal ? $available : $crossBudget,
+                    $horizontal ? $crossBudget : $available,
+                );
                 $minVal = $horizontal ? $hint->min->width : $hint->min->height;
                 if ($minVal > $work[$i]->minSize) {
                     $work[$i] = $work[$i]->withMinSize($minVal);
@@ -101,7 +109,7 @@ final class Resolver
             }
 
             // Phase 1: Resolve Fixed and Fit children
-            $remaining = self::resolveFixedAndFit($remaining, $work, $hinters, $sizes, $active, $horizontal);
+            $remaining = self::resolveFixedAndFit($remaining, $work, $hinters, $sizes, $active, $horizontal, $crossBudget);
 
             // Phase 2+3: Distribute remaining to Flex with clamping loop
             self::distributeFlexWithClamping($remaining, $work, $sizes, $active);
@@ -149,6 +157,7 @@ final class Resolver
         array &$sizes,
         array $active,
         bool $horizontal,
+        int $crossBudget = 0,
     ): int {
         $n = \count($constraints);
         for ($i = 0; $i < $n; $i++) {
@@ -166,7 +175,14 @@ final class Resolver
                 case ConstraintKind::Fit:
                     $desired = 0;
                     if ($hinters[$i] !== null) {
-                        $hint = $hinters[$i]->sizeHint($remaining, 0);
+                        // Finding sugar-dashboard-041: remaining space along
+                        // the primary axis was passed positionally as the
+                        // width, so a vertical Fit tile was measured against
+                        // its height-as-width; route budgets axis-correctly.
+                        $hint = $hinters[$i]->sizeHint(
+                            $horizontal ? $remaining : $crossBudget,
+                            $horizontal ? $crossBudget : $remaining,
+                        );
                         $desired = $horizontal ? $hint->desired->width : $hint->desired->height;
                     }
                     $size = self::clampConstraint($desired, $c);

@@ -152,6 +152,11 @@ final class TileLayout implements Item, SizedItem
             $this->gap,
             $hinters,
             $horizontal,
+            // Finding sugar-dashboard-041: the engine now hands hinters
+            // the cross-axis allocation too, so a vertical Fit measures
+            // against a real width and a horizontal one against a real
+            // height.
+            $horizontal ? $h : $w,
         );
 
         // Apply resolved sizes to tiles and collect rendered views
