@@ -121,7 +121,7 @@ final class FlexLayout implements \SugarCraft\Dashboard\Foundation\SizedItem
         }
 
         return match ($this->direction) {
-            FlexDirection::Row, FlexDirection::RowReverse => implode(str_repeat(' ', max(1, $this->gap)), $parts),
+            FlexDirection::Row, FlexDirection::RowReverse => implode(str_repeat(' ', $this->gap), $parts),
             FlexDirection::Column, FlexDirection::ColumnReverse => implode("\n", $parts),
         };
     }
@@ -181,6 +181,16 @@ final class FlexLayout implements \SugarCraft\Dashboard\Foundation\SizedItem
                 if ($index < count($this->items) - 1 && $this->gap > 0) {
                     $lines[$y] .= str_repeat(' ', $this->gap);
                 }
+            }
+        }
+
+        // NoWrap overflow truncates through the canonical cut (finding 031):
+        // when the natural row is at least as wide as the allocation the cells
+        // keep their natural widths, so the composed line must be clipped or
+        // it spills past the parent's budget.
+        foreach ($lines as $y => $line) {
+            if (Width::string($line) > $totalWidth) {
+                $lines[$y] = Truncate::truncate($line, $totalWidth, '');
             }
         }
 

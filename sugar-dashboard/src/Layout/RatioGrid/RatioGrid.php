@@ -8,6 +8,7 @@ use SugarCraft\Dashboard\Foundation\Item;
 use SugarCraft\Dashboard\Foundation\Sizer;
 use SugarCraft\Dashboard\Foundation\SizedItem;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Output\Truncate;
 
 /**
  * A grid layout that sizes rows and columns by ratio.
@@ -112,11 +113,25 @@ final class RatioGrid implements Item, SizedItem
                     $lineWidth = Width::string($line);
                     if ($lineWidth < $cellWidth) {
                         $line .= str_repeat(' ', $cellWidth - $lineWidth);
+                    } elseif ($lineWidth > $cellWidth) {
+                        // Pad-OR-truncate (finding 031): a cell wider than its
+                        // column used to keep every byte and spill the row.
+                        $line = Truncate::truncate($line, $cellWidth, '');
                     }
+
                     $rowLines[$lineIdx] .= $line;
                 }
 
                 $colIndex++;
+            }
+
+            // Fixed columns can themselves sum past the frame; clip
+            // through the canonical cut so the grid never writes past its
+            // allocation (finding 031).
+            foreach ($rowLines as $li => $line) {
+                if (Width::string($line) > $w) {
+                    $rowLines[$li] = Truncate::truncate($line, $w, '');
+                }
             }
 
             $output = array_merge($output, $rowLines);
