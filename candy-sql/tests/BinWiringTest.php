@@ -359,6 +359,26 @@ final class BinWiringTest extends TestCase
         $this->assertSame('0.7.x-dev', $manifest['require']['react/mysql']);
     }
 
+    /**
+     * A12 (AUD §2 #27 candy-sql half): the README once said the query pane
+     * threads no cancel token and Ctrl+C always quits. The App mints a
+     * per-dispatch CancellationSource and Ctrl+C cancels while a leg is in
+     * flight, so the README must state that and drop the stale claim.
+     */
+    public function testReadmeDescribesQueryPaneCancellationNotNoToken(): void
+    {
+        $readme = (string) \file_get_contents(\dirname(self::BIN_PATH) . '/../README.md');
+        $app    = (string) \file_get_contents(\dirname(self::BIN_PATH) . '/../src/App.php');
+
+        $this->assertStringNotContainsString('does not currently thread a', $readme);
+        $this->assertStringNotContainsString('rather than cancelling the statement', $readme);
+        $this->assertStringContainsString('threads its token into the connection', $readme);
+        $this->assertStringContainsString('`Ctrl+C` quits the app only when nothing', $readme);
+
+        $this->assertStringContainsString('CancellationSource::new()', $app);
+        $this->assertStringContainsString('$source->token()', $app);
+    }
+
     public function testReadmeDocumentsTheTerminalAndTimeoutContracts(): void
     {
         $readme = (string) \file_get_contents(\dirname(self::BIN_PATH) . '/../README.md');

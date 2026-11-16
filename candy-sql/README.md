@@ -1036,11 +1036,14 @@ Pre-1.0 gaps to be aware of, mostly on the async (ReactPHP) query path:
     socket. This is genuinely server-side for both explicit cancels and
     timeouts, subject to the usual PostgreSQL caveat that a cancel request is
     advisory — the backend interrupts the statement at its next safe point.
-- **Cancellation is library-level, not a UI key.** All of the above describes
-  the `AsyncConnection` API. The TUI's query pane does not currently thread a
-  token into its dispatch: an in-flight query runs to completion or until the
-  per-query timeout (`QueryTimeout`, default 30 s) rejects its promise, and
-  `Ctrl+C` quits the app rather than cancelling the statement.
+- **Cancellation reaches the UI too.** All of the above describes the
+  `AsyncConnection` API, and the TUI uses it: each query-pane dispatch mints a
+  per-dispatch cancel handle and threads its token into the connection.
+  `Esc` (from any pane, outside the open `/` filter and edit lines) and
+  `Ctrl+C` cancel the in-flight run; `Ctrl+C` quits the app only when nothing
+  is in flight (SQL-O08, see the key table above). A superseded run is
+  cancelled when the next one dispatches, and the per-query timeout
+  (`QueryTimeout`, default 30 s) still bounds every leg.
 - **Query-pane results are buffered in full.** A `SELECT` executed from the
   editor materialises every returned row into the in-process result table.
   The schema-browse preview pages instead: `PreviewQuery` fetches 100 rows per
