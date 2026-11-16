@@ -727,6 +727,30 @@ final class DocSurfaceTruthTest extends TestCase
         }
     }
 
+    /**
+     * AUD §2 #58 / P0-A13: PasswordAuth reads a variable that the stock
+     * daemon never sets, so the gate is only usable behind a wrapper. That
+     * must be stated on the class (where a reader of the code lands) and in
+     * the README (where an operator lands), and the statement must not be
+     * dropped by a later rewrite of either.
+     */
+    public function testPasswordAuthIsDocumentedAsWrapperOnly(): void
+    {
+        $doc = (new \ReflectionClass(\SugarCraft\SshServer\Middleware\Auth\PasswordAuth::class))->getDocComment();
+        self::assertIsString($doc, 'PasswordAuth must carry a class docblock');
+        $doc = (string) \preg_replace('/\s+/', ' ', $doc);
+        self::assertStringContainsString('**Wrapper-only.**', $doc);
+        self::assertStringContainsString('does not authenticate the peer', $doc);
+
+        $readme = $this->readme();
+        if ($readme === null) {
+            $this::fail('the library README is missing');
+        }
+        $flat = (string) \preg_replace('/\s+/', ' ', $readme);
+        self::assertStringContainsString('**Wrapper-only.** Compares a password from `SSH_PASSWORD`', $flat);
+        self::assertStringContainsString('**Wrapper-only:** reads `SSH_PASSWORD`', $flat);
+    }
+
     public function testTheChildEnvironmentContractIsWrittenWhereItIsUsed(): void
     {
         $handler = (string) \preg_replace(
