@@ -971,6 +971,9 @@ final class GpuTest extends TestCase
         // never runs there); the Linux arm keeps its exact pre-row bytes.
         $base = sys_get_temp_dir() . '/candy-top-winexe-' . bin2hex(random_bytes(4));
         mkdir($base, 0777, true);
+        // Resolved spelling: Gpu::candidates() realpaths PATH dirs by design
+        // (wave-4 F11, same Darwin /var -> /private/var law as the unpin leg).
+        $base = (string) realpath($base);
         file_put_contents($base . '/nvidia-smi', "#!/bin/sh\necho x\n");
         chmod($base . '/nvidia-smi', 0755);
         try {
