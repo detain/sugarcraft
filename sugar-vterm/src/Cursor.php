@@ -10,6 +10,8 @@ namespace SugarCraft\Vterm;
  * Readonly value object — row, column, shape, and visibility.
  *
  * Mirrors charmbracelet/x/vt Cursor (simplified for renderer use).
+ * The convenience verbs at()/hidden()/shown() below are the vocabulary the
+ * emulator snapshot {@see Cursor\Cursor} mirrors as pure aliases (vterm-09).
  */
 final readonly class Cursor
 {

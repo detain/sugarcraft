@@ -58,6 +58,18 @@ final readonly class Cursor
         );
     }
 
+    /**
+     * Position alias: row and column in one call. The canonical primitive
+     * pair is {@see withRow()}/{@see withCol()}; {@see \SugarCraft\Vterm\Cursor::at()}
+     * (the root renderer VO) carries the same verb so callers move between the
+     * two classes without renaming (vterm-09, additive-only — behaviour is
+     * identical to chaining the pair).
+     */
+    public function at(int $row, int $col): self
+    {
+        return $this->withRow($row)->withCol($col);
+    }
+
     public function withVisible(bool $v): self
     {
         return new self(
@@ -68,6 +80,18 @@ final readonly class Cursor
             savedRow: $this->savedRow,
             savedCol: $this->savedCol,
         );
+    }
+
+    /** Visibility alias for `withVisible(false)`; mirrors {@see \SugarCraft\Vterm\Cursor::hidden()}. */
+    public function hidden(): self
+    {
+        return $this->withVisible(false);
+    }
+
+    /** Visibility alias for `withVisible(true)`; mirrors {@see \SugarCraft\Vterm\Cursor::shown()}. */
+    public function shown(): self
+    {
+        return $this->withVisible(true);
     }
 
     public function withShape(int $shape): self
