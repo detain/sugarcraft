@@ -45,6 +45,15 @@ final class QuickPickRankerTest extends TestCase
                 return $score > 0 ? new MatchResult($query, $candidate, $score, [0]) : null;
             }
 
+            public function score(string $query, string $candidate): int
+            {
+                // Mirrors this double's own match() verdict (interface contract:
+                // score == match()?->score ?? 0) — the ranker-ordering pins
+                // (descending score / zero-score exclusion) read the SAME table
+                // match() consults, so a score() leg stays truthful.
+                return $this->scores[$candidate] ?? 0;
+            }
+
             public function matchAll(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): array
             {
                 $results = [];
@@ -78,6 +87,13 @@ final class QuickPickRankerTest extends TestCase
             public function match(string $query, string $candidate): ?MatchResult
             {
                 return new MatchResult($query, $candidate, 10, $this->indices);
+            }
+
+            public function score(string $query, string $candidate): int
+            {
+                // This double always matches with a fixed score of 10; score()
+                // carries the same constant (contract: score == match()?->score ?? 0).
+                return 10;
             }
 
             public function matchAll(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): array
@@ -266,6 +282,15 @@ final class QuickPickRankerTest extends TestCase
                 return str_starts_with($candidate, '*') ? null : new MatchResult($query, $candidate, 5, [0]);
             }
 
+            public function score(string $query, string $candidate): int
+            {
+                // Same verdict as match() without touching matchCalls: this
+                // double's whole point is counting ranker contact, and the
+                // pin asserts match() specifically stays at zero on the
+                // final-empty-batch path.
+                return \str_starts_with($candidate, '*') ? 0 : 5;
+            }
+
             public function matchAll(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): array
             {
                 // A supported batch answer of "nothing scored" — under -037
@@ -313,6 +338,16 @@ final class QuickPickRankerTest extends TestCase
                 $pos = \mb_strpos(\mb_strtolower($candidate, 'UTF-8'), \mb_strtolower($query, 'UTF-8'), 0, 'UTF-8');
 
                 return $pos === false ? null : new MatchResult($query, $candidate, 10, [$pos]);
+            }
+
+            public function score(string $query, string $candidate): int
+            {
+                // Same fold verdict as match(), same 10 on a hit — deliberately
+                // NOT routed through match() because this double counts contact
+                // there and the zero-frame-contact pin is about match().
+                $pos = \mb_strpos(\mb_strtolower($candidate, 'UTF-8'), \mb_strtolower($query, 'UTF-8'), 0, 'UTF-8');
+
+                return $pos === false ? 0 : 10;
             }
 
             public function matchAll(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): array

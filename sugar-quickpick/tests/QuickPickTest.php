@@ -1245,6 +1245,15 @@ final class QuickPickTest extends TestCase
                     : null;
             }
 
+            public function score(string $query, string $candidate): int
+            {
+                // Mirrors match()'s str_contains verdict as 5/0 (contract:
+                // score == match()?->score ?? 0). Counter-free on purpose:
+                // matchCalls is this double's probe of the per-item FALLBACK
+                // path, which runs through match() — not score().
+                return \str_contains($candidate, $query) ? 5 : 0;
+            }
+
             public function matchAll(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): array
             {
                 $this->matchAllCalls++;
@@ -1279,6 +1288,15 @@ final class QuickPickTest extends TestCase
             {
                 $this->matchCalls++;
                 return new \SugarCraft\Fuzzy\MatchResult($query, $candidate, 5, [0]);
+            }
+
+            public function score(string $query, string $candidate): int
+            {
+                // This double answers 5 for everything through match(); score()
+                // carries the same constant. Kept off the counter: matchCalls
+                // pins "the empty batch answer never consults the per-item
+                // half", which is specifically about match().
+                return 5;
             }
 
             public function matchAll(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): array

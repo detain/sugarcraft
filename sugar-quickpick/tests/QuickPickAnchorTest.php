@@ -37,6 +37,15 @@ final class QuickPickAnchorTest extends TestCase
                 return $score > 0 ? new MatchResult($query, $candidate, $score, [0]) : null;
             }
 
+            public function score(string $query, string $candidate): int
+            {
+                // Mirrors this double's own match() verdict (interface contract:
+                // score == match()?->score ?? 0). FUZZY-31 made score() abstract
+                // on FuzzyMatcher; the double must fulfil it even though
+                // QuickPick's batch/per-item paths call match()/matchAll().
+                return $this->scores[$candidate] ?? 0;
+            }
+
             public function matchAll(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): array
             {
                 $results = [];
