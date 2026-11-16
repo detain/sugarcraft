@@ -375,8 +375,17 @@ final class BinWiringTest extends TestCase
         $this->assertStringContainsString('threads its token into the connection', $readme);
         $this->assertStringContainsString('`Ctrl+C` quits the app only when nothing', $readme);
 
+        // The `?` overlay swallows the next key (Esc and Ctrl+C alike) before
+        // the cancel arm, so every surface that states the Esc/Ctrl+C scope
+        // must name it: the cancel paragraph, the key table and checklist 1.
+        $this->assertStringContainsString('the keyboard, or the `?` overlay is open (the next key, `Esc` included, only', $readme);
+        $this->assertStringContainsString('answers `Esc` and `Ctrl+C` by cancelling the prepared run', $readme);
+        $this->assertStringContainsString('an open admin page or the `?` overlay holds the keyboard', $readme);
+        $this->assertStringContainsString('(not while the `?` overlay is open, whose next key only closes it)', $readme);
+
         $this->assertStringContainsString('CancellationSource::new()', $app);
         $this->assertStringContainsString('$source->token()', $app);
+        $this->assertStringContainsString('if ($this->ui->helpOverlay && ', $app);
     }
 
     public function testReadmeDocumentsTheTerminalAndTimeoutContracts(): void
