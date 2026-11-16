@@ -447,11 +447,9 @@ final class GridTable implements Item, Sizer
         }
 
         // Data rows
-        $frozenWidth = $this->getFrozenWidth($colWidths);
-
         foreach ($paginated as $row) {
-            if ($this->frozenColumns > 0 && $frozenWidth > 0) {
-                $lines[] = $this->renderFrozenRow($row, $colWidths, $frozenWidth);
+            if ($this->frozenColumns > 0 && $this->hasFrozenBand($colWidths)) {
+                $lines[] = $this->renderFrozenRow($row, $colWidths);
             } else {
                 $lines[] = $this->renderRow($row, $colWidths);
             }
@@ -477,11 +475,19 @@ final class GridTable implements Item, Sizer
     }
 
     /**
-     * Get total width of frozen columns.
+     * Does the frozen band occupy any cell at all?
+     *
+     * The question the row loop actually asks is yes/no: a band with width
+     * renders through renderFrozenRow, an empty one through the plain row.
+     * The old getFrozenWidth() returned a pixel sum that no consumer ever
+     * read past this `> 0` test — renderFrozenRow lays the band out column
+     * by column — so the arithmetic now terminates in the bool it always
+     * served. The sum itself is kept verbatim: identical widths, identical
+     * decision, byte-for-byte.
      *
      * @param list<int> $colWidths
      */
-    private function getFrozenWidth(array $colWidths): int
+    private function hasFrozenBand(array $colWidths): bool
     {
         $frozen = 0;
         $frozenCount = min($this->frozenColumns, count($colWidths));
@@ -490,12 +496,13 @@ final class GridTable implements Item, Sizer
             $frozen += $colWidths[$i];
         }
 
-        // Add divider width
+        // The band carries one divider cell per frozen column when inner
+        // borders are on — that alone makes it non-empty.
         if ($frozenCount > 0 && $this->borderConfig->showInner) {
             $frozen += $frozenCount;
         }
 
-        return $frozen;
+        return $frozen > 0;
     }
 
     /**
@@ -513,11 +520,12 @@ final class GridTable implements Item, Sizer
             $line .= str_repeat($c->top, $width);
 
             if ($i < count($colWidths) - 1) {
-                if ($this->frozenColumns > 0 && $i === $this->frozenColumns - 1) {
-                    $line .= $c->topMid; // Freeze divider junction
-                } else {
-                    $line .= $c->topMid;
-                }
+                // No freeze special-case by design: the heavy freeze divider
+                // spans the body only, meeting the horizontal rules at the
+                // header/footer separators ('╥'/'╨' seats). An outer border
+                // row carries plain column junctions at every seat — the
+                // former identical-arm branch here was dead by geometry.
+                $line .= $c->topMid;
             }
         }
 
@@ -636,7 +644,7 @@ final class GridTable implements Item, Sizer
      *
      * @param list<int> $colWidths
      */
-    private function renderFrozenRow(Row $row, array $colWidths, int $frozenWidth): string
+    private function renderFrozenRow(Row $row, array $colWidths): string
     {
         $c = $this->borderConfig->chars;
         $frozenCount = min($this->frozenColumns, count($this->columns));
@@ -763,11 +771,9 @@ final class GridTable implements Item, Sizer
             $line .= str_repeat($c->bottom, $width);
 
             if ($i < count($colWidths) - 1) {
-                if ($this->frozenColumns > 0 && $i === $this->frozenColumns - 1) {
-                    $line .= $c->bottomMid; // Freeze divider junction
-                } else {
-                    $line .= $c->bottomMid;
-                }
+                // See renderTopBorder: the freeze divider never reaches an
+                // outer border row, so the seat is a plain bottom junction.
+                $line .= $c->bottomMid;
             }
         }
 
