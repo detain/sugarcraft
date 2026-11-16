@@ -10,6 +10,7 @@ use SugarCraft\Vcr\CassetteHeader;
 use SugarCraft\Vcr\Cli\Application;
 use SugarCraft\Vcr\Cli\Command;
 use SugarCraft\Vcr\Cli\DiffCommand;
+use SugarCraft\Vcr\Cli\DocumentedCommand;
 use SugarCraft\Vcr\Cli\InspectCommand;
 use SugarCraft\Vcr\Cli\ReplayCommand;
 use SugarCraft\Vcr\Cli\StatsCommand;
@@ -69,11 +70,15 @@ final class ApplicationTest extends TestCase
 
     public function testCustomCommandRouting(): void
     {
-        $stub = new class () implements Command {
+        $stub = new class () implements DocumentedCommand {
             public int $called = 0;
             public function summary(): string
             {
                 return 'stub';
+            }
+            public function usage(): string
+            {
+                return "usage: candy-vcr stub\n";
             }
             public function run(array $args, $stdout, $stderr): int
             {
@@ -87,6 +92,56 @@ final class ApplicationTest extends TestCase
         $this->assertSame(7, $exit);
         $this->assertSame(1, $stub->called);
         $this->assertStringContainsString('STUB: a,b', $stdout);
+    }
+
+    public function testHelpForCustomVerbPrintsItsOwnUsage(): void
+    {
+        $stub = new class () implements DocumentedCommand {
+            public int $called = 0;
+            public function summary(): string
+            {
+                return 'stub';
+            }
+            public function usage(): string
+            {
+                return "usage: candy-vcr stub [--flag]\n";
+            }
+            public function run(array $args, $stdout, $stderr): int
+            {
+                $this->called++;
+                return 0;
+            }
+        };
+        $app = new Application(['stub' => $stub]);
+
+        [$exit, $stdout] = $this->exec($app, ['candy-vcr', 'help', 'stub']);
+        $this->assertSame(0, $exit);
+        $this->assertSame("usage: candy-vcr stub [--flag]\n", $stdout);
+
+        [$exit, $stdout] = $this->exec($app, ['candy-vcr', 'stub', '--help']);
+        $this->assertSame(0, $exit);
+        $this->assertSame("usage: candy-vcr stub [--flag]\n", $stdout);
+        $this->assertSame(0, $stub->called, '--help must not run the verb');
+    }
+
+    public function testBareCommandWithoutUsageIsRefusedAtConstruction(): void
+    {
+        // Regression: a plain Command used to be accepted, and `help <sub>`
+        // then fell back to the global listing, hiding the missing usage.
+        $bare = new class () implements Command {
+            public function summary(): string
+            {
+                return 'bare';
+            }
+            public function run(array $args, $stdout, $stderr): int
+            {
+                return 0;
+            }
+        };
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('"bare"');
+        new Application(['bare' => $bare]);
     }
 
     public function testInspectDumpsCassetteEvents(): void
