@@ -24,6 +24,7 @@ use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Animation\AnsiArt;
 use SugarCraft\Animation\ArtLoop;
+use SugarCraft\Top\Collect\FreeBsd\LiveProbe;
 use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\Config\ConfigFile;
 use SugarCraft\Top\Config\GpuPanels;
@@ -272,6 +273,12 @@ final class App implements Model
         ?string $unsupportedOs = null,
         bool $runningAsRoot = false,
     ): self {
+        // 5A: discover the off-Linux boot instant HERE, synchronously and
+        // once, so the 1 Hz clock callback inside the event loop never
+        // waits on a child process (an unbounded sysctl stall used to
+        // starve every paint behind the loop's first tick). No-op on
+        // Linux: /proc/uptime answers in the closure itself.
+        self::primeBootTime();
         $profile ??= self::profileFor($config);
 
         return new self(
@@ -412,6 +419,9 @@ final class App implements Model
     /** Memoised live discovery (-1.0 = asked, no answer; null = never asked). */
     private static ?float $resolvedBootTime = null;
 
+    /** OS-shape seam: non-null simulates a host without /proc/uptime (test only). */
+    private static ?\Closure $bootProbeOverride = null;
+
     /**
      * Test seam: pin the boot instant the clock falls back to (null
      * restores live discovery). The suite drives the off-Linux arm this
@@ -424,12 +434,63 @@ final class App implements Model
     }
 
     /**
+     * Test seam: run the clock as a host without /proc/uptime would, with
+     * $probe standing in for the bounded sysctl child discovery (null
+     * restores the real OS rules). The Linux suite cannot reach the
+     * off-Linux arms — this simulates the SHAPE of such a host (no proc
+     * fast path, a probe answering the boot instant) without execing.
+     */
+    public static function pretendBootProbeForTesting(?\Closure $probe): void
+    {
+        self::$bootProbeOverride = $probe;
+        self::$resolvedBootTime = null;
+    }
+
+    /**
+     * Prime the boot instant once, at boot, OUTSIDE the event loop. CI
+     * wave 5 (5A): the clock closure used to run this discovery inline,
+     * and on macOS that meant a synchronous `sysctl` child inside the
+     * loop's first callback — an unbounded exec (shell_exec waits even
+     * after SIGTERM) that starved every 20 fps paint behind it when the
+     * spawn stalled on the runner. Discovery now belongs to start(),
+     * where a bounded child ({@see queryBootTime()}) can cost the frame
+     * path nothing; the closure only ever reads the memo.
+     */
+    public static function primeBootTime(): void
+    {
+        if (self::$bootTimeOverride !== null) {
+            return; // the pinned answer owns the clock
+        }
+        if (self::$resolvedBootTime !== null) {
+            return; // already asked once (that is the whole point)
+        }
+        $probe = self::$bootProbeOverride;
+        if ($probe === null) {
+            if (is_file('/proc/uptime')) {
+                return; // Linux answers itself; nothing to prime
+            }
+            if (PHP_OS_FAMILY !== 'BSD' && PHP_OS_FAMILY !== 'Darwin') {
+                return; // Windows has no dependency-free answer (documented 0)
+            }
+            self::$resolvedBootTime = self::queryBootTime() ?? -1.0;
+
+            return;
+        }
+        self::$resolvedBootTime = $probe() ?? -1.0;
+    }
+
+    /**
      * The live clock Cmd: wall time plus uptime. /proc/uptime answers on
      * Linux; finding 149 adds the off-Linux fallback — discover the boot
      * instant once and subtract it, so %u/%U stop reading a permanent 0
      * wherever a dependency-free answer exists (BSD family). Windows has
      * none (kern.boottime is BSD-only, GetTickCount64 would need FFI) and
      * keeps the documented 0 rather than a fabricated number.
+     *
+     * 5A: the closure NEVER discovers — it only reads the memo {@see
+     * primeBootTime()} filled at start(). A host that never primed (or a
+     * probe that never answered) floors to 0, the same documented
+     * no-answer answer; a clock tick must not be able to block the loop.
      */
     public static function systemClock(): \Closure
     {
@@ -439,14 +500,15 @@ final class App implements Model
             if ($override !== null) {
                 return new ClockTickMsg($wall, max(0.0, $wall - $override));
             }
-            $raw = @file_get_contents('/proc/uptime');
-            if ($raw !== false) {
-                return new ClockTickMsg($wall, (float) strtok($raw, ' '));
+            if (self::$bootProbeOverride === null) {
+                $raw = @file_get_contents('/proc/uptime');
+                if ($raw !== false) {
+                    return new ClockTickMsg($wall, (float) strtok($raw, ' '));
+                }
             }
-            self::$resolvedBootTime ??= self::queryBootTime() ?? -1.0;
             $boot = self::$resolvedBootTime;
 
-            return new ClockTickMsg($wall, $boot >= 0.0 ? max(0.0, $wall - $boot) : 0.0);
+            return new ClockTickMsg($wall, $boot !== null && $boot >= 0.0 ? max(0.0, $wall - $boot) : 0.0);
         };
     }
 
@@ -454,15 +516,18 @@ final class App implements Model
      * One-shot boot-instant discovery for the BSD family: kern.boottime
      * through a constant sysctl command line — no arguments, no user or
      * config data anywhere near the shell, so there is no external-CLI
-     * surface to escape. null means no answer (any other family, or a
-     * sysctl that cannot speak), and the clock then reports 0 as before.
+     * surface to escape. The child is the bounded {@see LiveProbe} shape
+     * (2 s read deadline, SIGKILL on overrun, reaped inside run()), not
+     * shell_exec: an unreaped/stalled sysctl must cost one boot delay,
+     * never a starved event loop. null means no answer (any other family,
+     * or a sysctl that cannot speak), and the clock then reports 0 as before.
      */
     private static function queryBootTime(): ?float
     {
         if (PHP_OS_FAMILY !== 'BSD' && PHP_OS_FAMILY !== 'Darwin') {
             return null;
         }
-        $out = @shell_exec('sysctl -n kern.boottime 2>/dev/null');
+        $out = LiveProbe::new()->run(['sysctl', '-n', 'kern.boottime']);
         if (!is_string($out) || trim($out) === '') {
             return null;
         }
