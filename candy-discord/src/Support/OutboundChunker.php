@@ -130,51 +130,106 @@ final class OutboundChunker
     }
 
     /**
+     * Valid UTF-8 lines at least this many UTF-16 units long take the single
+     * pass below. Shorter lines keep the original cut, which is faster there:
+     * the single pass pays one decode and a per-codepoint scan that a short line
+     * never earns back. Measured on the word-emoji fixture (min of 7 runs): the
+     * two cross between 24k and 32k units; at 40k units the single pass is 13%
+     * faster, at 300k units it is 4.9x faster (0.897 s to 0.183 s).
+     */
+    private const SINGLE_PASS_MIN_UNITS = 32000;
+
+    /**
      * Cuts a line that cannot fit alone into pieces of at most $room UTF-16
      * units: each piece ends after the last space inside its window, or at
      * the window's edge when there is no space. Leading whitespace of the
      * remainder is dropped, the first piece keeps the line's own left edge.
      *
-     * One decode and one prefix-sum pass. Each window end and its last space
-     * are then read off in amortized O(1), so a long line costs O(n). The
-     * earlier form re-measured and re-split the whole remaining body for every
-     * piece, which is O(n^2 / room): 6.8 s for a 1M-character line, measured.
-     *
-     * Invalid UTF-8 is the one input whose cut moved. The old mb_substr /
-     * mb_strlen / mb_str_split mix disagreed on stray bytes, so on those lines
-     * the piece boundaries (and sometimes the piece count) differ from the
-     * pre-single-pass cut, and stray bytes pass through instead of being
-     * replaced with '?'. Valid UTF-8 is cut identically to the old code.
+     * Invalid UTF-8 and short lines take the original cut, byte for byte. The
+     * single pass reads stray bytes differently (the old mb_substr / mb_strlen /
+     * mb_str_split mix disagreed on them), so it is only used on valid UTF-8,
+     * where it cuts identically to the original (the oracle test pins this).
      *
      * @return list<string>
      */
     private static function wordSplit(string $line, int $limit): array
     {
+        if (self::len($line) < self::SINGLE_PASS_MIN_UNITS || !\mb_check_encoding($line, 'UTF-8')) {
+            return self::wordSplitOriginal($line, $limit);
+        }
+
+        return self::wordSplitSinglePass($line, $limit);
+    }
+
+    /**
+     * The original greedy cut, unchanged from master: quadratic, since each
+     * piece re-measures and re-slices the remaining body.
+     *
+     * @return list<string>
+     */
+    private static function wordSplitOriginal(string $line, int $limit): array
+    {
+        $room = \max(16, $limit - 16); // headroom for the fence decoration
+        $pieces = [];
+        $body = $line;
+        while (self::len($body) > $room) {
+            $window = self::codepointsWithin($body, $room);
+            $cut = \mb_strrpos(\mb_substr($body, 0, $window), ' ');
+            $cut = $cut === false ? $window : $cut + 1;
+            $pieces[] = \rtrim(\mb_substr($body, 0, $cut));
+            $body = \ltrim(\mb_substr($body, $cut));
+        }
+        if ($body !== '') {
+            $pieces[] = $body;
+        }
+
+        return $pieces;
+    }
+
+    /**
+     * The same cut as wordSplitOriginal on valid UTF-8, in one decode and one
+     * scan. $win is the UTF-16 width of the codepoints in [$start, $end), kept
+     * incrementally so no prefix-sum array is built: a long line costs O(n)
+     * with about 16 bytes per codepoint less memory than a prefix-sum form.
+     *
+     * @return list<string>
+     */
+    private static function wordSplitSinglePass(string $line, int $limit): array
+    {
         $room = \max(16, $limit - 16); // headroom for the fence decoration
         $cps = \mb_str_split($line, 1, 'UTF-8');
         $n = \count($cps);
-        // $units[$i] is the UTF-16 width of the first $i codepoints.
-        $units = [0];
-        foreach ($cps as $i => $ch) {
-            $units[$i + 1] = $units[$i] + self::len($ch);
-        }
+        $total = self::len($line);
 
         $pieces = [];
-        $start = 0;   // first codepoint of the piece being cut
-        $end = 0;     // window end, exclusive: first codepoint that no longer fits
-        $space = -1;  // last ' ' below $end; $end only grows, so this never rescans
-        while ($units[$n] - $units[$start] > $room) {
-            while ($end < $n && $units[$end + 1] - $units[$start] <= $room) {
+        $consumed = 0; // UTF-16 units before $start
+        $start = 0;    // first codepoint of the piece being cut
+        $end = 0;      // window end, exclusive: first codepoint that no longer fits
+        $win = 0;      // UTF-16 units of [$start, $end)
+        $space = -1;   // last ' ' below $end; $end only grows, so this never rescans
+        while ($total - $consumed > $room) {
+            while ($end < $n && $win + self::unitsOf($cps[$end]) <= $room) {
                 if ($cps[$end] === ' ') {
                     $space = $end;
                 }
+                $win += self::unitsOf($cps[$end]);
                 ++$end;
             }
             $cut = $space >= $start ? $space + 1 : $end;
             $pieces[] = \rtrim(\implode('', \array_slice($cps, $start, $cut - $start)));
+            for ($i = $start; $i < $cut; ++$i) {
+                $width = self::unitsOf($cps[$i]);
+                $consumed += $width;
+                $win -= $width;
+            }
 
             $start = $cut;
             while ($start < $n && \in_array($cps[$start], self::TRIM, true)) {
+                $width = self::unitsOf($cps[$start]);
+                $consumed += $width;
+                if ($start < $end) {
+                    $win -= $width;
+                }
                 ++$start;
             }
             $end = \max($end, $start);
@@ -184,6 +239,15 @@ final class OutboundChunker
         }
 
         return $pieces;
+    }
+
+    /**
+     * UTF-16 width of one valid UTF-8 codepoint: a 4-byte sequence is an
+     * astral character, two units, and no shorter sequence is.
+     */
+    private static function unitsOf(string $codepoint): int
+    {
+        return \strlen($codepoint) === 4 ? 2 : 1;
     }
 
     /**
@@ -197,5 +261,27 @@ final class OutboundChunker
     public static function len(string $text): int
     {
         return \strlen(\mb_convert_encoding($text, 'UTF-16LE', 'UTF-8')) >> 1;
+    }
+
+    /**
+     * How many leading codepoints of $text fit within $room UTF-16 units.
+     * Slicing stays in codepoint space (mb_substr's currency) while the
+     * budget is counted in units, so a hard-cut piece never straddles its
+     * ceiling and a surrogate pair is never split in half.
+     */
+    private static function codepointsWithin(string $text, int $room): int
+    {
+        $fit = 0;
+        $units = 0;
+        foreach (\mb_str_split($text, 1, 'UTF-8') as $ch) {
+            $width = self::len($ch);
+            if ($units + $width > $room) {
+                break;
+            }
+            $units += $width;
+            ++$fit;
+        }
+
+        return $fit;
     }
 }

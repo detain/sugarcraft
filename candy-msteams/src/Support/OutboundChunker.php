@@ -140,25 +140,70 @@ final class OutboundChunker
     }
 
     /**
+     * Valid UTF-8 lines at least this many codepoints long take the single
+     * pass below. Shorter lines keep the original cut, which is faster there:
+     * the single pass pays one decode and a per-codepoint scan that a short line
+     * never earns back. Measured on the word-emoji fixture (min of 7 runs): the
+     * two cross at about 300k codepoints (0.0273 s original, 0.0286 s single
+     * pass); at 400k the single pass is 21% faster and at 1M it is 2.9x faster
+     * (0.295 s to 0.103 s).
+     */
+    private const SINGLE_PASS_MIN_CODEPOINTS = 300000;
+
+    /**
      * Cuts a line that cannot fit alone into pieces of at most $room
-     * codepoints: each piece ends after the last space inside its window, or
-     * at the window's edge when there is no space. Leading whitespace of the
+     * codepoints: each piece ends after the last space inside its window, or at
+     * the window's edge when there is no space. Leading whitespace of the
      * remainder is dropped, the first piece keeps the line's own left edge.
      *
-     * One decode and one scan. Each window's end and its last space are read
-     * off a single forward cursor, so a long line costs O(n). The earlier form
-     * re-measured and re-split the whole remaining body for every piece, which
-     * is O(n^2 / room).
-     *
-     * Invalid UTF-8 is the one input whose cut moved. The old mb_substr /
-     * mb_strlen mix disagreed on stray bytes, so on those lines the piece
-     * boundaries (and sometimes the piece count) differ from the pre-single-pass
-     * cut, and stray bytes pass through instead of being replaced with '?'.
-     * Valid UTF-8 is cut identically to the old code.
+     * Invalid UTF-8 and short lines take the original cut, byte for byte. The
+     * single pass reads stray bytes differently (the old mb_substr / mb_strlen /
+     * mb_str_split mix disagreed on them), so it is only used on valid UTF-8,
+     * where it cuts identically to the original (the oracle test pins this).
      *
      * @return list<string>
      */
     private static function wordSplit(string $line, int $limit): array
+    {
+        if (self::len($line) < self::SINGLE_PASS_MIN_CODEPOINTS || !\mb_check_encoding($line, 'UTF-8')) {
+            return self::wordSplitOriginal($line, $limit);
+        }
+
+        return self::wordSplitSinglePass($line, $limit);
+    }
+
+    /**
+     * The original greedy cut, unchanged from master: quadratic, since each
+     * piece re-measures and re-slices the remaining body.
+     *
+     * @return list<string>
+     */
+    private static function wordSplitOriginal(string $line, int $limit): array
+    {
+        $room = \max(16, $limit - 16); // headroom for the fence decoration
+        $pieces = [];
+        $body = $line;
+        while (self::len($body) > $room) {
+            $cut = \mb_strrpos(\mb_substr($body, 0, $room), ' ');
+            $cut = $cut === false ? $room : $cut + 1;
+            $pieces[] = \rtrim(\mb_substr($body, 0, $cut));
+            $body = \ltrim(\mb_substr($body, $cut));
+        }
+        if ($body !== '') {
+            $pieces[] = $body;
+        }
+
+        return $pieces;
+    }
+
+    /**
+     * The same cut as wordSplitOriginal on valid UTF-8, in one decode and one
+     * scan. Each window's end and its last space are read off a single forward
+     * cursor, so a long line costs O(n).
+     *
+     * @return list<string>
+     */
+    private static function wordSplitSinglePass(string $line, int $limit): array
     {
         $room = \max(16, $limit - 16); // headroom for the fence decoration
         $cps = \mb_str_split($line, 1, 'UTF-8');
