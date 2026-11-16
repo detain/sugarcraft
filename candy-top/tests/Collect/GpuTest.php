@@ -429,6 +429,12 @@ final class GpuTest extends TestCase
         $root = sys_get_temp_dir() . '/candy-top-gpu-' . bin2hex(random_bytes(6));
         mkdir("{$root}/old", 0777, true);
         mkdir("{$root}/new", 0777, true);
+        // Darwin spells temp paths under /var/folders with /var a symlink to
+        // /private/var, and the discovery sweep realpaths PATH dirs by design
+        // (AbsoluteSearchPath anti-hijack law), so the probe returns the
+        // resolved spelling; expect the bytes the probe actually sees. Linux
+        // /tmp is not a symlink — identical string, behavior unchanged.
+        $root = (string) realpath($root);
         touch("{$root}/old/nvidia-smi");
         chmod("{$root}/old/nvidia-smi", 0755);
         $path = getenv('PATH');
