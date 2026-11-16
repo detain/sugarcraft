@@ -266,6 +266,13 @@ final class ComboBox implements \SugarCraft\Dashboard\Foundation\SizedItem
      * content ellipsises instead of overflowing the box (finding
      * sugar-dashboard-046, the no-compress cliff — the same fail-toward-FIT
      * rule GridTable columns get through Calc).
+     *
+     * Behaviour change (P0-A11): the placeholder and the query are clipped by
+     * Calc::truncate, which measures display cells, not code points. A CJK or
+     * emoji placeholder/query therefore fills its allocation in cells and no
+     * longer overruns it. A clipped text also drops any ANSI sequence it
+     * carried (the old mb_substr cut could leave one open mid-escape). Text
+     * that already fits is returned untouched, SGR included.
      */
     private function clipToAllocation(string $text, int $chrome): string
     {
