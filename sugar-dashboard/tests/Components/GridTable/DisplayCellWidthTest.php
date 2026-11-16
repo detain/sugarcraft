@@ -97,4 +97,66 @@ final class DisplayCellWidthTest extends TestCase
         self::assertStringContainsString('日本語テ…', $rendered);
         self::assertSame(12, Width::string($rendered));
     }
+
+    public function testPlainAsciiTruncationMatchesTheCodePointRule(): void
+    {
+        // Oracle: the rule before the display-cell change. It agrees with the
+        // cell rule only where one code point is one cell, so the inputs are
+        // printable ASCII with no tab and no ESC (those are pinned below).
+        $codePointRule = static function (string $s, int $max): string {
+            if ($max <= 0) {
+                return '';
+            }
+            if (mb_strlen($s) <= $max) {
+                return $s;
+            }
+
+            return mb_substr($s, 0, $max - 1) . '…';
+        };
+
+        foreach (['', 'a', 'hello', 'abcdefgh', 'Hello, world!'] as $s) {
+            for ($max = 0; $max <= 12; $max++) {
+                self::assertSame(
+                    $codePointRule($s, $max),
+                    Calc::truncate($s, $max),
+                    "'{$s}' clipped to {$max}",
+                );
+            }
+        }
+    }
+
+    public function testATabIsChargedTheTabWidthNotOneCell(): void
+    {
+        // Width charges a tab TAB_WIDTH cells (Style expands tabs to the same
+        // count). The code-point rule charged one, so a cell that used to fit
+        // can now clip. Pinned so a change to the tab charge is visible here.
+        self::assertSame(6, Width::string("a\tb"));
+        self::assertSame(['k' => 6], self::columnWidthsOf(["a\tb"]));
+        self::assertSame('a…', Calc::truncate("a\tb", 3));
+    }
+
+    public function testSgrBytesAreNotChargedToCells(): void
+    {
+        // The code-point rule counted the ESC and the parameter bytes of an SGR
+        // sequence, so a three-cell styled word measured twelve. Cells ignore
+        // the sequence, and only a clipped cell loses its styling.
+        $styled = "\x1b[31mred\x1b[0m";
+
+        self::assertSame(3, Width::string($styled));
+        self::assertSame(['k' => 3], self::columnWidthsOf([$styled]));
+        self::assertSame($styled, Calc::truncate($styled, 3));
+        self::assertSame('r…', Calc::truncate($styled, 2));
+    }
+
+    /**
+     * @param list<string> $values one column, keyed 'k'
+     * @return array<string, int>
+     */
+    private function columnWidthsOf(array $values): array
+    {
+        $rows = array_map(static fn(string $v): Row => new Row(['k' => $v]), $values);
+        $widths = Calc::calculateColumnWidths($rows, [Column::new('k', 'K')], 200);
+
+        return ['k' => $widths[0]];
+    }
 }

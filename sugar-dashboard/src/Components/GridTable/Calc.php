@@ -13,6 +13,10 @@ use SugarCraft\Core\Util\Width;
  * code-point count: a CJK ideograph occupies two cells and an emoji two, so
  * measuring with mb_strlen() made those columns too narrow and misaligned the
  * frame.
+ *
+ * The measure is Width::string's, so two inputs differ from the old code-point
+ * rule: a tab is charged Width::TAB_WIDTH cells (not one), and SGR sequences
+ * cost nothing (not their byte count). Printable ASCII is unchanged.
  */
 final class Calc
 {
