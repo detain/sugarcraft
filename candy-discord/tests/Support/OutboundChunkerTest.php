@@ -147,12 +147,14 @@ final class OutboundChunkerTest extends TestCase
     public function testWordSplitCostGrowsLinearlyWithTheLength(): void
     {
         // A 4x longer line costs about 4x as much when linear, and about 12x as
-        // much under the original quadratic cut. Best of three runs damps noise.
+        // much under the original quadratic cut. Noise only ever adds time, so the
+        // fastest of five runs per side is a stable floor and a loaded runner
+        // cannot fail the ratio on one slow sample.
         $small = str_repeat("word \u{1F600} chunk ", 7000);
         $large = str_repeat("word \u{1F600} chunk ", 28000);
         $best = static function (string $line): float {
             $fastest = INF;
-            for ($run = 0; $run < 3; $run++) {
+            for ($run = 0; $run < 5; $run++) {
                 $started = hrtime(true);
                 OutboundChunker::split($line, 2000, 17);
                 $fastest = min($fastest, (hrtime(true) - $started) / 1e9);

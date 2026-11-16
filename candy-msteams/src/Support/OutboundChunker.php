@@ -150,6 +150,12 @@ final class OutboundChunker
      * re-measured and re-split the whole remaining body for every piece, which
      * is O(n^2 / room).
      *
+     * Invalid UTF-8 is the one input whose cut moved. The old mb_substr /
+     * mb_strlen mix disagreed on stray bytes, so on those lines the piece
+     * boundaries (and sometimes the piece count) differ from the pre-single-pass
+     * cut, and stray bytes pass through instead of being replaced with '?'.
+     * Valid UTF-8 is cut identically to the old code.
+     *
      * @return list<string>
      */
     private static function wordSplit(string $line, int $limit): array
