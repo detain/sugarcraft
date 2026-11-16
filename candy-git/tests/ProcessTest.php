@@ -233,6 +233,86 @@ final class ProcessTest extends TestCase
         }
     }
 
+    /**
+     * ci-wave-4 door red: CreateProcess refuses a program path carrying a '/'
+     * (error 267 - mixed-separator PATH entry from sys_get_temp_dir()
+     * concatenation) and refuses batch files outright (error 193 - a .cmd is
+     * not a PE image). The seam must hand runPolled a program it can actually
+     * launch, so the fold and the cmd.exe /d /c route are pinned with an
+     * explicit search path that answers identically on both hosts - on Linux
+     * the Windows candidates are real files whose names contain a literal
+     * backslash, which is exactly the spelling findExecutable builds.
+     */
+    public function testResolveSpawnProgramFoldsSeparatorsAndRoutesBatchShimsThroughCmd(): void
+    {
+        $base    = sys_get_temp_dir() . '/cgrespawn_' . bin2hex(random_bytes(4));
+        $exeDir  = $base . '_exe';
+        $cmdDir  = $base . '_cmd';
+        $batDir  = $base . '_bat';
+        mkdir($exeDir);
+        mkdir($cmdDir);
+        mkdir($batDir);
+        // .exe + .cmd twins in one dir pin the PATHEXT family order too:
+        // a real Git\cmd install ships git.exe and the fold must not route it
+        // through the interpreter.
+        file_put_contents($exeDir . '\\git.exe', 'MZ-fake-image');
+        file_put_contents($exeDir . '\\git.cmd', "@echo off\r\nexit /b 0\r\n");
+        file_put_contents($cmdDir . '\\git.cmd', "@echo off\r\nexit /b 0\r\n");
+        file_put_contents($batDir . '\\git.bat', "@echo off\r\nexit /b 0\r\n");
+        $fold = static fn (string $p): string => str_replace('/', '\\', $p);
+        $files = [$exeDir . '\\git.exe', $exeDir . '\\git.cmd', $cmdDir . '\\git.cmd', $batDir . '\\git.bat'];
+        try {
+            $windows = Platform::windows();
+
+            $this->assertSame(
+                [$fold($exeDir . '\\git.exe'), '--version'],
+                $windows->resolveSpawnProgram(['git', '--version'], $exeDir),
+                'an .exe resolves, folds to all-backslash, and is NOT routed through cmd.exe',
+            );
+            $this->assertSame(
+                ['cmd.exe', '/d', '/c', $fold($cmdDir . '\\git.cmd'), '--version', '-C', 'x'],
+                $windows->resolveSpawnProgram(['git', '--version', '-C', 'x'], $cmdDir),
+                'a lone .cmd shim must launch the way cmd.exe would run it, args trailing',
+            );
+            $this->assertSame(
+                ['cmd.exe', '/d', '/c', $fold($batDir . '\\git.bat')],
+                $windows->resolveSpawnProgram(['git'], $batDir),
+                '.bat rides the same interpreter route as .cmd',
+            );
+            $this->assertSame(
+                ['./git.exe', 'status'],
+                $windows->resolveSpawnProgram(['./git.exe', 'status'], $exeDir),
+                'a program that already spells a path is handed back untouched (L4 contract)',
+            );
+            $this->assertSame(
+                ['definitely-not-a-binary-xyz', 'a'],
+                $windows->resolveSpawnProgram(['definitely-not-a-binary-xyz', 'a'], $exeDir),
+                'an unresolvable name stays bare so spawnFailure keeps the honest OS reason',
+            );
+            $this->assertSame(
+                ['git', '--version'],
+                Platform::posix()->resolveSpawnProgram(['git', '--version'], $cmdDir),
+                'POSIX never rewrites - the seam is Windows-only by contract',
+            );
+            $this->assertSame(
+                ['definitely-not-a-binary-xyz', 'a'],
+                $windows->resolveSpawnProgram(['definitely-not-a-binary-xyz', 'a']),
+                'the live-env call shape runPolled uses answers unchanged for an absent name on any host',
+            );
+        } finally {
+            // On Linux the candidates are single filenames with a literal
+            // backslash (sitting next to the dirs); on Windows they are inside
+            // them. Unlink by exact path either way - glob would eat the
+            // backslash as an escape character.
+            foreach ($files as $f) {
+                @unlink($f);
+            }
+            foreach ([$exeDir, $cmdDir, $batDir] as $d) {
+                @rmdir($d);
+            }
+        }
+    }
+
     public function testPolledLadderCapturesStdoutStderrExitAndStdin(): void
     {
         $r = Process::run(['sh', '-c', 'cat; echo err >&2; exit 3'], "hello\n", 5.0, self::windowsLadder());

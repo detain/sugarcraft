@@ -182,11 +182,20 @@ final class Platform
      * tokens that already spell a path, and names nothing resolves, are handed
      * back untouched so spawnFailure's reason stays honest.
      *
-     * @param list<string> $argv
+     * Two more seams the door probe measured on the Windows runner
+     * (ci-wave-4, error 267): CreateProcess rejects ANY program path carrying
+     * a '/' - and a PATH entry built from sys_get_temp_dir() concatenation
+     * spells exactly that - so the resolved program is folded to all-backslash;
+     * and a .cmd/.bat is not a PE image, which CreateProcess answers with
+     * ERROR_BAD_EXE_FORMAT, so batch shims are handed to cmd.exe itself
+     * (/d skips AutoRun, /c runs-and-exits, the batch's exit code propagates).
+     *
+     * @param list<string>  $argv
+     * @param string|null   $path  search path override (test seam; null reads the live env)
      *
      * @return list<string>
      */
-    public function resolveSpawnProgram(array $argv): array
+    public function resolveSpawnProgram(array $argv, ?string $path = null): array
     {
         if (!$this->windows || $argv === []) {
             return $argv;
@@ -195,10 +204,15 @@ final class Platform
         if ($program === '' || str_contains($program, '/') || str_contains($program, '\\')) {
             return $argv;
         }
-        $resolved = $this->findExecutable($program);
-        if ($resolved !== null) {
-            $argv[0] = $resolved;
+        $resolved = $this->findExecutable($program, $path);
+        if ($resolved === null) {
+            return $argv;
         }
+        $resolved = str_replace('/', '\\', $resolved);
+        if (preg_match('/\.(?:cmd|bat)$/i', $resolved) === 1) {
+            return ['cmd.exe', '/d', '/c', $resolved, ...array_slice($argv, 1)];
+        }
+        $argv[0] = $resolved;
 
         return $argv;
     }
