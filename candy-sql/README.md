@@ -190,7 +190,7 @@ than spraying unreadable bytes.
 | `:tx …` (query pane, run with the run keys) | Transaction control on the sync session: `:tx` or `:tx begin` opens, `:tx commit` closes, `:tx rollback` closes discarding the work (two-press, like the destructive-statement gate); the status bar carries a `[TX]` badge while open (SQL-O12) |
 | run with `?` / `:name` placeholders in the statement (query pane) | Opens a per-parameter prompt line instead of running: `Enter` binds the typed value (an empty submit binds NULL), `Esc` or `Ctrl+C` cancels the whole prepared run without quitting, the last answer re-enters the run path — the destructive gate still arms on the placeholder text first. The statement reaches the server through `prepare`/`execute` bound, never concatenated; `?` and `:name` may not be mixed; bound runs execute synchronously (SQL-O23) |
 | `?` (Tables, Rows or Admin pane) | Toggle the key-help overlay — the per-pane binding roster generated from the same routing table the legends and this page describe; ANY key closes it (`Ctrl+C` included, so help cannot quit the app). In the Query pane `?` stays a typeable rune (and the SQL-O23 placeholder mark) (SQL-O21) |
-| `q` / `Esc`        | `Esc` cancels a running query first whenever one is in flight (any pane, SQL-O08); otherwise `q`/`Esc` quit from the Tables and Rows panes only — inside Admin, `q` returns to Tables and `Esc` cancels an open modal dialog; inside the query pane `q` types |
+| `q` / `Esc`        | `Esc` cancels a running query first whenever one is in flight (any pane, SQL-O08, unless an open `/` filter, file or edit line or an open admin page holds the keyboard); otherwise `q`/`Esc` quit from the Tables and Rows panes only — inside Admin, `q` returns to Tables and `Esc` cancels an open modal dialog; inside the query pane `q` types |
 | `Ctrl+C`           | Cancel the running query when one is in flight; quit when the app is idle (SQL-O08 superseded the old unconditional quit) |
 
 ### Admin Dashboard Keys
@@ -1039,10 +1039,14 @@ Pre-1.0 gaps to be aware of, mostly on the async (ReactPHP) query path:
 - **Cancellation reaches the UI too.** All of the above describes the
   `AsyncConnection` API, and the TUI uses it: each query-pane dispatch mints a
   per-dispatch cancel handle and threads its token into the connection.
-  `Esc` (from any pane, outside the open `/` filter and edit lines) and
-  `Ctrl+C` cancel the in-flight run; `Ctrl+C` quits the app only when nothing
-  is in flight (SQL-O08, see the key table above). A superseded run is
-  cancelled when the next one dispatches, and the per-query timeout
+  `Esc` cancels the in-flight run from any pane, unless an open admin page on
+  the Admin pane or an open `/` filter, export/import file or edit line holds
+  the keyboard. `Ctrl+C` cancels it too, except while the `?` overlay is open
+  (the next key, `Ctrl+C` included, only closes it); the parameter prompt
+  answers `Ctrl+C` by cancelling the prepared run before it starts.
+  `Ctrl+C` quits the app only when nothing is in flight (SQL-O08, see the key
+  table above). A superseded run is cancelled when the next one dispatches,
+  and the per-query timeout
   (`QueryTimeout`, default 30 s) still bounds every leg.
 - **Query-pane results are buffered in full.** A `SELECT` executed from the
   editor materialises every returned row into the in-process result table.
