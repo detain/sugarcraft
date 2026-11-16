@@ -4,8 +4,15 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dashboard\Components\GridTable;
 
+use SugarCraft\Core\Util\Width;
+
 /**
  * Calculation utilities for grid layout.
+ *
+ * Every width here is a terminal display-cell count (sugar-core Width), not a
+ * code-point count: a CJK ideograph occupies two cells and an emoji two, so
+ * measuring with mb_strlen() made those columns too narrow and misaligned the
+ * frame.
  */
 final class Calc
 {
@@ -164,13 +171,13 @@ final class Calc
      */
     private static function colMinWidth(Column $col, array $rows): int
     {
-        $width = mb_strlen($col->label);
+        $width = Width::string($col->label);
 
         foreach ($rows as $row) {
             $value = $row->get($col->key);
             if ($value !== null) {
                 $str = is_string($value) ? $value : (string) $value;
-                $len = mb_strlen($str);
+                $len = Width::string($str);
                 if ($len > $width) {
                     $width = $len;
                 }
@@ -181,7 +188,8 @@ final class Calc
     }
 
     /**
-     * Truncate string to maximum width.
+     * Truncate a string to at most $maxWidth display cells, ending in an
+     * ellipsis when it is cut. Never splits a grapheme cluster.
      */
     public static function truncate(string $str, int $maxWidth): string
     {
@@ -189,11 +197,6 @@ final class Calc
             return '';
         }
 
-        $len = mb_strlen($str);
-        if ($len <= $maxWidth) {
-            return $str;
-        }
-
-        return mb_substr($str, 0, $maxWidth - 1) . '…';
+        return Width::clipCells($str, $maxWidth, '…');
     }
 }
