@@ -232,10 +232,11 @@ final class DisplayCellWidthTest extends TestCase
     {
         // At width 30 each column is 15 cells (literal, not read back from Calc,
         // so the expectation holds on master too). The frozen cell 日本 is four
-        // cells and six bytes: str_pad would leave it unpadded on master, while
-        // the frozen half must reach 15 cells, then the extra right wall that renderFrozenRow
-        // writes (a defect, pinned below). The row is split at the freeze divider ║ so only
-        // the frozen half is measured.
+        // cells and six bytes: str_pad pads by bytes, so on master it would reach
+        // 13 cells, two short of the 15-cell column. The frozen half must reach
+        // 15 cells, then the extra right wall that renderFrozenRow writes before the
+        // divider, which the pin below records as a defect. The row is split at the
+        // freeze divider ║ so only the frozen half is measured.
         $columns = [Column::new('name', 'Name'), Column::new('city', 'City')];
         $rows = [
             new Row(['name' => '日本語', 'city' => '東京都']),
