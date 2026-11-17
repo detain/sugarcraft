@@ -803,6 +803,11 @@ jobs:
           MAT_LIB: ${{ matrix.lib }}
         run: cd "$MAT_LIB" && composer install --prefer-dist --no-progress -n
 
+      # The injection above dirties */composer.json; revert it so the tree is
+      # clean before phpunit (Help.php --version reads git dirty state).
+      - name: Revert path-repo injection
+        run: git checkout -- '*/composer.json'
+
       - name: List Modules
         run: php -m
 
