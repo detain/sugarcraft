@@ -631,10 +631,12 @@ final class DescriptorInheritanceGuardTest extends TestCase
         'sugar-async/ChildRun.php::spawn' => [
             'count' => 1,
             'reason' => 'the one proc_open in ChildRun, whose handle outlives spawn() by design: '
-                . 'run() and launch() reap it. run() calls BoundedShutdown reapIfExited or '
-                . 'terminateBounded on every return path and in its catch; launch() SIGTERMs at the '
-                . 'deadline, escalates to SIGKILL and proc_closes in finish(). The spec names only '
-                . 'fds 0, 1 and 2, so the fd≥3 inheritance is the exposure this row records. '
+                . 'run() and launch() reap it. run() reaps through BoundedShutdown: reapIfExited or '
+                . 'terminateBounded on every return path and in its catch. launch() runs the same '
+                . 'rungs on loop timers (SIGTERM at the deadline, SIGKILL after the grace, proc_close '
+                . 'once the status poll sees the child gone) and never waits in proc_close() for a live '
+                . 'child; a child that outlives its kill budget is reaped by a loop poll. The spec names '
+                . 'only fds 0, 1 and 2, so the fd≥3 inheritance is the exposure this row records. '
                 . 'NOT FIXABLE FROM THIS PACKAGE - sugar-async owns it.',
         ],
     ];

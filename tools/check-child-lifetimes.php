@@ -321,12 +321,14 @@ final class CheckChildLifetimes
             'count' => 1,
             'kind' => 'fd-open',
             'reason' => 'the one proc_open in ChildRun, held for the child\'s life and returned to '
-                . 'its two callers, which own the reap. run() calls BoundedShutdown reapIfExited or '
-                . 'terminateBounded on every return path, and its catch runs terminateBounded before '
-                . 'rethrowing. launch() on the loop SIGTERMs at the deadline, escalates to SIGKILL, '
-                . 'and proc_closes in finish(). The spec names only fds 0, 1 and 2, so the fd≥3 '
-                . 'inheritance is the exposure this row records, and it stands for sugar-async to own. '
-                . 'The Windows runtime check of the poll arm and launch() is still open.',
+                . 'its two callers, which own the reap. run() reaps through BoundedShutdown: '
+                . 'reapIfExited or terminateBounded on every return path, and its catch runs '
+                . 'terminateBounded before rethrowing. launch() runs the same rungs on loop timers '
+                . '(SIGTERM at the deadline, SIGKILL after the grace, proc_close once the status poll '
+                . 'sees the child gone) and never waits in proc_close() for a live child; a child that '
+                . 'outlives its kill budget is reaped by a loop poll. The spec names only fds 0, 1 and 2, '
+                . 'so the fd≥3 inheritance is the exposure this row records, and it stands for '
+                . 'sugar-async to own. The Windows runtime check of the poll arm and launch() is still open.',
         ],
     ];
 
