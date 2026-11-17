@@ -305,14 +305,16 @@ classified slices rather than handler callbacks.
 **`AnsiTokenizer`** turns a byte stream into a `list<Token>`. Create one with
 `AnsiTokenizer::new()`, call `parse($chunk)` for each read, and call
 `flush()` at end of stream. An unfinished sequence at the end of a chunk is
-held for the next `parse()` call. Past `AnsiTokenizer::MAX_PENDING_BYTES`
-(64 KiB) the held bytes come back as text, so a stuck stream cannot grow the
-buffer. `Token` carries `type` (`TEXT`, `CONTROL`, `ESC`, `CSI`, `OSC`, `DCS`,
-`APC`, `SOS`, `PM`), `data`, `intermediate`, `params`, `final`, and
-`terminator`, and `paramInts()` reads the parameters as integers. The field
-shape matches sugar-core's `Util\Token`. Unlike the handler machine, a C1
-byte (0x80–0x9F) is ordinary text here: only the 7-bit `ESC` spellings open
-a sequence.
+held for the next `parse()` call. If the held bytes pass
+`AnsiTokenizer::MAX_PENDING_BYTES` (64 KiB), they come back as text and the
+tokenizer resynchronizes, so a stuck stream cannot grow the buffer. The cap
+applies to the held partial only, so a large chunk that ends in a short partial
+still holds that partial. `Token` carries `type` (`TEXT`, `CONTROL`, `ESC`,
+`CSI`, `OSC`, `DCS`, `APC`, `SOS`, `PM`), `data`, `intermediate`, `params`,
+`final`, and `terminator`, and `paramInts()` reads the parameters as integers.
+The field shape and type values match sugar-core's `Util\Token`. Unlike the
+handler machine, a C1 byte (0x80–0x9F) is ordinary text here: only the 7-bit
+`ESC` spellings open a sequence.
 
 **`Codec\ControlNames`** names the C0 and C1 control bytes. `c0Name()` and
 `c1Name()` return long labels such as `BEL (bell)`. `mnemonic()` returns the
@@ -337,52 +339,117 @@ foreach ($tokenizer->parse("ok\x1b[31m\x07") as $token) {
 ### Migration map (P1-14a)
 
 What each replaced copy does, and where that behavior lives now. Nothing is
-deleted in this change; the copies are removed in the series steps named below.
+deleted in this change. Each copy is removed in the series step named below,
+and its callers move in that step.
 
-- **candy-ansi-inspect `C0C1.php`** (C0/C1 long labels, and the `C0 0x..` /
-  `C1 0x..` fallbacks) → `Codec\ControlNames::C0`, `C1`, `c0Name()`, `c1Name()`.
-  The strings are identical and pinned by `ControlNamesTest`. The file is
-  deleted in P4-9e.
-- **candy-ansi-inspect `Inspector::sanitizeLabelBytes()`** mnemonic arms (46
-  bytes: C0 including ESC, DEL, and the C1 bytes IND, NEL, HTS, RI, SS2, SS3,
-  DCS, SOS, CSI, ST, OSC, PM, APC) → `ControlNames::mnemonic()`. Pinned by
-  `inspectorMnemonics`. The UTF-8-aware sweep regex and the escaping stay in
-  the Inspector until P4-9e.
-- **Divergence, not yet migrated:** the Inspector's default arm renders 19 C1
-  bytes as `\xNN`: 0x80-0x83, 0x86, 0x87, 0x89-0x8C, 0x91-0x97, 0x99, 0x9A.
+**Behavior map: sugar-core `Util\Parser`** (deleted in P1-14b)
+
+| Behavior of the copy | Where it lives now |
+|---|---|
+| Printable and 8-bit bytes accumulate into one TEXT token | `AnsiTokenizer::parse()`, same |
+| C0 controls and DEL: one CONTROL token per byte | `AnsiTokenizer::parse()`, same |
+| `ESC` plus a byte: two-byte ESC token | `AnsiTokenizer::consumeEsc()`, same |
+| CSI: private marker, parameter bytes, intermediate bytes, final 0x40–0x7E | `AnsiTokenizer::consumeCsi()`, same |
+| CSI with an invalid final: bare `ESC [` token, then resynchronize | `consumeCsi()`, same |
+| OSC, DCS, APC, SOS, PM closed by BEL or ST, with `terminator` | `AnsiTokenizer::consumeStTerminated()`, same |
+| Incomplete sequence held across `parse()` calls | `AnsiTokenizer::$pending`, same |
+| `MAX_PENDING_BYTES` = 65536 | `AnsiTokenizer::MAX_PENDING_BYTES`, same value. **Judged on the held partial, not the buffer (declared change below)** |
+| `flush()` returns held bytes as one TEXT token and clears them | `AnsiTokenizer::flush()`, same |
+| Token type constants and field names | `SugarCraft\AnsiParser\Token`, same values |
+| `Token::paramInts()` | `SugarCraft\AnsiParser\Token::paramInts()`, same |
+| Construction `new Parser()` | `AnsiTokenizer::new()`. Changes at the call sites in P1-14b |
+
+**Declared behavior change.** A chunk longer than 64 KiB whose tail is a short
+unfinished sequence now holds that tail, as a short chunk does. The copy
+judged the cap on the whole buffer, so it emitted the tail as text and
+resynchronized. Verified on the copy and on this class with a 70,000-byte
+chunk ending in `ESC [ 38;5;` followed by `196m`: `Util\Parser` gives TEXT,
+TEXT; `AnsiTokenizer` gives TEXT, then CSI with params `38;5;196` and final
+`m`. Pinned by `AnsiTokenizerTest::testShortPartialAfterALargeChunkIsStillHeld`.
+
+**Behavior map: candy-ansi-inspect `C0C1.php`** (deleted in P4-9e)
+
+- `C0C1::C0`, `C0C1::C1` tables, `c0Name()` and `c1Name()`, including the
+  `C0 0x..` and `C1 0x..` fallbacks → `Codec\ControlNames::C0`, `C1`,
+  `c0Name()`, `c1Name()`. The strings are identical. `ControlNamesTest` pins
+  every label byte for byte.
+
+**Behavior map: candy-ansi-inspect `Inspector::sanitizeLabelBytes()`** (the
+mnemonic arms only, `Inspector.php` around lines 980–1001; the arms stay in the
+Inspector until P4-9e)
+
+- The 46 mnemonic arms (C0 including ESC, DEL, and the C1 bytes IND, NEL, HTS,
+  RI, SS2, SS3, DCS, SOS, CSI, ST, OSC, PM, APC) → `ControlNames::mnemonic()`.
+  Pinned by `ControlNamesTest::inspectorMnemonics`.
+- The UTF-8-aware sweep regex and the `\xHH` default arm stay in the Inspector
+  until P4-9e.
+- **Divergence, not yet migrated:** the default arm renders 19 C1 bytes as
+  `\xNN`: 0x80–0x83, 0x86, 0x87, 0x89–0x8C, 0x91–0x97, 0x99, 0x9A.
   `mnemonic()` names all of them (`mnemonic(0x80) === 'PAD'`). Migrating the
   Inspector changes its output for these bytes. P4-9e must either keep the hex
   form for them or change it in its own PR. Pinned by
-  `testC1BytesTheInspectorLeavesAsHexHaveMnemonicsHere`.
-- **sugar-core `Util\Parser`** → `AnsiTokenizer`. The port is method-for-method
-  (`parse`, `flush`, `consumeEsc`, `consumeCsi`, `consumeStTerminated`, the
-  65536-byte `MAX_PENDING_BYTES` cap) and emits the same token shape.
-  `Util/Parser.php` is deleted in P1-14b, which also changes the construction
-  from `new Parser()` to `AnsiTokenizer::new()`.
-- **Token types.** This package's `Token` is the survivor. sugar-core's
-  `Util\Token` becomes a `class_alias` of it in P1-14b. sugar-core then
-  requires `sugarcraft/sugar-ansi-parser`, which has no dependencies, so there
-  is no cycle. The `list<Util\Token>` hints and `instanceof` checks in
-  `sugar-core/src/Renderer.php` move in the same series. Until then the two
-  classes are not interchangeable.
-- **Callers P1-14b must migrate** (`Util\Parser` uses, by file and line): `sugar-core/src/Renderer.php:8`,
-  `sugar-core/tests/RendererTest.php:344`, `sugar-core/tests/SgrStateTest.php:8`,
-  `sugar-core/tests/Util/ParserTest.php:7`, `candy-code/src/Renderer.php:9`,
-  `candy-code/tests/Renderer/RenderMemoTest.php:13`.
+  `ControlNamesTest::testC1BytesTheInspectorLeavesAsHexHaveMnemonicsHere`.
 
-Audit premises corrected by this map:
+**Token types (sugar-core `Util\Token` → this package's `Token`)**
+
+`Util\Token` becomes a `class_alias` of `SugarCraft\AnsiParser\Token` in
+P1-14b. sugar-core then requires `sugarcraft/sugar-ansi-parser`, which has no
+dependencies, so there is no cycle. Until then the two classes are not
+interchangeable. Files that name `Util\Token` and must be checked in P1-14b:
+`sugar-core/src/Renderer.php`, `sugar-core/src/SgrState.php`,
+`sugar-core/tests/SgrStateTest.php`, `sugar-core/tests/Util/ParserTest.php`,
+`candy-code/src/Renderer.php`, and `sugar-flexbox/tests/SgrStateDifferentialTest.php`.
+
+**Unmapped extras (new here, no copy behind them).** `ControlNames::mnemonic()`
+for the 19 C1 bytes listed above, and the public `ControlNames::C0` and
+`ControlNames::C1` tables. Both exist only in this package.
+
+### Consumers P1-14b and P4-9e must move
+
+Found by `grep -rnF 'Util\Parser'` and `grep -rnF 'C0C1'` over the whole repo
+(excluding `vendor/`), on this commit. A line listed as "use" is an import;
+"new" is a construction; "doc" is a comment or a `{@see}` link with no code use.
+
+Util\Parser (P1-14b):
+
+- Production: `sugar-core/src/Renderer.php:8` (use), `:97` (new);
+  `sugar-core/src/SgrState.php:401` (doc); `sugar-widgets/src/Help/Help.php:13`
+  (use), `:421` (new); `candy-code/src/Renderer.php:9` (use), `:4519` and
+  `:4557` (new).
+- Tests: `sugar-core/tests/RendererTest.php:344` (FQN new);
+  `sugar-core/tests/SgrStateTest.php:8` (use) and about 30 `(new Parser())`
+  calls; `sugar-core/tests/Util/ParserTest.php:7` (use) and `:15` (new);
+  `sugar-widgets/tests/Help/HelpTest.php:202` (FQN new);
+  `sugar-widgets/tests/Help/HelpReviewPinsTest.php:9` (use);
+  `candy-code/tests/Renderer/RenderMemoTest.php:13` (use).
+- Docs naming the class: `SECURITY.md:63`.
+
+C0C1 (P4-9e):
+
+- Production: `candy-ansi-inspect/src/AnsiHandler.php:453` (`C0C1::c0Name`) and
+  `:503` (`C0C1::c1Name`).
+- Tests that call the class: `candy-ansi-inspect/tests/C0C1Test.php` (the whole
+  file pins the labels, and `ControlNamesTest` already pins the same strings);
+  `candy-ansi-inspect/tests/SosPmTest.php:8` (use), `:41` and `:46` (calls).
+- Tests that name it only in comments: `candy-ansi-inspect/tests/C1ClassificationSweepTest.php:30`
+  and `candy-ansi-inspect/tests/StreamingInspectorTest.php:295-296`.
+
+### Audit premises corrected by this map
 
 - `candy-ansi-inspect` `C0C1.php` and `Inspector.php:980-1001` are not a
   duplicate of `Codec\LabelSanitizer`. `LabelSanitizer::clip()` escapes as
   `\xHH` and clips to a byte limit, and it stays. The duplicate target is
   `Codec\ControlNames`.
-- `sugar-core` `Util/Parser.php` has callers beyond `Renderer.php`: the
-  sugar-core and candy-code tests and the candy-code renderer listed above.
-
-Test count at this commit: the full package suite is 586 tests and 1927
-assertions. The two new test classes had 84 tests before the C1 fallback pin
-was added, so they now have 103. That figure is derived from the count, not
-measured separately.
+- `sugar-core` `Util/Parser.php` has callers beyond `Renderer.php`. The list
+  above names every one: production callers in sugar-widgets and candy-code,
+  and the tests.
+- The C0C1.php deletion is P4-9e, not P1-14a. `candy-ansi-inspect` still calls
+  `C0C1` at `AnsiHandler.php:453` and `:503`, and that package is outside this
+  work package's lane. The plan's P1-14 entry, `UPSTREAM-PLAN.md` (section
+  "P1-14"), and the trace row AUD-6 r42 (`reviews/UPSTREAM-TRACE.tsv:223`) still
+  name P1-14a. The move is recorded here and in the PR body's dropped-claim
+  record. Updating the trace row is a planning-tree edit, not part of this
+  branch.
 
 ## Decoders (Codec)
 

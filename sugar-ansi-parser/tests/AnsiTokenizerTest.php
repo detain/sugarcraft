@@ -9,9 +9,10 @@ use SugarCraft\AnsiParser\AnsiTokenizer;
 use SugarCraft\AnsiParser\Token;
 
 /**
- * Behavior of the flat stream tokenizer. Cases port sugar-core's former
- * Util\Parser suite, which this class replaces, and add the edges that suite
- * left unpinned (DEL, 8-bit C1 bytes, invalid CSI finals, the flush contract).
+ * Behavior of the flat stream tokenizer. Cases port sugar-core's Util\Parser
+ * suite (the copy this class replaces in P1-14b, which deletes Util\Parser), and
+ * add the edges that suite left unpinned (DEL, 8-bit C1 bytes, invalid CSI
+ * finals, the flush contract, the held-bytes cap).
  */
 final class AnsiTokenizerTest extends TestCase
 {
@@ -246,6 +247,26 @@ final class AnsiTokenizerTest extends TestCase
         $this->assertCount(1, $tokens);
         $this->assertSame(Token::CSI, $tokens[0]->type);
         $this->assertSame('m', $tokens[0]->final);
+    }
+
+    public function testShortPartialAfterALargeChunkIsStillHeld(): void
+    {
+        // The cap judges the held partial, not the whole buffer: a chunk
+        // larger than MAX_PENDING_BYTES whose tail is a short unfinished CSI
+        // must keep that tail for the next call, not emit it as text.
+        $p = AnsiTokenizer::new();
+        $backlog = str_repeat('a', AnsiTokenizer::MAX_PENDING_BYTES + 4464);
+        $tokens = $p->parse($backlog . "\x1b[38;5;");
+        $this->assertCount(1, $tokens);
+        $this->assertSame(Token::TEXT, $tokens[0]->type);
+        $this->assertSame($backlog, $tokens[0]->data);
+
+        $tokens = $p->parse('196m');
+        $this->assertCount(1, $tokens);
+        $this->assertSame(Token::CSI, $tokens[0]->type);
+        $this->assertSame('38;5;196', $tokens[0]->params);
+        $this->assertSame('m', $tokens[0]->final);
+        $this->assertSame([], $p->flush());
     }
 
     public function testFlushReturnsBufferedAsText(): void

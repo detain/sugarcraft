@@ -85,13 +85,14 @@ final class AnsiTokenizer
                 $textStart = -1;
                 $consumed = $this->consumeEsc($buf, $i, $len, $tokens);
                 if ($consumed < 0) {
-                    // Incomplete. Hold the tail unless it has outgrown the cap:
-                    // then no terminator this tokenizer accepts is coming, so
-                    // return those bytes as text and resynchronize. The check
-                    // uses the whole buffer, because the backlog ahead of the
-                    // partial is what grew.
+                    // Incomplete. Hold the tail unless the tail itself has
+                    // outgrown the cap: then no terminator this tokenizer
+                    // accepts is coming, so return those bytes as text and
+                    // resynchronize. The check is on the held bytes, not the
+                    // whole buffer, so a large chunk ending in a short partial
+                    // still keeps that partial for the next call.
                     $rest = substr($buf, $i);
-                    if ($len > self::MAX_PENDING_BYTES) {
+                    if (strlen($rest) > self::MAX_PENDING_BYTES) {
                         $tokens[] = new Token(Token::TEXT, $rest);
                         return $tokens;
                     }
