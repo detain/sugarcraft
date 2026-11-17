@@ -415,6 +415,40 @@ terminal title, or log line an attacker-controlled input could reach without
 passing it through your display sanitizer first (`Sanitize::untrusted()` in
 `sugar-core`, or an equivalent for your surface).
 
+### Child processes: `ChildRun` and the `ChildPump` builder
+
+`ChildRun` runs one child argv (never through a shell) with a deadline and a
+per-stream byte cap, and returns a `ChildResult`:
+
+- `run()` blocks the caller and returns the result.
+- `launch($loop)` returns a promise of the result and never blocks the loop: output
+  is read by stream callbacks, the deadline is a timer, and the exit is checked by
+  a short periodic poll.
+
+A child past its deadline is killed through the sugar-core ladder (SIGTERM, grace,
+SIGKILL) and reported as `TIMED_OUT`. Defaults: ten seconds, 8 MiB per stream.
+`withStdin()` feeds a payload; on Windows a non-empty payload is refused, because
+the Windows runtime cannot give a non-blocking stdin pipe.
+
+`ChildPump::new($pipes)` is the builder under `ChildRun`, usable on its own over pipes
+you opened: `withDeadline()`, `withCap()`, `withOnChunk()` (live feed),
+`withStdin($pipe, $bytes)`, `withHeartbeat($seconds, $fn)`, `withReap($fn)` (runs once
+after the last read, even on a throw), then `pump()`. The static
+`ChildPump::drain(...)` stays for the callers that predate the builder.
+
+```php
+use SugarCraft\Async\ChildRun;
+
+$r = ChildRun::new([PHP_BINARY, '-r', 'echo strtoupper(stream_get_contents(STDIN));'])
+    ->withTimeout(5.0)
+    ->withMaxBytes(1_048_576)
+    ->withStdin('hello')
+    ->run();
+
+echo $r->stdout;            // HELLO
+echo $r->succeeded() ? "ok\n" : "failed\n";
+```
+
 ### Backoff, bounded retry, reconnect and pipe draining
 
 `Backoff::new($baseMs, $factor, $capMs)` is an immutable wait schedule (ceiling,
