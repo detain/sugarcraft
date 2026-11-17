@@ -23,7 +23,7 @@ use SugarCraft\Core\Util\Width;
  * Width::padRight (header, row, frozen and notice rows), and where truncate()
  * cuts. Nothing expands the tab. GridTable writes cell values raw, so a tab that
  * fits still reaches the terminal, which draws it to the next tab stop, not
- * necessarily four cells on. Example: a column labelled "Name" holding "a\tb" is
+ * necessarily four cells on. Example: a column labeled "Name" holding "a\tb" is
  * six cells wide with no pad space; the code-point rule made it four with one.
  */
 final class Calc
