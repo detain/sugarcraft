@@ -260,10 +260,12 @@ final class DisplayCellWidthTest extends TestCase
 
     public function testFrozenHalfOfARowPadsCjkCellsByDisplayWidth(): void
     {
-        // At width 30 each column is 15 cells (literal, not read back from Calc,
-        // so the expectation holds on master too). The frozen cell 日本 is four
-        // cells and six bytes: str_pad pads by bytes, so on master it would reach
-        // 13 cells, two short of the 15-cell column. The frozen half must reach
+        // At width 30 each column is 15 cells on master and on this branch. The
+        // minimum is the widest label or cell (master's mb_strlen gives 4, this
+        // branch's display cells give 6) and the spare cells split evenly, so
+        // the column reaches 15 either way (4 + 11 on master, 6 + 9 here). The frozen cell
+        // 日本 is four cells and six bytes: str_pad pads by bytes, so on master
+        // it reaches 13 cells, two short of the 15-cell column. The frozen half must reach
         // 15 cells, then the extra right wall that renderFrozenRow writes before the
         // divider. That wall makes the frozen data row 34 cells wide, one more than
         // the 33-cell frame, and the pin below records it as a defect. The row is
