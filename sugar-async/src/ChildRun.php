@@ -23,9 +23,11 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  *         ->run();
  *     if (!$r->succeeded()) { ... }
  *
- * A child past its deadline is killed through the sugar-core ladder (SIGTERM,
- * a grace period, SIGKILL) and reported as TIMED_OUT. A child that closes its
- * output and then lingers past the deadline is treated the same way.
+ * A child past its deadline is killed (SIGTERM, a grace period, SIGKILL) and
+ * reported as TIMED_OUT. run() does this through the sugar-core BoundedShutdown
+ * ladder; launch() runs the same rungs on loop timers, with the same budgets. A
+ * child that closes its output and then lingers past the deadline is treated
+ * the same way.
  *
  * Stdin: {@see withStdin()} feeds a payload to the child. The POSIX arm does it
  * through a non-blocking pipe. On Windows a non-empty payload is refused (a
@@ -33,8 +35,9 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * Windows runtime cannot give a non-blocking stdin pipe.
  *
  * Mirrors the process runners that grew in candy-git-server (BoundedCommand),
- * candy-top (AsyncCommand) and candy-code (CommandBackend); they are the copies
- * this replaces.
+ * candy-top (AsyncCommand) and candy-code (CommandBackend). Those copies stay
+ * live until their consumers move to this class in the P1-5c lanes; this class
+ * is the planned replacement for them, not yet a replacement.
  */
 final class ChildRun
 {
@@ -169,7 +172,9 @@ final class ChildRun
     /**
      * Start the child on $loop and return a promise of its result. The loop is
      * never blocked: output is read by stream callbacks, the deadline is a timer,
-     * and the reap is a short periodic check for the exit.
+     * and the reap is a short periodic check for the exit. A child still running
+     * after its kill budget is reaped by that same check once the kernel releases
+     * it, never by a blocking proc_close().
      *
      * The promise resolves (never rejects) once the child is done, and rejects
      * only when it cannot be started, or on a stdin payload on Windows.

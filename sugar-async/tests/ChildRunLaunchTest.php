@@ -10,6 +10,7 @@ use React\EventLoop\StreamSelectLoop;
 use React\Promise\PromiseInterface;
 use SugarCraft\Async\ChildResult;
 use SugarCraft\Async\ChildRun;
+use SugarCraft\Async\ChildRunLaunch;
 use SugarCraft\Async\WindowsPipes;
 
 /**
@@ -21,6 +22,16 @@ final class ChildRunLaunchTest extends TestCase
     private function php(string $code): array
     {
         return [PHP_BINARY, '-r', $code];
+    }
+
+    private function reflect(string $class, string $name): \ReflectionProperty|\ReflectionMethod
+    {
+        $ref = method_exists($class, $name)
+            ? new \ReflectionMethod($class, $name)
+            : new \ReflectionProperty($class, $name);
+        $ref->setAccessible(true);
+
+        return $ref;
     }
 
     private function requirePosixPipes(): void
@@ -101,6 +112,58 @@ final class ChildRunLaunchTest extends TestCase
 
         $this->assertSame(ChildResult::TIMED_OUT, $r->status);
         $this->assertLessThan(5.0, microtime(true) - $t0, 'the kill ladder runs on the loop and is bounded');
+    }
+
+    /**
+     * The kill budget is spent while the child is still running (a kernel wait
+     * after SIGKILL, simulated here by a child that is simply still alive). The
+     * result must settle without proc_close() blocking the loop, and the handle
+     * must be reaped by the loop's poll once the child is gone.
+     */
+    public function testAChildStillRunningWhenTheKillBudgetIsSpentIsReapedOnTheLoop(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+        $proc = proc_open($this->php('sleep(30);'), [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $pipes);
+        $this->assertIsResource($proc);
+
+        $deferred = new \React\Promise\Deferred();
+        $launch = new \SugarCraft\Async\ChildRunLaunch(
+            $loop,
+            $proc,
+            $pipes,
+            '',
+            30.0,
+            ChildRun::DEFAULT_MAX_BYTES,
+            $deferred,
+        );
+        $result = null;
+        $deferred->promise()->then(static function (ChildResult $r) use (&$result): void {
+            $result = $r;
+        });
+
+        $t0 = microtime(true);
+        $this->reflect(ChildRunLaunch::class, 'forceFinish')->invoke($launch);
+        $this->assertLessThan(1.0, microtime(true) - $t0, 'settling a live child must not wait for it');
+        $this->assertInstanceOf(ChildResult::class, $result);
+        $this->assertSame(ChildResult::TIMED_OUT, $result->status);
+        $this->assertNull($result->exitCode);
+        $this->assertNotNull($this->reflect(ChildRunLaunch::class, 'reaper')->getValue($launch), 'a live child keeps a reap poll armed');
+
+        proc_terminate($proc, 9);
+        $reaper = $this->reflect(ChildRunLaunch::class, 'reaper');
+        $loop->addPeriodicTimer(0.01, static function () use ($loop, $launch, $reaper): void {
+            if ($reaper->getValue($launch) === null) {
+                $loop->stop();
+            }
+        });
+        $guard = $loop->addTimer(5.0, static function () use ($loop): void {
+            $loop->stop();
+        });
+        $loop->run();
+        $loop->cancelTimer($guard);
+
+        $this->assertNull($reaper->getValue($launch), 'the poll reaps the child once it is gone');
     }
 
     public function testLaunchFeedsStdinAndReadsItBackLineByLine(): void

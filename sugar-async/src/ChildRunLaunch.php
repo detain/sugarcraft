@@ -19,6 +19,15 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * exit is seen, the result settles. At the deadline the child is signalled with
  * SIGTERM, then SIGKILL after the sugar-core grace budgets, and the result
  * settles as TIMED_OUT. Signals are integer literals, the sugar-core doctrine.
+ *
+ * These are the rungs of {@see \SugarCraft\Core\Util\Proc\BoundedShutdown::terminateBounded()}
+ * re-driven by loop timers: that method sleeps between rungs and so cannot run
+ * on the loop. Only the budgets and the signal numbers are shared with it.
+ *
+ * A child still running when the kill budget is spent is not waited for by
+ * proc_close(), which would block the loop. Its handle is reaped by a periodic
+ * poll once the kernel releases it, so the loop is never blocked; a child that
+ * never dies keeps that poll armed for as long as it lives.
  */
 final class ChildRunLaunch
 {
@@ -35,6 +44,9 @@ final class ChildRunLaunch
 
     /** @var list<TimerInterface> */
     private array $timers = [];
+
+    /** The poll that reaps a child still running at settle time; null when none is needed. */
+    private ?TimerInterface $reaper = null;
 
     private ChildCapture $capture;
 
@@ -212,7 +224,7 @@ final class ChildRunLaunch
         }
     }
 
-    /** The kill budget is spent: settle now. SIGKILL has landed or is one kernel step away, so the reap cannot wait long. */
+    /** The kill budget is spent: settle now, whether or not SIGKILL has landed. */
     private function forceFinish(): void
     {
         if (!$this->settled) {
@@ -239,8 +251,14 @@ final class ChildRunLaunch
         $this->closeAllPipes();
         $this->closeStdin();
 
-        $reaped = proc_close($this->proc);
-        $code = $this->exitCode ?? ($reaped >= 0 ? $reaped : null);
+        $code = $this->exitCode;
+        if ($this->exited) {
+            // Seen gone by the status poll, so proc_close() cannot wait.
+            $reaped = proc_close($this->proc);
+            $code ??= $reaped >= 0 ? $reaped : null;
+        } else {
+            $this->reapWhenGone();
+        }
 
         $r = $this->capture->result(DrainResult::CLOSED);
         $this->deferred->resolve(new ChildResult(
@@ -250,6 +268,22 @@ final class ChildRunLaunch
             $status,
             $r->droppedBytes(1) + $r->droppedBytes(2),
         ));
+    }
+
+    /**
+     * The child outlived its kill budget. Its handle is reaped on the loop once
+     * the status poll sees it gone, never by a blocking proc_close().
+     */
+    private function reapWhenGone(): void
+    {
+        $this->reaper = $this->loop->addPeriodicTimer(self::EXIT_POLL_SECONDS, function (): void {
+            if (proc_get_status($this->proc)['running'] !== false) {
+                return;
+            }
+            $this->loop->cancelTimer($this->reaper);
+            $this->reaper = null;
+            proc_close($this->proc);
+        });
     }
 
     private function closeSlot(int $slot): void

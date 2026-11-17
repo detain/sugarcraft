@@ -425,8 +425,9 @@ per-stream byte cap, and returns a `ChildResult`:
   is read by stream callbacks, the deadline is a timer, and the exit is checked by
   a short periodic poll.
 
-A child past its deadline is killed through the sugar-core ladder (SIGTERM, grace,
-SIGKILL) and reported as `TIMED_OUT`. Defaults: ten seconds, 8 MiB per stream.
+A child past its deadline is killed (SIGTERM, a grace period, SIGKILL) and reported
+as `TIMED_OUT`. `run()` uses the sugar-core `BoundedShutdown` ladder; `launch()` runs
+the same rungs on loop timers with the same budgets. Defaults: ten seconds, 8 MiB per stream.
 `withStdin()` feeds a payload; on Windows a non-empty payload is refused, because
 the Windows runtime cannot give a non-blocking stdin pipe.
 

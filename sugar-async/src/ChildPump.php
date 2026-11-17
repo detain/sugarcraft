@@ -345,6 +345,10 @@ final class ChildPump
      * and candy-code's three call sites). Same contract as before the builder:
      * see the class docblock for each argument. New code uses {@see new()}.
      *
+     * One deliberate tightening: a non-finite $deadline throws
+     * InvalidArgumentException, as {@see withDeadline()} does. The earlier body
+     * had no finiteness check on $deadline.
+     *
      * @param array<int|string, resource> $pipes
      * @param array<int, int|string> $discard
      * @param null|callable(): float $clock
