@@ -590,9 +590,17 @@ final class Width
      * Greedy word wrap of plain text into lines, for callers that place each
      * line themselves (a notice box, a toast, a fixed-height panel row).
      *
-     * Behaviour matches the two copies that migrate to it: candy-flappy
-     * `foldNoticeLine()` (`$breakWords: false`) and candy-minesweeper
-     * `wrapPlain()` (`$breakWords: true`), as pinned by WidthWrapWordsTest.
+     * Parity with the two copies it replaces, candy-flappy `foldNoticeLine()`
+     * (`$breakWords: false`) and candy-minesweeper `wrapPlain()`
+     * (`$breakWords: true`), is pinned by WidthWrapWordsTest for the fixtures
+     * both copies receive. It is not total. Known divergences, kept as
+     * documented here until P4-3b and P4-3c decide them:
+     *  - A newline is a hard break here. `foldNoticeLine()` splits on `\s+`,
+     *    which includes `\n`, so it joins the two sides with a space.
+     *  - `wrapPlain()` splits words on spaces only, so a tab is part of a word
+     *    there. This splits on all whitespace, so a tab separates words here.
+     *  - A ZWJ cluster is kept whole here. `wrapPlain()` breaks it per codepoint.
+     *
      * The rules, in order:
      *  - `\n` is a hard break. Every paragraph yields at least one line, so an
      *    empty paragraph is an empty line.
@@ -622,6 +630,7 @@ final class Width
         foreach (\explode("\n", Ansi::strip($s)) as $paragraph) {
             $line = '';
             $lineWidth = 0;
+            $paragraphStart = \count($lines);
             foreach (self::splitWords($paragraph) as $word) {
                 $wordWidth = self::string($word);
                 if ($breakWords) {
@@ -648,7 +657,12 @@ final class Width
                     $lineWidth += 1 + $wordWidth;
                 }
             }
-            $lines[] = $line;
+            // An empty $line is only meaningful when nothing else came out of
+            // this paragraph: a cut that consumed the whole word leaves an
+            // empty remainder, and pushing it would add a spurious blank line.
+            if ($line !== '' || \count($lines) === $paragraphStart) {
+                $lines[] = $line;
+            }
         }
 
         return $lines;

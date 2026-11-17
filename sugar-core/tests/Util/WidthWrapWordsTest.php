@@ -145,6 +145,17 @@ final class WidthWrapWordsTest extends TestCase
         $this->assertSame(['ab', 'abcdefgh', 'cd'], Width::wrapWords('ab abcdefgh cd', 4, breakWords: false));
     }
 
+    public function testAWordCutToItsWholeChunkLeavesNoTrailingEmptyLine(): void
+    {
+        // The cut consumes the whole word, so the remainder is '' and must not
+        // come out as a blank line after the chunk.
+        $this->assertSame(['中'], Width::wrapWords('中', 1));
+        $this->assertSame(['a', '中'], Width::wrapWords('a 中', 1));
+        $this->assertSame(['中', '中'], Width::wrapWords('中中', 1));
+        $this->assertSame(['abcd', 'efgh'], Width::wrapWords('abcdefgh', 4));
+        $this->assertSame(['abcd', 'efgh', 'ij'], Width::wrapWords('abcdefghij', 4));
+    }
+
     public function testEachParagraphYieldsAtLeastOneLine(): void
     {
         $this->assertSame([''], Width::wrapWords('', 5));
