@@ -18,18 +18,26 @@ use PHPUnit\Framework\TestCase;
  */
 final class ParserCacheTest extends TestCase
 {
-    /** @return object|string|null the parser value, or null when uninitialised */
-    private function parserValue(Renderer $r): mixed
+    /** The process-wide parser, or null before the first render (or after a reset). */
+    private function parserValue(): mixed
     {
         $prop = new \ReflectionProperty(Renderer::class, 'parser');
         $prop->setAccessible(true);
-        return $prop->isInitialized($r) ? $prop->getValue($r) : null;
+        return $prop->getValue();
+    }
+
+    private function resetParser(): void
+    {
+        $prop = new \ReflectionProperty(Renderer::class, 'parser');
+        $prop->setAccessible(true);
+        $prop->setValue(null, null);
     }
 
     public function testParserNotBuiltByBuilderChaining(): void
     {
-        // Several with*() hops, no render yet: the parser must stay null so
+        // Several with*() hops, no render yet: the parser must stay unbuilt so
         // that builder chaining does not pay the Environment-assembly cost.
+        $this->resetParser();
         $r = (new Renderer(Theme::plain()))
             ->withEmoji(true)
             ->withWordWrap(40)
@@ -37,32 +45,45 @@ final class ParserCacheTest extends TestCase
             ->withTableWrap(true)
             ->withTheme(Theme::dracula());
         $this->assertNull(
-            $this->parserValue($r),
+            $this->parserValue(),
             'parser must remain unbuilt across with*() chaining',
         );
 
         // The first render lazily constructs it.
         $r->render('# hi');
         $this->assertNotNull(
-            $this->parserValue($r),
+            $this->parserValue(),
             'parser must be built on first render',
         );
     }
 
-    public function testParserBuiltOnceAndReusedPerInstance(): void
+    public function testParserBuiltOnceAndSharedAcrossRendersAndInstances(): void
     {
         $r = new Renderer(Theme::plain());
         $r->render('first render');
-        $first = $this->parserValue($r);
+        $first = $this->parserValue();
         $r->render('second render');
-        $second = $this->parserValue($r);
+        (new Renderer(Theme::dark()))->render('another instance');
 
         $this->assertNotNull($first);
         $this->assertSame(
             $first,
-            $second,
-            'the parser is assembled once and reused for later renders on the same instance',
+            $this->parserValue(),
+            'the parser is assembled once per process and reused by every instance',
         );
+    }
+
+    public function testFoldedCachedRendererReusesTheParser(): void
+    {
+        // The per-frame path (rank 39): a folded render off the cached bundle
+        // must not assemble a second Environment.
+        $cached = Renderer::cached(Theme::dark(), 40);
+        $cached->render("# Intro\n\nbody\n");
+        $built = $this->parserValue();
+
+        $folded = $cached->withFolds(['intro'])->render("# Intro\n\nbody\n");
+        $this->assertSame($built, $this->parserValue(), 'withFolds() must reuse the shared parser');
+        $this->assertStringNotContainsString('body', $folded, 'the fold still drops the section body');
     }
 
     public function testLazyParserPreservesOutputAcrossBuilderChaining(): void
@@ -118,7 +139,7 @@ final class ParserCacheTest extends TestCase
         // was assembled once and survived the second call.
         $parserProp = new \ReflectionProperty(Renderer::class, 'parser');
         $parserProp->setAccessible(true);
-        $this->assertNotNull($parserProp->getValue($held));
+        $this->assertNotNull($parserProp->getValue());
     }
 
     public function testCustomThemeDoesNotPolluteTheStockCache(): void

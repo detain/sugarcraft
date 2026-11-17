@@ -25,14 +25,14 @@ final class StyleGuideTest extends TestCase
     private const FULL_DOC = <<<'JSON'
     {
       "document": {
-        "block_prefix": "«",
-        "block_suffix": "»",
+        "block_prefix": "\n",
+        "block_suffix": "\n\n",
         "indent": 2,
         "margin": "1",
         "color": "#aabbcc"
       },
       "h1": { "color": "#ff0000", "bold": true },
-      "paragraph": { "block_prefix": "P> ", "block_suffix": " <P" },
+      "paragraph": { "block_prefix": " \n", "block_suffix": "\t" },
       "strong": { "color": "5" },
       "block_quote": { "italic": true },
       "chroma": {
@@ -56,8 +56,8 @@ final class StyleGuideTest extends TestCase
     {
         $guide = StyleGuide::fromJsonString(self::FULL_DOC);
 
-        $this->assertSame('«', $guide->blockPrefix);
-        $this->assertSame('»', $guide->blockSuffix);
+        $this->assertSame("\n", $guide->blockPrefix);
+        $this->assertSame("\n\n", $guide->blockSuffix);
         $this->assertSame(2, $guide->documentIndent);
         $this->assertSame(1, $guide->documentMargin, 'digit-string margin coerces to int');
     }
@@ -180,12 +180,12 @@ final class StyleGuideTest extends TestCase
     {
         $theme = StyleGuide::fromJsonString(self::FULL_DOC)->theme();
 
-        $this->assertSame('«', $theme->documentBlockPrefix);
-        $this->assertSame('»', $theme->documentBlockSuffix);
+        $this->assertSame("\n", $theme->documentBlockPrefix);
+        $this->assertSame("\n\n", $theme->documentBlockSuffix);
         $this->assertSame(2, $theme->documentIndent);
         $this->assertSame(1, $theme->documentMargin);
-        $this->assertSame('P> ', $theme->paragraphPrefix);
-        $this->assertSame(' <P', $theme->paragraphSuffix);
+        $this->assertSame(" \n", $theme->paragraphPrefix);
+        $this->assertSame("\t", $theme->paragraphSuffix);
         $this->assertSame(
             Style::new()->foreground(Color::hex('#ff0000'))->bold()->render('h'),
             $theme->heading1->render('h'),
@@ -222,7 +222,7 @@ final class StyleGuideTest extends TestCase
             file_put_contents($path, self::FULL_DOC);
             $guide = StyleGuide::fromFile($path);
 
-            $this->assertSame('«', $guide->blockPrefix);
+            $this->assertSame("\n", $guide->blockPrefix);
             $this->assertSame(['color' => '#ff0000', 'bold' => true], $guide->element('h1'));
         } finally {
             @unlink($path);
@@ -452,10 +452,11 @@ final class StyleGuideTest extends TestCase
     }
 
     /**
-     * The four block_prefix / block_suffix slots refuse a payload by slot
-     * name rather than sweeping it, as candy-mdview's GlamourTheme always has:
-     * they are vertical-spacing slots, so any escape in them is a channel into
-     * every rendered frame. Inert whitespace stays accepted.
+     * The four block_prefix / block_suffix slots refuse anything but newlines,
+     * tabs and spaces by slot name rather than sweeping it, as candy-mdview's
+     * GlamourTheme always has: they are vertical-spacing slots, so an escape
+     * or visible glyph in them is a channel into every rendered frame. Inert
+     * whitespace stays accepted.
      */
     public function testHostileDecorationSlotsRefuseByName(): void
     {
@@ -464,13 +465,15 @@ final class StyleGuideTest extends TestCase
             'document.block_suffix' => '{"document":{"block_suffix":"\\u001b[1;31mX"}}',
             'paragraph.block_prefix' => '{"document":{},"paragraph":{"block_prefix":"\\u001b[2J"}}',
             'paragraph.block_suffix' => '{"document":{},"paragraph":{"block_suffix":"\\u001b[1;31mX"}}',
+            'document.block_prefix (visible text)' => '{"document":{"block_prefix":"\u00ab"}}',
+            'paragraph.block_prefix (visible text)' => '{"document":{},"paragraph":{"block_prefix":"P> "}}',
         ];
         foreach ($cases as $slot => $json) {
             try {
                 StyleGuide::fromJsonString($json);
                 $this->fail("{$slot} carried a payload and was accepted");
             } catch (\InvalidArgumentException $e) {
-                $this->assertStringContainsString($slot, $e->getMessage(), $slot);
+                $this->assertStringContainsString(explode(' ', $slot)[0], $e->getMessage(), $slot);
             }
         }
 

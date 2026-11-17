@@ -11,7 +11,9 @@ declare(strict_types=1);
 return [
     'theme.read_failed'            => '无法读取主题文件：{path}',
     'theme.file_too_large'         => '主题文件超过 {bytes} 字节上限：{path}',
-    'glamour.decoration_unsafe' => '样式文件的 {slot} 槽包含控制字节或转义字节，已拒绝',
+    'glamour.decoration_unsafe' => '主题 {slot} 只能包含换行、制表符和空格',
+    'theme.not_glamour_document' => '主题 JSON 不是 glamour 样式文档（缺少 "document" 块）',
+    'html.max_bytes_invalid' => '最大字节数必须为正整数；收到 {bytes}',
     'glamour.value_too_large' => '样式文件中的 {key} 值超过 {limit} 上限',
     'theme.json_invalid'           => '主题文件中的 JSON 无效',
     'theme.json_object'            => '主题 JSON 必须解码为对象',

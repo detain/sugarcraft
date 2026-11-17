@@ -109,10 +109,11 @@ final class StyleGuide
      * Trust note: a style file is code the terminal runs. Do not
      * auto-load workspace-adjacent style files; load only files the
      * operator pinned. The four `block_prefix` / `block_suffix` slots
-     * (document and paragraph) refuse a control or escape byte by slot
-     * name, visible text stays legal; `indent_token` is swept through
-     * `Sanitize::untrusted()` so a hostile token cannot inject raw escape
-     * sequences. Stock glamour affixes and tokens survive byte-identical. Files over
+     * (document and paragraph) accept only newlines, tabs and spaces and
+     * refuse anything else by slot name (candy-mdview's rule); `indent_token`
+     * is swept through `Sanitize::untrusted()` so a hostile token cannot
+     * inject raw escape sequences. Stock glamour spacing and tokens survive
+     * byte-identical. Files over
      * {@see Theme::MAX_CONFIG_BYTES} refuse before they are parsed.
      *
      * @throws \RuntimeException        when the file cannot be read or is too large
@@ -196,11 +197,12 @@ final class StyleGuide
             $elements[$name] = $primitive;
         }
 
-        // The decoration law: the four block_prefix / block_suffix slots that
-        // cross into Theme may not carry a control or escape byte; such a
-        // payload refuses by slot name. Visible text stays legal (glamour's
-        // own "«" and "> " affixes). The validated value replaces the raw one
-        // so every later read sees a string.
+        // The decoration law (candy-mdview's GlamourTheme, kept as the stricter
+        // copy): the four block_prefix / block_suffix slots that cross into
+        // Theme may carry only newlines, tabs and spaces. Anything else refuses
+        // by slot name, so visible text cannot ride a vertical-spacing slot.
+        // The validated value replaces the raw one so every later read sees a
+        // string.
         foreach (['document', 'paragraph'] as $block) {
             foreach (['block_prefix', 'block_suffix'] as $slot) {
                 if (array_key_exists($slot, $elements[$block] ?? [])) {
@@ -428,23 +430,21 @@ final class StyleGuide
         return null;
     }
 
-    /**
-     * Control bytes that may not appear in a decoration slot: C0 except TAB,
-     * LF and CR (ESC included), DEL, and the C1 range as UTF-8 (U+0080-U+009F).
-     */
-    private const DECORATION_PAYLOAD = '/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]|\xC2[\x80-\x9F]/';
+    /** Inert vertical spacing: the only payload a decoration slot may carry (candy-mdview's whitespaceSlot). */
+    private const DECORATION_SPACING = '/\A[\n\t ]*\z/';
 
     /**
      * A decoration slot: a non-string shape reads as '' (malformed, not
-     * fatal); a string carrying a control or escape byte refuses by naming
-     * the slot, since such a payload is a channel into every rendered frame.
+     * fatal); a string holding anything but newlines, tabs and spaces refuses
+     * by naming the slot. Such a slot is a spacing slot, so any other payload
+     * is a channel into every rendered frame.
      */
     private static function decorationSlot(mixed $value, string $slot): string
     {
         if (!is_string($value)) {
             return '';
         }
-        if (preg_match(self::DECORATION_PAYLOAD, $value) !== 1) {
+        if (preg_match(self::DECORATION_SPACING, $value) === 1) {
             return $value;
         }
 

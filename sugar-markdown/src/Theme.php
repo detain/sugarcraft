@@ -538,7 +538,7 @@ final class Theme
             throw new \InvalidArgumentException(Lang::t('theme.json_invalid'));
         }
         if (!is_array($decoded) || array_is_list($decoded) || !StyleGuide::isGlamourSchema($decoded)) {
-            throw new \InvalidArgumentException('theme JSON is not a glamour styles document (no "document" block)');
+            throw new \InvalidArgumentException(Lang::t('theme.not_glamour_document'));
         }
 
         return StyleGuide::fromDecoded($decoded)->theme();

@@ -66,10 +66,10 @@ final class ThemeCatalogTest extends TestCase
 
     public function testGlamourJsonAcceptsTheDocumentSchema(): void
     {
-        $theme = Theme::fromGlamourJson('{"document":{"block_prefix":"> ","color":"#ffffff"}}');
+        $theme = Theme::fromGlamourJson('{"document":{"block_prefix":"\\n","color":"#ffffff"}}');
 
         $this->assertInstanceOf(Theme::class, $theme);
-        $this->assertSame('> ', $theme->documentBlockPrefix);
+        $this->assertSame("\n", $theme->documentBlockPrefix);
     }
 
     public function testGlamourJsonRefusesTheFlatSchema(): void

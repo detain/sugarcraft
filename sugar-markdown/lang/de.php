@@ -11,7 +11,9 @@ declare(strict_types=1);
 return [
     'theme.read_failed'            => 'Theme-Datei konnte nicht gelesen werden: {path}',
     'theme.file_too_large'         => 'Theme-Datei überschreitet die Obergrenze von {bytes} Byte: {path}',
-    'glamour.decoration_unsafe' => 'Feld {slot} der Stildatei enthält ein Steuer- oder Escape-Byte; abgelehnt',
+    'glamour.decoration_unsafe' => 'Theme-Feld {slot} darf nur Zeilenumbrüche, Tabs und Leerzeichen enthalten',
+    'theme.not_glamour_document' => 'Theme-JSON ist kein glamour-Stildokument (kein „document“-Block)',
+    'html.max_bytes_invalid' => 'Die maximale Byte-Anzahl muss positiv sein; erhalten: {bytes}',
     'glamour.value_too_large' => '{key} der Stildatei überschreitet die Obergrenze {limit}',
     'theme.json_invalid'           => 'ungültiges JSON in Theme-Datei',
     'theme.json_object'            => 'Theme-JSON muss zu einem Objekt dekodiert werden',

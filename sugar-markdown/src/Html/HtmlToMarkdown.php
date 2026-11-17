@@ -10,6 +10,7 @@ use DOMDocument;
 use DOMElement;
 use DOMNode;
 use DOMText;
+use SugarCraft\Markdown\Lang;
 
 /**
  * Converts an HTML string into Markdown, for callers that fetch pages and
@@ -108,7 +109,7 @@ final class HtmlToMarkdown
     public function withMaxBytes(int $bytes): self
     {
         if ($bytes <= 0) {
-            throw new \InvalidArgumentException('max bytes must be a positive byte count; got ' . $bytes);
+            throw new \InvalidArgumentException(Lang::t('html.max_bytes_invalid', ['bytes' => $bytes]));
         }
 
         return new self($bytes);

@@ -38,7 +38,9 @@ final class StyleSheet
     public static function base(): self
     {
         // Pure and immutable (every with*() copies), so one instance serves
-        // every render; rebuilding it per render() was the audit's rank 39 cost.
+        // every render. AUD §7 #39 named rebuilding it per render() as a cost;
+        // that saving was not measured on its own (see the P1-12 PR body for the
+        // measured per-frame figure, which covers the whole render path).
         return self::$base ??= self::buildBase();
     }
 

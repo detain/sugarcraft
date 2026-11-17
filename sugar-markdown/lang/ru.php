@@ -11,7 +11,9 @@ declare(strict_types=1);
 return [
     'theme.read_failed'            => 'невозможно прочитать файл темы: {path}',
     'theme.file_too_large'         => 'файл темы превышает потолок в {bytes} байт: {path}',
-    'glamour.decoration_unsafe' => 'слот {slot} файла стиля содержит управляющий или escape-байт; отклонено',
+    'glamour.decoration_unsafe' => 'поле темы {slot} должно содержать только переводы строк, табуляции и пробелы',
+    'theme.not_glamour_document' => 'JSON темы не является документом стилей glamour (нет блока "document")',
+    'html.max_bytes_invalid' => 'максимальное число байтов должно быть положительным; получено: {bytes}',
     'glamour.value_too_large' => 'значение {key} в файле стиля превышает предел {limit}',
     'theme.json_invalid'           => 'некорректный JSON в файле темы',
     'theme.json_object'            => 'JSON темы должен декодироваться в объект',

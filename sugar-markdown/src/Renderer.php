@@ -109,14 +109,28 @@ final class Renderer
     ];
 
     public readonly Theme $theme;
+
     /**
-     * CommonMark parser, built lazily on first {@see render()} and cached
-     * on the instance. Left null by the constructor so the chainable
-     * `with*()` builders (which spin up a fresh instance via {@see mutate()})
-     * do NOT rebuild the parser/Environment on every call — only an actual
-     * render pays that cost, once per instance.
+     * The CommonMark parser, shared by every instance in the process and built
+     * lazily on the first {@see render()} (or {@see parseSection()}). Its
+     * Environment is the same for every Renderer: the extension set is fixed
+     * and the only per-parse input, the seed of link reference definitions, is
+     * read from {@see $pendingSeed}, not from the instance. So the chainable
+     * `with*()` builders, which spin up a fresh instance via {@see mutate()},
+     * reuse it instead of re-assembling the Environment on every call.
      */
-    private ?MarkdownParser $parser = null;
+    private static ?MarkdownParser $parser = null;
+
+    /**
+     * Link reference definitions {@see parseSection()} seeds into the parse
+     * in flight, null outside one. Only the stream family sets it, and only
+     * after narrowing to the labels the section could look up
+     * ({@see narrowSeed()}). Static because the shared parser's listener
+     * reads it; set and cleared around one parse, never across calls.
+     *
+     * @var list<ReferenceInterface>|null
+     */
+    private static ?array $pendingSeed = null;
 
     /**
      * Render bundles {@see cached()} hands out, keyed `"<theme id>|<width>"`
@@ -131,15 +145,6 @@ final class Renderer
     /** Most bundles {@see cached()} keeps; a terminal resize adds one per width. */
     private const CACHE_LIMIT = 32;
 
-    /**
-     * Link reference definitions {@see parseSection()} seeds into the parse
-     * in flight, null outside one. Only the stream family sets it, and only
-     * after narrowing to the labels the section could look up
-     * ({@see narrowSeed()}).
-     *
-     * @var list<ReferenceInterface>|null
-     */
-    private ?array $seedReferences = null;
     /**
      * The options in effect, readable after construction (SM-S12): the
      * constructor is their single gate (SM-S50: a non-positive wrapWidth
@@ -246,16 +251,12 @@ final class Renderer
     }
 
     /**
-     * Lazily build (and memoise) the CommonMark parser. Deferring
-     * construction out of `__construct()` means the `with*()` builders no
-     * longer rebuild the whole Environment + extension set on every call —
-     * the parser is assembled exactly once, on the first render of an
-     * instance. Extension set is identical to the previous eager build, so
-     * render output is byte-for-byte unchanged.
+     * The shared CommonMark parser, assembled once per process. The extension
+     * set is identical to every earlier build, so render output is unchanged.
      */
-    private function parser(): MarkdownParser
+    private static function parser(): MarkdownParser
     {
-        if ($this->parser === null) {
+        if (self::$parser === null) {
             $env = new Environment();
             $env->addExtension(new CommonMarkCoreExtension());
             $env->addExtension(new TableExtension());
@@ -272,20 +273,20 @@ final class Renderer
             // map the parse resolves references against. Seeded entries go
             // in first, so the section's own duplicates lose to them, which
             // is CommonMark's first-definition-wins across the whole document.
-            $env->addEventListener(DocumentPreParsedEvent::class, function (DocumentPreParsedEvent $event): void {
-                if ($this->seedReferences === null) {
+            $env->addEventListener(DocumentPreParsedEvent::class, static function (DocumentPreParsedEvent $event): void {
+                if (self::$pendingSeed === null) {
                     return;
                 }
                 $map = $event->getDocument()->getReferenceMap();
-                foreach ($this->seedReferences as $reference) {
+                foreach (self::$pendingSeed as $reference) {
                     if (!$map->contains($reference->getLabel())) {
                         $map->add($reference);
                     }
                 }
             });
-            $this->parser = new MarkdownParser($env);
+            self::$parser = new MarkdownParser($env);
         }
-        return $this->parser;
+        return self::$parser;
     }
 
     public static function ansi(): self
@@ -355,9 +356,11 @@ final class Renderer
      * cache and the caller owns a custom instance's lifetime.
      *
      * The returned instance is shared. Its {@see render()} resets all
-     * per-document state on entry, so reuse is safe; it must not be mutated
-     * through {@see withFolds()} or the other builders, which return new
-     * instances and leave the cached one alone.
+     * per-document state on entry, so reuse is safe. The builders
+     * ({@see withFolds()} and the others) return new instances and leave the
+     * cached one alone; they reuse the process-wide parser, so
+     * `Renderer::cached($t, $w)->withFolds($ids)->render($md)` pays no
+     * Environment build per frame.
      *
      * @throws \InvalidArgumentException when $wrapWidth is not positive or null
      */
@@ -573,11 +576,11 @@ final class Renderer
         // the stream channel and the whole-document channel see the same
         // nodes and stay byte-identical.
 
-        $this->seedReferences = $seed === null ? null : self::narrowSeed($section, $seed);
+        self::$pendingSeed = $seed === null ? null : self::narrowSeed($section, $seed);
         try {
-            return $this->parser()->parse($section);
+            return self::parser()->parse($section);
         } finally {
-            $this->seedReferences = null;
+            self::$pendingSeed = null;
         }
     }
 
@@ -1055,7 +1058,7 @@ final class Renderer
         $this->blockStack = new BlockStack();
         $this->styleSheet = $this->styleSheetOverride ?? StyleSheet::base();
 
-        $document = $this->parser()->parse($markdown);
+        $document = self::parser()->parse($markdown);
         $this->blockStack->push(new BlockContext(
             BlockKind::Document,
             depth: 0,

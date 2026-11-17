@@ -11,7 +11,9 @@ declare(strict_types=1);
 return [
     'theme.read_failed'            => 'تعذر قراءة ملف السمة: {path}',
     'theme.file_too_large'         => 'ملف السمة يتجاوز الحد الأقصى {bytes} بايت: {path}',
-    'glamour.decoration_unsafe' => 'خانة {slot} في ملف النمط تحتوي على بايت تحكم أو هروب؛ تم رفضها',
+    'glamour.decoration_unsafe' => 'حقل السمة {slot} يجب ألّا يحتوي سوى على أسطر جديدة ومحاذات وفراغات',
+    'theme.not_glamour_document' => 'JSON السمة ليس مستند أنماط glamour (لا توجد كتلة "document")',
+    'html.max_bytes_invalid' => 'يجب أن يكون الحد الأقصى للبايتات عددا موجبا من البايتات؛ القيمة {bytes}',
     'glamour.value_too_large' => 'القيمة {key} في ملف النمط تتجاوز الحد {limit}',
     'theme.json_invalid'           => 'JSON غير صالح في ملف السمة',
     'theme.json_object'            => 'يجب أن يتم فك ترميز JSON للسمة إلى كائن',
