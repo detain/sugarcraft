@@ -179,10 +179,10 @@ recipe is `withBasis()`, not `withRatio(0)`.
    is no separate cross-axis knob (main-axis placement of leftover space is
    `withJustify()`, below), and rows are always placed top-down. In row mode the case
    selects the box height (`stretch` fills the declared height, every other case the
-   tallest item) as well as how each item's text sits inside its allocated cell; in column mode each line is placed inside the width
-   the ITEM MEASURES — `stretch` uses the container width, every other case the item's
-   own measured width — so column-mode alignment discriminates only lines of DIFFERENT
-   lengths within one item: a uniform-width item renders byte-identical under
+   tallest item) as well as how each item's text sits inside its allocated cell. In column
+   mode each line is placed inside the width the ITEM MEASURES — `stretch` uses the
+   container width, every other case the item's own measured width — so column-mode
+   alignment discriminates only lines of DIFFERENT lengths within one item: a uniform-width item renders byte-identical under
    `start`/`center`/`end` (centring a whole item against the container is padding's
    layer, not alignment's). Content beyond the declared height is
    clamped, never distributed; `render(w, h)` output always fits the requested box.
@@ -236,11 +236,14 @@ Two differences from the wrap in sugar-dashboard's `FlexLayout` (the behavior it
   `a    b    `, where the dashboard draws `ab`. Within flexbox, a set of growing items that
   fits draws the same cells under `Wrap::Wrap` and `Wrap::NoWrap` (fixed-basis items differ
   in padding, below).
-- **Per-line allocation.** Each wrapped line runs the ratio allocation again, so `aaaa`,
-  `bbbb`, `cc` at width 10 draw `aaaabbbcc ` where the dashboard keeps `aaaabbbbcc`.
-- **Padding.** A wrapped line is padded to the full width, though a NoWrap line is only as
-  wide as its cells (see above). The box is padded to its full height only under
-  `Align::Stretch`; the dashboard always pads.
+- **Per-line allocation.** Each wrapped line runs the ratio allocation again. `aaaa`,
+  `bbbbbbbb`, `cc` at width 10 draw `aaaa      ` and then `bbbbbcc   `: the second line
+  holds `bbbbbbbb` and `cc` together, and its eight-cell item is cut to five cells. The
+  dashboard keeps `bbbbbbbbcc` on that line.
+- **Padding.** A wrapped line is padded to the full width. A NoWrap line of fixed-basis
+  items is not: `aa` and `bb` at `withBasis(2)` in width 8 draw `aabb` under NoWrap and
+  `aabb    ` under Wrap. The box is padded to its full height only under `Align::Stretch`;
+  the dashboard always pads.
 
 To build a sidebar plus a fill panel: give the sidebar `withBasis(20)` and the panel
 `withRatio(1)`. There is no center-a-dialog primitive in this lib — pad with fixed-ratio
