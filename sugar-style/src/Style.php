@@ -106,6 +106,7 @@ final class Style
         private readonly UnderlineStyle $underlineStyle = UnderlineStyle::None,
         private readonly string $paddingChar = ' ',
         private readonly string $marginChar  = ' ',
+        private readonly bool $wordWrap = false,
     ) {}
 
     /**
@@ -629,6 +630,19 @@ final class Style
     }
 
     /**
+     * Word-wrap content to {@see width()} instead of truncating it. Opt-in:
+     * the default keeps width()'s truncation, which existing consumers and
+     * the README rely on. Breaks fall on whitespace where the line allows,
+     * a word wider than the budget is broken across lines, and SGR styling
+     * carries across each break ({@see Width::wrapAnsi()}). Without a
+     * width() this is a no-op: there is no budget to wrap to.
+     */
+    public function wordWrap(bool $on = true): self
+    {
+        return $this->with(wordWrap: $on, propsAdded: ['wordWrap']);
+    }
+
+    /**
      * Set the colour painted into the margin area (outside the border).
      * Defaults to no colour; useful for full-width status bars.
      */
@@ -1010,6 +1024,52 @@ final class Style
      */
     public function getBorderSides(): array { return $this->borderSides(); }
 
+    /*
+     * Frame sizes: the cells a style adds around its content, per axis.
+     * These mirror render()'s own arithmetic, so an app can budget a content
+     * width or height as "outer size minus frame" without re-deriving the
+     * sides. Vertical padding and margin are zero under inline(), as render()
+     * zeroes them there. A border contributes one cell per enabled side, and
+     * none at all without a border(). The bare names follow the accessor-era
+     * no-get law: none of them collides with a fluent setter.
+     */
+
+    /** Left plus right padding, in cells. */
+    public function horizontalPadding(): int { return $this->padding[1] + $this->padding[3]; }
+
+    /** Top plus bottom padding, in rows; zero under inline(). */
+    public function verticalPadding(): int { return $this->inline ? 0 : $this->padding[0] + $this->padding[2]; }
+
+    /** Left plus right margin, in cells. */
+    public function horizontalMargin(): int { return $this->margin[1] + $this->margin[3]; }
+
+    /** Top plus bottom margin, in rows; zero under inline(). */
+    public function verticalMargin(): int { return $this->inline ? 0 : $this->margin[0] + $this->margin[2]; }
+
+    /** Border columns: one per enabled left or right side; zero without a border(). */
+    public function horizontalBorderSize(): int
+    {
+        return $this->border === null ? 0 : ($this->borderSides[1] ? 1 : 0) + ($this->borderSides[3] ? 1 : 0);
+    }
+
+    /** Border rows: one per enabled top or bottom side; zero without a border(). */
+    public function verticalBorderSize(): int
+    {
+        return $this->border === null ? 0 : ($this->borderSides[0] ? 1 : 0) + ($this->borderSides[2] ? 1 : 0);
+    }
+
+    /** Total non-content width: padding, border and margin, left and right. */
+    public function horizontalFrameSize(): int
+    {
+        return $this->horizontalPadding() + $this->horizontalBorderSize() + $this->horizontalMargin();
+    }
+
+    /** Total non-content height: padding, border and margin, top and bottom. */
+    public function verticalFrameSize(): int
+    {
+        return $this->verticalPadding() + $this->verticalBorderSize() + $this->verticalMargin();
+    }
+
     public function isSet(string $prop): bool { return isset($this->propsSet[$prop]); }
 
     // ─── Unset* resetters ──────────────────────────────────────────────
@@ -1145,6 +1205,32 @@ final class Style
     }
 
     /**
+     * Start a chain that edits one draft and builds a single new style.
+     *
+     * Each setter on this class returns a fresh instance, so a chain of N
+     * setters mints N intermediate styles. The builder carries the draft as
+     * one constructor-argument array and calls `new self(...)` once, in
+     * build(). The closures are minted here, inside this class's scope, so
+     * the private constructor and the padding/margin normaliser stay private.
+     *
+     *     $style = Style::new()->builder()->bold()->fg('#ff8800')->width(20)->build();
+     *
+     * Mirrors the chained form exactly: see {@see StyleBuilder}.
+     */
+    public function builder(): StyleBuilder
+    {
+        $args = get_object_vars($this);
+        // The render memos are caches of this instance, not construction
+        // arguments; a fresh build recomputes them.
+        unset($args['contentSgrMemo'], $args['borderSgrMemo']);
+        return new StyleBuilder(
+            $args,
+            static fn(array $a): self => new self(...$a),
+            static fn(array $sides, string $label): array => self::expandSides($sides, $label),
+        );
+    }
+
+    /**
      * Merge {@see $parent} into this style. Any property the child
      * explicitly set wins; everything else is taken from the parent.
      *
@@ -1203,6 +1289,7 @@ final class Style
             underlineStyle:  $has('underlineStyle') === true ? $this->underlineStyle : $parent->underlineStyle,
             paddingChar:      $has('paddingChar') === true ? $this->paddingChar : $parent->paddingChar,
             marginChar:       $has('marginChar') === true ? $this->marginChar   : $parent->marginChar,
+            wordWrap:         $has('wordWrap') === true ? $this->wordWrap       : $parent->wordWrap,
         );
     }
 
@@ -1286,6 +1373,7 @@ final class Style
         $mergedUnderlineStyle = $other->isSet('underlineStyle') ? $other->underlineStyle : null;
         $mergedPaddingChar = $other->isSet('paddingChar')   ? $other->paddingChar : null;
         $mergedMarginChar  = $other->isSet('marginChar')    ? $other->marginChar  : null;
+        $mergedWordWrap    = $other->isSet('wordWrap')      ? $other->wordWrap    : null;
 
         // A value-probed prop that was skipped (null in $other) must not
         // carry $other's sentinel over: the receiver's value survived, so
@@ -1373,6 +1461,7 @@ final class Style
             underlineStyle:   $mergedUnderlineStyle ?? $this->underlineStyle,
             paddingChar:      $mergedPaddingChar  ?? $this->paddingChar,
             marginChar:       $mergedMarginChar   ?? $this->marginChar,
+            wordWrap:         $mergedWordWrap     ?? $this->wordWrap,
         );
     }
 
@@ -1422,6 +1511,13 @@ final class Style
         //    rewrite clipped against the decoration.
         if ($this->transform !== null) {
             $content = ($this->transform)($content);
+        }
+
+        // Word wrap runs before the line split, so each break becomes an
+        // ordinary line and the width() truncation below only ever sees
+        // lines that already fit the budget.
+        if ($this->wordWrap && $this->width !== null) {
+            $content = Width::wrapAnsi($content, $this->width);
         }
 
         // 1. Lines from content.
@@ -2276,6 +2372,7 @@ final class Style
         ?UnderlineStyle $underlineStyle = null,
         ?string $paddingChar = null,
         ?string $marginChar = null,
+        ?bool $wordWrap = null,
         array $propsAdded = [],
     ): self {
         $newProps = $this->propsSet;
@@ -2327,6 +2424,7 @@ final class Style
             underlineStyle:   $underlineStyle    ?? $this->underlineStyle,
             paddingChar:      $paddingChar       ?? $this->paddingChar,
             marginChar:       $marginChar        ?? $this->marginChar,
+            wordWrap:         $wordWrap          ?? $this->wordWrap,
         );
     }
 
@@ -2366,6 +2464,7 @@ final class Style
             underlineStyle: $this->underlineStyle,
             paddingChar:    $this->paddingChar,
             marginChar:     $this->marginChar,
+            wordWrap:       $this->wordWrap,
         );
     }
 }

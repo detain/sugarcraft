@@ -291,18 +291,18 @@ echo Tree::new()
   `withCompleteForeground` / `withCompleteBackground`) take an
   `AdaptiveColor`/`CompleteColor` object — the `with*` prefix marks them as
   VO-carrying builders beside their bare positional twins — measured
-  2026-11: 76 fluent setters, 4 `with*()` methods, 34 getters (`get*` /
+  2026-11: 77 fluent setters, 4 `with*()` methods, 34 getters (`get*` /
   `is*`), 31 `unset*()`. Re-derive with reflection over non-static public
   methods (return-`self` = setter; `get*`/`is*` = getter; `unset*` =
   unsetter). Every fluent setter routes through the
-  private 62-positional-parameter `with()` choke; `inherit()`/`patch()` mint the merged instance directly
+  private 63-positional-parameter `with()` choke; `inherit()`/`patch()` mint the merged instance directly
   (`new self(...)`, `src/Style.php:1013`/`:1176`) — the memo-reset consequence
   holds either way (fresh instance). Props covered: fg/bg/border
   colours (incl. per-side), bold/italic/underline/strikethrough/faint/blink/
   rapidBlink/reverse/overline/invisible, padding/margin (1/2/4-arg shorthand
   + per-side) with `paddingChar()`/`marginChar()` fill glyphs, width/height,
   maxWidth/maxHeight, align (Align/VAlign), inline, transform, tabWidth,
-  marginBackground, colorWhitespace. Plus `copy()` (shallow clone),
+  marginBackground, colorWhitespace, wordWrap (opt-in, see below). Plus `copy()` (shallow clone),
   `inherit($parent)` (unset-only merge), and
   `patch($other)` (incremental merge — only props set in $other are applied;
   a null colour/width/border in $other is skipped, not a clear).
@@ -989,6 +989,58 @@ The attribute-carrying claims in this section were re-checked across
 every degradation tier during the 2026-11 documentation pass: what
 holds at TrueColor holds unchanged at Ansi256, Ansi, and Ascii, with
 NoTty the only tier where colour and emphasis both leave the picture.
+
+## Word wrap, frame sizes and the chain builder
+
+**Word wrap.** `width()` truncates content that is wider than the budget,
+which is the default and stays so. Opt in with `wordWrap()` to break the
+content onto more lines instead: breaks fall on whitespace where the line
+allows, a word wider than the budget is broken across lines, and SGR
+styling carries across each break (`Width::wrapAnsi()`). `wordWrap()`
+needs a `width()` to wrap to; without one it does nothing.
+
+```php
+use SugarCraft\Style\Style;
+
+$quote = Style::new()->width(12)->wordWrap()
+    ->render('the quick brown fox jumps over the lazy dog');
+echo $quote, "\n";
+```
+
+**Frame sizes.** A style adds cells around its content: padding, border
+and margin. Five accessors report each axis, so an app can budget a
+content box as an outer size minus the frame. `horizontalFrameSize()` and
+`verticalFrameSize()` total the three; the `horizontal*` and `vertical*`
+pairs report padding, border and margin separately. Vertical padding and
+margin are zero under `inline()`, as `render()` zeroes them there, and the
+border counts one cell per enabled side (zero without a `border()`).
+
+```php
+use SugarCraft\Style\Style;
+
+$card = Style::new()->padding(1, 2)->wordWrap()->width(20);
+$contentWidth = 40 - $card->horizontalFrameSize();   // 36 cells of text
+```
+
+**Chain builder.** `builder()` starts a chain that edits one draft and
+builds a single new `Style`, where the usual chain mints one intermediate
+style per setter. `build()` returns the same value the chained setters
+would, and the builder covers the scalar and colour setters: `fg`/`bg`
+(and the long forms), the boolean attributes, the sizes, `align`,
+`padding`, `margin`, `inline`, `wordWrap`, `colorProfile` and `setString`.
+Structural setters such as `border()` stay on `Style`: call `build()` and
+continue from there.
+
+```php
+use SugarCraft\Style\Style;
+
+$heading = Style::new()->builder()
+    ->bold()
+    ->fg('#ff8800')
+    ->padding(0, 1)
+    ->build();
+echo $heading->render('Release notes'), "\n";
+```
 
 ## Performance — build once, render many
 
