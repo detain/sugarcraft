@@ -12,7 +12,7 @@ namespace SugarCraft\Async;
  * {@see pump()}:
  *
  *     $r = ChildPump::new([1 => $out, 2 => $err])
- *         ->withDeadline(microtime(true) + 5.0)
+ *         ->withDeadline(Clock::monotonicSeconds() + 5.0)
  *         ->withCap(1_048_576)
  *         ->withOnChunk(static fn (int|string $slot, string $bytes) => $tail->write($bytes))
  *         ->pump();
@@ -395,7 +395,10 @@ final class ChildPump
         $reason = DrainResult::CLOSED;
         $beatAt = $this->heartbeatSeconds === null ? null : $clock() + $this->heartbeatSeconds;
 
-        while ($open !== []) {
+        // The feed outlives the output pipes: a child may close stdout and
+        // stderr and still read its stdin, so the loop runs until the feed
+        // is written, the pipe breaks, or the deadline passes.
+        while ($open !== [] || $feed !== null) {
             if ($this->stopAtCap && $capture->anyFull()) {
                 $reason = DrainResult::STOPPED;
                 break;

@@ -188,6 +188,24 @@ final class ChildRunTest extends TestCase
         ChildRun::new([PHP_BINARY, 42]);
     }
 
+    public function testStdinIsFedInFullEvenAfterTheOutputPipesClose(): void
+    {
+        $this->requirePosixPipes();
+        $payload = str_repeat('x', 200_000); // past one pipe buffer
+        $marker = tempnam(sys_get_temp_dir(), 'cr-stdin');
+        try {
+            // The child closes its output pipes, then reads everything it is fed.
+            $code = 'fclose(STDOUT); fclose(STDERR); file_put_contents('
+                . var_export((string) $marker, true)
+                . ', strlen(stream_get_contents(STDIN)));';
+            ChildRun::new($this->php($code))->withStdin($payload)->withTimeout(10.0)->run();
+
+            $this->assertSame(strlen($payload), (int) file_get_contents((string) $marker));
+        } finally {
+            @unlink((string) $marker);
+        }
+    }
+
     public function testTheBuilderIsImmutable(): void
     {
         $base = ChildRun::new($this->php('exit(0);'));
