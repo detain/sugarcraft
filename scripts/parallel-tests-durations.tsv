@@ -410,6 +410,7 @@ candy-code/tests/Tools/ShellOwnershipTest.php	1.875	10
 candy-code/tests/Workflows/StageWorktreeIsolationTest.php	1.874	12
 candy-code/tests/Session/DebouncedTranscriptPersistenceTest.php	1.873	9
 candy-code/tests/Commands/ShareCommandTest.php	1.867	43
+candy-code/tests/Bundles/BundleInstallScopeTest.php	1.867	19
 candy-code/tests/Protocol/CommandListSkillRowsTest.php	1.863	9
 candy-code/tests/Session/TranscriptResumeTest.php	1.856	14
 candy-code/tests/Host/SessionHostTurnSettleWorkTest.php	1.855	3
