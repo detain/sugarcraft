@@ -184,6 +184,22 @@ final class DisplayCellWidthTest extends TestCase
         self::assertSame([14], Calc::calculateColumnWidths($rows, $columns, 14));
     }
 
+    public function testAWideLabelAloneSetsTheRenderedColumnWidth(): void
+    {
+        // The same case as the unit pin above, through render(): the content 'x'
+        // is narrower than the label, so the fourteen-cell label sets the column
+        // and the header keeps its full text. Master measured the label in code
+        // points (seven), so the column was seven cells while the fourteen-cell
+        // header overran it: the top border and the header line differ in width.
+        $grid = GridTable::new([Column::new('a', '日本語テキスト')], [new Row(['a' => 'x'])])
+            ->setSize(30, 10);
+
+        $rendered = $grid->render();
+
+        $this->assertFrameIsRectangular($rendered);
+        self::assertStringContainsString('┃日本語テキスト┃', $rendered);
+    }
+
     public function testComboBoxPlaceholderClipsInDisplayCells(): void
     {
         // Inside a twelve-cell allocation the three-cell search prefix leaves
