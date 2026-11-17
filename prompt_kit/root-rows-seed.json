@@ -499,7 +499,7 @@
         "sugar-flexbox": {
             "readme": {
                 "needles": [
-                    "FlexBox layout engine + delta-rendering Table (sort/filter/cursor) + sticky Viewport + Scrollbar. Ratio-based sizing, gap, align, justify (space-between/around/evenly), row wrap, per-column styling."
+                    "FlexBox layout engine + delta-rendering Table (sort/filter/cursor) + sticky Viewport + Scrollbar. Ratio-based sizing, gap, align, per-column styling."
                 ],
                 "dead": []
             },

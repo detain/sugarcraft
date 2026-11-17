@@ -163,7 +163,7 @@
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">FlexBox layout engine for terminal grids — ratio-based item sizing, gap, align, main-axis justify (space-between, space-around, space-evenly), and row wrap. Plus a simple table with sort, filter, cursor nav, and column styling. Viewport and Scrollbar compose the canonical sugar-forms classes.</p>
+<p class="lede" style="margin-top: 28px;">FlexBox layout engine for terminal grids — ratio-based item sizing, gap, align. Plus a simple table with sort, filter, cursor nav, and column styling. Viewport and Scrollbar compose the canonical sugar-forms classes.</p>
 
     <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-flexbox</code></pre>
@@ -190,7 +190,7 @@ echo $table-&gt;render(), PHP_EOL;</code></pre>
 
     <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>FlexBox</strong><span>Ratio-based row / column layout. Align: Start, Center, End, Stretch (one value drives both axes — box height plus text placement in row mode, rendered width plus placement in column mode). Justify (withJustify): Start, End, Center, SpaceBetween, SpaceAround, SpaceEvenly place leftover main-axis cells. Wrap (withWrap): Wrap breaks row items onto further lines by hypothetical size; NoWrap is the default.</span></div>
+      <div class="feature"><strong>FlexBox</strong><span>Ratio-based row / column layout. Align: Start, Center, End, Stretch (one value drives both axes — box height plus text placement in row mode, rendered width plus placement in column mode; no CSS justify-content counterpart).</span></div>
             <div class="feature"><strong>Table</strong><span>Sort by column (asc/desc toggle, with authored secondary tiebreakers via Column::sorted()), filter by case-folded text, cursor navigation guarded at its door, per-column style, hidden (width-0) columns, themeable ruler, and an over-wide disclosure: computeTotalWidth() is the whole grid's width and render() never wraps — compose in a Viewport to scroll it.</span></div>
             <div class="feature"><strong>Viewport</strong><span>Scrollable viewport composes the canonical sugar-forms Viewport. Keyboard nav (line/page/half-page), mouse wheel, smooth scroll, scrollbar. Sticky headers and footers via withStickyHeader()/withStickyFooter(); a document that fits renders the plain streaming face. withLinkedViewport() is a decorative partner marker only (scroll state never propagates).</span></div>
             <div class="feature"><strong>Scrollbar</strong><span>Scrollbar composes the canonical sugar-forms Scrollbar. Vertical/horizontal, configurable thumb/track chars.</span></div>
@@ -222,8 +222,6 @@ echo $table-&gt;render(), PHP_EOL;</code></pre>
 <tr><td>FlexBox</td><td>column(...items)</td><td>Create vertical flexbox</td></tr>
 <tr><td>FlexBox</td><td>withGap(cells)</td><td>Set gap between items</td></tr>
 <tr><td>FlexBox</td><td>withAlign(Align)</td><td>Align enum case (Start/Center/End/Stretch) driving both axes — takes the enum, not a string</td></tr>
-<tr><td>FlexBox</td><td>withJustify(Justify)</td><td>Main-axis placement of leftover cells (Start/End/Center/SpaceBetween/SpaceAround/SpaceEvenly); Start is the default</td></tr>
-<tr><td>FlexBox</td><td>withWrap(Wrap)</td><td>Wrap (row boxes only) breaks items onto further lines by hypothetical size; NoWrap is the default</td></tr>
 <tr><td>FlexItem</td><td>new(content)</td><td>Create flex item</td></tr>
 <tr><td>FlexItem</td><td>withRatio(n)</td><td>Share of leftover main-axis space (0 = never grows, keeps its floor)</td></tr>
 <tr><td>FlexItem</td><td>withBasis(cells)</td><td>Fixed main-axis reservation before ratios share the rest</td></tr>
