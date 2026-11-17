@@ -347,6 +347,62 @@ final class ImageSource
     }
 
     /**
+     * The media type of image bytes, by magic number, or null when none of the
+     * four vision wires' formats matches: PNG, JPEG, GIF and WebP.
+     *
+     * A pure label. It never refuses: an animated WebP reports image/webp here,
+     * and the refusal belongs to decoding ({@see fromString()}). Callers that
+     * only need to tag bytes for a wire use this and nothing else.
+     */
+    public static function sniffMime(string $bytes): ?string
+    {
+        if (str_starts_with($bytes, "\x89PNG\r\n\x1a\n")) {
+            return 'image/png';
+        }
+        if (str_starts_with($bytes, "\xFF\xD8\xFF")) {
+            return 'image/jpeg';
+        }
+        if (str_starts_with($bytes, 'GIF87a') || str_starts_with($bytes, 'GIF89a')) {
+            return 'image/gif';
+        }
+        // "RIFF" + 4 size bytes + "WEBP".
+        if (strlen($bytes) >= 12 && str_starts_with($bytes, 'RIFF') && substr($bytes, 8, 4) === 'WEBP') {
+            return 'image/webp';
+        }
+
+        return null;
+    }
+
+    /**
+     * Whether a URL names something {@see fromUrl()} may fetch: a non-empty
+     * host, and a scheme on the allow-list (compared case-insensitively, since
+     * RFC 3986 §3.1 makes schemes case-insensitive).
+     *
+     * A pure predicate for callers that must decide before they fetch and want
+     * no exception. Unlike the fetch path, it also requires a host, so
+     * `http:/path` and `https:` are refused. A null allow-list accepts any
+     * scheme, the same opt-in the fetch path makes.
+     *
+     * @param array<string>|null $allowedSchemes
+     */
+    public static function isFetchableUrl(string $url, ?array $allowedSchemes = ['http', 'https']): bool
+    {
+        if ($url === '') {
+            return false;
+        }
+        $host = parse_url($url, PHP_URL_HOST);
+        if (!is_string($host) || $host === '') {
+            return false;
+        }
+        if ($allowedSchemes === null) {
+            return true;
+        }
+        $scheme = parse_url($url, PHP_URL_SCHEME);
+
+        return is_string($scheme) && in_array(strtolower($scheme), array_map('strtolower', $allowedSchemes), true);
+    }
+
+    /**
      * Detect image MIME type from magic bytes.
      *
      * Mirrors the format detection in fromFile() so fromString() produces
@@ -368,36 +424,18 @@ final class ImageSource
      */
     private static function detectImageFormat(string $bytes, ?string $sniffedMime = null): string
     {
-        if (strlen($bytes) >= 8 && $bytes[0] === "\x89" && $bytes[1] === 'P'
-            && $bytes[2] === 'N' && $bytes[3] === 'G'
-        ) {
-            return 'image/png';
+        $named = self::sniffMime($bytes);
+        // An animated WebP never gets a label — on hosts whose libwebp demuxes
+        // animation to a first frame, GD would decode one happy still from it;
+        // refusing on the STRUCTURE (VP8X ANIM bit / ANMF chunk) happens
+        // PRE-decode, host-independently.
+        if ($named === 'image/webp' && self::webpCarriesAnimation($bytes) === true) {
+            throw new UnsupportedFormatException(Lang::t('image_source.anim_webp', [
+                'format' => 'RIFF/WEBP with VP8X ANIM or ANMF chunks',
+            ]));
         }
-        if (strlen($bytes) >= 3 && $bytes[0] === "\xFF" && $bytes[1] === "\xD8"
-            && $bytes[2] === "\xFF"
-        ) {
-            return 'image/jpeg';
-        }
-        if (strlen($bytes) >= 6
-            && (str_starts_with($bytes, 'GIF87a') || str_starts_with($bytes, 'GIF89a'))
-        ) {
-            return 'image/gif';
-        }
-        // WebP: "RIFF" + 4 bytes + "WEBP". An animated WebP never gets a
-        // label — on hosts whose libwebp demuxes animation to a first frame, GD
-        // would decode one happy still from it; refusing on the STRUCTURE
-        // (VP8X ANIM bit / ANMF chunk) happens PRE-decode, host-independently.
-        if (strlen($bytes) >= 12 && $bytes[0] === 'R' && $bytes[1] === 'I'
-            && $bytes[2] === 'F' && $bytes[3] === 'F' && $bytes[8] === 'W'
-            && $bytes[9] === 'E' && $bytes[10] === 'B' && $bytes[11] === 'P'
-        ) {
-            if (self::webpCarriesAnimation($bytes) === true) {
-                throw new UnsupportedFormatException(Lang::t('image_source.anim_webp', [
-                    'format' => 'RIFF/WEBP with VP8X ANIM or ANMF chunks',
-                ]));
-            }
-
-            return 'image/webp';
+        if ($named !== null) {
+            return $named;
         }
 
         // Containers this library cannot decode AT ALL, recognisable by
@@ -1393,12 +1431,13 @@ final class ImageSource
             return;
         }
         $scheme = parse_url($url, PHP_URL_SCHEME);
-        if ($scheme === false || $scheme === null) {
+        if (!is_string($scheme)) {
             throw new \InvalidArgumentException(
                 Lang::t('image_source.url_invalid_scheme', ['scheme' => 'unknown', 'allowed' => implode(', ', $allowedSchemes)])
             );
         }
-        if (!in_array($scheme, $allowedSchemes, true)) {
+        // Case-insensitive, as RFC 3986 §3.1 requires: `HTTPS://` is https.
+        if (!in_array(strtolower($scheme), array_map('strtolower', $allowedSchemes), true)) {
             throw new \InvalidArgumentException(
                 Lang::t('image_source.url_invalid_scheme', ['scheme' => $scheme, 'allowed' => implode(', ', $allowedSchemes)])
             );
