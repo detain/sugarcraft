@@ -79,7 +79,7 @@ final class FrozenRowAlignmentTest extends TestCase
     {
         $border = BorderConfig::$preset();
 
-        foreach ([20, 30, 33, 45, 70] as $width) {
+        foreach (range(5, 120) as $width) {
             $base = self::lines(0, $width, $border);
 
             foreach ([1, 2, 3] as $frozen) {
