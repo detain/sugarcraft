@@ -761,6 +761,7 @@ final class DocSurfaceTruthTest extends TestCase
         self::assertStringContainsString('| `SSH_PASSWORD` | **not set by this repo; whether sshd\'s ForceCommand path exports it is unverified against OpenSSH** |', $flat);
         self::assertStringContainsString('neither is a credential proof by itself', $flat);
         self::assertStringContainsString('that `AcceptEnv` value is peer-asserted rather than proven.', $flat);
+        self::assertStringContainsString('The gate does not authenticate the peer by itself.', $flat);
         self::assertStringContainsString('peer-asserted through `AcceptEnv`; neither is a credential proof by itself.', $flat);
         self::assertStringContainsString('The variable is expected to reach this process', $flat);
         self::assertStringNotContainsString('arrives only if', $flat);
