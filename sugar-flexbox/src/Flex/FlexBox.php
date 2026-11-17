@@ -29,6 +29,8 @@ final readonly class FlexBox
         public readonly Align $align = Align::Stretch,
         public readonly int $gap = 0,
         private readonly array $items = [],
+        public readonly Justify $justify = Justify::Start,
+        public readonly Wrap $wrap = Wrap::NoWrap,
     ) {}
 
     // -------------------------------------------------------------------------
@@ -67,6 +69,24 @@ final readonly class FlexBox
             );
         }
         return $this->mutate(['gap' => $cells]);
+    }
+
+    /**
+     * Distribute leftover main-axis cells (see {@see Justify}). Leftover
+     * exists only where no ratio item absorbs it, as in CSS.
+     */
+    public function withJustify(Justify $justify): self
+    {
+        return $this->mutate(['justify' => $justify]);
+    }
+
+    /**
+     * Break a row-direction box onto further lines when its items overflow
+     * the width (see {@see Wrap}). Column boxes ignore it.
+     */
+    public function withWrap(Wrap $wrap): self
+    {
+        return $this->mutate(['wrap' => $wrap]);
     }
 
     /**
@@ -130,10 +150,27 @@ final readonly class FlexBox
 
     private function renderRow(int $totalWidth, int $totalHeight): string
     {
-        $items = $this->items;
-        $gap   = $this->effectiveGap($totalWidth);
+        if ($this->wrap === Wrap::Wrap) {
+            return $this->renderWrappedRow($totalWidth, $totalHeight);
+        }
 
-        // Measure each item on the axes the renderer actually consumes.
+        return \implode("\n", $this->renderRowLine($this->items, $totalWidth, $totalHeight, $this->align === Align::Stretch));
+    }
+
+    /**
+     * Lay one line of items across the width and return its rows.
+     *
+     * $fillHeight is the Stretch contract: the box takes the declared height.
+     * A wrapped line never fills; it takes the height of its tallest cell.
+     *
+     * @param list<FlexItem> $items
+     * @return list<string>
+     */
+    private function renderRowLine(array $items, int $totalWidth, int $totalHeight, bool $fillHeight): array
+    {
+        $count = \count($items);
+        $gap   = $this->effectiveGap($totalWidth, $count);
+
         $measured = \array_map(fn(FlexItem $item): array => [
             'item'   => $item,
             'width'  => $this->measureWidth($item),
@@ -148,22 +185,17 @@ final readonly class FlexBox
         // 10-line item in a 3-row box renders 3 rows (clamped, never
         // overflowed; see Align's vertical-axis promise).
         $maxHeight = \min(
-            $this->align === Align::Stretch
+            $fillHeight
                 ? $totalHeight
                 : ($heights === [] ? 0 : \max($heights)),
             $totalHeight,
         );
 
-        // Row assembly is quadratic in the OLD shape: every output line
-        // re-exploded, re-extended and re-indexed every item's full
-        // content, and repeated the gap str_repeat once per cell. Build
-        // each item's finished column of cells exactly once (measure ->
+        // Build each item's finished column of cells exactly once (measure ->
         // sanitize -> align -> style), then join per line — byte-identical
         // output at O(lines + cells) instead of O(lines * cells) of work
         // (a 50-item row was measured over one 60fps frame budget on the
         // quadratic shape).
-        $gapStr = $gap > 0 ? \str_repeat(' ', $gap) : '';
-
         $cells = [];
         foreach ($measured as $i => $m) {
             $aw        = $m['allocated'];
@@ -183,23 +215,109 @@ final readonly class FlexBox
             $cells[$i] = $column;
         }
 
+        // Slot k sits before item k (slot count is the trailing slot). Interior
+        // slots carry the gap plus any justified share; the edges carry only
+        // the justified share. Start leaves every slot empty, so the line is
+        // unpadded exactly as before justify existed.
+        $extra = $this->justifyExtra($measured, $totalWidth, $gap);
+        $slotPad = [];
+        for ($k = 0; $k <= $count; $k++) {
+            $width = ($k === 0 || $k === $count) ? $extra[$k] : $gap + $extra[$k];
+            $slotPad[$k] = $width > 0 ? \str_repeat(' ', $width) : '';
+        }
+
         $resultLines = [];
         for ($line = 0; $line < $maxHeight; $line++) {
-            $parts = [];
-            foreach ($cells as $column) {
-                $parts[] = $column[$line];
+            $lineStr = $slotPad[0];
+            foreach ($cells as $i => $column) {
+                if ($i > 0) {
+                    $lineStr .= $slotPad[$i];
+                }
+                $lineStr .= $column[$line];
             }
-            $lineStr     = $gapStr === '' ? \implode('', $parts) : \implode($gapStr, $parts);
+            $lineStr .= $slotPad[$count];
             $resultLines[] = CellPad::fit($lineStr, $totalWidth)[0];
         }
 
-        return \implode("\n", $resultLines);
+        return $resultLines;
+    }
+
+    /**
+     * Greedy line breaking for a wrapping row. Each item's hypothetical size is
+     * the one {@see allocateMainAxis()} gives it alone on a line, so the break
+     * points match the cells drawn; a line closes before the item that would
+     * overflow it. Wrapped lines stack flush with no row gap.
+     */
+    private function renderWrappedRow(int $totalWidth, int $totalHeight): string
+    {
+        $groups  = [];
+        $current = [];
+        $used    = 0;
+        foreach ($this->items as $item) {
+            $hypothetical = $this->hypotheticalWrapSize($item, $totalWidth);
+            // A line of n items is drawn with effectiveGap(n) between items
+            // (renderRowLine), so the break test uses that gap, not the raw
+            // setting: a raw gap wider than the container breaks a set that
+            // renderRowLine would draw on one line.
+            $n      = \count($current) + 1;
+            $needed = $used + $hypothetical + $this->effectiveGap($totalWidth, $n) * ($n - 1);
+
+            if ($current !== [] && $needed > $totalWidth) {
+                $groups[] = $current;
+                $current  = [];
+                $used     = 0;
+            }
+
+            $current[] = $item;
+            $used     += $hypothetical;
+        }
+        if ($current !== []) {
+            $groups[] = $current;
+        }
+
+        // Every wrapped line is padded to the full width, so the box is a
+        // rectangle even when a short last line leaves leftover cells unplaced.
+        $lines = [];
+        foreach ($groups as $group) {
+            foreach ($this->renderRowLine($group, $totalWidth, $totalHeight, false) as $line) {
+                [$fitted, $fittedWidth] = CellPad::fit($line, $totalWidth);
+                $lines[] = CellPad::pad($fitted, $fittedWidth, $totalWidth, 'right');
+            }
+        }
+
+        if ($this->align === Align::Stretch) {
+            $blank = \str_repeat(' ', $totalWidth);
+            while (\count($lines) < $totalHeight) {
+                $lines[] = $blank;
+            }
+        }
+
+        return \implode("\n", \array_slice($lines, 0, $totalHeight));
+    }
+
+    /**
+     * Main size an item takes when it stands alone on a wrapped line. Mirrors
+     * the branches of {@see allocateMainAxis()}: a basis is taken as set, a
+     * grow item takes its natural width, and a ratio-0 item with no basis keeps
+     * the 1-cell floor it is drawn at (README, rule 3). Measuring it at its
+     * content width instead would break lines the layout never fills.
+     */
+    private function hypotheticalWrapSize(FlexItem $item, int $totalWidth): int
+    {
+        if ($item->basis > 0) {
+            return \min($item->basis, $totalWidth);
+        }
+        if ($item->ratio <= 0) {
+            return 1;
+        }
+        return \max(1, $this->measureWidth($item));
     }
 
     private function renderColumn(int $totalWidth, int $totalHeight): string
     {
         $items = $this->items;
-        $gap   = $this->effectiveGap($totalHeight);
+        $count = \count($items);
+        $gap   = $this->effectiveGap($totalHeight, $count);
 
         $measured = \array_map(fn(FlexItem $item): array => [
             'item'   => $item,
@@ -209,9 +327,19 @@ final readonly class FlexBox
 
         $measured = $this->allocateMainAxis($measured, $totalHeight, $gap);
 
+        // Slot k sits before item k; rows in a slot are blank. See renderRowLine.
+        $extra = $this->justifyExtra($measured, $totalHeight, $gap);
+        $blank = \str_repeat(' ', $totalWidth);
+
         $resultLines = [];
-        for ($i = 0; $i < \count($measured); $i++) {
-            $m    = $measured[$i];
+        for ($i = 0; $i < $count; $i++) {
+            $m = $measured[$i];
+
+            $before = $i === 0 ? $extra[0] : $gap + $extra[$i];
+            for ($j = 0; $j < $before; $j++) {
+                $resultLines[] = $blank;
+            }
+
             $itemLines = $m['item']->lines();
             // Fit contract: an item may never print more lines than the
             // height allocateMainAxis reserved for it. A taller multi-line
@@ -247,26 +375,86 @@ final readonly class FlexBox
             // Pad to allocated height
             $extraLines = $m['allocated'] - \count($itemLines);
             for ($j = 0; $j < $extraLines; $j++) {
-                $resultLines[] = \str_repeat(' ', $totalWidth);
+                $resultLines[] = $blank;
             }
+        }
 
-            // Gap BETWEEN items only — same interstice contract renderRow
-            // keeps (: i < count-1). A trailing gap after the last item
-            // wasted budget rows the height clamp then cut from real
-            // content.
-            if ($gap > 0 && $i < \count($measured) - 1) {
-                for ($j = 0; $j < $gap; $j++) {
-                    $resultLines[] = \str_repeat(' ', $totalWidth);
-                }
-            }
+        for ($j = 0; $j < $extra[$count]; $j++) {
+            $resultLines[] = $blank;
         }
 
         return \implode("\n", \array_slice($resultLines, 0, $totalHeight));
     }
 
-    // -------------------------------------------------------------------------
-    // Helpers
-    // -------------------------------------------------------------------------
+    /**
+     * Leftover main-axis cells split into n+1 slots around n items: index 0
+     * is leading, index n trailing, the rest sit between items. Gaps are not
+     * part of the result; callers add them to the interior slots.
+     *
+     * Weights are integer shares. Each slot takes its floored share, and the
+     * remainder goes to positive-weight slots from the trailing end inwards,
+     * so the split always sums to the leftover exactly.
+     *
+     * @param list<array{item: FlexItem, width: int, height: int, allocated: int}> $measured
+     * @return list<int>
+     */
+    private function justifyExtra(array $measured, int $mainSize, int $gap): array
+    {
+        $count = \count($measured);
+        $used  = $gap * \max(0, $count - 1);
+        foreach ($measured as $m) {
+            $used += $m['allocated'];
+        }
+        $leftover = $mainSize - $used;
+
+        $slots = \array_fill(0, $count + 1, 0);
+        if ($count === 0 || $leftover <= 0) {
+            return $slots;
+        }
+
+        if ($this->justify === Justify::Center) {
+            // Floor on the leading side, matching centerAlign()'s text placement.
+            $slots[0]      = \intdiv($leftover, 2);
+            $slots[$count] = $leftover - $slots[0];
+            return $slots;
+        }
+
+        $weights = match ($this->justify) {
+            Justify::Start => \array_fill(0, $count + 1, 0),
+            Justify::End => \array_merge([1], \array_fill(0, $count, 0)),
+            // One item under space-between is flex-start, the CSS edge rule.
+            Justify::SpaceBetween => $count === 1
+                ? \array_fill(0, 2, 0)
+                : \array_merge([0], \array_fill(0, $count - 1, 1), [0]),
+            // Half-slots: edges get one unit, interior slots two, so each item
+            // owns equal space on both sides and the edges are half-sized.
+            Justify::SpaceAround => \array_merge([1], \array_fill(0, $count - 1, 2), [1]),
+            Justify::SpaceEvenly => \array_fill(0, $count + 1, 1),
+        };
+
+        $total = \array_sum($weights);
+        if ($total === 0) {
+            return $slots;
+        }
+
+        $assigned = 0;
+        foreach ($weights as $k => $w) {
+            $slots[$k] = \intdiv($leftover * $w, $total);
+            $assigned += $slots[$k];
+        }
+        // The remainder goes to the trailing-most positive slots first, the
+        // side Center puts its odd cell on, so one item under SpaceEvenly or
+        // SpaceAround splits exactly as Center does.
+        $rest = $leftover - $assigned;
+        for ($k = \count($weights) - 1; $k >= 0 && $rest > 0; $k--) {
+            if ($weights[$k] > 0) {
+                $slots[$k]++;
+                $rest--;
+            }
+        }
+
+        return $slots;
+    }
 
     /**
      * The gap that is actually renderable: each interstice is capped so the
@@ -275,10 +463,10 @@ final readonly class FlexBox
      * (The setter refuses negatives; this only reins in absurd positives.)
      *
      * @param int $mainSize Container size along the active direction
+     * @param int $n        Items laid out on this line
      */
-    private function effectiveGap(int $mainSize): int
+    private function effectiveGap(int $mainSize, int $n): int
     {
-        $n = \count($this->items);
         if ($n < 2 || $this->gap === 0) {
             return 0;
         }
