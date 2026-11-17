@@ -361,6 +361,23 @@ if (ImageSource::isFetchableUrl($url)) {
 $pixels = PngPixels::decode($bytes); // null means: fall back to GD
 ```
 
+The chunk walk, scanline unfilter and colour expansion behind `PngPixels` are
+shared with the APNG frame path. Two behaviour changes come with the sharing,
+both declared here:
+
+- **APNG tRNS (changed).** A gray (type 0) or RGB (type 2) APNG frame whose
+  `tRNS` names a colour key now marks exact key matches fully transparent.
+  Before, the APNG frame path ignored the key and those pixels stayed opaque.
+- **Scheme case (changed).** The fetch path (`fromUrl()`, including every
+  redirect hop) compares the scheme case-insensitively, the same rule
+  `isFetchableUrl()` uses. `HTTPS://example.test/a.png` now passes the scheme
+  check, where it was refused as "not in the allowed list" before.
+
+`PngPixels::walkChunks()`, `parseIhdr()`, `parsePalette()`, `parseTrns()` and
+`inflateAndUnfilter()` are `public static` only so `ApngDecoder` can call them
+from another class. They are tagged `@internal`, are not part of the supported
+API, and may change without notice.
+
 ## Async and precomputed renders
 
 Encoding a poster is the expensive part, and a whole-buffer encode monopolises
