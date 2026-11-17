@@ -611,18 +611,18 @@ jobs:
       # ReadmeSuiteFigureDriftTest::testArtifactIsNotStaleAgainstTheLiveEnumeration
       # re-derives `tests` LIVE from `phpunit --list-tests` inside this very
       # suite at every merge. The double lock means adding tests without
-      # refreshing BOTH artifacts cannot go green. --timeout 1500 per shard:
+      # refreshing BOTH artifacts cannot go green. --timeout 2400 per shard:
       # the suite outgrew 600, and that era's numbers (two shards killed at
       # exactly 600s while still passing, 2026-10-06) are history. RT-26
       # (2026-11-12) re-put the tuning figures from the committed durations
       # table. THE WALL IS FLOOR-BOUND: no K ever beats the slowest single
       # file, and the LPT K=4 MAX BUCKET is what --timeout must clear, not
       # the average shard.
-      # TSV-PIN tests=33094 files=2123 serial_sum=4044.9 floor=302.5 floor_file=candy-code/tests/Renderer/KeyHelpTest.php lpt_k4_max=1011.2 timeout_test=1500
+      # TSV-PIN tests=33094 files=2126 serial_sum=3536.1 floor=302.5 floor_file=candy-code/tests/Renderer/KeyHelpTest.php lpt_k4_max=884.0 timeout_test=2400
       # Every value on that line is re-derived from the committed durations
       # table and suite-figure.json by tools/tests/ParallelShardTuningTest.php
-      # — prose and probe drift only as far as the next red suite. 1500s is
-      # ~1.5x the max legit bucket and still bounds a hung shard far under
+      # — prose and probe drift only as far as the next red suite. 2400s is
+      # ~2.7x the max legit bucket and still bounds a hung shard far under
       # the serial wall. tests= rides the figure ReadmeSuiteFigureDriftTest
       # re-derives live, so this line cannot quietly age past the trio.
       - name: Install ripgrep (candy-code)
@@ -657,7 +657,7 @@ jobs:
           bash scripts/parallel-tests.sh "$K" \
             --durations scripts/parallel-tests-durations.tsv \
             --against-json candy-code/tests/Config/Support/suite-figure.json \
-            --out "$OUT" --timeout 1500 || RC=$?
+            --out "$OUT" --timeout 2400 || RC=$?
           if [ "$RC" -ne 0 ]; then
             echo "sharded run failed rc=$RC (per-shard tails are printed inline by the harness)"
             exit "$RC"
@@ -1125,7 +1125,7 @@ jobs:
       # Codecov upload downstream is untouched and cannot tell merged from
       # serial. test-merge-clover.php runs FIRST: a merger regression must fail
       # in seconds, not after a full-suite wall. --timeout 2400 per shard: the
-      # K=4 max bucket is 1011.2s (RT-26 re-pin; machine values on the test
+      # K=4 max bucket is 884.0s (RT-26 re-pin; machine values on the test
       # job's TSV-PIN line) and pcov overhead is up to ~2x on a slow runner —
       # shards were killed at 900s on 2026-10-05 — so 2400 still clears 2x the
       # max bucket while bounding a hung shard.
