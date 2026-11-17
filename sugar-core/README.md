@@ -316,6 +316,21 @@ two enums. Tests that depend on an answer must pin the env explicitly.
 | `DISPLAY` | `Util\Clipboard` (X11 backend plan) | no X11 clipboard candidate |
 | `WAYLAND_DISPLAY` | `Util\Clipboard` (Wayland backend plan) | no Wayland clipboard candidate |
 
+**`ColorProfile::fromEnvironment(array $env, bool $isTty, ?bool $override = null)`**
+is the pure form of that negotiation. It reads no `getenv()`, no stream and
+runs no probe, so `[]` is hermetic and the same arguments always answer the
+same. `detect()` is `fromEnvironment()` fed the process environment and the
+stdout stream. `$override` is an explicit caller decision such as a `--color`
+flag: `true` forces `TrueColor`, `false` forces colour off (`Ascii` on a
+terminal, `NoTty` otherwise), and both outrank the environment.
+
+**Text helpers.** `Util\Format::iecBytes(int)` renders binary sizes
+(`4.0 KiB`, `1.0 MiB`). `Util\Width::truncateEllipsis($s, $n, '...')` clips
+to a cell budget with an ellipsis that counts against it.
+`Util\Width::wrapWords($s, $n, breakWords: true)` returns the wrapped lines
+as a list, for callers that place each line themselves. `breakWords: false`
+leaves an over-wide word whole on its own line.
+
 ### Color-profile detection order
 
 `ColorProfile::detect()` decides in exactly this order (the docblock on

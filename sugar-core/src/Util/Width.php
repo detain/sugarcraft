@@ -167,11 +167,22 @@ final class Width
         ) {
             // Drop the oldest half of what is actually there (the entry-cap
             // path at a full 2048 memo behaves exactly as the old fixed
-            // 1024-offset slice did) and re-account the survivors. The loop
-            // lets a byte-triggered overflow with only a few huge keys keep
-            // shedding instead of over-shooting the budget.
-            self::$memo = \array_slice(self::$memo, intdiv(\count(self::$memo), 2) ?: 1, null, true);
-            self::$memoBytes = \array_sum(\array_map('strlen', \array_keys(self::$memo)));
+            // 1024-offset slice did) and re-account the bytes it removed. The
+            // loop lets a byte-triggered overflow with only a few huge keys
+            // keep shedding instead of over-shooting the budget.
+            // Subtract the evicted keys' bytes from the running total instead
+            // of re-summing the survivors: the eviction pass stays linear in
+            // the dropped half, with no key-array allocation for the kept half.
+            $drop = \intdiv(\count(self::$memo), 2) ?: 1;
+            $dropped = 0;
+            foreach (self::$memo as $key => $_width) {
+                if ($dropped++ >= $drop) {
+                    break;
+                }
+                // Integer-like keys come back as int; strlen needs the string form.
+                self::$memoBytes -= \strlen((string) $key);
+            }
+            self::$memo = \array_slice(self::$memo, $drop, null, true);
         }
         self::$memoBytes += \strlen($s);
         return self::$memo[$s] = $width;
@@ -333,6 +344,35 @@ final class Width
             $i += strlen($cluster);
         }
         return $out;
+    }
+
+    /**
+     * Shorten `$s` to at most `$n` display cells, ending a clipped text with
+     * `$ellipsis`, which counts against the budget.
+     *
+     * Text that already fits comes back untouched, ANSI included. A clip goes
+     * through {@see truncate()}: ANSI is dropped and the cut is grapheme-safe.
+     * When the ellipsis alone does not fit in `$n` cells there is no room for
+     * it, so the result is a plain head cut that still fits.
+     *
+     * Shaped after the ellipsis-truncate copies that migrate to it (candy-files
+     * `Entry`, candy-top `Units`, phlix `Truncate`). `clipCells()` is the
+     * marker-first sibling whose no-room fallback cuts the marker, not the text.
+     */
+    public static function truncateEllipsis(string $s, int $n, string $ellipsis = '...'): string
+    {
+        if ($n <= 0) {
+            return '';
+        }
+        if (self::string($s) <= $n) {
+            return $s;
+        }
+        $ellipsisWidth = self::string($ellipsis);
+        if ($ellipsisWidth >= $n) {
+            return self::truncate($s, $n);
+        }
+
+        return self::truncate($s, $n - $ellipsisWidth) . $ellipsis;
     }
 
     /**
@@ -541,6 +581,125 @@ final class Width
             $out[] = self::wrapParagraph($paragraph, $max);
         }
         return implode("\n", $out);
+    }
+
+    /**
+     * Greedy word wrap of plain text into lines, for callers that place each
+     * line themselves (a notice box, a toast, a fixed-height panel row).
+     *
+     * Behaviour matches the two copies that migrate to it: candy-flappy
+     * `foldNoticeLine()` (`$breakWords: false`) and candy-minesweeper
+     * `wrapPlain()` (`$breakWords: true`), as pinned by WidthWrapWordsTest.
+     * The rules, in order:
+     *  - `\n` is a hard break. Every paragraph yields at least one line, so an
+     *    empty paragraph is an empty line.
+     *  - Words are separated by runs of whitespace. Each output line joins its
+     *    words with a single space, so runs collapse and edge whitespace goes.
+     *  - A word that fits joins the current line when it can, and otherwise
+     *    opens the next line.
+     *  - A word wider than `$width`, with `$breakWords`, is cut at grapheme
+     *    boundaries and each whole chunk becomes a line of its own; the
+     *    remainder then wraps like any other word. Without `$breakWords` it
+     *    stands alone on its line, over-wide, as the flappy fold did.
+     *
+     * A single grapheme wider than `$width` is never split, so it can exceed
+     * the budget on its own line. ANSI sequences are stripped first, as in
+     * {@see wrap()}.
+     *
+     * @return list<string>
+     * @throws \InvalidArgumentException when `$width` is below 1
+     */
+    public static function wrapWords(string $s, int $width, bool $breakWords = true): array
+    {
+        if ($width < 1) {
+            throw new \InvalidArgumentException("wrapWords() needs a width of at least 1 cell, got $width.");
+        }
+
+        $lines = [];
+        foreach (\explode("\n", Ansi::strip($s)) as $paragraph) {
+            $line = '';
+            $lineWidth = 0;
+            foreach (self::splitWords($paragraph) as $word) {
+                $wordWidth = self::string($word);
+                if ($breakWords) {
+                    while ($wordWidth > $width) {
+                        if ($line !== '') {
+                            $lines[] = $line;
+                            $line = '';
+                            $lineWidth = 0;
+                        }
+                        [$chunk, $word] = self::cutAtWidth($word, $width);
+                        $lines[] = $chunk;
+                        $wordWidth = self::string($word);
+                    }
+                }
+                if ($line === '') {
+                    $line = $word;
+                    $lineWidth = $wordWidth;
+                } elseif ($lineWidth + 1 + $wordWidth > $width) {
+                    $lines[] = $line;
+                    $line = $word;
+                    $lineWidth = $wordWidth;
+                } else {
+                    $line .= ' ' . $word;
+                    $lineWidth += 1 + $wordWidth;
+                }
+            }
+            $lines[] = $line;
+        }
+
+        return $lines;
+    }
+
+    /**
+     * Words of one paragraph: runs of whitespace separate them, and empty
+     * runs vanish. `/u` refuses malformed UTF-8, so that case falls back to
+     * the ASCII whitespace set at byte level, as {@see wrapParagraph()} does.
+     *
+     * @return list<string>
+     */
+    private static function splitWords(string $paragraph): array
+    {
+        $words = \preg_split('/\s+/u', $paragraph, -1, PREG_SPLIT_NO_EMPTY);
+        if ($words === false) {
+            $words = \preg_split('/[ \t\r\x0B\x0C]+/', $paragraph, -1, PREG_SPLIT_NO_EMPTY);
+            if ($words === false) {
+                throw new \RuntimeException(
+                    Lang::t('width.wrap_split_failed', ['reason' => preg_last_error_msg()]),
+                );
+            }
+        }
+
+        return $words;
+    }
+
+    /**
+     * Cut `$word` after as many grapheme clusters as fit in `$width` cells.
+     * The first cluster is always taken, even when it is wider than the
+     * budget, so every cut makes progress.
+     *
+     * @return array{0: string, 1: string} the chunk, then the unconsumed rest
+     */
+    private static function cutAtWidth(string $word, int $width): array
+    {
+        $chunk = '';
+        $used = 0;
+        $taken = 0;
+        $i = 0;
+        $len = \strlen($word);
+        while ($i < $len) {
+            $cluster = self::nextCluster($word, $i);
+            $clusterWidth = self::graphemeWidth($cluster);
+            if ($taken > 0 && $used + $clusterWidth > $width) {
+                break;
+            }
+            $chunk .= $cluster;
+            $used += $clusterWidth;
+            $taken++;
+            $i += \strlen($cluster);
+        }
+
+        return [$chunk, \substr($word, $i)];
     }
 
     /**
