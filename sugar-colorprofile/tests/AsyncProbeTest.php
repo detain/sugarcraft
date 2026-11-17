@@ -655,6 +655,43 @@ final class AsyncProbeTest extends TestCase
         }
     }
 
+    /**
+     * The memo policy is the sync door's for colorProfile() too: a child that
+     * exits nonzero after printing a TERM cap is a completed verdict, so its
+     * promotion is memoized and a repeat call settles in place without a spawn.
+     */
+    public function testNonZeroChildVerdictIsMemoizedLikeTheSyncDoor(): void
+    {
+        AsyncProbe::resetForTesting();
+        $slots = new \ReflectionProperty(AsyncProbe::class, 'inFlight');
+        $slots->setValue(null, []);
+
+        $script = $this->plantProbe("#!/bin/sh\nprintf '\\tTc,\\n'\nexit 2\n");
+        $_ENV['TERM'] = 'xterm';
+        putenv('TERM=xterm');
+
+        try {
+            $loop = new \React\EventLoop\StreamSelectLoop();
+            $first = null;
+            AsyncProbe::colorProfile($loop)->then(function (ColorProfile $p) use (&$first): void {
+                $first = $p;
+            });
+            $this->runUntilSettled($loop, $first);
+            $this->assertSame(ColorProfile::TrueColor, $first, 'the completed child promotes whatever its exit code');
+
+            \file_put_contents($script, "#!/bin/sh\nprintf '\\tFx,\\n'\nexit 0\n");
+            $second = null;
+            AsyncProbe::colorProfile(new \React\EventLoop\StreamSelectLoop())->then(function (ColorProfile $p) use (&$second): void {
+                $second = $p;
+            });
+            $this->assertSame(ColorProfile::TrueColor, $second, 'the memoized verdict answers in place, with no second spawn');
+            $this->assertCount(0, $slots->getValue(), 'a memo answer books no slot');
+        } finally {
+            AsyncProbe::resetForTesting();
+            @\unlink($script);
+        }
+    }
+
     public function testNegativeVerdictIsTermStaticWhileTheEnvRungIsReDerived(): void
     {
         // The child proved this TERM advertises no promotion; the ANSWER to
