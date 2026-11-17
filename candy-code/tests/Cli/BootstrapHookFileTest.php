@@ -1173,8 +1173,8 @@ YAML);
         $result = $hooks->preToolUse($this->context('Bash', ['command' => 'ls']));
 
         $this->assertTrue(
-            $result->isAsk() || $result->isDenied(),
-            'the rewritten command must be judged (asked, or refused by the gate), not executed',
+            $result->isAsk(),
+            'the rewritten command must be asked about on the re-scan, not executed',
         );
         $this->assertFalse($result->permitsExecution());
     }
