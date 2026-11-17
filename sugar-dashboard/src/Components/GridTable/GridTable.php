@@ -679,7 +679,7 @@ final class GridTable implements Item, Sizer
         }
 
         // The divider takes the seat of the wall after the last frozen cell,
-        // as renderRow swaps it in, so the row keeps the frame's cell count
+        // as renderRow swaps it in, so the row keeps the unfrozen row's cell count
         // (borderless has an empty divider; renderHeader still hard-codes '║' there,
         // a known follow-up pinned in FrozenRowAlignmentTest). With no scrollable
         // column left there is no seat to divide, and the closing wall below ends the row.
