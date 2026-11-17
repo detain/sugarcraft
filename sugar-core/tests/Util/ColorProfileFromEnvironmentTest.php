@@ -11,11 +11,11 @@ use SugarCraft\Core\Util\ColorProfile;
 /**
  * The environment matrix for {@see ColorProfile::fromEnvironment()}.
  *
- * Rows in {@see sharedMatrix()} give the same answer under the local fallback
- * ladder and under sugar-colorprofile's DetectionChain, so they run either way.
- * Rows where the two ladders disagree on purpose (the CoreForkDivergencePinTest
- * table) run only on the ladder that answers them, and each skips when the
- * other ladder is live.
+ * Two kinds of row. The non-terminal and override rows are decided here, with
+ * no environment negotiation, so they hold with or without sugar-colorprofile.
+ * Every other row is negotiated: with the chain installed the answer is the
+ * chain's, and without it (P1-10a deleted the local ladder) a terminal answers
+ * `Ascii`. {@see terminalAnswer()} states that expectation for both states.
  */
 final class ColorProfileFromEnvironmentTest extends TestCase
 {
@@ -24,18 +24,26 @@ final class ColorProfileFromEnvironmentTest extends TestCase
         return class_exists(\SugarCraft\ColorProfile\DetectionChain::class);
     }
 
+    /**
+     * The answer for a terminal with no override: the chain's when installed,
+     * colour off when not. An empty array reaches the chain as TERM='' so the
+     * chain never reads the ambient environment.
+     *
+     * @param array<string,string> $env
+     */
+    private static function terminalAnswer(array $env): ColorProfile
+    {
+        if (!self::chainPresent()) {
+            return ColorProfile::Ascii;
+        }
+        return \SugarCraft\ColorProfile\DetectionChain::detect($env === [] ? ['TERM' => ''] : $env)
+            ->toColorProfile()
+            ->toCore();
+    }
+
     /** @return iterable<string, array{array<string,string>, bool, ?bool, ColorProfile}> */
     public static function sharedMatrix(): iterable
     {
-        yield 'empty env is hermetic and colourless' => [[], true, null, ColorProfile::Ascii];
-        yield 'xterm-256color is 256' => [['TERM' => 'xterm-256color'], true, null, ColorProfile::Ansi256];
-        yield 'plain xterm is ANSI' => [['TERM' => 'xterm'], true, null, ColorProfile::Ansi];
-        yield 'COLORTERM truecolor' => [['TERM' => 'xterm', 'COLORTERM' => 'truecolor'], true, null, ColorProfile::TrueColor];
-        yield 'COLORTERM 24bit' => [['TERM' => 'xterm', 'COLORTERM' => '24bit'], true, null, ColorProfile::TrueColor];
-        yield 'NO_COLOR is ascii on a tty' => [['TERM' => 'xterm', 'NO_COLOR' => '1'], true, null, ColorProfile::Ascii];
-        yield 'CLICOLOR=0 is ascii on a tty' => [['TERM' => 'xterm', 'CLICOLOR' => '0'], true, null, ColorProfile::Ascii];
-        yield 'CLICOLOR_FORCE lifts dumb' => [['TERM' => 'dumb', 'CLICOLOR_FORCE' => '1'], true, null, ColorProfile::TrueColor];
-        yield 'CLICOLOR_FORCE on a pipe' => [['TERM' => 'xterm', 'CLICOLOR_FORCE' => '1'], false, null, ColorProfile::TrueColor];
         yield 'pipe without force is NoTty' => [['TERM' => 'xterm-256color'], false, null, ColorProfile::NoTty];
         yield 'NO_COLOR on a pipe is NoTty' => [['TERM' => 'xterm', 'NO_COLOR' => '1'], false, null, ColorProfile::NoTty];
         yield 'override true forces TrueColor' => [[], true, true, ColorProfile::TrueColor];
@@ -52,29 +60,45 @@ final class ColorProfileFromEnvironmentTest extends TestCase
         $this->assertSame($expected, ColorProfile::fromEnvironment($env, $isTty, $override));
     }
 
-    /** Rows where the fallback ladder answers `NoTty`, and the chain answers `Ascii`. */
-    public function testDumbTermAnswersAsTheLiveLadderSays(): void
+    /**
+     * @return iterable<string, array{array<string,string>, bool}>
+     */
+    public static function negotiatedMatrix(): iterable
     {
-        $expected = self::chainPresent() ? ColorProfile::Ascii : ColorProfile::NoTty;
-        $this->assertSame($expected, ColorProfile::fromEnvironment(['TERM' => 'dumb'], true));
+        yield 'empty env is hermetic' => [[], true];
+        yield 'xterm-256color' => [['TERM' => 'xterm-256color'], true];
+        yield 'plain xterm' => [['TERM' => 'xterm'], true];
+        yield 'COLORTERM truecolor' => [['TERM' => 'xterm', 'COLORTERM' => 'truecolor'], true];
+        yield 'COLORTERM 24bit' => [['TERM' => 'xterm', 'COLORTERM' => '24bit'], true];
+        yield 'NO_COLOR on a tty' => [['TERM' => 'xterm', 'NO_COLOR' => '1'], true];
+        yield 'CLICOLOR=0 on a tty' => [['TERM' => 'xterm', 'CLICOLOR' => '0'], true];
+        yield 'CLICOLOR_FORCE lifts dumb' => [['TERM' => 'dumb', 'CLICOLOR_FORCE' => '1'], true];
+        yield 'CLICOLOR_FORCE on a pipe' => [['TERM' => 'xterm', 'CLICOLOR_FORCE' => '1'], false];
+        yield 'dumb terminal' => [['TERM' => 'dumb'], true];
+        yield 'FORCE_COLOR=1 on a tty' => [['FORCE_COLOR' => '1', 'TERM' => 'xterm'], true];
+        yield 'FORCE_COLOR=1 on a pipe' => [['FORCE_COLOR' => '1', 'TERM' => 'xterm'], false];
+        yield 'CI runner' => [['CI' => 'true', 'TERM' => ''], true];
     }
 
-    /** Fallback-only: the legacy ladder reads CI as ANSI; the chain has no CI rung. */
-    public function testCiEnvironmentIsAnsiOnTheFallbackLadder(): void
+    #[DataProvider('negotiatedMatrix')]
+    public function testNegotiatedRowsAreTheChainsOrColourOff(array $env, bool $isTty): void
     {
-        if (self::chainPresent()) {
-            $this->markTestSkipped('sugar-colorprofile installed; the CI rung belongs to the fallback ladder');
-        }
-        $this->assertSame(ColorProfile::Ansi, ColorProfile::fromEnvironment(['CI' => 'true', 'TERM' => ''], true));
+        $this->assertSame(self::terminalAnswer($env), ColorProfile::fromEnvironment($env, $isTty));
     }
 
-    /** Fallback-only: FORCE_COLOR=1 is TrueColor here, Ansi under the chain's level grammar. */
-    public function testForceColorOneOnTheFallbackLadder(): void
+    /**
+     * With no chain the ambient-free answer is colour off, whatever the rung:
+     * the CI, FORCE_COLOR and dumb rows that the deleted ladder answered
+     * differently all read Ascii here.
+     */
+    public function testWithoutTheChainNoNegotiationRungAnswers(): void
     {
         if (self::chainPresent()) {
-            $this->markTestSkipped('sugar-colorprofile installed; FORCE_COLOR levels follow the chain');
+            $this->markTestSkipped('sugar-colorprofile installed; the chain answers negotiated rows');
         }
-        $this->assertSame(ColorProfile::TrueColor, ColorProfile::fromEnvironment(['FORCE_COLOR' => '1', 'TERM' => 'xterm'], true));
+        $this->assertSame(ColorProfile::Ascii, ColorProfile::fromEnvironment(['CI' => 'true', 'TERM' => ''], true));
+        $this->assertSame(ColorProfile::Ascii, ColorProfile::fromEnvironment(['FORCE_COLOR' => '1', 'TERM' => 'xterm'], true));
+        $this->assertSame(ColorProfile::Ascii, ColorProfile::fromEnvironment(['TERM' => 'dumb'], true));
     }
 
     /** The answer must not depend on the process environment. */
@@ -90,9 +114,12 @@ final class ColorProfileFromEnvironmentTest extends TestCase
         putenv('CLICOLOR_FORCE=1');
         putenv('TERM=dumb');
         try {
-            $this->assertSame(ColorProfile::Ascii, ColorProfile::fromEnvironment([], true));
+            $this->assertSame(self::terminalAnswer([]), ColorProfile::fromEnvironment([], true));
             $this->assertSame(ColorProfile::NoTty, ColorProfile::fromEnvironment([], false));
-            $this->assertSame(ColorProfile::Ansi, ColorProfile::fromEnvironment(['TERM' => 'xterm'], true));
+            $this->assertSame(
+                self::terminalAnswer(['TERM' => 'xterm']),
+                ColorProfile::fromEnvironment(['TERM' => 'xterm'], true),
+            );
         } finally {
             foreach ($keys as $key) {
                 if ($before[$key] === false) {
@@ -113,6 +140,8 @@ final class ColorProfileFromEnvironmentTest extends TestCase
 
     public function testNullStreamSkipsTheTtyGate(): void
     {
-        $this->assertSame(ColorProfile::Ansi256, ColorProfile::detect(['TERM' => 'xterm-256color'], null));
+        $env = ['TERM' => 'xterm-256color'];
+        $this->assertSame(self::terminalAnswer($env), ColorProfile::detect($env, null));
+        $this->assertNotSame(ColorProfile::NoTty, ColorProfile::detect($env, null));
     }
 }
