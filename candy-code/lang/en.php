@@ -184,6 +184,9 @@ return [
     'cli.bundles.install.no_home' => 'bundles install: this process has no home directory it can confirm it owns, and the bundle root could not be created there',
     'cli.bundles.install.not_a_source' => 'bundles install: {source} is neither an existing directory nor a git URL',
     'cli.bundles.install.not_bundle' => 'bundles install: {source} carries no .claude-plugin/plugin.json (and no bare plugin.json), so it is not a plugin bundle',
+    'cli.bundles.install.project_link' => 'bundles install: {path} is a symbolic link; a project bundle root reached through one is refused, so nothing was installed',
+    'cli.bundles.install.project_root' => 'bundles install: the project root {root} is not a directory this process can install into; nothing was written',
+    'cli.bundles.install.project_user' => 'bundles install: --project and --user name two different bundle roots; give one of them, or neither for the user root',
     'cli.bundles.install.read_failed' => 'bundles install: {source} could not be staged into the bundle root',
     'cli.bundles.install.via_marketplace' => 'Recorded {name} from marketplace {marketplace} at commit {sha}; `candy-code bundles update {name}` refreshes it from that row.',
     'cli.bundles.installed' => 'Installed bundle {name} to {dest}.',
@@ -208,9 +211,11 @@ return [
     'cli.bundles.no_action' => 'bundles: no action given',
     'cli.bundles.none' => 'No plugin bundles found (looked under .candy-code/bundles and every pluginPaths entry).',
     'cli.bundles.recommend.none' => 'No recommendations for this project: the added marketplaces offer nothing new that its files point at.',
+    'cli.bundles.scope_not_install' => 'bundles {verb}: --project and --user choose where an install lands, so only `bundles install` takes them',
     'cli.bundles.search.needs_query' => 'bundles search: give a query string',
     'cli.bundles.search.none' => 'No catalog entry matches {query}.',
     'cli.bundles.unknown_action' => 'bundles {action}: unknown action',
+    'cli.bundles.update.ambiguous' => 'bundle update: {name} is installed in both the user root and the project root, so update refused to choose; move one copy aside and run it again',
     'cli.bundles.update.done' => 'Updated bundle {name} from its marketplace record to commit {sha}.',
     'cli.bundles.update.marketplace_gone' => 'bundle {name} records marketplace {marketplace}, which is not added; the bundle was left exactly as it is — re-add the marketplace to update it',
     'cli.bundles.update.no_record' => 'bundle {name} carries no marketplace provenance record (it was installed from a path or a URL), so update left it alone',
@@ -218,7 +223,7 @@ return [
     'cli.bundles.update.renamed' => 'bundle update: {from} renamed itself to {to} upstream; update refuses to re-key an installed bundle, so nothing moved',
     'cli.bundles.update.swap_failed' => 'bundle update: the tree swap for {name} failed; the previous tree is intact',
     'cli.bundles.update.unknown' => 'bundles update: no bundle named {name} is installed',
-    'cli.bundles.usage' => 'Usage: candy-code bundles list | install <path|git-url|plugin@marketplace> | marketplace add <path|git-url> | marketplace list | marketplace remove <name> | marketplace update [name] | update [bundle] | search <query> | recommend',
+    'cli.bundles.usage' => 'Usage: candy-code bundles list | install <path|git-url|plugin@marketplace> [--project|--user] | marketplace add <path|git-url> | marketplace list | marketplace remove <name> | marketplace update [name] | update [bundle] | search <query> | recommend',
     'cli.completion.no_shell' => 'completion: no shell given',
     'cli.completion.option.agent' => 'Launch narrowed to an agent preset (interactive only)',
     'cli.completion.option.append_system_prompt' => 'Append operator rules to the one-shot system prompt (inline text or @file)',
@@ -445,6 +450,7 @@ answers from the pause records alone):
   bundles install <src>  Copy a bundle directory, or clone a git URL with a
                          bounded depth-one clone, into the user bundle root
                          (~/.candy-code/bundles), where only you own it.
+                         --project: <root>/.candy-code/bundles instead.
   doctor                 Check this installation and report every problem it
                          finds: PHP version, the extensions the session store
                          and serve need, the config file, the permission

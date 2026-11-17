@@ -146,6 +146,9 @@ return [
     'cli.bundles.install.no_home' => 'bundles install: este proceso no tiene un directorio home del que pueda confirmar su propiedad, y la raíz de bundles no pudo crearse allí',
     'cli.bundles.install.not_a_source' => 'bundles install: {source} no es ni un directorio existente ni una URL de git',
     'cli.bundles.install.not_bundle' => 'bundles install: {source} no contiene .claude-plugin/plugin.json (ni un plugin.json suelto), por lo que no es un bundle de plugin',
+    'cli.bundles.install.project_link' => 'bundles install: {path} es un enlace simbólico; una raíz de bundle de proyecto alcanzada a través de uno se rechaza, así que no se instaló nada',
+    'cli.bundles.install.project_root' => 'bundles install: la raíz de proyecto {root} no es un directorio en el que este proceso pueda instalar; no se escribió nada',
+    'cli.bundles.install.project_user' => 'bundles install: --project y --user nombran dos raíces de bundle distintas; indique una, o ninguna para la raíz de usuario',
     'cli.bundles.install.read_failed' => 'bundles install: {source} no pudo prepararse en la raíz de bundles',
     'cli.bundles.install.via_marketplace' => 'Registrado {name} del marketplace {marketplace} en el commit {sha}; `candy-code bundles update {name}` lo actualiza desde esa fila.',
     'cli.bundles.installed' => 'Bundle {name} instalado en {dest}.',
@@ -170,9 +173,11 @@ return [
     'cli.bundles.no_action' => 'bundles: no se indicó ninguna acción',
     'cli.bundles.none' => 'No se encontraron bundles de plugin (se buscó bajo .candy-code/bundles y en cada entrada de pluginPaths).',
     'cli.bundles.recommend.none' => 'Sin recomendaciones para este proyecto: los marketplaces añadidos no ofrecen nada nuevo al que apunten sus archivos.',
+    'cli.bundles.scope_not_install' => 'bundles {verb}: --project y --user eligen dónde llega una instalación, así que solo `bundles install` los acepta',
     'cli.bundles.search.needs_query' => 'bundles search: indique una cadena de consulta',
     'cli.bundles.search.none' => 'Ninguna entrada del catálogo coincide con {query}.',
     'cli.bundles.unknown_action' => 'bundles {action}: acción desconocida',
+    'cli.bundles.update.ambiguous' => 'bundle update: {name} está instalado tanto en la raíz de usuario como en la del proyecto; update no eligió; mueva una copia a otro sitio y vuelva a ejecutarlo',
     'cli.bundles.update.done' => 'Bundle {name} actualizado desde su registro de marketplace al commit {sha}.',
     'cli.bundles.update.marketplace_gone' => 'el bundle {name} registra el marketplace {marketplace}, que no está añadido; el bundle se dejó exactamente como está — vuelva a añadir el marketplace para actualizarlo',
     'cli.bundles.update.no_record' => 'el bundle {name} no tiene registro de procedencia de marketplace (se instaló desde una ruta o una URL), por lo que la actualización lo dejó intacto',
@@ -180,7 +185,7 @@ return [
     'cli.bundles.update.renamed' => 'bundle update: {from} se renombró a {to} en el origen; la actualización se niega a reindexar un bundle instalado, por lo que no se movió nada',
     'cli.bundles.update.swap_failed' => 'bundle update: falló el intercambio de árbol para {name}; el árbol anterior está intacto',
     'cli.bundles.update.unknown' => 'bundles update: no hay ningún bundle llamado {name} instalado',
-    'cli.bundles.usage' => 'Uso: candy-code bundles list | install <path|git-url|plugin@marketplace> | marketplace add <path|git-url> | marketplace list | marketplace remove <name> | marketplace update [name] | update [bundle] | search <query> | recommend',
+    'cli.bundles.usage' => 'Uso: candy-code bundles list | install <path|git-url|plugin@marketplace> [--project|--user] | marketplace add <path|git-url> | marketplace list | marketplace remove <name> | marketplace update [name] | update [bundle] | search <query> | recommend',
     'cli.completion.no_shell' => 'completion: no se indicó ningún shell',
     'cli.completion.option.agent' => 'Inicio reducido a un preset de agente (solo interactivo)',
     'cli.completion.option.append_system_prompt' => 'Añadir reglas de operador al prompt de sistema de un solo disparo (texto en línea o @file)',
@@ -405,6 +410,7 @@ detenerse — y attach, que es la excepción a ambos: ejecuta la TUI en una sesi
   bundles install <src>  Copiar un directorio de bundle, o clonar una URL git con un
                          clon de profundidad uno acotado, en la raíz de bundles del usuario
                          (~/.candy-code/bundles), donde solo usted es propietario.
+                         --project: lo deja en <root>/.candy-code/bundles.
   doctor                 Comprobar esta instalación e informar de cada problema que
                          encuentre: versión de PHP, las extensiones que el almacén de sesiones
                          y serve necesitan, el archivo de configuración, la política de

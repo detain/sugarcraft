@@ -146,6 +146,9 @@ return [
     'cli.bundles.install.no_home' => 'bundles install：此程序沒有可確認擁有權的家目錄，且無法在其中建立 bundle 根目錄',
     'cli.bundles.install.not_a_source' => 'bundles install：{source} 既不是現有的目錄，也不是 git URL',
     'cli.bundles.install.not_bundle' => 'bundles install：{source} 不含 .claude-plugin/plugin.json（也沒有裸 plugin.json），因此不是 plugin bundle',
+    'cli.bundles.install.project_link' => 'bundles install：{path} 是符號連結；經由連結到達的專案 bundle 根目錄會被拒絕，因此未安裝任何內容',
+    'cli.bundles.install.project_root' => 'bundles install：專案根目錄 {root} 不是本程序可以安裝進去的目錄；未寫入任何內容',
+    'cli.bundles.install.project_user' => 'bundles install：--project 與 --user 指向兩個不同的 bundle 根目錄；請只指定一個，或都不指定以使用使用者根目錄',
     'cli.bundles.install.read_failed' => 'bundles install：無法將 {source} 暫存至 bundle 根目錄',
     'cli.bundles.install.via_marketplace' => '已記錄 {name} 來自 marketplace {marketplace}（commit {sha}）；`candy-code bundles update {name}` 會從該列刷新。',
     'cli.bundles.installed' => '已將 bundle {name} 安裝至 {dest}。',
@@ -170,9 +173,11 @@ return [
     'cli.bundles.no_action' => 'bundles：未提供動作',
     'cli.bundles.none' => '未找到 plugin bundles（已搜尋 .candy-code/bundles 及每個 pluginPaths 條目）。',
     'cli.bundles.recommend.none' => '此專案沒有推薦：已新增的 marketplace 未提供其檔案指向的新內容。',
+    'cli.bundles.scope_not_install' => 'bundles {verb}：--project 與 --user 決定安裝位置，只有 `bundles install` 接受它們',
     'cli.bundles.search.needs_query' => 'bundles search：請提供查詢字串',
     'cli.bundles.search.none' => '沒有目錄條目符合 {query}。',
     'cli.bundles.unknown_action' => 'bundles {action}：未知的動作',
+    'cli.bundles.update.ambiguous' => 'bundle update：{name} 同時安裝在使用者根目錄與專案根目錄中，update 無法選擇；請先移開其中一份再重新執行',
     'cli.bundles.update.done' => '已從 marketplace 記錄將 bundle {name} 更新至 commit {sha}。',
     'cli.bundles.update.marketplace_gone' => 'bundle {name} 記錄了 marketplace {marketplace}，但它尚未新增；bundle 維持原樣——請重新新增 marketplace 以更新',
     'cli.bundles.update.no_record' => 'bundle {name} 沒有 marketplace 來源記錄（它是從路徑或 URL 安裝的），因此更新未觸動它',
@@ -180,7 +185,7 @@ return [
     'cli.bundles.update.renamed' => 'bundle update：{from} 在上游已改名為 {to}；更新拒絕重新鍵控已安裝的 bundle，因此未做任何變動',
     'cli.bundles.update.swap_failed' => 'bundle update：{name} 的樹狀交換失敗；先前的樹狀結構完好',
     'cli.bundles.update.unknown' => 'bundles update：名為 {name} 的 bundle 未安裝',
-    'cli.bundles.usage' => '用法：candy-code bundles list | install <path|git-url|plugin@marketplace> | marketplace add <path|git-url> | marketplace list | marketplace remove <name> | marketplace update [name] | update [bundle] | search <query> | recommend',
+    'cli.bundles.usage' => '用法：candy-code bundles list | install <path|git-url|plugin@marketplace> [--project|--user] | marketplace add <path|git-url> | marketplace list | marketplace remove <name> | marketplace update [name] | update [bundle] | search <query> | recommend',
     'cli.completion.no_shell' => 'completion：未提供 shell',
     'cli.completion.option.agent' => '以代理預設收窄启動（僅互動式）',
     'cli.completion.option.append_system_prompt' => '將操作者規則附加至一次性系統提示（內文或 @file）',
@@ -405,6 +410,7 @@ CandyCode — 終端機 AI 程式碼助理。
   bundles install <src>  複製套件目錄，或以深度一 git clone
                          將 git URL 複製到使用者套件根目錄
                          （~/.candy-code/bundles），僅你擁有該目錄。
+                         --project：改裝到 <root>/.candy-code/bundles。
   doctor                 檢查此安裝並回報所有發現的問題：
                          PHP 版本、工作階段儲存與 serve 所需的擴充
                          功能、設定檔、權限

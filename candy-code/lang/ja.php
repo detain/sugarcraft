@@ -146,6 +146,9 @@ return [
     'cli.bundles.install.no_home' => 'bundles install: このプロセスは所有を確認できるホームディレクトリを持たず、bundle ルートを作成できませんでした',
     'cli.bundles.install.not_a_source' => 'bundles install: {source} は既存のディレクトリでも git URL でもありません',
     'cli.bundles.install.not_bundle' => 'bundles install: {source} に .claude-plugin/plugin.json（および bare plugin.json）がないため、プラグイン bundle ではありません',
+    'cli.bundles.install.project_link' => 'bundles install: {path} はシンボリックリンクです。リンクを経由したプロジェクトの bundle ルートは拒否されるため、何もインストールされていません',
+    'cli.bundles.install.project_root' => 'bundles install: プロジェクトルート {root} はこのプロセスがインストールできるディレクトリではありません。何も書き込まれていません',
+    'cli.bundles.install.project_user' => 'bundles install: --project と --user は異なる2つの bundle ルートを指定します。どちらか一方を指定するか、ユーザールートの場合は両方省略してください',
     'cli.bundles.install.read_failed' => 'bundles install: {source} を bundle ルートにステージできませんでした',
     'cli.bundles.install.via_marketplace' => '{name} を {marketplace} マーケットプレイスからコミット {sha} で記録しました。`candy-code bundles update {name}` でその行から更新できます。',
     'cli.bundles.installed' => 'Bundle {name} を {dest} にインストールしました。',
@@ -170,9 +173,11 @@ return [
     'cli.bundles.no_action' => 'bundles: アクションが指定されていません',
     'cli.bundles.none' => 'プラグイン bundle が見つかりません（.candy-code/bundles とすべての pluginPaths エントリを検索しました）。',
     'cli.bundles.recommend.none' => 'このプロジェクトへの推奨はありません: 追加済みのマーケットプレイスに、プロジェクトファイルが参照する新規項目がありません。',
+    'cli.bundles.scope_not_install' => 'bundles {verb}: --project と --user はインストール先を選ぶためのもので、`bundles install` だけが受け付けます',
     'cli.bundles.search.needs_query' => 'bundles search: クエリ文字列を指定してください',
     'cli.bundles.search.none' => '{query} に一致するカタログエントリがありません。',
     'cli.bundles.unknown_action' => 'bundles {action}: 不明なアクション',
+    'cli.bundles.update.ambiguous' => 'bundle update: {name} はユーザールートとプロジェクトルートの両方にインストールされているため、update はどちらかを選べませんでした。片方を移動してから再実行してください',
     'cli.bundles.update.done' => 'マーケットプレイスレコードから bundle {name} をコミット {sha} に更新しました。',
     'cli.bundles.update.marketplace_gone' => 'bundle {name} はマーケットプレイス {marketplace} を記録していますが、追加されていません。bundle はそのままです — マーケットプレイスを再追加して更新してください',
     'cli.bundles.update.no_record' => 'bundle {name} にマーケットプレイスの来歴レコードがありません（パスまたは URL からインストールされたため）、更新はスキップされました',
@@ -180,7 +185,7 @@ return [
     'cli.bundles.update.renamed' => 'bundle update: {from} が上流で {to} にリネームされました。インストール済み bundle のキー再設定は拒否されるため、変更はありません',
     'cli.bundles.update.swap_failed' => 'bundle update: {name} のツリー切り替えに失敗しました。既存のツリーは無傷です',
     'cli.bundles.update.unknown' => 'bundles update: {name} という bundle はインストールされていません',
-    'cli.bundles.usage' => '使い方: candy-code bundles list | install <path|git-url|plugin@marketplace> | marketplace add <path|git-url> | marketplace list | marketplace remove <name> | marketplace update [name] | update [bundle] | search <query> | recommend',
+    'cli.bundles.usage' => '使い方: candy-code bundles list | install <path|git-url|plugin@marketplace> [--project|--user] | marketplace add <path|git-url> | marketplace list | marketplace remove <name> | marketplace update [name] | update [bundle] | search <query> | recommend',
     'cli.completion.no_shell' => 'completion: シェルが指定されていません',
     'cli.completion.option.agent' => 'エージェントプリセットに絞った起動（対話モードのみ）',
     'cli.completion.option.append_system_prompt' => 'ワンショットシステムプロンプトにオペレータールールを追加（インラインテキストまたは @file）',
@@ -405,6 +410,7 @@ CandyCode — ターミナル向けAIコーディングアシスタント。
   bundles install <src>  バンドルディレクトリをコピー、またはgit URLを
                          深さ1のクローンで取得し、ユーザーバンドルルート
                          （~/.candy-code/bundles）に配置（所有権はあなたのみ）。
+                         --project: 代わりに <root>/.candy-code/bundles に置きます。
   doctor                 このインストールを検査し、すべての問題を報告:
                          PHPバージョン、セッションストアとserveが
                          必要とする拡張機能、設定ファイル、権限

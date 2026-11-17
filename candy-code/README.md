@@ -2597,11 +2597,12 @@ candy-code attach [<session>]        # the TUI on a session of the running serve
                                      #   [--url URL]
 candy-code acp                       # an Agent Client Protocol agent on stdio, for an editor to start
 candy-code bundles list              # plugin bundles this directory sees, with the declined surfaces named
-candy-code bundles install <path|git-url|plugin@marketplace>
-                                     # a bundle copied, cloned, or gated in from an added marketplace
+candy-code bundles install <path|git-url|plugin@marketplace> [--project|--user]
+                                     # a bundle copied, cloned, or gated in from an added marketplace;
+                                     #   --project lands it in <root>/.candy-code/bundles instead
 candy-code bundles marketplace add|list|remove|update
                                      # pinned plugin catalogs under ~/.candy-code/
-candy-code bundles update [bundle]   # re-install recorded bundles from their marketplace pins
+candy-code bundles update [bundle]   # re-install recorded bundles from their marketplace pins, in their own tier
 candy-code bundles search|recommend  # read-only catalog queries, never a write
 candy-code completion bash|zsh|fish  # a shell completion script on stdout
 candy-code usage [7|30|all]          # the durable spend ledger folded by day and model —

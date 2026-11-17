@@ -146,6 +146,9 @@ return [
     'cli.bundles.install.no_home' => 'bundles install: 이 프로세스가 소유를 확인할 수 있는 홈 디렉터리가 없어 번들 루트를 생성할 수 없습니다',
     'cli.bundles.install.not_a_source' => 'bundles install: {source}이 기존 디렉터리도 git URL도 아닙니다',
     'cli.bundles.install.not_bundle' => 'bundles install: {source}에 .claude-plugin/plugin.json (또는 plugin.json)이 없어 플러그인 번들이 아닙니다',
+    'cli.bundles.install.project_link' => 'bundles install: {path} 은(는) 심볼릭 링크입니다. 링크를 거쳐 도달한 프로젝트 번들 루트는 거부되므로 아무것도 설치되지 않았습니다',
+    'cli.bundles.install.project_root' => 'bundles install: 프로젝트 루트 {root} 는 이 프로세스가 설치할 수 있는 디렉터리가 아닙니다. 아무것도 기록되지 않았습니다',
+    'cli.bundles.install.project_user' => 'bundles install: --project 와 --user 는 서로 다른 두 번들 루트를 지정합니다. 하나만 지정하거나, 사용자 루트는 둘 다 생략하세요',
     'cli.bundles.install.read_failed' => 'bundles install: {source}을 번들 루트에 준비할 수 없습니다',
     'cli.bundles.install.via_marketplace' => '{name}을 {marketplace} 마켓플레이스에서 커밋 {sha}으로 기록했습니다; `candy-code bundles update {name}`으로 해당 레코드에서 갱신할 수 있습니다.',
     'cli.bundles.installed' => '번들 {name}을 {dest}에 설치했습니다.',
@@ -170,9 +173,11 @@ return [
     'cli.bundles.no_action' => 'bundles: 작업이 지정되지 않았습니다',
     'cli.bundles.none' => '플러그인 번들을 찾을 수 없습니다 (.candy-code/bundles 및 모든 pluginPaths 항목에서 검색).',
     'cli.bundles.recommend.none' => '이 프로젝트에 대한 추천 없음: 추가된 마켓플레이스에서 프로젝트 파일이 참조하는 새로운 항목이 없습니다.',
+    'cli.bundles.scope_not_install' => 'bundles {verb}: --project 와 --user 는 설치 위치를 정하는 옵션이므로 `bundles install` 에서만 사용할 수 있습니다',
     'cli.bundles.search.needs_query' => 'bundles search: 검색어를 지정하세요',
     'cli.bundles.search.none' => '{query}와 일치하는 카탈로그 항목이 없습니다.',
     'cli.bundles.unknown_action' => 'bundles {action}: 알 수 없는 작업',
+    'cli.bundles.update.ambiguous' => 'bundle update: {name} 이(가) 사용자 루트와 프로젝트 루트에 모두 설치되어 있어 update 가 선택하지 않았습니다. 한쪽 사본을 옮긴 뒤 다시 실행하세요',
     'cli.bundles.update.done' => '마켓플레이스 레코드에서 번들 {name}을 커밋 {sha}으로 갱신했습니다.',
     'cli.bundles.update.marketplace_gone' => '번들 {name}이 마켓플레이스 {marketplace}을 기록하고 있으나 추가되지 않았습니다; 번들은 그대로 유지되었습니다 — 마켓플레이스를 재추가하여 갱신하세요',
     'cli.bundles.update.no_record' => '번들 {name}에 마켓플레이스 출처 기록이 없습니다 (경로 또는 URL에서 설치됨), 갱신 시 변경되지 않았습니다',
@@ -180,7 +185,7 @@ return [
     'cli.bundles.update.renamed' => '번들 갱신: {from}이 업스트림에서 {to}로 이름이 변경되었습니다; 설치된 번들의 키를 재설정하지 않으므로 아무것도 이동되지 않았습니다',
     'cli.bundles.update.swap_failed' => '번들 갱신: {name}의 트리 교체에 실패했습니다; 이전 트리는 그대로입니다',
     'cli.bundles.update.unknown' => 'bundles update: {name} 번들이 설치되어 있지 않습니다',
-    'cli.bundles.usage' => '사용법: candy-code bundles list | install <path|git-url|plugin@marketplace> | marketplace add <path|git-url> | marketplace list | marketplace remove <name> | marketplace update [name] | update [bundle] | search <query> | recommend',
+    'cli.bundles.usage' => '사용법: candy-code bundles list | install <path|git-url|plugin@marketplace> [--project|--user] | marketplace add <path|git-url> | marketplace list | marketplace remove <name> | marketplace update [name] | update [bundle] | search <query> | recommend',
     'cli.completion.no_shell' => 'completion: 셸이 지정되지 않았습니다',
     'cli.completion.option.agent' => '에이전트 프리셋트로 짓은 시작 (대화형 전용)',
     'cli.completion.option.append_system_prompt' => '원샷 시스템 프롬프트에 운영자 규칙 추가 (인라인 텍스트 또는 @file)',
@@ -405,6 +410,7 @@ CandyCode — 터미널용 AI 코딩 어시스턴트.
   bundles install <src>  번들 디렉터리 복사 또는 git URL을
                          깊이 1 제한 클론으로 사용자 번들 루트
                          (~/.candy-code/bundles)에 설치, 소유권은 본인만.
+                         --project: <root>/.candy-code/bundles 에 설치합니다.
   doctor                 이 설치를 검사하고 발견된 모든 문제를 보고:
                          PHP 버전, 세션 저장소와 serve에 필요한
                          확장, 설정 파일, 권한 정책,

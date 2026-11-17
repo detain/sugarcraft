@@ -298,13 +298,17 @@ candy-code bundles install <path>         # copy a bundle directory into
 candy-code bundles install <git-url>      # depth-one clone into the same place
 candy-code bundles install <plugin>@<marketplace>
                                           # gated install from an added marketplace
+candy-code bundles install <src> --project
+                                          # the same install, into <root>/.candy-code/bundles/
+                                          # (<root> is --root, else the working directory)
 candy-code bundles marketplace add <path|git-url>
                                           # pin a marketplace catalog under ~/.candy-code/
 candy-code bundles marketplace list       # the added rows and their pins
 candy-code bundles marketplace remove <name>
 candy-code bundles marketplace update [name]
                                           # re-clone, diff, move the pin
-candy-code bundles update [bundle]        # re-install recorded bundles from their rows
+candy-code bundles update [bundle]        # re-install recorded bundles from their rows,
+                                          # each in the tier it was installed to
 candy-code bundles search <query>         # every catalog entry matching a needle
 candy-code bundles recommend              # entries the project's own files point at
 ```
@@ -319,9 +323,22 @@ Both arms land content-only trees: the copy skips every `.git` directory and
 the clone sheds its own before the rename. A git clone runs as a bounded,
 non-interactive child: `--depth 1`,
 no tags, terminal prompts and askpass disabled, killed with its process group
-if it overstays. Its only destination is the user bundle root — a clone can
-land in `~/.candy-code/bundles/<name>` and nowhere else, under a name that can
+if it overstays. Its destination is one of two bundle roots — a clone can land in
+`~/.candy-code/bundles/<name>` or, with `--project`, in
+`<root>/.candy-code/bundles/<name>`, and nowhere else, under a name that can
 not traverse out of it.
+
+`--project` is the project tier: the bundle is discovered only in the directory
+it sits under, and `bundles list` shows it as `project`. `--root` names that
+directory; without it the working directory is used, the same base discovery
+reads. The directory is created on demand, and a symlink in either
+`.candy-code` segment is refused. `--project --user` together is a usage error.
+Trust does not follow the scope: a project-tier bundle still needs its name in
+`trustedBundleChannels` before its channels or hooks load. `bundles update`
+keeps every bundle in the tier it occupies: it walks the user root and, when
+one exists, the project root named above. A bundle name present in both tiers
+is refused by `update` rather than guessed at; move one copy aside first. The
+scope flags are accepted by `install` alone.
 
 ## Marketplaces
 

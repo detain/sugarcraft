@@ -469,7 +469,9 @@ final class ReadPathCensusTest extends TestCase
             // root (under HomeDirectory::owned()) names-only, to pick which
             // installed bundles `bundles update` walks and `recommend` excludes.
             'SELF_LOCATED — bundlesBundleRootNames() reads only the names directly under '
-                . 'the operator-owned `~/.candy-code/bundles` root this command minted',
+                . 'the operator-owned `~/.candy-code/bundles` root this command minted, or '
+                . 'under the project bundle root the operator named with `--root` or the '
+                . 'working directory (PLG-2a `bundles update`), names only',
             // gc-cli-1106 closeout 2026-11-06: gcLiveLockCount() lists names under
             // the lock directory inside this application's own config root, names
             // only, to count live flocks for the `gc status` advice line.

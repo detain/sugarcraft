@@ -146,6 +146,9 @@ return [
     'cli.bundles.install.no_home' => 'bundles install: у этого процесса нет домашней директории, владение которой можно подтвердить, и корень bundle не удалось создать',
     'cli.bundles.install.not_a_source' => 'bundles install: {source} — не существующий каталог и не git URL',
     'cli.bundles.install.not_bundle' => 'bundles install: в {source} нет .claude-plugin/plugin.json (и нет просто plugin.json), поэтому это не plugin bundle',
+    'cli.bundles.install.project_link' => 'bundles install: {path} — это символическая ссылка; корень бандла проекта, достигнутый через ссылку, отклоняется, поэтому ничего не установлено',
+    'cli.bundles.install.project_root' => 'bundles install: корень проекта {root} — не каталог, в который этот процесс может установить бандл; ничего не записано',
+    'cli.bundles.install.project_user' => 'bundles install: --project и --user задают два разных корня бандлов; укажите один из них или ни одного для пользовательского корня',
     'cli.bundles.install.read_failed' => 'bundles install: {source} не удалось подготовить в корне bundle',
     'cli.bundles.install.via_marketplace' => 'Записан {name} из marketplace {marketplace} на коммите {sha}; `candy-code bundles update {name}` обновит его из этой записи.',
     'cli.bundles.installed' => 'Bundle {name} установлен в {dest}.',
@@ -170,9 +173,11 @@ return [
     'cli.bundles.no_action' => 'bundles: действие не указано',
     'cli.bundles.none' => 'Plugin bundle не найдены (проверены .candy-code/bundles и все записи pluginPaths).',
     'cli.bundles.recommend.none' => 'Нет рекомендаций для этого проекта: добавленные marketplace не предлагают ничего нового, на что указывают его файлы.',
+    'cli.bundles.scope_not_install' => 'bundles {verb}: --project и --user определяют, куда попадает установка; их принимает только `bundles install`',
     'cli.bundles.search.needs_query' => 'bundles search: укажите поисковый запрос',
     'cli.bundles.search.none' => 'Ни одна запись каталога не совпадает с {query}.',
     'cli.bundles.unknown_action' => 'bundles {action}: неизвестное действие',
+    'cli.bundles.update.ambiguous' => 'bundle update: {name} установлен и в пользовательском корне, и в корне проекта; update не стал выбирать; переместите одну копию и запустите снова',
     'cli.bundles.update.done' => 'Bundle {name} обновлён из записи marketplace до коммита {sha}.',
     'cli.bundles.update.marketplace_gone' => 'bundle {name} ссылается на marketplace {marketplace}, который не добавлен; bundle оставлен без изменений — добавьте marketplace заново для обновления',
     'cli.bundles.update.no_record' => 'у bundle {name} нет записи о происхождении из marketplace (он установлен из пути или URL), поэтому обновление не затронуло его',
@@ -180,7 +185,7 @@ return [
     'cli.bundles.update.renamed' => 'bundle update: {from} переименовался в {to} в upstream; обновление отказывается перепривязывать установленный bundle, поэтому ничего не перемещено',
     'cli.bundles.update.swap_failed' => 'bundle update: замена дерева для {name} не удалась; предыдущее дерево не повреждено',
     'cli.bundles.update.unknown' => 'bundles update: bundle с именем {name} не установлен',
-    'cli.bundles.usage' => 'Использование: candy-code bundles list | install <path|git-url|plugin@marketplace> | marketplace add <path|git-url> | marketplace list | marketplace remove <name> | marketplace update [name] | update [bundle] | search <query> | recommend',
+    'cli.bundles.usage' => 'Использование: candy-code bundles list | install <path|git-url|plugin@marketplace> [--project|--user] | marketplace add <path|git-url> | marketplace list | marketplace remove <name> | marketplace update [name] | update [bundle] | search <query> | recommend',
     'cli.completion.no_shell' => 'completion: оболочка не указана',
     'cli.completion.option.agent' => 'Запуск с ограничением на пресет агента (только интерактивный режим)',
     'cli.completion.option.append_system_prompt' => 'Добавить правила оператора к одноразовому системному промпту (текст или @file)',
@@ -405,6 +410,7 @@ acp выполняет ходы для редактора, пока редакт
   bundles install <src>  Скопировать директорию бандла или клонировать git URL
                          с ограничением глубины до одного уровня в корень
                          пользовательских бандлов (~/.candy-code/bundles), где владелец только вы.
+                         --project: ставит в <root>/.candy-code/bundles.
   doctor                 Проверить установку и сообщить о каждой найденной
                          проблеме: версия PHP, расширения для хранилища сессий
                          и serve, конфиг-файл, политика разрешений,
