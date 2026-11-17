@@ -732,7 +732,7 @@ final class DocSurfaceTruthTest extends TestCase
     /**
      * AUD §2 #58 / P0-A13: PasswordAuth reads `SSH_PASSWORD`, which this repo
      * does not set, and whether a ForceCommand wrapper exports it is unverified
-     * against OpenSSH, so the gate is only usable behind a wrapper. That must
+     * against OpenSSH, so the gate is meant to run behind a wrapper. That must
      * be stated on the class (where a reader of the code lands) and in the
      * README (where an operator lands), and the statement must not be dropped
      * by a later rewrite of either. Absolute claims about what OpenSSH never
