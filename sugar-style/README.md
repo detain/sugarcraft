@@ -1008,12 +1008,14 @@ echo $quote, "\n";
 ```
 
 **Frame sizes.** A style adds cells around its content: padding, border
-and margin. Five accessors report each axis, so an app can budget a
-content box as an outer size minus the frame. `horizontalFrameSize()` and
-`verticalFrameSize()` total the three; the `horizontal*` and `vertical*`
-pairs report padding, border and margin separately. Vertical padding and
-margin are zero under `inline()`, as `render()` zeroes them there, and the
-border counts one cell per enabled side (zero without a `border()`).
+and margin. Eight accessors report them, so an app can budget a content
+box as an outer size minus the frame. Six are per axis: `horizontalPadding()`
+and `verticalPadding()`, `horizontalMargin()` and `verticalMargin()`, and
+`horizontalBorderSize()` and `verticalBorderSize()`. The other two,
+`horizontalFrameSize()` and `verticalFrameSize()`, total the three parts
+on their axis. Vertical padding and margin are zero under `inline()`, as
+`render()` zeroes them there, and the border counts one cell per enabled
+side (zero without a `border()`).
 
 ```php
 use SugarCraft\Style\Style;
