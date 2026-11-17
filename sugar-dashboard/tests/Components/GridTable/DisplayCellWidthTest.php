@@ -213,35 +213,40 @@ final class DisplayCellWidthTest extends TestCase
 
     public function testFrozenHalfOfARowPadsCjkCellsByDisplayWidth(): void
     {
-        // The frozen cell 日本 is four cells but six bytes. str_pad pads by
-        // bytes, so it would stop two cells short of the column width that
-        // Calc computed; Width::padRight pads to the full width.
+        // At width 30 each column is 15 cells (literal, not read back from Calc,
+        // so the expectation holds on master too). The frozen cell 日本 is four
+        // cells and six bytes: str_pad would leave it unpadded on master, while
+        // the frozen half must reach 15 cells, then the wall. The row is split at
+        // the freeze divider ║ so only the frozen half is measured.
         $columns = [Column::new('name', 'Name'), Column::new('city', 'City')];
         $rows = [
             new Row(['name' => '日本語', 'city' => '東京都']),
             new Row(['name' => '日本', 'city' => '東京']),
         ];
-        $widths = Calc::calculateColumnWidths($rows, $columns, 30);
 
         $rendered = GridTable::new($columns, $rows)->freezeColumns(1)->setSize(30, 10)->render();
+        $frozenHalf = explode('║', explode("\n", $rendered)[4])[0];
 
-        self::assertStringContainsString(Width::padRight('日本', $widths[0]), $rendered);
+        self::assertSame('┃日本' . str_repeat(' ', 11) . '┃', $frozenHalf);
+        self::assertSame(17, Width::string($frozenHalf));
     }
 
     public function testScrollingHalfOfAFrozenRowPadsCjkCellsByDisplayWidth(): void
     {
-        // The scrolling half is the cells after the freeze divider. 東京 is six
-        // bytes and four cells, the same byte/cell gap as the frozen half.
+        // The scrolling half is the cells after the freeze divider ║. 東京 is four
+        // cells and six bytes, the same byte/cell gap as the frozen half, and the
+        // column is the literal 15 cells (see the frozen-half test).
         $columns = [Column::new('name', 'Name'), Column::new('city', 'City')];
         $rows = [
             new Row(['name' => '日本語', 'city' => '東京都']),
             new Row(['name' => '日本', 'city' => '東京']),
         ];
-        $widths = Calc::calculateColumnWidths($rows, $columns, 30);
 
         $rendered = GridTable::new($columns, $rows)->freezeColumns(1)->setSize(30, 10)->render();
+        $scrollHalf = explode('║', explode("\n", $rendered)[4])[1];
 
-        self::assertStringContainsString(Width::padRight('東京', $widths[1]), $rendered);
+        self::assertSame('東京' . str_repeat(' ', 11) . '┃', $scrollHalf);
+        self::assertSame(16, Width::string($scrollHalf));
     }
 
     public function testNoticeRowPadsByDisplayWidth(): void
