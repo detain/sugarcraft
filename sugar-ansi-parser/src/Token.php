@@ -9,7 +9,11 @@ namespace SugarCraft\AnsiParser;
  *
  * Field semantics by `$type`:
  *
- * - `TEXT`    — `$data` is one or more bytes that are not C0 controls or ESC.
+ * - `TEXT`    — `$data` is one or more bytes that are not C0 controls or ESC. The one
+ *               exception is a held partial sequence returned as text: from
+ *               {@see AnsiTokenizer::flush()}, or when the held bytes pass the
+ *               cap. Such a partial always begins with ESC, and it is returned
+ *               whole rather than dropped.
  * - `CONTROL` — `$data` is a single C0 control byte (or DEL, 0x7F).
  * - `ESC`     — short two-byte sequence; `$data` is the byte after ESC.
  * - `CSI`     — `ESC [ … final`. `$intermediate` carries the leading private

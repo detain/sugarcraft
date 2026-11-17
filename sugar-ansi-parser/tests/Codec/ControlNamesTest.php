@@ -12,9 +12,10 @@ use SugarCraft\AnsiParser\Codec\ControlNames;
  * Pins the control-name vocabulary. The long labels are the spellings that
  * candy-ansi-inspect's C0C1Test has always asserted. The mnemonic tests pin
  * the short names that candy-ansi-inspect's Inspector splices into sanitized
- * labels for 46 bytes (see inspectorMnemonics()). The Inspector renders 19
- * further C1 bytes as hex escapes, while mnemonic() names them; that gap is
- * pinned separately and recorded in the README migration map.
+ * labels for 46 bytes (the inspectorMnemonics() data provider feeds
+ * testInspectorMnemonicsAreReproduced). The Inspector renders 19 further C1
+ * bytes as hex escapes, while mnemonic() names them; that gap is pinned
+ * separately and recorded in the README migration map.
  */
 final class ControlNamesTest extends TestCase
 {

@@ -10,8 +10,9 @@ use SugarCraft\AnsiParser\Token;
 
 /**
  * Behavior of the flat stream tokenizer. Cases port sugar-core's Util\Parser
- * suite (the copy this class replaces in P1-14b, which deletes Util\Parser), and
- * add the edges that suite left unpinned (DEL, 8-bit C1 bytes, invalid CSI
+ * suite (tests/Util/ParserTest.php in sugar-core). Util\Parser is not removed
+ * until P1-14b, so until then both suites cover the same behavior. The cases
+ * also add the edges that suite left unpinned (DEL, 8-bit C1 bytes, invalid CSI
  * finals, the flush contract, the held-bytes cap).
  */
 final class AnsiTokenizerTest extends TestCase
@@ -233,7 +234,8 @@ final class AnsiTokenizerTest extends TestCase
         $p = AnsiTokenizer::new();
         // An OSC opener that never meets BEL or ST: buffered while the partial
         // fits MAX_PENDING_BYTES, recovered as text the moment the backlog would
-        // outgrow it (no unbounded state, no quadratic rescan across feeds).
+        // outgrow it. This bounds the buffer. It does not bound the total scan
+        // work over many small feeds (see the MAX_PENDING_BYTES docblock).
         $prefix = "\x1b]0;" . str_repeat('x', AnsiTokenizer::MAX_PENDING_BYTES - 5);
         $this->assertSame([], $p->parse($prefix));   // within the cap: still buffered
         $tokens = $p->parse('yy');                   // pushes the backlog one past it

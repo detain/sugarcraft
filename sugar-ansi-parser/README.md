@@ -306,10 +306,13 @@ classified slices rather than handler callbacks.
 `AnsiTokenizer::new()`, call `parse($chunk)` for each read, and call
 `flush()` at end of stream. An unfinished sequence at the end of a chunk is
 held for the next `parse()` call. If the held bytes pass
-`AnsiTokenizer::MAX_PENDING_BYTES` (64 KiB), they come back as text and the
-tokenizer resynchronizes, so a stuck stream cannot grow the buffer. The cap
-applies to the held partial only, so a large chunk that ends in a short partial
-still holds that partial. `Token` carries `type` (`TEXT`, `CONTROL`, `ESC`,
+`AnsiTokenizer::MAX_PENDING_BYTES` (64 KiB), they come back as one TEXT token
+that starts at the ESC, and the tokenizer resynchronizes, so a stuck stream
+cannot grow the buffer. The cap applies to the held partial only, so a large
+chunk that ends in a short partial still holds that partial. The cap bounds
+memory, not time: the held partial is rescanned on every feed, so a stream of
+1-byte feeds that keeps a 64 KiB partial open costs about 2e9 byte steps in
+total. Tracking a scanned offset would remove that cost; it is not implemented. `Token` carries `type` (`TEXT`, `CONTROL`, `ESC`,
 `CSI`, `OSC`, `DCS`, `APC`, `SOS`, `PM`), `data`, `intermediate`, `params`,
 `final`, and `terminator`, and `paramInts()` reads the parameters as integers.
 The field shape and type values match sugar-core's `Util\Token`. Unlike the
@@ -362,10 +365,12 @@ and its callers move in that step.
 **Declared behavior change.** A chunk longer than 64 KiB whose tail is a short
 unfinished sequence now holds that tail, as a short chunk does. The copy
 judged the cap on the whole buffer, so it emitted the tail as text and
-resynchronized. Verified on the copy and on this class with a 70,000-byte
-chunk ending in `ESC [ 38;5;` followed by `196m`: `Util\Parser` gives TEXT,
-TEXT; `AnsiTokenizer` gives TEXT, then CSI with params `38;5;196` and final
-`m`. Pinned by `AnsiTokenizerTest::testShortPartialAfterALargeChunkIsStillHeld`.
+resynchronized. Checked on the copy and on this class with a chunk of 70,000 bytes
+followed by `ESC [ 38;5;` (the first call), then a chunk `196m` (the second). `Util\Parser` gives TEXT
+(70,000 bytes), then TEXT (`ESC [ 38;5;`), then TEXT (`196m`). `AnsiTokenizer`
+gives TEXT (70,000 bytes) on the first call, then CSI with params `38;5;196`
+and final `m` on the second. Pinned by
+`AnsiTokenizerTest::testShortPartialAfterALargeChunkIsStillHeld`.
 
 **Behavior map: candy-ansi-inspect `C0C1.php`** (deleted in P4-9e)
 
@@ -380,7 +385,7 @@ Inspector until P4-9e)
 
 - The 46 mnemonic arms (C0 including ESC, DEL, and the C1 bytes IND, NEL, HTS,
   RI, SS2, SS3, DCS, SOS, CSI, ST, OSC, PM, APC) → `ControlNames::mnemonic()`.
-  Pinned by `ControlNamesTest::inspectorMnemonics`.
+  Pinned by `ControlNamesTest::testInspectorMnemonicsAreReproduced`.
 - The UTF-8-aware sweep regex and the `\xHH` default arm stay in the Inspector
   until P4-9e.
 - **Divergence, not yet migrated:** the default arm renders 19 C1 bytes as
@@ -417,7 +422,7 @@ Util\Parser (P1-14b):
   (use), `:421` (new); `candy-code/src/Renderer.php:9` (use), `:4519` and
   `:4557` (new).
 - Tests: `sugar-core/tests/RendererTest.php:344` (FQN new);
-  `sugar-core/tests/SgrStateTest.php:8` (use) and about 30 `(new Parser())`
+  `sugar-core/tests/SgrStateTest.php:8` (use) and 26 `(new Parser())`
   calls; `sugar-core/tests/Util/ParserTest.php:7` (use) and `:15` (new);
   `sugar-widgets/tests/Help/HelpTest.php:202` (FQN new);
   `sugar-widgets/tests/Help/HelpReviewPinsTest.php:9` (use);

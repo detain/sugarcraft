@@ -42,8 +42,14 @@ final class AnsiTokenizer
     /**
      * Upper bound on a single incomplete sequence held across parse() calls.
      * Real traffic never approaches it (OSC and DCS replies are tens of bytes).
-     * Past the cap, the held bytes are recovered as a TEXT token instead of
-     * being rescanned on every later feed.
+     * Past the cap, the held bytes are recovered as a TEXT token and the
+     * tokenizer resynchronizes.
+     *
+     * The cap bounds the buffer, not the total work. The held partial is
+     * rescanned from its opening ESC on every feed, so one feed costs at most
+     * about this many byte steps. A stream of 1-byte feeds that keeps a partial
+     * open therefore costs up to roughly MAX_PENDING_BYTES^2 / 2 steps in total.
+     * Tracking a scanned offset would remove that; it is not done here.
      */
     public const MAX_PENDING_BYTES = 65536;
 
