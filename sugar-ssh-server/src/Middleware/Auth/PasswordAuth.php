@@ -31,6 +31,15 @@ use SugarCraft\SshServer\StreamHelper;
  * to the entry script over a pipe and inject it as a constructor argument.
  * (2026-11 audit)
  *
+ * **Wrapper-only.** The gate is meant to run behind a wrapper: the wrapper
+ * that launches the entry script (the ForceCommand target or equivalent)
+ * exports `SSH_PASSWORD`. This repo does not set `SSH_PASSWORD`, and whether
+ * sshd's ForceCommand path exports it is unverified against OpenSSH. The
+ * gate also cannot tell a wrapper's export apart from a client-supplied value
+ * that an operator has let through with `AcceptEnv`; that value is
+ * peer-asserted rather than proven. The gate checks what the environment says;
+ * it does not authenticate the peer by itself. (2026-11 audit)
+ *
  * **Presence is not emptiness.** A session whose environment carries no
  * `SSH_PASSWORD` at all is refused without consulting the validator. An
  * empty string that was actually delivered still reaches it, because
