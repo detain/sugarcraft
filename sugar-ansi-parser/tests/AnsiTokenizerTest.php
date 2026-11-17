@@ -235,8 +235,8 @@ final class AnsiTokenizerTest extends TestCase
         $p = AnsiTokenizer::new();
         // An OSC opener that never meets BEL or ST: buffered while the partial
         // fits MAX_PENDING_BYTES, recovered as text the moment the backlog would
-        // outgrow it. This bounds the buffer. It does not bound the total scan
-        // work over many small feeds (see the MAX_PENDING_BYTES docblock).
+        // outgrow it. This bounds the buffer, and the scan work per feed (see the
+        // MAX_PENDING_BYTES docblock for what it does not bound).
         $prefix = "\x1b]0;" . str_repeat('x', AnsiTokenizer::MAX_PENDING_BYTES - 5);
         $this->assertSame([], $p->parse($prefix));   // within the cap: still buffered
         $tokens = $p->parse('yy');                   // pushes the backlog one past it
@@ -272,6 +272,73 @@ final class AnsiTokenizerTest extends TestCase
         $this->assertSame([], $p->flush());
     }
 
+    public function testOscFedOneByteAtATimeMatchesSingleFeed(): void
+    {
+        // The body holds an ESC that is not part of ST, and both ST and BEL
+        // terminators, so every resume point sees a different kind of byte.
+        $stream = "\x1b]0;tit\x1ble\x07after\x1b]2;a\x1b\\end";
+        $single = AnsiTokenizer::new()->parse($stream);
+        $this->assertSame(
+            [Token::OSC, Token::TEXT, Token::OSC, Token::TEXT],
+            array_map(static fn (Token $t): string => $t->type, $single),
+        );
+        $this->assertEquals(self::coalesceText($single), self::coalesceText(self::feedOneByteAtATime($stream)));
+    }
+
+    public function testDcsFedOneByteAtATimeMatchesSingleFeed(): void
+    {
+        $stream = "\x1bPqabc\x1b\\x\x1b_hi\x07z";
+        $single = AnsiTokenizer::new()->parse($stream);
+        $this->assertSame(
+            [Token::DCS, Token::TEXT, Token::APC, Token::TEXT],
+            array_map(static fn (Token $t): string => $t->type, $single),
+        );
+        $this->assertEquals(self::coalesceText($single), self::coalesceText(self::feedOneByteAtATime($stream)));
+    }
+
+    public function testHeldStringResumedAcrossFeedsStillHitsTheCap(): void
+    {
+        $p = AnsiTokenizer::new();
+        $cap = AnsiTokenizer::MAX_PENDING_BYTES;
+        // Held partial of exactly cap-1 bytes, then two single-byte feeds that
+        // resume the body scan. The cap is judged on the whole held partial.
+        $prefix = "\x1b]0;" . str_repeat('x', $cap - 5);
+        $this->assertSame([], $p->parse($prefix));
+        $this->assertSame([], $p->parse('y'));      // exactly MAX_PENDING_BYTES held
+        $tokens = $p->parse('y');                   // one past the cap
+        $this->assertCount(1, $tokens);
+        $this->assertSame(Token::TEXT, $tokens[0]->type);
+        $this->assertSame($prefix . 'yy', $tokens[0]->data);
+        $this->assertSame([], $p->flush());
+
+        $tokens = $p->parse("\x1b[31m");
+        $this->assertCount(1, $tokens);
+        $this->assertSame(Token::CSI, $tokens[0]->type);
+    }
+
+    public function testResumeStateIsClearedByTerminationAndByFlush(): void
+    {
+        // A finished envelope must not leave a resume offset behind for the
+        // next one to inherit.
+        $p = AnsiTokenizer::new();
+        $this->assertSame([], $p->parse("\x1b]0;a"));
+        $this->assertSame([Token::OSC], array_map(
+            static fn (Token $t): string => $t->type,
+            $p->parse("b\x07"),
+        ));
+        $this->assertSame([], $p->parse("\x1b]1;c"));
+        $tokens = $p->parse("\x07");
+        $this->assertCount(1, $tokens);
+        $this->assertSame('1;c', $tokens[0]->data);
+
+        // A flushed partial must not leave one either.
+        $this->assertSame([], $p->parse("\x1b]2;d"));
+        $this->assertSame("\x1b]2;d", $p->flush()[0]->data);
+        $this->assertSame([], $p->parse("\x1b]3;e"));
+        $tokens = $p->parse("\x07");
+        $this->assertSame('3;e', $tokens[0]->data);
+    }
+
     public function testFlushReturnsBufferedAsText(): void
     {
         $p = AnsiTokenizer::new();
@@ -305,5 +372,43 @@ final class AnsiTokenizerTest extends TestCase
         $t = new Token(Token::TEXT, 'x');
         $this->expectException(\Error::class);
         $t->data = 'y';
+    }
+
+    /**
+     * Joins adjacent TEXT tokens. A text run is cut at every feed boundary, so
+     * one-byte feeds split runs that a single feed keeps whole; the stream's
+     * tokens are the same once those cuts are removed.
+     *
+     * @param list<Token> $tokens
+     * @return list<Token>
+     */
+    private static function coalesceText(array $tokens): array
+    {
+        $out = [];
+        foreach ($tokens as $token) {
+            $n = count($out);
+            if ($token->type === Token::TEXT && $n > 0 && $out[$n - 1]->type === Token::TEXT) {
+                $out[$n - 1] = new Token(Token::TEXT, $out[$n - 1]->data . $token->data);
+            } else {
+                $out[] = $token;
+            }
+        }
+        return $out;
+    }
+
+    /** @return list<Token> */
+    private static function feedOneByteAtATime(string $stream): array
+    {
+        $p = AnsiTokenizer::new();
+        $tokens = [];
+        for ($i = 0, $n = strlen($stream); $i < $n; $i++) {
+            foreach ($p->parse($stream[$i]) as $token) {
+                $tokens[] = $token;
+            }
+        }
+        foreach ($p->flush() as $token) {
+            $tokens[] = $token;
+        }
+        return $tokens;
     }
 }

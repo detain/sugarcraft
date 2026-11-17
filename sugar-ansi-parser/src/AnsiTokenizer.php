@@ -45,16 +45,32 @@ final class AnsiTokenizer
      * Past the cap, the held bytes are recovered as a TEXT token and the
      * tokenizer resynchronizes.
      *
-     * The cap bounds the buffer, not the total work. The held partial is
-     * rescanned from its opening ESC on every feed, so one feed costs at most
-     * about this many byte steps. A stream of 1-byte feeds that keeps a partial
-     * open therefore costs up to roughly MAX_PENDING_BYTES^2 / 2 steps in total.
-     * Tracking a scanned offset would remove that; it is not done here.
+     * The cap bounds the buffer, not the total work per feed. An unterminated
+     * OSC/DCS/APC/SOS/PM body keeps its scan position across feeds, so each body
+     * byte is examined once however many feeds it arrives in. A held CSI is still
+     * rescanned from its ESC on every feed, so a stream of 1-byte feeds that keeps
+     * a CSI open costs up to roughly MAX_PENDING_BYTES^2 / 2 steps in total.
      */
     public const MAX_PENDING_BYTES = 65536;
 
     /** Bytes carried over from the previous parse() call. */
     private string $pending = '';
+
+    /**
+     * Offset into {@see $pending} where an unterminated string body stopped
+     * being scanned, or 0 when no string envelope is held. Only ever non-zero
+     * when `$pending` starts with the envelope's ESC, so the next feed resumes
+     * the body scan there instead of rescanning it from the opener.
+     */
+    private int $pendingScan = 0;
+
+    /**
+     * Set by {@see consumeStTerminated()} when it runs out of input: the offset
+     * in the buffer where the next feed must resume the body scan. Reset before
+     * every escape-sequence consumption, so a stale value never leaks into a
+     * later hold decision.
+     */
+    private int $envelopeScanStop = 0;
 
     private function __construct()
     {
@@ -74,7 +90,9 @@ final class AnsiTokenizer
     public function parse(string $chunk): array
     {
         $buf = $this->pending . $chunk;
+        $resume = $this->pendingScan;
         $this->pending = '';
+        $this->pendingScan = 0;
         $len = strlen($buf);
         $i = 0;
         $tokens = [];
@@ -89,7 +107,10 @@ final class AnsiTokenizer
                     $tokens[] = new Token(Token::TEXT, substr($buf, $textStart, $i - $textStart));
                 }
                 $textStart = -1;
-                $consumed = $this->consumeEsc($buf, $i, $len, $tokens);
+                // A held envelope always begins at offset 0, so only the first
+                // escape of this buffer can resume a body scan.
+                $this->envelopeScanStop = 0;
+                $consumed = $this->consumeEsc($buf, $i, $len, $tokens, $i === 0 ? $resume : 0);
                 if ($consumed < 0) {
                     // Incomplete. Hold the tail unless the tail itself has
                     // outgrown the cap: then no terminator this tokenizer
@@ -103,6 +124,9 @@ final class AnsiTokenizer
                         return $tokens;
                     }
                     $this->pending = $rest;
+                    if ($this->envelopeScanStop > 0) {
+                        $this->pendingScan = $this->envelopeScanStop - $i;
+                    }
                     return $tokens;
                 }
                 $i += $consumed;
@@ -147,6 +171,7 @@ final class AnsiTokenizer
         }
         $rest = $this->pending;
         $this->pending = '';
+        $this->pendingScan = 0;
         return [new Token(Token::TEXT, $rest)];
     }
 
@@ -154,9 +179,12 @@ final class AnsiTokenizer
      * Consume an `ESC ...` sequence starting at offset `$i`. Returns the number
      * of bytes consumed, or -1 when the sequence is incomplete.
      *
+     * `$scanFrom` is the resume offset for a string body held from an earlier
+     * feed; 0 means scan from the start of the body.
+     *
      * @param list<Token> $tokens output appended to
      */
-    private function consumeEsc(string $buf, int $i, int $len, array &$tokens): int
+    private function consumeEsc(string $buf, int $i, int $len, array &$tokens, int $scanFrom = 0): int
     {
         if ($i + 1 >= $len) {
             return -1;
@@ -167,19 +195,19 @@ final class AnsiTokenizer
             return $this->consumeCsi($buf, $i, $len, $tokens);
         }
         if ($second === ']') {
-            return $this->consumeStTerminated($buf, $i, $len, $tokens, Token::OSC);
+            return $this->consumeStTerminated($buf, $i, $len, $tokens, Token::OSC, $scanFrom);
         }
         if ($second === 'P') {
-            return $this->consumeStTerminated($buf, $i, $len, $tokens, Token::DCS);
+            return $this->consumeStTerminated($buf, $i, $len, $tokens, Token::DCS, $scanFrom);
         }
         if ($second === '_') {
-            return $this->consumeStTerminated($buf, $i, $len, $tokens, Token::APC);
+            return $this->consumeStTerminated($buf, $i, $len, $tokens, Token::APC, $scanFrom);
         }
         if ($second === 'X') {
-            return $this->consumeStTerminated($buf, $i, $len, $tokens, Token::SOS);
+            return $this->consumeStTerminated($buf, $i, $len, $tokens, Token::SOS, $scanFrom);
         }
         if ($second === '^') {
-            return $this->consumeStTerminated($buf, $i, $len, $tokens, Token::PM);
+            return $this->consumeStTerminated($buf, $i, $len, $tokens, Token::PM, $scanFrom);
         }
 
         // Two-byte sequence: ESC 7, ESC 8, ESC c, ESC D, ESC M, and any other printable.
@@ -244,11 +272,14 @@ final class AnsiTokenizer
     /**
      * OSC, DCS, APC, SOS and PM share one envelope: `ESC <opener> <body> <ST | BEL>`,
      * where ST is `ESC \` and BEL is `\x07`.
+     *
+     * When the envelope is unterminated, the offset where the body scan stopped
+     * is left in {@see $envelopeScanStop} for the next feed to resume from.
      */
-    private function consumeStTerminated(string $buf, int $i, int $len, array &$tokens, string $type): int
+    private function consumeStTerminated(string $buf, int $i, int $len, array &$tokens, string $type, int $scanFrom = 0): int
     {
-        $j = $i + 2;
-        $bodyStart = $j;
+        $bodyStart = $i + 2;
+        $j = $scanFrom > 0 ? $scanFrom : $bodyStart;
         while ($j < $len) {
             $b = $buf[$j];
             if ($b === "\x07") {
@@ -261,6 +292,10 @@ final class AnsiTokenizer
             }
             $j++;
         }
+        // Every body byte before len-1 has already been checked together with
+        // its successor, which is in the buffer. A trailing ESC is the one
+        // byte whose verdict waits on a byte not yet seen, so resume there.
+        $this->envelopeScanStop = max($bodyStart, $len - 1);
         return -1;
     }
 }
