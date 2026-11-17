@@ -551,7 +551,7 @@ final class WorkerPool
                 }
             },
             function (\Throwable $e) use ($worker, $writer, $jobId): void {
-                // A writer the worker no longer owns was cancelled by that worker's own
+                // A writer the worker no longer owns was canceled by that worker's own
                 // teardown, which already settles the job.
                 if ($worker->writer !== $writer || !isset($this->pending[$jobId])) {
                     return;

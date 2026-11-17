@@ -17,7 +17,7 @@ use React\Promise\PromiseInterface;
  *
  *   - **Detached** (no loop): {@see enqueue()} writes synchronously, looping
  *     over short writes and waiting on writability up to a wall deadline.
- *     This is the pre-queue behaviour, kept for direct {@see Renderer} users
+ *     This is the pre-queue behavior, kept for direct {@see Renderer} users
  *     and for teardown.
  *   - **Attached**: {@see enqueue()} appends and makes one non-blocking write
  *     attempt. The rest waits for the loop's write-readiness watcher

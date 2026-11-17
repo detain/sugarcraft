@@ -220,7 +220,7 @@ final class ProgramExecCaptureTest extends TestCase
 
     // ─── 018 legs: write twins — resume, retry-shape, deadline ────────────
 
-    public function testFlushNowResumesShortWritesAtTheFwriteOffset(): void
+    public function testDetachedEnqueueResumesShortWritesAtTheFwriteOffset(): void
     {
         $sockets = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
         $this->assertNotFalse($sockets);
@@ -354,29 +354,31 @@ final class ProgramExecCaptureTest extends TestCase
         };
     }
 
-    public function testWriteOutputRecordsTheFlushedPrefixOfACappedStream(): void
+    public function testWriterRecordsTheFlushedPrefixOfACappedStream(): void
     {
-        $peer    = null;
-        $writer  = $this->cappedSocketPair($peer);
-        $memory  = fopen('php://memory', 'r');
-        $program = new Program(
-            new ExecCaptureNullModel(),
-            new ProgramOptions(
-                useAltScreen: false,
-                catchInterrupts: false,
-                hideCursor: false,
-                input: $memory,
-                output: $writer,
-                loop: new StreamSelectLoop(),
-            ),
-        );
-        $log = [];
-        $program->setRecorder($this->teeRecorder($log));
+        $peer   = null;
+        $writer = $this->cappedSocketPair($peer);
+        // Attached, so the stall bound is the loop's 0.5 s timer. A detached write waits the
+        // full 30 s no-progress deadline before it drops the tail, which a unit test cannot afford.
+        $loop = new StreamSelectLoop();
+        $log  = [];
+        $sink = Writer::new($writer);
+        $sink->setRecorder($this->teeRecorder($log));
+        $sink->attach($loop, 0.5);
 
-        $payload = bin2hex(random_bytes(131072));
-        $m       = new \ReflectionMethod($program, 'writeOutput');
-        $m->setAccessible(true);
-        $m->invoke($program, $payload, 0.5);
+        $payload  = bin2hex(random_bytes(131072));
+        $rejected = null;
+        $sink->enqueue($payload);
+        $sink->drain()->then(null, function (\Throwable $e) use (&$rejected): void {
+            $rejected = $e;
+        });
+        $loop->addTimer(1.5, fn () => $loop->stop());
+        $loop->run();
+        $this->assertInstanceOf(
+            \SugarCraft\Core\WriteStalledException::class,
+            $rejected,
+            'an unread capped socket stalls the backlog and the stall bound drops its tail',
+        );
 
         $recorded = implode('', $log);
         $this->assertNotSame('', $recorded);
@@ -413,6 +415,26 @@ final class ProgramExecCaptureTest extends TestCase
         $this->assertSame(["\x1b[2Jframe"], $log);
         rewind($out);
         $this->assertSame("\x1b[2Jframe", stream_get_contents($out));
+    }
+
+    /**
+     * Replaces the source-pattern test that pinned Renderer::emit() to the flushed count: the
+     * renderer now hands frames to the Writer, so the behavioral claim is that the recorder tee
+     * holds exactly the bytes that reached the stream.
+     */
+    public function testRendererTeesEveryFrameItWritesToTheRecorder(): void
+    {
+        $out      = fopen('php://memory', 'w+');
+        $renderer = new Renderer($out, synchronized: false);
+        $log      = [];
+        $renderer->setRecorder($this->teeRecorder($log));
+
+        $renderer->render("first\nframe");
+        $renderer->render("first\nsecond");
+
+        rewind($out);
+        $this->assertNotSame('', (string) stream_get_contents($out));
+        $this->assertSame(stream_get_contents($out, -1, 0), implode('', $log));
     }
 
     // ─── 002 leg: structured failure message renders ──────────────────────

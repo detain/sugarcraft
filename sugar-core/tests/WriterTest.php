@@ -359,4 +359,36 @@ final class WriterTest extends TestCase
         $writer->close();
         fclose($writerEnd);
     }
+
+    /**
+     * The synchronous path (flushNow, used by teardown and by a writer with no loop) has its own
+     * no-progress bound. A reader-less pipe with a backlog queued on the loop must reject at that
+     * bound, not wait out the loop's stall timer and not block forever in fwrite().
+     */
+    public function testFlushNowDropsTheBacklogAfterTheNoProgressDeadline(): void
+    {
+        [$proc, $stdin] = $this->stalledPipe();
+        stream_set_blocking($stdin, false);
+        $loop = new StreamSelectLoop();
+        $writer = Writer::new($stdin, $loop);
+        $writer->enqueue(str_repeat('F', self::STALL_PAYLOAD));
+
+        $rejected = null;
+        $writer->drain()->then(null, function (\Throwable $e) use (&$rejected): void {
+            $rejected = $e;
+        });
+        $started = microtime(true);
+        $writer->flushNow(0.3);
+        $elapsed = microtime(true) - $started;
+
+        $this->assertInstanceOf(WriteStalledException::class, $rejected);
+        $this->assertSame(self::STALL_PAYLOAD, $rejected->total);
+        $this->assertLessThan(self::STALL_PAYLOAD, $rejected->written, 'the pipe took only what fit');
+        $this->assertGreaterThanOrEqual(0.3, $elapsed, 'the bound waits out its full no-progress window');
+        $this->assertLessThan(10.0, $elapsed, 'and does not block past it');
+        $this->assertTrue($writer->isIdle());
+
+        $writer->close();
+        $this->reap($proc, $stdin);
+    }
 }
