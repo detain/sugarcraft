@@ -226,6 +226,20 @@ ignores `withWrap()` and does not reflow into extra columns. There is no `wrap-r
 sugar-dashboard's `FlexWrap::WrapReverse` was never honored by its layout, so it is not
 carried over.
 
+Two differences from the wrap in sugar-dashboard's `FlexLayout` (the behavior it replaces):
+
+- **Sizing.** The dashboard wraps only when natural widths overflow, and otherwise keeps
+  natural widths. Flexbox items default to ratio 1 and grow, so a set that fits still
+  fills the width: `FlexItem::new('a')` and `FlexItem::new('b')` at width 10 draw
+  `a    b    `, where the dashboard draws `ab`. Within flexbox, a set of growing items that
+  fits draws the same cells under `Wrap::Wrap` and `Wrap::NoWrap` (fixed-basis items differ
+  in padding, below).
+- **Per-line allocation.** Each wrapped line runs the ratio allocation again, so `aaaa`,
+  `bbbb`, `cc` at width 10 draw `aaaabbbcc ` where the dashboard keeps `aaaabbbbcc`.
+- **Padding.** A wrapped line is padded to the full width, though a NoWrap line is only as
+  wide as its cells (see above). The box is padded to its full height only under
+  `Align::Stretch`; the dashboard always pads.
+
 To build a sidebar plus a fill panel: give the sidebar `withBasis(20)` and the panel
 `withRatio(1)`. There is no center-a-dialog primitive in this lib — pad with fixed-ratio
 spacers (`withRatio(1)` on each side, content `withRatio(n)`) instead.

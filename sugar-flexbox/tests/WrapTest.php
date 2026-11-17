@@ -56,6 +56,38 @@ final class WrapTest extends TestCase
         }
     }
 
+    /**
+     * Declared in README "Justify and wrap": a wrapped line is padded to the
+     * full width, while a NoWrap line is only as wide as its cells. Fixed-basis
+     * items that fit leave the NoWrap line short, so the two differ here.
+     */
+    public function testAFittingWrappedBoxPadsWhereTheNoWrapLineStaysShort(): void
+    {
+        $items = [
+            FlexItem::new('a')->withBasis(1),
+            FlexItem::new('b')->withBasis(1),
+        ];
+
+        self::assertSame('ab', FlexBox::row(...$items)->render(10, 1));
+        self::assertSame('ab        ', FlexBox::row(...$items)->withWrap(Wrap::Wrap)->render(10, 1));
+    }
+
+    /**
+     * Growing items (the FlexItem default, ratio 1) fill a fitting line the same
+     * way with or without Wrap: the only difference is the line break, which
+     * never happens here. This is the flexbox sizing model, not wrap behavior.
+     */
+    public function testAFittingSetOfGrowingItemsMatchesNoWrap(): void
+    {
+        $items = [FlexItem::new('a'), FlexItem::new('b')];
+
+        self::assertSame(
+            FlexBox::row(...$items)->render(10, 1),
+            FlexBox::row(...$items)->withWrap(Wrap::Wrap)->render(10, 1),
+        );
+        self::assertSame('a    b    ', FlexBox::row(...$items)->withWrap(Wrap::Wrap)->render(10, 1));
+    }
+
     public function testStretchPadsTheWrappedBoxToTheRequestedHeight(): void
     {
         $out = FlexBox::row(...self::four())
