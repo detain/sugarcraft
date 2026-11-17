@@ -23,6 +23,9 @@ namespace CandyCode\Bundles\MsTeams\Support;
  */
 final class OutboundChunker
 {
+    /** The bytes PHP's ltrim/rtrim strip by default. All are ASCII, so each is one byte and one codepoint. */
+    private const TRIM_BYTES = " \t\n\r\0\x0B";
+
     /**
      * @return list<string>
      */
@@ -137,9 +140,45 @@ final class OutboundChunker
     }
 
     /**
+     * Valid UTF-8 lines at least this many codepoints long take the single
+     * pass below. Shorter lines keep the original cut, which is faster there:
+     * the single pass pays one decode and a per-codepoint scan that a short line
+     * never earns back. Measured on the word-emoji fixture (min of 7 runs): the
+     * two cross at about 300k codepoints (0.0273 s original, 0.0286 s single
+     * pass); at 400k the single pass is 21% faster and at 1M it is 2.9x faster
+     * (0.295 s to 0.103 s).
+     */
+    private const SINGLE_PASS_MIN_CODEPOINTS = 300000;
+
+    /**
+     * Cuts a line that cannot fit alone into pieces of at most $room
+     * codepoints: each piece ends after the last space inside its window, or at
+     * the window's edge when there is no space. Leading whitespace of the
+     * remainder is dropped, the first piece keeps the line's own left edge.
+     *
+     * Invalid UTF-8 and short lines take the original cut, byte for byte. The
+     * single pass reads stray bytes differently (the old mb_substr / mb_strlen /
+     * mb_str_split mix disagreed on them), so it is only used on valid UTF-8,
+     * where it cuts identically to the original (the oracle test pins this).
+     *
      * @return list<string>
      */
     private static function wordSplit(string $line, int $limit): array
+    {
+        if (self::len($line) < self::SINGLE_PASS_MIN_CODEPOINTS || !\mb_check_encoding($line, 'UTF-8')) {
+            return self::wordSplitOriginal($line, $limit);
+        }
+
+        return self::wordSplitSinglePass($line, $limit);
+    }
+
+    /**
+     * The original greedy cut, unchanged from master: quadratic, since each
+     * piece re-measures and re-slices the remaining body.
+     *
+     * @return list<string>
+     */
+    private static function wordSplitOriginal(string $line, int $limit): array
     {
         $room = \max(16, $limit - 16); // headroom for the fence decoration
         $pieces = [];
@@ -156,6 +195,60 @@ final class OutboundChunker
 
         return $pieces;
     }
+
+    /**
+     * The same cut as wordSplitOriginal on valid UTF-8, in one scan with no
+     * per-codepoint array. Positions are byte offsets. $win counts the codepoints
+     * in [$start, $end), so the window never rescans. A piece's codepoints are
+     * measured in C (mb_strlen) and its trim run with strspn, so a long line
+     * costs O(n).
+     *
+     * @return list<string>
+     */
+    private static function wordSplitSinglePass(string $line, int $limit): array
+    {
+        $room = \max(16, $limit - 16); // headroom for the fence decoration
+        $bytes = \strlen($line);
+        $total = self::len($line);
+
+        $pieces = [];
+        $consumed = 0; // codepoints before $start
+        $start = 0;    // byte offset of the piece being cut
+        $end = 0;      // byte offset of the window end, exclusive
+        $win = 0;      // codepoints in [$start, $end)
+        $space = -1;   // byte offset of the last ' ' below $end; $end only grows, so this never rescans
+        while ($total - $consumed > $room) {
+            while ($win < $room && $end < $bytes) {
+                $lead = \ord($line[$end]);
+                if ($lead === 0x20) {
+                    $space = $end;
+                }
+                $end += $lead < 0x80 ? 1 : ($lead < 0xE0 ? 2 : ($lead < 0xF0 ? 3 : 4));
+                ++$win;
+            }
+            $cut = $space >= $start ? $space + 1 : $end;
+            $taken = \substr($line, $start, $cut - $start);
+            $codepoints = self::len($taken);
+            $consumed += $codepoints;
+            $win -= $codepoints;
+            $pieces[] = \rtrim($taken);
+
+            $start = $cut;
+            $skip = $start < $bytes ? \strspn($line, self::TRIM_BYTES, $start) : 0;
+            $consumed += $skip; // TRIM is ASCII: one codepoint per byte
+            if ($start < $end) {
+                $win -= \min($skip, $end - $start);
+            }
+            $start += $skip;
+            $end = \max($end, $start);
+        }
+        if ($start < $bytes) {
+            $pieces[] = \substr($line, $start);
+        }
+
+        return $pieces;
+    }
+
 
     public static function len(string $text): int
     {

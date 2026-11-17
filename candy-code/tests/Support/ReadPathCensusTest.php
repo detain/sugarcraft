@@ -167,8 +167,11 @@ final class ReadPathCensusTest extends TestCase
         'Agents/AgentWorkerPool.php|file_get_contents' => [
             'SELF_LOCATED — a result file this pool named and a forked child of it wrote',
             'SELF_LOCATED — the same directory, read during the drain loop',
+        ],
+        'Agents/AgentWorkerPool.php|fopen' => [
             'SELF_LOCATED — a running agent\'s progress file, named by progressFile() '
-                . 'from the pool\'s own 0700 random dir and written only by its own child',
+                . 'from the pool\'s own 0700 random dir and written only by its own child; '
+                . 'read by byte range, and only for a size that pumpProgress() has just stat\'d',
         ],
         'Agents/ForeignAgentPresetRegistry.php|glob' => [
             'CONTAINED — `.claude/agents` / `.opencode/agents`, anchored per tier',

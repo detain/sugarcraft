@@ -6219,8 +6219,9 @@ public static function useMaxCost(?string $maxCost): void
      * reaches {@see PermissionGate}'s Auto-mode 3-strike circuit breaker. That
      * is not a cost this wiring introduced and it is not about config hooks:
      * the three built-ins have always been ahead of the gate, so a
-     * {@see \SugarCraft\Code\Hooks\BuiltIn\ConfirmRemoveHook} DENY — the
-     * commonest refusal there is — was already uncounted before a hook FILE
+     * {@see \SugarCraft\Code\Hooks\BuiltIn\ConfirmRemoveHook} match — an ASK the
+     * operator decides, refused outright where nobody can answer it — is the
+     * commonest such stop, and it was already uncounted before a hook FILE
      * could be loaded at all. Registering config hooks in between adds one
      * more source of the same uncounted refusal, not a new failure mode. It is
      * a MISCOUNT rather than a hole — the call is refused either way, and the
@@ -7298,7 +7299,8 @@ public static function useMaxCost(?string $maxCost): void
      * {@see \SugarCraft\Code\Hooks\BuiltIn\RepeatCallGuardHook} loop guard —
      * never read the mode at all. A bare chain with no gate enforces MORE than
      * bypass: it adds {@see \SugarCraft\Code\Hooks\BuiltIn\ConfirmRemoveHook}
-     * refusing destructive `rm`s earlier and more broadly than the breaker, and
+     * asking about destructive `rm`s earlier and more broadly than the breaker
+     * (refused outright only where no approver can answer), and
      * the secret/file-class refusals of ProtectFiles, which bypass stands down.
      * What the gate buys either way is that all of it is REACHABLE and
      * configurable: set `permissionMode`/`permissionRules` and it starts

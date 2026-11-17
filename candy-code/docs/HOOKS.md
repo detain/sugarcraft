@@ -1278,7 +1278,7 @@ it runs only once the rest of the chain has permitted that output — see
 | Hook | Event | What it does |
 |---|---|---|
 | `ProtectFilesHook` | `PreToolUse` on `^(Bash\|PtyRun\|Edit\|Write\|ApplyPatch\|Read\|Grep\|Glob\|Lsp\|mcp__.*)$` | denies secret and policy files; asks for the rest — the shell half is derived from `ShellSubjectTools::NAMES`, and a `PtyRun` step is judged from its DECODED keystrokes as well as its raw bytes — see [below](#what-protect-files-covers) and [`PERMISSIONS.md`](PERMISSIONS.md#the-hooks-that-outrank-the-gate) |
-| `ConfirmRemoveHook` | `PreToolUse` on `^(?:Bash\|PtyRun)$` | denies obvious destructive shell (`rm -rf`, `find … -delete`, …) — typed keystrokes count as shell text here too |
+| `ConfirmRemoveHook` | `PreToolUse` on `^(?:Bash\|PtyRun)$` | asks before obvious destructive shell (`rm -rf`, `find … -delete`, …); an unanswered ask never runs — typed keystrokes count as shell text here too |
 | `AuditHook` | `PostToolUse`, matcher `.*` | appends every call — and every refused or withheld one, see [below](#what-the-audit-log-records) — to whatever `AuditHook::defaultLogFile()` answers — a fixed leaf inside a per-user directory the hook creates `0700` and refuses to use if it is not its own |
 
 Twelve more exist and are **not** registered by default:
@@ -1370,7 +1370,7 @@ Quoting is **not** among those evasions for `ConfirmRemoveHook` any more: each
 pattern runs against the raw command *and* its quote-removed words (the same
 `Permissions\ShellWords` tokeniser the permission gate's step-0 breaker uses),
 so `rm '-rf' x`, `rm "-rf" x`, `find . '-delete'` and `dd 'of=/dev/sda'` are
-denied like their unquoted spellings. Earlier cuts let the first three pass
+asked about like their unquoted spellings. Earlier cuts let the first three pass
 the whole built-in chain under `bypass-permissions`, then the default mode on
 every path (it still is for `-p` and background sessions; the TUI now starts in
 `default`).

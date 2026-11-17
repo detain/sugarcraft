@@ -48,7 +48,7 @@ final class TimeSeriesTest extends TestCase
         $start = new \DateTimeImmutable('2026-01-01 09:00:00');
         $end   = new \DateTimeImmutable('2026-01-01 17:00:00');
         $ts = TimeSeries::new([])->withTimeRange($start, $end);
-        [$rs, $re] = $ts->getTimeRange();
+        [$rs, $re] = $ts->timeRange();
         $this->assertEquals($start, $rs);
         $this->assertEquals($end, $re);
     }
@@ -58,7 +58,7 @@ final class TimeSeriesTest extends TestCase
         $ts = TimeSeries::new([])
             ->withTimeRange(new \DateTimeImmutable('2026-01-01 09:00:00'), null)
             ->withTimeRange(null, null);
-        $this->assertSame([null, null], $ts->getTimeRange());
+        $this->assertSame([null, null], $ts->timeRange());
     }
 
     public function testWithTimeRangeFiltersOutOfRangePoints(): void

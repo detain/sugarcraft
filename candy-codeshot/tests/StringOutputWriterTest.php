@@ -22,13 +22,13 @@ final class StringOutputWriterTest extends TestCase
         $writer->write('hello');
         $writer->write(' world');
 
-        $this->assertSame('hello world', $writer->getResult());
+        $this->assertSame('hello world', $writer->result());
     }
 
-    public function testGetResultReturnsEmptyStringWhenNoWrite(): void
+    public function testResultReturnsEmptyStringWhenNoWrite(): void
     {
         $writer = new StringOutputWriter();
-        $this->assertSame('', $writer->getResult());
+        $this->assertSame('', $writer->result());
     }
 
     public function testFlushIsNoOp(): void
@@ -38,7 +38,7 @@ final class StringOutputWriterTest extends TestCase
         $writer->flush();
 
         // flush should not change anything since string accumulation is already in memory
-        $this->assertSame('test', $writer->getResult());
+        $this->assertSame('test', $writer->result());
     }
 
     public function testMultipleWritesAccumulate(): void
@@ -48,7 +48,7 @@ final class StringOutputWriterTest extends TestCase
         $writer->write("\n");
         $writer->write('line2');
 
-        $this->assertSame("line1\nline2", $writer->getResult());
+        $this->assertSame("line1\nline2", $writer->result());
     }
 
     public function testEmptyStringWriteDoesNotAffectBuffer(): void
@@ -57,7 +57,7 @@ final class StringOutputWriterTest extends TestCase
         $writer->write('content');
         $writer->write('');
 
-        $this->assertSame('content', $writer->getResult());
+        $this->assertSame('content', $writer->result());
     }
 
     public function testUnicodeContentPreserved(): void
@@ -66,6 +66,6 @@ final class StringOutputWriterTest extends TestCase
         $writer->write('こんにちは');
         $writer->write(' 🌍');
 
-        $this->assertSame('こんにちは 🌍', $writer->getResult());
+        $this->assertSame('こんにちは 🌍', $writer->result());
     }
 }

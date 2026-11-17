@@ -79,13 +79,13 @@ final class GraphPrimitivesTest extends TestCase
 
     public function testGetCirclePointsWithLimit(): void
     {
-        $pts = Graph::getCirclePointsWithLimit(0, 0, 5, limit: 4, samples: 32);
+        $pts = Graph::circlePointsWithLimit(0, 0, 5, limit: 4, samples: 32);
         $this->assertCount(4, $pts);
     }
 
     public function testGetLinePointsWithLimit(): void
     {
-        $pts = Graph::getLinePointsWithLimit(0, 0, 10, 0, limit: 5);
+        $pts = Graph::linePointsWithLimit(0, 0, 10, 0, limit: 5);
         $this->assertCount(5, $pts);
         $this->assertSame([0, 0], $pts[0]);
         $this->assertSame([4, 0], $pts[4]);
@@ -93,7 +93,7 @@ final class GraphPrimitivesTest extends TestCase
 
     public function testGetFullCirclePointsAreUnique(): void
     {
-        $pts = Graph::getFullCirclePoints(0, 0, 5);
+        $pts = Graph::fullCirclePoints(0, 0, 5);
         $seen = [];
         foreach ($pts as [$x, $y]) {
             $key = $x . ',' . $y;
@@ -106,7 +106,7 @@ final class GraphPrimitivesTest extends TestCase
 
     public function testGetFullCirclePointsWithLimitCaps(): void
     {
-        $pts = Graph::getFullCirclePointsWithLimit(0, 0, 5, limit: 6);
+        $pts = Graph::fullCirclePointsWithLimit(0, 0, 5, limit: 6);
         $this->assertCount(6, $pts);
     }
 

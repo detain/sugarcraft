@@ -76,12 +76,30 @@ final class ProjectileTest extends TestCase
         $this->assertSame(0.0, $tg->z);
     }
 
-    public function testLegacyYDownGravityForBackCompat(): void
+    public function testYDownPresetsCarryTheOppositeSign(): void
     {
         $g = Projectile::gravityYDown();
+        $this->assertSame(0.0, $g->x);
         $this->assertEqualsWithDelta(9.81, $g->y, 1e-9);
+        $this->assertSame(0.0, $g->z);
+
         $tg = Projectile::terminalGravityYDown();
+        $this->assertSame(0.0, $tg->x);
         $this->assertEqualsWithDelta(53.0, $tg->y, 1e-9);
+        $this->assertSame(0.0, $tg->z);
+    }
+
+    public function testGravityPresetIsPluggableAsAccelerationForOneFrame(): void
+    {
+        $p = Projectile::new(
+            deltaTime: 1.0 / 60.0,
+            position: Point::zero(),
+            velocity: new Vector(0.0, 10.0),
+            acceleration: Projectile::gravity(),
+        );
+        // One frame of -9.81 m/s^2 gravity drops the Y velocity by 9.81 / 60.
+        $next = $p->update();
+        $this->assertEqualsWithDelta(10.0 - 9.81 / 60.0, $next->velocity->y, 1e-6);
     }
 
     public function testProjectileSimulatesUpwardThrowWithYUpGravity(): void

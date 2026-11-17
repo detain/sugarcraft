@@ -12,6 +12,7 @@ return [
     'column.width_nonneg'         => 'La larghezza della colonna deve essere >= 0',
     'tabs.bad_index'              => 'indice della scheda fuori intervallo',
     'tabs.neg_width'              => 'la larghezza delle schede deve essere >= 0',
+    'tabs.zone_key_empty'         => 'la chiave di zona della scheda non deve essere vuota',
     'table.dim_nonneg'            => 'la larghezza/altezza della tabella deve essere >= 0',
     'table.page_size_nonneg'      => 'la dimensione della pagina deve essere >= 0',
     'table.set_columns_type'      => 'le colonne devono essere istanze di colonna',

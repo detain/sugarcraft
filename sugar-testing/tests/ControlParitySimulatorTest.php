@@ -235,18 +235,18 @@ final class ControlParitySimulatorTest extends TestCase
         self::assertSame('Ix', $cloneRun->model->trace);
     }
 
-    public function testDeprecatedSendAliasKeepsBehaviourAndDiscipline(): void
+    public function testAddMsgsMutatesReturnsTheSameHandleAndArmsTheConfigureGuard(): void
     {
-        // send() survives as a thin alias so external consumers migrate on
-        // their own schedule: same handle back, same queueing, and the
-        // configure-after-send guard trips through it too.
+        // The queueing contract that the removed send() alias used to pin:
+        // same handle back, the queue lives on it, and the configure-after-
+        // send guard trips once anything has been queued.
         $sim = ProgramSimulator::new(new ControlRecorderModel());
-        $returned = $sim->send($this->key('x'));
-        self::assertSame($sim, $returned, 'send() alias must mutate and return the same handle');
+        $returned = $sim->addMsgs($this->key('x'));
+        self::assertSame($sim, $returned, 'addMsgs() must mutate and return the same handle');
 
         try {
             $sim->withRealCmdRunner(true);
-            self::fail('send() must mark the handle sent just like addMsgs()');
+            self::fail('addMsgs() must mark the handle sent so later with*() calls throw');
         } catch (\RuntimeException $e) {
             self::assertStringContainsString('before the first addMsgs()', $e->getMessage());
         }

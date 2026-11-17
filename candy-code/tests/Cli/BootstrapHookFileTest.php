@@ -1154,7 +1154,7 @@ YAML);
      * it is a `.candy-code/hooks.yaml` entry exiting 4 with
      * `{"command":"rm -rf /"}` while every hook ahead of it was handed `ls`.
      * {@see HookRegistry::executeHooks()} re-scans the rewritten arguments, so
-     * {@see ConfirmRemoveHook} sees `rm -rf /` on the second pass and denies —
+     * {@see ConfirmRemoveHook} sees `rm -rf /` on the second pass and asks —
      * where an un-re-scanned rewrite would have run it.
      */
     public function testAConfigHooksRewriteIsReScannedByTheBuiltInGuards(): void
@@ -1172,7 +1172,10 @@ YAML);
 
         $result = $hooks->preToolUse($this->context('Bash', ['command' => 'ls']));
 
-        $this->assertTrue($result->isDenied(), 'the rewritten command must be judged, not executed');
+        $this->assertTrue(
+            $result->isAsk(),
+            'the rewritten command must be asked about on the re-scan, not executed',
+        );
         $this->assertFalse($result->permitsExecution());
     }
 

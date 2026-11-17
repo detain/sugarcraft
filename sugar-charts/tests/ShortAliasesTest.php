@@ -78,8 +78,8 @@ final class ShortAliasesTest extends TestCase
 
     public function testBarChartAliases(): void
     {
-        $long  = BarChart::new([['a', 1.0], ['b', 2.0]])->withSize(20, 5)->withShowLabels(true)->withShowAxis(true)->view();
-        $short = BarChart::new([['a', 1.0], ['b', 2.0]])->size(20, 5)->showLabels(true)->showAxis(true)->view();
+        $long  = BarChart::new([['a', 1.0], ['b', 2.0]])->withSize(20, 5)->withShowLabels(true)->withAxes(true)->view();
+        $short = BarChart::new([['a', 1.0], ['b', 2.0]])->size(20, 5)->showLabels(true)->axes(true)->view();
         $this->assertSame($long, $short);
     }
 

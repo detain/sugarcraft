@@ -10,30 +10,17 @@ use SugarCraft\Charts\LineStyle;
 use SugarCraft\Charts\MarkLine;
 
 /**
- * CH-17 (sugar-charts-088): the MarkLine style vocabulary moved from
- * string constants to the {@see LineStyle} enum, with the legacy
- * spellings kept as accepted input (deprecated alias window per house
- * law). Acceptance pin: old-const vs new-enum renders are byte-identical.
+ * CH-17 (sugar-charts-088) moved the MarkLine style vocabulary onto the
+ * {@see LineStyle} enum. C2 retired the legacy `STYLE_*` string spellings
+ * after their alias window, so the enum is the only accepted vocabulary.
  */
 final class MarkLineStyleTest extends TestCase
 {
-    public function testLegacyConstantsResolveToEnumCases(): void
+    public function testEnumCasesCarryTheWireSpellings(): void
     {
-        $this->assertSame(LineStyle::Solid, LineStyle::tryFrom(MarkLine::STYLE_SOLID));
-        $this->assertSame(LineStyle::Dashed, LineStyle::tryFrom(MarkLine::STYLE_DASHED));
-        $this->assertSame(LineStyle::Dotted, LineStyle::tryFrom(MarkLine::STYLE_DOTTED));
-    }
-
-    public function testLegacyConstantInputNormalisesToCase(): void
-    {
-        $arms = [
-            [MarkLine::STYLE_SOLID, LineStyle::Solid],
-            [MarkLine::STYLE_DASHED, LineStyle::Dashed],
-            [MarkLine::STYLE_DOTTED, LineStyle::Dotted],
-        ];
-        foreach ($arms as [$spelling, $case]) {
-            $this->assertSame($case, MarkLine::at(1.0, 'x', $spelling)->style);
-        }
+        $this->assertSame('solid', LineStyle::Solid->value);
+        $this->assertSame('dashed', LineStyle::Dashed->value);
+        $this->assertSame('dotted', LineStyle::Dotted->value);
     }
 
     public function testEnumInputAcceptedAtEveryStyleSurface(): void
@@ -46,20 +33,12 @@ final class MarkLineStyleTest extends TestCase
         $this->assertSame(LineStyle::Dotted, MarkLine::average($data, LineStyle::Dotted)->style);
     }
 
-    public function testRenderParityOldConstVsNewEnum(): void
+    public function testEveryCasePaintsAMarkLine(): void
     {
-        $arms = [
-            [MarkLine::STYLE_SOLID, LineStyle::Solid],
-            [MarkLine::STYLE_DASHED, LineStyle::Dashed],
-            [MarkLine::STYLE_DOTTED, LineStyle::Dotted],
-        ];
-        foreach ($arms as $i => [$spelling, $case]) {
-            $old = LineChart::new([0, 10], 5, 3)->withMarkLines([MarkLine::at(5.0, '', $spelling)])->view();
-            $new = LineChart::new([0, 10], 5, 3)->withMarkLines([MarkLine::at(5.0, '', $case)])->view();
-            // Sanity that each arm actually paints: without it a no-op mark
-            // renderer would make both sides vacuously equal.
-            $this->assertNotSame(LineChart::new([0, 10], 5, 3)->view(), $old, "parity arm {$i} must paint glyphs");
-            $this->assertSame($old, $new, "parity arm {$i}: enum must render the legacy bytes exactly");
+        $blank = LineChart::new([0, 10], 5, 3)->view();
+        foreach (LineStyle::cases() as $case) {
+            $painted = LineChart::new([0, 10], 5, 3)->withMarkLines([MarkLine::at(5.0, '', $case)])->view();
+            $this->assertNotSame($blank, $painted, "{$case->name} must paint glyphs");
         }
     }
 
@@ -69,22 +48,10 @@ final class MarkLineStyleTest extends TestCase
         $this->assertSame(LineStyle::Dashed, MarkLine::min([1, 2, 3])->style);
     }
 
-    public function testUnknownStyleRejectedNamingAcceptedSpellings(): void
+    public function testStringSpellingIsATypeErrorNotAnAlias(): void
     {
-        try {
-            MarkLine::at(1.0, '', 'squiggly');
-            $this->fail('unknown style spelling must throw');
-        } catch (\InvalidArgumentException $e) {
-            $this->assertStringContainsString('Invalid MarkLine style: squiggly', $e->getMessage());
-            $this->assertStringContainsString('solid, dashed, dotted', $e->getMessage());
-        }
-    }
-
-    public function testDeprecatedRoutingIsDocumentedInSource(): void
-    {
-        $doc = (new \ReflectionClassConstant(MarkLine::class, 'STYLE_SOLID'))->getDocComment();
-        $this->assertIsString($doc);
-        $this->assertStringContainsString('@deprecated', $doc, 'the alias window must stay documented for the future cleanup pass');
+        $this->expectException(\TypeError::class);
+        MarkLine::at(1.0, '', 'solid');
     }
 
     public function testRenderMatchNoLongerCarriesStringFallbackArm(): void

@@ -496,9 +496,8 @@ final class Store
      * Write binary data from a key to a file path.
      *
      * Named saveTo(): the operation writes store data OUT to disk, so the
-     * direction verb replaces the legacy getFile() spelling from the
-     * accessor-era rename; the store-side mutator setFile() keeps its name
-     * because it is the file form of this class's canonical set() verb.
+     * direction verb names it; the store-side mutator setFile() keeps its
+     * name because it is the file form of this class's canonical set() verb.
      */
     public function saveTo(string $key, string $filePath): bool
     {
@@ -563,15 +562,6 @@ final class Store
             }
         }
     }
-
-    /**
-     * BC forwarder for the pre-rename accessor name.
-     *
-     * @deprecated The `get`-prefixed form breaks the house bare-accessor
-     *     convention; kept only as a BC forwarder. Use
-     *     {@see self::saveTo()} instead. REMOVED-IN: 2.0.0.
-     */
-    public function getFile(string $key, string $filePath): bool { return $this->saveTo($key, $filePath); }
 
     // -------------------------------------------------------------------------
     // Database management

@@ -87,9 +87,9 @@ final class HeatmapMonoRampTest extends TestCase
     public function testMonoRampFlagSurvivesResizeThroughCopy(): void
     {
         $h = Heatmap::new([[0.5]])->withMonoRamp();
-        $this->assertTrue($h->getMonoRamp());
+        $this->assertTrue($h->monoRamp());
         // withSize() round-trips through copy(); the mode flag must carry.
-        $this->assertTrue($h->withSize(4, 2)->getMonoRamp());
+        $this->assertTrue($h->withSize(4, 2)->monoRamp());
         $this->assertTrue($h->monoRamp(true)->monoRamp()); // dual-form: arg sets, bare reads
     }
 

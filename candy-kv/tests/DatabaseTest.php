@@ -271,8 +271,8 @@ final class DatabaseTest extends TestCase
         $stmt->close();
 
         $this->assertNull($this->db->get('expired-key'));
-        // But getRaw should still find it
-        $raw = $this->db->getRaw('expired-key');
+        // But raw() should still find it
+        $raw = $this->db->raw('expired-key');
         $this->assertNotNull($raw);
     }
 

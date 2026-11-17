@@ -228,6 +228,87 @@ final class MaskIngestTest extends TestCase
         $this->assertNull($mask->advisory);
     }
 
+    public function testEachScanlineReadsItsPredictorFromTheRowAlreadyUnfiltered(): void
+    {
+        // 3x3 gray. Row 1 Up adds row 0 (10,20,30) → 11,22,33. Row 2 Average
+        // predicts from the row above (11,22,33) and the left neighbor in the
+        // same row: x0 = 0 + 11/2 = 5, x1 = 0 + (5+22)/2 = 13, x2 = 0 + (13+33)/2 = 23.
+        // The linear unfilter writes into one buffer by offset, so this pins
+        // that the "previous" row it reads is the one it just wrote.
+        $raw = "\x00\x0A\x14\x1E" . "\x02\x01\x02\x03" . "\x03\x00\x00\x00";
+        $unfilter = new \ReflectionMethod(MaskIngest::class, 'unfilter');
+        $unfilter->setAccessible(true);
+
+        $this->assertSame(
+            [10, 20, 30, 11, 22, 33, 5, 13, 23],
+            $unfilter->invoke(null, $raw, 3, 3, 1),
+        );
+    }
+
+    public function testA1024SquareRgbaMaskClassifiesInLinearTime(): void
+    {
+        // MaskIngest audit row 2 (candy-code src/Media/MaskIngest.php unfilter):
+        // the per-scanline `[...$samples, ...$current]` re-copied every earlier
+        // row, so a 1024x1024 RGBA mask took 31 s to walk (33 s on the measuring
+        // box) and ~136 MB at peak. The offset-write walk does the same work in
+        // ~3 s. The budget is 15 s: generous enough for a slow CI runner, and a
+        // quadratic walk exceeds it on any machine that measured the original.
+        $side = 1024;
+        $row = "\x00" . \str_repeat("\x7F\x7F\x7F\xFE", $side);
+        $png = self::rawPng($side, $side, 6, \str_repeat($row, $side));
+
+        $start = \hrtime(true);
+        $mask = MaskIngest::fromBytes($png, 'square.png');
+        $seconds = (\hrtime(true) - $start) / 1e9;
+
+        $this->assertSame(MaskIngest::MODE_ALPHA, $mask->mode);
+        $this->assertSame(MaskIngest::ADVISORY_COVERS_EVERYTHING, $mask->advisory, 'every pixel carries alpha 254');
+        $this->assertLessThan(15.0, $seconds, sprintf('1024x1024 RGBA classified in %.2f s; budget 15 s', $seconds));
+    }
+
+    public function testAMalformedLateRowDeclinesWithoutWalkingTheEarlierRows(): void
+    {
+        // 4000x400 gray, filter byte 5 on the last row. The per-scanline walk
+        // re-copied every earlier row before it reached the bad byte (quadratic:
+        // ~3e8 element copies here, several seconds). The pre-scan declines before
+        // any sample is written, so the budget is generous for any runner.
+        $width = 4000;
+        $height = 400;
+        $raw = \str_repeat("\x00" . \str_repeat("\x00", $width), $height - 1)
+            . "\x05" . \str_repeat("\x00", $width);
+        $unfilter = new \ReflectionMethod(MaskIngest::class, 'unfilter');
+        $unfilter->setAccessible(true);
+
+        $start = \hrtime(true);
+        $result = $unfilter->invoke(null, $raw, $width, $height, 1);
+        $seconds = (\hrtime(true) - $start) / 1e9;
+
+        $this->assertNull($result);
+        $this->assertLessThan(1.0, $seconds, sprintf('declining a late bad filter byte took %.2f s; budget 1 s', $seconds));
+    }
+
+    public function testAnUnknownFilterByteDeclinesBeforeTheBufferIsAllocated(): void
+    {
+        // 4000x4000 gray: a sample buffer for it is 16M slots (~256 MB as a PHP
+        // array). A bad filter byte on row 0 must decline without allocating it,
+        // and must not read past row 0 although the raw stream is far shorter
+        // than the header claims. Master also declines here (it never allocates
+        // for row 0); the late-row test above is the one that fails on master.
+        $raw = "\x05" . \str_repeat("\x00", 16);
+        $unfilter = new \ReflectionMethod(MaskIngest::class, 'unfilter');
+        $unfilter->setAccessible(true);
+
+        $peakBefore = \memory_get_peak_usage();
+        $this->assertNull($unfilter->invoke(null, $raw, 4000, 4000, 1));
+        $grew = \memory_get_peak_usage() - $peakBefore;
+
+        $this->assertLessThan(
+            16 * 1024 * 1024,
+            $grew,
+            sprintf('declining a bad filter byte grew peak memory by %d bytes; the buffer was allocated first', $grew),
+        );
+    }
+
     // ---- GD fallback paths ----------------------------------------------------
 
     public function testAPalettePngWithTransparentIndexClassifiesAsAlphaViaGd(): void

@@ -52,7 +52,7 @@ final class Projectile
      * 080): {@see Vector} is readonly, so handing every caller the same
      * instance is safe and a per-call `new` was pure allocation for the
      * ported-Go idiom's loop. These are the canonical home of the gravity
-     * presets; the {@see Gravity} façade forwards here and is deprecated.
+     * presets (the package-level Gravity façade was removed in 2.0.0).
      */
     private static array $gravityVectors = [];
 

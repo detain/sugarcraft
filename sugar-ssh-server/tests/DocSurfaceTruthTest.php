@@ -539,9 +539,11 @@ final class DocSurfaceTruthTest extends TestCase
 
         $flat = (string) \preg_replace('/\s+/', ' ', $readme);
 
-        // PasswordAuth: the variable it reads is one no OpenSSH exports.
+        // PasswordAuth: this repo does not set the variable it reads, and the
+        // ForceCommand export is unverified; no absolute claim about OpenSSH.
         self::assertStringContainsString('Compares a password from `SSH_PASSWORD`', $flat);
-        self::assertStringContainsString('Nothing in OpenSSH ever sets that variable', $flat);
+        self::assertStringContainsString('This repo does not set `SSH_PASSWORD`, and whether sshd\'s ForceCommand path exports it is unverified against OpenSSH', $flat);
+        self::assertDoesNotMatchRegularExpression('/nothing in openssh ever sets/i', $flat);
         self::assertStringNotContainsString('against a caller-supplied callback (`SSH_PASSWORD` env var).', $flat);
 
         // CertificateAuth: same story, and the silence was the defect (audit K6).
@@ -725,6 +727,55 @@ final class DocSurfaceTruthTest extends TestCase
                 $body,
             );
         }
+    }
+
+    /**
+     * AUD §2 #58 / P0-A13: PasswordAuth reads `SSH_PASSWORD`, which this repo
+     * does not set, and whether a ForceCommand wrapper exports it is unverified
+     * against OpenSSH, so the gate is meant to run behind a wrapper. That must
+     * be stated on the class (where a reader of the code lands) and in the
+     * README (where an operator lands), and the statement must not be dropped
+     * by a later rewrite of either. Absolute claims about what OpenSSH never
+     * sets are asserted absent, case-insensitively, so they cannot come back.
+     */
+    public function testPasswordAuthIsDocumentedAsWrapperOnly(): void
+    {
+        $doc = (new \ReflectionClass(\SugarCraft\SshServer\Middleware\Auth\PasswordAuth::class))->getDocComment();
+        self::assertIsString($doc, 'PasswordAuth must carry a class docblock');
+        $doc = (string) \preg_replace('/^\s*\*\s?/m', '', $doc);
+        $doc = (string) \preg_replace('/\s+/', ' ', $doc);
+        self::assertStringContainsString('**Wrapper-only.**', $doc);
+        self::assertStringContainsString('This repo does not set `SSH_PASSWORD`, and whether sshd\'s ForceCommand path exports it is unverified against OpenSSH.', $doc);
+        self::assertStringContainsString('it does not authenticate the peer by itself.', $doc);
+        self::assertStringContainsString('that value is peer-asserted rather than proven.', $doc);
+        self::assertDoesNotMatchRegularExpression('/nothing in openssh ever sets/i', $doc);
+
+        $readme = $this->readme();
+        if ($readme === null) {
+            $this::fail('the library README is missing');
+        }
+        $flat = (string) \preg_replace('/\s+/', ' ', $readme);
+        self::assertStringContainsString('**Wrapper-only.** Compares a password from `SSH_PASSWORD`', $flat);
+        self::assertStringContainsString('**Wrapper-only:** reads `SSH_PASSWORD`', $flat);
+        self::assertStringContainsString('This repo does not set `SSH_PASSWORD`, and whether sshd\'s ForceCommand path exports it is unverified against OpenSSH', $flat);
+        self::assertStringContainsString('| `SSH_PASSWORD` | **not set by this repo; whether sshd\'s ForceCommand path exports it is unverified against OpenSSH** |', $flat);
+        self::assertStringContainsString('neither is a credential proof by itself', $flat);
+        self::assertStringContainsString('that `AcceptEnv` value is peer-asserted rather than proven.', $flat);
+        self::assertStringContainsString('The gate does not authenticate the peer by itself.', $flat);
+        self::assertStringContainsString('peer-asserted through `AcceptEnv`; neither is a credential proof by itself.', $flat);
+        self::assertStringContainsString('The variable is expected to reach this process', $flat);
+        self::assertStringNotContainsString('arrives only if', $flat);
+        self::assertStringNotContainsString('never a credential proof', $flat);
+        self::assertStringNotContainsString('reaches this process when', $flat);
+        self::assertDoesNotMatchRegularExpression('/nothing in openssh ever sets/i', $flat);
+
+        // The shared docs (admin guide, site body source, generated site page)
+        // are not pinned here: they live outside this lib and are changed by the
+        // merge gate, so a pin on them would be red on this branch. The getenv
+        // read is pinned by content, not by line number, so an unrelated edit
+        // above it does not break this pin.
+        $source = (string) \file_get_contents(\dirname(__DIR__) . '/src/Middleware/Auth/PasswordAuth.php');
+        self::assertStringContainsString("getenv('SSH_PASSWORD')", $source, 'PasswordAuth must read SSH_PASSWORD through getenv');
     }
 
     public function testTheChildEnvironmentContractIsWrittenWhereItIsUsed(): void

@@ -100,6 +100,16 @@ final class AgentWorkerPool
     private array $stallDeadlines = [];
 
     /**
+     * Bytes of each running agent's progress file already mirrored into its
+     * SubAgent::$output, keyed by agent id. Dropped with the file whenever it
+     * is discarded: at dispatch and when the result is collected
+     * ({@see discardProgress()}), so a recycled id starts from byte 0.
+     *
+     * @var array<string, int>
+     */
+    private array $progressOffsets = [];
+
+    /**
      * Wall-clock budget, in seconds, for one {@see executeAll()} run as a
      * whole — set by {@see withTimeBudget()}; null means no run-level bound.
      *
@@ -2482,10 +2492,30 @@ final class AgentWorkerPool
      * sufficient for the pane to appear: a frame that painted mid-run would
      * have had nothing to paint. This is the other half.
      *
-     * The whole file is re-read rather than tailed from an offset: a live
-     * agent's buffer is bounded by what it can say in one task, the read is
-     * once per poll per RUNNING agent, and an offset would have to be
-     * invalidated on every path that recycles an id.
+     * The file is stat'd every poll and read only when its length has changed
+     * since the last poll, so a poll with no growth costs one stat. A poll that
+     * sees a change verifies the mirror before it extends it: the whole file is
+     * read, its first {@see $progressOffsets} bytes are compared with the
+     * buffer, and only then are the bytes past them appended. That is what
+     * mirrors an in-place rewrite which grows the file. The offset is tied to
+     * the buffer (see the invariant in the body) and is dropped with the file
+     * at dispatch and when the result is collected.
+     *
+     * Declared behaviour change (2026-11-16): a same-size in-place rewrite of
+     * bytes that were already mirrored is not mirrored. It leaves the length
+     * unchanged, so a poll that stats the file sees nothing to verify. The
+     * shrink to zero resets the mirror at once, and only a poll that observes
+     * size 0 runs that reset. A file shrunk to zero and regrown between two
+     * polls is rebuilt or extended by the prefix comparison, so the buffer is
+     * never joined to bytes that differ from the mirror. The one exception is a
+     * regrow to exactly the mirrored length with no poll observing size 0. A
+     * stat cannot tell that from a same-size in-place rewrite, so it falls under
+     * the same trade-off and is not mirrored until the length next changes.
+     *
+     * Cost of the verification: a poll that sees growth reads the whole file,
+     * not only the appended bytes. The earlier tail read only the appended
+     * bytes, but it could not see a growing rewrite, and no cheaper check can:
+     * detecting a changed byte requires reading it.
      */
     protected function pumpProgress(): void
     {
@@ -2495,12 +2525,69 @@ final class AgentWorkerPool
                 continue;
             }
 
-            $published = @file_get_contents($this->progressFile((string) $agentId));
-            if ($published === false || $published === '' || $published === $agent->output) {
+            $id = (string) $agentId;
+            $path = $this->progressFile($id);
+
+            // Stat first. PHP caches stat results for the last file touched,
+            // so the cache is cleared for this path before reading its size.
+            clearstatcache(true, $path);
+            $size = @filesize($path);
+            if ($size === false) {
                 continue;
             }
 
-            $agent->output = $published;
+            // The mirror invariant: $agent->output holds the first $offset bytes
+            // of the progress file, where $offset is the length the mirror was
+            // last built from. When the file and the buffer both still have that
+            // length there is nothing to do, and that is the only case in which
+            // an in-place rewrite goes unseen (the declared same-size trade-off).
+            $offset = $this->progressOffsets[$id] ?? 0;
+            $mirrored = \strlen($agent->output);
+            if ($size === $offset && $mirrored === $offset) {
+                continue;
+            }
+
+            // Shrunk to zero: drop the mirror and the offset at once, so a
+            // regrowth before the next poll is rebuilt from byte 0 and not joined
+            // to the old buffer. Reading an empty file would not tell this case
+            // apart from an unreadable one.
+            if ($size === 0) {
+                $agent->output = '';
+                unset($this->progressOffsets[$id]);
+                continue;
+            }
+
+            // Any other change is verified against the whole file. Growth alone
+            // cannot tell an append from a rewrite that grew the file, so the
+            // mirrored prefix is compared before any new bytes are taken from it.
+            $full = self::readProgressRange($path, 0, $size);
+            if ($full === '') {
+                // Unreadable, or truncated to zero between the stat and the read.
+                // A read that is short but not empty is not this case: it is
+                // mirrored below as the file's current content. The buffer is
+                // still the first $offset bytes of the file as of its last build,
+                // so the offset stays. Dropping it would make the next readable
+                // poll look like a rebuild, and report a change (status and stall
+                // deadline) for bytes that did not change.
+                continue;
+            }
+
+            $intact = $mirrored === $offset
+                && \strlen($full) >= $offset
+                && ($offset === 0 || substr_compare($full, $agent->output, 0, $offset) === 0);
+            if ($intact) {
+                $delta = (string) substr($full, $offset);
+                if ($delta === '') {
+                    continue;
+                }
+
+                // `.=` on a buffer the pump owns reuses it in place.
+                $agent->output .= $delta;
+            } else {
+                $agent->output = $full;
+            }
+            $this->progressOffsets[$id] = \strlen($full);
+
             // Only now, and only for an agent that has actually said
             // something: `pending` is what settleAbandoned() distinguishes a
             // never-dispatched task by, and `streaming` is what every
@@ -2520,10 +2607,38 @@ final class AgentWorkerPool
         }
     }
 
+    /**
+     * The $length bytes of a progress file from $offset, or '' when it cannot
+     * be opened or read. Only {@see pumpProgress()} calls this, and only for a
+     * range it has just stat'd. A read that returns fewer bytes than statted
+     * (the file was truncated after the stat, to a non-zero length) returns
+     * those bytes, and pumpProgress() mirrors them as the file's content at
+     * that read; it does not wait for the next poll.
+     */
+    private static function readProgressRange(string $path, int $offset, int $length): string
+    {
+        $handle = @fopen($path, 'rb');
+        if ($handle === false) {
+            return '';
+        }
+
+        try {
+            if (fseek($handle, $offset) !== 0) {
+                return '';
+            }
+            $chunk = fread($handle, $length);
+        } finally {
+            fclose($handle);
+        }
+
+        return \is_string($chunk) ? $chunk : '';
+    }
+
     /** Drop one agent's progress file; its result supersedes it. */
     protected function discardProgress(string $agentId): void
     {
         @unlink($this->progressFile($agentId));
+        unset($this->progressOffsets[$agentId]);
     }
 
     /**

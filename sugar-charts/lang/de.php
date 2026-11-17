@@ -54,7 +54,6 @@ return [
         'ohlc.high_below_low' => 'Ungueltiger OHLC-Bar: high ({high}) darf nicht unter low ({low}) liegen',
         'markline.empty_dataset' => 'MarkLine kann nicht aus einem leeren Datensatz abgeleitet werden',
         'markline.invalid_type' => 'Ungueltiger MarkLine-Typ: {type} (erwartet einer von: {allowed})',
-        'markline.invalid_style' => 'Ungueltiger MarkLine-Stil: {style} (erwartet einer von: {allowed})',
         'movingaverage.window_positive' => 'Fenstergröße muss > 0 sein, erhalten {given}',
         'movingaverage.alpha_range' => 'EMA-Alpha muss in (0, 1] liegen, erhalten {given}',
         'bucketbytime.interval_positive' => 'Bucket-Intervall muss > 0 sein, erhalten {given}',

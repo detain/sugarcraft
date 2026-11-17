@@ -176,16 +176,6 @@ final class Scatter implements ChromeAccessors
         return $this->copy(legendIndicatorChar: $indicatorChar === null ? null : Rune::cell($indicatorChar, 'legend indicator'), legendIndicatorCharSet: true);
     }
 
-    /**
-     * @deprecated use {@see self::withLegendIndicator()}: the argument is
-     *             the indicator RUNE, not a style. Kept one minor as the
-     *             house alias window; REMOVED-IN 2.0.0.
-     */
-    public function withLegendStyle(?string $indicatorChar = null): self
-    {
-        return $this->withLegendIndicator($indicatorChar);
-    }
-
     /** Set the chart title. */
     public function withTitle(?string $title = null, Position $position = Position::Top): self
     {
@@ -244,8 +234,6 @@ final class Scatter implements ChromeAccessors
         return func_num_args() === 0 ? $this->legendIndicatorChar : $this->withLegendIndicator($char);
     }
 
-    /** @deprecated use {@see self::legendIndicator()}; REMOVED-IN 2.0.0. */
-    public function legendStyle(?string $char): self { return $this->withLegendIndicator($char); }
     public function title(?string $t = null, Position $p = Position::Top): self { return $this->withTitle($t, $p); }
     public function xLabel(?string $label = null): self              { return $this->withXLabel($label); }
     public function yLabel(?string $label = null): self              { return $this->withYLabel($label); }

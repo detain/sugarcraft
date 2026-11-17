@@ -63,7 +63,7 @@ final class BarChartBarColorTest extends TestCase
 
     public function testDefaultAndNullResetAreByteIdentical(): void
     {
-        $base = BarChart::new([['cpu', 0.7], ['mem', 0.4], ['disk', 0.9]], 12, 5)->withShowAxis();
+        $base = BarChart::new([['cpu', 0.7], ['mem', 0.4], ['disk', 0.9]], 12, 5)->withAxes();
         $nil = static fn(Bar $bar, int $i): ?Color => null;
 
         $this->assertSame($base->view(), $base->withBarColor($nil)->view());
@@ -92,7 +92,7 @@ final class BarChartBarColorTest extends TestCase
         $this->assertNull($base->barColorFn);
         $this->assertSame($fn, $next->barColorFn);
         $this->assertSame($fn, $next->withBarWidth(2)->barColorFn, 'barWidthCopy keeps the resolver');
-        $this->assertSame($fn, $next->withShowAxis()->barColorFn);
+        $this->assertSame($fn, $next->withAxes()->barColorFn);
     }
 
     public function testShortAliasMatchesLongForm(): void
