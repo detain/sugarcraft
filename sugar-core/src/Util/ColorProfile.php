@@ -153,10 +153,13 @@ enum ColorProfile: int
 
     /**
      * The local fallback ladder, used only when sugar-colorprofile is absent.
-     * It stays because sugar-core must answer without that optional sibling;
-     * it is not a second copy of the chain. The chain's rungs are the
-     * reference, and CoreForkDivergencePinTest pins where the two answers
-     * differ on purpose.
+     *
+     * This is a second copy of the chain's rungs, and the consolidation audit
+     * marks it for deletion. It is kept because deletion is blocked:
+     * sugar-colorprofile requires sugar-core, so sugar-core cannot require the
+     * chain, and the audit's remedy is to move the value enum to a leaf package
+     * first. Until that move lands, the two answers may differ only where
+     * CoreForkDivergencePinTest records it (an owner SSOT ruling is open).
      *
      * @param array<string,string> $env
      */

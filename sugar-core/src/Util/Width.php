@@ -171,8 +171,11 @@ final class Width
             // loop lets a byte-triggered overflow with only a few huge keys
             // keep shedding instead of over-shooting the budget.
             // Subtract the evicted keys' bytes from the running total instead
-            // of re-summing the survivors: the eviction pass stays linear in
-            // the dropped half, with no key-array allocation for the kept half.
+            // of re-summing the survivors. The old pass built an array_keys()
+            // copy and an array_map() of every survivor's strlen() per eviction;
+            // this one walks only the dropped half. array_slice() still copies
+            // the kept half once, as the old code did, so an eviction costs one
+            // O(count) rebuild, not two.
             $drop = \intdiv(\count(self::$memo), 2) ?: 1;
             $dropped = 0;
             foreach (self::$memo as $key => $_width) {
