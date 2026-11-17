@@ -135,8 +135,9 @@ final class PermissionGateHookTest extends TestCase
 
     /**
      * Ordering contract from the class docblock: the built-ins are the
-     * narrower, more specific hazard check, and their DENY short-circuits the
-     * scan before the gate's broad-policy message can replace it. Backdrop is
+     * narrower, more specific hazard check, and their verdict (an ASK for a
+     * destructive match) short-circuits the scan before the gate's broad-policy
+     * message can replace it. Backdrop is
      * Default — under the bypass-permissions ruling of 2026-10-06 the guard
      * hooks stand down entirely (second limb below), so the ranking is only
      * observable while they still enforce; what survives bypass is the gate's

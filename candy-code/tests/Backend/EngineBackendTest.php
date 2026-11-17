@@ -1158,7 +1158,7 @@ final class EngineBackendTest extends TestCase
     /**
      * Safe-by-default: a backend constructed WITHOUT a withHooks() call must
      * still register the built-in hooks, so a dangerous Bash tool call is
-     * denied before the tool ever executes.
+     * never executed: the built-ins ask, and with no approver the ask is refused.
      */
     public function testDefaultBackendDeniesDangerousBashToolCall(): void
     {
@@ -1168,7 +1168,7 @@ final class EngineBackendTest extends TestCase
 
         $backend->complete([Message::user('clean up')]);
 
-        $this->assertFalse($spy->executed, 'rm -rf must be denied by the safe-by-default hooks');
+        $this->assertFalse($spy->executed, 'rm -rf must not run under the safe-by-default hooks');
     }
 
     /**

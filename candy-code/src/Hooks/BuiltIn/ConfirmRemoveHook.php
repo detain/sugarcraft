@@ -30,12 +30,12 @@ use SugarCraft\Code\Permissions\ShellWords;
  * {@see ShellWords::dequoted()}: the quote-removed words, one simple command
  * per line. When the line does not parse (an unterminated quote) the second
  * candidate is the raw text with every quote and backslash deleted instead —
- * cruder, but a deny list must not get NARROWER on input it cannot read. The
- * raw text is always checked too, so nothing denied before is allowed now.
+ * cruder, but a match list must not get NARROWER on input it cannot read. The
+ * raw text is always checked too, so nothing asked about before runs unasked now.
  *
  * BYPASS IS ABOVE THIS GUARD-RAIL (owner ruling 2026-10-06). `bypass-permissions`
- * means allow-all: the human already holds the wheel, and every refusal this
- * hook adds is a heuristic prompt the operator explicitly waived. The
+ * means allow-all: the human already holds the wheel, and every prompt this
+ * hook adds is a heuristic the operator explicitly waived. The
  * unswitchable floor for destructive Bash stays where it always was — the
  * step-0 `rm -rf /` breaker inside {@see \SugarCraft\Code\Permissions\PermissionGate},
  * which no mode and no hook can talk open. Constructed without $modeReader

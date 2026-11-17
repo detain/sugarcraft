@@ -267,8 +267,9 @@ final class ConfirmRemoveHookTest extends TestCase
      * stands down, so the ONLY thing still refusing destructive Bash is the
      * gate's step-0 breaker — which is quoted-flag aware and catches every
      * `rm`-shaped row here but not `find -delete`. Each row states its bypass
-     * verdict; under a non-bypass session every row still denies, pinned in
-     * the same run so the pair cannot drift apart.
+     * verdict; under a non-bypass session every row still refuses or asks and
+     * never runs unanswered (breaker rows refuse outright, hook rows ask), pinned
+     * in the same run so the pair cannot drift apart.
      *
      * @return iterable<string, array{string, bool}>
      */
