@@ -195,6 +195,22 @@ final class PermissionGateHookTest extends TestCase
 
         $this->assertTrue($refused->isDenied(), 'the breaker refuses outright, ahead of any question');
         $this->assertFalse($refused->permitsExecution());
+
+        // The production order (EngineBackend::resolveHookManager() registers the
+        // built-ins first, then the gate), which the block above does not cover.
+        $production = new HookManager(new HookRegistry());
+        $production->registerBuiltIns();
+        $production->register(new PermissionGateHook(new PermissionGate(PermissionMode::Default)));
+
+        $productionAsk = $production->preToolUse($this->context('Bash', ['command' => 'rm -rf ./build']));
+
+        $this->assertTrue($productionAsk->isAsk(), 'built-ins first: the question still stands');
+        $this->assertFalse($productionAsk->permitsExecution());
+
+        $productionRefused = $production->preToolUse($this->context('Bash', ['command' => 'rm -rf /']));
+
+        $this->assertTrue($productionRefused->isDenied(), 'built-ins first: the breaker still refuses rm -rf / outright');
+        $this->assertFalse($productionRefused->permitsExecution());
     }
 
     /**
