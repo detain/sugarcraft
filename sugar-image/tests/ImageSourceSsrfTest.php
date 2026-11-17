@@ -146,6 +146,36 @@ final class ImageSourceSsrfTest extends TestCase
         $this->assertSame(2, $img->height);
     }
 
+    public function testInitialUrlWithAnUpperCaseSchemeIsFetched(): void
+    {
+        // RFC 3986 §3.1: `HTTP://` is http. The initial URL goes through the same
+        // case-insensitive scheme rule as the redirect hops, so it reaches the
+        // image instead of being refused as "not in the allowed list".
+        $img = ImageSource::fromUrl(
+            "HTTP://127.0.0.1:{$this->port}/poster.png",
+            allowedHosts: ['127.0.0.1'],
+        );
+
+        $this->assertSame('image/png', $img->format);
+        $this->assertSame(4, $img->width);
+        $this->assertSame(2, $img->height);
+    }
+
+    public function testUpperCaseAllowListEntryMatchesALowerCaseUrl(): void
+    {
+        // A caller's allow-list entry in upper case must match the lower-case
+        // scheme parse_url() returns for `http://`. Master compared the two with
+        // a strict in_array, so ['HTTP'] refused every http URL.
+        $img = ImageSource::fromUrl(
+            "http://127.0.0.1:{$this->port}/poster.png",
+            allowedSchemes: ['HTTP'],
+            allowedHosts: ['127.0.0.1'],
+        );
+
+        $this->assertSame('image/png', $img->format);
+        $this->assertSame(4, $img->width);
+    }
+
     public function testSyncSameAuthorityRedirectKeepsCredentials(): void
     {
         // finding sugar-image-101 (sync twin): a relative redirect stays on
