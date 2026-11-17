@@ -268,12 +268,30 @@ final class DisplayCellWidthTest extends TestCase
 
         // Pinned as it is, not as correct. The frozen data row is 34 cells wide
         // because renderFrozenRow writes an extra right wall before the divider,
-        // one more than the 33-cell frame. The defect is tracked as P0-A14
-        // (reviews/UPSTREAM-PLAN.md, Group A table), which depends on P0-A11: the
-        // extra wall in renderFrozenRow is removed there and this pin is re-pinned.
-        // The literals below stay as they are.
+        // one more than the 33-cell frame. The defect is tracked as P0-A14 in the
+        // upstream work-package plan, which depends on P0-A11: the extra wall in
+        // renderFrozenRow is removed there and this pin is re-pinned. The
+        // literals below stay as they are.
         self::assertSame('┃日本' . str_repeat(' ', 11) . '┃', $frozenHalf);
         self::assertSame(17, Width::string($frozenHalf));
+
+        // Whole-row pins. assertFrameIsRectangular cannot hold here: the frame is
+        // 33 cells, and the two frozen data rows (lines 3 and 4) are the 34-cell
+        // defect. Every other line must stay at the frame width.
+        $lines = explode("\n", $rendered);
+        foreach ([0, 1, 2, 5, 6] as $frameLine) {
+            self::assertSame(33, Width::string($lines[$frameLine]), "frame line {$frameLine}");
+        }
+        self::assertSame(
+            '┃日本語' . str_repeat(' ', 9) . '┃║東京都' . str_repeat(' ', 9) . '┃',
+            $lines[3],
+        );
+        self::assertSame(
+            '┃日本' . str_repeat(' ', 11) . '┃║東京' . str_repeat(' ', 11) . '┃',
+            $lines[4],
+        );
+        self::assertSame(34, Width::string($lines[3]));
+        self::assertSame(34, Width::string($lines[4]));
     }
 
     public function testScrollingHalfOfAFrozenRowPadsCjkCellsByDisplayWidth(): void
