@@ -175,6 +175,36 @@ final class WidthWrapWordsTest extends TestCase
         $this->assertSame([$family, 'x'], Width::wrapWords($family . 'x', 2));
     }
 
+    /**
+     * The three declared divergences from the copies (see the wrapWords
+     * docblock). Each pins BOTH sides, so a move in either the helper or a
+     * copy reddens here. The owner ruling that settles them gates P4-3b and
+     * P4-3c; until then a consumer that migrates inherits the helper's answer.
+     */
+    public function testDivergenceNewlineIsAHardBreakWhereFlappyJoinsWithASpace(): void
+    {
+        $this->assertSame(['a b'], self::flappyFoldReference("a\nb", 10));
+        $this->assertSame(['a', 'b'], Width::wrapWords("a\nb", 10, breakWords: false));
+    }
+
+    public function testDivergenceTabSeparatesWordsWhereMinesweeperKeepsItInTheWord(): void
+    {
+        $this->assertSame(["a\tb"], self::minesweeperWrapReference("a\tb", 10));
+        $this->assertSame(['a b'], Width::wrapWords("a\tb", 10, breakWords: true));
+    }
+
+    public function testDivergenceZwjClusterStaysWholeWhereMinesweeperBreaksPerCodepoint(): void
+    {
+        // At width 1 the family (2 cells) is over-wide, so the copy cuts it
+        // per codepoint and leaves a trailing empty line; the helper keeps it whole.
+        $family = "\u{1f468}\u{200d}\u{1f469}\u{200d}\u{1f467}";
+        $this->assertSame(
+            ["\u{1f468}", "\u{200d}", "\u{1f469}", "\u{200d}", "\u{1f467}", ''],
+            self::minesweeperWrapReference($family, 1),
+        );
+        $this->assertSame([$family], Width::wrapWords($family, 1, breakWords: true));
+    }
+
     public function testRejectsNonPositiveWidth(): void
     {
         $this->expectException(\InvalidArgumentException::class);
