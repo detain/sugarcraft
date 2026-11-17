@@ -963,7 +963,7 @@ final class Chat implements Model
          * it. Before this, {@see Runtime}'s engine pipeline ran every call
          * through {@see HookManager} while the Chat-native pipeline called
          * the registered closure with zero gating - so the same `rm -rf`
-         * argument was denied by {@see \SugarCraft\Code\Hooks\BuiltIn\ConfirmRemoveHook}
+         * argument was asked about by {@see \SugarCraft\Code\Hooks\BuiltIn\ConfirmRemoveHook}
          * on one path and executed on the other.
          *
          * Null (the default) keeps the pre-gating behaviour for tests and

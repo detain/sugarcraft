@@ -7299,7 +7299,8 @@ public static function useMaxCost(?string $maxCost): void
      * {@see \SugarCraft\Code\Hooks\BuiltIn\RepeatCallGuardHook} loop guard —
      * never read the mode at all. A bare chain with no gate enforces MORE than
      * bypass: it adds {@see \SugarCraft\Code\Hooks\BuiltIn\ConfirmRemoveHook}
-     * refusing destructive `rm`s earlier and more broadly than the breaker, and
+     * asking about destructive `rm`s earlier and more broadly than the breaker
+     * (refused outright only where no approver can answer), and
      * the secret/file-class refusals of ProtectFiles, which bypass stands down.
      * What the gate buys either way is that all of it is REACHABLE and
      * configurable: set `permissionMode`/`permissionRules` and it starts
