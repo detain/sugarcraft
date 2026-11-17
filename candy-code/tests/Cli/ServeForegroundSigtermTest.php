@@ -75,13 +75,20 @@ final class ServeForegroundSigtermTest extends TestCase
         }
         $records = \glob($this->home . '/.candy-code/server/server.json') ?: [];
         $this->assertNotSame([], $records, 'a live serve keeps its record');
+        // SIGTERM lands right after the readiness line, inside the window before
+        // the loop starts: the stop must survive into the loop, not be lost.
         \posix_kill(\proc_get_status($proc)['pid'], \SIGTERM);
         $running = true;
-        for ($i = 0; $i < 600 && $running; $i++) {
+        $deadline = \microtime(true) + 3.0;
+        while (\microtime(true) < $deadline && $running) {
             $running = \proc_get_status($proc)['running'];
             \usleep(25000);
         }
-        $this->assertFalse($running, 'serve exits on SIGTERM');
+        if ($running) {
+            \proc_terminate($proc, \SIGKILL);
+            \proc_close($proc);
+            $this->fail('serve did not exit within 3 s of SIGTERM');
+        }
         \proc_close($proc);
         $this->assertSame([], \glob($this->home . '/.candy-code/server/server.json') ?: []);
         $this->assertSame([], \glob($this->home . '/.candy-code/server/*.sock') ?: []);
