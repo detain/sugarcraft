@@ -230,6 +230,13 @@ final class Writer
      * progress. A stream that stays full past the bound drops its tail and
      * the waiters reject, the same outcome the old blocking path had.
      *
+     * This is the blocking path, kept on purpose for the two writes that have
+     * no loop to pump: before attach() (setup) and after close() (teardown),
+     * plus any write made while the writer is detached. An attached writer
+     * never reaches this loop from enqueue(). The stream_select() wait here is
+     * therefore a moved wait, not a removed one, and it is bounded only by the
+     * no-progress deadline.
+     *
      * @return int bytes handed off by this call
      */
     public function flushNow(float $deadline = self::WRITE_WAIT_DEADLINE): int

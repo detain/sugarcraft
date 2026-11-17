@@ -515,8 +515,10 @@ final class Program
      * `uv__update_time()` reveals the true clock, and the overdue timer fires at
      * once, early by the whole pre-run idle like every other row.
      *
-     * A real `Program` ALWAYS carries such handles: the stdin read watcher and
-     * the framerate tick. Measured through this method, a bail-out timer armed
+     * A real `Program` ALWAYS carries such handles: the stdin read watcher, and
+     * the periodic signal pump where it is armed (async signals off). The render
+     * timer is one-shot and armed only while dirty, so it is not a standing
+     * handle. Measured through this method, a bail-out timer armed
      * on a fresh loop before that loop is handed to `Program::run()` fires at
      * 5.001s / 1.999s / 0.022s for a 5s arm after N = 0 / 3 / 6 seconds of idle
      * — dead linear in `delay - idle`. So a test harness must not treat a
