@@ -127,10 +127,12 @@ final class AsyncProbeBoundedTest extends TestCase
         // grew it without end before the capability scan ever judged it. The
         // pump must carry the same keep-a-prefix guard as stderr: a ceiling
         // check around the append, not a raw concatenation. The behavior-side
-        // pin (a Tc line beyond the cap never lands) is in {@see AsyncProbeTest}.
+        // pin (a Tc line beyond the cap never lands) is in AsyncProbeReportTest
+        // (testStdoutCapIsExactAcrossASingleLargeRead).
         $src = self::src();
         self::assertStringContainsString('self::STDOUT_CAP_BYTES', $src);
-        self::assertStringContainsString('\strlen($stdout) < self::STDOUT_CAP_BYTES', $src);
+        self::assertStringContainsString('self::STDOUT_CAP_BYTES - \strlen($stdout)', $src);
+        self::assertStringNotContainsString('\strlen($stdout) < self::STDOUT_CAP_BYTES', $src, 'a per-chunk append guard overshoots the ceiling');
 
         $const = (new \ReflectionClass(AsyncProbe::class))->getReflectionConstant('STDOUT_CAP_BYTES');
         self::assertNotFalse($const, 'stdout needs its own named ceiling, mirroring stderr');

@@ -431,10 +431,15 @@ final class AsyncProbe
         // (created inside start()); Process itself emits only 'exit'. Listening
         // for 'stdout'/'stderr' EVENTS silently never fires — the pump below
         // reads the streams directly.
+        // The cut is exact, not per-chunk: a stream read can carry up to a full
+        // pipe buffer, and appending it whole would let the prefix overshoot the
+        // ceiling and pull a cap name past it into the scan. The sync door
+        // (InfocmpBinary::execOnce) cuts the same way.
         $stdout = '';
         $process->stdout?->on('data', function ($chunk) use (&$stdout): void {
-            if (\strlen($stdout) < self::STDOUT_CAP_BYTES) {
-                $stdout .= $chunk;
+            $room = self::STDOUT_CAP_BYTES - \strlen($stdout);
+            if ($room > 0) {
+                $stdout .= \substr((string) $chunk, 0, $room);
             }
         });
 
@@ -443,8 +448,9 @@ final class AsyncProbe
         // A bounded prefix is retained; everything past the cap is discarded.
         $stderr = '';
         $process->stderr?->on('data', function ($chunk) use (&$stderr): void {
-            if (\strlen($stderr) < self::STDERR_CAP_BYTES) {
-                $stderr .= $chunk;
+            $room = self::STDERR_CAP_BYTES - \strlen($stderr);
+            if ($room > 0) {
+                $stderr .= \substr((string) $chunk, 0, $room);
             }
         });
 

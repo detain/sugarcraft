@@ -307,6 +307,138 @@ final class AsyncProbeReportTest extends TestCase
         }
     }
 
+    /**
+     * The TERM gate runs before any spawn on the report() path: a TERM infocmp
+     * would parse as its own option books no slot and reaches no binary, and
+     * the answer is the environment report the sync pipeline gives.
+     */
+    public function testUnsafeTermNeverReachesTheChildOnTheReportPath(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('the planted /bin/sh stub needs a POSIX shell.');
+        }
+
+        $this->setTerm('-bad');
+        $log = \tempnam(\sys_get_temp_dir(), 'cp28gate');
+        self::assertIsString($log);
+        \unlink($log);
+        $path = $this->plantBinary('#!/bin/sh' . "\n" . 'echo spawn >> ' . \escapeshellarg($log) . "\n" . "exit 0\n");
+        try {
+            $loop = new StreamSelectLoop();
+            $report = null;
+            AsyncProbe::report($loop)->then(static function (ProbeReport $r) use (&$report): void {
+                $report = $r;
+            });
+
+            $this->assertInstanceOf(ProbeReport::class, $report, 'an unsafe TERM settles in place');
+            $this->assertCount(0, $this->inFlightSlots(), 'the TERM gate books no slot');
+            $this->assertFileDoesNotExist($log, 'the planted binary must never be executed for an unsafe TERM');
+            $this->assertSame(self::sources(TerminalProbe::run()), self::sources($report));
+            $this->assertFalse(\in_array('terminfo:Tc|RGB', self::sources($report), true));
+        } finally {
+            @\unlink($path);
+            @\unlink($log);
+        }
+    }
+
+    /**
+     * With no infocmp on the roster the report answers the environment alone:
+     * no slot is booked, nothing is memoized, and the report equals the sync
+     * composition on the same host.
+     */
+    public function testMissingBinaryNeverBooksAChildOnTheReportPath(): void
+    {
+        $this->setTerm('xterm-256color');
+        (new \ReflectionProperty(InfocmpBinary::class, 'path'))->setValue(null, '');
+
+        $loop = new StreamSelectLoop();
+        $report = null;
+        AsyncProbe::report($loop)->then(static function (ProbeReport $r) use (&$report): void {
+            $report = $r;
+        });
+
+        $this->assertInstanceOf(ProbeReport::class, $report, 'a missing binary settles in place');
+        $this->assertCount(0, $this->inFlightSlots(), 'no roster binary means no slot');
+        $this->assertSame([], $this->settledDumps());
+        $this->assertSame(self::sources(TerminalProbe::run()), self::sources($report));
+    }
+
+    /**
+     * The 8 KiB ceiling is exact on the report() pump, the same cut the sync
+     * door makes. The planted dump is ~36 KB with a Tc cap at its tail: the
+     * memo must hold exactly InfocmpBinary::OUTPUT_CAP_BYTES bytes, and the
+     * capability past the ceiling must never reach the report. A per-chunk
+     * append guard would keep the whole first read (one pipe buffer) and
+     * fail both assertions.
+     */
+    public function testStdoutCapIsExactAcrossASingleLargeRead(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('the planted /bin/sh stub needs a POSIX shell.');
+        }
+
+        $this->setTerm('xterm-256color');
+        $path = $this->plantBinary(
+            "#!/bin/sh\n"
+            . "i=0\n"
+            . "while [ \$i -lt 3000 ]; do printf '\\tfiller%d,\\n' \$i; i=\$((i+1)); done\n"
+            . "printf '\\tTc,\\n'\n",
+        );
+        try {
+            $loop = new StreamSelectLoop();
+            $report = self::settle(AsyncProbe::report($loop), $loop);
+
+            $this->assertInstanceOf(ProbeReport::class, $report);
+            $dumps = $this->settledDumps();
+            $this->assertArrayHasKey('xterm-256color', $dumps);
+            $this->assertSame(
+                InfocmpBinary::OUTPUT_CAP_BYTES,
+                \strlen((string) $dumps['xterm-256color']),
+                'the report pump keeps exactly the 8 KiB prefix, never a whole read past it',
+            );
+            $this->assertFalse(
+                \in_array('terminfo:Tc|RGB', self::sources($report), true),
+                'a capability beyond the ceiling must not reach the report',
+            );
+        } finally {
+            @\unlink($path);
+        }
+    }
+
+    /**
+     * The dump memo clears in bulk when it reaches MEMO_MAX_ENTRIES (256), the
+     * same ceiling the settled-answer memo and the sync dump table carry. A
+     * full table plus one completed child leaves exactly that child's dump.
+     */
+    public function testDumpMemoClearsWhenFullThroughReport(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('the planted /bin/sh stub needs a POSIX shell.');
+        }
+
+        $full = [];
+        for ($i = 1; $i <= 256; $i++) {
+            $full["filler-term-{$i}"] = "filler-{$i}";
+        }
+        (new \ReflectionProperty(AsyncProbe::class, 'settledDumps'))->setValue(null, $full);
+
+        $this->setTerm('xterm-newcap');
+        $path = $this->plantBinary("#!/bin/sh\nprintf 'xterm-newcap|x,\\n'\n");
+        try {
+            $loop = new StreamSelectLoop();
+            $report = self::settle(AsyncProbe::report($loop), $loop);
+
+            $this->assertInstanceOf(ProbeReport::class, $report);
+            $this->assertSame(
+                ['xterm-newcap' => "xterm-newcap|x,\n"],
+                $this->settledDumps(),
+                'a write into a full dump memo clears it first, leaving only the new entry',
+            );
+        } finally {
+            @\unlink($path);
+        }
+    }
+
     /** @return array<string, string|null> */
     private function settledDumps(): array
     {
