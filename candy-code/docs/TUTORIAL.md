@@ -54,13 +54,13 @@ candy-code
 
 `candy-code models` lists every provider this install can select, with the model
 each one defaults to. The selected one is marked `*`. OpenAI defaults to
-`gpt-4o-mini` (`src/Providers/ProviderFactory.php:108`); set `CANDY_CODE_MODEL`
-to override it.
+`gpt-4o` (`src/Providers/ProviderFactory.php:581`), the same model `models`
+prints for it; set `CANDY_CODE_MODEL` to override it.
 
 Exporting variables in every shell gets tedious. `candy-code login openai`
-pastes the key into the `providers` block of `~/.candy-code/config.json`
-instead. That file keeps the key as plain text, so read
-[SECURITY.md](SECURITY.md#credentials-on-disk) before you store one there.
+stores the key in the `providers` block of `~/.candy-code/config.json` instead
+(`src/Config/ProviderKeyStore.php:87-99`). That file keeps the key as plain text,
+so read [SECURITY.md](SECURITY.md#credentials-on-disk) before you store one there.
 
 For `claude-code` and `codex`, `login` hands the terminal to the vendor's own
 CLI, and the token never passes through candy-code. Those two need no API key,
@@ -90,14 +90,15 @@ hooks and tool as a model's call (`src/Providers/EchoProvider.php:23-30`):
 ```
 
 In `default` mode a `Write` waits for your reply. The keys are bound in
-`src/Commands/KeyBindingRegistry.php:1308-1325`:
+`src/Commands/KeyBindingRegistry.php:1308-1329`:
 
 | Key | Reply | What it does |
 |---|---|---|
 | `y` | `Once` | Runs this one call. |
 | `a` | `Always` | Allows calls like this one for the rest of the session. |
-| `p` | persist | Saves the allowance as a rule, through `Chat::persistPermissionRules()`. |
-| `n` | `Reject` | Refuses this call. The turn ends without running it. |
+| `p` | persist | Saves the allowance as a rule in your user `permissionRules`, so the next launch answers it too. Offered only where a rule can reproduce the grant: a pipeline's per-part grant and an exact-call grant have no `p` (`src/Commands/KeyBindingRegistry.php:1318-1320`). |
+| `n` | `Reject` | Refuses this call, so it does not run (`src/Chat.php:3595`). |
+| `x` | `Reject` with a note | Refuses this call and stops the turn at the next step boundary (`src/Chat.php:3578`, `src/Commands/KeyBindingRegistry.php:1329`). |
 
 The reply enum is `src/Permissions/PermissionReply.php`. Esc stops the running
 turn (`chat.stop`, `src/Commands/KeyBindingRegistry.php:1132`).
@@ -177,10 +178,17 @@ written by `src/Cli/HeadlessPermissionPrompt.php:483`. Pass `--permission-mode`
 to change that. The `bypass-permissions` mode runs everything without asking,
 so use it only where you trust the prompt.
 
-Real output, captured with no provider configured. The run also writes one
-notice to stderr that names the missing provider and the offline echo fallback,
-so the answer below is an echo. The `session_id` is an example and differs on
-each run:
+This output was captured from a run with no provider configured. To reproduce
+it, give the run an empty home directory so no saved provider is read, and clear
+the environment (`env -i`) so no `CANDY_CODE_PROVIDER` is set:
+
+```sh
+env -i HOME="$(mktemp -d)" PATH="$PATH" candy-code -p "say hello" --output-format json
+```
+
+The JSON envelope goes to stdout. Two lines go to stderr: a note that `-p` starts
+in `default` mode, and a notice that no provider is configured, so the answer is
+an echo (`src/Cli/LaunchContext.php:2198`). The `session_id` differs on each run:
 
 ```text
 {"schema":1,"result":"You said:\n\n> say hello","refusals":[],"session_id":"dd45608ae21ddba9"}

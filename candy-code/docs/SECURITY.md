@@ -15,8 +15,7 @@ When this page and that policy disagree, the root policy wins.
 
 ## Reporting a vulnerability
 
-Do not open a public issue. Report privately, to the monorepo (`detain/sugarcraft`, not the subtree-split
-mirror):
+Do not open a public issue. Report privately, through the monorepo (`detain/sugarcraft`):
 
 - **GitHub private vulnerability reporting** — the "Report a vulnerability" form on the repository's Security
   tab. This is the primary channel.
@@ -31,8 +30,8 @@ The root policy is the authority. In short, `master` is the source of truth, and
 every fix lands there first. Tagged, signed releases are built into a single
 `candy-code.phar`, and `candy-code self-update` installs a newer one only after
 the signature verifies against the public key pinned in
-`src/Cli/SelfUpdate.php:75`. The one exception is the earliest build, which
-predates the key pin and carries only a SHA-256 check. Releases are not
+`src/Cli/SelfUpdate.php:75`. A build with an empty key constant is keyless, and
+binds its bytes only through the SHA-256 sidecar (`src/Cli/SelfUpdate.php:70-75`). Releases are not
 backported to old tags before 1.0, so the fix for a version you run is the next
 release.
 
@@ -44,13 +43,13 @@ column.
 
 | Input | Trust | What enforces it | Read |
 |---|---|---|---|
-| Model output: tool calls, edits, shell commands | Untrusted | The permission gate runs the circuit breaker, then the rules, then the mode. The circuit breaker denies recursive deletes of `/` or `~` unconditionally. | [PERMISSIONS.md](PERMISSIONS.md) (`src/Permissions/PermissionGate.php`) |
+| Model output: tool calls, edits, shell commands | Untrusted | The permission gate runs the circuit breaker, then the channel tool scope (only when a channel sets one), then the rules, then the mode. The circuit breaker denies recursive deletes of `/` or `~` unconditionally. | [PERMISSIONS.md](PERMISSIONS.md) (`src/Permissions/PermissionGate.php:1002-1047`) |
 | A project's settings file | Untrusted until you read it | Your own files outrank the project's, so a project only fills in what you left unset. The `trustedProject*` keys cannot be written from the project layer (`src/Config/LayeredSettings.php:109-118`). | [SETTINGS.md](SETTINGS.md) |
 | A project's `.mcp.json` | Declined until you trust it | A project's servers start only after `candy-code mcp trust`, which records each server's command, arguments and environment. A later change is refused until you approve it again (`src/MCP/McpTrustPins.php:14`). | [MCP.md](MCP.md) |
 | A project's hooks file | Ignored until you trust the project | `<root>/.candy-code/hooks.yaml` loads only for a trusted project (`src/Hooks/HookManager.php:141`). | [HOOKS.md](HOOKS.md) |
 | An installed plugin bundle | Partly trusted | Its hooks run only through a channel listed in `trustedBundleChannels`, and its `.mcp.json` stays declined. | [PLUGINS.md](PLUGINS.md) |
 | Terminal output from tools, files and servers | Untrusted | Anything a program writes to the terminal is a control-sequence sink. The presentation code sanitizes these strings with `SugarCraft\Core\Util\Sanitize`, the fleet contract in section 1 of the root [`docs/TRUST-BOUNDARY.md`](https://github.com/detain/sugarcraft/blob/master/docs/TRUST-BOUNDARY.md). | [`docs/TRUST-BOUNDARY.md`](https://github.com/detain/sugarcraft/blob/master/docs/TRUST-BOUNDARY.md) |
-| Web content fetched by `WebFetch` | Untrusted | Each host is resolved and refused if any answer is in a blocked range (`src/Tools/BuiltIn/WebFetch.php:28-42`). Each redirect hop is judged by your rules, not only the first URL. | [PERMISSIONS.md](PERMISSIONS.md) |
+| Web content fetched by `WebFetch` | Untrusted | Each host is resolved and refused if any answer is in a blocked range, on every redirect hop (`src/Tools/BuiltIn/WebFetch.php:28-42`, hop check at `:353`). When you have permission rules configured, each redirect target is also judged by them, and a rule that denies or would ask refuses the hop (`src/Tools/BuiltIn/WebFetch.php:337-350`). With no rules configured that rule check does not run. | [PERMISSIONS.md](PERMISSIONS.md) |
 | A command you type with `!` | Trusted, by you | It runs without a prompt, because you typed it. A policy you configured still applies (`src/Commands/BangShell.php`). | [TUTORIAL.md](TUTORIAL.md#6-run-your-own-commands) |
 | The provider you select | Trusted with your prompts | Prompts go to the endpoint you chose, and your key authenticates the request. The offline echo provider makes no network calls. | [ENVIRONMENT.md](ENVIRONMENT.md) |
 | Network clients of `candy-code serve` | Untrusted until authenticated | The server binds `127.0.0.1` by default (`src/Server/ServerConfig.php:27`). Any other address needs `--allow-remote` (`src/Server/ServerConfig.php:753`). Every route except the health check, the login exchange and the static UI needs the owner token or a viewer token (`src/Server/Http/AuthMiddleware.php:18-30`). `--allowed-host` and `--allowed-ips` narrow who may connect. | [SERVER.md](SERVER.md) |
@@ -58,8 +57,8 @@ column.
 Two defaults are worth knowing before you rely on the model. The TUI starts in
 `default` mode, which asks before it writes. The Bash sandbox is off, so a Bash
 call runs with your privileges unless you turn `bashSandbox` on (`src/Config/Settings/Definitions/ToolSettings.php:98`).
-When it is on, it runs Bubblewrap on Linux and Seatbelt on macOS
-(`src/Tools/Sandbox/SandboxFactory.php:10-20`).
+When it is on, it runs Seatbelt on macOS (`Darwin`) and Bubblewrap on every other
+OS family (`src/Tools/Sandbox/SandboxFactory.php:73-80`).
 
 ## Threat model
 

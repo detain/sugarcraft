@@ -15,9 +15,11 @@ No. With no provider configured, the TUI and `-p` both answer from the offline
 
 ### Which providers can I use?
 
-Eleven type keys, listed under `CANDY_CODE_PROVIDER` in
-[ENVIRONMENT.md](ENVIRONMENT.md). `candy-code models` prints the same providers
-with each one's default model, and marks the one this install has selected.
+Eleven built-in type keys, listed under `CANDY_CODE_PROVIDER` in
+[ENVIRONMENT.md](ENVIRONMENT.md), plus any provider the shipped
+`config.dev.json` declares (`dev-sglang` in this repository's copy).
+`candy-code models` prints the same providers with each one's default model,
+and marks the one this install has selected.
 Every provider is built in `src/Providers/ProviderFactory.php`.
 
 ### The TUI says "echo" and my model never answers. Why?
@@ -98,7 +100,7 @@ server's command, arguments and environment. `candy-code mcp list` shows the
 servers without starting any of them, and `candy-code mcp trust` approves the
 file as it stands (`candy-code --help`). A later change to a server's command,
 arguments or environment is refused until you approve it again
-(`src/MCP/McpTrustPins.php:14`). The full model is in [MCP.md](MCP.md).
+(`src/MCP/McpTrustPins.php:44-48`). The full model is in [MCP.md](MCP.md).
 
 ### Why do my project's hooks not run?
 
@@ -181,14 +183,15 @@ connect, because an empty list admits every address beside loopback
 
 Because it answers every permission ask without asking. The server refuses
 that mode unless you pass `--allow-bypass` or set `server.allowBypass`
-(`src/Server/ServerConfig.php:676`).
+(`src/Server/ServerConfig.php:262-305`, and the refusal at `:676`).
 
 ### How do I update it?
 
 `candy-code self-update` downloads the phar, checks it against the pinned
 Ed25519 key (`src/Cli/SelfUpdate.php:75`), and refuses a payload that does not
-verify. The keyless exception is the earliest build, which carries only a
-SHA-256 check. The root policy describes the release channels in
+verify. A build with an empty key constant is keyless, and binds its bytes only
+through the SHA-256 sidecar (`src/Cli/SelfUpdate.php:70-75`). The root policy
+describes the release channels in
 [`SECURITY.md`](https://github.com/detain/sugarcraft/blob/master/SECURITY.md).
 
 ## Where to go next

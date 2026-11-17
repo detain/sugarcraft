@@ -5337,7 +5337,7 @@ final class DocFigureProseDriftTest extends TestCase
     public function testGlossarySsrfRowNamesTheWebFetchGuardItCites(): void
     {
         $glossary = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/GLOSSARY.md');
-        self::assertSame(1, preg_match('/^\| \*\*SSRF\*\* \| (.*) \|$/m', $glossary, $row), 'the SSRF glossary row is gone');
+        self::assertSame(1, preg_match('/^\| \x2a\x2aSSRF\x2a\x2a \| (.*) \|$/m', $glossary, $row), 'the SSRF glossary row is gone');
         self::assertStringContainsString('WebFetch', $row[1], 'the SSRF row no longer names the guard that answers it');
         self::assertStringContainsString('blocked range', $row[1], 'the SSRF row no longer says what the guard refuses');
         self::assertStringNotContainsString('jail-checked', $row[1], 'the content-free SSRF gloss came back');
@@ -5364,6 +5364,96 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertNotSame('', $lead, 'the TUTORIAL lead before step 1 is gone');
         self::assertStringContainsString('::tool', $lead, 'the TUTORIAL lead no longer names the scripted tool form its offline steps need');
         self::assertStringContainsString('::tool <Name> <json-object>', self::sourceOf('Providers/EchoProvider.php'), 'the scripted ::tool form the lead cites moved out of EchoProvider');
+    }
+
+    /**
+     * PD-2a review fixes: every source line a candy-code docs page cites for a
+     * behavior claim must still say that behavior. A moved line then fails here,
+     * instead of sending a reader to the wrong code.
+     */
+    public function testPdTwoACitedSourceLinesStillSayWhatThePagesSay(): void
+    {
+        $line = static function (string $relative, int $number): string {
+            $lines = explode("\n", self::sourceOf($relative));
+            self::assertArrayHasKey($number - 1, $lines, "src/{$relative} is shorter than the line {$number} a docs page cites");
+
+            return $lines[$number - 1];
+        };
+
+        // TUTORIAL step 2: the OpenAI default is gpt-4o, the model `models` prints.
+        self::assertStringContainsString("'model' => 'gpt-4o'", $line('Providers/ProviderFactory.php', 581), 'the OpenAI default moved; TUTORIAL.md cites ProviderFactory.php:581');
+        $tutorial = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/TUTORIAL.md');
+        self::assertStringContainsString('`gpt-4o` (`src/Providers/ProviderFactory.php:581`)', $tutorial, 'TUTORIAL.md no longer names the OpenAI default at its cite');
+        self::assertStringNotContainsString('`gpt-4o-mini` (`src/Providers/ProviderFactory.php:108`)', $tutorial, 'TUTORIAL.md again calls the auxiliary model the OpenAI default');
+
+        // TUTORIAL lead and FAQ: /exit quits mid-turn, at the two cites the page gives.
+        self::assertStringContainsString("'/exit'", $line('Host/TurnController.php', 309), 'the mid-turn /exit check moved; TUTORIAL.md cites TurnController.php:309-310');
+        self::assertStringContainsString('ROUTE_QUIT', $line('Host/TurnController.php', 310), 'the mid-turn quit route moved; TUTORIAL.md cites TurnController.php:309-310');
+        self::assertStringContainsString('TurnController::ROUTE_QUIT => [$this, Cmd::quit()]', $line('Chat.php', 9595), 'the quit route in Chat moved; TUTORIAL.md cites Chat.php:9595');
+
+        // TUTORIAL step 4: the key rows and the `p` condition.
+        self::assertStringContainsString('Offered only where a rule can reproduce the grant', $tutorial, 'TUTORIAL.md dropped the condition on the p key');
+        self::assertStringContainsString('offered only where a rule reproduces the grant', self::sourceOf('Commands/KeyBindingRegistry.php'), 'the source no longer says p is offered only where a rule reproduces the grant');
+        self::assertStringContainsString('Refuses this call, so it does not run', $tutorial, 'TUTORIAL.md dropped the n-key row');
+        self::assertStringContainsString("'n' => PermissionReply::Reject", $line('Chat.php', 3595), 'the n key moved; TUTORIAL.md cites Chat.php:3595');
+        self::assertStringContainsString('The user refused this call and stopped the turn.', $line('Chat.php', 3578), 'the x key stop moved; TUTORIAL.md cites Chat.php:3578');
+
+        // TUTORIAL step 4 and the login claim: the key store writes the providers block.
+        self::assertStringContainsString('mutateUserConfig', $line('Config/ProviderKeyStore.php', 87), 'the login key write moved; TUTORIAL.md cites ProviderKeyStore.php:87-99');
+        self::assertStringContainsString("['providers' => \$providers], []", $line('Config/ProviderKeyStore.php', 99), 'the login key write moved; TUTORIAL.md cites ProviderKeyStore.php:87-99');
+
+        // TUTORIAL step 9: the reproduction command for the captured output.
+        self::assertStringContainsString('env -i HOME="$(mktemp -d)" PATH="$PATH" candy-code -p "say hello" --output-format json', $tutorial, 'TUTORIAL.md dropped the command that reproduces its captured output');
+
+        // WebFetch's per-hop rule veto (SEC-3), which SECURITY.md cites with its caveat.
+        self::assertStringContainsString('if ($redirected)', $line('Tools/BuiltIn/WebFetch.php', 337), 'the redirect hop check moved; SECURITY.md cites WebFetch.php:337-350');
+        self::assertStringContainsString('redirectRulePolicy', $line('Tools/BuiltIn/WebFetch.php', 347), 'the redirect rule veto moved; SECURITY.md cites WebFetch.php:337-350');
+        self::assertStringContainsString("'Darwin'", $line('Tools/Sandbox/SandboxFactory.php', 76), 'the sandbox OS split moved; SECURITY.md cites SandboxFactory.php:73-80');
+
+        // FAQ: the serve bypass gate and the self-update key.
+        self::assertStringContainsString("'server.allowBypass'", $line('Server/ServerConfig.php', 262), 'the server.allowBypass key moved; FAQ.md cites ServerConfig.php:262-305');
+        self::assertStringContainsString("'--allow-bypass'", $line('Server/ServerConfig.php', 305), 'the --allow-bypass flag moved; FAQ.md cites ServerConfig.php:262-305');
+        self::assertStringContainsString('PUBLIC_KEY_BASE64', $line('Cli/SelfUpdate.php', 75), 'the pinned release key moved; SECURITY.md and FAQ.md cite SelfUpdate.php:70-75');
+    }
+
+    /**
+     * PD-2a review fixes: SECURITY.md keeps its pointer to the root policy's
+     * sections and its threat model, and GLOSSARY.md gives the gate in the order
+     * PermissionGate runs it (circuit breaker, channel scope, rules, mode).
+     */
+    public function testPdTwoASecurityPageKeepsItsPolicyPointerThreatModelAndGateOrder(): void
+    {
+        $security = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/SECURITY.md');
+        self::assertNotSame('', $security, 'docs/SECURITY.md vanished');
+
+        $rootPolicy = (string) file_get_contents(\dirname(__DIR__, 3) . '/SECURITY.md');
+        self::assertNotSame('', $rootPolicy, 'the root SECURITY.md vanished — the SECURITY page points readers at its sections');
+        foreach (['## Supported versions', '## Scope', '## Supply chain', '## Disclosure'] as $heading) {
+            self::assertStringContainsString($heading, $rootPolicy, "the root SECURITY.md lost the {$heading} section the docs page names");
+        }
+        foreach (['Supported versions', 'Scope', 'Supply chain', 'Disclosure'] as $section) {
+            self::assertStringContainsString($section, $security, "docs/SECURITY.md no longer points at the root policy's {$section} section");
+        }
+        self::assertStringContainsString('https://github.com/detain/sugarcraft/blob/master/SECURITY.md', $security, 'docs/SECURITY.md lost its link to the root policy');
+
+        self::assertStringContainsString("## Threat model\n", $security, 'docs/SECURITY.md lost its Threat model section');
+        foreach (['Assets.', 'Attackers the design defends against.', 'Assumed trusted.', 'Out of the model.'] as $part) {
+            self::assertStringContainsString($part, $security, "the threat model lost its {$part} paragraph");
+        }
+        self::assertStringContainsString('circuit breaker, the channel', $security, 'the threat model no longer gives the gate order');
+
+        $source = self::sourceOf('Permissions/PermissionGate.php');
+        $breaker = strpos($source, '0. Circuit breaker');
+        $scope = strpos($source, '0.5 Channel tool scope');
+        $rules = strpos($source, '1. Check explicit rules');
+        self::assertNotFalse($breaker, 'the circuit breaker step moved out of PermissionGate');
+        self::assertNotFalse($scope, 'the channel tool scope step moved out of PermissionGate');
+        self::assertNotFalse($rules, 'the rules step moved out of PermissionGate');
+        self::assertTrue($breaker < $scope && $scope < $rules, 'PermissionGate no longer runs the circuit breaker, then the channel scope, then the rules');
+
+        $glossary = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/GLOSSARY.md');
+        self::assertStringContainsString('the circuit breaker, the channel tool scope (only when a channel sets one), the rules, then the mode', $glossary, 'the GLOSSARY permission gate row no longer gives the source order');
+        self::assertStringNotContainsString('defined in one or two lines each', $glossary, 'the GLOSSARY intro claims entries are one or two lines, which the entries no longer are');
     }
 
 

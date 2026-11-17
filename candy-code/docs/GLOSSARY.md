@@ -1,9 +1,9 @@
 # Glossary
 
-The vocabulary this documentation assumes, defined in one or two lines each.
-Terms are grouped by what they describe. Each entry names the page or source
-file where you can read more, so the definition is a starting point rather than
-the whole story.
+The vocabulary this documentation assumes. Terms are grouped by what they
+describe. Each entry gives the meaning in a sentence or two and names the page or
+source file to read next, so the entry is a starting point rather than the whole
+story.
 
 ## Terminal and rendering
 
@@ -56,7 +56,7 @@ the whole story.
 |---|---|
 | **bang command (`!`)** | A shell command you type in the TUI, prefixed with `!`. Its output goes into the transcript, and it asks no permission, because you typed it (`src/Commands/BangShell.php`). |
 | **circuit breaker** | The refusal that runs before every rule and every mode: a recursive delete of `/` or `~` is denied unconditionally ([PERMISSIONS.md](PERMISSIONS.md)). |
-| **permission gate** | The check every tool call passes through, in this order: the circuit breaker, the rules, then the mode's own evaluator (`src/Permissions/PermissionGate.php`). |
+| **permission gate** | The check every tool call passes through, in this order: the circuit breaker, the channel tool scope (only when a channel sets one), the rules, then the mode's own evaluator (`src/Permissions/PermissionGate.php:1002-1047`). |
 | **permission mode** | One of six settings for how much the agent may do without asking, from `bypass-permissions` (runs everything) to `dont-ask` (denies everything but reads). See [PERMISSIONS.md](PERMISSIONS.md#the-six-modes). |
 | **permission rule** | An allow, deny or ask pattern on a tool and its argument. The first matching rule wins (`src/Permissions/PermissionRule.php`). |
 | **plan mode** | A permission mode that denies writes, so the agent can read and plan. The agent leaves it by asking, through `PlanExit`, and you approve or refuse the plan in the permission modal (`src/Tools/BuiltIn/PlanExitTool.php`). |
