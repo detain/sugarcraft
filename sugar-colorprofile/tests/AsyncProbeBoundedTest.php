@@ -20,6 +20,15 @@ use SugarCraft\ColorProfile\AsyncProbe;
  */
 final class AsyncProbeBoundedTest extends TestCase
 {
+    protected function tearDown(): void
+    {
+        // plantBinary() stuffs a temp file into InfocmpBinary's static path memo.
+        // Drop the memo so the planted (since unlinked) binary cannot outlive its
+        // test and answer for the next file in the same process.
+        \SugarCraft\ColorProfile\Probe\InfocmpBinary::reset();
+        parent::tearDown();
+    }
+
     private static function src(): string
     {
         $src = file_get_contents(__DIR__ . '/../src/AsyncProbe.php');
