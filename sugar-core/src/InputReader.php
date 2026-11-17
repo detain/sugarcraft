@@ -102,6 +102,14 @@ final class InputReader
     private int $scanResume = 0;
 
     /**
+     * Whether the parked digit-led SS3 span (`ESC O <digits>[;<digits>]`)
+     * has already consumed its `;`. Without it a resumed scan cannot tell
+     * the first digit run from the modifier run, since both are digits.
+     * Only meaningful while {@see $scanResume} is set by that park site.
+     */
+    private bool $ss3Semicolon = false;
+
+    /**
      * @param bool $sanitizePaste When true (default), bracketed-paste payloads
      *                            are run through
      *                            {@see Sanitize::untrustedForMarkedFrames()}
@@ -237,19 +245,37 @@ final class InputReader
                     // is Ctrl+Up rather than a leaked ";5A". A span split
                     // across feeds parks until its final byte arrives.
                     if ($remain >= 3 && $this->buf[$i + 2] >= '0' && $this->buf[$i + 2] <= '9') {
-                        $j = $i + 2;
-                        while ($j < $len && $this->buf[$j] >= '0' && $this->buf[$j] <= '9') {
-                            $j++;
-                        }
-                        if ($j < $len && $this->buf[$j] === ';') {
-                            $j++;
-                            while ($j < $len && $this->buf[$j] >= '0' && $this->buf[$j] <= '9') {
+                        // Resume at the parked offset when re-walking a span
+                        // that was cut by the buffer end; fresh spans start
+                        // at the first digit. A resumed offset is never below
+                        // the first digit (a park needs >= 1 digit), so the
+                        // walk never starts inside the ESC O prefix.
+                        $resumed = $this->scanResume > 0;
+                        $j       = $resumed ? $i + $this->scanResume : $i + 2;
+                        $semi    = $resumed && $this->ss3Semicolon;
+                        while ($j < $len) {
+                            $d = $this->buf[$j];
+                            if ($d >= '0' && $d <= '9') {
                                 $j++;
+                            } elseif (!$semi && $d === ';') {
+                                $semi = true;
+                                $j++;
+                            } else {
+                                break;
                             }
                         }
                         if ($j >= $len) {
+                            // Parked mid-span: record how far the walk got so
+                            // the next feed resumes at the first unscanned
+                            // byte. The `;` flag rides alongside because the
+                            // offset alone cannot tell the two digit runs apart.
+                            $this->scanResume    = $len - $i;
+                            $this->ss3Semicolon = $semi;
                             break;
                         }
+                        // The span is complete (final byte, or a malformed
+                        // non-final byte): the parked cursor is spent.
+                        $this->scanResume = 0;
                         $c = ord($this->buf[$j]);
                         if ($c < 0x40 || $c > 0x7e) {
                             // Not a final byte: the span is malformed. Drop it

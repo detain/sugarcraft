@@ -788,6 +788,46 @@ final class InputReaderTest extends TestCase
         $this->assertFalse($plainF1[0]->alt);
     }
 
+    public function testDigitSpanSs3ByteByByteMatchesOneShotAndResumesTheScan(): void
+    {
+        // A digit-led SS3 span parked across feeds must record its scan
+        // offset, so each feed walks only the bytes it added. Every split
+        // must decode to the same single key as a one-shot feed.
+        $resume = new \ReflectionProperty(InputReader::class, 'scanResume');
+        foreach (["\x1bO2;5A", "\x1bO12345;5A", "\x1bO1;2D", "\x1bO25P"] as $seq) {
+            $oneShot = (new InputReader())->parse($seq);
+            $this->assertCount(1, $oneShot, bin2hex($seq));
+
+            $reader = new InputReader();
+            $fed = [];
+            $n = strlen($seq);
+            for ($k = 0; $k < $n; $k++) {
+                foreach ($reader->parse($seq[$k]) as $m) {
+                    $fed[] = $m;
+                }
+                if ($k >= 2 && $k < $n - 1) {
+                    // Parked after k+1 bytes: the cursor sits at the buffer end.
+                    $this->assertSame($k + 1, $resume->getValue($reader), bin2hex($seq) . " after byte $k");
+                }
+            }
+            $this->assertCount(1, $fed, bin2hex($seq) . ' byte-by-byte');
+            $this->assertSame(0, $resume->getValue($reader), 'completion clears the cursor');
+            $this->assertSame($oneShot[0]->type, $fed[0]->type, bin2hex($seq));
+            $this->assertSame($oneShot[0]->ctrl, $fed[0]->ctrl, bin2hex($seq));
+            $this->assertSame($oneShot[0]->alt, $fed[0]->alt, bin2hex($seq));
+            $this->assertSame($oneShot[0]->shift, $fed[0]->shift, bin2hex($seq));
+        }
+
+        // The `;` flag decides which digit run a resumed walk is in: after a
+        // parked "ESC O 2;" the next digit is the modifier, not more key digits.
+        $reader = new InputReader();
+        $reader->parse("\x1bO2;");
+        $msgs = $reader->parse("5A");
+        $this->assertCount(1, $msgs);
+        $this->assertSame(KeyType::Up, $msgs[0]->type);
+        $this->assertTrue($msgs[0]->ctrl);
+    }
+
     public function testDigitSpanSs3NeverReadsAsCsi(): void
     {
         // The CSI table would read "1;5R" as a cursor-position report and
