@@ -19,7 +19,9 @@ use SugarCraft\Dashboard\Components\GridTable\Row;
  * unfrozen rows. The divider now takes the seat of that wall, as renderHeader
  * and renderRow already do, and a fully frozen row ends on the closing wall.
  * Every line of a frozen render must measure the same as the matching line of
- * the unfrozen render, at every width, freeze count and border preset.
+ * the unfrozen render, at every width, freeze count and border preset. The one
+ * exception is the borderless header, a separate defect pinned explicitly in
+ * the sweep below rather than skipped.
  */
 final class FrozenRowAlignmentTest extends TestCase
 {
@@ -87,15 +89,20 @@ final class FrozenRowAlignmentTest extends TestCase
                 self::assertCount(count($base), $lines, "width {$width}, frozen {$frozen}: line count");
 
                 foreach ($lines as $i => $line) {
-                    // The borderless header carries a stray '║' from renderHeader's
-                    // hard-coded freeze glyph. That is the header's own defect and is
-                    // not part of the frozen data row this test pins.
-                    if ($preset === 'borderless' && $i === 0) {
-                        continue;
+                    $expected = Width::string($base[$i]);
+
+                    // Known remaining mismatch, follow-up (not fixed by P0-A14): renderHeader
+                    // hard-codes the '║' freeze glyph instead of $borderConfig->chars->freezeDivider,
+                    // and borderless has no divider, so the borderless header gains one cell at
+                    // every freeze seat that has a scrollable column after it. The frozen data
+                    // rows still match. This is pinned, not skipped: when renderHeader is fixed
+                    // this assertion turns red on purpose and the pin is removed with the fix.
+                    if ($preset === 'borderless' && $i === 0 && $frozen < count(self::columns())) {
+                        $expected += 1;
                     }
 
                     self::assertSame(
-                        Width::string($base[$i]),
+                        $expected,
                         Width::string($line),
                         "width {$width}, frozen {$frozen}, line {$i}: {$line}",
                     );

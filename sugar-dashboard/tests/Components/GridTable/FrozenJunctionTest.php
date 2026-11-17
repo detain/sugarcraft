@@ -112,9 +112,10 @@ final class FrozenJunctionTest extends TestCase
         // data rows prove the band SELECTOR itself: renderRow's rtrim and
         // renderFrozenRow agree byte-for-byte while the band stays inside
         // the rendered column window, so this pin only holds while the
-        // loop routes band rows through the frozen renderer (M1 — the
-        // predicate disabled — must not change these bytes either; the
-        // discriminator with teeth is the out-of-window leg below).
+        // loop routes band rows through the frozen renderer. With the
+        // predicate disabled (M1) these bytes are unchanged, so this pin
+        // cannot kill M1. The M1 kill is FrozenRowAlignmentTest: its rounded,
+        // minimal and borderless sweeps fail under the mutation (P0-A14).
         foreach ([1, 3, 4] as $i) {
             self::assertSame(1, substr_count($lines[$i], '║'), "interior text row $i carries the heavy freeze divider once");
         }
