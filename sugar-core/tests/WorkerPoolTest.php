@@ -407,12 +407,12 @@ final class WorkerPoolTest extends TestCase
         // buffer is pinned small (SO_SNDBUF; the stream API's
         // stream_set_write_buffer refuses to shrink AF_UNIX pairs) and whose
         // read end is held but never drained. A blob payload then outruns
-        // the buffer, the drain loop spins to WRITE_DEADLINE_SECONDS (10 s,
-        // + the bounded reap ladder), and the job is REJECTED with the named
-        // timeout — the old blocking fwrite froze the whole event loop
-        // forever in exactly this situation. The promise is already settled
-        // when dispatch() returns, so its rejection reaches a handler
-        // attached afterwards synchronously; no second loop spin is needed.
+        // the buffer, the queued stdin writer makes no progress for
+        // WRITE_DEADLINE_SECONDS (10 s, + the bounded reap ladder), and the
+        // job is REJECTED with the named timeout — the old blocking fwrite
+        // froze the whole event loop forever in exactly this situation. The
+        // write runs on the loop, so the rejection arrives while the loop
+        // runs; the test spins the loop until it lands.
         $pool = new WorkerPool($this->loop, 1);
 
         if (!function_exists('socket_import_stream')) {
@@ -453,7 +453,14 @@ final class WorkerPoolTest extends TestCase
         $pool->dispatch($task)
             ->then(null, function (\Throwable $e) use (&$rejected): void {
                 $rejected = $e;
+                $this->loop->stop();
             });
+        // The stdin write is queued on the loop now, so the rejection lands while the loop runs.
+        $guard = $this->loop->addTimer(20.0, function (): void {
+            $this->loop->stop();
+        });
+        $this->spinLoop();
+        $this->loop->cancelTimer($guard);
         $elapsed = microtime(true) - $started;
 
         $this->assertInstanceOf(\RuntimeException::class, $rejected, 'the write deadline settled the job');

@@ -139,7 +139,7 @@ final class ProgramTimerAccuracyTest extends TestCase
      * It only looks like one in the degenerate case where the armed timer is the
      * loop's earliest deadline — `UV::RUN_ONCE` sizes the poll against the same
      * stale clock the deadline was built from, so the two errors cancel. Give
-     * the loop one handle due sooner (a `Program` always has a framerate tick)
+     * the loop one handle due sooner (a `Program` with a live render or a signal pump has one)
      * and the poll returns early, the post-poll clock refresh reveals the true
      * time, and the arm loses the whole pre-run idle.
      *
@@ -179,7 +179,7 @@ final class ProgramTimerAccuracyTest extends TestCase
         $loop = new ExtUvLoop();
 
         if ($withPeriodicHandle) {
-            // Stands in for Program's framerate tick.
+            // Stands in for a periodic handle a Program may arm (its signal fallback pump).
             $loop->addPeriodicTimer(1 / 60, static function (): void {});
         }
 
@@ -211,7 +211,7 @@ final class ProgramTimerAccuracyTest extends TestCase
         // that window, so the 10s deadline really is 10s away.
         //
         // It is NOT reliable because "pre-run arms are safe" — they are not. A
-        // Program owns a stdin read watcher and a framerate tick, and any handle
+        // Program owns a stdin read watcher and, on the signal fallback, a periodic tick, and any handle
         // due sooner than the armed timer exposes the stale clock in full (see
         // the timer-accuracy notes on Program::run()). So keep the construction
         // inside this method: hoist it to a property or share one loop across

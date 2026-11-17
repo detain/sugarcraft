@@ -43,21 +43,14 @@ use SugarCraft\Core\Util\Width;
 final class Renderer
 {
     /**
-     * Wall-clock ceiling for waiting on a writable output stream in
-     * {@see writeAll()} (audit sugar-core-018). A stream that stays full
-     * past this bound gets its tail dropped (the flushed prefix is what
-     * the recorder tee sees) instead of spinning the frame loop forever.
+     * Stall bound before a stuck output stream's tail is dropped (audit
+     * sugar-core-018). The bound lives on {@see Writer}; this alias keeps the
+     * public constant name stable.
      */
-    public const WRITE_WAIT_DEADLINE = 30.0;
+    public const WRITE_WAIT_DEADLINE = Writer::WRITE_WAIT_DEADLINE;
 
-    /**
-     * How many consecutive {@see stream_select()} failures {@see writeAll()}
-     * tolerates before declaring the stream dead. PHP's select already
-     * retries plain EINTR internally, so this covers the signal-dispatch
-     * races that still surface as `false` — the old code treated the very
-     * first one as terminal and silently dropped the frame tail.
-     */
-    public const MAX_SELECT_FALSE_RETRY = 5;
+    /** Consecutive stream_select() failures tolerated; see {@see Writer::MAX_SELECT_FALSE_RETRY}. */
+    public const MAX_SELECT_FALSE_RETRY = Writer::MAX_SELECT_FALSE_RETRY;
 
     /** @var list<string>|null */
     private ?array $lastLines = null;
@@ -75,25 +68,30 @@ final class Renderer
      */
     private const TOKEN_CACHE_MAX = 2000;
 
-    private ?Recorder $recorder = null;
+    /** Output queue: every frame and side-effect escape leaves through it. */
+    private Writer $writer;
 
     /** Shared parser for cell-diff repaints — avoids repeated allocation. */
     private Parser $parser;
 
     /**
-     * @param resource $out
-     * @param bool     $inline    draw inline instead of taking over the screen
-     * @param bool     $cellDiff  enable the cursed cell-diff algorithm
-     *                            (Bubble Tea v2 default — meaningful
-     *                            bandwidth win for SSH but slightly more
-     *                            CPU per frame; ignored when `$inline`)
+     * @param resource   $out
+     * @param bool       $inline    draw inline instead of taking over the screen
+     * @param bool       $cellDiff  enable the cursed cell-diff algorithm
+     *                              (Bubble Tea v2 default — meaningful
+     *                              bandwidth win for SSH but slightly more
+     *                              CPU per frame; ignored when `$inline`)
+     * @param Writer|null $writer  the queue to write through; Program passes its own
+     *                              so frames and side-effect escapes share one FIFO
      */
     public function __construct(
-        private $out,
+        $out,
         private readonly bool $inline = false,
         private readonly bool $cellDiff = false,
         private readonly bool $synchronized = true,
+        ?Writer $writer = null,
     ) {
+        $this->writer = $writer ?? Writer::new($out);
         $this->parser = new Parser();
     }
 
@@ -104,7 +102,7 @@ final class Renderer
      */
     public function setRecorder(?Recorder $recorder): void
     {
-        $this->recorder = $recorder;
+        $this->writer->setRecorder($recorder);
     }
 
     public function render(string $frame): void
@@ -153,73 +151,14 @@ final class Renderer
         $this->tokenCache = [];
     }
 
+    /**
+     * Hand a frame to the writer. Detached, the writer flushes it before this
+     * returns; attached to a loop, the program's loop drains it. The recorder
+     * tee and the sugar-core-018 flushed-prefix rule both live in the writer.
+     */
     private function emit(string $bytes): void
     {
-        // sugar-core-018: the recorder tee gets the FLUSHED prefix only.
-        // Cassettes are a claim about what the user saw; recording bytes the
-        // stream refused to take replayed ghosts of dropped tails.
-        $flushed = self::writeAll($this->out, $bytes);
-        if ($this->recorder !== null && $flushed > 0) {
-            $this->recorder->recordOutput($flushed === strlen($bytes) ? $bytes : substr($bytes, 0, $flushed));
-        }
-    }
-
-    /**
-     * Write every byte of $bytes to $out, looping over short writes.
-     *
-     * A single `fwrite()` is NOT guaranteed to consume the whole string:
-     * a full-screen frame is tens of KB, and when the destination is a
-     * PTY/pipe (notably an SSH session) whose kernel buffer is partially
-     * full, `fwrite()` writes only what fits and returns a short count.
-     * The unwritten tail used to be silently dropped, so a large first
-     * frame painted only partially — a different, non-deterministic amount
-     * each launch — while the small per-keystroke diffs always fit. Loop
-     * until the buffer drains (waiting for writability when it's full) so a
-     * frame is all-or-nothing on screen.
-     *
-     * sugar-core-018: `stream_select() === false` is NOT "not writable".
-     * Signal-dispatch races surface as a false return even on a healthy
-     * stream, and the old single-strike `return` silently dropped frame
-     * tails right there. False now retries up to
-     * {@see MAX_SELECT_FALSE_RETRY} consecutive ticks, and a stream that
-     * stays full is bounded by the {@see WRITE_WAIT_DEADLINE} wall clock.
-     * Returns the number of bytes actually flushed — the ONLY number the
-     * caller may treat as written (the emit() recorder tee records exactly
-     * that prefix).
-     *
-     * @param resource $out
-     */
-    private static function writeAll($out, string $bytes, float $deadline = self::WRITE_WAIT_DEADLINE): int
-    {
-        $len = strlen($bytes);
-        $written = 0;
-        $selectFalse = 0;
-        $start = hrtime(true);
-        while ($written < $len) {
-            $n = @fwrite($out, $written === 0 ? $bytes : substr($bytes, $written));
-            if ($n === false) {
-                return $written; // unrecoverable write error — drop the rest
-            }
-            if ($n === 0) {
-                if ((hrtime(true) - $start) / 1e9 >= $deadline) {
-                    return $written; // wall deadline — flushed prefix is the truth
-                }
-                // Non-blocking stream with a full buffer: block until it can
-                // take more rather than busy-spinning and dropping the tail.
-                $w = [$out];
-                $r = $e = null;
-                if (@stream_select($r, $w, $e, 1) === false) {
-                    if (++$selectFalse > self::MAX_SELECT_FALSE_RETRY) {
-                        return $written; // persistently failing select — stream is dead
-                    }
-                    continue;
-                }
-                $selectFalse = 0;
-                continue;
-            }
-            $written += $n;
-        }
-        return $written;
+        $this->writer->enqueue($bytes);
     }
 
     /**

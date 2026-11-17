@@ -14,6 +14,7 @@ use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Core\Recorder;
 use SugarCraft\Core\Renderer;
+use SugarCraft\Core\Writer;
 
 /**
  * A model with no behaviour of its own — the exec-capture and recorder
@@ -219,7 +220,7 @@ final class ProgramExecCaptureTest extends TestCase
 
     // ─── 018 legs: write twins — resume, retry-shape, deadline ────────────
 
-    public function testWriteAllResumesShortWritesAtTheFwriteOffset(): void
+    public function testFlushNowResumesShortWritesAtTheFwriteOffset(): void
     {
         $sockets = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
         $this->assertNotFalse($sockets);
@@ -247,8 +248,38 @@ final class ProgramExecCaptureTest extends TestCase
 
         $payload = bin2hex(random_bytes(2 * 1024 * 1024)); // 4 MiB of unique bytes
         $t0      = microtime(true);
-        $flushed = $this->invokeStatic(Renderer::class, 'writeAll', [$writer, $payload, 10.0]);
-        $this->assertIsInt($flushed);
+        // The writer is detached, so enqueue() writes before it returns. The recorder sees
+        // exactly the bytes the kernel accepted, which is the count this test asserts on.
+        $tee  = '';
+        $sink = Writer::new($writer);
+        $sink->setRecorder(new class ($tee) implements Recorder {
+            public function __construct(private string &$tee)
+            {
+            }
+
+            public function recordResize(int $cols, int $rows): void
+            {
+            }
+
+            public function recordInputBytes(string $bytes): void
+            {
+            }
+
+            public function recordOutput(string $bytes): void
+            {
+                $this->tee .= $bytes;
+            }
+
+            public function recordQuit(): void
+            {
+            }
+
+            public function close(): void
+            {
+            }
+        });
+        $sink->enqueue($payload);
+        $flushed = strlen($tee);
         // A non-blocking send cannot take a 4 MiB burst in one syscall into
         // a socket buffer two-to-fifty orders smaller, so multiple fwrite
         // rounds ran; the mutation probe (rewrite-from-zero) reddens the
@@ -275,9 +306,10 @@ final class ProgramExecCaptureTest extends TestCase
 
     public function testWriteTwinsRetrySelectFalseInsteadOfDroppingTheTail(): void
     {
+        // The write loop now lives in Writer::flushNow() (the detached path); the attached path never
+        // blocks on select at all, so the bounded retry is only needed on the synchronous leg.
         foreach ([
-            ['Renderer.php', '/if \(@stream_select\(\$r, \$w, \$e, 1\) === false\) \{\s*if \(\+\+\$selectFalse > self::MAX_SELECT_FALSE_RETRY\) \{/'],
-            ['Program.php', '/if \(@stream_select\(\$r, \$w, \$e, 1\) === false\) \{\s*if \(\+\+\$selectFalse > Renderer::MAX_SELECT_FALSE_RETRY\) \{/'],
+            ['Writer.php', '/if \(@stream_select\(\$r, \$w, \$e, 1\) === false\) \{\s*if \(\+\+\$selectFalse > self::MAX_SELECT_FALSE_RETRY\) \{/'],
         ] as [$file, $pattern]) {
             $src = (string) file_get_contents(dirname(__DIR__) . '/src/' . $file);
             $this->assertSame(
@@ -376,31 +408,11 @@ final class ProgramExecCaptureTest extends TestCase
 
         $m = new \ReflectionMethod($program, 'writeOutput');
         $m->setAccessible(true);
-        $m->invoke($program, "\x1b[2Jframe", 0.5);
+        $m->invoke($program, "\x1b[2Jframe");
 
         $this->assertSame(["\x1b[2Jframe"], $log);
         rewind($out);
         $this->assertSame("\x1b[2Jframe", stream_get_contents($out));
-    }
-
-    public function testRendererEmitRecordsFlushedBytesOnly(): void
-    {
-        $src = (string) file_get_contents(dirname(__DIR__) . '/src/Renderer.php');
-        $this->assertSame(
-            1,
-            preg_match(
-                '/\$flushed = self::writeAll\(\$this->out, \$bytes\);(?<body>.*?)recordOutput\(/s',
-                $src,
-                $m,
-            ),
-            'emit() must capture the flushed count from writeAll before recording',
-        );
-        $this->assertStringContainsString('$flushed', $m['body']);
-        $this->assertStringNotContainsString(
-            'recordOutput($bytes)',
-            str_replace("\n", ' ', preg_replace('/^\s*\/\/.*$/m', '', $src) ?? $src),
-            'no seat may tee the requested bytes as if they were written',
-        );
     }
 
     // ─── 002 leg: structured failure message renders ──────────────────────

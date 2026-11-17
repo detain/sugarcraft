@@ -70,6 +70,19 @@ final class Program
     private $output;
     private readonly InputReader $reader;
     private readonly Renderer $renderer;
+    /**
+     * The output queue. Frames, side-effect escapes and runtime bytes all go
+     * through it, so they reach the terminal in the order they were produced.
+     */
+    private readonly Writer $writer;
+    /** The armed one-shot render timer, or null when no frame is due ({@see markDirty()}). */
+    private ?TimerInterface $renderTimer = null;
+    /** True from just before loop->run() until run()'s finally: renders may be scheduled. */
+    private bool $loopLive = false;
+    /** True while a held frame waits on the writer draining. */
+    private bool $awaitingDrain = false;
+    /** microtime(true) of the last painted frame; the render cadence is anchored here. */
+    private float $lastFrameAt = 0.0;
     private readonly Tty $tty;
     private bool $dirty = true;
     private bool $escapeFlushPending = false;
@@ -250,11 +263,13 @@ final class Program
             }
         }
         $this->reader = new InputReader($options->sanitizePaste);
+        $this->writer = Writer::new($this->output);
         $this->renderer = new Renderer(
             $this->output,
             inline:   $options->inlineMode,
             cellDiff: $options->cellDiffRenderer,
             synchronized: $options->synchronizedOutput,
+            writer: $this->writer,
         );
         $this->tty = new Tty($this->input, $options->termios);
     }
@@ -391,7 +406,7 @@ final class Program
         $this->lastRenderedBody = null;
         $this->lastImageSignature = '';
         $this->lastImageRows = [];
-        $this->dirty = true;
+        $this->markDirty();
     }
 
     /**
@@ -613,21 +628,22 @@ final class Program
             });
             $inputWatched = true;
 
-            // Render tick.
-            $tickInterval = 1.0 / max(1.0, $this->options->framerate);
-            $tickTimer = $this->loop->addPeriodicTimer($tickInterval, function (): void {
-                // Fallback signal pump for environments where async delivery is
-                // unavailable (or was declined). When async signals are enabled,
-                // handlers already fired and nothing is pending, so skip this to
-                // avoid a redundant dispatch.
-                if (!$this->asyncSignals && function_exists('pcntl_signal_dispatch')) {
+            // Render is event-driven: markDirty() arms a one-shot timer at the
+            // frame cadence (scheduleRender()), so an idle program wakes for
+            // input and its own timers only. The old 60 Hz periodic tick ran
+            // whether or not anything had changed.
+            //
+            // Fallback signal pump for environments where async delivery is
+            // unavailable (or was declined). It needs a periodic wake of its
+            // own, since nothing else runs in an idle loop. When async signals
+            // are enabled, handlers already fired and nothing is pending, so
+            // this is skipped.
+            if (!$this->asyncSignals && function_exists('pcntl_signal_dispatch')) {
+                $tickInterval = 1.0 / max(1.0, $this->options->framerate);
+                $tickTimer = $this->loop->addPeriodicTimer($tickInterval, static function (): void {
                     pcntl_signal_dispatch();
-                }
-                if ($this->dirty) {
-                    $this->renderFrame();
-                    $this->dirty = false;
-                }
-            });
+                });
+            }
 
             // Paint the initial frame synchronously, before the loop starts, so the
             // first view is on screen immediately rather than one render-tick later.
@@ -656,12 +672,19 @@ final class Program
             // $running; loop->stop() before loop->run() is lost, so without
             // this guard the run would block until something else stopped it.
             if ($this->running) {
+                $this->loopLive = true;
+                $this->scheduleRender();
                 $this->loop->run();
             }
 
             $normalReturn = true;
             return $this->model;
         } finally {
+            $this->loopLive = false;
+            if ($this->renderTimer !== null) {
+                $this->loop->cancelTimer($this->renderTimer);
+                $this->renderTimer = null;
+            }
             if ($tickTimer !== null) {
                 $this->loop->cancelTimer($tickTimer);
             }
@@ -777,7 +800,7 @@ final class Program
         $this->lastRenderedBody = null;
         $this->lastImageSignature = '';
         $this->lastImageRows = [];
-        $this->dirty = true;
+        $this->markDirty();
     }
 
     /**
@@ -1048,7 +1071,7 @@ final class Program
             $this->lastRenderedBody = null;
             $this->lastImageSignature = '';
             $this->lastImageRows = [];
-            $this->dirty = true;
+            $this->markDirty();
             return;
         }
         if ($msg instanceof ExecRequest) {
@@ -1096,7 +1119,7 @@ final class Program
                 $this->lastRenderedBody = null;
                 $this->lastImageSignature = '';
                 $this->lastImageRows = [];
-                $this->dirty = true;
+                $this->markDirty();
             }
         }
         if ($msg instanceof AsyncCmd) {
@@ -1170,7 +1193,7 @@ final class Program
                 }
                 [$nextModel, $cmd] = $updated;
                 $this->model = $nextModel;
-                $this->dirty = true;
+                $this->markDirty();
                 if ($cmd !== null) {
                     $this->scheduleCmd($cmd);
                 }
@@ -1208,7 +1231,7 @@ final class Program
             // was dropped on the floor: routed, updated, thrown away.
             $this->persistScreenModel($this->model, $nextModel);
         }
-        $this->dirty = true;
+        $this->markDirty();
         if ($cmd !== null) {
             $this->scheduleCmd($cmd);
         }
@@ -1580,7 +1603,7 @@ final class Program
         $this->lastRenderedBody = null;
         $this->lastImageSignature = '';
         $this->lastImageRows = [];
-        $this->dirty = true;
+        $this->markDirty();
 
         $produced = $req->onComplete !== null
             ? ($req->onComplete)($exit, $stdout, $stderr, $err)
@@ -1706,7 +1729,7 @@ final class Program
         $this->lastRenderedBody = null;
         $this->lastImageSignature = '';
         $this->lastImageRows = [];
-        $this->dirty = true;
+        $this->markDirty();
         if (!$this->suspendResumeIssued) {
             $this->suspendResumeIssued = true;
             $this->dispatch(new ResumeMsg());
@@ -2052,6 +2075,10 @@ final class Program
 
     private function setupTerminal(): void
     {
+        // Attach before the first write so setup bytes ride the loop too. The
+        // stall bound drops a backlog that makes no progress; the render is then
+        // repainted in full (see onOutputStalled()).
+        $this->writer->attach($this->loop, Renderer::WRITE_WAIT_DEADLINE, $this->onOutputStalled(...));
         // X-CORE1-FIX (reviews-1103 MAJOR-1): the latch arms at entry, before
         // the first write. setupTerminal() runs outside run()'s try, so a hard
         // fatal or a throw from enableRawMode()'s TermiosFactory chain after
@@ -2130,6 +2157,9 @@ final class Program
     private function teardownTerminal(bool $popKittyKeyboard = false): void
     {
         if (!$this->terminalAttached) {
+            // Nothing to restore, but a backlog from an earlier write must still reach the
+            // terminal before the program goes away.
+            $this->writer->close();
             return;
         }
         $this->terminalAttached = false;
@@ -2179,6 +2209,9 @@ final class Program
         $this->activeMouseMode = MouseMode::Off;
         $this->activeFocusReporting = false;
         $this->activeBracketedPaste = false;
+        // Teardown is the last word on the terminal: flush the queue synchronously and
+        // detach, so nothing waits on a loop that is about to stop.
+        $this->writer->close();
     }
 
     /**
@@ -2291,6 +2324,7 @@ final class Program
      */
     private function renderFrame(): void
     {
+        $this->lastFrameAt = microtime(true);
         $frameStart = microtime(true);
 
         if ($this->options->withoutRenderer) {
@@ -2479,65 +2513,80 @@ final class Program
     }
 
     /**
-     * Write a chunk to the program's output stream and tee it to the
-     * recorder if one is attached. Every byte that leaves the runtime —
-     * renderer frames, RawMsg / PrintMsg, terminal-mode bytes, cursor /
-     * title / progress emitters — flows through here so cassettes
-     * reflect what the user actually saw.
-     *
-     * @param float $deadline writability ceiling (tests pass short bounds;
-     *                        production callers always take the default)
+     * Queue a chunk for the program's output stream. Every byte that leaves
+     * the runtime (renderer frames, RawMsg / PrintMsg, terminal-mode bytes,
+     * cursor / title / progress emitters) goes through the {@see Writer}, which
+     * tees the bytes it flushed to the recorder so cassettes reflect what the
+     * user saw. Inside run() the loop drains the queue without blocking; outside
+     * it the bytes are written before this returns.
      */
-    private function writeOutput(string $bytes, float $deadline = Renderer::WRITE_WAIT_DEADLINE): void
+    private function writeOutput(string $bytes): void
     {
-        // Loop over short writes: a single fwrite() to a PTY/pipe (e.g. an
-        // SSH session) with a partially full kernel buffer consumes only what
-        // fits and returns a short count. Dropping the tail left mode-setting
-        // sequences and large RawMsg/PrintMsg payloads partially emitted.
-        //
-        // sugar-core-018 (mirrors Renderer::writeAll()): a stream_select()
-        // false return is a transient interrupt, not "writable never" —
-        // retry MAX_SELECT_FALSE_RETRY consecutive ticks inside a
-        // WRITE_WAIT_DEADLINE wall bound before giving up on the tail.
-        $len = strlen($bytes);
-        $written = 0;
-        $selectFalse = 0;
-        $start = hrtime(true);
-        // A closed resource makes fwrite()/stream_select() throw TypeError (the
-        // @ silencer does not cover that), and a torn pipe returns false with
-        // a Notice. Teardown is best-effort: swallow and let later restore
-        // writes still be attempted.
-        try {
-            while ($written < $len && is_resource($this->output)) {
-                $n = @fwrite($this->output, $written === 0 ? $bytes : substr($bytes, $written));
-                if ($n === false) {
-                    break;
-                }
-                if ($n === 0) {
-                    if ((hrtime(true) - $start) / 1e9 >= $deadline) {
-                        break;
-                    }
-                    $w = [$this->output];
-                    $r = $e = null;
-                    if (@stream_select($r, $w, $e, 1) === false) {
-                        if (++$selectFalse > Renderer::MAX_SELECT_FALSE_RETRY) {
-                            break;
-                        }
-                        continue;
-                    }
-                    $selectFalse = 0;
-                    continue;
-                }
-                $written += $n;
-            }
-        } catch (\Throwable) {
+        $this->writer->enqueue($bytes);
+    }
+
+    /**
+     * Frame cadence: arm the one-shot render timer if a frame is due. Every state
+     * change calls this (via markDirty), and the timer is idempotent, so many
+     * changes between frames share one timer. This is the first half of coalescing.
+     */
+    private function markDirty(): void
+    {
+        $this->dirty = true;
+        $this->scheduleRender();
+    }
+
+    private function scheduleRender(): void
+    {
+        if (!$this->dirty || !$this->loopLive || $this->renderTimer !== null) {
+            return;
         }
-        // sugar-core-018: the recorder tee sees FLUSHED bytes only — a
-        // cassette that claims bytes the stream refused never matches what
-        // the user saw on glass.
-        if ($this->recorder !== null && $written > 0) {
-            $this->recorder->recordOutput($written === $len ? $bytes : substr($bytes, 0, $written));
+        $interval = 1.0 / max(1.0, $this->options->framerate);
+        $delay = max(0.0, $this->lastFrameAt + $interval - microtime(true));
+        $this->renderTimer = $this->loop->addTimer($delay, function (): void {
+            $this->renderTimer = null;
+            $this->onRenderTick();
+        });
+    }
+
+    private function onRenderTick(): void
+    {
+        if (!$this->dirty) {
+            return;
         }
+        if (!$this->writer->isIdle()) {
+            // Backpressure: the terminal has not taken the last frame yet. Hold this one.
+            // Updates that arrive meanwhile only set $dirty, so one frame renders the latest
+            // state when the queue drains. Painting now would queue a diff behind a backlog
+            // that is growing, and a dead client would then grow the queue without limit.
+            $this->awaitWriterDrain();
+            return;
+        }
+        $this->renderFrame();
+        $this->dirty = false;
+    }
+
+    private function awaitWriterDrain(): void
+    {
+        if ($this->awaitingDrain) {
+            return;
+        }
+        $this->awaitingDrain = true;
+        $resume = function (): void {
+            $this->awaitingDrain = false;
+            $this->scheduleRender();
+        };
+        $this->writer->drain()->then($resume, $resume);
+    }
+
+    /**
+     * The writer dropped a backlog it could not deliver. The terminal no longer
+     * matches the renderer's diff base, so the next frame repaints in full.
+     */
+    private function onOutputStalled(WriteStalledException $error): void
+    {
+        $this->log('warning', $error->getMessage());
+        $this->forceRepaint();
     }
 
     /**

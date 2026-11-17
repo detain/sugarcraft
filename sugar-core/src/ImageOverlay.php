@@ -61,6 +61,9 @@ final class ImageOverlay
      */
     private const MARKER_BASE = 0xE002;
 
+    /** Printable ASCII, 0x20 to 0x7E. ESC (0x1B) is outside the range, so a run never swallows a marker. */
+    private const PRINTABLE_ASCII = ' !"#$%&\'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~';
+
     /**
      * Introducer of the authenticating escape: `ESC ] candy-image ; <id> ESC \`.
      *
@@ -155,6 +158,12 @@ final class ImageOverlay
         $lines = explode("\n", $frame);
         $paints = [];
         foreach ($lines as $row => $line) {
+            // A line with no ESC byte holds no marker (every marker is an escape),
+            // and resolveLine() would hand it back unchanged. Skip the per-codepoint
+            // walk for it. Frames are mostly plain text, so this is the common case.
+            if (strpos($line, "\x1b") === false) {
+                continue;
+            }
             $lines[$row] = self::resolveLine($line, $row + 1, $images, $paints);
         }
 
@@ -208,6 +217,16 @@ final class ImageOverlay
                 }
                 $out .= ' '; // occupy the cell with a real space
                 $col += 1;
+                continue;
+            }
+
+            // ASCII fast path: a run of printable ASCII is one cell per byte, so the
+            // run is copied and counted in one step instead of codepoint by codepoint.
+            $run = strspn($line, self::PRINTABLE_ASCII, $i);
+            if ($run > 0) {
+                $out .= substr($line, $i, $run);
+                $col += $run;
+                $i += $run;
                 continue;
             }
 

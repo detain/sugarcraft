@@ -24,6 +24,12 @@ final class WorkerState
 
     public string $buffer = '';
 
+    /** Read position in $buffer while complete lines are handed off (zero between polls). */
+    public int $cursor = 0;
+
+    /** The queued writer carrying the current job's payload to stdin, if one is in flight. */
+    public ?Writer $writer = null;
+
     /**
      * sc-30: bounded keep-last capture of this worker's stderr (the pool
      * appends at most until WorkerPool::STDERR_TAIL_BYTES and slides the
