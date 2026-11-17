@@ -53,7 +53,7 @@ final class WordWrapTest extends TestCase
         self::assertSame(['abcde', 'fghij'], self::plainLines($out));
     }
 
-    public function testWordWrapHonoursExplicitNewlines(): void
+    public function testWordWrapHonorsExplicitNewlines(): void
     {
         $out = Style::new()->width(5)->wordWrap()->render("ab\ncd");
 
