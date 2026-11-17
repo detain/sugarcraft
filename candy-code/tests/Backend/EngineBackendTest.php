@@ -1160,7 +1160,7 @@ final class EngineBackendTest extends TestCase
      * still register the built-in hooks, so a dangerous Bash tool call is
      * never executed: the built-ins ask, and with no approver the ask is refused.
      */
-    public function testDefaultBackendDeniesDangerousBashToolCall(): void
+    public function testDefaultBackendRefusesUnansweredDangerousBashToolCall(): void
     {
         $spy = $this->bashSpyTool();
         $backend = EngineBackend::new($this->bashThenAnswerProvider(), 'm')

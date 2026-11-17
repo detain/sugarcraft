@@ -848,7 +848,7 @@ final class PermissionGateTest extends TestCase
     /**
      * The controls: still about `rm` recursive+force on root or home, nothing
      * wider. These must stay Allow under `bypass-permissions` (ConfirmRemoveHook
-     * is a separate layer and still refuses `rm -rf` on its own).
+     * is a separate layer and still asks about `rm -rf` on its own).
      *
      * @return iterable<string, array{string}>
      */

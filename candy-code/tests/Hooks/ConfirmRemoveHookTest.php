@@ -161,7 +161,7 @@ final class ConfirmRemoveHookTest extends TestCase
     }
 
     // =========================================================================
-    // Extended Destructive-Form Denial Tests (long flags + other tools)
+    // Extended Destructive-Form Ask Tests (long flags + other tools)
     // =========================================================================
 
     public function testAskLongFormRecursiveRm(): void
