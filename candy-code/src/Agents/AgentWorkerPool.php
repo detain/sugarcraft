@@ -2558,10 +2558,11 @@ final class AgentWorkerPool
             // mirrored prefix is compared before any new bytes are taken from it.
             $full = self::readProgressRange($path, 0, $size);
             if ($full === '') {
-                // Unreadable, or truncated between the stat and the read. Keep
-                // what was mirrored, and drop the offset so the next poll
-                // verifies from byte 0 once the file can be read again.
-                unset($this->progressOffsets[$id]);
+                // Unreadable, or truncated between the stat and the read. The
+                // buffer is still the first $offset bytes of the file as of its
+                // last build, so the offset stays. Dropping it would make the
+                // next readable poll look like a rebuild, and report a change
+                // (status and stall deadline) for bytes that did not change.
                 continue;
             }
 

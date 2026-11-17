@@ -933,9 +933,9 @@ final class WorkflowLivePaneTest extends TestCase
 
     /**
      * A resync whose read fails keeps the mirror it already had, and the next
-     * poll rebuilds it from byte 0 once the file can be read again. Clearing
-     * the buffer before the read would have dropped it to '' on this poll.
-     * Skipped as root, which reads a mode-0 file regardless.
+     * poll replaces it with the file's bytes once the file can be read again.
+     * Clearing the buffer before the read would have dropped it to '' on this
+     * poll. Skipped as root, which reads a mode-0 file regardless.
      */
     public function testAResyncThatCannotReadTheFileKeepsTheMirror(): void
     {
@@ -974,6 +974,67 @@ final class WorkflowLivePaneTest extends TestCase
             'first',
             $agent->output,
             'The mirror was not rebuilt from byte 0 once the file became readable.',
+        );
+    }
+
+    /**
+     * A poll whose read fails keeps the offset along with the mirror. The file
+     * then holds exactly the mirrored bytes again, so the next poll finds
+     * nothing to do: the status and the stall deadline stay as they were. Had
+     * the offset been dropped, that poll would have counted as a rebuild and
+     * reported the agent as streaming with its stall deadline renewed, for a
+     * file whose bytes never changed. The file is grown, then written back to
+     * the mirrored bytes while the test can still write it; the two writes are
+     * the test's own, since the pool never shrinks a progress file in place.
+     * Skipped as root, which reads a mode-0 file regardless.
+     */
+    public function testAnUnreadablePollKeepsTheOffsetSoAnUnchangedFileIsNotReportedAsStreaming(): void
+    {
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            self::markTestSkipped('root reads a mode-0 file, so the unreadable case cannot be set up');
+        }
+
+        $pool = new AgentWorkerPool();
+        $agent = $this->subAgent('a-14', 30);
+        $this->putRunning($pool, $agent, 4254);
+
+        $publish = new \ReflectionMethod(AgentWorkerPool::class, 'publishProgress');
+        $pump = new \ReflectionMethod(AgentWorkerPool::class, 'pumpProgress');
+        $path = (new \ReflectionMethod(AgentWorkerPool::class, 'progressFile'))->invoke($pool, 'a-14');
+        $deadlines = new \ReflectionProperty(AgentWorkerPool::class, 'stallDeadlines');
+
+        $publish->invoke($pool, 'a-14', 'first');
+        $pump->invoke($pool);
+        $this->assertSame('first', $agent->output);
+
+        // Grow the file, then make it unreadable: the size differs from the
+        // mirror, so the poll tries to read it and the read fails.
+        file_put_contents($path, '/x', FILE_APPEND);
+        chmod($path, 0000);
+        $agent->status = SubAgent::STATUS_RUNNING;
+        $sentinel = [1, 30.0];
+        $deadlines->setValue($pool, ['a-14' => $sentinel]);
+        try {
+            $pump->invoke($pool);
+        } finally {
+            chmod($path, 0644);
+        }
+        $this->assertSame('first', $agent->output, 'An unreadable poll changed the mirror.');
+
+        // The file again holds exactly the mirrored bytes.
+        file_put_contents($path, 'first');
+        $pump->invoke($pool);
+
+        $this->assertSame('first', $agent->output);
+        $this->assertSame(
+            SubAgent::STATUS_RUNNING,
+            $agent->status,
+            'A poll that found the mirrored bytes unchanged reported the agent as streaming.',
+        );
+        $this->assertSame(
+            ['a-14' => $sentinel],
+            $deadlines->getValue($pool),
+            'A poll that found the mirrored bytes unchanged renewed the stall deadline.',
         );
     }
 
@@ -1273,10 +1334,11 @@ final class WorkflowLivePaneTest extends TestCase
         );
     }
 
-    private function subAgent(string $id): SubAgent
+    private function subAgent(string $id, int $stallTimeout = 0): SubAgent
     {
         return new SubAgent(
             id: $id,
+            stallTimeout: $stallTimeout,
             agent: new Agent(
                 name: self::AGENT_NAME,
                 description: 'explore',
