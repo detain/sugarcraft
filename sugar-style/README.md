@@ -1031,7 +1031,7 @@ builds a single new `Style`, where the usual chain mints one intermediate
 style per setter. The builder's setters are `set*`-named (`setBold()`,
 `setFg()`, `setWidth()`) because they mutate the draft rather than return a
 new value. `build()` returns the same value the chained setters would.
-The builder covers the setters that take a plain value: the colours
+The builder covers the setters that take a plain value: the colors
 (`setFg`/`setBg`, the long forms, `setUnderlineColor`), the boolean
 attributes (including `setRapidBlink`, `setOverline` and `setInvisible`),
 `setUnderlineStyle`, the sizes, `setTabWidth`, `setAlign`,

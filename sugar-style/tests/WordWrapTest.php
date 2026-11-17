@@ -65,7 +65,7 @@ final class WordWrapTest extends TestCase
         $out = Style::new()->width(5)->wordWrap()->render("\x1b[31mhello world\x1b[0m");
 
         self::assertSame(['hello', 'world'], self::plainLines($out));
-        self::assertStringContainsString("\x1b[31m", explode("\n", $out)[0], 'the colour opens the first line');
+        self::assertStringContainsString("\x1b[31m", explode("\n", $out)[0], 'the color opens the first line');
         self::assertStringContainsString("\x1b[0m", explode("\n", $out)[1], 'the reset closes the last line');
     }
 
@@ -96,6 +96,24 @@ final class WordWrapTest extends TestCase
 
         self::assertSame('one two', rtrim(Ansi::strip($out)));
         self::assertStringNotContainsString("\n", $out);
+    }
+
+    public function testInlineWordWrapOfAnOverflowingLineStaysOneLine(): void
+    {
+        // The wrap pass must not run under inline(): breaking "one two three"
+        // at width 4 would reintroduce newlines that inline() has removed.
+        $out = Style::new()->inline()->wordWrap()->width(4)->render('one two three');
+
+        self::assertSame('one ', $out);
+        self::assertStringNotContainsString("\n", $out);
+    }
+
+    public function testInlineWordWrapOfNewlineSeparatedOverflowStaysOneLine(): void
+    {
+        $out = Style::new()->inline()->wordWrap()->width(4)->render("one two\nthree four");
+
+        self::assertStringNotContainsString("\n", $out);
+        self::assertSame(4, Width::string($out));
     }
 
     public function testWordWrapIsIgnoredUnderInlineSoTheResultStaysOneLine(): void

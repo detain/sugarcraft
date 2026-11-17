@@ -18,14 +18,14 @@ use SugarCraft\Core\Util\ColorProfile;
  * the {@see Style} setter of the same name, and the equivalence is pinned by
  * tests/StyleBuilderTest.php.
  *
- * Covers the setters that take a plain value: colours, the boolean
- * attributes, underline shape and colour, sizes and tab width, alignment,
- * colour profile, padding and margin as whole shorthands, the padding and
+ * Covers the setters that take a plain value: colors, the boolean
+ * attributes, underline shape and color, sizes and tab width, alignment,
+ * color profile, padding and margin as whole shorthands, the padding and
  * margin glyphs and margin background, and the bound content. Four groups
  * stay on {@see Style}, and a chain that needs one calls build() and
  * continues there:
- *  - structural setters: border() and its side and colour variants, the
- *    adaptive and complete colours, hyperlink() and transform();
+ *  - structural setters: border() and its side and color variants, the
+ *    adaptive and complete colors, hyperlink() and transform();
  *  - the per-side padding and margin setters (paddingTop() and so on);
  *  - the short aliases on(), of(), dim(), pad() and mg().
  *
@@ -49,7 +49,7 @@ final class StyleBuilder
      *
      * @param array<string,mixed>                       $seedArgs the seed Style's properties
      * @param \Closure(array<string,mixed>):Style       $factory  builds a Style from constructor arguments
-     * @param \Closure(array<int,int>,string):array     $sides    the padding/margin normaliser
+     * @param \Closure(array<int,int>,string):array     $sides    the padding/margin normalizer
      * @internal
      */
     public function __construct(
@@ -60,10 +60,10 @@ final class StyleBuilder
         $this->args = $seedArgs;
     }
 
-    /** Set the foreground colour. Pass null to clear. Mirrors {@see Style::foreground()}. */
+    /** Set the foreground color. Pass null to clear. Mirrors {@see Style::foreground()}. */
     public function setForeground(?Color $c): self { return $this->put('fg', $c); }
 
-    /** Set the background colour. Pass null to clear. Mirrors {@see Style::background()}. */
+    /** Set the background color. Pass null to clear. Mirrors {@see Style::background()}. */
     public function setBackground(?Color $c): self { return $this->put('bg', $c); }
 
     /** Hex-string form of {@see setForeground()}. Mirrors {@see Style::fg()}. */
@@ -72,7 +72,7 @@ final class StyleBuilder
     /** Hex-string form of {@see setBackground()}. Mirrors {@see Style::bg()}. */
     public function setBg(Color|string|null $c): self { return $this->setBackground(self::asColor($c)); }
 
-    /** Set the underline colour (SGR 58), or clear it with null. Mirrors {@see Style::underlineColor()}. */
+    /** Set the underline color (SGR 58), or clear it with null. Mirrors {@see Style::underlineColor()}. */
     public function setUnderlineColor(Color|string|null $c): self { return $this->put('underlineColor', self::asColor($c)); }
 
     public function setBold(bool $on = true): self          { return $this->flag('bold', $on); }
@@ -132,7 +132,7 @@ final class StyleBuilder
     /** Glyph that fills margin cells. Mirrors {@see Style::marginChar()}. */
     public function setMarginChar(string $char): self { return $this->put('marginChar', $char); }
 
-    /** Colour painted into the margin, or cleared with null. Mirrors {@see Style::marginBackground()}. */
+    /** Color painted into the margin, or cleared with null. Mirrors {@see Style::marginBackground()}. */
     public function setMarginBackground(?Color $c): self { return $this->put('marginBg', $c); }
 
     /** Build the Style. The builder stays usable: the draft is copied, not consumed. */

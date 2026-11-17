@@ -1036,37 +1036,37 @@ final class Style
      * no-get law: none of them collides with a fluent setter.
      */
 
-    /** Left plus right padding, in cells. */
+    /** Left plus right padding, in cells. Mirrors charmbracelet/lipgloss.GetHorizontalPadding. */
     public function horizontalPadding(): int { return $this->padding[1] + $this->padding[3]; }
 
-    /** Top plus bottom padding, in rows; zero under inline(). */
+    /** Top plus bottom padding, in rows; zero under inline(). Mirrors charmbracelet/lipgloss.GetVerticalPadding. */
     public function verticalPadding(): int { return $this->inline ? 0 : $this->padding[0] + $this->padding[2]; }
 
-    /** Left plus right margin, in cells. */
+    /** Left plus right margin, in cells. Mirrors charmbracelet/lipgloss.GetHorizontalMargins. */
     public function horizontalMargin(): int { return $this->margin[1] + $this->margin[3]; }
 
-    /** Top plus bottom margin, in rows; zero under inline(). */
+    /** Top plus bottom margin, in rows; zero under inline(). Mirrors charmbracelet/lipgloss.GetVerticalMargins. */
     public function verticalMargin(): int { return $this->inline ? 0 : $this->margin[0] + $this->margin[2]; }
 
-    /** Border columns: one per enabled left or right side; zero without a border(). */
+    /** Border columns: one per enabled left or right side; zero without a border(). Mirrors charmbracelet/lipgloss.GetHorizontalBorderSize. */
     public function horizontalBorderSize(): int
     {
         return $this->border === null ? 0 : ($this->borderSides[1] ? 1 : 0) + ($this->borderSides[3] ? 1 : 0);
     }
 
-    /** Border rows: one per enabled top or bottom side; zero without a border(). */
+    /** Border rows: one per enabled top or bottom side; zero without a border(). Mirrors charmbracelet/lipgloss.GetVerticalBorderSize. */
     public function verticalBorderSize(): int
     {
         return $this->border === null ? 0 : ($this->borderSides[0] ? 1 : 0) + ($this->borderSides[2] ? 1 : 0);
     }
 
-    /** Total non-content width: padding, border and margin, left and right. */
+    /** Total non-content width: padding, border and margin, left and right. Mirrors charmbracelet/lipgloss.GetHorizontalFrameSize. */
     public function horizontalFrameSize(): int
     {
         return $this->horizontalPadding() + $this->horizontalBorderSize() + $this->horizontalMargin();
     }
 
-    /** Total non-content height: padding, border and margin, top and bottom. */
+    /** Total non-content height: padding, border and margin, top and bottom. Mirrors charmbracelet/lipgloss.GetVerticalFrameSize. */
     public function verticalFrameSize(): int
     {
         return $this->verticalPadding() + $this->verticalBorderSize() + $this->verticalMargin();
@@ -1213,7 +1213,7 @@ final class Style
      * setters mints N intermediate styles. The builder carries the draft as
      * one constructor-argument array and calls `new self(...)` once, in
      * build(). The closures are minted here, inside this class's scope, so
-     * the private constructor and the padding/margin normaliser stay private.
+     * the private constructor and the padding/margin normalizer stay private.
      *
      *     $style = Style::new()->builder()->setBold()->setFg('#ff8800')->setWidth(20)->build();
      *

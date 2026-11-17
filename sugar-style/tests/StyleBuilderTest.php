@@ -49,13 +49,13 @@ final class StyleBuilderTest extends TestCase
     public static function equivalentChains(): array
     {
         return [
-            'colour and attributes' => [
+            'color and attributes' => [
                 static fn (Style $s): Style => $s->foreground(Color::hex('#ff8800'))->background(Color::hex('#101010'))
                     ->bold()->italic()->underline()->strikethrough()->faint()->blink()->reverse(),
                 static fn (StyleBuilder $b): StyleBuilder => $b->setForeground(Color::hex('#ff8800'))->setBackground(Color::hex('#101010'))
                     ->setBold()->setItalic()->setUnderline()->setStrikethrough()->setFaint()->setBlink()->setReverse(),
             ],
-            'hex-string colour forms' => [
+            'hex-string color forms' => [
                 static fn (Style $s): Style => $s->fg('#ff8800')->on('#000080'),
                 static fn (StyleBuilder $b): StyleBuilder => $b->setFg('#ff8800')->setBg('#000080'),
             ],
@@ -85,7 +85,7 @@ final class StyleBuilderTest extends TestCase
                 static fn (Style $s): Style => $s->inline()->wordWrap()->width(7)->setString('one two three'),
                 static fn (StyleBuilder $b): StyleBuilder => $b->setInline()->setWordWrap()->setWidth(7)->setString('one two three'),
             ],
-            'colour whitespace and tab width' => [
+            'color whitespace and tab width' => [
                 static fn (Style $s): Style => $s->colorWhitespace(false)->tabWidth(2),
                 static fn (StyleBuilder $b): StyleBuilder => $b->setColorWhitespace(false)->setTabWidth(2),
             ],
@@ -101,7 +101,7 @@ final class StyleBuilderTest extends TestCase
                 static fn (Style $s): Style => $s->underlineStyle(UnderlineStyle::Double)->underline(false),
                 static fn (StyleBuilder $b): StyleBuilder => $b->setUnderlineStyle(UnderlineStyle::Double)->setUnderline(false),
             ],
-            'null clears colours and sizes' => [
+            'null clears colors and sizes' => [
                 static fn (Style $s): Style => $s->foreground(Color::hex('#ff0000'))->foreground(null)
                     ->background(Color::hex('#00ff00'))->background(null)
                     ->width(9)->width(null)->maxHeight(4)->maxHeight(null),
@@ -109,7 +109,7 @@ final class StyleBuilderTest extends TestCase
                     ->setBackground(Color::hex('#00ff00'))->setBackground(null)
                     ->setWidth(9)->setWidth(null)->setMaxHeight(4)->setMaxHeight(null),
             ],
-            'null clears the string colours' => [
+            'null clears the string colors' => [
                 static fn (Style $s): Style => $s->fg('#ff0000')->fg(null)->bg('#00ff00')->bg(null)->underlineColor(null),
                 static fn (StyleBuilder $b): StyleBuilder => $b->setFg('#ff0000')->setFg(null)->setBg('#00ff00')->setBg(null)->setUnderlineColor(null),
             ],
@@ -245,7 +245,7 @@ final class StyleBuilderTest extends TestCase
         self::assertSame($viaSetter, $viaBuilder);
     }
 
-    public function testColourNamesAreRefusedLikeTheSetter(): void
+    public function testColorNamesAreRefusedLikeTheSetter(): void
     {
         self::assertNotNull(self::catchMessage(static fn () => Style::new()->fg('navy')));
         self::assertNotNull(self::catchMessage(static fn () => Style::new()->builder()->setFg('navy')));
