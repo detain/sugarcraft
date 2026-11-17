@@ -360,8 +360,9 @@ final class BinWiringTest extends TestCase
     }
 
     /**
-     * A12 (AUD §2 #27 candy-sql half): the README once said the query pane
-     * threads no cancel token and Ctrl+C always quits. The App mints a
+     * A12 (AUD §5, the candy-sql half; §2 #27 covers candy-git-server only):
+     * the README once said the query pane threads no cancel token and
+     * Ctrl+C always quits. The App mints a
      * per-dispatch CancellationSource and Ctrl+C cancels while a leg is in
      * flight, so the README must state that and drop the stale claim.
      */
