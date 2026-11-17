@@ -2506,7 +2506,11 @@ final class AgentWorkerPool
      * unchanged, so a poll that stats the file sees nothing to verify. The
      * shrink to zero resets the mirror at once, and only a poll that observes
      * size 0 runs that reset. A file shrunk to zero and regrown between two
-     * polls is caught by the prefix comparison and rebuilt, not spliced.
+     * polls is rebuilt or extended by the prefix comparison, so the buffer is
+     * never joined to bytes that differ from the mirror. The one exception is a
+     * regrow to exactly the mirrored length with no poll observing size 0. A
+     * stat cannot tell that from a same-size in-place rewrite, so it falls under
+     * the same trade-off and is not mirrored until the length next changes.
      *
      * Cost of the verification: a poll that sees growth reads the whole file,
      * not only the appended bytes. The earlier tail read only the appended

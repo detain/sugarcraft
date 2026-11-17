@@ -900,6 +900,47 @@ final class WorkflowLivePaneTest extends TestCase
     }
 
     /**
+     * DECLARED TRADE-OFF (under the same-size rule above), pinned on purpose: a
+     * file shrunk to zero and regrown to exactly the mirrored length between two
+     * polls is not mirrored. No poll observes size 0, so the zero-size reset never
+     * runs, and the length still equals the stored offset. A stat cannot tell
+     * this from a same-size in-place rewrite, and catching it would need a read
+     * on every poll, which the same-size rule exists to avoid. The next poll that
+     * sees a different length rebuilds the mirror, which the last assertion checks.
+     */
+    public function testASameLengthRegrowAfterAShrinkToZeroBetweenPollsIsNotMirrored(): void
+    {
+        $pool = new AgentWorkerPool();
+        $agent = $this->subAgent('a-14');
+        $this->putRunning($pool, $agent, 4255);
+
+        $publish = new \ReflectionMethod(AgentWorkerPool::class, 'publishProgress');
+        $pump = new \ReflectionMethod(AgentWorkerPool::class, 'pumpProgress');
+        $path = (new \ReflectionMethod(AgentWorkerPool::class, 'progressFile'))->invoke($pool, 'a-14');
+
+        $publish->invoke($pool, 'a-14', 'first');
+        $pump->invoke($pool);
+        $this->assertSame('first', $agent->output);
+
+        file_put_contents($path, '');
+        file_put_contents($path, 'REPLA');
+        $pump->invoke($pool);
+        $this->assertSame(
+            'first',
+            $agent->output,
+            'Trade-off: a same-length regrow between polls is not mirrored.',
+        );
+
+        file_put_contents($path, 'REPLA/more');
+        $pump->invoke($pool);
+        $this->assertSame(
+            'REPLA/more',
+            $agent->output,
+            'A later length change did not rebuild the mirror from the file.',
+        );
+    }
+
+    /**
      * An in-place rewrite of mirrored bytes that GROWS the file is mirrored.
      *
      * The file grows past the stored offset, so the poll reads the whole file
