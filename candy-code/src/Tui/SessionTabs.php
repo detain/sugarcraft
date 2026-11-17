@@ -37,6 +37,9 @@ final class SessionTabs
      *     'Tab'). sugar-core's InputReader does not decode this form, so on the
      *     live path it never reaches handleKey(); the entry is reachable only
      *     by a raw-byte caller. Closing that gap needs a sugar-core change.
+     *     App::init() negotiates kitty DISAMBIGUATE and deliberately not
+     *     modifyOtherKeys (candy-code/src/App/App.php, the CSI > 1 u push), so
+     *     this app does not ask a terminal for the xterm form either.
      *
      * @var list<string>
      */
