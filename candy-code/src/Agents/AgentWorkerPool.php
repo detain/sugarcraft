@@ -2499,10 +2499,11 @@ final class AgentWorkerPool
      * dropped with the file at dispatch and when the result is collected.
      *
      * Trade-off, stated because it is a behaviour change: the old whole-file
-     * read also mirrored an in-place rewrite of bytes already mirrored, so a
-     * same-size rewrite was picked up on the next poll. The tail does not
-     * re-read mirrored bytes, so that rewrite is not mirrored. Nothing in the
-     * pool produces one (see the invariant in the body).
+     * read also mirrored an in-place rewrite of bytes already mirrored, whatever
+     * the rewrite's length, so the next poll showed it. The tail does not re-read
+     * mirrored bytes, so such a rewrite is not mirrored unless the file shrinks
+     * below the offset and forces a resync. Nothing in the pool produces one:
+     * publishProgress() only appends (see the invariant in the body).
      */
     protected function pumpProgress(): void
     {
@@ -2542,27 +2543,38 @@ final class AgentWorkerPool
                 // file shrunk to zero and regrown past the old offset before
                 // the next poll would otherwise be tailed from that offset and
                 // spliced onto the old buffer.
-                $offset = 0;
-                $agent->output = '';
-                unset($this->progressOffsets[$id]);
-            }
-            if ($size <= $offset) {
-                continue;
-            }
+                if ($size === 0) {
+                    $agent->output = '';
+                    unset($this->progressOffsets[$id]);
+                    continue;
+                }
 
-            $delta = self::readProgressRange($path, $offset, $size - $offset);
-            if ($delta === '') {
-                continue;
-            }
+                // Read before replacing the buffer, so an unreadable file keeps
+                // what was mirrored. The stored offset is dropped with it: the
+                // next poll then sees a length mismatch and rebuilds from byte 0.
+                $delta = self::readProgressRange($path, 0, $size);
+                if ($delta === '') {
+                    unset($this->progressOffsets[$id]);
+                    continue;
+                }
 
-            // `.=` on a buffer the pump owns reuses it in place, so a long run
-            // costs O(output) in total rather than O(output) per chunk.
-            if ($resync) {
                 $agent->output = $delta;
+                $this->progressOffsets[$id] = \strlen($delta);
             } else {
+                if ($size <= $offset) {
+                    continue;
+                }
+
+                $delta = self::readProgressRange($path, $offset, $size - $offset);
+                if ($delta === '') {
+                    continue;
+                }
+
+                // `.=` on a buffer the pump owns reuses it in place, so a long
+                // run costs O(output) in total rather than O(output) per chunk.
                 $agent->output .= $delta;
+                $this->progressOffsets[$id] = $offset + \strlen($delta);
             }
-            $this->progressOffsets[$id] = $offset + \strlen($delta);
 
             // Only now, and only for an agent that has actually said
             // something: `pending` is what settleAbandoned() distinguishes a

@@ -869,6 +869,83 @@ final class WorkflowLivePaneTest extends TestCase
     }
 
     /**
+     * The same trade-off as the same-size case, for a rewrite that GROWS the
+     * file while keeping the mirrored prefix's length. The length check does
+     * not notice the rewrite, so the tail yields 'first/extra' where the old
+     * whole-file read yielded 'FIRST/extra'. Pinned so the widened declaration
+     * stays true.
+     */
+    public function testAGrowingRewriteOfMirroredBytesIsNotMirrored(): void
+    {
+        $pool = new AgentWorkerPool();
+        $agent = $this->subAgent('a-11');
+        $this->putRunning($pool, $agent, 4251);
+
+        $publish = new \ReflectionMethod(AgentWorkerPool::class, 'publishProgress');
+        $pump = new \ReflectionMethod(AgentWorkerPool::class, 'pumpProgress');
+        $path = (new \ReflectionMethod(AgentWorkerPool::class, 'progressFile'))->invoke($pool, 'a-11');
+
+        $publish->invoke($pool, 'a-11', 'first');
+        $pump->invoke($pool);
+        $this->assertSame('first', $agent->output);
+
+        file_put_contents($path, 'FIRST/extra');
+        $pump->invoke($pool);
+
+        $this->assertSame(
+            'first/extra',
+            $agent->output,
+            'Trade-off: a growing rewrite of mirrored bytes is not mirrored; only the appended bytes are read.',
+        );
+    }
+
+    /**
+     * A resync whose read fails keeps the mirror it already had, and the next
+     * poll rebuilds it from byte 0 once the file can be read again. Clearing
+     * the buffer before the read would have dropped it to '' on this poll.
+     * Skipped as root, which reads a mode-0 file regardless.
+     */
+    public function testAResyncThatCannotReadTheFileKeepsTheMirror(): void
+    {
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            self::markTestSkipped('root reads a mode-0 file, so the unreadable case cannot be set up');
+        }
+
+        $pool = new AgentWorkerPool();
+        $agent = $this->subAgent('a-12');
+        $this->putRunning($pool, $agent, 4252);
+
+        $publish = new \ReflectionMethod(AgentWorkerPool::class, 'publishProgress');
+        $pump = new \ReflectionMethod(AgentWorkerPool::class, 'pumpProgress');
+        $path = (new \ReflectionMethod(AgentWorkerPool::class, 'progressFile'))->invoke($pool, 'a-12');
+
+        $publish->invoke($pool, 'a-12', 'first');
+        $pump->invoke($pool);
+        $this->assertSame('first', $agent->output);
+
+        // A length mismatch forces a resync on the next poll.
+        $agent->output = 'stale!';
+        chmod($path, 0000);
+        try {
+            $pump->invoke($pool);
+            $this->assertSame(
+                'stale!',
+                $agent->output,
+                'An unreadable file on resync cleared the mirror instead of keeping it.',
+            );
+        } finally {
+            chmod($path, 0644);
+        }
+
+        $pump->invoke($pool);
+        $this->assertSame(
+            'first',
+            $agent->output,
+            'The mirror was not rebuilt from byte 0 once the file became readable.',
+        );
+    }
+
+    /**
      * A retry clears the buffer to '' before re-queueing the agent, and the
      * next poll must mirror the file from its first byte again — the offset
      * alone would silently skip everything published so far.
