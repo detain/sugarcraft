@@ -760,17 +760,13 @@ final class WorkflowLivePaneTest extends TestCase
     }
 
     /**
-     * Each poll reads only the bytes appended since the previous poll, in order.
-     *
-     * The output string alone cannot show that: a whole-file re-read yields
-     * the same result for an append-only file. So the test makes the mirrored
-     * prefix differ from the file on disk ('XXXXX' in place of 'first', plus
-     * the appended '/second'). A poll that re-reads the file from byte 0 would
-     * mirror 'XXXXX/second'. The offset tail reads only the bytes past the
-     * mirrored prefix and yields 'first/second'. The prefix rewrite is not a
-     * supported publisher action; it serves only as the probe.
+     * Appends accumulate across polls, and a poll with no growth changes
+     * nothing. The output string is the same whether each poll reads only the
+     * appended bytes or the whole file, so this pins the mirrored result rather
+     * than the read pattern. The rewrite cases below pin the behaviour a
+     * whole-file-on-growth design must keep.
      */
-    public function testPumpTailsOnlyTheBytesAppendedSinceTheLastPoll(): void
+    public function testPumpMirrorsEachAppendAcrossPolls(): void
     {
         $pool = new AgentWorkerPool();
         $agent = $this->subAgent('a-4');
@@ -778,20 +774,54 @@ final class WorkflowLivePaneTest extends TestCase
 
         $publish = new \ReflectionMethod(AgentWorkerPool::class, 'publishProgress');
         $pump = new \ReflectionMethod(AgentWorkerPool::class, 'pumpProgress');
-        $path = (new \ReflectionMethod(AgentWorkerPool::class, 'progressFile'))->invoke($pool, 'a-4');
 
         $publish->invoke($pool, 'a-4', 'first');
         $pump->invoke($pool);
         $this->assertSame('first', $agent->output);
 
-        file_put_contents($path, 'XXXXX');
-        file_put_contents($path, '/second', FILE_APPEND);
+        $pump->invoke($pool);
+        $this->assertSame('first', $agent->output, 'A poll with no growth changed the mirror.');
+
+        $publish->invoke($pool, 'a-4', '/second');
+        $pump->invoke($pool);
+        $publish->invoke($pool, 'a-4', '/third');
+        $pump->invoke($pool);
+
+        $this->assertSame('first/second/third', $agent->output);
+    }
+
+    /**
+     * A file shrunk to zero and regrown past the old offset between two polls
+     * is not spliced onto its stale mirror.
+     *
+     * No poll observes the zero-length file here, so the zero-size reset never
+     * runs. The regrown file is longer than the stored offset (5), and a
+     * length-only check would tail bytes 5.. of 'replacement' and append them
+     * to 'first', giving 'firstcement'. The prefix comparison sees 'repla' where
+     * 'first' was mirrored and rebuilds from byte 0.
+     */
+    public function testARegrownFileIsNotSplicedOntoItsStaleMirror(): void
+    {
+        $pool = new AgentWorkerPool();
+        $agent = $this->subAgent('a-13');
+        $this->putRunning($pool, $agent, 4253);
+
+        $publish = new \ReflectionMethod(AgentWorkerPool::class, 'publishProgress');
+        $pump = new \ReflectionMethod(AgentWorkerPool::class, 'pumpProgress');
+        $path = (new \ReflectionMethod(AgentWorkerPool::class, 'progressFile'))->invoke($pool, 'a-13');
+
+        $publish->invoke($pool, 'a-13', 'first');
+        $pump->invoke($pool);
+        $this->assertSame('first', $agent->output);
+
+        file_put_contents($path, '');
+        file_put_contents($path, 'replacement');
         $pump->invoke($pool);
 
         $this->assertSame(
-            'first/second',
+            'replacement',
             $agent->output,
-            'The pump re-read the mirrored prefix instead of tailing only the appended bytes.',
+            'A file shrunk to zero and regrown between polls was spliced onto its stale mirror.',
         );
     }
 
@@ -834,9 +864,10 @@ final class WorkflowLivePaneTest extends TestCase
     }
 
     /**
-     * TRADE-OFF, pinned on purpose: an in-place rewrite of bytes the pump has
-     * already mirrored is NOT mirrored. The old whole-file read showed it on
-     * the next poll; the offset tail does not re-read mirrored bytes.
+     * DECLARED BEHAVIOUR CHANGE (owner-approved, 2026-11-16), pinned on purpose:
+     * a same-size in-place rewrite of bytes the pump has already mirrored is NOT
+     * mirrored. The length is unchanged, so a poll that stats the file sees nothing
+     * to verify. A rewrite that grows the file is mirrored (see the growing test).
      *
      * Nothing in the pool rewrites published bytes (publishProgress() appends,
      * and the file is removed only by discardProgress(), which drops the
@@ -869,13 +900,14 @@ final class WorkflowLivePaneTest extends TestCase
     }
 
     /**
-     * The same trade-off as the same-size case, for a rewrite that GROWS the
-     * file while keeping the mirrored prefix's length. The length check does
-     * not notice the rewrite, so the tail yields 'first/extra' where the old
-     * whole-file read yielded 'FIRST/extra'. Pinned so the widened declaration
-     * stays true.
+     * An in-place rewrite of mirrored bytes that GROWS the file is mirrored.
+     *
+     * The file grows past the stored offset, so the poll reads the whole file
+     * and compares its prefix with the buffer. The prefix differs ('FIRST'
+     * against 'first'), so the buffer is rebuilt from the file. A tail that
+     * read only the bytes past the offset would yield 'first/extra'.
      */
-    public function testAGrowingRewriteOfMirroredBytesIsNotMirrored(): void
+    public function testAGrowingRewriteOfMirroredBytesIsMirrored(): void
     {
         $pool = new AgentWorkerPool();
         $agent = $this->subAgent('a-11');
@@ -893,9 +925,9 @@ final class WorkflowLivePaneTest extends TestCase
         $pump->invoke($pool);
 
         $this->assertSame(
-            'first/extra',
+            'FIRST/extra',
             $agent->output,
-            'Trade-off: a growing rewrite of mirrored bytes is not mirrored; only the appended bytes are read.',
+            'A growing in-place rewrite of mirrored bytes was not mirrored.',
         );
     }
 
