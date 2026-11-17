@@ -90,7 +90,7 @@ final class TabCloseAndQuitTest extends TestCase
     }
 
     /**
-     * Rewrite the close arm through App's own private mutate (the
+     * Rewrite the close arm through App's own protected mutate (the
      * Mutable splat, one changes array), so the expiry branch can be timed without sleeping.
      *
      * @param array{key:string,at:float} $arm
