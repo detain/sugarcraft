@@ -101,8 +101,9 @@ final class AgentWorkerPool
 
     /**
      * Bytes of each running agent's progress file already mirrored into its
-     * SubAgent::$output, keyed by agent id. Dropped with the file at every
-     * dispatch ({@see discardProgress()}), so a recycled id starts from byte 0.
+     * SubAgent::$output, keyed by agent id. Dropped with the file whenever it
+     * is discarded: at dispatch and when the result is collected
+     * ({@see discardProgress()}), so a recycled id starts from byte 0.
      *
      * @var array<string, int>
      */
@@ -2495,7 +2496,7 @@ final class AgentWorkerPool
      * stats the file and reads just the bytes past {@see $progressOffsets}. A
      * poll with no growth costs one stat, and a long run reads each byte once.
      * The offset is tied to the buffer (see the invariant in the body) and is
-     * dropped with the file on every dispatch.
+     * dropped with the file at dispatch and when the result is collected.
      *
      * Trade-off, stated because it is a behaviour change: the old whole-file
      * read also mirrored an in-place rewrite of bytes already mirrored, so a
@@ -2530,13 +2531,20 @@ final class AgentWorkerPool
             // compare bytes, so a file replaced by one that is not shorter than
             // the offset, with the buffer still at offset length, is not
             // detected. The pool never produces that: publishProgress() only
-            // appends, and the file is removed only by discardProgress() at
-            // dispatch, which also drops the offset, so the next run starts
-            // from byte 0 whatever the length check says.
+            // appends, and the file is removed only by discardProgress(), which
+            // runs at dispatch and when the result is collected and drops the
+            // offset with it, so the next run starts from byte 0 whatever the
+            // length check says.
             $offset = $this->progressOffsets[$id] ?? 0;
             $resync = $size < $offset || \strlen($agent->output) !== $offset;
             if ($resync) {
+                // Drop the stale mirror now, not only when new bytes arrive. A
+                // file shrunk to zero and regrown past the old offset before
+                // the next poll would otherwise be tailed from that offset and
+                // spliced onto the old buffer.
                 $offset = 0;
+                $agent->output = '';
+                unset($this->progressOffsets[$id]);
             }
             if ($size <= $offset) {
                 continue;

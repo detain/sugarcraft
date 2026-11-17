@@ -760,10 +760,15 @@ final class WorkflowLivePaneTest extends TestCase
     }
 
     /**
-     * Each poll mirrors the bytes appended since the previous poll, in order.
+     * Each poll reads only the bytes appended since the previous poll, in order.
      *
-     * The publisher only appends, so the second poll must add exactly the
-     * second chunk to the mirror and nothing already mirrored.
+     * The output string alone cannot show that: a whole-file re-read yields
+     * the same result for an append-only file. So the test makes the mirrored
+     * prefix differ from the file on disk ('XXXXX' in place of 'first', plus
+     * the appended '/second'). A poll that re-reads the file from byte 0 would
+     * mirror 'XXXXX/second'. The offset tail reads only the bytes past the
+     * mirrored prefix and yields 'first/second'. The prefix rewrite is not a
+     * supported publisher action; it serves only as the probe.
      */
     public function testPumpTailsOnlyTheBytesAppendedSinceTheLastPoll(): void
     {
@@ -773,18 +778,58 @@ final class WorkflowLivePaneTest extends TestCase
 
         $publish = new \ReflectionMethod(AgentWorkerPool::class, 'publishProgress');
         $pump = new \ReflectionMethod(AgentWorkerPool::class, 'pumpProgress');
+        $path = (new \ReflectionMethod(AgentWorkerPool::class, 'progressFile'))->invoke($pool, 'a-4');
 
         $publish->invoke($pool, 'a-4', 'first');
         $pump->invoke($pool);
         $this->assertSame('first', $agent->output);
 
-        $publish->invoke($pool, 'a-4', '/second');
+        file_put_contents($path, 'XXXXX');
+        file_put_contents($path, '/second', FILE_APPEND);
         $pump->invoke($pool);
 
         $this->assertSame(
             'first/second',
             $agent->output,
-            'The pump did not mirror the bytes appended since the last poll.',
+            'The pump re-read the mirrored prefix instead of tailing only the appended bytes.',
+        );
+    }
+
+    /**
+     * Shrink to zero, poll, then regrow past the old offset. The poll that
+     * sees the zero-length file must drop the mirror and the stored offset at
+     * once. Otherwise the next poll would find the stored offset (5) equal to
+     * the buffer length, tail bytes 5.. of the new content, and splice them
+     * onto the old 'first' (giving 'firstcement' for 'replacement').
+     */
+    public function testAProgressFileShrunkToZeroIsNotSplicedOntoItsStaleMirror(): void
+    {
+        $pool = new AgentWorkerPool();
+        $agent = $this->subAgent('a-7');
+        $this->putRunning($pool, $agent, 4248);
+
+        $publish = new \ReflectionMethod(AgentWorkerPool::class, 'publishProgress');
+        $pump = new \ReflectionMethod(AgentWorkerPool::class, 'pumpProgress');
+        $path = (new \ReflectionMethod(AgentWorkerPool::class, 'progressFile'))->invoke($pool, 'a-7');
+
+        $publish->invoke($pool, 'a-7', 'first');
+        $pump->invoke($pool);
+        $this->assertSame('first', $agent->output);
+
+        file_put_contents($path, '');
+        $pump->invoke($pool);
+        $this->assertSame(
+            '',
+            $agent->output,
+            'A progress file shrunk to zero left its stale mirror in place.',
+        );
+
+        file_put_contents($path, 'replacement');
+        $pump->invoke($pool);
+        $this->assertSame(
+            'replacement',
+            $agent->output,
+            'The regrown progress file was spliced onto the stale mirror.',
         );
     }
 
