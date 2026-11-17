@@ -364,6 +364,47 @@ final class AsyncProbeReportTest extends TestCase
     }
 
     /**
+     * CP-14 on the report() surface: a loop that refuses the child's stream
+     * watchers makes Process::start() throw after proc_open succeeded. The
+     * spawn catch must release the booked slot, reap the launched child, and
+     * settle the report with the environment answer in place, never throw and
+     * never stay pending. The expectation on addReadStream proves the spawn
+     * really reached start() before the refusal, so a regression that skips
+     * the spawn would fail here rather than pass by accident.
+     */
+    public function testReportSpawnFailureSettlesTheEnvironmentReportAndReleasesTheSlot(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('the planted /bin/sh stub needs a POSIX shell.');
+        }
+
+        $this->setTerm('xterm-256color');
+        $path = $this->plantBinary("#!/bin/sh\nexec sleep 30\n");
+        try {
+            $refusal = new \RuntimeException('test loop refuses stream watchers');
+            $loop = $this->createMock(LoopInterface::class);
+            $loop->expects($this->atLeastOnce())->method('addReadStream')->willThrowException($refusal);
+            $loop->method('addWriteStream')->willThrowException($refusal);
+
+            $report = null;
+            AsyncProbe::report($loop)->then(static function (ProbeReport $r) use (&$report): void {
+                $report = $r;
+            });
+
+            $this->assertInstanceOf(ProbeReport::class, $report, 'a failed spawn settles in place, without throwing');
+            $this->assertSame(
+                self::sources(TerminfoReplayProbe::replaying(null)->runProbe()),
+                self::sources($report),
+                'a failed spawn answers with the environment report, not a terminfo leg',
+            );
+            $this->assertCount(0, $this->inFlightSlots(), 'a failed spawn releases its booked cap slot');
+            $this->assertSame([], $this->settledDumps(), 'a failed spawn mints no dump memo entry');
+        } finally {
+            @\unlink($path);
+        }
+    }
+
+    /**
      * The 8 KiB ceiling is exact on the report() pump, the same cut the sync
      * door makes. The planted dump is ~36 KB with a Tc cap at its tail: the
      * memo must hold exactly InfocmpBinary::OUTPUT_CAP_BYTES bytes, and the
