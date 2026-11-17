@@ -45,8 +45,12 @@ printing a startup banner while serving nothing — the ssh and git-daemon
 transports remain unwired libraries. On the live listener
 push is served: authorization runs before a single ref byte or pack body
 is touched, and hook declines ride back in-band in the report-status
-stream. Nothing forks per connection — but every served request spawns
-bounded, reaped `git` children.
+stream. The live HTTP listener forks one worker per connection by default
+(`http.worker_per_request`, on unless set false; needs `ext-pcntl`): each
+worker serves its connection to completion and exits, so one wedged request
+cannot delay its neighbours. With the knob off, or on a host without pcntl,
+connections are served serially and the bin names that trade-off on stderr
+at startup. Every served request spawns bounded, reaped `git` children.
 
 **What is implemented:**
 

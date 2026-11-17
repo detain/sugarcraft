@@ -48,10 +48,6 @@ final class ThrowI18nTest extends TestCase
                 static fn () => MarkLine::fromDataset([1.0, 2.0], 'median'),
                 'Invalid MarkLine type: median (expected one of: min, max, average)',
             ],
-            'markline.invalid-style' => [
-                static fn () => MarkLine::at(1.0, '', 'zigzag'),
-                'Invalid MarkLine style: zigzag (expected one of: solid, dashed, dotted)',
-            ],
             'movingaverage.window-positive' => [
                 static fn () => MovingAverage::simple(0),
                 'Window size must be > 0, got 0',
@@ -135,7 +131,6 @@ final class ThrowI18nTest extends TestCase
             'ohlc.high_below_low',
             'markline.empty_dataset',
             'markline.invalid_type',
-            'markline.invalid_style',
             'movingaverage.window_positive',
             'movingaverage.alpha_range',
             'bucketbytime.interval_positive',
@@ -184,7 +179,6 @@ final class ThrowI18nTest extends TestCase
             'range.pinned_min_exceeds_max' => ['{axis}', '{min}', '{max}'],
             'ohlc.high_below_low' => ['{high}', '{low}'],
             'markline.invalid_type' => ['{type}', '{allowed}'],
-            'markline.invalid_style' => ['{style}', '{allowed}'],
             'movingaverage.window_positive' => ['{given}'],
             'movingaverage.alpha_range' => ['{given}'],
             'bucketbytime.interval_positive' => ['{given}'],

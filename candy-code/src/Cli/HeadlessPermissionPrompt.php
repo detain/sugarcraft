@@ -153,15 +153,18 @@ use SugarCraft\Code\Tools\ToolCall;
  *    refusal produces whatever settled it — so the fix covers shapes this
  *    class never sees, and would have covered them even if this class did not
  *    exist.
- *  - AND THAT IS THE POINT, because the commonest refusal is one of them. A
- *    plain {@see \SugarCraft\Code\Hooks\HookResult::deny()} returns out of
- *    {@see \SugarCraft\Code\Runtime::gate()} BEFORE `settleAsk()` is
- *    reached, so it never arrives here at all. It follows that "every refusal
+ *  - AND THAT IS THE POINT, because on the pre-ask build the commonest refusal
+ *    was one of them. A plain {@see \SugarCraft\Code\Hooks\HookResult::deny()}
+ *    returns out of {@see \SugarCraft\Code\Runtime::gate()} BEFORE `settleAsk()`
+ *    is reached, so it never arrived here at all. It follows that "every refusal
  *    is already on stderr" — a sentence lifted from this docblock's four
  *    shapes and generalised across {@see NonInteractive} and `README.md` — was
- *    false: a hook DENY reached neither stderr nor `--output-format text`.
- *    MEASURED at round 47 by driving the shipped gate's `rm -rf` denial
- *    through a real `EngineBackend`: zero bytes on stderr.
+ *    false: before ConfirmRemoveHook began asking, a hook DENY reached neither
+ *    stderr nor `--output-format text`.
+ *    MEASURED at round 47, on the pre-ask build, by driving the gate's `rm -rf`
+ *    denial through a real `EngineBackend`: zero bytes on stderr. That match is
+ *    now an ASK, which goes through `settleAsk()` rather than returning early,
+ *    so it is no longer the example of an unseen refusal.
  *
  * THE LAST PARAGRAPH HERE SAID "the remaining gap is a deny-path stderr line in
  * `Runtime`", and E219 closed the gap somewhere else. WHAT IS TRUE NOW: the

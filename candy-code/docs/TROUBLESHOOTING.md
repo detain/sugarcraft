@@ -224,9 +224,10 @@ diverge.
 3. **Wrong event?** A `PreToolUse` hook cannot see output; a `PostToolUse` one
    cannot stop anything.
 4. **`disabled: true`** keeps the entry out of the chain.
-5. **A narrower hook denied first.** `ProtectFilesHook`, `ConfirmRemoveHook` and
+5. **A narrower hook refused or asked first.** `ProtectFilesHook`, `ConfirmRemoveHook` and
    `AuditHook` are registered ahead of everything from a file, and a `Deny` wins
-   outright.
+   outright. A `ConfirmRemoveHook` match is an ask, not a refusal: you are prompted with
+   its message, and where nobody can answer the ask, it is refused and never runs.
 
 **My hook (or a Bash command) cannot see `GITHUB_TOKEN`, an `AWS_*` variable or
 an API key.** Expected: `ScriptHook::execute()` sets eight `CRUSH_*` variables over

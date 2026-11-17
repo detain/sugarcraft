@@ -49,7 +49,6 @@ final class Sparkline
         public readonly ?float $min,
         public readonly ?float $max,
         public readonly ?Style $style = null,
-        public readonly bool $autoMaxValue = true,
     ) {
         if ($width < 0) {
             throw new \InvalidArgumentException(Lang::t('sparkline.width_nonneg'));
@@ -83,7 +82,7 @@ final class Sparkline
     /** @param list<int|float> $data */
     public function withData(array $data): self
     {
-        return new self(array_values($data), $this->width, $this->min, $this->max, $this->style, $this->autoMaxValue);
+        return new self(array_values($data), $this->width, $this->min, $this->max, $this->style);
     }
 
     public function withWidth(int $w): self
@@ -91,11 +90,11 @@ final class Sparkline
         if ($w < 0) {
             throw new \InvalidArgumentException(Lang::t('sparkline.width_nonneg'));
         }
-        return new self($this->data, $w, $this->min, $this->max, $this->style, $this->autoMaxValue);
+        return new self($this->data, $w, $this->min, $this->max, $this->style);
     }
 
-    public function withMin(?float $m): self { return new self($this->data, $this->width, $m, $this->max, $this->style, $this->autoMaxValue); }
-    public function withMax(?float $m): self { return new self($this->data, $this->width, $this->min, $m, $this->style, $this->autoMaxValue); }
+    public function withMin(?float $m): self { return new self($this->data, $this->width, $m, $this->max, $this->style); }
+    public function withMax(?float $m): self { return new self($this->data, $this->width, $this->min, $m, $this->style); }
 
     /**
      * Style applied to every glyph in {@see view()}. Pass null to
@@ -103,24 +102,7 @@ final class Sparkline
      */
     public function withStyle(?Style $style): self
     {
-        return new self($this->data, $this->width, $this->min, $this->max, $style, $this->autoMaxValue);
-    }
-
-    /**
-     * Accepts ntcharts' `WithNoAutoMaxValue` for API parity. The
-     * configured {@see $max} is ALWAYS used verbatim when set (and
-     * values exceeding it clamp to the top glyph) whether the toggle
-     * is on or off; without a pin the window's max rescales either
-     * way. The flag therefore changes no rendering — retained as a
-     * no-op shim, not silently removed (removal is breaking).
-     * See {@see view()} for the resolved expression.
-     *
-     * @deprecated no-effect shim — the pin it toggles is always honored;
-     *             set {@see withMax()} (or clear it) instead.
-     */
-    public function withNoAutoMaxValue(bool $disable = true): self
-    {
-        return new self($this->data, $this->width, $this->min, $this->max, $this->style, !$disable);
+        return new self($this->data, $this->width, $this->min, $this->max, $style);
     }
 
     // Short-form aliases. sugar-charts-104: zero-arg calls used to be
@@ -155,8 +137,6 @@ final class Sparkline
 
     /** Short-form alias for {@see withStyle()}. */
     public function style(?Style $style): self   { return $this->withStyle($style); }
-    /** Short-form alias for {@see withNoAutoMaxValue()}. */
-    public function noAutoMaxValue(bool $disable = true): self { return $this->withNoAutoMaxValue($disable); }
 
     /**
      * Append a single sample. Mirrors ntcharts'
@@ -177,7 +157,7 @@ final class Sparkline
     {
         $next = $this->data;
         $next[] = $value;
-        return new self($next, $this->width, $this->min, $this->max, $this->style, $this->autoMaxValue);
+        return new self($next, $this->width, $this->min, $this->max, $this->style);
     }
 
     /**
@@ -195,13 +175,13 @@ final class Sparkline
         foreach ($values as $v) {
             $next[] = $v;
         }
-        return new self($next, $this->width, $this->min, $this->max, $this->style, $this->autoMaxValue);
+        return new self($next, $this->width, $this->min, $this->max, $this->style);
     }
 
     /** Drop every recorded sample. Mirrors ntcharts' `Clear`. */
     public function clear(): self
     {
-        return new self([], $this->width, $this->min, $this->max, $this->style, $this->autoMaxValue);
+        return new self([], $this->width, $this->min, $this->max, $this->style);
     }
 
     /**
@@ -301,11 +281,8 @@ final class Sparkline
         // excludes the data now throws instead of drawing a fake flat line.
         [$min, $max] = Range::resolve($this->min, $this->max, min($points), max($points), 'value');
         // A pinned max is used verbatim; with no pin the window's
-        // max rescales. The autoMaxValue toggle cannot change either
-        // outcome — with a pin it is ignored, without one the inner
-        // guard computes max(points) against itself — so it is kept
-        // purely for ntcharts WithNoAutoMaxValue API parity (its
-        // docblock says so). Behaviour is byte-identical.
+        // max rescales. Behaviour is byte-identical to the pre-removal
+        // no-op toggle (sugar-charts withNoAutoMaxValue shim, retired).
         return [$w, $points, (float) $min, $max - $min];
     }
 

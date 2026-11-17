@@ -141,9 +141,9 @@ final class AliasParityTest extends TestCase
     public function testRosterMatchesCompletenessCensus(): void
     {
         $this->assertSame(
-            157,
+            150,
             count(self::rosterProvider()),
-            'parity roster no longer covers the 157-wither alias surface'
+            'parity roster no longer covers the 150-wither alias surface (157 less the seven C2 retirements)'
         );
     }
 

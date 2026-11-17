@@ -198,15 +198,6 @@ final class BarChart implements ChromeAccessors
     }
 
     /**
-     * @deprecated kept as the BC alias window for {@see withAxes()} —
-     *             LineChart's spelling is canonical; retire next minor.
-     */
-    public function withShowAxis(bool $on = true): self
-    {
-        return $this->withAxes($on);
-    }
-
-    /**
      * Render the sub-cell remainder of each bar as an eighth-block cap
      * instead of snapping the whole bar to full `█` cells. Low-height
      * charts otherwise make 0.9 and 0.51 indistinguishable once they
@@ -356,16 +347,6 @@ final class BarChart implements ChromeAccessors
         return $this->copy(legendIndicatorChar: $indicatorChar === null ? null : Rune::cell($indicatorChar, 'legend indicator'), legendIndicatorCharSet: true);
     }
 
-    /**
-     * @deprecated use {@see self::withLegendIndicator()}: the argument is
-     *             the indicator RUNE, not a style. Kept one minor as the
-     *             house alias window; REMOVED-IN 2.0.0.
-     */
-    public function withLegendStyle(?string $indicatorChar = null): self
-    {
-        return $this->withLegendIndicator($indicatorChar);
-    }
-
     /** Set the chart title. */
     public function withTitle(?string $title = null, Position $position = Position::Top): self
     {
@@ -410,8 +391,6 @@ final class BarChart implements ChromeAccessors
     public function showLabels(bool $on = true): self { return $this->withShowLabels($on); }
     public function horizontal(bool $on = true): self { return $this->withHorizontal($on); }
     public function axes(bool $on = true): self       { return $this->withAxes($on); }
-    /** @deprecated alias-window for {@see axes()}/{@see withAxes()}; retire next minor. */
-    public function showAxis(bool $on = true): self   { return $this->withAxes($on); }
     /** Short-form alias for {@see withFractionalHeights()}. */
     public function fractional(bool $on = true): self { return $this->withFractionalHeights($on); }
     public function barWidth(?int $width): self       { return $this->withBarWidth($width); }
@@ -433,8 +412,6 @@ final class BarChart implements ChromeAccessors
         return func_num_args() === 0 ? $this->legendIndicatorChar : $this->withLegendIndicator($char);
     }
 
-    /** @deprecated use {@see self::legendIndicator()}; REMOVED-IN 2.0.0. */
-    public function legendStyle(?string $char): self { return $this->withLegendIndicator($char); }
     public function title(?string $t = null, Position $p = Position::Top): self { return $this->withTitle($t, $p); }
     /** Short-form alias for {@see withTitlePosition()} — Position-suffix deviates to `Pos`, mirroring `legendPos`. */
     public function titlePos(Position $pos): self     { return $this->withTitlePosition($pos); }

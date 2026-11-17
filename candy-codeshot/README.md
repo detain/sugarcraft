@@ -484,23 +484,16 @@ cd candy-codeshot && composer install && vendor/bin/phpunit
 The options roster guard (`tests/OptionsRosterTest.php`) fails when the parser,
 `cli.usage`, or the README flag list drift apart.
 
-## Accessor deprecation (2026-10-24)
+## Accessors
 
-`StringOutputWriter::getResult()` is now `result()` — the house convention for
-accessors drops the `get` prefix. Use `result()`; `getResult()` remains as a
-deprecated forwarder that returns the identical string, and will be removed in
-candy-codeshot v2.0.0. The bare name deliberately stays off the `OutputWriter`
-interface: `FileOutputWriter` has no accumulated string to hand back, so
-`result()` is this implementation's surface.
+`StringOutputWriter::result()` returns the accumulated output. Accessors use
+bare names with no `get` prefix, so `result()` is the only accessor for the
+buffer. The bare name deliberately stays off the `OutputWriter` interface:
+`FileOutputWriter` has no accumulated string to hand back, so `result()` is
+this implementation's surface.
 
-| Namespace | Class | Deprecated | Use instead |
-|-----------|-------|------------|-------------|
-| `CodeShot` | `StringOutputWriter` | `getResult()` | `result()` |
-
-`tests/AccessorDeprecationTest.php` keeps the forwarder byte-identical to
-`result()` on a live writer and fails if any public `get*()` accessor ships
-without a deprecation marker. Nothing internal called the writer — the
-renderers return complete bytes — so no call sites needed switching.
+`tests/AccessorDeprecationTest.php` fails if any public `get*()` accessor
+appears under `src/`.
 
 ## Credits & inspiration
 

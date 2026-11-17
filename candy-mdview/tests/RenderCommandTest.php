@@ -122,21 +122,48 @@ final class RenderCommandTest extends TestCase
         RenderCommand::pickTheme('mystery');
     }
 
-    public function testLoadInputReadsFile(): void
+    public function testFileLaneReadsFile(): void
     {
         $tmp = tempnam(sys_get_temp_dir(), 'mdview-');
         $this->assertNotFalse($tmp);
         file_put_contents($tmp, "# Hello");
         try {
-            $this->assertSame("# Hello", RenderCommand::loadInput($tmp));
+            $this->assertSame("# Hello", $this->invokeStatic('readDocument', [$tmp]));
         } finally {
             unlink($tmp);
         }
     }
 
-    public function testLoadInputMissingFileReturnsNull(): void
+    public function testFileLaneRefusesMissingFileByName(): void
     {
-        $this->assertNull(RenderCommand::loadInput('/no/such/path/candy-mdview-test.md'));
+        // The retired loadInput() answered null here and named nothing; the
+        // canonical door refuses and names the path.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/candy-mdview-test\.md/');
+        $this->invokeStatic('readDocument', ['/no/such/path/candy-mdview-test.md']);
+    }
+
+    public function testFileLaneRefusesBinaryPayloadTheRetiredHelperPassedThrough(): void
+    {
+        // Regression (SEC-05): loadInput() returned any bytes it read, NUL
+        // included, with no binary refusal. The file lane must refuse them.
+        $tmp = tempnam(sys_get_temp_dir(), 'mdview-');
+        $this->assertNotFalse($tmp);
+        file_put_contents($tmp, "\x7fELF\x00\x00\x00binary");
+        try {
+            $this->expectException(\InvalidArgumentException::class);
+            $this->expectExceptionMessageMatches('/not a text file/');
+            $this->invokeStatic('readDocument', [$tmp]);
+        } finally {
+            unlink($tmp);
+        }
+    }
+
+    public function testLoadInputIsRemovedFromTheClassSurface(): void
+    {
+        // The alias is gone: the canonical door is readDocument(), which
+        // every real input path enforces through DocumentGate.
+        $this->assertFalse(method_exists(RenderCommand::class, 'loadInput'));
     }
 
     public function testPickThemeDarkLightDraculaTokyoNightPink(): void
@@ -906,31 +933,6 @@ final class RenderCommandTest extends TestCase
         $this->assertStringContainsString('not a text file', $msg);
     }
 
-    public function testLoadInputIsDeprecatedAndBounded(): void
-    {
-        // Finding 042: the legacy integrator door lacked its @deprecated
-        // tag and read streams unbounded. Both legs pinned here: the tag
-        // names the gated successors, and a past-cap stream collapses to
-        // null instead of ballooning the caller's memory.
-        $doc = (new \ReflectionMethod(RenderCommand::class, 'loadInput'))->getDocComment();
-        $this->assertIsString($doc);
-        $this->assertStringContainsString('@deprecated', $doc);
-
-        $stream = fopen('php://temp', 'r+');
-        $this->assertNotFalse($stream);
-        fwrite($stream, str_repeat('y', 67_108_865));
-        fseek($stream, 0);
-        $this->assertNull(RenderCommand::loadInput('', $stream), 'past-cap stream collapses to null, never an unbounded slurp');
-        fclose($stream);
-
-        $small = fopen('php://temp', 'r+');
-        $this->assertNotFalse($small);
-        fwrite($small, "# ok\n");
-        fseek($small, 0);
-        $this->assertSame("# ok\n", RenderCommand::loadInput('', $small), 'bounded, not broken: small reads still work');
-        fclose($small);
-    }
-
     public function testPagerRefusesWithNothingWrittenToTheDocumentChannel(): void
     {
         // Finding 006: `-p` with a captured stdout and no controlling
@@ -1463,27 +1465,62 @@ final class RenderCommandTest extends TestCase
         $this->assertSame(str_ends_with($payload, "\n") === false, $newline);
     }
 
-    public function testLoadInputEmptyStdinReturnsNull(): void
+    public function testStdinLaneRefusesEmptyInputByName(): void
     {
         // Use a pipe that we control — php://temp is seekable and not a TTY.
         $stream = fopen('php://temp', 'r+');
         $this->assertNotFalse($stream);
-        // Stream is seekable but empty → should return null.
-        $result = RenderCommand::loadInput('', $stream);
-        fclose($stream);
-        $this->assertNull($result);
+        // Stream is seekable but empty: the retired loadInput() answered null.
+        try {
+            $this->expectException(\InvalidArgumentException::class);
+            $this->invokeStatic('readDocument', ['', $stream]);
+        } finally {
+            fclose($stream);
+        }
     }
 
-    public function testLoadInputReadsStdin(): void
+    public function testStdinLaneReadsPipedDocument(): void
     {
         // Use a pipe that we control — php://temp is seekable and not a TTY.
         $stream = fopen('php://temp', 'r+');
         $this->assertNotFalse($stream);
         fwrite($stream, "# Hello from stdin");
-        fseek($stream, 0); // Rewind to beginning so loadInput can read it.
-        $result = RenderCommand::loadInput('', $stream);
+        fseek($stream, 0); // Rewind so the gate reads from the start.
+        $result = $this->invokeStatic('readDocument', ['', $stream]);
         fclose($stream);
         $this->assertSame("# Hello from stdin", $result);
+    }
+
+    public function testStdinLaneReadsSmallDocumentWithinTheCap(): void
+    {
+        // Carried over from the retired bounded-read pin: a small stream
+        // still reads after the cap is enforced.
+        $small = fopen('php://temp', 'r+');
+        $this->assertNotFalse($small);
+        fwrite($small, "# ok\n");
+        fseek($small, 0);
+        try {
+            $this->assertSame("# ok\n", $this->invokeStatic('readDocument', ['', $small]));
+        } finally {
+            fclose($small);
+        }
+    }
+
+    public function testStdinLaneRefusesBinaryPayloadTheRetiredHelperPassedThrough(): void
+    {
+        // Regression (SEC-05): loadInput() read piped bytes with no binary
+        // refusal. The stdin lane must refuse a NUL-bearing payload.
+        $stream = fopen('php://temp', 'r+');
+        $this->assertNotFalse($stream);
+        fwrite($stream, "# head\x00tail");
+        fseek($stream, 0);
+        try {
+            $this->expectException(\InvalidArgumentException::class);
+            $this->expectExceptionMessageMatches('/not a text file/');
+            $this->invokeStatic('readDocument', ['', $stream]);
+        } finally {
+            fclose($stream);
+        }
     }
 
     public function testExecuteUnreadableThemeConfigIsUsageError(): void
@@ -2088,19 +2125,19 @@ final class RenderCommandTest extends TestCase
         $this->assertStringContainsString('zz', $msg);
     }
 
-    public function testLoadInputGuardsStdinDefinitionBeforeUse(): void
+    public function testStdinDefinitionIsGuardedBeforeUse(): void
     {
-        // Structural pin (senior-m2, Law-1 ordering): the shipped arm read
-        // `$stream ?? STDIN` BEFORE the defined('STDIN') check, making the
-        // defensive branch dead code. The guard must precede the use.
-        $ref  = new ReflectionMethod(RenderCommand::class, 'loadInput');
+        // Structural pin (senior-m2, Law-1 ordering), re-pointed from the
+        // retired loadInput() to its canonical successor: the stdin lane of
+        // readDocument() must check defined('STDIN') before it reads STDIN.
+        $ref  = new ReflectionMethod(RenderCommand::class, 'readDocument');
         $src  = implode('', array_slice(
             file((string) $ref->getFileName()),
             $ref->getStartLine() - 1,
             $ref->getEndLine() - $ref->getStartLine() + 1
         ));
         $guard = strpos($src, "defined('STDIN')");
-        $use   = strpos($src, '$stream = STDIN');
+        $use   = strpos($src, '$pipedStream ?? STDIN');
         $this->assertNotFalse($guard);
         $this->assertNotFalse($use);
         $this->assertLessThan($use, $guard, 'STDIN must be checked defined() before it is read');

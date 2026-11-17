@@ -762,57 +762,6 @@ final class RenderCommand extends Command
     }
 
     /**
-     * Legacy input reader kept for integrators: null on every failure mode,
-     * without naming which one.
-     *
-     * @deprecated kept for the package's own tests and integrators, not
-     *             advertised API. It carries NONE of the {@see DocumentGate}
-     *             guards that every real input door enforces (is_file, the
-     *             size cap, the binary refusal) — bytes read through this
-     *             helper go unjudged, and it has no refusal channel to name
-     *             what it rejected. Successors: the file lane
-     *             {@see self::readDocumentFile()} and the stdin lane of
-     *             {@see self::readDocument()}, which share the one gate.
-     *
-     * @param resource|null $stream Defaults to STDIN; allows unit-testing stdin paths.
-     *
-     * @return string|null Returns null when:
-     *   - file path provided but file does not exist or is unreadable
-     *   - no file path and STDIN is a TTY (interactive terminal)
-     *   - no file path and STDIN is empty
-     *   - no file path and the stream exceeds the document cap
-     * Note: It is not possible to distinguish these failure modes from the return value.
-     */
-    public static function loadInput(string $file, $stream = null): ?string
-    {
-        if ($file !== '') {
-            $contents = @file_get_contents($file);
-            return is_string($contents) ? $contents : null;
-        }
-        // defined('STDIN') is checked BEFORE touching the constant: the old
-        // `$stream ?? STDIN` line evaluated the constant first, so under a
-        // runner without STDIN defined it fataled instead of answering null.
-        if ($stream === null) {
-            if (defined('STDIN') === false) {
-                return null;
-            }
-            $stream = STDIN;
-        }
-        if (is_resource($stream) === false || TtyDetect::isAtty($stream) === true) {
-            return null;
-        }
-        // Color decision lives entirely in execute(); loadInput just reads —
-        // bounded at the document cap (an unbounded read here would make the
-        // deprecated door the one that ignores the invariant).
-        $raw = stream_get_contents($stream, DocumentGate::MAX_INPUT_BYTES + 1);
-        if (is_string($raw) && strlen($raw) > DocumentGate::MAX_INPUT_BYTES) {
-            return null;
-        }
-
-        return is_string($raw) && $raw !== '' ? $raw : null;
-    }
-
-    /**
      * Read a `--theme-config` JSON file under a byte cap, then decode it.
      *
      * {@see Theme::fromJson()} slurps the whole file unbounded; reading at

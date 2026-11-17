@@ -191,7 +191,7 @@ candy-code/tests/Server/AttachResumeTest.php	4.503	6
 candy-code/tests/Workflows/WorkflowAnnouncementsTest.php	4.491	8
 candy-code/tests/Backend/EngineBackendParallelConfigTest.php	4.470	31
 candy-code/tests/Integration/UsageWiringTest.php	4.457	43
-candy-code/tests/Workflows/WorkflowLivePaneTest.php	4.425	11
+candy-code/tests/Workflows/WorkflowLivePaneTest.php	4.425	21
 candy-code/tests/Backend/EngineBackendAttachmentsTest.php	4.420	10
 candy-code/tests/Tools/TaskToolArgumentScopedGrantTest.php	4.394	6
 candy-code/tests/Session/CheckpointStorageTest.php	4.340	23

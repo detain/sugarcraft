@@ -208,9 +208,8 @@ echo $config->angularFrequency;     // 13.416... (public readonly)
 
 `SpringConfig::spring()` returns a pre-wired `Spring` instance ready to drive
 `update()` calls and accept the optional `reducedMotionOverride` — see
-[Reduced motion](#reduced-motion). `SpringConfig::springAt60Fps()` is a deprecated synonym of its 1/60
-default leg (`REMOVED-IN: 2.0.0`): same door, two spellings, one of them
-going away.
+[Reduced motion](#reduced-motion). Its default frame time is 1/60 s, one frame
+at 60 fps.
 
 ## Damping-ratio regimes
 
@@ -336,14 +335,11 @@ Gravity constants: `Projectile::GRAVITY` (9.81) and
 the constructor; `gravityYDown()` / `terminalGravityYDown()` keep the
 legacy Y-down sign reachable.
 
-`sugar-spring` once shipped these same vectors twice: the `Gravity` façade
-(`Gravity::standard()` etc.) forwarded to the `Projectile` statics, with no
-canonical answer. Ruling: **the Projectile statics are the canonical home**
-— they stand beside the constants they read. `SugarCraft\Spring\Gravity`
-stays callable for pre-2.0 compatibility but every accessor emits
-`E_USER_DEPRECATED` and names its `Projectile::` replacement
-(REMOVED-IN: 2.0.0). Both spellings return the same SHARED immutable
-`Vector` (readonly by type — no caller can mutate what they did not build).
+The **Projectile statics are the only gravity presets**. The package-level
+`SugarCraft\Spring\Gravity` façade (`Gravity::standard()` etc.) forwarded to
+them and was removed in 2.0.0; see [Removed aliases](#removed-aliases-200).
+The presets return a SHARED immutable `Vector` (readonly by type — no caller
+can mutate what they did not build).
 
 ## Coordinate systems
 
@@ -365,8 +361,7 @@ would silently see `INF` against `INF`.
 The Y-axis convention is **Y-up** by default: `Projectile::gravity()` returns `(0, -9.81, 0)` so increasing
 Y means "up the screen". Terminal renderers usually grow downward —
 flip to `Projectile::gravityYDown()` when you want gravity to pull toward the bottom of the grid
-without manually negating every coordinate. (The deprecated `Gravity::standard()` /
-`Gravity::standardYDown()` spellings return identically until 2.0.0.)
+without manually negating every coordinate.
 
 `Projectile::update()` returns a **new `Projectile`** instance each
 call — `update()` never mutates the receiver. The hazard is discarding
@@ -476,13 +471,10 @@ is why they are exposed). Unknown ids are refused by `position()` / `target()` /
 `velocity()` / `withTarget()` with an `OutOfBoundsException` naming the id,
 and the constructor refuses misaligned or orphaned per-id maps (the
 position, velocity and target maps are keyed by id and must hold the same
-ids). The legacy
-`add()` / `remove()` / `setTarget()` mutators are **deprecated** shims
-(REMOVED-IN: 2.0.0) that emit `E_USER_DEPRECATED` and now delegate to their
-`with*()` twins — copy-on-write like everything else, so `$c = $c->add(...)`
-works (it used to assign `null` because the shims returned `void` while
-mutating the receiver; the receiver-mutation half is gone, the return value
-is the new collection). Migrate to the `with*()` forms above.
+ids). The pre-2.0
+`add()` / `remove()` / `setTarget()` mutators were removed in 2.0.0. Use the
+`with*()` forms above: `withSpring()`, `without()` and `withTarget()` are
+copy-on-write, so the return value is the new collection.
 
 ## Easing
 
@@ -635,19 +627,16 @@ back-flavoured control points — same honesty rule as `Easing`.
   `tick(): self` (new collection; positions map via `all()`) /
   `position($id): float` / `has($id): bool` / `all(): array<string,float>` /
   `target($id): float` / `velocity($id): float` / `allVelocities()` /
-  `settled($threshold = Spring::SETTLING_THRESHOLD): bool`. The legacy
-  `add()` / `remove()` / `setTarget()` mutators are deprecated
-  copy-on-write `E_USER_DEPRECATED` shims (REMOVED-IN: 2.0.0) returning
-  `self` — use the `with*()` forms.
+  `settled($threshold = Spring::SETTLING_THRESHOLD): bool`. The pre-2.0
+  `add()` / `remove()` / `setTarget()` mutators were removed in 2.0.0 — use
+  the `with*()` forms.
 - **`SpringPreset`** — `Gentle` / `Wobbly` / `Stiff` / `Slow` / `Molasses`.
   `resolve()` returns a `SpringConfig`.
 - **`SpringConfig`** — `__construct(tension, friction, mass)` (all finite and
   positive; extreme-but-finite triples are refused when the derived ω/ζ are
   non-finite, non-positive, or numerically degenerate) with public readonly
   `$angularFrequency` / `$dampingRatio` /
-  `spring(float $deltaTime = 1/60, ?bool $reducedMotionOverride = null)` /
-  `springAt60Fps(?bool $reducedMotionOverride = null)` (deprecated synonym of
-  the default leg, REMOVED-IN: 2.0.0).
+  `spring(float $deltaTime = 1/60, ?bool $reducedMotionOverride = null)`.
 - **`Projectile`** — `Projectile::new(...)` / `update()` / `position()` /
   `velocity()` / `acceleration()` (identical `->position` etc. properties
   exist) / `withPosition()` / `withVelocity()` / `withAcceleration()` /
@@ -656,9 +645,6 @@ back-flavoured control points — same honesty rule as `Easing`.
   `gravity()` / `terminalGravity()` / `gravityYDown()` /
   `terminalGravityYDown()` (canonical gravity presets, shared immutable
   vectors) / `GRAVITY` / `TERMINAL_GRAVITY`.
-- **`Gravity`** — DEPRECATED forwarders to the `Projectile` gravity statics
-  (`E_USER_DEPRECATED`, REMOVED-IN: 2.0.0): `standard()`, `terminal()`,
-  `standardYDown()`, `terminalYDown()`.
 - **`Vector`** — immutable 3D vector (finite components enforced) with `add` /
   `sub` / `scale` / `length` / `lengthSquared` / `dot` / `cross` / `lerp` /
   `normalize` (throws `RuntimeException` — zero-band and overflowed lengths;
@@ -679,7 +665,7 @@ are refused with `InvalidArgumentException`).
   `CubicIn/Out/InOut`, `ElasticIn/Out/InOut`, `BounceIn/Out/InOut`,
   `BackIn/Out/InOut`.
 - **`CubicBezier`** — `ease(float $t): float` (implements the `EasingFunction`
-  seam; `evaluate()` is the deprecated alias until 2.0.0). 26 static factories:
+  seam). 26 static factories:
   the five CSS timing keywords (`linear`, `ease` as `cssEase()`, `easeIn`, `easeOut`,
   `easeInOut`) and 21 Penner-style curves (`easeIn/Out/InOut` × `Sine`, `Quad`,
   `Cubic`, `Quart`, `Quint`, `Expo`, `Circ`) expressed as Bezier control
@@ -736,21 +722,27 @@ value](.vhs/spring.gif)
 ![Projectile-driven particle field falling under terminal
 gravity](.vhs/particle.gif)
 
-## Accessor deprecation (2026-10-24)
+## Removed aliases (2.0.0)
 
-Two accessors were renamed to the house bare form: `SpringCollection::getTarget()`
-→ `target($id)` (2026-10-24) and `SpringCollection::get()` → `position($id)`.
-Each legacy spelling stays a thin `@deprecated` BC forwarder — loud with
-`E_USER_DEPRECATED`, stamped `REMOVED-IN: 2.0.0` — until sugar-spring v2.0.0;
-migrate call sites.
+The pre-rename and pre-2.0 aliases below were deleted in 2.0.0. Each one
+forwarded to the canonical method shown; migrate call sites to it.
 
-| Namespace | Class | Deprecated | Use instead |
-|-----------|-------|------------|-------------|
-| `Spring` | `SpringCollection` | `getTarget()` | `target()` |
-| `Spring` | `SpringCollection` | `get()` | `position()` |
+| Class | Removed | Use instead |
+|-------|---------|-------------|
+| `SpringCollection` | `add()` | `withSpring()` |
+| `SpringCollection` | `remove()` | `without()` |
+| `SpringCollection` | `setTarget()` | `withTarget()` |
+| `SpringCollection` | `get()` | `position()` |
+| `SpringCollection` | `getTarget()` | `target()` |
+| `SpringConfig` | `springAt60Fps()` | `spring()` |
+| `Easing\CubicBezier` | `evaluate()` | `ease()` |
+| `Gravity` | `standard()` | `Projectile::gravity()` |
+| `Gravity` | `terminal()` | `Projectile::terminalGravity()` |
+| `Gravity` | `standardYDown()` | `Projectile::gravityYDown()` |
+| `Gravity` | `terminalYDown()` | `Projectile::terminalGravityYDown()` |
 
-`tests/AccessorDeprecationTest.php` pins the table above; the dated internal
-change record lives in `CALIBER_LEARNINGS.md`.
+The `Gravity` façade class itself is gone. `tests/AccessorDeprecationTest.php`
+pins this table against the code.
 
 ## Used by
 

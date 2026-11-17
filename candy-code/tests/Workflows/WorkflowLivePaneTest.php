@@ -21,6 +21,7 @@ use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Tests\Support\DrivesWorkflowRunsTrait;
+use SugarCraft\Code\Tests\Support\ProgressReadProbe;
 use SugarCraft\Code\Tui\Components\AgentSplitColumn;
 use SugarCraft\Code\Tui\Renderer;
 use SugarCraft\Code\Workflows\Tasks;
@@ -734,7 +735,7 @@ final class WorkflowLivePaneTest extends TestCase
 
     /**
      * And the pump really does track the whole published stream rather than
-     * the latest chunk — the reason the file is read in full each poll.
+     * the latest chunk — the reason it keeps a byte offset into the stream.
      */
     public function testThePumpTracksTheWholePublishedStreamNotTheLatestChunk(): void
     {
@@ -756,6 +757,418 @@ final class WorkflowLivePaneTest extends TestCase
         (new \ReflectionMethod(AgentWorkerPool::class, 'discardProgress'))->invoke($pool, 'a-3');
         $this->assertFileDoesNotExist(
             (new \ReflectionMethod(AgentWorkerPool::class, 'progressFile'))->invoke($pool, 'a-3'),
+        );
+    }
+
+    /**
+     * Appends accumulate across polls, and a poll with no growth changes
+     * nothing. The mirrored result is the same whether a growing poll reads only
+     * the appended bytes or the whole file, so the output assertions pin the
+     * result, not the growing read. What is pinned about reads is the idle poll:
+     * the stat decides it, and it opens nothing. The probe counts opens, and
+     * this test fails on a pump that reads the file on every poll. The rewrite
+     * cases below pin the behaviour a whole-file-on-growth design must keep.
+     */
+    public function testPumpMirrorsEachAppendAcrossPolls(): void
+    {
+        ProgressReadProbe::register();
+        $dir = $this->makeProbeDir();
+        try {
+            $pool = new AgentWorkerPool();
+            (new \ReflectionProperty(AgentWorkerPool::class, 'resultDir'))
+                ->setValue($pool, ProgressReadProbe::uri($dir));
+            $agent = $this->subAgent('a-4');
+            $this->putRunning($pool, $agent, 4245);
+
+            $publish = new \ReflectionMethod(AgentWorkerPool::class, 'publishProgress');
+            $pump = new \ReflectionMethod(AgentWorkerPool::class, 'pumpProgress');
+
+            $publish->invoke($pool, 'a-4', 'first');
+            $pump->invoke($pool);
+            $this->assertSame('first', $agent->output);
+
+            ProgressReadProbe::$opens = 0;
+            $pump->invoke($pool);
+            $this->assertSame('first', $agent->output, 'A poll with no growth changed the mirror.');
+            $this->assertSame(
+                0,
+                ProgressReadProbe::$opens,
+                'A poll with no growth opened the progress file; the stat should have decided it.',
+            );
+
+            $publish->invoke($pool, 'a-4', '/second');
+            $pump->invoke($pool);
+            $publish->invoke($pool, 'a-4', '/third');
+            $pump->invoke($pool);
+
+            $this->assertSame('first/second/third', $agent->output);
+        } finally {
+            $this->removeProbeDir($dir);
+        }
+    }
+
+    /**
+     * A file shrunk to zero and regrown past the old offset between two polls
+     * is not spliced onto its stale mirror.
+     *
+     * No poll observes the zero-length file here, so the zero-size reset never
+     * runs. The regrown file is longer than the stored offset (5), and a
+     * length-only check would tail bytes 5.. of 'replacement' and append them
+     * to 'first', giving 'firstcement'. The prefix comparison sees 'repla' where
+     * 'first' was mirrored and rebuilds from byte 0.
+     */
+    public function testARegrownFileIsNotSplicedOntoItsStaleMirror(): void
+    {
+        $pool = new AgentWorkerPool();
+        $agent = $this->subAgent('a-13');
+        $this->putRunning($pool, $agent, 4253);
+
+        $publish = new \ReflectionMethod(AgentWorkerPool::class, 'publishProgress');
+        $pump = new \ReflectionMethod(AgentWorkerPool::class, 'pumpProgress');
+        $path = (new \ReflectionMethod(AgentWorkerPool::class, 'progressFile'))->invoke($pool, 'a-13');
+
+        $publish->invoke($pool, 'a-13', 'first');
+        $pump->invoke($pool);
+        $this->assertSame('first', $agent->output);
+
+        file_put_contents($path, '');
+        file_put_contents($path, 'replacement');
+        $pump->invoke($pool);
+
+        $this->assertSame(
+            'replacement',
+            $agent->output,
+            'A file shrunk to zero and regrown between polls was spliced onto its stale mirror.',
+        );
+    }
+
+    /**
+     * Shrink to zero, poll, then regrow past the old offset. The poll that
+     * sees the zero-length file must drop the mirror and the stored offset at
+     * once. Otherwise the next poll would find the stored offset (5) equal to
+     * the buffer length, tail bytes 5.. of the new content, and splice them
+     * onto the old 'first' (giving 'firstcement' for 'replacement').
+     */
+    public function testAProgressFileShrunkToZeroIsNotSplicedOntoItsStaleMirror(): void
+    {
+        $pool = new AgentWorkerPool();
+        $agent = $this->subAgent('a-7');
+        $this->putRunning($pool, $agent, 4248);
+
+        $publish = new \ReflectionMethod(AgentWorkerPool::class, 'publishProgress');
+        $pump = new \ReflectionMethod(AgentWorkerPool::class, 'pumpProgress');
+        $path = (new \ReflectionMethod(AgentWorkerPool::class, 'progressFile'))->invoke($pool, 'a-7');
+
+        $publish->invoke($pool, 'a-7', 'first');
+        $pump->invoke($pool);
+        $this->assertSame('first', $agent->output);
+
+        file_put_contents($path, '');
+        $pump->invoke($pool);
+        $this->assertSame(
+            '',
+            $agent->output,
+            'A progress file shrunk to zero left its stale mirror in place.',
+        );
+
+        file_put_contents($path, 'replacement');
+        $pump->invoke($pool);
+        $this->assertSame(
+            'replacement',
+            $agent->output,
+            'The regrown progress file was spliced onto the stale mirror.',
+        );
+    }
+
+    /**
+     * DECLARED BEHAVIOUR CHANGE (owner-approved, 2026-11-16), pinned on purpose:
+     * a same-size in-place rewrite of bytes the pump has already mirrored is NOT
+     * mirrored. The length is unchanged, so a poll that stats the file sees nothing
+     * to verify. A rewrite that grows the file is mirrored (see the growing test).
+     *
+     * Nothing in the pool rewrites published bytes (publishProgress() appends,
+     * and the file is removed only by discardProgress(), which drops the
+     * offset), so the loss is not reachable from the pool. If a future writer
+     * rewrites in place, this test must change with the design, not be
+     * deleted to make a red run green.
+     */
+    public function testASameSizeRewriteOfMirroredBytesIsNotMirrored(): void
+    {
+        $pool = new AgentWorkerPool();
+        $agent = $this->subAgent('a-5');
+        $this->putRunning($pool, $agent, 4246);
+
+        $publish = new \ReflectionMethod(AgentWorkerPool::class, 'publishProgress');
+        $pump = new \ReflectionMethod(AgentWorkerPool::class, 'pumpProgress');
+        $path = (new \ReflectionMethod(AgentWorkerPool::class, 'progressFile'))->invoke($pool, 'a-5');
+
+        $publish->invoke($pool, 'a-5', 'steady');
+        $pump->invoke($pool);
+        $this->assertSame('steady', $agent->output);
+
+        file_put_contents($path, 'STEADY');
+        $pump->invoke($pool);
+
+        $this->assertSame(
+            'steady',
+            $agent->output,
+            'Trade-off: a same-size rewrite of mirrored bytes is not mirrored.',
+        );
+    }
+
+    /**
+     * DECLARED TRADE-OFF (under the same-size rule above), pinned on purpose: a
+     * file shrunk to zero and regrown to exactly the mirrored length between two
+     * polls is not mirrored. No poll observes size 0, so the zero-size reset never
+     * runs, and the length still equals the stored offset. A stat cannot tell
+     * this from a same-size in-place rewrite, and catching it would need a read
+     * on every poll, which the same-size rule exists to avoid. The next poll that
+     * sees a different length rebuilds the mirror, which the last assertion checks.
+     */
+    public function testASameLengthRegrowAfterAShrinkToZeroBetweenPollsIsNotMirrored(): void
+    {
+        $pool = new AgentWorkerPool();
+        $agent = $this->subAgent('a-14');
+        $this->putRunning($pool, $agent, 4255);
+
+        $publish = new \ReflectionMethod(AgentWorkerPool::class, 'publishProgress');
+        $pump = new \ReflectionMethod(AgentWorkerPool::class, 'pumpProgress');
+        $path = (new \ReflectionMethod(AgentWorkerPool::class, 'progressFile'))->invoke($pool, 'a-14');
+
+        $publish->invoke($pool, 'a-14', 'first');
+        $pump->invoke($pool);
+        $this->assertSame('first', $agent->output);
+
+        file_put_contents($path, '');
+        file_put_contents($path, 'REPLA');
+        $pump->invoke($pool);
+        $this->assertSame(
+            'first',
+            $agent->output,
+            'Trade-off: a same-length regrow between polls is not mirrored.',
+        );
+
+        file_put_contents($path, 'REPLA/more');
+        $pump->invoke($pool);
+        $this->assertSame(
+            'REPLA/more',
+            $agent->output,
+            'A later length change did not rebuild the mirror from the file.',
+        );
+    }
+
+    /**
+     * An in-place rewrite of mirrored bytes that GROWS the file is mirrored.
+     *
+     * The file grows past the stored offset, so the poll reads the whole file
+     * and compares its prefix with the buffer. The prefix differs ('FIRST'
+     * against 'first'), so the buffer is rebuilt from the file. A tail that
+     * read only the bytes past the offset would yield 'first/extra'.
+     */
+    public function testAGrowingRewriteOfMirroredBytesIsMirrored(): void
+    {
+        $pool = new AgentWorkerPool();
+        $agent = $this->subAgent('a-11');
+        $this->putRunning($pool, $agent, 4251);
+
+        $publish = new \ReflectionMethod(AgentWorkerPool::class, 'publishProgress');
+        $pump = new \ReflectionMethod(AgentWorkerPool::class, 'pumpProgress');
+        $path = (new \ReflectionMethod(AgentWorkerPool::class, 'progressFile'))->invoke($pool, 'a-11');
+
+        $publish->invoke($pool, 'a-11', 'first');
+        $pump->invoke($pool);
+        $this->assertSame('first', $agent->output);
+
+        file_put_contents($path, 'FIRST/extra');
+        $pump->invoke($pool);
+
+        $this->assertSame(
+            'FIRST/extra',
+            $agent->output,
+            'A growing in-place rewrite of mirrored bytes was not mirrored.',
+        );
+    }
+
+    /**
+     * A resync whose read fails keeps the mirror it already had, and the next
+     * poll replaces it with the file's bytes once the file can be read again.
+     * Clearing the buffer before the read would have dropped it to '' on this
+     * poll. Skipped as root, which reads a mode-0 file regardless.
+     */
+    public function testAResyncThatCannotReadTheFileKeepsTheMirror(): void
+    {
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            self::markTestSkipped('root reads a mode-0 file, so the unreadable case cannot be set up');
+        }
+
+        $pool = new AgentWorkerPool();
+        $agent = $this->subAgent('a-12');
+        $this->putRunning($pool, $agent, 4252);
+
+        $publish = new \ReflectionMethod(AgentWorkerPool::class, 'publishProgress');
+        $pump = new \ReflectionMethod(AgentWorkerPool::class, 'pumpProgress');
+        $path = (new \ReflectionMethod(AgentWorkerPool::class, 'progressFile'))->invoke($pool, 'a-12');
+
+        $publish->invoke($pool, 'a-12', 'first');
+        $pump->invoke($pool);
+        $this->assertSame('first', $agent->output);
+
+        // A length mismatch forces a resync on the next poll.
+        $agent->output = 'stale!';
+        chmod($path, 0000);
+        try {
+            $pump->invoke($pool);
+            $this->assertSame(
+                'stale!',
+                $agent->output,
+                'An unreadable file on resync cleared the mirror instead of keeping it.',
+            );
+        } finally {
+            chmod($path, 0644);
+        }
+
+        $pump->invoke($pool);
+        $this->assertSame(
+            'first',
+            $agent->output,
+            'The mirror was not rebuilt from byte 0 once the file became readable.',
+        );
+    }
+
+    /**
+     * A poll whose read fails keeps the offset along with the mirror. The file
+     * then holds exactly the mirrored bytes again, so the next poll finds
+     * nothing to do: the status and the stall deadline stay as they were. Had
+     * the offset been dropped, that poll would have counted as a rebuild and
+     * reported the agent as streaming with its stall deadline renewed, for a
+     * file whose bytes never changed. The file is grown, then written back to
+     * the mirrored bytes while the test can still write it; the two writes are
+     * the test's own, since the pool never shrinks a progress file in place.
+     * Skipped as root, which reads a mode-0 file regardless.
+     */
+    public function testAnUnreadablePollKeepsTheOffsetSoAnUnchangedFileIsNotReportedAsStreaming(): void
+    {
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            self::markTestSkipped('root reads a mode-0 file, so the unreadable case cannot be set up');
+        }
+
+        $pool = new AgentWorkerPool();
+        $agent = $this->subAgent('a-14', 30);
+        $this->putRunning($pool, $agent, 4254);
+
+        $publish = new \ReflectionMethod(AgentWorkerPool::class, 'publishProgress');
+        $pump = new \ReflectionMethod(AgentWorkerPool::class, 'pumpProgress');
+        $path = (new \ReflectionMethod(AgentWorkerPool::class, 'progressFile'))->invoke($pool, 'a-14');
+        $deadlines = new \ReflectionProperty(AgentWorkerPool::class, 'stallDeadlines');
+
+        $publish->invoke($pool, 'a-14', 'first');
+        $pump->invoke($pool);
+        $this->assertSame('first', $agent->output);
+
+        // Grow the file, then make it unreadable: the size differs from the
+        // mirror, so the poll tries to read it and the read fails.
+        file_put_contents($path, '/x', FILE_APPEND);
+        chmod($path, 0000);
+        $agent->status = SubAgent::STATUS_RUNNING;
+        $sentinel = [1, 30.0];
+        $deadlines->setValue($pool, ['a-14' => $sentinel]);
+        try {
+            $pump->invoke($pool);
+        } finally {
+            chmod($path, 0644);
+        }
+        $this->assertSame('first', $agent->output, 'An unreadable poll changed the mirror.');
+
+        // The file again holds exactly the mirrored bytes.
+        file_put_contents($path, 'first');
+        $pump->invoke($pool);
+
+        $this->assertSame('first', $agent->output);
+        $this->assertSame(
+            SubAgent::STATUS_RUNNING,
+            $agent->status,
+            'A poll that found the mirrored bytes unchanged reported the agent as streaming.',
+        );
+        $this->assertSame(
+            ['a-14' => $sentinel],
+            $deadlines->getValue($pool),
+            'A poll that found the mirrored bytes unchanged renewed the stall deadline.',
+        );
+    }
+
+    /**
+     * A retry clears the buffer to '' before re-queueing the agent, and the
+     * next poll must mirror the file from its first byte again — the offset
+     * alone would silently skip everything published so far.
+     */
+    public function testPumpResyncsWhenTheBufferWasClearedByARetry(): void
+    {
+        $pool = new AgentWorkerPool();
+        $agent = $this->subAgent('a-6');
+        $this->putRunning($pool, $agent, 4247);
+
+        $publish = new \ReflectionMethod(AgentWorkerPool::class, 'publishProgress');
+        $pump = new \ReflectionMethod(AgentWorkerPool::class, 'pumpProgress');
+
+        $publish->invoke($pool, 'a-6', 'attempt one');
+        $pump->invoke($pool);
+
+        $agent->output = '';
+        $pump->invoke($pool);
+        $this->assertSame(
+            'attempt one',
+            $agent->output,
+            'A cleared buffer was not re-mirrored from the start of the progress file.',
+        );
+
+        $publish->invoke($pool, 'a-6', ' and more');
+        $pump->invoke($pool);
+        $this->assertSame('attempt one and more', $agent->output);
+    }
+
+    /**
+     * A recycled id starts its mirror from byte 0, not from the previous run's
+     * offset.
+     *
+     * The first recycle is to a longer run. The prefix check rejects a stale
+     * offset there ("new" is not "old"), so that half passes with or without
+     * the offset reset. The second recycle is to a run of the same length as
+     * the mirror. The stored offset then equals both the new file's size and
+     * the buffer length, an unchanged-looking file, so only the reset in
+     * discardProgress() makes the poll rebuild from byte 0.
+     */
+    public function testARecycledIdMirrorsTheNewRunFromItsFirstByte(): void
+    {
+        $pool = new AgentWorkerPool();
+        $agent = $this->subAgent('a-7');
+        $this->putRunning($pool, $agent, 4248);
+
+        $publish = new \ReflectionMethod(AgentWorkerPool::class, 'publishProgress');
+        $pump = new \ReflectionMethod(AgentWorkerPool::class, 'pumpProgress');
+        $discard = new \ReflectionMethod(AgentWorkerPool::class, 'discardProgress');
+
+        $publish->invoke($pool, 'a-7', 'old');
+        $pump->invoke($pool);
+        $this->assertSame('old', $agent->output);
+
+        $discard->invoke($pool, 'a-7');
+        $publish->invoke($pool, 'a-7', 'new run text');
+        $pump->invoke($pool);
+
+        $this->assertSame(
+            'new run text',
+            $agent->output,
+            'The recycled id tailed from the previous run\'s offset.',
+        );
+
+        $discard->invoke($pool, 'a-7');
+        $publish->invoke($pool, 'a-7', 'NEW RUN TEXT');
+        $pump->invoke($pool);
+
+        $this->assertSame(
+            'NEW RUN TEXT',
+            $agent->output,
+            'A recycled id of the same length as its previous run kept the previous mirror.',
         );
     }
 
@@ -993,10 +1406,11 @@ final class WorkflowLivePaneTest extends TestCase
         );
     }
 
-    private function subAgent(string $id): SubAgent
+    private function subAgent(string $id, int $stallTimeout = 0): SubAgent
     {
         return new SubAgent(
             id: $id,
+            stallTimeout: $stallTimeout,
             agent: new Agent(
                 name: self::AGENT_NAME,
                 description: 'explore',
@@ -1010,6 +1424,23 @@ final class WorkflowLivePaneTest extends TestCase
             ),
             task: 'explore the docs',
         );
+    }
+
+    /** A real directory for a probed result dir; {@see removeProbeDir()} clears it. */
+    private function makeProbeDir(): string
+    {
+        $dir = sys_get_temp_dir() . '/sc-progress-probe-' . bin2hex(random_bytes(6));
+        mkdir($dir, 0700);
+
+        return $dir;
+    }
+
+    private function removeProbeDir(string $dir): void
+    {
+        foreach (glob($dir . '/*') ?: [] as $file) {
+            @unlink($file);
+        }
+        @rmdir($dir);
     }
 
     /** File $agent into the pool exactly as a forked dispatch would have. */

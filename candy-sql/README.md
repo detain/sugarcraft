@@ -190,8 +190,8 @@ than spraying unreadable bytes.
 | `:tx …` (query pane, run with the run keys) | Transaction control on the sync session: `:tx` or `:tx begin` opens, `:tx commit` closes, `:tx rollback` closes discarding the work (two-press, like the destructive-statement gate); the status bar carries a `[TX]` badge while open (SQL-O12) |
 | run with `?` / `:name` placeholders in the statement (query pane) | Opens a per-parameter prompt line instead of running: `Enter` binds the typed value (an empty submit binds NULL), `Esc` or `Ctrl+C` cancels the whole prepared run without quitting, the last answer re-enters the run path — the destructive gate still arms on the placeholder text first. The statement reaches the server through `prepare`/`execute` bound, never concatenated; `?` and `:name` may not be mixed; bound runs execute synchronously (SQL-O23) |
 | `?` (Tables, Rows or Admin pane) | Toggle the key-help overlay — the per-pane binding roster generated from the same routing table the legends and this page describe; ANY key closes it (`Ctrl+C` included, so help cannot quit the app). In the Query pane `?` stays a typeable rune (and the SQL-O23 placeholder mark) (SQL-O21) |
-| `q` / `Esc`        | `Esc` cancels a running query first whenever one is in flight (any pane, SQL-O08); otherwise `q`/`Esc` quit from the Tables and Rows panes only — inside Admin, `q` returns to Tables and `Esc` cancels an open modal dialog; inside the query pane `q` types |
-| `Ctrl+C`           | Cancel the running query when one is in flight; quit when the app is idle (SQL-O08 superseded the old unconditional quit) |
+| `q` / `Esc`        | `Esc` cancels a running query first whenever one is in flight (any pane, SQL-O08, unless an open parameter prompt, `/` filter, file or edit line, an open admin page on the Admin pane or the `?` overlay holds the keyboard); otherwise `q`/`Esc` quit from the Tables and Rows panes only — inside Admin, `q` returns to Tables and `Esc` cancels an open modal dialog; inside the query pane `q` types |
+| `Ctrl+C`           | Cancel the running query when one is in flight; quit when the app is idle (SQL-O08 superseded the old unconditional quit). Not while the `?` overlay is open (its next key, `Ctrl+C` included, only closes it), and an open parameter prompt takes it first (it answers `Ctrl+C` by cancelling the prepared run, SQL-O23) |
 
 ### Admin Dashboard Keys
 
@@ -375,9 +375,9 @@ Multi-driver support is now available via `DatabaseInterface`. `CsvExporter` and
 
 `App::update()` consumes the keyboard in this order — each step sees only what the steps above it released (once-037: this contract used to be one 1,100-character semicolon wall):
 
-1. **Ctrl+C** — cancels a running query when one is in flight; quits when idle (SQL-O08 superseded the old unconditional quit).
+1. **Ctrl+C** — cancels a running query when one is in flight (not while the `?` overlay is open, whose next key only closes it). An open parameter prompt takes the key first and answers `Ctrl+C` by cancelling the prepared run (SQL-O23). Quits when idle (SQL-O08 superseded the old unconditional quit).
 2. **Admin modals** — on the Admin pane, every key goes to the page while it is modal (`PageBase::isModal()`: the variable-editor dialog, the GTID dialog, a pending kill confirmation, or a staged PerfSchema commit); `Esc` goes to the page whenever it is present.
-3. **q/Esc** — quit **only from the Tables and Rows browser panes**. An in-flight cancel (step 1's arm) answers `Esc` before the pane chords do; in the Query pane `Esc` no longer discards a drafted query.
+3. **q/Esc** — quit **only from the Tables and Rows browser panes**. The in-flight `Esc` cancel (SQL-O08, its own `Esc` arm in `App::update()`, not step 1's `Ctrl+C` arm) answers `Esc` before the pane chords do, unless an open `/` filter, file or edit line holds the keyboard; in the Query pane `Esc` no longer discards a drafted query.
 4. **Tab** — cycles the focus pane.
 5. **Tables pane** — `/` opens a live filter line over the table names; while it is open the line owns the keyboard (`Esc` abandons it and clears the filter instead of quitting, `q` is just a filter letter, arrows move the filtered cursor, Enter commits and loads). Cursor movement never fetches: only Enter/Space loads the highlighted table's preview (SQL-O10; the old per-cursor preview round trip auto-floated every table on ERP-sized schemas). `PgDn`/`PgUp` walk that preview in 100-row server-side windows (SQL-O11) — forward only while the current page is full, and the status line counts 'page X (rows a–b)'.
 6. **Export/import lines** — `Ctrl+S`/`x` (export) and `i` (import) open a file line (SQL-O07); while it is open the line owns the keyboard the same way the filter does — `Enter` is its only submit key, `Esc` closes it without quitting, `q` is a path letter. The export half additionally refuses overwrite: an existing destination arms a `REPLACE …?` confirm that `Enter` accepts and any edit disarms.
@@ -1036,11 +1036,22 @@ Pre-1.0 gaps to be aware of, mostly on the async (ReactPHP) query path:
     socket. This is genuinely server-side for both explicit cancels and
     timeouts, subject to the usual PostgreSQL caveat that a cancel request is
     advisory — the backend interrupts the statement at its next safe point.
-- **Cancellation is library-level, not a UI key.** All of the above describes
-  the `AsyncConnection` API. The TUI's query pane does not currently thread a
-  token into its dispatch: an in-flight query runs to completion or until the
-  per-query timeout (`QueryTimeout`, default 30 s) rejects its promise, and
-  `Ctrl+C` quits the app rather than cancelling the statement.
+- **Cancellation reaches the UI too.** All of the above describes the
+  `AsyncConnection` API, and the TUI uses it: each query-pane dispatch mints a
+  per-dispatch cancel handle and threads its token into the connection.
+  `Esc` cancels the in-flight run from any pane, unless an open parameter
+  prompt, admin page on the Admin pane, `/` filter, export/import file or edit
+  line holds the keyboard, or the `?` overlay is open (the next key, `Esc` included, only
+  closes it). `Ctrl+C` cancels it too, except while the `?` overlay or the
+  parameter prompt holds the keyboard (the `?` overlay's next key, `Ctrl+C`
+  included, only closes it). The parameter prompt
+  answers `Esc` and `Ctrl+C` by cancelling the prepared run before it starts.
+  `Ctrl+C` quits the app only when nothing is in flight (SQL-O08, see the key
+  table above). A superseded run is cancelled when the next query or
+  table-preview load dispatches (both dispatch paths cancel the in-flight
+  handle), and the per-query timeout
+  (`QueryTimeout`, default 30 s) still bounds every leg, rejecting its promise
+  when it fires.
 - **Query-pane results are buffered in full.** A `SELECT` executed from the
   editor materialises every returned row into the in-process result table.
   The schema-browse preview pages instead: `PreviewQuery` fetches 100 rows per

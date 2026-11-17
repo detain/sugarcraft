@@ -359,6 +359,49 @@ final class BinWiringTest extends TestCase
         $this->assertSame('0.7.x-dev', $manifest['require']['react/mysql']);
     }
 
+    /**
+     * A12 (AUD §5, the candy-sql half; §2 #27 covers candy-git-server only):
+     * the README once said the query pane threads no cancel token and
+     * Ctrl+C always quits. The App mints a
+     * per-dispatch CancellationSource and Ctrl+C cancels while a leg is in
+     * flight, so the README must state that and drop the stale claim.
+     */
+    public function testReadmeDescribesQueryPaneCancellationNotNoToken(): void
+    {
+        $readme = (string) \file_get_contents(\dirname(self::BIN_PATH) . '/../README.md');
+        $app    = (string) \file_get_contents(\dirname(self::BIN_PATH) . '/../src/App.php');
+
+        $this->assertStringNotContainsString('does not currently thread a', $readme);
+        $this->assertStringNotContainsString('rather than cancelling the statement', $readme);
+        $this->assertStringContainsString('threads its token into the connection', $readme);
+        $this->assertStringContainsString('`Ctrl+C` quits the app only when nothing', $readme);
+
+        // The `?` overlay swallows the next key (Esc and Ctrl+C alike) before
+        // the cancel arm, so every surface that states the Esc/Ctrl+C scope
+        // must name it: the cancel paragraph, the key table and checklist 1.
+        $this->assertStringContainsString('the keyboard, or the `?` overlay is open (the next key, `Esc` included, only', $readme);
+        $this->assertStringContainsString('answers `Esc` and `Ctrl+C` by cancelling the prepared run', $readme);
+        $this->assertStringContainsString('an open admin page on the Admin pane or the `?` overlay holds the keyboard', $readme);
+        $this->assertStringContainsString('(not while the `?` overlay is open, whose next key only closes it)', $readme);
+
+        // Key-table step 3: the in-flight Esc is its own arm, not step 1's
+        // Ctrl+C arm, and it yields to the open / filter, file and edit lines.
+        $this->assertStringContainsString('The in-flight `Esc` cancel (SQL-O08, its own `Esc` arm in `App::update()`, not step 1\'s `Ctrl+C` arm) answers `Esc` before the pane chords do', $readme);
+        $this->assertStringContainsString('unless an open `/` filter, file or edit line holds the keyboard', $readme);
+        // The cancellation paragraph's Esc exceptions mirror the same yields.
+        $this->assertStringContainsString('prompt, admin page on the Admin pane, `/` filter, export/import file or edit', $readme);
+
+        // A superseded run is cancelled by both dispatch paths (query and
+        // table-preview load), so the README must name both.
+        $this->assertStringContainsString('A superseded run is cancelled when the next query or', $readme);
+        $this->assertStringContainsString('table-preview load dispatches (both dispatch paths cancel the in-flight', $readme);
+        $this->assertSame(2, \substr_count($app, 'cancelInFlightSilently();'));
+
+        $this->assertStringContainsString('CancellationSource::new()', $app);
+        $this->assertStringContainsString('$source->token()', $app);
+        $this->assertStringContainsString('if ($this->ui->helpOverlay && ', $app);
+    }
+
     public function testReadmeDocumentsTheTerminalAndTimeoutContracts(): void
     {
         $readme = (string) \file_get_contents(\dirname(self::BIN_PATH) . '/../README.md');

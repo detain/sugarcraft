@@ -35,6 +35,29 @@ final class BinDocTruthTest extends TestCase
     }
 
     /**
+     * A12 (AUD §2 #27): the README once said "nothing forks per connection"
+     * while the live HTTP listener forks a WorkerFork per connection by
+     * default (http.worker_per_request). The claim must now name the
+     * default and the serial degraded arms, matching bin/candy-git-server.
+     */
+    public function testReadmeDescribesWorkerPerRequestDefaultNotNoFork(): void
+    {
+        $this->assertStringNotContainsString('Nothing forks per connection', $this->readme);
+        $this->assertStringContainsString('forks one worker per connection by default', $this->readme);
+        $this->assertStringContainsString('http.worker_per_request', $this->readme);
+        // The default and the two degraded arms (knob off, no pcntl) are
+        // pinned in the README itself, not only in the bin source below.
+        $this->assertStringContainsString('(`http.worker_per_request`, on unless set false; needs `ext-pcntl`)', $this->readme);
+        $this->assertStringContainsString('With the knob off, or on a host without pcntl,', $this->readme);
+        $this->assertStringContainsString('connections are served serially and the bin names that trade-off on stderr', $this->readme);
+
+        $source = (string) \file_get_contents($this->bin);
+        $this->assertStringContainsString('worker_per_request is off — serving SERIALLY', $source);
+        $this->assertStringContainsString('cannot fork (no pcntl) — serving SERIALLY', $source);
+        $this->assertStringContainsString('new \SugarCraft\GitServer\Support\WorkerFork()', $source);
+    }
+
+    /**
      * 131: the header usage block once shipped a shorter roster than the
      * dispatched commands (user list / user token / repo info / version
      * were missing). The expectation is DERIVED from the dispatch match

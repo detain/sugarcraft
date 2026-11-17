@@ -482,8 +482,9 @@ final class HookRegistry
      * user who had been shown `ls` — or, on a tool already granted
      * {@see \SugarCraft\Code\Permissions\PermissionReply::Always}, by nobody at
      * all — and {@see HookManager::resolveAsk()} then settled that approval
-     * into exactly the MODIFY that ran it, past three built-ins that hard-deny
-     * it. Judging it costs one more pass and produces ConfirmRemoveHook's DENY.
+     * into exactly the MODIFY that ran it, past three built-ins that would have
+     * stopped it. Judging it costs one more pass and produces ConfirmRemoveHook's
+     * ASK on that pass, so the operator is asked about the rewritten command.
      * A hook that sanitises AND asks is therefore still supported, and gets its
      * question put about the sanitised call — the only version worth asking;
      * dropping an ASK's rewrite outright would close the same hole by SILENTLY
@@ -641,8 +642,8 @@ final class HookRegistry
                 // `PermissionReply::Always` for the tool turns that ASK into
                 // permission with no prompt at all, so not even a human is
                 // shown the wrong command. It is now a proposal that goes
-                // through the loop like any other, so that same hook produces a
-                // DENY from ConfirmRemoveHook on pass 2.
+                // through the loop like any other, so that same hook produces an
+                // ASK from ConfirmRemoveHook on pass 2.
                 //
                 // STAMPED WITH WHO ASKED (F-P7/F-P9) from the registry's own
                 // record, overwriting anything the hook's result carried, so

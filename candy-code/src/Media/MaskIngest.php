@@ -257,22 +257,34 @@ final readonly class MaskIngest
     private static function unfilter(string $raw, int $width, int $height, int $channels): ?array
     {
         $rowLen = $width * $channels;
-        $samples = [];
-        $previous = array_fill(0, $rowLen, 0);
+        // The caller has already checked strlen($raw) === height * (rowLen + 1),
+        // so every filter byte sits at a known offset. Scanning them before the
+        // buffer exists keeps a malformed stream a cheap decline: a 4000x4000
+        // gray header would otherwise reserve ~16M slots (~256 MB) before the
+        // bad byte was seen, past the default memory_limit.
+        for ($y = 0, $stride = $rowLen + 1; $y < $height; $y++) {
+            if (ord($raw[$y * $stride]) > 4) {
+                return null;
+            }
+        }
+
+        // One buffer, written by offset: row $y lives at [$y * $rowLen, ($y + 1) * $rowLen)
+        // and the "previous" row is read back from it. Growing the list per
+        // scanline ([...$samples, ...$current]) re-copied every earlier row
+        // each time, which made the walk quadratic (1024x1024 RGBA: 31 s).
+        $samples = array_fill(0, $rowLen * $height, 0);
         $offset = 0;
 
         for ($y = 0; $y < $height; $y++) {
             $filter = ord($raw[$offset++]);
-            if ($filter > 4) {
-                return null;
-            }
-            $current = [];
+            $base = $y * $rowLen;
+            $upBase = $base - $rowLen;
             for ($x = 0; $x < $rowLen; $x++) {
                 $byte = ord($raw[$offset + $x]);
-                $left = $x >= $channels ? $current[$x - $channels] : 0;
-                $up = $previous[$x];
-                $upLeft = $x >= $channels ? $previous[$x - $channels] : 0;
-                $current[$x] = match ($filter) {
+                $left = $x >= $channels ? $samples[$base + $x - $channels] : 0;
+                $up = $y > 0 ? $samples[$upBase + $x] : 0;
+                $upLeft = ($x >= $channels && $y > 0) ? $samples[$upBase + $x - $channels] : 0;
+                $samples[$base + $x] = match ($filter) {
                     0 => $byte,
                     1 => ($byte + $left) & 0xFF,
                     2 => ($byte + $up) & 0xFF,
@@ -281,8 +293,6 @@ final readonly class MaskIngest
                 } & 0xFF;
             }
             $offset += $rowLen;
-            $samples = [...$samples, ...$current];
-            $previous = $current;
         }
 
         return $samples;

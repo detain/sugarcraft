@@ -22,7 +22,7 @@ use SugarCraft\Code\Tools\BuiltIn\Edit;
  */
 final class HookGateE2ETest extends TestCase
 {
-    public function testConfirmRemoveHookDeniesBashRmRf(): void
+    public function testConfirmRemoveHookAsksBeforeBashRmRf(): void
     {
         $manager = new HookManager(new HookRegistry());
         $manager->registerBuiltIns();
@@ -40,7 +40,8 @@ final class HookGateE2ETest extends TestCase
 
         $result = $manager->preToolUse($context);
 
-        $this->assertTrue($result->isDenied());
+        $this->assertTrue($result->isAsk(), 'the operator decides, the hook does not refuse');
+        $this->assertFalse($result->permitsExecution(), 'an unanswered ask never runs');
         $this->assertStringContainsString('recursive', $result->message);
     }
 

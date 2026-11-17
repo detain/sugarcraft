@@ -348,14 +348,14 @@ final class TabsTest extends TestCase
         $t = $this->tabs()->withWidth(200)->withZoneManager($manager);
         $view = $t->view();
         // Zone markers are sugar-mouse PUA sentinels: U+E000 <id> U+E001 ...
-        // Prefix is concatenated directly, so "test" + "tab-0" = "testtab-0".
+        // Ids are "<manager prefix><zoneKey>tab-N", concatenated directly.
         $this->assertStringContainsString(\SugarCraft\Mouse\Sentinel::OPEN, $view);
         $this->assertStringContainsString(
-            \SugarCraft\Mouse\Sentinel::OPEN . 'testtab-0' . \SugarCraft\Mouse\Sentinel::CLOSE,
+            \SugarCraft\Mouse\Sentinel::OPEN . 'test' . $t->zoneKey . 'tab-0' . \SugarCraft\Mouse\Sentinel::CLOSE,
             $view,
         );
         $this->assertStringContainsString(
-            \SugarCraft\Mouse\Sentinel::OPEN . 'testtab-1' . \SugarCraft\Mouse\Sentinel::CLOSE,
+            \SugarCraft\Mouse\Sentinel::OPEN . 'test' . $t->zoneKey . 'tab-1' . \SugarCraft\Mouse\Sentinel::CLOSE,
             $view,
         );
     }
@@ -374,7 +374,7 @@ final class TabsTest extends TestCase
         $t = $t->focus();
 
         // Click on tab-1 (Profile).
-        $zone = new \SugarCraft\Mouse\Zones\Zone('test-tab-1', 7, 1, 14, 1);
+        $zone = new \SugarCraft\Mouse\Zones\Zone('test' . $t->zoneKey . 'tab-1', 7, 1, 14, 1);
         $mouse = new \SugarCraft\Core\Msg\MouseMsg(10, 1, \SugarCraft\Core\MouseButton::Left, \SugarCraft\Core\MouseAction::Press);
         $msg = new \SugarCraft\Mouse\Zones\MsgZoneInBounds($zone, $mouse);
         [$t, ] = $t->update($msg);
@@ -382,18 +382,38 @@ final class TabsTest extends TestCase
         $this->assertSame(1, $t->active());
     }
 
-    public function testMsgZoneInBoundsIgnoredWhenUnfocused(): void
+    /**
+     * Regression: a click on an unfocused bar used to be dropped by a focus
+     * gate in update(), so the first click on a tab strip did nothing. Clicks
+     * now activate the tab regardless of focus, and do not grant focus — the
+     * parent still owns keyboard routing.
+     */
+    public function testMsgZoneInBoundsActivatesTabWhenUnfocused(): void
     {
         $manager = \SugarCraft\Mouse\Zones\Manager::newPrefix('test');
         $t = $this->tabs()->withZoneManager($manager);
-        // Not focused.
+        $this->assertFalse($t->focused);
 
-        $zone = new \SugarCraft\Mouse\Zones\Zone('test-tab-1', 7, 1, 14, 1);
+        $zone = new \SugarCraft\Mouse\Zones\Zone('test' . $t->zoneKey . 'tab-1', 7, 1, 14, 1);
         $mouse = new \SugarCraft\Core\Msg\MouseMsg(10, 1, \SugarCraft\Core\MouseButton::Left, \SugarCraft\Core\MouseAction::Press);
         $msg = new \SugarCraft\Mouse\Zones\MsgZoneInBounds($zone, $mouse);
         [$t, ] = $t->update($msg);
 
-        $this->assertSame(0, $t->active()); // unchanged
+        $this->assertSame(1, $t->active());
+        $this->assertFalse($t->focused, 'a click activates the tab without taking focus');
+    }
+
+    public function testMsgZoneInBoundsOutsideVisibleRangeIgnoredWhenUnfocused(): void
+    {
+        $manager = \SugarCraft\Mouse\Zones\Manager::newPrefix('test');
+        $t = $this->tabs()->withWidth(15)->withZoneManager($manager);
+        $this->assertFalse($t->focused);
+
+        $zone = new \SugarCraft\Mouse\Zones\Zone('test' . $t->zoneKey . 'tab-2', 30, 1, 38, 1);
+        $mouse = new \SugarCraft\Core\Msg\MouseMsg(35, 1, \SugarCraft\Core\MouseButton::Left, \SugarCraft\Core\MouseAction::Press);
+        [$t, ] = $t->update(new \SugarCraft\Mouse\Zones\MsgZoneInBounds($zone, $mouse));
+
+        $this->assertSame(0, $t->active()); // tab-2 is not in the visible window
     }
 
     public function testMsgZoneInBoundsOutsideVisibleRangeIgnored(): void
@@ -403,12 +423,138 @@ final class TabsTest extends TestCase
         $t = $this->tabs()->withWidth(15)->withZoneManager($manager);
         $t = $t->focus();
 
-        $zone = new \SugarCraft\Mouse\Zones\Zone('test-tab-2', 30, 1, 38, 1);
+        $zone = new \SugarCraft\Mouse\Zones\Zone('test' . $t->zoneKey . 'tab-2', 30, 1, 38, 1);
         $mouse = new \SugarCraft\Core\Msg\MouseMsg(35, 1, \SugarCraft\Core\MouseButton::Left, \SugarCraft\Core\MouseAction::Press);
         $msg = new \SugarCraft\Mouse\Zones\MsgZoneInBounds($zone, $mouse);
         [$t, ] = $t->update($msg);
 
         $this->assertSame(0, $t->active()); // unchanged — tab-2 not visible
+    }
+
+    /**
+     * Regression (P0-A8 review, blocking): two bars on one zone manager used
+     * to mint identical "tab-N" ids, so a click on bar 2's tab 1 also
+     * activated tab 1 on bar 1. Each bar scopes its ids with its own zoneKey,
+     * so a click changes only the bar that owns the zone. Bar 1 stays
+     * unfocused throughout, which also pins the P0-A8 contract: a click on an
+     * unfocused bar is accepted.
+     */
+    public function testClickOnOneBarDoesNotAffectSiblingBarOnSharedManager(): void
+    {
+        $manager = \SugarCraft\Mouse\Zones\Manager::newPrefix('shared');
+        $bar1 = Tabs::new(['A1', 'A2', 'A3'], 60)->withZoneManager($manager);
+        $bar2 = Tabs::new(['B1', 'B2', 'B3'], 60)->withZoneManager($manager)->focus();
+        $this->assertFalse($bar1->focused);
+
+        $manager->scan($bar1->view() . "\n" . $bar2->view());
+        $mouse = new \SugarCraft\Core\Msg\MouseMsg(10, 1, \SugarCraft\Core\MouseButton::Left, \SugarCraft\Core\MouseAction::Press);
+
+        // Click on bar 2, tab 1: only bar 2 moves. The zone is read from the
+        // rendered bytes, so the test does not depend on how ids are minted.
+        $bar2Tab1 = $this->zoneFor($bar2->view(), 'B2');
+        $msg = new \SugarCraft\Mouse\Zones\MsgZoneInBounds($bar2Tab1, $mouse);
+        [$bar1AfterBar2Click, ] = $bar1->update($msg);
+        [$bar2AfterBar2Click, ] = $bar2->update($msg);
+        $this->assertSame(0, $bar1AfterBar2Click->active(), 'bar 1 ignores a click aimed at bar 2');
+        $this->assertSame(1, $bar2AfterBar2Click->active(), 'bar 2 activates its own tab 1');
+
+        // Click on the UNFOCUSED bar 1, tab 2: accepted, and bar 2 ignores it.
+        $bar1Tab2 = $this->zoneFor($bar1->view(), 'A3');
+        $msg = new \SugarCraft\Mouse\Zones\MsgZoneInBounds($bar1Tab2, $mouse);
+        [$bar1AfterBar1Click, ] = $bar1->update($msg);
+        [$bar2AfterBar1Click, ] = $bar2->update($msg);
+        $this->assertSame(2, $bar1AfterBar1Click->active(), 'unfocused bar 1 accepts a click on its tab 2');
+        $this->assertFalse($bar1AfterBar1Click->focused, 'the click does not grant focus');
+        $this->assertSame(0, $bar2AfterBar1Click->active(), 'bar 2 ignores a click aimed at bar 1');
+    }
+
+    public function testWithZoneKeyPinsZoneIdsAcrossRebuilds(): void
+    {
+        $manager = \SugarCraft\Mouse\Zones\Manager::newPrefix('p');
+        $first = Tabs::new(['Home', 'Profile'])->withZoneKey('stable-')->withZoneManager($manager);
+        $rebuilt = Tabs::new(['Home', 'Profile'])->withZoneKey('stable-')->withZoneManager($manager);
+        $this->assertSame($first->view(), $rebuilt->view());
+        $this->assertStringContainsString(\SugarCraft\Mouse\Sentinel::OPEN . 'pstable-tab-1' . \SugarCraft\Mouse\Sentinel::CLOSE, $first->view());
+    }
+
+    /**
+     * Bars derived from one template share its zoneKey. With the same key, a
+     * click aimed at bar 2's tab 1 is accepted by bar 1 too. This pins the
+     * documented caveat: give each derived bar its own withZoneKey().
+     */
+    public function testBarsDerivedFromOneTemplateLeakClicksWhileKeysMatch(): void
+    {
+        $manager = \SugarCraft\Mouse\Zones\Manager::newPrefix('tpl');
+        $tpl = Tabs::new()->withZoneManager($manager);
+        $bar1 = $tpl->withLabels(['A1', 'A2']);
+        $bar2 = $tpl->withLabels(['B1', 'B2']);
+        $this->assertSame($bar1->zoneKey, $bar2->zoneKey, 'derived bars inherit the template key');
+
+        $click = new \SugarCraft\Mouse\Zones\MsgZoneInBounds($this->zoneFor($bar2->view(), 'B2'), $this->leftPress());
+        [$bar1After, ] = $bar1->update($click);
+        [$bar2After, ] = $bar2->update($click);
+        $this->assertSame(1, $bar1After->active(), 'shared key: bar 1 answers a click aimed at bar 2');
+        $this->assertSame(1, $bar2After->active());
+    }
+
+    /**
+     * The same template pattern with a distinct withZoneKey() on each derived
+     * bar: the click is aimed at bar 2 and bar 1 ignores it. If routing stopped
+     * comparing the zone key, bar 1 would accept bar 2's id and this fails.
+     */
+    public function testBarsDerivedFromOneTemplateStopLeakingWithDistinctZoneKeys(): void
+    {
+        $manager = \SugarCraft\Mouse\Zones\Manager::newPrefix('tpl');
+        $tpl = Tabs::new()->withZoneManager($manager);
+        $bar1 = $tpl->withLabels(['A1', 'A2'])->withZoneKey('left-');
+        $bar2 = $tpl->withLabels(['B1', 'B2'])->withZoneKey('right-');
+
+        $click = new \SugarCraft\Mouse\Zones\MsgZoneInBounds($this->zoneFor($bar2->view(), 'B2'), $this->leftPress());
+        [$bar1After, ] = $bar1->update($click);
+        [$bar2After, ] = $bar2->update($click);
+        $this->assertSame(0, $bar1After->active(), 'bar 1 ignores a click aimed at bar 2');
+        $this->assertSame(1, $bar2After->active(), 'bar 2 activates its own tab 1');
+    }
+
+    public function testWithZoneKeyRejectsEmptyKey(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('tab zone key must not be empty');
+        Tabs::new()->withZoneKey('');
+    }
+
+    public function testWithZoneKeyReturnsNewInstance(): void
+    {
+        $t1 = Tabs::new(['Home']);
+        $original = $t1->zoneKey;
+        $t2 = $t1->withZoneKey('pinned-');
+        $this->assertNotSame($t1, $t2);
+        $this->assertSame('pinned-', $t2->zoneKey);
+        $this->assertSame($original, $t1->zoneKey, 'the original bar keeps its key');
+        $this->assertSame('pinned-', $t2->withLabels(['A', 'B'])->zoneKey, 'with*() carries the key forward');
+    }
+
+    /**
+     * The zone a bar's view() wraps around $label, rebuilt from the marker
+     * bytes ("OPEN id CLOSE content OPEN /id CLOSE", content padded by the bar).
+     */
+    private function zoneFor(string $view, string $label): \SugarCraft\Mouse\Zones\Zone
+    {
+        $open = preg_quote(\SugarCraft\Mouse\Sentinel::OPEN, '/');
+        $close = preg_quote(\SugarCraft\Mouse\Sentinel::CLOSE, '/');
+        $pattern = '/' . $open . '([A-Za-z0-9._:-]+)' . $close . '(.*?)' . $open . '\/\1' . $close . '/';
+        preg_match_all($pattern, $view, $all, PREG_SET_ORDER);
+        foreach ($all as $m) {
+            if (trim($m[2]) === $label) {
+                return new \SugarCraft\Mouse\Zones\Zone($m[1], 7, 1, 14, 1);
+            }
+        }
+        $this->fail("view wraps '{$label}' in no zone");
+    }
+
+    private function leftPress(): \SugarCraft\Core\Msg\MouseMsg
+    {
+        return new \SugarCraft\Core\Msg\MouseMsg(10, 1, \SugarCraft\Core\MouseButton::Left, \SugarCraft\Core\MouseAction::Press);
     }
 
     public function testWithZoneManagerReturnsNewInstance(): void
@@ -682,8 +828,9 @@ final class TabsTest extends TestCase
         $this->assertSame(4, substr_count($view, $open));
         $this->assertSame(4, substr_count($view, $close));
         $this->assertStringNotContainsString($open . 'qtab-9' . $close, $view);
-        $this->assertStringContainsString($open . 'qtab-0' . $close, $view);
-        $this->assertStringContainsString($open . 'qtab-1' . $close, $view);
+        $key = $t->zoneKey;
+        $this->assertStringContainsString($open . 'q' . $key . 'tab-0' . $close, $view);
+        $this->assertStringContainsString($open . 'q' . $key . 'tab-1' . $close, $view);
         // The visible text survives (sentinels removed, payload kept).
         $this->assertStringContainsString('Proqtab-9file', $view);
     }
@@ -761,17 +908,18 @@ final class TabsTest extends TestCase
     }
 
     /**
-     * N13: zone ids are minted as "[prefix]tab-N", so the LAST "tab-" is the
-     * one we wrote. A manager prefix that itself contains "tab-<digit>" made
-     * the first-occurrence walk mis-route the click to the wrong tab.
+     * N13: a manager prefix that itself contains "tab-<digit>" must not
+     * mis-route a click. The bar matches its exact "[prefix][zoneKey]tab-N"
+     * shape, so the trailing segment is the only index it accepts.
      */
     public function testZoneIdWithTabPrefixEmbeddedRoutesByLastSegment(): void
     {
-        $t = Tabs::new(['A', 'B', 'C', 'D', 'E']);
+        $manager = \SugarCraft\Mouse\Zones\Manager::newPrefix('tab-4table-');
+        $t = Tabs::new(['A', 'B', 'C', 'D', 'E'])->withZoneManager($manager);
         $t = $t->focus();
 
         // First "tab-" says 4 (valid index!), last says 1 — 1 is the truth.
-        $zone = new \SugarCraft\Mouse\Zones\Zone('tab-4table-tab-1', 7, 1, 14, 1);
+        $zone = new \SugarCraft\Mouse\Zones\Zone('tab-4table-' . $t->zoneKey . 'tab-1', 7, 1, 14, 1);
         $mouse = new \SugarCraft\Core\Msg\MouseMsg(10, 1, \SugarCraft\Core\MouseButton::Left, \SugarCraft\Core\MouseAction::Press);
         [$t, ] = $t->update(new \SugarCraft\Mouse\Zones\MsgZoneInBounds($zone, $mouse));
 

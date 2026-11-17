@@ -12,6 +12,7 @@ return [
     'column.width_nonneg'         => 'Šířka sloupce musí být >= 0',
     'tabs.bad_index'              => 'index karty mimo rozsah',
     'tabs.neg_width'              => 'šířka karet musí být >= 0',
+    'tabs.zone_key_empty'         => 'klíč zóny záložky nesmí být prázdný',
     'table.dim_nonneg'            => 'šířka/výška tabulky musí být >= 0',
     'table.page_size_nonneg'      => 'velikost strany musí být >= 0',
     'table.set_columns_type'      => 'sloupce musí být instance sloupce',

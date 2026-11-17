@@ -77,7 +77,7 @@ final class ScriptedInputRuntimeParityTest extends TestCase
         $content = str_repeat('x', InputReader::MAX_PASTE_BYTES + 8192);
         $sim = ProgramSimulator::new(new RecordingModel());
         foreach (ScriptedInput::new()->paste($content)->build() as $msg) {
-            $sim = $sim->send($msg);
+            $sim = $sim->addMsgs($msg);
         }
 
         $trace = $sim->run()->view;

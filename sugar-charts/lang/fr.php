@@ -54,7 +54,6 @@ return [
         'ohlc.high_below_low' => 'Barre OHLC invalide : high ({high}) ne doit pas etre inferieur a low ({low})',
         'markline.empty_dataset' => 'Impossible de determiner une MarkLine a partir d\'un jeu de donnees vide',
         'markline.invalid_type' => 'Type MarkLine invalide : {type} (attendu : {allowed})',
-        'markline.invalid_style' => 'Style MarkLine invalide : {style} (attendu : {allowed})',
         'movingaverage.window_positive' => 'La taille de fenetre doit etre > 0, recu {given}',
         'movingaverage.alpha_range' => 'Le alpha EMA doit etre dans (0, 1], recu {given}',
         'bucketbytime.interval_positive' => 'L\'intervalle de seau doit etre > 0, recu {given}',

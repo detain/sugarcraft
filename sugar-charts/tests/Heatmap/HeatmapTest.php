@@ -158,7 +158,7 @@ final class HeatmapTest extends TestCase
     {
         $bold = \SugarCraft\Style\Style::new()->bold();
         $h = Heatmap::new([[0.5]])->withCellStyle($bold);
-        $this->assertSame($bold, $h->getCellStyle());
+        $this->assertSame($bold, $h->cellStyle());
         // Bold ANSI escape (\e[1m) should appear in rendered output.
         $this->assertStringContainsString("\x1b[", $h->view());
     }
@@ -167,13 +167,13 @@ final class HeatmapTest extends TestCase
     {
         $bold = \SugarCraft\Style\Style::new()->bold();
         $h = Heatmap::new([[0.5]])->withCellStyle($bold)->withCellStyle(null);
-        $this->assertNull($h->getCellStyle());
+        $this->assertNull($h->cellStyle());
     }
 
     public function testAutoValueRangeDefaultsToOn(): void
     {
         $h = Heatmap::new([[0.5]]);
-        $this->assertTrue($h->getAutoValueRange());
+        $this->assertTrue($h->autoValueRange());
     }
 
     public function testWithAutoValueRangeFalseRespectsExplicitMinMax(): void
@@ -186,7 +186,7 @@ final class HeatmapTest extends TestCase
             ->withMin(10.0)
             ->withMax(20.0)
             ->withAutoValueRange(false);
-        $this->assertFalse($h->getAutoValueRange());
+        $this->assertFalse($h->autoValueRange());
         $this->assertNotSame('', $h->view());
     }
 }

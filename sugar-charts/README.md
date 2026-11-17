@@ -56,7 +56,7 @@ echo LineChart::new([1, 4, 2, 8, 6, 3, 7], 30, 6)->view() . PHP_EOL;
 > Every `with*()` fluent setter on the chart classes (and on `Legend`) also has a
 > short-form alias: `withFoo()` becomes `foo()` (drop `with`, lcfirst). Fleet-wide
 > vocabulary includes `data`, `size`, `min`, `max`, `point`, `xRange`, `yRange`,
-> `xyRange`, `colors`, `palette`, `bars`, `barWidth`, `showLabels`, `showAxis`,
+> `xyRange`, `colors`, `palette`, `bars`, `barWidth`, `showLabels`, `axes`,
 > `title`, `canvas`, `theme`, `dataset`, `markLines`, `unicodeConnectors`, `style`,
 > `protocol`, `items` and `position`.
 > That list is fleet-wide vocabulary, not a per-class promise: each alias exists on
@@ -64,12 +64,10 @@ echo LineChart::new([1, 4, 2, 8, 6, 3, 7], 30, 6)->view() . PHP_EOL;
 > `Sparkline`, while neither `BarChart` nor `LineChart` carries `colors()`, `style()`
 > or `palette()`. The per-class registry is pinned by `tests/AliasCompletenessTest.php`.
 > The OHLC row value object is `Charts\OHLC\Candle` (CH-57; it was `OHLC\Bar`,
-> which collided with `BarChart\Bar`). `OHLC\Bar` still resolves via a
-> `class_alias` seat and is `@deprecated` (REMOVED-IN 2.0.0).
+> which collided with `BarChart\Bar`). The `OHLC\Bar` class alias was retired in C2.
 >
 > The legend indicator rune is set with `withLegendIndicator()` / `legendIndicator()`
-> (CH-58); the old `withLegendStyle()` / `legendStyle()` names forward to it and
-> are `@deprecated` (REMOVED-IN 2.0.0).
+> (CH-58). The former `withLegendStyle()` / `legendStyle()` names were retired in C2.
 >
 > A few names deviate from the rule to read better: `withLegendPosition()` →
 > `legendPos()` and `withTitlePosition()` → `titlePos()` (`Pos` is the accepted
@@ -96,13 +94,13 @@ is `SugarCraft\Charts\Canvas\Canvas`); prose and snippets always spell the full 
 
 | Component | Role | Notable knobs |
 |---|---|---|
-| `Charts\Canvas\Canvas` | Fixed-size cell grid; each cell holds a rune + optional sugar-style `Style`. | `setCell` / `setLines` / `setString` / `setRunes` / `fill` / `fillLine` / `shiftUp` / `shiftDown` / `shiftLeft` / `shiftRight` / `setCellStyle` / `cellStyle` / `cell` (`getCell` / `getCellStyle` kept as compat aliases) |
+| `Charts\Canvas\Canvas` | Fixed-size cell grid; each cell holds a rune + optional sugar-style `Style`. | `setCell` / `setLines` / `setString` / `setRunes` / `fill` / `fillLine` / `shiftUp` / `shiftDown` / `shiftLeft` / `shiftRight` / `setCellStyle` / `cellStyle` / `cell` |
 | `Charts\Canvas\BrailleGrid` | Sub-cell scratch buffer (2 cols × 4 rows of dots per cell). Paint dots, then copy to a `Canvas`. | `set` / `unset` / `toggle` / `isSet` / `rune` / `paint(Canvas, x0, y0, ?Style)` / `clear` |
 | `Charts\Canvas\Graph` | Drawing primitives over a `Canvas`. | `drawHLine` / `drawVLine` / `drawXYAxis` / `drawXYAxisLabel` / `drawString` / `drawLine` / `drawLinePoints` / `fillRect` / `drawColumn` / `drawColumns` / `drawRows` / `drawCandlestick` / `drawBrailleRune` / `drawBraillePatterns` / `drawVerticalLineUp` / `drawVerticalLineDown` / `drawHorizontalLineLeft` / `drawHorizontalLineRight` / `circlePoints` / `circlePointsWithLimit` / `fullCirclePoints` / `fullCirclePointsWithLimit` / `linePointsWithLimit` (`get*` spellings kept as ntcharts-mirror compat aliases) |
-| `Charts\Sparkline\Sparkline` | Single-row series renderer using the eight Unicode bar glyphs. | `push` / `pushAll` / `clear` / `withMin` / `withMax` / `withStyle(?Style)` / `withNoAutoMaxValue(bool)` (parity shim — the flag never changes output; removal would be breaking) / `withWidth` |
-| `Charts\BarChart\BarChart` | Labeled bars — vertical or horizontal (`withHorizontal()`, a second render mode); auto-scales to a configurable min / max. | `withBarWidth` / `withBarGap` / `withNoAutoBarWidth` / `withFractionalHeights` (eighth-block caps) / `withBarColor(?Closure)` (per-bar `fn(Bar, int): ?Color`) / `withHorizontal(bool)` / `withShowAxis(bool)` / `withMin(?float)` / `withMax(?float)` / `withDataLabels(bool)` (values as a row, see Value labels) / `withDataLabelFormatter(?Closure)` / `push(Bar\|array)` / `pushAll(iterable)` / `clear` |
+| `Charts\Sparkline\Sparkline` | Single-row series renderer using the eight Unicode bar glyphs. | `push` / `pushAll` / `clear` / `withMin` / `withMax` / `withStyle(?Style)` / `withWidth` |
+| `Charts\BarChart\BarChart` | Labeled bars — vertical or horizontal (`withHorizontal()`, a second render mode); auto-scales to a configurable min / max. | `withBarWidth` / `withBarGap` / `withNoAutoBarWidth` / `withFractionalHeights` (eighth-block caps) / `withBarColor(?Closure)` (per-bar `fn(Bar, int): ?Color`) / `withHorizontal(bool)` / `withAxes(bool)` / `withMin(?float)` / `withMax(?float)` / `withDataLabels(bool)` (values as a row, see Value labels) / `withDataLabelFormatter(?Closure)` / `push(Bar\|array)` / `pushAll(iterable)` / `clear` |
 | `Charts\LineChart\LineChart` | Multi-series ASCII or braille plot drawn onto a Canvas with configurable axes. `withDataset()` registers a named series and its legend entry; series colors cycle through the six-name color-blind-safe palette (blue, orange, green, red, purple, cyan) or follow the `withTheme()` palette. The legend strip (the row of color swatches and series names) appears only once `withLegend()` is on — adding datasets never shows it on its own. | `withYRange` / `withXRange` / `withXYRange` / `autoAdjustRange` / `withXLabelFormatter` / `withYLabelFormatter` / `withAxes` / `withXLabels` / `withYLabels` / `withCanvas` / `withTheme` / `withFill` / `withSeriesColorFn(?Closure)` (per-point `fn(string, int, float): ?Color`) |
-| `Charts\LineChart\TimeSeries` | Wrapper around `LineChart` (composition, not inheritance — `TimeSeries` is `final`) accepting `[\DateTimeImmutable, value]` tuples and rendering X-axis labels formatted from the timestamps. LineChart knobs such as `withDataset()` / `withTheme()` are not exposed. | `push` / `withPoints` / `withTimeFormat` / `withXLabelCount` / `withTimeRange(?start, ?end)` / `getTimeRange()` |
+| `Charts\LineChart\TimeSeries` | Wrapper around `LineChart` (composition, not inheritance — `TimeSeries` is `final`) accepting `[\DateTimeImmutable, value]` tuples and rendering X-axis labels formatted from the timestamps. LineChart knobs such as `withDataset()` / `withTheme()` are not exposed. | `push` / `withPoints` / `withTimeFormat` / `withXLabelCount` / `withTimeRange(?start, ?end)` / `timeRange()` |
 | `Charts\LineChart\Streamline` | Streaming line windowed to width — renders through a LineChart of configurable height (default 8 rows). | `push` / `pushAll` / `clear` / `isEmpty` / `count` / `withSize` / `withMin` / `withMax` / `withYRange` / `withPoint` |
 | `Charts\LineChart\Waveline` | XY scatter / wave plot driven by `(x, y)` pairs. | `push` / `pushAll` / `clear` / `withSize` / `withXRange` / `withYRange` / `withXYRange` / `withPoint` |
 | `Charts\Heatmap\Heatmap` | 2D grid colored by value with optional palette / legend. | `withSize` / `withMin` / `withMax` / `withPalette` / `withLegend` / `withColors(cold, hot)` / `withRune` / `withColorProfile` / `withCellStyle(?Style)` / `withAutoValueRange(bool)` / `pushPoint(HeatPoint)` / `pushAll` |
@@ -326,25 +324,27 @@ echo BarChart::new([['cpu', 0.7], ['mem', 0.4], ['disk', 0.9]], 20, 5)
 ```php
 use SugarCraft\Charts\Chart\Position;
 use SugarCraft\Charts\LineChart\LineChart;
+use SugarCraft\Charts\LineStyle;
 use SugarCraft\Charts\MarkLine;
 
 $chart = LineChart::new([3, 1, 4, 1, 5, 9, 2, 6], 40, 8)
     ->withMarkLines([
-        MarkLine::at(7.5, 'alarm', MarkLine::STYLE_DASHED),
+        MarkLine::at(7.5, 'alarm', LineStyle::Dashed),
     ])
     ->withLegend()
     ->withLegendPosition(Position::Bottom);
 echo $chart->view();
 ```
 
-- `MarkLine::at(float $value, string $label = '', string $style = MarkLine::STYLE_DASHED)`
-  is the factory (the constructor is private). `STYLE_SOLID` /
-  `STYLE_DASHED` / `STYLE_DOTTED` pick the run glyph; the line is drawn
+- `MarkLine::at(float $value, string $label = '', LineStyle $style = LineStyle::Dashed)`
+  is the factory (the constructor is private). `LineStyle::Solid` /
+  `LineStyle::Dashed` / `LineStyle::Dotted` pick the run glyph (the legacy
+  `MarkLine::STYLE_*` strings were retired in C2); the line is drawn
   across the plot at the value's row. Labels are sanitized through the
   untrusted-text guard at construction; non-finite values and unknown styles
-  throw at once.
+  throw at once (a string style is a `TypeError`).
   Data-derived marks: `MarkLine::min($data)`, `MarkLine::max($data)`,
-  `MarkLine::average($data)` (each `(array $data, string $style = STYLE_DASHED)`),
+  `MarkLine::average($data)` (each `(array $data, LineStyle $style = LineStyle::Dashed)`),
   or `MarkLine::fromDataset($data, $type)` with `$type` one of min/max/average.
 - `Legend` is the composed strip — `withItems(list<array{label, color}>)`,
   `withPosition(Position)`, `withIndicatorChar(string)`,
@@ -599,7 +599,7 @@ BarChart, Heatmap, OHLCChart, Scatter, Picture, TimeSeries and Streamline
 | LineChart | 🟢 v1 (multi-dataset + per-point colors + theming ship; **Mouse interaction** — the ntcharts BubbleZone equivalent — is a real gap: no hit-testing, zones, or legend-clicks exist; see sugar-mouse for the raw event primitives. Zoom/pan stay pending on top of that.) |
 | TimeSeries | 🟢 v1 (multi-dataset + update-handler variants pending) |
 | Streamline, Waveline | 🟢 v1 — shipped, nothing pending. |
-| Heatmap | 🟢 v1 (auto value-range toggle ships: `withAutoValueRange()` / `getAutoValueRange()`) |
+| Heatmap | 🟢 v1 (auto value-range toggle ships: `withAutoValueRange()` / `autoValueRange()`) |
 | OHLC | 🟡 candlestick rendering only — volume sub-pane + multi-series pending |
 | Scatter | 🟡 single-dataset only — per-point rune/style sets pending |
 | Picture | 🟢 v1 — Sixel + Kitty + iTerm2 encoders ship; when no protocol is detected, `view()` prints a plain-text placeholder |

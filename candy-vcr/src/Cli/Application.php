@@ -12,8 +12,8 @@ use Symfony\Component\Console\Output\StreamOutput;
 
 /**
  * Subcommand router for `bin/candy-vcr`. Dispatches to one of the
- * registered {@see Command} implementations based on the first
- * positional arg.
+ * registered {@see DocumentedCommand} (or Symfony) implementations based on
+ * the first positional arg.
  */
 final class Application
 {
@@ -23,15 +23,21 @@ final class Application
     /** @var array<string> */
     public const VERSION_FLAGS = ['--version', '-V'];
 
-    /** @var array<string, Command|SymfonyCommand> */
+    /** @var array<string, DocumentedCommand|SymfonyCommand> */
     private array $commands;
 
     /**
-     * @param array<string, Command|SymfonyCommand>|null $commands
+     * Every registered verb carries its own usage block, so `help <sub>` and
+     * `<sub> --help` have one source for every verb. A bare {@see Command}
+     * is refused here, not at the help door: without a usage() there is no
+     * sub-specific answer to give, and a silent global-listing fallback
+     * would hide the missing contract.
+     *
+     * @param array<string, DocumentedCommand|SymfonyCommand>|null $commands
      */
     public function __construct(?array $commands = null)
     {
-        $this->commands = $commands ?? [
+        $commands ??= [
             'record' => new RecordCommand(),
             'inspect' => new InspectCommand(),
             'replay' => new ReplayCommand(),
@@ -41,6 +47,16 @@ final class Application
             'render-tape' => new RenderTapeCommand(),
             'render-batch' => new RenderBatchCommand(),
         ];
+        foreach ($commands as $name => $command) {
+            if (!$command instanceof DocumentedCommand && !$command instanceof SymfonyCommand) {
+                throw new \InvalidArgumentException(sprintf(
+                    'candy-vcr verb "%s" must implement %s or be a Symfony command.',
+                    $name,
+                    DocumentedCommand::class,
+                ));
+            }
+        }
+        $this->commands = $commands;
     }
 
     /**
@@ -83,7 +99,7 @@ final class Application
             return $this->runSymfonyCommand($command, $rest, $stdout, $stderr);
         }
 
-        if ($command instanceof DocumentedCommand && self::requestsHelp($rest)) {
+        if (self::requestsHelp($rest)) {
             // One help contract across the whole CLI: `-h`/`--help` anywhere on
             // a hand-rolled verb answers with that verb's own usage block on
             // stdout and exit 0. Before this the flag was refused as an unknown
@@ -122,14 +138,8 @@ final class Application
             return $this->runSymfonyCommand($command, ['--help'], $stdout, $stderr);
         }
 
-        if ($command instanceof DocumentedCommand) {
-            fwrite($stdout, $command->usage());
-            return 0;
-        }
+        fwrite($stdout, $command->usage());
 
-        // A hand-rolled verb without usage(): the global listing is the best
-        // answer available; keep exit 0 because the sub itself is valid.
-        $this->printUsage($stdout);
         return 0;
     }
 

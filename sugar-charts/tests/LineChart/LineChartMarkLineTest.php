@@ -6,6 +6,7 @@ namespace SugarCraft\Charts\Tests\LineChart;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Charts\LineChart\LineChart;
+use SugarCraft\Charts\LineStyle;
 use SugarCraft\Charts\MarkLine;
 
 /**
@@ -32,7 +33,7 @@ final class LineChartMarkLineTest extends TestCase
 
         // Opt-in is immutable: setting then clearing returns to the plain bytes,
         // and the original instance is never mutated by a wither.
-        $marked  = $chart->withMarkLines([MarkLine::at(5.0, '', MarkLine::STYLE_SOLID)]);
+        $marked  = $chart->withMarkLines([MarkLine::at(5.0, '', LineStyle::Solid)]);
         $cleared = $marked->withMarkLines([]);
         $this->assertNotSame($chart, $marked);
         $this->assertNotSame($plain, $marked->view(), 'sanity: marks must actually paint');
@@ -46,7 +47,7 @@ final class LineChartMarkLineTest extends TestCase
         $expected = "    *\n─────\n*/"; // U+2500 solid run over the whole middle row
         $this->assertSame(
             $expected,
-            self::base()->withMarkLines([MarkLine::at(5.0, '', MarkLine::STYLE_SOLID)])->view(),
+            self::base()->withMarkLines([MarkLine::at(5.0, '', LineStyle::Solid)])->view(),
             'solid mark at 5.0 must map to row 1 and paint the full plot-width run',
         );
 
@@ -54,7 +55,7 @@ final class LineChartMarkLineTest extends TestCase
         $peaks = LineChart::new([0, 10, 0], 3, 3); // " *", "", "* *" (no connectors between adjacent cols)
         $this->assertSame(
             "───\n\n* *",
-            $peaks->withMarkLines([MarkLine::at(10.0, '', MarkLine::STYLE_SOLID)])->view(),
+            $peaks->withMarkLines([MarkLine::at(10.0, '', LineStyle::Solid)])->view(),
             'a mark at max=10 replaces the peak point cells on its row',
         );
     }
@@ -63,12 +64,12 @@ final class LineChartMarkLineTest extends TestCase
     {
         $this->assertSame(
             "    *\n╌╌╌╌╌\n*/", // U+254C
-            self::base()->withMarkLines([MarkLine::at(5.0, '', MarkLine::STYLE_DASHED)])->view(),
+            self::base()->withMarkLines([MarkLine::at(5.0, '', LineStyle::Dashed)])->view(),
             'dashed style must render U+254C across the row',
         );
         $this->assertSame(
             "    *\n┄┄┄┄┄\n*/", // U+2504
-            self::base()->withMarkLines([MarkLine::at(5.0, '', MarkLine::STYLE_DOTTED)])->view(),
+            self::base()->withMarkLines([MarkLine::at(5.0, '', LineStyle::Dotted)])->view(),
             'dotted style must render U+2504 across the row',
         );
         // MarkLine::at() defaults to dashed — the no-style path must match.
@@ -86,7 +87,7 @@ final class LineChartMarkLineTest extends TestCase
         $wide = LineChart::new([0, 10], 9, 3);
         $this->assertSame(
             "       /*\n──────max\n*//",
-            $wide->withMarkLines([MarkLine::at(5.0, 'max', MarkLine::STYLE_SOLID)])->view(),
+            $wide->withMarkLines([MarkLine::at(5.0, 'max', LineStyle::Solid)])->view(),
             'label must overwrite exactly the rightmost label-width cells of its row',
         );
 
@@ -95,13 +96,13 @@ final class LineChartMarkLineTest extends TestCase
         $mb = LineChart::new([0, 10], 7, 3);
         $this->assertSame(
             "     /*\n────été\n*/",
-            $mb->withMarkLines([MarkLine::at(5.0, 'été', MarkLine::STYLE_SOLID)])->view(),
+            $mb->withMarkLines([MarkLine::at(5.0, 'été', LineStyle::Solid)])->view(),
             'label width must be measured in codepoints, not bytes',
         );
 
         // 5 wide with a 3-cell label: 5 > 3+2 is FALSE (strict) → label omitted,
         // full glyph run stays.
-        $narrow = self::base()->withMarkLines([MarkLine::at(5.0, 'abc', MarkLine::STYLE_SOLID)]);
+        $narrow = self::base()->withMarkLines([MarkLine::at(5.0, 'abc', LineStyle::Solid)]);
         $this->assertSame(
             "    *\n─────\n*/",
             $narrow->view(),
@@ -116,8 +117,8 @@ final class LineChartMarkLineTest extends TestCase
         $this->assertSame(
             $plain,
             self::base()->withMarkLines([
-                MarkLine::at(11.0, '', MarkLine::STYLE_SOLID),
-                MarkLine::at(-0.5, '', MarkLine::STYLE_SOLID),
+                MarkLine::at(11.0, '', LineStyle::Solid),
+                MarkLine::at(-0.5, '', LineStyle::Solid),
             ])->view(),
             'marks outside [min, max] must paint nothing',
         );
@@ -125,12 +126,12 @@ final class LineChartMarkLineTest extends TestCase
         // Closed interval: the exact min/max endpoints DO render (rows 2 and 0).
         $this->assertSame(
             "─────\n  //\n*/",
-            self::base()->withMarkLines([MarkLine::at(10.0, '', MarkLine::STYLE_SOLID)])->view(),
+            self::base()->withMarkLines([MarkLine::at(10.0, '', LineStyle::Solid)])->view(),
             'mark at max must render on row 0',
         );
         $this->assertSame(
             "    *\n  //\n─────",
-            self::base()->withMarkLines([MarkLine::at(0.0, '', MarkLine::STYLE_SOLID)])->view(),
+            self::base()->withMarkLines([MarkLine::at(0.0, '', LineStyle::Solid)])->view(),
             'mark at min must render on the bottom row',
         );
     }
@@ -144,17 +145,13 @@ final class LineChartMarkLineTest extends TestCase
             $this->assertStringContainsString('MarkLine instances, string given', $e->getMessage());
         }
 
-        // Style is validated at construction, not buried in the render pass:
-        // a MarkLine that cannot be rasterized must never exist, and the
-        // message names the accepted spellings so callers fix it blind.
+        // Style is typed: a MarkLine that cannot be rasterized must never
+        // exist, so a string spelling is refused at the call site.
         try {
             MarkLine::at(5.0, '', 'wavy');
-            $this->fail('unknown MarkLine style must throw at construction');
-        } catch (\InvalidArgumentException $e) {
-            $this->assertSame(
-                'Invalid MarkLine style: wavy (expected one of: solid, dashed, dotted)',
-                $e->getMessage(),
-            );
+            $this->fail('a string MarkLine style must be refused at the call site');
+        } catch (\TypeError $e) {
+            $this->assertStringContainsString('must be of type SugarCraft\\Charts\\LineStyle, string given', $e->getMessage());
         }
 
         // A non-finite value is rejected at the same ingress — it would
