@@ -180,6 +180,7 @@ return [
     'cli.bundles.update.ambiguous' => 'bundle update：{name} 同时安装在用户根目录和项目根目录中，update 无法选择；请先移开其中一份再重新运行',
     'cli.bundles.update.done' => '已从 marketplace 记录将 bundle {name} 更新到 commit {sha}。',
     'cli.bundles.update.marketplace_gone' => 'bundle {name} 记录 marketplace {marketplace}，但该 marketplace 未添加；bundle 保持原样——重新添加 marketplace 以更新',
+    'cli.bundles.update.no_home' => 'bundle update: {name} 被拒绝：其 marketplace 固定记录位于用户注册表中，而本进程没有可确认归其所有的主目录；未做任何更改',
     'cli.bundles.update.no_record' => 'bundle {name} 无 marketplace 来源记录（从路径或 URL 安装），更新已跳过',
     'cli.bundles.update.nothing' => '尚无 bundle 根目录；无需更新。',
     'cli.bundles.update.renamed' => 'bundle update：{from} 上游已更名为 {to}；更新拒绝重新键控已安装的 bundle，未做任何更改',

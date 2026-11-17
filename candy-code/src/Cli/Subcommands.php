@@ -5231,7 +5231,9 @@ final class Subcommands
             }
 
             if ($registry === null) {
-                self::bundlesLine(Lang::t('cli.bundles.install.no_home'));
+                // Named per bundle: an unnamed update may refuse several project
+                // bundles in one run, and the operator must see which one it was.
+                self::bundlesLine(Lang::t('cli.bundles.update.no_home', ['name' => $name]));
 
                 if ($named) {
                     $status = NonInteractive::EXIT_FAILURE;

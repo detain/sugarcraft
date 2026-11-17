@@ -180,6 +180,7 @@ return [
     'cli.bundles.update.ambiguous' => 'bundle update: {name} ist sowohl im Benutzer- als auch im Projektverzeichnis installiert; das Update hat nicht gewählt — verschieben Sie eine Kopie und starten Sie es erneut',
     'cli.bundles.update.done' => 'Bundle {name} aus seinem Marketplace-Eintrag auf Commit {sha} aktualisiert.',
     'cli.bundles.update.marketplace_gone' => 'Bundle {name} verweist auf Marketplace {marketplace}, der nicht hinzugefügt ist; das Bundle wurde genau so belassen — fügen Sie den Marketplace erneut hinzu, um es zu aktualisieren',
+    'cli.bundles.update.no_home' => 'bundle update: {name} wird abgelehnt: Sein Marketplace-Pin ist in der Benutzer-Registry verzeichnet, und dieser Prozess hat kein Home-Verzeichnis, dessen Besitz er bestätigen kann; es wurde nichts geändert',
     'cli.bundles.update.no_record' => 'Bundle {name} enthält keinen Marketplace-Herkunftseintrag (es wurde von einem Pfad oder einer URL installiert); das Update hat es nicht angefasst',
     'cli.bundles.update.nothing' => 'Noch keine Bundle-Wurzel; es gibt nichts zu aktualisieren.',
     'cli.bundles.update.renamed' => 'bundle update: {from} hat sich upstream in {to} umbenannt; das Update verweigert die Schlüsseländerung eines installierten Bundles; nichts wurde verschoben',

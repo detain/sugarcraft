@@ -180,6 +180,7 @@ return [
     'cli.bundles.update.ambiguous' => 'bundle update：{name} 同時安裝在使用者根目錄與專案根目錄中，update 無法選擇；請先移開其中一份再重新執行',
     'cli.bundles.update.done' => '已從 marketplace 記錄將 bundle {name} 更新至 commit {sha}。',
     'cli.bundles.update.marketplace_gone' => 'bundle {name} 記錄了 marketplace {marketplace}，但它尚未新增；bundle 維持原樣——請重新新增 marketplace 以更新',
+    'cli.bundles.update.no_home' => 'bundle update: {name} 被拒絕：其 marketplace 釘選紀錄位於使用者登錄檔中，而本程序沒有可確認擁有權的主目錄；未做任何變更',
     'cli.bundles.update.no_record' => 'bundle {name} 沒有 marketplace 來源記錄（它是從路徑或 URL 安裝的），因此更新未觸動它',
     'cli.bundles.update.nothing' => '尚無 bundle 根目錄；沒有可更新的內容。',
     'cli.bundles.update.renamed' => 'bundle update：{from} 在上游已改名為 {to}；更新拒絕重新鍵控已安裝的 bundle，因此未做任何變動',

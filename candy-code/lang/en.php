@@ -218,6 +218,7 @@ return [
     'cli.bundles.update.ambiguous' => 'bundle update: {name} is installed in both the user root and the project root, so update refused to choose; move one copy aside and run it again',
     'cli.bundles.update.done' => 'Updated bundle {name} from its marketplace record to commit {sha}.',
     'cli.bundles.update.marketplace_gone' => 'bundle {name} records marketplace {marketplace}, which is not added; the bundle was left exactly as it is — re-add the marketplace to update it',
+    'cli.bundles.update.no_home' => 'bundle update: {name} is refused: its marketplace pin is recorded in the user registry, and this process has no home directory it can confirm it owns; nothing was changed',
     'cli.bundles.update.no_record' => 'bundle {name} carries no marketplace provenance record (it was installed from a path or a URL), so update left it alone',
     'cli.bundles.update.nothing' => 'No bundle root yet; there is nothing to update.',
     'cli.bundles.update.renamed' => 'bundle update: {from} renamed itself to {to} upstream; update refuses to re-key an installed bundle, so nothing moved',

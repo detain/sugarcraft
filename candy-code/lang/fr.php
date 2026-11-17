@@ -180,6 +180,7 @@ return [
     'cli.bundles.update.ambiguous' => 'bundle update : {name} est installé à la fois dans la racine utilisateur et dans celle du projet ; la mise à jour n\'a pas choisi ; déplacez une copie et relancez-la',
     'cli.bundles.update.done' => 'Bundle {name} mis à jour depuis son enregistrement marketplace au commit {sha}.',
     'cli.bundles.update.marketplace_gone' => 'le bundle {name} enregistre le marketplace {marketplace}, qui n\'est pas ajouté ; le bundle a été laissé tel quel — réajoutez le marketplace pour le mettre à jour',
+    'cli.bundles.update.no_home' => 'bundle update : {name} est refusé : son épinglage de marketplace est enregistré dans le registre utilisateur, et ce processus n\'a pas de répertoire personnel dont il puisse confirmer la propriété ; rien n\'a été modifié',
     'cli.bundles.update.no_record' => 'le bundle {name} ne porte aucun enregistrement de provenance marketplace (il a été installé depuis un chemin ou une URL), la mise à jour l\'a donc laissé en l\'état',
     'cli.bundles.update.nothing' => 'Aucune racine de bundles pour l\'instant ; rien à mettre à jour.',
     'cli.bundles.update.renamed' => 'bundle update : {from} s\'est renommé en {to} en amont ; la mise à jour refuse de réindexer un bundle installé, rien n\'a bougé',

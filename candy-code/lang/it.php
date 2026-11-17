@@ -180,6 +180,7 @@ return [
     'cli.bundles.update.ambiguous' => 'bundle update: {name} è installato sia nella radice utente sia in quella di progetto; update non ha scelto; sposta una copia e rilancia',
     'cli.bundles.update.done' => 'Bundle {name} aggiornato dal suo record marketplace al commit {sha}.',
     'cli.bundles.update.marketplace_gone' => 'il bundle {name} registra il marketplace {marketplace}, che non è stato aggiunto; il bundle è stato lasciato esattamente com\'è — riaggiungere il marketplace per aggiornarlo',
+    'cli.bundles.update.no_home' => 'bundle update: {name} viene rifiutato: il suo pin del marketplace è registrato nel registro utente, e questo processo non ha una directory home di cui possa confermare la proprietà; non è stato modificato nulla',
     'cli.bundles.update.no_record' => 'il bundle {name} non contiene un record di provenienza marketplace (è stato installato da un percorso o un URL), quindi l\'aggiornamento lo ha lasciato invariato',
     'cli.bundles.update.nothing' => 'Nessuna radice dei bundle ancora; non c\'è nulla da aggiornare.',
     'cli.bundles.update.renamed' => 'bundle update: {from} si è rinominato in {to} upstream; l\'aggiornamento rifiuta di riassegnare la chiave di un bundle installato, quindi nulla è stato spostato',

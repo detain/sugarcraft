@@ -180,6 +180,7 @@ return [
     'cli.bundles.update.ambiguous' => 'bundle update: {name} はユーザールートとプロジェクトルートの両方にインストールされているため、update はどちらかを選べませんでした。片方を移動してから再実行してください',
     'cli.bundles.update.done' => 'マーケットプレイスレコードから bundle {name} をコミット {sha} に更新しました。',
     'cli.bundles.update.marketplace_gone' => 'bundle {name} はマーケットプレイス {marketplace} を記録していますが、追加されていません。bundle はそのままです — マーケットプレイスを再追加して更新してください',
+    'cli.bundles.update.no_home' => 'bundle update: {name} は拒否されました。マーケットプレイスのピン留めはユーザーレジストリに記録されており、このプロセスには所有を確認できるホームディレクトリがありません。何も変更されていません',
     'cli.bundles.update.no_record' => 'bundle {name} にマーケットプレイスの来歴レコードがありません（パスまたは URL からインストールされたため）、更新はスキップされました',
     'cli.bundles.update.nothing' => 'bundle ルートがまだありません。更新対象がありません。',
     'cli.bundles.update.renamed' => 'bundle update: {from} が上流で {to} にリネームされました。インストール済み bundle のキー再設定は拒否されるため、変更はありません',

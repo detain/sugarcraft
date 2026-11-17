@@ -180,6 +180,7 @@ return [
     'cli.bundles.update.ambiguous' => 'bundle update: {name} 이(가) 사용자 루트와 프로젝트 루트에 모두 설치되어 있어 update 가 선택하지 않았습니다. 한쪽 사본을 옮긴 뒤 다시 실행하세요',
     'cli.bundles.update.done' => '마켓플레이스 레코드에서 번들 {name}을 커밋 {sha}으로 갱신했습니다.',
     'cli.bundles.update.marketplace_gone' => '번들 {name}이 마켓플레이스 {marketplace}을 기록하고 있으나 추가되지 않았습니다; 번들은 그대로 유지되었습니다 — 마켓플레이스를 재추가하여 갱신하세요',
+    'cli.bundles.update.no_home' => 'bundle update: {name}은(는) 거부되었습니다. 마켓플레이스 고정 정보는 사용자 레지스트리에 기록되어 있으며, 이 프로세스에는 소유를 확인할 수 있는 홈 디렉터리가 없습니다. 아무것도 변경되지 않았습니다',
     'cli.bundles.update.no_record' => '번들 {name}에 마켓플레이스 출처 기록이 없습니다 (경로 또는 URL에서 설치됨), 갱신 시 변경되지 않았습니다',
     'cli.bundles.update.nothing' => '번들 루트가 아직 없습니다; 갱신할 항목이 없습니다.',
     'cli.bundles.update.renamed' => '번들 갱신: {from}이 업스트림에서 {to}로 이름이 변경되었습니다; 설치된 번들의 키를 재설정하지 않으므로 아무것도 이동되지 않았습니다',

@@ -210,13 +210,19 @@ final class BundleInstallScopeTest extends TestCase
         );
         file_put_contents($source . '/plugins/alpha/UPSTREAM.txt', 'v2 for alpha');
 
-        $this->unownHome();
+        [$exit, , $stderr] = $this->runCliAs('relative-home', $this->project, 'bundles', 'update', 'alpha', '--root', $this->project);
 
         self::assertSame(
             NonInteractive::EXIT_FAILURE,
-            $this->verb('update', 'alpha', '--root', $this->project),
+            $exit,
             'the pins live in the user registry, which an unowned home cannot read: a named update refuses, it never re-stages from the record',
         );
+        self::assertStringContainsString(
+            Lang::t('cli.bundles.update.no_home', ['name' => 'alpha']),
+            $stderr,
+            'the refusal names the bundle it refused, on the update verb',
+        );
+        self::assertStringNotContainsString('bundles install:', $stderr, 'an update refusal must not borrow the install verb');
         self::assertSame(
             'v1 for alpha',
             file_get_contents($this->project . '/.candy-code/bundles/alpha/UPSTREAM.txt'),
@@ -235,14 +241,17 @@ final class BundleInstallScopeTest extends TestCase
         );
         file_put_contents($source . '/plugins/alpha/UPSTREAM.txt', 'v2 for alpha');
 
-        $this->unownHome();
-
-        [$exit] = $this->verbCapture('update', '--root', $this->project);
+        [$exit, , $stderr] = $this->runCliAs('relative-home', $this->project, 'bundles', 'update', '--root', $this->project);
 
         self::assertSame(
             NonInteractive::EXIT_OK,
             $exit,
             'a scanned root reports and skips a bundle it cannot re-resolve, as it does for a gone marketplace; the project root is still walked, so the old whole-verb refusal is gone',
+        );
+        self::assertStringContainsString(
+            Lang::t('cli.bundles.update.no_home', ['name' => 'alpha']),
+            $stderr,
+            'the walk still refuses each project bundle by name, so the operator can see which one was skipped',
         );
         self::assertSame('v1 for alpha', file_get_contents($this->project . '/.candy-code/bundles/alpha/UPSTREAM.txt'));
     }
@@ -489,13 +498,25 @@ final class BundleInstallScopeTest extends TestCase
      */
     private function runCli(string $cwd, string ...$operands): array
     {
+        return $this->runCliAs($this->home, $cwd, ...$operands);
+    }
+
+    /**
+     * {@see runCli()} with an explicit HOME. A value HomeDirectory::owned()
+     * rejects (`relative-home`) drives the owner-less path in a real process,
+     * where the in-process unownHome() would print to the test runner's stderr.
+     *
+     * @return array{0: int, 1: string, 2: string} exit code, stdout, stderr
+     */
+    private function runCliAs(string $home, string $cwd, string ...$operands): array
+    {
         $bin = dirname(__DIR__, 2) . '/bin/candy-code';
         $process = proc_open(
             [PHP_BINARY, $bin, ...$operands],
             [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
             $cwd,
-            ['HOME' => $this->home, 'PATH' => (string) getenv('PATH'), 'LC_ALL' => 'C', 'LANG' => 'C'],
+            ['HOME' => $home, 'PATH' => (string) getenv('PATH'), 'LC_ALL' => 'C', 'LANG' => 'C'],
         );
 
         if (!is_resource($process)) {

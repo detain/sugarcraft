@@ -180,6 +180,7 @@ return [
     'cli.bundles.update.ambiguous' => 'bundle update: {name} установлен и в пользовательском корне, и в корне проекта; update не стал выбирать; переместите одну копию и запустите снова',
     'cli.bundles.update.done' => 'Bundle {name} обновлён из записи marketplace до коммита {sha}.',
     'cli.bundles.update.marketplace_gone' => 'bundle {name} ссылается на marketplace {marketplace}, который не добавлен; bundle оставлен без изменений — добавьте marketplace заново для обновления',
+    'cli.bundles.update.no_home' => 'bundle update: {name} отклонён: его закрепление за маркетплейсом записано в пользовательском реестре, а этот процесс не имеет домашнего каталога, владение которым он может подтвердить; ничего не изменено',
     'cli.bundles.update.no_record' => 'у bundle {name} нет записи о происхождении из marketplace (он установлен из пути или URL), поэтому обновление не затронуло его',
     'cli.bundles.update.nothing' => 'Корня bundle ещё нет; обновлять нечего.',
     'cli.bundles.update.renamed' => 'bundle update: {from} переименовался в {to} в upstream; обновление отказывается перепривязывать установленный bundle, поэтому ничего не перемещено',
