@@ -2124,3 +2124,4 @@ candy-code/tests/Windows/WindowsPtyRunSmokeTest.php	0.000	1
 candy-code/tests/Protocol/Methods/TodoMethodsTest.php	0.000	2
 candy-code/tests/App/AppMutateSplatTest.php	0.246	6
 candy-code/tests/Chat/WithSizeIdentityTest.php	0.246	6
+candy-code/tests/Config/CandyCodeFactsDocDriftTest.php	0.050	8

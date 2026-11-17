@@ -13,7 +13,9 @@ prompt, in assembly order"); this page is the *why* beside that *what*.
 ## The thirteen slots, in order of record
 
 `Runtime::systemPromptSections()` returns an ordered list of `PromptSection`s, base first and the
-static `<env>` block last. Counted from the live method, there are thirteen slots:
+static `<env>` block last. Counting the numbered entries below, there are thirteen slots:
+entries 3, 5 and 12 are present only in some builds, and each says when. The
+`agent-instructions` layer after the list is conditional too and is not numbered.
 
 1. **Base identity** (`Runtime::basePrompt()`) — the Static heredoc that opens every prompt.
    Unfenced, because it is harness voice with no untrusted input. For the DeepSeek-V4, Qwen3.8
@@ -39,8 +41,7 @@ static `<env>` block last. Counted from the live method, there are thirteen slot
    `repoMap.maxBytes` moves each section's 8,192-byte budget (`RepoMapBlock::MAX_SECTION_BYTES`);
    both are read once per turn (`Runtime::repoMapSnapshot()`).
 5. **Symbol map** (`SymbolMapBlock`) — fenced `symbol-map`; the definitions the rest of the workspace
-   references most, ranked by PageRank over which files use which names (an Aider repo map, roadmap
-   5.5-5), unfocused and capped at 1,024 tokens. PerSession and byte-stable: `EngineBackend` captures
+   references most, ranked by PageRank over which files use which names (an Aider-style repo map), unfocused and capped at 1,024 tokens. PerSession and byte-stable: `EngineBackend` captures
    it once per session in the parent before a turn's fork (`Runtime::primeSymbolMap()`) and the
    session memo holds it until a refresh point; a session with no capture assembles no slot at all,
    so every other prompt build is unchanged. A changed tree does not stall that first turn: when the
@@ -132,8 +133,8 @@ the static `<env>` half, kept last because the slot order is the documented one.
 no empty fence and no dangling separator.
 
 A layer the numbering does not count: `agent-instructions` (the `<agent-instructions>`
-slot, C-AGT-4.a) joins directly behind tool guidance, and only when a primary agent has set
-instructions. Tool guidance (3) and the symbol map (5) are conditional in the same way.
+slot) joins directly behind tool guidance, and only when a primary agent has set
+instructions. Like entries 3 and 5, it is absent from a prompt that does not carry it.
 
 ## Outside the system prompt: the turn-context row and in-place notices
 

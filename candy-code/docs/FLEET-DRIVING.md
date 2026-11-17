@@ -108,8 +108,9 @@ Both flags ship on every build.
 - `--input-format stream-json` reads each piped `{"type":"user","content":…}` NDJSON line
   as its own user turn before the `-p` prompt. A malformed JSON line exits 2 and names its
   line number; unusable shapes are counted and named once on stderr while the run continues.
-  The 10 MiB stdin cap counts raw bytes before parsing. The flag requires a prompt. The
-  default `text` format keeps the raw-prepend path.
+  The 10 MiB stdin cap counts raw bytes before parsing. The flag needs a prompt: `-p`,
+  `run "<prompt>"`, or `--batch`, which is itself a prompt request. The default `text`
+  format keeps the raw-prepend path.
 
 ## Follow-up turns and lineage
 

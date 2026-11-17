@@ -47,7 +47,9 @@ A stopped TUI is a separate family: its loop exits `128+N` for the signal that
 caught it — `130` for SIGINT (Ctrl+C), `143` for SIGTERM, `129` for SIGHUP —
 after the full teardown the binary's shutdown guard runs. A cooperative quit
 (`/exit`, `q`, a double `Ctrl+C`) still exits `0`: in the TUI a single `Ctrl+C` is a keypress that interrupts the turn or clears the draft (journaled, announced at the next launch), not a signal, so it never changes the exit code. One-shot mode and the subcommands have no
-signal rows: they answer with the three codes above.
+signal rows. Their exit codes are the table under the README's "Exit codes and the
+JSON document" heading, plus `3` from `workflow run` and `workflow resume` when a run
+stopped for a person.
 
 ---
 
