@@ -38,7 +38,7 @@ use SugarCraft\Core\Util\Sanitize;
  *
  * Coverage: printable ASCII, control characters
  * (Ctrl+A‒Z, Tab, Enter, Backspace, Escape, Space), Alt-prefixed keys
- * (ESC + char), the arrow and tilde function CSIs (Insert, Delete, F1–F20),
+ * (ESC + char), the arrow and tilde function CSIs (Insert, Delete, F1–F24),
  * the SS3 arrow, F1–F4 and application-keypad forms, SGR mouse reports,
  * and the Kitty keyboard protocol (CSI-u plus its PUA function-key
  * encodings).
@@ -764,6 +764,15 @@ final class InputReader
                 '32'     => new KeyMsg(KeyType::F18),
                 '33'     => new KeyMsg(KeyType::F19),
                 '34'     => new KeyMsg(KeyType::F20),
+                // F21-F24 continue the same numbering (35..38), as sugar-input's
+                // TILDE_FUNCTION_KEYS does. Menu and Pause have no tilde code:
+                // 29~ is F16 in this numbering, and xterm defines no sequence
+                // for Pause. They surface only through the Kitty path (57363,
+                // 57362).
+                '35'     => new KeyMsg(KeyType::F21),
+                '36'     => new KeyMsg(KeyType::F22),
+                '37'     => new KeyMsg(KeyType::F23),
+                '38'     => new KeyMsg(KeyType::F24),
                 default  => null,
             },
             default => null,

@@ -772,6 +772,45 @@ final class InputReaderTest extends TestCase
         $this->assertSame(KeyType::Kp0, $msgs[0]->type);
     }
 
+    public function testF21ThroughF24ViaCsiTilde(): void
+    {
+        // Ported from sugar-input's TILDE_FUNCTION_KEYS (35..38). The table
+        // here stopped at F20, so these were silently dropped.
+        $msgs = (new InputReader())->parse("\x1b[35~\x1b[36~\x1b[37~\x1b[38~");
+        $this->assertSame(
+            [KeyType::F21, KeyType::F22, KeyType::F23, KeyType::F24],
+            array_map(static fn (KeyMsg $m): KeyType => $m->type, $msgs),
+        );
+    }
+
+    public function testKittyPauseAndMenuFunctionalKeys(): void
+    {
+        // Pause and Menu have no legacy encoding (see the tilde table note in
+        // InputReader), so the Kitty codepoints are their only input path.
+        $msgs = (new InputReader())->parse("\x1b[57362u\x1b[57363u");
+        $this->assertCount(2, $msgs);
+        $this->assertSame(KeyType::Pause, $msgs[0]->type);
+        $this->assertSame(KeyType::Menu, $msgs[1]->type);
+    }
+
+    public function testRxvtTildeSevenEightAreHomeAndEnd(): void
+    {
+        // Ported from sugar-input: rxvt/aterm send 7~ and 8~ for Home and End.
+        $msgs = (new InputReader())->parse("\x1b[7~\x1b[8~");
+        $this->assertCount(2, $msgs);
+        $this->assertSame(KeyType::Home, $msgs[0]->type);
+        $this->assertSame(KeyType::End, $msgs[1]->type);
+    }
+
+    public function testCtrlFunctionKeyNumberTildeForm(): void
+    {
+        // Ported from sugar-input: CSI 21;5~ is Ctrl+F10.
+        $msgs = (new InputReader())->parse("\x1b[21;5~");
+        $this->assertCount(1, $msgs);
+        $this->assertSame(KeyType::F10, $msgs[0]->type);
+        $this->assertTrue($msgs[0]->ctrl);
+    }
+
     // ---- bracketed paste -------------------------------------------------
 
     public function testBracketedPasteSingleFrame(): void

@@ -222,10 +222,10 @@ enum KeyType: string
             57363 => self::Menu,
 
             // F1–F35 (Kitty functional-key codepoints 57364–57398). The
-            // legacy tilde table in InputReader decodes F1–F20 (codes 11–34)
-            // and SS3 F1–F4, so F21–F35 are reached only through this table.
-            // F36–F63 — upstream's xterm-extension range — have no decoder
-            // input path in this lib; the enum cases are parity surface only.
+            // legacy tilde table in InputReader stops at F12 (codes 11–24)
+            // and SS3 at F4, so F36–F63 — upstream's xterm-extension range —
+            // have no decoder input path in this lib; the enum cases are
+            // parity surface only.
             57364 => self::F1,
             57365 => self::F2,
             57366 => self::F3,
