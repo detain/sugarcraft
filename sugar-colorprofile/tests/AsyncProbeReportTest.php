@@ -13,6 +13,7 @@ use SugarCraft\ColorProfile\Probe\Capability;
 use SugarCraft\ColorProfile\Probe\InfocmpBinary;
 use SugarCraft\ColorProfile\Probe\ProbeReport;
 use SugarCraft\ColorProfile\Probe\TerminalProbe;
+use SugarCraft\ColorProfile\Probe\TerminfoReplayProbe;
 
 /**
  * @covers \SugarCraft\ColorProfile\AsyncProbe::report
@@ -210,6 +211,84 @@ final class AsyncProbeReportTest extends TestCase
         } finally {
             $this->setInFlightSlots([]);
         }
+    }
+
+    /**
+     * The SIGTERM -> SIGKILL ladder driven through report()'s own onLadder
+     * seam, not only through colorProfile(). A TERM-ignoring child fires the
+     * deadline rung: the report settles as "no dump" (the environment answer,
+     * exactly what the sync door gives on overrun), books no dump memo entry
+     * (CP-13), and the grace KILL reaps the child.
+     */
+    public function testTermIgnoringChildSettlesTheReportAsNoDumpAndIsReaped(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('POSIX signal semantics (trap, SIGKILL) are not available here.');
+        }
+
+        $this->setTerm('xterm-256color');
+        $path = $this->plantBinary("#!/bin/sh\ntrap '' TERM\nwhile :; do :; done\n");
+        AsyncProbe::setDeadlinesForTesting(1, 1);
+        try {
+            $loop = new StreamSelectLoop();
+            $promise = AsyncProbe::report($loop);
+
+            $slots = array_values($this->inFlightSlots());
+            $this->assertCount(1, $slots, 'the terminfo leg must spawn a child on the loop the caller passed');
+            $process = $slots[0]['process'];
+
+            $report = self::settle($promise, $loop);
+
+            $this->assertInstanceOf(ProbeReport::class, $report);
+            $this->assertSame(
+                self::sources(TerminfoReplayProbe::replaying(null)->runProbe()),
+                self::sources($report),
+                'a ladder-killed child replays as "no dump": the environment answer stands',
+            );
+            $this->assertCount(0, $this->inFlightSlots(), 'the deadline rung releases the slot');
+            $this->assertSame([], $this->settledDumps(), 'a killed child mints no dump memo entry (CP-13)');
+
+            // The grace KILL fires after the caller has settled. Drive the loop
+            // past it so the child is observed, reaped and closed.
+            $loop->addTimer(2.5, static function () use ($loop): void {
+                $loop->stop();
+            });
+            $loop->run();
+
+            $this->assertFalse($process->isRunning(), 'no live child survives the ladder');
+            $this->assertNull(
+                (new \ReflectionProperty(\React\ChildProcess\Process::class, 'process'))->getValue($process),
+                'the grace rung must SIGKILL and reap the child, not merely signal it',
+            );
+        } finally {
+            if (isset($process) && $process->isRunning()) {
+                $process->terminate(\defined('SIGKILL') ? \SIGKILL : 9);
+            }
+            @\unlink($path);
+        }
+    }
+
+    /** @return array<string, string|null> */
+    private function settledDumps(): array
+    {
+        $prop = new \ReflectionProperty(AsyncProbe::class, 'settledDumps');
+
+        return $prop->getValue();
+    }
+
+    /**
+     * Stuff a temp script into InfocmpBinary's path memo (the house
+     * binary-stub shape; tearDown() resets the memo).
+     */
+    private function plantBinary(string $body): string
+    {
+        $path = \tempnam(\sys_get_temp_dir(), 'cp28');
+        self::assertIsString($path);
+        \file_put_contents($path, $body);
+        \chmod($path, 0755);
+        (new \ReflectionProperty(InfocmpBinary::class, 'path'))->setValue(null, $path);
+
+        return $path;
     }
 
     /** @return array<int, array{process: mixed, deadline: float}> */

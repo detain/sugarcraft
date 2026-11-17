@@ -55,7 +55,7 @@ use SugarCraft\ColorProfile\Env;
  *             with the loop you own; it returns the same ProbeReport and
  *             spawns the infocmp child on that loop. For the TrueColor
  *             verdict alone, {@see AsyncProbe::colorProfile()} is the
- *             async equivalent. The class stays byte-identical for BC: no
+ *             async equivalent. Runtime behavior is unchanged for BC: no
  *             runtime notice is raised, and every consumer keeps working.
  *
  * @see https://github.com/charmbracelet/colorprofile
