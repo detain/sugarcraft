@@ -21,6 +21,7 @@ use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Tests\Support\DrivesWorkflowRunsTrait;
+use SugarCraft\Code\Tests\Support\ProgressReadProbe;
 use SugarCraft\Code\Tui\Components\AgentSplitColumn;
 use SugarCraft\Code\Tui\Renderer;
 use SugarCraft\Code\Workflows\Tasks;
@@ -761,33 +762,49 @@ final class WorkflowLivePaneTest extends TestCase
 
     /**
      * Appends accumulate across polls, and a poll with no growth changes
-     * nothing. The output string is the same whether each poll reads only the
-     * appended bytes or the whole file, so this pins the mirrored result rather
-     * than the read pattern. The rewrite cases below pin the behaviour a
-     * whole-file-on-growth design must keep.
+     * nothing. The mirrored result is the same whether a growing poll reads only
+     * the appended bytes or the whole file, so the output assertions pin the
+     * result, not the growing read. What is pinned about reads is the idle poll:
+     * the stat decides it, and it opens nothing. The probe counts opens, and
+     * this test fails on a pump that reads the file on every poll. The rewrite
+     * cases below pin the behaviour a whole-file-on-growth design must keep.
      */
     public function testPumpMirrorsEachAppendAcrossPolls(): void
     {
-        $pool = new AgentWorkerPool();
-        $agent = $this->subAgent('a-4');
-        $this->putRunning($pool, $agent, 4245);
+        ProgressReadProbe::register();
+        $dir = $this->makeProbeDir();
+        try {
+            $pool = new AgentWorkerPool();
+            (new \ReflectionProperty(AgentWorkerPool::class, 'resultDir'))
+                ->setValue($pool, ProgressReadProbe::uri($dir));
+            $agent = $this->subAgent('a-4');
+            $this->putRunning($pool, $agent, 4245);
 
-        $publish = new \ReflectionMethod(AgentWorkerPool::class, 'publishProgress');
-        $pump = new \ReflectionMethod(AgentWorkerPool::class, 'pumpProgress');
+            $publish = new \ReflectionMethod(AgentWorkerPool::class, 'publishProgress');
+            $pump = new \ReflectionMethod(AgentWorkerPool::class, 'pumpProgress');
 
-        $publish->invoke($pool, 'a-4', 'first');
-        $pump->invoke($pool);
-        $this->assertSame('first', $agent->output);
+            $publish->invoke($pool, 'a-4', 'first');
+            $pump->invoke($pool);
+            $this->assertSame('first', $agent->output);
 
-        $pump->invoke($pool);
-        $this->assertSame('first', $agent->output, 'A poll with no growth changed the mirror.');
+            ProgressReadProbe::$opens = 0;
+            $pump->invoke($pool);
+            $this->assertSame('first', $agent->output, 'A poll with no growth changed the mirror.');
+            $this->assertSame(
+                0,
+                ProgressReadProbe::$opens,
+                'A poll with no growth opened the progress file; the stat should have decided it.',
+            );
 
-        $publish->invoke($pool, 'a-4', '/second');
-        $pump->invoke($pool);
-        $publish->invoke($pool, 'a-4', '/third');
-        $pump->invoke($pool);
+            $publish->invoke($pool, 'a-4', '/second');
+            $pump->invoke($pool);
+            $publish->invoke($pool, 'a-4', '/third');
+            $pump->invoke($pool);
 
-        $this->assertSame('first/second/third', $agent->output);
+            $this->assertSame('first/second/third', $agent->output);
+        } finally {
+            $this->removeProbeDir($dir);
+        }
     }
 
     /**
@@ -1113,9 +1130,12 @@ final class WorkflowLivePaneTest extends TestCase
      * A recycled id starts its mirror from byte 0, not from the previous run's
      * offset.
      *
-     * The new run is longer than the old one, so a size check alone would not
-     * notice the recycle: a stale offset of 3 would tail " run text" onto
-     * "old" and report "old run text" for a run whose output is "new run text".
+     * The first recycle is to a longer run. The prefix check rejects a stale
+     * offset there ("new" is not "old"), so that half passes with or without
+     * the offset reset. The second recycle is to a run of the same length as
+     * the mirror. The stored offset then equals both the new file's size and
+     * the buffer length, an unchanged-looking file, so only the reset in
+     * discardProgress() makes the poll rebuild from byte 0.
      */
     public function testARecycledIdMirrorsTheNewRunFromItsFirstByte(): void
     {
@@ -1125,12 +1145,13 @@ final class WorkflowLivePaneTest extends TestCase
 
         $publish = new \ReflectionMethod(AgentWorkerPool::class, 'publishProgress');
         $pump = new \ReflectionMethod(AgentWorkerPool::class, 'pumpProgress');
+        $discard = new \ReflectionMethod(AgentWorkerPool::class, 'discardProgress');
 
         $publish->invoke($pool, 'a-7', 'old');
         $pump->invoke($pool);
         $this->assertSame('old', $agent->output);
 
-        (new \ReflectionMethod(AgentWorkerPool::class, 'discardProgress'))->invoke($pool, 'a-7');
+        $discard->invoke($pool, 'a-7');
         $publish->invoke($pool, 'a-7', 'new run text');
         $pump->invoke($pool);
 
@@ -1138,6 +1159,16 @@ final class WorkflowLivePaneTest extends TestCase
             'new run text',
             $agent->output,
             'The recycled id tailed from the previous run\'s offset.',
+        );
+
+        $discard->invoke($pool, 'a-7');
+        $publish->invoke($pool, 'a-7', 'NEW RUN TEXT');
+        $pump->invoke($pool);
+
+        $this->assertSame(
+            'NEW RUN TEXT',
+            $agent->output,
+            'A recycled id of the same length as its previous run kept the previous mirror.',
         );
     }
 
@@ -1393,6 +1424,23 @@ final class WorkflowLivePaneTest extends TestCase
             ),
             task: 'explore the docs',
         );
+    }
+
+    /** A real directory for a probed result dir; {@see removeProbeDir()} clears it. */
+    private function makeProbeDir(): string
+    {
+        $dir = sys_get_temp_dir() . '/sc-progress-probe-' . bin2hex(random_bytes(6));
+        mkdir($dir, 0700);
+
+        return $dir;
+    }
+
+    private function removeProbeDir(string $dir): void
+    {
+        foreach (glob($dir . '/*') ?: [] as $file) {
+            @unlink($file);
+        }
+        @rmdir($dir);
     }
 
     /** File $agent into the pool exactly as a forked dispatch would have. */
