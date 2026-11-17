@@ -455,7 +455,4 @@ final class ApngDecoder
 
         return $canvas;
     }
-
-    // ─── Scanline decoding ──────────────────────────────────────────────────
-
 }

@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Attachments;
 use SugarCraft\Code\Attachment;
 use SugarCraft\Code\AttachmentType;
 use SugarCraft\Code\Lang;
+use SugarCraft\Image\ImageSource;
 
 /**
  * `@file` mentions in a prompt (audit 15b-15): finding them, turning them into
@@ -253,17 +254,12 @@ final class FileMentions
 
     /**
      * The media type of image bytes, by magic number - PNG, JPEG, GIF and
-     * WebP, the four every vision wire here accepts - or null.
+     * WebP, the four every vision wire here accepts - or null. The table lives
+     * in {@see ImageSource::sniffMime()} so the library and the app cannot drift.
      */
     public static function sniffImage(string $bytes): ?string
     {
-        return match (true) {
-            str_starts_with($bytes, "\x89PNG\r\n\x1a\n") => 'image/png',
-            str_starts_with($bytes, "\xFF\xD8\xFF") => 'image/jpeg',
-            str_starts_with($bytes, 'GIF87a'), str_starts_with($bytes, 'GIF89a') => 'image/gif',
-            strlen($bytes) >= 12 && str_starts_with($bytes, 'RIFF') && substr($bytes, 8, 4) === 'WEBP' => 'image/webp',
-            default => null,
-        };
+        return ImageSource::sniffMime($bytes);
     }
 
     /**

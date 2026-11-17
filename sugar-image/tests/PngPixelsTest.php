@@ -389,4 +389,149 @@ final class PngPixelsTest extends TestCase
 
         new RgbaPixels(2, 2, 'short');
     }
+
+    // ─── Fixtures moved from candy-code MaskIngest (mask classification inputs) ───
+
+    private static function fixture(string $name): string
+    {
+        return (string) file_get_contents(__DIR__ . '/fixtures/mask/' . $name . '.png');
+    }
+
+    /** @return list<int> the RGBA quad at pixel index $i */
+    private static function quad(RgbaPixels $p, int $i): array
+    {
+        return array_values(unpack('C4', substr($p->rgba, $i * 4, 4)) ?: []);
+    }
+
+    public function testTheAlphaFixtureDecodesToExactlyTransparentAndOpaquePixels(): void
+    {
+        $p = PngPixels::decode(self::fixture('mask-alpha'));
+
+        self::assertNotNull($p);
+        self::assertSame([8, 8], [$p->width, $p->height]);
+        self::assertSame([0, 0, 0, 0], self::quad($p, 0), 'first column block is fully transparent');
+        self::assertSame([255, 255, 255, 255], self::quad($p, 4), 'second block is opaque white');
+    }
+
+    public function testTheAlpha254FixtureKeepsTheStoredNearOpaqueSampleGdWouldDrop(): void
+    {
+        $p = PngPixels::decode(self::fixture('mask-alpha254'));
+
+        self::assertNotNull($p);
+        self::assertSame(254, self::quad($p, 0)[3], 'alpha 254 survives; GD reads it back as opaque');
+        self::assertSame(255, self::quad($p, 1)[3]);
+    }
+
+    public function testTheLumaFixtureDecodesToOpaqueGrayscale(): void
+    {
+        $p = PngPixels::decode(self::fixture('mask-luma'));
+
+        self::assertNotNull($p);
+        foreach (range(0, $p->width * $p->height - 1) as $i) {
+            [$r, $g, $b, $a] = self::quad($p, $i);
+            self::assertTrue($r === $g && $g === $b, "pixel {$i} is achromatic");
+            self::assertSame(255, $a, "pixel {$i} is opaque");
+        }
+    }
+
+    public function testTheNeitherFixtureDecodesToOpaqueChromaticPixels(): void
+    {
+        $p = PngPixels::decode(self::fixture('mask-neither'));
+
+        self::assertNotNull($p);
+        self::assertSame([255, 0, 0, 255], self::quad($p, 0));
+    }
+
+    public function testTheCorruptFixtureDeclinesWithoutThrowing(): void
+    {
+        self::assertNull(PngPixels::decode(self::fixture('corrupt')));
+    }
+
+    // ─── Direct coverage for the shared container primitives ───────────────
+
+    public function testWalkChunksReturnsEachChunkInOrderUpToIend(): void
+    {
+        $stream = self::chunk('IHDR', 'abc') . self::chunk('IDAT', '') . self::chunk('IEND', '') . 'trailing';
+
+        self::assertSame(
+            [
+                ['type' => 'IHDR', 'data' => 'abc'],
+                ['type' => 'IDAT', 'data' => ''],
+                ['type' => 'IEND', 'data' => ''],
+            ],
+            PngPixels::walkChunks($stream, 0),
+        );
+    }
+
+    public function testWalkChunksRefusesAChunkWhoseCrcDoesNotMatch(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        PngPixels::walkChunks(pack('N', 3) . 'IHDR' . 'abc' . pack('N', 0), 0);
+    }
+
+    public function testWalkChunksRefusesANonLetterChunkType(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        PngPixels::walkChunks(self::chunk("IH\x001", ''), 0);
+    }
+
+    public function testParseIhdrReadsGeometryAndChannelCount(): void
+    {
+        self::assertSame([3, 2, 4, 6], PngPixels::parseIhdr(pack('NNCCCCC', 3, 2, 8, 6, 0, 0, 0)));
+    }
+
+    public function testParseIhdrRefusesSixteenBitDepth(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        PngPixels::parseIhdr(pack('NNCCCCC', 1, 1, 16, 0, 0, 0, 0));
+    }
+
+    public function testParseIhdrRefusesAnInterlacedHeader(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        PngPixels::parseIhdr(pack('NNCCCCC', 1, 1, 8, 2, 0, 0, 1));
+    }
+
+    public function testParsePaletteReadsRgbTriplesFromPlte(): void
+    {
+        $chunks = [['type' => 'IHDR', 'data' => ''], ['type' => 'PLTE', 'data' => "\x01\x02\x03\xFF\x00\x7F"]];
+
+        self::assertSame([1, 2, 3, 255, 0, 127], PngPixels::parsePalette($chunks));
+        self::assertSame([], PngPixels::parsePalette([]));
+    }
+
+    public function testParsePaletteRefusesATornEntry(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        PngPixels::parsePalette([['type' => 'PLTE', 'data' => "\x01\x02"]]);
+    }
+
+    public function testParseTrnsReturnsPerIndexAlphaOrNothing(): void
+    {
+        self::assertSame([0, 128], PngPixels::parseTrns([['type' => 'tRNS', 'data' => "\x00\x80"]]));
+        self::assertSame([], PngPixels::parseTrns([]));
+    }
+
+    public function testInflateAndUnfilterReversesTheSubFilterAndExpandsRgb(): void
+    {
+        // One 2x1 RGB row, Sub filter: the second pixel is stored as a delta from the first.
+        $zlib = gzcompress("\x01" . pack('C*', 10, 20, 30, 1, 1, 1));
+
+        self::assertSame(
+            pack('C*', 10, 20, 30, 255, 11, 21, 31, 255),
+            PngPixels::inflateAndUnfilter($zlib, 2, 1, 3, 2, [], []),
+        );
+    }
+
+    public function testInflateAndUnfilterRefusesAStreamOfTheWrongLength(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        PngPixels::inflateAndUnfilter(gzcompress("\x00"), 1, 1, 1, 0, [], []);
+    }
 }

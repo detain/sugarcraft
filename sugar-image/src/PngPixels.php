@@ -31,7 +31,7 @@ final class PngPixels
 
     /**
      * Largest image {@see decode()} accepts by default: 4096×4096. Its RGBA
-     * expansion is then 64 MiB, the same ceiling the mask byte walk always used.
+     * expansion is then 64 MiB.
      */
     public const MAX_PIXELS = 16_777_216;
 
