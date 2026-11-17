@@ -80,7 +80,7 @@ is a locally spawned `/bg` daemon: it has no terminal for the whole life of the
 run, so an asking default there would refuse every edit. With no
 `permissionRules` configured `bypass-permissions` now decides *less* than
 having no gate (2026-10-06 ruling): the built-in guard hooks stand down before
-it — `ConfirmRemoveHook` stops refusing, the secret and file-class rows of
+it — `ConfirmRemoveHook` stops asking, the secret and file-class rows of
 `ProtectFilesHook` stop refusing, and `Ask`-class rules answer allow — while a
 bare chain with no gate enforces all of it. What still refuses in bypass is the
 floor: the `rm -rf /` circuit breaker, explicit `Deny` rules, and the
