@@ -724,6 +724,55 @@ final class InputReaderTest extends TestCase
         $this->assertSame([], (new InputReader())->parse("\x1b[30~"));
     }
 
+    public function testModifiedSs3ArrowDecodesAsKeyNotPrintable(): void
+    {
+        // Legacy xterm modified SS3 `ESC O 1 ; <mod> <final>`: the whole span
+        // is one key. The old single-byte SS3 scan dropped the digit and
+        // leaked ";5" and the final as printable characters.
+        $msgs = (new InputReader())->parse("\x1bO1;5C");
+        $this->assertCount(1, $msgs);
+        $this->assertInstanceOf(KeyMsg::class, $msgs[0]);
+        $this->assertSame(KeyType::Right, $msgs[0]->type);
+        $this->assertTrue($msgs[0]->ctrl);
+    }
+
+    public function testModifiedSs3ShiftArrowAndF1(): void
+    {
+        $left = (new InputReader())->parse("\x1bO1;2D");
+        $this->assertCount(1, $left);
+        $this->assertSame(KeyType::Left, $left[0]->type);
+        $this->assertTrue($left[0]->shift);
+
+        $f1 = (new InputReader())->parse("\x1bO1;2P");
+        $this->assertCount(1, $f1);
+        $this->assertSame(KeyType::F1, $f1[0]->type);
+        $this->assertTrue($f1[0]->shift);
+    }
+
+    public function testModifiedSs3SplitAcrossFeedsCompletesWithoutLeaking(): void
+    {
+        $reader = new InputReader();
+        $this->assertSame([], $reader->parse("\x1bO1"));
+        $msgs = $reader->parse(";2D");
+        $this->assertCount(1, $msgs);
+        $this->assertSame(KeyType::Left, $msgs[0]->type);
+        $this->assertTrue($msgs[0]->shift);
+
+        $reader = new InputReader();
+        $this->assertSame([], $reader->parse("\x1bO1;"));
+        $msgs = $reader->parse("2D");
+        $this->assertCount(1, $msgs);
+        $this->assertSame(KeyType::Left, $msgs[0]->type);
+        $this->assertTrue($msgs[0]->shift);
+    }
+
+    public function testPlainSs3F1StillDecodes(): void
+    {
+        $msgs = (new InputReader())->parse("\x1bOP");
+        $this->assertCount(1, $msgs);
+        $this->assertSame(KeyType::F1, $msgs[0]->type);
+    }
+
     public function testKeypadDigitsViaSs3(): void
     {
         // Regression: DECKPAM ESC O p..y (keypad 0..9) was dropped entirely.

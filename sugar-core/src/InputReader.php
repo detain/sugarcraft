@@ -229,6 +229,34 @@ final class InputReader
                     break;
                 }
                 if ($next === 'O') {
+                    // Legacy modified SS3 (xterm): ESC O 1 ; <mod> <final>
+                    // names the key with its modifiers. It is decoded
+                    // through the CSI path so both forms share one modifier
+                    // table, and a span split across feeds parks until its
+                    // final byte arrives rather than leaking "1;" as text.
+                    if ($remain === 3 && $this->buf[$i + 2] === '1') {
+                        // Bare "ESC O 1" may be the head of a modified span
+                        // whose ';' has not arrived yet.
+                        break;
+                    }
+                    if ($remain >= 4 && $this->buf[$i + 2] === '1' && $this->buf[$i + 3] === ';') {
+                        $j = $i + 4;
+                        while ($j < $len && $this->buf[$j] >= '0' && $this->buf[$j] <= '9') {
+                            $j++;
+                        }
+                        if ($j >= $len) {
+                            break;
+                        }
+                        $c = ord($this->buf[$j]);
+                        if ($j > $i + 4 && $c >= 0x40 && $c <= 0x7e) {
+                            $msg = $this->decodeCsi(substr($this->buf, $i + 2, $j - $i - 2), chr($c));
+                            if ($msg !== null) {
+                                $msgs[] = $msg;
+                            }
+                            $i = $j + 1;
+                            continue;
+                        }
+                    }
                     // SS3: ESC O <single byte>. Used for F1-F4 on most
                     // terminals (xterm sends "ESC O P" for F1, etc.).
                     if ($remain < 3) {
