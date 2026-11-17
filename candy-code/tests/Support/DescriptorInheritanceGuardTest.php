@@ -625,6 +625,18 @@ final class DescriptorInheritanceGuardTest extends TestCase
                 . 'so it runs once per process. Not promoted to a CLOSING_HELPERS row for the '
                 . 'reason the render row gives. NOT FIXABLE FROM THIS PACKAGE - sugar-image owns it.',
         ],
+        // P1-5: ChildRun is the bounded runner that the candy-code, candy-top,
+        // candy-git-server and sugar-dashboard copies are replacing. Its spawn
+        // hands the handle to run() or launch(), which own the reap.
+        'sugar-async/ChildRun.php::spawn' => [
+            'count' => 1,
+            'reason' => 'the one proc_open in ChildRun, whose handle outlives spawn() by design: '
+                . 'run() and launch() reap it. run() calls BoundedShutdown reapIfExited or '
+                . 'terminateBounded on every return path and in its catch; launch() SIGTERMs at the '
+                . 'deadline, escalates to SIGKILL and proc_closes in finish(). The spec names only '
+                . 'fds 0, 1 and 2, so the fd≥3 inheritance is the exposure this row records. '
+                . 'NOT FIXABLE FROM THIS PACKAGE - sugar-async owns it.',
+        ],
     ];
 
     /**
