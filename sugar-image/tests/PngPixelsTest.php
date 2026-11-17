@@ -434,6 +434,26 @@ final class PngPixelsTest extends TestCase
         self::assertSame([0, 255, 0], $alpha);
     }
 
+    /**
+     * Regression: the RGB half of the APNG tRNS change. On master the frame path
+     * ignored the colour key for type 2 as well, so the exact key triple stayed
+     * opaque. Only the exact triple turns transparent; a near miss keeps alpha 255.
+     */
+    public function testApngFramePathHonoursAnRgbTrnsKey(): void
+    {
+        $stream = self::SIG . self::ihdr(2, 1, 2)
+            . self::chunk('tRNS', pack('n3', 10, 20, 30))
+            . self::chunk('acTL', pack('NN', 1, 0))
+            . self::chunk('fcTL', pack('NNNNNnnCC', 0, 2, 1, 0, 0, 1, 10, 0, 0))
+            . self::chunk('IDAT', gzcompress(self::filter(pack('C*', 10, 20, 30, 10, 20, 31), 2, 1, 3, [0])))
+            . self::chunk('IEND', '');
+
+        $frames = ApngDecoder::decode($stream, 0);
+
+        self::assertCount(1, $frames);
+        self::assertSame(pack('C*', 10, 20, 30, 0, 10, 20, 31, 255), $frames[0]['rgba']);
+    }
+
     public function testRgbaValueObjectRejectsAShortBuffer(): void
     {
         $this->expectException(\InvalidArgumentException::class);
