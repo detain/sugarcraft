@@ -66,9 +66,10 @@ final class DisplayCellWidthTest extends TestCase
 
     public function testUnsortedHeaderPadsACjkLabelByDisplayWidth(): void
     {
-        // The label 名前 is four cells but two code points. str_pad counts code
-        // points, so on the old path the header came out wider than the column;
-        // Width::padRight fills the column's fourteen cells exactly.
+        // The label 名前 is four cells but six bytes. str_pad pads by bytes, so on
+        // the old path the header came out narrower than its column (the frame
+        // line and the header line differ); Width::padRight pads by display cells
+        // to the column's fourteen.
         $name = Column::new('name', '名前');
         $grid = GridTable::new([$name], [new Row(['name' => '日本語テキスト'])])
             ->setSize(30, 10);
@@ -77,6 +78,7 @@ final class DisplayCellWidthTest extends TestCase
         $header = explode("\n", $rendered)[1];
 
         $this->assertFrameIsRectangular($rendered);
+        self::assertSame(16, Width::string($header));
         self::assertStringContainsString('┃名前' . str_repeat(' ', 10) . '┃', $header);
     }
 
