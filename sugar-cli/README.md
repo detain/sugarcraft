@@ -70,7 +70,7 @@ echo StatusLine::error('connection refused'), "\n";
   through a pipe; otherwise a non-tty STDOUT (`myapp --help | less`) and
   `TERM=dumb` resolve the same way and emit no escape bytes at all —
   that downgrade drops the bold attribute along with the colour, unlike
-  `NO_COLOR`, which outranks the force vars, drops colour while keeping
+  `NO_COLOR`, which the force vars outrank, drops colour while keeping
   bold, and resolves to the Ascii profile; BSD `CLICOLOR=0` drops colour
   unless forced. The roster authority is sugar-core's `ColorProfile`
   docblock — sugar-cli never re-implements the order. **Every presenter

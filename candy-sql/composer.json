@@ -71,5 +71,12 @@
         "ext-pdo_mysql": "Required to connect to MySQL servers (--driver=mysql).",
         "ext-pdo_pgsql": "Required to connect to PostgreSQL servers (--driver=pgsql).",
         "ext-pcntl": "Arms the SIGALRM-based query timeout (StatementTimeout). Without it the timeout degrades to the driver's network timeout instead of the configured deadline — common on Windows and slim Docker php-cli images."
+    },
+    "extra": {
+        "sugarcraft": {
+            "deferred-wiring": {
+                "sugarcraft/sugar-colorprofile": "P1-10a: ColorProfile::detect() delegates to sugarcraft/sugar-colorprofile's DetectionChain when that package is installed, behind a class_exists guard, so src/ never names its namespace. The require is what makes the chain answer colour; without it the call falls back to Ascii (no colour, text kept)."
+            }
+        }
     }
 }

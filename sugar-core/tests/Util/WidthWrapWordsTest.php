@@ -229,6 +229,9 @@ final class WidthWrapWordsTest extends TestCase
     public function testRegressionZwjClusterIsNeverCutWhenBreaking(): void
     {
         $family = "\u{1f468}\u{200d}\u{1f469}\u{200d}\u{1f467}";
+        // Width 1 is narrower than the 2-cell family: it is over-wide, yet kept
+        // whole on its own line, with no trailing empty line after it.
+        $this->assertSame([$family], Width::wrapWords($family, 1, breakWords: true));
         $this->assertSame([$family], Width::wrapWords($family, 2, breakWords: true));
         $this->assertSame(['x', $family], Width::wrapWords('x ' . $family, 2, breakWords: true));
         $this->assertSame([$family, $family], Width::wrapWords($family . ' ' . $family, 2, breakWords: true));

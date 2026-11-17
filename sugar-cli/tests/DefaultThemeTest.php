@@ -99,11 +99,16 @@ final class DefaultThemeTest extends TestCase
         $this->assertSame(StatusLine::success('done', Theme::ansi()), $out);
     }
 
-    /** NO_COLOR drops colour but keeps emphasis (no-color.org forbids colour only). */
-    public function testDetectHonoursNoColor(): void
+    /**
+     * FORCE_COLOR=1 is the chain's Ansi floor and outranks NO_COLOR, which the
+     * chain reads as a passive preference (P1-10a: the chain's answers win over
+     * the deleted local ladder, which had NO_COLOR first). So the tick keeps its
+     * 16-colour green and the emphasis survives beside it.
+     */
+    public function testDetectForceColorOutranksNoColor(): void
     {
         $out = StatusLine::success('done', Theme::detect(['NO_COLOR' => '1', 'FORCE_COLOR' => '1']));
-        $this->assertSame("\x1b[1m✓\x1b[0m done", $out);
+        $this->assertSame("\x1b[1m\x1b[92m✓\x1b[0m done", $out);
     }
 
     /**
@@ -172,7 +177,8 @@ final class DefaultThemeTest extends TestCase
     public function testNullThemeHonoursForceColorEnv(\Closure $render): void
     {
         putenv('FORCE_COLOR=1');
-        $this->assertSame($render(Theme::ansi()), $render(null));
+        // FORCE_COLOR=1 is the chain's Ansi floor (P1-10a), not truecolor.
+        $this->assertSame($render(Theme::detect(['FORCE_COLOR' => '1'])), $render(null));
     }
 
     public function testDetectRejectsNonResourceStream(): void

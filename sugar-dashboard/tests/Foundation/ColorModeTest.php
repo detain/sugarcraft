@@ -100,31 +100,32 @@ final class ColorModeTest extends TestCase
 
     public function testDumbTerminalMatchesTheDetectionChain(): void
     {
-        // The split-brain keystone (finding M-7): with $stdout = null
-        // ColorProfile::detect() resolves purely from the environment, so
-        // under an identical environment the two chains must not diverge.
+        // The split-brain keystone (finding M-7): with $stdout = null the
+        // veto-aware detectTerminal() resolves purely from the environment, so
+        // under an identical environment the two answers must not diverge.
+        // Plain detect() answers Ascii here (the chain's TERM=dumb rung), and
+        // only detectTerminal() maps that to NoTty (P1-10a).
         putenv('TERM=dumb');
         ColorMode::resetForTesting();
-        self::assertSame(ColorProfile::detect(null, null), ColorMode::profile());
+        self::assertSame(ColorProfile::detectTerminal(null, null), ColorMode::profile());
         self::assertSame(ColorProfile::NoTty, ColorMode::profile());
 
-        // Order parity too: detect() weighs TERM=dumb above NO_COLOR, so the
-        // pair must still agree with both set.
+        // With NO_COLOR also set, the chain answers Ascii (NO_COLOR outranks
+        // TERM=dumb in the chain) and the dumb veto still lands on NoTty.
         putenv('NO_COLOR=1');
         ColorMode::resetForTesting();
-        self::assertSame(ColorProfile::detect(null, null), ColorMode::profile());
+        self::assertSame(ColorProfile::detectTerminal(null, null), ColorMode::profile());
         self::assertSame(ColorProfile::NoTty, ColorMode::profile());
     }
 
-    public function testNoColorPresenceSemanticsDivergeDeliberately(): void
+    public function testNoColorZeroIsHonouredByBothAuthorities(): void
     {
-        // Documented, not accidental: the chain honours the no-color.org
-        // convention (NO_COLOR present with ANY value disables, including
-        // "0"), while ColorProfile::detect() applies generic truthiness.
+        // no-color.org: NO_COLOR present with ANY value disables, including
+        // "0". detect() delegates to the chain now, so it agrees (P1-10a).
         putenv('NO_COLOR=0');
         ColorMode::resetForTesting();
         self::assertSame(ColorProfile::Ascii, ColorMode::profile());
-        self::assertSame(ColorProfile::Ansi256, ColorProfile::detect(null, null));
+        self::assertSame(ColorProfile::Ascii, ColorProfile::detect(null, null));
     }
 
     public function testClicolorZeroOptsOut(): void

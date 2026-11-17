@@ -49,5 +49,12 @@
         }
     },
     "minimum-stability": "dev",
-    "prefer-stable": true
+    "prefer-stable": true,
+    "extra": {
+        "sugarcraft": {
+            "deferred-wiring": {
+                "sugarcraft/sugar-colorprofile": "P1-10a: ColorProfile::detect() delegates to sugarcraft/sugar-colorprofile's DetectionChain when that package is installed, behind a class_exists guard, so src/ never names its namespace. The require is what makes the chain answer colour; without it the call falls back to Ascii (no colour, text kept)."
+            }
+        }
+    }
 }
