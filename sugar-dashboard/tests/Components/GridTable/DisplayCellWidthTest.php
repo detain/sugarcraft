@@ -146,6 +146,23 @@ final class DisplayCellWidthTest extends TestCase
         self::assertSame('日本', Calc::truncate('日本', 4));
     }
 
+    public function testTruncateNeverSplitsAGraphemeCluster(): void
+    {
+        // A ZWJ family is one two-cell glyph. Cut to three cells it keeps the whole
+        // cluster and drops "xyz". Master's mb_substr kept two code points and left
+        // a dangling ZWJ before the ellipsis.
+        $family = "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}";
+        self::assertSame($family . '…', Calc::truncate($family . 'xyz', 3));
+
+        // A flag is a pair of regional indicators, one two-cell glyph. Cut to two
+        // cells it cannot fit, so only the ellipsis remains; master kept the lone
+        // first indicator.
+        self::assertSame('…', Calc::truncate("\u{1F1EF}\u{1F1F5}abc", 2));
+
+        // Combining marks belong to the base letter's cluster and stay with it.
+        self::assertSame("a\u{0301}\u{0301}…", Calc::truncate("a\u{0301}\u{0301}bc", 2));
+    }
+
     public function testColumnWidthIsTheWidestCellOfCjkContent(): void
     {
         // '日本語' is three code points but six display cells, so the first
