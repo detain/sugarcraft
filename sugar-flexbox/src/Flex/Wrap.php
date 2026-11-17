@@ -1,0 +1,19 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Flexbox\Flex;
+
+/**
+ * Whether a row-direction {@see FlexBox} breaks its items onto further lines.
+ *
+ * `Wrap` breaks greedily by each item's hypothetical main size (its basis when
+ * set, otherwise its natural content width). Each wrapped line is laid out
+ * independently across the full width. Column-direction boxes ignore this
+ * setting; see the README.
+ */
+enum Wrap
+{
+    case NoWrap;
+    case Wrap;
+}

@@ -49,6 +49,9 @@ intercept.
   `Align::End` / `Align::Stretch`, set via `withAlign()`
 - **Gap** between items
 - **Ratio-based sizing** — items with grow ratios fill available space
+- **Justify** leftover main-axis space with the `Justify` enum (`withJustify()`):
+  `Start`, `End`, `Center`, `SpaceBetween`, `SpaceAround`, `SpaceEvenly`
+- **Wrap** row items onto further lines with the `Wrap` enum (`withWrap()`)
 
 ### Table
 - **Sortable columns** — `withSort($column, $ascending = true)` sets an order, `sortByNext($column)` flips it (mouse wiring belongs to the app); when BOTH cells are numeric they compare as numbers — 2 sorts before 100, and a column mixing '9' and text sorts as text; string comparison is Unicode case-folded, so 'a' precedes 'B' and (with ext-intl loaded) 'Ärger' sorts with the A's. Columns authored with `Column::sorted($dir, $priority)` are priority-ordered tiebreakers under the clicked primary (1 = first, 0 = last, each leg with its own direction) — a click never authors or erases them — and their arrows show beside the active one. The sort arrow is prepended before the header is truncated, so a sorted column narrower than arrow plus text shows the arrow alone
@@ -143,8 +146,9 @@ bulk construction stays flat.
 
 ### How sizing works
 
-Every dimension is in **cells**, and allocation follows one deterministic model (no CSS
-`justify-content`, `flex-wrap`, or reverse-direction counterparts exist):
+Every dimension is in **cells**, and allocation follows one deterministic model (no
+reverse-direction counterparts exist; `justify-content` and `flex-wrap` are the
+`withJustify()` and `withWrap()` setters described below):
 
 `FlexItem::new()` defaults to grow-ratio **1** — plain items divide the free
 space evenly, not proportionally to content; CSS's `flex-grow: 0` intuition
@@ -172,8 +176,8 @@ recipe is `withBasis()`, not `withRatio(0)`.
    hand one a SMALLER share than the fallback gave it (two ratio-1 items beside one
    ratio-0 sibling allocate 1/1/1 across one cell but 1/0/1 across two).
 4. **Align** (`start`/`center`/`end`/`stretch`) is ONE value that drives BOTH axes — there
-   is no separate cross-axis knob and no CSS `justify-content` counterpart, and rows are
-   always placed top-down. In row mode the case selects the box height (`stretch` fills the
+   is no separate cross-axis knob (main-axis placement of leftover space is
+   `withJustify()`, below), and rows are always placed top-down. In row mode the case selects the box height (`stretch` fills the
    declared height, every other case the tallest item) as well as how each item's text
    sits inside its allocated cell; in column mode each line is placed inside the width
    the ITEM MEASURES — `stretch` uses the container width, every other case the item's
@@ -182,6 +186,40 @@ recipe is `withBasis()`, not `withRatio(0)`.
    `start`/`center`/`end` (centring a whole item against the container is padding's
    layer, not alignment's). Content beyond the declared height is
    clamped, never distributed; `render(w, h)` output always fits the requested box.
+
+#### Justify and wrap
+
+`withJustify(Justify $j)` places leftover main-axis cells: widths in a row box, heights in
+a column box. Leftover exists only where no ratio item absorbs it (fixed `withBasis()`
+items, ratio-0 items on their 1-cell floor, or the no-flex fallback), as in CSS.
+`Justify::Start` is the default and leaves the line unpadded, exactly as before the
+setter existed. `End` and `Center` pack the items to one side or the middle; `Center`
+puts the odd cell on the trailing side. `SpaceBetween` puts all leftover between items,
+and a single item behaves as `Start`. `SpaceAround` gives each item equal space on both
+sides, with half-size edges. `SpaceEvenly` gives every gap, edges included, the same
+size. A `withGap()` value is a minimum between items, and the justified share is added
+on top of it. Leftover that does not divide evenly goes to the earliest slots in order,
+so each split sums to the leftover exactly.
+
+```php
+use SugarCraft\Flexbox\Flex\{FlexBox, FlexItem, Justify};
+
+$bar = FlexBox::row(
+    FlexItem::new('Home')->withBasis(6),
+    FlexItem::new('Save')->withBasis(6),
+)->withJustify(Justify::SpaceBetween);
+
+echo $bar->render(30, 1), "\n";
+```
+
+`withWrap(Wrap::Wrap)` breaks a row box onto further lines when its items overflow the
+width. Each item's hypothetical size is its `withBasis()` or, when unset, its natural
+content width. A line closes before the item that would overflow it. Each wrapped line is
+then laid out across the full width under the same ratio, justify and align rules.
+Wrapped lines stack flush with no row gap; `withGap()` only spaces items within a line.
+The box height is the sum of the line heights, clamped to the height passed to `render()`,
+and `Align::Stretch` pads it to that height. Wrap applies to row boxes only. A column box
+ignores `withWrap()` and does not reflow into extra columns.
 
 To build a sidebar plus a fill panel: give the sidebar `withBasis(20)` and the panel
 `withRatio(1)`. There is no center-a-dialog primitive in this lib — pad with fixed-ratio
