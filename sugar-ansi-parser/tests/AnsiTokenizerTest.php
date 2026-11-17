@@ -156,10 +156,11 @@ final class AnsiTokenizerTest extends TestCase
 
     public function testApc(): void
     {
+        // CandyZone marker: ESC _ candyzone:S:foo ESC \ @rename-keep legacy wire token / historical log
         $tokens = AnsiTokenizer::new()->parse("\x1b_candyzone:S:foo\x1b\\");
         $this->assertCount(1, $tokens);
         $this->assertSame(Token::APC, $tokens[0]->type);
-        $this->assertSame('candyzone:S:foo', $tokens[0]->data);
+        $this->assertSame('candyzone:S:foo', $tokens[0]->data); // @rename-keep legacy wire token / historical log
     }
 
     public function testSosAndPmEnvelopes(): void
