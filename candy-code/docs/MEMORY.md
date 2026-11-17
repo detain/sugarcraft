@@ -283,8 +283,8 @@ under their own `## standing intents` heading with the trigger spelled out, and
 `tests/Context/StandingIntentTest.php`.
 
 Status: this step lands the save-side vocabulary, the refusals, the index
-heading and the tool-time seam, and with the weld the store round-trip is
-live: `MemoryStore` carries the `when:` column of the frontmatter, a saved
+heading and the tool-time seam. The store round-trip is live too:
+`MemoryStore` carries the `when:` column of the frontmatter, a saved
 intent's trigger survives the write and re-arms on reload, and the `save`
 reply says the standing-intent sentence. A hand-edited malformed trigger
 de-arms that note instead of unreadabling it — the read door stays lenient
@@ -400,7 +400,7 @@ Those values are the defaults. The `memory.promptMaxEntries`,
 `memory.promptMaxBytes` and `memory.entryMaxBytes` settings change them — with
 `memory.userMaxEntries` and `memory.userMaxBytes` for the user-scope sub-caps
 (4 notes, 1,024 bytes) — from `~/.candy-code/config.json` only, read by each
-turn's `Runtime` (`MemoryBlock::withSettings()`, roadmap N-P4d). The header
+turn's `Runtime` (`MemoryBlock::withSettings()`). The header
 sentence states whatever applies. A sub-cap that would not nest (a note's
 line within the user budget, the user budget within the total, the user notes
 within the note count) is lowered to fit, so the relations below hold whatever

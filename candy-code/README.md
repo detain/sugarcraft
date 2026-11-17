@@ -1686,7 +1686,7 @@ visible in sessions.db and in every later prompt replayed from them; and
 `allowedTools`, for a reason worth spelling
 out because on capability alone it looks harmless. A whitelist is an intersection — it
 cannot add a tool that `Bootstrap::tools()` did not build — but its effect is
-defined by what it *omits*, so `allowedTools: ["Bash"]` deletes <!-- tools:others:begin -->all forty of the others — `Read`, `Edit`, `Glob`, `Grep`, `Write`, `WebFetch`, `WebSearch`, `doctor`, `Skill`, `Lsp`, `Memory`, `RepoMap`, `Prune`, `Todo`, `Compress`, `Workflow`, `Recall`, `Team`, `ApplyPatch`, `AskUser`, `PlanExit`, `SendMessage`, `Subagents`, `InterruptAgent`, `GenerateImage`, `GenerateVideo`, `PtyRun`, `Ls`, `ShellOutput`, `ShellStop`, `mcp_list`, `mcp_call`, `Schedule`, `skills_search`, `SkillWorkshop`, `Advisor`, `Canvas`, `Script`, `ShellSend` and `NotebookEdit` —<!-- tools:others:end --> in one line, and what the model does next is the
+defined by what it *omits*, so `allowedTools: ["Bash"]` deletes <!-- tools:others:begin -->all forty of the others, thirty-seven of them on a plain launch — `Read`, `Edit`, `Glob`, `Grep`, `Write`, `WebFetch`, `WebSearch`, `doctor`, `Skill`, `Lsp`, `Memory`, `RepoMap`, `Prune`, `Todo`, `Compress`, `Workflow`, `Recall`, `Team`, `ApplyPatch`, `AskUser`, `PlanExit`, `SendMessage`, `Subagents`, `InterruptAgent`, `GenerateImage`, `GenerateVideo`, `PtyRun`, `Ls`, `ShellOutput`, `ShellStop`, `mcp_list`, `mcp_call`, `Schedule`, `skills_search`, `SkillWorkshop`, `Advisor`, `Canvas`, `Script`, `ShellSend` and `NotebookEdit` —<!-- tools:others:end --> in one line, and what the model does next is the
 same work through `Bash`, which reaches the permission gate as opaque shell text
 instead of as a reviewable path. Strictly fewer tools, strictly coarser review.
 
@@ -2251,13 +2251,15 @@ one.
 
 ### Exit codes and the JSON document
 
-The same three exit codes govern every subcommand below.
+The same three exit codes govern every subcommand below. `workflow run` and
+`workflow resume` add one more, `3`, which is described in its row of the table.
 
 | exit | meaning |
 | --- | --- |
 | `0` | the prompt ran and produced an answer, or the subcommand answered |
 | `1` | ran and failed: the backend threw (unreachable host, rejected key, model error), the answer could not be encoded in the requested format, a `doctor` check came back `FAIL`, `session delete` found no such session, `session import` attempted a transcript the importer refused (unreadable bytes, a shape it cannot parse, a source that shrank under its own ledger), a trusted `.mcp.json` could not be parsed, an `lsp install` probe failed to produce the server, or a turn hook (`UserPromptSubmit`/`SessionStart`) blocked the prompt before the first billed call — retrying may help. `error.type`: `backend`, `encoding`, `import-refused`, `mcp-config`, `not-found`, `lsp-install`, `hook` |
 | `2` | usage/configuration error, nothing was attempted: no prompt given, unrecognized flag, a word left over after `-p`/`run`'s prompt or before a subcommand, a second project directory, an `--output-format` value that is none of `text`, `json` or `stream-json`, `--config` naming no readable file, `--root` naming no directory, a missing `vendor/autoload.php`, a **permission policy that is present but unusable** (see [Permission modes](#capabilities) — an unreadable/unreachable/unparseable `~/.candy-code/config.json`, or a `permissionMode` naming no real mode), or a provider (from `$CANDY_CODE_PROVIDER` **or** the persisted Ctrl+P choice) that cannot be constructed — retrying will not help — or `--json-schema` asked of a provider that cannot honour the schema (its own `error.type`, so a consumer knows the schema was never sent), or `--json-schema` with no `-p`/`run` prompt to constrain — nothing would have read it, so the launch is refused rather than silently un-schema'd — or `--worktree` beside `serve`, outside a git work tree, or with a name its path and ref rules refuse, or a `--session-id` that is not 16 lowercase hexadecimal characters, names an id already stored, is combined with `--continue`, `--resume`, `--incognito` or a subcommand, or is given with no prompt to run. `error.type`: `usage`, `provider_configuration`, `json_schema_unsupported`, `installation` — the last one is the missing `vendor/autoload.php`, and it is what tells a consumer which kind of `2` it got |
+| `3` | `workflow run` and `workflow resume` only: the run stopped for a person rather than failing. A verification stage escalated (its first failure carries the escalation marker), or a cooperative signal pause completed. The run prints its resume id; `workflow resume <id>` continues it. A budget stop reports `paused` and exits `1`, not `3`. |
 
 `2` covers "no prompt given" (`candy-code -p`, `candy-code run`) deliberately:
 the invocation is malformed, no backend is ever selected, and a CI gate that
@@ -2265,7 +2267,7 @@ retries on `1` would otherwise retry it forever. It also covers a subcommand
 handed a missing or unknown operand (`candy-code session`, `candy-code mcp
 bogus`, `candy-code completion tcsh`).
 
-A stop by signal is a fourth outcome outside this table, and the TUI is the
+A stop by signal is outside this table, and the TUI is the
 surface that reports it: when SIGINT, SIGTERM or SIGHUP ends the loop, the
 process exits `128+N` — `130`, `143` and `129` respectively — after the full
 teardown (terminal recovery, session persistence) that a cooperative quit

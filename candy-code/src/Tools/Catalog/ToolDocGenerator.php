@@ -185,15 +185,25 @@ final class ToolDocGenerator
         return $held === [] ? $text : $text . '; `src/Tools/BuiltIn/` also holds ' . self::joined($held, ', ', ', and ');
     }
 
-    /** The README `allowedTools: ["Bash"]` sentence's list of what it deletes. */
+    /**
+     * The README `allowedTools: ["Bash"]` sentence's list of what it deletes.
+     * The list is the ceiling (conditional builds included), but a plain launch
+     * builds only the unconditional set, so the sentence states both counts:
+     * "all forty" would otherwise read as forty tools present on every launch.
+     */
     public function othersList(): string
     {
         $others = array_values(array_filter(
             array_map(static fn (CatalogEntry $e): string => $e->name, ToolCatalog::built()),
             static fn (string $name): bool => $name !== self::SURVIVOR,
         ));
+        $plainLaunch = array_values(array_filter(
+            array_map(static fn (CatalogEntry $e): string => $e->name, ToolCatalog::builtUnconditionally()),
+            static fn (string $name): bool => $name !== self::SURVIVOR,
+        ));
 
-        return 'all ' . SettingsDocGenerator::spell(\count($others)) . ' of the others — '
+        return 'all ' . SettingsDocGenerator::spell(\count($others)) . ' of the others, '
+            . SettingsDocGenerator::spell(\count($plainLaunch)) . ' of them on a plain launch — '
             . self::codeList($others, ', ', ' and ') . ' —';
     }
 

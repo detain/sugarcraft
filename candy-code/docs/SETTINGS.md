@@ -1145,8 +1145,7 @@ what your `allowedTools` excluded.
 
 ## Compaction thresholds
 
-The `compaction.*` keys move the tiers every context-usage check is judged by
-(roadmap N-P4b). `Bootstrap::chat()` builds the session's `CompactorConfig`
+The `compaction.*` keys move the tiers every context-usage check is judged by. `Bootstrap::chat()` builds the session's `CompactorConfig`
 from them (`CompactorConfig::fromSettings()`) and hands that one instance to
 every turn, and a save from the settings view rebuilds it
 (`Chat::applySettings()`), so in the TUI a change is **live**: the next prompt

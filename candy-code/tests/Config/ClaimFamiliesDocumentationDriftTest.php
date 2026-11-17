@@ -193,10 +193,14 @@ final class ClaimFamiliesDocumentationDriftTest extends TestCase
             'TROUBLESHOOTING no longer spells the live count (' . \count($codes) . ') of exit codes',
         );
 
+        // `workflow run` and `workflow resume` return one code the non-interactive
+        // path does not: the stopped-for-a-person exit, private to Subcommands and
+        // read here rather than copied, so a renumbering moves this test with it.
+        $stopped = (string) (new \ReflectionClassConstant(\SugarCraft\Code\Cli\Subcommands::class, 'WORKFLOW_EXIT_STOPPED'))->getValue();
         $this->assertSame(
-            $codes,
+            [...$codes, $stopped],
             $this->tableCodes($readme, '| exit | meaning |', 'README'),
-            'the README exit table and NonInteractive::EXIT_* disagree — a code was added, removed, or renumbered',
+            'the README exit table and NonInteractive::EXIT_* (plus the workflow stop code) disagree — a code was added, removed, or renumbered',
         );
         $this->assertSame(
             $codes,

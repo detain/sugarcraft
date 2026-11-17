@@ -37,7 +37,7 @@ static `<env>` block last. Counted from the live method, there are thirteen slot
 4. **Repo map** (`RepoMapBlock`) — fenced `repo-map`; per-session memoized snapshot of derived
    repository facts. `repoMap.enabled: false` leaves the slot out (and skips the walk), and
    `repoMap.maxBytes` moves each section's 8,192-byte budget (`RepoMapBlock::MAX_SECTION_BYTES`);
-   both are read once per turn (`Runtime::repoMapSnapshot()`, roadmap N-P4d).
+   both are read once per turn (`Runtime::repoMapSnapshot()`).
 5. **Symbol map** (`SymbolMapBlock`) — fenced `symbol-map`; the definitions the rest of the workspace
    references most, ranked by PageRank over which files use which names (an Aider repo map, roadmap
    5.5-5), unfocused and capped at 1,024 tokens. PerSession and byte-stable: `EngineBackend` captures
@@ -52,7 +52,7 @@ static `<env>` block last. Counted from the live method, there are thirteen slot
    own fence, `user-rules`, with the operator-authority preamble — except a `paths:`-scoped rule,
    which is delivered at tool time instead (see the trigger bullets below). The user and project
    standing rules share one budget, `Runtime::MAX_STANDING_RULE_BYTES` (65,536 framed bytes), which
-   `rules.standingMaxBytes` (`config.json` only, roadmap N-P4d) replaces; a rule past it becomes one
+   `rules.standingMaxBytes` (`config.json` only) replaces; a rule past it becomes one
    pointer line.
 7. **Instruction documents** — `InstructionFileLoader::loadRoot()` then `loadForced()` (read
    through their path-keyed sibling `loadDocuments()`), each non-blank document its own
@@ -130,6 +130,10 @@ Slots 1–3 are the Static prefix; 4–9 are PerSession; 10–12 are PerTurn; 13
 the static `<env>` half, kept last because the slot order is the documented one. A section whose
 `render()` returns the empty string folds out of both wire forms — an absent layer adds no bytes,
 no empty fence and no dangling separator.
+
+A layer the numbering does not count: `agent-instructions` (the `<agent-instructions>`
+slot, C-AGT-4.a) joins directly behind tool guidance, and only when a primary agent has set
+instructions. Tool guidance (3) and the symbol map (5) are conditional in the same way.
 
 ## Outside the system prompt: the turn-context row and in-place notices
 
