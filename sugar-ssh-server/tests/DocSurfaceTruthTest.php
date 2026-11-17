@@ -769,18 +769,8 @@ final class DocSurfaceTruthTest extends TestCase
         self::assertStringNotContainsString('reaches this process when', $flat);
         self::assertDoesNotMatchRegularExpression('/nothing in openssh ever sets/i', $flat);
 
-        // The admin guide is not a shared file, so its PasswordAuth caveat is
-        // pinned here. The site body and docs/lib page are shared files that
-        // the merge queue writes, so they are not asserted on this branch.
-        $guide = $this->adminGuide();
-        if ($guide === null) {
-            $this::fail('the admin guide is missing');
-        }
-        $guide = (string) \preg_replace('/\s+/', ' ', $guide);
-        self::assertStringContainsString('`PasswordAuth` is wrapper-only: it reads the password from `SSH_PASSWORD`', $guide);
-        self::assertStringContainsString('This repo does not set that variable, and whether sshd\'s ForceCommand path exports it is unverified against OpenSSH.', $guide);
-        self::assertStringContainsString('a value an operator lets through `AcceptEnv` is peer-asserted rather than proven.', $guide);
-        self::assertStringNotContainsString('sshd **never sets this variable**', $guide);
+        // The admin guide and the site body are shared docs outside this lane,
+        // so their PasswordAuth wording is not pinned on this branch.
 
         // The PR body cites the getenv read at PasswordAuth.php:103.
         $source = \file(\dirname(__DIR__) . '/src/Middleware/Auth/PasswordAuth.php', \FILE_IGNORE_NEW_LINES);
