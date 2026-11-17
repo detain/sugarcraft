@@ -163,6 +163,26 @@ final class BundleRecommendationNoticeTest extends TestCase
         $this->assertSame([], Bootstrap::launchNotices(), 'a project-tier install is not a recommendation');
     }
 
+    public function testASymlinkedProjectTierIsNotReadByTheLaunchRow(): void
+    {
+        // Discovery refuses a symlinked project floor, so the launch row does not
+        // read one either: an install behind the link is not counted as installed.
+        $elsewhere = $this->tempDir . '/elsewhere/.candy-code';
+        mkdir($elsewhere . '/bundles/php-tools', 0700, true);
+        symlink($elsewhere, $this->projectRoot . '/.candy-code');
+        $this->addMarketplace('acme', self::SHA_A, [$this->entry('php-tools', ['php', 'composer'])]);
+        $this->withPhpSignal();
+        $registry = MarketplaceRegistry::atPaths($this->stampFile, $this->checkouts);
+
+        Bootstrap::reportBundleRecommendations($this->projectRoot, $registry, $this->stampFile, $this->installedRoot);
+
+        $this->assertSame(
+            [Lang::t('bundles.recommend.launch', ['names' => 'php-tools@acme'])],
+            Bootstrap::launchNotices(),
+            'the symlinked tier is not read, so php-tools is still offered',
+        );
+    }
+
     public function testTheRowShowsOncePerProjectPerPinAndARepinedMarketplaceShowsAgain(): void
     {
         $this->addMarketplace('acme', self::SHA_A, [$this->entry('php-tools', ['php', 'composer'])]);

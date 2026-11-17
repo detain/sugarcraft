@@ -286,6 +286,76 @@ final class BundleInstallScopeTest extends TestCase
         );
     }
 
+    public function testTheProjectBundleRootIsCreatedAtTheDeclaredModeBeforeTheUmask(): void
+    {
+        $source = $this->stagedBundle('demo-src', 'demo');
+
+        self::assertSame(NonInteractive::EXIT_OK, $this->verb('install', $source, '--project', '--root', $this->project));
+
+        $expected = decoct(0755 & ~umask());
+        self::assertSame(
+            $expected,
+            decoct(fileperms($this->project . '/.candy-code/bundles') & 0777),
+            'the project bundle root is created 0755, less the umask',
+        );
+        self::assertSame(
+            $expected,
+            decoct(fileperms($this->project . '/.candy-code') & 0777),
+            'the .candy-code segment the install creates takes the same mode',
+        );
+    }
+
+    public function testAProjectTierReachedThroughASymlinkIsNotReadByUpdate(): void
+    {
+        $source = $this->addPathMarketplace('demo', 'alpha');
+        $staging = $this->tempDir . '/staging';
+        mkdir($staging, 0777, true);
+        self::assertSame(NonInteractive::EXIT_OK, $this->verb('install', 'alpha@demo', '--project', '--root', $staging));
+
+        // The install was real; the checkout then swaps its dot directory for a
+        // link into a tree outside the project, which update must not walk.
+        $linked = $this->tempDir . '/linked-tier';
+        mkdir($linked, 0777, true);
+        rename($staging . '/.candy-code', $linked . '/.candy-code');
+        symlink($linked . '/.candy-code', $this->project . '/.candy-code');
+
+        file_put_contents($source . '/plugins/alpha/UPSTREAM.txt', 'v2 for alpha');
+
+        [$exit, $out] = $this->verbCapture('update', '--root', $this->project);
+
+        self::assertSame(NonInteractive::EXIT_OK, $exit);
+        self::assertStringNotContainsString('Updated bundle alpha', $out, 'the linked tier is not a root update walks');
+        self::assertSame(
+            'v1 for alpha',
+            file_get_contents($linked . '/.candy-code/bundles/alpha/UPSTREAM.txt'),
+            'the bytes behind the symlink are untouched',
+        );
+
+        self::assertSame(
+            NonInteractive::EXIT_FAILURE,
+            $this->verb('update', 'alpha', '--root', $this->project),
+            'a named update does not find alpha behind the link either',
+        );
+        self::assertSame('v1 for alpha', file_get_contents($linked . '/.candy-code/bundles/alpha/UPSTREAM.txt'));
+    }
+
+    public function testAProjectTierReachedThroughASymlinkIsNotReadByRecommend(): void
+    {
+        // The project's composer.json offers the `php`-keyword entry; the install
+        // sits behind a symlinked dot directory, so it is not counted as installed.
+        file_put_contents($this->project . '/composer.json', '{}');
+        $this->addPathMarketplace('demo', 'alpha', keywords: ['php']);
+        $linked = $this->tempDir . '/linked-tier';
+        $this->plainBundleAt($linked . '/.candy-code/bundles/alpha', 'alpha');
+        symlink($linked . '/.candy-code', $this->project . '/.candy-code');
+
+        self::assertContains(
+            'alpha',
+            $this->recommendedNames(),
+            'discovery refuses a symlinked project floor, so recommend does not read it either',
+        );
+    }
+
     /** A real bundle directory to install FROM, returned as its path. */
     private function stagedBundle(string $folder, string $name): string
     {
