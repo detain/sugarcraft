@@ -531,9 +531,15 @@ trait ServeStartup
 
         // Never SIGCHLD: the turn children are reaped by EngineBackend's own
         // sweep, and a SIGCHLD handler would race it (Appendix O §4.6).
+        // The stop runs on the loop's next tick, never inside the handler: a
+        // signal that lands between the readiness line and Loop::run() would
+        // otherwise call Loop::stop() before run() sets its running flag, the
+        // request is lost, and the server serves on with no way to be stopped.
+        // Ticks run inside run(), after that flag is set; the signal itself
+        // interrupts the loop's blocking wait so the tick runs at once.
         foreach ([\SIGINT => 'SIGINT', \SIGTERM => 'SIGTERM'] as $signal => $name) {
-            $handlers[$signal] = static function () use ($stop, $name): void {
-                $stop($name);
+            $handlers[$signal] = static function () use ($stop, $name, $loop): void {
+                $loop->futureTick(static fn () => $stop($name));
             };
             Loop::addSignal($signal, $handlers[$signal]);
         }
