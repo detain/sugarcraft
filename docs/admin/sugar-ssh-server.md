@@ -257,13 +257,11 @@ evidence to check, e.g. the host sshd did the crypto). Fingerprint
 membership uses `hash_equals()` across every entry rather than an
 `in_array()` early-out, so list position is not measurable.
 
-**`PasswordAuth` / `SSH_PASSWORD` caveat.** `PasswordAuth` is wrapper-only:
-it reads the password from `SSH_PASSWORD` via `$_SERVER`/`getenv`. This repo
-does not set that variable, and whether sshd's ForceCommand path exports it
-is unverified against OpenSSH. To use this middleware you must inject the
-secret yourself (for example from a wrapper or PAM exec), and a value an
-operator lets through `AcceptEnv` is peer-asserted rather than proven. Either
-way the password is
+**`PasswordAuth` / `SSH_PASSWORD` caveat.** `PasswordAuth` reads the
+password from `SSH_PASSWORD` via `$_SERVER`/`getenv`. sshd **never sets
+this variable** — OpenSSH does not hand passwords to forced commands.
+To use this middleware you must inject the secret yourself (for
+example from a wrapper or PAM exec), which means the password is
 visible in that process's `/proc/<pid>/environ`, is inherited by any
 child spawned afterwards, and can land in crash dumps. The library
 clears the variable immediately after reading it, which stops later
