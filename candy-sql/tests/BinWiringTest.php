@@ -383,6 +383,19 @@ final class BinWiringTest extends TestCase
         $this->assertStringContainsString('an open admin page or the `?` overlay holds the keyboard', $readme);
         $this->assertStringContainsString('(not while the `?` overlay is open, whose next key only closes it)', $readme);
 
+        // Key-table step 3: the in-flight Esc is its own arm, not step 1's
+        // Ctrl+C arm, and it yields to the open / filter, file and edit lines.
+        $this->assertStringContainsString('The in-flight `Esc` cancel (SQL-O08, its own `Esc` arm in `App::update()`, not step 1\'s `Ctrl+C` arm) answers `Esc` before the pane chords do', $readme);
+        $this->assertStringContainsString('unless an open `/` filter, file or edit line holds the keyboard', $readme);
+        // The cancellation paragraph's Esc exceptions mirror the same yields.
+        $this->assertStringContainsString('prompt, admin page on the Admin pane, `/` filter, export/import file or edit', $readme);
+
+        // A superseded run is cancelled by both dispatch paths (query and
+        // table-preview load), so the README must name both.
+        $this->assertStringContainsString('A superseded run is cancelled when the next query or', $readme);
+        $this->assertStringContainsString('table-preview load dispatches (both dispatch paths cancel the in-flight', $readme);
+        $this->assertSame(2, \substr_count($app, 'cancelInFlightSilently();'));
+
         $this->assertStringContainsString('CancellationSource::new()', $app);
         $this->assertStringContainsString('$source->token()', $app);
         $this->assertStringContainsString('if ($this->ui->helpOverlay && ', $app);

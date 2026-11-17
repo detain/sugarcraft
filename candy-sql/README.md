@@ -1047,8 +1047,9 @@ Pre-1.0 gaps to be aware of, mostly on the async (ReactPHP) query path:
   included, only closes it). The parameter prompt
   answers `Esc` and `Ctrl+C` by cancelling the prepared run before it starts.
   `Ctrl+C` quits the app only when nothing is in flight (SQL-O08, see the key
-  table above). A superseded run is cancelled when the next one dispatches,
-  and the per-query timeout
+  table above). A superseded run is cancelled when the next query or
+  table-preview load dispatches (both dispatch paths cancel the in-flight
+  handle), and the per-query timeout
   (`QueryTimeout`, default 30 s) still bounds every leg, rejecting its promise
   when it fires.
 - **Query-pane results are buffered in full.** A `SELECT` executed from the
