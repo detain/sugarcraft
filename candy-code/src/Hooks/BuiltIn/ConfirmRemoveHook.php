@@ -30,16 +30,22 @@ use SugarCraft\Code\Permissions\ShellWords;
  * {@see ShellWords::dequoted()}: the quote-removed words, one simple command
  * per line. When the line does not parse (an unterminated quote) the second
  * candidate is the raw text with every quote and backslash deleted instead —
- * cruder, but a deny list must not get NARROWER on input it cannot read. The
- * raw text is always checked too, so nothing denied before is allowed now.
+ * cruder, but a match list must not get NARROWER on input it cannot read. The
+ * raw text is always checked too, so nothing asked about before runs unasked now.
  *
  * BYPASS IS ABOVE THIS GUARD-RAIL (owner ruling 2026-10-06). `bypass-permissions`
- * means allow-all: the human already holds the wheel, and every refusal this
- * hook adds is a heuristic prompt the operator explicitly waived. The
+ * means allow-all: the human already holds the wheel, and every prompt this
+ * hook adds is a heuristic the operator explicitly waived. The
  * unswitchable floor for destructive Bash stays where it always was — the
  * step-0 `rm -rf /` breaker inside {@see \SugarCraft\Code\Permissions\PermissionGate},
- * which no mode and no hook can talk open. Constructed without
- * $modeReader (bare embedders, tests) the hook denies exactly as before.
+ * which no mode and no hook can talk open. Constructed without $modeReader
+ * (bare embedders, tests) there is no mode to stand the hook down, so a match
+ * asks.
+ *
+ * A MATCH IS AN ASK, NOT A DENY. The hook has no verdict on a destructive
+ * command: an operator may mean it (cleaning a build directory). It returns
+ * {@see HookResult::ask()} with the explicit question, so the operator decides
+ * and a headless run without an answerer still refuses (fail closed).
  */
 final readonly class ConfirmRemoveHook implements HookInterface
 {
@@ -52,7 +58,8 @@ final readonly class ConfirmRemoveHook implements HookInterface
      *        lazy, not a captured gate, because a mode switch replaces the
      *        gate object mid-session ({@see \SugarCraft\Code\Chat}'s
      *        permission-mode toggle re-registers {@see PermissionGateHook});
-     *        null (or a chain with no gate) keeps the pre-ruling behaviour.
+     *        null (or a chain with no gate) never stands the hook down, so a
+     *        match asks ({@see execute()}).
      */
     public function __construct(?\Closure $modeReader = null)
     {
@@ -70,7 +77,7 @@ final readonly class ConfirmRemoveHook implements HookInterface
         // rm with GNU long-form flags: --recursive / --force, and the
         // unambiguous abbreviations GNU getopt accepts for them (`--rec`,
         // `--forc`) — the step-0 breaker in PermissionGate counts those, and
-        // this hook is documented as refusing everything that breaker does.
+        // this hook is documented as asking about everything that breaker refuses.
         '/\brm\b[^\n]*\s--(?:r(?:e(?:c(?:u(?:r(?:s(?:i(?:ve?)?)?)?)?)?)?)?|f(?:o(?:r(?:ce?)?)?)?)(?!\w)/i',
         // find ... -delete wipes every matched entry.
         '/\bfind\b[^\n]*\s-delete\b/i',
@@ -79,6 +86,15 @@ final readonly class ConfirmRemoveHook implements HookInterface
         // dd with an output file/device overwrites it wholesale.
         '/\bdd\b[^\n]*\bof=/i',
     ];
+
+    /**
+     * The question put to the operator when a destructive pattern matches.
+     * It is the permission prompt's body ({@see HookResult::ask()}), so it
+     * says what matched and what approval means, in terms the human can act on.
+     */
+    private const CONFIRM_MESSAGE = 'This command matches the recursive/force rm, find -delete, '
+        . 'shred or dd of= guard-rail. Approve it only if you mean to run it. The guard-rail '
+        . 'is a best-effort heuristic, not a security boundary.';
 
     public function name(): string
     {
@@ -122,11 +138,12 @@ final readonly class ConfirmRemoveHook implements HookInterface
 
             foreach (self::DANGEROUS_PATTERNS as $pattern) {
                 if (preg_grep($pattern, $candidates) !== []) {
-                    return HookResult::deny(
-                        'This hook prevents recursive/force rm and other destructive '
-                        . 'commands (find -delete, shred, dd of=). It is a best-effort '
-                        . 'heuristic, not a security boundary. Use interactive rm instead.'
-                    );
+                    // ASK, not DENY: the operator decides. A headless model cannot
+                    // run `rm` interactively, so a refusal here left it no way to
+                    // finish the task. An unanswered ASK still never runs (see
+                    // HookResult::permitsExecution()), and every surface that cannot
+                    // put the question fails closed on it.
+                    return HookResult::ask(self::CONFIRM_MESSAGE);
                 }
             }
         }

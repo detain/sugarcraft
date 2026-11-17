@@ -2687,9 +2687,12 @@ final class NonInteractive
      * format the operator is reading the terminal, where
      * {@see HeadlessPermissionPrompt} has already written every one of them to
      * stderr". Round 47 measured that false — that class is reached only for a
-     * hook verdict of ASK, so it covers the prompt-shaped refusals and not the
-     * commonest one; a plain hook DENY returns out of
-     * {@see \SugarCraft\Code\Runtime::gate()} before `settleAsk()`.
+     * hook verdict of ASK, so it covers the prompt-shaped refusals and, on the
+     * pre-ask build, not the commonest one. On the pre-ask build a {@see \SugarCraft\Code\Hooks\BuiltIn\ConfirmRemoveHook}
+     * match was a plain hook DENY, and a plain hook DENY returned out of
+     * {@see \SugarCraft\Code\Runtime::gate()} before `settleAsk()`. A match is an
+     * ASK now, so it goes through `settleAsk()` like the other prompt-shaped
+     * refusals; a plain DENY from some other hook still returns early.
      *
      * WHAT IT SAID SECOND: that the gap was real and "its fix belongs on the
      * DENY path in `Runtime`, not here". The diagnosis was right and the owner
@@ -2814,9 +2817,10 @@ final class NonInteractive
      * THE GAP THIS CLOSES. Before it, a blocked call reached the operator on
      * exactly one surface and only in one format: the `refusals` array of an
      * `--output-format json` document. On the default `text` format a hook
-     * DENY — the commonest refusal there is, and the one the shipped
-     * `ConfirmRemoveHook` raises against `rm -rf` — produced the answer on
-     * stdout, no tool execution, and NOTHING anywhere saying so. A tool
+     * refusal produced the answer on stdout, no tool execution, and NOTHING
+     * anywhere saying so. On the pre-ask build the commonest such refusal was a
+     * ConfirmRemoveHook match, a plain DENY; today the one a headless run hits
+     * is an unanswered ConfirmRemoveHook ask. A tool
      * silently not running is the failure a headless caller has the least
      * chance of noticing: the model sees the refusal and answers around it, so
      * the reply reads as a completed piece of work.
