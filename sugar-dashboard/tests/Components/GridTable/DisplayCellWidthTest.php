@@ -290,6 +290,7 @@ final class DisplayCellWidthTest extends TestCase
             '┃日本' . str_repeat(' ', 11) . '┃║東京' . str_repeat(' ', 11) . '┃',
             $lines[4],
         );
+        // Pinned as it is: tracked as P0-A14, which depends on P0-A11.
         self::assertSame(34, Width::string($lines[3]));
         self::assertSame(34, Width::string($lines[4]));
     }
