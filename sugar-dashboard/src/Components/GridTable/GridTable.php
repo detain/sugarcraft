@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dashboard\Components\GridTable;
 
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Dashboard\Foundation\Item;
 use SugarCraft\Dashboard\Foundation\Sizer;
 
@@ -548,15 +549,19 @@ final class GridTable implements Item, Sizer
         foreach ($this->columns as $i => $column) {
             $width = $colWidths[$i];
             $label = Calc::truncate($column->label, $width);
-            $padded = str_pad($label, $width, ' ');
+            $padded = Width::padRight($label, $width);
 
             // Add sort indicator if sorted
             if ($this->sortState->isSortedBy($column->key)) {
                 $indicator = $this->sortState->direction === SortDirection::Asc ? ' ▲' : ' ▼';
-                $indicatorLen = mb_strlen($indicator);
+                $indicatorCells = Width::string($indicator);
 
-                if ($indicatorLen < $width) {
-                    $padded = mb_substr($padded, 0, $width - $indicatorLen) . $indicator;
+                if ($indicatorCells < $width) {
+                    $inner = $width - $indicatorCells;
+                    // Width::truncate strips every escape before it measures, so a label
+                    // that already fits must bypass it or its styling is lost (P0-A11).
+                    $body = Width::string($label) <= $inner ? $label : Width::truncate($label, $inner);
+                    $padded = Width::padRight($body, $inner) . $indicator;
                 }
             }
 
@@ -624,7 +629,7 @@ final class GridTable implements Item, Sizer
             }
 
             $truncated = Calc::truncate($str, $width);
-            $padded = str_pad($truncated, $width, ' ');
+            $padded = Width::padRight($truncated, $width);
 
             $line .= $padded;
             $line .= $c->right;
@@ -664,7 +669,7 @@ final class GridTable implements Item, Sizer
             }
 
             $truncated = Calc::truncate($str, $width);
-            $padded = str_pad($truncated, $width, ' ');
+            $padded = Width::padRight($truncated, $width);
 
             if ($i === 0) {
                 $line .= $c->left . $padded;
@@ -691,7 +696,7 @@ final class GridTable implements Item, Sizer
             }
 
             $truncated = Calc::truncate($str, $width);
-            $padded = str_pad($truncated, $width, ' ');
+            $padded = Width::padRight($truncated, $width);
 
             if ($i === $scrollStart) {
                 $line .= $padded;
@@ -749,7 +754,7 @@ final class GridTable implements Item, Sizer
         foreach ($this->columns as $i => $column) {
             $width = $colWidths[$i];
             $text = $i === 0 ? $message : '';
-            $padded = str_pad(Calc::truncate($text, $width), $width, ' ');
+            $padded = Width::padRight(Calc::truncate($text, $width), $width);
             $line .= $padded . $c->right;
         }
 
