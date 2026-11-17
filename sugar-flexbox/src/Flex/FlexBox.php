@@ -388,8 +388,8 @@ final readonly class FlexBox
      * part of the result; callers add them to the interior slots.
      *
      * Weights are integer shares. Each slot takes its floored share, and the
-     * remainder goes to positive-weight slots in order, so the split always
-     * sums to the leftover exactly.
+     * remainder goes to positive-weight slots from the trailing end inwards,
+     * so the split always sums to the leftover exactly.
      *
      * @param list<array{item: FlexItem, width: int, height: int, allocated: int}> $measured
      * @return list<int>
@@ -438,12 +438,12 @@ final readonly class FlexBox
             $slots[$k] = \intdiv($leftover * $w, $total);
             $assigned += $slots[$k];
         }
+        // The remainder goes to the trailing-most positive slots first, the
+        // side Center puts its odd cell on, so one item under SpaceEvenly or
+        // SpaceAround splits exactly as Center does.
         $rest = $leftover - $assigned;
-        foreach ($weights as $k => $w) {
-            if ($rest === 0) {
-                break;
-            }
-            if ($w > 0) {
+        for ($k = \count($weights) - 1; $k >= 0 && $rest > 0; $k--) {
+            if ($weights[$k] > 0) {
                 $slots[$k]++;
                 $rest--;
             }

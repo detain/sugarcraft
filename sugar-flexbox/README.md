@@ -198,8 +198,10 @@ puts the odd cell on the trailing side. `SpaceBetween` puts all leftover between
 and a single item behaves as `Start`. `SpaceAround` gives each item equal space on both
 sides, with half-size edges. `SpaceEvenly` gives every gap, edges included, the same
 size. A `withGap()` value is a minimum between items, and the justified share is added
-on top of it. Leftover that does not divide evenly goes to the earliest slots in order,
-so each split sums to the leftover exactly.
+on top of it. Leftover that does not divide evenly goes to the trailing slots first, so
+the odd cell lands where `Center` puts it and each split sums to the leftover exactly.
+`flex-start` and `flex-end` from sugar-dashboard's `JustifyContent` map to `Start` and
+`End`; a cell grid has no writing mode, so the logical and physical edges coincide.
 
 ```php
 use SugarCraft\Flexbox\Flex\{FlexBox, FlexItem, Justify};
@@ -220,7 +222,9 @@ then laid out across the full width under the same ratio, justify and align rule
 Wrapped lines stack flush with no row gap; `withGap()` only spaces items within a line.
 The box height is the sum of the line heights, clamped to the height passed to `render()`,
 and `Align::Stretch` pads it to that height. Wrap applies to row boxes only. A column box
-ignores `withWrap()` and does not reflow into extra columns.
+ignores `withWrap()` and does not reflow into extra columns. There is no `wrap-reverse`:
+sugar-dashboard's `FlexWrap::WrapReverse` was never honored by its layout, so it is not
+carried over.
 
 To build a sidebar plus a fill panel: give the sidebar `withBasis(20)` and the panel
 `withRatio(1)`. There is no center-a-dialog primitive in this lib — pad with fixed-ratio

@@ -137,7 +137,8 @@ final class WrapTest extends TestCase
             ->render(7, 2);
 
         // Line one leaves one cell over (a b c, 6 cells); line two leaves three (d e).
-        self::assertSame("a  b c \nd    e ", $out);
+        // Line one's odd cell goes to the later gap, as Center's odd cell trails.
+        self::assertSame("a b  c \nd    e ", $out);
     }
 
     public function testRatioZeroItemsWrapAtTheirOneCellFloor(): void

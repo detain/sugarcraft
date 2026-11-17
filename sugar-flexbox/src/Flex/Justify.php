@@ -13,7 +13,10 @@ namespace SugarCraft\Flexbox\Flex;
  * `Start` is the default and leaves the line unpadded, exactly as before the
  * option existed. The space-* values follow the CSS edge rules: one item
  * under `SpaceBetween` behaves as `Start`, and under `SpaceAround` or
- * `SpaceEvenly` it is centred.
+ * `SpaceEvenly` it is centred, with the odd cell trailing as `Center` puts it.
+ *
+ * sugar-dashboard's `JustifyContent::FlexStart` and `FlexEnd` have no case
+ * here: a cell grid has no writing mode, so they are `Start` and `End`.
  */
 enum Justify
 {

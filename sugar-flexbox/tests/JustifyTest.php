@@ -11,8 +11,11 @@ use SugarCraft\Flexbox\Flex\{Align, Direction, FlexBox, FlexItem, Justify, Wrap}
 /**
  * Pins {@see Justify}: how a FlexBox places leftover main-axis cells. Replaces
  * the justify cases in sugar-dashboard's FlexLayoutTest, which only asserted
- * non-empty output; these assert the exact cells. The dashboard source tests
- * stay in place until the P3-12 lane removes them, so this branch deletes none.
+ * non-empty output; these assert the exact cells. The WP asks for the dashboard
+ * tests to move here, but the move is deferred: sugar-dashboard's FlexLayout
+ * still calls JustifyContent (FlexLayout.php:433-575), so its tests cover live
+ * code. They are removed with the dashboard retirement in P3-12, and this branch
+ * deletes none.
  */
 final class JustifyTest extends TestCase
 {
@@ -62,11 +65,23 @@ final class JustifyTest extends TestCase
 
     public function testSpaceAroundGivesEachItemEqualSpaceWithHalfSizeEdges(): void
     {
-        // Half-slot weights 1,2,2,1: leftover 4 splits 1,2,1,0 with the
-        // remainder going to the earliest slots.
+        // Half-slot weights 1,2,2,1: leftover 4 floors to 0,1,1,0, and the
+        // two remainder cells go to the trailing slots first, giving 0,1,2,1.
         $out = FlexBox::row(...self::abc())->withJustify(Justify::SpaceAround)->render(10, 1);
 
-        self::assertSame(' a   b  c ', $out);
+        self::assertSame('a  b   c  ', $out);
+    }
+
+    public function testAnOddCellOfOneItemTrailsUnderSpaceEvenlyAndSpaceAroundAsUnderCenter(): void
+    {
+        // Leftover 7 at width 9: the odd cell trails, so the single item sits
+        // exactly where Center puts it, not one cell right.
+        $item = static fn (): FlexItem => FlexItem::new('a')->withBasis(2);
+        $center = FlexBox::row($item())->withJustify(Justify::Center)->render(9, 1);
+
+        self::assertSame('   a     ', $center);
+        self::assertSame($center, FlexBox::row($item())->withJustify(Justify::SpaceEvenly)->render(9, 1));
+        self::assertSame($center, FlexBox::row($item())->withJustify(Justify::SpaceAround)->render(9, 1));
     }
 
     public function testSpaceEvenlyGivesEveryGapIncludingEdgesTheSameSize(): void
@@ -124,7 +139,7 @@ final class JustifyTest extends TestCase
 
     public function testColumnSpaceBetweenSpreadsRowsAlongTheHeight(): void
     {
-        // Leftover 3 over two interior slots: the remainder cell lands in the first one.
+        // Leftover 3 over two interior slots: the remainder cell lands in the last one.
         $out = FlexBox::column(
             FlexItem::new('a')->withBasis(1),
             FlexItem::new('b')->withBasis(1),
@@ -132,7 +147,7 @@ final class JustifyTest extends TestCase
         )->withJustify(Justify::SpaceBetween)->render(5, 6);
 
         self::assertSame(
-            "a    \n     \n     \nb    \n     \nc    ",
+            "a    \n     \nb    \n     \n     \nc    ",
             $out,
         );
     }
