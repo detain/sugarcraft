@@ -4061,7 +4061,10 @@ final class Subcommands
     {
         $configured = Bootstrap::readUserConfig()[BundleDiscovery::SETTING_KEY] ?? [];
         $paths = \array_values(\array_filter(\is_array($configured) ? $configured : [], 'is_string'));
-        $discovery = new BundleDiscovery((string) ($args->root ?? ''), $paths);
+        // The same base `bundles install --project` writes to (`--root`, else the
+        // working directory): without it `list` scans `/.candy-code/bundles` and
+        // cannot see the bundle the install just placed.
+        $discovery = new BundleDiscovery((string) ($args->root ?? (\getcwd() ?: '')), $paths);
         $bundles = $discovery->discover();
 
         if ($args->outputFormat === NonInteractive::FORMAT_JSON) {

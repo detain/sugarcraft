@@ -98,6 +98,25 @@ final class BundleInstallScopeTest extends TestCase
         self::assertFileExists($this->project . '/.candy-code/bundles/demo/.claude-plugin/plugin.json');
     }
 
+    public function testBundlesListWithoutRootShowsAProjectInstallMadeWithoutRoot(): void
+    {
+        $source = $this->stagedBundle('demo-src', 'demo');
+        $before = getcwd();
+        self::assertNotFalse($before);
+
+        chdir($this->project);
+
+        try {
+            self::assertSame(NonInteractive::EXIT_OK, $this->verb('install', $source, '--project'));
+            [$exit, $out] = $this->verbCapture('list');
+        } finally {
+            chdir($before);
+        }
+
+        self::assertSame(NonInteractive::EXIT_OK, $exit);
+        self::assertMatchesRegularExpression('/^demo\s.*\bproject\b/m', $out, 'list defaults to the working directory the install wrote to');
+    }
+
     public function testAProjectInstallIsDiscoveredInTheProjectTier(): void
     {
         $source = $this->stagedBundle('demo-src', 'demo');
