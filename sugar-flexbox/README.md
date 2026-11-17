@@ -214,7 +214,8 @@ echo $bar->render(30, 1), "\n";
 
 `withWrap(Wrap::Wrap)` breaks a row box onto further lines when its items overflow the
 width. Each item's hypothetical size is its `withBasis()` or, when unset, its natural
-content width. A line closes before the item that would overflow it. Each wrapped line is
+content width; a ratio-0 item with no basis counts as its 1-cell floor, the size it is
+drawn at (rule 3). A line closes before the item that would overflow it. Each wrapped line is
 then laid out across the full width under the same ratio, justify and align rules.
 Wrapped lines stack flush with no row gap; `withGap()` only spaces items within a line.
 The box height is the sum of the line heights, clamped to the height passed to `render()`,

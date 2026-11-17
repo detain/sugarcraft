@@ -244,8 +244,9 @@ final readonly class FlexBox
 
     /**
      * Greedy line breaking for a wrapping row. Each item's hypothetical size is
-     * its basis when set, otherwise its natural width; a line closes before the
-     * item that would overflow it. Wrapped lines stack flush with no row gap.
+     * the one {@see allocateMainAxis()} gives it alone on a line, so the break
+     * points match the cells drawn; a line closes before the item that would
+     * overflow it. Wrapped lines stack flush with no row gap.
      */
     private function renderWrappedRow(int $totalWidth, int $totalHeight): string
     {
@@ -253,9 +254,7 @@ final readonly class FlexBox
         $current = [];
         $used    = 0;
         foreach ($this->items as $item) {
-            $hypothetical = $item->basis > 0
-                ? \min($item->basis, $totalWidth)
-                : \max(1, $this->measureWidth($item));
+            $hypothetical = $this->hypotheticalWrapSize($item, $totalWidth);
             $add = $current === [] ? $hypothetical : $hypothetical + $this->gap;
 
             if ($current !== [] && $used + $add > $totalWidth) {
@@ -290,6 +289,24 @@ final readonly class FlexBox
         }
 
         return \implode("\n", \array_slice($lines, 0, $totalHeight));
+    }
+
+    /**
+     * Main size an item takes when it stands alone on a wrapped line. Mirrors
+     * the branches of {@see allocateMainAxis()}: a basis is taken as set, a
+     * grow item takes its natural width, and a ratio-0 item with no basis keeps
+     * the 1-cell floor it is drawn at (README, rule 3). Measuring it at its
+     * content width instead would break lines the layout never fills.
+     */
+    private function hypotheticalWrapSize(FlexItem $item, int $totalWidth): int
+    {
+        if ($item->basis > 0) {
+            return \min($item->basis, $totalWidth);
+        }
+        if ($item->ratio <= 0) {
+            return 1;
+        }
+        return \max(1, $this->measureWidth($item));
     }
 
     private function renderColumn(int $totalWidth, int $totalHeight): string

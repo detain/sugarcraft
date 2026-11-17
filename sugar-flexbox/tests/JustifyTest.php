@@ -9,9 +9,10 @@ use SugarCraft\Core\Util\Width;
 use SugarCraft\Flexbox\Flex\{Align, Direction, FlexBox, FlexItem, Justify, Wrap};
 
 /**
- * Pins {@see Justify}: how a FlexBox places leftover main-axis cells. Moved
- * from sugar-dashboard FlexLayoutTest's justify cases, which only asserted
- * non-empty output; these assert the exact cells.
+ * Pins {@see Justify}: how a FlexBox places leftover main-axis cells. Replaces
+ * the justify cases in sugar-dashboard's FlexLayoutTest, which only asserted
+ * non-empty output; these assert the exact cells. The dashboard source tests
+ * stay in place until the P3-12 lane removes them, so this branch deletes none.
  */
 final class JustifyTest extends TestCase
 {
