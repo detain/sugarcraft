@@ -135,6 +135,92 @@ final class SessionTabsTest extends TestCase
         $this->assertNotNull($tabs2);
     }
 
+    /**
+     * Ctrl+Tab arrives as the synthetic CSI 1;5I or as the real bytes a
+     * terminal sends (kitty CSI 9;5u, xterm modifyOtherKeys CSI 27;5;9~).
+     * Each one must land on the same tab the synthetic constant lands on.
+     *
+     * @return iterable<string, array{string}>
+     */
+    public static function forwardTabKeys(): iterable
+    {
+        yield 'synthetic CSI 1;5I' => [SessionTabs::CTRL_TAB];
+        yield 'kitty CSI 9;5u' => ["\x1b[9;5u"];
+        yield 'xterm modifyOtherKeys CSI 27;5;9~' => ["\x1b[27;5;9~"];
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function backwardTabKeys(): iterable
+    {
+        yield 'synthetic CSI 1;6I' => [SessionTabs::CTRL_SHIFT_TAB];
+        yield 'kitty CSI 9;6u' => ["\x1b[9;6u"];
+        yield 'xterm modifyOtherKeys CSI 27;6;9~' => ["\x1b[27;6;9~"];
+    }
+
+    /** @dataProvider forwardTabKeys */
+    public function testEveryCtrlTabEncodingCyclesForwardLikeTheSyntheticKey(string $key): void
+    {
+        $tabs = (new SessionTabs())
+            ->openTab('s1', 'Session 1')
+            ->openTab('s2', 'Session 2');
+        $expected = $tabs->handleKey(SessionTabs::CTRL_TAB);
+        $actual = $tabs->handleKey($key);
+
+        $this->assertNotNull($actual);
+        $this->assertSame($expected?->activeTab()?->id, $actual->activeTab()?->id);
+        $this->assertNotSame('s2', $actual->activeTab()?->id);
+    }
+
+    /** @dataProvider backwardTabKeys */
+    public function testEveryCtrlShiftTabEncodingCyclesBackwardLikeTheSyntheticKey(string $key): void
+    {
+        $tabs = (new SessionTabs())
+            ->openTab('s1', 'Session 1')
+            ->openTab('s2', 'Session 2');
+        $expected = $tabs->handleKey(SessionTabs::CTRL_SHIFT_TAB);
+        $actual = $tabs->handleKey($key);
+
+        $this->assertNotNull($actual);
+        $this->assertSame('s1', $expected?->activeTab()?->id);
+        $this->assertSame($expected?->activeTab()?->id, $actual->activeTab()?->id);
+    }
+
+    public function testRealCtrlTabBytesStepOneTabForwardFromTheFirstTab(): void
+    {
+        $tabs = (new SessionTabs())
+            ->openTab('s1', 'Session 1')
+            ->openTab('s2', 'Session 2')
+            ->setActiveTab('s1');
+        $stepped = $tabs->handleKey("\x1b[9;5u");
+
+        $this->assertNotNull($stepped);
+        $this->assertSame('s2', $stepped->activeTab()?->id);
+    }
+
+    /**
+     * Only the Tab-with-Ctrl encodings are claimed. Ctrl+Enter, Alt+Tab and
+     * a Ctrl+Tab in the wrong CSI family must not cycle the strip.
+     *
+     * @return iterable<string, array{string}>
+     */
+    public static function unrelatedKeys(): iterable
+    {
+        yield 'kitty ctrl+enter CSI 13;5u' => ["\x1b[13;5u"];
+        yield 'xterm ctrl+enter CSI 27;5;13~' => ["\x1b[27;5;13~"];
+        yield 'kitty alt+tab CSI 9;3u' => ["\x1b[9;3u"];
+        yield 'xterm alt+tab CSI 27;3;9~' => ["\x1b[27;3;9~"];
+        yield 'kitty ctrl+alt+tab CSI 9;7u' => ["\x1b[9;7u"];
+    }
+
+    /** @dataProvider unrelatedKeys */
+    public function testNonCtrlTabSequencesAreNotClaimed(string $key): void
+    {
+        $tabs = (new SessionTabs())->openTab('s1', 'Session 1');
+        $this->assertNull($tabs->handleKey($key));
+    }
+
     public function testHandleKeyReturnsNullForUnrecognized(): void
     {
         $tabs = new SessionTabs();
