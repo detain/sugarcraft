@@ -196,6 +196,70 @@ final class WrapTest extends TestCase
         self::assertSame("hw\nx ", $narrow);
     }
 
+    /**
+     * The break test must use the gap a line is drawn with, not the raw setting.
+     * A gap wider than the container is capped to what fits (effectiveGap), so
+     * this pair fits on one line and must not break. Before the fix the raw
+     * gap of 10 broke it into two lines.
+     */
+    public function testTheBreakTestUsesTheGapTheLineIsDrawnWith(): void
+    {
+        $items = static fn(): array => [
+            FlexItem::new('a')->withBasis(1),
+            FlexItem::new('b')->withBasis(1),
+        ];
+
+        $noWrap = FlexBox::row(...$items())->withGap(10)->withAlign(Align::Start)->render(7, 1);
+        $wrap   = FlexBox::row(...$items())->withGap(10)->withWrap(Wrap::Wrap)->withAlign(Align::Start)->render(7, 1);
+
+        self::assertSame('a     b', $noWrap);
+        self::assertSame($noWrap, $wrap);
+    }
+
+    /**
+     * The capped gap shrinks as a line gains items (effectiveGap depends on the
+     * item count): three 1-cell items at width 7 are drawn with a gap of 2, so
+     * all three share the line.
+     */
+    public function testAFittingLineWithAnOversizedGapStaysOnOneLine(): void
+    {
+        $out = FlexBox::row(
+            FlexItem::new('a')->withBasis(1),
+            FlexItem::new('b')->withBasis(1),
+            FlexItem::new('c')->withBasis(1),
+        )->withGap(10)->withWrap(Wrap::Wrap)->withAlign(Align::Start)->render(7, 3);
+
+        self::assertSame('a  b  c', $out);
+    }
+
+    /** The capped gap still breaks a set that cannot fit: two 2-cell items at width 6. */
+    public function testAnOversizedGapStillBreaksASetThatDoesNotFit(): void
+    {
+        $out = FlexBox::row(
+            FlexItem::new('aa')->withBasis(2),
+            FlexItem::new('bb')->withBasis(2),
+        )->withGap(10)->withWrap(Wrap::Wrap)->withAlign(Align::Start)->render(6, 2);
+
+        self::assertSame("aa    \nbb    ", $out);
+    }
+
+    /**
+     * Align places each wrapped item's text inside its own cell, as it does on a
+     * NoWrap line. Two 3-cell items wrap at width 4, one per line.
+     */
+    public function testEachAlignPlacesTextInsideAWrappedItem(): void
+    {
+        $items = static fn(): array => [
+            FlexItem::new('x')->withBasis(3),
+            FlexItem::new('y')->withBasis(3),
+        ];
+
+        self::assertSame("x   \ny   ", FlexBox::row(...$items())->withWrap(Wrap::Wrap)->withAlign(Align::Start)->render(4, 2));
+        self::assertSame(" x  \n y  ", FlexBox::row(...$items())->withWrap(Wrap::Wrap)->withAlign(Align::Center)->render(4, 2));
+        self::assertSame("  x \n  y ", FlexBox::row(...$items())->withWrap(Wrap::Wrap)->withAlign(Align::End)->render(4, 2));
+        self::assertSame("x   \ny   \n    ", FlexBox::row(...$items())->withWrap(Wrap::Wrap)->withAlign(Align::Stretch)->render(4, 3));
+    }
+
     public function testColumnBoxesIgnoreWrap(): void
     {
         $items = static fn(): array => [

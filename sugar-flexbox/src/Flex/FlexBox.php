@@ -255,17 +255,21 @@ final readonly class FlexBox
         $used    = 0;
         foreach ($this->items as $item) {
             $hypothetical = $this->hypotheticalWrapSize($item, $totalWidth);
-            $add = $current === [] ? $hypothetical : $hypothetical + $this->gap;
+            // A line of n items is drawn with effectiveGap(n) between items
+            // (renderRowLine), so the break test uses that gap, not the raw
+            // setting: a raw gap wider than the container breaks a set that
+            // renderRowLine would draw on one line.
+            $n      = \count($current) + 1;
+            $needed = $used + $hypothetical + $this->effectiveGap($totalWidth, $n) * ($n - 1);
 
-            if ($current !== [] && $used + $add > $totalWidth) {
+            if ($current !== [] && $needed > $totalWidth) {
                 $groups[] = $current;
                 $current  = [];
                 $used     = 0;
-                $add      = $hypothetical;
             }
 
             $current[] = $item;
-            $used     += $add;
+            $used     += $hypothetical;
         }
         if ($current !== []) {
             $groups[] = $current;

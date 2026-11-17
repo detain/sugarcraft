@@ -177,9 +177,9 @@ recipe is `withBasis()`, not `withRatio(0)`.
    ratio-0 sibling allocate 1/1/1 across one cell but 1/0/1 across two).
 4. **Align** (`start`/`center`/`end`/`stretch`) is ONE value that drives BOTH axes — there
    is no separate cross-axis knob (main-axis placement of leftover space is
-   `withJustify()`, below), and rows are always placed top-down. In row mode the case selects the box height (`stretch` fills the
-   declared height, every other case the tallest item) as well as how each item's text
-   sits inside its allocated cell; in column mode each line is placed inside the width
+   `withJustify()`, below), and rows are always placed top-down. In row mode the case
+   selects the box height (`stretch` fills the declared height, every other case the
+   tallest item) as well as how each item's text sits inside its allocated cell; in column mode each line is placed inside the width
    the ITEM MEASURES — `stretch` uses the container width, every other case the item's
    own measured width — so column-mode alignment discriminates only lines of DIFFERENT
    lengths within one item: a uniform-width item renders byte-identical under
@@ -217,8 +217,10 @@ echo $bar->render(30, 1), "\n";
 `withWrap(Wrap::Wrap)` breaks a row box onto further lines when its items overflow the
 width. Each item's hypothetical size is its `withBasis()` or, when unset, its natural
 content width; a ratio-0 item with no basis counts as its 1-cell floor, the size it is
-drawn at (rule 3). A line closes before the item that would overflow it. Each wrapped line is
-then laid out across the full width under the same ratio, justify and align rules.
+drawn at (rule 3). A line closes before the item that would overflow it, counting the gap
+that line is drawn with: a `withGap()` wider than the box is capped as it is for NoWrap,
+so a set that fits on one line does not break. Each wrapped line is then laid out across
+the full width under the same ratio, justify and align rules.
 Wrapped lines stack flush with no row gap; `withGap()` only spaces items within a line.
 The box height is the sum of the line heights, clamped to the height passed to `render()`,
 and `Align::Stretch` pads it to that height. Wrap applies to row boxes only. A column box
