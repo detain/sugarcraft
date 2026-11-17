@@ -741,6 +741,15 @@ final class UsageRecordsTest extends TestCase
         $store->appendUsageRecord('s1', Usage::new(200, 0.005, unpricedModel: 'mystery'), 'm', 'compact');
         $store->appendUsageRecord('s2', Usage::new(50, 0.001), 'm', 'title');
 
+        // time() stamps whole seconds, so appends made within one second tie
+        // on MAX(ts) and a second boundary between appends reverses the order.
+        // Pin the stamps so the newest-first order under test is the rollup's
+        // own, not the wall clock's.
+        $pdo = new PDO('sqlite:' . $this->dbPath);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $pdo->exec("UPDATE usage_records SET ts = 1000 WHERE session_id = 's1' AND source = 'compact'");
+        $pdo->exec("UPDATE usage_records SET ts = 2000 WHERE session_id = 's1' AND source = 'turn'");
+
         $one = $store->usageSourceRollups('s1');
         self::assertSame(['turn', 'compact'], array_column($one, 'source'), 'newest activity first, as the model fold orders');
         self::assertSame(2, $one[0]['calls']);
