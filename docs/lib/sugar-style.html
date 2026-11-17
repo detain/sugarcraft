@@ -198,7 +198,7 @@ echo Layout::joinVertical(Position::LEFT, $banner, $table);</code></pre>
 
     <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Style</strong><span>Foreground / background, bold / italic / underline, overline, padding, margin, width, alignment. Immutable value object; setters keep lipgloss's bare names (<code>fg()</code>, <code>bold()</code>, <code>width()</code>) and each returns a <em>new</em> Style. Opt-in <code>wordWrap()</code> breaks content to <code>width()</code> instead of truncating it, <code>builder()</code> edits one draft for a chain of setters, and the <code>horizontalFrameSize()</code> family reports the cells a style adds around its content.</span></div>
+      <div class="feature"><strong>Style</strong><span>Foreground / background, bold / italic / underline, overline, padding, margin, width, alignment. Immutable value object; setters keep lipgloss's bare names (<code>fg()</code>, <code>bold()</code>, <code>width()</code>) and each returns a <em>new</em> Style.</span></div>
       <div class="feature"><strong>Border</strong><span>Eight built-in styles + custom. <code>Border::rounded()</code>, <code>thick()</code>, <code>double()</code>, <code>block()</code>, <code>hidden()</code>, <code>normal()</code>, <code>ascii()</code>, <code>markdownBorder()</code>.</span></div>
       <div class="feature"><strong>Table</strong><span>Headers, rows, per-cell styleFunc. ANSI-aware width calc with grapheme cluster support. Optional <code>wrap()</code> callback: every line it returns renders, so a wrapped row spans several physical lines.</span></div>
       <div class="feature"><strong>List + Tree</strong><span>Bulleted lists and ASCII trees with custom enumerators.</span></div>
@@ -247,11 +247,6 @@ echo Border::normal()-&gt;seam(left: true, right: true, up: false, down: true); 
 <tr><td>Style</td><td>foreground(color)</td><td>Set foreground color</td></tr>
 <tr><td>Style</td><td>background(color)</td><td>Set background color</td></tr>
 <tr><td>Style</td><td>bold(), italic(), underline(), blink(), rapidBlink()</td><td>Text effects (blink = SGR 5, rapidBlink = SGR 6)</td></tr>
-<tr><td>Style</td><td>wordWrap(bool $on = true)</td><td>Opt-in word wrap to <code>width()</code> instead of truncation: breaks fall on whitespace, a word wider than the budget is broken, SGR carries across breaks. A no-op without <code>width()</code> and under <code>inline()</code>, which stays one line</td></tr>
-<tr><td>Style</td><td>builder()</td><td>Start a chain that edits one draft and builds a single new Style via <code>build()</code>; its <code>set*()</code> setters mutate the draft, and the result equals the chained form</td></tr>
-<tr><td>Style</td><td>horizontalPadding() / verticalPadding() / horizontalMargin() / verticalMargin()</td><td>Padding and margin per axis, in cells or rows; vertical values are zero under <code>inline()</code></td></tr>
-<tr><td>Style</td><td>horizontalBorderSize() / verticalBorderSize()</td><td>Border columns and rows: one per enabled side, zero without a <code>border()</code></td></tr>
-<tr><td>Style</td><td>horizontalFrameSize() / verticalFrameSize()</td><td>Total non-content width and height: padding, border and margin, so content can be budgeted as outer size minus frame</td></tr>
 <tr><td>Style</td><td>patch($other)</td><td>Incremental merge — only props set in $other are applied; a null color/width/border in $other is skipped, not a clear</td></tr>
 <tr><td>Style</td><td>colorProfile(ColorProfile $p)</td><td>Force the color tier render() downsamples to (TrueColor / Ansi256 / Ansi / Ascii / NoTty)</td></tr>
 <tr><td>BorderGradientBlend</td><td>fromColors(Color ...$colors)</td><td>1-5 colors → 4 interpolated border-side colors</td></tr>
