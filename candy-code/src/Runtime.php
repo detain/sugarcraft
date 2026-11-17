@@ -1090,9 +1090,12 @@ final class Runtime
      *    `get_object_vars()` returns the class-body fields too and they are
      *    not constructor parameters. On `Runtime` that trait is unusable
      *    without overriding `mutate()`.
-     *  - `App::mutate()`'s hand-written `new self(...)` over the promoted
-     *    parameters CARRIES `environmentBlock` — it is a constructor parameter
-     *    — and resets `memoryBlock` and `repoMapBlock` to null.
+     *  - The hand-written `new self(...)` over the promoted parameters, the
+     *    form `App::mutate()` used before it moved onto the same `Mutable`
+     *    splat. It CARRIES `environmentBlock` — it is a constructor parameter
+     *    — and resets `memoryBlock` and `repoMapBlock` to null. `App` keeps
+     *    every field constructor-promoted, so the splat is safe there; a
+     *    `Runtime` mutator must take this hand-written form instead.
      *
      * So exactly TWO memos would be recaptured, not three, and the mechanism
      * is constructor re-entry rather than cloning.
