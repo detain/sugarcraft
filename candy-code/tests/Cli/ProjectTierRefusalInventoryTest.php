@@ -223,10 +223,16 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // arriving in a SECOND file, which the derivation flags by name. The
         // default writes nobody's project tier: USER, like the serve state
         // directory. PLG-2a `--project` adds a second destination, the project
-        // bundle root under the operator-named `--root` or working directory,
-        // which is operator-chosen (typed or cwd) and never read from the
-        // repository; a symlinked `.candy-code` or bundle root is refused.
-        'Cli/Subcommands.php|.candy-code/bundles' => self::USER,
+        // bundle root `<root>/.candy-code/bundles`, where `<root>` is the
+        // operator's `--root` or the working directory. The working directory
+        // is usually a clone, and a clone chooses its own project tier, so this
+        // literal serves the project tier exactly as the Bundle reader does:
+        // BOTH (PL-2a review, classification reversed from USER). Its gate is
+        // bundlesProjectRoot(): a symlinked `.candy-code` or bundle root is
+        // refused with a line, and manifest names are regex-validated before
+        // any path is built. The write is not ContainedPath-gated because this
+        // holder is not in wiredHolders(); its containment is the symlink refusal.
+        'Cli/Subcommands.php|.candy-code/bundles' => self::BOTH,
         // C-EXT-4.b 2026-10-28: the two git-metadata reads bundlesGitSha()
         // performs on a checkout — the scratch this verb minted inside the
         // user root, or the source directory the operator named at
@@ -526,12 +532,20 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         'Bundles/MarketplaceRegistry.php|.candy-code/marketplaces.json' => self::USER,
         'Bundles/MarketplaceRegistry.php|.candy-code/marketplaces' => self::USER,
         'Bundles/Marketplace.php|.claude-plugin/marketplace.json' => self::USER,
-        // C-AGT-6.d: Bootstrap's own fallback for the installed-bundle root —
+        // C-AGT-6.d: Bootstrap's fallback for the installed-bundle root —
         // `$home . '/.candy-code/bundles'`, the USER half of the path the
-        // Bundle reader above classifies BOTH. The project floor is built from
-        // the caller's root, not this literal; this occurrence is the home leg
-        // only (§7 closeout classification).
-        'Cli/Bootstrap.php|.candy-code/bundles' => self::USER,
+        // Bundle reader above classifies BOTH. PLG-2a adds the project leg from
+        // the same literal in reportBundleRecommendations(): `$root .
+        // '/.candy-code/bundles'`, where `$root` is the launch root (a clone in
+        // practice), so this occurrence now serves both tiers and is BOTH (PL-2a
+        // review, reclassified from USER). Its gate is is_link on both the
+        // `.candy-code` directory and the bundle root, the refusal
+        // bundlesExistingProjectRoot() applies to the update walk. The read
+        // takes directory NAMES only (scandir plus is_dir) and never reads a
+        // file's content, so a symlinked entry under a real bundle root adds
+        // one name to the exclusion list and nothing more; ContainedPath is the
+        // gate for holders that read content, and this one does not.
+        'Cli/Bootstrap.php|.candy-code/bundles' => self::BOTH,
         // C-TOOL-6.m + the self-update/push waves: three independent home-cache
         // files — the update-check notice, the mac-alt-option once-per-version
         // stamp, the first-run wizard's dismissal stamp — and the voice recorder's
@@ -620,7 +634,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
      * APPEARS IN. On this tree that is NINETY-FOUR occurrences — one per entry
-     * in {@see DOT_PATHS} — of SIXTY-FOUR distinct paths. THIRTY-SEVEN of those
+     * in {@see DOT_PATHS} — of SIXTY-FOUR distinct paths. THIRTY-NINE of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and
      * they are TWENTY-NINE distinct paths — which is the figure
@@ -859,7 +873,8 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             28 => 'TWENTY-EIGHT', 29 => 'TWENTY-NINE',
             30 => 'THIRTY', 31 => 'THIRTY-ONE', 32 => 'THIRTY-TWO',
             33 => 'THIRTY-THREE', 34 => 'THIRTY-FOUR', 35 => 'THIRTY-FIVE',
-            36 => 'THIRTY-SIX', 37 => 'THIRTY-SEVEN'];
+            36 => 'THIRTY-SIX', 37 => 'THIRTY-SEVEN', 38 => 'THIRTY-EIGHT',
+            39 => 'THIRTY-NINE'];
 
         $occurrences = \count(self::DOT_PATHS);
         $repositoryOccurrences = 0;
