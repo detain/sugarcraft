@@ -233,8 +233,9 @@ final class DisplayCellWidthTest extends TestCase
         // At width 30 each column is 15 cells (literal, not read back from Calc,
         // so the expectation holds on master too). The frozen cell 日本 is four
         // cells and six bytes: str_pad would leave it unpadded on master, while
-        // the frozen half must reach 15 cells, then the wall. The row is split at
-        // the freeze divider ║ so only the frozen half is measured.
+        // the frozen half must reach 15 cells, then the extra right wall that renderFrozenRow
+        // writes (a defect, pinned below). The row is split at the freeze divider ║ so only
+        // the frozen half is measured.
         $columns = [Column::new('name', 'Name'), Column::new('city', 'City')];
         $rows = [
             new Row(['name' => '日本語', 'city' => '東京都']),
@@ -244,6 +245,10 @@ final class DisplayCellWidthTest extends TestCase
         $rendered = GridTable::new($columns, $rows)->freezeColumns(1)->setSize(30, 10)->render();
         $frozenHalf = explode('║', explode("\n", $rendered)[4])[0];
 
+        // Pinned as it is, not as correct. The frozen data row is 34 cells wide
+        // because renderFrozenRow writes an extra right wall before the divider,
+        // one more than the 33-cell frame. Tracked as a separate work package:
+        // freeze-divider extra wall in renderFrozenRow. The literals below stay as they are.
         self::assertSame('┃日本' . str_repeat(' ', 11) . '┃', $frozenHalf);
         self::assertSame(17, Width::string($frozenHalf));
     }
@@ -262,6 +267,9 @@ final class DisplayCellWidthTest extends TestCase
         $rendered = GridTable::new($columns, $rows)->freezeColumns(1)->setSize(30, 10)->render();
         $scrollHalf = explode('║', explode("\n", $rendered)[4])[1];
 
+        // Pinned as it is, not as correct: this half is part of the same 34-cell frozen
+        // row, whose extra right wall before the divider is described in the frozen-half
+        // test. Tracked as freeze-divider extra wall in renderFrozenRow. The literals stay.
         self::assertSame('東京' . str_repeat(' ', 11) . '┃', $scrollHalf);
         self::assertSame(16, Width::string($scrollHalf));
     }
