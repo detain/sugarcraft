@@ -39,9 +39,9 @@ use SugarCraft\Core\Util\Sanitize;
  * Coverage: printable ASCII, control characters
  * (Ctrl+A‒Z, Tab, Enter, Backspace, Escape, Space), Alt-prefixed keys
  * (ESC + char), the arrow and tilde function CSIs (Insert, Delete, F1–F24),
- * the SS3 arrow, F1–F4 and application-keypad forms, SGR mouse reports,
- * and the Kitty keyboard protocol (CSI-u plus its PUA function-key
- * encodings).
+ * the SS3 arrow, F1–F4 and application-keypad forms (plain and modified),
+ * xterm modifyOtherKeys reports, SGR mouse reports, and the Kitty keyboard
+ * protocol (CSI-u plus its PUA function-key encodings).
  */
 final class InputReader
 {
@@ -229,33 +229,40 @@ final class InputReader
                     break;
                 }
                 if ($next === 'O') {
-                    // Legacy modified SS3 (xterm): ESC O 1 ; <mod> <final>
-                    // names the key with its modifiers. It is decoded
-                    // through the CSI path so both forms share one modifier
-                    // table, and a span split across feeds parks until its
-                    // final byte arrives rather than leaking "1;" as text.
-                    if ($remain === 3 && $this->buf[$i + 2] === '1') {
-                        // Bare "ESC O 1" may be the head of a modified span
-                        // whose ';' has not arrived yet.
-                        break;
-                    }
-                    if ($remain >= 4 && $this->buf[$i + 2] === '1' && $this->buf[$i + 3] === ';') {
-                        $j = $i + 4;
+                    // Digit-led SS3 (xterm legacy modified keys): ESC O
+                    // <digits> [; <digits>] <final>. The first run is the
+                    // key's own parameter (xterm sends "1") and the optional
+                    // second run is the modifier. Any digit span is accepted,
+                    // as sugar-input's EscapeDecoder does, so "ESC O 2;5A"
+                    // is Ctrl+Up rather than a leaked ";5A". A span split
+                    // across feeds parks until its final byte arrives.
+                    if ($remain >= 3 && $this->buf[$i + 2] >= '0' && $this->buf[$i + 2] <= '9') {
+                        $j = $i + 2;
                         while ($j < $len && $this->buf[$j] >= '0' && $this->buf[$j] <= '9') {
                             $j++;
+                        }
+                        if ($j < $len && $this->buf[$j] === ';') {
+                            $j++;
+                            while ($j < $len && $this->buf[$j] >= '0' && $this->buf[$j] <= '9') {
+                                $j++;
+                            }
                         }
                         if ($j >= $len) {
                             break;
                         }
                         $c = ord($this->buf[$j]);
-                        if ($j > $i + 4 && $c >= 0x40 && $c <= 0x7e) {
-                            $msg = $this->decodeCsi(substr($this->buf, $i + 2, $j - $i - 2), chr($c));
-                            if ($msg !== null) {
-                                $msgs[] = $msg;
-                            }
-                            $i = $j + 1;
+                        if ($c < 0x40 || $c > 0x7e) {
+                            // Not a final byte: the span is malformed. Drop it
+                            // and resync on the byte that ended it.
+                            $i = $j;
                             continue;
                         }
+                        $msg = $this->decodeModifiedSs3(substr($this->buf, $i + 2, $j - $i - 2), chr($c));
+                        if ($msg !== null) {
+                            $msgs[] = $msg;
+                        }
+                        $i = $j + 1;
+                        continue;
                     }
                     // SS3: ESC O <single byte>. Used for F1-F4 on most
                     // terminals (xterm sends "ESC O P" for F1, etc.).
@@ -705,6 +712,14 @@ final class InputReader
             }
         }
 
+        // xterm modifyOtherKeys report: CSI 27 ; <mods> ; <keysym> ~. A key
+        // with no dedicated CSI form arrives wrapped this way under
+        // modifyOtherKeys=1/2, so the keysym names the key. Ordinary keystrokes
+        // never produce this shape, so decoding it is always safe.
+        if ($final === '~' && preg_match('/^27;(\d{1,9});(\d{1,9})$/', $params, $mk) === 1) {
+            return $this->decodeModifyOtherKeys((int) $mk[1], (int) $mk[2]);
+        }
+
         // Modified key sequences carry a `;<mod>` suffix on the params,
         // e.g. `CSI 1;5A` (ctrl-Up) or `CSI 15;3~` (alt-F5). Strip the
         // modifier off here so the key-lookup match below stays simple.
@@ -1009,6 +1024,149 @@ final class InputReader
      * Decode an SS3 final byte (the byte after `ESC O`). Most terminals
      * use SS3 for F1-F4 — F5+ generally come back as CSI ~ sequences.
      */
+    /**
+     * Decode a digit-led SS3 span, `ESC O <digits>[;<mod>] <final>`.
+     *
+     * The span is resolved against the SS3 final table only, never the CSI
+     * table: a CSI reading would take `ESC O 1;5R` for a cursor-position
+     * report, and `ESC O 1;5~` for a tilde key. A malformed span (oversized
+     * run, empty or zero modifier, unknown final) yields null, so it is
+     * consumed without an event.
+     *
+     * Mirrors sugar-input's EscapeDecoder::handleSS3 digit branch.
+     */
+    private function decodeModifiedSs3(string $span, string $final): ?Msg
+    {
+        $runs = explode(';', $span);
+        foreach ($runs as $run) {
+            if (strlen($run) > 9) {
+                return null;
+            }
+        }
+        $mods = null;
+        if (count($runs) === 2) {
+            // The modifier is 1 + bitmask; an empty or zero modifier is
+            // malformed and would otherwise de-base to a fabricated mask.
+            if ($runs[1] === '' || (int) $runs[1] < 1) {
+                return null;
+            }
+            $mods = Modifiers::fromXtermMod((int) $runs[1]);
+        }
+        $key = $this->decodeSs3($final);
+        if (!$key instanceof KeyMsg || $mods === null) {
+            return $key;
+        }
+        return new KeyMsg(
+            $key->type,
+            $key->rune,
+            alt:   $mods->alt   || $key->alt,
+            ctrl:  $mods->ctrl  || $key->ctrl,
+            shift: $mods->shift || $key->shift,
+        );
+    }
+
+    /**
+     * Decode an xterm modifyOtherKeys report, `CSI 27 ; <mods> ; <keysym> ~`.
+     *
+     * The keysym is an X11 keysym, not a Kitty functional codepoint, so the
+     * two ranges are read separately: printable ASCII and the control
+     * keysyms by value, the X11 function block through {@see X11_KEYSYM_MAP}
+     * (consulted before the Kitty range, since 0xFF00 outranks 0xE000), and
+     * the rest of 0xE000 and up through the Kitty functional table. Anything
+     * unnamed yields null and is consumed without an event.
+     *
+     * Mirrors sugar-input's EscapeDecoder::modifyOtherKeysName.
+     */
+    private function decodeModifyOtherKeys(int $mods, int $keysym): ?KeyMsg
+    {
+        // The modifier field is 1 + bitmask. Zero is malformed, and would
+        // fabricate every modifier bit if it reached the bitmask.
+        if ($mods < 1) {
+            return null;
+        }
+        $m = Modifiers::fromXtermMod($mods);
+
+        if ($keysym === 32) {
+            $type = KeyType::Space;
+            $rune = ' ';
+        } elseif ($keysym >= 33 && $keysym <= 126) {
+            $type = KeyType::Char;
+            $rune = chr($keysym);
+        } elseif ($keysym === 9 || $keysym === 13 || $keysym === 27 || $keysym === 127) {
+            $type = match ($keysym) {
+                9       => KeyType::Tab,
+                13      => KeyType::Enter,
+                27      => KeyType::Escape,
+                default => KeyType::Backspace,
+            };
+            $rune = '';
+        } elseif ($keysym >= 0xFF00 && $keysym <= 0xFFFF) {
+            $type = self::X11_KEYSYM_MAP[$keysym] ?? null;
+            $rune = '';
+        } elseif ($keysym >= 0xE000) {
+            $type = KeyType::kittyFunctionalKeys()[$keysym] ?? null;
+            $rune = '';
+        } else {
+            $type = null;
+            $rune = '';
+        }
+        if ($type === null) {
+            return null;
+        }
+        return new KeyMsg($type, $rune, alt: $m->alt, ctrl: $m->ctrl, shift: $m->shift);
+    }
+
+    /**
+     * X11 function-keysym block (0xFF00-0xFFFF) names for modifyOtherKeys
+     * reports. Only keysyms with a KeyType of their own appear; Pause (0xFF13),
+     * Select (0xFF60) and KP_Space stay unmapped rather than inventing names.
+     * Delete (0xFFFF) is excluded: it is the unknown-keysym witness that
+     * modifyOtherKeys tests pin as a drop.
+     */
+    private const X11_KEYSYM_MAP = [
+        0xFF08 => KeyType::Backspace,
+        0xFF09 => KeyType::Tab,
+        0xFF0D => KeyType::Enter,
+        0xFF1B => KeyType::Escape,
+        0xFF50 => KeyType::Home,
+        0xFF51 => KeyType::Left,
+        0xFF52 => KeyType::Up,
+        0xFF53 => KeyType::Right,
+        0xFF54 => KeyType::Down,
+        0xFF55 => KeyType::PageUp,
+        0xFF56 => KeyType::PageDown,
+        0xFF57 => KeyType::End,
+        0xFF63 => KeyType::Insert,
+        0xFFBE => KeyType::F1,  0xFFBF => KeyType::F2,  0xFFC0 => KeyType::F3,  0xFFC1 => KeyType::F4,
+        0xFFC2 => KeyType::F5,  0xFFC3 => KeyType::F6,  0xFFC4 => KeyType::F7,  0xFFC5 => KeyType::F8,
+        0xFFC6 => KeyType::F9,  0xFFC7 => KeyType::F10, 0xFFC8 => KeyType::F11, 0xFFC9 => KeyType::F12,
+        0xFFCA => KeyType::F13, 0xFFCB => KeyType::F14, 0xFFCC => KeyType::F15, 0xFFCD => KeyType::F16,
+        0xFFCE => KeyType::F17, 0xFFCF => KeyType::F18, 0xFFD0 => KeyType::F19, 0xFFD1 => KeyType::F20,
+        0xFFD2 => KeyType::F21, 0xFFD3 => KeyType::F22, 0xFFD4 => KeyType::F23, 0xFFD5 => KeyType::F24,
+        0xFF8D => KeyType::KpEnter,
+        0xFF95 => KeyType::KpHome,
+        0xFF96 => KeyType::KpLeft,
+        0xFF97 => KeyType::KpUp,
+        0xFF98 => KeyType::KpRight,
+        0xFF99 => KeyType::KpDown,
+        0xFF9A => KeyType::KpPageUp,
+        0xFF9B => KeyType::KpPageDown,
+        0xFF9C => KeyType::KpEnd,
+        0xFF9D => KeyType::KpBegin,
+        0xFF9E => KeyType::KpInsert,
+        0xFF9F => KeyType::KpDelete,
+        0xFFAA => KeyType::KpMultiply,
+        0xFFAB => KeyType::KpAdd,
+        0xFFAC => KeyType::KpSeparator,
+        0xFFAD => KeyType::KpSubtract,
+        0xFFAE => KeyType::KpDecimal,
+        0xFFAF => KeyType::KpDivide,
+        0xFFB0 => KeyType::Kp0, 0xFFB1 => KeyType::Kp1, 0xFFB2 => KeyType::Kp2, 0xFFB3 => KeyType::Kp3,
+        0xFFB4 => KeyType::Kp4, 0xFFB5 => KeyType::Kp5, 0xFFB6 => KeyType::Kp6, 0xFFB7 => KeyType::Kp7,
+        0xFFB8 => KeyType::Kp8, 0xFFB9 => KeyType::Kp9,
+        0xFFBD => KeyType::KpEqual,
+    ];
+
     private function decodeSs3(string $final): ?Msg
     {
         return match ($final) {
