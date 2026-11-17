@@ -268,9 +268,9 @@ final class DisplayCellWidthTest extends TestCase
 
         // Pinned as it is, not as correct. The frozen data row is 34 cells wide
         // because renderFrozenRow writes an extra right wall before the divider,
-        // one more than the 33-cell frame. Recorded as an unscheduled defect, not a
-        // work package yet: the freeze-divider extra wall in renderFrozenRow, pending
-        // owner approval (reviews/UPSTREAM-PLAN.md, Phase 0 Group A note).
+        // one more than the 33-cell frame. The defect is tracked as P0-A14
+        // (reviews/UPSTREAM-PLAN.md, Group A table), which depends on P0-A11: the
+        // extra wall in renderFrozenRow is removed there and this pin is re-pinned.
         // The literals below stay as they are.
         self::assertSame('┃日本' . str_repeat(' ', 11) . '┃', $frozenHalf);
         self::assertSame(17, Width::string($frozenHalf));
@@ -292,8 +292,8 @@ final class DisplayCellWidthTest extends TestCase
 
         // Pinned as it is, not as correct: this half is part of the same 34-cell frozen
         // row. renderFrozenRow writes an extra right wall before the divider, one more
-        // than the 33-cell frame (see the frozen-half test). Recorded as the same
-        // unscheduled freeze-divider defect, pending owner approval. The literals stay.
+        // than the 33-cell frame (see the frozen-half test). The same defect, tracked
+        // as P0-A14 (depends on P0-A11). The literals stay until P0-A14 re-pins them.
         self::assertSame('東京' . str_repeat(' ', 11) . '┃', $scrollHalf);
         self::assertSame(16, Width::string($scrollHalf));
     }
