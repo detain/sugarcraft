@@ -32,6 +32,7 @@
         "php": "^8.3",
         "ext-intl": "*",
         "ext-mbstring": "*",
+        "sugarcraft/sugar-colorprofile": "dev-master",
         "sugarcraft/sugar-core": "dev-master",
         "sugarcraft/sugar-style": "dev-master",
         "sugarcraft/sugar-spring": "dev-master"

@@ -32,6 +32,7 @@
         "guzzlehttp/guzzle": "^7.12.1",
         "react/event-loop": "^1.6",
         "react/promise": "^3.3",
+        "sugarcraft/sugar-colorprofile": "@dev",
         "sugarcraft/sugar-core": "@dev",
         "sugarcraft/sugar-animation": "@dev",
         "sugarcraft/sugar-style": "@dev",

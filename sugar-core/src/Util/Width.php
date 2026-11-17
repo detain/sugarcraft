@@ -593,12 +593,14 @@ final class Width
      * Parity with the two copies it replaces, candy-flappy `foldNoticeLine()`
      * (`$breakWords: false`) and candy-minesweeper `wrapPlain()`
      * (`$breakWords: true`), is pinned by WidthWrapWordsTest for the fixtures
-     * both copies receive. It is not total. Known divergences, kept as
-     * documented here until P4-3b and P4-3c decide them:
+     * both copies receive. It is not total: three inputs differ, and the
+     * owner ruling of 2026-11-17 adopts this helper's answer for each. The
+     * consumers migrate in P4-3b and P4-3c, and each declares its change in
+     * its PR body. The regression pins are in WidthWrapWordsTest.
      *  - A newline is a hard break here. `foldNoticeLine()` splits on `\s+`,
      *    which includes `\n`, so it joins the two sides with a space.
-     *  - `wrapPlain()` splits words on spaces only, so a tab is part of a word
-     *    there. This splits on all whitespace, so a tab separates words here.
+     *  - A tab separates words here. `wrapPlain()` splits words on spaces
+     *    only, so a tab is part of a word there.
      *  - A ZWJ cluster is kept whole here. `wrapPlain()` breaks it per codepoint.
      *
      * The rules, in order:

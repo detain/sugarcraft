@@ -176,10 +176,10 @@ final class WidthWrapWordsTest extends TestCase
     }
 
     /**
-     * The three declared divergences from the copies (see the wrapWords
-     * docblock). Each pins BOTH sides, so a move in either the helper or a
-     * copy reddens here. The owner ruling that settles them gates P4-3b and
-     * P4-3c; until then a consumer that migrates inherits the helper's answer.
+     * The three divergences from the copies (see the wrapWords docblock). The
+     * owner ruling of 2026-11-17 adopts the helper's answer for each. Each
+     * test pins the copy's answer and the adopted answer side by side, so a
+     * move in either reddens here.
      */
     public function testDivergenceNewlineIsAHardBreakWhereFlappyJoinsWithASpace(): void
     {
@@ -203,6 +203,35 @@ final class WidthWrapWordsTest extends TestCase
             self::minesweeperWrapReference($family, 1),
         );
         $this->assertSame([$family], Width::wrapWords($family, 1, breakWords: true));
+    }
+
+    /**
+     * Regression pins for the adopted answers (owner ruling 2026-11-17). P4-3b
+     * and P4-3c inherit these, so a change here changes their output too.
+     */
+    public function testRegressionNewlineIsAHardBreakInBothModes(): void
+    {
+        $this->assertSame(['ab', 'cd'], Width::wrapWords("ab\ncd", 10, breakWords: false));
+        $this->assertSame(['ab', 'cd'], Width::wrapWords("ab\ncd", 10, breakWords: true));
+        $this->assertSame(['a', 'b'], Width::wrapWords("a\nb", 1));
+        $this->assertSame(['ab', 'cd'], Width::wrapWords("ab  \n  cd", 10));
+    }
+
+    public function testRegressionTabSeparatesWordsInBothModes(): void
+    {
+        $this->assertSame(['a b'], Width::wrapWords("a\tb", 3, breakWords: true));
+        $this->assertSame(['a', 'b'], Width::wrapWords("a\tb", 2, breakWords: true));
+        $this->assertSame(['a', 'b'], Width::wrapWords("a\tb", 2, breakWords: false));
+        $this->assertSame(['a b'], Width::wrapWords("a\t\t b", 3, breakWords: false));
+        $this->assertSame(['ab'], Width::wrapWords("\tab", 2));
+    }
+
+    public function testRegressionZwjClusterIsNeverCutWhenBreaking(): void
+    {
+        $family = "\u{1f468}\u{200d}\u{1f469}\u{200d}\u{1f467}";
+        $this->assertSame([$family], Width::wrapWords($family, 2, breakWords: true));
+        $this->assertSame(['x', $family], Width::wrapWords('x ' . $family, 2, breakWords: true));
+        $this->assertSame([$family, $family], Width::wrapWords($family . ' ' . $family, 2, breakWords: true));
     }
 
     public function testRejectsNonPositiveWidth(): void

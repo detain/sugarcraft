@@ -36,6 +36,7 @@
     "require": {
         "php": "^8.3",
         "ext-mbstring": "*",
+        "sugarcraft/sugar-colorprofile": "dev-master",
         "sugarcraft/sugar-core": "dev-master",
         "sugarcraft/sugar-forms": "dev-master",
         "sugarcraft/sugar-fuzzy": "dev-master",
