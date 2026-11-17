@@ -39,7 +39,7 @@ Three roots are scanned, and each bundle carries the tier its root implies:
 | Root | Tier | Trust |
 |---|---|---|
 | `<project>/.candy-code/bundles/` | `project` | confined to the checkout, exactly like a cloned `.claude/skills` tree |
-| `~/.candy-code/bundles/` | `user` | the destination `candy-code bundles install` writes to; a symlink inside it may point anywhere in home and nowhere outside it |
+| `~/.candy-code/bundles/` | `user` | the destination a bare `candy-code bundles install` writes to (`--project` writes the project row above instead); a symlink inside it may point anywhere in home and nowhere outside it |
 | every `pluginPaths` entry | `user` | the operator's explicit word: a listed path is trusted as given, and may be either one bundle or a container of bundles |
 
 A bundle whose path resolves outside the tree it was found in (a project
@@ -293,10 +293,13 @@ What matters from the plugin side:
 ```bash
 candy-code bundles list                   # every bundle this directory sees,
                                           # per-surface counts and both declines
-candy-code bundles install <path>         # copy a bundle directory into
-                                          # ~/.candy-code/bundles/
-candy-code bundles install <git-url>      # depth-one clone into the same place
-candy-code bundles install <plugin>@<marketplace>
+candy-code bundles install <path> [--project|--user]
+                                          # copy a bundle directory into
+                                          # ~/.candy-code/bundles/, or with --project
+                                          # into <root>/.candy-code/bundles/
+candy-code bundles install <git-url> [--project|--user]
+                                          # depth-one clone into the same place
+candy-code bundles install <plugin>@<marketplace> [--project|--user]
                                           # gated install from an added marketplace
 candy-code bundles marketplace add <path|git-url>
                                           # pin a marketplace catalog under ~/.candy-code/
@@ -304,7 +307,8 @@ candy-code bundles marketplace list       # the added rows and their pins
 candy-code bundles marketplace remove <name>
 candy-code bundles marketplace update [name]
                                           # re-clone, diff, move the pin
-candy-code bundles update [bundle]        # re-install recorded bundles from their rows
+candy-code bundles update [bundle]        # re-install recorded bundles from their rows,
+                                          # each in the tier it already occupies
 candy-code bundles search <query>         # every catalog entry matching a needle
 candy-code bundles recommend              # entries the project's own files point at
 ```
@@ -319,9 +323,14 @@ Both arms land content-only trees: the copy skips every `.git` directory and
 the clone sheds its own before the rename. A git clone runs as a bounded,
 non-interactive child: `--depth 1`,
 no tags, terminal prompts and askpass disabled, killed with its process group
-if it overstays. Its only destination is the user bundle root — a clone can
-land in `~/.candy-code/bundles/<name>` and nowhere else, under a name that can
-not traverse out of it.
+if it overstays. Its only destination is one bundle root: the user bundle root,
+or with `--project` the project's `<root>/.candy-code/bundles/` (`--root`, else
+the working directory). A clone lands in `<that root>/<name>` and nowhere else,
+under a name that can not traverse out of it. `--project --user` together is a
+usage error and writes nothing. `--project` does not need an owned home, so
+`bundles update` keeps a project bundle in the project tier with or without
+one; a recorded bundle still re-resolves its marketplace pin from the user
+registry, so without an owned home that refresh is refused by name.
 
 ## Marketplaces
 

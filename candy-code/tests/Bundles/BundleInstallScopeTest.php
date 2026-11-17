@@ -201,6 +201,60 @@ final class BundleInstallScopeTest extends TestCase
         self::assertSame(['alpha'], $this->listed($this->project . '/.candy-code/bundles'), 'no .swap- or .install- residue');
     }
 
+    public function testUpdateOfAProjectBundleWithNoOwnedHomeIsRefusedByNameAndLeftWhereItIs(): void
+    {
+        $source = $this->addPathMarketplace('demo', 'alpha');
+        self::assertSame(
+            NonInteractive::EXIT_OK,
+            $this->verb('install', 'alpha@demo', '--project', '--root', $this->project),
+        );
+        file_put_contents($source . '/plugins/alpha/UPSTREAM.txt', 'v2 for alpha');
+
+        $this->unownHome();
+
+        self::assertSame(
+            NonInteractive::EXIT_FAILURE,
+            $this->verb('update', 'alpha', '--root', $this->project),
+            'the pins live in the user registry, which an unowned home cannot read: a named update refuses, it never re-stages from the record',
+        );
+        self::assertSame(
+            'v1 for alpha',
+            file_get_contents($this->project . '/.candy-code/bundles/alpha/UPSTREAM.txt'),
+            'the refused update left the project tree exactly as it was',
+        );
+        self::assertSame(['alpha'], $this->listed($this->project . '/.candy-code/bundles'), 'no .swap- or .install- residue');
+        self::assertDirectoryDoesNotExist($this->root . '/alpha', 'a refused project update must not create a user-tier copy');
+    }
+
+    public function testAnUnnamedUpdateWithNoOwnedHomeWalksTheProjectTierAndSkipsItWithoutFailing(): void
+    {
+        $source = $this->addPathMarketplace('demo', 'alpha');
+        self::assertSame(
+            NonInteractive::EXIT_OK,
+            $this->verb('install', 'alpha@demo', '--project', '--root', $this->project),
+        );
+        file_put_contents($source . '/plugins/alpha/UPSTREAM.txt', 'v2 for alpha');
+
+        $this->unownHome();
+
+        [$exit] = $this->verbCapture('update', '--root', $this->project);
+
+        self::assertSame(
+            NonInteractive::EXIT_OK,
+            $exit,
+            'a scanned root reports and skips a bundle it cannot re-resolve, as it does for a gone marketplace; the project root is still walked, so the old whole-verb refusal is gone',
+        );
+        self::assertSame('v1 for alpha', file_get_contents($this->project . '/.candy-code/bundles/alpha/UPSTREAM.txt'));
+    }
+
+    public function testUpdateWithNoOwnedHomeAndNoProjectRootStillRefusesWithTheHomeLine(): void
+    {
+        $this->unownHome();
+
+        self::assertSame(NonInteractive::EXIT_FAILURE, $this->verb('update', '--root', $this->project));
+        self::assertDirectoryDoesNotExist($this->project . '/.candy-code', 'an update never creates a bundle root');
+    }
+
     public function testAnUnnamedUpdateRefreshesEachBundleInTheTierItOccupies(): void
     {
         $alphaSource = $this->addPathMarketplace('demo', 'alpha');
@@ -374,6 +428,17 @@ final class BundleInstallScopeTest extends TestCase
             $dir . '/.claude-plugin/plugin.json',
             json_encode(['name' => $name, 'version' => '1.0.0']),
         );
+    }
+
+    /**
+     * A relative HOME is never an owned home ({@see \SugarCraft\Code\Support\HomeDirectory::owned()}
+     * refuses a non-absolute path), so the user root and the user registry read as absent. The
+     * sandbox restore in tearDown puts the real HOME back.
+     */
+    private function unownHome(): void
+    {
+        putenv('HOME=relative-home');
+        $_SERVER['HOME'] = 'relative-home';
     }
 
     /** @return list<string> the names `bundles recommend` offers for the project, in its JSON form */

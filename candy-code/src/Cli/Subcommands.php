@@ -5127,26 +5127,31 @@ final class Subcommands
      * an update never leaves a bundle absent. A bundle with no record, or
      * one whose marketplace is gone, is refused per name when named and
      * skipped with a line when the root is scanned — update never invents
-     * a source for what install did not record.
+     * a source for what install did not record. Each bundle is refreshed in
+     * the tier it occupies (user root, or the project root the working
+     * directory holds), so a `--project` install is never moved to the user
+     * tier. Without an owned home the pins are unreadable, and every recorded
+     * bundle is refused by name instead of being re-staged from its record.
      */
     private static function bundlesUpdate(ParsedArgs $args): int
     {
-        $home = HomeDirectory::owned();
-        if ($home === null) {
-            self::bundlesLine(Lang::t('cli.bundles.install.no_home'));
-
-            return NonInteractive::EXIT_FAILURE;
-        }
-
         // PLG-2a: each bundle is updated in the root it already occupies, so a
         // `--project` install stays in its project tier. The user root comes
         // first; the project root is read only when the working directory (or
-        // --root) holds one.
+        // --root) holds one. An unowned home drops the user root but never the
+        // project root: `bundles install --project` does not consult the home,
+        // so update must still see what it installed.
+        $home = HomeDirectory::owned();
+        $candidates = [self::bundlesExistingProjectRoot($args)];
+        if ($home !== null) {
+            \array_unshift($candidates, $home . '/.candy-code/bundles');
+        }
+
         // A working directory that IS the home directory names the user root
         // again; the realpath check keeps that one root from being walked twice.
         $roots = [];
         $seenRoots = [];
-        foreach ([$home . '/.candy-code/bundles', self::bundlesExistingProjectRoot($args)] as $candidate) {
+        foreach ($candidates as $candidate) {
             $real = $candidate === null ? false : realpath($candidate);
             if ($real === false || isset($seenRoots[$real])) {
                 continue;
@@ -5156,10 +5161,23 @@ final class Subcommands
         }
 
         if ($roots === []) {
+            if ($home === null) {
+                self::bundlesLine(Lang::t('cli.bundles.install.no_home'));
+
+                return NonInteractive::EXIT_FAILURE;
+            }
+
             echo Lang::t('cli.bundles.update.nothing') . "\n";
 
             return NonInteractive::EXIT_OK;
         }
+
+        // The pinned marketplace entries live in the user registry under the
+        // owned home. With no owned home there is no pin to re-resolve, and
+        // update never re-stages from the record's own url or sha (that would
+        // walk around the marketplace install gate), so each recorded bundle
+        // is refused by name below rather than silently skipped or moved.
+        $registry = $home === null ? null : MarketplaceRegistry::loadDefault();
 
         $wanted = $args->subcommandArgs[1] ?? null;
         $named = $wanted !== null && $wanted !== '';
@@ -5196,7 +5214,6 @@ final class Subcommands
             }
         }
 
-        $registry = MarketplaceRegistry::loadDefault();
         $status = NonInteractive::EXIT_OK;
 
         foreach ($targets as ['name' => $name, 'root' => $root]) {
@@ -5205,6 +5222,16 @@ final class Subcommands
 
             if ($record === null) {
                 self::bundlesLine(Lang::t('cli.bundles.update.no_record', ['name' => $name]));
+
+                if ($named) {
+                    $status = NonInteractive::EXIT_FAILURE;
+                }
+
+                continue;
+            }
+
+            if ($registry === null) {
+                self::bundlesLine(Lang::t('cli.bundles.install.no_home'));
 
                 if ($named) {
                     $status = NonInteractive::EXIT_FAILURE;
