@@ -8,6 +8,7 @@ use SugarCraft\Markdown\Render\AutolinkMarker;
 use SugarCraft\Markdown\Render\BlockContext;
 use SugarCraft\Markdown\Render\BlockKind;
 use SugarCraft\Markdown\Render\BlockStack;
+use SugarCraft\Markdown\Render\SectionScanner;
 use SugarCraft\Markdown\Render\SectionStream;
 use SugarCraft\Markdown\Style\StyleCascade;
 use SugarCraft\Markdown\Style\StyleSheet;
@@ -118,13 +119,17 @@ final class Renderer
     private ?MarkdownParser $parser = null;
 
     /**
-     * Per-stock-theme render bundles for {@see renderMarkdown()}
-     * (SM-S53), keyed by the stock Theme instance's object id — the ids
-     * can never be recycled because Theme's stock memo holds the objects.
+     * Render bundles {@see cached()} hands out, keyed `"<theme id>|<width>"`
+     * (`off` for no wrapping). Only stock themes enter: their object ids
+     * cannot be recycled because Theme's stock memo pins the instances. Bounded
+     * at {@see CACHE_LIMIT} entries; the oldest leaves first.
      *
-     * @var array<int, self>
+     * @var array<string, self>
      */
-    private static array $stockRenderers = [];
+    private static array $cachedRenderers = [];
+
+    /** Most bundles {@see cached()} keeps; a terminal resize adds one per width. */
+    private const CACHE_LIMIT = 32;
 
     /**
      * Link reference definitions {@see parseSection()} seeds into the parse
@@ -161,6 +166,14 @@ final class Renderer
 
     /** Prefix fence lines with a padded, measurable line-number gutter ({@see withLineNumbers()}). */
     public readonly bool $lineNumbers;
+
+    /**
+     * Normalised heading ids whose bodies render folded away ({@see withFolds()}).
+     * Empty for an unfolded renderer.
+     *
+     * @var list<string>
+     */
+    public readonly array $folds;
     private readonly bool $textIsPlain;
     private bool $inTableCell = false;
 
@@ -203,6 +216,7 @@ final class Renderer
         bool $fenceColumnBudget = false,
         ?StyleSheet $styleSheetOverride = null,
         bool $lineNumbers = false,
+        array $folds = [],
     ) {
         $this->theme = $theme ?? Theme::ansi();
         // SM-S50: a zero/negative width is not "off" — off is null. Fail
@@ -224,6 +238,10 @@ final class Renderer
         $this->fenceColumnBudget = $fenceColumnBudget;
         $this->styleSheetOverride = $styleSheetOverride;
         $this->lineNumbers = $lineNumbers;
+        $this->folds = array_values(array_unique(array_filter(
+            array_map(SectionScanner::slug(...), $folds),
+            static fn(string $id): bool => $id !== '',
+        )));
         $this->textIsPlain = $this->theme->text === null || $this->isPlainStyle($this->theme->text);
     }
 
@@ -326,11 +344,41 @@ final class Renderer
         if (!Theme::isStock($theme)) {
             return (new self($theme))->render($markdown);
         }
-        // Safe id key: the stock memo in Theme pins a strong reference to
-        // this object for the process lifetime, so its id is never recycled
-        // behind our back.
-        $renderer = self::$stockRenderers[spl_object_id($theme)] ??= new self($theme);
-        return $renderer->render($markdown);
+        return self::cached($theme)->render($markdown);
+    }
+
+    /**
+     * A renderer for ($theme, $wrapWidth) that keeps its CommonMark parser
+     * between calls, so a per-frame caller pays the Environment build once
+     * per theme and width instead of once per frame. Stock themes only: a
+     * custom theme gets a fresh renderer, because identity is what keys the
+     * cache and the caller owns a custom instance's lifetime.
+     *
+     * The returned instance is shared. Its {@see render()} resets all
+     * per-document state on entry, so reuse is safe; it must not be mutated
+     * through {@see withFolds()} or the other builders, which return new
+     * instances and leave the cached one alone.
+     *
+     * @throws \InvalidArgumentException when $wrapWidth is not positive or null
+     */
+    public static function cached(?Theme $theme = null, ?int $wrapWidth = null): self
+    {
+        $theme ??= Theme::ansi();
+        if (!Theme::isStock($theme)) {
+            return new self($theme, $wrapWidth);
+        }
+        // Validate before keying: a refused width must not be cached as a key.
+        if ($wrapWidth !== null && $wrapWidth <= 0) {
+            return new self($theme, $wrapWidth);
+        }
+        $key = spl_object_id($theme) . '|' . ($wrapWidth ?? 'off');
+        if (!isset(self::$cachedRenderers[$key])) {
+            if (\count(self::$cachedRenderers) >= self::CACHE_LIMIT) {
+                array_shift(self::$cachedRenderers);
+            }
+            self::$cachedRenderers[$key] = new self($theme, $wrapWidth);
+        }
+        return self::$cachedRenderers[$key];
     }
 
     /**
@@ -647,6 +695,25 @@ final class Renderer
     }
 
     /**
+     * Fold the sections under the given headings: each named heading keeps its
+     * own line and drops everything up to the next heading at its level or
+     * above. Ids use the anchor-style form {@see SectionScanner::headingId()}
+     * produces, so `"Install & setup"` is folded by `"install-setup"` or by the
+     * heading text itself, and both sides are normalised the same way. Headings
+     * inside fenced code are never folds.
+     *
+     * Passing an empty list unfolds: `withFolds([])` returns a renderer that
+     * renders every section. The folded body is dropped before parsing, so
+     * link reference definitions written inside it do not resolve elsewhere.
+     *
+     * @param list<string> $headingIds
+     */
+    public function withFolds(array $headingIds): self
+    {
+        return $this->mutate(folds: $headingIds);
+    }
+
+    /**
      * Wrap paragraph + blockquote + list-item bodies at `$cols` cells.
      * Headings, code blocks and tables are never wrapped (they carry
      * their own width semantics; heading passthrough matches glamour).
@@ -944,6 +1011,7 @@ final class Renderer
         ?bool $fenceColumnBudget = null,
         ?StyleSheet $styleSheetOverride = null,
         ?bool $lineNumbers = null,
+        ?array $folds = null,
     ): self {
         return new self(
             $theme            ?? $this->theme,
@@ -959,6 +1027,7 @@ final class Renderer
             $fenceColumnBudget ?? $this->fenceColumnBudget,
             $styleSheetOverride ?? $this->styleSheetOverride,
             $lineNumbers      ?? $this->lineNumbers,
+            $folds            ?? $this->folds,
         );
     }
 
@@ -971,6 +1040,11 @@ final class Renderer
         // form valid UTF-8; the control-stripping sweep (stripControls) is
         // what sanitize gates, and it stays gated.
         $markdown = self::scrubForParse($markdown);
+        if ($this->folds !== []) {
+            // Folds drop section bodies before parsing, so the parser, the
+            // source-line map and the stream family all see the same text.
+            $markdown = SectionScanner::applyFolds($markdown, $this->folds);
+        }
         // Expansion runs post-parse in renderText: the parser sees the
         // source bytes as written, so shortcodes inside code spans, fenced
         // blocks and link destinations stay literal (M1).

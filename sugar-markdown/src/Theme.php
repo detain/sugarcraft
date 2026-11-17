@@ -462,6 +462,71 @@ final class Theme
     }
 
     /**
+     * Bundled theme files shipped under `themes/`, addressed by catalog name.
+     * They use the flat slot schema {@see fromJsonString()} reads.
+     */
+    private const BUNDLED = ['github', 'monokai', 'solarized'];
+
+    /**
+     * Every name {@see fromCatalog()} answers: the stock roster from
+     * {@see names()}, then the bundled theme files.
+     *
+     * @return list<string>
+     */
+    public static function catalog(): array
+    {
+        return [...self::names(), ...self::BUNDLED];
+    }
+
+    /**
+     * Path of a bundled theme file, or null when $name is not one of them.
+     * Case-insensitive; surrounding whitespace is ignored.
+     */
+    public static function bundledPath(string $name): ?string
+    {
+        $key = strtolower(trim($name));
+
+        return in_array($key, self::BUNDLED, true) ? dirname(__DIR__) . '/themes/' . $key . '.json' : null;
+    }
+
+    /**
+     * The stock theme {@see byName()} answers, else the bundled theme file of
+     * that name. Null when neither answers, so a caller picks its own fallback.
+     *
+     * @throws \RuntimeException when a bundled file exists but cannot be read
+     */
+    public static function fromCatalog(string $name): ?self
+    {
+        $stock = self::byName($name);
+        if ($stock !== null) {
+            return $stock;
+        }
+        $path = self::bundledPath($name);
+
+        return $path === null ? null : self::fromFile($path);
+    }
+
+    /**
+     * Decode a glamour `styles.json` document (the schema with a `document`
+     * block, as {@see StyleGuide} reads it). A flat-schema document is refused
+     * here; {@see fromJsonString()} is the door that accepts both.
+     *
+     * @throws \InvalidArgumentException when the JSON is invalid or not a glamour styles document
+     */
+    public static function fromGlamourJson(string $json): self
+    {
+        $decoded = json_decode($json, associative: true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new \InvalidArgumentException(Lang::t('theme.json_invalid'));
+        }
+        if (!is_array($decoded) || array_is_list($decoded) || !StyleGuide::isGlamourSchema($decoded)) {
+            throw new \InvalidArgumentException('theme JSON is not a glamour styles document (no "document" block)');
+        }
+
+        return StyleGuide::fromDecoded($decoded)->theme();
+    }
+
+    /**
      * Glamour-compatible env-var auto-selection. `NO_COLOR`, when set to
      * any non-empty value, wins first (M16): the no-color.org convention
      * asks for plain output regardless of anything else configured, so

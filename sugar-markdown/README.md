@@ -565,6 +565,30 @@ once.
   (tokenising with the plain-style degrade), `StreamSink` / `Writer`
   (the sink and push side of the streaming channels).
 
+## Frontmatter, folds, cached renderers and HTML input
+
+```php
+use SugarCraft\Markdown\Frontmatter;
+use SugarCraft\Markdown\Html\HtmlToMarkdown;
+use SugarCraft\Markdown\Renderer;
+use SugarCraft\Markdown\Theme;
+
+// Split a leading YAML block off a document; parsing the YAML is the caller's job.
+$split = Frontmatter::split("---\ntitle: Notes\n---\n# Install\n\nSteps.\n\n## Usage\n\nRun it.\n");
+echo $split->meta, "\n";
+
+// Fold the section under a heading: its line stays, its body is dropped.
+echo Renderer::cached(Theme::dark(), 72)->withFolds(['install'])->render($split->body);
+
+// Fetched HTML to Markdown; null means the body could not be converted.
+echo HtmlToMarkdown::new()->convert('<h2>Hi</h2><p><a href="/x">go</a></p>', 'https://example.test/a/') ?? 'refused', "\n";
+
+// Every name Theme::fromCatalog() answers: the stock roster, then the bundled files.
+echo implode(', ', array_slice(Theme::catalog(), -3)), "\n";
+```
+
+`Renderer::cached($theme, $width)` returns one shared renderer per stock theme and width, so a per-frame caller builds its CommonMark environment once. `withFolds()` takes anchor-style heading ids (`"Install & setup"` is `install-setup`) and never folds a heading inside a code fence.
+
 ## Test
 
 ```sh

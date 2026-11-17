@@ -80,6 +80,22 @@ final class SectionScanner
     private ?string $fenceChar = null;
     private int $fenceLen = 0;
 
+    /**
+     * Folded heading ids, as a set keyed by {@see slug()} form. A heading in
+     * the set keeps its own line and drops its body (see {@see $foldLevel}).
+     *
+     * @var array<string, true>
+     */
+    private readonly array $foldSet;
+
+    /**
+     * Level of the folded heading whose body is being dropped, or null when
+     * no fold is open. Every line until a heading at this level or above is
+     * discarded, fence and raw-HTML tracking still running so a fenced `#`
+     * line inside the body is never taken for a heading.
+     */
+    private ?int $foldLevel = null;
+
     /** Text that ends the raw-HTML block being read (CommonMark HTML block types 1-5), compared case-insensitively. */
     private ?string $rawEnd = null;
     private ?string $lastNonBlank = null;
@@ -87,6 +103,23 @@ final class SectionScanner
 
     /** The previous line closed a code fence. */
     private bool $afterFence = false;
+
+    /**
+     * @param list<string> $folds heading ids whose bodies are dropped (see
+     *                            {@see headingId()} for the id form); blank
+     *                            and duplicate ids are ignored
+     */
+    public function __construct(array $folds = [])
+    {
+        $set = [];
+        foreach ($folds as $id) {
+            $key = self::slug($id);
+            if ($key !== '') {
+                $set[$key] = true;
+            }
+        }
+        $this->foldSet = $set;
+    }
 
     /**
      * Absorb one input chunk; answer every section the assembled bytes have
@@ -158,6 +191,64 @@ final class SectionScanner
     }
 
     /**
+     * The id a column-0 ATX heading line answers to for {@see __construct()}'s
+     * folds: its text, closing `#` run removed, then {@see slug()}. Null for
+     * any line that is not an ATX heading.
+     */
+    public static function headingId(string $line): ?string
+    {
+        if (preg_match('/^#{1,6}(?:[ \t]+(.*?))?[ \t]*$/', rtrim($line, "\r\n"), $m) !== 1) {
+            return null;
+        }
+        $text = preg_replace('/(?:^|[ \t]+)#+$/', '', $m[1] ?? '') ?? ($m[1] ?? '');
+
+        return self::slug($text);
+    }
+
+    /**
+     * Anchor-style normal form shared by heading ids and fold requests:
+     * lower-cased, punctuation dropped, runs of spaces joined by one hyphen.
+     * `"Install & Setup"` and `"install-setup"` do not match each other; the
+     * point is that a caller writes the heading as it reads and the scanner
+     * compares both sides the same way.
+     */
+    public static function slug(string $text): string
+    {
+        $lower = mb_strtolower(trim($text), 'UTF-8');
+        $kept = preg_replace('/[^\p{L}\p{N}_ \t-]+/u', '', $lower) ?? '';
+        $joined = preg_replace('/[ \t]+/', '-', trim($kept)) ?? '';
+
+        return trim($joined, '-');
+    }
+
+    /**
+     * $markdown with every folded section's body removed, the heading lines
+     * kept. Feeds the same scanner {@see push()} uses, so a document folded
+     * whole and a document folded chunk by chunk keep the same lines.
+     *
+     * Unlike {@see push()}, whitespace-only sections are kept, so a document
+     * with no folded heading comes back unchanged except for one trailing
+     * newline added to an unterminated last line.
+     *
+     * @param list<string> $folds
+     */
+    public static function applyFolds(string $markdown, array $folds): string
+    {
+        $scanner = new self($folds);
+        $out = '';
+        $offset = 0;
+        while (($nl = strpos($markdown, "\n", $offset)) !== false) {
+            $out .= $scanner->scanLine(substr($markdown, $offset, $nl - $offset)) ?? '';
+            $offset = $nl + 1;
+        }
+        if ($offset < strlen($markdown)) {
+            $out .= $scanner->scanLine(substr($markdown, $offset)) ?? '';
+        }
+
+        return $out . $scanner->joinSection();
+    }
+
+    /**
      * End of document: scan the unterminated trailing line (if any) and
      * return everything not yet returned, or null when it holds no content.
      *
@@ -193,8 +284,7 @@ final class SectionScanner
         $this->afterFence = false;
 
         if ($this->fenceChar !== null) {
-            $this->sectionLines[] = $open;
-        $this->sectionBytes  += strlen($open);
+            $this->keep($open);
             if (preg_match('/^ {0,3}' . preg_quote($this->fenceChar, '/') . '{' . $this->fenceLen . ',}[ \t]*$/', $line) === 1) {
                 $this->fenceChar  = null;
                 $this->fenceLen   = 0;
@@ -204,8 +294,7 @@ final class SectionScanner
             return null;
         }
         if ($this->rawEnd !== null) {
-            $this->sectionLines[] = $open;
-        $this->sectionBytes  += strlen($open);
+            $this->keep($open);
             if (stripos($line, $this->rawEnd) !== false) {
                 $this->rawEnd = null;
             }
@@ -213,14 +302,24 @@ final class SectionScanner
             return null;
         }
         if (trim($line) === '') {
-            $this->sectionLines[] = $open;
-        $this->sectionBytes  += strlen($open);
+            $this->keep($open);
             $this->sawBlank = true;
             return null;
         }
 
         $isHeading = preg_match('/^#{1,6}([ \t]|$)/', $line) === 1;
-        $isHeadingBoundary = $isHeading && (
+        $level = $isHeading ? strspn($line, '#') : 0;
+        if ($this->foldLevel !== null && $isHeading && $level <= $this->foldLevel) {
+            // A heading at or above the folded one ends its body.
+            $this->foldLevel = null;
+        }
+        $foldsHeading = $isHeading && $this->foldLevel === null
+            && isset($this->foldSet[self::headingId($line) ?? '']);
+        // A heading inside a folded body is no boundary: the section it would
+        // open is dropped whole, and SectionStream needs the next section's
+        // first line to confirm the one before it. The fold's own closing
+        // heading is a boundary, and it is that line the stream confirms against.
+        $isHeadingBoundary = $isHeading && $this->foldLevel === null && (
             $afterFence
             || (
                 $this->sawBlank
@@ -236,8 +335,12 @@ final class SectionScanner
         );
         if ($isHeadingBoundary) {
             $closed             = $this->joinSection();
-            $this->sectionLines = [$open];
-            $this->sectionBytes = strlen($open);
+            $this->sectionLines = [];
+            $this->sectionBytes = 0;
+            $this->keep($open);
+            if ($foldsHeading) {
+                $this->foldLevel = $level;
+            }
             $this->sawBlank     = false;
             $this->lastNonBlank = null;
             return $closed;
@@ -254,11 +357,23 @@ final class SectionScanner
             // Self-contained on one line: the end marker follows the start.
             $this->rawEnd = stripos($line, $end, strpos($line, '<') + 1) === false ? $end : null;
         }
-        $this->sectionLines[] = $open;
-        $this->sectionBytes  += strlen($open);
+        $this->keep($open);
+        if ($foldsHeading) {
+            $this->foldLevel = $level;
+        }
         $this->lastNonBlank = $line;
         $this->sawBlank     = false;
         return null;
+    }
+
+    /** Append a line to the open section, unless a fold is dropping its body. */
+    private function keep(string $open): void
+    {
+        if ($this->foldLevel !== null) {
+            return;
+        }
+        $this->sectionLines[] = $open;
+        $this->sectionBytes  += strlen($open);
     }
 
     /**

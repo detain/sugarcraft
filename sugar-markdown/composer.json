@@ -29,6 +29,7 @@
     },
     "require": {
         "php": "^8.3",
+        "ext-dom": "*",
         "sugarcraft/sugar-core": "dev-master",
         "sugarcraft/sugar-style": "dev-master",
         "league/commonmark": "^2.4"

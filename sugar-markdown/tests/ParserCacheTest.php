@@ -101,7 +101,7 @@ final class ParserCacheTest extends TestCase
         // The stock render bundle (Renderer + its lazily-built parser) is
         // cached per stock theme, so repeated renderMarkdown() calls share
         // one parsed-environment object rather than rebuilding 3×.
-        $prop = new \ReflectionProperty(Renderer::class, 'stockRenderers');
+        $prop = new \ReflectionProperty(Renderer::class, 'cachedRenderers');
         $prop->setAccessible(true);
 
         Renderer::renderMarkdown('# one', Theme::dark());
@@ -111,7 +111,7 @@ final class ParserCacheTest extends TestCase
 
         $this->assertSame($after1, $after2, 'the dark bundle must be reused, not rebuilt');
 
-        $held = $after2[spl_object_id(Theme::dark())] ?? null;
+        $held = $after2[spl_object_id(Theme::dark()) . '|off'] ?? null;
         $this->assertInstanceOf(Renderer::class, $held);
 
         // The parser object is the identity that proves the Environment
@@ -123,7 +123,7 @@ final class ParserCacheTest extends TestCase
 
     public function testCustomThemeDoesNotPolluteTheStockCache(): void
     {
-        $prop = new \ReflectionProperty(Renderer::class, 'stockRenderers');
+        $prop = new \ReflectionProperty(Renderer::class, 'cachedRenderers');
         $prop->setAccessible(true);
         $before = $prop->getValue();
 

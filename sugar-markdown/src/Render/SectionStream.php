@@ -119,7 +119,7 @@ final class SectionStream
 
     public function __construct(private readonly Renderer $renderer)
     {
-        $this->scanner = new SectionScanner();
+        $this->scanner = new SectionScanner($renderer->folds);
         $this->known = new ReferenceMap();
         self::$normalizer ??= new TextNormalizer();
     }

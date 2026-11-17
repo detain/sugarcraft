@@ -37,6 +37,15 @@ final class StyleSheet
      */
     public static function base(): self
     {
+        // Pure and immutable (every with*() copies), so one instance serves
+        // every render; rebuilding it per render() was the audit's rank 39 cost.
+        return self::$base ??= self::buildBase();
+    }
+
+    private static ?self $base = null;
+
+    private static function buildBase(): self
+    {
         $sheet = new self();
 
         // Paragraph styles at all depths inherit from the base.
