@@ -235,8 +235,9 @@ final class DisplayCellWidthTest extends TestCase
         // cells and six bytes: str_pad pads by bytes, so on master it would reach
         // 13 cells, two short of the 15-cell column. The frozen half must reach
         // 15 cells, then the extra right wall that renderFrozenRow writes before the
-        // divider, which the pin below records as a defect. The row is split at the
-        // freeze divider ║ so only the frozen half is measured.
+        // divider. That wall makes the frozen data row 34 cells wide, one more than
+        // the 33-cell frame, and the pin below records it as a defect. The row is
+        // split at the freeze divider ║ so only the frozen half is measured.
         $columns = [Column::new('name', 'Name'), Column::new('city', 'City')];
         $rows = [
             new Row(['name' => '日本語', 'city' => '東京都']),
@@ -269,8 +270,9 @@ final class DisplayCellWidthTest extends TestCase
         $scrollHalf = explode('║', explode("\n", $rendered)[4])[1];
 
         // Pinned as it is, not as correct: this half is part of the same 34-cell frozen
-        // row, whose extra right wall before the divider is described in the frozen-half
-        // test. Tracked as freeze-divider extra wall in renderFrozenRow. The literals stay.
+        // row. renderFrozenRow writes an extra right wall before the divider, one more
+        // than the 33-cell frame (see the frozen-half test). Tracked as freeze-divider
+        // extra wall in renderFrozenRow. The literals stay.
         self::assertSame('東京' . str_repeat(' ', 11) . '┃', $scrollHalf);
         self::assertSame(16, Width::string($scrollHalf));
     }
