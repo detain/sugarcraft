@@ -297,6 +297,41 @@ Test breadth is hand-built edge pins (`ParserOverflowTest`,
 matrices that pin the bulk fast path to the per-byte path on fixed corpora;
 there is no continuous fuzzing in CI.
 
+## Flat tokenizer and control names
+
+Two smaller entry points sit beside the VT500 machine, for consumers that want
+classified slices rather than handler callbacks.
+
+**`AnsiTokenizer`** turns a byte stream into a `list<Token>`. Create one with
+`AnsiTokenizer::new()`, call `parse($chunk)` for each read, and call
+`flush()` at end of stream. An unfinished sequence at the end of a chunk is
+held for the next `parse()` call. Past `AnsiTokenizer::MAX_PENDING_BYTES`
+(64 KiB) the held bytes come back as text, so a stuck stream cannot grow the
+buffer. `Token` carries `type` (`TEXT`, `CONTROL`, `ESC`, `CSI`, `OSC`, `DCS`,
+`APC`, `SOS`, `PM`), `data`, `intermediate`, `params`, `final`, and
+`terminator`, and `paramInts()` reads the parameters as integers. The field
+shape matches sugar-core's `Util\Token`. Unlike the handler machine, a C1
+byte (0x80–0x9F) is ordinary text here: only the 7-bit `ESC` spellings open
+a sequence.
+
+**`Codec\ControlNames`** names the C0 and C1 control bytes. `c0Name()` and
+`c1Name()` return long labels such as `BEL (bell)`. `mnemonic()` returns the
+bare abbreviation (`BEL`, `CSI`, and `DEL` for 0x7F), or `null` for a
+non-control byte. The long labels come from the same table as the mnemonics.
+
+```php
+use SugarCraft\AnsiParser\AnsiTokenizer;
+use SugarCraft\AnsiParser\Codec\ControlNames;
+use SugarCraft\AnsiParser\Token;
+
+$tokenizer = AnsiTokenizer::new();
+foreach ($tokenizer->parse("ok\x1b[31m\x07") as $token) {
+    if ($token->type === Token::CONTROL) {
+        echo ControlNames::c0Name(ord($token->data)), "\n"; // BEL (bell)
+    }
+}
+```
+
 ## Decoders (Codec)
 
 `SugarCraft\AnsiParser\Codec` ships three **pure value decoders** — typed,
