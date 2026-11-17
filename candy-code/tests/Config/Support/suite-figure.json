@@ -1,9 +1,9 @@
 {
-    "tests": 33106,
-    "assertions": 801698,
-    "failures": 0,
+    "tests": 33133,
+    "assertions": 801910,
+    "failures": 1,
     "skipped": 9,
-    "measured_at": "2026-11-13",
+    "measured_at": "2026-11-17",
     "php": "8.3.6",
     "command": "php vendor/bin/phpunit -c phpunit.xml --log-junit <file> (cwd=candy-code, linked siblings, monorepo sandbox root)",
     "regenerate": "php tests/Config/Support/refresh-suite-figure.php <junit.xml> (cwd=candy-code) \u2014 then update the README headline from the same run"

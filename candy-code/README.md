@@ -3073,9 +3073,7 @@ API and stay as-is. Boolean `is*()`/`has*()` predicates are convention-compliant
 cd candy-code && composer install && vendor/bin/phpunit
 ```
 
-**33,106 tests / 801,698 assertions, 0 failures, 9 skipped** — the whole of
-`candy-code/tests/` (that suite only, not the monorepo) in one
-`vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6.
+**33,133 tests / 801,910 assertions, 1 failures, 9 skipped** — the whole of `candy-code/tests/` on PHP 8.3.6, run sharded (K=24) through `scripts/parallel-tests.sh` at 1b70baae7 (wall 312s). The 1 failure is HelpTest, pre-existing and red on origin/master at 6e95222a5.
 The 22m51s serial timing was taken on the earlier 24,863-test tree (2026-10-18);
 a timing for this pinned count is owed. The skips are expected and rostered, and the
 roster is a Linux figure that moves with the platform: each skip is a gate that
