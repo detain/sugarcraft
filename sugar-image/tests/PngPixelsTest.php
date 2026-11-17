@@ -7,6 +7,7 @@ namespace SugarCraft\Image\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Image\ApngDecoder;
 use SugarCraft\Image\Codec\RgbaPixels;
+use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\PngPixels;
 
 /**
@@ -338,13 +339,63 @@ final class PngPixelsTest extends TestCase
     /**
      * A lying IHDR with an IDAT that inflates far past its scanline budget is
      * cut off at the budget and declined, not expanded in full.
+     *
+     * A bare null would also come back from an uncapped inflate, since the length
+     * check rejects the full expansion afterwards. So the memory limit is set to
+     * leave headroom well under the 40 MiB an uncapped inflate would allocate: the
+     * capped path declines, and the uncapped one exhausts the limit.
      */
     public function testIdatBombIsCutAtTheScanlineBudget(): void
     {
-        $bomb = gzcompress(str_repeat("\0", 5_000_000));
+        $bomb = gzcompress(str_repeat("\0", 40 * 1024 * 1024));
         $stream = self::SIG . self::ihdr(2, 2, 6) . self::chunk('IDAT', $bomb) . self::chunk('IEND', '');
 
+        $original = (string) ini_get('memory_limit');
+        ini_set('memory_limit', (string) (memory_get_usage(true) + 16 * 1024 * 1024));
+        try {
+            self::assertNull(PngPixels::decode($stream));
+        } finally {
+            ini_set('memory_limit', $original);
+        }
+    }
+
+    /**
+     * The row loop unfilters row by row, so a bad filter byte on the last row
+     * declines after the earlier rows have been read, with no partial frame
+     * returned.
+     */
+    public function testAMalformedLateRowDeclinesAfterTheEarlierRows(): void
+    {
+        $filtered = self::filter(str_repeat("\x10", 64 * 4), 1, 64, 4, [0]);
+        $filtered[63 * 5] = "\x09"; // row 63's filter byte: 9 is not a PNG filter type
+
+        $stream = self::SIG . self::ihdr(1, 64, 6)
+            . self::chunk('IDAT', gzcompress($filtered))
+            . self::chunk('IEND', '');
+
         self::assertNull(PngPixels::decode($stream));
+    }
+
+    /**
+     * 4096x4096 RGBA is 67,112,960 scanline bytes, one row-width over the raw
+     * ceiling. It is declined on the header alone, before any inflate, so the
+     * tiny IDAT here never matters.
+     */
+    public function testRgbaAtTheRawCeilingDeclinesOnePastIt(): void
+    {
+        $stream = self::SIG . self::ihdr(4096, 4096, 6) . self::chunk('IDAT', gzcompress('')) . self::chunk('IEND', '');
+
+        self::assertNull(PngPixels::decode($stream));
+        self::assertSame(67_108_864, PngPixels::MAX_RAW_BYTES);
+    }
+
+    /**
+     * The default pixel ceiling is the loader's admission cap, so a still PNG
+     * that ImageSource admits is decodable here too.
+     */
+    public function testDefaultPixelCeilingIsTheLoaderAdmissionCap(): void
+    {
+        self::assertSame(ImageSource::MAX_PIXELS, PngPixels::MAX_PIXELS);
     }
 
     public function testApngBaseImageIsTheIdatFrame(): void

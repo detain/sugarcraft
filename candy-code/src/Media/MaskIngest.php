@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Media;
 
 use SugarCraft\Image\ImageSource;
-use SugarCraft\Image\PngPixels;
 
 /**
  * One mask image admitted into a generation request (crush-media W4.3).
@@ -24,15 +23,15 @@ use SugarCraft\Image\PngPixels;
  * Loud refusal when the file matches NEITHER convention: opaque and
  * chromatic — the server would read a meaningless luminance mask out of it.
  *
- * PNGs are classified from their stored samples: {@see PngPixels} decodes the
- * 8-bit, non-interlaced shapes (colour types 0 to 6) exactly, because PHP's GD
- * quantises 8-bit alpha down to 7 bits on LOAD: a pixel at alpha 252..254 reads
- * back fully opaque through `imagecolorat()`, and the plan's law is that a SINGLE
- * 1-step-transparent pixel makes the whole file an alpha mask. Everything the
- * decoder declines (16-bit, interlaced, JPEG/GIF) falls through to a pixel walk
- * over the GD-decoded image, where the 7-bit blind band is disclosed in the
- * fallback's own docblock.
-
+ * Classification reads the PNG bytes directly for the common shape (8-bit,
+ * non-interlaced, colour types 0/2/4/6) because PHP's GD quantises 8-bit
+ * alpha down to 7 bits on LOAD: a pixel at alpha 252..254 reads back fully
+ * opaque through `imagecolorat()`, and the plan's law is that a SINGLE
+ * 1-step-transparent pixel makes the whole file an alpha mask. Everything
+ * the byte walk declines (palettes, 16-bit, interlaced, JPEG/GIF) falls
+ * through to a pixel walk over the decoded image, where the 7-bit blind band
+ * is disclosed in the fallback's own docblock.
+ *
  * Fail-fast mirrors ImageIngress: every refusal is an
  * \InvalidArgumentException naming what was refused; a file that cannot be
  * decoded at all surfaces ImageIngress's own exceptions unchanged.
@@ -58,6 +57,25 @@ final readonly class MaskIngest
     public const NEITHER_REFUSAL = 'mask must be black-and-white (white = inpaint) or carry transparency — an opaque colour image is not a mask (crush-media W4.3)';
 
     private const PNG_SIGNATURE = "\x89PNG\r\n\x1a\n";
+
+    /**
+     * Raw-scanline ceiling for the IDAT inflate of the byte walk (W7 seam
+     * cure, sibling doctrine of {@see Png::MAX_TEXT_BYTES}): a hostile server
+     * or file can pair a modest IHDR with a DEFLATE ratio-bomb IDAT, and an
+     * uncapped inflate mints the whole expansion in RAM before the scanline
+     * equality check rejects it. The inflate therefore carries a max_length
+     * of exactly the IHDR-derived scanline budget, and shapes declaring MORE
+     * than this ceiling are simply not this walk's shape — they decline to
+     * the GD fallback (libpng bounds its own allocations). 64 MiB is
+     * self-referential: no larger than the compressed container
+     * {@see ImageIngress} admits at all (ImageSource::MAX_BYTES), and it
+     * covers every mask the purpose supports — every gray/gray+alpha mask
+     * inside ImageSource's 50-megapixel admission door (47.7 MiB raw worst
+     * case), RGBA up to 4095². One notch past the ceiling a 4096² RGBA
+     * frame rides GD instead, trading the walk's alpha-254 precision (already
+     * the disclosed fallback limitation) for the bound.
+     */
+    public const MAX_IDAT_RAW_BYTES = 67_108_864;
 
     /**
      * Walk verdict marker for "decided: neither convention" — distinct from
@@ -142,55 +160,218 @@ final readonly class MaskIngest
     }
 
     /**
-     * Stored-sample walk of a PNG through the shared decoder. {@see PngPixels}
-     * declines (null) every shape it does not cover, every malformed or
-     * CRC-failing stream, and every header whose declared pixel count passes its
-     * ceiling, so those fall through to the GD walk.
+     * Byte-exact walk of the common PNG shape: 8-bit, non-interlaced, colour
+     * types 0 (gray), 2 (RGB), 4 (gray+alpha), 6 (RGBA). Returns null for any
+     * other shape, any malformed stream, and any header declaring a scanline
+     * budget over {@see self::MAX_IDAT_RAW_BYTES} — the IDAT inflate is capped
+     * at that budget (W7 seam cure) — so the caller falls through to GD.
      *
      * @return array{0: string, 1: ?string}|null mode/advisory, VERDICT_NEITHER,
      *         or null = not my shape (fall through)
      */
     private static function walkPngBytes(string $bytes): ?array
     {
-        $pixels = PngPixels::decode($bytes);
+        $position = 8;
+        $length = strlen($bytes);
+        $idat = '';
+        $width = 0;
+        $height = 0;
+        $bitDepth = 0;
+        $colorType = -1;
+        $interlace = 1;
+        $trns = null;
 
-        return $pixels === null ? null : self::decide($pixels->rgba, $pixels->width * $pixels->height);
+        while ($position + 8 <= $length) {
+            $chunk = unpack('Nlen', substr($bytes, $position, 4));
+            if ($chunk === false) {
+                return null;
+            }
+            $type = substr($bytes, $position + 4, 4);
+            $size = (int) $chunk['len'];
+            $dataStart = $position + 8;
+            if ($size > $length - $dataStart) {
+                return null;
+            }
+            $data = substr($bytes, $dataStart, $size);
+            $position = $dataStart + $size + 4;
+
+            if ($type === 'IHDR') {
+                $header = unpack('Nw/Nh/Cdepth/Cctype/Ccomp/Cfilt/Cinter', $data);
+                if ($header === false) {
+                    return null;
+                }
+                $width = (int) $header['w'];
+                $height = (int) $header['h'];
+                $bitDepth = (int) $header['depth'];
+                $colorType = (int) $header['ctype'];
+                $interlace = (int) $header['inter'];
+            } elseif ($type === 'tRNS') {
+                $trns = $data;
+            } elseif ($type === 'IDAT') {
+                $idat .= $data;
+            } elseif ($type === 'IEND') {
+                break;
+            }
+            // PLTE and everything else: irrelevant to the types this walk covers.
+        }
+
+        if ($interlace !== 0 || $bitDepth !== 8 || !isset([0 => 1, 2 => 1, 4 => 1, 6 => 1][$colorType])) {
+            return null;
+        }
+
+        $channels = match ($colorType) { 0 => 1, 2 => 3, 4 => 2, default => 4 };
+
+        // W7 seam cure (MED-1 family): the inflate carries the EXACT scanline
+        // budget as max_length — an over-cap stream returns false (measured
+        // PHP 8.3) and rides the same decline as a mismatched length, minus
+        // the allocation. This closes the reachable bomb: ImageIngress admits
+        // a lying-IHDR file because libpng inflates only the declared rows
+        // ("Too much image data" is a warning), so the second inflate here
+        // was the unbounded expansion. The two gates keep the argument honest
+        // against a lying IHDR: `< 1` refuses zero-dimension headers (max_length
+        // 0 behaves as UNLIMITED — measured), and the ceiling refuses absurd
+        // declarations before inflating; any `$expected` that reaches the call
+        // is a true int (an overflowing product compares > the ceiling as a
+        // float and declines).
+        $expected = $height * (1 + $width * $channels);
+        if ($expected < 1 || $expected > self::MAX_IDAT_RAW_BYTES) {
+            return null;
+        }
+        $raw = @gzuncompress($idat, $expected);
+        if ($raw === false || strlen($raw) !== $expected) {
+            return null;
+        }
+
+        $pixels = self::unfilter($raw, $width, $height, $channels);
+
+        return $pixels === null ? null : self::decide($pixels, $width * $height, $colorType, $trns);
     }
 
     /**
-     * The §2.7 convention decision over straight-alpha RGBA8 samples: transparency
-     * present anywhere → alpha mode; opaque and strictly achromatic → luminance
-     * mode; opaque and chromatic → VERDICT_NEITHER (the caller refuses).
+     * Reconstruct raw 8-bit samples by reversing the per-scanline filters
+     * (None/Sub/Up/Average/Paeth, ISO 15948 §7.2, byte-wise with bpp equal to
+     * the channel count).
      *
-     * A tRNS key on a gray or RGB file reaches here already expanded to alpha 0
-     * by {@see PngPixels::decode()}, so "carries transparency" is a pixel with
-     * alpha below 255: a keyed-but-unused file stays opaque, as it always did.
+     * @return list<int>|null flat sample list, null on an unknown filter byte
+     */
+    private static function unfilter(string $raw, int $width, int $height, int $channels): ?array
+    {
+        $rowLen = $width * $channels;
+        // The caller has already checked strlen($raw) === height * (rowLen + 1),
+        // so every filter byte sits at a known offset. Scanning them before the
+        // buffer exists keeps a malformed stream a cheap decline: a 4000x4000
+        // gray header would otherwise reserve ~16M slots (~256 MB) before the
+        // bad byte was seen, past the default memory_limit.
+        for ($y = 0, $stride = $rowLen + 1; $y < $height; $y++) {
+            if (ord($raw[$y * $stride]) > 4) {
+                return null;
+            }
+        }
+
+        // One buffer, written by offset: row $y lives at [$y * $rowLen, ($y + 1) * $rowLen)
+        // and the "previous" row is read back from it. Growing the list per
+        // scanline ([...$samples, ...$current]) re-copied every earlier row
+        // each time, which made the walk quadratic (1024x1024 RGBA: 31 s).
+        $samples = array_fill(0, $rowLen * $height, 0);
+        $offset = 0;
+
+        for ($y = 0; $y < $height; $y++) {
+            $filter = ord($raw[$offset++]);
+            $base = $y * $rowLen;
+            $upBase = $base - $rowLen;
+            for ($x = 0; $x < $rowLen; $x++) {
+                $byte = ord($raw[$offset + $x]);
+                $left = $x >= $channels ? $samples[$base + $x - $channels] : 0;
+                $up = $y > 0 ? $samples[$upBase + $x] : 0;
+                $upLeft = ($x >= $channels && $y > 0) ? $samples[$upBase + $x - $channels] : 0;
+                $samples[$base + $x] = match ($filter) {
+                    0 => $byte,
+                    1 => ($byte + $left) & 0xFF,
+                    2 => ($byte + $up) & 0xFF,
+                    3 => ($byte + intdiv($left + $up, 2)) & 0xFF,
+                    default => ($byte + self::paeth($left, $up, $upLeft)) & 0xFF,
+                } & 0xFF;
+            }
+            $offset += $rowLen;
+        }
+
+        return $samples;
+    }
+
+    private static function paeth(int $a, int $b, int $c): int
+    {
+        $p = $a + $b - $c;
+        $pa = abs($p - $a);
+        $pb = abs($p - $b);
+        $pc = abs($p - $c);
+
+        return ($pa <= $pb && $pa <= $pc) ? $a : ($pb <= $pc ? $b : $c);
+    }
+
+    /**
+     * The §2.7 convention decision over decoded samples: transparency present
+     * anywhere → alpha mode; opaque and strictly achromatic → luminance mode;
+     * opaque and chromatic → VERDICT_NEITHER (the caller refuses).
+     *
+     * tRNS (exact-value keyed transparency, colour types 0/2) counts as
+     * "carries transparency" only when at least one pixel matches the key —
+     * presence-only would mislabel a keyed-but-unused file.
+     *
+     * @param list<int> $pixels flat 8-bit samples
      *
      * @return array{0: string, 1: ?string}|null
      */
-    private static function decide(string $rgba, int $count): ?array
+    private static function decide(array $pixels, int $count, int $colorType, ?string $trns): ?array
     {
+        $hasChannelAlpha = $colorType === 4 || $colorType === 6;
+        [$keyGray, $keyR, $keyG, $keyB] = self::trnsKey($colorType, $trns);
+
         $alphaMin = 255;
         $alphaMax = 0;
         $grayMin = 255;
         $grayMax = 0;
         $chromatic = false;
+        $keyedTransparent = 0;
 
-        for ($i = 0, $o = 0; $i < $count; $i++, $o += 4) {
-            $r = ord($rgba[$o]);
-            $g = ord($rgba[$o + 1]);
-            $b = ord($rgba[$o + 2]);
-            $a = ord($rgba[$o + 3]);
+        for ($i = 0; $i < $count; $i++) {
+            $r = null;
+            $g = null;
+            $b = null;
+            $a = 255;
+
+            if ($colorType === 0) {
+                $gray = $pixels[$i];
+                $isKey = $keyGray !== null && $gray === $keyGray;
+            } elseif ($colorType === 2) {
+                [$r, $g, $b] = [$pixels[$i * 3], $pixels[$i * 3 + 1], $pixels[$i * 3 + 2]];
+                $gray = $r;
+                $isKey = $keyR !== null && $r === $keyR && $g === $keyG && $b === $keyB;
+            } elseif ($colorType === 4) {
+                $gray = $pixels[$i * 2];
+                $a = $pixels[$i * 2 + 1];
+                $isKey = false;
+            } else {
+                [$r, $g, $b] = [$pixels[$i * 4], $pixels[$i * 4 + 1], $pixels[$i * 4 + 2]];
+                $a = $pixels[$i * 4 + 3];
+                $gray = $r;
+                $isKey = false;
+            }
 
             $alphaMin = min($alphaMin, $a);
             $alphaMax = max($alphaMax, $a);
-            $grayMin = min($grayMin, $r);
-            $grayMax = max($grayMax, $r);
-            $chromatic = $chromatic || $r !== $g || $g !== $b;
+            $grayMin = min($grayMin, $gray);
+            $grayMax = max($grayMax, $gray);
+            $chromatic = $chromatic || ($r !== null && ($r !== $g || $g !== $b));
+            $keyedTransparent += $isKey ? 1 : 0;
         }
 
-        if ($alphaMin < 255) {
-            return [self::MODE_ALPHA, $alphaMin === $alphaMax ? self::ADVISORY_COVERS_EVERYTHING : null];
+        $channelTransparent = $hasChannelAlpha && $alphaMin < 255;
+        if ($channelTransparent || $keyedTransparent > 0) {
+            $uniform = $channelTransparent
+                ? $alphaMin === $alphaMax
+                : $keyedTransparent === $count;
+
+            return [self::MODE_ALPHA, $uniform ? self::ADVISORY_COVERS_EVERYTHING : null];
         }
 
         if ($chromatic) {
@@ -198,6 +379,30 @@ final readonly class MaskIngest
         }
 
         return [self::MODE_LUMINANCE, self::uniformAdvisory($grayMin, $grayMax)];
+    }
+
+    /**
+     * The decoded tRNS key for colour types 0/2 (8-bit files only reach the
+     * caller that consumes this — high bytes are read but must be zero to
+     * match any sample); null when no usable key chunk exists.
+     *
+     * @return array{0: ?int, 1: ?int, 2: ?int, 3: ?int}
+     */
+    private static function trnsKey(int $colorType, ?string $trns): array
+    {
+        if ($trns === null) {
+            return [null, null, null, null];
+        }
+
+        if ($colorType === 0 && strlen($trns) >= 2 && $trns[0] === "\x00") {
+            return [ord($trns[1]), null, null, null];
+        }
+
+        if ($colorType === 2 && strlen($trns) >= 6 && $trns[0] . $trns[2] . $trns[4] === "\x00\x00\x00") {
+            return [null, ord($trns[1]), ord($trns[3]), ord($trns[5])];
+        }
+
+        return [null, null, null, null];
     }
 
     /** Flat-gray masks get an advisory; varied ones never do. */
@@ -215,9 +420,10 @@ final readonly class MaskIngest
     }
 
     /**
-     * GD fallback for every shape the shared PNG decoder declines: 16-bit and
-     * interlaced PNGs, JPEG and GIF. Disclosed limitation: GD has already
-     * quantised 8-bit alpha to 7 bits by this point, so a declined-shape file whose alphas sit ONLY in the 252..254
+     * GD fallback for every shape the byte walk declines: palettes (incl.
+     * tRNS-keyed), 16-bit and interlaced PNGs, JPEG and GIF. Disclosed
+     * limitation: GD has already quantised 8-bit alpha to 7 bits by this
+     * point, so a declined-shape file whose alphas sit ONLY in the 252..254
      * band would read opaque here — a quarter-percent band on shapes no mask
      * tool emits, and the classification only ever rides the row label: the
      * wire bytes are the untouched file either way.

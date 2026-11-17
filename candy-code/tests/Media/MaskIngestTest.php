@@ -228,6 +228,23 @@ final class MaskIngestTest extends TestCase
         $this->assertNull($mask->advisory);
     }
 
+    public function testEachScanlineReadsItsPredictorFromTheRowAlreadyUnfiltered(): void
+    {
+        // 3x3 gray. Row 1 Up adds row 0 (10,20,30) → 11,22,33. Row 2 Average
+        // predicts from the row above (11,22,33) and the left neighbor in the
+        // same row: x0 = 0 + 11/2 = 5, x1 = 0 + (5+22)/2 = 13, x2 = 0 + (13+33)/2 = 23.
+        // The linear unfilter writes into one buffer by offset, so this pins
+        // that the "previous" row it reads is the one it just wrote.
+        $raw = "\x00\x0A\x14\x1E" . "\x02\x01\x02\x03" . "\x03\x00\x00\x00";
+        $unfilter = new \ReflectionMethod(MaskIngest::class, 'unfilter');
+        $unfilter->setAccessible(true);
+
+        $this->assertSame(
+            [10, 20, 30, 11, 22, 33, 5, 13, 23],
+            $unfilter->invoke(null, $raw, 3, 3, 1),
+        );
+    }
+
     public function testA1024SquareRgbaMaskClassifiesInLinearTime(): void
     {
         // MaskIngest audit row 2 (candy-code src/Media/MaskIngest.php unfilter):
@@ -249,9 +266,52 @@ final class MaskIngestTest extends TestCase
         $this->assertLessThan(15.0, $seconds, sprintf('1024x1024 RGBA classified in %.2f s; budget 15 s', $seconds));
     }
 
+    public function testAMalformedLateRowDeclinesWithoutWalkingTheEarlierRows(): void
+    {
+        // 4000x400 gray, filter byte 5 on the last row. The per-scanline walk
+        // re-copied every earlier row before it reached the bad byte (quadratic:
+        // ~3e8 element copies here, several seconds). The pre-scan declines before
+        // any sample is written, so the budget is generous for any runner.
+        $width = 4000;
+        $height = 400;
+        $raw = \str_repeat("\x00" . \str_repeat("\x00", $width), $height - 1)
+            . "\x05" . \str_repeat("\x00", $width);
+        $unfilter = new \ReflectionMethod(MaskIngest::class, 'unfilter');
+        $unfilter->setAccessible(true);
+
+        $start = \hrtime(true);
+        $result = $unfilter->invoke(null, $raw, $width, $height, 1);
+        $seconds = (\hrtime(true) - $start) / 1e9;
+
+        $this->assertNull($result);
+        $this->assertLessThan(1.0, $seconds, sprintf('declining a late bad filter byte took %.2f s; budget 1 s', $seconds));
+    }
+
+    public function testAnUnknownFilterByteDeclinesBeforeTheBufferIsAllocated(): void
+    {
+        // 4000x4000 gray: a sample buffer for it is 16M slots (~256 MB as a PHP
+        // array). A bad filter byte on row 0 must decline without allocating it,
+        // and must not read past row 0 although the raw stream is far shorter
+        // than the header claims. Master also declines here (it never allocates
+        // for row 0); the late-row test above is the one that fails on master.
+        $raw = "\x05" . \str_repeat("\x00", 16);
+        $unfilter = new \ReflectionMethod(MaskIngest::class, 'unfilter');
+        $unfilter->setAccessible(true);
+
+        $peakBefore = \memory_get_peak_usage();
+        $this->assertNull($unfilter->invoke(null, $raw, 4000, 4000, 1));
+        $grew = \memory_get_peak_usage() - $peakBefore;
+
+        $this->assertLessThan(
+            16 * 1024 * 1024,
+            $grew,
+            sprintf('declining a bad filter byte grew peak memory by %d bytes; the buffer was allocated first', $grew),
+        );
+    }
+
     // ---- GD fallback paths ----------------------------------------------------
 
-    public function testAPalettePngWithTransparentIndexClassifiesAsAlpha(): void
+    public function testAPalettePngWithTransparentIndexClassifiesAsAlphaViaGd(): void
     {
         $im = \imagecreate(2, 2) ?: self::fail('GD unavailable');
         $white = \imagecolorallocate($im, 255, 255, 255);
@@ -319,17 +379,25 @@ final class MaskIngestTest extends TestCase
         $this->assertSame(MaskIngest::ADVISORY_COVERS_EVERYTHING, $mask->advisory);
     }
 
-    public function testTheWalkDelegatesToTheSharedPngDecoderAndKeepsItsOwnUnfilterGone(): void
+    public function testTheIdatInflateCarriesTheCapAndBothHonestyGatesStructurally(): void
     {
-        // The chunk walk, scanline unfilter and inflate cap live once, in
-        // sugar-image's PngPixels (which owns their tests). A second copy here
-        // is the drift this pin refuses: the walk must call the shared decoder
-        // and must not inflate or unfilter a scanline itself.
+        // The walkPngBytes inflate MUST carry the header-derived budget as
+        // max_length, and the two gates keeping that argument honest must be
+        // present: `< 1` (max_length 0 behaves as UNLIMITED — measured PHP
+        // 8.3 — so a zero-dimension lie must never reach the call) and the
+        // ceiling (an absurd declaration is declined before inflating). No
+        // functional mode detects their absence — the ceiling branch is not
+        // reachable through fromBytes at all for gray masks, since every
+        // header over the ceiling ALSO trips ImageIngress's own pixel/container
+        // doors first, and the <1 gate is defense-in-depth behind the door
+        // that refuses zero-dimension files. The source slice is the
+        // discriminator (same doctrine as PngTest's tEXt census).
         $src = (string) \file_get_contents(__DIR__ . '/../../src/Media/MaskIngest.php');
 
-        $this->assertSame(1, \substr_count($src, 'PngPixels::decode($bytes)'), 'the walk hands the bytes to the shared decoder');
-        $this->assertSame(0, \substr_count($src, 'gzuncompress('), 'no private inflate remains');
-        $this->assertFalse(\method_exists(MaskIngest::class, 'unfilter'), 'the private unfilter was deleted');
+        $this->assertSame(1, \substr_count($src, 'gzuncompress($idat, $expected)'), 'the inflate is capped, once, nowhere uncapped');
+        $this->assertSame(1, \substr_count($src, '$expected < 1'), 'zero-dimension gate present');
+        $this->assertSame(1, \substr_count($src, '$expected > self::MAX_IDAT_RAW_BYTES'), 'ceiling gate present');
+        $this->assertSame(67_108_864, MaskIngest::MAX_IDAT_RAW_BYTES, '64 MiB — no larger than the admitted container');
     }
 
     // ---- builders --------------------------------------------------------------

@@ -356,7 +356,11 @@ final class ImageSource
      */
     public static function sniffMime(string $bytes): ?string
     {
-        if (str_starts_with($bytes, "\x89PNG\r\n\x1a\n")) {
+        // Four signature bytes and a length of eight: the rule detectImageFormat()
+        // has always applied, kept so a PNG whose signature tail is damaged keeps
+        // its label. The full eight-byte signature is checked by the APNG and
+        // still-PNG paths, which decode the stream and refuse a damaged one.
+        if (strlen($bytes) >= 8 && str_starts_with($bytes, "\x89PNG")) {
             return 'image/png';
         }
         if (str_starts_with($bytes, "\xFF\xD8\xFF")) {
@@ -399,7 +403,19 @@ final class ImageSource
         }
         $scheme = parse_url($url, PHP_URL_SCHEME);
 
-        return is_string($scheme) && in_array(strtolower($scheme), array_map('strtolower', $allowedSchemes), true);
+        return is_string($scheme) && self::schemeIsAllowed($scheme, $allowedSchemes);
+    }
+
+    /**
+     * The scheme allow-list rule, shared by {@see isFetchableUrl()} and the fetch
+     * path's validateUrlScheme(), so the two cannot disagree on case.
+     *
+     * @param array<string> $allowedSchemes
+     */
+    private static function schemeIsAllowed(string $scheme, array $allowedSchemes): bool
+    {
+        // Case-insensitive, as RFC 3986 §3.1 requires: `HTTPS://` is https.
+        return in_array(strtolower($scheme), array_map('strtolower', $allowedSchemes), true);
     }
 
     /**
@@ -1436,8 +1452,7 @@ final class ImageSource
                 Lang::t('image_source.url_invalid_scheme', ['scheme' => 'unknown', 'allowed' => implode(', ', $allowedSchemes)])
             );
         }
-        // Case-insensitive, as RFC 3986 §3.1 requires: `HTTPS://` is https.
-        if (!in_array(strtolower($scheme), array_map('strtolower', $allowedSchemes), true)) {
+        if (!self::schemeIsAllowed($scheme, $allowedSchemes)) {
             throw new \InvalidArgumentException(
                 Lang::t('image_source.url_invalid_scheme', ['scheme' => $scheme, 'allowed' => implode(', ', $allowedSchemes)])
             );

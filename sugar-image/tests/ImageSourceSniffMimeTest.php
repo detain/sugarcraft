@@ -29,6 +29,9 @@ final class ImageSourceSniffMimeTest extends TestCase
     public static function namedFormats(): iterable
     {
         yield 'png' => ["\x89PNG\r\n\x1a\n\0\0\0\rIHDR", 'image/png'];
+        // The label keeps the four-byte rule detectImageFormat() always applied;
+        // a damaged tail is refused by the decoders, not relabelled here.
+        yield 'png with a damaged signature tail' => ["\x89PNG\r\nX\n\0\0\0\rIHDR", 'image/png'];
         yield 'jpeg' => ["\xFF\xD8\xFF\xE0\0\x10JFIF", 'image/jpeg'];
         yield 'gif87a' => ['GIF87a' . "\x01\x00\x01\x00", 'image/gif'];
         yield 'gif89a' => ['GIF89a' . "\x01\x00\x01\x00", 'image/gif'];

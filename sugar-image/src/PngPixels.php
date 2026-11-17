@@ -30,10 +30,20 @@ final class PngPixels
     private const CHANNELS = [0 => 1, 2 => 3, 3 => 1, 4 => 2, 6 => 4];
 
     /**
-     * Largest image {@see decode()} accepts by default: 4096×4096. Its RGBA
-     * expansion is then 64 MiB.
+     * Largest image {@see decode()} accepts by default. Tied to the
+     * {@see ImageSource} admission cap, so a still PNG the loader admits is also
+     * decodable here.
      */
-    public const MAX_PIXELS = 16_777_216;
+    public const MAX_PIXELS = ImageSource::MAX_PIXELS;
+
+    /**
+     * Raw-scanline ceiling for {@see decode()}: the bytes an image inflates to,
+     * `height × (width × channels + 1)` with the filter bytes included. The value
+     * is the former MaskIngest::MAX_IDAT_RAW_BYTES, so the set of stills declined
+     * for size is unchanged: gray and gray+alpha up to the pixel ceiling, RGBA up
+     * to 4095², and a 4096² RGBA frame declined.
+     */
+    public const MAX_RAW_BYTES = 67_108_864;
 
     /** Hard ceiling on each dimension, matching {@see ApngDecoder}. */
     private const HARD_MAX_DIM = 16384;
@@ -46,8 +56,11 @@ final class PngPixels
      * For an APNG this is the default (IDAT) image, which is what a non-animated
      * viewer shows. Returns null, never throws, for anything this decoder does
      * not handle: a non-PNG prefix, a malformed or CRC-failing chunk stream, an
-     * unsupported shape, a declared size over $maxPixels, or a palette index past
-     * PLTE.
+     * unsupported shape, a declared size over $maxPixels or over
+     * {@see MAX_RAW_BYTES}, or a palette index past PLTE.
+     *
+     * Returns the {@see RgbaPixels} value object (width, height and buffer) rather
+     * than a bare buffer, because every caller needs the geometry with the bytes.
      *
      * @param int $maxPixels Largest width×height accepted. A non-positive value
      *                       declines every image.
@@ -70,6 +83,12 @@ final class PngPixels
             }
             // Dimensions are bounded above, so the product cannot overflow int.
             if ($width * $height > $maxPixels) {
+                return null;
+            }
+            // Gate on the scanline bytes the inflate would produce, for every colour
+            // type. A pixel count alone would admit a 4096² RGBA frame (64 MiB of
+            // samples plus filter bytes) that the raw budget declines.
+            if ($height * ($width * $channels + 1) > self::MAX_RAW_BYTES) {
                 return null;
             }
 

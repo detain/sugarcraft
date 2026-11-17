@@ -345,8 +345,10 @@ they decode or fetch:
 - `PngPixels::decode($bytes)` returns the stored RGBA8 samples of a still PNG as
   a `Codec\RgbaPixels` (`width`, `height`, `rgba`), with no GD quantisation, so
   alpha 254 stays 254. It returns `null` for anything it declines: a non-PNG
-  prefix, a malformed or CRC-failing stream, 16-bit or interlaced data, or an
-  image over `$maxPixels` (default 4096²).
+  prefix, a malformed or CRC-failing stream, 16-bit or interlaced data, an
+  image over `$maxPixels` (default: the 50 MP `ImageSource` cap), or an image
+  whose inflated scanlines exceed 64 MiB (`PngPixels::MAX_RAW_BYTES`). The
+  second limit is what declines a 4096² RGBA frame.
 
 ```php
 use SugarCraft\Image\ImageSource;
