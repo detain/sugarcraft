@@ -47,6 +47,27 @@ final class AppMutateSplatTest extends TestCase
         self::assertSame('boom', $next->error);
         self::assertSame($this->provider, $next->provider);
         self::assertSame($base->messages, $next->messages);
+
+        foreach ((new \ReflectionClass(App::class))->getConstructor()->getParameters() as $param) {
+            $name = $param->getName();
+            if ($name === 'model') {
+                continue;
+            }
+            $prop = new \ReflectionProperty(App::class, $name);
+            $before = $prop->getValue($base);
+            $after = $prop->getValue($next);
+            if (is_object($before)) {
+                self::assertSame($before, $after, "field `$name` did not carry across the wither");
+            } else {
+                self::assertEquals($before, $after, "field `$name` did not carry across the wither");
+            }
+        }
+    }
+
+    public function testMutateIsProtectedAndTheTraitDeclaresItProtected(): void
+    {
+        self::assertTrue((new \ReflectionMethod(App::class, 'mutate'))->isProtected());
+        self::assertTrue((new \ReflectionMethod(Mutable::class, 'mutate'))->isProtected());
     }
 
     public function testExplicitNullResetsANullableFieldWithoutTouchingOthers(): void
