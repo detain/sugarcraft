@@ -166,6 +166,8 @@ final class App implements Model
      * The shared immutable-with splat. Every `with*()` names only what it
      * changes; a nullable field is reset by passing null explicitly, which
      * the splat carries as a present key (no `??` fallback to the old value).
+     * A readonly property cannot be reassigned after construction, so the
+     * splat always goes through the constructor rather than clone-and-mutate.
      * The drift guard holds the constructor and the properties in step.
      */
     use Mutable;
