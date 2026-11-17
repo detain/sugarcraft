@@ -11,10 +11,8 @@ declare(strict_types=1);
 return [
     'theme.read_failed'            => '테마 파일을 읽을 수 없음: {path}',
     'theme.file_too_large'         => '테마 파일이 {bytes}바이트 상한을 초과함: {path}',
-    'glamour.decoration_unsafe' => '테마 {slot}에는 줄 바꿈, 탭, 공백만 사용할 수 있습니다',
     'theme.not_glamour_document' => '테마 JSON은 glamour 스타일 문서가 아닙니다 ("document" 블록 없음)',
     'html.max_bytes_invalid' => '최대 바이트 수는 양의 바이트 수여야 합니다. 받은 값: {bytes}',
-    'glamour.value_too_large' => '스타일 파일의 {key} 값이 상한 {limit}을(를) 초과함',
     'theme.json_invalid'           => '테마 파일에 잘못된 JSON입니다',
     'theme.json_object'            => '테마 JSON은 객체로 디코딩되어야 합니다',
     'theme.bad_color'              => '잘못된 색상 지정: {spec}',

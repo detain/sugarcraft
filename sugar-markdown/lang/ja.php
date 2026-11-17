@@ -11,10 +11,8 @@ declare(strict_types=1);
 return [
     'theme.read_failed'            => 'テーマファイルを読み取れません：{path}',
     'theme.file_too_large'         => 'テーマファイルが{bytes}バイトの上限を超過しています: {path}',
-    'glamour.decoration_unsafe' => 'テーマ {slot} には改行・タブ・スペースのみ使用可能です',
     'theme.not_glamour_document' => 'テーマ JSON は glamour のスタイルドキュメントではありません（"document" ブロックがありません）',
     'html.max_bytes_invalid' => '最大バイト数は正のバイト数でなければなりません。指定値: {bytes}',
-    'glamour.value_too_large' => 'スタイルファイルの {key} の値が上限 {limit} を超えています',
     'theme.json_invalid'           => 'テーマファイルの JSON が無効です',
     'theme.json_object'            => 'テーマ JSON はオブジェクトにデコードされる必要があります',
     'theme.bad_color'              => '無効な色の指定: {spec}',

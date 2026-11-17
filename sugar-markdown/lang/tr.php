@@ -11,10 +11,8 @@ declare(strict_types=1);
 return [
     'theme.read_failed'            => 'tema dosyası okunamadı: {path}',
     'theme.file_too_large'         => 'tema dosyası {bytes} bayt üst sınırını aşıyor: {path}',
-    'glamour.decoration_unsafe' => 'tema alanı {slot} yalnızca satır sonu, sekme ve boşluk içerebilir',
     'theme.not_glamour_document' => 'tema JSON’u bir glamour stil belgesi değil ("document" bloğu yok)',
     'html.max_bytes_invalid' => 'en fazla bayt sayısı pozitif olmalıdır; alınan: {bytes}',
-    'glamour.value_too_large' => 'stil dosyasındaki {key} değeri {limit} üst sınırını aşıyor',
     'theme.json_invalid'           => 'tema dosyasında geçersiz JSON',
     'theme.json_object'            => 'tema JSON\'u bir nesneye dönüştürülmelidir',
     'theme.bad_color'              => 'geçersiz renk tanımı: {spec}',

@@ -39,8 +39,8 @@ final class StyleSheet
     {
         // Pure and immutable (every with*() copies), so one instance serves
         // every render. AUD §7 #39 named rebuilding it per render() as a cost;
-        // that saving was not measured on its own (see the P1-12 PR body for the
-        // measured per-frame figure, which covers the whole render path).
+        // that saving was never measured on its own, so no figure is claimed
+        // for it here.
         return self::$base ??= self::buildBase();
     }
 

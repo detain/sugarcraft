@@ -11,10 +11,8 @@ declare(strict_types=1);
 return [
     'theme.read_failed'            => 'nelze číst soubor tématu: {path}',
     'theme.file_too_large'         => 'soubor tématu překračuje strop {bytes} bajtů: {path}',
-    'glamour.decoration_unsafe' => 'pole motivu {slot} musí obsahovat pouze konce řádků, tabulátory a mezery',
     'theme.not_glamour_document' => 'JSON motivu není dokument stylů glamour (chybí blok "document")',
     'html.max_bytes_invalid' => 'max bytes musí být kladný počet bajtů; zadáno {bytes}',
-    'glamour.value_too_large' => '{key} souboru stylu překračuje strop {limit}',
     'theme.json_invalid'           => 'neplatný JSON v souboru motivu',
     'theme.json_object'            => 'téma JSON musí dekódovat do objektu',
     'theme.bad_color'              => 'neplatné zadání barvy: {spec}',

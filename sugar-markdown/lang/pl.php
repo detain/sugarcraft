@@ -11,10 +11,8 @@ declare(strict_types=1);
 return [
     'theme.read_failed'            => 'nie można odczytać pliku motywu: {path}',
     'theme.file_too_large'         => 'plik motywu przekracza limit {bytes} bajtów: {path}',
-    'glamour.decoration_unsafe' => 'pole {slot} motywu może zawierać tylko nowe wiersze, tabulatory i spacje',
     'theme.not_glamour_document' => 'JSON motywu nie jest dokumentem stylów glamour (brak bloku "document")',
     'html.max_bytes_invalid' => 'maksymalna liczba bajtów musi być dodatnia; podano: {bytes}',
-    'glamour.value_too_large' => 'wartość {key} w pliku stylu przekracza limit {limit}',
     'theme.json_invalid'           => 'nieprawidłowy JSON w pliku motywu',
     'theme.json_object'            => 'JSON motywu musi dekodować się do obiektu',
     'theme.bad_color'              => 'nieprawidłowa specyfikacja koloru: {spec}',

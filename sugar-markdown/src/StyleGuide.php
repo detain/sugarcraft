@@ -108,25 +108,23 @@ final class StyleGuide
      *
      * Trust note: a style file is code the terminal runs. Do not
      * auto-load workspace-adjacent style files; load only files the
-     * operator pinned. The four `block_prefix` / `block_suffix` slots
-     * (document and paragraph) accept only newlines, tabs and spaces and
-     * refuse anything else by slot name (candy-mdview's rule); `indent_token`
-     * is swept through `Sanitize::untrusted()` so a hostile token cannot
-     * inject raw escape sequences. Stock glamour spacing and tokens survive
-     * byte-identical. Files over
-     * {@see Theme::MAX_CONFIG_BYTES} refuse before they are parsed.
+     * operator pinned. Decoded string slots (`block_prefix` /
+     * `block_suffix` / `indent_token`) are swept through
+     * `Sanitize::untrusted()` so a hostile file cannot inject raw
+     * escape sequences — stock glamour "\n"/space affixes survive the
+     * sweep byte-identical. Files over {@see Theme::MAX_CONFIG_BYTES}
+     * refuse before they are parsed.
      *
      * @throws \RuntimeException        when the file cannot be read or is too large
-     * @throws \InvalidArgumentException when its contents are not a JSON object,
-     *                                   or a decoration slot or int is refused
+     * @throws \InvalidArgumentException when its contents are not a JSON object
      */
     public static function fromFile(string $path): self
     {
         if (!is_file($path)) {
             throw new \RuntimeException(Lang::t('theme.read_failed', ['path' => $path]));
         }
-        // The glamour door always carries the ceiling; the stat probe refuses
-        // before the read, the length check below covers a file that grew.
+        // The stat probe refuses an oversized file before the read; the length
+        // check after the read covers a file that grew between the two.
         $size = @filesize($path);
         if ($size !== false && $size > Theme::MAX_CONFIG_BYTES) {
             throw new \RuntimeException(Lang::t('theme.file_too_large', ['path' => $path, 'bytes' => Theme::MAX_CONFIG_BYTES]));
@@ -197,28 +195,19 @@ final class StyleGuide
             $elements[$name] = $primitive;
         }
 
-        // The decoration law (candy-mdview's GlamourTheme, kept as the stricter
-        // copy): the four block_prefix / block_suffix slots that cross into
-        // Theme may carry only newlines, tabs and spaces. Anything else refuses
-        // by slot name, so visible text cannot ride a vertical-spacing slot.
-        // The validated value replaces the raw one so every later read sees a
-        // string.
-        foreach (['document', 'paragraph'] as $block) {
-            foreach (['block_prefix', 'block_suffix'] as $slot) {
-                if (array_key_exists($slot, $elements[$block] ?? [])) {
-                    $elements[$block][$slot] = self::decorationSlot($elements[$block][$slot], "{$block}.{$slot}");
-                }
-            }
-        }
         $document = $elements['document'] ?? [];
 
-        // SEC-02 boundary for the one string slot left: an indent token is
-        // drawn on every quoted line, so it is still swept rather than refused.
+        // SEC-02 boundary: every decoded STRING slot goes through
+        // Sanitize::untrusted(). A style file is code the terminal runs
+        // — glamour ships prefixes like "\n" (kept: TAB/LF/CR survive the
+        // sweep byte-identical) but a hostile file must never be able to
+        // inject a raw OSC/CSI sequence into the render through a prefix,
+        // a suffix or an indent token.
         return new self(
-            blockPrefix:    (string) ($document['block_prefix'] ?? ''),
-            blockSuffix:    (string) ($document['block_suffix'] ?? ''),
-            documentIndent: self::boundedDecoration($document['indent'] ?? 0, 'document.indent'),
-            documentMargin: self::boundedDecoration($document['margin'] ?? 0, 'document.margin'),
+            blockPrefix:    Sanitize::untrusted((string) ($document['block_prefix'] ?? '')),
+            blockSuffix:    Sanitize::untrusted((string) ($document['block_suffix'] ?? '')),
+            documentIndent: self::nonNegativeInt($document['indent'] ?? 0),
+            documentMargin: self::nonNegativeInt($document['margin'] ?? 0),
             elements:       $elements,
             chroma:         $chroma,
         );
@@ -290,8 +279,8 @@ final class StyleGuide
             headingCase:         $this->headingCase(),
             documentMargin:      $this->documentMargin,
             documentIndent:      $this->documentIndent,
-            paragraphPrefix:     (string) ($paragraph['block_prefix'] ?? ''),
-            paragraphSuffix:     (string) ($paragraph['block_suffix'] ?? ''),
+            paragraphPrefix:     Sanitize::untrusted((string) ($paragraph['block_prefix'] ?? '')),
+            paragraphSuffix:     Sanitize::untrusted((string) ($paragraph['block_suffix'] ?? '')),
             documentBlockPrefix: $this->blockPrefix,
             documentBlockSuffix: $this->blockSuffix,
         );
@@ -428,45 +417,6 @@ final class StyleGuide
         }
 
         return null;
-    }
-
-    /** Inert vertical spacing: the only payload a decoration slot may carry (candy-mdview's whitespaceSlot). */
-    private const DECORATION_SPACING = '/\A[\n\t ]*\z/';
-
-    /**
-     * A decoration slot: a non-string shape reads as '' (malformed, not
-     * fatal); a string holding anything but newlines, tabs and spaces refuses
-     * by naming the slot. Such a slot is a spacing slot, so any other payload
-     * is a channel into every rendered frame.
-     */
-    private static function decorationSlot(mixed $value, string $slot): string
-    {
-        if (!is_string($value)) {
-            return '';
-        }
-        if (preg_match(self::DECORATION_SPACING, $value) === 1) {
-            return $value;
-        }
-
-        throw new \InvalidArgumentException(Lang::t('glamour.decoration_unsafe', ['slot' => $slot]));
-    }
-
-    /**
-     * A non-negative decoration int with the shared ceiling. Over the cap it
-     * refuses with its name: a style file asking for a billion-cell indent is
-     * broken, and {@see Theme}'s constructor would only saturate it silently.
-     */
-    private static function boundedDecoration(mixed $value, string $key): int
-    {
-        $number = self::nonNegativeInt($value);
-        if ($number > Theme::MAX_DOCUMENT_DECORATION) {
-            throw new \InvalidArgumentException(Lang::t('glamour.value_too_large', [
-                'key'   => $key,
-                'limit' => Theme::MAX_DOCUMENT_DECORATION,
-            ]));
-        }
-
-        return $number;
     }
 
     /** int | digit-string → non-negative int; anything else coerces to 0. */

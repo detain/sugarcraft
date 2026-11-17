@@ -11,10 +11,8 @@ declare(strict_types=1);
 return [
     'theme.read_failed'            => 'no se pudo leer el archivo de tema: {path}',
     'theme.file_too_large'         => 'el archivo de tema supera el límite de {bytes} bytes: {path}',
-    'glamour.decoration_unsafe' => 'el campo {slot} del tema solo puede contener saltos de línea, tabulaciones y espacios',
     'theme.not_glamour_document' => 'el JSON del tema no es un documento de estilos de glamour (falta el bloque "document")',
     'html.max_bytes_invalid' => 'el máximo de bytes debe ser un recuento positivo de bytes; se recibió {bytes}',
-    'glamour.value_too_large' => '{key} del archivo de estilo supera el límite de {limit}',
     'theme.json_invalid'           => 'JSON no válido en el archivo de tema',
     'theme.json_object'            => 'el JSON del tema debe decodificar a un objeto',
     'theme.bad_color'              => 'especificación de color no válida: {spec}',
