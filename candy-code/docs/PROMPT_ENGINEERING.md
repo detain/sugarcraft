@@ -14,7 +14,9 @@ prompt, in assembly order"); this page is the *why* beside that *what*.
 
 `Runtime::systemPromptSections()` returns an ordered list of `PromptSection`s, base first and the
 static `<env>` block last. Counting the numbered entries below, there are thirteen slots:
-entries 3, 5 and 12 are present only in some builds, and each says when. The
+entries 3, 5 and 12 are present only when their condition holds at runtime, and each
+entry says which: entry 3 needs a wired tool that supplies guidance, entry 5 needs a session
+with a symbol-map capture, and entry 12 needs the turn's permission gate in plan mode. The
 `agent-instructions` layer after the list is conditional too and is not numbered.
 
 1. **Base identity** (`Runtime::basePrompt()`) — the Static heredoc that opens every prompt.
