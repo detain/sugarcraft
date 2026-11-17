@@ -218,10 +218,14 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // choke); the manifest is gated WITH its bundle directory and answers as a
         // loader-local gap, the command-floor discipline entered one row younger.
         'Bundles/Bundle.php|.candy-code/bundles' => self::BOTH,
-        // PLG-1 `bundles install`: the verb's ONE write destination, the user
+        // PLG-1 `bundles install`: the verb's default write destination, the user
         // bundle root — the same PATH the reader above already classifies,
-        // arriving in a SECOND file, which the derivation flags by name. It
-        // writes nobody's project tier: USER, like the serve state directory.
+        // arriving in a SECOND file, which the derivation flags by name. The
+        // default writes nobody's project tier: USER, like the serve state
+        // directory. PLG-2a `--project` adds a second destination, the project
+        // bundle root under the operator-named `--root` or working directory,
+        // which is operator-chosen (typed or cwd) and never read from the
+        // repository; a symlinked `.candy-code` or bundle root is refused.
         'Cli/Subcommands.php|.candy-code/bundles' => self::USER,
         // C-EXT-4.b 2026-10-28: the two git-metadata reads bundlesGitSha()
         // performs on a checkout — the scratch this verb minted inside the
