@@ -203,12 +203,15 @@ final class Calc
      * Truncate a string to at most $maxWidth display cells, ending in an
      * ellipsis when it is cut. Never splits a grapheme cluster.
      *
-     * Behaviour change (P0-A11): a string that is cut loses all of its SGR,
-     * because Width::clipCells strips the sequences before it measures. Master's
-     * mb_substr kept whatever escapes fell before the cut, so a clipped GridTable
-     * cell or unsorted header label rendered partly styled. Now it renders plain.
-     * A string that fits is returned whole, SGR included. Pinned by
-     * testSgrBytesAreNotChargedToCells in DisplayCellWidthTest.
+     * Behavior change (P0-A11): a string that is cut loses every escape sequence
+     * it carries, not only SGR. Width::clipCells hands the cut to Width::truncate,
+     * which runs Ansi::strip over the whole string, so CSI, OSC (OSC 8 hyperlinks
+     * included), DCS, SOS, PM and APC sequences and raw C1 bytes all go. Master's
+     * mb_substr kept the escapes that fell before the cut and could cut mid-escape,
+     * so a clipped GridTable cell or unsorted header label rendered partly styled.
+     * Now it renders plain. A string that fits is returned whole, escapes included.
+     * Pinned by testSgrBytesAreNotChargedToCells and
+     * testAClippedOsc8HyperlinkLosesItsEscapes in DisplayCellWidthTest.
      */
     public static function truncate(string $str, int $maxWidth): string
     {

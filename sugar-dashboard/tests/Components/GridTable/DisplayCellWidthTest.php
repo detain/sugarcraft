@@ -349,6 +349,19 @@ final class DisplayCellWidthTest extends TestCase
         self::assertSame('r…', Calc::truncate($styled, 2));
     }
 
+    public function testAClippedOsc8HyperlinkLosesItsEscapes(): void
+    {
+        // Width::truncate runs Ansi::strip over the whole string, so a cut drops
+        // every escape sequence, not only SGR. An OSC 8 hyperlink is one: a cut
+        // keeps the visible text and none of the OSC bytes. A string that fits
+        // is returned whole, hyperlink included.
+        $link = "\x1b]8;;https://example.com\x1b\\link text\x1b]8;;\x1b\\";
+
+        self::assertSame(9, Width::string($link));
+        self::assertSame('lin…', Calc::truncate($link, 4));
+        self::assertSame($link, Calc::truncate($link, 20));
+    }
+
     /**
      * A ComboBox with the default selected-row color removed, so the option
      * line carries only the clipped label and its own SGR.
