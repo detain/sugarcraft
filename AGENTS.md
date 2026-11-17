@@ -61,7 +61,7 @@ Branches `ai/<slug>-<short>` (AI) / `feat/<slug>-<short>` (human). Title `<lib>:
 
 ## Audit-driven PRs
 
-Mark `docs/plans/AUDIT_*.md` items ✅ inline where they live; skip `credit upstream author`/UPGRADE_GUIDE (out of scope pre-1.0); one PR per lib in dependency order.
+Mark `docs/plans/AUDIT_*.md` items ✅ inline where they live; skip `credit upstream author`/UPGRADE_GUIDE (out of scope pre-1.0); one PR per lib, or two to four libs in one PR when they share a dependency step, in dependency order.
 
 ## Gotchas
 

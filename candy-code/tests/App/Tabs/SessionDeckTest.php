@@ -151,6 +151,25 @@ final class SessionDeckTest extends TestCase
         $this->assertSame($deck->cycle(1)->activeKey(), $viaKey->activeTab()?->id);
     }
 
+    public function testRealCtrlTabBytesWalkTheDeckRingLikeCycle(): void
+    {
+        $deck = SessionDeck::forLaunch('t0', 's0', 'a')
+            ->open('t1', 's1', 'b')
+            ->open('t2', 's2', 'c');
+
+        // Active is t2. kitty and xterm Ctrl+Tab bytes step forward with
+        // wraparound, exactly as cycle(1) does; Ctrl+Shift+Tab steps back.
+        $forward = $deck->tabs()->handleKey("\x1b[9;5u");
+        $this->assertSame($deck->cycle(1)->activeKey(), $forward?->activeTab()?->id);
+        $this->assertSame('t0', $forward?->activeTab()?->id);
+
+        $xterm = $deck->tabs()->handleKey("\x1b[27;5;9~");
+        $this->assertSame('t0', $xterm?->activeTab()?->id);
+
+        $back = $deck->tabs()->handleKey("\x1b[27;6;9~");
+        $this->assertSame($deck->cycle(-1)->activeKey(), $back?->activeTab()?->id);
+    }
+
     public function testAttentionAndSummaryReachTheLedgerRows(): void
     {
         $deck = SessionDeck::forLaunch('t0', 's0', 'first')
