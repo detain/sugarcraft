@@ -119,6 +119,11 @@ final class AsyncProbeBoundedTest extends TestCase
         self::assertStringNotContainsString("\$process->on('stderr'", $src, 'the dead event name must not return');
         self::assertStringNotContainsString("\$process->on('stdout'", $src, 'the dead event name must not return');
         self::assertStringContainsString('STDERR_CAP_BYTES', $src);
+        // The stderr cut is exact, like stdout: the room left under the
+        // ceiling bounds the appended slice. A per-chunk `strlen < CAP` guard
+        // appends a whole read and overshoots the ceiling (the master shape).
+        self::assertStringContainsString('self::STDERR_CAP_BYTES - \strlen($stderr)', $src, 'the stderr cut must be exact, not per-chunk');
+        self::assertStringNotContainsString('\strlen($stderr) < self::STDERR_CAP_BYTES', $src, 'a per-chunk stderr guard overshoots the ceiling');
     }
 
     public function testChildStdoutIsCappedIntoABoundedBuffer(): void
