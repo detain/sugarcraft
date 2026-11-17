@@ -45,6 +45,11 @@ final class BinDocTruthTest extends TestCase
         $this->assertStringNotContainsString('Nothing forks per connection', $this->readme);
         $this->assertStringContainsString('forks one worker per connection by default', $this->readme);
         $this->assertStringContainsString('http.worker_per_request', $this->readme);
+        // The default and the two degraded arms (knob off, no pcntl) are
+        // pinned in the README itself, not only in the bin source below.
+        $this->assertStringContainsString('(`http.worker_per_request`, on unless set false; needs `ext-pcntl`)', $this->readme);
+        $this->assertStringContainsString('With the knob off, or on a host without pcntl,', $this->readme);
+        $this->assertStringContainsString('connections are served serially and the bin names that trade-off on stderr', $this->readme);
 
         $source = (string) \file_get_contents($this->bin);
         $this->assertStringContainsString('worker_per_request is off — serving SERIALLY', $source);
