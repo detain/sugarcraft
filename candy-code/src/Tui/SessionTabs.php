@@ -25,14 +25,18 @@ final class SessionTabs
 
     /**
      * Every byte sequence that means Ctrl+Tab. The synthetic CTRL_TAB comes
-     * first; the rest are the real encodings the repo's decoders name for
-     * Tab with the Ctrl modifier (mod field 5 = 1 + CTRL):
+     * first; the rest are the encodings the repo's decoders name for Tab with
+     * the Ctrl modifier (mod field 5 = 1 + CTRL):
      *   - kitty CSI-u `CSI 9;5u`: sugar-core/src/InputReader.php
      *     (decodeKittyKey, code 9 => Tab) and sugar-input/src/EscapeDecoder.php
-     *     (kittyKeyCodeToName, code 9 => 'Tab').
+     *     (kittyKeyCodeToName, code 9 => 'Tab'). The live path already decodes
+     *     this form to KeyMsg(Tab, ctrl) before handleKey() sees anything, so
+     *     this entry serves callers that pass raw bytes.
      *   - xterm modifyOtherKeys `CSI 27;5;9~`: sugar-input/src/EscapeDecoder.php
      *     (the `^27;(\d+);(\d+)~$` arm and modifyOtherKeysName, keysym 9 =>
-     *     'Tab'). sugar-core's InputReader does not decode this form yet.
+     *     'Tab'). sugar-core's InputReader does not decode this form, so on the
+     *     live path it never reaches handleKey(); the entry is reachable only
+     *     by a raw-byte caller. Closing that gap needs a sugar-core change.
      *
      * @var list<string>
      */
