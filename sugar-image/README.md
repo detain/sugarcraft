@@ -343,7 +343,7 @@ they decode or fetch:
   predicate: a host is present and the scheme is allowed, compared
   case-insensitively. It never throws.
 - `PngPixels::decode($bytes)` returns the stored RGBA8 samples of a still PNG as
-  a `Codec\RgbaPixels` (`width`, `height`, `rgba`), with no GD quantisation, so
+  a `Codec\RawRgba` (`width`, `height`, `rgba`), with no GD quantisation, so
   alpha 254 stays 254. It returns `null` for anything it declines: a non-PNG
   prefix, a malformed or CRC-failing stream, 16-bit or interlaced data, an
   image over `$maxPixels` (default: the 50 MP `ImageSource` cap), or an image

@@ -6,7 +6,7 @@ namespace SugarCraft\Image\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Image\ApngDecoder;
-use SugarCraft\Image\Codec\RgbaPixels;
+use SugarCraft\Image\Codec\RawRgba;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\PngPixels;
 
@@ -17,7 +17,7 @@ use SugarCraft\Image\PngPixels;
  * fixtures before the decoder moved here.
  *
  * @covers \SugarCraft\Image\PngPixels
- * @covers \SugarCraft\Image\Codec\RgbaPixels
+ * @covers \SugarCraft\Image\Codec\RawRgba
  */
 final class PngPixelsTest extends TestCase
 {
@@ -107,7 +107,7 @@ final class PngPixelsTest extends TestCase
 
         $decoded = PngPixels::decode(self::png(2, 2, 6, $raw));
 
-        self::assertInstanceOf(RgbaPixels::class, $decoded);
+        self::assertInstanceOf(RawRgba::class, $decoded);
         self::assertSame(2, $decoded->width);
         self::assertSame(2, $decoded->height);
         self::assertSame($raw, $decoded->rgba);
@@ -454,11 +454,11 @@ final class PngPixelsTest extends TestCase
         self::assertSame(pack('C*', 10, 20, 30, 0, 10, 20, 31, 255), $frames[0]['rgba']);
     }
 
-    public function testRgbaValueObjectRejectsAShortBuffer(): void
+    public function testRawRgbaRejectsAShortBuffer(): void
     {
         $this->expectException(\InvalidArgumentException::class);
 
-        new RgbaPixels(2, 2, 'short');
+        RawRgba::new(2, 2, 'short');
     }
 
     // ─── Fixtures moved from candy-code MaskIngest (mask classification inputs) ───
@@ -469,7 +469,7 @@ final class PngPixelsTest extends TestCase
     }
 
     /** @return list<int> the RGBA quad at pixel index $i */
-    private static function quad(RgbaPixels $p, int $i): array
+    private static function quad(RawRgba $p, int $i): array
     {
         return array_values(unpack('C4', substr($p->rgba, $i * 4, 4)) ?: []);
     }

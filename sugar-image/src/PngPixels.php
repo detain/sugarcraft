@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Image;
 
-use SugarCraft\Image\Codec\RgbaPixels;
+use SugarCraft\Image\Codec\RawRgba;
 
 /**
  * Pure-PHP PNG pixel decoder for still images, with no GD quantisation.
@@ -59,13 +59,13 @@ final class PngPixels
      * unsupported shape, a declared size over $maxPixels or over
      * {@see MAX_RAW_BYTES}, or a palette index past PLTE.
      *
-     * Returns the {@see RgbaPixels} value object (width, height and buffer) rather
-     * than a bare buffer, because every caller needs the geometry with the bytes.
+     * Returns a {@see RawRgba} (width, height and buffer) rather than a bare
+     * buffer, because every caller needs the geometry with the bytes.
      *
      * @param int $maxPixels Largest width×height accepted. A non-positive value
      *                       declines every image.
      */
-    public static function decode(string $bytes, int $maxPixels = self::MAX_PIXELS): ?RgbaPixels
+    public static function decode(string $bytes, int $maxPixels = self::MAX_PIXELS): ?RawRgba
     {
         if (strlen($bytes) < 8 || substr($bytes, 0, 8) !== self::SIGNATURE) {
             return null;
@@ -110,7 +110,7 @@ final class PngPixels
 
             $rgba = self::inflateAndUnfilter($idat, $width, $height, $channels, $colorType, $palette, $trns);
 
-            return new RgbaPixels($width, $height, $rgba);
+            return RawRgba::new($width, $height, $rgba);
         } catch (\InvalidArgumentException) {
             return null;
         }
