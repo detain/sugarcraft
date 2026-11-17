@@ -263,9 +263,27 @@ final class ComboBox implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * Unallocated the combobox keeps its natural width (Boxer asks innerSize
      * for it); once setSize speaks, render stays inside the budget and long
-     * content ellipsises instead of overflowing the box (finding
+     * content ellipsizes instead of overflowing the box (finding
      * sugar-dashboard-046, the no-compress cliff — the same fail-toward-FIT
      * rule GridTable columns get through Calc).
+     *
+     * Behavior change (P0-A11): the two callers are renderInput (the
+     * placeholder or the query) and renderResultItem (each option label). Both
+     * clip through Calc::truncate, which measures display cells, not code
+     * points. So a CJK or emoji text fills its allocation in cells and no
+     * longer overruns it; a clipped text drops any ANSI sequence it carried
+     * (the old mb_substr cut could leave one open mid-escape). Text that already
+     * fits is returned untouched, SGR included.
+     *
+     * Tabs: inside this clip a tab is charged four cells (Width::TAB_WIDTH), and
+     * that charge only decides where the cut falls; the allocation is not
+     * widened by it. innerSize() charged tabs the same way before P0-A11, so the
+     * natural box width is unchanged. Nothing expands the tab: renderResultItem
+     * writes the returned label raw, so a tab that fits the allocation reaches
+     * the terminal unchanged and is drawn to the next tab stop, which can be
+     * more or fewer than four cells from where the clip measured it. The same
+     * holds for GridTable cells (see Calc, where the charge also sets column
+     * widths and pad counts).
      */
     private function clipToAllocation(string $text, int $chrome): string
     {
@@ -273,6 +291,9 @@ final class ComboBox implements \SugarCraft\Dashboard\Foundation\SizedItem
             return $text;
         }
 
+        // P0-A11: this clip is in display cells, and a clipped text drops its ANSI
+        // (text that fits is returned as-is). The placeholder and query are clipped
+        // here; the option labels are clipped through this same method. See the docblock.
         return Calc::truncate($text, max(1, $this->width - $chrome));
     }
 

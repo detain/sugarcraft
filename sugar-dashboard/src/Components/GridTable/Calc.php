@@ -4,8 +4,30 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dashboard\Components\GridTable;
 
+use SugarCraft\Core\Util\Width;
+
 /**
  * Calculation utilities for grid layout.
+ *
+ * Every width here is a terminal display-cell count (sugar-core Width), not a
+ * code-point count: a CJK ideograph occupies two cells and an emoji two, so
+ * measuring with mb_strlen() made those columns too narrow and misaligned the
+ * frame.
+ *
+ * The measure is Width::string's, so it differs from the old code-point rule
+ * for wide, zero-width and combining characters, for tabs and for SGR: a CJK
+ * ideograph or emoji is two cells, not one; a zero-width or combining mark adds
+ * none (e followed by U+0301 is one cell, not two); a tab is charged
+ * Width::TAB_WIDTH cells, not one; and SGR sequences cost nothing, not their
+ * byte count. Printable ASCII is unchanged.
+ *
+ * The tab charge is a measurement, not an expansion, and it reaches three
+ * places: colMinWidth() (the column width), the pad count GridTable adds with
+ * Width::padRight (header, row, frozen and notice rows), and where truncate()
+ * cuts. Nothing expands the tab. GridTable writes cell values raw, so a tab that
+ * fits still reaches the terminal, which draws it to the next tab stop, not
+ * necessarily four cells on. Example: a column labeled "Name" holding "a\tb" is
+ * six cells wide with no pad space; the code-point rule made it four with one.
  */
 final class Calc
 {
@@ -164,13 +186,13 @@ final class Calc
      */
     private static function colMinWidth(Column $col, array $rows): int
     {
-        $width = mb_strlen($col->label);
+        $width = Width::string($col->label);
 
         foreach ($rows as $row) {
             $value = $row->get($col->key);
             if ($value !== null) {
                 $str = is_string($value) ? $value : (string) $value;
-                $len = mb_strlen($str);
+                $len = Width::string($str);
                 if ($len > $width) {
                     $width = $len;
                 }
@@ -181,7 +203,18 @@ final class Calc
     }
 
     /**
-     * Truncate string to maximum width.
+     * Truncate a string to at most $maxWidth display cells, ending in an
+     * ellipsis when it is cut. Never splits a grapheme cluster.
+     *
+     * Behavior change (P0-A11): a string that is cut loses every escape sequence
+     * it carries, not only SGR. Width::clipCells hands the cut to Width::truncate,
+     * which runs Ansi::strip over the whole string, so CSI, OSC (OSC 8 hyperlinks
+     * included), DCS, SOS, PM and APC sequences and raw C1 bytes all go. Master's
+     * mb_substr kept the escapes that fell before the cut and could cut mid-escape,
+     * so a clipped GridTable cell or unsorted header label rendered partly styled.
+     * Now it renders plain. A string that fits is returned whole, escapes included.
+     * Pinned by testSgrBytesAreNotChargedToCells and
+     * testAClippedOsc8HyperlinkLosesItsEscapes in DisplayCellWidthTest.
      */
     public static function truncate(string $str, int $maxWidth): string
     {
@@ -189,11 +222,6 @@ final class Calc
             return '';
         }
 
-        $len = mb_strlen($str);
-        if ($len <= $maxWidth) {
-            return $str;
-        }
-
-        return mb_substr($str, 0, $maxWidth - 1) . '…';
+        return Width::clipCells($str, $maxWidth, '…');
     }
 }
