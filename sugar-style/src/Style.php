@@ -635,7 +635,9 @@ final class Style
      * the README rely on. Breaks fall on whitespace where the line allows,
      * a word wider than the budget is broken across lines, and SGR styling
      * carries across each break ({@see Width::wrapAnsi()}). Without a
-     * width() this is a no-op: there is no budget to wrap to.
+     * width() this is a no-op: there is no budget to wrap to. Under
+     * {@see inline()} it is also a no-op: inline() promises one line, so
+     * width() truncation applies instead.
      */
     public function wordWrap(bool $on = true): self
     {
@@ -1515,8 +1517,10 @@ final class Style
 
         // Word wrap runs before the line split, so each break becomes an
         // ordinary line and the width() truncation below only ever sees
-        // lines that already fit the budget.
-        if ($this->wordWrap && $this->width !== null) {
+        // lines that already fit the budget. Under inline() it is skipped:
+        // a wrap would reintroduce the newlines inline() just removed, and
+        // inline() promises one line, so width() truncation applies.
+        if ($this->wordWrap && $this->width !== null && !$this->inline) {
             $content = Width::wrapAnsi($content, $this->width);
         }
 

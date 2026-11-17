@@ -997,7 +997,9 @@ which is the default and stays so. Opt in with `wordWrap()` to break the
 content onto more lines instead: breaks fall on whitespace where the line
 allows, a word wider than the budget is broken across lines, and SGR
 styling carries across each break (`Width::wrapAnsi()`). `wordWrap()`
-needs a `width()` to wrap to; without one it does nothing.
+needs a `width()` to wrap to; without one it does nothing. Under `inline()`
+it does nothing either, because `inline()` keeps the result on one line, so
+`width()` truncation applies.
 
 ```php
 use SugarCraft\Style\Style;

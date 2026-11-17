@@ -98,6 +98,24 @@ final class WordWrapTest extends TestCase
         self::assertStringNotContainsString("\n", $out);
     }
 
+    public function testWordWrapIsIgnoredUnderInlineSoTheResultStaysOneLine(): void
+    {
+        $inline = Style::new()->inline()->width(5)->render('one two three');
+        $wrapped = Style::new()->inline()->wordWrap()->width(5)->render('one two three');
+
+        self::assertSame($inline, $wrapped, 'inline() keeps width() truncation');
+        self::assertSame('one t', rtrim(Ansi::strip($wrapped)));
+        self::assertStringNotContainsString("\n", $wrapped);
+    }
+
+    public function testInlineWithNewlinesAndWordWrapStaysOneLineAtWidth(): void
+    {
+        $out = Style::new()->inline()->wordWrap()->width(4)->render("one two\nthree");
+
+        self::assertStringNotContainsString("\n", $out);
+        self::assertSame(4, Width::string($out));
+    }
+
     public function testWordWrapSurvivesAnUnsetOfAnotherProp(): void
     {
         $style = Style::new()->wordWrap()->width(5)->bold()->unsetBold();
