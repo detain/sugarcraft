@@ -173,6 +173,17 @@ final class DisplayCellWidthTest extends TestCase
         self::assertSame([6, 1], Calc::calculateColumnWidths($rows, $columns, 7));
     }
 
+    public function testAWideLabelAloneSetsTheColumnWidth(): void
+    {
+        // The label '日本語テキスト' is seven code points but fourteen display cells,
+        // and the content 'x' is one cell, so the label alone sets the column. A
+        // code-point measure of the label (master's mb_strlen) would give seven.
+        $rows = [new Row(['a' => 'x'])];
+        $columns = [Column::new('a', '日本語テキスト')];
+
+        self::assertSame([14], Calc::calculateColumnWidths($rows, $columns, 14));
+    }
+
     public function testComboBoxPlaceholderClipsInDisplayCells(): void
     {
         // Inside a twelve-cell allocation the three-cell search prefix leaves
