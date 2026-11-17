@@ -14,9 +14,12 @@ use SugarCraft\Core\Util\Width;
  * measuring with mb_strlen() made those columns too narrow and misaligned the
  * frame.
  *
- * The measure is Width::string's, so two inputs differ from the old code-point
- * rule: a tab is charged Width::TAB_WIDTH cells (not one), and SGR sequences
- * cost nothing (not their byte count). Printable ASCII is unchanged.
+ * The measure is Width::string's, so it differs from the old code-point rule
+ * for wide, zero-width and combining characters, for tabs and for SGR: a CJK
+ * ideograph or emoji is two cells, not one; a zero-width or combining mark adds
+ * none (e followed by U+0301 is one cell, not two); a tab is charged
+ * Width::TAB_WIDTH cells, not one; and SGR sequences cost nothing, not their
+ * byte count. Printable ASCII is unchanged.
  *
  * The tab charge is a measurement, not an expansion, and it reaches three
  * places: colMinWidth() (the column width), the pad count GridTable adds with
