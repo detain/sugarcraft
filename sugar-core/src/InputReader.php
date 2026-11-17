@@ -38,7 +38,8 @@ use SugarCraft\Core\Util\Sanitize;
  *
  * Coverage: printable ASCII, control characters
  * (Ctrl+A‒Z, Tab, Enter, Backspace, Escape, Space), Alt-prefixed keys
- * (ESC + char), the arrow and tilde function CSIs, SGR mouse reports,
+ * (ESC + char), the arrow and tilde function CSIs (Insert, Delete, F1–F20),
+ * the SS3 arrow, F1–F4 and application-keypad forms, SGR mouse reports,
  * and the Kitty keyboard protocol (CSI-u plus its PUA function-key
  * encodings).
  */
@@ -736,6 +737,7 @@ final class InputReader
             'Z' => new KeyMsg(KeyType::Tab, shift: true),
             '~' => match ($keyParams) {
                 '1', '7' => new KeyMsg(KeyType::Home),
+                '2'      => new KeyMsg(KeyType::Insert),
                 '4', '8' => new KeyMsg(KeyType::End),
                 '3'      => new KeyMsg(KeyType::Delete),
                 '5'      => new KeyMsg(KeyType::PageUp),
@@ -752,6 +754,16 @@ final class InputReader
                 '21'     => new KeyMsg(KeyType::F10),
                 '23'     => new KeyMsg(KeyType::F11),
                 '24'     => new KeyMsg(KeyType::F12),
+                // F13-F20 use the VT220 numbering, which skips 27 and 30:
+                // those codes are unassigned and fall through to null.
+                '25'     => new KeyMsg(KeyType::F13),
+                '26'     => new KeyMsg(KeyType::F14),
+                '28'     => new KeyMsg(KeyType::F15),
+                '29'     => new KeyMsg(KeyType::F16),
+                '31'     => new KeyMsg(KeyType::F17),
+                '32'     => new KeyMsg(KeyType::F18),
+                '33'     => new KeyMsg(KeyType::F19),
+                '34'     => new KeyMsg(KeyType::F20),
                 default  => null,
             },
             default => null,
@@ -973,6 +985,23 @@ final class InputReader
             'D' => new KeyMsg(KeyType::Left),
             'H' => new KeyMsg(KeyType::Home),
             'F' => new KeyMsg(KeyType::End),
+            // Application keypad (DECKPAM, ESC =): Op..Oy are keypad 0..9,
+            // Ol the decimal separator and Om minus. ESC O M is keypad Enter
+            // and surfaces as plain Enter, not KpEnter: DECKPAM predates the
+            // KP* names. Kitty 57414 is the one that reports KpEnter.
+            'p' => new KeyMsg(KeyType::Kp0),
+            'q' => new KeyMsg(KeyType::Kp1),
+            'r' => new KeyMsg(KeyType::Kp2),
+            's' => new KeyMsg(KeyType::Kp3),
+            't' => new KeyMsg(KeyType::Kp4),
+            'u' => new KeyMsg(KeyType::Kp5),
+            'v' => new KeyMsg(KeyType::Kp6),
+            'w' => new KeyMsg(KeyType::Kp7),
+            'x' => new KeyMsg(KeyType::Kp8),
+            'y' => new KeyMsg(KeyType::Kp9),
+            'l' => new KeyMsg(KeyType::KpDecimal),
+            'm' => new KeyMsg(KeyType::KpSubtract),
+            'M' => new KeyMsg(KeyType::Enter),
             default => null,
         };
     }

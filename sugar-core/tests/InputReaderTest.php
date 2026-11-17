@@ -673,6 +673,105 @@ final class InputReaderTest extends TestCase
         $this->assertSame(KeyType::F1, $msgs[0]->type);
     }
 
+    // ---- legacy key completeness (merged from sugar-input EscapeDecoder) --
+
+    public function testInsertViaCsiTilde(): void
+    {
+        // Regression: CSI 2 ~ had no arm, so Insert was silently dropped.
+        $msgs = (new InputReader())->parse("\x1b[2~");
+        $this->assertCount(1, $msgs);
+        $this->assertInstanceOf(KeyMsg::class, $msgs[0]);
+        $this->assertSame(KeyType::Insert, $msgs[0]->type);
+        $this->assertFalse($msgs[0]->ctrl);
+        $this->assertFalse($msgs[0]->alt);
+    }
+
+    public function testModifiedInsertViaCsiTildeKeepsModifier(): void
+    {
+        // CSI 2 ; 5 ~ is Ctrl+Insert: the modifier parameter is stripped
+        // before the key lookup, so the Insert arm must see the bare "2".
+        $msgs = (new InputReader())->parse("\x1b[2;5~");
+        $this->assertCount(1, $msgs);
+        $this->assertSame(KeyType::Insert, $msgs[0]->type);
+        $this->assertTrue($msgs[0]->ctrl);
+        $this->assertFalse($msgs[0]->alt);
+    }
+
+    public function testF13ThroughF20ViaCsiTilde(): void
+    {
+        // Regression: the tilde table stopped at F12. Codes follow the VT220
+        // numbering, which skips 27 and 30.
+        $codes = [25, 26, 28, 29, 31, 32, 33, 34];
+        $expected = [
+            KeyType::F13, KeyType::F14, KeyType::F15, KeyType::F16,
+            KeyType::F17, KeyType::F18, KeyType::F19, KeyType::F20,
+        ];
+        $input = '';
+        foreach ($codes as $code) {
+            $input .= "\x1b[{$code}~";
+        }
+        $msgs = (new InputReader())->parse($input);
+        $this->assertCount(count($expected), $msgs);
+        foreach ($expected as $i => $type) {
+            $this->assertSame($type, $msgs[$i]->type, "tilde code {$codes[$i]}");
+        }
+    }
+
+    public function testUnassignedTildeCodesBetweenFunctionKeysAreDropped(): void
+    {
+        // 27 and 30 sit in the VT220 gaps and must not borrow a neighbour's key.
+        $this->assertSame([], (new InputReader())->parse("\x1b[27~"));
+        $this->assertSame([], (new InputReader())->parse("\x1b[30~"));
+    }
+
+    public function testKeypadDigitsViaSs3(): void
+    {
+        // Regression: DECKPAM ESC O p..y (keypad 0..9) was dropped entirely.
+        $finals = ['p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y'];
+        $input = '';
+        foreach ($finals as $final) {
+            $input .= "\x1bO{$final}";
+        }
+        $msgs = (new InputReader())->parse($input);
+        $this->assertCount(10, $msgs);
+        foreach ($msgs as $i => $msg) {
+            $this->assertSame(KeyType::from('kp' . $i), $msg->type, "keypad digit $i");
+            $this->assertSame('', $msg->rune);
+            $this->assertFalse($msg->alt);
+            $this->assertFalse($msg->ctrl);
+        }
+    }
+
+    public function testKeypadDecimalAndSubtractViaSs3(): void
+    {
+        // ESC O l is the keypad decimal separator and ESC O m is minus.
+        $msgs = (new InputReader())->parse("\x1bOl\x1bOm");
+        $this->assertCount(2, $msgs);
+        $this->assertSame(KeyType::KpDecimal, $msgs[0]->type);
+        $this->assertSame(KeyType::KpSubtract, $msgs[1]->type);
+    }
+
+    public function testKeypadEnterViaSs3IsPlainEnter(): void
+    {
+        // ESC O M predates the KP* names, so it surfaces as plain Enter. Kitty
+        // 57414 is the path that reports KpEnter. Both spellings are pinned.
+        $msgs = (new InputReader())->parse("\x1bOM");
+        $this->assertCount(1, $msgs);
+        $this->assertSame(KeyType::Enter, $msgs[0]->type);
+
+        $kitty = (new InputReader())->parse("\x1b[57414u");
+        $this->assertSame(KeyType::KpEnter, $kitty[0]->type);
+    }
+
+    public function testKeypadSs3SplitAcrossReads(): void
+    {
+        $r = new InputReader();
+        $this->assertSame([], $r->parse("\x1bO"));
+        $msgs = $r->parse('p');
+        $this->assertCount(1, $msgs);
+        $this->assertSame(KeyType::Kp0, $msgs[0]->type);
+    }
+
     // ---- bracketed paste -------------------------------------------------
 
     public function testBracketedPasteSingleFrame(): void
