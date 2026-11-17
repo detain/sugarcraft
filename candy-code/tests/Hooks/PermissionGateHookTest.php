@@ -142,16 +142,20 @@ final class PermissionGateHookTest extends TestCase
      * observable while they still enforce; what survives bypass is the gate's
      * own breaker floor, which the third limb pins.
      */
-    public function testABuiltInDenyOutranksTheGatesBroaderVerdict(): void
+    public function testABuiltInQuestionOutranksTheGatesBroaderQuestion(): void
     {
         $manager = new HookManager($registry = new HookRegistry());
         $manager->registerBuiltIns();
         $manager->register(new PermissionGateHook(new PermissionGate(PermissionMode::Default)));
 
+        // Both hooks ask. The first question raised is the one the operator
+        // answers, and the built-in is registered first, so its explicit
+        // message is the prompt body rather than the gate's broader policy text.
         $result = $manager->preToolUse($this->context('Bash', ['command' => 'rm -rf ./build']));
 
-        $this->assertTrue($result->isDenied());
-        $this->assertStringContainsString('destructive', $result->message);
+        $this->assertTrue($result->isAsk());
+        $this->assertFalse($result->permitsExecution());
+        $this->assertStringContainsString('recursive/force rm', $result->message);
         $this->assertNotNull($registry->get('PreToolUse', PermissionGateHook::NAME));
 
         $bypass = new HookManager(new HookRegistry());
@@ -169,10 +173,11 @@ final class PermissionGateHookTest extends TestCase
     }
 
     /**
-     * Fail-closed the other way round too: an ASK from the gate never grants,
-     * and a later hard DENY still wins over it.
+     * Fail-closed the other way round too: a question never grants, and a hard
+     * DENY (the gate's unswitchable breaker) still wins over the built-in's ASK
+     * whichever hook is registered first.
      */
-    public function testAGateAskDoesNotResurrectACallABuiltInDenies(): void
+    public function testAQuestionNeverGrantsAndAHardDenyStillWinsOverIt(): void
     {
         $manager = new HookManager(new HookRegistry());
         // Gate first this time, built-ins after, to show the ordering choice is
@@ -180,10 +185,15 @@ final class PermissionGateHookTest extends TestCase
         $manager->register(new PermissionGateHook(new PermissionGate(PermissionMode::Default)));
         $manager->registerBuiltIns();
 
-        $result = $manager->preToolUse($this->context('Bash', ['command' => 'rm -rf ./build']));
+        $ask = $manager->preToolUse($this->context('Bash', ['command' => 'rm -rf ./build']));
 
-        $this->assertTrue($result->isDenied());
-        $this->assertFalse($result->permitsExecution());
+        $this->assertTrue($ask->isAsk(), 'both hooks question the call; neither grants it');
+        $this->assertFalse($ask->permitsExecution());
+
+        $refused = $manager->preToolUse($this->context('Bash', ['command' => 'rm -rf /']));
+
+        $this->assertTrue($refused->isDenied(), 'the breaker refuses outright, ahead of any question');
+        $this->assertFalse($refused->permitsExecution());
     }
 
     /**

@@ -53,13 +53,13 @@ final class ConfirmRemoveHookTest extends TestCase
         $this->assertSame(0, preg_match('/' . $hook->matcher() . '/i', 'Edit'));
     }
 
-    public function testTypedStepSpellingRmRfDeniesLikeTheCommandField(): void
+    public function testTypedStepSpellingRmRfAsksLikeTheCommandField(): void
     {
         $hook = new ConfirmRemoveHook();
 
-        $deny = $hook->execute($this->createPtyContext('sh', [['send' => 'rm -rf / <Enter>'] ]));
-        $this->assertFalse($deny->isAllowed(), 'a destructive line typed as keystrokes is the same call as one in command position');
-        $this->assertStringContainsString('recursive/force rm', $deny->message);
+        $ask = $hook->execute($this->createPtyContext('sh', [['send' => 'rm -rf / <Enter>'] ]));
+        $this->assertFalse($ask->isAllowed(), 'a destructive line typed as keystrokes is the same call as one in command position');
+        $this->assertStringContainsString('recursive/force rm', $ask->message);
 
         $allow = $hook->execute($this->createPtyContext('sh', [['send' => 'ls <Enter>'] ]));
         $this->assertTrue($allow->isAllowed(), 'benign keystrokes stay through');
@@ -78,49 +78,68 @@ final class ConfirmRemoveHookTest extends TestCase
     }
 
     // =========================================================================
-    // Dangerous rm Command Denial Tests
+    // Dangerous rm Command Ask Tests
     // =========================================================================
 
-    public function testDenyRecursiveRm(): void
+    /**
+     * Regression: the hook used to return DENY with "Use interactive rm
+     * instead", an instruction a headless model cannot follow. A match is a
+     * question for the operator: the ASK carries the explicit message as the
+     * prompt body, and nothing runs until it is answered.
+     */
+    public function testMatchReturnsAnAskCarryingTheExplicitQuestion(): void
+    {
+        $result = (new ConfirmRemoveHook())->execute($this->createContext('rm -rf build'));
+
+        $this->assertSame(HookResult::ASK, $result->action);
+        $this->assertFalse($result->isDenied(), 'a match is a question, not a refusal');
+        $this->assertFalse($result->permitsExecution(), 'an unanswered ask must not run the command');
+        $this->assertStringContainsString('recursive/force rm', $result->message);
+        $this->assertStringContainsString('Approve it only if you mean to run it', $result->message);
+        $this->assertStringNotContainsString('Use interactive rm instead', $result->message);
+        $this->assertNull($result->modifiedInput, 'the hook proposes no rewrite of its own');
+    }
+
+    public function testAskRecursiveRm(): void
     {
         $hook = new ConfirmRemoveHook();
         $context = $this->createContext('rm -rf /important');
 
         $result = $hook->execute($context);
 
-        $this->assertTrue($result->isDenied());
+        $this->assertTrue($result->isAsk());
         $this->assertStringContainsString('recursive', $result->message);
     }
 
-    public function testDenyRecursiveRmWithSpace(): void
+    public function testAskRecursiveRmWithSpace(): void
     {
         $hook = new ConfirmRemoveHook();
         $context = $this->createContext('rm -r /important');
 
         $result = $hook->execute($context);
 
-        $this->assertTrue($result->isDenied());
+        $this->assertTrue($result->isAsk());
     }
 
-    public function testDenyForceRm(): void
+    public function testAskForceRm(): void
     {
         $hook = new ConfirmRemoveHook();
         $context = $this->createContext('rm -f file.txt');
 
         $result = $hook->execute($context);
 
-        $this->assertTrue($result->isDenied());
+        $this->assertTrue($result->isAsk());
         $this->assertStringContainsString('force', $result->message);
     }
 
-    public function testDenyRecursiveForceRm(): void
+    public function testAskRecursiveForceRm(): void
     {
         $hook = new ConfirmRemoveHook();
         $context = $this->createContext('rm -rf ./my-project');
 
         $result = $hook->execute($context);
 
-        $this->assertTrue($result->isDenied());
+        $this->assertTrue($result->isAsk());
 
         // Owner ruling 2026-10-06: the same hook wired to a bypass session
         // stands down, and a stricter mode does not. A hook with no reader at
@@ -128,71 +147,71 @@ final class ConfirmRemoveHookTest extends TestCase
         $bypassing = new ConfirmRemoveHook(static fn (): PermissionMode => PermissionMode::BypassPermissions);
         $this->assertTrue($bypassing->execute($context)->isAllowed(), 'bypass is above this guard-rail');
         $asking = new ConfirmRemoveHook(static fn (): PermissionMode => PermissionMode::Default);
-        $this->assertTrue($asking->execute($context)->isDenied(), 'only bypass stands the hook down');
+        $this->assertTrue($asking->execute($context)->isAsk(), 'only bypass stands the hook down');
     }
 
-    public function testDenyCombinedFlags(): void
+    public function testAskCombinedFlags(): void
     {
         $hook = new ConfirmRemoveHook();
         $context = $this->createContext('rm -r -f -v directory');
 
         $result = $hook->execute($context);
 
-        $this->assertTrue($result->isDenied());
+        $this->assertTrue($result->isAsk());
     }
 
     // =========================================================================
     // Extended Destructive-Form Denial Tests (long flags + other tools)
     // =========================================================================
 
-    public function testDenyLongFormRecursiveRm(): void
+    public function testAskLongFormRecursiveRm(): void
     {
         $hook = new ConfirmRemoveHook();
         $context = $this->createContext('rm --recursive /important');
 
         $result = $hook->execute($context);
 
-        $this->assertTrue($result->isDenied());
+        $this->assertTrue($result->isAsk());
     }
 
-    public function testDenyLongFormForceRm(): void
+    public function testAskLongFormForceRm(): void
     {
         $hook = new ConfirmRemoveHook();
         $context = $this->createContext('rm --force secret.txt');
 
         $result = $hook->execute($context);
 
-        $this->assertTrue($result->isDenied());
+        $this->assertTrue($result->isAsk());
     }
 
-    public function testDenyFindDelete(): void
+    public function testAskFindDelete(): void
     {
         $hook = new ConfirmRemoveHook();
         $context = $this->createContext("find . -name '*.log' -delete");
 
         $result = $hook->execute($context);
 
-        $this->assertTrue($result->isDenied());
+        $this->assertTrue($result->isAsk());
     }
 
-    public function testDenyShred(): void
+    public function testAskShred(): void
     {
         $hook = new ConfirmRemoveHook();
         $context = $this->createContext('shred -u secret.key');
 
         $result = $hook->execute($context);
 
-        $this->assertTrue($result->isDenied());
+        $this->assertTrue($result->isAsk());
     }
 
-    public function testDenyDdWithOutputFile(): void
+    public function testAskDdWithOutputFile(): void
     {
         $hook = new ConfirmRemoveHook();
         $context = $this->createContext('dd if=/dev/zero of=/dev/sda bs=1M');
 
         $result = $hook->execute($context);
 
-        $this->assertTrue($result->isDenied());
+        $this->assertTrue($result->isAsk());
     }
 
     public function testShellIndirectionIsNotDetected(): void
@@ -235,11 +254,11 @@ final class ConfirmRemoveHookTest extends TestCase
     }
 
     #[DataProvider('quotedDestructiveCases')]
-    public function testQuotedFlagsAreDenied(string $command): void
+    public function testQuotedFlagsAreAsked(string $command): void
     {
         $result = (new ConfirmRemoveHook())->execute($this->createContext($command));
 
-        $this->assertTrue($result->isDenied(), json_encode($command) . ' must be denied');
+        $this->assertTrue($result->isAsk(), json_encode($command) . ' must be asked');
     }
 
     /**
@@ -272,12 +291,17 @@ final class ConfirmRemoveHookTest extends TestCase
             json_encode($command) . ($breakerCaught ? ' is breaker territory and must still deny' : ' is hook territory and must run') . " under bypass: {$verdict->message}",
         );
 
-        // Control: with the hook in force, every row denies — none of these
-        // shapes is a licence the mode switch silently widens outside bypass.
-        $this->assertTrue(
-            $this->chain($command, PermissionMode::Default)->isDenied(),
-            json_encode($command) . ' must deny outside bypass',
+        // Control: with the hook in force, no row runs. The breaker rows are
+        // refused outright (the gate's DENY wins over the hook's ASK); the hook
+        // rows are put to the operator, and an unanswered ASK never executes.
+        $control = $this->chain($command, PermissionMode::Default);
+        $this->assertFalse(
+            $control->permitsExecution(),
+            json_encode($command) . ' must not run outside bypass',
         );
+        if ($breakerCaught) {
+            $this->assertTrue($control->isDenied(), json_encode($command) . ' is breaker territory and must be refused outright');
+        }
     }
 
     private function chain(string $command, PermissionMode $mode): HookResult
@@ -376,7 +400,7 @@ final class ConfirmRemoveHookTest extends TestCase
 
         $result = $hook->execute($context);
 
-        // -i is interactive (safe), -v is verbose (safe) - only r/f should deny
+        // -i is interactive (safe), -v is verbose (safe) - only r/f should ask
         $this->assertTrue($result->isAllowed());
     }
 

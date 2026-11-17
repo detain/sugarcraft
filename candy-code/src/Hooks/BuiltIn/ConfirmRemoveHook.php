@@ -39,7 +39,12 @@ use SugarCraft\Code\Permissions\ShellWords;
  * unswitchable floor for destructive Bash stays where it always was — the
  * step-0 `rm -rf /` breaker inside {@see \SugarCraft\Code\Permissions\PermissionGate},
  * which no mode and no hook can talk open. Constructed without
- * $modeReader (bare embedders, tests) the hook denies exactly as before.
+ * $modeReader (bare embedders, tests) the hook asks exactly as before.
+ *
+ * A MATCH IS AN ASK, NOT A DENY. The hook has no verdict on a destructive
+ * command: an operator may mean it (cleaning a build directory). It returns
+ * {@see HookResult::ask()} with the explicit question, so the operator decides
+ * and a headless run without an answerer still refuses (fail closed).
  */
 final readonly class ConfirmRemoveHook implements HookInterface
 {
@@ -79,6 +84,15 @@ final readonly class ConfirmRemoveHook implements HookInterface
         // dd with an output file/device overwrites it wholesale.
         '/\bdd\b[^\n]*\bof=/i',
     ];
+
+    /**
+     * The question put to the operator when a destructive pattern matches.
+     * It is the permission prompt's body ({@see HookResult::ask()}), so it
+     * says what matched and what approval means, in terms the human can act on.
+     */
+    private const CONFIRM_MESSAGE = 'This command matches the recursive/force rm, find -delete, '
+        . 'shred or dd of= guard-rail. Approve it only if you mean to run it. The guard-rail '
+        . 'is a best-effort heuristic, not a security boundary.';
 
     public function name(): string
     {
@@ -122,11 +136,12 @@ final readonly class ConfirmRemoveHook implements HookInterface
 
             foreach (self::DANGEROUS_PATTERNS as $pattern) {
                 if (preg_grep($pattern, $candidates) !== []) {
-                    return HookResult::deny(
-                        'This hook prevents recursive/force rm and other destructive '
-                        . 'commands (find -delete, shred, dd of=). It is a best-effort '
-                        . 'heuristic, not a security boundary. Use interactive rm instead.'
-                    );
+                    // ASK, not DENY: the operator decides. A headless model cannot
+                    // run `rm` interactively, so a refusal here left it no way to
+                    // finish the task. An unanswered ASK still never runs (see
+                    // HookResult::permitsExecution()), and every surface that cannot
+                    // put the question fails closed on it.
+                    return HookResult::ask(self::CONFIRM_MESSAGE);
                 }
             }
         }

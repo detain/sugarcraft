@@ -103,10 +103,10 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
         self::assertNotSame('', $document['refusals'][0]['reason']);
         // E250: the entry carries the KIND as a token, so a consumer outside
         // PHP does not have to re-match the prefix `reason` opens with. A real
-        // gate DENY is a `hook` refusal and nothing else, and this is the one
-        // row in this file driven by a REAL EngineBackend rather than by a
-        // hand-built event, so it is where the token is worth asserting.
-        self::assertSame(DenialKind::Hook->token(), $document['refusals'][0]['kind']);
+        // gate ASK that no approver answers is an `unanswered` refusal, and this
+        // is the one row in this file driven by a REAL EngineBackend rather than
+        // by a hand-built event, so it is where the token is worth asserting.
+        self::assertSame(DenialKind::Unanswered->token(), $document['refusals'][0]['kind']);
 
         // The answer is still the answer. A refusal is additional information,
         // never a replacement for the turn's result.
@@ -154,7 +154,7 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
         // Audit F-P8: the text is for the model and a human; what a reader
         // classifies on is the kind the engine stamped, and it must arrive.
         self::assertSame(
-            DenialKind::Hook,
+            DenialKind::Unanswered,
             $finished[0]->result->denial(),
             'the engine refused the call but the ToolFinished it emitted carries no denial kind, so every '
             . 'reader that classifies on the field reports it as an ordinary failure',

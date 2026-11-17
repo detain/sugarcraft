@@ -573,10 +573,13 @@ final class EngineBackendTest extends TestCase
     }
 
     /**
-     * A hook DENY inside the loop is a tool-call outcome the caller must be
-     * able to see; it used to be entirely internal to the engine.
+     * A hook ASK left unanswered inside the loop is a tool-call outcome the
+     * caller must be able to see, and the call must not run. This run has no
+     * approver, so the question is never put: the call is refused as an
+     * unanswered ask, and the operator-facing message the hook raised is carried
+     * through unchanged.
      */
-    public function testCompleteReportsAHookDeniedToolCallAsAnErrorEvent(): void
+    public function testCompleteReportsAnUnansweredHookAskAsAnErrorEvent(): void
     {
         $backend = EngineBackend::new($this->bashThenAnswerProvider(), 'bash')
             ->withTools([$this->bashSpyTool()]);
@@ -589,7 +592,8 @@ final class EngineBackendTest extends TestCase
         $this->assertCount(2, $events);
         $this->assertInstanceOf(ToolFinished::class, $events[1]);
         $this->assertTrue($events[1]->result->isError());
-        $this->assertStringContainsString('Hook denied', $events[1]->result->content());
+        $this->assertStringContainsString('Permission required: no approver is attached', $events[1]->result->content());
+        $this->assertStringContainsString('recursive/force rm', $events[1]->result->content());
     }
 
     public function testCompleteStillWorksWithoutAnOnEventCallback(): void
