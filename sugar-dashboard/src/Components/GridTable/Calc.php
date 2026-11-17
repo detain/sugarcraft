@@ -17,6 +17,10 @@ use SugarCraft\Core\Util\Width;
  * The measure is Width::string's, so two inputs differ from the old code-point
  * rule: a tab is charged Width::TAB_WIDTH cells (not one), and SGR sequences
  * cost nothing (not their byte count). Printable ASCII is unchanged.
+ *
+ * The tab charge only decides where a clip falls; nothing expands the tab.
+ * GridTable writes cell values raw, and ComboBox writes option labels raw, so a
+ * tab that fits still reaches the terminal, which draws it to the next tab stop.
  */
 final class Calc
 {

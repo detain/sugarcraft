@@ -58,9 +58,45 @@ final class DisplayCellWidthTest extends TestCase
         $rendered = $grid->render();
 
         $this->assertFrameIsRectangular($rendered);
-        // The label is cut to the cells left after the two-cell indicator, so
-        // the indicator still sits flush against the right wall.
+        // The label is four cells, so it fits the cells left after the two-cell
+        // indicator: it is padded to that width, not cut, and the indicator
+        // still sits flush against the right wall.
         self::assertStringContainsString('┃名前' . str_repeat(' ', 9) . '▲┃', $rendered);
+    }
+
+    public function testUnsortedHeaderPadsACjkLabelByDisplayWidth(): void
+    {
+        // The label 名前 is four cells but two code points. str_pad counts code
+        // points, so on the old path the header came out wider than the column;
+        // Width::padRight fills the column's fourteen cells exactly.
+        $name = Column::new('name', '名前');
+        $grid = GridTable::new([$name], [new Row(['name' => '日本語テキスト'])])
+            ->setSize(30, 10);
+
+        $rendered = $grid->render();
+        $header = explode("\n", $rendered)[1];
+
+        $this->assertFrameIsRectangular($rendered);
+        self::assertStringContainsString('┃名前' . str_repeat(' ', 10) . '┃', $header);
+    }
+
+    public function testDecomposedAccentMeasuresOneCell(): void
+    {
+        // "e" followed by U+0301 COMBINING ACUTE ACCENT is one glyph in one cell.
+        // The code-point rule counted two code points, one column cell too many.
+        self::assertSame(['k' => 1], self::columnWidthsOf(["e\u{0301}"]));
+    }
+
+    public function testPrecomposedAccentPadsByDisplayWidth(): void
+    {
+        // U+00E9 is one cell but two bytes. str_pad pads by bytes, so a cell of
+        // it in a four-cell column got two spaces and stopped a cell short.
+        $columns = [Column::new('name', 'Name')];
+        $rendered = GridTable::new($columns, [new Row(['name' => "\u{00e9}"])])
+            ->setSize(30, 10)
+            ->render();
+
+        self::assertStringContainsString("┃\u{00e9}   ┃", $rendered);
     }
 
     public function testSortedHeaderKeepsTheSgrOfALabelThatFits(): void
@@ -220,7 +256,7 @@ final class DisplayCellWidthTest extends TestCase
         self::assertStringContainsString(Width::padRight('日本', 6), $line);
 
         // Only filterable columns match, so the filter needs one to empty the set.
-        // The minimum width keeps the whole notice visible rather than ellipsised.
+        // The minimum width keeps the whole notice visible rather than ellipsized.
         $filtered = GridTable::new(
             [Column::new('name', 'Name', minWidth: 24, filterable: true)],
             [new Row(['name' => 'alpha'])],
@@ -279,7 +315,7 @@ final class DisplayCellWidthTest extends TestCase
     }
 
     /**
-     * A ComboBox with the default selected-row colour removed, so the option
+     * A ComboBox with the default selected-row color removed, so the option
      * line carries only the clipped label and its own SGR.
      *
      * @param list<array{label: string}> $options

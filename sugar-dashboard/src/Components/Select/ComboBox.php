@@ -263,18 +263,24 @@ final class ComboBox implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * Unallocated the combobox keeps its natural width (Boxer asks innerSize
      * for it); once setSize speaks, render stays inside the budget and long
-     * content ellipsises instead of overflowing the box (finding
+     * content ellipsizes instead of overflowing the box (finding
      * sugar-dashboard-046, the no-compress cliff — the same fail-toward-FIT
      * rule GridTable columns get through Calc).
      *
-     * Behaviour change (P0-A11): the two callers are renderInput (the
+     * Behavior change (P0-A11): the two callers are renderInput (the
      * placeholder or the query) and renderResultItem (each option label). Both
      * clip through Calc::truncate, which measures display cells, not code
      * points. So a CJK or emoji text fills its allocation in cells and no
-     * longer overruns it; a tab in the text is charged four cells, not one; and
-     * a clipped text drops any ANSI sequence it carried (the old mb_substr cut
-     * could leave one open mid-escape). Text that already fits is returned
-     * untouched, SGR included.
+     * longer overruns it; a clipped text drops any ANSI sequence it carried
+     * (the old mb_substr cut could leave one open mid-escape). Text that already
+     * fits is returned untouched, SGR included.
+     *
+     * Tabs: the clip charges a tab four cells (Width::TAB_WIDTH), but only to
+     * decide where the cut falls. Nothing expands the tab. renderResultItem
+     * writes the returned label raw, so a tab that fits the allocation reaches
+     * the terminal unchanged and the terminal draws it to the next tab stop,
+     * which can be more or fewer than four cells from where the clip measured
+     * it. The same holds for GridTable cells (see Calc).
      */
     private function clipToAllocation(string $text, int $chrome): string
     {
