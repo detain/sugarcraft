@@ -2562,11 +2562,13 @@ final class AgentWorkerPool
             // mirrored prefix is compared before any new bytes are taken from it.
             $full = self::readProgressRange($path, 0, $size);
             if ($full === '') {
-                // Unreadable, or truncated between the stat and the read. The
-                // buffer is still the first $offset bytes of the file as of its
-                // last build, so the offset stays. Dropping it would make the
-                // next readable poll look like a rebuild, and report a change
-                // (status and stall deadline) for bytes that did not change.
+                // Unreadable, or truncated to zero between the stat and the read.
+                // A read that is short but not empty is not this case: it is
+                // mirrored below as the file's current content. The buffer is
+                // still the first $offset bytes of the file as of its last build,
+                // so the offset stays. Dropping it would make the next readable
+                // poll look like a rebuild, and report a change (status and stall
+                // deadline) for bytes that did not change.
                 continue;
             }
 
@@ -2608,7 +2610,10 @@ final class AgentWorkerPool
     /**
      * The $length bytes of a progress file from $offset, or '' when it cannot
      * be opened or read. Only {@see pumpProgress()} calls this, and only for a
-     * range it has just stat'd, so a short read is left for the next poll.
+     * range it has just stat'd. A read that returns fewer bytes than statted
+     * (the file was truncated after the stat, to a non-zero length) returns
+     * those bytes, and pumpProgress() mirrors them as the file's content at
+     * that read; it does not wait for the next poll.
      */
     private static function readProgressRange(string $path, int $offset, int $length): string
     {
