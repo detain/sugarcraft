@@ -11,7 +11,7 @@ use SugarCraft\Core\Concerns\Mutable;
 
 /**
  * App's with*() builders ride the shared {@see Mutable} splat rather than a
- * hand-written 67-argument constructor call. These pins hold the behaviour the
+ * hand-written 67-argument constructor call. These pins hold the behavior the
  * splat must keep: unrelated fields carry across a wither, an explicit null
  * resets a nullable field, and the rebuilt App is a new instance.
  *
@@ -69,5 +69,21 @@ final class AppMutateSplatTest extends TestCase
         self::assertSame('sess-1', $app->sessionId);
         self::assertSame('high', $app->reasoningEffort);
         self::assertSame(3, $app->selectedAgentIndex);
+    }
+
+    /**
+     * Declared behavior change: the old variadic mutate() silently dropped a
+     * key it did not know, while the shared splat forwards every key as a
+     * named constructor argument, so an unknown key fails loudly as an Error.
+     */
+    public function testAnUnknownChangeKeyFailsLoudlyInsteadOfBeingDropped(): void
+    {
+        $app = App::new($this->provider, 'gpt-4');
+        $mutate = new \ReflectionMethod(App::class, 'mutate');
+
+        $this->expectException(\Error::class);
+        $this->expectExceptionMessage('Unknown named parameter');
+
+        $mutate->invoke($app, ['noSuchField' => 1]);
     }
 }
