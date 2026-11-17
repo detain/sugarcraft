@@ -5,19 +5,19 @@ declare(strict_types=1);
 namespace SugarCraft\AnsiParser;
 
 /**
- * Stream tokeniser for terminal byte input: raw bytes in, a list of
+ * Stream tokenizer for terminal byte input: raw bytes in, a list of
  * {@see Token} records out.
  *
  * This is the flat, dispatch-free view of the stream, for consumers that want
  * the classified slices rather than the VT500 handler callbacks of
- * {@see Parser\Parser}. It recognises C0 controls, two-byte ESC sequences,
+ * {@see Parser\Parser}. It recognizes C0 controls, two-byte ESC sequences,
  * CSI, and the string envelopes OSC, DCS, APC, SOS and PM. A C1 byte (0x80-0x9F)
  * is ordinary text here: only the 7-bit spellings open a sequence.
  *
  * An incomplete sequence at the end of a chunk is held and joined to the next
  * {@see parse()} call. {@see flush()} drains whatever is still held, as text,
  * at end of stream. Held bytes are capped at {@see MAX_PENDING_BYTES}; past
- * that the bytes are returned as text and the tokeniser resynchronises, so a
+ * that the bytes are returned as text and the tokenizer resynchronizes, so a
  * hostile stream cannot grow the buffer without bound.
  *
  * Usage:
@@ -60,7 +60,7 @@ final class AnsiTokenizer
     }
 
     /**
-     * Tokenise `$chunk`. Returns the tokens that are complete now; an
+     * Tokenize `$chunk`. Returns the tokens that are complete now; an
      * unfinished trailing sequence is held for the next call.
      *
      * @return list<Token>
@@ -86,8 +86,8 @@ final class AnsiTokenizer
                 $consumed = $this->consumeEsc($buf, $i, $len, $tokens);
                 if ($consumed < 0) {
                     // Incomplete. Hold the tail unless it has outgrown the cap:
-                    // then no terminator this tokeniser accepts is coming, so
-                    // return those bytes as text and resynchronise. The check
+                    // then no terminator this tokenizer accepts is coming, so
+                    // return those bytes as text and resynchronize. The check
                     // uses the whole buffer, because the backlog ahead of the
                     // partial is what grew.
                     $rest = substr($buf, $i);
@@ -226,7 +226,7 @@ final class AnsiTokenizer
         $finalByte = $buf[$j];
         $finalOrd = ord($finalByte);
         if ($finalOrd < 0x40 || $finalOrd > 0x7e) {
-            // Not a valid final: emit a bare ESC [ and resynchronise on the next byte.
+            // Not a valid final: emit a bare ESC [ and resynchronize on the next byte.
             $tokens[] = new Token(Token::ESC, '[');
             return 2;
         }

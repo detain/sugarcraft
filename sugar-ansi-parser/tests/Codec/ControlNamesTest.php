@@ -10,9 +10,11 @@ use SugarCraft\AnsiParser\Codec\ControlNames;
 
 /**
  * Pins the control-name vocabulary. The long labels are the spellings that
- * candy-ansi-inspect's C0C1Test has always asserted; the mnemonic parity test
- * reproduces the short names that candy-ansi-inspect's Inspector used to
- * splice into sanitised labels, so migrating onto this table keeps them.
+ * candy-ansi-inspect's C0C1Test has always asserted. The mnemonic tests pin
+ * the short names that candy-ansi-inspect's Inspector splices into sanitized
+ * labels for 46 bytes (see inspectorMnemonics()). The Inspector renders 19
+ * further C1 bytes as hex escapes, while mnemonic() names them; that gap is
+ * pinned separately and recorded in the README migration map.
  */
 final class ControlNamesTest extends TestCase
 {
@@ -153,10 +155,40 @@ final class ControlNamesTest extends TestCase
 
     public function testMnemonicMatchesEveryLongLabelsLeadingToken(): void
     {
-        // Two loops, not one spread: array unpacking renumbers int keys.
+        // One union with `+`, not array spread: `[...$a, ...$b]` renumbers the
+        // int keys, which would shift every C1 byte onto the wrong code point.
         foreach (ControlNames::C0 + ControlNames::C1 as $byte => $name) {
             $this->assertSame(explode(' ', $name, 2)[0], ControlNames::mnemonic($byte));
         }
+    }
+
+    /**
+     * C1 bytes that candy-ansi-inspect's Inspector::sanitizeLabelBytes() does
+     * NOT name: its default arm renders them as `\xNN`. mnemonic() names every
+     * C1 byte, so migrating the Inspector onto this table changes the output
+     * for exactly these bytes. The migration must either keep the hex form for
+     * them or change it deliberately in its own PR.
+     *
+     * @return iterable<string, array{int, string}>
+     */
+    public static function inspectorHexFallbackC1Bytes(): iterable
+    {
+        $pairs = [
+            0x80 => 'PAD', 0x81 => 'HOP', 0x82 => 'BPH', 0x83 => 'NBH',
+            0x86 => 'SSA', 0x87 => 'ESA', 0x89 => 'HTJ', 0x8A => 'VTS',
+            0x8B => 'PLD', 0x8C => 'PLU', 0x91 => 'PU1', 0x92 => 'PU2',
+            0x93 => 'STS', 0x94 => 'CCH', 0x95 => 'MW',  0x96 => 'SPA',
+            0x97 => 'EPA', 0x99 => 'SGCI', 0x9A => 'SCI',
+        ];
+        foreach ($pairs as $byte => $short) {
+            yield sprintf('0x%02X', $byte) => [$byte, $short];
+        }
+    }
+
+    #[DataProvider('inspectorHexFallbackC1Bytes')]
+    public function testC1BytesTheInspectorLeavesAsHexHaveMnemonicsHere(int $byte, string $short): void
+    {
+        $this->assertSame($short, ControlNames::mnemonic($byte));
     }
 
     /**

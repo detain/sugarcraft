@@ -9,15 +9,18 @@ namespace SugarCraft\AnsiParser\Codec;
  *
  * Two vocabularies, one table. {@see c0Name()} and {@see c1Name()} return the
  * long labels (`BEL (bell)`) that inspector reports print; {@see mnemonic()}
- * returns the bare abbreviation (`BEL`) that label sanitisers splice into
+ * returns the bare abbreviation (`BEL`) that label sanitizers splice into
  * escaped text. Both derive from the same constant, so the two spellings
  * cannot drift apart.
  *
  * The code points are ECMA-48; the wording follows the control-name
  * vocabulary of charmbracelet/sequin's rendered labels.
  *
- * @internal Library-internal table; the long-label spellings are pinned by
- *           consumer tests, so change them only together with those.
+ * This is public API, not an internal table. Its planned consumer is
+ * candy-ansi-inspect, which replaces its own C0C1 lookups (called from
+ * AnsiHandler) with this class. The long-label spellings are pinned by
+ * ControlNamesTest and by that package's C0C1Test, so change them only
+ * together with both.
  */
 final class ControlNames
 {

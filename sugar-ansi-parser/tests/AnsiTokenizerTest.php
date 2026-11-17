@@ -9,7 +9,7 @@ use SugarCraft\AnsiParser\AnsiTokenizer;
 use SugarCraft\AnsiParser\Token;
 
 /**
- * Behaviour of the flat stream tokeniser. Cases port sugar-core's former
+ * Behavior of the flat stream tokenizer. Cases port sugar-core's former
  * Util\Parser suite, which this class replaces, and add the edges that suite
  * left unpinned (DEL, 8-bit C1 bytes, invalid CSI finals, the flush contract).
  */
@@ -106,7 +106,7 @@ final class AnsiTokenizerTest extends TestCase
         $this->assertSame('p', $tokens[0]->final);
     }
 
-    public function testInvalidCsiFinalEmitsBareEscAndResynchronises(): void
+    public function testInvalidCsiFinalEmitsBareEscAndResynchronizes(): void
     {
         // 0x01 is below the 0x40-0x7E final range: the ESC [ pair is emitted
         // as an ESC token and the control byte that follows is still seen.
@@ -241,7 +241,7 @@ final class AnsiTokenizerTest extends TestCase
         $this->assertSame($prefix . 'yy', $tokens[0]->data);
         $this->assertSame([], $p->flush());          // nothing left buffered
 
-        // Resynchronised: the next chunk parses normally.
+        // Resynchronized: the next chunk parses normally.
         $tokens = $p->parse("\x1b[31m");
         $this->assertCount(1, $tokens);
         $this->assertSame(Token::CSI, $tokens[0]->type);
