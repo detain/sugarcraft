@@ -11353,11 +11353,17 @@ public static function useMaxCost(?string $maxCost): void
             return;
         }
 
-        $recommended = (new BundleRecommender(
-            $root,
-            $catalog,
-            $installedRoot === '' ? [] : self::installedBundleNames($installedRoot),
-        ))->recommend();
+        // PLG-2a: a bundle installed with `--project` into this directory is as
+        // installed as one in the user root, so the launch row excludes both
+        // tiers, the same union `bundles recommend` takes. A symlinked project
+        // tier is not read, matching the discovery floor that refuses it.
+        $installed = $installedRoot === '' ? [] : self::installedBundleNames($installedRoot);
+        $projectTier = $root . '/.candy-code/bundles';
+        if (!\is_link(\dirname($projectTier)) && !\is_link($projectTier)) {
+            $installed = \array_values(\array_unique(\array_merge($installed, self::installedBundleNames($projectTier))));
+        }
+
+        $recommended = (new BundleRecommender($root, $catalog, $installed))->recommend();
 
         if ($recommended === []) {
             return;

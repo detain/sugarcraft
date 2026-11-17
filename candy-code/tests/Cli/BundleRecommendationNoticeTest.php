@@ -149,6 +149,20 @@ final class BundleRecommendationNoticeTest extends TestCase
         $this->assertArrayNotHasKey('launchRecommendations', $document, 'a silent drain stamps nothing');
     }
 
+    public function testAProjectTierInstallIsExcludedFromTheLaunchRowToo(): void
+    {
+        // PLG-2a: `bundles install --project` lands under <root>/.candy-code/bundles;
+        // the launch row must not offer it back in that project.
+        mkdir($this->projectRoot . '/.candy-code/bundles/php-tools', 0700, true);
+        $this->addMarketplace('acme', self::SHA_A, [$this->entry('php-tools', ['php', 'composer'])]);
+        $this->withPhpSignal();
+        $registry = MarketplaceRegistry::atPaths($this->stampFile, $this->checkouts);
+
+        Bootstrap::reportBundleRecommendations($this->projectRoot, $registry, $this->stampFile, $this->installedRoot);
+
+        $this->assertSame([], Bootstrap::launchNotices(), 'a project-tier install is not a recommendation');
+    }
+
     public function testTheRowShowsOncePerProjectPerPinAndARepinedMarketplaceShowsAgain(): void
     {
         $this->addMarketplace('acme', self::SHA_A, [$this->entry('php-tools', ['php', 'composer'])]);
