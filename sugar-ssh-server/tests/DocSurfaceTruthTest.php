@@ -746,7 +746,7 @@ final class DocSurfaceTruthTest extends TestCase
         $doc = (string) \preg_replace('/\s+/', ' ', $doc);
         self::assertStringContainsString('**Wrapper-only.**', $doc);
         self::assertStringContainsString('This repo does not set `SSH_PASSWORD`, and whether sshd\'s ForceCommand path exports it is unverified against OpenSSH.', $doc);
-        self::assertStringContainsString('does not authenticate the peer', $doc);
+        self::assertStringContainsString('it does not authenticate the peer by itself.', $doc);
         self::assertDoesNotMatchRegularExpression('/nothing in openssh ever sets/i', $doc);
 
         $readme = $this->readme();
@@ -758,6 +758,11 @@ final class DocSurfaceTruthTest extends TestCase
         self::assertStringContainsString('**Wrapper-only:** reads `SSH_PASSWORD`', $flat);
         self::assertStringContainsString('This repo does not set `SSH_PASSWORD`, and whether sshd\'s ForceCommand path exports it is unverified against OpenSSH', $flat);
         self::assertStringContainsString('| `SSH_PASSWORD` | **not set by this repo; whether sshd\'s ForceCommand path exports it is unverified against OpenSSH** |', $flat);
+        self::assertStringContainsString('neither is a credential proof by itself', $flat);
+        self::assertStringContainsString('The variable is expected to reach this process', $flat);
+        self::assertStringNotContainsString('arrives only if', $flat);
+        self::assertStringNotContainsString('never a credential proof', $flat);
+        self::assertStringNotContainsString('reaches this process when', $flat);
         self::assertDoesNotMatchRegularExpression('/nothing in openssh ever sets/i', $flat);
     }
 
