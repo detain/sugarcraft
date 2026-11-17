@@ -6219,8 +6219,9 @@ public static function useMaxCost(?string $maxCost): void
      * reaches {@see PermissionGate}'s Auto-mode 3-strike circuit breaker. That
      * is not a cost this wiring introduced and it is not about config hooks:
      * the three built-ins have always been ahead of the gate, so a
-     * {@see \SugarCraft\Code\Hooks\BuiltIn\ConfirmRemoveHook} DENY — the
-     * commonest refusal there is — was already uncounted before a hook FILE
+     * {@see \SugarCraft\Code\Hooks\BuiltIn\ConfirmRemoveHook} match — an ASK the
+     * operator decides, refused outright where nobody can answer it — is the
+     * commonest such stop, and it was already uncounted before a hook FILE
      * could be loaded at all. Registering config hooks in between adds one
      * more source of the same uncounted refusal, not a new failure mode. It is
      * a MISCOUNT rather than a hole — the call is refused either way, and the

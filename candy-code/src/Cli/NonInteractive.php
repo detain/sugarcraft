@@ -2814,8 +2814,8 @@ final class NonInteractive
      * THE GAP THIS CLOSES. Before it, a blocked call reached the operator on
      * exactly one surface and only in one format: the `refusals` array of an
      * `--output-format json` document. On the default `text` format a hook
-     * DENY — the commonest refusal there is, and the one the shipped
-     * `ConfirmRemoveHook` raises against `rm -rf` — produced the answer on
+     * refusal — the commonest refusal there is, and the one a headless run hits
+     * when a `ConfirmRemoveHook` ask goes unanswered — produced the answer on
      * stdout, no tool execution, and NOTHING anywhere saying so. A tool
      * silently not running is the failure a headless caller has the least
      * chance of noticing: the model sees the refusal and answers around it, so

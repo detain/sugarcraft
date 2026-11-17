@@ -38,8 +38,9 @@ use SugarCraft\Code\Permissions\ShellWords;
  * hook adds is a heuristic prompt the operator explicitly waived. The
  * unswitchable floor for destructive Bash stays where it always was — the
  * step-0 `rm -rf /` breaker inside {@see \SugarCraft\Code\Permissions\PermissionGate},
- * which no mode and no hook can talk open. Constructed without
- * $modeReader (bare embedders, tests) the hook asks exactly as before.
+ * which no mode and no hook can talk open. Constructed without $modeReader
+ * (bare embedders, tests) there is no mode to stand the hook down, so a match
+ * asks.
  *
  * A MATCH IS AN ASK, NOT A DENY. The hook has no verdict on a destructive
  * command: an operator may mean it (cleaning a build directory). It returns
@@ -75,7 +76,7 @@ final readonly class ConfirmRemoveHook implements HookInterface
         // rm with GNU long-form flags: --recursive / --force, and the
         // unambiguous abbreviations GNU getopt accepts for them (`--rec`,
         // `--forc`) — the step-0 breaker in PermissionGate counts those, and
-        // this hook is documented as refusing everything that breaker does.
+        // this hook is documented as asking about everything that breaker refuses.
         '/\brm\b[^\n]*\s--(?:r(?:e(?:c(?:u(?:r(?:s(?:i(?:ve?)?)?)?)?)?)?)?|f(?:o(?:r(?:ce?)?)?)?)(?!\w)/i',
         // find ... -delete wipes every matched entry.
         '/\bfind\b[^\n]*\s-delete\b/i',
