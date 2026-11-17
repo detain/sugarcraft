@@ -2687,8 +2687,8 @@ final class NonInteractive
      * format the operator is reading the terminal, where
      * {@see HeadlessPermissionPrompt} has already written every one of them to
      * stderr". Round 47 measured that false — that class is reached only for a
-     * hook verdict of ASK, so it covers the prompt-shaped refusals and not the
-     * commonest one. On the pre-ask build a {@see \SugarCraft\Code\Hooks\BuiltIn\ConfirmRemoveHook}
+     * hook verdict of ASK, so it covers the prompt-shaped refusals and, on the
+     * pre-ask build, not the commonest one. On the pre-ask build a {@see \SugarCraft\Code\Hooks\BuiltIn\ConfirmRemoveHook}
      * match was a plain hook DENY, and a plain hook DENY returned out of
      * {@see \SugarCraft\Code\Runtime::gate()} before `settleAsk()`. A match is an
      * ASK now, so it goes through `settleAsk()` like the other prompt-shaped
