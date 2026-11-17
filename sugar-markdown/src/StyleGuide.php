@@ -108,19 +108,27 @@ final class StyleGuide
      *
      * Trust note: a style file is code the terminal runs. Do not
      * auto-load workspace-adjacent style files; load only files the
-     * operator pinned. Decoded string slots (`block_prefix` /
-     * `block_suffix` / `indent_token`) are swept through
-     * `Sanitize::untrusted()` so a hostile file cannot inject raw
-     * escape sequences — stock glamour "\n"/space affixes survive the
-     * sweep byte-identical.
+     * operator pinned. The four `block_prefix` / `block_suffix` slots
+     * (document and paragraph) refuse a control or escape byte by slot
+     * name, visible text stays legal; `indent_token` is swept through
+     * `Sanitize::untrusted()` so a hostile token cannot inject raw escape
+     * sequences. Stock glamour affixes and tokens survive byte-identical. Files over
+     * {@see Theme::MAX_CONFIG_BYTES} refuse before they are parsed.
      *
-     * @throws \RuntimeException        when the file cannot be read
-     * @throws \InvalidArgumentException when its contents are not a JSON object
+     * @throws \RuntimeException        when the file cannot be read or is too large
+     * @throws \InvalidArgumentException when its contents are not a JSON object,
+     *                                   or a decoration slot or int is refused
      */
     public static function fromFile(string $path): self
     {
         if (!is_file($path)) {
             throw new \RuntimeException(Lang::t('theme.read_failed', ['path' => $path]));
+        }
+        // The glamour door always carries the ceiling; the stat probe refuses
+        // before the read, the length check below covers a file that grew.
+        $size = @filesize($path);
+        if ($size !== false && $size > Theme::MAX_CONFIG_BYTES) {
+            throw new \RuntimeException(Lang::t('theme.file_too_large', ['path' => $path, 'bytes' => Theme::MAX_CONFIG_BYTES]));
         }
         $warning = null;
         set_error_handler(static function (int $errno, string $message) use (&$warning): bool {
@@ -138,6 +146,9 @@ final class StyleGuide
         if ($raw === false || $warning !== null) {
             $msg = $warning ?? 'unknown error';
             throw new \RuntimeException(Lang::t('theme.read_failed', ['path' => $path]) . ": {$msg}");
+        }
+        if (strlen($raw) > Theme::MAX_CONFIG_BYTES) {
+            throw new \RuntimeException(Lang::t('theme.file_too_large', ['path' => $path, 'bytes' => Theme::MAX_CONFIG_BYTES]));
         }
 
         return self::fromJsonString($raw);
@@ -185,19 +196,27 @@ final class StyleGuide
             $elements[$name] = $primitive;
         }
 
+        // The decoration law: the four block_prefix / block_suffix slots that
+        // cross into Theme may not carry a control or escape byte; such a
+        // payload refuses by slot name. Visible text stays legal (glamour's
+        // own "«" and "> " affixes). The validated value replaces the raw one
+        // so every later read sees a string.
+        foreach (['document', 'paragraph'] as $block) {
+            foreach (['block_prefix', 'block_suffix'] as $slot) {
+                if (array_key_exists($slot, $elements[$block] ?? [])) {
+                    $elements[$block][$slot] = self::decorationSlot($elements[$block][$slot], "{$block}.{$slot}");
+                }
+            }
+        }
         $document = $elements['document'] ?? [];
 
-        // SEC-02 boundary: every decoded STRING slot goes through
-        // Sanitize::untrusted(). A style file is code the terminal runs
-        // — glamour ships prefixes like "\n" (kept: TAB/LF/CR survive the
-        // sweep byte-identical) but a hostile file must never be able to
-        // inject a raw OSC/CSI sequence into the render through a prefix,
-        // a suffix or an indent token.
+        // SEC-02 boundary for the one string slot left: an indent token is
+        // drawn on every quoted line, so it is still swept rather than refused.
         return new self(
-            blockPrefix:    Sanitize::untrusted((string) ($document['block_prefix'] ?? '')),
-            blockSuffix:    Sanitize::untrusted((string) ($document['block_suffix'] ?? '')),
-            documentIndent: self::nonNegativeInt($document['indent'] ?? 0),
-            documentMargin: self::nonNegativeInt($document['margin'] ?? 0),
+            blockPrefix:    (string) ($document['block_prefix'] ?? ''),
+            blockSuffix:    (string) ($document['block_suffix'] ?? ''),
+            documentIndent: self::boundedDecoration($document['indent'] ?? 0, 'document.indent'),
+            documentMargin: self::boundedDecoration($document['margin'] ?? 0, 'document.margin'),
             elements:       $elements,
             chroma:         $chroma,
         );
@@ -269,8 +288,8 @@ final class StyleGuide
             headingCase:         $this->headingCase(),
             documentMargin:      $this->documentMargin,
             documentIndent:      $this->documentIndent,
-            paragraphPrefix:     Sanitize::untrusted((string) ($paragraph['block_prefix'] ?? '')),
-            paragraphSuffix:     Sanitize::untrusted((string) ($paragraph['block_suffix'] ?? '')),
+            paragraphPrefix:     (string) ($paragraph['block_prefix'] ?? ''),
+            paragraphSuffix:     (string) ($paragraph['block_suffix'] ?? ''),
             documentBlockPrefix: $this->blockPrefix,
             documentBlockSuffix: $this->blockSuffix,
         );
@@ -407,6 +426,47 @@ final class StyleGuide
         }
 
         return null;
+    }
+
+    /**
+     * Control bytes that may not appear in a decoration slot: C0 except TAB,
+     * LF and CR (ESC included), DEL, and the C1 range as UTF-8 (U+0080-U+009F).
+     */
+    private const DECORATION_PAYLOAD = '/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]|\xC2[\x80-\x9F]/';
+
+    /**
+     * A decoration slot: a non-string shape reads as '' (malformed, not
+     * fatal); a string carrying a control or escape byte refuses by naming
+     * the slot, since such a payload is a channel into every rendered frame.
+     */
+    private static function decorationSlot(mixed $value, string $slot): string
+    {
+        if (!is_string($value)) {
+            return '';
+        }
+        if (preg_match(self::DECORATION_PAYLOAD, $value) !== 1) {
+            return $value;
+        }
+
+        throw new \InvalidArgumentException(Lang::t('glamour.decoration_unsafe', ['slot' => $slot]));
+    }
+
+    /**
+     * A non-negative decoration int with the shared ceiling. Over the cap it
+     * refuses with its name: a style file asking for a billion-cell indent is
+     * broken, and {@see Theme}'s constructor would only saturate it silently.
+     */
+    private static function boundedDecoration(mixed $value, string $key): int
+    {
+        $number = self::nonNegativeInt($value);
+        if ($number > Theme::MAX_DOCUMENT_DECORATION) {
+            throw new \InvalidArgumentException(Lang::t('glamour.value_too_large', [
+                'key'   => $key,
+                'limit' => Theme::MAX_DOCUMENT_DECORATION,
+            ]));
+        }
+
+        return $number;
     }
 
     /** int | digit-string → non-negative int; anything else coerces to 0. */

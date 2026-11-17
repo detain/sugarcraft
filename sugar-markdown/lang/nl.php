@@ -11,6 +11,8 @@ declare(strict_types=1);
 return [
     'theme.read_failed'            => 'kan themabestand niet lezen: {path}',
     'theme.file_too_large'         => 'themabestand overschrijdt het plafond van {bytes} bytes: {path}',
+    'glamour.decoration_unsafe' => 'slot {slot} van het stijlbestand bevat een besturings- of escape-byte; geweigerd',
+    'glamour.value_too_large' => '{key} in het stijlbestand overschrijdt het plafond van {limit}',
     'theme.json_invalid'           => 'ongeldige JSON in thema-bestand',
     'theme.json_object'            => 'thema-JSON moet naar een object decoderen',
     'theme.bad_color'              => 'ongeldige kleurspecificatie: {spec}',

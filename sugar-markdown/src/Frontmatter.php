@@ -17,6 +17,14 @@ use SugarCraft\Markdown\Frontmatter\Split;
  *
  * Parsing the YAML is the caller's business: {@see Split::$meta} is the raw
  * block between the fences, handed over unparsed.
+ *
+ * Reviewed against the seven candy-code copies and the MemoryStore variant
+ * (candy-code/src/Memory/MemoryStore.php FRONTMATTER_PATTERN). Three
+ * differences are deliberate: the closing fence may end the document (the
+ * copies return no frontmatter there); the blank lines after the closing fence
+ * are consumed (the copies consume them too; MemoryStore keeps them in its
+ * body); and an unclosed block is still no frontmatter. Callers that depended
+ * on MemoryStore's body bytes must trim the leading blank lines themselves.
  */
 final class Frontmatter
 {

@@ -442,19 +442,78 @@ final class StyleGuideTest extends TestCase
         $this->assertSame("\n", $theme->paragraphSuffix);
 
         $hostile = StyleGuide::fromJsonString(
-            '{"document":{"block_prefix":"\\u001b]2;pwned\\u0007"},'
-            . '"paragraph":{"block_suffix":"\\u001b[1;31mX"},'
-            . '"block_quote":{"indent_token":"\\u001b]8;;http://evil\\u0007"}}'
+            '{"block_quote":{"indent_token":"\\u001b]8;;http://evil\\u0007"}}'
         );
-        $this->assertSame('', $hostile->blockPrefix, 'the whole OSC sequence, payload included, is swept');
-        $this->assertStringNotContainsString("\x1b", $hostile->blockPrefix);
-        $this->assertStringNotContainsString("\x07", $hostile->blockPrefix);
-        $this->assertStringNotContainsString("\x1b", $hostile->theme()->paragraphSuffix);
-        $this->assertStringNotContainsString("\x1b", $hostile->indentToken('block_quote'));
+        $this->assertStringNotContainsString("\x1b", $hostile->indentToken('block_quote'), 'indent tokens are swept');
+        $this->assertStringNotContainsString("\x07", $hostile->indentToken('block_quote'));
 
         $rendered = (new Renderer($hostile->theme()))->render("hello\n");
-        $this->assertStringNotContainsString("\x1b]2;pwned", $rendered);
         $this->assertStringNotContainsString("\x1b]8;;", $rendered);
+    }
+
+    /**
+     * The four block_prefix / block_suffix slots refuse a payload by slot
+     * name rather than sweeping it, as candy-mdview's GlamourTheme always has:
+     * they are vertical-spacing slots, so any escape in them is a channel into
+     * every rendered frame. Inert whitespace stays accepted.
+     */
+    public function testHostileDecorationSlotsRefuseByName(): void
+    {
+        $cases = [
+            'document.block_prefix' => '{"document":{"block_prefix":"\\u001b]2;pwned\\u0007"}}',
+            'document.block_suffix' => '{"document":{"block_suffix":"\\u001b[1;31mX"}}',
+            'paragraph.block_prefix' => '{"document":{},"paragraph":{"block_prefix":"\\u001b[2J"}}',
+            'paragraph.block_suffix' => '{"document":{},"paragraph":{"block_suffix":"\\u001b[1;31mX"}}',
+        ];
+        foreach ($cases as $slot => $json) {
+            try {
+                StyleGuide::fromJsonString($json);
+                $this->fail("{$slot} carried a payload and was accepted");
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString($slot, $e->getMessage(), $slot);
+            }
+        }
+
+        $inert = StyleGuide::fromJsonString('{"document":{"block_prefix":" \\n\\t","block_suffix":"\\n"}}')->theme();
+        $this->assertSame(" \n\t", $inert->documentBlockPrefix);
+    }
+
+    /** Non-string decoration shapes read as '' (malformed, not fatal), with no PHP warning. */
+    public function testNonStringDecorationSlotsCoerceToEmpty(): void
+    {
+        $guide = StyleGuide::fromJsonString('{"document":{"block_prefix":["x"],"block_suffix":null},"paragraph":{"block_prefix":{"a":1}}}');
+        $this->assertSame('', $guide->blockPrefix);
+        $this->assertSame('', $guide->blockSuffix);
+        $this->assertSame('', $guide->theme()->paragraphPrefix);
+    }
+
+    /** Document ints refuse over {@see Theme::MAX_DOCUMENT_DECORATION} by name, and accept the ceiling itself. */
+    public function testDocumentIntsOverTheCeilingRefuseByName(): void
+    {
+        $edge = StyleGuide::fromJsonString('{"document":{"indent":' . Theme::MAX_DOCUMENT_DECORATION . ',"margin":"256"}}');
+        $this->assertSame(Theme::MAX_DOCUMENT_DECORATION, $edge->documentIndent);
+        $this->assertSame(Theme::MAX_DOCUMENT_DECORATION, $edge->documentMargin);
+
+        try {
+            StyleGuide::fromJsonString('{"document":{"margin":"1500000000"}}');
+            $this->fail('an over-cap margin was accepted');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('document.margin', $e->getMessage());
+        }
+    }
+
+    /** The glamour door refuses a file over {@see Theme::MAX_CONFIG_BYTES} before it parses it. */
+    public function testFromFileRefusesFilesOverTheByteCeiling(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'sm-style');
+        self::assertIsString($path);
+        try {
+            file_put_contents($path, str_repeat(' ', Theme::MAX_CONFIG_BYTES + 1));
+            $this->expectException(\RuntimeException::class);
+            StyleGuide::fromFile($path);
+        } finally {
+            @unlink($path);
+        }
     }
 
     /**

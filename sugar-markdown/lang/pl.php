@@ -11,6 +11,8 @@ declare(strict_types=1);
 return [
     'theme.read_failed'            => 'nie można odczytać pliku motywu: {path}',
     'theme.file_too_large'         => 'plik motywu przekracza limit {bytes} bajtów: {path}',
+    'glamour.decoration_unsafe' => 'slot {slot} pliku stylu zawiera bajt sterujący lub ucieczki; odrzucono',
+    'glamour.value_too_large' => 'wartość {key} w pliku stylu przekracza limit {limit}',
     'theme.json_invalid'           => 'nieprawidłowy JSON w pliku motywu',
     'theme.json_object'            => 'JSON motywu musi dekodować się do obiektu',
     'theme.bad_color'              => 'nieprawidłowa specyfikacja koloru: {spec}',

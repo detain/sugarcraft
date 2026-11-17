@@ -11,6 +11,8 @@ declare(strict_types=1);
 return [
     'theme.read_failed'            => 'テーマファイルを読み取れません：{path}',
     'theme.file_too_large'         => 'テーマファイルが{bytes}バイトの上限を超過しています: {path}',
+    'glamour.decoration_unsafe' => 'スタイルファイルの {slot} に制御バイトまたはエスケープバイトが含まれているため拒否しました',
+    'glamour.value_too_large' => 'スタイルファイルの {key} の値が上限 {limit} を超えています',
     'theme.json_invalid'           => 'テーマファイルの JSON が無効です',
     'theme.json_object'            => 'テーマ JSON はオブジェクトにデコードされる必要があります',
     'theme.bad_color'              => '無効な色の指定: {spec}',

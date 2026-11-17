@@ -40,7 +40,7 @@ final class RendererCachedTest extends TestCase
         $this->assertSame(Theme::pink(), $r->theme);
     }
 
-    public function testCustomThemeIsNeverMemoised(): void
+    public function testCustomThemeIsNeverMemoized(): void
     {
         $custom = Theme::dark()->with('code', Style::new()->bold());
 

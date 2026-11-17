@@ -11,6 +11,8 @@ declare(strict_types=1);
 return [
     'theme.read_failed'   => 'could not read theme file: {path}',
     'theme.file_too_large' => 'theme file exceeds the {bytes} byte ceiling: {path}',
+    'glamour.decoration_unsafe' => 'style file slot {slot} carries a control or escape byte; refusing it',
+    'glamour.value_too_large' => 'style file value {key} exceeds the {limit} ceiling',
     'theme.json_invalid'  => 'invalid JSON in theme file',
     'theme.json_object'   => 'theme JSON must decode to an object',
     'theme.bad_color'     => 'invalid colour spec: {spec}',

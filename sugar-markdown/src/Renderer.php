@@ -143,7 +143,7 @@ final class Renderer
     /**
      * The options in effect, readable after construction (SM-S12): the
      * constructor is their single gate (SM-S50: a non-positive wrapWidth
-     * is refused, not normalised) and every `with*()` builder rebuilds
+     * is refused, not normalized) and every `with*()` builder rebuilds
      * through it, so these properties answer "what will this renderer
      * actually do".
      * They are public readonly instead of bare accessors because the
@@ -168,7 +168,7 @@ final class Renderer
     public readonly bool $lineNumbers;
 
     /**
-     * Normalised heading ids whose bodies render folded away ({@see withFolds()}).
+     * Normalized heading ids whose bodies render folded away ({@see withFolds()}).
      * Empty for an unfolded renderer.
      *
      * @var list<string>
@@ -333,7 +333,7 @@ final class Renderer
      * Pass a Theme to pick a stock or custom theme; default ansi.
      * For repeated rendering with the same theme, build a Renderer
      * directly and reuse it (the parser is cached per instance).
-     * Stock themes are memoised instances ({@see Theme::isStock()}), so
+     * Stock themes are memoized instances ({@see Theme::isStock()}), so
      * their render bundle — Environment, extension set, parsed
      * references — is built once and reused by every call (SM-S53);
      * custom themes get the historic one-shot instance.
@@ -699,7 +699,7 @@ final class Renderer
      * own line and drops everything up to the next heading at its level or
      * above. Ids use the anchor-style form {@see SectionScanner::headingId()}
      * produces, so `"Install & setup"` is folded by `"install-setup"` or by the
-     * heading text itself, and both sides are normalised the same way. Headings
+     * heading text itself, and both sides are normalized the same way. Headings
      * inside fenced code are never folds.
      *
      * Passing an empty list unfolds: `withFolds([])` returns a renderer that

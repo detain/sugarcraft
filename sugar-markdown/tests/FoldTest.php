@@ -54,7 +54,7 @@ final class FoldTest extends TestCase
         $this->assertSame([], $renderer->withFolds(['install'])->withFolds([])->folds);
     }
 
-    public function testFoldIdsAreNormalisedTheSameWayAsHeadings(): void
+    public function testFoldIdsAreNormalizedTheSameWayAsHeadings(): void
     {
         $this->assertSame(['install'], (new Renderer(Theme::plain()))->withFolds(['Install'])->folds);
         $this->assertSame(

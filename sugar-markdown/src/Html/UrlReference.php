@@ -25,8 +25,7 @@ final class UrlReference
      * `file:x`, `//169.254.169.254/` — is for the caller to vet before it
      * follows the URL, exactly as it would vet an absolute reference; resolving
      * never makes a disallowed target reachable.
-     *
-         */
+     */
     public static function resolve(string $base, string $reference): string
     {
         $r = self::splitReference($reference);

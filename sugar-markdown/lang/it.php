@@ -11,6 +11,8 @@ declare(strict_types=1);
 return [
     'theme.read_failed'            => 'impossibile leggere il file tema: {path}',
     'theme.file_too_large'         => 'il file tema supera il limite di {bytes} byte: {path}',
+    'glamour.decoration_unsafe' => 'lo slot {slot} del file di stile contiene un byte di controllo o di escape; rifiutato',
+    'glamour.value_too_large' => '{key} del file di stile supera il limite di {limit}',
     'theme.json_invalid'           => 'JSON non valido nel file del tema',
     'theme.json_object'            => 'il JSON del tema deve decodificare in un oggetto',
     'theme.bad_color'              => 'specifica di colore non valida: {spec}',

@@ -37,6 +37,22 @@ final class Theme
      */
     public const MAX_DOCUMENT_DECORATION = 256;
 
+    /**
+     * Byte ceiling for a theme file read through the glamour and catalog doors
+     * ({@see StyleGuide::fromFile()}, {@see fromCatalog()}). Shared with
+     * candy-mdview's GlamourTheme::MAX_CONFIG_BYTES so the two entrances
+     * cannot drift into different size policies.
+     */
+    public const MAX_CONFIG_BYTES = 1_000_000;
+
+    /**
+     * Spellings the catalog door answers beyond the stock roster: `--theme no`
+     * and `--theme auto-no` are the names candy-mdview has always accepted for
+     * the plain and notty themes. Keys are the normalized form (lower case,
+     * `_` read as `-`).
+     */
+    private const CATALOG_ALIASES = ['no' => 'plain', 'auto-no' => 'notty'];
+
     private static function boundedDecoration(int $value): int
     {
         return max(0, min(self::MAX_DOCUMENT_DECORATION, $value));
@@ -492,18 +508,20 @@ final class Theme
     /**
      * The stock theme {@see byName()} answers, else the bundled theme file of
      * that name. Null when neither answers, so a caller picks its own fallback.
+     * `no` and `auto-no` answer the plain and notty themes ({@see CATALOG_ALIASES}).
      *
      * @throws \RuntimeException when a bundled file exists but cannot be read
      */
     public static function fromCatalog(string $name): ?self
     {
-        $stock = self::byName($name);
+        $key = strtolower(str_replace('_', '-', trim($name)));
+        $stock = self::byName(self::CATALOG_ALIASES[$key] ?? $name);
         if ($stock !== null) {
             return $stock;
         }
         $path = self::bundledPath($name);
 
-        return $path === null ? null : self::fromFile($path);
+        return $path === null ? null : self::fromFile($path, self::MAX_CONFIG_BYTES);
     }
 
     /**

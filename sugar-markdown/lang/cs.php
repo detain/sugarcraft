@@ -11,6 +11,8 @@ declare(strict_types=1);
 return [
     'theme.read_failed'            => 'nelze číst soubor tématu: {path}',
     'theme.file_too_large'         => 'soubor tématu překračuje strop {bytes} bajtů: {path}',
+    'glamour.decoration_unsafe' => 'slot {slot} souboru stylu obsahuje řídicí nebo únikový bajt; odmítnuto',
+    'glamour.value_too_large' => '{key} souboru stylu překračuje strop {limit}',
     'theme.json_invalid'           => 'neplatný JSON v souboru motivu',
     'theme.json_object'            => 'téma JSON musí dekódovat do objektu',
     'theme.bad_color'              => 'neplatné zadání barvy: {spec}',

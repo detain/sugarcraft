@@ -89,4 +89,18 @@ final class ThemeCatalogTest extends TestCase
             }
         }
     }
+
+    /**
+     * candy-mdview's --theme door accepted these spellings before the catalog
+     * moved here; dropping them would refuse flags that worked yesterday.
+     */
+    public function testCatalogKeepsCandyMdviewAliasesForPlainAndNotty(): void
+    {
+        $this->assertEquals(Theme::plain(), Theme::fromCatalog('no'));
+        $this->assertEquals(Theme::notty(), Theme::fromCatalog('auto-no'));
+        $this->assertEquals(Theme::plain(), Theme::fromCatalog('NO'));
+        $this->assertEquals(Theme::notty(), Theme::fromCatalog('auto_no'));
+        $this->assertEquals(Theme::tokyoNight(), Theme::fromCatalog('tokyo_night'));
+        $this->assertNull(Theme::fromCatalog('autono'), 'only the spelled-out aliases answer');
+    }
 }

@@ -11,6 +11,8 @@ declare(strict_types=1);
 return [
     'theme.read_failed'            => 'Theme-Datei konnte nicht gelesen werden: {path}',
     'theme.file_too_large'         => 'Theme-Datei überschreitet die Obergrenze von {bytes} Byte: {path}',
+    'glamour.decoration_unsafe' => 'Feld {slot} der Stildatei enthält ein Steuer- oder Escape-Byte; abgelehnt',
+    'glamour.value_too_large' => '{key} der Stildatei überschreitet die Obergrenze {limit}',
     'theme.json_invalid'           => 'ungültiges JSON in Theme-Datei',
     'theme.json_object'            => 'Theme-JSON muss zu einem Objekt dekodiert werden',
     'theme.bad_color'              => 'ungültige Farbangabe: {spec}',

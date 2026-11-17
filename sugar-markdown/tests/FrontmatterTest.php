@@ -145,6 +145,12 @@ final class FrontmatterTest extends TestCase
         }
     }
 
+    /**
+     * MemoryStore keeps the blank lines between its closing fence and the
+     * text; the shared split drops them, because the main copies do. The
+     * divergence is deliberate and pinned here: the body is the memory body
+     * with its leading blank lines removed, nothing else changed.
+     */
     public function testMemoryVariantParityOnEveryDocumentItAccepts(): void
     {
         foreach ($this->parityDocuments() as $name => $doc) {
@@ -154,6 +160,12 @@ final class FrontmatterTest extends TestCase
             $split = Frontmatter::split($doc);
             $this->assertNotNull($split, $name);
             $this->assertSame($m[1], $split->meta, $name);
+            $this->assertSame(
+                preg_replace('/\A(?:[ \t]*\r?\n)*/', '', $m[2]),
+                $split->body,
+                "{$name}: body differs from MemoryStore beyond its leading blank lines",
+            );
+            $this->assertSame(strlen($doc) - strlen($split->body), $split->bodyOffset, $name);
         }
     }
 

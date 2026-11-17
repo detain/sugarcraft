@@ -11,6 +11,8 @@ declare(strict_types=1);
 return [
     'theme.read_failed'            => 'تعذر قراءة ملف السمة: {path}',
     'theme.file_too_large'         => 'ملف السمة يتجاوز الحد الأقصى {bytes} بايت: {path}',
+    'glamour.decoration_unsafe' => 'خانة {slot} في ملف النمط تحتوي على بايت تحكم أو هروب؛ تم رفضها',
+    'glamour.value_too_large' => 'القيمة {key} في ملف النمط تتجاوز الحد {limit}',
     'theme.json_invalid'           => 'JSON غير صالح في ملف السمة',
     'theme.json_object'            => 'يجب أن يتم فك ترميز JSON للسمة إلى كائن',
     'theme.bad_color'              => 'تحديد لون غير صالح: {spec}',

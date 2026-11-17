@@ -11,6 +11,8 @@ declare(strict_types=1);
 return [
     'theme.read_failed'            => 'tema dosyası okunamadı: {path}',
     'theme.file_too_large'         => 'tema dosyası {bytes} bayt üst sınırını aşıyor: {path}',
+    'glamour.decoration_unsafe' => '{slot} stil dosyası alanı bir denetim veya kaçış baytı içeriyor; reddedildi',
+    'glamour.value_too_large' => 'stil dosyasındaki {key} değeri {limit} üst sınırını aşıyor',
     'theme.json_invalid'           => 'tema dosyasında geçersiz JSON',
     'theme.json_object'            => 'tema JSON\'u bir nesneye dönüştürülmelidir',
     'theme.bad_color'              => 'geçersiz renk tanımı: {spec}',
