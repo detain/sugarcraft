@@ -5329,7 +5329,8 @@ final class DocFigureProseDriftTest extends TestCase
         // 27 as of 2026-11-06: FLEET-DRIVING.md joins the docs/ census (the
         // headless-driver playbook), lifting 26 covered pages to 27.
         // 28 as of 2026-11-12: SECURITY.md joins the docs/ census.
-        self::assertCount(28, $pages, 'the docs page census moved — this anchor guard would silently stop covering a page');
+        // 30 as of 2026-11-17: TUTORIAL.md and FAQ.md join the docs/ census.
+        self::assertCount(30, $pages, 'the docs page census moved — this anchor guard would silently stop covering a page');
 
         // CCD-DOC-06: the root README.md joins the census. It was never on any
         // target list of this family, so a bare File.php:NNN cite planted there
