@@ -5436,8 +5436,16 @@ final class Subcommands
             }
         }
 
+        // PLG-2a: a bundle installed with `--project` into this directory is as
+        // installed as one in the user root, so both tiers are excluded. The
+        // two roots coincide when the working directory is the home directory,
+        // and the names are unioned, so that is one name, not two.
         $home = HomeDirectory::owned();
         $installed = $home === null ? [] : self::bundlesBundleRootNames($home . '/.candy-code/bundles');
+        $projectRoot = self::bundlesExistingProjectRoot($args);
+        if ($projectRoot !== null) {
+            $installed = \array_values(\array_unique(\array_merge($installed, self::bundlesBundleRootNames($projectRoot))));
+        }
 
         $recommended = (new BundleRecommender($root, $catalog, $installed))->recommend();
 

@@ -338,7 +338,8 @@ Trust does not follow the scope: a project-tier bundle still needs its name in
 keeps every bundle in the tier it occupies: it walks the user root and, when
 one exists, the project root named above. A bundle name present in both tiers
 is refused by `update` rather than guessed at; move one copy aside first. The
-scope flags are accepted by `install` alone.
+scope flags are accepted by `install` alone. `bundles recommend` leaves out a
+bundle installed in either tier of the directory it reads.
 
 ## Marketplaces
 

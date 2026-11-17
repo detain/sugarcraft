@@ -16,11 +16,13 @@ trait PathMarketplaceFixtureTrait
 {
     /**
      * @param string $sha the full 40-hex commit the marketplace pins itself at
+     * @param list<string> $keywords the catalog keywords the plugin entry carries; empty leaves the entry keyword-free
      */
     private function addPathMarketplace(
         string $name,
         string $plugin,
         string $sha = '1111111111222222222233333333334444444444',
+        array $keywords = [],
     ): string {
         $source = $this->tempDir . '/' . $name . '-src';
         mkdir($source . '/.claude-plugin', 0777, true);
@@ -33,7 +35,8 @@ trait PathMarketplaceFixtureTrait
         file_put_contents(
             $source . '/.claude-plugin/marketplace.json',
             json_encode(['name' => $name, 'owner' => ['name' => 'op'], 'plugins' => [
-                ['name' => $plugin, 'source' => './plugins/' . $plugin],
+                ['name' => $plugin, 'source' => './plugins/' . $plugin]
+                    + ($keywords === [] ? [] : ['keywords' => $keywords]),
             ]]),
         );
 

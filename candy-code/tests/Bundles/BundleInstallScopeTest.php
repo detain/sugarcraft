@@ -10,16 +10,22 @@ use SugarCraft\Code\Bundles\BundleDiscovery;
 use SugarCraft\Code\Cli\ArgvParser;
 use SugarCraft\Code\Cli\NonInteractive;
 use SugarCraft\Code\Cli\Subcommands;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Tests\Skills\TemporaryDirectoryTrait;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Code\Tests\Support\PathMarketplaceFixtureTrait;
 
 /**
  * PLG-2a: `bundles install --project` lands a bundle in the project tier,
- * `bundles update` keeps each bundle in the tier it occupies, and the scope
- * flags are refused everywhere they do not apply. The bare install keeps its
- * user-root destination, which {@see BundleInstallTest} pins unchanged; this
- * file pins only what the scope flag adds.
+ * `bundles update` keeps each bundle in the tier it occupies, `bundles
+ * recommend` does not offer back what the project already holds, and the
+ * scope flags are refused everywhere they do not apply. The bare install keeps
+ * its user-root destination, which {@see BundleInstallTest} pins unchanged;
+ * this file pins only what the scope flag adds.
+ *
+ * The refusal lines are written to the process's STDERR, which an in-process
+ * `ob_start()` cannot capture, so those cases run the real `bin/candy-code`
+ * and read its stderr. Every other case dispatches in-process.
  */
 final class BundleInstallScopeTest extends TestCase
 {
@@ -105,16 +111,19 @@ final class BundleInstallScopeTest extends TestCase
         self::assertSame(['demo' => 'project'], $found, 'the bundle is listed in the project tier and nowhere else');
     }
 
-    public function testProjectAndUserTogetherAreRefusedAndNothingIsWritten(): void
+    public function testProjectAndUserTogetherAreRefusedWithTheirOwnLineAndNothingIsWritten(): void
     {
         $source = $this->stagedBundle('demo-src', 'demo');
 
-        self::assertSame(
-            NonInteractive::EXIT_CONFIG,
-            $this->verb('install', $source, '--project', '--user', '--root', $this->project),
-        );
+        [$exit, , $stderr] = $this->runCli($this->project, 'bundles', 'install', $source, '--project', '--user', '--root', $this->project);
 
-        self::assertDirectoryDoesNotExist($this->project . '/.candy-code');
+        self::assertSame(NonInteractive::EXIT_CONFIG, $exit);
+        self::assertStringContainsString(
+            Lang::t('cli.bundles.install.project_user'),
+            $stderr,
+            'the refusal must name the conflict, not be the generic unknown-flag exit',
+        );
+        self::assertDirectoryDoesNotExist($this->project . '/.candy-code/bundles');
         self::assertDirectoryDoesNotExist($this->root . '/demo');
     }
 
@@ -147,13 +156,27 @@ final class BundleInstallScopeTest extends TestCase
         self::assertDirectoryDoesNotExist($missing);
     }
 
-    public function testTheScopeFlagsAreRefusedOnEveryVerbThatIsNotInstall(): void
+    public function testTheScopeFlagsAreRefusedWithTheirOwnLineOnEveryVerbThatIsNotInstall(): void
     {
         self::assertSame(NonInteractive::EXIT_OK, $this->verb('list', '--root', $this->project), 'list answers OK with nothing installed');
 
-        self::assertSame(NonInteractive::EXIT_CONFIG, $this->verb('list', '--project'));
-        self::assertSame(NonInteractive::EXIT_CONFIG, $this->verb('update', '--user'));
-        self::assertSame(NonInteractive::EXIT_CONFIG, $this->verb('search', 'x', '--project'));
+        foreach ([
+            ['list', '--project'],
+            ['update', '--user'],
+            ['search', 'x', '--project'],
+            ['recommend', '--user'],
+        ] as $operands) {
+            [$exit, , $stderr] = $this->runCli($this->project, 'bundles', ...$operands);
+
+            self::assertSame(NonInteractive::EXIT_CONFIG, $exit, 'refused as usage: ' . implode(' ', $operands));
+            self::assertStringContainsString(
+                Lang::t('cli.bundles.scope_not_install', ['verb' => $operands[0]]),
+                $stderr,
+                'the refusal names the scope flag and the verb: ' . implode(' ', $operands),
+            );
+        }
+
+        self::assertDirectoryDoesNotExist($this->project . '/.candy-code/bundles', 'a refused verb writes nothing');
     }
 
     public function testUpdateKeepsAProjectTierBundleInItsTier(): void
@@ -178,15 +201,89 @@ final class BundleInstallScopeTest extends TestCase
         self::assertSame(['alpha'], $this->listed($this->project . '/.candy-code/bundles'), 'no .swap- or .install- residue');
     }
 
+    public function testAnUnnamedUpdateRefreshesEachBundleInTheTierItOccupies(): void
+    {
+        $alphaSource = $this->addPathMarketplace('demo', 'alpha');
+        $betaSource = $this->addPathMarketplace('other', 'beta');
+        self::assertSame(NonInteractive::EXIT_OK, $this->verb('install', 'alpha@demo'));
+        self::assertSame(
+            NonInteractive::EXIT_OK,
+            $this->verb('install', 'beta@other', '--project', '--root', $this->project),
+        );
+
+        file_put_contents($alphaSource . '/plugins/alpha/UPSTREAM.txt', 'v2 for alpha');
+        file_put_contents($betaSource . '/plugins/beta/UPSTREAM.txt', 'v2 for beta');
+
+        [$exit, $out] = $this->verbCapture('update', '--root', $this->project);
+
+        self::assertSame(NonInteractive::EXIT_OK, $exit);
+        self::assertSame(1, substr_count($out, 'Updated bundle alpha from'), 'alpha is refreshed once, in the user root');
+        self::assertSame(1, substr_count($out, 'Updated bundle beta from'), 'beta is refreshed once, in the project root');
+        self::assertSame('v2 for alpha', file_get_contents($this->root . '/alpha/UPSTREAM.txt'));
+        self::assertSame('v2 for beta', file_get_contents($this->project . '/.candy-code/bundles/beta/UPSTREAM.txt'));
+        self::assertDirectoryDoesNotExist($this->root . '/beta', 'the project bundle is not moved to the user root');
+        self::assertDirectoryDoesNotExist($this->project . '/.candy-code/bundles/alpha', 'the user bundle is not copied into the project');
+    }
+
+    public function testAnUnnamedUpdateFromTheHomeDirectoryWalksTheUserRootOnce(): void
+    {
+        $source = $this->addPathMarketplace('demo', 'alpha');
+        self::assertSame(NonInteractive::EXIT_OK, $this->verb('install', 'alpha@demo'));
+        file_put_contents($source . '/plugins/alpha/UPSTREAM.txt', 'v2 for alpha');
+
+        // The working directory IS the home directory, so the project root
+        // (`<cwd>/.candy-code/bundles`) names the user root a second time.
+        $before = getcwd();
+        self::assertNotFalse($before);
+        chdir($this->home);
+
+        try {
+            [$exit, $out] = $this->verbCapture('update');
+        } finally {
+            chdir($before);
+        }
+
+        self::assertSame(NonInteractive::EXIT_OK, $exit);
+        self::assertSame(1, substr_count($out, 'Updated bundle alpha from'), 'one root, walked once: one refresh line');
+        self::assertSame('v2 for alpha', file_get_contents($this->root . '/alpha/UPSTREAM.txt'));
+    }
+
     public function testANameInBothTiersIsRefusedByUpdateAndNeitherCopyIsTouched(): void
     {
         $this->plainBundleAt($this->root . '/dup', 'dup');
         $this->plainBundleAt($this->project . '/.candy-code/bundles/dup', 'dup');
 
-        self::assertSame(NonInteractive::EXIT_FAILURE, $this->verb('update', 'dup', '--root', $this->project));
+        [$exit, , $stderr] = $this->runCli($this->project, 'bundles', 'update', 'dup');
 
+        self::assertSame(NonInteractive::EXIT_FAILURE, $exit);
+        self::assertStringContainsString(
+            Lang::t('cli.bundles.update.ambiguous', ['name' => 'dup']),
+            $stderr,
+            'update must refuse to choose between the two tiers, not re-stage one of them',
+        );
         self::assertFileExists($this->root . '/dup/.claude-plugin/plugin.json');
         self::assertFileExists($this->project . '/.candy-code/bundles/dup/.claude-plugin/plugin.json');
+    }
+
+    public function testRecommendDoesNotOfferBackABundleTheProjectAlreadyInstalledWithProject(): void
+    {
+        // composer.json is a manifest signal whose vocabulary includes `php`,
+        // so a keyword-`php` catalog entry is a recommendation for this project.
+        file_put_contents($this->project . '/composer.json', '{}');
+        $this->addPathMarketplace('demo', 'alpha', keywords: ['php']);
+
+        self::assertContains('alpha', $this->recommendedNames(), 'before the install the entry is offered');
+
+        self::assertSame(
+            NonInteractive::EXIT_OK,
+            $this->verb('install', 'alpha@demo', '--project', '--root', $this->project),
+        );
+
+        self::assertNotContains(
+            'alpha',
+            $this->recommendedNames(),
+            'an install in the project tier counts as installed for recommend in that project',
+        );
     }
 
     /** A real bundle directory to install FROM, returned as its path. */
@@ -209,6 +306,19 @@ final class BundleInstallScopeTest extends TestCase
         );
     }
 
+    /** @return list<string> the names `bundles recommend` offers for the project, in its JSON form */
+    private function recommendedNames(): array
+    {
+        [, $out] = $this->verbCapture('recommend', '--root', $this->project, '--output-format', 'json');
+        $decoded = json_decode($out, true);
+        self::assertIsArray($decoded, 'recommend --output-format json prints one JSON document');
+
+        return array_values(array_map(
+            static fn (array $row): string => (string) $row['name'],
+            (array) ($decoded['recommendations'] ?? []),
+        ));
+    }
+
     private function verb(string ...$operands): int
     {
         $output = ob_start();
@@ -220,6 +330,49 @@ final class BundleInstallScopeTest extends TestCase
                 ob_end_clean();
             }
         }
+    }
+
+    /** @return array{0: int, 1: string} the exit code and the stdout of one in-process dispatch */
+    private function verbCapture(string ...$operands): array
+    {
+        ob_start();
+
+        try {
+            $exit = Subcommands::dispatch(ArgvParser::parse(array_merge(['candy-code', 'bundles'], $operands)));
+        } finally {
+            $captured = (string) ob_get_clean();
+        }
+
+        return [$exit, $captured];
+    }
+
+    /**
+     * One real `bin/candy-code bundles ...` process, with the sandboxed home and
+     * a fixed locale, so its stderr is the refusal line a person would see.
+     *
+     * @return array{0: int, 1: string, 2: string} exit code, stdout, stderr
+     */
+    private function runCli(string $cwd, string ...$operands): array
+    {
+        $bin = dirname(__DIR__, 2) . '/bin/candy-code';
+        $process = proc_open(
+            [PHP_BINARY, $bin, ...$operands],
+            [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            $cwd,
+            ['HOME' => $this->home, 'PATH' => (string) getenv('PATH'), 'LC_ALL' => 'C', 'LANG' => 'C'],
+        );
+
+        if (!is_resource($process)) {
+            self::fail('could not start candy-code for: ' . implode(' ', $operands));
+        }
+
+        $stdout = (string) stream_get_contents($pipes[1]);
+        fclose($pipes[1]);
+        $stderr = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[2]);
+
+        return [proc_close($process), $stdout, $stderr];
     }
 
     /** @return list<string> every entry directly under a directory, dot-named ones included */
