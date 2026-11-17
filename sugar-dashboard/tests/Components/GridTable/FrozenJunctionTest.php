@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Dashboard\Tests\Components\GridTable;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Dashboard\Components\GridTable\BorderConfig;
 use SugarCraft\Dashboard\Components\GridTable\Column;
 use SugarCraft\Dashboard\Components\GridTable\GridTable;
@@ -119,20 +120,24 @@ final class FrozenJunctionTest extends TestCase
         }
     }
 
-    public function testBandModeBeyondColumnWindowKeepsDanglingDividerBytes(): void
+    public function testBandModeBeyondColumnWindowDropsDanglingDivider(): void
     {
-        // frozen(5) with five columns: the band swallows the whole window.
-        // The band renderer still appends right+divider after the final
-        // frozen cell — a known cosmetic overhang (┃║┃, reported by this
-        // row's probe, cure deliberately NOT taken here to keep the
-        // refactor byte-neutral) — while the plain row path's rtrim seat
-        // would emit a single divider swap. These bytes pin which arm the
-        // selector chose: disabling hasFrozenBand() (M1) turns BOTH
-        // dangling tails into plain walls and reddens this test.
+        // frozen(5) with five columns: the band swallows the whole window, so
+        // there is no scrollable seat for the divider. The row must end on the
+        // closing wall exactly like the header, with no divider and no
+        // overhang (P0-A14). The band arm is still the one that renders the
+        // row: the plain row path would not carry a divider either, so the
+        // width and the wall pins below are what tell the arms apart.
         $lines = self::lines(self::grid(5));
 
-        self::assertSame(1, substr_count($lines[3], '║'), 'band arm keeps the divider in the out-of-window row');
-        self::assertStringEndsWith('┃║┃', $lines[3], 'band arm leaves the documented dangling divider tail (report-only cosmetic)');
+        self::assertSame(0, substr_count($lines[3], '║'), 'a fully frozen row has no seat for the divider');
+        self::assertStringEndsWith('┃', $lines[3]);
+        self::assertStringNotContainsString('║┃', $lines[3], 'no dangling divider tail');
+        self::assertSame(
+            Width::string($lines[1]),
+            Width::string($lines[3]),
+            'the fully frozen row has the same cell count as the header',
+        );
     }
 
     public function testFrozenZeroFrameCarriesNoFreezeGlyphs(): void
