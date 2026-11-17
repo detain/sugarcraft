@@ -558,8 +558,8 @@ final class GridTable implements Item, Sizer
 
                 if ($indicatorCells < $width) {
                     $inner = $width - $indicatorCells;
-                    // Width::truncate strips SGR before it measures, so a label that
-                    // already fits must bypass it or its styling is lost (P0-A11).
+                    // Width::truncate strips every escape before it measures, so a label
+                    // that already fits must bypass it or its styling is lost (P0-A11).
                     $body = Width::string($label) <= $inner ? $label : Width::truncate($label, $inner);
                     $padded = Width::padRight($body, $inner) . $indicator;
                 }
