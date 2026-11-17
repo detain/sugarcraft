@@ -380,7 +380,7 @@ final class BinWiringTest extends TestCase
         // must name it: the cancel paragraph, the key table and checklist 1.
         $this->assertStringContainsString('the keyboard, or the `?` overlay is open (the next key, `Esc` included, only', $readme);
         $this->assertStringContainsString('answers `Esc` and `Ctrl+C` by cancelling the prepared run', $readme);
-        $this->assertStringContainsString('an open admin page or the `?` overlay holds the keyboard', $readme);
+        $this->assertStringContainsString('an open admin page on the Admin pane or the `?` overlay holds the keyboard', $readme);
         $this->assertStringContainsString('(not while the `?` overlay is open, whose next key only closes it)', $readme);
 
         // Key-table step 3: the in-flight Esc is its own arm, not step 1's
