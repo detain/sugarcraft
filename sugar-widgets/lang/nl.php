@@ -12,6 +12,7 @@ return [
     'column.width_nonneg'         => 'Kolombreedte moet >= 0 zijn',
     'tabs.bad_index'              => 'tabindex valt buiten bereik',
     'tabs.neg_width'              => 'tabbreedte moet >= 0 zijn',
+    'tabs.zone_key_empty'         => 'de zonesleutel van het tabblad mag niet leeg zijn',
     'table.dim_nonneg'            => 'tabel breedte/hoogte moet >= 0 zijn',
     'table.page_size_nonneg'      => 'paginagrootte moet >= 0 zijn',
     'table.set_columns_type'      => 'kolommen moeten kolom-instanties zijn',

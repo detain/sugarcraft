@@ -12,6 +12,7 @@ return [
     'column.width_nonneg'         => 'La largeur de colonne doit être >= 0',
     'tabs.bad_index'              => 'index d\'onglet hors plage',
     'tabs.neg_width'              => 'la largeur des onglets doit être >= 0',
+    'tabs.zone_key_empty'         => 'la clé de zone d\'onglet ne doit pas être vide',
     'table.dim_nonneg'            => 'la largeur/hauteur du tableau doit être >= 0',
     'table.page_size_nonneg'      => 'la taille de page doit être >= 0',
     'table.set_columns_type'      => 'les colonnes doivent être des instances de colonne',

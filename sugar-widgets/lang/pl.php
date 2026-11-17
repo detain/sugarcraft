@@ -12,6 +12,7 @@ return [
     'column.width_nonneg'         => 'Szerokość kolumny musi być >= 0',
     'tabs.bad_index'              => 'indeks zakładek poza zakresem',
     'tabs.neg_width'              => 'szerokość zakładek musi być >= 0',
+    'tabs.zone_key_empty'         => 'klucz strefy zakładki nie może być pusty',
     'table.dim_nonneg'            => 'szerokość/wysokość tabeli musi być >= 0',
     'table.page_size_nonneg'      => 'rozmiar strony musi być >= 0',
     'table.set_columns_type'      => 'kolumny muszą być instancjami kolumny',

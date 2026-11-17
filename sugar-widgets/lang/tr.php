@@ -12,6 +12,7 @@ return [
     'column.width_nonneg'         => 'Sütun genişliği >= 0 olmalıdır',
     'tabs.bad_index'              => 'sekme indeksi aralık dışında',
     'tabs.neg_width'              => 'sekme genişliği >= 0 olmalıdır',
+    'tabs.zone_key_empty'         => 'sekme bölgesi anahtarı boş olamaz',
     'table.dim_nonneg'            => 'tablo genişlik/yüksekliği >= 0 olmalıdır',
     'table.page_size_nonneg'      => 'sayfa boyutu >= 0 olmalıdır',
     'table.set_columns_type'      => 'sütunlar birer sütun örneği olmalı',

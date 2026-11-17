@@ -300,6 +300,7 @@ echo OptionRow::renderRow('Update ms', TextEdit::new('2000', numeric: true),
 <tr><td>Help</td><td>new(separator, keyDescGap, columnGap, showAll, maxWidth, ellipsis, fullSeparator, styles)</td><td>Keybinding help overlay — all params optional; <code>withKeyDescGap()</code> / <code>withColumnGap()</code> / <code>withWidth()</code> return new instances</td></tr>
 <tr><td>Paginator</td><td>withTotalPages(int)</td><td>Set page count directly (converts via perPage); <code>setTotalPages()</code> is the deprecated spelling</td></tr>
 <tr><td>Tabs</td><td>withZoneManager(?Manager)</td><td>Mouse-zone opt-in — zones are emitted only when a supplied <code>sugar-mouse</code> Manager is attached; passing null detaches it again</td></tr>
+<tr><td>Tabs</td><td>withZoneKey(string $key)</td><td>Pins the bar's zone-id prefix. Bars derived from one template share its key, so give each bar its own <code>withZoneKey()</code> when they share a sugar-mouse Manager. Keys must be non-empty and unique per manager (an empty key throws <code>\InvalidArgumentException</code>).</td></tr>
 <tr><td>OptionRow</td><td>renderRow(...)</td><td>One-line btop options row sized to the field width — the primary API</td></tr>
 <tr><td>TextEdit</td><td>new(text, ?caret, numeric)</td><td>Immutable inline editor (btop <code>Draw::TextEdit</code>); underline caret, grapheme-cluster caret</td></tr>
 <tr><td>TextEdit</td><td>left() / right() / home() / end() / withCaret(int)</td><td>Caret movement (clamped)</td></tr>

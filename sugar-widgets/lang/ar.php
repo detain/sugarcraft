@@ -12,6 +12,7 @@ return [
     'column.width_nonneg'         => 'عرض العمود يجب أن يكون >= 0',
     'tabs.bad_index'              => 'مؤشر علامة التبويب خارج النطاق',
     'tabs.neg_width'              => 'عرض علامات التبويب يجب أن يكون >= 0',
+    'tabs.zone_key_empty'         => 'يجب ألا يكون مفتاح منطقة التبويب فارغًا',
     'table.dim_nonneg'            => 'عرض/ارتفاع الجدول يجب أن يكون >= 0',
     'table.page_size_nonneg'      => 'حجم الصفحة يجب أن يكون >= 0',
     'table.set_columns_type'      => 'يجب أن تكون القيم مثيلات أعمدة',
