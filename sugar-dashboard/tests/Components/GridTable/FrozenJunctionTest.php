@@ -125,9 +125,11 @@ final class FrozenJunctionTest extends TestCase
         // frozen(5) with five columns: the band swallows the whole window, so
         // there is no scrollable seat for the divider. The row must end on the
         // closing wall exactly like the header, with no divider and no
-        // overhang (P0-A14). The band arm is still the one that renders the
-        // row: the plain row path would not carry a divider either, so the
-        // width and the wall pins below are what tell the arms apart.
+        // overhang (P0-A14). The pins below check that geometry only. At a
+        // fully frozen count renderRow and renderFrozenRow emit identical
+        // bytes for BorderConfig::new(), rounded() and minimal(), so this
+        // test cannot tell the band arm from the plain arm, and it does not
+        // try to.
         $lines = self::lines(self::grid(5));
 
         self::assertSame(0, substr_count($lines[3], '║'), 'a fully frozen row has no seat for the divider');
