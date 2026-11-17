@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Chat;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\InputReader;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Code\Backend\EchoBackend;
@@ -324,6 +325,36 @@ final class SessionCommandTest extends TestCase
         $this->assertNull($cmd);
         // Wraps backward from the first session to the last.
         $this->assertSame($ids[count($ids) - 1], $next->currentSessionId());
+    }
+
+    /**
+     * The live path for kitty's CSI-u Ctrl+Tab: the bytes go through the
+     * real sugar-core decoder, not a hand-built KeyMsg, and the decoded
+     * message must cycle the open tabs exactly as the synthetic key does.
+     */
+    public function testRealKittyCtrlTabBytesCycleTheLiveChat(): void
+    {
+        $this->sessionStore->createSession('session-a', 'openai', 'gpt-4', null, 'Alpha');
+        $this->sessionStore->createSession('session-b', 'openai', 'gpt-4', null, 'Beta');
+        $ids = array_column($this->sessionStore->listSessions(), 'id');
+
+        $chat = new Chat(
+            backend: new EchoBackend(),
+            sessionStore: $this->sessionStore,
+            currentSessionId: $ids[0],
+            tabState: new SessionTabState(tabs: self::tabsFromStore($this->sessionStore, activeId: $ids[0])),
+        );
+
+        $msgs = (new InputReader())->parse("\x1b[9;5u");
+        $this->assertCount(1, $msgs);
+        $this->assertInstanceOf(KeyMsg::class, $msgs[0]);
+        $this->assertSame(KeyType::Tab, $msgs[0]->type);
+        $this->assertTrue($msgs[0]->ctrl);
+
+        [$next, $cmd] = $chat->update($msgs[0]);
+
+        $this->assertNull($cmd);
+        $this->assertSame($ids[1], $next->currentSessionId());
     }
 
     public function testCtrlTabIsNoopWithFewerThanTwoSessions(): void
