@@ -20590,11 +20590,14 @@ final class Chat implements Model
      */
     public function withSize(int $cols, int $rows): self
     {
+        // Compared against the stored values, not just the positive-check: the
+        // shell re-asserts the pane geometry on every frame, and a Chat rebuilt
+        // for an unchanged size would hand every identity-keyed memo a new key.
         $changes = [];
-        if ($cols > 0) {
+        if ($cols > 0 && $cols !== $this->cols) {
             $changes['cols'] = $cols;
         }
-        if ($rows > 0) {
+        if ($rows > 0 && $rows !== $this->rows) {
             $changes['rows'] = $rows;
         }
 
