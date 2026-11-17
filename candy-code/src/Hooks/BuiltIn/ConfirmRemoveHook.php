@@ -58,7 +58,8 @@ final readonly class ConfirmRemoveHook implements HookInterface
      *        lazy, not a captured gate, because a mode switch replaces the
      *        gate object mid-session ({@see \SugarCraft\Code\Chat}'s
      *        permission-mode toggle re-registers {@see PermissionGateHook});
-     *        null (or a chain with no gate) keeps the pre-ruling behaviour.
+     *        null (or a chain with no gate) never stands the hook down, so a
+     *        match asks ({@see execute()}).
      */
     public function __construct(?\Closure $modeReader = null)
     {
