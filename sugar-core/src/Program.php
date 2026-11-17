@@ -636,9 +636,14 @@ final class Program
             // Fallback signal pump for environments where async delivery is
             // unavailable (or was declined). It needs a periodic wake of its
             // own, since nothing else runs in an idle loop. When async signals
-            // are enabled, handlers already fired and nothing is pending, so
-            // this is skipped.
-            if (!$this->asyncSignals && function_exists('pcntl_signal_dispatch')) {
+            // are enabled (by installSignalHandlers(), or already by the host
+            // through pcntl_async_signals()), handlers already fired and nothing
+            // is pending, so this is skipped. With withoutSignalHandler and async
+            // off, the pump is the only dispatcher for host-installed pcntl
+            // handlers, so it stays armed there.
+            if (!$this->asyncSignals
+                && function_exists('pcntl_signal_dispatch')
+                && !(function_exists('pcntl_async_signals') && pcntl_async_signals())) {
                 $tickInterval = 1.0 / max(1.0, $this->options->framerate);
                 $tickTimer = $this->loop->addPeriodicTimer($tickInterval, static function (): void {
                     pcntl_signal_dispatch();

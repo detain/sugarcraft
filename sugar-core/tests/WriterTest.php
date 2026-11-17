@@ -302,4 +302,61 @@ final class WriterTest extends TestCase
         });
         $this->assertSame(0, $resolved);
     }
+
+    /**
+     * A write that fails synchronously (the reader is already gone) settles
+     * before drain() is called. drain() must still reject with the write
+     * error, not resolve over bytes that never left, and the failure is
+     * handed out once.
+     */
+    public function testSynchronousWriteFailureRejectsTheLaterDrain(): void
+    {
+        [$writerEnd, $readerEnd] = $this->pair();
+        fclose($readerEnd);
+        $loop = new StreamSelectLoop();
+        $writer = Writer::new($writerEnd, $loop);
+
+        $writer->enqueue('frame bytes');
+        $resolved = null;
+        $rejected = null;
+        $writer->drain()->then(
+            function (int $n) use (&$resolved): void {
+                $resolved = $n;
+            },
+            function (\Throwable $e) use (&$rejected): void {
+                $rejected = $e;
+            },
+        );
+
+        $this->assertNull($resolved, 'a failed write must not resolve as success');
+        $this->assertInstanceOf(\RuntimeException::class, $rejected);
+        $this->assertNotInstanceOf(WriteStalledException::class, $rejected, 'a write error is not a stall');
+
+        $second = null;
+        $writer->drain()->then(function (int $n) use (&$second): void {
+            $second = $n;
+        });
+        $this->assertSame(0, $second, 'the failure is reported once, then the queue reads as idle');
+
+        $writer->close();
+        fclose($writerEnd);
+    }
+
+    /** The same failure on a detached writer: enqueue writes inline and fails before drain(). */
+    public function testDetachedWriteFailureRejectsTheLaterDrain(): void
+    {
+        [$writerEnd, $readerEnd] = $this->pair();
+        fclose($readerEnd);
+        $writer = Writer::new($writerEnd);
+
+        $writer->enqueue('frame bytes');
+        $rejected = null;
+        $writer->drain()->then(null, function (\Throwable $e) use (&$rejected): void {
+            $rejected = $e;
+        });
+
+        $this->assertInstanceOf(\RuntimeException::class, $rejected);
+        $writer->close();
+        fclose($writerEnd);
+    }
 }

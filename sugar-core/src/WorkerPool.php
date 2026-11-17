@@ -79,10 +79,14 @@ final class WorkerPool
     private const REAP_TICK_MICROS = 10_000;
 
     /**
-     * sc-30: ceiling on how long a stdin write may drain before the worker
-     * is declared dead. Bounded on purpose — the old blocking fwrite froze
-     * the WHOLE event loop forever once a >64 KiB payload outran the pipe
-     * buffer (the kernel pipe capacity) with a child that was not reading.
+     * sc-30: no-progress bound on a stdin write. The worker is declared dead
+     * after this many seconds in which the child accepted no bytes at all;
+     * a slow but moving child is not cut off. (The earlier loop capped the
+     * whole write at this wall-clock total instead, so a slow reader that
+     * kept accepting data was still killed at 10 s.) Bounded on purpose —
+     * the old blocking fwrite froze the WHOLE event loop forever once a
+     * >64 KiB payload outran the pipe buffer (the kernel pipe capacity) with
+     * a child that was not reading.
      */
     private const WRITE_DEADLINE_SECONDS = 10.0;
 

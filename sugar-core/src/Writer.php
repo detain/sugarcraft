@@ -79,6 +79,15 @@ final class Writer
     /** @var list<Deferred> */
     private array $waiters = [];
 
+    /**
+     * The error that ended the last backlog while no drain() was waiting on
+     * it. enqueue() on an attached writer can fail synchronously, before the
+     * caller reaches drain(); drain() must still report that failure rather
+     * than resolve over bytes that never left. Cleared when a new backlog
+     * starts and when drain() hands it out.
+     */
+    private ?\Throwable $undelivered = null;
+
     private ?Recorder $recorder = null;
 
     /** @param resource $stream */
@@ -162,6 +171,7 @@ final class Writer
         if ($bytes === '') {
             return;
         }
+        $this->undelivered = null;
         if ($this->offset >= self::CHUNK_BYTES) {
             $this->buffer = substr($this->buffer, $this->offset);
             $this->offset = 0;
@@ -180,6 +190,8 @@ final class Writer
      * Promise that settles once the queue is empty. It resolves with the bytes
      * the backlog handed off (0 when nothing was pending), or rejects with a
      * {@see WriteStalledException} or a write error when the tail is dropped.
+     * A backlog that failed before anyone called drain() rejects here too, so
+     * a synchronous write failure is never reported as success.
      *
      * @return PromiseInterface<int>
      */
@@ -187,6 +199,12 @@ final class Writer
     {
         $deferred = new Deferred();
         if ($this->isIdle()) {
+            if ($this->undelivered !== null) {
+                $error = $this->undelivered;
+                $this->undelivered = null;
+                $deferred->reject($error);
+                return $deferred->promise();
+            }
             $deferred->resolve(0);
             return $deferred->promise();
         }
@@ -372,6 +390,9 @@ final class Writer
     {
         $waiters = $this->waiters;
         $this->waiters = [];
+        if ($error !== null && $waiters === []) {
+            $this->undelivered = $error;
+        }
         foreach ($waiters as $deferred) {
             if ($error === null) {
                 $deferred->resolve($written);
