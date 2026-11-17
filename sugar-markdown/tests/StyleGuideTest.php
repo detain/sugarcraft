@@ -514,4 +514,21 @@ final class StyleGuideTest extends TestCase
             @unlink($path);
         }
     }
+
+    /**
+     * A non-string decoration slot reads as '' (candy-mdview's GlamourTheme
+     * rule). Casting an array would render the text "Array" with a warning.
+     */
+    public function testNonStringDecorationSlotsReadAsEmpty(): void
+    {
+        $theme = StyleGuide::fromJsonString(
+            '{"document":{"block_prefix":["x"],"block_suffix":{"a":1}},'
+            . '"paragraph":{"block_prefix":7,"block_suffix":true}}',
+        )->theme();
+
+        $this->assertSame('', $theme->documentBlockPrefix);
+        $this->assertSame('', $theme->documentBlockSuffix);
+        $this->assertSame('', $theme->paragraphPrefix);
+        $this->assertSame('', $theme->paragraphSuffix);
+    }
 }

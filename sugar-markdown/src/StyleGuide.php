@@ -204,8 +204,8 @@ final class StyleGuide
         // inject a raw OSC/CSI sequence into the render through a prefix,
         // a suffix or an indent token.
         return new self(
-            blockPrefix:    Sanitize::untrusted((string) ($document['block_prefix'] ?? '')),
-            blockSuffix:    Sanitize::untrusted((string) ($document['block_suffix'] ?? '')),
+            blockPrefix:    self::slot($document['block_prefix'] ?? null),
+            blockSuffix:    self::slot($document['block_suffix'] ?? null),
             documentIndent: self::nonNegativeInt($document['indent'] ?? 0),
             documentMargin: self::nonNegativeInt($document['margin'] ?? 0),
             elements:       $elements,
@@ -279,8 +279,8 @@ final class StyleGuide
             headingCase:         $this->headingCase(),
             documentMargin:      $this->documentMargin,
             documentIndent:      $this->documentIndent,
-            paragraphPrefix:     Sanitize::untrusted((string) ($paragraph['block_prefix'] ?? '')),
-            paragraphSuffix:     Sanitize::untrusted((string) ($paragraph['block_suffix'] ?? '')),
+            paragraphPrefix:     self::slot($paragraph['block_prefix'] ?? null),
+            paragraphSuffix:     self::slot($paragraph['block_suffix'] ?? null),
             documentBlockPrefix: $this->blockPrefix,
             documentBlockSuffix: $this->blockSuffix,
         );
@@ -417,6 +417,16 @@ final class StyleGuide
         }
 
         return null;
+    }
+
+    /**
+     * A decoration slot (block_prefix / block_suffix) as text. A string is
+     * swept through Sanitize::untrusted(); any other JSON shape is '' — an
+     * array cast to string would render the word "Array" and raise a warning.
+     */
+    private static function slot(mixed $value): string
+    {
+        return is_string($value) ? Sanitize::untrusted($value) : '';
     }
 
     /** int | digit-string → non-negative int; anything else coerces to 0. */

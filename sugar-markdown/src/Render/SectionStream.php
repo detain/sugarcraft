@@ -152,6 +152,10 @@ final class SectionStream
 
             return $this->release();
         }
+        // Every closed section is confirmed once, from its own bytes: confirm()
+        // is the only route a scanned section takes into the queue, so gating
+        // it on new definitions would drop text. Only retryHeld() waits for
+        // new definitions (AUD rank 67; the PR body records the deviation).
         foreach ($closed as $i => $section) {
             $next = $closed[$i + 1] ?? $this->scanner->openSection();
             $nl = strpos($next, "\n");

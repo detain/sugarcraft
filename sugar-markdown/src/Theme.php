@@ -964,6 +964,8 @@ final class Theme
     /**
      * @deprecated Prefer {@see fromFile()} — it names the file contract and
      *     carries the optional byte ceiling. This alias forwards unchanged.
+     *     Kept, not deleted: candy-mdview still calls it (RenderCommand::pickTheme
+     *     and tests/ThemeLoadTest.php). It goes with the P1-12c-mdview migration.
      */
     public static function fromJson(string $path): self
     {
