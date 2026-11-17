@@ -23,6 +23,29 @@ final class SessionTabs
     /** Key code for Ctrl+Shift+Tab (backward tab cycle). */
     public const CTRL_SHIFT_TAB = "\x1b[1;6I";
 
+    /**
+     * Every byte sequence that means Ctrl+Tab. The synthetic CTRL_TAB comes
+     * first; the rest are the real encodings the repo's decoders name for
+     * Tab with the Ctrl modifier (mod field 5 = 1 + CTRL):
+     *   - kitty CSI-u `CSI 9;5u`: sugar-core/src/InputReader.php
+     *     (decodeKittyKey, code 9 => Tab) and sugar-input/src/EscapeDecoder.php
+     *     (kittyKeyCodeToName, code 9 => 'Tab').
+     *   - xterm modifyOtherKeys `CSI 27;5;9~`: sugar-input/src/EscapeDecoder.php
+     *     (the `^27;(\d+);(\d+)~$` arm and modifyOtherKeysName, keysym 9 =>
+     *     'Tab'). sugar-core's InputReader does not decode this form yet.
+     *
+     * @var list<string>
+     */
+    private const CTRL_TAB_KEYS = [self::CTRL_TAB, "\x1b[9;5u", "\x1b[27;5;9~"];
+
+    /**
+     * Every byte sequence that means Ctrl+Shift+Tab. Same decoders as
+     * CTRL_TAB_KEYS with mod field 6 (1 + SHIFT + CTRL).
+     *
+     * @var list<string>
+     */
+    private const CTRL_SHIFT_TAB_KEYS = [self::CTRL_SHIFT_TAB, "\x1b[9;6u", "\x1b[27;6;9~"];
+
     /** @var array<string, SessionTab> Tab lookup by id */
     private readonly array $tabsById;
 
@@ -267,11 +290,11 @@ final class SessionTabs
      */
     public function handleKey(string $key): ?self
     {
-        if ($key === self::CTRL_TAB) {
+        if (\in_array($key, self::CTRL_TAB_KEYS, true)) {
             return $this->cycleForward();
         }
 
-        if ($key === self::CTRL_SHIFT_TAB) {
+        if (\in_array($key, self::CTRL_SHIFT_TAB_KEYS, true)) {
             return $this->cycleBackward();
         }
 
