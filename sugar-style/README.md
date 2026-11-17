@@ -1024,20 +1024,28 @@ $contentWidth = 40 - $card->horizontalFrameSize();   // 36 cells of text
 
 **Chain builder.** `builder()` starts a chain that edits one draft and
 builds a single new `Style`, where the usual chain mints one intermediate
-style per setter. `build()` returns the same value the chained setters
-would, and the builder covers the scalar and colour setters: `fg`/`bg`
-(and the long forms), the boolean attributes, the sizes, `align`,
-`padding`, `margin`, `inline`, `wordWrap`, `colorProfile` and `setString`.
-Structural setters such as `border()` stay on `Style`: call `build()` and
-continue from there.
+style per setter. The builder's setters are `set*`-named (`setBold()`,
+`setFg()`, `setWidth()`) because they mutate the draft rather than return a
+new value. `build()` returns the same value the chained setters would.
+The builder covers the setters that take a plain value: the colours
+(`setFg`/`setBg`, the long forms, `setUnderlineColor`), the boolean
+attributes (including `setRapidBlink`, `setOverline` and `setInvisible`),
+`setUnderlineStyle`, the sizes, `setTabWidth`, `setAlign`,
+`setVerticalAlign`, `setColorProfile`, `setPadding` and `setMargin` as
+whole shorthands, `setPaddingChar`, `setMarginChar`, `setMarginBackground`,
+`setInline`, `setWordWrap`, `setColorWhitespace` and `setString`.
+Structural setters such as `border()` and `hyperlink()`, the per-side
+setters such as `paddingTop()`, and the short aliases (`on()`, `of()`,
+`dim()`, `pad()`, `mg()`) stay on `Style`: call `build()` and continue
+from there.
 
 ```php
 use SugarCraft\Style\Style;
 
 $heading = Style::new()->builder()
-    ->bold()
-    ->fg('#ff8800')
-    ->padding(0, 1)
+    ->setBold()
+    ->setFg('#ff8800')
+    ->setPadding(0, 1)
     ->build();
 echo $heading->render('Release notes'), "\n";
 ```

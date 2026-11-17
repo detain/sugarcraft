@@ -1213,7 +1213,7 @@ final class Style
      * build(). The closures are minted here, inside this class's scope, so
      * the private constructor and the padding/margin normaliser stay private.
      *
-     *     $style = Style::new()->builder()->bold()->fg('#ff8800')->width(20)->build();
+     *     $style = Style::new()->builder()->setBold()->setFg('#ff8800')->setWidth(20)->build();
      *
      * Mirrors the chained form exactly: see {@see StyleBuilder}.
      */
