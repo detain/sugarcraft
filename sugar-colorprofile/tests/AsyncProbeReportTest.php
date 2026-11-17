@@ -268,6 +268,45 @@ final class AsyncProbeReportTest extends TestCase
         }
     }
 
+    /**
+     * A child that exits non-zero proves nothing, the CP-13 rule shared with
+     * colorProfile(): the report settles as "no dump", books no memo entry,
+     * and a repeat report() spawns again. The sync door memoizes this verdict
+     * instead; the divergence is recorded in the P1-15 behaviour map, and this
+     * test pins the async side of it with a spawn counter.
+     */
+    public function testNonZeroExitSettlesAsNoDumpAndIsNotMemoized(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('the planted /bin/sh stub needs a POSIX shell.');
+        }
+
+        $this->setTerm('xterm-256color');
+        $log = \tempnam(\sys_get_temp_dir(), 'cp28log');
+        self::assertIsString($log);
+        $path = $this->plantBinary('#!/bin/sh' . "\n" . 'echo spawn >> ' . \escapeshellarg($log) . "\n" . "exit 1\n");
+        try {
+            $loop = new StreamSelectLoop();
+
+            $first = self::settle(AsyncProbe::report($loop), $loop);
+            $this->assertInstanceOf(ProbeReport::class, $first);
+            $this->assertSame(
+                self::sources(TerminfoReplayProbe::replaying(null)->runProbe()),
+                self::sources($first),
+                'a non-zero exit replays as "no dump": the environment answer stands',
+            );
+            $this->assertSame([], $this->settledDumps(), 'only a zero exit mints a dump memo entry (CP-13)');
+
+            $second = self::settle(AsyncProbe::report($loop), $loop);
+            $this->assertInstanceOf(ProbeReport::class, $second);
+            $this->assertSame([], $this->settledDumps());
+            $this->assertSame(2, \substr_count((string) \file_get_contents($log), 'spawn'), 'the non-zero verdict is not memoized, so the repeat report re-spawns');
+        } finally {
+            @\unlink($path);
+            @\unlink($log);
+        }
+    }
+
     /** @return array<string, string|null> */
     private function settledDumps(): array
     {
