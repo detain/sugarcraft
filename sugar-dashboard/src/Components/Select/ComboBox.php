@@ -275,12 +275,15 @@ final class ComboBox implements \SugarCraft\Dashboard\Foundation\SizedItem
      * (the old mb_substr cut could leave one open mid-escape). Text that already
      * fits is returned untouched, SGR included.
      *
-     * Tabs: the clip charges a tab four cells (Width::TAB_WIDTH), but only to
-     * decide where the cut falls. Nothing expands the tab. renderResultItem
+     * Tabs: inside this clip a tab is charged four cells (Width::TAB_WIDTH), and
+     * that charge only decides where the cut falls; the allocation is not
+     * widened by it. innerSize() charged tabs the same way before P0-A11, so the
+     * natural box width is unchanged. Nothing expands the tab: renderResultItem
      * writes the returned label raw, so a tab that fits the allocation reaches
-     * the terminal unchanged and the terminal draws it to the next tab stop,
-     * which can be more or fewer than four cells from where the clip measured
-     * it. The same holds for GridTable cells (see Calc).
+     * the terminal unchanged and is drawn to the next tab stop, which can be
+     * more or fewer than four cells from where the clip measured it. The same
+     * holds for GridTable cells (see Calc, where the charge also sets column
+     * widths and pad counts).
      */
     private function clipToAllocation(string $text, int $chrome): string
     {
