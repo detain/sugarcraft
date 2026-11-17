@@ -2501,9 +2501,17 @@ final class AgentWorkerPool
      * Trade-off, stated because it is a behaviour change: the old whole-file
      * read also mirrored an in-place rewrite of bytes already mirrored, whatever
      * the rewrite's length, so the next poll showed it. The tail does not re-read
-     * mirrored bytes, so such a rewrite is not mirrored unless the file shrinks
-     * below the offset and forces a resync. Nothing in the pool produces one:
-     * publishProgress() only appends (see the invariant in the body).
+     * mirrored bytes, and a poll that stats the file cannot see a change before
+     * the offset, so such a rewrite is not mirrored at any length, not only at
+     * the same length. The declared scope is every in-place rewrite of mirrored
+     * bytes; the rewrite's length does not decide it. The one reset that reaches
+     * back is the shrink to zero, and only a poll that observes size 0 runs it.
+     * A file shrunk to zero and regrown past the offset between two polls is
+     * therefore tailed from the old offset and joined to the stale buffer, a
+     * splice rather than a rebuild. Nothing in the pool produces either write:
+     * publishProgress() only appends (see the invariant in the body), and
+     * discardProgress() removes the file and its offset together, never
+     * truncating the file in place.
      */
     protected function pumpProgress(): void
     {
