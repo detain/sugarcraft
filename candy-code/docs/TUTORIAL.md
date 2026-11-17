@@ -1,10 +1,12 @@
 # Tutorial: first run to first commit
 
-This walks one session from a cold start to a committed change. The first
-four steps work offline, with no API key, so you can see the whole loop before
-you connect a model. Each step names the key or command to use and the source
-that implements it, so you can check a behavior rather than take the page's
-word for it.
+This walks one session from a cold start to a committed change. Step 1 runs
+offline, with no API key. Step 2 needs a provider key or a vendor sign-in. Steps
+4 and 5 need the model to ask for tool calls. Without a model you can script
+those calls with `::tool` lines instead, because the offline echo provider makes
+a tool call only from them (`src/Providers/EchoProvider.php:23-30`). Each step
+names the key or command to use and the source that implements it, so you can
+check a behavior rather than take the page's word for it.
 
 Before you start, check the installation:
 
@@ -30,7 +32,8 @@ With no provider configured, the TUI answers from the offline `EchoProvider`.
 `LaunchContext::provider()` falls back to it whenever a run has no provider, or
 the provider cannot be built (`src/Cli/LaunchContext.php:2198`). Type
 `say hello` and press Enter. The reply is your own words quoted back, and
-nothing leaves the machine. `/exit` quits (`src/Commands/CommandRegistry.php:74`).
+nothing leaves the machine. `/exit` quits, and it still quits while a reply is
+streaming (`src/Host/TurnController.php:309-310`, `src/Chat.php:9595`).
 
 On a machine where nothing is chosen or configured, a first-run wizard opens
 once. Its code is in `src/Tui/FirstRunWizard/`. You can skip it, and
@@ -78,7 +81,16 @@ enforced.
 ## 4. Answer a permission prompt
 
 When the agent asks to run a tool that the gate does not allow on its own, the
-turn pauses on a prompt. The keys are bound in `src/Commands/KeyBindingRegistry.php:1308-1325`:
+turn pauses on a prompt. To reach a prompt without a model, start a turn with a scripted call. Each
+`::tool` line becomes a real call, and the engine runs it through the same gate,
+hooks and tool as a model's call (`src/Providers/EchoProvider.php:23-30`):
+
+```text
+::tool Write {"file_path":"notes.txt","content":"hello\n","description":"write a test note"}
+```
+
+In `default` mode a `Write` waits for your reply. The keys are bound in
+`src/Commands/KeyBindingRegistry.php:1308-1325`:
 
 | Key | Reply | What it does |
 |---|---|---|
@@ -97,7 +109,8 @@ each one. Switch with `/permissions mode <name>`
 
 ## 5. Look at the change, then take it back
 
-Ask the agent to make a small edit, then:
+Ask the agent to make a small edit (offline, send the scripted `Write` from
+step 4 and approve it), then:
 
 - `/diff` shows what changed in the files since a checkpoint. Its form is
   `/diff [n] [--print]`.
@@ -106,10 +119,18 @@ Ask the agent to make a small edit, then:
   the conversation, the files, or both. `/redo` steps forward again over what
   `/rewind` or `/undo` took back.
 
-Checkpoints are built with git plumbing: `git stash create`, then `write-tree`
-and `commit-tree` (`src/Workspace/WorkspaceCheckpointer.php:18-27`). A project
-that is not in a git repository still gets its files written. It has no
-step-back point, so `/undo` and `/rewind` have nothing to restore.
+In a git repository, checkpoints are built with git plumbing: `git stash create`,
+then `write-tree` and `commit-tree` (`src/Workspace/WorkspaceCheckpointer.php:18-27`).
+A project that is not a git repository is snapshotted into a shadow repository
+beside `session.db` instead (`src/Workspace/WorkspaceCheckpointer.php:30-33`), so
+`/rewind --files` still has a point to restore. Two limits apply. Untracked
+files that are too large, too many, or match the excluded patterns are never
+snapshotted, so a restore does not touch them either
+(`src/Workspace/WorkspaceCheckpointer.php:34-40`). Your home directory and the
+Desktop, Documents and Downloads folders directly inside it are refused outright
+(`:42-46`, `:176-202`). When a capture is
+refused or fails, the checkpoint row records why, and `/rewind --files` reports
+it (`:48-53`).
 
 ## 6. Run your own commands
 

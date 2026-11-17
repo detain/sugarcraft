@@ -30,7 +30,7 @@ the whole story.
 | **MCP** | Model Context Protocol — a standard for plugging external tool servers into an AI agent over stdio or HTTP. CandyCode is an MCP *client*: [MCP.md](MCP.md). |
 | **OTLP** | OpenTelemetry Protocol. CandyCode exports its event stream to an OTLP endpoint only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set; with it unset, export stays off ([ENVIRONMENT.md](ENVIRONMENT.md)). |
 | **sdapi** | The Stable Diffusion web UI API family — the HTTP interfaces of A1111/SD.Next-style servers (`/sdapi/v1/txt2img` and friends). The media tools speak it, plus the SGLang-Diffusion variant ([MEDIA.md](MEDIA.md)). |
-| **SSRF** | Server-Side Request Forgery — tricking a program into making requests to an address the attacker cannot reach directly (e.g. cloud metadata, localhost services). `WebFetch` resolves each host and refuses any address in a blocked range (`src/Tools/BuiltIn/WebFetch.php`, class doc). |
+| **SSRF** | Server-Side Request Forgery — tricking a program into making requests to an address the attacker cannot reach directly (e.g. cloud metadata, localhost services). `WebFetch` resolves each host once, refuses the name when any answer is in a blocked range, and dials the validated address, so a second DNS lookup cannot point the socket elsewhere (`src/Tools/BuiltIn/WebFetch.php:23-42`). |
 
 ## The agent and its tools
 
@@ -68,7 +68,7 @@ the whole story.
 | Term | Meaning |
 |---|---|
 | **branch** | A new session of kind `branch`, made by `/branch` from the current session ([COMMANDS.md](COMMANDS.md), `src/Session/SessionKind.php`). |
-| **checkpoint** | A git snapshot of the workspace, taken for a turn, so `/undo`, `/rewind` and `/diff` can compare or restore it (`src/Workspace/WorkspaceCheckpointer.php`). |
+| **checkpoint** | A snapshot of the workspace, taken for a turn, so `/rewind --files` and `/diff` can compare or restore it. In a git repository it is a pinned git commit; elsewhere it is a shadow repository beside `session.db` (`src/Workspace/WorkspaceCheckpointer.php:18-33`, [TUTORIAL.md](TUTORIAL.md#5-look-at-the-change-then-take-it-back)). |
 | **session** | A stored conversation with its transcript, kept in `~/.candy-code/session.db` (`src/Session/SessionStore.php`). |
 | **session kind** | What a stored session is: `main`, `branch`, `subagent` or `background` (`src/Session/SessionKind.php:23-26`). |
 | **settings layer** | One of five sources a setting can come from. Your own files outrank the project's, and the machine's file outranks yours ([SETTINGS.md](SETTINGS.md), `src/Config/LayeredSettings.php:20-24`). |

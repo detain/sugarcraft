@@ -129,9 +129,17 @@ dotfile sync. The full list of stored secrets is in
 
 `/undo` takes back the last turn, or reverts the last auto-commit. `/rewind`
 restores an earlier checkpoint, and `/redo` steps forward again
-([COMMANDS.md](COMMANDS.md)). Checkpoints are built with git
-(`src/Workspace/WorkspaceCheckpointer.php:18-27`), so a project outside a git
-repository has nothing to step back to. The files are still written.
+([COMMANDS.md](COMMANDS.md)). In a git repository, checkpoints are built with git
+(`src/Workspace/WorkspaceCheckpointer.php:18-27`). A project outside one is
+snapshotted into a shadow repository beside `session.db`
+(`src/Workspace/WorkspaceCheckpointer.php:30-33`), so `/rewind --files` still has
+a point to restore. Two cases have none. Your home directory and its Desktop,
+Documents and Downloads folders are refused (`src/Workspace/WorkspaceCheckpointer.php:42-46`,
+`:176-202`), and a session store kept only in memory keeps no shadow repository
+(`src/Session/EnhancedSessionStore.php:1361-1363`, `src/Workspace/WorkspaceCheckpointer.php:539-541`).
+`/rewind --files` says why there is nothing to restore in either case
+(`src/Workspace/WorkspaceCheckpointer.php:48-53`). The agent's edits are written
+to disk either way.
 
 ### How do I find an old session?
 

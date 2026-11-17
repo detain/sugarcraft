@@ -9,7 +9,7 @@ asking.
 | [TUTORIAL.md](TUTORIAL.md) | A first session, from an offline first run to a committed change | You are new, or want one end-to-end walk-through |
 | [FAQ.md](FAQ.md) | Short answers to the common questions on providers, permissions, sessions and serving | A question comes up that the reference pages answer at length |
 | [GLOSSARY.md](GLOSSARY.md) | What TUI, MCP, OSC 52, sixel, PTY, SGR, permission modes, checkpoints, sessions and the rest mean | Any page's vocabulary stops you |
-| [SECURITY.md](SECURITY.md) | The trust boundaries, where each secret is stored, how to report a vulnerability, and where each surface's security model lives | You found a security issue or are assessing the trust model |
+| [SECURITY.md](SECURITY.md) | The threat model, the trust boundaries, where each secret is stored, how to report a vulnerability, and where each surface's security model lives | You found a security issue or are assessing the trust model |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Dev modes, the sharded suite, the drift guards, docs cadence | You are changing this package's code or docs |
 | [ADDING_A_PROVIDER.md](ADDING_A_PROVIDER.md) | The provider contract: capabilities, carrier fields, registration, behavior laws | You are wiring a new model API |
 | [COMMANDS.md](COMMANDS.md) | Every slash command, argument-for-argument | You want to know what you can type |

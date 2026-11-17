@@ -5306,6 +5306,68 @@ final class DocFigureProseDriftTest extends TestCase
 
 
     /**
+     * TUTORIAL.md and FAQ.md once said a project outside git "has nothing to
+     * step back to". A file-backed session store keeps a shadow repository
+     * beside session.db for exactly that project, so the sentence is false on
+     * a default install. Both halves are pinned: the source keeps the shadow
+     * fallback, and the pages state it and no longer repeat the refuted claim.
+     */
+    public function testCheckpointPagesDescribeTheShadowFallbackForNonGitProjects(): void
+    {
+        $store = self::sourceOf('Session/EnhancedSessionStore.php');
+        self::assertStringContainsString('self::SHADOW_DIRECTORY', $store, 'the file-backed session store no longer passes a shadow base — the non-git checkpoint fallback the docs describe is gone');
+        self::assertStringContainsString('this session store keeps no shadow repositories', self::sourceOf('Workspace/WorkspaceCheckpointer.php'), 'the refusal the in-memory caveat quotes moved or was reworded');
+
+        foreach (['TUTORIAL.md', 'FAQ.md'] as $page) {
+            $text = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/' . $page);
+            self::assertNotSame('', $text, "docs/{$page} vanished");
+            self::assertStringContainsString('shadow repository', $text, "docs/{$page} does not say a non-git project gets a shadow checkpoint");
+            foreach (['nothing to step back to', 'step-back point', 'have nothing to restore'] as $refuted) {
+                self::assertStringNotContainsStringIgnoringCase($refuted, $text, "docs/{$page} repeats the refuted non-git checkpoint claim");
+            }
+        }
+    }
+
+    /**
+     * GLOSSARY.md's SSRF row once said only "Why outbound fetches are
+     * jail-checked", which names no guard. The row must now name the WebFetch
+     * check it cites, and that check must still be the one the class doc
+     * describes.
+     */
+    public function testGlossarySsrfRowNamesTheWebFetchGuardItCites(): void
+    {
+        $glossary = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/GLOSSARY.md');
+        self::assertSame(1, preg_match('/^\| \*\*SSRF\*\* \| (.*) \|$/m', $glossary, $row), 'the SSRF glossary row is gone');
+        self::assertStringContainsString('WebFetch', $row[1], 'the SSRF row no longer names the guard that answers it');
+        self::assertStringContainsString('blocked range', $row[1], 'the SSRF row no longer says what the guard refuses');
+        self::assertStringNotContainsString('jail-checked', $row[1], 'the content-free SSRF gloss came back');
+
+        $fetch = self::sourceOf('Tools/BuiltIn/WebFetch.php');
+        self::assertStringContainsString('resolves the hostname ONCE', $fetch, 'WebFetch no longer resolves once — the SSRF row describes a guard that moved');
+        self::assertStringContainsString('checked against the blocked ranges', $fetch, 'WebFetch no longer checks every answer against the blocked ranges the row names');
+    }
+
+    /**
+     * TUTORIAL.md once said its first four steps "work offline, with no API
+     * key", but steps 4 and 5 need tool calls, and the offline echo provider
+     * makes those only from scripted `::tool` lines. The lead must not repeat
+     * the claim, and it must name the scripted form the steps rely on, which the
+     * provider's class doc defines.
+     */
+    public function testTutorialLeadNamesTheScriptedToolFormItsOfflineStepsNeed(): void
+    {
+        $tutorial = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/TUTORIAL.md');
+        self::assertNotSame('', $tutorial, 'docs/TUTORIAL.md vanished');
+        self::assertStringNotContainsStringIgnoringCase('four steps work offline', $tutorial, 'the TUTORIAL offline claim came back — steps 2, 4 and 5 need a key or scripted tool calls');
+
+        $lead = (string) strstr($tutorial, '## 1.', true);
+        self::assertNotSame('', $lead, 'the TUTORIAL lead before step 1 is gone');
+        self::assertStringContainsString('::tool', $lead, 'the TUTORIAL lead no longer names the scripted tool form its offline steps need');
+        self::assertStringContainsString('::tool <Name> <json-object>', self::sourceOf('Providers/EchoProvider.php'), 'the scripted ::tool form the lead cites moved out of EchoProvider');
+    }
+
+
+    /**
      * E686 tranche-11 (AI): a bare line anchor is the one doc figure that rots
      * in total silence — no guard resolves it and every reader trusts it. The
      * five ARCHITECTURE anchors this tranche healed had drifted by up to a
