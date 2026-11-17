@@ -185,6 +185,25 @@ final class DisplayCellWidthTest extends TestCase
         self::assertSame(12, Width::string($rendered));
     }
 
+    public function testComboBoxQueryClipsInDisplayCells(): void
+    {
+        // The query takes the same clip as the placeholder. Inside a twelve-cell
+        // allocation the "🔍 " prefix leaves nine cells: the seven-character
+        // query is fourteen cells, so it is cut to eight cells plus the ellipsis.
+        // The code-point rule saw seven characters, fit them in nine cells, and
+        // overran the box. The input color is removed so the line is plain.
+        $combo = ComboBox::new('Search')
+            ->withInputColor(null)
+            ->withSelectedColor(null)
+            ->setSize(12, 1)
+            ->withQuery('日本語テキスト');
+
+        $line = explode("\n", $combo->render())[0];
+
+        self::assertSame('🔍 日本語テ…', $line);
+        self::assertSame(12, Width::string($line));
+    }
+
     public function testComboBoxOptionLabelClipsInDisplayCells(): void
     {
         // Option labels go through the same clip as the placeholder. Inside a
