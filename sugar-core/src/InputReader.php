@@ -1021,10 +1021,6 @@ final class InputReader
     private const BEL = "\x07";
 
     /**
-     * Decode an SS3 final byte (the byte after `ESC O`). Most terminals
-     * use SS3 for F1-F4 — F5+ generally come back as CSI ~ sequences.
-     */
-    /**
      * Decode a digit-led SS3 span, `ESC O <digits>[;<mod>] <final>`.
      *
      * The span is resolved against the SS3 final table only, never the CSI
@@ -1167,6 +1163,10 @@ final class InputReader
         0xFFBD => KeyType::KpEqual,
     ];
 
+    /**
+     * Decode an SS3 final byte (the byte after `ESC O`). Most terminals
+     * use SS3 for F1-F4 — F5+ generally come back as CSI ~ sequences.
+     */
     private function decodeSs3(string $final): ?Msg
     {
         return match ($final) {
