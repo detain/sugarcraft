@@ -246,7 +246,7 @@ final class AsyncProbeReportTest extends TestCase
                 'a ladder-killed child replays as "no dump": the environment answer stands',
             );
             $this->assertCount(0, $this->inFlightSlots(), 'the deadline rung releases the slot');
-            $this->assertSame([], $this->settledDumps(), 'a killed child mints no dump memo entry (CP-13)');
+            $this->assertSame(['xterm-256color' => null], $this->settledDumps(), 'a deadline overrun is a recorded miss, as on the sync door');
 
             // The grace KILL fires after the caller has settled. Drive the loop
             // past it so the child is observed, reaped and closed.
@@ -255,6 +255,11 @@ final class AsyncProbeReportTest extends TestCase
             });
             $loop->run();
 
+            $this->assertSame(
+                ['xterm-256color' => null],
+                $this->settledDumps(),
+                'the late exit of a ladder-killed child must not overwrite the recorded miss with its partial dump',
+            );
             $this->assertFalse($process->isRunning(), 'no live child survives the ladder');
             $this->assertNull(
                 (new \ReflectionProperty(\React\ChildProcess\Process::class, 'process'))->getValue($process),
@@ -269,13 +274,13 @@ final class AsyncProbeReportTest extends TestCase
     }
 
     /**
-     * A child that exits non-zero proves nothing, the CP-13 rule shared with
-     * colorProfile(): the report settles as "no dump", books no memo entry,
-     * and a repeat report() spawns again. The sync door memoizes this verdict
-     * instead; the divergence is recorded in the P1-15 behaviour map, and this
-     * test pins the async side of it with a spawn counter.
+     * A child that exits non-zero is a verdict like any other: the report
+     * answers from the stdout it printed (empty here, so "no dump"), memoizes
+     * that dump, and a repeat report() replays it without a second spawn. This
+     * is the sync door's policy (InfocmpBinary::execOnce returns the capped
+     * stdout whatever the exit code); the spawn counter pins the memo side.
      */
-    public function testNonZeroExitSettlesAsNoDumpAndIsNotMemoized(): void
+    public function testNonZeroExitSettlesAsNoDumpAndIsMemoizedLikeTheSyncDoor(): void
     {
         if (PHP_OS_FAMILY === 'Windows') {
             $this->markTestSkipped('the planted /bin/sh stub needs a POSIX shell.');
@@ -293,14 +298,58 @@ final class AsyncProbeReportTest extends TestCase
             $this->assertSame(
                 self::sources(TerminfoReplayProbe::replaying(null)->runProbe()),
                 self::sources($first),
-                'a non-zero exit replays as "no dump": the environment answer stands',
+                'a non-zero exit with empty stdout replays as "no dump": the environment answer stands',
             );
-            $this->assertSame([], $this->settledDumps(), 'only a zero exit mints a dump memo entry (CP-13)');
+            $this->assertSame(['xterm-256color' => ''], $this->settledDumps(), 'the completed child books its verdict whatever its exit code');
 
             $second = self::settle(AsyncProbe::report($loop), $loop);
             $this->assertInstanceOf(ProbeReport::class, $second);
-            $this->assertSame([], $this->settledDumps());
-            $this->assertSame(2, \substr_count((string) \file_get_contents($log), 'spawn'), 'the non-zero verdict is not memoized, so the repeat report re-spawns');
+            $this->assertSame(['xterm-256color' => ''], $this->settledDumps());
+            $this->assertSame(1, \substr_count((string) \file_get_contents($log), 'spawn'), 'the memoized verdict answers the repeat report without a second spawn');
+        } finally {
+            @\unlink($path);
+            @\unlink($log);
+        }
+    }
+
+    /**
+     * The sync door and the async report agree on the verdict of the same
+     * child, nonzero exit included: the dump the sync door memoizes is the one
+     * the report memoizes and replays, and both surfaces spawn once per TERM.
+     */
+    public function testSyncDoorAndReportAgreeOnTheVerdictOfANonZeroChild(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('the planted /bin/sh stub needs a POSIX shell.');
+        }
+
+        $this->setTerm('xterm-256color');
+        $log = \tempnam(\sys_get_temp_dir(), 'cp28parity');
+        self::assertIsString($log);
+        $path = $this->plantBinary(
+            '#!/bin/sh' . "\n"
+            . 'echo spawn >> ' . \escapeshellarg($log) . "\n"
+            . "printf '\\tTc,\\n'\n"
+            . "exit 3\n",
+        );
+        try {
+            $syncDump = InfocmpBinary::runBounded('xterm-256color');
+            $this->assertSame("\tTc,\n", $syncDump, 'the sync door keeps the dump of a nonzero child');
+            InfocmpBinary::runBounded('xterm-256color');
+            $this->assertSame(1, \substr_count((string) \file_get_contents($log), 'spawn'), 'the sync door memoizes its verdict');
+
+            $loop = new StreamSelectLoop();
+            $report = self::settle(AsyncProbe::report($loop), $loop);
+            $this->assertSame(
+                self::sources(TerminalProbe::run()),
+                self::sources($report),
+                'the async report composes the same answer the sync probe gives for the same child',
+            );
+            $this->assertContains('terminfo:Tc|RGB', self::sources($report));
+            $this->assertSame(['xterm-256color' => "\tTc,\n"], $this->settledDumps(), 'the async memo holds the sync door\'s verdict');
+
+            self::settle(AsyncProbe::report($loop), $loop);
+            $this->assertSame(2, \substr_count((string) \file_get_contents($log), 'spawn'), 'one async spawn, the sync spawn before it: no re-spawn on either surface');
         } finally {
             @\unlink($path);
             @\unlink($log);
@@ -344,7 +393,9 @@ final class AsyncProbeReportTest extends TestCase
     /**
      * With no infocmp on the roster the report answers the environment alone:
      * no slot is booked, nothing is memoized, and the report equals the sync
-     * composition on the same host.
+     * composition on the same host. The recording pass never asks for a dump
+     * without a binary (TerminalProbe's infocmpAvailable gate), so no verdict
+     * exists to record.
      */
     public function testMissingBinaryNeverBooksAChildOnTheReportPath(): void
     {
@@ -359,7 +410,7 @@ final class AsyncProbeReportTest extends TestCase
 
         $this->assertInstanceOf(ProbeReport::class, $report, 'a missing binary settles in place');
         $this->assertCount(0, $this->inFlightSlots(), 'no roster binary means no slot');
-        $this->assertSame([], $this->settledDumps());
+        $this->assertSame([], $this->settledDumps(), 'no binary, no verdict, no memo entry');
         $this->assertSame(self::sources(TerminalProbe::run()), self::sources($report));
     }
 
@@ -398,7 +449,7 @@ final class AsyncProbeReportTest extends TestCase
                 'a failed spawn answers with the environment report, not a terminfo leg',
             );
             $this->assertCount(0, $this->inFlightSlots(), 'a failed spawn releases its booked cap slot');
-            $this->assertSame([], $this->settledDumps(), 'a failed spawn mints no dump memo entry');
+            $this->assertSame(['xterm-256color' => null], $this->settledDumps(), 'a failed launch is a recorded miss, as on the sync door');
         } finally {
             @\unlink($path);
         }

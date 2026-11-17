@@ -291,9 +291,9 @@ final class AsyncProbeBoundedTest extends TestCase
                 'the slot table must drain',
             );
             self::assertSame(
-                [],
+                [$term => null],
                 (new \ReflectionProperty(AsyncProbe::class, 'settledMemo'))->getValue(),
-                'CP-13 contract under a real signal kill: a killed child mints no memo entry',
+                'a grace-killed child is a recorded miss, the sync door\'s verdict for an overrun: the late exit must not overwrite it',
             );
         } finally {
             if ($process !== null && $process->isRunning()) {

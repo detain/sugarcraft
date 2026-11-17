@@ -231,23 +231,24 @@ final class AsyncProbe
      * surface caches carries the same property, and its table mints entries
      * for clean misses too). The ENV-side half of any negative answer is
      * re-derived from the CURRENT chain per call, so env drift after the
-     * first probe can never be served stale. A child that died nonzero or
-     * was ladder-killed proves nothing: only a zero exit mints an entry.
-     * Cap-full/no-binary/unsettled-shape early returns never consulted the
-     * child, so they never write.
+     * first probe can never be served stale. Every verdict the sync door
+     * memoizes is memoized here too (a completed child of any exit code, a
+     * deadline overrun as a miss, a failed launch), so the two surfaces share
+     * one cache policy. Cap-full, unsafe-TERM and absent-binary early returns
+     * never launch a child and never write.
      *
      * @var array<string, ColorProfile|null>
      */
     private static array $settledMemo = [];
 
     /**
-     * Stdout of COMPLETED infocmp children for {@see report()}, keyed by
-     * lowercased TERM. The sync door caches its dump per TERM
-     * ({@see InfocmpBinary}); the async report keeps the same policy so
-     * repeat reports never re-spawn. Only a zero exit mints an entry, and
-     * the cardinality ceiling is {@see self::MEMO_MAX_ENTRIES}.
+     * Dump verdicts for {@see report()}, keyed by lowercased TERM: the capped
+     * stdout of a completed child (any exit code), or null for a recorded miss
+     * (deadline overrun, failed launch). This is the same table policy as
+     * {@see InfocmpBinary::runBounded()}, so repeat reports never re-spawn on
+     * either surface. The cardinality ceiling is {@see self::MEMO_MAX_ENTRIES}.
      *
-     * @var array<string, string>
+     * @var array<string, string|null>
      */
     private static array $settledDumps = [];
 
@@ -329,19 +330,26 @@ final class AsyncProbe
             $infocmpPath,
             $term,
             $deferred,
-            static function (?int $exitCode, string $stdout) use ($chain, $term): ColorProfile {
-                $promoted = $exitCode === 0 && TerminfoParser::hasCapName($stdout, TerminfoParser::TRUECOLOR_NAMES);
-                if ($exitCode === 0) {
-                    // TERM-static verdict from a cleanly completed child only
-                    // (CP-13): promotion, or the NULL negative sentinel.
-                    self::memoWrite(\strtolower($term), $promoted ? ColorProfile::TrueColor : null);
-                }
+            static function (?int $exitCode, string $stdout) use ($chain, $memoKey): ColorProfile {
+                // Every completed verdict is memoized, the exit code
+                // notwithstanding: the sync door keeps whatever dump the child
+                // printed (InfocmpBinary::execOnce), so the async memo must
+                // hold the same TERM-static answer for the same child.
+                $promoted = TerminfoParser::hasCapName($stdout, TerminfoParser::TRUECOLOR_NAMES);
+                self::memoWrite($memoKey, $promoted ? ColorProfile::TrueColor : null);
 
                 return $promoted ? ColorProfile::TrueColor : self::settleFromChain($chain);
             },
-            static fn (): ColorProfile => self::settleFromChain($chain),
+            static function () use ($chain, $memoKey): ColorProfile {
+                // A deadline overrun is a recorded miss, as on the sync door.
+                self::memoWrite($memoKey, null);
+
+                return self::settleFromChain($chain);
+            },
         );
         if (!$spawned) {
+            self::memoWrite($memoKey, null);
+
             return \React\Promise\resolve(self::settleFromChain($chain));
         }
 
@@ -458,7 +466,9 @@ final class AsyncProbe
         // later KILL it, and settle the caller with the chain answer. A hung
         // infocmp can therefore never strand the promise OR the slot.
         $graceTimer = null;
-        $timeoutTimer = $loop->addTimer(self::timeoutSeconds(), static function () use ($process, $loop, $deferred, $release, $onLadder, &$graceTimer): void {
+        $laddered = false;
+        $timeoutTimer = $loop->addTimer(self::timeoutSeconds(), static function () use ($process, $loop, $deferred, $release, $onLadder, &$graceTimer, &$laddered): void {
+            $laddered = true;
             $process->terminate();
             $graceTimer = $loop->addTimer(self::graceSeconds(), static function () use ($process): void {
                 self::killAndReap($process);
@@ -480,9 +490,15 @@ final class AsyncProbe
         // $stdout must be captured BY REFERENCE: the accumulator is filled by
         // the data pump after this closure is built, and a by-value copy would
         // hand the exit handler the empty string it had at registration time.
-        $process->on('exit', function (?int $exitCode, ?int $signal = null) use ($deferred, &$stdout, $release, $cancelLadder, $onExit): void {
+        $process->on('exit', function (?int $exitCode, ?int $signal = null) use ($deferred, &$stdout, &$laddered, $release, $cancelLadder, $onExit): void {
             $cancelLadder();
             $release();
+            // The deadline rung already settled this verdict (and its memo
+            // entry) through $onLadder; a late exit must not re-run $onExit,
+            // which would overwrite that recorded miss with the partial dump.
+            if ($laddered) {
+                return;
+            }
             $deferred->resolve($onExit($exitCode, $stdout));
         });
 
@@ -551,17 +567,25 @@ final class AsyncProbe
             $infocmpPath,
             $term,
             $deferred,
-            static function (?int $exitCode, string $stdout) use ($memoKey): ?string {
-                if ($exitCode !== 0) {
-                    return null;
-                }
+            static function (?int $exitCode, string $stdout) use ($memoKey): string {
+                // Every completed verdict is memoized, the exit code
+                // notwithstanding: InfocmpBinary::execOnce returns the capped
+                // stdout for any child the ladder did not drive, so the async
+                // memo keeps the same dump for the same child.
                 self::dumpMemoWrite($memoKey, $stdout);
 
                 return $stdout;
             },
-            static fn (): ?string => null,
+            static function () use ($memoKey): ?string {
+                // A deadline overrun is a recorded miss, as on the sync door.
+                self::dumpMemoWrite($memoKey, null);
+
+                return null;
+            },
         );
         if (!$spawned) {
+            self::dumpMemoWrite($memoKey, null);
+
             return \React\Promise\resolve($environmentReport);
         }
 
@@ -574,7 +598,7 @@ final class AsyncProbe
      * Sole write site of the dump memo behind {@see report()}, enforcing the
      * same cardinality ceiling as {@see memoWrite()}.
      */
-    private static function dumpMemoWrite(string $key, string $dump): void
+    private static function dumpMemoWrite(string $key, ?string $dump): void
     {
         if (\count(self::$settledDumps) >= self::MEMO_MAX_ENTRIES) {
             self::$settledDumps = [];
