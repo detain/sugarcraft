@@ -132,6 +132,42 @@ final class BundleInstallScopeTest extends TestCase
         self::assertSame(['demo' => 'project'], $found, 'the bundle is listed in the project tier and nowhere else');
     }
 
+    public function testAUserBundleIsDiscoveredOnceInTheUserTierWhenTheHomeDirectoryIsTheProjectRoot(): void
+    {
+        $this->plainBundleAt($this->root . '/demo', 'demo');
+
+        $found = [];
+        foreach ((new BundleDiscovery(ProjectRoot::resolve($this->home)))->discover() as $bundle) {
+            $found[] = [$bundle->name, $bundle->tier];
+        }
+
+        self::assertSame(
+            [['demo', 'user']],
+            $found,
+            'home is both the project root and the user root: the bundle is one row, in the user tier',
+        );
+    }
+
+    public function testBundlesListFromTheHomeDirectoryShowsAUserBundleOnce(): void
+    {
+        $this->plainBundleAt($this->root . '/demo', 'demo');
+
+        $before = getcwd();
+        self::assertNotFalse($before);
+
+        chdir($this->home);
+
+        try {
+            [$exit, $out] = $this->verbCapture('list');
+        } finally {
+            chdir($before);
+        }
+
+        self::assertSame(NonInteractive::EXIT_OK, $exit);
+        self::assertSame(1, preg_match_all('/^demo\s/m', $out), 'list shows one row for the bundle, not one per tier');
+        self::assertMatchesRegularExpression('/^demo\s.*\buser\b/m', $out, 'the one row is the user-tier copy');
+    }
+
     public function testProjectAndUserTogetherAreRefusedWithTheirOwnLineAndNothingIsWritten(): void
     {
         $source = $this->stagedBundle('demo-src', 'demo');
