@@ -77,6 +77,23 @@ final class WebsocketUrlTest extends TestCase
         self::assertNull(WebsocketUrl::from('http://[ ]:1'));
     }
 
+    public function testHostAcceptedMalformedAddressesAreRefused(): void
+    {
+        // Inputs candy-code's Attach::websocketUrl turns into a URL today. This class
+        // refuses them with null, and the host delegating here changes them on purpose.
+        $malformed = [
+            'http://[abc]:8080',
+            'http://[v1.fe]:8080',
+            'http://[ ]:1',
+            'ws://[:]:1/ws',
+            'http://[fe80::1%]:8080',
+            'http://::1',
+        ];
+        foreach ($malformed as $address) {
+            self::assertNull(WebsocketUrl::from($address), $address);
+        }
+    }
+
     public function testSurroundingWhitespaceIsTrimmed(): void
     {
         self::assertSame('wss://agent.example.com/ws', WebsocketUrl::from("  https://agent.example.com/\n"));
