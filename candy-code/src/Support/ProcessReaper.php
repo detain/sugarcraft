@@ -362,7 +362,9 @@ final class ProcessReaper
 
     /**
      * Whether the child has exited, capturing its status from the poll that
-     * saw the exit: `proc_close()` reports -1 once the exit was observed here.
+     * saw the exit. A signal death reads -1 here and `proc_close()` then
+     * reports -1 as well (the poll consumed the status); a normal exit is
+     * reported as its code by both. -1 is the sentinel the callers branch on.
      *
      * @param resource $process
      */

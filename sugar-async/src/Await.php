@@ -28,6 +28,9 @@ final class Await
 {
     private static bool $driving = false;
 
+    /** @var array<class-string, \ReflectionProperty|null> */
+    private static array $runningFlags = [];
+
     /**
      * @param PromiseInterface $promise  Settles with the value to return
      * @param float $seconds             Budget (positive and finite)
@@ -71,6 +74,11 @@ final class Await
         );
 
         if ($settled === false) {
+            // Refused before anything is armed: a nested run() here would be a
+            // second driver, and the stop() it ends with would end the outer one.
+            if (self::loopIsRunning($loop)) {
+                throw new \LogicException('Await::until() cannot run inside a loop callback that is already driving the loop');
+            }
             $timer = $loop->addTimer($seconds, static function () use ($loop, &$waiting): void {
                 if ($waiting) {
                     $loop->stop();
@@ -98,5 +106,34 @@ final class Await
         }
 
         return $value;
+    }
+
+    /**
+     * Whether $loop is inside run() right now. react/event-loop publishes no
+     * probe for this, so the flag each shipped loop keeps privately is read.
+     * A loop class without that flag answers false, which leaves only the
+     * {@see $driving} guard in force for it.
+     */
+    private static function loopIsRunning(LoopInterface $loop): bool
+    {
+        $class = $loop::class;
+        if (!\array_key_exists($class, self::$runningFlags)) {
+            self::$runningFlags[$class] = self::runningFlagOf($loop);
+        }
+
+        $flag = self::$runningFlags[$class];
+
+        return $flag !== null && $flag->getValue($loop) === true;
+    }
+
+    private static function runningFlagOf(LoopInterface $loop): ?\ReflectionProperty
+    {
+        for ($class = new \ReflectionClass($loop); $class !== false; $class = $class->getParentClass()) {
+            if ($class->hasProperty('running')) {
+                return $class->getProperty('running');
+            }
+        }
+
+        return null;
     }
 }
