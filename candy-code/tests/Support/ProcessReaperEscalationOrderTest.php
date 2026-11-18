@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Support;
 
 use PHPUnit\Framework\TestCase;
+use React\EventLoop\StreamSelectLoop;
 use SugarCraft\Code\Support\ProcessReaper;
 
 /**
@@ -163,5 +164,55 @@ final class ProcessReaperEscalationOrderTest extends TestCase
             \proc_close($process);
             @\unlink($ready);
         }
+    }
+
+    /**
+     * The -1 sentinel, pinned on both close paths. A child that dies of a
+     * signal reads -1 once the ladder's status poll has seen it: the poll
+     * consumes the status, so proc_close() reports -1 too. SIGKILL is sent
+     * before the close, so the death is in place when the poll runs.
+     */
+    public function testTerminateAndCloseReportsASignalDeathAsTheSentinel(): void
+    {
+        $process = $this->sleeper();
+        \proc_terminate($process, 9);
+        \usleep(200_000);
+
+        $this->assertSame(-1, ProcessReaper::terminateAndClose($process));
+    }
+
+    public function testTerminateAndCloseAsyncReportsASignalDeathAsTheSentinel(): void
+    {
+        $process = $this->sleeper();
+        \proc_terminate($process, 9);
+        \usleep(200_000);
+
+        $status = 'unset';
+        ProcessReaper::terminateAndCloseAsync(
+            new StreamSelectLoop(),
+            $process,
+            null,
+            static function (?int $reaped) use (&$status): void {
+                $status = $reaped;
+            },
+        );
+
+        $this->assertSame(-1, $status);
+    }
+
+    /** @return resource */
+    private function sleeper()
+    {
+        $process = \proc_open(
+            ['sleep', '30'],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($process);
+        foreach ($pipes as $pipe) {
+            @\fclose($pipe);
+        }
+
+        return $process;
     }
 }

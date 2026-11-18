@@ -310,9 +310,10 @@ held for the next `parse()` call. If the held bytes pass
 that starts at the ESC, and the tokenizer resynchronizes, so a stuck stream
 cannot grow the buffer. The cap applies to the held partial only, so a large
 chunk that ends in a short partial still holds that partial. The cap bounds
-memory, not time: the held partial is rescanned on every feed, so a stream of
-1-byte feeds that keeps a 64 KiB partial open costs about 2e9 byte steps in
-total. Tracking a scanned offset would remove that cost; it is not implemented. `Token` carries `type` (`TEXT`, `CONTROL`, `ESC`,
+memory, not time. Only a held CSI is rescanned from its ESC on every feed, so a
+stream of 1-byte feeds that keeps a 64 KiB CSI open costs about 2e9 byte steps
+in total. An unterminated OSC, DCS, APC, SOS or PM body keeps its scan offset
+across feeds, so each body byte is examined once. `Token` carries `type` (`TEXT`, `CONTROL`, `ESC`,
 `CSI`, `OSC`, `DCS`, `APC`, `SOS`, `PM`), `data`, `intermediate`, `params`,
 `final`, and `terminator`, and `paramInts()` reads the parameters as integers.
 The field shape and type values match sugar-core's `Util\Token`. Unlike the
@@ -351,7 +352,7 @@ and its callers move in that step.
 |---|---|
 | Printable and 8-bit bytes accumulate into one TEXT token | `AnsiTokenizer::parse()`, same |
 | C0 controls and DEL: one CONTROL token per byte | `AnsiTokenizer::parse()`, same |
-| `ESC` plus a byte: two-byte ESC token | `AnsiTokenizer::consumeEsc()`, same |
+| `ESC` plus a byte: two-byte ESC token | `AnsiTokenizer::consumeEsc()`, same for two-byte finals. ESC intermediates (`ESC ( 0`, `ESC # 8`) are a declared change (below) |
 | CSI: private marker, parameter bytes, intermediate bytes, final 0x40–0x7E | `AnsiTokenizer::consumeCsi()`, same, except an ESC inside the CSI (declared change below) |
 | CSI with an invalid final: bare `ESC [` token, then resynchronize | `consumeCsi()`, same |
 | OSC, DCS, APC, SOS, PM closed by BEL or ST, with `terminator` | `AnsiTokenizer::consumeStTerminated()`, same, except an ESC inside the body (declared change below) |
@@ -372,6 +373,16 @@ swallowed the ESC into the body, so `ESC ] 0 ; t ESC [ A` gave one OSC token and
 lost the key press. Pinned by `AnsiTokenizerTest::testEscInsideCsiAbortsTheSequenceAndRestarts`,
 `testEscEscRestartsTheSequence`, `testEscInsideOscAbortsTheStringAndKeepsTheNextKey` and
 `testEscInsideDcsAndApcAbortTheString`.
+
+**Declared behavior change (ESC intermediates).** `ESC` followed by 0x20–0x2F
+bytes and then a final 0x30–0x7E is one ESC token: the final goes in `data` and
+the intermediates in `intermediate`, as the VT500 `Parser` dispatches it. So
+`ESC ( 0` is `data` `0`, intermediate `(`, and `ESC # 8` is `data` `8`,
+intermediate `#`. The copy in `Util\Parser` split these after the first byte, so
+the final came back as TEXT and a DEC graphics switch printed as literal
+characters. A sequence cut short by ESC or a non-final byte is dropped with no
+token, as a CSI is. Pinned by `AnsiTokenizerTest::testEscIntermediateDesignationIsOneEscTokenWithNoTextLeak`,
+`testEscDecalnAndS7c1tCarryTheirIntermediates` and `testEscIntermediateAbandonedByEscOrControlResyncs`.
 
 **Declared behavior change.** A chunk longer than 64 KiB whose tail is a short
 unfinished sequence now holds that tail, as a short chunk does. The copy

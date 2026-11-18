@@ -81,12 +81,20 @@ final class BoundedShutdown
      * child's exit status.
      *
      * The status is captured from `proc_get_status()` at the moment the poll
-     * observes the exit, NOT from `proc_close()`: once the status poll has
-     * seen the child gone, `proc_close()` reports -1 (measured, PHP 8.3.6 —
-     * the same reason candy-code's clipboard spawner reads its exit code out
-     * of the poll). When the poll never observed an exit — the uninterruptible
-     * kernel-wait case — the status falls back to `proc_close()`'s own report,
-     * which is honest because that call will have waited out the child.
+     * observes the exit, NOT from `proc_close()`: a status poll that has seen
+     * the child die of a SIGNAL consumes that status, and `proc_close()` then
+     * reports -1 (measured, PHP 8.3.6 — the same reason candy-code's clipboard
+     * spawner reads its exit code out of the poll). A normal exit is reported
+     * as its code by both.
+     *
+     * THE -1 IS A SENTINEL, NOT A CODE. A child killed by a signal reads -1
+     * from this method when the ladder polled it, and the number of the signal
+     * (9 for a SIGKILL) from a `proc_close()` that no poll preceded. Callers
+     * treat -1 as "died of a signal, or unknown", never as an exit code; the
+     * ladder keeps it because callers across the tree branch on that value.
+     * When the poll never observed an exit — the uninterruptible kernel-wait
+     * case — the status falls back to `proc_close()`'s own report, which is
+     * honest because that call will have waited out the child.
      *
      * IDEMPOTENT BY CONTRACT: a non-resource argument returns null instead of
      * throwing, because every caller is on a teardown path that may run twice
@@ -504,8 +512,8 @@ final class BoundedShutdown
         }
 
         // The handle still goes through proc_close() — that call is the reap.
-        // The status comes from the poll (proc_close() reports -1 once the
-        // exit was observed) and proc_close() cannot block here, because the
+        // The status comes from the poll (a signal death reads -1, see
+        // terminateBounded()) and proc_close() cannot block here, because the
         // bounded wait already established the child is gone.
         $exitCode = null;
         self::exited($process, $exitCode);
