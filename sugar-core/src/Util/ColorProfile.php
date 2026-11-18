@@ -10,8 +10,8 @@ namespace SugarCraft\Core\Util;
  * @deprecated since CP-22 — `SugarCraft\ColorProfile\ColorProfile` is the
  *             single vocabulary and detector. This enum stays as the
  *             five-rung projection (`ColorProfile::toCore()` / `fromCore()`)
- *             and `detect()` delegates to the chain when it is installed;
- *             the local ladder is a fallback for installs without it.
+ *             and `detect()` delegates to the chain when it is installed.
+ *             Without the chain there is no colour: see {@see fromEnvironment()}.
  */
 enum ColorProfile: int
 {
@@ -24,24 +24,10 @@ enum ColorProfile: int
     /**
      * Detect the active terminal's color profile.
      *
-     * Mirrors the detection decision order of charmbracelet/colorprofile.Detect.
-     *   1. Output is not a TTY → `NoTty` — checked FIRST, so `NO_COLOR` on a
-     *      pipe is `NoTty` (no escape bytes at all), not `Ascii`. A truthy
-     *      `CLICOLOR_FORCE`/`FORCE_COLOR` says "emit escapes anyway" and so
-     *      counts as a terminal here.
-     *   2. `TERM=dumb` → `NoTty` unless forced (upstream: "TERM=dumb is always
-     *      treated as NoTTY unless CLICOLOR_FORCE=1 is set").
-     *   3. `NO_COLOR` set → `Ascii`: colour off, text decoration (bold, faint,
-     *      italic …) kept, per no-color.org. It outranks the force variables.
-     *   4. `CLICOLOR=0` → `Ascii` (BSD opt-out), unless a force variable wins.
-     *   5. `CLICOLOR_FORCE`/`FORCE_COLOR` truthy → `TrueColor`
-     *   6. `COLORTERM` ∈ {truecolor, 24bit} → `TrueColor`
-     *   7. Known `TERM_PROGRAM` values → matched tier
-     *   8. `WT_SESSION` (Windows Terminal) set → `TrueColor`
-     *   9. `TERM` substring match: `*direct*`/`*truecolor*` → `TrueColor`,
-     *      `*256*` → `Ansi256`, `*color*`/xterm/screen/tmux → `Ansi`
-     *  10. CI environment → `Ansi` (most CI logs render 16-color OK)
-     *  11. fallback → `Ascii`
+     * With sugar-colorprofile installed this is its DetectionChain, and the
+     * decision order is documented on that class. Without it there is no
+     * local ladder: a non-terminal answers `NoTty`, and a terminal answers
+     * `Ascii` (no colour, decoration kept). See {@see fromEnvironment()}.
      *
      * @param array<string,string>|null $env  defaults to a snapshot of getenv()
      * @param resource|null             $stdout used to query `stream_isatty`;
@@ -52,14 +38,54 @@ enum ColorProfile: int
     public static function detect(?array $env = null, $stdout = null): self
     {
         $env ??= self::defaultEnv();
+        // No stream to ask means "assume a terminal": the TTY gate is skipped,
+        // matching the documented $stdout = null contract.
+        $isTty = $stdout === null || !is_resource($stdout) || stream_isatty($stdout);
+
+        return self::fromEnvironment($env, $isTty);
+    }
+
+    /**
+     * The one colour-negotiation entry point: the answer for an explicit
+     * environment and a TTY fact, with no ambient reads.
+     *
+     * Pure. It reads neither `getenv()` nor any stream and runs no probe, so
+     * the same arguments always give the same tier. `[]` is hermetic: it reads
+     * no ambient environment. {@see detect()} is this method fed the process
+     * environment and the stdout stream.
+     *
+     * `$isTty` replaces the stream check. A non-terminal answers `NoTty` unless
+     * a force variable is set, because a pipe gets no escape bytes at all.
+     *
+     * Without sugar-colorprofile there is no environment negotiation at all,
+     * so a terminal answers `Ascii` whatever `$env` says (declared behaviour
+     * change, P1-10a: the local fallback ladder was deleted).
+     *
+     * `$override` is an explicit caller decision, such as a `--color` flag.
+     * It outranks the environment:
+     *  - `null`  negotiate from `$env` as {@see detect()} does.
+     *  - `true`  colour is forced on: `TrueColor`, whatever the TTY and env say.
+     *  - `false` colour is forced off: `Ascii` on a terminal (decoration kept),
+     *            `NoTty` otherwise (no escape bytes).
+     *
+     * @param array<string,string> $env  the complete environment; `[]` is hermetic
+     * @param bool                 $isTty whether the destination is a terminal
+     * @param bool|null            $override null negotiates; true or false forces
+     */
+    public static function fromEnvironment(array $env, bool $isTty, ?bool $override = null): self
+    {
+        if ($override === true) {
+            return self::TrueColor;
+        }
+        if ($override === false) {
+            return $isTty ? self::Ascii : self::NoTty;
+        }
 
         $force = self::truthy($env['CLICOLOR_FORCE'] ?? '')
               || self::truthy($env['FORCE_COLOR']    ?? '');
 
-        if (!$force && $stdout !== null && is_resource($stdout)) {
-            if (!stream_isatty($stdout)) {
-                return self::NoTty;
-            }
+        if (!$force && !$isTty) {
+            return self::NoTty;
         }
 
         // CP-22: when sugar-colorprofile is installed it owns the env ladder
@@ -74,84 +100,8 @@ enum ColorProfile: int
                 ->toCore();
         }
 
-        // Legacy fallback ladder: used only when sugar-colorprofile is absent.
-        $term      = strtolower($env['TERM']         ?? '');
-        $colorTerm = strtolower($env['COLORTERM']    ?? '');
-        $program   = strtolower($env['TERM_PROGRAM'] ?? '');
-
-        if ($term === 'dumb' && !$force) {
-            return self::NoTty;
-        }
-
-        if (self::truthy($env['NO_COLOR'] ?? '')) {
-            return self::Ascii;
-        }
-
-        // BSD-family colour opt-out: CLICOLOR=0 means "colour off", and
-        // sugar-pty already short-circuits it — until this rung landed the
-        // fleet-wide colour authority did not, so the two answers split per
-        // library. Unlike NO_COLOR it does NOT outrank an explicit force
-        // variable: CLICOLOR=0 + CLICOLOR_FORCE=1 publishes colour. The
-        // defaultEnv() roster below collects CLICOLOR so the rung fires on
-        // the no-argument default path, not only for callers that pass an
-        // explicit env array.
-        if (!$force && ($env['CLICOLOR'] ?? '') === '0') {
-            return self::Ascii;
-        }
-
-        if ($force) {
-            return self::TrueColor;
-        }
-
-        if ($colorTerm === 'truecolor' || $colorTerm === '24bit') {
-            return self::TrueColor;
-        }
-
-        if ($program !== '') {
-            $match = match (true) {
-                str_contains($program, 'iterm')         => self::TrueColor,
-                str_contains($program, 'wezterm')       => self::TrueColor,
-                str_contains($program, 'vscode')        => self::TrueColor,
-                str_contains($program, 'kitty')         => self::TrueColor,
-                str_contains($program, 'alacritty')     => self::TrueColor,
-                str_contains($program, 'ghostty')       => self::TrueColor,
-                str_contains($program, 'apple_terminal') => self::Ansi256,
-                str_contains($program, 'hyper')         => self::TrueColor,
-                default                                 => null,
-            };
-            if ($match !== null) {
-                return $match;
-            }
-        }
-
-        if (($env['WT_SESSION'] ?? '') !== '') {
-            return self::TrueColor;
-        }
-
-        if (str_contains($term, 'truecolor') || str_contains($term, 'direct')) {
-            return self::TrueColor;
-        }
-
-        if (str_contains($term, '256')) {
-            return self::Ansi256;
-        }
-
-        if (str_contains($term, 'color') || $term === 'xterm' || $term === 'screen' || $term === 'tmux') {
-            return self::Ansi;
-        }
-
-        // CI runners usually produce ANSI-coloured logs.
-        if (self::truthy($env['CI']        ?? '')
-         || self::truthy($env['GITHUB_ACTIONS'] ?? '')
-         || self::truthy($env['GITLAB_CI'] ?? '')
-         || self::truthy($env['BUILDKITE'] ?? '')) {
-            return self::Ansi;
-        }
-
-        if ($term === '') {
-            return self::Ascii;
-        }
-
+        // No chain and no local ladder: colour is off. The TTY gate above has
+        // already answered NoTty for a non-terminal without a force variable.
         return self::Ascii;
     }
 
@@ -164,8 +114,10 @@ enum ColorProfile: int
      * switches on `NoTty` ("this device cannot honor addressing") must ask
      * THIS method: it maps an unforced dumb terminal back to `NoTty` whichever
      * ladder answered, so the veto does not depend on which siblings happen
-     * to be installed. A force variable lifts the answer above `Ascii` and is
-     * left alone, exactly as in the legacy ladder.
+     * to be installed. With the chain installed, a force variable lifts the
+     * answer above `Ascii` and is left alone. Without it nothing lifts
+     * `Ascii`, so a forced dumb terminal also answers `NoTty` (declared
+     * behaviour change, P1-10a).
      *
      * @param array<string,string>|null $env
      * @param resource|null             $stdout

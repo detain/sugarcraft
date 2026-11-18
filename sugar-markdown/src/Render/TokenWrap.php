@@ -100,7 +100,7 @@ final class TokenWrap
                 $gap .= $part;
                 continue;
             }
-            $blob = self::emit($carry . $gap, $max);
+            $blob = self::emitBeforeSeparator($carry . $gap, $max);
             if ($blob !== null) {
                 $rows[] = $blob;
             }
@@ -122,12 +122,30 @@ final class TokenWrap
     /**
      * Run the gap text (with any carried-over packed row prefixed) through
      * the native wrapper, or answer null when there is nothing pending —
-     * wrapAnsi() only flushes a non-empty line, and an empty gap must not
-     * fabricate the blank row that `implode([""])` would encode.
+     * an empty gap must not fabricate the blank row that `implode([""])`
+     * would encode.
      */
     private static function emit(string $text, int $max): ?string
     {
         return $text === '' ? null : Width::wrapAnsi($text, $max);
+    }
+
+    /**
+     * As emit(), for a chunk that the caller joins to the packed rows after
+     * it with a `\n` separator. A trailing hard break makes wrapAnsi() emit
+     * one extra empty row, and that row is what the separator stands for;
+     * keeping it would add a blank row to the output.
+     */
+    private static function emitBeforeSeparator(string $text, int $max): ?string
+    {
+        if ($text === '') {
+            return null;
+        }
+        $out = Width::wrapAnsi($text, $max);
+        if (str_ends_with($text, "\n") && str_ends_with($out, "\n")) {
+            $out = substr($out, 0, -1);
+        }
+        return $out;
     }
 
     /**

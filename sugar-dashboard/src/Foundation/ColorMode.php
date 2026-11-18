@@ -43,12 +43,16 @@ use SugarCraft\Core\Util\ColorProfile;
  * Named divergences from `ColorProfile::detect()` (the README's Color
  * Environment paragraph documents them for readers; this list and
  * tests/Foundation/ColorModeDetectDivergenceTest.php are their source of
- * truth): NO_COLOR=0 disables color here while detect's truthiness test
- * ignores it; a force variable outranks NO_COLOR here while detect lets
- * NO_COLOR win; and the chain never negotiates sub-tiers — a
- * TERM=xterm-256color host answers TrueColor here versus detect's Ansi256
- * ladder (detect also consults COLORTERM, TERM_PROGRAM, CI, and a non-tty
- * stdout, where this chain stays byte-identical under a pipe by design).
+ * truth). detect() answers through sugar-colorprofile's chain when it is
+ * installed (P1-10a), so NO_COLOR=0 and the force-over-NO_COLOR order agree
+ * with this funnel. What still differs: a forced level is TrueColor here,
+ * where detect() answers the chain's level (FORCE_COLOR=1 is its Ansi floor);
+ * the chain never negotiates sub-tiers here, so a TERM=xterm-256color host
+ * answers TrueColor here versus detect()'s Ansi256 (detect also consults
+ * COLORTERM, TERM_PROGRAM, WT_SESSION and CI hosts, and a non-tty stdout,
+ * where this funnel stays byte-identical under a pipe by design); and
+ * TERM=dumb answers NoTty here, where detect() answers Ascii and only
+ * ColorProfile::detectTerminal() answers NoTty.
  */
 final class ColorMode
 {

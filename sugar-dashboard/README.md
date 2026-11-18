@@ -866,17 +866,21 @@ in the same namespace are its value parts.
 > `TERM=dumb` → plain text, then `NO_COLOR` present-and-non-empty → color
 > off with decoration kept, then `CLICOLOR=0` → the same, and everything
 > else lands on the TrueColor floor. It diverges from what
-> `ColorProfile::detect()` would answer in exactly three documented places,
-> each pinned by `tests/Foundation/ColorModeDetectDivergenceTest.php`:
-> `NO_COLOR=0` disables color here while detect's truthiness test ignores
-> it; a force variable outranks `NO_COLOR` here while detect lets
-> `NO_COLOR` win; and the chain funnels without negotiating sub-tiers, so
+> `ColorProfile::detect()` would answer in the documented places, each
+> pinned by `tests/Foundation/ColorModeDetectDivergenceTest.php`. Since
+> P1-10a `detect()` answers through sugar-colorprofile's chain when that
+> package is installed, so `NO_COLOR=0` and the force-over-`NO_COLOR` order
+> now agree with this funnel. What still differs: a forced level is
+> TrueColor here, while detect answers the chain's level (`FORCE_COLOR=1` is
+> its Ansi floor); the chain funnels without negotiating sub-tiers, so
 > `TERM=xterm-256color` answers TrueColor here versus detect's `Ansi256`
 > (detect additionally consults `COLORTERM`, `TERM_PROGRAM` and CI hosts,
 > and refuses color on a non-tty stdout — a pipe keeps byte-identical
 > output here, and embedding hosts that know the real destination collapse
 > that last gap deliberately with
-> `ColorMode::use(ColorProfile::detect(null, $stdout))`). An explicit
+> `ColorMode::use(ColorProfile::detect(null, $stdout))`); and `TERM=dumb`
+> answers `NoTty` here, where `detect()` answers `Ascii` and only
+> `ColorProfile::detectTerminal()` answers `NoTty`. An explicit
 > profile argument — or a seeded override — always wins over the process
 > mode.
 >
