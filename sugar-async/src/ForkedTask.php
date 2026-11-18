@@ -28,6 +28,9 @@ use React\Promise\PromiseInterface;
  */
 final class ForkedTask
 {
+    /** Seconds between WNOHANG polls while a settled task waits on its child. */
+    private const REAP_POLL_SECONDS = 0.01;
+
     /**
      * @param callable(ForkChannel): void $child  Runs in the forked child
      * @param callable(string): void $collect  Parent-side handler for each child frame
@@ -80,7 +83,11 @@ final class ForkedTask
         $deadlineHandle = null;
         $registration = null;
 
-        $settle = static function (?\Throwable $error) use (&$settled, &$deadlineHandle, &$registration, $deferred, $parent, $pid): void {
+        // The reap is polled on the loop, never blocking: a child that closed its
+        // channel early may keep running for a long time, and a child that
+        // survives SIGKILL may sit in an uninterruptible wait. Either would park
+        // every other connection the loop serves behind a blocking waitpid().
+        $settle = static function (?\Throwable $error) use (&$settled, &$deadlineHandle, &$registration, $deferred, $parent, $pid, $loop): void {
             if ($settled) {
                 return;
             }
@@ -91,12 +98,13 @@ final class ForkedTask
             if ($error !== null) {
                 \posix_kill($pid, \defined('SIGKILL') ? \SIGKILL : 9);
             }
-            $status = self::reap($pid);
-            if ($error !== null) {
-                $deferred->reject($error);
-                return;
-            }
-            $deferred->resolve($status);
+            self::reapWhenExited($loop, $pid, static function (int $status) use ($deferred, $error): void {
+                if ($error !== null) {
+                    $deferred->reject($error);
+                    return;
+                }
+                $deferred->resolve($status);
+            });
         };
 
         $parent->onFrame(static function (string $frame) use (&$settled, $settle, $collect): void {
@@ -140,17 +148,51 @@ final class ForkedTask
             $code = 1;
         }
         $channel->close();
+        // The child inherits the parent's output-buffer stack. A normal exit()
+        // flushes it, and the child shares the parent's stdout, so the parent's
+        // un-emitted bytes would be written a second time from here. Drain the
+        // levels without flushing before exiting.
+        while (\ob_get_level() > 0) {
+            \ob_end_clean();
+        }
         exit($code);
     }
 
-    /** Blocking reap; -1 when the child did not exit normally. */
-    private static function reap(int $pid): int
+    /**
+     * Reap the child on loop timers: answer at once when it has already exited,
+     * otherwise poll WNOHANG each tick and answer the tick it is seen gone.
+     * `$done` gets the exit status, or -1 when the child did not exit normally
+     * (or could not be waited for at all).
+     *
+     * @param callable(int):void $done
+     */
+    private static function reapWhenExited(LoopInterface $loop, int $pid, callable $done): void
     {
         $status = 0;
-        if (\pcntl_waitpid($pid, $status) !== $pid) {
-            return -1;
+        $poll = static function () use ($pid, &$status): ?int {
+            $waited = \pcntl_waitpid($pid, $status, \WNOHANG);
+            if ($waited === 0) {
+                return null;
+            }
+
+            return $waited === $pid && \pcntl_wifexited($status) ? \pcntl_wexitstatus($status) : -1;
+        };
+
+        $code = $poll();
+        if ($code !== null) {
+            $done($code);
+
+            return;
         }
 
-        return \pcntl_wifexited($status) ? \pcntl_wexitstatus($status) : -1;
+        $timer = null;
+        $timer = $loop->addPeriodicTimer(self::REAP_POLL_SECONDS, static function () use (&$timer, $loop, $poll, $done): void {
+            $code = $poll();
+            if ($code === null) {
+                return;
+            }
+            $loop->cancelTimer($timer);
+            $done($code);
+        });
     }
 }

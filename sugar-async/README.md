@@ -324,8 +324,7 @@ wait ends, and what happens when the caller cancels the wrapper:
   per-request wall-clock killer.
   Both wrappers take the promise first and the loop as a trailing optional
   parameter (`loop:` omitted → shared `Loop::get()`). The historical
-  loop-first positional form still transposes with an `E_USER_DEPRECATED`
-  notice for one more release — loop-first support is REMOVED-IN 2.0.0.
+  loop-first positional form is removed: passing the loop first is a `TypeError`.
 - `cancellable(promise, token:, onCancel:, label:)` — the returned promise rejects
   immediately with `OperationCancelledException` when the token fires, a late inner
   result is dropped, and an optional `onCancel` hook fires at most once as a
@@ -399,8 +398,8 @@ wait ends, and what happens when the caller cancels the wrapper:
   semantics for user-paced actions: the wait lifts at N seconds, the inner is
   never killed — this library puts no blanket wall-clock timeout on
   operations whose pace belongs to the user.
-  The deprecated `onPending()` shim delegates to this pair (hook →
-  `pendingNotice()`, no hook → `boundWait()`) and leaves in 2.0.
+  The former `onPending()` shim is removed; call `pendingNotice()` or
+  `boundWait()` directly.
 
 Both failure modes surface as `RuntimeException` subclasses — `TimeoutException`
 for timeouts (with structured `seconds()` / `label()` fields),
@@ -530,7 +529,7 @@ The loop-side primitives that used to be hand-rolled in each app:
 | `LoopDeadline::arm($loop, $seconds, $onFire)` | One-shot deadline on the loop; `fired()` and `disarm()`. |
 | `ForkChannel::pair()` and `ForkedTask::run(...)` | A length-prefixed frame channel over a socket pair, and a forked child whose frames reach the parent loop. Settles with the child's exit status; a token or deadline kills the child with SIGKILL. Needs ext-pcntl and ext-posix. |
 
-`AsyncOps` keeps its public names, now forwarding to `Timeouts` (`withTimeout`, `withDeadline`), `Pending` (`pendingNotice`, `boundWait`, `onPending`) and `Retry` (`retry`). `AsyncCache` evicts in O(1) amortized and exposes `generation()`, an epoch advanced by `invalidate()` and `clear()`.
+`AsyncOps` keeps its public names, now forwarding to `Timeouts` (`withTimeout`, `withDeadline`), `Pending` (`pendingNotice`, `boundWait`) and `Retry` (`retry`). `AsyncCache` evicts in O(1) amortized and exposes `generation()`, an epoch advanced by `invalidate()` and `clear()`.
 
 ## AsyncCache
 
