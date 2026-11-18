@@ -115,6 +115,18 @@ final class WindowsPathTest extends TestCase
     }
 
     /**
+     * Regression. A tilde-digit root typed in another case must still be trusted,
+     * because NTFS ignores case. The FS-backed branch cannot run on POSIX, so this
+     * pins the pure resolver it calls first. The tail keeps its 8.3 check.
+     */
+    public function testATildeRootTypedInAnotherCaseIsStillTrusted(): void
+    {
+        $this->assertSame("C:\\WORK\\proj~2\\a.txt", WindowsPath::absolutise("C:\\work\\proj~2", "c:\\WORK\\proj~2\\a.txt"));
+        $this->assertSame("C:\\work\\PROJ~2\\sub\\a.txt", WindowsPath::absolutise("C:\\work\\proj~2", "C:\\work\\PROJ~2\\sub\\a.txt"));
+        $this->assertNull(WindowsPath::absolutise("C:\\work\\proj~2", "c:\\WORK\\proj~2\\PROGRA~1\\x"));
+    }
+
+    /**
      * @return iterable<string, array{string, bool}>
      */
     public static function absoluteRows(): iterable

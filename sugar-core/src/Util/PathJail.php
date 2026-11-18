@@ -426,9 +426,13 @@ final class PathJail
      * Whether a `..` in the Windows path $parts would be applied by the
      * filesystem to a different directory from the lexical collapse.
      *
-     * The same test as {@see parentWalkCrossesLink()}, written over WindowsPath's
+     * The shape of {@see parentWalkCrossesLink()}, written over WindowsPath's
      * anchor and segments, so the drive and UNC prefixes render correctly. Any
-     * prefix that is a link, or that realpath() would move, is a refusal.
+     * prefix that is a link, or that realpath() would move, is a refusal. Unlike
+     * parentWalkCrossesLink(), the move test is case-insensitive (see
+     * {@see windowsRealpathMoves()}), so the two checks are not interchangeable:
+     * routing this through parentWalkCrossesLink() would refuse a `..` after a
+     * directory typed in other than its on-disk case.
      *
      * @param array{0: string, 1: list<string>} $parts
      */

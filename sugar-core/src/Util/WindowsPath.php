@@ -71,7 +71,7 @@ final class WindowsPath
                 return null;
             }
             [$typedAnchor, $typedSegments] = $typed;
-            if ($typedAnchor !== $anchor || array_slice($typedSegments, 0, count($rootSegments)) !== $rootSegments) {
+            if ($typedAnchor !== $anchor || !self::startsWithRoot($typedSegments, $rootSegments)) {
                 return self::parts($path);
             }
 
@@ -231,6 +231,33 @@ final class WindowsPath
         $segments = self::segments($tail, $trusted);
 
         return $segments === null ? null : [$anchor, $segments];
+    }
+
+    /**
+     * Whether $segments begins with $root, comparing names case-insensitively.
+     *
+     * NTFS ignores case, so a root typed in another case names the same
+     * directory, and its tilde-digit name must still be trusted. The typed
+     * spelling is kept: within() compares case-sensitively on its own, so the
+     * pure verdict is unchanged, and the filesystem branch checks containment
+     * by realpath().
+     *
+     * @param list<string> $segments
+     * @param list<string> $root
+     */
+    private static function startsWithRoot(array $segments, array $root): bool
+    {
+        if (count($segments) < count($root)) {
+            return false;
+        }
+
+        foreach ($root as $i => $name) {
+            if (strcasecmp($segments[$i], $name) !== 0) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
