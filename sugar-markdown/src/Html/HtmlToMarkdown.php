@@ -25,9 +25,12 @@ use DOMText;
  * converted from its first {@see MAX_PARSE_BYTES} only, and the output closes
  * with a note saying so: a refusal here would hand the caller the raw bytes,
  * and the raw bytes are exactly what the drop rule exists to keep from the
- * model. ext-dom absent, unparseable, or nothing renderable still returns
- * null, and the caller hands the raw body to the model with a one-line note
- * rather than pretending a conversion happened.
+ * model. ext-dom absent still returns null, and the caller hands the raw body
+ * to the model with a one-line note rather than pretending a conversion
+ * happened. A body the parser refuses, or one that renders nothing (only
+ * dropped subtrees such as a lone `<script>`), returns a one-line note
+ * instead: a null there would send the raw body, dropped text and all, to the
+ * model.
  *
  * Markup kept: headings 1-6, paragraphs, inline emphasis, links with
  * relative hrefs resolved against the final fetch URL through
@@ -69,6 +72,12 @@ final class HtmlToMarkdown
      * own byte cap allows, and whatever sits past the cut is never converted.
      */
     public const MAX_PARSE_BYTES = 512 * 1024;
+
+    /** The line returned for a parsed body that has no renderable text. */
+    private const EMPTY_NOTE = '*(The page has no readable text.)*';
+
+    /** The line returned for a body the HTML parser refuses outright. */
+    private const UNREADABLE_NOTE = '*(The page could not be read as HTML.)*';
 
     /**
      * Elements dropped whole, text included. `template`, `noembed` and
@@ -116,9 +125,11 @@ final class HtmlToMarkdown
      *                        not a bare charset name is ignored, never
      *                        interpolated
      *
-     * @return ?string Markdown ending in one newline, or null when the body
-     *                 could not be converted and the caller should fall back
-     *                 to the raw bytes. The output is Markdown source, not
+     * @return ?string Markdown ending in one newline; a one-line note when the
+     *                 body is refused by the parser or holds nothing
+     *                 renderable; or null only for empty input and when ext-dom
+     *                 is absent, where the caller should fall back to the raw
+     *                 bytes. The output is Markdown source, not
      *                 display text: brackets and backslashes from the page
      *                 text are backslash-escaped in it (see escapeText()), so
      *                 a raw consumer sees the escapes; render it, or unescape
@@ -169,7 +180,7 @@ final class HtmlToMarkdown
             libxml_use_internal_errors($previous);
         }
         if ($loaded === false) {
-            return null;
+            return self::UNREADABLE_NOTE . "\n";
         }
 
         // Start inside <body>: libxml's standard HTML parsing puts fragments
@@ -177,14 +188,17 @@ final class HtmlToMarkdown
         // metadata (the <title>, inline <style> text) stays out of the page.
         $root = $document->getElementsByTagName('body')->item(0) ?? $document->documentElement;
         if ($root === null) {
-            return null;
+            return self::UNREADABLE_NOTE . "\n";
         }
 
         $blocks = self::renderBlocks($root, $baseUrl);
 
         $markdown = trim(implode("\n\n", $blocks));
+        // A parsed body that renders nothing gets the note, not null: the caller
+        // falls back to the raw bytes on null, and those bytes may be the very
+        // script text the drop rule removed.
         if (!$truncated) {
-            return $markdown === '' ? null : $markdown . "\n";
+            return ($markdown === '' ? self::EMPTY_NOTE : $markdown) . "\n";
         }
 
         // A truncated body that renders nothing still returns the note: a null
@@ -630,6 +644,10 @@ final class HtmlToMarkdown
     private static function joinBlocks(DOMElement $node, string $baseUrl): string
     {
         $text = implode(' ', self::renderBlocks($node, $baseUrl));
+        // Newlines go before the code-span-aware collapse: a stray backtick in
+        // page text can look like a code span to that pattern, which would keep
+        // a newline (from a br or a fenced pre) and split the heading or row.
+        $text = preg_replace('/\r\n|\r|\n/', ' ', $text) ?? $text;
 
         return trim(self::collapseOutsideCode($text, '\s+'));
     }

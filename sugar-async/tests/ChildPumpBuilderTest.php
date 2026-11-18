@@ -205,8 +205,43 @@ final class ChildPumpBuilderTest extends TestCase
                 ->withStdin($p['pipes'][0], 'x')
                 ->pump();
         } finally {
-            fclose($p['pipes'][0]);
+            // The refusal closes the handed-over pipe itself, so only a pipe still open is ours to close.
+            if (is_resource($p['pipes'][0])) {
+                fclose($p['pipes'][0]);
+            }
         }
+    }
+
+    public function testARefusedStdinFeedStillRunsTheReapAndClosesThePipe(): void
+    {
+        // The refusal happens before any read, so the reap and the pipe close are the
+        // only cleanup the caller gets. Both must happen on the refusal path too.
+        $p = $this->spawn('usleep(10000);', true);
+        $stdin = $p['pipes'][0];
+        $reaped = false;
+
+        try {
+            ChildPump::new([1 => $p['pipes'][1]])
+                ->withDeadline(microtime(true) + 5)
+                ->withPollPipes(true)
+                ->withStdin($stdin, 'x')
+                ->withReap(static function () use (&$reaped): void {
+                    $reaped = true;
+                })
+                ->pump();
+            $this->fail('a stdin feed on the poll arm must be refused');
+        } catch (\LogicException) {
+            // expected: the refusal under test
+        }
+
+        // Checked before any cleanup of ours, so a regression that leaves the pipe open shows here.
+        $stillOpen = is_resource($stdin);
+        if ($stillOpen) {
+            fclose($stdin);
+        }
+
+        $this->assertTrue($reaped, 'the reap runs even when the stdin feed is refused');
+        $this->assertFalse($stillOpen, 'the handed-over stdin pipe is closed even when the feed is refused');
     }
 
     public function testHeartbeatFiresWhileTheChildIsSilent(): void

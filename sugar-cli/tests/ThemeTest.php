@@ -363,7 +363,7 @@ final class ThemeTest extends TestCase
     private const FINGERPRINT_ENV_KEYS = [
         'NO_COLOR', 'CLICOLOR', 'CLICOLOR_FORCE', 'FORCE_COLOR',
         'TERM', 'COLORTERM', 'TERM_PROGRAM',
-        'WT_SESSION',
+        'WT_SESSION', 'TMUX', 'STY', 'GOOGLE_CLOUD_SHELL',
         'CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'BUILDKITE',
     ];
 
