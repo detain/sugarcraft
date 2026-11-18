@@ -193,6 +193,19 @@ final class WidthWrapWordsTest extends TestCase
         $this->assertSame(['a b'], Width::wrapWords("a\tb", 10, breakWords: true));
     }
 
+    /**
+     * Not in the 2026-11-17 ruling: Unicode whitespace separates words here,
+     * while the minesweeper copy splits on spaces only. Pinned so P4-3c cannot
+     * change NBSP- or ideographic-space-separated text without noticing.
+     */
+    public function testDivergenceUnicodeWhitespaceSeparatesWordsWhereMinesweeperKeepsItInTheWord(): void
+    {
+        $this->assertSame(["a\u{00A0}b"], self::minesweeperWrapReference("a\u{00A0}b", 10));
+        $this->assertSame(['a b'], Width::wrapWords("a\u{00A0}b", 10, breakWords: true));
+        $this->assertSame(["a\u{3000}b"], self::minesweeperWrapReference("a\u{3000}b", 10));
+        $this->assertSame(['a b'], Width::wrapWords("a\u{3000}b", 10, breakWords: true));
+    }
+
     public function testDivergenceZwjClusterStaysWholeWhereMinesweeperBreaksPerCodepoint(): void
     {
         // At width 1 the family (2 cells) is over-wide, so the copy cuts it

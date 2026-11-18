@@ -276,7 +276,7 @@ library's full surface.
 | `TERM` | `Util\ColorProfile::detect()` | falls through to the `Ascii` tier |
 | `COLORTERM` | `Util\ColorProfile::detect()` | no early TrueColor bail |
 | `TERM_PROGRAM` | `Util\ColorProfile::detect()`, `Util\Tty\EnvDetect` (mintty), `Util\Clipboard` (backend plan) | no known-terminal match |
-| `NO_COLOR` | `Util\ColorProfile::detect()` | colour stays enabled |
+| `NO_COLOR` | `Util\ColorProfile::detect()` | colour stays enabled; a force variable (`FORCE_COLOR`, `CLICOLOR_FORCE`) outranks it when sugar-colorprofile is installed |
 | `CLICOLOR` | `Util\ColorProfile::detect()` (`CLICOLOR=0` opts out of colour) | no opt-out signal |
 | `CLICOLOR_FORCE` | `Util\ColorProfile::detect()` | no force (truthy = non-empty, not `0`, not `false`) |
 | `FORCE_COLOR` | `Util\ColorProfile::detect()` | no force |
@@ -297,9 +297,16 @@ delegates to its `DetectionChain` (guarded by `class_exists`, no `require`
 cycle; `sugar-colorprofile` is a `suggest`). Without it there is no local
 ladder (P1-10a deleted it): every terminal answers `Ascii`, and the
 `Util\ColorProfile` enum is `@deprecated`. With the chain installed, its
-answers differ from the old ladder in three corners:
+answers differ from the old ladder in four corners:
 `TERM=dumb` on a non-TTY is `Ascii` (was `NoTty`), `FORCE_COLOR=1` is `Ansi`
-(was `TrueColor`), and `CI=true` without `TERM` is `Ascii` (was `Ansi`).
+(was `TrueColor`), `CI=true` without `TERM` is `Ascii` (was `Ansi`), and a
+force variable now outranks `NO_COLOR`: `NO_COLOR=1 FORCE_COLOR=1` is `Ansi`
+(was `Ascii`) and `NO_COLOR=1 CLICOLOR_FORCE=1` is `TrueColor` (was `Ascii`).
+The old ladder let `NO_COLOR` win. The chain's order is the house order
+(`CLICOLOR_FORCE`/`FORCE_COLOR` are active overrides, `NO_COLOR` a passive
+preference), so a child process that inherits `FORCE_COLOR=1` gets colour even
+when the parent exported `NO_COLOR=1`. This is declared here, not only in the
+sugar-cli README.
 `SugarCraft\Colorprofile\ColorProfile::fromCore()` / `toCore()` bridge the
 two enums. Tests that depend on an answer must pin the env explicitly.
 | `PATH` | `Util\Executable\Locator` (the search path `locate()` walks, after any `$extraPath` argument) | empty — nothing is found unless the caller passed `$extraPath` |

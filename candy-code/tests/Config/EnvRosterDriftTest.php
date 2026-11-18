@@ -1801,8 +1801,12 @@ final class EnvRosterDriftTest extends TestCase
      * oracle while README still promises that every variable CandyCode reads is
      * documented. This leg takes every upper-case literal handed to getenv(),
      * $_ENV[] or $_SERVER[] in src/ and demands a row for it on ENVIRONMENT.md
-     * (or on the ambient list). Variable-name reads are not followed; the
-     * prefixed ones keep their own scanner.
+     * (or on the ambient list). A key reached through a string constant declared
+     * in the same file (`self::NAME`, `static::NAME`, `Owner::NAME`) is followed
+     * to its value, because `getenv(self::PROXY_ENV)` is the same read as the
+     * literal. Blind spots, stated so the claim is not overread: a constant
+     * declared in another file is not resolved, and a variable-name read is not
+     * followed. The prefixed ones keep their own scanner.
      */
     public function testEveryLiteralNonPrefixedEnvironmentReadInSrcIsTabulated(): void
     {
@@ -1850,6 +1854,57 @@ final class EnvRosterDriftTest extends TestCase
         );
     }
 
+    public function testTheLiteralReadScanFollowsASameFileStringConstant(): void
+    {
+        $this->assertSame(
+            ['HTTPS_PROXY'],
+            self::literalEnvReadsIn(
+                '<?php class A { private const PROXY_ENV = "HTTPS_PROXY"; '
+                . 'function f() { return getenv(self::PROXY_ENV); } }',
+            ),
+        );
+        $this->assertSame(
+            ['NO_PROXY'],
+            self::literalEnvReadsIn(
+                '<?php class A { public const X = \'NO_PROXY\'; '
+                . 'function f() { return $_SERVER[static::X] ?? null; } }',
+            ),
+        );
+        $this->assertSame(
+            ['NO_PROXY', 'HTTPS_PROXY'],
+            self::literalEnvReadsIn(
+                '<?php class A { const P = "HTTPS_PROXY", N = "NO_PROXY"; '
+                . 'function f() { return [getenv(self::N), getenv(self::P)]; } }',
+            ),
+        );
+        // Two classes share the name K with different values: both values are
+        // reported for each read (an over-report that can only ask for extra rows).
+        $this->assertSame(
+            ['HTTPS_PROXY', 'NO_PROXY'],
+            array_values(array_unique(self::literalEnvReadsIn(
+                '<?php class A { const K = "HTTPS_PROXY"; } class B { const K = "NO_PROXY"; '
+                . 'function f() { return getenv(A::K) . getenv(B::K); } }',
+            ))),
+        );
+    }
+
+    public function testAConstantThatIsNotAnEnvironmentKeyOrIsDeclaredElsewhereIsNotAFalseRead(): void
+    {
+        $this->assertSame(
+            [],
+            self::literalEnvReadsIn(
+                '<?php class A { private const NAME = "HTTPS_PROXY"; '
+                . 'function f() { return $this->names[self::NAME] ?? null; } }',
+            ),
+            'a constant is only a read when it is the key of getenv() or of $_ENV / $_SERVER',
+        );
+        $this->assertSame(
+            [],
+            self::literalEnvReadsIn('<?php class A { function f() { return getenv(Other::PROXY_ENV); } }'),
+            'a constant declared in another file is a documented blind spot, not a silent claim',
+        );
+    }
+
     /**
      * @return array<string, string> src/ PHP file path => source text
      */
@@ -1884,6 +1939,7 @@ final class EnvRosterDriftTest extends TestCase
             }
             $tokens[] = $token;
         }
+        $constants = self::sameFileStringConstants($tokens);
 
         $names = [];
         $count = \count($tokens);
@@ -1892,22 +1948,85 @@ final class EnvRosterDriftTest extends TestCase
             if (!\is_array($token)) {
                 continue;
             }
-            $literal = null;
             $isGetenv = \in_array($token[0], [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true)
                 && preg_match('/(?:^|\\\\)getenv$/i', $token[1]) === 1;
             $isSuperglobal = $token[0] === T_VARIABLE && ($token[1] === '$_ENV' || $token[1] === '$_SERVER');
             $open = $tokens[$i + 1] ?? null;
-            $first = $tokens[$i + 2] ?? null;
-            if (($isGetenv && $open === '(') || ($isSuperglobal && $open === '[')) {
-                if (\is_array($first) && $first[0] === T_CONSTANT_ENCAPSED_STRING) {
-                    $literal = trim($first[1], "\"'");
-                }
+            if (!($isGetenv && $open === '(') && !($isSuperglobal && $open === '[')) {
+                continue;
             }
-            if ($literal !== null && preg_match('/^[A-Z][A-Z0-9_]*$/', $literal) === 1) {
-                $names[] = $literal;
+            foreach (self::keyValuesAt($tokens, $i + 2, $constants) as $literal) {
+                if (preg_match('/^[A-Z][A-Z0-9_]*$/', $literal) === 1) {
+                    $names[] = $literal;
+                }
             }
         }
 
         return $names;
+    }
+
+    /**
+     * The string value(s) of the key expression starting at $at: a quoted literal,
+     * or a class constant (`self::NAME`, `static::NAME`, `Owner::NAME`) declared as
+     * a string in the same file. A name declared with two different values in the
+     * file yields both, so the scan over-reports rather than hides a read.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $tokens
+     * @param array<string, list<string>> $constants
+     * @return list<string>
+     */
+    private static function keyValuesAt(array $tokens, int $at, array $constants): array
+    {
+        $first = $tokens[$at] ?? null;
+        if (\is_array($first) && $first[0] === T_CONSTANT_ENCAPSED_STRING) {
+            return [trim($first[1], "\"'")];
+        }
+        $scope = \is_array($first) ? $first[0] : null;
+        $isScope = \in_array($scope, [T_STRING, T_STATIC, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true);
+        $colons = $tokens[$at + 1] ?? null;
+        $member = $tokens[$at + 2] ?? null;
+        if (
+            $isScope
+            && \is_array($colons) && $colons[0] === T_DOUBLE_COLON
+            && \is_array($member) && $member[0] === T_STRING
+        ) {
+            return $constants[$member[1]] ?? [];
+        }
+
+        return [];
+    }
+
+    /**
+     * Every `const NAME = 'value'` declared as a quoted string in one file, including
+     * the comma-separated form `const A = 'x', B = 'y';`. Keyed by constant name.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $tokens
+     * @return array<string, list<string>>
+     */
+    private static function sameFileStringConstants(array $tokens): array
+    {
+        $found = [];
+        $count = \count($tokens);
+        for ($i = 0; $i < $count; ++$i) {
+            if (!\is_array($tokens[$i]) || $tokens[$i][0] !== T_CONST) {
+                continue;
+            }
+            $j = $i + 1;
+            while (
+                isset($tokens[$j], $tokens[$j + 1], $tokens[$j + 2])
+                && \is_array($tokens[$j]) && $tokens[$j][0] === T_STRING
+                && $tokens[$j + 1] === '='
+                && \is_array($tokens[$j + 2]) && $tokens[$j + 2][0] === T_CONSTANT_ENCAPSED_STRING
+            ) {
+                $found[$tokens[$j][1]][] = trim($tokens[$j + 2][1], "\"'");
+                $j += 3;
+                if (($tokens[$j] ?? null) !== ',') {
+                    break;
+                }
+                ++$j;
+            }
+        }
+
+        return $found;
     }
 }

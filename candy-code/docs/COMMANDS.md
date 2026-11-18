@@ -441,14 +441,14 @@ share the typed-name asymmetry —
 a typed pseudo-name meets the unknown-command refusal, never a model turn; the
 dock pair's palette arms instead drive the COMPLETE command text
 (`/pane dock left`) through `Chat::handlePaneCommand()`, the handler the real
-`/pane` row dispatches to. Since CC-UXD-03 the lifecycle trio — `close-tab`,
+`/pane` row dispatches to. The lifecycle trio — `close-tab`,
 `session-pin`, `session-delete` — is no longer in this set: each gained the
 handler its palette arm already ran, so the typed spelling opens the same door
 with the same confirmation.
 The Ctrl+P palette and the draft box are two different surfaces over one
 registry, and a palette row may be a fuller sentence than a slash spelling.
-Since this release the palette lists EVERY slash-visible command, and CC-UXD-04
-(reviews-1103) made every row run the real verb: a row whose bare `/<name>` form
+Since this release the palette lists EVERY slash-visible command, and every row
+runs the real verb: a row whose bare `/<name>` form
 means something is an ACTION row — Enter on it dispatches exactly what the typed
 spelling dispatches, what the row shows is what happens. A row is a PREFILL only
 when its bare form needs an argument; running it closes the palette and fills a

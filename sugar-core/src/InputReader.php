@@ -331,9 +331,14 @@ final class InputReader
                             continue;
                         }
                         // A bare digit run with no `;` cannot be a modified
-                        // key, so a keypad final after it is ordinary text:
-                        // `ESC O 1` then `x` types the `x`, not keypad 8.
-                        if (!$semi && strpos(self::SS3_KEYPAD_FINALS, chr($c)) !== false) {
+                        // key, so its final is typed when it is not an SS3
+                        // key final: `ESC O 1` then `x` types the `x` (not
+                        // keypad 8), and `ESC O 2` then `Zx` types `Z` and `x`.
+                        // Only a final that names a non-keypad SS3 key (`ESC O
+                        // 1 P` is F1) is decoded as a key.
+                        $final = chr($c);
+                        if (!$semi && (strpos(self::SS3_KEYPAD_FINALS, $final) !== false
+                            || $this->decodeSs3($final) === null)) {
                             $i = $j;
                             continue;
                         }
@@ -388,6 +393,12 @@ final class InputReader
                 // the next byte is `>` (the XTVERSION reply marker)
                 // so we don't shadow Alt-P keypresses (`ESC P` from
                 // the user) for the general case.
+                // A lone `ESC P` at the buffer end may be the head of that
+                // reply split across reads, so it parks until the next byte
+                // says whether it is `>` or an Alt+P key.
+                if ($next === 'P' && $remain === 2) {
+                    break;
+                }
                 if ($next === 'P' && $remain >= 3 && $this->buf[$i + 2] === '>') {
                     $scan = $this->scanStringTerminator(
                         $i + 2,
