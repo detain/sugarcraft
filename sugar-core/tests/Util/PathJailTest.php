@@ -384,4 +384,55 @@ final class PathJailTest extends TestCase
     {
         $this->assertFalse(PathJail::below($this->root . '/missing', $this->root));
     }
+
+    // ------------------------------------------------- malformed and edge roots
+
+    public function testTheFilesystemRootContainsEveryCanonicalPath(): void
+    {
+        // Regression. The root `/` used to build the prefix `//`, so every
+        // canonical descendant was refused.
+        $this->assertSame($this->root . '/inside.txt', PathJail::resolve('/', $this->root . '/inside.txt'));
+        $this->assertSame($this->root, PathJail::resolveDir('/', $this->root));
+        $this->assertSame($this->root . '/new/x.txt', PathJail::resolveForCreate('/', $this->root . '/new/x.txt'));
+        $this->assertTrue(PathJail::within($this->root, '/'));
+        $this->assertTrue(PathJail::below($this->root, '/'));
+        $this->assertFalse(PathJail::below('/', '/'));
+    }
+
+    public function testAnEmptyRootIsRefusedByEveryMethodEvenWhenTheTargetExistsInTheWorkingDirectory(): void
+    {
+        // Regression. realpath('') answers with the working directory, so an
+        // empty root made any relative target under the working directory look
+        // confined. The target is created in the working directory here, which
+        // is the case the report described.
+        $previous = getcwd();
+        $this->assertNotFalse($previous);
+        chdir($this->root);
+        try {
+            $this->assertNull(PathJail::resolve('', 'inside.txt'));
+            $this->assertNull(PathJail::resolveForCreate('', 'inside.txt'));
+            $this->assertNull(PathJail::resolveDir('', '.'));
+            $this->assertNull(PathJail::confine('', 'inside.txt'));
+        } finally {
+            chdir($previous);
+        }
+    }
+
+    public function testAMalformedRootIsRefusedWithoutThrowingInEveryMethod(): void
+    {
+        // Regression. confine() and resolveDir() used to call realpath() before
+        // the NUL check, and realpath() throws a ValueError on a NUL byte.
+        $this->assertNull(PathJail::resolve("\0", 'inside.txt'));
+        $this->assertNull(PathJail::resolveForCreate("\0", 'inside.txt'));
+        $this->assertNull(PathJail::resolveDir("\0", '.'));
+        $this->assertNull(PathJail::confine("\0", 'inside.txt'));
+    }
+
+    public function testAComparisonWithANulByteIsRefusedWithoutThrowing(): void
+    {
+        // Regression. within() and below() passed the NUL straight to realpath().
+        $this->assertFalse(PathJail::within("{$this->root}/inside.txt\0", $this->root));
+        $this->assertFalse(PathJail::within($this->root, "{$this->root}\0"));
+        $this->assertFalse(PathJail::below("{$this->root}/sub\0", $this->root));
+    }
 }

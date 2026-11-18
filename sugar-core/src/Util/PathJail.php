@@ -24,9 +24,12 @@ namespace SugarCraft\Core\Util;
  *     working directory, so an empty string would silently anchor containment
  *     wherever the process happens to stand.
  *
- * `resolveForCreate()`, `resolveDir()` and `confine()` keep the base rules
- * exactly. `resolveForCreate()` already refuses a dangling leaf by its own
- * ancestor walk, and `resolveDir()` never accepts a missing path.
+ * Every method refuses an empty root and a NUL byte before any filesystem
+ * call, because an empty root anchors on the working directory and realpath()
+ * throws on NUL. The empty-path and dangling-leaf refusals are resolve()'s
+ * alone. `resolveForCreate()`, `resolveDir()` and `confine()` keep the base
+ * rules otherwise: `resolveForCreate()` already refuses a dangling leaf by its
+ * own ancestor walk, and `resolveDir()` never accepts a missing path.
  *
  * ## The overflow hook (the one path outside the root)
  *
@@ -109,7 +112,7 @@ final class PathJail
 
         $fullPath = str_starts_with($path, '/')
             ? $path
-            : $rootReal . '/' . ltrim($path, '/');
+            : self::under($rootReal, $path);
 
         $resolved = realpath($fullPath);
         if ($resolved !== false) {
@@ -166,7 +169,7 @@ final class PathJail
 
         $fullPath = str_starts_with($path, '/')
             ? $path
-            : $rootReal . '/' . ltrim($path, '/');
+            : self::under($rootReal, $path);
         $resolved = realpath($fullPath);
         if ($resolved === false) {
             return null;
@@ -187,14 +190,18 @@ final class PathJail
      */
     public static function confine(string $root, string $path): ?string
     {
+        if (self::unusable($root, $path)) {
+            return null;
+        }
+
         $rootReal = realpath($root);
-        if ($rootReal === false || self::unusable($root, $path)) {
+        if ($rootReal === false) {
             return null;
         }
 
         // A dangling leaf is invisible to realpath(), so the resolve() verdict
         // below would vouch for it. Refuse it first, on the normalized path.
-        $full = str_starts_with($path, '/') ? $path : $rootReal . '/' . ltrim($path, '/');
+        $full = str_starts_with($path, '/') ? $path : self::under($rootReal, $path);
         $leaf = self::normalizeLexically($full);
         if (is_link($leaf) && realpath($leaf) === false) {
             return null;
@@ -256,7 +263,7 @@ final class PathJail
 
         $fullPath = str_starts_with($path, '/')
             ? $path
-            : $rootReal . '/' . ltrim($path, '/');
+            : self::under($rootReal, $path);
         $resolved = realpath($fullPath);
 
         if ($resolved === false) {
@@ -293,20 +300,31 @@ final class PathJail
      */
     private static function inside(string $candidate, string $rootReal): bool
     {
-        return $candidate === $rootReal || str_starts_with($candidate, $rootReal . '/');
+        return $candidate === $rootReal || str_starts_with($candidate, rtrim($rootReal, '/') . '/');
+    }
+
+    /**
+     * Join a relative path onto a canonical root. The trailing slash is trimmed
+     * first, so the filesystem root `/` does not become `//`.
+     */
+    private static function under(string $rootReal, string $path): string
+    {
+        return rtrim($rootReal, '/') . '/' . ltrim($path, '/');
     }
 
     /**
      * Whether a root/path pair is unusable as a filesystem path at all.
      *
-     * A NUL byte can never appear in a real path, and realpath() and is_dir()
-     * THROW a ValueError on one instead of answering false. An unguarded NUL
-     * would turn a containment question into an uncaught crash in whichever
-     * caller asked it, so the refusal lives here for every caller.
+     * An empty root is refused because realpath('') answers with the process
+     * working directory, which would make the working directory the jail. A NUL
+     * byte can never appear in a real path, and realpath() and is_dir() THROW a
+     * ValueError on one instead of answering false. An unguarded NUL would turn a
+     * containment question into an uncaught crash in whichever caller asked it,
+     * so both refusals live here, before any filesystem call.
      */
     private static function unusable(string $root, string $path): bool
     {
-        return str_contains($root, "\0") || str_contains($path, "\0");
+        return $root === '' || str_contains($root, "\0") || str_contains($path, "\0");
     }
 
     /**
@@ -337,7 +355,8 @@ final class PathJail
     {
         // The empty string is refused here rather than left to realpath(), which
         // would answer it with the process working directory.
-        if ($path === '' || $boundary === '') {
+        // NUL is refused here too: realpath() throws a ValueError on it.
+        if ($path === '' || $boundary === '' || str_contains($path, "\0") || str_contains($boundary, "\0")) {
             return false;
         }
 
