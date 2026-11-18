@@ -235,4 +235,15 @@ final class BufferBuilderTest extends TestCase
         self::assertSame(7, $builder->toBuffer()->width());
         self::assertSame(3, $builder->toBuffer()->height());
     }
+
+    public function testOversizedSeedMismatchIsRefusedBeforeTheCanvasIsAllocated(): void
+    {
+        // Regression (Codex P2): the constructor used to fill a blank 10^8-cell
+        // canvas before fromGrid() saw the 1-cell seed, which exhausts the
+        // memory limit with a fatal error that no caller can catch. The seed
+        // must be refused first, as an InvalidArgumentException.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('must contain exactly 100000000 cells');
+        BufferBuilder::fromGrid(10000, 10000, [Cell::blank()]);
+    }
 }
