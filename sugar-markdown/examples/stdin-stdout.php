@@ -25,6 +25,13 @@ foreach ($argv as $arg) {
 }
 $theme = Theme::byName($themeName) ?? Theme::ansi();
 
-$markdown = (string) stream_get_contents(STDIN);
+// Bounded read: a pipe can carry any size, and the renderer's cost grows
+// with what it is given. Past the cap the demo refuses rather than stalling.
+const MAX_INPUT_BYTES = 1048576;
+$markdown = (string) stream_get_contents(STDIN, MAX_INPUT_BYTES + 1);
+if (strlen($markdown) > MAX_INPUT_BYTES) {
+    fwrite(STDERR, 'input exceeds ' . MAX_INPUT_BYTES . " bytes; refusing to render\n");
+    exit(2);
+}
 echo (new Renderer($theme))->render($markdown);
 echo "\n";

@@ -28,4 +28,5 @@ return [
     'blockstack.pop_empty' => 'lo stack di blocchi è vuoto',
     'theme.mapper_not_style' => 'Theme::mapStyles() prevede che il mapper restituisca un Style, ottenuto: {type}',
     'theme.with_slot_not_style' => 'Theme::with(): "{slot}" non è uno slot Style; slot validi: {slots}',
+    'fold.marker' => '▸ ripiegato',
 ];

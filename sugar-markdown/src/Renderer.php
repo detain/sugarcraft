@@ -127,6 +127,22 @@ final class Renderer
     private static array $stockRenderers = [];
 
     /**
+     * Upper bound on {@see cached()} entries. A frame loop asks for one or
+     * two (theme, width) pairs; the bound only stops a process that keeps
+     * minting custom themes from holding every one of them alive.
+     */
+    private const CACHE_LIMIT = 32;
+
+    /**
+     * The renderers {@see cached()} handed out, keyed by theme identity and
+     * width, oldest first. Each entry holds its theme, so the object id in
+     * its key cannot be recycled while the entry exists.
+     *
+     * @var array<string, self>
+     */
+    private static array $cache = [];
+
+    /**
      * Link reference definitions {@see parseSection()} seeds into the parse
      * in flight, null outside one. Only the stream family sets it, and only
      * after narrowing to the labels the section could look up
@@ -161,6 +177,14 @@ final class Renderer
 
     /** Prefix fence lines with a padded, measurable line-number gutter ({@see withLineNumbers()}). */
     public readonly bool $lineNumbers;
+
+    /**
+     * Heading IDs whose sections render folded ({@see withFolds()}), in the
+     * order given. Empty when nothing folds.
+     *
+     * @var list<string>
+     */
+    public readonly array $folds;
     private readonly bool $textIsPlain;
     private bool $inTableCell = false;
 
@@ -203,6 +227,7 @@ final class Renderer
         bool $fenceColumnBudget = false,
         ?StyleSheet $styleSheetOverride = null,
         bool $lineNumbers = false,
+        array $folds = [],
     ) {
         $this->theme = $theme ?? Theme::ansi();
         // SM-S50: a zero/negative width is not "off" — off is null. Fail
@@ -224,6 +249,7 @@ final class Renderer
         $this->fenceColumnBudget = $fenceColumnBudget;
         $this->styleSheetOverride = $styleSheetOverride;
         $this->lineNumbers = $lineNumbers;
+        $this->folds = array_values(array_unique($folds));
         $this->textIsPlain = $this->theme->text === null || $this->isPlainStyle($this->theme->text);
     }
 
@@ -331,6 +357,40 @@ final class Renderer
         // behind our back.
         $renderer = self::$stockRenderers[spl_object_id($theme)] ??= new self($theme);
         return $renderer->render($markdown);
+    }
+
+    /**
+     * The shared renderer for $theme at $width columns, built on first use
+     * and returned as the same instance after that. A caller that renders on
+     * every frame (a TUI pane, a chat transcript) gets one parser, one
+     * Environment and one stylesheet for the whole session instead of paying
+     * for them per frame (rank 39). Null $theme means {@see Theme::ansi()};
+     * null $width means no wrapping.
+     *
+     * Entries are keyed by the theme object's identity, so two equal themes
+     * that are distinct objects get distinct renderers. Only the most recent
+     * {@see CACHE_LIMIT} pairs are kept; an evicted renderer stays valid for
+     * whoever still holds it.
+     */
+    public static function cached(?Theme $theme = null, ?int $width = null): self
+    {
+        $theme ??= Theme::ansi();
+        $key = spl_object_id($theme) . ':' . ($width ?? 'off');
+        if (isset(self::$cache[$key])) {
+            // Refresh recency: move the entry to the end of the array.
+            $renderer = self::$cache[$key];
+            unset(self::$cache[$key]);
+            self::$cache[$key] = $renderer;
+
+            return $renderer;
+        }
+        $renderer = new self($theme, $width);
+        self::$cache[$key] = $renderer;
+        if (count(self::$cache) > self::CACHE_LIMIT) {
+            array_shift(self::$cache);
+        }
+
+        return $renderer;
     }
 
     /**
@@ -790,6 +850,38 @@ final class Renderer
     }
 
     /**
+     * Fold the sections under the top-level headings named by $headingIds.
+     * A folded heading renders its own line, then a fold marker, and the
+     * blocks after it are hidden up to the next heading of any level. The
+     * hidden blocks are the body only: a heading nested under a folded one
+     * is a heading of its own and shows, so the fold never has to know about
+     * sections the stream family renders separately.
+     *
+     * IDs are the values {@see headingId()} returns for the heading text. An
+     * ID that matches no heading is ignored. Pass an empty list to unfold
+     * everything; the returned renderer carries the list given, without repeats.
+     *
+     * @param list<string> $headingIds
+     */
+    public function withFolds(array $headingIds): self
+    {
+        return $this->mutate(folds: $headingIds);
+    }
+
+    /**
+     * The fold ID for a heading whose visible text is $text: lowercase, each
+     * run of characters that are neither letters nor digits becomes a single
+     * hyphen, and the hyphens at both ends are trimmed. Two headings with the
+     * same text share an ID, so folding that ID folds both.
+     */
+    public static function headingId(string $text): string
+    {
+        $slug = preg_replace('/[^\p{L}\p{N}]+/u', '-', mb_strtolower($text)) ?? '';
+
+        return trim($slug, '-');
+    }
+
+    /**
      * Preserve consecutive blank lines in source markdown. By default
      * CommonMark collapses runs of blank lines; with this on, every run of
      * blank lines between two blocks survives into {@see render()}'s output
@@ -944,6 +1036,7 @@ final class Renderer
         ?bool $fenceColumnBudget = null,
         ?StyleSheet $styleSheetOverride = null,
         ?bool $lineNumbers = null,
+        ?array $folds = null,
     ): self {
         return new self(
             $theme            ?? $this->theme,
@@ -959,6 +1052,7 @@ final class Renderer
             $fenceColumnBudget ?? $this->fenceColumnBudget,
             $styleSheetOverride ?? $this->styleSheetOverride,
             $lineNumbers      ?? $this->lineNumbers,
+            $folds            ?? $this->folds,
         );
     }
 
@@ -1500,18 +1594,54 @@ final class Renderer
 
     private function renderChildren(Node $parent): string
     {
+        // Folds apply to the top level only: a heading inside a quote or a
+        // list is never a section boundary, so it can never fold.
+        $folds = $parent instanceof Document && $this->folds !== []
+            ? array_flip($this->folds)
+            : null;
+        $hiding = false;
         $parts = [];
         foreach ($parent->children() as $child) {
+            if ($folds !== null) {
+                if ($child instanceof Heading) {
+                    $hiding = isset($folds[self::foldIdOf($child)]);
+                } elseif ($hiding) {
+                    continue;
+                }
+            }
             $part = $this->renderNode($child);
-            if ($this->sourceLines !== null && $child instanceof AbstractBlock) {
+            // A folded heading's next block is hidden, so its blank lines
+            // are not padded against it.
+            if ($this->sourceLines !== null && $child instanceof AbstractBlock && !$hiding) {
                 $next = $child->next();
                 if ($next instanceof AbstractBlock) {
                     $part = $this->padBlankLines($part, $child, $next);
                 }
             }
+            if ($hiding && $child instanceof Heading) {
+                $part .= Lang::t('fold.marker') . "\n\n";
+            }
             $parts[] = $part;
         }
         return implode('', $parts);
+    }
+
+    /** The {@see headingId()} of a heading's visible text (code spans and image alt text included). */
+    private static function foldIdOf(Heading $heading): string
+    {
+        return self::headingId(self::plainText($heading));
+    }
+
+    private static function plainText(Node $node): string
+    {
+        $text = '';
+        foreach ($node->children() as $child) {
+            $text .= $child instanceof Text || $child instanceof Code
+                ? $child->getLiteral()
+                : self::plainText($child);
+        }
+
+        return $text;
     }
 
     /**
