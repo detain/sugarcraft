@@ -41,8 +41,11 @@ you trust receive their tool arguments, and Bash commands can reach the network.
 echo provider contains no HTTP client code, so a run without a configured provider
 sends no code or prompts. The egress notes for each tool are in
 [ENVIRONMENT.md](ENVIRONMENT.md).
-Phar installs do make one background GET a day to the GitHub release list for the
-"update available" notice; set `CANDY_CODE_NO_UPDATE_CHECK=1` to stop it. The shipped
+Two background GETs run at launch, and neither carries your prompts, code or a
+credential. The first refreshes LiteLLM's model database from
+`raw.githubusercontent.com`, on every install type; `CANDY_CODE_DISABLE_MODEL_METADATA=1`
+stops it. The second is phar-only: one GET a day to the GitHub release list for the
+"update available" notice, which `CANDY_CODE_NO_UPDATE_CHECK=1` stops. The shipped
 `dev-sglang` block in `config.dev.json` sends no API key, and this repository does not
 say who operates its endpoint, so do not use it for private code. The details are in
 [ENVIRONMENT.md](ENVIRONMENT.md#the-shipped-configdevjson-block).
