@@ -689,6 +689,49 @@ final class MemoryStoreTest extends TestCase
     }
 
     /**
+     * P1-12 review of MemoryStore::FRONTMATTER_PATTERN against
+     * sugar-markdown's Frontmatter::split: the two fence grammars differ on an
+     * empty block, on blank lines before the body and on CRLF endings. The
+     * decision is that a note's accept/reject outcome and its content are the
+     * contract, so P1-12c-cc4 must keep these outcomes when it migrates.
+     */
+    public function testFenceGrammarDivergencesFromTheSharedSplitKeepTheSameOutcome(): void
+    {
+        $store = new MemoryStore($this->tempDir);
+        $store->add('seed note', 'project');
+        $project = $this->tempDir . '/project';
+
+        // Adjacent fences: the shared split reads an empty meta, which the
+        // mapping check then refuses, so the note is skipped either way.
+        file_put_contents($project . '/adjacent-fences.md', "---\n---\nbody\n");
+        // A blank line between the fences: the same refusal, one step later.
+        file_put_contents($project . '/blank-block.md', "---\n\n---\nbody\n");
+        // Blank lines before the body: the content is trimmed, so they are invisible.
+        file_put_contents($project . '/blank-body.md', "---\ntype: note\nscope: project\n---\n\n\nbody\n");
+        // CRLF endings: the YAML reader takes the carriage returns, the content is the body.
+        file_put_contents($project . '/crlf.md', "---\r\ntype: note\r\nscope: project\r\n---\r\nbody\r\n");
+
+        $loaded = [];
+        foreach ($store->list('project') as $entry) {
+            $loaded[$entry->id()] = $entry->content();
+        }
+        $skipped = array_keys($store->skipped('project'));
+        sort($skipped);
+
+        $this->assertSame(
+            [$project . '/adjacent-fences.md', $project . '/blank-block.md'],
+            $skipped,
+            'an empty block and a blank-line block are refused, as before',
+        );
+        $this->assertArrayHasKey('blank-body', $loaded);
+        $this->assertArrayHasKey('crlf', $loaded);
+        $this->assertArrayNotHasKey('adjacent-fences', $loaded);
+        $this->assertArrayNotHasKey('blank-block', $loaded);
+        $this->assertSame('body', $loaded['blank-body'], 'blank lines before the body are trimmed away');
+        $this->assertSame('body', $loaded['crlf'], 'CRLF endings load the same note');
+    }
+
+    /**
      * Audit 15d-04: one hand-edited note must never take the whole store (and,
      * through MemoryBlock::capture(), every turn's system prompt) down with it.
      * Every case here used to escape list() as a TypeError or be dropped
