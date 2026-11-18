@@ -295,11 +295,27 @@ final readonly class ShellSend implements Tool, AcceptsShellOwner, BuildsFromCat
         // S-P06 (R9): the fixed-tick bounded wait is sugar-async's Retry::bounded
         // over a factor-1.0 Backoff (a constant tick, no growth, no jitter).
         return (bool) Retry::bounded(
-            static fn(): bool => \is_file($pidPath),
+            static fn(): bool => self::pidRecorded($pidPath),
             static fn(mixed $ready): bool => $ready === false,
             self::RELAY_ATTACH_BUDGET_MS,
             Backoff::new((float) self::RELAY_ATTACH_TICK_MS, 1.0),
         );
+    }
+
+    /**
+     * A pid record counts only once it names a positive pid. The relay writes
+     * the file atomically, but existence alone is not the readiness law: an
+     * empty file is a write in progress, and ShellStop reading it would find
+     * no group to signal.
+     */
+    private static function pidRecorded(string $path): bool
+    {
+        if (!\is_file($path)) {
+            return false;
+        }
+        $raw = @\file_get_contents($path);
+
+        return \is_string($raw) && (int) trim($raw) > 0;
     }
 
     /**
