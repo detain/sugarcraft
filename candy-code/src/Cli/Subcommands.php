@@ -4326,6 +4326,14 @@ final class Subcommands
             return NonInteractive::EXIT_FAILURE;
         }
 
+        $held = self::bundlesOtherTierHolder($args, $root, $name);
+        if ($held !== null) {
+            self::bundlesLine(Lang::t('cli.bundles.install.other_tier', ['name' => $name, 'path' => $held]));
+            self::removeTree($scratch);
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
         if (!@\rename($staged, $dest)) {
             // Cross-device or non-directory root: fall back to the same
             // copy used for path sources, then drop the scratch.
@@ -4382,6 +4390,17 @@ final class Subcommands
         }
 
         $base = ProjectRoot::resolve(\rtrim($base, '/'));
+
+        // ProjectRoot answers the home directory itself when the launch sits
+        // there. Installing under it would write the user tier while the
+        // operator asked for the project tier, so refuse instead of collapsing.
+        $home = HomeDirectory::owned();
+        if ($home !== null && realpath($base) === realpath($home)) {
+            self::bundlesLine(Lang::t('cli.bundles.install.project_is_home', ['root' => $base]));
+
+            return null;
+        }
+
         $root = $base . '/.candy-code/bundles';
         $dotDir = \dirname($root);
 
@@ -4398,6 +4417,36 @@ final class Subcommands
         }
 
         return $root;
+    }
+
+    /**
+     * The copy of {@see $name} that already sits in the OTHER owned bundle
+     * root, or null when that root holds none. The root being written is the
+     * user root when it resolves to the owned home's bundle directory; every
+     * other root is the project tier. Discovery lists both copies, and `bundles
+     * update` then refuses the name as ambiguous, with no verb to remove either
+     * one, so the install is refused here instead of creating the pair.
+     */
+    private static function bundlesOtherTierHolder(ParsedArgs $args, string $root, string $name): ?string
+    {
+        $home = HomeDirectory::owned();
+        $userRoot = $home === null ? null : $home . '/.candy-code/bundles';
+        $realRoot = realpath($root);
+        $writesUser = $userRoot !== null && $realRoot !== false && realpath($userRoot) === $realRoot;
+
+        $other = $writesUser ? self::bundlesExistingProjectRoot($args) : $userRoot;
+        if ($other === null) {
+            return null;
+        }
+
+        $realOther = realpath($other);
+        if ($realOther === false || $realOther === $realRoot) {
+            return null;
+        }
+
+        $held = $other . '/' . $name;
+
+        return \file_exists($held) ? $held : null;
     }
 
     /**
@@ -5031,6 +5080,14 @@ final class Subcommands
 
         if (\file_exists($dest)) {
             self::bundlesLine(Lang::t('cli.bundles.install.exists', ['name' => $name, 'dest' => $dest]));
+            self::removeTree($staged);
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        $held = self::bundlesOtherTierHolder($args, $root, $name);
+        if ($held !== null) {
+            self::bundlesLine(Lang::t('cli.bundles.install.other_tier', ['name' => $name, 'path' => $held]));
             self::removeTree($staged);
 
             return NonInteractive::EXIT_FAILURE;

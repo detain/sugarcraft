@@ -510,6 +510,8 @@ final class HtmlToMarkdown
 
     /**
      * Raw text of a subtree with dropped elements removed from the walk.
+     * A `br` reads as a newline, so a line break inside a `<pre>` keeps its
+     * line instead of running the code together.
      * `textContent` reads through everything, which would hand a `<pre>`,
      * an inline code span, or a form-control label the literal payload of a
      * nested `<script>` — exactly the injection the drop list exists to
@@ -528,6 +530,8 @@ final class HtmlToMarkdown
         foreach ($node->childNodes as $child) {
             if ($child instanceof DOMText || $child instanceof DOMCdataSection) {
                 $out .= $child->nodeValue ?? '';
+            } elseif ($child instanceof DOMElement && strtolower($child->nodeName) === 'br') {
+                $out .= "\n";
             } elseif ($child instanceof DOMElement && !in_array(strtolower($child->nodeName), self::DROP_TAGS, true)) {
                 $out .= self::visibleText($child);
             }
@@ -668,6 +672,7 @@ final class HtmlToMarkdown
         if ($probe === '') {
             return null;
         }
+        $isDataImage = false;
         if (preg_match('~^([a-zA-Z][a-zA-Z0-9+.\-]*):~', $probe, $m) === 1) {
             $scheme = strtolower($m[1]);
             $allowed = in_array($scheme, self::LINK_SCHEMES, true)
@@ -675,22 +680,31 @@ final class HtmlToMarkdown
             if (!$allowed) {
                 return null;
             }
+            $isDataImage = $scheme === 'data';
         }
 
-        return self::encodeDestination($baseUrl === '' ? $href : UrlReference::resolve($baseUrl, $href));
+        // A data URI is already absolute, and its payload may hold '#' or '?'
+        // that UrlReference would read as a fragment or query and cut short.
+        if ($baseUrl === '' || $isDataImage) {
+            return self::encodeDestination($href);
+        }
+
+        return self::encodeDestination(UrlReference::resolve($baseUrl, $href));
     }
 
     /**
      * A destination CommonMark reads whole: spaces and control characters are
-     * percent-encoded, since a space ends the destination. Parentheses are
-     * left as the page wrote them while they balance (`Foo_(bar)`); once any
-     * prefix has more `)` than `(`, or the totals differ, every parenthesis is
-     * percent-encoded, because an unbalanced one ends the destination early.
+     * percent-encoded, since a space ends the destination. Backslashes are too,
+     * because CommonMark reads `\)` as an escaped parenthesis that never closes
+     * the link. Parentheses are left as the page wrote them while they balance
+     * (`Foo_(bar)`); once any prefix has more `)` than `(`, or the totals
+     * differ, every parenthesis is percent-encoded, because an unbalanced one
+     * ends the destination early.
      */
     private static function encodeDestination(string $url): string
     {
         $url = preg_replace_callback(
-            '/[\x00-\x20\x7F]/',
+            '/[\x00-\x20\x7F\\\\]/',
             static fn (array $m): string => sprintf('%%%02X', ord($m[0])),
             $url,
         ) ?? $url;

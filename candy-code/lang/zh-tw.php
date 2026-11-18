@@ -148,6 +148,8 @@ return [
     'cli.bundles.install.not_bundle' => 'bundles install：{source} 不含 .claude-plugin/plugin.json（也沒有裸 plugin.json），因此不是 plugin bundle',
     'cli.bundles.install.project_link' => 'bundles install：{path} 是符號連結；經由連結到達的專案 bundle 根目錄會被拒絕，因此未安裝任何內容',
     'cli.bundles.install.project_root' => 'bundles install：專案根目錄 {root} 不是本程序可以安裝進去的目錄；未寫入任何內容',
+    'cli.bundles.install.other_tier' => 'bundles install: 名為 {name} 的 bundle 已安裝在 {path}（另一層級）；為避免同名 bundle 同時存在於使用者層與專案層，已拒絕此次安裝',
+    'cli.bundles.install.project_is_home' => 'bundles install: --project 解析到你的家目錄 {root}，那是使用者層而非專案；請在專案內執行、傳入 --root，或移除 --project 以安裝到使用者根目錄；未寫入任何內容',
     'cli.bundles.install.project_user' => 'bundles install：--project 與 --user 指向兩個不同的 bundle 根目錄；請只指定一個，或都不指定以使用使用者根目錄',
     'cli.bundles.install.read_failed' => 'bundles install：無法將 {source} 暫存至 bundle 根目錄',
     'cli.bundles.install.via_marketplace' => '已記錄 {name} 來自 marketplace {marketplace}（commit {sha}）；`candy-code bundles update {name}` 會從該列刷新。',

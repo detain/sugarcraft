@@ -914,6 +914,28 @@ final class InputReaderTest extends TestCase
         $this->assertSame('x', $msgs[1]->rune);
     }
 
+    public function testLoneEscPPromotedToAltPWhenTheEscapeTimeoutFires(): void
+    {
+        // With no follow-up byte, the escape timeout calls flushPending(). It
+        // must promote the parked ESC P to Alt+Shift+P rather than wait on the
+        // next keystroke, which would then arrive glued to the P.
+        $r = new InputReader();
+        $this->assertSame([], $r->parse("\x1bP"));
+        $this->assertTrue($r->hasPendingEscape());
+
+        $msg = $r->flushPending();
+        $this->assertInstanceOf(KeyMsg::class, $msg);
+        $this->assertSame('P', $msg->rune);
+        $this->assertTrue($msg->alt);
+        $this->assertFalse($r->hasPendingEscape());
+        $this->assertNull($r->flushPending());
+
+        $after = $r->parse('x');
+        $this->assertCount(1, $after);
+        $this->assertSame('x', $after[0]->rune);
+        $this->assertFalse($after[0]->alt);
+    }
+
     public function testMalformedDigitSpanSs3IsDroppedWithoutLeak(): void
     {
         $this->assertSame([], (new InputReader())->parse("\x1bO1;0A"));

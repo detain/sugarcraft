@@ -298,6 +298,25 @@ final class HtmlToMarkdownTest extends TestCase
         $this->assertSame("one\ntwo\n", $markdown);
     }
 
+    public function testALineBreakInsideAPreBlockKeepsItsLine(): void
+    {
+        // The whole-subtree text read must see a br as a newline, or the two
+        // lines of code run together into one.
+        $this->assertSame(
+            "```\nline1\nline2\n```\n",
+            HtmlToMarkdown::convert('<pre>line1<br>line2</pre>', ''),
+        );
+        $this->assertSame(
+            "```\nx = 1\ny = 2\n```\n",
+            HtmlToMarkdown::convert('<pre><code>x = 1<br>y = 2</code></pre>', ''),
+        );
+    }
+
+    public function testALineBreakInsideInlineCodeStaysOnOneLine(): void
+    {
+        $this->assertSame("`a b`\n", HtmlToMarkdown::convert('<p><code>a<br>b</code></p>', ''));
+    }
+
     public function testDefinitionListsFallThroughAsTextBlocks(): void
     {
         $markdown = HtmlToMarkdown::convert('<dl><dt>Term</dt><dd>Def</dd></dl>', '');
@@ -328,6 +347,26 @@ final class HtmlToMarkdownTest extends TestCase
         );
 
         $this->assertSame("![pic](data:image/png;base64,AAA)![r](http://example.test/dir/real.png)\n", $markdown);
+    }
+
+    public function testInlineSvgDataImageKeepsItsHashWhenABaseIsGiven(): void
+    {
+        $markdown = HtmlToMarkdown::convert(
+            '<img src="data:image/svg+xml,<svg fill=\'#fff\'/>" alt="logo">',
+            'https://example.com/',
+        );
+
+        $this->assertSame("![logo](data:image/svg+xml,<svg%20fill='#fff'/>)\n", $markdown);
+    }
+
+    public function testInlineSvgDataImageKeepsItsQueryWhenABaseIsGiven(): void
+    {
+        $markdown = HtmlToMarkdown::convert(
+            '<img src="data:image/svg+xml,<svg data-x=\'a?b\'/>" alt="logo">',
+            'https://example.com/',
+        );
+
+        $this->assertSame("![logo](data:image/svg+xml,<svg%20data-x='a?b'/>)\n", $markdown);
     }
 
     public function testOversizedBodiesAreConvertedFromTheirFirstPartOnly(): void
@@ -592,6 +631,13 @@ final class HtmlToMarkdownTest extends TestCase
         $markdown = HtmlToMarkdown::convert('<p><a href="/wiki/Foo_(bar">x</a></p>', 'https://e.com/');
 
         $this->assertSame("[x](https://e.com/wiki/Foo_%28bar)\n", $markdown);
+    }
+
+    public function testBackslashesInAnHrefAreEncodedSoTheLinkStillParses(): void
+    {
+        $markdown = HtmlToMarkdown::convert('<p><a href="https://x.com/a\\">q</a> and more text</p>', 'https://example.com/');
+
+        $this->assertSame("[q](https://x.com/a%5C) and more text\n", $markdown);
     }
 
     public function testBalancedParenthesesInAnHrefAreKeptAsWritten(): void

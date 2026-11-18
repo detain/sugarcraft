@@ -77,7 +77,7 @@ final class GraphicsRenderer implements FrameRenderer
             // previous one, so playback does not leave one image in the terminal's
             // store per frame. The session lives as long as this renderer; the
             // Player hands the last id to the successor when it rebuilds.
-            $this->session ??= GraphicsFrameSession::new($delegate);
+            $this->session ??= GraphicsFrameSession::new($delegate)->withImageId(self::allocateImageBase());
 
             return $residue . $this->session->present($source, $cellsW, $cellsH);
         }
@@ -103,8 +103,11 @@ final class GraphicsRenderer implements FrameRenderer
      * Escape bytes this renderer still owes the terminal: the delete of the frame it
      * drew last, or a predecessor's residue it has not yet written (a second rebuild
      * before any render). '' when neither exists or the backend cannot delete by id.
+     *
+     * Public so a Player can retire a Kitty frame when a mode cycle hands the
+     * terminal to a text renderer, which cannot consume the residue itself.
      */
-    private function retirement(): string
+    public function retirement(): string
     {
         if ($this->session === null || $this->session->frameCount() === 0) {
             return $this->residue;
@@ -118,6 +121,32 @@ final class GraphicsRenderer implements FrameRenderer
         $last = $this->session->imageId + (($this->session->frameCount() - 1) % 2);
 
         return $delegate->delete((string) $last);
+    }
+
+    /**
+     * Kitty image ids are per terminal, not per renderer. Every session takes a
+     * fresh pair (its double buffer) from this process-wide allocator, so two video
+     * Players on one terminal never draw or delete each other's frames.
+     *
+     * The range sits at 2^30 and starts at a random even offset: a bare sugar-image
+     * caller (AnimationDriver defaults to id 1) cannot land on a video pair, and two
+     * video processes sharing a terminal are unlikely to start on the same pair.
+     */
+    private const IMAGE_ID_FLOOR = 0x4000_0000;
+
+    /** Largest base whose pair (base, base + 1) still fits Kitty's 32-bit id. */
+    private const IMAGE_ID_CEILING = 0xFFFF_FFFE;
+
+    private static ?int $nextImageBase = null;
+
+    private static function allocateImageBase(): int
+    {
+        $base = self::$nextImageBase
+            ?? (self::IMAGE_ID_FLOOR + (random_int(0, 0x0FFF_FFFF) & ~1));
+
+        self::$nextImageBase = $base >= self::IMAGE_ID_CEILING ? self::IMAGE_ID_FLOOR : $base + 2;
+
+        return $base;
     }
 
     /**
