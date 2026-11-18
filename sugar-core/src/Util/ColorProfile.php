@@ -153,7 +153,7 @@ enum ColorProfile: int
      */
     private static function forcesColor(array $env): bool
     {
-        if (self::truthy($env['CLICOLOR_FORCE'] ?? '')) {
+        if (self::isForceValue($env['CLICOLOR_FORCE'] ?? '')) {
             return true;
         }
         $forceColor = strtolower($env['FORCE_COLOR'] ?? '');
@@ -187,8 +187,14 @@ enum ColorProfile: int
         return $out;
     }
 
-    private static function truthy(string $v): bool
+    /**
+     * CLICOLOR_FORCE's grammar, the one {@see \SugarCraft\ColorProfile\Env::isForceValue()}
+     * applies on the chain side: set, non-empty, and not exactly `0`. The word
+     * `false` forces here just as it does there, so the pipe gate and the chain
+     * give the same answer for the same environment.
+     */
+    private static function isForceValue(string $v): bool
     {
-        return $v !== '' && $v !== '0' && strtolower($v) !== 'false';
+        return $v !== '' && $v !== '0';
     }
 }
