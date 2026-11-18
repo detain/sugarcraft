@@ -92,7 +92,7 @@ story.
 ## Identifier conventions in code comments
 
 Reading `src/` and `tests/`, you will meet short audit-style labels —
-`E707`, `ISS-037`, `SEC-3`, `TUI-4a`, `round-81`. They are **internal
+`E707`, `ISS-037`, `SEC-3`, `TUI-4a`, `round-61`. They are **internal
 working identifiers** from the hardening and comparison programs: each one
 named a specific finding, and the comment carrying it explains why the code
 looks the way it does ("the brake the spend cap cannot be", "refuses while

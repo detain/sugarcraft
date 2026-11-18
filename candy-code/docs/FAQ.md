@@ -35,9 +35,11 @@ the run selected.
 ### Where does my code go?
 
 To the provider you select, and nowhere else. The echo provider contains no
-HTTP client code, so a run without a configured provider sends nothing. The
-shipped `dev-sglang` block in `config.dev.json` points at a maintainer-run demo
-server with no authentication, so do not use it for private code. The details are in
+HTTP client code, so a run without a configured provider sends no code or prompts.
+Phar installs do make one background GET a day to the GitHub release list for the
+"update available" notice; set `CANDY_CODE_NO_UPDATE_CHECK=1` to stop it. The shipped
+`dev-sglang` block in `config.dev.json` sends no API key, and this repository does not
+say who operates its endpoint, so do not use it for private code. The details are in
 [ENVIRONMENT.md](ENVIRONMENT.md#the-shipped-configdevjson-block).
 
 ### Where does candy-code keep its state?
@@ -122,7 +124,7 @@ files leave unset, so a clone cannot override a value you chose
 In `~/.candy-code/config.json`, as plain text, unless you saved it with
 `candy-code login --keychain`, which keeps it in the OS keychain and writes only a
 reference. The file is written at mode `0600`, so only your user can read it
-(`src/Cli/Bootstrap.php:5160`).
+(`src/Cli/Bootstrap.php:5159`).
 Anything that can read files as you can read the key too, including backups and
 dotfile sync. The full list of stored secrets is in
 [SECURITY.md](SECURITY.md#credentials-on-disk).

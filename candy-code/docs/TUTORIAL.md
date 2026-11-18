@@ -37,7 +37,7 @@ streaming (`src/Host/TurnController.php:309-310`, `src/Chat.php:9595`).
 
 On a machine where nothing is chosen or configured, a first-run wizard can open
 (its code is in `src/Tui/FirstRunWizard/`). If you skip it, the status line names
-`candy-code login <provider>` as the way to finish setup (`src/Cli/Bootstrap.php:2116`).
+`candy-code login <provider>` as the way to finish setup (`src/App/App.php:2116`).
 
 ## 2. Connect a real model
 
