@@ -30,6 +30,7 @@ return [
     'lru_map.capacity_invalid' => 'a capacidade LRU deve ser pelo menos 1, obtida {capacity}',
     'lru_map.capacity_too_large' => 'a capacidade LRU {capacity} excede o limite de crescimento {max}',
     'lru_map.evict_from_empty' => 'não é possível remover de um mapa LRU vazio',
+    'lru_map.ttl_invalid' => 'O TTL do mapa LRU deve ser um número positivo e finito de segundos, obtido {seconds}',
     'errors.negative_not_allowed' => 'valor negativo não permitido para {name}',
     'errors.value_must_be_positive' => '{name} deve ser positivo, obtido {value}',
     'errors.value_out_of_range' => '{name} deve estar entre {min} e {max}, obtido {value}',

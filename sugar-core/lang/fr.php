@@ -39,6 +39,7 @@ return [
     'lru_map.capacity_invalid' => 'la capacité LRU doit être au moins 1, reçue {capacity}',
     'lru_map.capacity_too_large' => 'la capacité LRU {capacity} dépasse la garde de croissance {max}',
     'lru_map.evict_from_empty' => 'impossible d\'évincer depuis une carte LRU vide',
+    'lru_map.ttl_invalid' => 'Le TTL de la carte LRU doit être un nombre positif et fini de secondes, obtenu {seconds}',
     'errors.negative_not_allowed' => 'valeur négative non autorisée pour {name}',
     'errors.value_must_be_positive' => '{name} doit être positif, reçue {value}',
     'errors.value_out_of_range' => '{name} doit être entre {min} et {max}, reçue {value}',
