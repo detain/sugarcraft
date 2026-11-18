@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core;
 
+use SugarCraft\AnsiParser\AnsiTokenizer;
+use SugarCraft\AnsiParser\Token;
 use SugarCraft\Core\Util\Ansi;
-use SugarCraft\Core\Util\Parser;
-use SugarCraft\Core\Util\Token;
 use SugarCraft\Core\Util\Width;
 
 /**
@@ -24,7 +24,7 @@ use SugarCraft\Core\Util\Width;
  *   - **Full-screen cell-diff** (the "cursed renderer", default in
  *     Bubble Tea v2, opt-in here via `$cellDiff: true`). For each
  *     row that changed it tokenises both prev and current lines via
- *     {@see Parser}, finds the longest common prefix, and emits a
+ *     {@see AnsiTokenizer}, finds the longest common prefix, and emits a
  *     partial repaint from the first divergence. Dramatically smaller
  *     for the common case of slow-changing lines (progress bars,
  *     status counters, ticking clocks) — the headline win behind the
@@ -67,8 +67,8 @@ final class Renderer
      */
     private const TOKEN_CACHE_MAX = 2000;
 
-    /** Shared parser for cell-diff repaints — avoids repeated allocation. */
-    private Parser $parser;
+    /** Shared tokenizer for cell-diff repaints — avoids repeated allocation. */
+    private AnsiTokenizer $tokenizer;
 
     private readonly Writer $writer;
 
@@ -87,7 +87,7 @@ final class Renderer
         private readonly bool $synchronized = true,
         ?Writer $writer = null,
     ) {
-        $this->parser = new Parser();
+        $this->tokenizer = AnsiTokenizer::new();
         // Program passes its own writer so frames and program writes share one
         // ordered queue. Standalone renderers get a synchronous writer on $out.
         $this->writer = $writer ?? new Writer($out);
@@ -359,14 +359,14 @@ final class Renderer
         if (\count($this->tokenCache) >= self::TOKEN_CACHE_MAX) {
             $this->tokenCache = \array_slice($this->tokenCache, self::TOKEN_CACHE_MAX >> 1, null, true);
         }
-        // A row is a complete unit, but Parser is a STREAM tokeniser: an
+        // A row is a complete unit, but AnsiTokenizer is a STREAM tokeniser: an
         // escape left unterminated at the end of `$s` is buffered as pending
         // and prepended to the NEXT parse() — the next row, the other side of
         // the diff — whose tokens (and cache entry) then describe bytes that
         // are not in that row. flush() hands the tail back as TEXT so every
         // row's tokens cover exactly its own bytes.
-        $tokens = $this->parser->parse($s);
-        foreach ($this->parser->flush() as $tail) {
+        $tokens = $this->tokenizer->parse($s);
+        foreach ($this->tokenizer->flush() as $tail) {
             $tokens[] = $tail;
         }
         return $this->tokenCache[$s] = $tokens;

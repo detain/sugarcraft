@@ -35,6 +35,7 @@
         "ext-mbstring": "*",
         "react/event-loop": "^1.6",
         "react/promise": "^3.3",
+        "sugarcraft/sugar-ansi-parser": "dev-master",
         "sugarcraft/sugar-pty": "dev-master"
     },
     "require-dev": {
