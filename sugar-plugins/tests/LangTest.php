@@ -135,6 +135,38 @@ final class LangTest extends TestCase
         $plugin::t('greeting');
     }
 
+    public function testExistingDirectoryWithoutEnglishCatalogIsRefused(): void
+    {
+        $plugin = new class () extends Lang {
+            protected const NAMESPACE = 'no-en-plugin';
+            protected const DIR = __DIR__ . '/../src';
+        };
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('has no en.php catalog');
+        $plugin::t('greeting');
+    }
+
+    public function testRefusedDirectoryIsNotClaimed(): void
+    {
+        $refused = new class () extends Lang {
+            protected const NAMESPACE = 'retry-plugin';
+            protected const DIR = __DIR__ . '/../src';
+        };
+        $fixed = new class () extends Lang {
+            protected const NAMESPACE = 'retry-plugin';
+            protected const DIR = __DIR__ . '/fixtures/lang';
+        };
+
+        try {
+            $refused::t('greeting');
+            $this->fail('A DIR without en.php must be refused.');
+        } catch (\InvalidArgumentException) {
+        }
+
+        $this->assertSame('Hello Ada', $fixed::t('greeting', ['name' => 'Ada']));
+    }
+
     public function testHostNamespaceCodeIsReserved(): void
     {
         $plugin = new class () extends Lang {

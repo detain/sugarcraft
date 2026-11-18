@@ -101,6 +101,10 @@ abstract class Lang extends BaseLang
         if (!is_dir($dir)) {
             throw new \InvalidArgumentException("$class DIR '$dir' is not a directory.");
         }
+        // en.php is T's universal fallback; a directory without it (say a plugin's src/ instead of lang/) would echo raw keys too.
+        if (!is_file($dir . DIRECTORY_SEPARATOR . 'en.php')) {
+            throw new \InvalidArgumentException("$class DIR '$dir' has no en.php catalog.");
+        }
         self::$claimed[$namespace] = $dir;
     }
 }
