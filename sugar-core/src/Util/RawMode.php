@@ -239,11 +239,25 @@ final class RawMode
             return;
         }
         self::$backstopArmed = true;
-        \register_shutdown_function(static function (): void {
-            foreach (self::$savedSnapshots as $device => $snapshot) {
-                unset(self::$savedSnapshots[$device]);
-                @\exec('stty -F ' . \escapeshellarg($device) . ' ' . \escapeshellarg($snapshot) . ' 2>/dev/null');
-            }
+        $installPid = \getmypid();
+        \register_shutdown_function(static function () use ($installPid): void {
+            self::restoreAtShutdown($installPid);
         });
+    }
+
+    /**
+     * Shutdown body of the backstop. A forked child inherits the shutdown
+     * queue and exits through it, and the snapshots belong to the parent's
+     * terminal, so a process other than the installing one restores nothing.
+     */
+    private static function restoreAtShutdown(int $installPid): void
+    {
+        if (\getmypid() !== $installPid) {
+            return;
+        }
+        foreach (self::$savedSnapshots as $device => $snapshot) {
+            unset(self::$savedSnapshots[$device]);
+            @\exec('stty -F ' . \escapeshellarg($device) . ' ' . \escapeshellarg($snapshot) . ' 2>/dev/null');
+        }
     }
 }

@@ -19,6 +19,8 @@ use React\Promise\PromiseInterface;
  * child with SIGKILL and reaping it before the promise settles: $token fires
  * (rejects with OperationCancelledException), the optional $deadline elapses
  * (rejects with TimeoutException), or $collect throws (that exception rejects).
+ * Closing the channel does not disarm them: a child that closes its channel and
+ * keeps running is still bounded by $deadline and $token until it is reaped.
  *
  * Requires ext-pcntl and ext-posix; without them it refuses up front rather
  * than returning a promise that can never settle. The child exits through
@@ -26,7 +28,11 @@ use React\Promise\PromiseInterface;
  * __destruct() there, including objects the parent holds. A destructor with
  * external effects is therefore unsafe to hold across the fork unless it
  * checks the process that minted it: {@see \SugarCraft\Core\Util\LockGuard}
- * does, so a held file lock survives the child's exit.
+ * does, so a held file lock survives the child's exit. The same applies to
+ * register_shutdown_function() callbacks: the child runs every one the parent
+ * registered, so one that touches the terminal or other shared state must
+ * compare getmypid() with the pid that registered it (RawMode and
+ * sugar-readline do).
  */
 final class ForkedTask
 {
@@ -55,12 +61,12 @@ final class ForkedTask
             throw new \InvalidArgumentException('ForkedTask deadline must be a positive finite number of seconds');
         }
 
-        // The settle closure exists only after the fork; a cancel before that
+        // The cancel closure exists only after the fork; a cancel before that
         // point has no child to stop, so the reference is still null then.
-        $settle = null;
-        $deferred = new Deferred(static function () use (&$settle): never {
-            if ($settle !== null) {
-                $settle(new OperationCancelledException('Forked task cancelled'));
+        $fail = null;
+        $deferred = new Deferred(static function () use (&$fail): never {
+            if ($fail !== null) {
+                $fail(new OperationCancelledException('Forked task cancelled'));
             }
             throw new OperationCancelledException('Forked task cancelled');
         });
@@ -81,7 +87,12 @@ final class ForkedTask
         }
         $childEnd->close();
 
-        $settled = false;
+        // $outcome holds the error that ends the task early (collect failure,
+        // deadline, token). A channel close leaves it null: the child is still
+        // awaited, and the deadline and token stay armed until it is reaped, so
+        // a child that closed its channel and then blocks can still be killed.
+        $outcome = null;
+        $reaping = false;
         $deadlineHandle = null;
         $registration = null;
 
@@ -89,52 +100,58 @@ final class ForkedTask
         // channel early may keep running for a long time, and a child that
         // survives SIGKILL may sit in an uninterruptible wait. Either would park
         // every other connection the loop serves behind a blocking waitpid().
-        $settle = static function (?\Throwable $error) use (&$settled, &$deadlineHandle, &$registration, $deferred, $parent, $pid, $loop): void {
-            if ($settled) {
+        $startReap = static function () use (&$reaping, &$outcome, &$deadlineHandle, &$registration, $deferred, $parent, $pid, $loop): void {
+            if ($reaping) {
                 return;
             }
-            $settled = true;
-            $deadlineHandle?->disarm();
-            $registration?->unsubscribe();
+            $reaping = true;
             $parent->close();
-            if ($error !== null) {
-                \posix_kill($pid, \defined('SIGKILL') ? \SIGKILL : 9);
-            }
-            self::reapWhenExited($loop, $pid, static function (int $status) use ($deferred, $error): void {
-                if ($error !== null) {
-                    $deferred->reject($error);
+            self::reapWhenExited($loop, $pid, static function (int $status) use (&$outcome, &$deadlineHandle, &$registration, $deferred): void {
+                // Released only once the child is reaped: until then its pid is
+                // still ours to signal, and the deadline must still be able to fire.
+                $deadlineHandle?->disarm();
+                $registration?->unsubscribe();
+                if ($outcome !== null) {
+                    $deferred->reject($outcome);
                     return;
                 }
                 $deferred->resolve($status);
             });
         };
 
-        $parent->onFrame(static function (string $frame) use (&$settled, $settle, $collect): void {
-            if ($settled) {
+        $fail = static function (\Throwable $error) use (&$outcome, $pid, $startReap): void {
+            if ($outcome !== null) {
+                return;
+            }
+            $outcome = $error;
+            \posix_kill($pid, \defined('SIGKILL') ? \SIGKILL : 9);
+            $startReap();
+        };
+
+        // Armed before the channel handlers are registered, so no callback can
+        // run while either is still unset.
+        if ($deadline !== null) {
+            $deadlineHandle = LoopDeadline::arm($loop, $deadline, static function () use ($fail, $deadline): void {
+                $fail(new TimeoutException('Forked task exceeded its ' . MessageFormat::seconds($deadline) . ' deadline', seconds: $deadline));
+            });
+        }
+        if ($token !== null) {
+            $registration = $token->onCancel(static function () use ($fail): void {
+                $fail(new OperationCancelledException('Forked task cancelled'));
+            });
+        }
+
+        $parent->onFrame(static function (string $frame) use (&$outcome, $fail, $collect): void {
+            if ($outcome !== null) {
                 return;
             }
             try {
                 $collect($frame);
             } catch (\Throwable $error) {
-                $settle($error);
+                $fail($error);
             }
         }, $loop);
-        $parent->onClose(static function () use (&$settled, $settle): void {
-            if (!$settled) {
-                $settle(null);
-            }
-        });
-
-        if ($deadline !== null) {
-            $deadlineHandle = LoopDeadline::arm($loop, $deadline, static function () use ($settle, $deadline): void {
-                $settle(new TimeoutException('Forked task exceeded its ' . MessageFormat::seconds($deadline) . ' deadline', seconds: $deadline));
-            });
-        }
-        if ($token !== null) {
-            $registration = $token->onCancel(static function () use ($settle): void {
-                $settle(new OperationCancelledException('Forked task cancelled'));
-            });
-        }
+        $parent->onClose($startReap);
 
         return $deferred->promise();
     }

@@ -110,16 +110,75 @@ final class AnsiTokenizerTest extends TestCase
 
     public function testInvalidCsiFinalEmitsBareEscAndResynchronizes(): void
     {
-        // 0x7F is above the 0x40-0x7E final range and is not an in-place
+        // 0x80 is above the 0x40-0x7E final range and is not an in-place
         // control, so the ESC [ pair is emitted as an ESC token and the byte
-        // that follows is still seen. (A C0 such as 0x01 executes in place
-        // instead, and the CSI stays open for its final.)
-        $tokens = AnsiTokenizer::new()->parse("\x1b[\x7f");
+        // that follows is still seen as text. (A C0 such as 0x01 executes in
+        // place instead, and the CSI stays open for its final.)
+        $tokens = AnsiTokenizer::new()->parse("\x1b[\x80");
         $this->assertCount(2, $tokens);
         $this->assertSame(Token::ESC, $tokens[0]->type);
         $this->assertSame('[', $tokens[0]->data);
+        $this->assertSame(Token::TEXT, $tokens[1]->type);
+        $this->assertSame("\x80", $tokens[1]->data);
+    }
+
+    public function testDelInsideCsiIsIgnoredAndTheSequenceContinues(): void
+    {
+        // The VT500 CsiEntry, CsiParam and CsiIntermediate states ignore DEL,
+        // so the SGR is dispatched intact and no DEL token is emitted.
+        $tokens = AnsiTokenizer::new()->parse("\x1b[3\x7f1m");
+        $this->assertCount(1, $tokens);
+        $this->assertSame(Token::CSI, $tokens[0]->type);
+        $this->assertSame('31', $tokens[0]->params);
+        $this->assertSame('m', $tokens[0]->final);
+
+        $tokens = AnsiTokenizer::new()->parse("\x1b[\x7f31m");
+        $this->assertCount(1, $tokens);
+        $this->assertSame('31', $tokens[0]->params);
+        $this->assertSame('m', $tokens[0]->final);
+
+        $tokens = AnsiTokenizer::new()->parse("\x1b[1\x7f;2m");
+        $this->assertCount(1, $tokens);
+        $this->assertSame('1;2', $tokens[0]->params);
+        $this->assertSame('m', $tokens[0]->final);
+    }
+
+    public function testDelAfterEscIsIgnoredAndTheNextByteDispatches(): void
+    {
+        // The VT500 Escape state ignores DEL, so ESC DEL c is still ESC c.
+        $tokens = AnsiTokenizer::new()->parse("\x1b\x7fc");
+        $this->assertCount(1, $tokens);
+        $this->assertSame(Token::ESC, $tokens[0]->type);
+        $this->assertSame('c', $tokens[0]->data);
+    }
+
+    public function testCanAndSubEndAnOscBodyAndTheTextAfterThemSurfaces(): void
+    {
+        // Regression: CAN and SUB were body bytes in the string states, so the
+        // text after them was swallowed into the OSC token.
+        $tokens = AnsiTokenizer::new()->parse("\x1b]0;title\x18hello\x07");
+        $this->assertCount(4, $tokens);
+        $this->assertSame(Token::OSC, $tokens[0]->type);
+        $this->assertSame('0;title', $tokens[0]->data);
+        $this->assertSame('', $tokens[0]->terminator);
         $this->assertSame(Token::CONTROL, $tokens[1]->type);
-        $this->assertSame("\x7f", $tokens[1]->data);
+        $this->assertSame("\x18", $tokens[1]->data);
+        $this->assertSame(Token::TEXT, $tokens[2]->type);
+        $this->assertSame('hello', $tokens[2]->data);
+        $this->assertSame(Token::CONTROL, $tokens[3]->type);
+        $this->assertSame("\x07", $tokens[3]->data);
+    }
+
+    public function testCanAndSubEndDcsApcSosAndPmBodies(): void
+    {
+        foreach (["\x1bPabc\x1ahello\x1b\\", "\x1b_abc\x18hello\x1b\\", "\x1bXabc\x1ahello\x1b\\", "\x1b^abc\x18hello\x1b\\"] as $input) {
+            $tokens = AnsiTokenizer::new()->parse($input);
+            $this->assertGreaterThanOrEqual(3, count($tokens), $input);
+            $this->assertSame('', $tokens[0]->terminator, $input);
+            $this->assertSame(Token::CONTROL, $tokens[1]->type, $input);
+            $this->assertSame(Token::TEXT, $tokens[2]->type, $input);
+            $this->assertSame('hello', $tokens[2]->data, $input);
+        }
     }
 
     public function testOscWithBel(): void
