@@ -122,16 +122,46 @@ final class Cmd
     }
 
     /**
+     * Like {@see tick()}, but returns a {@see TickHandle} the model keeps so
+     * it can cancel the tick before it fires. Issue the Cmd with
+     * `$handle->cmd()`; call `$handle->cancel()` to drop the pending
+     * dispatch (including one not yet armed on the loop).
+     *
+     * @param \Closure():?Msg $produce
+     */
+    public static function cancellableTick(float $seconds, \Closure $produce): TickHandle
+    {
+        return new TickHandle($seconds, $produce);
+    }
+
+    /**
+     * Ask the Program for the current terminal size. The Program resolves it
+     * when the Cmd runs and dispatches a {@see \SugarCraft\Core\Msg\WindowSizeMsg}
+     * built from the live size, honouring ProgramOptions::$windowSize when set.
+     * Use it to re-sync a model after it was built without a size.
+     */
+    public static function windowSize(): \Closure
+    {
+        return static fn (): Msg => new WindowSizeRequest();
+    }
+
+    /**
      * Wrap an async operation in a Cmd. The $factory should return a
      * React\Promise\PromiseInterface<?Msg>. The promise's resolved Msg (if any) will
      * be dispatched to update(). Rejected promises dispatch ExceptionMsg.
      *
+     * Pass `$timeoutSeconds` to bound the wait. A promise still pending after
+     * that many seconds is rejected with a timeout error, which dispatches
+     * ExceptionMsg like any other rejection. The timer runs on the Program's
+     * loop, and a promise that settles first is never rejected late.
+     *
      * @param \Closure(): \React\Promise\PromiseInterface<?Msg> $factory
+     * @param float|null $timeoutSeconds null (default) waits without a bound
      * @return \Closure(): AsyncCmd
      */
-    public static function promise(\Closure $factory): \Closure
+    public static function promise(\Closure $factory, ?float $timeoutSeconds = null): \Closure
     {
-        return static fn (): AsyncCmd => new AsyncCmd($factory());
+        return static fn (): AsyncCmd => new AsyncCmd($factory(), $timeoutSeconds);
     }
 
     /**
