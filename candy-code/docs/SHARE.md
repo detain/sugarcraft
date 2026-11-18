@@ -56,9 +56,9 @@ other tools parse them.
 ## `/share serve`: a self-hosted page
 
 ```text
-/share serve            # snapshot now, live for 7 days
-/share serve 30         # live for 30 days
-/share serve --live 14  # a page that tracks this session, for 14 days
+/share serve            # a snapshot of the transcript now, valid for 7 days
+/share serve 30         # a snapshot, valid for 30 days
+/share serve --live 14  # a page that tracks this session, valid for 14 days
 ```
 
 `/share serve` renders the transcript to HTML at that moment and stores the
