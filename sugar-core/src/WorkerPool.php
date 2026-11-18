@@ -86,9 +86,6 @@ final class WorkerPool
      */
     private const WRITE_DEADLINE_SECONDS = 10.0;
 
-    /** Retry granularity for the non-blocking stdin drain loop, in microseconds. */
-    private const WRITE_POLL_MICROS = 2_000;
-
     /** sc-30: how much of a worker's stderr the pool keeps for failure reports. */
     private const STDERR_TAIL_BYTES = 4096;
 
@@ -321,27 +318,36 @@ final class WorkerPool
             return;
         }
 
-        if ($worker->buffer !== '') {
-            $newlinePos = strpos($worker->buffer, "\n");
-            while ($newlinePos !== false) {
-                $line = substr($worker->buffer, 0, $newlinePos);
-                $worker->buffer = substr($worker->buffer, $newlinePos + 1);
-                $this->handleWorkerLine($worker, $line);
-                $newlinePos = strpos($worker->buffer, "\n");
-            }
-        }
+        $this->drainWorkerLines($worker);
 
         $chunk = fread($worker->stdout, 8192);
         if ($chunk !== false && $chunk !== '') {
             $worker->buffer .= $chunk;
+            $this->drainWorkerLines($worker);
+        }
+    }
 
-            $newlinePos = strpos($worker->buffer, "\n");
-            while ($newlinePos !== false) {
-                $line = substr($worker->buffer, 0, $newlinePos);
-                $worker->buffer = substr($worker->buffer, $newlinePos + 1);
-                $this->handleWorkerLine($worker, $line);
-                $newlinePos = strpos($worker->buffer, "\n");
+    /**
+     * Hand every complete line in the worker's buffer to handleWorkerLine().
+     *
+     * Audit rank 109: the old loop re-sliced the whole buffer once per line,
+     * which is O(lines x buffer). A cursor walks the buffer instead, and the
+     * consumed prefix is cut once per drain.
+     */
+    private function drainWorkerLines(WorkerState $worker): void
+    {
+        while ($worker->bufferOffset < strlen($worker->buffer)) {
+            $pos = strpos($worker->buffer, "\n", $worker->bufferOffset);
+            if ($pos === false) {
+                break;
             }
+            $line = substr($worker->buffer, $worker->bufferOffset, $pos - $worker->bufferOffset);
+            $worker->bufferOffset = $pos + 1;
+            $this->handleWorkerLine($worker, $line);
+        }
+        if ($worker->bufferOffset > 0) {
+            $worker->buffer = (string) substr($worker->buffer, min($worker->bufferOffset, strlen($worker->buffer)));
+            $worker->bufferOffset = 0;
         }
     }
 
@@ -525,40 +531,62 @@ final class WorkerPool
             return;
         }
 
-        // sc-30: the payload goes out through a NON-BLOCKING drain loop with
-        // a hard deadline. The kernel pipe holds ~64 KiB; the old blocking
-        // fwrite on a child that had not started reading (or a task whose
-        // serialized envelope simply exceeded the pipe) stalled the entire
-        // ReactPHP event loop — UI, timers, every other worker — until the
-        // child drained it, i.e. indefinitely for a wedged boot. Now: write
-        // what fits, retry on a 2 ms poll, and after WRITE_DEADLINE_SECONDS
-        // declare the worker dead with a named error — bounded, diagnosable,
-        // and the promise settles either way.
+        // P1-1: the payload goes through the worker's queued Writer, so dispatch()
+        // never blocks the loop. Bytes the child's pipe refuses wait in that
+        // writer and drain as the child reads. A child that takes nothing for
+        // WRITE_DEADLINE_SECONDS is declared dead with a named error, as before:
+        // bounded, diagnosable, and the promise settles either way.
+        $writer = $this->stdinWriter($worker);
         $data = $serialized . "\n";
         $length = strlen($data);
-        $offset = 0;
-        $deadline = microtime(true) + self::WRITE_DEADLINE_SECONDS;
-        while (true) {
-            $written = @fwrite($worker->stdin, substr($data, $offset));
-            if ($written === false) {
-                $this->handleWorkerDeath($worker, 'Failed to write to worker stdin' . $this->stderrDetail($worker), $jobId);
-                return;
-            }
-            $offset += $written;
-            if ($offset >= $length) {
-                break;
-            }
-            if (microtime(true) >= $deadline) {
+        $handedBefore = $writer->handedOff();
+        $this->clearWriteDeadline($worker);
+        $worker->writeDeadline = $this->loop->addTimer(
+            self::WRITE_DEADLINE_SECONDS,
+            function () use ($worker, $writer, $jobId, $handedBefore, $length): void {
+                $worker->writeDeadline = null;
+                if ($writer->pendingBytes() === 0) {
+                    return;
+                }
                 $this->handleWorkerDeath($worker, Lang::t('worker.stdin_write_timeout', [
                     'seconds'   => self::WRITE_DEADLINE_SECONDS,
-                    'written'   => $offset,
+                    'written'   => $writer->handedOff() - $handedBefore,
                     'total'     => $length,
                 ]) . $this->stderrDetail($worker), $jobId);
-                return;
-            }
-            usleep(self::WRITE_POLL_MICROS);
+            },
+        );
+        $writer->onDrain(function () use ($worker): void {
+            $this->clearWriteDeadline($worker);
+        });
+        $writer->onError(function () use ($worker, $jobId): void {
+            $this->handleWorkerDeath($worker, 'Failed to write to worker stdin' . $this->stderrDetail($worker), $jobId);
+        });
+        $writer->write($data);
+        if ($writer->pendingBytes() === 0) {
+            $this->clearWriteDeadline($worker);
         }
-        @fflush($worker->stdin);
+    }
+
+    /**
+     * The queued writer for this worker's current stdin. Rebuilt when the
+     * stdin resource is replaced; the previous writer is released first.
+     */
+    private function stdinWriter(WorkerState $worker): Writer
+    {
+        if ($worker->writer === null || $worker->writer->stream() !== $worker->stdin) {
+            $worker->writer?->release();
+            $worker->writer = new Writer($worker->stdin);
+            $worker->writer->attach($this->loop);
+        }
+        return $worker->writer;
+    }
+
+    private function clearWriteDeadline(WorkerState $worker): void
+    {
+        if ($worker->writeDeadline !== null) {
+            $this->loop->cancelTimer($worker->writeDeadline);
+            $worker->writeDeadline = null;
+        }
     }
 
     /**
@@ -905,7 +933,8 @@ PHP;
             }
             $probe = @fread($worker->stdout, 4096);
             if ($probe !== false && $probe !== '') {
-                $worker->buffer = $probe . $worker->buffer;
+                $worker->buffer = $probe . substr($worker->buffer, $worker->bufferOffset);
+                $worker->bufferOffset = 0;
             }
             if (feof($worker->stdout)) {
                 $this->closeWorker($worker);
@@ -974,6 +1003,9 @@ PHP;
      */
     private function closeWorkerStreams(WorkerState $worker): void
     {
+        $worker->writer?->release();
+        $worker->writer = null;
+        $this->clearWriteDeadline($worker);
         if ($worker->stderr !== null && is_resource($worker->stderr)) {
             $this->loop->removeReadStream($worker->stderr);
         }

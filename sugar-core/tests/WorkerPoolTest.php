@@ -407,12 +407,11 @@ final class WorkerPoolTest extends TestCase
         // buffer is pinned small (SO_SNDBUF; the stream API's
         // stream_set_write_buffer refuses to shrink AF_UNIX pairs) and whose
         // read end is held but never drained. A blob payload then outruns
-        // the buffer, the drain loop spins to WRITE_DEADLINE_SECONDS (10 s,
-        // + the bounded reap ladder), and the job is REJECTED with the named
-        // timeout — the old blocking fwrite froze the whole event loop
-        // forever in exactly this situation. The promise is already settled
-        // when dispatch() returns, so its rejection reaches a handler
-        // attached afterwards synchronously; no second loop spin is needed.
+        // the buffer. P1-1: the queued writer leaves the rest pending, so
+        // dispatch() returns at once and the loop keeps turning; the write
+        // deadline (WRITE_DEADLINE_SECONDS, 10 s, + the bounded reap ladder)
+        // then REJECTS the job with the named timeout. The old blocking fwrite
+        // froze the whole event loop forever in exactly this situation.
         $pool = new WorkerPool($this->loop, 1);
 
         if (!function_exists('socket_import_stream')) {
@@ -453,7 +452,15 @@ final class WorkerPoolTest extends TestCase
         $pool->dispatch($task)
             ->then(null, function (\Throwable $e) use (&$rejected): void {
                 $rejected = $e;
+                $this->loop->stop();
             });
+        $this->assertLessThan(1.0, microtime(true) - $started, 'dispatch() returns without waiting on the deaf pipe');
+        $this->assertNull($rejected, 'the deadline has not passed yet, so the job is not settled');
+        $guard = $this->loop->addTimer(20.0, function (): void {
+            $this->loop->stop();
+        });
+        $this->loop->run();
+        $this->loop->cancelTimer($guard);
         $elapsed = microtime(true) - $started;
 
         $this->assertInstanceOf(\RuntimeException::class, $rejected, 'the write deadline settled the job');
