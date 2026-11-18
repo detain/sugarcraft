@@ -29,4 +29,5 @@ return [
     'theme.mapper_not_style' => 'Theme::mapStyles(), eşleyicinin bir Style döndürmesini bekliyor, alınan: {type}',
     'theme.with_slot_not_style' => 'Theme::with(): "{slot}" bir Style yuvası değil; geçerli yuvalar: {slots}',
     'fold.marker' => '▸ daraltıldı',
+    'glamour.value_too_large' => 'tema {key} en fazla {limit} değerini aşıyor',
 ];

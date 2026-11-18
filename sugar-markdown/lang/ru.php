@@ -29,4 +29,5 @@ return [
     'theme.mapper_not_style' => 'Theme::mapStyles() ожидает, что маппер вернёт Style, получено: {type}',
     'theme.with_slot_not_style' => 'Theme::with(): «{slot}» — не слот Style; допустимые слоты: {slots}',
     'fold.marker' => '▸ свёрнуто',
+    'glamour.value_too_large' => 'тема {key} превышает максимум {limit}',
 ];

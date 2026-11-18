@@ -1301,15 +1301,7 @@ final class Renderer
 
     private function renderText(string $literal): string
     {
-        if ($this->sanitize) {
-            $literal = self::stripControls($literal);
-        }
-        if ($this->expandEmoji) {
-            // The parser already decided what is code, what is a destination
-            // and what is text; expansion here rewrites only text (M1), and
-            // the map's values are trusted house constants.
-            $literal = self::expandEmojiShortcodes($literal);
-        }
+        $literal = $this->visibleLiteral($literal);
         if ($this->textCase !== null) {
             $literal = self::applyCase($literal, $this->textCase);
         }
@@ -1604,7 +1596,7 @@ final class Renderer
         foreach ($parent->children() as $child) {
             if ($folds !== null) {
                 if ($child instanceof Heading) {
-                    $hiding = isset($folds[self::foldIdOf($child)]);
+                    $hiding = isset($folds[$this->foldIdOf($child)]);
                 } elseif ($hiding) {
                     continue;
                 }
@@ -1626,22 +1618,50 @@ final class Renderer
         return implode('', $parts);
     }
 
-    /** The {@see headingId()} of a heading's visible text (code spans and image alt text included). */
-    private static function foldIdOf(Heading $heading): string
+    /**
+     * The {@see headingId()} of a heading's visible text (code spans and image
+     * alt text included). The text is what renders, not the source: with
+     * expandEmoji on, `:rocket: Launch` folds as `launch`, the way the reader
+     * sees it, so a caller deriving the ID from the visible heading finds it.
+     */
+    private function foldIdOf(Heading $heading): string
     {
-        return self::headingId(self::plainText($heading));
+        return self::headingId($this->plainText($heading));
     }
 
-    private static function plainText(Node $node): string
+    private function plainText(Node $node): string
     {
         $text = '';
         foreach ($node->children() as $child) {
-            $text .= $child instanceof Text || $child instanceof Code
-                ? $child->getLiteral()
-                : self::plainText($child);
+            if ($child instanceof Text) {
+                $text .= $this->visibleLiteral($child->getLiteral());
+            } elseif ($child instanceof Code) {
+                // renderCode() expands no shortcodes: a code span shows as written.
+                $text .= $this->sanitize ? self::stripControls($child->getLiteral()) : $child->getLiteral();
+            } else {
+                $text .= $this->plainText($child);
+            }
         }
 
         return $text;
+    }
+
+    /**
+     * A text literal as {@see renderText()} shows it: control bytes swept under
+     * sanitize, shortcodes expanded under expandEmoji. The parser already decided
+     * what is code, what is a destination and what is text; expansion rewrites
+     * only text (M1), and the map's values are trusted house constants.
+     */
+    private function visibleLiteral(string $literal): string
+    {
+        if ($this->sanitize) {
+            $literal = self::stripControls($literal);
+        }
+        if ($this->expandEmoji) {
+            $literal = self::expandEmojiShortcodes($literal);
+        }
+
+        return $literal;
     }
 
     /**

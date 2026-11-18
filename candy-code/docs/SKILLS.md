@@ -355,7 +355,7 @@ nobody infers them from the shape of the code:
   `enabledSkills` is in every prompt turn, whichever files the session touches;
   its `paths:` drives only the `SkillPathNudge` described above. Rules are
   different, and this is where the two used to be confused: a rule's `paths:`
-  IS applied (P6.S5b). `Rule::buildTriggers()` (reached from `Rule::new()`)
+  IS applied. `Rule::buildTriggers()` (reached from `Rule::new()`)
   builds a `PathTrigger` from it, the splice in
   `Runtime::systemPromptSections()` skips every rule
   `RulePathNudge::isPathScoped()` claims, and `Bootstrap` wires `RulePathNudge`
@@ -445,9 +445,8 @@ the canonical path above and once from an automatic match, so which path is
 canonical was decided before any of it shipped.
 
 The reason the automatic match is unwired is measured, not stylistic. Scored
-against a labelled corpus of prompt/skill pairs —
-`prompt_kit/findings/P7.S4/measure.php`, re-run at this checkout on PHP 8.3.6 —
-the substring matching in `matchesPrompt()` lands at **0.162 precision** (recall
+against a labelled corpus of prompt/skill pairs, re-run at this checkout on
+PHP 8.3.6: the substring matching in `matchesPrompt()` lands at **0.162 precision** (recall
 1.000; 24 of 25 boundary cases false-positive). Rewriting the needle test as
 whole-word matching raises precision only to **0.214**. A matcher that is wrong
 on five of six candidate mentions does not spare the user from naming their

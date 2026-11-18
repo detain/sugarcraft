@@ -261,7 +261,7 @@ the guard chain; seeding it twice would create a second session row per launch.
 
 `App` copies no state out of the hosted chat except `withSessionId()`, which is
 read back off it rather than re-derived, so the two cannot disagree. Since
-P-TABS.e the shell hosts **many** chats: when the launch carries a tab factory,
+The shell hosts **many** chats: when the launch carries a tab factory,
 `armDeck()` seeds a `SessionDeck` (`src/App/Tabs/`) whose active entry is the
 foreground `Chat` and whose parked entries are chats whose turns keep streaming
 in the background. Every `Cmd` a hosted chat returns rides out wrapped by
@@ -1292,7 +1292,7 @@ Keyboard focus order and meaning:
   **session tabs** switch whole sessions.
 - **dividers** between panes are grab targets: dragging one resizes the
   panes either side; grabbing a pane's header or its View ▸ Panes row (the
-  same `panetab:` zone since P-MENU.e) drags the pane to a new dock
+  same `panetab:` zone) drags the pane to a new dock
   position.
 - **overlays** intercept every key while open — Esc closes the top-most one;
   the palette's rows are arrow-key navigable before Enter picks.
@@ -1419,8 +1419,8 @@ Four patterns worth recognising, because they explain otherwise-odd code:
    from nothing. Each one that has been found is now either wired or documented
    as a seam — never deleted. Live examples of the seam form: `SkillDiscovery`,
    `App::dispatchSkill()`.
-   (`ForeignMemoryImporter` was on this list until P7.S6 wired it behind
-   `/memory import`, and `src/LSP/` until step 3.F gave it a launcher.)
+   (`ForeignMemoryImporter` was on this list until it was wired behind
+   `/memory import`, and `src/LSP/` until it gained a launcher.)
 2. **Absence is a no-op; present-but-unusable is a refusal.** Applied to
    `config.json`, `hooks.yaml`, `.mcp.json`, `--config`, `--root`, and every
    `CANDY_CODE_*` variable that carries policy.
