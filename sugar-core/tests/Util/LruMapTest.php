@@ -691,4 +691,53 @@ final class LruMapTest extends TestCase
         self::assertFalse($snapshot->has('a'), 'restamping must not resurrect an expired entry');
         self::assertSame([], $snapshot->keys());
     }
+
+    public function testPromotingAnEntryDoesNotDelayTheExpiryOfTheOnesStampedBeforeIt(): void
+    {
+        $now = 0.0;
+        $map = LruMap::new(4)->withTtl(10.0, $this->clockAt($now));
+        $map->put('a', 1);
+
+        $now = 5.0;
+        $map->put('b', 2);
+
+        $now = 6.0;
+        self::assertSame(1, $map->get('a'), 'a is now the most recent, but still stamped at 10s');
+
+        $now = 12.0;
+        self::assertSame(['b'], $map->keys(), 'a expired at 10s even though it was read at 6s');
+    }
+
+    public function testAClockThatStepsBackwardsKeepsCountAndLookupsAgreed(): void
+    {
+        $now = 0.0;
+        $map = LruMap::new(4)->withTtl(10.0, $this->clockAt($now));
+
+        $now = 10.0;
+        $map->put('a', 'first');
+
+        $now = 5.0;
+        $map->put('b', 'second');
+
+        $now = 17.0;
+        self::assertSame(2, $map->count());
+        self::assertSame('second', $map->get('b'), 'the stamp is floored at 20s, so the lookup agrees with the count');
+
+        $now = 20.0;
+        self::assertSame(0, $map->count());
+    }
+
+    public function testShorteningTheLifetimeWithWithTtlIsNotFlooredByTheLongerStamp(): void
+    {
+        $now = 0.0;
+        $long = LruMap::new(4)->withTtl(100.0, $this->clockAt($now));
+        $long->put('a', 'v');
+
+        $now = 1.0;
+        $short = $long->withTtl(10.0, $this->clockAt($now));
+
+        $now = 12.0;
+        self::assertFalse($short->has('a'), 'restamped at 1s for 10s, so it is gone by 12s');
+        self::assertSame(1, $long->count(), 'the receiver keeps its original 100s lifetime');
+    }
 }
