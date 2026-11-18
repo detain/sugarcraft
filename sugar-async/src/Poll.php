@@ -71,6 +71,11 @@ final class Poll
                 $deferred->reject($error);
                 return;
             }
+            if ($done) {
+                // $fn cancelled the token (or the promise) synchronously: the
+                // poll has already settled, so no backoff timer may be armed.
+                return;
+            }
             if ($value !== null) {
                 $finish();
                 $deferred->resolve($value);

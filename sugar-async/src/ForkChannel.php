@@ -82,10 +82,20 @@ final class ForkChannel
         }
         $bytes = pack('N', $size) . $frame;
         $total = strlen($bytes);
-        for ($written = 0; $written < $total;) {
-            $wrote = @fwrite($this->stream, substr($bytes, $written, self::CHUNK_BYTES));
-            if ($wrote === false || $wrote === 0) {
+        $written = 0;
+        while ($written < $total) {
+            $wrote = @\fwrite($this->stream, substr($bytes, $written, self::CHUNK_BYTES));
+            if ($wrote === false || ($wrote === 0 && \feof($this->stream))) {
                 throw new \RuntimeException('ForkChannel: peer closed while sending');
+            }
+            if ($wrote === 0) {
+                // Nonblocking backpressure (a full kernel buffer), not a closed
+                // peer: wait for the stream to drain, then write the same bytes again.
+                $read = null;
+                $write = [$this->stream];
+                $except = null;
+                @\stream_select($read, $write, $except, 1);
+                continue;
             }
             $written += $wrote;
         }

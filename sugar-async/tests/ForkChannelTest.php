@@ -110,4 +110,45 @@ final class ForkChannelTest extends TestCase
             $b->close();
         }
     }
+
+    /**
+     * Regression: once onFrame() makes the stream nonblocking, a frame larger
+     * than the kernel buffer used to abort the send on the first 0-byte write
+     * (temporary backpressure) and report the peer as closed. The reader runs
+     * in a forked child so the parent's send really does have to wait for it.
+     */
+    public function testALargeFrameSurvivesBackpressureOnANonblockingEnd(): void
+    {
+        if (!\function_exists('pcntl_fork')) {
+            self::markTestSkipped('needs ext-pcntl to run the reader in another process');
+        }
+        $size = 4 * 1024 * 1024;
+        [$parent, $child] = ForkChannel::pair();
+        $pid = \pcntl_fork();
+        if ($pid === 0) {
+            $parent->close();
+            // Let the parent fill the kernel buffer before the first read.
+            usleep(300000);
+            $loop = new StreamSelectLoop();
+            $received = null;
+            $child->onFrame(static function (string $frame) use (&$received, $loop): void {
+                $received = $frame;
+                $loop->stop();
+            }, $loop);
+            $loop->run();
+            exit($received !== null && strlen($received) === $size ? 0 : 1);
+        }
+        $child->close();
+        $loop = new StreamSelectLoop();
+        $parent->onFrame(static fn (string $frame) => null, $loop);
+
+        try {
+            $parent->send(str_repeat('x', $size));
+        } finally {
+            $parent->close();
+        }
+        \pcntl_waitpid($pid, $status);
+
+        self::assertTrue(\pcntl_wifexited($status) && \pcntl_wexitstatus($status) === 0, 'the reader must receive the whole frame');
+    }
 }

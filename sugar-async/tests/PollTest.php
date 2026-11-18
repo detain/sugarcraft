@@ -133,4 +133,34 @@ final class PollTest extends TestCase
             self::assertSame(1, $calls);
         }
     }
+
+    /**
+     * Regression: a callable that cancels the token and then answers null used
+     * to arm the next backoff timer after the poll had already rejected, which
+     * kept the loop alive for the whole delay.
+     */
+    public function testASynchronousCancelInsideTheAttemptArmsNoTimer(): void
+    {
+        $loop = new StreamSelectLoop();
+        $source = CancellationSource::new();
+        $calls = 0;
+        $promise = Poll::until(static function () use (&$calls, $source): ?int {
+            $calls++;
+            $source->cancel();
+
+            return null;
+        }, Backoff::new(500.0)->withoutJitter(), $source->token(), $loop);
+
+        try {
+            Await::until($promise, 2.0, $loop);
+            self::fail('A cancelled poll must reject');
+        } catch (OperationCancelledException) {
+            // expected
+        }
+
+        $started = microtime(true);
+        $loop->run();
+        self::assertLessThan(0.25, microtime(true) - $started, 'no backoff timer may outlive the settled poll');
+        self::assertSame(1, $calls);
+    }
 }
