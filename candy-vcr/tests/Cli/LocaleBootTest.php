@@ -22,7 +22,7 @@ final class LocaleBootTest extends TestCase
      */
     private static function spawn(array $env, string ...$args): array
     {
-        $cmd = \array_merge([\PHP_BINARY, self::BIN], $args);
+        $cmd = array_values([\PHP_BINARY, self::BIN, ...$args]);
         // No inherited LC_*/LANG: the child's locale is exactly what the test names.
         $base = ['PATH' => (string) \getenv('PATH'), 'HOME' => (string) \getenv('HOME')];
         $proc = \proc_open($cmd, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, null, $base + $env);

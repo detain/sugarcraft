@@ -745,6 +745,47 @@ final class AsyncProbeTest extends TestCase
         }
     }
 
+    /**
+     * A signal kill answers no dump, on both doors. The planted child prints a
+     * Tc (truecolor) capability and then SIGKILLs itself; the async door must
+     * settle to the chain answer (Ansi256 for xterm-256color), never promote
+     * from the partial stdout, exactly as Probe::colorProfile() does.
+     */
+    public function testSignalKilledChildWithATcPrefixNeverPromotesAndSettlesToTheChain(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('the planted /bin/sh stub needs a POSIX shell.');
+        }
+
+        AsyncProbe::resetForTesting();
+        $script = $this->plantProbe("#!/bin/sh\nprintf '\\tTc,\\n'\nkill -KILL \$\$\n");
+        $_ENV['TERM'] = 'xterm-256color';
+        putenv('TERM=xterm-256color');
+
+        try {
+            $loop = new \React\EventLoop\StreamSelectLoop();
+            $profile = null;
+            AsyncProbe::colorProfile($loop)->then(function (ColorProfile $p) use (&$profile): void {
+                $profile = $p;
+            });
+            $this->runUntilSettled($loop, $profile);
+
+            $this->assertSame(
+                ColorProfile::Ansi256,
+                $profile,
+                'a signal-killed child answers no dump: the partial Tc prefix must not promote past the chain answer',
+            );
+            $this->assertSame(
+                [],
+                (new \ReflectionProperty(AsyncProbe::class, 'settledMemo'))->getValue(),
+                'a signal-killed child mints no memo entry',
+            );
+        } finally {
+            AsyncProbe::resetForTesting();
+            @\unlink($script);
+        }
+    }
+
     public function testNegativeVerdictIsTermStaticWhileTheEnvRungIsReDerived(): void
     {
         // The child proved this TERM advertises no promotion; the ANSWER to

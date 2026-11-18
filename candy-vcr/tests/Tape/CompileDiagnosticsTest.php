@@ -194,7 +194,7 @@ final class CompileDiagnosticsTest extends TestCase
         $bytes = '';
         foreach ($cassette->events as $event) {
             if ($event->kind === EventKind::Input) {
-                $bytes .= (string) $event->payload['b'];
+                $bytes .= (\is_string($event->payload['b']) ? $event->payload['b'] : '');
             }
         }
 

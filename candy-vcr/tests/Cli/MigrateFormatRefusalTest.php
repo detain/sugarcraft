@@ -55,6 +55,8 @@ final class MigrateFormatRefusalTest extends TestCase
     }
 
     /**
+     * @param list<string> $argv
+     *
      * @return array{0:int, 1:string}
      */
     private function migrate(array $argv): array

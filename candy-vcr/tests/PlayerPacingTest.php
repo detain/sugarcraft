@@ -178,13 +178,17 @@ final class PlayerPacingTest extends TestCase
      */
     private static function neverSelfQuitFactory(): \Closure
     {
-        return static fn ($input, $output, $loop): Program => new Program(
-            new EchoModel(quitAfter: \PHP_INT_MAX),
-            new ProgramOptions(
-                input: $input,
-                output: $output,
-                loop: $loop,
-            ),
-        );
+        return static function ($input, $output, $loop): Program {
+            \assert(\is_resource($input) && \is_resource($output) && $loop instanceof \React\EventLoop\LoopInterface);
+
+            return new Program(
+                new EchoModel(quitAfter: \PHP_INT_MAX),
+                new ProgramOptions(
+                    input: $input,
+                    output: $output,
+                    loop: $loop,
+                ),
+            );
+        };
     }
 }
