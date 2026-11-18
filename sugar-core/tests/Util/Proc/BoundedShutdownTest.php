@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Core\Tests\Util\Proc;
 
 use PHPUnit\Framework\TestCase;
+use React\EventLoop\LoopInterface;
+use React\EventLoop\StreamSelectLoop;
 use SugarCraft\Core\Util\Proc\BoundedShutdown;
 
 /**
@@ -332,5 +334,138 @@ final class BoundedShutdownTest extends TestCase
         ) {
             self::markTestSkipped('the fork-shaped ladder needs ext-pcntl and ext-posix');
         }
+    }
+
+    /**
+     * Run one async ladder on a private loop and return what it settled with.
+     * The loop is bounded so a stuck ladder fails by name instead of hanging.
+     *
+     * @param callable(LoopInterface, callable(mixed=):void):void $start
+     */
+    private function settleAsync(callable $start): mixed
+    {
+        $loop = new StreamSelectLoop();
+        $settled = false;
+        $value = null;
+        $start($loop, static function (mixed $v = null) use (&$settled, &$value, $loop): void {
+            $settled = true;
+            $value = $v;
+            $loop->stop();
+        });
+
+        if (!$settled) {
+            $bound = $loop->addTimer(5.0, static function () use ($loop): void {
+                $loop->stop();
+            });
+            $loop->run();
+            $loop->cancelTimer($bound);
+        }
+
+        self::assertTrue($settled, 'the async ladder must settle within the bound');
+
+        return $value;
+    }
+
+    public function testEscalateAsyncSendsFifteenThenNineAndReportsGoneWhenNineLands(): void
+    {
+        $sent = [];
+        $hookCalls = 0;
+
+        $gone = $this->settleAsync(static function (LoopInterface $loop, callable $done) use (&$sent, &$hookCalls): void {
+            BoundedShutdown::escalateAsync(
+                $loop,
+                static function (int $signal) use (&$sent): void {
+                    $sent[] = $signal;
+                },
+                static function () use (&$sent): bool {
+                    return \in_array(9, $sent, true);
+                },
+                static fn (bool $isGone) => $done($isGone),
+                0.05,
+                0.5,
+                static function () use (&$hookCalls): void {
+                    $hookCalls++;
+                },
+            );
+        });
+
+        self::assertTrue($gone);
+        self::assertSame([15, 9], $sent, 'the rung order is TERM then the integer-literal 9');
+        self::assertSame(1, $hookCalls, 'the escalation hook fires once between the rungs');
+    }
+
+    public function testEscalateAsyncReportsStillRunningWhenTheKillBudgetRunsOut(): void
+    {
+        $sent = [];
+        $started = \hrtime(true);
+
+        $gone = $this->settleAsync(static function (LoopInterface $loop, callable $done) use (&$sent): void {
+            BoundedShutdown::escalateAsync(
+                $loop,
+                static function (int $signal) use (&$sent): void {
+                    $sent[] = $signal;
+                },
+                static fn (): bool => false,
+                static fn (bool $isGone) => $done($isGone),
+                0.05,
+                0.05,
+            );
+        });
+
+        self::assertFalse($gone, 'a child that never dies is reported as still running');
+        self::assertSame([15, 9], $sent);
+        self::assertLessThan(2.0, (\hrtime(true) - $started) / 1_000_000_000, 'both budgets bound the wait');
+    }
+
+    public function testTerminateBoundedAsyncDeliversTheExitStatusOfAnAlreadyExitedChild(): void
+    {
+        $process = $this->spawn(['/bin/sh', '-c', 'exit 7']);
+        self::assertTrue(BoundedShutdown::hasExited($process, 2.0), 'the fixture itself must terminate');
+
+        $status = $this->settleAsync(static function (LoopInterface $loop, callable $done) use ($process): void {
+            BoundedShutdown::terminateBoundedAsync($loop, $process, static fn (?int $s) => $done($s));
+        });
+
+        self::assertSame(7, $status);
+        self::assertFalse(\is_resource($process), 'the async reap consumes the handle');
+    }
+
+    public function testTerminateBoundedAsyncEscalatesAndReapsATermIgnoringChild(): void
+    {
+        $process = $this->spawn(['/bin/sh', '-c', "trap '' TERM; exec sleep 30"]);
+        $pid = (int) (\proc_get_status($process)['pid'] ?? 0);
+
+        $started = \hrtime(true);
+        $status = $this->settleAsync(static function (LoopInterface $loop, callable $done) use ($process): void {
+            BoundedShutdown::terminateBoundedAsync(
+                $loop,
+                $process,
+                static fn (?int $s) => $done($s),
+                0.3,
+                0.5,
+            );
+        });
+        $elapsedSeconds = (\hrtime(true) - $started) / 1_000_000_000;
+
+        self::assertIsInt($status);
+        self::assertLessThan(
+            2.5,
+            $elapsedSeconds,
+            'the async ladder must not wait out the child\'s 30s sleep',
+        );
+        self::assertProcessGone($pid);
+        self::assertFalse(\is_resource($process));
+    }
+
+    public function testTerminateBoundedAsyncAnswersNullForANonResourceAtOnce(): void
+    {
+        $loop = new StreamSelectLoop();
+        $answer = 'unset';
+
+        BoundedShutdown::terminateBoundedAsync($loop, null, static function (?int $s) use (&$answer): void {
+            $answer = $s;
+        });
+
+        self::assertNull($answer, 'a consumed or absent handle answers null synchronously, like the sync contract');
     }
 }
