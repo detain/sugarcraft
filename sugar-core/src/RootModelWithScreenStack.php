@@ -23,6 +23,14 @@ final class RootModelWithScreenStack implements Model, ScreenStackCapable
     /** @var list<string> */
     public array $poppedIds = [];
 
+    /**
+     * The base layer while a screen is pushed. {@see $currentModel} mirrors the
+     * live top then, so the base is parked here and restored when the stack
+     * empties; with no screen pushed it stays null and the base is
+     * {@see $currentModel} itself.
+     */
+    private ?Model $baseLayer = null;
+
     public function __construct(
         public ScreenStack $screens = new ScreenStack(),
         public ?Model $currentModel = null,
@@ -42,13 +50,29 @@ final class RootModelWithScreenStack implements Model, ScreenStackCapable
     {
         $next = clone $this;
         $next->screens = $screens;
-        $next->currentModel = $screens->isEmpty() ? null : $screens->current()->model;
+        if ($screens->isEmpty()) {
+            // Still empty: the base is already the active model, nothing to restore.
+            if (!$this->screens->isEmpty()) {
+                $next->currentModel = $this->baseLayer;
+                $next->baseLayer = null;
+            }
+        } elseif ($this->screens->isEmpty()) {
+            $next->baseLayer = $this->currentModel;
+            $next->currentModel = $screens->current()->model;
+        } else {
+            $next->currentModel = $screens->current()->model;
+        }
         return $next;
     }
 
+    /**
+     * Program calls init() on the active model only. With no screen pushed
+     * that is this root, so the base layer's startup Cmd is returned here;
+     * with a screen on top the screen's own init() is the one Program runs.
+     */
     public function init(): ?\Closure
     {
-        return null;
+        return $this->screens->isEmpty() ? $this->currentModel?->init() : null;
     }
 
     public function update(Msg $msg): array
@@ -63,9 +87,14 @@ final class RootModelWithScreenStack implements Model, ScreenStackCapable
                 $next->pushedIds[] = (string) $model->id;
             }
             $msg->screen->onEnter?->__invoke();
+            if ($next->screens->isEmpty()) {
+                $next->baseLayer = $next->currentModel;
+            }
             $next->screens = $next->screens->push($msg->screen);
             $next->currentModel = $msg->screen->model;
-            return [$next, null];
+            // A pushed screen starts like the root's own init(): nothing else
+            // calls init() on it, so its startup Cmd is returned to the caller.
+            return [$next, $model->init()];
         }
 
         if ($msg instanceof Msg\ScreenStackPoppedMsg) {
@@ -78,9 +107,13 @@ final class RootModelWithScreenStack implements Model, ScreenStackCapable
                     $next->poppedIds[] = (string) $poppedModel->id;
                 }
                 $next->screens = $next->screens->pop();
-                $next->currentModel = $next->screens->isEmpty()
-                    ? null
-                    : $next->screens->current()->model;
+                if ($next->screens->isEmpty()) {
+                    // The base layer comes back with its state as it was at the push.
+                    $next->currentModel = $next->baseLayer;
+                    $next->baseLayer = null;
+                } else {
+                    $next->currentModel = $next->screens->current()->model;
+                }
             }
             return [$next, null];
         }

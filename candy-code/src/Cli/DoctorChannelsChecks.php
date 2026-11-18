@@ -111,7 +111,7 @@ final class DoctorChannelsChecks
             // The launch and serve boot resolve the project tier through
             // ProjectRoot, so a subdirectory launch sees the repository's
             // bundles; doctor must read the same tree or it calls them stale.
-            $projectRoot = ProjectRoot::resolve($root ?? (getcwd() ?: ''));
+            $projectRoot = ProjectRoot::lookup($root ?? (getcwd() ?: ''));
             $bundles = (new BundleDiscovery($projectRoot, is_array($paths) ? $paths : []))->discover();
         }
         $store ??= ChannelsStore::new();

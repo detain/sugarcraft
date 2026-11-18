@@ -166,18 +166,23 @@ final class ForkChannel
             return;
         }
         $this->inbound .= $chunk;
-        while (strlen($this->inbound) >= 4) {
-            $size = unpack('N', $this->inbound)[1];
+        // Walk the buffer with an offset and trim it once after the loop: a read
+        // holding thousands of small frames would otherwise re-copy the whole
+        // remainder per frame, which is quadratic on the parent's loop.
+        $offset = 0;
+        $total = strlen($this->inbound);
+        while ($total - $offset >= 4) {
+            $size = unpack('N', $this->inbound, $offset)[1];
             if ($size > self::MAX_FRAME_BYTES) {
                 // A length no honest peer sends: the stream is no longer framed.
                 $this->close();
                 return;
             }
-            if (strlen($this->inbound) < 4 + $size) {
-                return;
+            if ($total - $offset < 4 + $size) {
+                break;
             }
-            $frame = substr($this->inbound, 4, $size);
-            $this->inbound = (string) substr($this->inbound, 4 + $size);
+            $frame = substr($this->inbound, $offset + 4, $size);
+            $offset += 4 + $size;
             if ($this->onFrame !== null) {
                 ($this->onFrame)($frame);
             }
@@ -185,5 +190,6 @@ final class ForkChannel
                 return;
             }
         }
+        $this->inbound = (string) substr($this->inbound, $offset);
     }
 }

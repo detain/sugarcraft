@@ -20,6 +20,9 @@ use ReflectionNamedType;
  */
 final class FactoryNamingTest extends TestCase
 {
+    /**
+     * @return array<string, array{class-string}>
+     */
     public static function forbiddenFactoryProvider(): array
     {
         return [

@@ -659,6 +659,14 @@ Every renderer also takes a raw straight-alpha RGBA8 buffer through
 Kitty sends it as `f=32` and iTerm2 as an uncompressed TIFF, so neither builds
 a PNG container. Sixel and the text tiers decode it through an `ImageSource`.
 
+A Kitty `renderRgb()` frame is anonymous: no `i=` names it, so no `delete()`
+can retire it, and calling it once per frame leaves one image in the terminal's
+store per call. A frame loop uses `KittyRenderer::renderRgbFrame($rgba,
+$pixelWidth, $pixelHeight, $cellsWidth, $cellsHeight, $imageId)` instead. It
+carries the id, so the previous frame is retired with `delete($previousId)` once
+the new one is drawn, the same double buffer `present()` runs. For ImageSource
+frames, `GraphicsFrameSession` does this for you.
+
 `GraphicsFrameSession::new($renderer)->withImageId($id)` presents a frame
 sequence without leaking images. Each `present($frame, $width, $height = null)`
 draws the frame under an id from a two-slot double buffer and then retires the

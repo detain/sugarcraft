@@ -343,53 +343,75 @@ final class GraphicsRendererTest extends TestCase
     }
 
     /**
-     * A Player rebuild (resize or mode cycle) replaces the renderer. The successor
-     * must retire the frame the outgoing session drew last, or it stays in the
-     * terminal's image store.
+     * retirement() deletes both slots of the Kitty pair: the frame a replacing Player
+     * must delete so it does not outlive the session in the terminal's image store.
      */
-    public function testSuccessorRetiresTheOutgoingKittyFrameOnItsFirstDraw(): void
+    public function testRetirementDeletesBothSlotsOfTheKittyPair(): void
     {
         $frame = self::makeFrame();
-        $outgoing = new GraphicsRenderer(Mode::Kitty);
-        $slot1 = self::drawnImageId($outgoing->render($frame, Mode::Kitty));
-        $outgoing->render($frame, Mode::Kitty);
+        $renderer = new GraphicsRenderer(Mode::Kitty);
+        $slot = self::drawnImageId($renderer->render($frame, Mode::Kitty));
+        $renderer->render($frame, Mode::Kitty);
 
-        $retire = (new KittyRenderer())->delete((string) ($slot1 + 1));
-        $successor = (new GraphicsRenderer(Mode::Kitty))->carryingFrom($outgoing);
-
-        $this->assertStringStartsWith($retire, $successor->render($frame, Mode::Kitty));
-        $this->assertStringStartsNotWith($retire, $successor->render($frame, Mode::Kitty), 'the residue is written once');
+        $kitty = new KittyRenderer();
+        $this->assertSame(
+            $kitty->delete((string) $slot) . $kitty->delete((string) ($slot + 1)),
+            $renderer->retirement(),
+        );
     }
 
     /**
-     * The retirement crosses a mode change: a Kitty frame left by a Kitty session
-     * is deleted even when the successor draws through another backend.
+     * A view whose output is never written still advances the session. The frame on
+     * screen is the one written before it, so retirement() must still delete that
+     * slot, not only the newest id.
      */
-    public function testSuccessorInAnotherModeStillRetiresTheKittyFrame(): void
+    public function testRetirementStillDeletesTheWrittenFrameAfterAnUnwrittenView(): void
     {
         $frame = self::makeFrame();
-        $outgoing = new GraphicsRenderer(Mode::Kitty);
-        $slot = self::drawnImageId($outgoing->render($frame, Mode::Kitty));
+        $renderer = new GraphicsRenderer(Mode::Kitty);
+        $written = self::drawnImageId($renderer->render($frame, Mode::Kitty));
+        $renderer->render($frame, Mode::Kitty); // measured, then discarded: never written
 
-        $successor = (new GraphicsRenderer(Mode::Sixel))->carryingFrom($outgoing);
-
-        $this->assertStringStartsWith((new KittyRenderer())->delete((string) $slot), $successor->render($frame, Mode::Sixel));
+        $this->assertStringContainsString(
+            (new KittyRenderer())->delete((string) $written),
+            $renderer->retirement(),
+            'the frame on screen must be retired even though a later view was never written',
+        );
     }
 
     /**
-     * A second rebuild before any render must not drop the first rebuild's
-     * still-owed retirement.
+     * Reading the retirement spends nothing: a discarded view or a second Cmd
+     * computation still sees the same delete, so it is never lost to a rebuild.
      */
-    public function testRebuildBeforeRenderKeepsThePredecessorsResidue(): void
+    public function testRetirementIsStableUntilTheRendererIsReplaced(): void
     {
         $frame = self::makeFrame();
-        $outgoing = new GraphicsRenderer(Mode::Kitty);
-        $slot = self::drawnImageId($outgoing->render($frame, Mode::Kitty));
+        $renderer = new GraphicsRenderer(Mode::Kitty);
+        $renderer->render($frame, Mode::Kitty);
 
-        $unrendered = (new GraphicsRenderer(Mode::Kitty))->carryingFrom($outgoing);
-        $again = (new GraphicsRenderer(Mode::Kitty))->carryingFrom($unrendered);
+        $first = $renderer->retirement();
+        $this->assertNotSame('', $first);
+        $this->assertSame($first, $renderer->retirement(), 'reading the retirement must not spend it');
+    }
 
-        $this->assertStringStartsWith((new KittyRenderer())->delete((string) $slot), $again->render($frame, Mode::Kitty));
+    /**
+     * Nothing was drawn, so there is nothing for the terminal to retire.
+     */
+    public function testRetirementIsEmptyBeforeAnyDraw(): void
+    {
+        $this->assertSame('', (new GraphicsRenderer(Mode::Kitty))->retirement());
+    }
+
+    /**
+     * Backends that cannot delete by id (Sixel, iTerm2) never owe a retirement.
+     */
+    public function testRetirementIsEmptyForBackendsWithoutIdDelete(): void
+    {
+        $frame = self::makeFrame();
+        $sixel = new GraphicsRenderer(Mode::Sixel);
+        $sixel->render($frame, Mode::Sixel);
+
+        $this->assertSame('', $sixel->retirement());
     }
 
     /**
@@ -430,15 +452,5 @@ final class GraphicsRendererTest extends TestCase
         self::assertSame(1, preg_match('/\bi=(\d+)/', $output, $m), 'the draw must address an image id');
 
         return (int) $m[1];
-    }
-
-    /**
-     * With no frame drawn before the rebuild there is nothing to retire.
-     */
-    public function testSuccessorOfAFreshRendererRetiresNothing(): void
-    {
-        $successor = (new GraphicsRenderer(Mode::Kitty))->carryingFrom(new GraphicsRenderer(Mode::Kitty));
-
-        $this->assertStringNotContainsString('a=d', $successor->render(self::makeFrame(), Mode::Kitty));
     }
 }

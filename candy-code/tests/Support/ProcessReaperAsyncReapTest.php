@@ -123,6 +123,125 @@ final class ProcessReaperAsyncReapTest extends TestCase
         }
     }
 
+    /**
+     * Regression: the leader-only "gone" check declared a containment-wrapped
+     * child gone the moment its wrapper died on SIGTERM, so a TERM-ignoring
+     * descendant in the group never received signal 9. The async ladder must
+     * keep escalating until the group is empty.
+     */
+    public function testTerminateAndCloseAsyncReachesATermIgnoringDescendantAfterTheWrapperDiesOnTerm(): void
+    {
+        [$wrapped, $wrapperPid, $grandchild] = self::spawnWrapperWithTermIgnoringGrandchild();
+        $loop = new StreamSelectLoop();
+        $settled = false;
+
+        try {
+            ProcessReaper::terminateAndCloseAsync($loop, $wrapped, $wrapperPid, static function () use (&$settled, $loop): void {
+                $settled = true;
+                $loop->stop();
+            });
+            $loop->addTimer(10.0, static function () use ($loop): void {
+                $loop->stop();
+            });
+            $loop->run();
+
+            self::assertTrue($settled, 'the async teardown must settle');
+            self::assertFalse(self::groupMemberAlive($grandchild), 'the TERM-ignoring descendant must be down once the ladder settles');
+        } finally {
+            self::killGroupQuietly($wrapperPid, $grandchild, $wrapped);
+        }
+    }
+
+    /** Sync twin of the regression above: terminateAndAwaitExit() must not report gone while the group lives. */
+    public function testTerminateAndAwaitExitReachesATermIgnoringDescendantAfterTheWrapperDiesOnTerm(): void
+    {
+        [$wrapped, $wrapperPid, $grandchild] = self::spawnWrapperWithTermIgnoringGrandchild();
+
+        try {
+            self::assertTrue(ProcessReaper::terminateAndAwaitExit($wrapped, $wrapperPid));
+            self::assertFalse(self::groupMemberAlive($grandchild), 'terminateAndAwaitExit reports gone only once the group is empty');
+        } finally {
+            self::killGroupQuietly($wrapperPid, $grandchild, $wrapped);
+        }
+    }
+
+    /**
+     * A setsid-led shell whose background sleeper ignores SIGTERM, with the
+     * wrapper itself dying on TERM. Readiness is signalled by the sleeper after
+     * its trap is armed, so the teardown never races an unarmed sleeper.
+     *
+     * @return array{0: resource, 1: int, 2: int} the wrapper, its pid, and the grandchild pid
+     */
+    private static function spawnWrapperWithTermIgnoringGrandchild(): array
+    {
+        if (!\function_exists('posix_kill')) {
+            self::markTestSkipped('ext-posix is required to inspect the process group');
+        }
+        $setsid = null;
+        foreach (['/usr/bin/setsid', '/bin/setsid'] as $candidate) {
+            if (\is_executable($candidate)) {
+                $setsid = $candidate;
+                break;
+            }
+        }
+        if ($setsid === null) {
+            self::markTestSkipped('setsid(1) is not installed on this host');
+        }
+
+        $marker = \tempnam(\sys_get_temp_dir(), 'reaper-group-');
+        self::assertNotFalse($marker, 'could not create the grandchild marker file');
+        $ready = $marker . '.ready';
+
+        try {
+            $wrapped = \proc_open(
+                [$setsid, 'sh', '-c', '(trap "" TERM; : > "$0.ready"; exec sleep 30) & echo $! > "$0"; wait', $marker],
+                [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+                $pipes,
+            );
+            self::assertIsResource($wrapped);
+            foreach ($pipes as $pipe) {
+                \fclose($pipe);
+            }
+            $wrapperPid = (int) (\proc_get_status($wrapped)['pid'] ?? 0);
+
+            $deadline = \hrtime(true) / 1_000_000_000 + 3.0;
+            while ((!\is_file($ready) || \trim((string) \file_get_contents($marker)) === '') && \hrtime(true) / 1_000_000_000 < $deadline) {
+                \usleep(10_000);
+            }
+            self::assertFileExists($ready, 'the sleeper never armed its TERM trap');
+            $grandchild = (int) \trim((string) \file_get_contents($marker));
+            self::assertGreaterThan(0, $grandchild, 'the wrapper never reported its grandchild');
+            self::assertTrue(self::groupMemberAlive($grandchild), 'the grandchild must be alive before the teardown');
+        } finally {
+            @\unlink($marker);
+            @\unlink($ready);
+        }
+
+        return [$wrapped, $wrapperPid, $grandchild];
+    }
+
+    /** A zombie is gone for this purpose: it has released its memory and cannot run. */
+    private static function groupMemberAlive(int $pid): bool
+    {
+        $stat = @\file_get_contents('/proc/' . $pid . '/stat');
+
+        return $stat !== false && \preg_match('/\)\s+Z/', $stat) !== 1;
+    }
+
+    /** @param resource $wrapped */
+    private static function killGroupQuietly(int $wrapperPid, int $grandchild, $wrapped): void
+    {
+        if ($grandchild > 0 && self::groupMemberAlive($grandchild)) {
+            @\posix_kill($grandchild, 9);
+        }
+        if ($wrapperPid > 0) {
+            @\posix_kill(-$wrapperPid, 9);
+        }
+        if (\is_resource($wrapped)) {
+            \proc_close($wrapped);
+        }
+    }
+
     public function testGraceDeadlinesMeasureOnAMonotonicClock(): void
     {
         // A wall-clock step (NTP) must not stretch or cut the TERM/KILL window.

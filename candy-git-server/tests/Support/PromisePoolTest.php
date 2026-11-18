@@ -147,4 +147,38 @@ final class PromisePoolTest extends TestCase
 
         $this->assertSame([11, 12, 13], $result);
     }
+
+    /**
+     * Regression: cancelling the aggregate used to be a no-op, so an abandoned
+     * batch kept launching $fn for every remaining item. Item 1 is held
+     * pending, the batch is cancelled, then item 1 resolves: the fix must start
+     * nothing after the cancel, and the aggregate must reject.
+     */
+    public function testCancellingTheBatchStopsLaunchingRemainingItems(): void
+    {
+        $loop = new StreamSelectLoop();
+
+        $started = [];
+        $pending = [];
+        $promise = PromisePool::map($loop, [1, 2, 3, 4, 5], static function (int $x) use (&$started, &$pending) {
+            $started[] = $x;
+            $pending[$x] = new Deferred();
+
+            return $pending[$x]->promise();
+        }, 1);
+
+        $error = null;
+        $promise->then(null, static function (\Throwable $e) use (&$error): void {
+            $error = $e;
+        });
+
+        $loop->addTimer(0.01, static function () use ($promise, &$pending): void {
+            $promise->cancel();
+            $pending[1]->resolve(1);
+        });
+        $loop->run();
+
+        $this->assertSame([1], $started, 'a cancelled batch must not start any further item');
+        $this->assertInstanceOf(\SugarCraft\Async\OperationCancelledException::class, $error);
+    }
 }

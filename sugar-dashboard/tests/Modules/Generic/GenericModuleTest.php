@@ -6,6 +6,7 @@ namespace SugarCraft\Dashboard\Tests\Modules\Generic;
 
 use PHPUnit\Framework\Attributes\WithoutErrorHandler;
 use PHPUnit\Framework\TestCase;
+use React\EventLoop\StreamSelectLoop;
 use SugarCraft\Async\Await;
 use SugarCraft\Core\BatchMsg;
 use SugarCraft\Core\Msg;
@@ -190,6 +191,53 @@ final class GenericModuleTest extends TestCase
         $this->assertSame($afterStale, $again, 'the live run keeps the latch');
         $this->assertNotNull($tickCmd);
         $this->assertInstanceOf(TickRequest::class, $tickCmd(), 'the latched tick only re-arms');
+    }
+
+    /**
+     * Regression: the command ran on the global loop even when the host ran its own,
+     * so its pipes and deadline never fired and the output never came back. The run
+     * must settle on the loop the module was given.
+     */
+    public function testTheCommandRunsOnTheLoopTheModuleWasGiven(): void
+    {
+        $loop = new StreamSelectLoop();
+        $module = new GenericModule([PHP_BINARY, '-r', 'echo "injected";'], 5, null, $loop);
+        [, $cmd] = $module->update(new TickMsg());
+        self::assertNotNull($cmd);
+
+        $settled = null;
+        $this->runOf($cmd)()->promise->then(static function (Msg $msg) use (&$settled, $loop): void {
+            $settled = $msg;
+            $loop->stop();
+        });
+        $loop->addTimer(10.0, static fn () => $loop->stop());
+        $loop->run();
+
+        self::assertInstanceOf(CommandOutputMsg::class, $settled, 'the host loop must settle the run');
+        self::assertSame('injected', $settled->output);
+    }
+
+    /**
+     * Regression: the latch counted from the tick, so a Cmd the host ran only after
+     * the ceiling let the next tick start a second child beside the live one. The
+     * ceiling now counts from the launch, so a freshly launched child is never stacked.
+     */
+    public function testTheLatchCountsFromTheLaunchNotFromAQueuedTick(): void
+    {
+        $module = new GenericModule([PHP_BINARY, '-r', 'usleep(200000); echo "late";'], 5);
+        [$inFlight, $cmd] = $module->update(new TickMsg());
+        self::assertNotNull($cmd);
+
+        // The tick was queued past the ceiling before the host ran its Cmd.
+        $this->backdateLatch($inFlight, BoundedCommand::SETTLE_CEILING_SECONDS + 1.0);
+        $run = $this->runOf($cmd)();
+
+        [$again] = $inFlight->update(new TickMsg());
+        $this->assertSame($inFlight, $again, 'a freshly launched child keeps the latch');
+
+        $output = Await::until($run->promise, 15.0);
+        [$settled] = $inFlight->update($output);
+        $this->assertStringContainsString('late', $settled->view());
     }
 
     private function backdateLatch(GenericModule $module, float $seconds): void

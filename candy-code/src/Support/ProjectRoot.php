@@ -86,14 +86,26 @@ final class ProjectRoot
      */
     public static function resolve(string $directory): string
     {
+        $root = self::lookup($directory);
+        self::migrateLegacyDir($root);
+
+        return $root;
+    }
+
+    /**
+     * The same answer as {@see resolve()} without the one-time move of a
+     * legacy `.sugar-crush` directory. Read-only verbs (`bundles list`,
+     * `bundles recommend`, `doctor`) answer through this so that inspecting a
+     * checkout never renames a directory in it; the launch and the write verbs
+     * keep {@see resolve()}, which is where the move belongs.
+     */
+    public static function lookup(string $directory): string
+    {
         if ($directory === '' || !is_dir($directory)) {
             return $directory;
         }
 
-        $root = self::$memo[$directory] ??= (new self())->walk($directory);
-        self::migrateLegacyDir($root);
-
-        return $root;
+        return self::$memo[$directory] ??= (new self())->walk($directory);
     }
 
     /**

@@ -62,6 +62,9 @@ final class ReplayTerminalGuardTest extends TestCase
         return $path;
     }
 
+    /**
+     * @return list<Event>
+     */
     private function outputEvents(): array
     {
         return [

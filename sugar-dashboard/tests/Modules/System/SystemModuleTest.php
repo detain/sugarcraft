@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Dashboard\Tests\Modules\System;
 
 use PHPUnit\Framework\TestCase;
+use React\EventLoop\StreamSelectLoop;
+use SugarCraft\Core\BatchMsg;
 use SugarCraft\Core\Msg;
 use SugarCraft\Dashboard\Module\BoundedCommand;
 use SugarCraft\Dashboard\Module\ProcAvailability;
@@ -346,6 +348,33 @@ final class SystemModuleTest extends TestCase
      * sample Cmd, so the GPU row froze for the session. Past the settle ceiling
      * a tick samples again, which shows as a refreshed latch timestamp.
      */
+    /**
+     * Regression: nvidia-smi ran on the global loop even when the host ran its own,
+     * so its pipes and deadline never fired and the GPU row never updated. The sample
+     * must settle on the loop the module was given.
+     */
+    public function testTheGpuSampleRunsOnTheLoopTheModuleWasGiven(): void
+    {
+        $loop = new StreamSelectLoop();
+        $module = new SystemModule(1.0, 'system', $loop);
+        [, $cmd] = $module->update(new RefreshMsg());
+        $this->assertNotNull($cmd);
+
+        // The tick re-arms beside the sample, so the sample is the second batch member.
+        $batch = $cmd();
+        $sample = $batch instanceof BatchMsg ? $batch->cmds[1]() : $batch;
+
+        $settled = null;
+        $sample->promise->then(static function (Msg $msg) use (&$settled, $loop): void {
+            $settled = $msg;
+            $loop->stop();
+        });
+        $loop->addTimer(10.0, static fn () => $loop->stop());
+        $loop->run();
+
+        $this->assertInstanceOf(GpuSampleMsg::class, $settled, 'the host loop must settle the GPU sample');
+    }
+
     public function testAGpuSampleDroppedByTheHostIsReissuedAfterTheSettleCeiling(): void
     {
         $module = new SystemModule();

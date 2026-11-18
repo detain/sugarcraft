@@ -26,6 +26,9 @@ namespace SugarCraft\Vcr;
  */
 final readonly class ReplayResult
 {
+    /**
+     * @param list<string> $undecodedInputAt
+     */
     public function __construct(
         public bool $ok,
         public string $diff,

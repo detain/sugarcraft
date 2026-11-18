@@ -2036,7 +2036,7 @@ chat session.
 ### What the verb deliberately does not add
 
 `cache:` keeps its opt-in-only semantics with **no CLI kill-switch** — the
-`--no-cache` override is a documented owed seam (NIT-1), not silently widened
+`--no-cache` override is a documented, still-open seam, not silently widened
 here. The verb adds no wall-clock timeout to any path; stage and workflow
 budgets ride the existing engine families unchanged.
 

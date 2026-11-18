@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\AttachmentType;
 use SugarCraft\Code\Attachments\FileMentions;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
+use SugarCraft\Image\ImageSource;
 
 /**
  * Audit 15b-15: what an `@` in a prompt attaches, what it leaves as prose,
@@ -230,6 +231,18 @@ final class FileMentionsTest extends TestCase
         $this->assertNull(FileMentions::complete('src/Chat', $this->root), 'the common prefix adds nothing');
         $this->assertNull(FileMentions::complete('nope', $this->root));
         $this->assertNull(FileMentions::complete('missing/dir/x', $this->root));
+    }
+
+    /**
+     * A PNG whose signature tail is damaged keeps the label sugar-image gives it, so
+     * an `@file` mention and a session.send image never disagree about the same bytes.
+     */
+    public function testADamagedPngSignatureSniffsLikeSugarImage(): void
+    {
+        $damaged = "\x89PNG\x00\x00\x00\x00rest";
+
+        $this->assertSame(ImageSource::sniffMime($damaged), FileMentions::sniffImage($damaged));
+        $this->assertSame('image/png', FileMentions::sniffImage($damaged));
     }
 
     public function testImagesAreSniffedByContentNotName(): void

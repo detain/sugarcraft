@@ -274,9 +274,6 @@ final class Program
         // and program writes keep their order. Synchronous until run() attaches
         // the loop.
         $this->writer = new Writer($this->output);
-        $this->writer->onDrain(function (): void {
-            $this->onOutputDrained();
-        });
         $this->renderer = new Renderer(
             $this->output,
             inline:   $options->inlineMode,
@@ -582,6 +579,13 @@ final class Program
         // run #2 diff against the CLOSED screen — a stale tail instead of a
         // fresh paint. Reset at the same door as stopSignal.
         $this->lastRenderedBody = null;
+        // Bind the drain hook to the instance that is running. The writer is
+        // shared with every clone (withExceptionHandler()/withLogger()), so a
+        // hook captured in the constructor would drain into the original and
+        // leave this instance's held frame and overflow flag stranded.
+        $this->writer->onDrain(function (): void {
+            $this->onOutputDrained();
+        });
         $this->setupTerminal();
         $this->installSignalHandlers();
 
@@ -792,6 +796,13 @@ final class Program
      * a child process, a suspend or an external release. O_NONBLOCK lives on
      * the shared open file description, so a child or the shell would inherit
      * it. Queued bytes go out first.
+     *
+     * This is the one deliberate exception to the Writer's "never blocks the
+     * loop" contract: the flush waits synchronously for up to
+     * Writer::WRITE_WAIT_DEADLINE when the terminal has stopped reading. The
+     * child, the suspend or the release cannot take the terminal while those
+     * bytes are still queued, so deferring the handover to onDrain would only
+     * move the same wait past a point where the terminal is already in use.
      */
     private function detachOutput(): void
     {
@@ -1333,6 +1344,10 @@ final class Program
                 if ($cmd !== null) {
                     $this->scheduleCmd($cmd);
                 }
+                // A push or pop moves the active model, so the subscriptions
+                // of the new top (pushed screen, or the base on pop) must be
+                // reconciled now, not on the next unrelated Msg.
+                $this->reconcileWantedSubscriptions();
                 return;
             }
             // sugar-core-034 (RUN-9): a stack message reaching a root that does
@@ -2958,6 +2973,14 @@ final class Program
                 foreach ($node->panes() as $pane) {
                     $collect($pane->model);
                 }
+            } elseif ($node instanceof RootModelWithScreenStack
+                && $node->screens()->isEmpty()
+                && $node->currentModel !== null
+            ) {
+                // With no screen pushed the root is the active model, and its
+                // base layer is the live one: walk it, or its subscriptions
+                // never start (the root itself declares none).
+                $collect($node->currentModel);
             }
         };
         $collect($model);

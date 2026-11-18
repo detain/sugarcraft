@@ -215,6 +215,7 @@ which is why a contributor could be failed by a check they had no way to
 reproduce.
 
     phpunit --no-configuration --colors=never tools/tests/   # this script's own guard
+    php tools/check-plugin-deps.php
     php tools/check-path-repos.php --no-lib-path-repos
     php tools/check-path-repos.php
     php tools/check-path-repos.php --unused

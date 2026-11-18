@@ -177,10 +177,6 @@ final class Player implements Model
         // $stopped latch above is the precedent: it is a CACHE, not a value
         // the model is presented with.
         private readonly \ArrayObject $frameAtMemo = new \ArrayObject(),
-        // A Kitty frame the last mode cycle left on screen, owed to the terminal as
-        // its delete. Only a text successor can owe it (a graphics successor carries
-        // the residue itself), and view() writes it once before update() spends it.
-        private readonly string $retirement = '',
     ) {
     }
 
@@ -666,12 +662,6 @@ final class Player implements Model
      */
     public function update(Msg $msg): array
     {
-        // The retirement belongs to the one view that follows the mode cycle; the
-        // next message spends it, so later views do not repeat the delete.
-        if ($this->retirement !== '') {
-            return $this->mutate(['retirement' => ''])->update($msg);
-        }
-
         try {
             return $this->updateModel($msg);
         } catch (FfmpegDecodeFailure $failure) {
@@ -953,6 +943,10 @@ final class Player implements Model
 
         [$decoder, $frame, $landed] = $this->rebuildDecoderAt($cols, $rows, $this->mode, $this->frameIndex);
 
+        // Read before the swap: the outgoing renderer's last Kitty frame is what the
+        // terminal still shows, and the Cmd retires it once the runtime runs it.
+        $retire = $this->retirementCmd();
+
         // Rebuild the renderer to match the new cell dimensions (same mode/ramp/cellPx),
         // and clear the pending slot in the same mutate() so the apply is atomic: no
         // Player instance ever shows the new grid while still owning the old decoder.
@@ -967,14 +961,14 @@ final class Player implements Model
             'frameIndex' => $landed,
             'videoTime' => $landed / $this->fps,
             'lastTickTime' => $this->now(),
-            'renderer' => $this->successorRenderer(RendererFactory::new($this->mode, $this->ramp, $this->cellPxW, $this->cellPxH)),
+            'renderer' => RendererFactory::new($this->mode, $this->ramp, $this->cellPxW, $this->cellPxH),
         ]);
 
         $cmd = $nextPlayer->paused
             ? null
             : Cmd::tick(1.0 / $this->fps, static fn (): Msg => TickMsg::instance());
 
-        return [$nextPlayer, $cmd];
+        return [$nextPlayer, self::joinCmds($retire, $cmd)];
     }
 
     /**
@@ -1054,8 +1048,12 @@ final class Player implements Model
         if ($msg->type === KeyType::Escape
             || ($msg->type === KeyType::Char && $msg->rune === 'q')
             || ($msg->ctrl && $msg->rune === 'c')) {
+            // The last Kitty frame is still on screen, and quitting is the last
+            // chance to retire it: stop() cannot hand the runtime bytes, so the
+            // delete rides the quit Cmd ahead of the QuitMsg.
+            $retire = $this->retirementCmd();
             $this->stop();
-            return [$this, Cmd::quit()];
+            return [$this, self::joinCmds($retire, Cmd::quit())];
         }
 
         // Space: toggle pause/resume.
@@ -1161,18 +1159,17 @@ final class Player implements Model
             // equal-geometry mode renders, so re-spawning ffmpeg and decoding
             // forward to the current playhead would be pure churn.
             if (self::decodeGeometry($nextMode) === self::decodeGeometry($this->mode)) {
-                $nextRenderer = $this->successorRenderer(RendererFactory::new($nextMode, $this->ramp, $this->cellPxW, $this->cellPxH));
+                $retire = $this->retirementCmd();
 
                 return [$this->mutate([
                     'mode' => $nextMode,
-                    'renderer' => $nextRenderer,
-                    'retirement' => $this->retirementOwedTo($nextRenderer),
-                ]), null];
+                    'renderer' => RendererFactory::new($nextMode, $this->ramp, $this->cellPxW, $this->cellPxH),
+                ]), $retire];
             }
 
+            $retire = $this->retirementCmd();
             [$decoder, $frame, $landed] = $this->rebuildDecoderAt($this->cellsW, $this->cellsH, $nextMode, $this->frameIndex);
 
-            $nextRenderer = $this->successorRenderer(RendererFactory::new($nextMode, $this->ramp, $this->cellPxW, $this->cellPxH));
             $nextPlayer = $this->mutate([
                 'mode' => $nextMode,
                 'decoder' => $decoder,
@@ -1180,10 +1177,9 @@ final class Player implements Model
                 // Budget-yielded walk: record the true landed playhead.
                 'frameIndex' => $landed,
                 'videoTime' => $landed / $this->fps,
-                'renderer' => $nextRenderer,
-                'retirement' => $this->retirementOwedTo($nextRenderer),
+                'renderer' => RendererFactory::new($nextMode, $this->ramp, $this->cellPxW, $this->cellPxH),
             ]);
-            return [$nextPlayer, null];
+            return [$nextPlayer, $retire];
         }
 
         return [$this, null];
@@ -1261,7 +1257,7 @@ final class Player implements Model
      */
     public function view(): string
     {
-        return $this->retirement . $this->paint();
+        return $this->paint();
     }
 
     private function paint(): string
@@ -2430,6 +2426,9 @@ final class Player implements Model
      * teardown is measured on Linux only; the Windows disposition (refused at
      * spawn by SV-M44, unmeasured-by-design otherwise) is documented at
      * {@see \SugarCraft\Video\Decode\FfmpegDecoder::isTeardownExit()}.
+     *
+     * stop() writes nothing to the terminal. A host that tore down a Kitty player
+     * runs {@see teardownCmd()} first, or the last frame stays in the image store.
      */
     public function stop(): void
     {
@@ -2668,7 +2667,6 @@ final class Player implements Model
             // SV-L86/086: pinned — the thumbnail memo belongs to the stream,
             // not to one state; a tick or seek mid-scrub must not reset it.
             frameAtMemo: $this->frameAtMemo,
-            retirement: array_key_exists('retirement', $changes) ? $changes['retirement'] : $this->retirement,
         );
         // Teardown is not a value the model is built with, so it cannot ride the
         // named-argument list — copy the latch forward instead. Every derived
@@ -2688,29 +2686,47 @@ final class Player implements Model
     }
 
     /**
-     * A renderer rebuilt after a resize or mode cycle inherits the outgoing one's
-     * last Kitty frame, so the successor retires it on its first draw.
+     * The Cmd a host runs before {@see stop()} when it tears the player down outside
+     * update(). stop() is void, so this is the only way to hand the runtime the delete
+     * for the last Kitty frame; without it the frame outlives the player. Null when
+     * nothing was drawn or the current mode cannot delete by id.
      */
-    private function successorRenderer(FrameRenderer $next): FrameRenderer
+    public function teardownCmd(): ?\Closure
     {
-        if ($next instanceof GraphicsRenderer && $this->renderer instanceof GraphicsRenderer) {
-            return $next->carryingFrom($this->renderer);
-        }
-
-        return $next;
+        return $this->retirementCmd();
     }
 
     /**
-     * The delete a rebuild owes the terminal when the successor is a text renderer:
-     * the outgoing Kitty frame, which no text successor would ever retire. Graphics
-     * successors carry the residue through {@see successorRenderer()} instead.
+     * The Cmd that retires the Kitty frame the outgoing renderer drew last, or null
+     * when it drew none. A rebuild replaces the renderer, and a fresh Kitty session
+     * starts its own id pair, so nothing else would ever delete that frame from the
+     * terminal's image store.
+     *
+     * It is a Cmd rather than bytes folded into view() on purpose (CLAUDE.md: side
+     * effects go in a Cmd, never in view()). The runtime writes it exactly once,
+     * however many views are discarded or messages coalesced before the next frame.
      */
-    private function retirementOwedTo(FrameRenderer $next): string
+    private function retirementCmd(): ?\Closure
     {
-        if ($next instanceof GraphicsRenderer || !$this->renderer instanceof GraphicsRenderer) {
-            return '';
+        if (!$this->renderer instanceof GraphicsRenderer) {
+            return null;
         }
 
-        return $this->renderer->retirement();
+        $bytes = $this->renderer->retirement();
+
+        return $bytes === '' ? null : Cmd::raw($bytes);
+    }
+
+    /**
+     * Joins two optional Cmds, keeping null when neither is set so callers that
+     * expect "no Cmd" still get one.
+     */
+    private static function joinCmds(?\Closure $first, ?\Closure $second): ?\Closure
+    {
+        if ($first === null) {
+            return $second;
+        }
+
+        return $second === null ? $first : Cmd::batch($first, $second);
     }
 }

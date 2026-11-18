@@ -96,6 +96,36 @@ final class ChildPumpBuilderTest extends TestCase
         $this->assertSame(10.0, ChildPump::DEFAULT_TIMEOUT_SECONDS);
     }
 
+    /**
+     * Pins the default's value, not just its sign: a clock reading inside the
+     * ten-second window with the child still running must not expire the pump.
+     * A default of 1 s, 5 s or 9.5 s would expire here, and a much longer one
+     * would wait a second time, which the select stub refuses.
+     */
+    public function testDefaultDeadlineDoesNotExpireBeforeTenSecondsHavePassed(): void
+    {
+        $this->requirePosixPipes();
+        // The read at 0.0 fixes the deadline at 10.0. 9.9 is inside it, so the
+        // pump waits once; 11.0 is past it, so the pump stops with no second wait.
+        $seq = [0.0, 9.9];
+        $clock = static function () use (&$seq): float {
+            return array_shift($seq) ?? 11.0;
+        };
+        $waits = 0;
+        $select = static function (array $read, ?array $write, ?array $except, int $seconds, int $micros) use (&$waits): int {
+            if (++$waits > 1) {
+                throw new \RuntimeException('the pump waited again after the default deadline should have passed');
+            }
+
+            return 0;
+        };
+        $p = $this->spawn('sleep(30);');
+        $r = ChildPump::new([1 => $p['pipes'][1]])->withClock($clock)->withSelect($select)->pump();
+
+        $this->assertSame(1, $waits, 'at 9.9 s the default deadline has not passed, so the pump waits');
+        $this->assertSame(DrainResult::EXPIRED, $r->reason);
+    }
+
     public function testDefaultDeadlineLeavesAQuickChildAlone(): void
     {
         $this->requirePosixPipes();
@@ -190,6 +220,25 @@ final class ChildPumpBuilderTest extends TestCase
 
         $this->assertSame(DrainResult::CLOSED, $r->reason);
         $this->assertSame('[]', $r->buffer(1));
+    }
+
+    public function testThePollArmKeepsBytesBufferedBeforeTheDeadline(): void
+    {
+        // The select arm sweeps what is already buffered when the deadline passes;
+        // the poll arm must do the same, or the last bytes before the deadline vanish.
+        $pipe = tmpfile();
+        fwrite($pipe, 'tail');
+        rewind($pipe);
+
+        $r = ChildPump::new([1 => $pipe])
+            ->withDeadline(1.0)
+            ->withClock(static fn (): float => 2.0)
+            ->withPollPipes(true)
+            ->pump();
+
+        $this->assertSame(DrainResult::EXPIRED, $r->reason);
+        $this->assertSame('tail', $r->buffer(1));
+        fclose($pipe);
     }
 
     public function testStdinFeedIsRefusedOnTheWindowsPollArm(): void

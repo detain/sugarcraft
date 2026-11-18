@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Tests\Config;
 use PHPUnit\Framework\AssertionFailedError;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Hooks\HookEvent;
+use SugarCraft\Code\MCP\Serve\McpServeRoster;
 use SugarCraft\Code\Permissions\PermissionMode;
 
 /**
@@ -48,8 +49,11 @@ use SugarCraft\Code\Permissions\PermissionMode;
 final class CandyCodeBodyClaimDriftTest extends TestCase
 {
     private const BODY = __DIR__ . '/../../../docs/_data/candy-code.body.html';
+    private const COMPARISON = __DIR__ . '/../../COMPARISON.md';
     private const SOURCE = __DIR__ . '/../../src';
     private const LANG = __DIR__ . '/../../lang';
+    private const EXAMPLES = __DIR__ . '/../../examples';
+    private const VHS = __DIR__ . '/../../.vhs';
 
     /**
      * Class-shaped names the body puts in `<code>`: a bare name, a namespaced
@@ -187,6 +191,125 @@ final class CandyCodeBodyClaimDriftTest extends TestCase
                 "the candy-code body quotes '{$word} {$noun}' while the live count is {$live[$kind]}"
             );
         }
+    }
+
+    /**
+     * Every candy-code hook-event count on COMPARISON.md is pinned, not just the
+     * one comparison phrase. Each spelling below is anchored to its row or
+     * sentence, because the page also quotes other events (Claude Code's 33,
+     * the serve protocol's 38 event types, OpenCode's 35): a bare "N events"
+     * pattern would call those defects. Each label must match at least once, so
+     * a rewritten sentence cannot drop out of the check silently.
+     *
+     * @return array<string, string> label => pattern with the count as group 1
+     */
+    private static function comparisonHookEventPatterns(): array
+    {
+        $count = '(' . self::countPattern() . ')';
+
+        return [
+            'comparison against Claude Code' => '/\b' . $count . '\s+hook events\s+vs\s+Claude Code/i',
+            'breadth bullet' => '/\bhooks \(' . $count . ' events;/i',
+            'HK-02 scoreboard row' => '/\|\s*HK-02\s*\|[^\n]*?✅\s*' . $count . ' events:/u',
+            'HK-02 detail bullet' => '/\bAll ' . $count . ' events have production dispatch sites/i',
+            'hook comparison table' => '/\|\s*Events\s*\|\s*' . $count . ' \(Pre\/PostToolUse/i',
+        ];
+    }
+
+    public function testTheComparisonPageQuotesTheLiveHookEventCountForCandyCode(): void
+    {
+        $text = (string) file_get_contents(self::COMPARISON);
+        $live = \count(HookEvent::cases());
+
+        foreach (self::comparisonHookEventPatterns() as $label => $pattern) {
+            preg_match_all($pattern, $text, $found);
+            self::assertNotEmpty($found[1], "COMPARISON.md no longer states the candy-code hook event count in its {$label}");
+
+            foreach ($found[1] as $word) {
+                self::assertSame(
+                    $live,
+                    self::countValue($word),
+                    "COMPARISON.md quotes '{$word}' hook events in its {$label} while the HookEvent enum has {$live}"
+                );
+            }
+        }
+    }
+
+    /**
+     * REGRESSION: each pinned spelling must read a stale figure. Without this, a
+     * pattern that stopped matching its row would leave the live assertion above
+     * checking nothing, and the page could keep "16" in that row forever.
+     */
+    public function testEachComparisonHookCountSpellingReadsAStaleFigure(): void
+    {
+        $fixtures = [
+            'comparison against Claude Code' => '15 hook events vs Claude Code',
+            'breadth bullet' => '- **Breadth.** hooks (15 events; command, HTTP and prompt kinds fire)',
+            'HK-02 scoreboard row' => '| HK-02 | Events supported (list them) | ✅ 15 events: Pre/PostToolUse, Stop |',
+            'HK-02 detail bullet' => '- **candy-code** ✅ — All 15 events have production dispatch sites; UserPromptSubmit',
+            'hook comparison table' => '| Events | 15 (Pre/PostToolUse, Stop, SubagentStop) | 33 |',
+        ];
+
+        $patterns = self::comparisonHookEventPatterns();
+        self::assertSame(array_keys($patterns), array_keys($fixtures), 'the pinned hook-count spellings and their fixtures have drifted apart');
+
+        foreach ($fixtures as $label => $line) {
+            self::assertSame(1, preg_match($patterns[$label], $line, $found), "the {$label} pattern no longer reads its row");
+            self::assertSame(15, self::countValue($found[1]), "the {$label} pattern does not read the count it captures");
+        }
+    }
+
+    public function testTheMcpServeRosterOnThePageIsTheRosterTheServerServes(): void
+    {
+        self::assertSame(
+            1,
+            preg_match('/read-only tool roster \(([^)]*)\)/', strip_tags(self::body()), $listed),
+            'the body no longer names the mcp serve read-only roster — re-pin this leg with the page'
+        );
+
+        $named = array_map('trim', explode(',', $listed[1]));
+        $served = McpServeRoster::NAMES;
+        sort($named);
+        sort($served);
+        self::assertSame($served, $named, 'the body names an MCP read-only roster that differs from McpServeRoster::NAMES');
+    }
+
+    public function testEveryShippedExampleHasADemoGifOnThePage(): void
+    {
+        $examples = array_map('basename', glob(self::EXAMPLES . '/*.php') ?: []);
+        self::assertNotEmpty($examples, 'the examples directory is empty or unreadable');
+
+        // The claim is scoped to the PHP examples, and the glob above is too. The
+        // workflow YAML under examples/workflows/ has no tape, so an unqualified
+        // "every example" would be false; the scope sentence must stay on the page.
+        self::assertStringContainsString(
+            'every PHP example shipped with the app',
+            self::body(),
+            'the body no longer scopes its demo claim to the PHP examples this leg checks'
+        );
+        self::assertStringContainsString(
+            '<code>examples/workflows/</code> ships without a recording',
+            self::body(),
+            'the body no longer says the workflow YAML ships without a recording'
+        );
+
+        $tapes = glob(self::VHS . '/*.tape') ?: [];
+        $tapeText = implode("\n", array_map(static fn (string $tape): string => (string) file_get_contents($tape), $tapes));
+
+        $unrecorded = [];
+        foreach ($examples as $example) {
+            if (!str_contains($tapeText, 'examples/' . $example)) {
+                $unrecorded[] = $example;
+            }
+        }
+        self::assertSame([], $unrecorded, 'the body says every shipped example has a demo, but no .vhs tape runs these: ' . implode(', ', $unrecorded));
+
+        preg_match_all('#\.vhs/([\w-]+)\.gif#', self::body(), $shown);
+        $gifs = array_values(array_unique($shown[1]));
+        $recorded = array_map(static fn (string $tape): string => basename($tape, '.tape'), $tapes);
+        sort($gifs);
+        sort($recorded);
+        self::assertSame($recorded, $gifs, 'the demo grid on the page does not show exactly one GIF per .vhs tape');
     }
 
     public function testHyphenatedCompoundCountsAreReadWholeAndValuedAsOneNumber(): void

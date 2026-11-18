@@ -129,7 +129,7 @@ final class WebhookDispatcherTest extends TestCase
     public function testFiveXxClimbsTheBackoffLadderThenGivesUp(): void
     {
         // Geometric stand-in for the 50/80/110 ms rungs the array used to spell out.
-        $ladder = Backoff::new(50.0, 1.6)->withAttempts(3);
+        $ladder = Backoff::new(50.0, 1.6)->withAttempts(4);
         $dispatcher = $this->dispatcher(
             [['status' => 500], ['status' => 502], ['status' => 503], ['status' => 500]],
             $ladder,
@@ -166,11 +166,34 @@ final class WebhookDispatcherTest extends TestCase
         self::assertSame(2.0, $policy->secondsForAttempt(1));
         self::assertSame(8.0, $policy->secondsForAttempt(2));
         self::assertSame(30.0, $policy->secondsForAttempt(3));
-        self::assertTrue($policy->allows(2), 'the third retry is still owed');
-        self::assertFalse($policy->allows(3), 'the delivery is given up after three retries');
+        self::assertSame(4, $policy->attempts, 'four total attempts: the first send plus three retries');
+        self::assertTrue($policy->allows(3), 'the third failure still earns a retry');
+        self::assertFalse($policy->allows(4), 'the fourth failure gives the delivery up');
         self::assertSame(10.0, WebhookDispatcher::POST_TIMEOUT_SECONDS);
         self::assertSame(2.0, WebhookDispatcher::CONNECT_TIMEOUT_SECONDS);
         self::assertSame(128, WebhookDispatcher::DEFAULT_QUEUE_LIMIT);
+    }
+
+    /**
+     * Regression: the dispatcher handed Backoff the retry count where the
+     * contract takes the 1-based failure index, so a declared budget of N made
+     * N+1 deliveries. A budget of two must be exactly two sends, and the give-up
+     * notice must name the same count.
+     */
+    public function testTheDeclaredAttemptBudgetIsTheNumberOfDeliveries(): void
+    {
+        RuntimeNoticeSink::reset();
+        RuntimeNoticeSink::arm(crossFork: false);
+
+        $dispatcher = $this->dispatcher([['status' => 500], ['status' => 500], ['status' => 200]], Backoff::new(10.0)->withAttempts(2));
+
+        $dispatcher->dispatch($this->event());
+        self::pumpLoopUntil(static fn (): bool => $dispatcher->settled() === 1, 5.0);
+
+        self::assertCount(2, $this->posts, 'withAttempts(2) is two sends, not three');
+        $rows = RuntimeNoticeSink::drain();
+        self::assertCount(1, $rows);
+        self::assertStringContainsString('failed after 2 attempts', $rows[0]);
     }
 
     /**
@@ -211,7 +234,7 @@ final class WebhookDispatcherTest extends TestCase
 
     public function testTransportRejectionRidesTheLadderAndSucceedsQuietly(): void
     {
-        $dispatcher = $this->dispatcher([['reject' => 'connection refused'], ['status' => 200]], Backoff::new(10.0)->withAttempts(1));
+        $dispatcher = $this->dispatcher([['reject' => 'connection refused'], ['status' => 200]], Backoff::new(10.0)->withAttempts(2));
         RuntimeNoticeSink::reset();
         RuntimeNoticeSink::arm(crossFork: false);
 
@@ -238,7 +261,7 @@ final class WebhookDispatcherTest extends TestCase
             ['status' => 200],
             ['status' => 503], ['status' => 503], ['status' => 503], ['status' => 503],
         ];
-        $dispatcher = $this->dispatcher($outcomes, Backoff::new(2.0, 1.0)->withAttempts(3));
+        $dispatcher = $this->dispatcher($outcomes, Backoff::new(2.0, 1.0)->withAttempts(4));
 
         $dispatcher->dispatch($this->event());
         self::pumpLoopUntil(static fn (): bool => $dispatcher->settled() === 1);
@@ -290,7 +313,7 @@ final class WebhookDispatcherTest extends TestCase
         RuntimeNoticeSink::reset();
         RuntimeNoticeSink::arm(crossFork: false);
 
-        $dispatcher = $this->dispatcher([['throw' => true], ['throw' => true], ['throw' => true], ['throw' => true]], Backoff::new(2.0, 1.0)->withAttempts(3));
+        $dispatcher = $this->dispatcher([['throw' => true], ['throw' => true], ['throw' => true], ['throw' => true]], Backoff::new(2.0, 1.0)->withAttempts(4));
 
         self::assertTrue($dispatcher->dispatch($this->event()), 'admitted — its failure is a settled delivery, not an exception');
         self::pumpLoopUntil(static fn (): bool => $dispatcher->settled() === 1, 5.0);

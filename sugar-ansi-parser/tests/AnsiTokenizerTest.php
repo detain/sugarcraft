@@ -333,6 +333,19 @@ final class AnsiTokenizerTest extends TestCase
         $this->assertSame([], $p->flush());
     }
 
+    public function testPendingBytesReportsTheHeldPartial(): void
+    {
+        $p = AnsiTokenizer::new();
+        $this->assertSame(0, $p->pendingBytes());
+        $p->parse("ab\x1b[38;5");
+        $this->assertSame(6, $p->pendingBytes());
+        $p->parse('m');
+        $this->assertSame(0, $p->pendingBytes());
+        $p->parse("\x1b[3");
+        $p->flush();
+        $this->assertSame(0, $p->pendingBytes());
+    }
+
     public function testOscFedOneByteAtATimeMatchesSingleFeed(): void
     {
         // Both BEL and ST terminators, so every resume point sees a different
@@ -412,6 +425,148 @@ final class AnsiTokenizerTest extends TestCase
         $this->assertSame('m', $tokens[0]->final);
         $this->assertSame(Token::TEXT, $tokens[1]->type);
         $this->assertSame('X', $tokens[1]->data);
+    }
+
+    public function testCsiSplitAtEveryByteMatchesSingleFeed(): void
+    {
+        // A held CSI resumes its body walk where it stopped. Every split, and the
+        // byte-wise feed, must agree with the one-shot tokens, including the
+        // controls, DEL, private markers and intermediates the walk steps over.
+        $streams = [
+            "\x1b[31m",
+            "\x1b[?25l",
+            "\x1b[>0;1;2c",
+            "\x1b[=3c",
+            "\x1b[1 q",
+            "\x1b[1;\x0a2H",
+            "\x1b[1\x7f;2m",
+            "\x1b[\x01?5h",
+            "\x1b[1\x18x",
+            "\x1b[1\x1b[2m",
+            "\x1b[1\x80x",
+            "\x1b[12\x0f ;3~",
+            "\x1b[1;\x0a2",
+        ];
+        foreach ($streams as $stream) {
+            $one = AnsiTokenizer::new();
+            $expected = self::coalesceText(array_merge($one->parse($stream), $one->flush()));
+            $this->assertEquals(
+                $expected,
+                self::coalesceText(self::feedOneByteAtATime($stream)),
+                bin2hex($stream) . ' byte-wise',
+            );
+            for ($cut = 1, $n = strlen($stream); $cut < $n; $cut++) {
+                $p = AnsiTokenizer::new();
+                $split = array_merge($p->parse(substr($stream, 0, $cut)), $p->parse(substr($stream, $cut)), $p->flush());
+                $this->assertEquals($expected, self::coalesceText($split), bin2hex($stream) . " cut at $cut");
+            }
+        }
+    }
+
+    public function testHeldCsiBodyIsNotRescannedOnEveryFeed(): void
+    {
+        // Regression: a held CSI was rescanned from its ESC on every feed, so a
+        // long body fed a byte at a time cost quadratic work. Resuming the walk
+        // keeps it linear. The bound is far above the linear cost, so only a
+        // return to the rescan fails it.
+        $body = str_repeat('1', 16384);
+        $stream = "\x1b[" . $body . 'm';
+        $p = AnsiTokenizer::new();
+        $tokens = [];
+        $start = hrtime(true);
+        for ($i = 0, $n = strlen($stream); $i < $n; $i++) {
+            foreach ($p->parse($stream[$i]) as $token) {
+                $tokens[] = $token;
+            }
+        }
+        $elapsed = (hrtime(true) - $start) / 1e9;
+
+        $this->assertCount(1, $tokens);
+        $this->assertSame(Token::CSI, $tokens[0]->type);
+        $this->assertSame($body, $tokens[0]->params);
+        $this->assertLessThan(5.0, $elapsed, 'held CSI body was rescanned per feed');
+    }
+
+    public function testHeldEscIntermediatesAreNotRescannedOnEveryFeed(): void
+    {
+        // Regression: a held ESC prefix of intermediates was rescanned from its
+        // ESC on every feed, so a stream fed a byte at a time cost quadratic
+        // work. The walk now resumes where it stopped; only a return to the
+        // rescan can fail the bound below.
+        $n = 16384;
+        $stream = "\x1b" . str_repeat(' ', $n) . 'm';
+        $p = AnsiTokenizer::new();
+        $tokens = [];
+        $start = hrtime(true);
+        for ($i = 0, $len = strlen($stream); $i < $len; $i++) {
+            foreach ($p->parse($stream[$i]) as $token) {
+                $tokens[] = $token;
+            }
+        }
+        $elapsed = (hrtime(true) - $start) / 1e9;
+
+        $this->assertCount(1, $tokens);
+        $this->assertSame(Token::ESC, $tokens[0]->type);
+        $this->assertSame('m', $tokens[0]->data);
+        $this->assertSame(str_repeat(' ', $n), $tokens[0]->intermediate);
+        $this->assertLessThan(5.0, $elapsed, 'held ESC intermediates were rescanned per feed');
+    }
+
+    public function testHeldEscControlsAreNotRescannedOnEveryFeed(): void
+    {
+        // Regression: the C0 controls after a held ESC were rescanned from the
+        // ESC on every feed. Resuming the walk keeps the cost linear.
+        $n = 16384;
+        $stream = "\x1b" . str_repeat("\x01", $n) . 'c';
+        $p = AnsiTokenizer::new();
+        $tokens = [];
+        $start = hrtime(true);
+        for ($i = 0, $len = strlen($stream); $i < $len; $i++) {
+            foreach ($p->parse($stream[$i]) as $token) {
+                $tokens[] = $token;
+            }
+        }
+        $elapsed = (hrtime(true) - $start) / 1e9;
+
+        $this->assertCount($n + 1, $tokens);
+        for ($i = 0; $i < $n; $i++) {
+            $this->assertSame(Token::CONTROL, $tokens[$i]->type);
+            $this->assertSame("\x01", $tokens[$i]->data);
+        }
+        $this->assertSame(Token::ESC, $tokens[$n]->type);
+        $this->assertSame('c', $tokens[$n]->data);
+        $this->assertLessThan(5.0, $elapsed, 'held ESC controls were rescanned per feed');
+    }
+
+    public function testEscPrefixSplitAtEveryByteMatchesSingleFeed(): void
+    {
+        // The resume walk over a held ESC prefix must agree with the one-shot
+        // pass at every cut: the controls are emitted once, in order, and the
+        // intermediates and DEL the walk steps over never leak as text.
+        $streams = [
+            "\x1b\x01 \x7f(0",
+            "\x1b \x01(\x0a0x",
+            "\x1b\x01\x01c",
+            "\x1b\x01 \x18x",
+            "\x1b \x1bc",
+            "\x1b\x0a[1;2H",
+            "\x1b\x0a \x0a[A",
+            "\x1b#\x01 8z",
+        ];
+        foreach ($streams as $stream) {
+            $one = AnsiTokenizer::new();
+            $expected = self::coalesceText(array_merge($one->parse($stream), $one->flush()));
+            $this->assertEquals(
+                $expected,
+                self::coalesceText(self::feedOneByteAtATime($stream)),
+                bin2hex($stream) . ' byte-wise',
+            );
+            for ($cut = 1, $n = strlen($stream); $cut < $n; $cut++) {
+                $p = AnsiTokenizer::new();
+                $split = array_merge($p->parse(substr($stream, 0, $cut)), $p->parse(substr($stream, $cut)), $p->flush());
+                $this->assertEquals($expected, self::coalesceText($split), bin2hex($stream) . " cut at $cut");
+            }
+        }
     }
 
     public function testEscEscRestartsTheSequence(): void

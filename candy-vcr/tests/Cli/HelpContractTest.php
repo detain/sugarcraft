@@ -93,8 +93,8 @@ final class HelpContractTest extends TestCase
     }
 
     /**
-     * @param array<string> $argv
-     * @param array<string> $cmdArgs
+     * @param list<string> $argv
+     * @param list<string> $cmdArgs
      *
      * @return array{0: int, 1: string, 2: string}
      */

@@ -45,6 +45,17 @@ final class WebsocketUrlTest extends TestCase
         self::assertNull(WebsocketUrl::from('http://[fe80::1%]:8080'));
     }
 
+    public function testPercentEncodedEmptyZoneIdIsRefusedLikeRawEmptyZone(): void
+    {
+        // The %25 spelling of the same empty zone must be refused too, not re-read as zone `25`.
+        self::assertNull(WebsocketUrl::from('http://[fe80::1%25]:8080'));
+    }
+
+    public function testZoneIdWithSpaceIsRefused(): void
+    {
+        self::assertNull(WebsocketUrl::from('http://[fe80::1%25a b]:8080'));
+    }
+
     public function testInvalidIpv6AddressBeforeZoneIdIsRefused(): void
     {
         self::assertNull(WebsocketUrl::from('http://[:::%25eth0]:8080'));

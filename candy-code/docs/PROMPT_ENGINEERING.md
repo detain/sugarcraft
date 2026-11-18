@@ -13,7 +13,13 @@ prompt, in assembly order"); this page is the *why* beside that *what*.
 ## The thirteen slots, in order of record
 
 `Runtime::systemPromptSections()` returns an ordered list of `PromptSection`s, base first and the
-static `<env>` block last. By design there are thirteen slots: the list below is that order. The method skips a conditional slot (agent instructions, the symbol map, the user and project rules, and so on) when its input is absent, so a given launch can send fewer sections than the design lists:
+static `<env>` block last. By design there are thirteen slots: the list below is that order. One
+conditional slot is left unnumbered so the numbers the rest of this page cites keep their meaning:
+agent instructions (`3a`, `<agent-instructions>`, PerSession) sits between items 3 and 4 and joins
+the prompt only when a primary agent preset puts bytes in it, so an agent-preset launch assembles
+fourteen sections. The method skips the other conditional slots (the symbol map, the user
+and project rules, and so on) when their input is absent, so a given launch can send fewer sections
+than the design lists:
 
 1. **Base identity** (`Runtime::basePrompt()`) — the Static heredoc that opens every prompt.
    Unfenced, because it is harness voice with no untrusted input. For the DeepSeek-V4, Qwen3.8
@@ -34,6 +40,10 @@ static `<env>` block last. By design there are thirteen slots: the list below is
    tool implements `PromptGuidance` and contributes a non-empty fragment; with no qualifying tool
    the slot is absent from the list entirely, not rendered empty. Fragments are ordered by
    `name()`, so the bytes cannot depend on registration order. Static.
+3a. **Agent instructions** (`Runtime::systemPromptSections()`, `<agent-instructions>`) — the active
+   primary agent preset's instruction body, behind the tool guidance and ahead of the repo map.
+   Present only when a `PrimaryAgent::apply()` put bytes in it; a foreign-tier preset's body is
+   repository content, so it is escaped and fenced like the other dynamic slots. PerSession.
 4. **Repo map** (`RepoMapBlock`) — fenced `repo-map`; per-session memoized snapshot of derived
    repository facts. `repoMap.enabled: false` leaves the slot out (and skips the walk), and
    `repoMap.maxBytes` moves each section's 8,192-byte budget (`RepoMapBlock::MAX_SECTION_BYTES`);
@@ -539,7 +549,7 @@ six — the count here is the count there, and the discrepancy is recorded rathe
    compound.
 5. **Do not add a user-supplied system-prompt override key.** Roo removed theirs as "footgun
    prompting"; `Config\LayeredSettings` is already right to omit it. The one permitted seam is
-   the plan §6 ruling's `-p --append-system-prompt`: a one-shot, operator-typed APPEND that
+   the ruling that allows `-p --append-system-prompt`: a one-shot, operator-typed APPEND that
    splices one more `<user-rules>`-fenced section at the end of the prompt through the same
    escape and precedence framing as the standing rules — it can add instruction, never replace
    or demote the base prompt, and it is refused without `-p` so it cannot attach to a session

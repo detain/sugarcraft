@@ -233,6 +233,38 @@ final class AsyncProbeTest extends TestCase
         }
     }
 
+    public function testSettledMemoAnswersAtCapWithoutBookingASlot(): void
+    {
+        // A completed child already promoted this TERM to TrueColor. With all
+        // four slots busy the memo must still answer: a hit books nothing, so
+        // the in-flight cap must not flip the verdict under unrelated load
+        // (the cap check used to sit above the memo read, unlike report()).
+        $_ENV['TERM'] = 'xterm-256color';
+        putenv('TERM=xterm-256color');
+        $counter = new \ReflectionProperty(AsyncProbe::class, 'inFlight');
+        $counter->setAccessible(true);
+        $memo = new \ReflectionProperty(AsyncProbe::class, 'settledMemo');
+        $memo->setAccessible(true);
+
+        try {
+            $counter->setValue(null, self::fakeSlots(4, \microtime(true) + 10.0));
+            $memo->setValue(null, ['xterm-256color' => ColorProfile::TrueColor]);
+
+            $resolved = null;
+            AsyncProbe::colorProfile(new \React\EventLoop\StreamSelectLoop())->then(function (ColorProfile $p) use (&$resolved): void {
+                $resolved = $p;
+            });
+
+            $this->assertSame(ColorProfile::TrueColor, $resolved, 'a memo hit must answer even at the cap');
+            $this->assertCount(4, $counter->getValue(), 'a memo hit must neither spawn nor book a slot');
+        } finally {
+            self::clearSlots($counter);
+            $memo->setValue(null, []);
+            unset($_ENV['TERM']);
+            putenv('TERM');
+        }
+    }
+
     public function testStaleSlotsAreReclaimedAndTheAsyncLegSettles(): void
     {
         $_ENV['TERM'] = 'xterm-256color';
@@ -742,6 +774,47 @@ final class AsyncProbeTest extends TestCase
             AsyncProbe::resetForTesting();
             @\unlink($script);
             @\unlink($log);
+        }
+    }
+
+    /**
+     * A signal kill answers no dump, on both doors. The planted child prints a
+     * Tc (truecolor) capability and then SIGKILLs itself; the async door must
+     * settle to the chain answer (Ansi256 for xterm-256color), never promote
+     * from the partial stdout, exactly as Probe::colorProfile() does.
+     */
+    public function testSignalKilledChildWithATcPrefixNeverPromotesAndSettlesToTheChain(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('the planted /bin/sh stub needs a POSIX shell.');
+        }
+
+        AsyncProbe::resetForTesting();
+        $script = $this->plantProbe("#!/bin/sh\nprintf '\\tTc,\\n'\nkill -KILL \$\$\n");
+        $_ENV['TERM'] = 'xterm-256color';
+        putenv('TERM=xterm-256color');
+
+        try {
+            $loop = new \React\EventLoop\StreamSelectLoop();
+            $profile = null;
+            AsyncProbe::colorProfile($loop)->then(function (ColorProfile $p) use (&$profile): void {
+                $profile = $p;
+            });
+            $this->runUntilSettled($loop, $profile);
+
+            $this->assertSame(
+                ColorProfile::Ansi256,
+                $profile,
+                'a signal-killed child answers no dump: the partial Tc prefix must not promote past the chain answer',
+            );
+            $this->assertSame(
+                [],
+                (new \ReflectionProperty(AsyncProbe::class, 'settledMemo'))->getValue(),
+                'a signal-killed child mints no memo entry',
+            );
+        } finally {
+            AsyncProbe::resetForTesting();
+            @\unlink($script);
         }
     }
 

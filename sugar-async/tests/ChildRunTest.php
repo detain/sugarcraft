@@ -84,6 +84,22 @@ final class ChildRunTest extends TestCase
         $this->assertLessThan(5.0, $this->now() - $t0, 'the kill ladder must bound the run');
     }
 
+    public function testAFloodingChildPastTheDeadlineIsReportedAsTimedOutInBoundedTime(): void
+    {
+        $this->requirePosixPipes();
+        // Regression: the expiry sweep walked each pipe to EOF, so a child that
+        // kept writing (a large git log -p or diff) never returned control.
+        $t0 = $this->now();
+        $r = ChildRun::new($this->php('while (true) { fwrite(STDOUT, str_repeat("y", 65536)); }'))
+            ->withTimeout(0.5)
+            ->withMaxBytes(4096)
+            ->run();
+
+        $this->assertSame(ChildResult::TIMED_OUT, $r->status);
+        $this->assertTrue($r->timedOut());
+        $this->assertLessThan(5.0, $this->now() - $t0, 'the sweep must not run on past the budget');
+    }
+
     public function testAChildThatClosesItsOutputButLingersIsKilledAsTimedOut(): void
     {
         $this->requirePosixPipes();

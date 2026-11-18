@@ -258,6 +258,35 @@ final class BundleInstallScopeTest extends TestCase
         self::assertSame(['alpha'], $this->listed($this->project . '/.candy-code/bundles'), 'no .swap- or .install- residue');
     }
 
+    public function testUpdateFromASubdirectoryRefreshesTheRepositoryProjectTierByNameAndUnnamed(): void
+    {
+        $repo = $this->gitRepo('repo');
+        $src = $repo . '/src';
+        mkdir($src, 0777, true);
+        $source = $this->addPathMarketplace('demo', 'alpha');
+        $this->inDirectory($repo, function (): void {
+            self::assertSame(NonInteractive::EXIT_OK, $this->verb('install', 'alpha@demo', '--project'));
+        });
+        ProjectRoot::forget();
+
+        file_put_contents($source . '/plugins/alpha/UPSTREAM.txt', 'v2 for alpha');
+        [$exit, $out] = $this->inDirectory($src, fn (): array => $this->verbCapture('update'));
+
+        self::assertSame(NonInteractive::EXIT_OK, $exit);
+        self::assertSame(1, substr_count($out, 'Updated bundle alpha from'), 'an unnamed update from a subdirectory reaches the repository project tier');
+        self::assertSame('v2 for alpha', file_get_contents($repo . '/.candy-code/bundles/alpha/UPSTREAM.txt'));
+        self::assertDirectoryDoesNotExist($src . '/.candy-code', 'an update must not make the subdirectory its own project root');
+
+        file_put_contents($source . '/plugins/alpha/UPSTREAM.txt', 'v3 for alpha');
+        self::assertSame(
+            NonInteractive::EXIT_OK,
+            $this->inDirectory($src, fn (): int => $this->verb('update', 'alpha')),
+            'a named update from a subdirectory finds the repository project bundle',
+        );
+        self::assertSame('v3 for alpha', file_get_contents($repo . '/.candy-code/bundles/alpha/UPSTREAM.txt'));
+        self::assertDirectoryDoesNotExist($this->root . '/alpha', 'an update must not move a project bundle into the user root');
+    }
+
     public function testUpdateOfAProjectBundleWithNoOwnedHomeIsRefusedByNameAndLeftWhereItIs(): void
     {
         $source = $this->addPathMarketplace('demo', 'alpha');

@@ -1689,6 +1689,9 @@ cannot add a tool that `Bootstrap::tools()` did not build — but its effect is
 defined by what it *omits*, so `allowedTools: ["Bash"]` deletes <!-- tools:others:begin -->all thirty-seven of the others a plain launch builds — `Read`, `Edit`, `Glob`, `Grep`, `Write`, `WebFetch`, `WebSearch`, `doctor`, `Skill`, `Lsp`, `Memory`, `RepoMap`, `Prune`, `Todo`, `Compress`, `Workflow`, `Recall`, `Team`, `ApplyPatch`, `AskUser`, `PlanExit`, `SendMessage`, `Subagents`, `InterruptAgent`, `GenerateImage`, `GenerateVideo`, `PtyRun`, `Ls`, `ShellOutput`, `ShellStop`, `Schedule`, `skills_search`, `SkillWorkshop`, `Canvas`, `Script`, `ShellSend` and `NotebookEdit` —<!-- tools:others:end --> in one line, and what the model does next is the
 same work through `Bash`, which reaches the permission gate as opaque shell text
 instead of as a reviewable path. Strictly fewer tools, strictly coarser review.
+`Task` is the one built-in the whitelist cannot reach: it is appended after the
+filter (`LaunchContext::tools()`), so a chat launched with an agent manager keeps
+sub-agent spawning under `allowedTools: ["Bash"]` too.
 
 Its sibling `disabledTools` *is* available to a trusted project — with a
 caveat about how its names actually match.
@@ -2252,7 +2255,8 @@ one.
 ### Exit codes and the JSON document
 
 The same three exit codes govern every subcommand below, except that
-`candy-code workflow run` also exits `3`, explained after the table.
+`candy-code workflow run` and `candy-code workflow resume` also exit `3`,
+explained after the table.
 
 | exit | meaning |
 | --- | --- |
@@ -2266,9 +2270,10 @@ retries on `1` would otherwise retry it forever. It also covers a subcommand
 handed a missing or unknown operand (`candy-code session`, `candy-code mcp
 bogus`, `candy-code completion tcsh`).
 
-`workflow run` exits `3` when a run stopped for a person: a verification stage
-escalated, or a cooperative signal pause completed. That code is not one of the
-shared `NonInteractive` codes, so it sits outside the table.
+`workflow run` and `workflow resume` both exit `3` when a run stopped for a
+person: a verification stage escalated, or a cooperative signal pause completed.
+That code is not one of the shared `NonInteractive` codes, so it sits outside
+the table.
 
 A stop by signal is outside this table, and the TUI is the
 surface that reports it: when SIGINT, SIGTERM or SIGHUP ends the loop, the
@@ -2617,7 +2622,9 @@ candy-code usage [7|30|all]          # the durable spend ledger folded by day an
                                      #   emits the facts map behind the page
 candy-code workflow run <name> [--param k=v | --param k:=json]...   # run a saved workflow to completion headlessly;
                                      #   lint errors refuse it (exit 1, nothing dispatched);
-                                     #   a paused run prints its resume id and exits 3
+                                     #   a run stopped for a person (an escalated verification
+                                     #   stage or a signal pause) prints its resume id and exits 3;
+                                     #   a budget-stop pause exits 1
 candy-code workflow status <name>    # live, remembered, or paused — the engine's own answer
 candy-code workflow resume <id>      # replay the recorded pause file; refuses records that
                                      #   are live in another process
@@ -3020,11 +3027,11 @@ final class MyProvider implements ProviderInterface
 ## Accessor deprecation
 
 Per the house bare-accessor convention (`AGENTS.md`: *"Bare accessors (no* `get`*"),
-ruling 3b), the 2026-10-24 remediation pass renamed 55 public `get*()` accessors
+a rename pass moved 55 public `get*()` accessors
 across 27 classes to their bare twins. The 23 forwarders on the `Agents`/`Workflows`
 classes (`AgentManager`, `AgentWorkerPool`, `Mailbox`, `TaskList`, `Team`,
-`TeamManager`, `Teammate`, `WorkflowEngine`, `WorktreeManager`) were swept in the
-2026-11 remediation (G-03) — the bare names are the only API there. The legacy
+`TeamManager`, `Teammate`, `WorkflowEngine`, `WorktreeManager`) were swept to the
+bare names, which are the only API there. The legacy
 names on the remaining classes stay as one-line BC forwarders, each marked `@deprecated` with `REMOVED-IN: 2.0.0` — they will be
 removed in candy-code v2.0.0. Internal call sites in `src/` were switched to the
 bare forms in the same pass.

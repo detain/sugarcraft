@@ -77,6 +77,12 @@ final class ChildPump
     /** Bytes taken per ready pipe per iteration — one non-blocking read. */
     public const READ_BYTES = 8192;
 
+    /**
+     * Bytes the expiry sweep may take from one pipe: the default Linux pipe
+     * capacity, so everything a quiet child left buffered is taken in full.
+     */
+    public const SWEEP_BYTES = 65536;
+
     /** Consecutive failed selects ridden out before giving up. */
     public const SELECT_RETRIES = 128;
 
@@ -466,16 +472,66 @@ final class ChildPump
 
         if ($reason === DrainResult::EXPIRED || $reason === DrainResult::RETRY_BUDGET_GONE) {
             // Sweep what is already buffered in the kernel before letting go:
-            // a partial reason beats none. Non-blocking, so it cannot park.
+            // a partial reason beats none.
             foreach ($open as $slot => $pipe) {
-                $rest = @stream_get_contents($pipe);
-                if (is_string($rest) && $rest !== '') {
-                    $capture->offer($slot, $rest);
-                }
+                $this->sweepPipe($slot, $pipe, $capture);
             }
         }
 
         return $capture->result($reason);
+    }
+
+    /**
+     * The expiry sweep for one pipe: takes what the kernel already holds, up to
+     * {@see SWEEP_BYTES}, then stops. It never walks to EOF: a child still writing
+     * past its deadline refills the pipe as fast as it is read, so such a walk
+     * never ends and buffers without bound. A pipe still yielding past the budget
+     * is one that keeps refilling, so the unread remainder is recorded as
+     * truncation instead of being lost without a trace.
+     *
+     * @param resource $pipe
+     */
+    private function sweepPipe(int|string $slot, $pipe, ChildCapture $capture): void
+    {
+        $budget = self::SWEEP_BYTES;
+        while ($budget > 0) {
+            $chunk = fread($pipe, min(self::READ_BYTES, $budget));
+            if ($chunk === false || $chunk === '') {
+                return;
+            }
+            $capture->offer($slot, $chunk);
+            $budget -= strlen($chunk);
+        }
+
+        // The budget is spent: one peek tells a pipe that just ended from one with bytes left.
+        $peek = fread($pipe, self::READ_BYTES);
+        if ($peek !== false && $peek !== '') {
+            $capture->offer($slot, $peek);
+            $capture->unread($slot);
+        }
+    }
+
+    /**
+     * One read of whatever each pipe has available now; true when any pipe gave bytes.
+     *
+     * @param array<int, resource> $pipes
+     */
+    private function readPolledPass(array $pipes, ChildCapture $capture): bool
+    {
+        $got = false;
+        foreach ($pipes as $slot => $pipe) {
+            // A socket among the pipes reports fstat size 0, but it was
+            // made non-blocking above, so a plain read answers at once.
+            $chunk = self::isSocket($pipe)
+                ? (string) @fread($pipe, self::READ_BYTES)
+                : WindowsPipes::readAvailable($pipe, self::READ_BYTES);
+            if ($chunk !== '') {
+                $capture->offer($slot, $chunk);
+                $got = true;
+            }
+        }
+
+        return $got;
     }
 
     /**
@@ -499,6 +555,10 @@ final class ChildPump
 
             $now = $clock();
             if ($now >= $deadline) {
+                // Same sweep as the select arm: bytes that landed in the last nap
+                // before the deadline are kept, not dropped with the pipe.
+                $this->readPolledPass($pipes, $capture);
+
                 return $capture->result(DrainResult::EXPIRED);
             }
 
@@ -514,18 +574,7 @@ final class ChildPump
                 $exitedAt = $now;
             }
 
-            $got = false;
-            foreach ($pipes as $slot => $pipe) {
-                // A socket among the pipes reports fstat size 0, but it was
-                // made non-blocking above, so a plain read answers at once.
-                $chunk = self::isSocket($pipe)
-                    ? (string) @fread($pipe, self::READ_BYTES)
-                    : WindowsPipes::readAvailable($pipe, self::READ_BYTES);
-                if ($chunk !== '') {
-                    $capture->offer($slot, $chunk);
-                    $got = true;
-                }
-            }
+            $got = $this->readPolledPass($pipes, $capture);
 
             if ($exitedAt !== null && (!$got || $now - $exitedAt >= WindowsPipes::EXIT_DRAIN_GRACE_SECONDS)) {
                 return $capture->result(DrainResult::CLOSED);

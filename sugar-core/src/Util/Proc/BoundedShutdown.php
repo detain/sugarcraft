@@ -72,6 +72,15 @@ final class BoundedShutdown
      */
     public const REAP_POLL_SECONDS = 0.25;
 
+    /**
+     * When each group last had a live member seen by a /proc walk, keyed by pgid.
+     * A walk costs tens of milliseconds on a busy host and the async ladders ask
+     * on every 5 ms tick, so the answer is reused for REAP_POLL_SECONDS.
+     *
+     * @var array<int, float>
+     */
+    private static array $groupScannedAt = [];
+
     private function __construct()
     {
     }
@@ -119,16 +128,16 @@ final class BoundedShutdown
 
         $exitCode = null;
 
-        // Already exited on its own — the overwhelmingly common case. Skip
+        // Already gone on its own — the overwhelmingly common case. Skip
         // straight to the reap so a normal completion pays no signal at all
         // and none of the escalation budget.
-        if (!self::exited($process, $exitCode)) {
+        if (!self::gone($process, $groupPid, $exitCode)) {
             self::escalate(
                 static function (int $signal) use ($process, $groupPid): void {
                     self::signal($process, $groupPid, $signal);
                 },
-                static function () use ($process, &$exitCode): bool {
-                    return self::exited($process, $exitCode);
+                static function () use ($process, $groupPid, &$exitCode): bool {
+                    return self::gone($process, $groupPid, $exitCode);
                 },
                 $graceSeconds,
                 $killGraceSeconds,
@@ -167,7 +176,7 @@ final class BoundedShutdown
         }
 
         $exitCode = null;
-        if (self::exited($process, $exitCode)) {
+        if (self::gone($process, $groupPid, $exitCode)) {
             return true;
         }
 
@@ -175,10 +184,10 @@ final class BoundedShutdown
             static function (int $signal) use ($process, $groupPid): void {
                 self::signal($process, $groupPid, $signal);
             },
-            static function () use ($process): bool {
+            static function () use ($process, $groupPid): bool {
                 $code = null;
 
-                return self::exited($process, $code);
+                return self::gone($process, $groupPid, $code);
             },
             $graceSeconds,
             $killGraceSeconds,
@@ -234,10 +243,11 @@ final class BoundedShutdown
     /**
      * {@see escalate()} driven by loop timers instead of `usleep()`: each wait
      * ticks on $loop at the poll cadence, so a wedged child costs the loop
-     * nothing while it waits. A gateway that recycles hosts on its own event
-     * loop cannot afford the sync ladder, which would freeze every other
-     * connection for up to both budgets. CLI call sites keep the sync variant:
-     * they have no loop to yield to.
+     * nothing while it waits, provided $isGone itself is cheap: it runs on the
+     * loop every tick. A gateway that recycles hosts on its own event loop
+     * cannot afford the sync ladder, which would freeze every other connection
+     * for up to both budgets. CLI call sites keep the sync variant: they have
+     * no loop to yield to.
      *
      * Same rung order and the same literal-9 doctrine. $done receives whether
      * the child is gone by the end of the budgets.
@@ -308,6 +318,12 @@ final class BoundedShutdown
      * Trade-off: that poll is a loop timer, so a child that never dies holds
      * the loop open; a caller that must exit regardless cancels its own work.
      *
+     * The group probe on this path is {@see groupEmpty()} with `$walkProc`
+     * false: one `kill(-pgid, 0)` per tick and never a /proc walk. A group whose
+     * members linger as zombies (no reaper collects them) therefore reads
+     * non-empty and runs the full budget, then falls through to the reap poll.
+     * The price is that latency, paid on a timer, never a loop freeze.
+     *
      * An already-exited child is answered at once with no signal spent, and a
      * non-resource argument answers null, matching the sync contract.
      *
@@ -336,7 +352,7 @@ final class BoundedShutdown
         // Reap in every branch: the status poll only captures the exit code, it
         // does not release the handle, and a skipped proc_close() leaks it.
         $exitCode = null;
-        if (self::exited($process, $exitCode)) {
+        if (self::gone($process, $groupPid, $exitCode, false)) {
             $reaped = \proc_close($process);
             $finish($exitCode ?? $reaped);
 
@@ -348,8 +364,8 @@ final class BoundedShutdown
             static function (int $signal) use ($process, $groupPid): void {
                 self::signal($process, $groupPid, $signal);
             },
-            static function () use ($process, &$exitCode): bool {
-                return self::exited($process, $exitCode);
+            static function () use ($process, $groupPid, &$exitCode): bool {
+                return self::gone($process, $groupPid, $exitCode, false);
             },
             static function (bool $gone) use ($loop, $process, &$exitCode, $finish): void {
                 // Only a poll that saw the exit may take the blocking reap: then
@@ -672,6 +688,111 @@ final class BoundedShutdown
         }
 
         \proc_terminate($process, $signal);
+    }
+
+    /**
+     * "Is the child gone?" for a handle, and for a containment-wrapped child
+     * also "is its process group empty?".
+     *
+     * The leader exiting is not enough. A descendant that ignores SIGTERM
+     * outlives its wrapper, and declaring the child gone at that point would
+     * end the ladder before the signal 9 rung — the only rung that reaches it.
+     * A non-resource is gone by definition, so a handle another teardown
+     * already closed never keeps a poll alive.
+     *
+     * @param mixed $process the value a `proc_open()` call returned
+     * @param bool $walkProc see {@see groupEmpty()}; false on the loop-driven path
+     */
+    private static function gone(mixed $process, ?int $groupPid, ?int &$exitCode, bool $walkProc = true): bool
+    {
+        if (!\is_resource($process)) {
+            return true;
+        }
+
+        if (!self::exited($process, $exitCode)) {
+            return false;
+        }
+
+        return $groupPid === null || self::groupEmpty($groupPid, $walkProc);
+    }
+
+    /**
+     * Whether no live member remains in the process group $groupPid.
+     *
+     * Public so a sibling ladder (candy-code's ProcessReaper) applies the same
+     * group rule instead of its own leader-only check. An empty group answers
+     * at once; a non-empty one is re-scanned at most every
+     * {@see REAP_POLL_SECONDS}, and between scans it answers "not empty".
+     * The ladder therefore notices a drained group up to one poll cadence late,
+     * which is the price of not walking /proc on every 5 ms tick.
+     *
+     * With $walkProc false the /proc walk is skipped entirely: the answer is the
+     * kernel's `kill(-pgid, 0)` alone, so a zombie member counts as live until
+     * its parent reaps it. That is the probe a loop-driven ladder can afford.
+     * A full /proc walk costs tens of milliseconds on a busy host, and on the
+     * event loop it would freeze every other connection once per cadence.
+     */
+    public static function groupEmpty(int $groupPid, bool $walkProc = true): bool
+    {
+        if (!\function_exists('posix_kill') || !@\posix_kill(-$groupPid, 0)) {
+            unset(self::$groupScannedAt[$groupPid]);
+
+            return true;
+        }
+
+        if (!$walkProc) {
+            return false;
+        }
+
+        $now = self::now();
+        if (isset(self::$groupScannedAt[$groupPid]) && $now - self::$groupScannedAt[$groupPid] < self::REAP_POLL_SECONDS) {
+            return false;
+        }
+
+        if (self::noLiveMemberScanned($groupPid)) {
+            unset(self::$groupScannedAt[$groupPid]);
+
+            return true;
+        }
+
+        self::$groupScannedAt[$groupPid] = $now;
+
+        return false;
+    }
+
+    /**
+     * The /proc half of {@see groupEmpty()}: no member outside states Z and X.
+     *
+     * `kill(-pgid, 0)` answers true for a ZOMBIE as well as a live process, and
+     * a zombie waiting on a reaper that is slow to act would otherwise hold the
+     * ladder open for its whole budget. So members in state Z (or X) are
+     * skipped when /proc can be read; without /proc the probe stays conservative
+     * and counts them.
+     */
+    private static function noLiveMemberScanned(int $groupPid): bool
+    {
+        $stats = @\glob('/proc/[0-9]*/stat');
+        if ($stats === false || $stats === []) {
+            return false;
+        }
+
+        foreach ($stats as $statFile) {
+            $stat = @\file_get_contents($statFile);
+            if ($stat === false) {
+                continue;
+            }
+            // "pid (comm) state ppid pgrp ..." — comm may hold spaces and parens,
+            // so the match anchors on the LAST ") " before the fixed-shape tail.
+            if (\preg_match('/^\d+ \(.*\) ([A-Za-z]) \d+ (\d+) /s', $stat, $m) === 1
+                && (int) $m[2] === $groupPid
+                && $m[1] !== 'Z'
+                && $m[1] !== 'X'
+            ) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
