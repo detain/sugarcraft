@@ -49,13 +49,16 @@ final class RootModelWithScreenStack implements Model, ScreenStackCapable
     public function withScreens(ScreenStack $screens): self
     {
         $next = clone $this;
-        if ($this->screens->isEmpty() && !$screens->isEmpty()) {
-            $next->baseLayer = $this->currentModel;
-        }
         $next->screens = $screens;
         if ($screens->isEmpty()) {
-            $next->currentModel = $this->baseLayer;
-            $next->baseLayer = null;
+            // Still empty: the base is already the active model, nothing to restore.
+            if (!$this->screens->isEmpty()) {
+                $next->currentModel = $this->baseLayer;
+                $next->baseLayer = null;
+            }
+        } elseif ($this->screens->isEmpty()) {
+            $next->baseLayer = $this->currentModel;
+            $next->currentModel = $screens->current()->model;
         } else {
             $next->currentModel = $screens->current()->model;
         }

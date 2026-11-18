@@ -114,6 +114,15 @@ final class RootModelBaseLayerRestoreTest extends TestCase
         $this->assertSame('base n=4', $next->view());
     }
 
+    public function testWithScreensEmptyOverAnEmptyStackKeepsTheBase(): void
+    {
+        $base = new BaseRestoreCounterModel(6);
+        $next = (new RootModelWithScreenStack(currentModel: $base))->withScreens(new ScreenStack());
+
+        $this->assertSame($base, $next->currentModel, 'an empty write over an empty stack must not drop the base');
+        $this->assertSame('base n=6', $next->view());
+    }
+
     public function testWithScreensPushingOverABaseParksIt(): void
     {
         $base = new BaseRestoreCounterModel(5);

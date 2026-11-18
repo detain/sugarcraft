@@ -19,6 +19,11 @@ use React\EventLoop\LoopInterface;
  *    the rest wait in one ordered buffer that a write watcher on the loop
  *    drains as the reader catches up. A reader that stalls delays only its
  *    own bytes, never timers, input or other workers.
+ *    The one exception is {@see detach()} and {@see flush()}: they wait on the
+ *    stream synchronously for up to their deadline, so a reader that has
+ *    stalled blocks the loop for that long. Program calls them only where the
+ *    terminal must change hands before the loop may continue (exec, suspend,
+ *    release), and that cost is accepted there.
  *
  * Frame coalescing: every write made while bytes are pending joins the same
  * buffer, so one drain pass sends them in as few syscalls as the stream

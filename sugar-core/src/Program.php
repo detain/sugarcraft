@@ -796,6 +796,13 @@ final class Program
      * a child process, a suspend or an external release. O_NONBLOCK lives on
      * the shared open file description, so a child or the shell would inherit
      * it. Queued bytes go out first.
+     *
+     * This is the one deliberate exception to the Writer's "never blocks the
+     * loop" contract: the flush waits synchronously for up to
+     * Writer::WRITE_WAIT_DEADLINE when the terminal has stopped reading. The
+     * child, the suspend or the release cannot take the terminal while those
+     * bytes are still queued, so deferring the handover to onDrain would only
+     * move the same wait past a point where the terminal is already in use.
      */
     private function detachOutput(): void
     {
