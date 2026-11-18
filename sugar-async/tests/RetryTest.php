@@ -291,6 +291,62 @@ final class RetryTest extends TestCase
         $this->assertSame(1, $n, 'no second dial after cancel');
     }
 
+    public function testReconnectCancelFromRetryHookLeavesNoLiveTimer(): void
+    {
+        // Private loop: run() returns as soon as nothing is armed, so the drain
+        // time is exactly the life of any timer the cancelled cycle left behind.
+        $loop = new \React\EventLoop\StreamSelectLoop();
+        $source = CancellationSource::new();
+        $n = 0;
+        $p = Retry::reconnect(function () use (&$n) {
+            $n++;
+            return reject(new \RuntimeException('x'));
+        }, Backoff::new(2000.0)->withoutJitter()->withAttempts(5), $source->token(), $loop,
+            static function () use ($source): void {
+                $source->cancel();
+            });
+        $err = null;
+        $p->then(null, function (\Throwable $e) use (&$err): void {
+            $err = $e;
+        });
+
+        $start = microtime(true);
+        $loop->run();
+        $drain = microtime(true) - $start;
+
+        $this->assertInstanceOf(OperationCancelledException::class, $err);
+        $this->assertSame(1, $n, 'no second dial after cancel from the hook');
+        $this->assertLessThan(1.0, $drain, 'redial timer armed after the hook cancelled the cycle kept the loop alive');
+    }
+
+    public function testRetryCancelFromProgressHookLeavesNoLiveTimer(): void
+    {
+        // Same shape as the reconnect case: the hook cancels during the backoff
+        // window, so the cancel listener fires before the backoff timer is armed.
+        $loop = new \React\EventLoop\StreamSelectLoop();
+        $source = CancellationSource::new();
+        $n = 0;
+        $p = Retry::retry(function () use (&$n) {
+            $n++;
+            return reject(new \RuntimeException('x'));
+        }, 5, 2.0, $source->token(), null, 0.0, $loop, null,
+            static function () use ($source): void {
+                $source->cancel();
+            });
+        $err = null;
+        $p->then(null, function (\Throwable $e) use (&$err): void {
+            $err = $e;
+        });
+
+        $start = microtime(true);
+        $loop->run();
+        $drain = microtime(true) - $start;
+
+        $this->assertInstanceOf(OperationCancelledException::class, $err);
+        $this->assertSame(1, $n, 'no second attempt after cancel from the hook');
+        $this->assertLessThan(1.0, $drain, 'backoff timer armed after the hook cancelled the cycle kept the loop alive');
+    }
+
     public function testReconnectAlreadyCancelledTokenNeverDials(): void
     {
         $source = CancellationSource::new();
