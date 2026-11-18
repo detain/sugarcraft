@@ -42,7 +42,8 @@ needed for this check:
 candy-code models     # * marks the provider a new session will use
 ```
 
-If the provider has no key, its turns fail with an error. See
+If the selected provider has no key, the agent starts on an offline echo backend:
+turns answer with echo text and a warning that a provider is unavailable. See
 [CREDENTIALS.md](CREDENTIALS.md) to set one up.
 
 ## What the editor gets
@@ -53,7 +54,7 @@ appears in `candy-code session list`, and you can reopen it in the terminal with
 `--resume`.
 
 - **One project per process.** The first session fixes the project root from its
-  `cwd`. An editor that opens a second project gets a refusal. Start another
+  `cwd`. An editor that opens a second project gets a JSON-RPC invalid-params error. Start another
   `candy-code acp` process for it.
 - **Your project's own configuration applies.** candy-code's tools, its
   permission gate and its checkpoints are used. The editor's own file and
@@ -83,7 +84,7 @@ and other messages keep flowing in the meantime.
 
 Cancelling a prompt in the editor stops the turn at once. The running command is
 stopped, tool rows that were running show as interrupted, and any open permission
-question is settled as rejected. The prompt then ends with the `cancelled` stop
+question is settled as cancelled, which never allows the tool call. The prompt then ends with the `cancelled` stop
 reason.
 
 ## Stop reasons you will see
@@ -103,10 +104,10 @@ A turn that fails returns a JSON-RPC error with the cause.
 - The editor's `fs/*` and `terminal/*` methods are not used. candy-code reads
   and writes files through its own tools.
 - Image and audio prompt blocks are not used.
-- Built-in slash commands that need a terminal screen, such as `/theme`,
-  `/keys` or `/settings`, are answered with a refusal that says so. Commands
-  with a host binding, such as `/help`, answer normally. Other slash commands
-  work as they do in `serve`.
+- Built-in slash commands with no host binding are refused with a message that
+  the command runs only in a terminal. That includes `/theme`, `/keys` and
+  `/settings`, which need a screen, and others such as `/sessions`, `/compress`
+  and `/copy`. Commands with a host binding, such as `/help`, answer normally.
 
 ## Troubleshooting
 
@@ -116,7 +117,7 @@ A turn that fails returns a JSON-RPC error with the cause.
 | `candy-code acp` exits with code `2` | It was given an operand, or `--output-format json`. The protocol is the output, so no format flag applies. Remove them from the arguments |
 | The editor shows an agent log full of warnings | Anything PHP prints goes to stderr, which the editor shows as the agent's log. Those lines are not protocol errors. The protocol runs on stdout only |
 | Every turn ends `refusal` | The spend cap is reached. `/budget` in the TUI shows the cap. A prompt with no text is a JSON-RPC invalid-params error, not a refusal |
-| Every turn fails with a provider error | No provider is configured for this process. Run `candy-code models` and `candy-code login <provider>` in a terminal, then restart the editor's agent |
+| Turns answer with offline echo text and a warning that a provider is unavailable | No provider is configured, or the selected provider has no key. Run `candy-code models` and `candy-code login <provider>` in a terminal, then restart the editor's agent |
 | A second project will not open | One process serves one project root. Start another `candy-code acp` for it |
 
 ## See also
