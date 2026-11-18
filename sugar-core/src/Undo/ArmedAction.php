@@ -41,12 +41,16 @@ final class ArmedAction
      * @param string               $kind        Application-defined action name, such as "delete".
      * @param string               $prompt      The text shown while the gate is armed.
      * @param array<string, mixed> $payload     What the action will do when confirmed.
-     * @param string               $localeAffirmative  Extra confirming word for the active locale.
-     *                                          The word is lower-cased before matching,
-     *                                          so `J` and `j` configure the same key. The
-     *                                          typed keystroke is compared as typed, so a
-     *                                          capital `J` does not confirm, as with `Y`.
-     *                                          An empty string adds nothing.
+     * @param string               $localeAffirmative  Extra confirming key for the active locale.
+     *                                          It must be exactly one character, because a
+     *                                          confirmation is one keystroke and a longer word
+     *                                          could never match. The word is lower-cased
+     *                                          before matching, so `J` and `j` configure the
+     *                                          same key. The typed keystroke is compared as
+     *                                          typed, so a capital `J` does not confirm, as
+     *                                          with `Y`. An empty string adds nothing.
+     * @throws \InvalidArgumentException When $localeAffirmative is not one character
+     *                                   once lower-cased.
      */
     public static function new(
         string $kind,
@@ -54,6 +58,13 @@ final class ArmedAction
         array $payload = [],
         string $localeAffirmative = '',
     ): self {
+        if ($localeAffirmative !== '' && mb_strlen(mb_strtolower($localeAffirmative)) !== 1) {
+            throw new \InvalidArgumentException(sprintf(
+                'ArmedAction locale affirmative must be a single character, got "%s".',
+                $localeAffirmative,
+            ));
+        }
+
         return new self($kind, $prompt, $payload, $localeAffirmative);
     }
 

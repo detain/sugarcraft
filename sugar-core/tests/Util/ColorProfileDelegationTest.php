@@ -80,4 +80,65 @@ final class ColorProfileDelegationTest extends TestCase
             fclose($tmp);
         }
     }
+
+    /**
+     * The no-argument detect() snapshots the process, so the keys the chain
+     * reads from that snapshot must be in the roster. Chain-independent: it
+     * inspects the roster directly, so it runs without sugar-colorprofile.
+     */
+    public function testDefaultEnvCarriesTheMultiplexerAndCloudShellKeys(): void
+    {
+        $keys = ['TMUX', 'STY', 'GOOGLE_CLOUD_SHELL'];
+        $restore = [];
+        foreach ($keys as $key) {
+            $restore[$key] = getenv($key);
+            putenv($key . '=sc-probe');
+        }
+        try {
+            $method = new \ReflectionMethod(ColorProfile::class, 'defaultEnv');
+            $collected = $method->invoke(null);
+            foreach ($keys as $key) {
+                $this->assertSame('sc-probe', $collected[$key] ?? null, "{$key} must reach the chain");
+            }
+        } finally {
+            foreach ($restore as $key => $value) {
+                if ($value === false) {
+                    putenv($key);
+                } else {
+                    putenv($key . '=' . $value);
+                }
+            }
+        }
+    }
+
+    /** TMUX with a screen TERM is a chain rung, so a no-argument detect() must see it. */
+    public function testNoArgumentDetectMatchesTheChainOnAMultiplexerEnvironment(): void
+    {
+        if (!self::chainPresent()) {
+            $this->markTestSkipped('sugar-colorprofile not installed; parity leg unreachable');
+        }
+        $restore = [];
+        foreach (['TMUX' => '/tmp/tmux-1000/default', 'TERM' => 'screen', 'COLORTERM' => false] as $key => $value) {
+            $restore[$key] = getenv($key);
+            if ($value === false) {
+                putenv($key);
+            } else {
+                putenv($key . '=' . $value);
+            }
+        }
+        try {
+            $this->assertSame(
+                \SugarCraft\ColorProfile\DetectionChain::detect()->toColorProfile()->toCore(),
+                ColorProfile::detect(),
+            );
+        } finally {
+            foreach ($restore as $key => $value) {
+                if ($value === false) {
+                    putenv($key);
+                } else {
+                    putenv($key . '=' . $value);
+                }
+            }
+        }
+    }
 }

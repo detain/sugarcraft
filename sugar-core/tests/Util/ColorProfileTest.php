@@ -88,13 +88,17 @@ final class ColorProfileTest extends TestCase
         }
     }
 
-    /** NO_COLOR outranks a force variable: forced output keeps decoration but loses colour. */
-    public function testNoColorBeatsForceOnNonTtyStream(): void
+    /**
+     * With the chain installed a force variable outranks NO_COLOR (the declared
+     * house order, sugar-core README). Without it there is no negotiation, so
+     * the colour-off answer stands: forced output keeps decoration, loses colour.
+     */
+    public function testNoColorAndForceOnNonTtyStreamFollowTheDeclaredOrder(): void
     {
         $tmp = fopen('php://memory', 'r+');
         try {
             $this->assertSame(
-                ColorProfile::Ascii,
+                self::chainPresent() ? ColorProfile::Ansi : ColorProfile::Ascii,
                 ColorProfile::detect(['NO_COLOR' => '1', 'FORCE_COLOR' => '1', 'TERM' => 'xterm'], $tmp),
             );
         } finally {
