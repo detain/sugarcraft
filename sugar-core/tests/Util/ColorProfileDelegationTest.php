@@ -8,9 +8,10 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\ColorProfile;
 
 /**
- * CP-22: detect() delegates to sugar-colorprofile's chain when installed and
- * falls back to the local legacy ladder when not. sugar-core cannot require
- * colorprofile (it requires us), so each leg skips when the other is live.
+ * CP-22: detect() delegates to sugar-colorprofile's chain when installed.
+ * Without it there is no local ladder (P1-10a deleted it) and a terminal
+ * answers Ascii. sugar-core cannot require colorprofile (it requires us), so
+ * each leg skips when the other is live.
  */
 final class ColorProfileDelegationTest extends TestCase
 {
@@ -19,14 +20,21 @@ final class ColorProfileDelegationTest extends TestCase
         return class_exists(\SugarCraft\ColorProfile\DetectionChain::class);
     }
 
-    public function testLegacyLadderWhenColorprofileAbsent(): void
+    public function testColourIsOffWithoutColorprofile(): void
     {
         if (self::chainPresent()) {
-            $this->markTestSkipped('sugar-colorprofile installed; legacy leg unreachable');
+            $this->markTestSkipped('sugar-colorprofile installed; colour-off leg unreachable');
         }
-        $this->assertSame(ColorProfile::TrueColor, ColorProfile::detect(['FORCE_COLOR' => '1', 'TERM' => 'xterm']));
-        $this->assertSame(ColorProfile::NoTty, ColorProfile::detect(['TERM' => 'dumb']));
-        $this->assertSame(ColorProfile::Ansi, ColorProfile::detect(['CI' => 'true']));
+        $this->assertSame(ColorProfile::Ascii, ColorProfile::detect(['FORCE_COLOR' => '1', 'TERM' => 'xterm']));
+        $this->assertSame(ColorProfile::Ascii, ColorProfile::detect(['TERM' => 'dumb']));
+        $this->assertSame(ColorProfile::Ascii, ColorProfile::detect(['CI' => 'true']));
+        $pipe = fopen('php://memory', 'r');
+        try {
+            $this->assertSame(ColorProfile::Ascii, ColorProfile::detect(['FORCE_COLOR' => '1', 'TERM' => 'xterm'], $pipe), 'a force variable passes the TTY gate');
+            $this->assertSame(ColorProfile::NoTty, ColorProfile::detect(['TERM' => 'xterm'], $pipe), 'an unforced pipe is still NoTty');
+        } finally {
+            fclose($pipe);
+        }
     }
 
     public function testDelegatesToChainWhenInstalled(): void

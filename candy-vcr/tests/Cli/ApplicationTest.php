@@ -139,9 +139,11 @@ final class ApplicationTest extends TestCase
             }
         };
 
+        // Reflection, not `new`: the constructor's type forbids a bare Command,
+        // and this test exists to prove the runtime guard refuses it anyway.
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('"bare"');
-        new Application(['bare' => $bare]);
+        (new \ReflectionClass(Application::class))->newInstanceArgs([['bare' => $bare]]);
     }
 
     public function testInspectDumpsCassetteEvents(): void

@@ -377,15 +377,15 @@ final class ThemeTest extends TestCase
     {
         $restore = $this->isolateEnv(['NO_COLOR' => '1', 'CLICOLOR_FORCE' => '1']);
         try {
-            // force + NO_COLOR outranks it → Ascii: decoration, no colour.
-            $ascii = Theme::detect();
-            $this->assertStringNotContainsString('38;2;', $ascii->prompt->render('p'));
+            // CLICOLOR_FORCE outranks NO_COLOR (the chain's order): truecolor.
+            $forced = Theme::detect();
+            $this->assertStringContainsString('38;2;', $forced->prompt->render('p'));
 
-            putenv('NO_COLOR=0'); // same stream, one changed value → fresh
-            $full = Theme::detect();
+            putenv('CLICOLOR_FORCE=0'); // same stream, one changed value → fresh
+            $plain = Theme::detect();
 
-            $this->assertNotSame($ascii, $full, 'a changed env key must never return the memoized answer');
-            $this->assertStringContainsString('38;2;', $full->prompt->render('p'), 'force leg: TrueColor returns');
+            $this->assertNotSame($forced, $plain, 'a changed env key must never return the memoized answer');
+            $this->assertStringNotContainsString('38;2;', $plain->prompt->render('p'), 'NO_COLOR alone drops the truecolor palette');
         } finally {
             $this->restoreEnv($restore);
         }

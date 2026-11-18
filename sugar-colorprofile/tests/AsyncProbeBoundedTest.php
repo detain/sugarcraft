@@ -20,6 +20,15 @@ use SugarCraft\ColorProfile\AsyncProbe;
  */
 final class AsyncProbeBoundedTest extends TestCase
 {
+    protected function tearDown(): void
+    {
+        // plantBinary() stuffs a temp file into InfocmpBinary's static path memo.
+        // Drop the memo so the planted (since unlinked) binary cannot outlive its
+        // test and answer for the next file in the same process.
+        \SugarCraft\ColorProfile\Probe\InfocmpBinary::reset();
+        parent::tearDown();
+    }
+
     private static function src(): string
     {
         $src = file_get_contents(__DIR__ . '/../src/AsyncProbe.php');
@@ -110,6 +119,11 @@ final class AsyncProbeBoundedTest extends TestCase
         self::assertStringNotContainsString("\$process->on('stderr'", $src, 'the dead event name must not return');
         self::assertStringNotContainsString("\$process->on('stdout'", $src, 'the dead event name must not return');
         self::assertStringContainsString('STDERR_CAP_BYTES', $src);
+        // The stderr cut is exact, like stdout: the room left under the
+        // ceiling bounds the appended slice. A per-chunk `strlen < CAP` guard
+        // appends a whole read and overshoots the ceiling (the master shape).
+        self::assertStringContainsString('self::STDERR_CAP_BYTES - \strlen($stderr)', $src, 'the stderr cut must be exact, not per-chunk');
+        self::assertStringNotContainsString('\strlen($stderr) < self::STDERR_CAP_BYTES', $src, 'a per-chunk stderr guard overshoots the ceiling');
     }
 
     public function testChildStdoutIsCappedIntoABoundedBuffer(): void
@@ -118,10 +132,12 @@ final class AsyncProbeBoundedTest extends TestCase
         // grew it without end before the capability scan ever judged it. The
         // pump must carry the same keep-a-prefix guard as stderr: a ceiling
         // check around the append, not a raw concatenation. The behavior-side
-        // pin (a Tc line beyond the cap never lands) is in {@see AsyncProbeTest}.
+        // pin (a Tc line beyond the cap never lands) is in AsyncProbeReportTest
+        // (testStdoutCapIsExactAcrossASingleLargeRead).
         $src = self::src();
         self::assertStringContainsString('self::STDOUT_CAP_BYTES', $src);
-        self::assertStringContainsString('\strlen($stdout) < self::STDOUT_CAP_BYTES', $src);
+        self::assertStringContainsString('self::STDOUT_CAP_BYTES - \strlen($stdout)', $src);
+        self::assertStringNotContainsString('\strlen($stdout) < self::STDOUT_CAP_BYTES', $src, 'a per-chunk append guard overshoots the ceiling');
 
         $const = (new \ReflectionClass(AsyncProbe::class))->getReflectionConstant('STDOUT_CAP_BYTES');
         self::assertNotFalse($const, 'stdout needs its own named ceiling, mirroring stderr');
@@ -275,9 +291,9 @@ final class AsyncProbeBoundedTest extends TestCase
                 'the slot table must drain',
             );
             self::assertSame(
-                [],
+                [$term => null],
                 (new \ReflectionProperty(AsyncProbe::class, 'settledMemo'))->getValue(),
-                'CP-13 contract under a real signal kill: a killed child mints no memo entry',
+                'a grace-killed child is a recorded miss, the sync door\'s verdict for an overrun: the late exit must not overwrite it',
             );
         } finally {
             if ($process !== null && $process->isRunning()) {
@@ -377,6 +393,84 @@ final class AsyncProbeBoundedTest extends TestCase
                 // re-enters itself through the stream-close handler — drive
                 // the same canonical path the library uses (the handler's
                 // single close reaps; an already-closed handle no-ops).
+                $process->stdout?->close();
+                $process->stderr?->close();
+                $process->stdin?->close();
+            }
+            AsyncProbe::resetForTesting();
+            $this->restoreEnv($saved);
+            unset($_ENV['TERM']);
+            \putenv('TERM');
+            @\unlink($path);
+        }
+    }
+
+    /**
+     * The late-exit guard on the colorProfile() surface (the report() twin is
+     * pinned in AsyncProbeReportTest). The child prints a TrueColor cap BEFORE
+     * the deadline, ignores TERM, and is KILLed by the grace rung. The deadline
+     * rung has already settled the caller and booked its recorded miss, so the
+     * late exit must not run the completion closure: without the $laddered
+     * guard that closure reads the printed Tc line and overwrites the miss with
+     * TrueColor, which every later call on this TERM would then serve.
+     */
+    public function testLateExitAfterTheDeadlineRungCannotPromoteTheMemo(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('POSIX signal semantics (trap, SIGKILL) are not available here.');
+        }
+
+        $term = 'xterm-256color';
+        $saved = $this->armCleanEnv();
+        $_ENV['TERM'] = $term;
+        \putenv("TERM={$term}");
+        $path = $this->plantBinary("#!/bin/sh\nprintf '\\tTc,\\n'\ntrap '' TERM\nwhile :; do :; done\n");
+
+        $process = null;
+        $exit = null;
+        $settled = null;
+
+        AsyncProbe::setDeadlinesForTesting(1, 1);
+        try {
+            $loop = new \React\EventLoop\StreamSelectLoop();
+            AsyncProbe::colorProfile($loop)->then(static function (\SugarCraft\ColorProfile\ColorProfile $p) use (&$settled): void {
+                $settled = $p;
+            });
+
+            $capture = $loop->addPeriodicTimer(0.05, static function () use ($loop, &$process, &$capture, &$exit): void {
+                $slots = (new \ReflectionProperty(AsyncProbe::class, 'inFlight'))->getValue();
+                if ($slots === []) {
+                    return;
+                }
+                $process = $slots[array_key_first($slots)]['process'];
+                $process->on('exit', static function (?int $code) use (&$exit): void {
+                    $exit = $code ?? -1;
+                });
+                $loop->cancelTimer($capture);
+            });
+            // Run past the KILL rung (deadline 1 s + grace 1 s) so the late exit is delivered.
+            $loop->addTimer(3.2, static function () use ($loop): void {
+                $loop->stop();
+            });
+            $loop->run();
+
+            self::assertNotNull($process, 'the slot must be capturable before the deadline releases it');
+            self::assertSame(
+                \SugarCraft\ColorProfile\ColorProfile::Ansi256,
+                $settled,
+                'the deadline rung settles the caller with the env rung, not the printed Tc line',
+            );
+            self::assertNotNull($exit, 'the KILLed child must exit inside the run, after the deadline settle');
+            self::assertSame(
+                [$term => null],
+                (new \ReflectionProperty(AsyncProbe::class, 'settledMemo'))->getValue(),
+                'the late exit must not promote the recorded miss to TrueColor',
+            );
+        } finally {
+            if ($process !== null && $process->isRunning()) {
+                $process->terminate(\defined('SIGKILL') ? \SIGKILL : 9);
+            }
+            if ($process !== null) {
                 $process->stdout?->close();
                 $process->stderr?->close();
                 $process->stdin?->close();
