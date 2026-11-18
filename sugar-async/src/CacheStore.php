@@ -24,6 +24,9 @@ final class CacheStore
     /** @var array<string, float>  monotonic clock stamp per key, never the value's own time. */
     public array $storedAt = [];
 
+    /** Epoch bumped by every invalidate() and clear(); see AsyncCache::generation(). */
+    public int $generation = 0;
+
     /**
      * Monotonic-seconds clock shared by every handle on this store, so stamps
      * written through one clone are judged by the same clock through another.

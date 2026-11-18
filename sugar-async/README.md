@@ -516,6 +516,22 @@ $promise = AsyncOps::withTimeout(
 $promise->then(static fn (mixed $v): string => (string) $v);
 ```
 
+### Waiting, polling, rate gates and forked tasks
+
+The loop-side primitives that used to be hand-rolled in each app:
+
+| Primitive | Use it for |
+|---|---|
+| `AsyncOps::deferred(\Closure $fn)` | Run a step on the next loop tick, off the caller's stack; a throw rejects the promise. |
+| `Await::until($promise, $seconds)` | Drive the loop until a promise settles: returns its value, rethrows its rejection, or throws `TimeoutException` (never a silent `null`). Refuses to nest inside another `Await`. |
+| `Poll::until($fn, $backoff, $token)` | Call `$fn` until it answers non-null, spacing attempts by the `Backoff` ladder; the attempt cap of the backoff bounds it. |
+| `Notifier::new($loop)` | `wait($seconds)` resolves on the next `notify()`. A notify with no waiter is kept as one pending signal, so a wake-up between two waits is not lost. |
+| `RateGate::new($seconds, $clock)` | Loop-free `allow(): bool`, true at most once per interval; denied calls do not move the window. |
+| `LoopDeadline::arm($loop, $seconds, $onFire)` | One-shot deadline on the loop; `fired()` and `disarm()`. |
+| `ForkChannel::pair()` and `ForkedTask::run(...)` | A length-prefixed frame channel over a socket pair, and a forked child whose frames reach the parent loop. Settles with the child's exit status; a token or deadline kills the child with SIGKILL. Needs ext-pcntl and ext-posix. |
+
+`AsyncOps` keeps its public names, now forwarding to `Timeouts` (`withTimeout`, `withDeadline`), `Pending` (`pendingNotice`, `boundWait`, `onPending`) and `Retry` (`retry`). `AsyncCache` evicts in O(1) amortized and exposes `generation()`, an epoch advanced by `invalidate()` and `clear()`.
+
 ## AsyncCache
 
 `AsyncCache` is a generic, loop-free cache-aside primitive — loop-free meaning

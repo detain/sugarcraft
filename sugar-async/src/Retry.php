@@ -8,6 +8,8 @@ use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
+use function React\Promise\reject;
+use function React\Promise\resolve;
 
 /**
  * The seats around {@see Backoff} that actually wait: a budgeted synchronous
@@ -16,6 +18,18 @@ use React\Promise\PromiseInterface;
  */
 final class Retry
 {
+    /**
+     * Hard ceiling on a single retry backoff delay (seconds).
+     *
+     * The 2^n ladder plateaus here instead of growing unbounded: past this
+     * horizon a timer is no longer a long wait but a silently-stuck cycle
+     * (StreamSelectLoop clamps one tick to ~2.56 h; ext-uv casts float
+     * intervals toward ints), and the doubling itself outlives every real
+     * outage. onRetry() reports the capped value, so an operator sees the
+     * plateau rather than a fantasy exponent.
+     */
+    public const MAX_BACKOFF_SECONDS = 3600.0;
+
     /** Longest single sleep slice {@see nap()} takes when a beat is wired, microseconds. */
     public const BEAT_SLICE_MICROSECONDS = 1_000_000;
 
@@ -233,5 +247,342 @@ final class Retry
         $attempt(1);
 
         return $deferred->promise();
+    }
+
+    /**
+     * Retry a callable $attempts times in total with exponential backoff.
+     *
+     * Cancel() on the returned promise abandons the whole cycle: backoff
+     * timers are released, no further attempt is scheduled, the current
+     * attempt's promise is cancelled, and the returned promise rejects with
+     * OperationCancelledException. A $token fired mid-attempt does the same
+     * to the visible promise: the in-flight attempt is cancelled, and if the
+     * driver ignores the abort (a hung or canceller-less promise), the wait
+     * rejects immediately with a generic 'Retry cancelled mid-cycle'
+     * OperationCancelledException rather than waiting forever; a cooperative
+     * driver still settles with the stage-specific rejection.
+     *
+     * The attempt cap alone does not bound wall-clock: exponential backoff
+     * (2^n) can stretch a bounded attempt count into an unbounded wait, and a
+     * fleet of clients retrying in lockstep produces a thundering herd. Pass
+     * $maxTotalSeconds to cap total elapsed time across attempts, and $jitter
+     * to randomize each backoff. Both default to the historical behavior
+     * (no cap, no jitter). The ladder itself plateaus at
+     * {@see self::MAX_BACKOFF_SECONDS}: a delay past that ceiling is clamped
+     * to it (and reported to $onRetry clamped), so the cycle can never arm a
+     * beyond-the-horizon forever-timer.
+     *
+     * @param callable(): PromiseInterface $operation  The operation to retry
+     * @param int $attempts  Maximum number of attempts (must be >= 1)
+     * @param float $baseBackoffSeconds  Initial backoff after a failure (seconds)
+     * @param CancellationToken|null $token  Optional cancellation token to abort
+     *        retries — honoured before, during and after each attempt (see above).
+     * @param float|null $maxTotalSeconds  Optional wall-clock budget across all
+     *        attempts. The budget bounds when a NEW attempt may start: a
+     *        backoff that would overshoot the cutoff is clamped to start
+     *        exactly at it, and once the cutoff passes the cycle stops without
+     *        scheduling — rejecting with a TimeoutException naming the
+     *        exhausted budget (the last failure rides along as `previous`), so
+     *        "gave up after the budget" is distinguishable from "the operation
+     *        keeps failing". Null (default) imposes no cap.
+     * @param float $jitter  Fractional randomization of each backoff in
+     *        [0, $jitter]; the delay lands in [backoff, backoff*(1+$jitter)].
+     *        0.0 (default) means no jitter (exactly the base backoff).
+     * @param LoopInterface|null $loop  Optional event loop; uses Loop::get() if null.
+     * @param null|callable(): float $now  Optional monotonic-seconds clock
+     *        (test seam — fake it to drive budget exhaustion without sleeping);
+     *        defaults to hrtime(true)/1e9.
+     * @param null|callable(int, float): void $onRetry  Progress hook fired at
+     *        scheduling time with (attemptNumber, plannedDelaySeconds) before
+     *        each backoff is armed — the surface an "attempt 2 of 3" spinner
+     *        renders from. Advisory: like the other notice hooks, a throw from
+     *        it is logged, never propagated.
+     * @return PromiseInterface
+     */
+    public static function retry(
+        callable $operation,
+        int $attempts = 3,
+        float $baseBackoffSeconds = 0.1,
+        ?CancellationToken $token = null,
+        ?float $maxTotalSeconds = null,
+        float $jitter = 0.0,
+        ?LoopInterface $loop = null,
+        ?callable $now = null,
+        ?callable $onRetry = null,
+    ): PromiseInterface {
+        if ($attempts < 1) {
+            throw new \InvalidArgumentException('Attempts must be >= 1');
+        }
+        if ($baseBackoffSeconds <= 0 || !is_finite($baseBackoffSeconds)) {
+            throw new \InvalidArgumentException('Base backoff must be a positive finite number');
+        }
+        if ($maxTotalSeconds !== null && ($maxTotalSeconds <= 0 || !is_finite($maxTotalSeconds))) {
+            throw new \InvalidArgumentException('Max total seconds must be a positive finite number when set');
+        }
+        if ($jitter < 0 || !is_finite($jitter)) {
+            throw new \InvalidArgumentException('Jitter must be a finite number >= 0');
+        }
+
+        // One internal stop source drives every cancellation path: the
+        // external token is mirrored into it, every backoff stage watches it,
+        // and abandoning the returned promise fires it. Stages consult exactly
+        // one token, and a consumer's cancel() stops the whole cycle instead
+        // of silently doing nothing on a Deferred that cannot be cancelled.
+        $stop = CancellationSource::new();
+        $mirror = null;
+        // By-reference captures: the token can only fire after retry() has
+        // returned (an already-cancelled token fires synchronously at
+        // registration, while these are still null — guarded below), so the
+        // mirror always sees the assigned stage promises.
+        $core = null;
+        $outer = null;
+        $coreSettled = false;
+        if ($token !== null) {
+            // The mirror is dropped the moment the cycle settles or the wait is
+            // abandoned (below), so a long-lived external token carries no
+            // residue per retry.
+            $mirror = $token->onCancel(static function () use ($stop, &$core, &$outer, &$coreSettled): void {
+                $stop->cancel();
+                // Honour a token fire DURING an attempt: stages consult the
+                // stop token between attempts, but a hung driver never regains
+                // control to consult anything. Aborting the in-flight promise
+                // lets a cooperative driver settle the cycle with its
+                // stage-specific rejection; if nothing settled, the visible
+                // wait rejects here instead of waiting forever.
+                if ($core !== null) {
+                    try {
+                        $core->cancel();
+                    } catch (\Throwable) {
+                        // An exploding driver abort still gets the treatment below.
+                    }
+                }
+                if ($outer !== null && $coreSettled === false) {
+                    $outer->reject(new OperationCancelledException('Retry cancelled mid-cycle'));
+                }
+            });
+        }
+
+        // One monotonic clock for the whole cycle. hrtime() is immune to
+        // wall-clock steps (NTP corrections, manual date changes) that
+        // microtime() happily follows — a backward step used to silently
+        // stretch or skip the budget.
+        $clock = $now ?? static fn(): float => Clock::monotonicSeconds();
+
+        // Convert the relative budget to an absolute cutoff once, so recursive
+        // attempts share a single fixed deadline.
+        $deadline = $maxTotalSeconds !== null ? $clock() + $maxTotalSeconds : null;
+
+        $core = self::retryAttempt(
+            $operation,
+            $attempts,
+            $baseBackoffSeconds,
+            $stop->token(),
+            1,
+            $loop,
+            $jitter,
+            $deadline,
+            $clock,
+            $maxTotalSeconds,
+            $onRetry,
+        );
+
+        $outer = new Deferred(static function () use ($stop, $core, $mirror): never {
+            $stop->cancel();
+            try {
+                $core->cancel();
+            } catch (\Throwable) {
+                // A driver whose abort explodes still abandons the wait.
+            }
+            $mirror?->unsubscribe();
+            throw new OperationCancelledException('Async operation cancelled');
+        });
+        $core->then(
+            static function (mixed $value) use ($outer, $mirror, &$coreSettled): void {
+                $coreSettled = true;
+                $mirror?->unsubscribe();
+                $outer->resolve($value);
+            },
+            static function (\Throwable $error) use ($outer, $mirror, &$coreSettled): void {
+                $coreSettled = true;
+                $mirror?->unsubscribe();
+                $outer->reject($error);
+            },
+        );
+
+        return $outer->promise();
+    }
+
+    /**
+     * @internal  Recursive retry implementation.
+     *
+     * @param LoopInterface|null $loop  Event loop; defaults to Loop::get().
+     *        Accepting it (mirroring debounce()/throttle()) lets tests drive
+     *        retries with a mock loop instead of the global singleton.
+     * @param float $jitter  Fractional backoff randomization; see retry().
+     * @param float|null $deadline  Absolute monotonic-clock cutoff, or null
+     *        for none.
+     * @param callable(): float $now  Monotonic-seconds clock (see retry()).
+     * @param float|null $maxTotalSeconds  The budget behind $deadline, for the
+     *        exhaustion message.
+     * @param null|callable(int, float): void $onRetry  Progress hook; see retry().
+     */
+    private static function retryAttempt(
+        callable $operation,
+        int $remaining,
+        float $backoff,
+        CancellationToken $token,
+        int $attempt,
+        ?LoopInterface $loop = null,
+        float $jitter = 0.0,
+        ?float $deadline = null,
+        ?callable $now = null,
+        ?float $maxTotalSeconds = null,
+        ?callable $onRetry = null,
+    ): PromiseInterface {
+        $loop ??= Loop::get();
+        $clock = $now ?? static fn(): float => Clock::monotonicSeconds();
+
+        if ($token->isCancelled()) {
+            return reject(new OperationCancelledException('Retry cancelled before attempt ' . $attempt));
+        }
+
+        try {
+            $operationPromise = $operation();
+        } catch (\Throwable $e) {
+            $operationPromise = reject($e);
+        }
+        if (!$operationPromise instanceof PromiseInterface) {
+            // One guard vocabulary across the package (mirrors
+            // AsyncCache::fetch): a non-promise is refused by name, not by
+            // an obscure member-access failure two frames away. The refusal
+            // is terminal — a deterministic caller bug retried down the
+            // ladder just burns the budget — and travels the same rejection
+            // channel as the operation's own failure would.
+            return reject(new \InvalidArgumentException('AsyncOps retry operation must return a promise; ' . get_debug_type($operationPromise) . ' returned.'));
+        }
+        return $operationPromise->then(
+            static fn ($value) => $value,
+            static function (\Throwable $e) use ($operation, $remaining, $backoff, $token, $attempt, $loop, $jitter, $deadline, $clock, $maxTotalSeconds, $onRetry): PromiseInterface {
+                if ($token->isCancelled()) {
+                    return reject(new OperationCancelledException('Retry cancelled after attempt ' . $attempt));
+                }
+
+                if ($remaining <= 1) {
+                    return reject($e);
+                }
+
+                // Wall-clock DoS guard, evaluated BEFORE the next backoff is
+                // armed: once the cutoff has passed, stop scheduling and reject
+                // with a TimeoutException naming the exhausted budget — the
+                // last failure rides along as `previous`, so "gave up after
+                // the budget" is distinguishable from "the operation keeps
+                // failing" without message archaeology. (Rejecting bare $e
+                // here made the two shapes identical.)
+                $remainingBudget = $deadline !== null ? $deadline - $clock() : null;
+                if ($remainingBudget !== null && $remainingBudget <= 0.0) {
+                    return reject(new TimeoutException(
+                        'Retry budget of ' . MessageFormat::seconds($maxTotalSeconds ?? 0.0)
+                            . ' exhausted after attempt ' . $attempt
+                            . ' (last failure: ' . $e->getMessage() . ')',
+                        previous: $e,
+                        seconds: $maxTotalSeconds,
+                    ));
+                }
+
+                // Schedule the next attempt with a future tick to avoid blocking
+                // the loop. Jitter the delay to avoid a thundering herd; the base
+                // still doubles un-jittered to keep the exponential schedule.
+                // The budget bounds when a NEW attempt may start: a delay that
+                // would overshoot the cutoff is clamped to land exactly on it —
+                // never armed past the cutoff with the stop checked only after
+                // the failure that the overshoot caused.
+                $delay = self::jitteredBackoff($backoff, $jitter);
+                if ($delay > self::MAX_BACKOFF_SECONDS) {
+                    // Ladder plateau (see MAX_BACKOFF_SECONDS): clamp before
+                    // the budget so the reported and armed delay carry both
+                    // bounds — the doubling stops at the horizon, the cycle
+                    // still ends via the attempt cap or $maxTotalSeconds.
+                    $delay = self::MAX_BACKOFF_SECONDS;
+                }
+                if ($remainingBudget !== null && $delay > $remainingBudget) {
+                    $delay = $remainingBudget;
+                }
+                if ($onRetry !== null) {
+                    // Reported with the CLAMPED delay so a UI counting down
+                    // to the next attempt cannot be fooled by a budget cut.
+                    try {
+                        $onRetry($attempt, $delay);
+                    } catch (\Throwable $hookError) {
+                        AsyncOps::logFailure('sugar-async: retry progress hook failed: ' . $hookError->getMessage());
+                    }
+                }
+                $deferred = new Deferred();
+
+                // Cancellation must be prompt. Without this wiring a cancel
+                // landing mid-backoff left the promise pending and the shared
+                // loop held for the remaining (doubling) delay. $settled makes
+                // the abort and the timer callback mutually exclusive: this
+                // registration is deliberately kept for the life of the
+                // backoff (the removal handle onCancel() returns is discarded
+                // here), so the latch — not an unregister — is what stops an
+                // abort queued by a stage that already ran from firing on a
+                // later cancel().
+                $pending = null;
+                $settled = false;
+
+                $token->onCancel(static function () use (&$pending, &$settled, $deferred, $loop, $attempt): void {
+                    if ($settled === true) {
+                        return;
+                    }
+                    $settled = true;
+                    if ($pending !== null) {
+                        $loop->cancelTimer($pending);
+                        $pending = null;
+                    }
+                    $deferred->reject(new OperationCancelledException(
+                        'Retry cancelled during backoff after attempt ' . $attempt,
+                    ));
+                });
+
+                $pending = $loop->addTimer(
+                    $delay,
+                    static function () use ($operation, $remaining, $backoff, $token, $attempt, $deferred, $loop, $jitter, $deadline, $clock, $maxTotalSeconds, $onRetry, &$settled, &$pending): void {
+                        if ($settled === true) {
+                            return; // cancelled during backoff; abort already rejected
+                        }
+                        $settled = true;
+                        $pending = null;
+                        try {
+                            $next = self::retryAttempt($operation, $remaining - 1, $backoff * 2, $token, $attempt + 1, $loop, $jitter, $deadline, $clock, $maxTotalSeconds, $onRetry);
+                            $next->then(
+                                static fn ($v) => $deferred->resolve($v),
+                                static fn ($e) => $deferred->reject($e),
+                            );
+                        } catch (\Throwable $e) {
+                            $deferred->reject($e);
+                        }
+                    },
+                );
+                return $deferred->promise();
+            },
+        );
+    }
+
+    /**
+     * Apply randomized jitter to a backoff delay, spreading retries to avoid a
+     * thundering herd. Returns a delay in [$backoff, $backoff * (1 + $jitter)];
+     * with $jitter <= 0.0 the delay is exactly $backoff, keeping the
+     * historical no-jitter schedule.
+     *
+     * Uses random_int() (CSPRNG-backed) rather than mt_rand()/rand() so it does
+     * not depend on — or perturb — global mt_srand() seed state.
+     */
+    private static function jitteredBackoff(float $backoff, float $jitter): float
+    {
+        if ($jitter <= 0.0) {
+            return $backoff;
+        }
+        $fraction = random_int(0, PHP_INT_MAX) / PHP_INT_MAX;
+        return $backoff + ($backoff * $jitter * $fraction);
     }
 }
