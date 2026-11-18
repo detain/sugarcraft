@@ -22,7 +22,10 @@ final class CanonicalWidthTest extends TestCase
         $method = new \ReflectionMethod(DatePicker::class, 'placeStringAt');
         $method->setAccessible(true);
 
-        return $method->invoke(new DatePicker(new \DateTimeImmutable('2026-05-01')), $buf, $col, $row, $s, null);
+        $builder = $buf->toBuilder();
+        $method->invoke(new DatePicker(new \DateTimeImmutable('2026-05-01')), $builder, $col, $row, $s, null);
+
+        return $builder->toBuffer();
     }
 
     public function testZeroWidthClusterDoesNotConsumeAColumn(): void

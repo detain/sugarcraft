@@ -723,6 +723,9 @@ final class DatePickerStyleTest extends TestCase
         $ref = new \ReflectionClass($this->dp);
         $meth = $ref->getMethod('placeStringAt');
         $meth->setAccessible(true);
-        return $meth->invoke($this->dp, $buf, $col, $row, $s, $style);
+        $builder = $buf->toBuilder();
+        $meth->invoke($this->dp, $builder, $col, $row, $s, $style);
+
+        return $builder->toBuffer();
     }
 }

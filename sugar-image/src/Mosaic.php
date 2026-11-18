@@ -614,7 +614,7 @@ final class Mosaic implements IncrementalRenderer
      *    (half/quarter block, ASCII — the renderers implementing
      *    {@see AcceptsOptimization}) coalesce identical-glyph runs under an
      *    unchanged pen into `ESC[count b`, gated by
-     *    {@see \SugarCraft\CellBuffer\Diff\RepeatGate::worth()} AND
+     *    {@see \SugarCraft\CellBuffer\Support\RepeatGate::worth()} AND
      *    {@see Detect::supportsRepeat()}. Pixel-protocol backends (sixel/
      *    kitty/iterm2/chafa) carry no cell stream to coalesce: the mask
      *    still rides their poster cache key but emits nothing.
