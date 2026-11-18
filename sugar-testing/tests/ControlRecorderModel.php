@@ -17,7 +17,7 @@ use SugarCraft\Core\Subscriptions;
 /**
  * Trace-recording model for the control-parity pins: appends a token per
  * message it is actually shown. Keys echo their rune, the startup trio
- * lands as `80x24` / `K=V` / `CP`, and ANY other message class lands as
+ * lands as `80x24` / `K=V` / `CP<profile name>`, and ANY other message class lands as
  * `<ClassName>` — so a control message leaking through the simulator's
  * dispatch ladder shows up as a visible token, not silence.
  *
@@ -42,7 +42,7 @@ final class ControlRecorderModel implements Model
             $msg instanceof KeyMsg         => $msg->rune !== '' ? $msg->rune : '<' . $msg->type->name . '>',
             $msg instanceof WindowSizeMsg  => $msg->cols . 'x' . $msg->rows,
             $msg instanceof EnvMsg         => 'K=' . ($msg->vars['K'] ?? '?'),
-            $msg instanceof ColorProfileMsg => 'CP',
+            $msg instanceof ColorProfileMsg => 'CP' . $msg->profile->name,
             default                        => '<' . (new \ReflectionClass($msg))->getShortName() . '>',
         };
 
