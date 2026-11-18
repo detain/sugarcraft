@@ -147,6 +147,17 @@ final class DeclaredClassesTest extends TestCase
         $this->assertSame(['Beta\Holder'], DeclaredClasses::of($path));
     }
 
+    public function testAUseFunctionImportDeclaresNothingAndIsNotListedAsAFunction(): void
+    {
+        // An import names the engine's strlen() without declaring it. Listing it as a
+        // declaration would refuse this file as a collision on every launch after its first.
+        $path = $this->file("<?php\n\ndeclare(strict_types=1);\n\nuse function strlen;\n\nfinal class Imports\n{\n}\n");
+
+        $this->assertSame([], DeclaredClasses::functionsOf($path));
+        $this->assertSame(['Imports'], DeclaredClasses::of($path));
+        $this->assertNull(DeclaredClasses::declaredElsewhere($path));
+    }
+
     public function testAFunctionNestedInAPlainBlockRedeclaringAnEngineFunctionIsReportedBeforeRequire(): void
     {
         // The engine's strlen() is not a file, so the nested declaration would fatal

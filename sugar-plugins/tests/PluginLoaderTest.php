@@ -90,7 +90,7 @@ final class PluginLoaderTest extends TestCase
         $this->assertFalse(class_exists($plugin['class'], false), 'a quarantined file must not execute');
         $this->assertSame([$plugin['file']], $ledger->recorded);
 
-        $second = $this->load([$candidate], $ledger);
+        $second = $this->load([$candidate], $ledger->nextLaunch());
 
         $this->assertCount(1, $second->loaded);
         $this->assertSame([], $second->quarantined);
@@ -150,7 +150,7 @@ final class PluginLoaderTest extends TestCase
         // kind never produces a row for the same file.
         $second = $this->load(
             $candidate,
-            $ledger,
+            $ledger->nextLaunch(),
             kinds: ['subscriber', 'channel'],
             interfaces: ['channel' => Plugin::class, 'subscriber' => SubscribesToSessionEvents::class],
         );
@@ -160,6 +160,35 @@ final class PluginLoaderTest extends TestCase
             array_map(static fn (array $row): array => [$row['kind'], $row['reason']], $second->refusals),
             'one path, one refusal row, for the first kind in the list',
         );
+    }
+
+    public function testASecondCallOnTheSameLedgerIsStillThisLaunchAndRunsNothingFirstSeen(): void
+    {
+        $ns = 'PluginFixtures\\' . Plugins::tag();
+        $fqcn = $ns . '\\Impl';
+        $built = $this->build('demo', Plugins::pluginSource($ns, 'Impl', 'demo'), [
+            'channel' => ['file' => 'src/Impl.php', 'class' => $fqcn],
+            'theme' => ['file' => 'src/Impl.php', 'class' => $fqcn],
+        ]);
+        $candidate = [Plugins::candidate('demo', $built['dir'])];
+        $ledger = new MemoryLedger();
+        $interfaces = ['channel' => Plugin::class, 'theme' => Plugin::class];
+
+        // A host that loads per kind reaches the same entry twice in one launch.
+        $first = $this->load($candidate, $ledger, kinds: ['channel'], interfaces: $interfaces);
+        $second = $this->load($candidate, $ledger, kinds: ['theme'], interfaces: $interfaces);
+
+        $this->assertSame([['channel']], array_map(static fn (array $row): array => [$row['kind']], $first->quarantined));
+        $this->assertSame([], $second->loaded, 'the file was first seen this launch and must not load');
+        $this->assertCount(1, $second->quarantined);
+        $this->assertSame([], $second->refusals);
+        $this->assertFalse(class_exists($fqcn, false), 'a file first seen in this launch must not run in a later call');
+        $this->assertSame([$built['file']], $ledger->recorded, 'the mark is recorded once per launch');
+
+        $next = $this->load($candidate, $ledger->nextLaunch(), kinds: ['theme'], interfaces: $interfaces);
+
+        $this->assertCount(1, $next->loaded, 'the next launch reads the mark and loads the file');
+        $this->assertTrue(class_exists($fqcn, false));
     }
 
     public function testTwoTrustedCandidatesNamingOneFileQuarantineItOnceAndRunNothingThisLaunch(): void
@@ -192,7 +221,7 @@ final class PluginLoaderTest extends TestCase
         $this->assertFalse(class_exists($class, false), 'a file first seen under one name must not run under another');
         $this->assertSame([$file], $ledger->recorded);
 
-        $second = $this->load($candidates, $ledger, trusted: ['outer', 'inner']);
+        $second = $this->load($candidates, $ledger->nextLaunch(), trusted: ['outer', 'inner']);
 
         $this->assertSame(['outer', 'inner'], array_column($second->loaded, 'bundle'));
         $this->assertSame([], $second->quarantined);

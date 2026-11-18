@@ -158,7 +158,8 @@ final class DeclaredClasses
                 }
             }
 
-            if ($id === T_FUNCTION && \end($braces) !== true) {
+            // `use function strlen;` imports a name; it declares nothing, so it is not listed.
+            if ($id === T_FUNCTION && $prev !== T_USE && \end($braces) !== true) {
                 $j = $i + 1;
                 if (\in_array($tokens[$j][0] ?? null, [T_AMPERSAND_NOT_FOLLOWED_BY_VAR_OR_VARARG, T_AMPERSAND_FOLLOWED_BY_VAR_OR_VARARG], true)) {
                     $j++;

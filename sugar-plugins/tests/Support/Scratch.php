@@ -30,6 +30,9 @@ final class Scratch
             throw new \RuntimeException('could not create ' . $parent);
         }
         \file_put_contents($path, $contents);
+        // The umask decides the mode a new file gets (0664 under umask 0002), so
+        // every fixture is pinned to 0644: tests choose their own modes explicitly.
+        \chmod($path, 0644);
 
         return $path;
     }

@@ -31,8 +31,6 @@ final class PluginRegistry
     /** @var list<Plugin> started plugins, start order, for reverse-order dispose */
     private array $started = [];
 
-    private bool $disposed = false;
-
     /** @param list<string> $reservedBundles bundle names that may never register a plugin */
     private function __construct(
         private readonly array $reservedBundles,
@@ -129,29 +127,31 @@ final class PluginRegistry
     }
 
     /**
-     * Dispose started plugins in reverse start order. Each dispose is shielded:
-     * a throw is handed to $log and swallowed, so one faulty plugin cannot strand
-     * the teardown of the others. Idempotent.
+     * Dispose the plugins started since the last call, in reverse start order.
+     * Each dispose is shielded: a throw is handed to $log and swallowed, so one
+     * faulty plugin cannot strand the teardown of the others.
+     *
+     * Idempotent per call: the started list and the registrations are cleared
+     * before any dispose runs, so a re-entrant call from inside a dispose finds
+     * nothing to do. The registry stays usable afterwards; a plugin registered
+     * and started later is disposed by the next call.
      *
      * @param \Closure(string): void $log
      */
     public function disposeAll(\Closure $log): void
     {
-        if ($this->disposed) {
-            return;
-        }
-        $this->disposed = true;
+        $pending = \array_reverse($this->started);
 
-        foreach (\array_reverse($this->started) as $plugin) {
+        $this->started = [];
+        $this->plugins = [];
+        $this->byName = [];
+
+        foreach ($pending as $plugin) {
             try {
                 $plugin->dispose();
             } catch (\Throwable $e) {
                 $log(ErrorLine::of($e, 'plugin dispose ' . $plugin->name()));
             }
         }
-
-        $this->started = [];
-        $this->plugins = [];
-        $this->byName = [];
     }
 }

@@ -31,4 +31,16 @@ final class MemoryLedger implements QuarantineLedger
         $this->recorded[] = $path;
         $this->seen[$path] = true;
     }
+
+    /**
+     * A ledger for the NEXT launch: the marks this one holds are on disk by then,
+     * and nothing else carries over. The same instance is one launch, not the next.
+     */
+    public function nextLaunch(): self
+    {
+        $next = new self();
+        $next->seen = $this->seen;
+
+        return $next;
+    }
 }

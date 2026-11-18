@@ -240,6 +240,25 @@ final class PluginRegistryTest extends TestCase
         $this->assertStringContainsString('dispose failed for faulty', $lines[0]);
     }
 
+    public function testAPluginStartedAfterADisposeIsDisposedByTheNextDispose(): void
+    {
+        $events = [];
+        $registry = PluginRegistry::new();
+        $first = $this->plugin('first', $events);
+        $registry->register('demo', $first);
+        $registry->markStarted($first);
+        $registry->disposeAll(static function (string $line): void {
+        });
+
+        $later = $this->plugin('later', $events);
+        $this->assertTrue($registry->register('demo', $later), 'the registry stays usable after a dispose');
+        $registry->markStarted($later);
+        $registry->disposeAll(static function (string $line): void {
+        });
+
+        $this->assertSame(['dispose:first', 'dispose:later'], $events, 'a later start must not be stranded');
+    }
+
     public function testDisposeAllIsIdempotent(): void
     {
         $events = [];

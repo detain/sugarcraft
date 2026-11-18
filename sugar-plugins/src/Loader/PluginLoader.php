@@ -26,7 +26,8 @@ use SugarCraft\Plugins\Trust\TrustList;
  *    launch that first reveals it. The file loads at the NEXT launch, so a
  *    manifest swap under a trusted name cannot smuggle code in silently.
  * 4. THE BYTES THEMSELVES MUST BE PRIVATE. Before `require_once`, the file and
- *    its parent directory must be owned by this process and not world-writable.
+ *    its parent directory must be owned by this process and not writable by the
+ *    group or the world.
  *
  * The loader ANSWERS; it never announces. Every entry lands in exactly one
  * bucket (see {@see LoadResult}). A file that throws at require time is refused
@@ -35,11 +36,20 @@ use SugarCraft\Plugins\Trust\TrustList;
  * never overrides.
  *
  * Refusal reason words: manifest-refused, uncontained, contract-unsupported,
- * world-writable, foreign-owner, require-failed, class-collision, class-missing,
- * class-not-declared, interface-mismatch.
+ * world-writable, group-writable, foreign-owner, require-failed, class-collision,
+ * class-missing, class-not-declared, interface-mismatch.
  */
 final class PluginLoader
 {
+    /**
+     * Per QuarantineLedger instance: the paths that ledger's earlier load() calls
+     * quarantined. A ledger instance is one launch, so a second call on it must
+     * not find the first call's mark and require the file.
+     *
+     * @var ?\WeakMap<QuarantineLedger, array<string, true>>
+     */
+    private static ?\WeakMap $firstSightByLedger = null;
+
     /**
      * Load every trusted plugin's entrypoints of $kinds into this process.
      *
@@ -49,6 +59,11 @@ final class PluginLoader
      * notice or a refusal never counts the same file twice. Across trusted
      * candidates, a path is quarantined or required at most once per launch, so
      * the second bundle cannot run a file the first has only just seen.
+     *
+     * A ledger instance is one launch: the first sight is recorded once for it,
+     * and any later call on the same instance lists that path as quarantined
+     * again without recording it or requiring it. A later launch reads the marks
+     * from disk through a fresh ledger, and only then does the file load.
      *
      * Two trusted names that reach one file (a symlinked plugin directory, or a
      * manifest nested under another) yield ONE LOADED ROW PER NAME, by design:
@@ -99,6 +114,10 @@ final class PluginLoader
         $requireErrors = [];
         /** @var array<string, string> $collisions realpath => the type another file already declares */
         $collisions = [];
+
+        self::$firstSightByLedger ??= new \WeakMap();
+        /** @var array<string, true> $firstSight paths this ledger's earlier calls quarantined in this launch */
+        $firstSight = self::$firstSightByLedger[$ledger] ?? [];
 
         foreach ($candidates as $candidate) {
             if (!$trust->contains($candidate->name)) {
@@ -157,7 +176,10 @@ final class PluginLoader
                     }
 
                     if (!isset($pathState[$entry->path])) {
-                        if (!$ledger->seen($entry->path)) {
+                        if (isset($firstSight[$entry->path])) {
+                            // An earlier call on this ledger already saw it this launch.
+                            $pathState[$entry->path] = 'quarantined';
+                        } elseif (!$ledger->seen($entry->path)) {
                             // Quarantine first: recorded before the require, so the
                             // NEXT launch loads it and this launch only lists it.
                             // A ledger that cannot persist must not abort the launch: the mark
@@ -167,6 +189,8 @@ final class PluginLoader
                             } catch (\Throwable) {
                             }
                             $pathState[$entry->path] = 'quarantined';
+                            $firstSight[$entry->path] = true;
+                            self::$firstSightByLedger[$ledger] = $firstSight;
                         } elseif (($collision = DeclaredClasses::declaredElsewhere($entry->path)) !== null) {
                             // Checked before require_once: a redeclared type is a fatal
                             // compile error that no catch below can reach.
@@ -196,7 +220,7 @@ final class PluginLoader
                     }
 
                     if ($pathState[$entry->path] === 'collision') {
-                        $refusals[] = $where + ['reason' => 'class-collision', 'error' => 'class ' . $collisions[$entry->path] . ' is already declared by another file'];
+                        $refusals[] = $where + ['reason' => 'class-collision', 'error' => "'" . $collisions[$entry->path] . "' is already declared by another file"];
                         continue;
                     }
 

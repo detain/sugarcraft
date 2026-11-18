@@ -48,6 +48,24 @@ final class PrivateBytesTest extends TestCase
         $this->assertSame('world-writable', PrivateBytes::refusal($file));
     }
 
+    public function testAGroupWritableFileIsRefused(): void
+    {
+        // A group member can rewrite a 0664 file as surely as the world can.
+        $file = Scratch::put($this->dir . '/Impl.php', '<?php');
+        chmod($file, 0664);
+
+        $this->assertSame('group-writable', PrivateBytes::refusal($file));
+    }
+
+    public function testAGroupWritableParentDirectoryIsRefused(): void
+    {
+        $file = Scratch::put($this->dir . '/Impl.php', '<?php');
+        chmod($file, 0644);
+        chmod($this->dir, 0775);
+
+        $this->assertSame('group-writable', PrivateBytes::refusal($file));
+    }
+
     public function testAFileOwnedByAnotherUidIsRefused(): void
     {
         $file = Scratch::put($this->dir . '/Impl.php', '<?php');
