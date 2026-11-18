@@ -422,15 +422,17 @@ for the 19 C1 bytes listed above, and the public `ControlNames::C0` and
 ### Consumers the follow-up steps must move (Util\Parser, Util\Token) and P4-9e (C0C1)
 
 Found by `grep -rnF 'Util\Parser'` and `grep -rnF 'C0C1'` over the whole repo
-(excluding `vendor/`), on this commit. A line listed as "use" is an import;
-"new" is a construction; "doc" is a comment or a `{@see}` link with no code use.
+(excluding `vendor/`), re-run on the P1-14b tree after `sugar-core/src/Renderer.php`
+moved onto `AnsiTokenizer`, so that file no longer appears below. A line listed as
+"use" is an import; "new" is a construction; "doc" is a comment or a `{@see}` link
+with no code use.
 
 Util\Parser (P1-14b):
 
-- Production: `sugar-core/src/Renderer.php:8` (use), `:97` (new);
-  `sugar-core/src/SgrState.php:401` (doc); `sugar-widgets/src/Help/Help.php:13`
-  (use), `:421` (new); `candy-code/src/Renderer.php:9` (use), `:4519` and
-  `:4557` (new).
+- Production: `sugar-widgets/src/Help/Help.php:13` (use), `:421` (new);
+  `candy-code/src/Renderer.php:9` (use), `:4519` and `:4557` (new);
+  `sugar-core/src/SgrState.php:401` (doc). `sugar-core/src/Renderer.php` now
+  imports `AnsiTokenizer` and `Util\Token` and has no `Util\Parser` reference.
 - Tests: `sugar-core/tests/RendererTest.php:344` (FQN new);
   `sugar-core/tests/SgrStateTest.php:8` (use) and 26 `(new Parser())`
   calls; `sugar-core/tests/Util/ParserTest.php:7` (use) and `:15` (new);
