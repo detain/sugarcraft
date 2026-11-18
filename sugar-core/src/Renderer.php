@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Core;
 
 use SugarCraft\AnsiParser\AnsiTokenizer;
-use SugarCraft\AnsiParser\Token;
+use SugarCraft\AnsiParser\Token as AnsiToken;
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Token;
 use SugarCraft\Core\Util\Width;
 
 /**
@@ -365,10 +366,20 @@ final class Renderer
         // the diff — whose tokens (and cache entry) then describe bytes that
         // are not in that row. flush() hands the tail back as TEXT so every
         // row's tokens cover exactly its own bytes.
-        $tokens = $this->tokenizer->parse($s);
+        // SgrState and the token helpers below take the Util\Token shape, so
+        // each sugar-ansi-parser token is copied across at this boundary.
+        $tokens = [];
+        foreach ($this->tokenizer->parse($s) as $t) {
+            $tokens[] = self::legacyToken($t);
+        }
         foreach ($this->tokenizer->flush() as $tail) {
-            $tokens[] = $tail;
+            $tokens[] = self::legacyToken($tail);
         }
         return $this->tokenCache[$s] = $tokens;
+    }
+
+    private static function legacyToken(AnsiToken $t): Token
+    {
+        return new Token($t->type, $t->data, $t->intermediate, $t->params, $t->final, $t->terminator);
     }
 }
