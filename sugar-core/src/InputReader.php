@@ -395,7 +395,9 @@ final class InputReader
                 // the user) for the general case.
                 // A lone `ESC P` at the buffer end may be the head of that
                 // reply split across reads, so it parks until the next byte
-                // says whether it is `>` or an Alt+P key.
+                // says whether it is `>` or an Alt+P key. If no byte follows
+                // within the escape timeout, flushPending() promotes it to
+                // Alt+Shift+P, the same as a lone ESC.
                 if ($next === 'P' && $remain === 2) {
                     break;
                 }
@@ -599,6 +601,12 @@ final class InputReader
         return $msgs;
     }
 
+    /**
+     * Promotes a parked key once the escape timeout has passed with no
+     * follow-up byte: a lone ESC is the Escape key, and a lone `ESC P` (held
+     * for a possible XTVERSION reply) is Alt+Shift+P, as it decodes when the
+     * next byte is not `>`.
+     */
     public function flushPending(): ?Msg
     {
         // Inside a paste, a buffered ESC is the head of the end marker (or a
@@ -607,21 +615,25 @@ final class InputReader
         if ($this->buf === '' || $this->pasting) {
             return null;
         }
-        if (ord($this->buf[0]) === 0x1b && strlen($this->buf) === 1) {
+        if ($this->buf === "\x1b") {
             $this->buf = '';
             return new KeyMsg(KeyType::Escape);
+        }
+        if ($this->buf === "\x1bP") {
+            $this->buf = '';
+            return $this->decodeChar(0x50, true);
         }
         return null;
     }
 
     /**
-     * True when the parser is holding a single ESC byte awaiting
+     * True when the parser is holding a lone ESC, or a lone `ESC P`, awaiting
      * disambiguation. {@see \SugarCraft\Core\Program} polls this so it can
-     * promote the byte to a bare Escape after a short timeout.
+     * promote the held key after a short timeout via {@see flushPending()}.
      */
     public function hasPendingEscape(): bool
     {
-        return !$this->pasting && $this->buf === "\x1b";
+        return !$this->pasting && ($this->buf === "\x1b" || $this->buf === "\x1bP");
     }
 
     /**
