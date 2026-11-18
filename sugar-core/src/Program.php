@@ -145,16 +145,6 @@ final class Program
     private array $activeSubscriptions = [];
 
     /**
-     * Model-tree subscription collections, keyed by the active model's
-     * identity. Models are immutable, so an unchanged identity means an
-     * unchanged tree; the WeakMap lets a dropped model's entry go with it.
-     * The value is a one-slot array because WeakMap treats a null value as
-     * absent, and "no subscriptions" is a result worth remembering.
-     *
-     * @var \WeakMap<Model, array{0: ?Subscriptions}>
-     */
-    private \WeakMap $subscriptionMemo;
-    /**
      * Signal-subscription chains, keyed by signal number (sugar-core-017).
      * Each signo owns ONE dispatcher we install; `prev` is the handler the
      * dispatcher displaced (null = unobservable: cancel then refuses to
@@ -285,7 +275,6 @@ final class Program
             writer: $this->writer,
         );
         $this->tty = new Tty($this->input, $options->termios);
-        $this->subscriptionMemo = new \WeakMap();
     }
 
     /**
@@ -2852,22 +2841,7 @@ final class Program
         // subscription declarations structurally dead).
         return $this->options->subscriptions !== null
             ? ($this->options->subscriptions)($this->model)
-            : $this->memoizedSubscriptions($this->activeModel());
-    }
-
-    /**
-     * Collect the model tree's subscriptions once per model identity. Every
-     * update cycle asks for them, and most updates return the same model
-     * (`[$this, null]`), so re-walking the tree each time is wasted work.
-     */
-    private function memoizedSubscriptions(Model $model): ?Subscriptions
-    {
-        if (isset($this->subscriptionMemo[$model])) {
-            return $this->subscriptionMemo[$model][0];
-        }
-        $collected = $this->collectSubscriptions($model);
-        $this->subscriptionMemo[$model] = [$collected];
-        return $collected;
+            : $this->collectSubscriptions($this->activeModel());
     }
 
     /**

@@ -24,6 +24,7 @@ use SugarCraft\Core\SequenceMsg;
 use SugarCraft\Core\Subscription;
 use SugarCraft\Core\Subscriptions;
 use SugarCraft\Core\TickRequest;
+use SugarCraft\Core\WindowSizeRequest;
 use Throwable;
 
 /**
@@ -56,11 +57,11 @@ final class TabScope
      * Wrapping any of these would hide it from the strict `instanceof`
      * ladder in sugar-core/src/Program.php, silently swallowing quits,
      * prints, terminal handoffs, and screen-stack routing. WindowSizeMsg
-     * sits in this set even though it later reaches the model: Program
-     * consumes its recorder/renderer-reset role first, and a Cmd that
-     * mints a resize does not exist in this app today — if one ever
-     * does, the fix is to unwrap the envelope in that model arm, NOT to
-     * drop this entry and lose the reset for every other producer.
+     * and WindowSizeRequest sit in this set even though they reach the
+     * model: Program turns a WindowSizeRequest into a WindowSizeMsg and
+     * consumes its recorder/renderer-reset role first, so the model gets
+     * an unscoped WindowSizeMsg, the same as every other resize. Wrapping
+     * either one would drop that reset for every producer.
      *
      * @var list<class-string<Msg>>
      */
@@ -72,6 +73,7 @@ final class TabScope
         InterruptMsg::class,
         QuitMsg::class,
         WindowSizeMsg::class,
+        WindowSizeRequest::class,
         SubscriptionsMsg::class,
         ScreenStackPushedMsg::class,
         ScreenStackPoppedMsg::class,

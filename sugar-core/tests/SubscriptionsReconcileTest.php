@@ -317,8 +317,8 @@ final class SubscriptionsReconcileTest extends TestCase
             public function init(): ?\Closure { return null; }
             public function update(\SugarCraft\Core\Msg $msg): array
             {
-                // Next model, not an in-place write: the subscription memo is
-                // keyed on model identity (sugar-core rank 14).
+                // Next model, not an in-place write: the reconcile diff is
+                // what keeps an unchanged subscription running, not identity.
                 $next = clone $this;
                 $next->cycles++;
                 return [$next, null];

@@ -204,7 +204,7 @@ final class CmdPromiseTimeoutTest extends TestCase
         (new ProgramOptionsBuilder())->withEscapeDelay(INF);
     }
 
-    public function testSubscriptionsAreCollectedOncePerModelIdentity(): void
+    public function testSubscriptionsAreReadAfterEveryUpdateEvenForTheSameIdentity(): void
     {
         [$in, $out, $writer] = $this->pipes();
         $loop = new StreamSelectLoop();
@@ -219,8 +219,11 @@ final class CmdPromiseTimeoutTest extends TestCase
         $program->run();
 
         // The model returns $this from every update, so the identity never
-        // changes and the tree is walked once, not once per message.
-        $this->assertSame(1, $model->counter->calls);
+        // changes. A model may still change what it wants between updates
+        // (Codex P2 on #1523), so the declared set is re-read every cycle:
+        // the initial collection plus one per message. Reconciliation only
+        // re-arms what actually changed.
+        $this->assertGreaterThanOrEqual(6, $model->counter->calls);
         fclose($writer);
         fclose($in);
         fclose($out);
