@@ -37,6 +37,21 @@ namespace SugarCraft\Core\Util;
  *     For a gate — a permission prompt, a confirmation — where the user must
  *     see exactly what they are approving, and a strip would hide part of it.
  *
+ * **Which entry point to call.** Choose by where the text lands, not by how
+ * dangerous it looks. The first six rows are policies; the last row lists the
+ * building blocks they are made from, which a caller may also use directly.
+ *
+ * | The text is headed for…                                        | Call                                  | Removes or renders                                                        |
+ * |----------------------------------------------------------------|---------------------------------------|---------------------------------------------------------------------------|
+ * | A plain-text sink: a log line, a notification, a module field  | {@see untrusted()}                    | Every escape, C0 and C1 except tab, LF and CR. Bidi and zero-width kept.  |
+ * | A row of a line-oriented frame, from outside the process       | {@see untrustedForDisplay()}          | As `untrusted()`, plus CR and CRLF become LF; bidi and zero-width shown as `<U+XXXX>`. |
+ * | A frame carrying sugar-mouse zone markup, from outside         | {@see untrustedForMarkedFrames()}     | As `untrusted()`, plus the zone sentinels U+E000 and U+E001.              |
+ * | A data-grid cell from an already-stringified value             | {@see cellValue()}                    | Invalid UTF-8 repaired; remaining control bytes shown as a dot; newlines collapsed unless asked to keep them. |
+ * | A single-line field that must not hold any control character   | {@see controlChars()}                 | C0 removed, `\n` `\r` `\t` become spaces. SGR parameter text is left behind. |
+ * | A gate (permission, confirmation) where every byte must be seen | {@see visibleControls()}             | Nothing removed. Controls rendered as caret notation or `<U+XXXX>`.       |
+ * | Text that must be free of invisible formatting                 | {@see stripInvisibleFormatting()}     | Bidi and zero-width format characters removed. {@see markInvisibleFormatting()} marks them instead. |
+ * | Building blocks                                                 | {@see stripZoneSentinels()}, {@see stripPrivateUse()} | The first removes only the sentinel pair; the second removes the whole BMP Private Use Area. |
+ *
  * **The Private-Use reservation.** A TUI frame is not only text: sugar-mouse's
  * `Mark`/`Scan` delimit clickable zones with the sentinel pair U+E000 (open) and
  * U+E001 (close), and {@see \SugarCraft\Core\ImageOverlay} allocates the
