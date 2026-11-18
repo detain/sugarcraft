@@ -99,7 +99,7 @@ entry that was not found.
 
 1. A `providers.<name>` entry in `config.json` is merged over the built-in
    defaults for its `type`. Keys the entry sets win. Keys it leaves out come
-   from the defaults. An entry without a string `type` is skipped entirely,
+   from the defaults. An entry without a non-empty string `type` is skipped entirely,
    not merged.
 2. The built-in defaults for each type read their environment variable, for
    example `OPENAI_API_KEY` for `openai`. The full list is in

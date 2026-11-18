@@ -117,7 +117,9 @@ A turn that fails returns a JSON-RPC error with the cause.
 | The agent never starts in the editor | The editor cannot find `candy-code` on its `PATH`. Give the full path to the binary in the agent's `command` |
 | `candy-code acp` exits with code `2` | It was given an operand, or `--output-format json`. The protocol is the output, so no format flag applies. Remove them from the arguments |
 | The editor shows an agent log full of warnings | Anything PHP prints goes to stderr, which the editor shows as the agent's log. Those lines are not protocol errors. The protocol runs on stdout only |
-| Every turn ends `refusal` | The spend cap is reached. `/budget` in the TUI shows the cap. A prompt with no text is a JSON-RPC invalid-params error, not a refusal |
+| Every turn ends `refusal` | The spend cap is reached. A few other conditions also end a turn with `refusal`
+(a foreground-compaction block, the thrash breaker, the no-backend notice).
+`/budget` in the TUI shows the cap. A prompt with no text is a JSON-RPC invalid-params error, not a refusal |
 | Turns answer with offline echo text | No provider is selected, or the selected provider has no key (the stderr log shows a provider-unavailable warning in the second case). Run `candy-code models` and `candy-code login <provider>` in a terminal, then restart the editor's agent |
 | A second project will not open | One process serves one project root. Start another `candy-code acp` for it |
 

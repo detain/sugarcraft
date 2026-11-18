@@ -37,8 +37,9 @@ or `.`) takes its format from the extension, and otherwise the format is Markdow
 - The reply names the file it wrote.
 
 Before the transcript is written, the same secret redactor the memory audit
-trail uses runs over it. That is the only difference from `/export`, and it is
-why `/share` is the one to use when the file might be shared.
+trail uses runs over it. The redaction is the main difference from `/export`, along with the path and
+format rules below, and it is why `/share` is the one to use when the file might
+be shared.
 
 ## `/export`: the raw transcript
 
@@ -55,7 +56,9 @@ treat it like the transcript itself. `text` output is also cleaned for display:
 terminal control bytes are stripped. Bidi embeddings, overrides and isolates,
 zero-width spaces, word joiners and byte-order marks become visible `<U+XXXX>`
 markers. Zero-width joiners, non-joiners and direction marks become markers only
-where they cannot do their job. Private-use characters are removed. This is display hygiene and does not remove secrets. `md`, `html` and `json` are written byte for byte, because
+where they cannot do their job. Private-use characters in the Basic Multilingual Plane are removed, and
+supplementary-plane private-use characters (where Nerd Font glyphs live) are kept.
+This is display hygiene and does not remove secrets. `md`, `html`, `json` and `jsonl` are written byte for byte, because
 other tools parse them.
 
 ## `/share serve`: a self-hosted page
