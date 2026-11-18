@@ -148,6 +148,8 @@ return [
     'cli.bundles.install.not_bundle' => 'bundles install：{source} 不含 .claude-plugin/plugin.json（也无裸 plugin.json），不是插件 bundle',
     'cli.bundles.install.project_link' => 'bundles install：{path} 是符号链接；经由链接到达的项目 bundle 根目录会被拒绝，因此未安装任何内容',
     'cli.bundles.install.project_root' => 'bundles install：项目根目录 {root} 不是本进程可以安装到的目录；未写入任何内容',
+    'cli.bundles.install.other_tier' => 'bundles install: 名为 {name} 的 bundle 已安装在 {path}（另一层级）；为避免同名 bundle 同时存在于用户层和项目层，已拒绝此次安装',
+    'cli.bundles.install.project_is_home' => 'bundles install: --project 解析到你的主目录 {root}，那是用户层而非项目；请在项目内运行、传入 --root，或去掉 --project 以安装到用户根目录；未写入任何内容',
     'cli.bundles.install.project_user' => 'bundles install：--project 与 --user 指向两个不同的 bundle 根目录；请只指定一个，或都不指定以使用用户根目录',
     'cli.bundles.install.read_failed' => 'bundles install：无法将 {source} 暂存到 bundle 根目录',
     'cli.bundles.install.via_marketplace' => '已记录 {name}（来自 marketplace {marketplace}，commit {sha}）；`candy-code bundles update {name}` 可从该记录刷新。',

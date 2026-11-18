@@ -148,6 +148,8 @@ return [
     'cli.bundles.install.not_bundle' => 'bundles install : {source} ne contient pas de .claude-plugin/plugin.json (ni de plugin.json nu) ; ce n\'est donc pas un bundle de plugin',
     'cli.bundles.install.project_link' => 'bundles install : {path} est un lien symbolique ; une racine de bundle de projet atteinte par un lien est refusée, rien n\'a donc été installé',
     'cli.bundles.install.project_root' => 'bundles install : la racine de projet {root} n\'est pas un répertoire où ce processus peut installer ; rien n\'a été écrit',
+    'cli.bundles.install.other_tier' => 'bundles install: un bundle nommé {name} est déjà installé à {path} dans l\'autre niveau ; l\'installation a été refusée pour qu\'un même nom ne se trouve pas à la fois au niveau utilisateur et au niveau projet',
+    'cli.bundles.install.project_is_home' => 'bundles install: --project mène à votre répertoire personnel {root}, qui est le niveau utilisateur et non un projet ; lancez-le dans un projet ou passez --root, ou retirez --project pour installer à la racine utilisateur ; rien n\'a été écrit',
     'cli.bundles.install.project_user' => 'bundles install : --project et --user désignent deux racines de bundle différentes ; donnez-en une, ou aucune pour la racine utilisateur',
     'cli.bundles.install.read_failed' => 'bundles install : {source} n\'a pas pu être préparé dans la racine de bundles',
     'cli.bundles.install.via_marketplace' => '{name} enregistré depuis le marketplace {marketplace} au commit {sha} ; `candy-code bundles update {name}` le rafraîchit depuis cette entrée.',
