@@ -72,12 +72,32 @@ final class PngPixels
         }
 
         try {
-            $chunks = self::walkChunks($bytes, 8);
-            if ($chunks === [] || $chunks[0]['type'] !== 'IHDR') {
+            // Walk incrementally and keep only what is read back: IHDR, the first
+            // PLTE and tRNS, and the IDAT payload. Retaining every chunk would let
+            // a stream of tiny ancillary chunks cost roughly 400 bytes of PHP array
+            // per chunk, far more than the input it came in.
+            $kept = [];
+            $seen = [];
+            $idat = '';
+            foreach (self::iterChunks($bytes, 8) as $chunk) {
+                $type = $chunk['type'];
+                if ($kept === []) {
+                    if ($type !== 'IHDR') {
+                        return null;
+                    }
+                    $kept[] = $chunk;
+                } elseif ($type === 'IDAT') {
+                    $idat .= $chunk['data'];
+                } elseif (($type === 'PLTE' || $type === 'tRNS') && !isset($seen[$type])) {
+                    $seen[$type] = true;
+                    $kept[] = $chunk;
+                }
+            }
+            if ($kept === []) {
                 return null;
             }
 
-            [$width, $height, $channels, $colorType] = self::parseIhdr($chunks[0]['data']);
+            [$width, $height, $channels, $colorType] = self::parseIhdr($kept[0]['data']);
             if ($width < 1 || $height < 1 || $width > self::HARD_MAX_DIM || $height > self::HARD_MAX_DIM) {
                 return null;
             }
@@ -92,18 +112,12 @@ final class PngPixels
                 return null;
             }
 
-            $idat = '';
-            foreach ($chunks as $chunk) {
-                if ($chunk['type'] === 'IDAT') {
-                    $idat .= $chunk['data'];
-                }
-            }
             if ($idat === '') {
                 return null;
             }
 
-            $palette = self::parsePalette($chunks);
-            $trns = self::parseTrns($chunks);
+            $palette = self::parsePalette($kept);
+            $trns = self::parseTrns($kept);
             if ($colorType === 3 && $palette === []) {
                 return null;
             }
@@ -127,8 +141,19 @@ final class PngPixels
      */
     public static function walkChunks(string $bytes, int $offset): array
     {
+        return iterator_to_array(self::iterChunks($bytes, $offset), false);
+    }
+
+    /**
+     * Yield the chunks of {@see walkChunks()} one at a time, so a caller that
+     * keeps only part of the stream never holds the whole chunk list.
+     *
+     * @return \Generator<int, array{type: string, data: string}>
+     * @throws \InvalidArgumentException  on a truncated stream or a bad CRC
+     */
+    private static function iterChunks(string $bytes, int $offset): \Generator
+    {
         $len = strlen($bytes);
-        $out = [];
 
         while ($offset < $len) {
             // Each chunk: 4-byte length, 4-byte type, `length` data, 4-byte CRC.
@@ -160,15 +185,13 @@ final class PngPixels
                 throw new \InvalidArgumentException(Lang::t('apng.bad_chunk_crc', ['type' => $type]));
             }
 
-            $out[] = ['type' => $type, 'data' => $data];
+            yield ['type' => $type, 'data' => $data];
 
             if ($type === 'IEND') {
-                break;
+                return;
             }
             $offset = $crcStart + 4;
         }
-
-        return $out;
     }
 
     /**

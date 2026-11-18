@@ -548,6 +548,31 @@ final class PngPixelsTest extends TestCase
         PngPixels::walkChunks(self::chunk("IH\x001", ''), 0);
     }
 
+    /**
+     * decode() keeps only IHDR, the first PLTE and tRNS, and the IDAT payload, so
+     * 100 000 four-byte ancillary chunks (about 1.6 MB of input) decode to the same
+     * pixels without a list entry per chunk. Retaining every chunk measured about
+     * 47 MB of peak growth for this input; the bound below sits well between that
+     * and the incremental path's sub-megabyte figure.
+     */
+    public function testManyTinyAncillaryChunksDecodeWithBoundedMemory(): void
+    {
+        $raw = pack('C*', 10, 20, 30, 254, 0, 0, 0, 0, 255, 255, 255, 1, 9, 8, 7, 128);
+        $stream = self::png(2, 2, 6, $raw, [0], str_repeat(self::chunk('auXa', 'abcd'), 100_000));
+
+        $started = hrtime(true);
+        memory_reset_peak_usage();
+        $baseline = memory_get_usage();
+        $decoded = PngPixels::decode($stream);
+        $peakGrowth = memory_get_peak_usage() - $baseline;
+        $seconds = (hrtime(true) - $started) / 1e9;
+
+        self::assertInstanceOf(RawRgba::class, $decoded);
+        self::assertSame($raw, $decoded->rgba);
+        self::assertLessThan(8 * 1024 * 1024, $peakGrowth, 'peak memory grew with the chunk count');
+        self::assertLessThan(2.0, $seconds);
+    }
+
     public function testParseIhdrReadsGeometryAndChannelCount(): void
     {
         self::assertSame([3, 2, 4, 6], PngPixels::parseIhdr(pack('NNCCCCC', 3, 2, 8, 6, 0, 0, 0)));
