@@ -34,6 +34,22 @@ final class WebsocketUrlTest extends TestCase
         self::assertSame('ws://[::1]:9/ws', WebsocketUrl::from('http://::1:9'));
     }
 
+    public function testZoneScopedIpv6HostKeepsItsZoneId(): void
+    {
+        // The host's Attach::websocketUrl keeps a bracketed zone-scoped address as printed.
+        self::assertSame('ws://[fe80::1%25eth0]:8080/ws', WebsocketUrl::from('http://[fe80::1%25eth0]:8080'));
+    }
+
+    public function testEmptyZoneIdIsRefused(): void
+    {
+        self::assertNull(WebsocketUrl::from('http://[fe80::1%]:8080'));
+    }
+
+    public function testInvalidIpv6AddressBeforeZoneIdIsRefused(): void
+    {
+        self::assertNull(WebsocketUrl::from('http://[:::%25eth0]:8080'));
+    }
+
     public function testBareIpv6HostWithoutPortIsRefused(): void
     {
         // parse_url() reads `http://::1` as host `:` port 1; that must not become `[:]:1`.

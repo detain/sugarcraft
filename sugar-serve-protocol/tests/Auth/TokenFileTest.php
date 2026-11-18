@@ -55,16 +55,18 @@ final class TokenFileTest extends TestCase
         self::assertNull(TokenFile::read($this->dir));
     }
 
-    public function testOversizedTokenFileIsMalformedNotLoaded(): void
+    public function testLargeNonTokenFileIsMalformed(): void
     {
         \file_put_contents($this->dir . '/token', self::TOKEN . \str_repeat('a', 1 << 20));
 
         self::assertNull(TokenFile::read($this->dir));
     }
 
-    public function testTokenFilePaddedToTheByteLimitStillReads(): void
+    public function testTokenFollowedByTrailingWhitespacePastOldLimitStillReads(): void
     {
-        \file_put_contents($this->dir . '/token', self::TOKEN . \str_repeat(' ', TokenFile::MAX_BYTES - 64));
+        // Matches the host's TokenStore::read, which trims before it validates and
+        // has no size cap: a good token must not be rotated away for its padding.
+        \file_put_contents($this->dir . '/token', self::TOKEN . "\n" . \str_repeat(' ', 200));
 
         self::assertSame(self::TOKEN, TokenFile::read($this->dir));
     }

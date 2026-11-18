@@ -45,10 +45,17 @@ final class WebsocketUrl
             ? \substr($parts['host'], 1, -1)
             : $parts['host'];
         $ipv6 = \str_contains($bare, ':');
+        // A zone id (`fe80::1%25eth0`, as a server prints a link-local address) is
+        // kept as given, the way the host's Attach::websocketUrl keeps it; the
+        // address before the `%` is what must be a valid IPv6 literal.
+        $zone = '';
+        if ($ipv6 && \preg_match('/^([^%]+)(%.+)$/', $bare, $m) === 1) {
+            [, $bare, $zone] = $m;
+        }
         if ($ipv6 && \filter_var($bare, \FILTER_VALIDATE_IP, \FILTER_FLAG_IPV6) === false) {
             return null;
         }
-        $host = $ipv6 ? '[' . $bare . ']' : $bare;
+        $host = $ipv6 ? '[' . $bare . $zone . ']' : $bare;
 
         return $scheme . '://' . $host . (isset($parts['port']) ? ':' . $parts['port'] : '') . self::WS_PATH;
     }
