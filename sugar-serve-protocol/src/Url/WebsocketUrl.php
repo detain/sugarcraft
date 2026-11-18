@@ -1,0 +1,70 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\ServeProtocol\Url;
+
+/**
+ * Turns the address a server prints (or a browser opens) into the ws(s) URL
+ * the serve protocol is dialled at.
+ *
+ * The pure half of candy-code's `Attach::websocketUrl`, with one deliberate
+ * divergence: the host's method still builds a URL for a few malformed
+ * addresses (`http://[abc]:8080`, `http://::1`, `http://[fe80::1%]:8080` and
+ * similar) that this class refuses with null. Delegating the host here turns
+ * those into null on purpose; they were never dialable. The pinned set is
+ * `WebsocketUrlTest::testHostAcceptedMalformedAddressesAreRefused`.
+ */
+final class WebsocketUrl
+{
+    /** The path the WebSocket is served on; any path given is replaced. */
+    public const WS_PATH = '/ws';
+
+    private function __construct()
+    {
+    }
+
+    /**
+     * `ws://host:port/ws` for an `http(s)://` or `ws(s)://` address, or null
+     * when $url is neither. A bracketed IPv6 host is kept bracketed.
+     */
+    public static function from(string $url): ?string
+    {
+        $parts = \parse_url(\trim($url));
+        if (!\is_array($parts) || !isset($parts['scheme'], $parts['host'])) {
+            return null;
+        }
+        $scheme = match (\strtolower($parts['scheme'])) {
+            'http', 'ws' => 'ws',
+            'https', 'wss' => 'wss',
+            default => null,
+        };
+        if ($scheme === null || $parts['host'] === '') {
+            return null;
+        }
+        // parse_url() cannot split a bare IPv6 host without a port: `http://::1`
+        // comes back as host `:` and port 1. A host that is not a valid IPv6
+        // literal once its brackets are stripped is refused, not bracketed.
+        $bracketed = \str_starts_with($parts['host'], '[') && \str_ends_with($parts['host'], ']');
+        $bare = $bracketed ? \substr($parts['host'], 1, -1) : $parts['host'];
+        $ipv6 = \str_contains($bare, ':');
+        // A bracketed host is only ever an IPv6 literal; `[abc]` must not be dialled as
+        // the DNS name `abc`, which is what dropping its brackets would do.
+        if ($bracketed && !$ipv6) {
+            return null;
+        }
+        // A zone id (`fe80::1%25eth0`, as a server prints a link-local address) is
+        // kept as given, the way the host's Attach::websocketUrl keeps it; the
+        // address before the `%` is what must be a valid IPv6 literal.
+        $zone = '';
+        if ($ipv6 && \preg_match('/^([^%]+)(%.+)$/', $bare, $m) === 1) {
+            [, $bare, $zone] = $m;
+        }
+        if ($ipv6 && \filter_var($bare, \FILTER_VALIDATE_IP, \FILTER_FLAG_IPV6) === false) {
+            return null;
+        }
+        $host = $ipv6 ? '[' . $bare . $zone . ']' : $bare;
+
+        return $scheme . '://' . $host . (isset($parts['port']) ? ':' . $parts['port'] : '') . self::WS_PATH;
+    }
+}

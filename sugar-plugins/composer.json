@@ -1,0 +1,46 @@
+{
+    "name": "sugarcraft/sugar-plugins",
+    "description": "Generic plugin core for SugarCraft hosts: the plugin and channel contracts, the plugin launch context, and the prompt-fence escape.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "tui",
+        "plugin",
+        "channel",
+        "sugarcraft"
+    ],
+    "homepage": "https://github.com/sugarcraft/sugar-plugins",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/sugar-plugins/issues",
+        "source": "https://github.com/sugarcraft/sugar-plugins/tree/master",
+        "docs": "https://sugarcraft.github.io/lib/sugar-plugins.html"
+    },
+    "require": {
+        "php": "^8.3",
+        "psr/http-message": "^1.1 || ^2.0",
+        "react/event-loop": "^1.6",
+        "sugarcraft/sugar-core": "dev-master"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Plugins\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Plugins\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
