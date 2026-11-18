@@ -41,6 +41,24 @@ use SugarCraft\Image\Support\TmuxBinary;
 final class Detect
 {
     private const DA1_QUERY    = "\x1b[c";           // DA1 "who are you?"
+
+    /**
+     * Kitty graphics capability query (P1-13b): a 1x1 RGB pixel under image
+     * id 31, action `a=q` (query, store nothing). A Kitty-speaking terminal
+     * answers `ESC _ G i=31;OK ESC \`; one that does not answers nothing or
+     * an error code.
+     */
+    private const KITTY_APC_QUERY = "\x1b_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\x1b\\";
+
+    /** The OK reply to {@see KITTY_APC_QUERY}, ST- or BEL-terminated. */
+    public const KITTY_APC_REPLY = '/\e_Gi=31;OK(?:\e\\\\|\x07)/';
+
+    /**
+     * The window terminator for the Kitty query: the DA1 answer, with the
+     * Kitty reply before it when one arrived. One pattern, so the reply is
+     * removed from the buffer and never reaches the stray-input store.
+     */
+    private const KITTY_APC_THEN_DA1 = '/(?:\e_Gi=31;[^\e]*(?:\e\\\\|\x07))?\e\[\?[\d;]*c/';
     private const XTWINOP_14  = "\x1b[14t";          // window pixel size
     private const XTWINOP_16  = "\x1b[16t";          // cell pixel size
     private const XTWINOP_18  = "\x1b[18t";          // terminal cell count
@@ -281,9 +299,10 @@ final class Detect
     /**
      * Probe the terminal: env vars first, then optional DA1 query.
      *
-     * If env vars already give a definite protocol (Kitty / iTerm2),
-     * DA1 is skipped.  It only fills gaps — primarily detecting sixel
-     * on xterm-compatible terminals that have no identifying env var.
+     * If env vars already give a definite protocol (iTerm2), DA1 is skipped.
+     * A Kitty env claim is confirmed by an APC `a=q` reply instead, and is
+     * dropped without one (P1-13b). DA1 only fills gaps — primarily detecting
+     * sixel on xterm-compatible terminals that have no identifying env var.
      */
     public static function probe(): Capability
     {
@@ -309,7 +328,22 @@ final class Detect
 
         $cap = self::probeEnv($inTmux);
 
-        // Env vars gave a definite answer — no DA1 needed.
+        // A Kitty claim from the environment is a hypothesis until the terminal
+        // answers an APC `a=q` query (P1-13b). Capability::kitty() is true only
+        // on that reply: no reply, or no tty to ask on, drops the claim and the
+        // ladder below decides as it would for any other terminal. A DA1 answer
+        // that arrived without the reply was already read by that query, so the
+        // sixel arm reads it from there instead of asking a second time.
+        $da1Consumed = false;
+        if ($cap->kitty) {
+            $kittyReply = self::probeKittyApc();
+            if ($kittyReply !== true) {
+                $da1Consumed = $kittyReply === false;
+                $cap = Capability::unknown(null, $inTmux)->withTerminalFacts($cap->quirks, $cap->passthroughMode);
+            }
+        }
+
+        // Env vars (or the Kitty reply) gave a definite answer — no DA1 needed.
         if ($cap->kitty || $cap->iterm2) {
             return self::finishProbe($cap->withCellSize(self::probeFontSize()));
         }
@@ -353,7 +387,9 @@ final class Detect
                 return self::finishProbe(Capability::sixel(self::probeFontSize(), $inTmux)->withTerminalFacts($cap->quirks, $cap->passthroughMode));
             }
 
-            $sixelViaDa1 = self::probeDa1();
+            // A DA1 answer the Kitty query already read is parsed, not re-asked:
+            // a second query would wait out the window for an answer that never comes.
+            $sixelViaDa1 = $da1Consumed ? self::parseDa1Reply((string) self::$lastDa1Reply) : self::probeDa1();
             if ($sixelViaDa1 === true) {
                 return self::finishProbe(Capability::sixel(self::probeFontSize(), $inTmux)->withTerminalFacts($cap->quirks, $cap->passthroughMode));
             }
@@ -916,6 +952,49 @@ final class Detect
         }
 
         return self::parseDa1Reply($reply);
+    }
+
+    /**
+     * Ask whether the terminal really speaks the Kitty graphics protocol: an
+     * APC `a=q` query for one 1x1 RGB pixel (image id 31), followed by DA1 so
+     * the reply window closes even when the terminal ignores APC, since every
+     * terminal answers DA1. Terminals answer in order, so the OK reply, when
+     * there is one, precedes the DA1 answer.
+     *
+     * @return bool|null  true = the `i=31;OK` reply came back; false = DA1 came
+     *                    back without it (the terminal parsed the query and
+     *                    declined it, or ignored it); null = no tty, a failed
+     *                    write, or no answer within the window
+     */
+    private static function probeKittyApc(): ?bool
+    {
+        if (!self::isInteractiveTty()) {
+            return null;
+        }
+        $fd    = self::stdinFd();
+        $out   = self::stdoutFd();
+        $query = self::KITTY_APC_QUERY . self::DA1_QUERY;
+        $written = @fwrite($out, $query);
+        if ($written === false || $written !== strlen($query)) {
+            return null;
+        }
+        fflush($out);
+
+        // The terminator consumes the APC reply together with the DA1 answer:
+        // stashSurplus() removes one match per pattern, so an APC reply left
+        // out of it would be replayed to the input parser as a stray keystroke.
+        $reply = self::readStdinTimed(self::TIMEOUT_MS, $fd, self::KITTY_APC_THEN_DA1);
+        if (preg_match(self::KITTY_APC_REPLY, $reply) === 1) {
+            return true;
+        }
+
+        if (preg_match(self::DA1_REPLY_TERMINATOR, $reply) !== 1) {
+            return null;
+        }
+        // The DA1 answer is in hand: the sixel arm reads it from here (see probeQueries).
+        self::$lastDa1Reply = $reply;
+
+        return false;
     }
 
     /**

@@ -676,6 +676,35 @@ not grow. iTerm2 pops the previous frame before it draws, because its delete
 removes only the topmost image. Sixel and the text tiers have nothing to delete.
 `Renderer::supportsIdDelete()` reports which case applies.
 
+**Kitty is confirmed, not assumed.** An environment claim of Kitty
+(`KITTY_WINDOW_ID`, `TERM=xterm-kitty`, a known `TERM_PROGRAM`) is a hypothesis.
+`Detect::probe()` sends an APC `a=q` query for one 1x1 pixel under image id 31,
+followed by DA1, and `Capability::kitty()` is true only when the terminal
+answers `ESC _ G i=31;OK`. A DA1 answer without that reply, no answer in the
+window, or no tty to ask on drops the claim, and the ladder decides as it does
+for any other terminal. `Detect::fromEnv()` is unchanged: it still names the
+claim, and it never asks.
+
+## Sprite sheets, timelines and the decode cache
+
+`SpriteSheet::fromSource($sheet, $cols, $rows)` splits a storyboard or trickplay
+sheet into an equal grid. `->tile($i)` returns tile `$i` in row-major order as an
+`ImageSource`. `Timeline::new($tiles, $durationSeconds)->tileAt($sec)` maps a
+playback position to the tile that covers it, clamping before the start and
+past the end.
+
+Each tile is a crop of the sheet, and `ImageSource::crop()` reads its decode
+through `DecodedImageCache`: a process-wide LRU of eight decoded handles, keyed
+on the content of the bytes. A sheet of any number of tiles costs one decode,
+and two `ImageSource` values built from the same bytes share one. The cache
+owns its handles, so callers read them and never destroy them.
+`DecodedImageCache::misses()` counts the decodes, and `reset()` clears the cache.
+
+`ChafaRenderer::renderAsync($image, $width, $height, $loop)` runs the chafa child
+on the event loop through `ChildRun`. The loop keeps running while chafa
+encodes. The repaint memo is kept, so an unchanged frame resolves without a
+spawn. `render()` is unchanged and still blocks.
+
 ## Inside tmux
 
 tmux panes **swallow** DCS, APC and OSC strings unless the window's
