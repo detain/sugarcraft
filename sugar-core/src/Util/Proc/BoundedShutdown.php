@@ -451,8 +451,13 @@ final class BoundedShutdown
             if ($isGone()) {
                 return true;
             }
+            // An exhausted budget goes straight to the closing poll: sleeping
+            // first would charge a zero-budget probe a full interval it never asked for.
+            if (\hrtime(true) / 1_000_000_000 >= $deadline) {
+                break;
+            }
             \usleep(self::POLL_INTERVAL_US);
-        } while (\hrtime(true) / 1_000_000_000 < $deadline);
+        } while (true);
 
         return $isGone();
     }

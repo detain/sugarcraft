@@ -232,7 +232,7 @@ final class ProcessReaper
 
         $signal(15);
         $killed = false;
-        $deadline = \microtime(true) + $terminateGrace;
+        $deadline = self::monotonic() + $terminateGrace;
         $timer = null;
         $timer = $loop->addPeriodicTimer(self::POLL_INTERVAL_US / 1_000_000, static function () use (&$timer, &$killed, &$deadline, $loop, $signal, $isGone, $finish, $killGrace, $onEscalate): void {
             if ($isGone()) {
@@ -241,7 +241,7 @@ final class ProcessReaper
 
                 return;
             }
-            if (\microtime(true) < $deadline) {
+            if (self::monotonic() < $deadline) {
                 return;
             }
             if ($killed) {
@@ -255,7 +255,7 @@ final class ProcessReaper
             }
             $signal(9);
             $killed = true;
-            $deadline = \microtime(true) + $killGrace;
+            $deadline = self::monotonic() + $killGrace;
         });
     }
 
@@ -396,16 +396,26 @@ final class ProcessReaper
     /**
      * Poll $isGone until it answers true or the budget runs out.
      */
+    /**
+     * Monotonic seconds for every grace deadline. The wall clock (microtime)
+     * would let an NTP step stretch or cut the TERM/KILL window, the same
+     * reason sugar-core's BoundedShutdown measures on hrtime().
+     */
+    private static function monotonic(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
+    }
+
     private static function waitBounded(callable $isGone, float $budgetSeconds): bool
     {
-        $deadline = \microtime(true) + $budgetSeconds;
+        $deadline = self::monotonic() + $budgetSeconds;
 
         do {
             if ($isGone()) {
                 return true;
             }
             \usleep(self::POLL_INTERVAL_US);
-        } while (\microtime(true) < $deadline);
+        } while (self::monotonic() < $deadline);
 
         return $isGone();
     }

@@ -430,6 +430,37 @@ final class LockFileTest extends TestCase
         $stale->release();
     }
 
+    public function testForkedChildExitDoesNotReleaseTheParentsLock(): void
+    {
+        if (!\function_exists('pcntl_fork') || !\function_exists('posix_kill')) {
+            self::markTestSkipped('needs ext-pcntl and ext-posix');
+        }
+        $path = $this->dir . '/l';
+        $guard = LockFile::on($path)->tryAcquire();
+        self::assertNotNull($guard);
+
+        $pid = \pcntl_fork();
+        self::assertNotSame(-1, $pid);
+        if ($pid === 0) {
+            // A normal exit runs __destruct() on every object the fork inherited,
+            // including the parent's guard. That run must leave the lock alone.
+            exit(0);
+        }
+        \pcntl_waitpid($pid, $status);
+        self::assertTrue(\pcntl_wifexited($status));
+
+        $probe = fopen($path, 'c');
+        self::assertIsResource($probe);
+        // flock() is per open file description: a fresh fopen() is a second holder.
+        self::assertFalse(flock($probe, LOCK_EX | LOCK_NB), 'a forked child must not drop the parent lock');
+        fclose($probe);
+
+        $guard->release();
+        $again = LockFile::on($path)->tryAcquire();
+        self::assertNotNull($again, 'the parent can still release and re-take the lock');
+        $again->release();
+    }
+
     /**
      * A dead exclusive holder left its pid note behind and a live shared reader
      * now holds the inode. The reader writes no pid, so the note still reads as

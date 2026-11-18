@@ -227,7 +227,9 @@ final class Retry
 
                         return;
                     }
-                    $delayMs = $backoff->forAttempt($n);
+                    // The ladder plateau retry() applies: an uncapped Backoff would
+                    // otherwise arm a redial timer days out. Reported clamped too.
+                    $delayMs = min($backoff->forAttempt($n), (int) (self::MAX_BACKOFF_SECONDS * 1000));
                     if ($onRetry !== null) {
                         try {
                             $onRetry($n, $delayMs, $failure);
