@@ -31,6 +31,22 @@ trait RenderValidationTrait
      */
     protected function prepareRender(ImageSource $image, int $width, ?int &$height): int
     {
+        return $this->prepareRenderFor($image->width, $image->height, $width, $height);
+    }
+
+    /**
+     * The same validation and height law as {@see prepareRender()}, keyed on
+     * the source's pixel grid instead of an {@see ImageSource}. Raw-RGBA
+     * entry points ({@see \SugarCraft\Image\Renderer\Renderer::renderRgb()})
+     * have no ImageSource to hand, and their auto height must still come
+     * out of the same cell-geometry rule.
+     */
+    protected function prepareRenderFor(int $sourceWidth, int $sourceHeight, int $width, ?int &$height): int
+    {
+        if ($sourceWidth <= 0 || $sourceHeight <= 0) {
+            throw new \InvalidArgumentException("source dimensions {$sourceWidth}x{$sourceHeight} must be positive");
+        }
+
         if ($width <= 0) {
             throw new \InvalidArgumentException(
                 Lang::t('renderer.invalid_width', ['width' => $width])
@@ -47,7 +63,7 @@ trait RenderValidationTrait
         // through the cell box rather than through a square grid — see
         // {@see CellGeometry}. Dividing by the aspect alone displayed every
         // auto-sized frame at half its true aspect.
-        $effectiveHeight = $height ?? CellGeometry::heightCells($width, $image->aspectRatio());
+        $effectiveHeight = $height ?? CellGeometry::heightCells($width, $sourceWidth / $sourceHeight);
         if ($effectiveHeight <= 0) {
             $effectiveHeight = 1;
         }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Image\Renderer;
 
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Image\Codec\RawRgba;
 use SugarCraft\Image\Codec\TiffUncompressed;
 use SugarCraft\Image\Concerns\ForceTrueColor;
 use SugarCraft\Image\ImageSource;
@@ -32,6 +33,7 @@ final class Iterm2Renderer implements Renderer
 {
     use \SugarCraft\Image\Concerns\RenderValidationTrait;
     use \SugarCraft\Image\Concerns\ResolvesRawPixelsTrait;
+    use \SugarCraft\Image\Concerns\ImageSourceRgbFallback;
 
     public function render(ImageSource $image, int $width, ?int $height = null): string
     {
@@ -109,6 +111,25 @@ final class Iterm2Renderer implements Renderer
      * {@see render()} keeps its historical base64-PNG envelope byte-for-
      * byte; this is the explicit opt-in sibling.
      */
+    /**
+     * Raw RGBA straight to an uncompressed TIFF, with no PNG container.
+     *
+     * Same inline-image envelope as {@see renderTiff()}; the only difference
+     * is where the pixels come from.
+     */
+    public function renderRgb(string $rgba, int $pixelWidth, int $pixelHeight, int $width, ?int $height = null): string
+    {
+        $effectiveHeight = $this->prepareRenderFor($pixelWidth, $pixelHeight, $width, $height);
+        $tiffBytes       = TiffUncompressed::encode(RawRgba::validate($rgba, $pixelWidth, $pixelHeight), $pixelWidth, $pixelHeight);
+
+        return Ansi::iterm2InlineImage(base64_encode($tiffBytes), [
+            'type'                => 'tiff',
+            'width'               => $width,
+            'height'              => $effectiveHeight,
+            'preserveAspectRatio' => true,
+        ]);
+    }
+
     public function renderTiff(ImageSource $image, int $width, ?int $height = null, ?string $rgba = null): string
     {
         $effectiveHeight = $this->prepareRender($image, $width, $height);
