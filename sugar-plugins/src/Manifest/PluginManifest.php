@@ -90,6 +90,33 @@ final readonly class PluginManifest
         );
     }
 
+    /**
+     * The raw decoded manifest of $dir, or [] when there is no readable,
+     * decodable one. The installer's name lookup rides this: it takes the
+     * document as written, without the containment and refusal rules of
+     * {@see fromDir()}, so a bundle the loader refuses can still be named.
+     *
+     * @return array<string, mixed>
+     */
+    public static function readManifest(string $dir): array
+    {
+        $path = self::manifestPath($dir);
+
+        if ($path === null) {
+            return [];
+        }
+
+        $raw = @\file_get_contents($path);
+
+        if ($raw === false) {
+            return [];
+        }
+
+        $decoded = \json_decode($raw, true);
+
+        return \is_array($decoded) ? $decoded : [];
+    }
+
     /** True when $dir carries either manifest shape. */
     public static function hasManifest(string $dir): bool
     {

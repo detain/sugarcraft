@@ -267,4 +267,21 @@ final class PluginManifestTest extends TestCase
         $this->assertSame(['channel', 'subscriber'], array_keys($entrypoints));
         $this->assertSame('subscriber', $entrypoints['subscriber'][0]->kind);
     }
+
+    public function testReadManifestReturnsTheRawDocumentThatFromDirRefuses(): void
+    {
+        $this->writeBare(['name' => '.hidden', 'contract' => 'not-an-int']);
+
+        $this->assertNull(PluginManifest::fromDir($this->dir));
+        $this->assertSame(['name' => '.hidden', 'contract' => 'not-an-int'], PluginManifest::readManifest($this->dir));
+    }
+
+    public function testReadManifestIsEmptyWhenThereIsNoDecodableManifest(): void
+    {
+        $this->assertSame([], PluginManifest::readManifest($this->dir));
+
+        Scratch::put($this->dir . '/plugin.json', '{not json');
+
+        $this->assertSame([], PluginManifest::readManifest($this->dir));
+    }
 }

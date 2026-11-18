@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Plugins\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Plugins\Channel\SubscribesToSessionEvents;
 use SugarCraft\Plugins\Loader\LoadResult;
 use SugarCraft\Plugins\Loader\PluginCandidate;
 use SugarCraft\Plugins\Loader\PluginLoader;
@@ -96,7 +97,7 @@ final class PluginLoaderTest extends TestCase
         $this->assertTrue(class_exists($plugin['class'], false));
     }
 
-    public function testOnePathIsLoadedOnceAcrossKinds(): void
+    public function testOnePathIsRequiredOnceAndEveryKindGetsItsOwnRow(): void
     {
         $ns = 'PluginFixtures\\' . Plugins::tag();
         $fqcn = $ns . '\\Impl';
@@ -114,9 +115,128 @@ final class PluginLoaderTest extends TestCase
             interfaces: ['channel' => Plugin::class, 'subscriber' => Plugin::class],
         );
 
-        $this->assertCount(1, $result->loaded);
-        $this->assertSame('channel', $result->loaded[0]['kind']);
+        // The file runs once; each kind that names it is still judged and
+        // lands in exactly one bucket.
+        $this->assertSame(['channel', 'subscriber'], array_column($result->loaded, 'kind'));
+        $this->assertSame([], $result->quarantined);
         $this->assertSame([], $result->refusals);
+        $this->assertTrue(class_exists($fqcn, false));
+    }
+
+    public function testADuplicatePathUnderTwoKindsLandsEachRowInOneBucket(): void
+    {
+        $ns = 'PluginFixtures\\' . Plugins::tag();
+        $fqcn = $ns . '\\Impl';
+        $built = $this->build('demo', Plugins::pluginSource($ns, 'Impl', 'demo'), [
+            'channel' => ['file' => 'src/Impl.php', 'class' => $fqcn],
+            'subscriber' => ['file' => 'src/Impl.php', 'class' => $fqcn],
+        ]);
+        $ledger = new MemoryLedger();
+        $ledger->prime($built['file']);
+
+        $result = $this->load(
+            [Plugins::candidate('demo', $built['dir'])],
+            $ledger,
+            kinds: ['channel', 'subscriber'],
+            interfaces: ['channel' => Plugin::class, 'subscriber' => SubscribesToSessionEvents::class],
+        );
+
+        $this->assertSame(['channel'], array_column($result->loaded, 'kind'));
+        $this->assertSame(
+            [['subscriber', 'interface-mismatch']],
+            array_map(static fn (array $row): array => [$row['kind'], $row['reason']], $result->refusals),
+            'the subscriber row must be judged and refused, never dropped',
+        );
+    }
+
+    public function testTwoTrustedCandidatesNamingOneFileQuarantineItOnceAndRunNothingThisLaunch(): void
+    {
+        $ns = 'PluginFixtures\\' . Plugins::tag();
+        $class = $ns . '\\Hook';
+        $outer = Scratch::dir('loader');
+        $this->dirs[] = $outer;
+        Scratch::put($outer . '/inner/plugin.php', Plugins::pluginSource($ns, 'Hook', 'demo'));
+        Scratch::put($outer . '/plugin.json', (string) json_encode([
+            'name' => 'outer',
+            'entrypoints' => ['channel' => ['file' => 'inner/plugin.php', 'class' => $class]],
+        ]));
+        Scratch::put($outer . '/inner/plugin.json', (string) json_encode([
+            'name' => 'inner',
+            'entrypoints' => ['channel' => ['file' => 'plugin.php', 'class' => $class]],
+        ]));
+        $file = (string) realpath($outer . '/inner/plugin.php');
+        $candidates = [
+            Plugins::candidate('outer', $outer),
+            Plugins::candidate('inner', $outer . '/inner'),
+        ];
+        $ledger = new MemoryLedger();
+
+        $first = $this->load($candidates, $ledger, trusted: ['outer', 'inner']);
+
+        $this->assertSame(['outer', 'inner'], array_column($first->quarantined, 'bundle'));
+        $this->assertSame([], $first->loaded);
+        $this->assertSame([], $first->refusals);
+        $this->assertFalse(class_exists($class, false), 'a file first seen under one name must not run under another');
+        $this->assertSame([$file], $ledger->recorded);
+
+        $second = $this->load($candidates, $ledger, trusted: ['outer', 'inner']);
+
+        $this->assertSame(['outer', 'inner'], array_column($second->loaded, 'bundle'));
+        $this->assertSame([], $second->quarantined);
+        $this->assertSame([], $second->refusals);
+        $this->assertTrue(class_exists($class, false));
+    }
+
+    public function testATrustedDirectoryWithNoManifestOwesNoRow(): void
+    {
+        $dir = Scratch::dir('loader');
+        $this->dirs[] = $dir;
+
+        $result = $this->load(
+            [Plugins::candidate('demo', $dir)],
+            new MemoryLedger(),
+            kinds: ['channel', 'theme'],
+            interfaces: ['channel' => Plugin::class, 'theme' => Plugin::class],
+        );
+
+        $this->assertSame(['loaded' => [], 'quarantined' => [], 'refusals' => []], $result->toArray());
+    }
+
+    public function testAForeignOwnedFileIsRefusedAtTheLoaderDoor(): void
+    {
+        $plugin = $this->declaring('Impl');
+        $ledger = new MemoryLedger();
+        $ledger->prime($plugin['file']);
+        $owner = (int) fileowner($plugin['file']);
+
+        $result = PluginLoader::load(
+            [Plugins::candidate('demo', $plugin['dir'])],
+            new TrustList(['demo']),
+            $ledger,
+            ['channel'],
+            ['channel' => Plugin::class],
+            3,
+            processUid: $owner + 1,
+        );
+
+        $this->assertSame(['foreign-owner'], array_column($result->refusals, 'reason'));
+        $this->assertSame([], $result->loaded);
+        $this->assertFalse(class_exists($plugin['class'], false), 'a foreign-owned file must not execute');
+    }
+
+    public function testAHostClassOfTheSameNameIsNotAdoptedByAPluginFileThatDeclaresNothing(): void
+    {
+        $hostClass = MemoryLedger::class;
+        $built = $this->build('demo', "<?php\n\ndeclare(strict_types=1);\n\n// declares nothing\n", [
+            'channel' => ['file' => 'src/Impl.php', 'class' => $hostClass],
+        ]);
+        $ledger = new MemoryLedger();
+        $ledger->prime($built['file']);
+
+        $result = $this->load([Plugins::candidate('demo', $built['dir'])], $ledger);
+
+        $this->assertSame(['class-not-declared'], array_column($result->refusals, 'reason'));
+        $this->assertSame([], $result->loaded);
     }
 
     public function testAnUntrustedNameNeverHasItsManifestRead(): void

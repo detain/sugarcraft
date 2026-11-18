@@ -48,7 +48,8 @@ final class PluginRegistry
     /**
      * Accept one plugin under $bundleName. A collision (a reserved bundle, or a
      * name another accepted plugin already owns) is refused, never overridden.
-     * Returns false and names the reason word in $reason when it refuses.
+     * A blank name is refused as `invalid-name`. Returns false and names the
+     * reason word in $reason when it refuses.
      */
     public function register(string $bundleName, object $plugin, ?string &$reason = null): bool
     {
@@ -67,6 +68,14 @@ final class PluginRegistry
         }
 
         $name = \trim($plugin->name());
+
+        // An empty name would index under '' and collide with every other
+        // nameless plugin, so it is refused as a name, not as a collision.
+        if ($name === '') {
+            $reason = 'invalid-name';
+
+            return false;
+        }
 
         if (isset($this->byName[$name])) {
             $reason = 'collision';

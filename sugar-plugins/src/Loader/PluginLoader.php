@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Plugins\Loader;
 
 use SugarCraft\Core\Util\PathJail;
+use SugarCraft\Plugins\Manifest\PluginManifest;
 use SugarCraft\Plugins\Support\ErrorLine;
 use SugarCraft\Plugins\Trust\PrivateBytes;
 use SugarCraft\Plugins\Trust\QuarantineLedger;
@@ -44,13 +45,16 @@ final class PluginLoader
      *
      * One trust list, one quarantine ledger, one private-bytes door: the kind
      * only selects which manifest section is read. A path named under two kinds
-     * is loaded, and recorded, exactly once.
+     * or by two trusted candidates is decided ONCE per launch: quarantined or
+     * required at most once, whatever the number of entries that name it. Each
+     * entry still lands in its own bucket, judged against its own class.
      *
      * @param list<PluginCandidate>            $candidates    discovered plugins
      * @param QuarantineLedger                 $ledger        the seen-ledger backing quarantine
      * @param list<string>                     $kinds         manifest entrypoint kinds to read
      * @param array<string, class-string>      $kindInterfaces the interface each kind's class must implement
      * @param int                              $hostContract  the host's contract integer; a plugin declaring a higher one is refused
+     * @param ?int                             $processUid    the uid the bytes must belong to; null reads the process's own
      *
      * @throws \InvalidArgumentException when a requested kind has no interface mapped
      */
@@ -61,6 +65,7 @@ final class PluginLoader
         array $kinds,
         array $kindInterfaces,
         int $hostContract,
+        ?int $processUid = null,
     ): LoadResult {
         foreach ($kinds as $kind) {
             if (!isset($kindInterfaces[$kind])) {
@@ -79,6 +84,13 @@ final class PluginLoader
             return new LoadResult($loaded, $quarantined, $refusals);
         }
 
+        // Launch-wide, not per candidate: two trusted names can reach one file,
+        // and the second must not find the first's quarantine mark and require it.
+        /** @var array<string, string> $pathState realpath => 'quarantined' | 'required' | 'failed' */
+        $pathState = [];
+        /** @var array<string, string> $requireErrors realpath => diagnostic of the failed require */
+        $requireErrors = [];
+
         foreach ($candidates as $candidate) {
             if (!$trust->contains($candidate->name)) {
                 continue; // trust is by exact name, never case-folded
@@ -86,9 +98,14 @@ final class PluginLoader
 
             $manifest = $candidate->manifest();
             if ($manifest === null) {
-                // A trusted name whose manifest was refused (non-object, dot-name,
-                // malformed contract) still owes every requested kind a row, or the
-                // host would see the plugin in no bucket at all.
+                // No manifest file at all is not a refusal: discovery never listed
+                // such a directory, so it owes no row. A manifest that is present
+                // but refused still owes every requested kind a row, or the host
+                // would see the plugin in no bucket at all.
+                if (!PluginManifest::hasManifest($candidate->dir)) {
+                    continue;
+                }
+
                 foreach ($kinds as $kind) {
                     $refusals[] = ['bundle' => $candidate->name, 'path' => $candidate->dir, 'class' => '', 'kind' => $kind, 'reason' => 'manifest-refused'];
                 }
@@ -98,15 +115,9 @@ final class PluginLoader
             $contract = $manifest->contract();
             $unsupported = $contract !== null && $contract > $hostContract;
             $declared = $manifest->entrypoints();
-            $seenPaths = [];
 
             foreach ($kinds as $kind) {
                 foreach ($declared[$kind] ?? [] as $entry) {
-                    if (isset($seenPaths[$entry->path])) {
-                        continue; // one path, one load, however many kinds name it
-                    }
-                    $seenPaths[$entry->path] = true;
-
                     $where = ['bundle' => $candidate->name, 'path' => $entry->path, 'class' => $entry->class, 'kind' => $kind];
 
                     if (!PathJail::below($entry->path, $candidate->dir)) {
@@ -121,26 +132,38 @@ final class PluginLoader
                         continue;
                     }
 
-                    $private = PrivateBytes::refusal($entry->path);
+                    $private = PrivateBytes::refusal($entry->path, $processUid);
                     if ($private !== null) {
                         $refusals[] = $where + ['reason' => $private];
                         continue;
                     }
 
-                    if (!$ledger->seen($entry->path)) {
-                        // Quarantine first: recorded before the require, so the
-                        // NEXT launch loads it and this launch only lists it.
-                        $ledger->record($entry->path);
+                    if (!isset($pathState[$entry->path])) {
+                        if (!$ledger->seen($entry->path)) {
+                            // Quarantine first: recorded before the require, so the
+                            // NEXT launch loads it and this launch only lists it.
+                            $ledger->record($entry->path);
+                            $pathState[$entry->path] = 'quarantined';
+                        } else {
+                            try {
+                                require_once $entry->path;
+                                $pathState[$entry->path] = 'required';
+                            } catch (\Throwable $e) {
+                                // One throwing plugin file must not abort the whole load;
+                                // the diagnostic travels AS DATA in the row.
+                                $pathState[$entry->path] = 'failed';
+                                $requireErrors[$entry->path] = ErrorLine::of($e, 'plugin require ' . $entry->class);
+                            }
+                        }
+                    }
+
+                    if ($pathState[$entry->path] === 'quarantined') {
                         $quarantined[] = $where;
                         continue;
                     }
 
-                    try {
-                        require_once $entry->path;
-                    } catch (\Throwable $e) {
-                        // One throwing plugin file must not abort the whole load;
-                        // the diagnostic travels AS DATA in the row.
-                        $refusals[] = $where + ['reason' => 'require-failed', 'error' => ErrorLine::of($e, 'plugin require ' . $entry->class)];
+                    if ($pathState[$entry->path] === 'failed') {
+                        $refusals[] = $where + ['reason' => 'require-failed', 'error' => $requireErrors[$entry->path]];
                         continue;
                     }
 

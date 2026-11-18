@@ -70,6 +70,21 @@ final class PluginRegistryTest extends TestCase
         $this->assertSame($first, $registry->pluginNamed('alpha'));
     }
 
+    public function testABlankNameIsRefusedAsAnInvalidNameNotACollision(): void
+    {
+        $events = [];
+        $registry = PluginRegistry::new();
+
+        $accepted = $registry->register('one', $this->plugin('  ', $events), $reason);
+
+        $this->assertFalse($accepted);
+        $this->assertSame('invalid-name', $reason);
+        $this->assertNull($registry->pluginNamed(''));
+
+        $this->assertFalse($registry->register('two', $this->plugin('', $events), $reason));
+        $this->assertSame('invalid-name', $reason, 'a second blank name must not be refused as a collision');
+    }
+
     public function testAReservedBundleIsRefused(): void
     {
         $events = [];
