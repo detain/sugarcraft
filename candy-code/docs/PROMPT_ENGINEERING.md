@@ -568,7 +568,7 @@ reason each stays out:
   `PlanModeSection`, in the system prompt itself — none of them inside a user turn).
 - **Keyword and intent triggers are built but not applied.** Every rule carries its `paths:` /
   `keywords:` / `description` triggers into its `Rule` object, and only the first is consulted.
-  The `paths:` half shipped (P6.S5b): the splice in `Runtime::systemPromptSections()` skips every
+  The `paths:` half shipped: the splice in `Runtime::systemPromptSections()` skips every
   rule `RulePathNudge::isPathScoped()` claims, and `Bootstrap` wires `RulePathNudge` into Read,
   Edit, Write, ApplyPatch, Glob and Grep, which deliver the rule in their tool output on the first touch of a
   matching file. The nudge re-walks the rules on every consult, so a scoped rule added or edited

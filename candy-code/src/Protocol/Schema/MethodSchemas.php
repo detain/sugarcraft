@@ -55,7 +55,7 @@ final class MethodSchemas
         $page = static fn (Schema $item): Schema => Schema::object(['items' => Schema::arrayOf($item), 'nextCursor' => Schema::string()->nullable()], ['items', 'nextCursor']);
         $summary = Schema::ref(D::SESSION_SUMMARY);
         $memoryScope = Schema::enum(['user', 'project', 'agent']);
-        $root = Schema::string(4096)->describe('Another project root: the serve gateway routes the call to that root\'s workspace host (roadmap O-7).');
+        $root = Schema::string(4096)->describe('Another project root: the serve gateway routes the call to that root\'s workspace host.');
         $workspace = Schema::object([
             'root' => Schema::string(),
             'primary' => Schema::boolean(),
