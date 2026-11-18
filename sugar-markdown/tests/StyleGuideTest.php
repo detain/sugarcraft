@@ -257,6 +257,31 @@ final class StyleGuideTest extends TestCase
         }
     }
 
+    public function testFromFileRefusesAFileOverTheConfigCeilingBeforeReadingIt(): void
+    {
+        // A sparse file reports its size without writing the bytes; the stat
+        // refusal must fire before any read, so the content never matters.
+        $path = tempnam(sys_get_temp_dir(), 'g8guide');
+        $this->assertIsString($path);
+        $handle = fopen($path, 'wb');
+        $this->assertIsResource($handle);
+        ftruncate($handle, StyleGuide::MAX_CONFIG_BYTES + 1);
+        fclose($handle);
+
+        $caught = null;
+        try {
+            StyleGuide::fromFile($path);
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        } finally {
+            unlink($path);
+        }
+
+        $this->assertNotNull($caught, 'an oversized style file must be refused');
+        $this->assertStringContainsString('byte ceiling', $caught->getMessage());
+        $this->assertStringContainsString((string) StyleGuide::MAX_CONFIG_BYTES, $caught->getMessage());
+    }
+
     public function testFromFileDoorThrowsOnMissingPath(): void
     {
         $this->expectException(\RuntimeException::class);

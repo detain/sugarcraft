@@ -1638,6 +1638,12 @@ final class Renderer
             } elseif ($child instanceof Code) {
                 // renderCode() expands no shortcodes: a code span shows as written.
                 $text .= $this->sanitize ? self::stripControls($child->getLiteral()) : $child->getLiteral();
+            } elseif ($child instanceof Newline) {
+                // A break shows as a line end, which a reader takes as a word gap.
+                $text .= ' ';
+            } elseif ($child instanceof HtmlInline) {
+                // renderHtmlSpan() shows raw inline HTML as written, tags included.
+                $text .= self::stripControls($child->getLiteral());
             } else {
                 $text .= $this->plainText($child);
             }
