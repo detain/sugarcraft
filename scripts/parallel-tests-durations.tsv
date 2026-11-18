@@ -1065,6 +1065,7 @@ candy-code/tests/ChatScrollTest.php	0.081	18
 candy-code/tests/Channels/ChannelsStoreTest.php	0.080	15
 candy-code/tests/Skills/SlashSkillInvocationTest.php	0.080	14
 candy-code/tests/Config/CandyCodeBodyClaimDriftTest.php	0.080	10
+candy-code/tests/Server/DiscoveryReaderParityTest.php	0.080	6
 candy-code/tests/Bundles/BundleInstallTest.php	0.079	20
 candy-code/tests/Permissions/PlanModePlansDirExceptionTest.php	0.079	22
 candy-code/tests/Providers/SseDecodeFrameBoundTest.php	0.079	4
