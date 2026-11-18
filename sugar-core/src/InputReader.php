@@ -1223,7 +1223,13 @@ final class InputReader
      * the rest of 0xE000 and up through the Kitty functional table. Anything
      * unnamed yields null and is consumed without an event.
      *
-     * Mirrors sugar-input's EscapeDecoder::modifyOtherKeysName.
+     * This shares its keysym layout with sugar-input's
+     * EscapeDecoder::modifyOtherKeysName but is not a copy of it. Two
+     * keysyms read differently here, and both are pinned by InputReaderTest:
+     * 0xFFFF (X11 Delete) is named as Delete, where sugar-input drops it as
+     * unknown, and the Latin-1 and BMP keysyms 0xA0-0xD7FF are characters,
+     * where sugar-input drops them. Until the P1-3 façade makes sugar-input a
+     * core adapter, the two decoders disagree on those bytes.
      */
     private function decodeModifyOtherKeys(int $mods, int $keysym): ?KeyMsg
     {

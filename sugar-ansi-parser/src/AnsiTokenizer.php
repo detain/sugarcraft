@@ -55,9 +55,7 @@ final class AnsiTokenizer
      * OSC/DCS/APC/SOS/PM body and a held CSI body each keep their scan position
      * across feeds, so each of their bytes is examined once however many feeds
      * it arrives in. An ESC held on its intermediates or on the C0 controls after
-     * it is still rescanned from its ESC on every feed (it keeps no scan offset),
-     * so a 1-byte-feed stream that keeps one of those open costs up to roughly
-     * MAX_PENDING_BYTES^2 / 2 steps in total.
+     * it keeps its own scan offset, so those holds are linear too.
      */
     public const MAX_PENDING_BYTES = 65536;
 
@@ -100,6 +98,21 @@ final class AnsiTokenizer
 
     private int $csiPhase = 0;
 
+    /**
+     * Offset into {@see $pending} where a held ESC stopped being scanned while
+     * it was still reading C0 controls or ESC intermediates, or 0 when no such
+     * hold is pending. Those bytes are the only ones a held ESC can wait on, so
+     * the next feed resumes the walk here instead of rescanning from the ESC.
+     */
+    private int $pendingEsc = 0;
+
+    /**
+     * Set by {@see consumeEsc()} when it runs out of input inside the ESC
+     * prefix: the offset in the buffer where the walk stopped. Reset before
+     * every escape-sequence consumption, like {@see $csiScanStop}.
+     */
+    private int $escScanStop = 0;
+
     /** CSI body phases: the optional private marker, then parameters, then intermediates. */
     private const CSI_MARKER       = 0;
     private const CSI_PARAMS       = 1;
@@ -126,10 +139,12 @@ final class AnsiTokenizer
         $resume = $this->pendingScan;
         $csiResume = $this->pendingCsi;
         $csiPhase = $this->pendingCsiPhase;
+        $escResume = $this->pendingEsc;
         $this->pending = '';
         $this->pendingScan = 0;
         $this->pendingCsi = 0;
         $this->pendingCsiPhase = 0;
+        $this->pendingEsc = 0;
         $len = strlen($buf);
         $i = 0;
         $tokens = [];
@@ -151,6 +166,18 @@ final class AnsiTokenizer
             // re-reads the sequence from its ESC and commits it once.
         }
 
+        // The same holds for an ESC still waiting on C0 controls or
+        // intermediates: the walk resumes at its stop, and the full pass runs
+        // once the byte that ends the prefix arrives.
+        if ($escResume > 0 && $len <= self::MAX_PENDING_BYTES) {
+            $stop = self::walkEscPrefix($buf, $escResume, $len);
+            if ($stop >= $len) {
+                $this->pending = $buf;
+                $this->pendingEsc = $stop;
+                return $tokens;
+            }
+        }
+
         while ($i < $len) {
             $b = $buf[$i];
 
@@ -164,6 +191,7 @@ final class AnsiTokenizer
                 // escape of this buffer can resume a body scan.
                 $this->envelopeScanStop = 0;
                 $this->csiScanStop = 0;
+                $this->escScanStop = 0;
                 $consumed = $this->consumeEsc($buf, $i, $len, $tokens, $i === 0 ? $resume : 0);
                 if ($consumed < 0) {
                     // Incomplete. Hold the tail unless the tail itself has
@@ -184,6 +212,9 @@ final class AnsiTokenizer
                     if ($this->csiScanStop > 0) {
                         $this->pendingCsi      = $this->csiScanStop - $i;
                         $this->pendingCsiPhase = $this->csiPhase;
+                    }
+                    if ($this->escScanStop > 0) {
+                        $this->pendingEsc = $this->escScanStop - $i;
                     }
                     return $tokens;
                 }
@@ -232,6 +263,7 @@ final class AnsiTokenizer
         $this->pendingScan = 0;
         $this->pendingCsi = 0;
         $this->pendingCsiPhase = 0;
+        $this->pendingEsc = 0;
         return [new Token(Token::TEXT, $rest)];
     }
 
@@ -304,6 +336,7 @@ final class AnsiTokenizer
         $controls = [];
         $k = self::skipInPlace($buf, $i + 1, $len, $controls);
         if ($k >= $len) {
+            $this->escScanStop = $len;
             return -1;
         }
         $second = $buf[$k];
@@ -355,6 +388,7 @@ final class AnsiTokenizer
                 $j++;
             }
             if ($j >= $len) {
+                $this->escScanStop = $len;
                 return -1;
             }
             $finalOrd = ord($buf[$j]);
@@ -454,6 +488,30 @@ final class AnsiTokenizer
         self::emitControls($buf, $inside, $tokens);
         $tokens[] = new Token(Token::CSI, '', $intermediate, $params, $finalByte);
         return $j + 1 - $i;
+    }
+
+    /**
+     * Walks a held ESC prefix from `$j`: the C0 controls and ESC intermediates
+     * that may follow the ESC before its introducer. Returns the offset of the
+     * first byte that is neither, or `$len` when the buffer ends first. It is
+     * the same walk {@see consumeEsc()} makes before it decides the sequence,
+     * with nothing recorded, so the full pass that commits the sequence still
+     * emits its controls once.
+     */
+    private static function walkEscPrefix(string $buf, int $j, int $len): int
+    {
+        $ignored = [];
+        while (true) {
+            $j = self::skipInPlace($buf, $j, $len, $ignored);
+            if ($j >= $len) {
+                return $len;
+            }
+            $ord = ord($buf[$j]);
+            if ($ord < 0x20 || $ord > 0x2f) {
+                return $j;
+            }
+            $j++;
+        }
     }
 
     /**
