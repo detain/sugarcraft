@@ -4,21 +4,31 @@ declare(strict_types=1);
 
 namespace SugarCraft\Git;
 
+use SugarCraft\Async\ChildPump;
+use SugarCraft\Async\Clock;
+use SugarCraft\Async\DrainResult;
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
+
 /**
  * Runs an external command with a wall-clock timeout.
  *
  * The synchronous {@see Git} driver shells out on the UI thread, so a git
  * invocation that wedges — a credential or pager prompt, an index lock held by
  * another process, an unreachable remote — would otherwise freeze the whole TUI
- * indefinitely. Draining stdout/stderr through `stream_select` with a deadline
- * lets us `proc_terminate` the child once the budget is spent instead of
- * blocking on `stream_get_contents` forever.
+ * indefinitely. The POSIX arm drains stdout/stderr through sugar-async's
+ * {@see ChildPump} with a deadline, and stops a child that outlives it with the
+ * sugar-core {@see BoundedShutdown} ladder instead of blocking on
+ * `stream_get_contents` forever.
  *
  * stdin is pumped through the SAME select loop rather than one blocking
  * `fwrite`: a child that never reads (an early `git apply` refusal, say) fills
  * the 64KiB pipe and a blocking write would wedge the UI thread OUTSIDE the
- * timeout budget entirely — the loop keeps the deadline authoritative over the
+ * timeout budget entirely — the pump keeps the deadline authoritative over the
  * write phase too.
+ *
+ * The Windows arm keeps its temp-file ladder here: stdin there is a file the
+ * child reads, which the pipe-based pump cannot take, so it stays until the
+ * Windows runtime check that gates the P1-5 consumers.
  *
  * Mirrors jesseduffield/lazygit pkg/utils exec command-runner — capture + bounded execution of git. */
 final class Process
@@ -62,6 +72,13 @@ final class Process
      * the cap keeps that pathological lane bounded instead of spinning forever.
      */
     private const MAX_CONSECUTIVE_EINTRS = 32;
+
+    /**
+     * A non-positive timeout keeps its historical meaning, "no deadline". The
+     * pump always carries a deadline, so that lane gets one a year out: far
+     * past any child this runs, and still a bounded number for the select wait.
+     */
+    private const UNBOUNDED_SECONDS = 31_536_000.0;
 
     /**
      * Environment handed to every child: the parent's environment plus
@@ -140,171 +157,56 @@ final class Process
             throw self::spawnFailure();
         }
 
-        // EPIPE is expected when the child exits without draining us — @fwrite
-        // surfaces it as a silent write failure and the child's own exit code
-        // speaks for the outcome.
-        $stdinHandle = null;
-        $stdinOffset = 0;
+        $clock    = Clock::monotonicSeconds(...);
+        $deadline = $clock() + ($timeout > 0 ? $timeout : self::UNBOUNDED_SECONDS);
+
+        $pump = ChildPump::new([1 => $pipes[1], 2 => $pipes[2]])
+            ->withDeadline($deadline)
+            ->withCap(self::MAX_CAPTURE)
+            ->withClock($clock)
+            ->withSelectRetries(self::MAX_CONSECUTIVE_EINTRS);
         if ($stdin !== null) {
-            stream_set_blocking($pipes[0], false);
-            if ($stdin === '') {
-                fclose($pipes[0]);
-            } else {
-                $stdinHandle = $pipes[0];
-            }
+            // An empty payload closes the pipe at once, so the child sees EOF.
+            $pump = $pump->withStdin($pipes[0], $stdin);
         }
 
-        $open = [];
-        foreach ([1, 2] as $i) {
-            stream_set_blocking($pipes[$i], false);
-            $open[$i] = $pipes[$i];
+        try {
+            $r = $pump->pump();
+        } catch (\Throwable $e) {
+            self::closeAll($pipes);
+            BoundedShutdown::terminateBounded($proc, self::TERMINATE_GRACE_SECONDS);
+
+            throw $e;
         }
+        // Pipes go before any reap: the reap waits on the exit, and our ends
+        // are ours to close first.
+        self::closeAll($pipes);
 
-        $stdout      = '';
-        $stderr      = '';
-        $stdoutTruncated = false;
-        $stderrTruncated = false;
-        $timedOut    = false;
-        $abandoned   = false; // loop stopped while the child may still be live (timeout or EINTR)
-        $interrupted = false; // candy-git-006: abandoned by a signal storm, not by the deadline
-        $intrCount   = 0;     // consecutive stream_select() === false results
-        $deadline    = $timeout > 0 ? microtime(true) + $timeout : null;
+        // candy-git-007: pipe EOF is not child death. A child that redirects its
+        // own descriptors away closes our capture pipes at once while the process
+        // keeps living, so after a clean EOF the reap spends whatever of the
+        // absolute deadline remains. Any other ending has no budget left to spend.
+        // The reap waits without signalling; a child still running then goes
+        // through the TERM -> grace -> KILL ladder. terminateBounded() is
+        // idempotent on a handle the first call already reaped, so it runs
+        // unconditionally: every path out of here reaps the child.
+        $budget  = $r->reason === DrainResult::CLOSED ? max(0.0, $deadline - $clock()) : 0.0;
+        $reaped  = BoundedShutdown::reapIfExited($proc, $budget);
+        $stopped = BoundedShutdown::terminateBounded($proc, self::TERMINATE_GRACE_SECONDS);
+        $exit    = $reaped ?? $stopped ?? -1;
 
-        while ($open !== [] || $stdinHandle !== null) {
-            $wait = null;
-            if ($deadline !== null) {
-                $wait = $deadline - microtime(true);
-                if ($wait <= 0) {
-                    $timedOut  = true;
-                    $abandoned = true;
-                    break;
-                }
-            }
+        $timedOut    = $r->reason === DrainResult::EXPIRED
+            || ($r->reason === DrainResult::CLOSED && $reaped === null);
+        $interrupted = $r->reason === DrainResult::RETRY_BUDGET_GONE;
 
-            $read   = array_values($open);
-            $write  = $stdinHandle !== null ? [$stdinHandle] : [];
-            $except = null;
-            if ($wait === null) {
-                $ready = @stream_select($read, $write, $except, null);
-            } else {
-                $sec   = (int) $wait;
-                $usec  = (int) (($wait - $sec) * 1_000_000);
-                $ready = @stream_select($read, $write, $except, $sec, $usec);
-            }
-
-            // false = interrupted by a signal. An ordinary SIGWINCH (terminal
-            // resize) must NOT strand or kill a live child (candy-git-006):
-            // keep waiting against the same absolute deadline. The deadline
-            // check at the top of the loop still bounds the wait, and a storm
-            // of back-to-back EINTRs is capped (MAX_CONSECUTIVE_EINTRS) so the
-            // drain can never spin forever outside the budget.
-            if ($ready === false) {
-                if (++$intrCount > self::MAX_CONSECUTIVE_EINTRS) {
-                    $interrupted = true;
-                    $abandoned   = true;
-                    break;
-                }
-                continue;
-            }
-            $intrCount = 0;
-            if ($ready === 0) {
-                $timedOut  = true;
-                $abandoned = true;
-                break;
-            }
-
-            foreach ($read as $stream) {
-                $key   = array_search($stream, $open, true);
-                $chunk = fread($stream, 8192);
-                if ($chunk === '' || $chunk === false) {
-                    if ($key !== false) {
-                        fclose($open[$key]);
-                        unset($open[$key]);
-                    }
-                    continue;
-                }
-                // A27: append up to the cap, discard the rest (keep draining
-                // so the child finishes naturally), and remember that
-                // truncation happened so the caller sees a marker.
-                if ($key === 1) {
-                    if (strlen($stdout) < self::MAX_CAPTURE) {
-                        $stdout .= substr($chunk, 0, self::MAX_CAPTURE - strlen($stdout));
-                    }
-                    if (strlen($stdout) >= self::MAX_CAPTURE) {
-                        $stdoutTruncated = true;
-                    }
-                } else {
-                    if (strlen($stderr) < self::MAX_CAPTURE) {
-                        $stderr .= substr($chunk, 0, self::MAX_CAPTURE - strlen($stderr));
-                    }
-                    if (strlen($stderr) >= self::MAX_CAPTURE) {
-                        $stderrTruncated = true;
-                    }
-                }
-            }
-
-            if ($stdinHandle !== null && in_array($stdinHandle, $write, true)) {
-                $n = @fwrite($stdinHandle, substr($stdin, $stdinOffset, 65536));
-                if ($n === false || $n === 0) {
-                    fclose($stdinHandle);
-                    $stdinHandle = null;
-                } else {
-                    $stdinOffset += $n;
-                    if ($stdinOffset >= strlen($stdin)) {
-                        fclose($stdinHandle);
-                        $stdinHandle = null;
-                    }
-                }
-            }
-        }
-
-        // candy-git-007: pipe EOF is not child death. A child that redirects
-        // its own descriptors away (`sh -c 'exec >/dev/null 2>&1; sleep 4'`)
-        // closes our capture pipes at once while the process keeps living —
-        // without this re-check, the proc_close() below waits on it OUTSIDE
-        // the timeout budget. Spend whatever of the absolute deadline remains
-        // on bounded liveness polling; if the child outlives the budget it
-        // goes through the same SIGTERM -> grace -> SIGKILL ladder a timeout uses.
-        // ($deadline === null means the caller asked for no bound at all —
-        // there, the blocking proc_close is the honest documented behavior.)
-        if (!$abandoned && $deadline !== null) {
-            while (proc_get_status($proc)['running']) {
-                if (microtime(true) >= $deadline) {
-                    $timedOut  = true;
-                    $abandoned = true;
-                    break;
-                }
-                usleep(10_000);
-            }
-        }
-
-        if ($abandoned) {
-            self::terminateBounded($proc, $platform);
-            // candy-git-092: never report a clean-looking shape for a child we
-            // stopped — re-read status after the ladder. SIGKILL is not
-            // ignorable, so a still-"running" answer here is a kernel reap lag;
-            // say so honestly on the marker instead of implying a full stop.
-            if (proc_get_status($proc)['running']) {
-                $interrupted = true;
-            }
-        }
-
-        if ($stdinHandle !== null) {
-            fclose($stdinHandle);
-        }
-
-        foreach ($open as $stream) {
-            if (is_resource($stream)) {
-                fclose($stream);
-            }
-        }
-
-        $exit = proc_close($proc);
-
-        if ($stdoutTruncated) {
+        // Each overflowing stream gets its own notice, so a caller reading
+        // stderr sees the marker on stderr; the flag says the same in shape.
+        $stdout = $r->buffer(1);
+        $stderr = $r->buffer(2);
+        if ($r->droppedBytes(1) > 0) {
             $stdout .= "\n" . self::CAPTURE_NOTICE;
         }
-        if ($stderrTruncated) {
+        if ($r->droppedBytes(2) > 0) {
             $stderr .= "\n" . self::CAPTURE_NOTICE;
         }
 
@@ -316,63 +218,33 @@ final class Process
             'interrupted' => $interrupted,
             // candy-git-040: callers must be able to tell a complete answer
             // from a head-kept one WITHOUT string-matching the notice.
-            'truncated'   => $stdoutTruncated || $stderrTruncated,
+            'truncated'   => $r->truncated(),
         ];
     }
 
     /**
-     * Bounded SIGTERM -> grace -> SIGKILL ladder for a child we stopped waiting
-     * on. SIGTERM first gives git (and any hook it spawned) a chance to clean
-     * up lock files it took; only a child that ignores it — deliberately or
-     * because it is wedged in uninterruptible I/O — is SIGKILLed after the
-     * grace window. Polls instead of one-shotting proc_get_status: the exit
-     * ordering around pipe-EOF makes any single liveness read racy (measured
-     * in this fleet: a one-shot can still say "running" seconds after death),
-     * and the loop is bounded by the grace deadline either way.
-     *
-     * Honest limit (candy-git-092): the ladder reaches the DIRECT child only —
-     * proc_terminate() signals that one pid (POSIX), so a git helper or hook
-     * that outlives its parent keeps running (its pipes were already closed by
-     * us, so it can no longer block the drain). The caller re-reads status
-     * after every timedOut kill and marks the result honestly rather than
-     * implying the whole tree stopped.
+     * Windows stop: there is no SIGTERM there, so the whole tree is killed
+     * through the Platform seam (git spawns helpers and hooks), then a bounded
+     * liveness wait, then one last proc_terminate.
      *
      * @param resource $proc
      */
-    private static function terminateBounded($proc, Platform $platform): void
+    private static function terminateWindows($proc, Platform $platform): void
     {
         $status = proc_get_status($proc);
         if (!$status['running']) {
             return; // already dead — proc_close will reap without blocking
         }
 
-        if ($platform->isWindows()) {
-            // No SIGTERM on Windows: stop the whole tree (git spawns helpers
-            // and hooks), then fall through to the same bounded liveness wait.
-            $platform->killTree($status['pid']);
-            $grace = microtime(true) + self::TERMINATE_GRACE_SECONDS;
-            while (microtime(true) < $grace) {
-                if (!proc_get_status($proc)['running']) {
-                    return;
-                }
-                usleep(10_000);
-            }
-            proc_terminate($proc);
-
-            return;
-        }
-
-        proc_terminate($proc, 15);
-
+        $platform->killTree($status['pid']);
         $grace = microtime(true) + self::TERMINATE_GRACE_SECONDS;
         while (microtime(true) < $grace) {
-            usleep(10_000);
             if (!proc_get_status($proc)['running']) {
                 return;
             }
+            usleep(10_000);
         }
-
-        proc_terminate($proc, 9);
+        proc_terminate($proc);
     }
 
     /**
@@ -435,7 +307,7 @@ final class Process
             }
             if ($deadline !== null && microtime(true) >= $deadline) {
                 $timedOut = true;
-                self::terminateBounded($proc, $platform);
+                self::terminateWindows($proc, $platform);
                 break;
             }
             usleep(10_000);
@@ -472,6 +344,16 @@ final class Process
         $cleanup();
 
         return $result;
+    }
+
+    /** @param array<int, resource> $pipes */
+    private static function closeAll(array $pipes): void
+    {
+        foreach ($pipes as $pipe) {
+            if (is_resource($pipe)) {
+                fclose($pipe);
+            }
+        }
     }
 
     /** The spawn failure carries the OS reason so a launch problem is not mistaken for "git is missing". */
