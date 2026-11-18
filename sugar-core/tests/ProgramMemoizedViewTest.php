@@ -277,6 +277,31 @@ final class ProgramMemoizedViewTest extends TestCase
 
         self::assertSame(['hook-boom'], $caught);
     }
+
+    public function testRevisionThrowGoesToExceptionHandlerAndSkipsFrame(): void
+    {
+        $model = new ThrowingRevisionModel();
+        $caught = [];
+        $seen = [];
+        [$program] = $this->program($model);
+        $program = $program
+            ->withExceptionHandler(
+                static function (\Throwable $t) use (&$caught): void {
+                    $caught[] = $t->getMessage();
+                },
+            )
+            ->withFrameDiffHook(
+                static function (?string $previous, string $current) use (&$seen): void {
+                    $seen[] = [$previous, $current];
+                },
+            );
+
+        $this->renderFrame($program);
+
+        self::assertSame(['revision-boom'], $caught, 'a throwing revision() must reach the exception handler');
+        self::assertSame(0, $model->viewCalls, 'view() must not run once revision() has thrown for the frame');
+        self::assertSame([], $seen, 'the skipped frame must not paint, so the diff hook never fires');
+    }
 }
 
 /**
@@ -317,6 +342,41 @@ final class RevisionModel implements Model, RevisionCapable
     public function revision(): int|string|null
     {
         return $this->revision;
+    }
+}
+
+/**
+ * Revision-capable model whose revision() throws: the frame must be skipped
+ * without calling view(), and the throw routed to the exception handler.
+ */
+final class ThrowingRevisionModel implements Model, RevisionCapable
+{
+    use SubscriptionCapable;
+
+    public int $viewCalls = 0;
+
+    public function init(): ?\Closure
+    {
+        return null;
+    }
+
+    /**
+     * @return array{0: Model, 1: ?\Closure}
+     */
+    public function update(Msg $msg): array
+    {
+        return [$this, null];
+    }
+
+    public function view(): string
+    {
+        $this->viewCalls++;
+        return 'never';
+    }
+
+    public function revision(): int|string|null
+    {
+        throw new \RuntimeException('revision-boom');
     }
 }
 
