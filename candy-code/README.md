@@ -1686,7 +1686,7 @@ visible in sessions.db and in every later prompt replayed from them; and
 `allowedTools`, for a reason worth spelling
 out because on capability alone it looks harmless. A whitelist is an intersection — it
 cannot add a tool that `Bootstrap::tools()` did not build — but its effect is
-defined by what it *omits*, so `allowedTools: ["Bash"]` deletes <!-- tools:others:begin -->all forty of the others — `Read`, `Edit`, `Glob`, `Grep`, `Write`, `WebFetch`, `WebSearch`, `doctor`, `Skill`, `Lsp`, `Memory`, `RepoMap`, `Prune`, `Todo`, `Compress`, `Workflow`, `Recall`, `Team`, `ApplyPatch`, `AskUser`, `PlanExit`, `SendMessage`, `Subagents`, `InterruptAgent`, `GenerateImage`, `GenerateVideo`, `PtyRun`, `Ls`, `ShellOutput`, `ShellStop`, `mcp_list`, `mcp_call`, `Schedule`, `skills_search`, `SkillWorkshop`, `Advisor`, `Canvas`, `Script`, `ShellSend` and `NotebookEdit` —<!-- tools:others:end --> in one line, and what the model does next is the
+defined by what it *omits*, so `allowedTools: ["Bash"]` deletes <!-- tools:others:begin -->all thirty-seven of the others a plain launch builds — `Read`, `Edit`, `Glob`, `Grep`, `Write`, `WebFetch`, `WebSearch`, `doctor`, `Skill`, `Lsp`, `Memory`, `RepoMap`, `Prune`, `Todo`, `Compress`, `Workflow`, `Recall`, `Team`, `ApplyPatch`, `AskUser`, `PlanExit`, `SendMessage`, `Subagents`, `InterruptAgent`, `GenerateImage`, `GenerateVideo`, `PtyRun`, `Ls`, `ShellOutput`, `ShellStop`, `Schedule`, `skills_search`, `SkillWorkshop`, `Canvas`, `Script`, `ShellSend` and `NotebookEdit` —<!-- tools:others:end --> in one line, and what the model does next is the
 same work through `Bash`, which reaches the permission gate as opaque shell text
 instead of as a reviewable path. Strictly fewer tools, strictly coarser review.
 
@@ -2251,7 +2251,8 @@ one.
 
 ### Exit codes and the JSON document
 
-The same three exit codes govern every subcommand below.
+The same three exit codes govern every subcommand below, except that
+`candy-code workflow run` also exits `3`, explained after the table.
 
 | exit | meaning |
 | --- | --- |
@@ -2265,7 +2266,11 @@ retries on `1` would otherwise retry it forever. It also covers a subcommand
 handed a missing or unknown operand (`candy-code session`, `candy-code mcp
 bogus`, `candy-code completion tcsh`).
 
-A stop by signal is a fourth outcome outside this table, and the TUI is the
+`workflow run` exits `3` when a run stopped for a person: a verification stage
+escalated, or a cooperative signal pause completed. That code is not one of the
+shared `NonInteractive` codes, so it sits outside the table.
+
+A stop by signal is outside this table, and the TUI is the
 surface that reports it: when SIGINT, SIGTERM or SIGHUP ends the loop, the
 process exits `128+N` — `130`, `143` and `129` respectively — after the full
 teardown (terminal recovery, session persistence) that a cooperative quit

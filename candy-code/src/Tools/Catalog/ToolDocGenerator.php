@@ -185,15 +185,20 @@ final class ToolDocGenerator
         return $held === [] ? $text : $text . '; `src/Tools/BuiltIn/` also holds ' . self::joined($held, ', ', ', and ');
     }
 
-    /** The README `allowedTools: ["Bash"]` sentence's list of what it deletes. */
+    /**
+     * The README `allowedTools: ["Bash"]` sentence's list of what it deletes.
+     * A plain launch builds {@see ToolCatalog::builtUnconditionally()}, so the
+     * count is that set minus the survivor; the conditional builds (MCP
+     * dispatch, Advisor) join only when their context exists and are not counted.
+     */
     public function othersList(): string
     {
         $others = array_values(array_filter(
-            array_map(static fn (CatalogEntry $e): string => $e->name, ToolCatalog::built()),
+            array_map(static fn (CatalogEntry $e): string => $e->name, ToolCatalog::builtUnconditionally()),
             static fn (string $name): bool => $name !== self::SURVIVOR,
         ));
 
-        return 'all ' . SettingsDocGenerator::spell(\count($others)) . ' of the others — '
+        return 'all ' . SettingsDocGenerator::spell(\count($others)) . ' of the others a plain launch builds — '
             . self::codeList($others, ', ', ' and ') . ' —';
     }
 

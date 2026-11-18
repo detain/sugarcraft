@@ -14,6 +14,7 @@ use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Core\Recorder;
 use SugarCraft\Core\Renderer;
+use SugarCraft\Core\Writer;
 
 /**
  * A model with no behaviour of its own — the exec-capture and recorder
@@ -247,7 +248,7 @@ final class ProgramExecCaptureTest extends TestCase
 
         $payload = bin2hex(random_bytes(2 * 1024 * 1024)); // 4 MiB of unique bytes
         $t0      = microtime(true);
-        $flushed = $this->invokeStatic(Renderer::class, 'writeAll', [$writer, $payload, 10.0]);
+        $flushed = $this->invokeStatic(Writer::class, 'writeAll', [$writer, $payload, 10.0]);
         $this->assertIsInt($flushed);
         // A non-blocking send cannot take a 4 MiB burst in one syscall into
         // a socket buffer two-to-fifty orders smaller, so multiple fwrite
@@ -276,8 +277,7 @@ final class ProgramExecCaptureTest extends TestCase
     public function testWriteTwinsRetrySelectFalseInsteadOfDroppingTheTail(): void
     {
         foreach ([
-            ['Renderer.php', '/if \(@stream_select\(\$r, \$w, \$e, 1\) === false\) \{\s*if \(\+\+\$selectFalse > self::MAX_SELECT_FALSE_RETRY\) \{/'],
-            ['Program.php', '/if \(@stream_select\(\$r, \$w, \$e, 1\) === false\) \{\s*if \(\+\+\$selectFalse > Renderer::MAX_SELECT_FALSE_RETRY\) \{/'],
+            ['Writer.php', '/if \(@stream_select\(\$r, \$w, \$e, 1\) === false\) \{\s*if \(\+\+\$selectFalse > self::MAX_SELECT_FALSE_RETRY\) \{/'],
         ] as [$file, $pattern]) {
             $src = (string) file_get_contents(dirname(__DIR__) . '/src/' . $file);
             $this->assertSame(
@@ -385,20 +385,24 @@ final class ProgramExecCaptureTest extends TestCase
 
     public function testRendererEmitRecordsFlushedBytesOnly(): void
     {
-        $src = (string) file_get_contents(dirname(__DIR__) . '/src/Renderer.php');
+        // Renderer emits through the shared Writer; the recorder tee lives there,
+        // so the claim "tee records only flushed bytes" is pinned on Writer.
+        $renderer = (string) file_get_contents(dirname(__DIR__) . '/src/Renderer.php');
+        $writerSrc = (string) file_get_contents(dirname(__DIR__) . '/src/Writer.php');
+        $this->assertStringContainsString('$this->writer->write($bytes);', $renderer);
         $this->assertSame(
             1,
             preg_match(
-                '/\$flushed = self::writeAll\(\$this->out, \$bytes\);(?<body>.*?)recordOutput\(/s',
-                $src,
+                '/\$flushed = self::writeAll\(\$this->stream, \$bytes, \$deadline\);(?<body>.*?)recordOutput\(/s',
+                $writerSrc,
                 $m,
             ),
-            'emit() must capture the flushed count from writeAll before recording',
+            'the synchronous write must capture the flushed count from writeAll before recording',
         );
         $this->assertStringContainsString('$flushed', $m['body']);
         $this->assertStringNotContainsString(
             'recordOutput($bytes)',
-            str_replace("\n", ' ', preg_replace('/^\s*\/\/.*$/m', '', $src) ?? $src),
+            str_replace("\n", ' ', preg_replace('/^\s*\/\/.*$/m', '', $writerSrc) ?? $writerSrc),
             'no seat may tee the requested bytes as if they were written',
         );
     }

@@ -455,6 +455,35 @@ final class ProcessTest extends TestCase
         $this->assertFalse($polled['truncated']);
     }
 
+    /**
+     * Regression: output of exactly MAX_CAPTURE bytes is complete, not
+     * truncated. The old copy set the flag as soon as the retained length
+     * reached the cap, even with nothing refused, so an exact-size answer got
+     * a false notice and a false truncated marker.
+     */
+    public function testOutputExactlyAtTheCapIsNotFlaggedTruncated(): void
+    {
+        $r = Process::run(
+            ['php', '-r', 'echo str_repeat("x", 4 * 1024 * 1024);'],
+            null,
+            15.0,
+        );
+
+        $this->assertSame(Process::MAX_CAPTURE, strlen($r['stdout']));
+        $this->assertStringNotContainsString('truncated at 4 MiB', $r['stdout']);
+        $this->assertFalse($r['truncated']);
+    }
+
+    /** A non-positive timeout keeps its meaning: no deadline, so a slow child completes. */
+    public function testNonPositiveTimeoutDisablesTheDeadline(): void
+    {
+        $r = Process::run(['sh', '-c', 'sleep 0.3; echo ok'], null, 0.0);
+
+        $this->assertFalse($r['timedOut']);
+        $this->assertSame(0, $r['exit']);
+        $this->assertSame("ok\n", $r['stdout']);
+    }
+
     public function testTheGitRedirectFamilyIsStrippedFromTheChildEnv(): void
     {
         // candy-git-041: `git -C` does not outvote these; a hook-inherited

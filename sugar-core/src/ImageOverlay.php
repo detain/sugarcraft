@@ -155,6 +155,11 @@ final class ImageOverlay
         $lines = explode("\n", $frame);
         $paints = [];
         foreach ($lines as $row => $line) {
+            // Prefilter (rank 17): a marker is always introduced by an escape, so
+            // a line with no ESC byte cannot change and is skipped without a walk.
+            if (!str_contains($line, "\x1b")) {
+                continue;
+            }
             $lines[$row] = self::resolveLine($line, $row + 1, $images, $paints);
         }
 
@@ -208,6 +213,24 @@ final class ImageOverlay
                 }
                 $out .= ' '; // occupy the cell with a real space
                 $col += 1;
+                continue;
+            }
+
+            // ASCII fast path (rank 17): a run of printable ASCII is one column per
+            // byte, so it is copied in one step rather than measured per codepoint.
+            $code = ord($line[$i]);
+            if ($code >= 0x20 && $code <= 0x7E) {
+                $run = 1;
+                while ($i + $run < $len) {
+                    $next = ord($line[$i + $run]);
+                    if ($next < 0x20 || $next > 0x7E) {
+                        break;
+                    }
+                    $run++;
+                }
+                $out .= substr($line, $i, $run);
+                $col += $run;
+                $i += $run;
                 continue;
             }
 
