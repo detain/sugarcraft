@@ -402,7 +402,9 @@ final class Program
      * the first paint, and after a reset such as forceRepaint()) and the body
      * this frame painted. Both are the bodies after image markers are
      * resolved, so the hook sees what the text renderer diffed. Equal bodies
-     * mean nothing changed on screen. The hook is not called in headless mode
+     * mean the text grid did not change; the cursor and the image layer are
+     * not part of the body, so they can change the screen while the bodies
+     * stay equal. The hook is not called in headless mode
      * (`ProgramOptions::withoutRenderer`). A throw from the hook goes to the
      * exception handler, like any other user-code seat.
      *

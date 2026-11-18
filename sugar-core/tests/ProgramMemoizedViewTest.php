@@ -36,7 +36,7 @@ final class ProgramMemoizedViewTest extends TestCase
     /**
      * @return array{0: Program, 1: resource}
      */
-    private function program(Model $model): array
+    private function program(Model $model, bool $headless = false): array
     {
         $sockets = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
         self::assertNotFalse($sockets);
@@ -48,6 +48,7 @@ final class ProgramMemoizedViewTest extends TestCase
             useAltScreen: false,
             catchInterrupts: false,
             hideCursor: false,
+            withoutRenderer: $headless,
             input: $in,
             output: $out,
             loop: new StreamSelectLoop(),
@@ -165,6 +166,49 @@ final class ProgramMemoizedViewTest extends TestCase
             [[null, 'one'], ['one', 'one'], ['one', 'two']],
             $seen,
             'the hook sees the first paint with a null previous body, then each frame\'s previous and current bodies',
+        );
+    }
+
+    public function testFrameDiffHookIsNotCalledInHeadlessMode(): void
+    {
+        $model = new RevisionModel();
+        $seen = [];
+        [$program] = $this->program($model, headless: true);
+        $program = $program->withFrameDiffHook(
+            static function (?string $previous, string $current) use (&$seen): void {
+                $seen[] = [$previous, $current];
+            },
+        );
+
+        $this->renderFrame($program);
+        $model->label = 'two';
+        $model->revision = 2;
+        $this->renderFrame($program);
+
+        self::assertSame([], $seen, 'withoutRenderer must never call the diff hook');
+        self::assertSame(2, $model->viewCalls, 'headless frames still run view()');
+    }
+
+    public function testFrameDiffHookSeesNullPreviousAfterForceRepaint(): void
+    {
+        $model = new RevisionModel();
+        $seen = [];
+        [$program] = $this->program($model);
+        $program = $program->withFrameDiffHook(
+            static function (?string $previous, string $current) use (&$seen): void {
+                $seen[] = [$previous, $current];
+            },
+        );
+
+        $this->renderFrame($program);
+        $this->renderFrame($program);
+        $program->forceRepaint();
+        $this->renderFrame($program);
+
+        self::assertSame(
+            [[null, 'one'], ['one', 'one'], [null, 'one']],
+            $seen,
+            'forceRepaint() must reset the previous body the hook sees to null',
         );
     }
 

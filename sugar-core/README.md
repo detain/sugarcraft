@@ -1074,7 +1074,7 @@ $program = (new Program(new Counter()))
 
 ### withFrameDiffHook
 
-Register a per-frame diff hook: a read-only observer that runs after every frame the renderer paints. It receives the body the previous frame painted and the body this frame painted. The previous body is `null` before the first paint and after a reset such as `forceRepaint()`. Both bodies are the ones after image markers are resolved, which is what the text renderer diffed. Equal bodies mean nothing changed on screen. The hook is not called in headless mode (`withoutRenderer`). A throw goes to the exception handler. Do not write to the terminal from the hook.
+Register a per-frame diff hook: a read-only observer that runs after every frame the renderer paints. It receives the body the previous frame painted and the body this frame painted. The previous body is `null` before the first paint and after a reset such as `forceRepaint()`. Both bodies are the ones after image markers are resolved, which is what the text renderer diffed. Equal bodies mean the text grid did not change. The body does not include the cursor or the image layer, so a cursor move, or an image whose pixels change behind an unchanged marker, can alter the screen while the bodies stay equal. The hook is not called in headless mode (`withoutRenderer`). A throw goes to the exception handler. Do not write to the terminal from the hook.
 
 ```php
 use SugarCraft\Core\Program;
