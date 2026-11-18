@@ -143,7 +143,8 @@ final class ChildLifetimesToolTest extends TestCase
         // 30 -> 32 on 2026-11-13: two more accounted spawn sites landed in
         // sibling lanes (tool reports 0 problems, every exposed site has a roster row).
         // 32 -> 33 on P1-5: sugar-async ChildRun::spawn, the one new proc_open site.
-        $this->assertStringContainsString('33 proc_open sites', $out);
+        // 33 -> 32 on P1-5c-dashboard: BoundedCommand's own proc_open retired; it now runs through ChildRun.
+        $this->assertStringContainsString('32 proc_open sites', $out);
     }
 
     /**
