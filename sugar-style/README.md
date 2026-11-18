@@ -366,7 +366,9 @@ echo Tree::new()
   `Layout::horizontal($constraints)->split($area)` and
   `Layout::vertical($constraints)->split($area)` return `Rect[]`.
   Constraints: `Constraint::length/min/max/percentage/ratio/fill`.
-  State: `Rect` (x, y, width, height) + `Direction` (Horizontal/Vertical).
+  State: `Rect` (x, y, width, height) + `SugarCraft\Constraints\Direction`
+  (Horizontal/Vertical). sugar-style no longer ships its own `Direction`;
+  the canonical enum lives in sugar-constraints.
 - **`Listing\ItemList`** + **`Listing\Enumerator`** — bullet, dash, asterisk,
   arabic, alphabet, roman, romanUpper, decimal, tree, none. Nested sublists +
   per-item style hooks.

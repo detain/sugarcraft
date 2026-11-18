@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Constraints\CassowarySolver;
 use SugarCraft\Constraints\GreedySolver;
 use SugarCraft\Style\Layout\Constraint;
-use SugarCraft\Style\Layout\Direction;
+use SugarCraft\Constraints\Direction;
 use SugarCraft\Style\Layout\Rect;
 use SugarCraft\Style\Layout\Solver;
 use SugarCraft\Style\Layout\SolverFactory;

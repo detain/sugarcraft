@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Style\Layout;
 
+use SugarCraft\Constraints\Direction;
+
 /**
  * Constraint-based layout split facade.
  *
