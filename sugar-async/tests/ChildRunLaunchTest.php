@@ -87,6 +87,24 @@ final class ChildRunLaunchTest extends TestCase
         $this->assertSame(ChildResult::EXITED, $r->status);
     }
 
+    /**
+     * Regression: launch() reported a signal-killed child's exit as null while
+     * run() reported -1, so the dashboard's async path showed no failure for a
+     * crashed command. The two paths must agree.
+     */
+    public function testLaunchReportsASignalKilledChildAsRunDoesNotNull(): void
+    {
+        $this->requirePosixPipes();
+        $sync = ChildRun::new(['sh', '-c', 'kill -9 $$'])->run();
+
+        $loop = new StreamSelectLoop();
+        $async = $this->settle($loop, ChildRun::new(['sh', '-c', 'kill -9 $$'])->launch($loop));
+
+        $this->assertSame(-1, $sync->exitCode);
+        $this->assertSame(-1, $async->exitCode, 'a signal death must not read as "could not be reaped"');
+        $this->assertSame($sync->status, $async->status);
+    }
+
     public function testLaunchDoesNotBlockTheLoop(): void
     {
         $this->requirePosixPipes();

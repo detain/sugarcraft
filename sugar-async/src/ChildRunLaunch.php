@@ -198,7 +198,9 @@ final class ChildRunLaunch
 
         $this->exited = true;
         $this->exitedAt = Clock::monotonicSeconds();
-        $this->exitCode = $status['exitcode'] >= 0 ? $status['exitcode'] : null;
+        // Raw, as ChildRun::run() keeps it: a signal-killed child reports -1, and
+        // a null here would read as "could not be reaped" and hide the failure.
+        $this->exitCode = (int) $status['exitcode'];
 
         return true;
     }
@@ -265,7 +267,7 @@ final class ChildRunLaunch
         if ($this->exited) {
             // Seen gone by the status poll, so proc_close() cannot wait.
             $reaped = proc_close($this->proc);
-            $code ??= $reaped >= 0 ? $reaped : null;
+            $code ??= $reaped;
         } else {
             // Survived the kill budget: reaped on the loop once the kernel releases it.
             BoundedShutdown::reapWhenExited($this->loop, $this->proc);

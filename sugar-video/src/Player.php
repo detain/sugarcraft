@@ -27,6 +27,7 @@ use SugarCraft\Video\Msg\ResizeRebuildMsg;
 use SugarCraft\Video\Msg\TickMsg;
 use SugarCraft\Video\Render\Color;
 use SugarCraft\Video\Render\FrameRenderer;
+use SugarCraft\Video\Render\GraphicsRenderer;
 use SugarCraft\Video\Render\LumaRamp;
 use SugarCraft\Video\Render\Mode;
 use SugarCraft\Video\Render\RendererFactory;
@@ -956,7 +957,7 @@ final class Player implements Model
             'frameIndex' => $landed,
             'videoTime' => $landed / $this->fps,
             'lastTickTime' => $this->now(),
-            'renderer' => RendererFactory::new($this->mode, $this->ramp, $this->cellPxW, $this->cellPxH),
+            'renderer' => $this->successorRenderer(RendererFactory::new($this->mode, $this->ramp, $this->cellPxW, $this->cellPxH)),
         ]);
 
         $cmd = $nextPlayer->paused
@@ -1152,7 +1153,7 @@ final class Player implements Model
             if (self::decodeGeometry($nextMode) === self::decodeGeometry($this->mode)) {
                 return [$this->mutate([
                     'mode' => $nextMode,
-                    'renderer' => RendererFactory::new($nextMode, $this->ramp, $this->cellPxW, $this->cellPxH),
+                    'renderer' => $this->successorRenderer(RendererFactory::new($nextMode, $this->ramp, $this->cellPxW, $this->cellPxH)),
                 ]), null];
             }
 
@@ -1165,7 +1166,7 @@ final class Player implements Model
                 // Budget-yielded walk: record the true landed playhead.
                 'frameIndex' => $landed,
                 'videoTime' => $landed / $this->fps,
-                'renderer' => RendererFactory::new($nextMode, $this->ramp, $this->cellPxW, $this->cellPxH),
+                'renderer' => $this->successorRenderer(RendererFactory::new($nextMode, $this->ramp, $this->cellPxW, $this->cellPxH)),
             ]);
             return [$nextPlayer, null];
         }
@@ -2663,5 +2664,18 @@ final class Player implements Model
         // Cmd::tick chain; a wall-clock subscription here would double-tick
         // the pump. Input and resize arrive through sugar-core's own wiring.
         return null;
+    }
+
+    /**
+     * A renderer rebuilt after a resize or mode cycle inherits the outgoing one's
+     * last Kitty frame, so the successor retires it on its first draw.
+     */
+    private function successorRenderer(FrameRenderer $next): FrameRenderer
+    {
+        if ($next instanceof GraphicsRenderer && $this->renderer instanceof GraphicsRenderer) {
+            return $next->carryingFrom($this->renderer);
+        }
+
+        return $next;
     }
 }
