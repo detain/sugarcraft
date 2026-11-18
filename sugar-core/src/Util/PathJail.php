@@ -51,13 +51,13 @@ namespace SugarCraft\Core\Util;
  * not count there: a repository linking its workflows directory onto its own
  * checkout root would expose every untracked file in the working tree.
  *
- * ## POSIX paths only
+ * ## Platform separators
  *
- * Containment compares canonical paths with a `/` separator. On Windows,
- * realpath() answers with backslashes, so every entry below the root is
- * refused. That fails closed, but it is not working Windows containment. A
- * Windows caller needs separator normalization and drive-letter absolute-path
- * detection before it relies on this class.
+ * Containment compares canonical paths against the platform separator
+ * (`DIRECTORY_SEPARATOR`), which is what realpath() answers with: `/` on POSIX,
+ * `\\` on Windows. Direct and nested entries are judged by the same rule
+ * there. Drive-letter and case handling are not exercised on Windows, so a
+ * Windows caller must test before it relies on this class.
  *
  * ## Not covered
  *
@@ -309,7 +309,19 @@ final class PathJail
      */
     private static function inside(string $candidate, string $rootReal): bool
     {
-        return $candidate === $rootReal || str_starts_with($candidate, rtrim($rootReal, '/') . '/');
+        return self::insideBeneath($candidate, $rootReal, DIRECTORY_SEPARATOR);
+    }
+
+    /**
+     * The boundary test behind {@see inside()}, with the separator passed in so
+     * the Windows rule is testable on POSIX. Checking only `/` made a canonical
+     * Windows path (backslashes) refuse every existing entry below the root,
+     * while a new direct child passed through the directory branch.
+     */
+    private static function insideBeneath(string $candidate, string $rootReal, string $separator): bool
+    {
+        return $candidate === $rootReal
+            || str_starts_with($candidate, rtrim($rootReal, $separator) . $separator);
     }
 
     /**

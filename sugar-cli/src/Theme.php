@@ -139,7 +139,7 @@ final class Theme
     private const DETECT_ENV_KEYS = [
         'NO_COLOR', 'CLICOLOR', 'CLICOLOR_FORCE', 'FORCE_COLOR',
         'TERM', 'COLORTERM', 'TERM_PROGRAM',
-        'WT_SESSION',
+        'WT_SESSION', 'TMUX', 'STY', 'GOOGLE_CLOUD_SHELL',
         'CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'BUILDKITE',
     ];
 
@@ -148,7 +148,7 @@ final class Theme
 
     /**
      * Fingerprint of everything the default-stream detect path reads: the
-     * twelve roster values and the state of STDOUT as sugar-core will see it
+     * roster values and the state of STDOUT as sugar-core will see it
      * (defined / open / tty-ness — the three facts detectDefaultStream()
      * branches on). Two calls share a key exactly when both inputs are
      * byte-identical, which is precisely the never-stale condition.

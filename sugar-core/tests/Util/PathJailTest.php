@@ -477,4 +477,32 @@ final class PathJailTest extends TestCase
         $this->assertFalse(PathJail::within($this->root, "{$this->root}\0"));
         $this->assertFalse(PathJail::below("{$this->root}/sub\0", $this->root));
     }
+
+    /**
+     * Containment must treat a direct child, a nested entry and the root the
+     * same way for each platform separator. The Windows rows run on POSIX
+     * through the separator seam, because realpath() there answers backslashes.
+     *
+     * @return iterable<string, array{string, string, string, bool}>
+     */
+    public static function boundaryRows(): iterable
+    {
+        yield 'posix direct child' => ['/ws/a.txt', '/ws', '/', true];
+        yield 'posix nested' => ['/ws/sub/a.txt', '/ws', '/', true];
+        yield 'posix root itself' => ['/ws', '/ws', '/', true];
+        yield 'posix sibling sharing a prefix' => ['/wsx/a.txt', '/ws', '/', false];
+        yield 'posix backslash in a name is not a boundary' => ['/ws\\evil', '/ws', '/', false];
+        yield 'windows direct child' => ['C:\\ws\\a.txt', 'C:\\ws', '\\', true];
+        yield 'windows nested' => ['C:\\ws\\sub\\a.txt', 'C:\\ws', '\\', true];
+        yield 'windows root itself' => ['C:\\ws', 'C:\\ws', '\\', true];
+        yield 'windows sibling sharing a prefix' => ['C:\\wsx\\a.txt', 'C:\\ws', '\\', false];
+        yield 'windows drive root' => ['C:\\Windows', 'C:\\', '\\', true];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('boundaryRows')]
+    public function testContainmentIsTheSameForDirectAndNestedEntries(string $candidate, string $root, string $separator, bool $inside): void
+    {
+        $method = new \ReflectionMethod(PathJail::class, 'insideBeneath');
+        $this->assertSame($inside, $method->invoke(null, $candidate, $root, $separator));
+    }
 }

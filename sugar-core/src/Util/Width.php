@@ -388,7 +388,8 @@ final class Width
             return $s;
         }
         $ellipsisWidth = self::string($ellipsis);
-        if ($ellipsisWidth >= $n) {
+        // An ellipsis that exactly fills the budget fits: only a wider one forces the head cut.
+        if ($ellipsisWidth > $n) {
             return self::truncate($s, $n);
         }
 
@@ -611,14 +612,20 @@ final class Width
      * (`$breakWords: false`) and candy-minesweeper `wrapPlain()`
      * (`$breakWords: true`), is pinned by WidthWrapWordsTest for the fixtures
      * both copies receive. It is not total: three inputs differ, and the
-     * owner ruling of 2026-11-17 adopts this helper's answer for each. The
-     * consumers migrate in P4-3b and P4-3c, and each declares its change in
+     * owner ruling of 2026-11-17 adopts this helper's answer for the first three.
+     * The consumers migrate in P4-3b and P4-3c, and each declares its change in
      * its PR body. The regression pins are in WidthWrapWordsTest.
      *  - A newline is a hard break here. `foldNoticeLine()` splits on `\s+`,
      *    which includes `\n`, so it joins the two sides with a space.
      *  - A tab separates words here. `wrapPlain()` splits words on spaces
      *    only, so a tab is part of a word there.
      *  - A ZWJ cluster is kept whole here. `wrapPlain()` breaks it per codepoint.
+     *  - A fourth divergence is not in that ruling and is disclosed here rather
+     *    than adopted: every Unicode whitespace code point separates words,
+     *    including U+00A0 (no-break space) and U+3000 (ideographic space), and
+     *    the separator is rewritten to a plain space. `wrapPlain()` splits on
+     *    spaces only, so it keeps those characters inside one word. P4-3c must
+     *    decide this before migrating NBSP-separated or CJK-spaced text.
      *
      * The rules, in order:
      *  - `\n` is a hard break. Every paragraph yields at least one line, so an
