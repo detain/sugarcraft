@@ -65,6 +65,18 @@ final class JsonFileQuarantineLedgerTest extends TestCase
         $this->assertSame(['/plugin/A.php' => true, '/plugin/B.php' => true], $disk['seenEntrypoints']);
     }
 
+    public function testAWriteTheDiskRefusesIsNotThrownAndTheMarkHoldsForThisLaunch(): void
+    {
+        // A regular file where the record's directory should be: the write cannot create it.
+        file_put_contents($this->dir . '/blocker', 'not a directory');
+        $ledger = JsonFileQuarantineLedger::new($this->dir . '/blocker/channels.json');
+
+        $ledger->record('/plugin/Impl.php');
+
+        $this->assertTrue($ledger->seen('/plugin/Impl.php'));
+        $this->assertNotNull($ledger->readFailure());
+    }
+
     public function testAnUnreadableRecordIsNeverOverwritten(): void
     {
         $broken = '{not json at all';

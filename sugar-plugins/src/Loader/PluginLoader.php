@@ -50,6 +50,12 @@ final class PluginLoader
      * candidates, a path is quarantined or required at most once per launch, so
      * the second bundle cannot run a file the first has only just seen.
      *
+     * Two trusted names that reach one file (a symlinked plugin directory, or a
+     * manifest nested under another) yield ONE LOADED ROW PER NAME, by design:
+     * each name is a trusted plugin and the file is declared once. A host that
+     * builds one instance per loaded row must dedupe on the class it was handed,
+     * because the loader does not refuse the repeat.
+     *
      * @param list<PluginCandidate>            $candidates    discovered plugins
      * @param QuarantineLedger                 $ledger        the seen-ledger backing quarantine
      * @param list<string>                     $kinds         manifest entrypoint kinds to read
@@ -154,7 +160,12 @@ final class PluginLoader
                         if (!$ledger->seen($entry->path)) {
                             // Quarantine first: recorded before the require, so the
                             // NEXT launch loads it and this launch only lists it.
-                            $ledger->record($entry->path);
+                            // A ledger that cannot persist must not abort the launch: the mark
+                            // still holds for this launch, so the file is listed and never run.
+                            try {
+                                $ledger->record($entry->path);
+                            } catch (\Throwable) {
+                            }
                             $pathState[$entry->path] = 'quarantined';
                         } elseif (($collision = DeclaredClasses::declaredElsewhere($entry->path)) !== null) {
                             // Checked before require_once: a redeclared type is a fatal

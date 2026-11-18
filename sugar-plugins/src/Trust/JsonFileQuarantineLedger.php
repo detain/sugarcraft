@@ -10,8 +10,9 @@ use SugarCraft\Core\Util\AtomicJsonFile;
  * A {@see QuarantineLedger} kept under one key of a JSON file, written 0600.
  *
  * The file is shared with other writers (a host keeps credentials and policy
- * in the same bytes), so the write is a fresh-read merge: the mark joins
- * whatever the disk holds at that moment and no other key is touched.
+ * in the same bytes), so the write is a locked fresh-read merge
+ * ({@see AtomicJsonFile::mutate()}): the mark joins whatever the disk holds at
+ * that moment, under the same lock, and no other key is touched.
  *
  * Corruption fails closed: a record that cannot be read is never overwritten.
  * The mark stays in memory for this launch's dedupe, the broken bytes stay on
@@ -52,13 +53,28 @@ final class JsonFileQuarantineLedger implements QuarantineLedger
         return \is_array($seen) && true === ($seen[$path] ?? false);
     }
 
+    /**
+     * Never throws: a record that cannot be read or a write the disk refuses is
+     * noted in {@see readFailure()}, and the mark holds in memory for this launch.
+     */
     public function record(string $path): void
     {
         $seen = \is_array($this->data[$this->key] ?? null) ? $this->data[$this->key] : [];
         $seen[$path] = true;
+        $key = $this->key;
 
         try {
-            $record = $this->read();
+            // One exclusive lock over read, merge and publish: a concurrent
+            // launch's mark cannot be lost between this read and this write.
+            // The default read is strict, so a broken record throws before any write.
+            $published = AtomicJsonFile::new($this->path)->withPermissions(0600)->mutate(
+                static function (array $disk) use ($key, $seen): array {
+                    $fresh = \is_array($disk[$key] ?? null) ? $disk[$key] : [];
+                    $disk[$key] = $seen + $fresh;
+
+                    return $disk;
+                },
+            );
         } catch (\Throwable $e) {
             // Never write a record we cannot read back: the broken bytes stay
             // on disk for repair, and the mark lives on for this launch only.
@@ -68,12 +84,10 @@ final class JsonFileQuarantineLedger implements QuarantineLedger
             return;
         }
 
-        $fresh = \is_array($record[$this->key] ?? null) ? $record[$this->key] : [];
-        $record[$this->key] = $seen + $fresh;
-        $this->data = $record;
+        if ($published !== null) {
+            $this->data = $published;
+        }
         $this->readFailure = null;
-
-        AtomicJsonFile::new($this->path)->withPermissions(0600)->write($this->data);
     }
 
     /** Why the most recent read failed, or null while reads succeed. */

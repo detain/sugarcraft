@@ -14,6 +14,7 @@ use SugarCraft\Plugins\Plugin;
 use SugarCraft\Plugins\Tests\Support\MemoryLedger;
 use SugarCraft\Plugins\Tests\Support\Plugins;
 use SugarCraft\Plugins\Tests\Support\Scratch;
+use SugarCraft\Plugins\Trust\QuarantineLedger;
 use SugarCraft\Plugins\Trust\TrustList;
 
 final class PluginLoaderTest extends TestCase
@@ -492,6 +493,63 @@ final class PluginLoaderTest extends TestCase
 
         $this->assertSame(['interface-mismatch'], array_column($result->refusals, 'reason'));
         $this->assertSame([], $result->loaded);
+    }
+
+    public function testTwoTrustedNamesReachingOneFileThroughASymlinkYieldOneLoadedRowEachAndDeclareTheClassOnce(): void
+    {
+        // Pins the documented decision on load(): one loaded row per trusted name,
+        // and the file is required once, so its class is declared a single time.
+        $ns = 'PluginFixtures\\' . Plugins::tag();
+        $fqcn = $ns . '\\Alias';
+        $alpha = $this->build('alpha', Plugins::pluginSource($ns, 'Alias', 'alpha'), [
+            'channel' => ['file' => 'src/Impl.php', 'class' => $fqcn],
+        ]);
+        $link = $alpha['dir'] . '-alias';
+        $this->dirs[] = $link;
+        symlink($alpha['dir'], $link);
+
+        $ledger = new MemoryLedger();
+        $ledger->prime($alpha['file']);
+
+        $result = $this->load([
+            Plugins::candidate('alpha', $alpha['dir']),
+            Plugins::candidate('beta', $link),
+        ], $ledger, trusted: ['alpha', 'beta']);
+
+        $this->assertSame(['alpha', 'beta'], array_column($result->loaded, 'bundle'));
+        $this->assertSame([], $result->refusals);
+        $this->assertSame([$fqcn, $fqcn], array_column($result->loaded, 'class'));
+        $this->assertTrue(class_exists($fqcn, false));
+    }
+
+    public function testALedgerThatRefusesToPersistDoesNotAbortTheLaunch(): void
+    {
+        $plugin = $this->declaring('Impl');
+        $ledger = new class () implements QuarantineLedger {
+            public function seen(string $path): bool
+            {
+                return false;
+            }
+
+            public function record(string $path): void
+            {
+                throw new \RuntimeException('disk full');
+            }
+        };
+
+        $result = PluginLoader::load(
+            [Plugins::candidate('demo', $plugin['dir'])],
+            new TrustList(['demo']),
+            $ledger,
+            ['channel'],
+            ['channel' => Plugin::class],
+            3,
+        );
+
+        $this->assertCount(1, $result->quarantined, 'the mark still holds for this launch, so the file is listed');
+        $this->assertSame([], $result->loaded);
+        $this->assertSame([], $result->refusals);
+        $this->assertFalse(class_exists($plugin['class'], false), 'a file the ledger could not record must not run');
     }
 
     public function testAKindWithNoMappedInterfaceIsAProgrammingError(): void
