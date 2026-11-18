@@ -75,9 +75,10 @@ final class CandyCodeBodyClaimDriftTest extends TestCase
     ];
 
     /**
-     * The tens and units of a hyphenated compound count ("twenty-six"). The
-     * compound is matched whole and valued as one number: read as bare words,
-     * "twenty-six" would surface as "six" and "thirty-one" as "one".
+     * The tens and units of a compound count, hyphenated ("twenty-six") or
+     * spaced ("twenty six"). The compound is matched whole and valued as one
+     * number: read as bare words, "twenty-six" would surface as "six" and
+     * "thirty one" as "one".
      */
     private const COMPOUND_TENS = 'twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety';
     private const COMPOUND_UNITS = 'one|two|three|four|five|six|seven|eight|nine';
@@ -199,10 +200,23 @@ final class CandyCodeBodyClaimDriftTest extends TestCase
             self::quotedNounCounts('twenty-one hook events, thirty-one locales, one locale', 'hook events?|locales?')
         );
 
+        // The spaced spelling is a compound too: "Twenty six permission modes" is 26, not the unit "six".
+        self::assertSame(
+            ['Twenty six', 'forty two'],
+            self::quotedPermissionModeCounts('Twenty six permission modes, forty two modes')
+        );
+        self::assertSame(
+            [['Twenty one', 'hook events'], ['forty two', 'hook events']],
+            self::quotedNounCounts('Twenty one hook events and forty two hook events', 'hook events?|locales?')
+        );
+
         self::assertSame(21, self::countValue('twenty-one'));
         self::assertSame(26, self::countValue('Twenty-Six'));
+        self::assertSame(21, self::countValue('twenty one'));
+        self::assertSame(26, self::countValue('Twenty Six'));
         self::assertSame(30, self::countValue('thirty'));
         self::assertSame(-1, self::countValue('one-two'), 'only a tens word takes a hyphenated unit');
+        self::assertSame(-1, self::countValue('one two'), 'only a tens word takes a spaced unit');
     }
 
     public function testClassTokenScanReadsNamespacedAndCallFormTokensAndResolvesThemAgainstTheirNamespace(): void
@@ -410,7 +424,7 @@ final class CandyCodeBodyClaimDriftTest extends TestCase
      */
     private static function countPattern(): string
     {
-        return '(?:(?:' . self::COMPOUND_TENS . ')-(?:' . self::COMPOUND_UNITS . ')|'
+        return '(?:(?:' . self::COMPOUND_TENS . ')[- ](?:' . self::COMPOUND_UNITS . ')|'
             . implode('|', array_keys(self::COUNT_WORDS)) . '|\d+)';
     }
 
@@ -421,7 +435,7 @@ final class CandyCodeBodyClaimDriftTest extends TestCase
             return (int) $lower;
         }
 
-        if (preg_match('/^(' . self::COMPOUND_TENS . ')-(' . self::COMPOUND_UNITS . ')$/', $lower, $parts) === 1) {
+        if (preg_match('/^(' . self::COMPOUND_TENS . ')[- ](' . self::COMPOUND_UNITS . ')$/', $lower, $parts) === 1) {
             return self::COUNT_WORDS[$parts[1]] + self::COUNT_WORDS[$parts[2]];
         }
 
