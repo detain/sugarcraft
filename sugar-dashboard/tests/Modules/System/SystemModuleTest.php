@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Tests\Modules\System;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Msg;
 use SugarCraft\Dashboard\Module\ProcAvailability;
+use SugarCraft\Dashboard\Modules\System\GpuSampleMsg;
 use SugarCraft\Dashboard\Modules\System\RefreshMsg;
 use SugarCraft\Dashboard\Modules\System\SystemModule;
 
@@ -288,5 +289,32 @@ final class SystemModuleTest extends TestCase
         // series measures from the first tick (no differential needed).
         $this->assertCount(2, $state['cpuHistory']);
         $this->assertCount(3, $state['memHistory']);
+    }
+
+    /**
+     * Regression: nvidia-smi used to run inside the tick, so a hung driver froze
+     * the dashboard for its whole deadline. A tick now returns at once with the
+     * sample on the loop, and its answer is applied when it arrives.
+     */
+    public function testAGpuSampleArrivesAsItsOwnMessageAndIsApplied(): void
+    {
+        $module = new SystemModule();
+        [$ticked, $cmd] = $module->update(new RefreshMsg());
+        $this->assertNotNull($cmd);
+        $this->assertStringNotContainsString('GPU', $ticked->view(), 'no GPU row before its sample settles');
+
+        [$sampled, $sampledCmd] = $ticked->update(new GpuSampleMsg('system', 42.0, false));
+        $this->assertNull($sampledCmd);
+        $this->assertStringContainsString('GPU  42%', $sampled->view());
+    }
+
+    public function testAGpuSampleForAnotherModuleIsIgnored(): void
+    {
+        $module = new SystemModule();
+
+        [$next, $cmd] = $module->update(new GpuSampleMsg('other', 42.0, false));
+
+        $this->assertSame($module, $next);
+        $this->assertNull($cmd);
     }
 }
