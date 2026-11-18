@@ -222,6 +222,25 @@ final class ChildPumpBuilderTest extends TestCase
         $this->assertSame('[]', $r->buffer(1));
     }
 
+    public function testThePollArmKeepsBytesBufferedBeforeTheDeadline(): void
+    {
+        // The select arm sweeps what is already buffered when the deadline passes;
+        // the poll arm must do the same, or the last bytes before the deadline vanish.
+        $pipe = tmpfile();
+        fwrite($pipe, 'tail');
+        rewind($pipe);
+
+        $r = ChildPump::new([1 => $pipe])
+            ->withDeadline(1.0)
+            ->withClock(static fn (): float => 2.0)
+            ->withPollPipes(true)
+            ->pump();
+
+        $this->assertSame(DrainResult::EXPIRED, $r->reason);
+        $this->assertSame('tail', $r->buffer(1));
+        fclose($pipe);
+    }
+
     public function testStdinFeedIsRefusedOnTheWindowsPollArm(): void
     {
         // The poll arm is forced on any runtime; a stdin feed on it must refuse

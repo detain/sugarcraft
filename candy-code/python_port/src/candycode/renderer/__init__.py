@@ -1,6 +1,10 @@
 """
 Main renderer module for the CandyCode TUI.
 Ports src/Renderer.php - the pure view function for Chat transcript rendering.
+
+Experimental. This package does not import: `candycode.renderer` imports
+`candycode.renderer.chat_renderer`, which does not exist, so importing `candycode`
+raises ModuleNotFoundError until that import is fixed.
 """
 
 from candycode.renderer.chat_renderer import ChatRenderer, Renderer
