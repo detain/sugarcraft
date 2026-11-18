@@ -111,8 +111,10 @@ missing key (and the environment variable to set, where there is one).
 
 - **Required:** `region`. The bare default is `us-east-1`, and a block that
   omits `region` launches there. To take the region from the environment, write
-  it as a placeholder, `"region": "${AWS_REGION}"`; the `AWS_*` variables are not
-  read otherwise.
+  it as a placeholder, `"region": "${AWS_REGION}"`. If `AWS_REGION` is unset, the
+  placeholder expands to empty and the launch refuses, naming `AWS_REGION`; write
+  `"${AWS_REGION:-us-east-1}"` to fall back. The factory reads no other `AWS_*`
+  variable for the region.
 - **Optional:** `model` (default `us.anthropic.claude-sonnet-4-6`, an
   inference-profile id, which on-demand Claude 4.x throughput requires),
   `modelPrices`, `promptCache`, `fallbackModels`, `contextWindow`.
@@ -187,11 +189,11 @@ environment. The defaults apply when the variable is unset or empty.
 
 | Variable | Type | What it sets | Default when unset |
 |---|---|---|---|
-| `OPENAI_API_KEY` | `openai`, `codex` | The OpenAI key. For `codex`, only when you bill by key. | empty, which the provider rejects |
+| `OPENAI_API_KEY` | `openai`, `codex` | The OpenAI key. For `codex`, only when you bill by key. | `openai`: empty, which the provider rejects; `codex`: not read by the factory, and the subprocess inherits it if set |
 | `OPENAI_ORG_ID` | `openai` | The organization id. | none |
 | `OPENAI_BASE_URL` | `openai`, `sglang`, `custom` | The endpoint for OpenAI-shaped types. | `openai`: the SDK's host; `sglang`: `http://localhost:30000`; `custom`: `http://localhost:8080` |
 | `AZURE_OPENAI_API_KEY` | `azure` | The Azure OpenAI key. | empty, which the provider rejects |
-| `ANTHROPIC_API_KEY` | `anthropic`, `claude-code` | The Anthropic key. | empty, which the provider rejects |
+| `ANTHROPIC_API_KEY` | `anthropic`, `claude-code` | The Anthropic key. | `anthropic`: empty, which the provider rejects; `claude-code`: passed to the `claude` subprocess as an empty value, not refused |
 | `ANTHROPIC_BASE_URL` | `anthropic`, `claude-code` | The Anthropic root, without `/v1`. | `anthropic`: `https://api.anthropic.com`; `claude-code`: the `claude` CLI's own endpoint |
 | `ANTHROPIC_AUTH_TOKEN` | `claude-code` | A bearer credential passed to the `claude` subprocess. | unset |
 | `SGLANG_API_KEY` | `sglang` | The key for an authenticated SGLang server. | none |
@@ -199,7 +201,7 @@ environment. The defaults apply when the variable is unset or empty.
 | `GEMINI_API_KEY` | `gemini` | The Gemini API key. | empty, which the provider rejects |
 | `GEMINI_BASE_URL` | `gemini` | The Gemini API root. | `https://generativelanguage.googleapis.com` |
 | `OPENROUTER_API_KEY` | `openrouter` | The OpenRouter key. | empty, which the provider rejects |
-| `AWS_REGION` | `bedrock` | The region, but only when the block's `region` is the placeholder `"${AWS_REGION}"`. The factory does not read it otherwise. | `us-east-1` |
+| `AWS_REGION` | `bedrock` | The region, but only when the block's `region` is the placeholder `"${AWS_REGION}"`. The factory does not read it otherwise. | empty: the placeholder path refuses the launch. A block that omits `region` uses `us-east-1`. |
 | `AWS_DEFAULT_REGION` | `bedrock` | Not read by the provider factory. A directly built `BedrockProvider` with an empty region falls back to it when `AWS_REGION` is unset. | `us-east-1` |
 
 The provider-selection variables `CANDY_CODE_PROVIDER` and `CANDY_CODE_MODEL` are
