@@ -924,6 +924,7 @@ candy-code/tests/Backend/AutoTestReflectionTest.php	0.169	3
 candy-code/tests/Host/TurnRunnerActiveSubagentsTest.php	0.169	4
 candy-code/tests/Config/Settings/SettingsWriterTest.php	0.167	57
 candy-code/tests/Backend/SessionPromptMemoPrimeTest.php	0.166	3
+candy-code/tests/Config/KeysAndProvidersPageDriftTest.php	0.166	179
 candy-code/tests/App/AgentWindowViewportTest.php	0.164	5
 candy-code/tests/Channels/ChannelRegistryTest.php	0.164	17
 candy-code/tests/Session/Import/SessionImportLedgerTest.php	0.164	7
