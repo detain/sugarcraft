@@ -52,11 +52,16 @@ final class CandyCodeBodyClaimDriftTest extends TestCase
     private const LANG = __DIR__ . '/../../lang';
 
     /**
-     * Class-shaped names the body puts in `<code>`. The suffixes are the
-     * naming conventions the source already follows; a bare `Bash` or `Read`
-     * is a tool name, not a class, and is deliberately not matched.
+     * Class-shaped names the body puts in `<code>`: a bare name, a namespaced
+     * path (`Tools\Tool`), or either followed by `()` (`ConfirmRemoveHook()`).
+     * {@see self::classTokens()} keeps a token only when it is namespaced or
+     * ends in one of the suffixes below; a bare `Bash` or `Read` is a tool
+     * name, not a class, and is deliberately not matched.
      */
-    private const CLASS_TOKEN = '#<code>([A-Z]\w*(?:Hook|Interface|Engine|Backend|Gate|Store|Manager|Registry|Client|Preset|Factory|Mode))</code>#';
+    private const CLASS_TOKEN = '#<code>((?:[A-Z]\w*\\\\)*[A-Z]\w*)(?:\(\))?</code>#';
+
+    /** The naming conventions the source already follows for classes. */
+    private const CLASS_SUFFIX = '#(?:Hook|Interface|Engine|Backend|Gate|Store|Manager|Registry|Client|Preset|Factory|Mode)$#';
 
     /** @var array<string, int> */
     private const COUNT_WORDS = [
@@ -114,8 +119,7 @@ final class CandyCodeBodyClaimDriftTest extends TestCase
 
     public function testEveryClassShapedCodeTokenInTheBodyNamesAShippedClass(): void
     {
-        preg_match_all(self::CLASS_TOKEN, self::body(), $tokens);
-        $names = array_values(array_unique($tokens[1]));
+        $names = self::classTokens(self::body());
         self::assertNotEmpty($names, 'the body no longer carries any class-shaped <code> token — the pattern no longer matches the page');
 
         $missing = [];
@@ -176,6 +180,26 @@ final class CandyCodeBodyClaimDriftTest extends TestCase
                 "the candy-code body quotes '{$match[1]} {$match[2]}' while the live count is {$live[$kind]}"
             );
         }
+    }
+
+    public function testClassTokenScanReadsNamespacedAndCallFormTokensAndResolvesThemAgainstTheirNamespace(): void
+    {
+        self::assertSame(
+            ['Tools\Tool', 'ConfirmRemoveHook', 'Tools\Gone'],
+            self::classTokens('<code>Tools\Tool</code> <code>ConfirmRemoveHook()</code> <code>Tools\Gone</code> <code>Bash</code> <code>Model</code>')
+        );
+
+        $missing = [];
+        self::assertNotNull(self::declaredClass('Tools\Tool', $missing));
+        self::assertSame([], $missing);
+
+        // The short name exists, but not under the namespace the body names.
+        self::assertNull(self::declaredClass('Other\Tool', $missing));
+        self::assertNull(self::declaredClass('Tools\Gone', $missing));
+        self::assertSame(
+            ['Other\Tool (no declaration under src/)', 'Tools\Gone (no declaration under src/)'],
+            $missing
+        );
     }
 
     public function testAMethodDeclaredOnlyPrivatelyIsNotAPublicMethod(): void
@@ -266,16 +290,45 @@ final class CandyCodeBodyClaimDriftTest extends TestCase
     }
 
     /**
+     * Every class-shaped `<code>` token in the text that is either namespaced
+     * or ends in a class suffix, in first-seen order.
+     *
+     * @return list<string>
+     */
+    private static function classTokens(string $html): array
+    {
+        preg_match_all(self::CLASS_TOKEN, $html, $found);
+        $kept = array_filter(
+            $found[1],
+            static fn (string $name): bool => str_contains($name, '\\') || preg_match(self::CLASS_SUFFIX, $name) === 1
+        );
+
+        return array_values(array_unique($kept));
+    }
+
+    /**
      * Records a missing reference in $missing and returns null, or returns the
-     * one FQN the short name declares.
+     * one FQN the name declares. A namespaced name (`Tools\Tool`) must match a
+     * declaration whose FQN equals it or ends with it, so a wrong namespace is
+     * reported rather than resolved by its short name.
      *
      * @param list<string> $missing
      */
-    private static function declaredClass(string $short, array &$missing): ?string
+    private static function declaredClass(string $name, array &$missing): ?string
     {
+        $pos = strrpos($name, '\\');
+        $short = $pos === false ? $name : substr($name, $pos + 1);
+
         $candidates = self::declarations()[$short] ?? [];
+        if (str_contains($name, '\\')) {
+            $candidates = array_values(array_filter(
+                $candidates,
+                static fn (string $fqn): bool => $fqn === $name || str_ends_with($fqn, '\\' . $name)
+            ));
+        }
+
         if (\count($candidates) !== 1) {
-            $missing[] = $short . (
+            $missing[] = $name . (
                 $candidates === []
                     ? ' (no declaration under src/)'
                     : ' (ambiguous: ' . implode(', ', $candidates) . ')'
