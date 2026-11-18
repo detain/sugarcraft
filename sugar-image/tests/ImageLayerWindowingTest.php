@@ -27,6 +27,8 @@ final class ImageLayerWindowingTest extends TestCase
     private function fakeRenderer(): Renderer
     {
         return new class implements Renderer {
+        use \SugarCraft\Image\Concerns\ImageSourceRgbFallback;
+
             public function render(ImageSource $image, int $width, ?int $height = null): string
             {
                 return '';

@@ -57,6 +57,8 @@ use SugarCraft\Image\Support\OutputOptimizer;
  */
 final class QuarterBlockRenderer implements Renderer, AcceptsOptimization, ConfigFingerprintProvider, CanvasModeConfigurable
 {
+    use \SugarCraft\Image\Concerns\ImageSourceRgbFallback;
+
     use \SugarCraft\Image\Concerns\RenderValidationTrait;
     use \SugarCraft\Image\Concerns\OptimizationCarrierTrait;
 

@@ -25,6 +25,7 @@ final class MosaicModeStringTest extends TestCase
 
     protected function setUp(): void
     {
+        \SugarCraft\Image\Mosaic::resetAutoMemo();
         parent::setUp();
         // 'auto' routes through Mosaic::auto(); clear the terminal knobs so
         // the detection result is deterministic on any machine.

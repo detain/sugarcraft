@@ -105,6 +105,27 @@ final class Mosaic implements IncrementalRenderer
     }
 
     /**
+     * Memoised {@see auto()} answer for this process; null until the first call.
+     */
+    private static ?self $autoMemo = null;
+
+    /**
+     * Pick the best renderer from environment variables alone.
+     *
+     * The env stage of {@see auto()} without the tty: no query bytes, no
+     * timeouts, no palette probe, and no tmux `allow-passthrough` toggle (that
+     * toggle is a tmux process, which this pure entry point must not spawn).
+     * Inside tmux the passthrough envelope is still applied, so the bytes
+     * match what the probed path would emit for the same terminal.
+     *
+     * @param array<string,string>|null $env  null reads the process environment
+     */
+    public static function fromEnv(?array $env = null): self
+    {
+        return self::fromCapability(Detect::fromEnv($env), ensureTmux: false);
+    }
+
+    /**
      * Auto-detect the best renderer.
      *
      * NEVER throws: every failure route lands on a renderer, because the
@@ -138,6 +159,25 @@ final class Mosaic implements IncrementalRenderer
      * @see Detect::probe() for the primary TTY-probing implementation
      */
     public static function auto(): self
+    {
+        return self::$autoMemo ??= self::autoProbe();
+    }
+
+    /**
+     * Forget the memoised {@see auto()} result, so the next call probes the
+     * terminal again. For tests and for an application that changed terminal
+     * (a reattached multiplexer, say); the probe itself is the expensive part.
+     */
+    public static function resetAutoMemo(): void
+    {
+        self::$autoMemo = null;
+    }
+
+    /**
+     * The uncached {@see auto()} body: one Detect::probe(), then the palette
+     * fallback only when that found no graphics protocol.
+     */
+    private static function autoProbe(): self
     {
         try {
             $cap = Detect::probe();
@@ -1034,7 +1074,7 @@ final class Mosaic implements IncrementalRenderer
      * chain answers screen. Shared by {@see probe()}, {@see auto()} and the
      * palette fallback so every detection path ends in one place.
      */
-    private static function fromCapability(Capability $cap): self
+    private static function fromCapability(Capability $cap, bool $ensureTmux = true): self
     {
         $renderer = self::bestBackend($cap);
 
@@ -1055,7 +1095,7 @@ final class Mosaic implements IncrementalRenderer
         // is on — flip it transactionally for the process lifetime when a
         // pixel protocol is in play (chicle-options.c:2412-2418 gates the
         // same way; text fallback emits nothing that needs the toggle).
-        if ($cap->inTmux && self::hasGraphicsProtocol($cap)) {
+        if ($ensureTmux && $cap->inTmux && self::hasGraphicsProtocol($cap)) {
             TmuxPassthrough::ensure();
         }
 
@@ -1114,10 +1154,10 @@ final class Mosaic implements IncrementalRenderer
      * Returns null on an unknown mode so callers can phrase the error in
      * their own words rather than unwinding an exception.
      */
-    public static function fromModeString(string $mode): ?self
+    public static function fromModeString(string $mode, bool $probe = true): ?self
     {
         return match (strtolower(trim($mode))) {
-            'auto'         => self::auto(),
+            'auto'         => $probe ? self::auto() : self::fromEnv(),
             'sixel'        => self::sixel(),
             'kitty'        => self::kitty(),
             'iterm2'       => self::iterm2(),

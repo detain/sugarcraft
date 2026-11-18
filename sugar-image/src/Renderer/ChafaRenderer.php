@@ -24,6 +24,8 @@ use SugarCraft\Image\Lang;
  */
 final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
 {
+    use \SugarCraft\Image\Concerns\ImageSourceRgbFallback;
+
     use \SugarCraft\Image\Concerns\RenderValidationTrait;
 
     /**

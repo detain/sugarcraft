@@ -139,6 +139,8 @@ final class AnimationDriverFlickerTest extends TestCase
     private function sentinelRenderer(\Closure $deleteBytes): Renderer
     {
         return new class ($deleteBytes) implements Renderer {
+        use \SugarCraft\Image\Concerns\ImageSourceRgbFallback;
+
             /** @param \Closure(string): string $deleteBytes */
             public function __construct(private readonly \Closure $deleteBytes) {}
 

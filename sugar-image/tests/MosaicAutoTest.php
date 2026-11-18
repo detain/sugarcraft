@@ -19,6 +19,7 @@ final class MosaicAutoTest extends TestCase
 
     protected function setUp(): void
     {
+        \SugarCraft\Image\Mosaic::resetAutoMemo();
         parent::setUp();
         $keys = [
             'CLICOLOR_FORCE', 'NO_COLOR', 'CLICOLOR', 'TERM', 'COLORTERM',

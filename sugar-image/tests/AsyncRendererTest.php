@@ -173,6 +173,8 @@ final class AsyncRendererTest extends TestCase
         // back reddens this arm AND the type pin.
         $image = ImageSource::fromFile(__DIR__ . '/fixtures/4x2.png');
         $slow  = new class implements Renderer, IncrementalRenderer {
+        use \SugarCraft\Image\Concerns\ImageSourceRgbFallback;
+
             public function render(ImageSource $image, int $width, ?int $height = null): string
             {
                 return \implode('', iterator_to_array($this->renderRows($image, $width, $height), false));

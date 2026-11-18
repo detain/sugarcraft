@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Image\Renderer;
 
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Image\Codec\RawRgba;
 use SugarCraft\Image\Concerns\ForceTrueColor;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\KittyOptions;
@@ -314,21 +315,96 @@ final class KittyRenderer implements Renderer, IncrementalRenderer
         $effectiveHeight = $this->prepareRender($image, $width, $height);
         $payload         = $this->resolveRgba($image, $rgba);
 
+        return $this->rawTransmission($payload, $image->width, $image->height, $width, $effectiveHeight, null);
+    }
+
+    /**
+     * Transmit a raw RGBA8 buffer without building a PNG container.
+     *
+     * The payload is the caller's pixel buffer as-is, so this is the path
+     * {@see renderRgb()} takes, and there is no GD decode on the way out.
+     */
+    public function renderRgb(string $rgba, int $pixelWidth, int $pixelHeight, int $width, ?int $height = null): string
+    {
+        $effectiveHeight = $this->prepareRenderFor($pixelWidth, $pixelHeight, $width, $height);
+        $payload         = RawRgba::validate($rgba, $pixelWidth, $pixelHeight);
+
+        return $this->rawTransmission($payload, $pixelWidth, $pixelHeight, $width, $effectiveHeight, null);
+    }
+
+    /**
+     * Draw `$imageId`, then retire `$prevId` once the new frame is on screen.
+     *
+     * Both ids ride the protocol's `i=` key, so the delete reaches the image
+     * this session placed. Without the id the frame was anonymous and nothing
+     * could ever remove it, which is how video frames piled up in the store.
+     */
+    public function present(ImageSource $image, int $width, ?int $height, string $imageId, ?string $prevId): string
+    {
+        self::assertPositiveId($imageId);
+        if ($prevId !== null) {
+            // delete() casts its argument to int, so a malformed id would
+            // become 0, and Kitty's `i=0` delete clears every image.
+            self::assertPositiveId($prevId);
+        }
+
+        $frame = $this->renderFrame($image, $width, $height, (int) $imageId);
+
+        if ($prevId === null || $prevId === $imageId) {
+            return $frame;
+        }
+
+        return $frame . $this->delete($prevId);
+    }
+
+    /**
+     * @throws \InvalidArgumentException unless $id is a positive decimal integer
+     */
+    private static function assertPositiveId(string $id): void
+    {
+        if (!ctype_digit($id) || $id === '0') {
+            throw new \InvalidArgumentException("Kitty image id must be a positive integer, got '{$id}'");
+        }
+    }
+
+    public function supportsIdDelete(): bool
+    {
+        return true;
+    }
+
+    /**
+     * Emit the f=32 transmission of one raw RGBA8 payload. With $imageId null
+     * the frame is anonymous and the bytes are the historical renderUncompressed
+     * shape; with an id it carries `i=` and `q=2` so later deletes can target it.
+     */
+    private function rawTransmission(
+        string $payload,
+        int $pixelWidth,
+        int $pixelHeight,
+        int $width,
+        int $effectiveHeight,
+        ?int $imageId,
+    ): string {
         $chunks = $this->chunkPayload($payload, KittyOptions::DEFAULT_CHUNK_BYTES);
         $total  = count($chunks);
 
-        $out = Ansi::kittyGraphicsBegin([
-            // Same a=T invariant as every other transmit in this renderer:
-            // raw RGBA under a defaulted action stores the image without
-            // ever compositing it.
-            'a' => 'T',
+        // Same a=T invariant as every other transmit in this renderer:
+        // raw RGBA under a defaulted action stores the image without
+        // ever compositing it.
+        $begin = ['a' => 'T'];
+        if ($imageId !== null) {
+            $begin['i'] = $imageId;
+            $begin['q'] = 2;
+        }
+        $begin += [
             'c' => $width,
             'r' => $effectiveHeight > 0 ? $effectiveHeight : 1,
             'f' => 32,
-            's' => $image->width,
-            'v' => $image->height,
-        ]);
+            's' => $pixelWidth,
+            'v' => $pixelHeight,
+        ];
 
+        $out = Ansi::kittyGraphicsBegin($begin);
         foreach ($chunks as $idx => $chunk) {
             $out .= Ansi::kittyGraphicsChunk($chunk, $idx < $total - 1);
         }

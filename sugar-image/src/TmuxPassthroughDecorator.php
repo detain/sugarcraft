@@ -126,6 +126,21 @@ final class TmuxPassthroughDecorator implements Renderer, PassthroughDecorator
         }
     }
 
+    public function renderRgb(string $rgba, int $pixelWidth, int $pixelHeight, int $width, ?int $height = null): string
+    {
+        return $this->wrap($this->inner->renderRgb($rgba, $pixelWidth, $pixelHeight, $width, $height));
+    }
+
+    public function present(ImageSource $image, int $width, ?int $height, string $imageId, ?string $prevId): string
+    {
+        return $this->wrap($this->inner->present($image, $width, $height, $imageId, $prevId));
+    }
+
+    public function supportsIdDelete(): bool
+    {
+        return $this->inner->supportsIdDelete();
+    }
+
     public function name(): string
     {
         return 'tmux(' . $this->inner->name() . ')';
