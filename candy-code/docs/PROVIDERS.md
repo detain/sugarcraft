@@ -190,7 +190,7 @@ environment. The defaults apply when the variable is unset or empty.
 | `OPENAI_BASE_URL` | `openai`, `sglang`, `custom` | The endpoint for OpenAI-shaped types. | `openai`: the SDK's host; `sglang`: `http://localhost:30000`; `custom`: `http://localhost:8080` |
 | `AZURE_OPENAI_API_KEY` | `azure` | The Azure OpenAI key. | empty, which the provider rejects |
 | `ANTHROPIC_API_KEY` | `anthropic`, `claude-code` | The Anthropic key. | empty, which the provider rejects |
-| `ANTHROPIC_BASE_URL` | `anthropic`, `claude-code` | The Anthropic root, without `/v1`. | `https://api.anthropic.com` |
+| `ANTHROPIC_BASE_URL` | `anthropic`, `claude-code` | The Anthropic root, without `/v1`. | `anthropic`: `https://api.anthropic.com`; `claude-code`: the `claude` CLI's own endpoint |
 | `ANTHROPIC_AUTH_TOKEN` | `claude-code` | A bearer credential passed to the `claude` subprocess. | unset |
 | `SGLANG_API_KEY` | `sglang` | The key for an authenticated SGLang server. | none |
 | `GCP_PROJECT_ID` | `vertex` | The Google Cloud project. | empty, which the provider rejects |
