@@ -65,6 +65,13 @@ final class BoundedShutdown
     /** Poll granularity: fine enough that a prompt exit is not rounded up to the whole budget. */
     public const POLL_INTERVAL_US = 5000;
 
+    /**
+     * Seconds between exit polls while {@see reapWhenExited()} waits on a child
+     * the ladder could not stop. Coarse on purpose: a stuck child is rare and a
+     * prompt reap is not worth a 200Hz wakeup on a loop that is serving others.
+     */
+    public const REAP_POLL_SECONDS = 0.25;
+
     private function __construct()
     {
     }
@@ -281,10 +288,17 @@ final class BoundedShutdown
 
     /**
      * Async {@see terminateBounded()}: the ladder on loop timers, then the reap
-     * once the child is gone or its budgets ran out. $then receives the exit
-     * status, captured the same way the sync call captures it: from the poll
-     * that saw the exit, falling back to `proc_close()` only when the poll
-     * never did.
+     * once the child is gone. $then receives the exit status, captured the same
+     * way the sync call captures it: from the poll that saw the exit, falling
+     * back to `proc_close()` only when the poll never did.
+     *
+     * A child that survives signal 9 within its budget is NOT reaped with a
+     * blocking `proc_close()` — that would park the loop thread on exactly the
+     * uninterruptible kernel wait the ladder cannot break. The handle is kept
+     * and polled by {@see reapWhenExited()} until the kernel releases the
+     * child, so the loop keeps serving every other connection in the meantime.
+     * Trade-off: that poll is a loop timer, so a child that never dies holds
+     * the loop open; a caller that must exit regardless cancels its own work.
      *
      * An already-exited child is answered at once with no signal spent, and a
      * non-resource argument answers null, matching the sync contract.
@@ -329,12 +343,74 @@ final class BoundedShutdown
             static function () use ($process, &$exitCode): bool {
                 return self::exited($process, $exitCode);
             },
-            static function () use ($process, &$exitCode, $finish): void {
+            static function (bool $gone) use ($loop, $process, &$exitCode, $finish): void {
+                // Only a poll that saw the exit may take the blocking reap: then
+                // proc_close() cannot wait. Anything else is deferred to the loop.
+                if (!$gone) {
+                    self::reapWhenExited($loop, $process, $finish);
+
+                    return;
+                }
+
                 $reaped = \is_resource($process) ? \proc_close($process) : null;
                 $finish($exitCode ?? $reaped);
             },
             $graceSeconds,
             $killGraceSeconds,
+        );
+    }
+
+    /**
+     * Reap a child on loop timers, never blocking: answer at once when it has
+     * already exited, otherwise poll it every {@see REAP_POLL_SECONDS} and
+     * `proc_close()` it the tick it is seen gone.
+     *
+     * This is the reap half of {@see terminateBoundedAsync()} for a child the
+     * ladder could not stop. A synchronous `proc_close()` there would wait on
+     * the child with no bound. The status reported is the one the poll captured,
+     * matching the sync contract; a non-resource argument answers null.
+     *
+     * @param callable(?int):void|null $then
+     */
+    public static function reapWhenExited(
+        LoopInterface $loop,
+        mixed $process,
+        ?callable $then = null,
+        float $pollSeconds = self::REAP_POLL_SECONDS,
+    ): void {
+        $finish = static function (?int $status) use ($then): void {
+            if ($then !== null) {
+                $then($status);
+            }
+        };
+
+        if (!\is_resource($process)) {
+            $finish(null);
+
+            return;
+        }
+
+        $exitCode = null;
+        if (self::exited($process, $exitCode)) {
+            $reaped = \proc_close($process);
+            $finish($exitCode ?? $reaped);
+
+            return;
+        }
+
+        $timer = null;
+        $timer = $loop->addPeriodicTimer(
+            $pollSeconds,
+            static function () use (&$timer, $loop, $process, $finish): void {
+                $code = null;
+                if (!self::exited($process, $code)) {
+                    return;
+                }
+
+                $loop->cancelTimer($timer);
+                $reaped = \proc_close($process);
+                $finish($code ?? $reaped);
+            },
         );
     }
 

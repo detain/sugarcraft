@@ -457,6 +457,201 @@ final class BoundedShutdownTest extends TestCase
         self::assertFalse(\is_resource($process));
     }
 
+    public function testTerminateBoundedAsyncEscalatesAndReapsTheWholeProcessGroup(): void
+    {
+        self::requirePosix();
+        if (!\SugarCraft\Core\Util\Executable\Locator::exists('setsid')) {
+            self::markTestSkipped('setsid(1) is not installed on this host');
+        }
+
+        // The wrapper runs a background grandchild and reports its pid through a
+        // marker file. Only the group signal reaches the grandchild: a direct
+        // proc_terminate() kills the wrapper alone and orphans the sleeper.
+        $marker = \tempnam(\sys_get_temp_dir(), 'bounded-shutdown-');
+        self::assertNotFalse($marker, 'could not create the grandchild marker file');
+        $grandchild = 0;
+
+        try {
+            $wrapped = $this->spawn(['/usr/bin/setsid', 'sh', '-c', 'sleep 30 & echo $! > "$0"; wait', $marker]);
+            $wrappedPid = (int) (\proc_get_status($wrapped)['pid'] ?? 0);
+
+            $deadline = \hrtime(true) / 1_000_000_000 + 2.0;
+            while (\posix_getpgid($wrappedPid) !== $wrappedPid && \hrtime(true) / 1_000_000_000 < $deadline) {
+                \usleep(10_000);
+            }
+            // file_get_contents(), not filesize(): PHP's stat cache would pin the size at 0.
+            while (\trim((string) \file_get_contents($marker)) === '' && \hrtime(true) / 1_000_000_000 < $deadline) {
+                \usleep(10_000);
+            }
+            $grandchild = (int) \trim((string) \file_get_contents($marker));
+            self::assertGreaterThan(0, $grandchild, 'the wrapper never reported its grandchild');
+            self::assertTrue(self::stillRunning($grandchild), 'the grandchild must be alive before the teardown');
+
+            $status = $this->settleAsync(static function (LoopInterface $loop, callable $done) use ($wrapped, $wrappedPid): void {
+                BoundedShutdown::terminateBoundedAsync(
+                    $loop,
+                    $wrapped,
+                    static fn (?int $s) => $done($s),
+                    0.3,
+                    0.3,
+                    $wrappedPid,
+                );
+            });
+
+            self::assertIsInt($status);
+            self::assertFalse(\is_resource($wrapped), 'the async reap consumes the handle');
+            self::assertFalse(
+                self::stillRunning($grandchild),
+                'the group-aware async ladder must take the descendant down with the wrapper',
+            );
+        } finally {
+            @\unlink($marker);
+            if ($grandchild > 0 && self::stillRunning($grandchild)) {
+                @\posix_kill($grandchild, 9);
+            }
+        }
+    }
+
+    public function testEscalateAsyncNeverSendsNineToAChildThatTermEndsGone(): void
+    {
+        $sent = [];
+        $hookCalls = 0;
+
+        $gone = $this->settleAsync(static function (LoopInterface $loop, callable $done) use (&$sent, &$hookCalls): void {
+            BoundedShutdown::escalateAsync(
+                $loop,
+                static function (int $signal) use (&$sent): void {
+                    $sent[] = $signal;
+                },
+                static function () use (&$sent): bool {
+                    return \in_array(15, $sent, true);
+                },
+                static fn (bool $isGone) => $done($isGone),
+                0.5,
+                0.5,
+                static function () use (&$hookCalls): void {
+                    ++$hookCalls;
+                },
+            );
+        });
+
+        self::assertTrue($gone);
+        self::assertSame([15], $sent, 'a well-behaved child pays no KILL rung on the async path either');
+        self::assertSame(0, $hookCalls, 'the between-rungs hook must not fire when TERM landed');
+    }
+
+    public function testTerminateBoundedAsyncEndsATermHonouringChildWithoutTheKillRung(): void
+    {
+        $process = $this->spawn(['sleep', '30']);
+        $pid = (int) (\proc_get_status($process)['pid'] ?? 0);
+
+        $started = \hrtime(true);
+        $status = $this->settleAsync(static function (LoopInterface $loop, callable $done) use ($process): void {
+            BoundedShutdown::terminateBoundedAsync(
+                $loop,
+                $process,
+                static fn (?int $s) => $done($s),
+                0.5,
+                2.0,
+            );
+        });
+        $elapsedSeconds = (\hrtime(true) - $started) / 1_000_000_000;
+
+        self::assertIsInt($status);
+        self::assertLessThan(1.0, $elapsedSeconds, 'a SIGTERM-honouring child must not pay the kill budget');
+        self::assertProcessGone($pid);
+        self::assertFalse(\is_resource($process));
+    }
+
+    public function testReapWhenExitedNeverBlocksTheLoopWhileTheChildRuns(): void
+    {
+        self::requirePosix();
+
+        // A blocking proc_close() would park the loop for the child's whole 30s
+        // sleep. The tick below runs only if the loop stays free while the child
+        // is alive, and the external kill then lets the deferred reap settle.
+        $process = $this->spawn(['sleep', '30']);
+        $pid = (int) (\proc_get_status($process)['pid'] ?? 0);
+
+        $loop = new StreamSelectLoop();
+        $settled = false;
+        $status = null;
+        $ticks = 0;
+        $handleLiveAtKill = false;
+
+        BoundedShutdown::reapWhenExited(
+            $loop,
+            $process,
+            static function (?int $s) use (&$settled, &$status, $loop): void {
+                $settled = true;
+                $status = $s;
+                $loop->stop();
+            },
+            0.01,
+        );
+
+        $loop->addTimer(0.1, static function () use (&$ticks, &$handleLiveAtKill, $process, $pid): void {
+            ++$ticks;
+            $handleLiveAtKill = \is_resource($process);
+            @\posix_kill($pid, 9);
+        });
+
+        $started = \hrtime(true);
+        $bound = $loop->addTimer(5.0, static function () use ($loop): void {
+            $loop->stop();
+        });
+        $loop->run();
+        $loop->cancelTimer($bound);
+        $elapsedSeconds = (\hrtime(true) - $started) / 1_000_000_000;
+
+        self::assertSame(1, $ticks, 'the loop must keep ticking while the child is still alive');
+        self::assertTrue($handleLiveAtKill, 'the reap must not consume a running child');
+        self::assertTrue($settled, 'the deferred reap must settle once the child is gone');
+        self::assertIsInt($status);
+        self::assertFalse(\is_resource($process));
+        self::assertLessThan(2.0, $elapsedSeconds, 'the reap follows the death, it does not wait out the sleep');
+    }
+
+    public function testReapWhenExitedAnswersAtOnceForAnAlreadyExitedChild(): void
+    {
+        $process = $this->spawn(['/bin/sh', '-c', 'exit 5']);
+        self::assertTrue(BoundedShutdown::hasExited($process, 2.0), 'the fixture itself must terminate');
+
+        $status = $this->settleAsync(static function (LoopInterface $loop, callable $done) use ($process): void {
+            BoundedShutdown::reapWhenExited($loop, $process, static fn (?int $s) => $done($s));
+        });
+
+        self::assertSame(5, $status);
+        self::assertFalse(\is_resource($process));
+    }
+
+    public function testReapWhenExitedAnswersNullForANonResourceAtOnce(): void
+    {
+        $loop = new StreamSelectLoop();
+        $answer = 'unset';
+
+        BoundedShutdown::reapWhenExited($loop, null, static function (?int $s) use (&$answer): void {
+            $answer = $s;
+        });
+
+        self::assertNull($answer);
+    }
+
+    /**
+     * A zombie has already died even though signal 0 still reaches its pid,
+     * so the probe reads the kernel's state letter as well.
+     */
+    private static function stillRunning(int $pid): bool
+    {
+        if (!@\posix_kill($pid, 0)) {
+            return false;
+        }
+
+        $stat = @\file_get_contents("/proc/{$pid}/stat");
+
+        return $stat === false || \preg_match('/\)\s+Z/', $stat) !== 1;
+    }
+
     public function testTerminateBoundedAsyncAnswersNullForANonResourceAtOnce(): void
     {
         $loop = new StreamSelectLoop();
