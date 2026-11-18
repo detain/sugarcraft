@@ -304,9 +304,41 @@ final class SystemModuleTest extends TestCase
         $this->assertNotNull($cmd);
         $this->assertStringNotContainsString('GPU', $ticked->view(), 'no GPU row before its sample settles');
 
-        [$sampled, $sampledCmd] = $ticked->update(new GpuSampleMsg('system', 42.0, false));
+        // The first sample of a fresh module is sample 1.
+        [$sampled, $sampledCmd] = $ticked->update(new GpuSampleMsg('system', 42.0, false, 1));
         $this->assertNull($sampledCmd);
         $this->assertStringContainsString('GPU  42%', $sampled->view());
+    }
+
+    /**
+     * Regression: a hung sample that settles after its successor started used to
+     * clear the latch the successor holds, so the next tick started a third child
+     * beside the live one. Only the newest sample may settle the latch.
+     */
+    public function testAStaleGpuSampleDoesNotClearTheLatchOfANewerSample(): void
+    {
+        $module = new SystemModule();
+        [$first] = $module->update(new RefreshMsg());
+        // The first sample is still hung past the ceiling, so the next tick samples again.
+        $this->setGpuInFlightSince($first, $this->gpuInFlightSince($first) - BoundedCommand::SETTLE_CEILING_SECONDS - 1.0);
+        [$second] = $first->update(new RefreshMsg());
+        $this->assertSame(2, $this->gpuSampleSeq($second));
+
+        [$afterStale, $staleCmd] = $second->update(new GpuSampleMsg('system', 9.0, false, 1));
+        $this->assertNull($staleCmd);
+        $this->assertSame($second, $afterStale, 'a stale sample changes nothing');
+
+        // The newer sample still holds the latch, so a tick inside the ceiling issues no third sample.
+        [$again] = $afterStale->update(new RefreshMsg());
+        $this->assertSame(2, $this->gpuSampleSeq($again), 'the live sample keeps the latch');
+
+        [$settled] = $again->update(new GpuSampleMsg('system', 42.0, false, 2));
+        $this->assertStringContainsString('GPU  42%', $settled->view());
+    }
+
+    private function gpuSampleSeq(SystemModule $module): int
+    {
+        return (int) (new \ReflectionProperty(SystemModule::class, 'gpuSampleSeq'))->getValue($module);
     }
 
     /**
@@ -343,7 +375,7 @@ final class SystemModuleTest extends TestCase
     {
         $module = new SystemModule();
 
-        [$next, $cmd] = $module->update(new GpuSampleMsg('other', 42.0, false));
+        [$next, $cmd] = $module->update(new GpuSampleMsg('other', 42.0, false, 1));
 
         $this->assertSame($module, $next);
         $this->assertNull($cmd);
