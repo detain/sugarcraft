@@ -62,7 +62,7 @@ Any value other than empty or `0` opts out. The `RepoMap` tool still works with
 the variable set, so a checkout where you want to skip the prompt cost keeps
 the model's ability to ask for a map.
 
-The setting is `symbolMap.enabled` in your user `~/.candy-code/config.json`. A
+The setting is `symbolMap.enabled` in your user `~/.candy-code/config.json` (or your user `settings.json`). A
 project settings file cannot set it, and a value there is ignored. It takes
 effect when the session starts.
 
