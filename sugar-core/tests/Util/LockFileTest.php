@@ -297,6 +297,11 @@ final class LockFileTest extends TestCase
      */
     public function testLostSweepRaceResolvesNullWithoutDoubleClosing(): void
     {
+        if (PHP_OS_FAMILY === 'Windows') {
+            // The sweep needs to unlink a file this process still holds open, and
+            // Windows refuses that without FILE_SHARE_DELETE, so the race cannot be staged.
+            self::markTestSkipped('Windows will not unlink a file held open by this process');
+        }
         $path = $this->dir . '/l';
         $probes = 0;
         $probe = static function (int $pid) use ($path, &$probes): bool {

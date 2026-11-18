@@ -740,4 +740,23 @@ final class LruMapTest extends TestCase
         self::assertFalse($short->has('a'), 'restamped at 1s for 10s, so it is gone by 12s');
         self::assertSame(1, $long->count(), 'the receiver keeps its original 100s lifetime');
     }
+
+    /**
+     * Regression: the default clock was microtime(true), so an NTP step back
+     * lengthened every later entry's lifetime through the stamp floor. The
+     * default must read the monotonic hrtime clock, which is seconds since boot
+     * and so sits far from the epoch-based wall clock.
+     */
+    public function testDefaultTtlClockIsMonotonicHrtimeNotWallClock(): void
+    {
+        $now = new \ReflectionMethod(LruMap::class, 'now');
+        $map = LruMap::new(4)->withTtl(60.0);
+
+        self::assertEqualsWithDelta(
+            hrtime(true) / 1e9,
+            $now->invoke($map),
+            1.0,
+            'the default clock is the monotonic hrtime seconds, not microtime',
+        );
+    }
 }
