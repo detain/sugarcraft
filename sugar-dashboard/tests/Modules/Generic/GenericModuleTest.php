@@ -8,6 +8,7 @@ use PHPUnit\Framework\Attributes\WithoutErrorHandler;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Async\Await;
 use SugarCraft\Core\Msg;
+use SugarCraft\Dashboard\Module\BoundedCommand;
 use SugarCraft\Dashboard\Modules\Generic\GenericModule;
 use SugarCraft\Dashboard\Modules\Generic\TickMsg;
 
@@ -107,6 +108,31 @@ final class GenericModuleTest extends TestCase
 
         $this->assertSame($inFlight, $again);
         $this->assertNull($cmd);
+    }
+
+    /**
+     * Regression: a host that fans a source-less TickMsg out to every module and
+     * keeps only the returned module drops the Cmd. The in-flight latch then
+     * never cleared, and the module went silent for the rest of the session.
+     * Past the settle ceiling the latch is stale, so the next tick runs again.
+     */
+    public function testATickAfterADroppedCommandsSettleCeilingRunsAgain(): void
+    {
+        $module = new GenericModule('printf "x"', 5);
+        [$dropped] = $module->update(new TickMsg());
+        $this->backdateLatch($dropped, BoundedCommand::SETTLE_CEILING_SECONDS + 1.0);
+
+        [$again, $cmd] = $dropped->update(new TickMsg());
+
+        $this->assertNotNull($cmd, 'a dropped command must not silence the module');
+        $settled = $again->update(Await::until($cmd()->promise, 15.0))[0];
+        $this->assertSame('x', $settled->view());
+    }
+
+    private function backdateLatch(GenericModule $module, float $seconds): void
+    {
+        $since = new \ReflectionProperty(GenericModule::class, 'inFlightSince');
+        $since->setValue($module, (float) $since->getValue($module) - $seconds);
     }
 
     public function testUpdateWithNonTickMsgReturnsSameModule(): void
