@@ -1,6 +1,6 @@
 # sugar-plugins
 
-The generic plugin core for SugarCraft hosts: the plugin and channel contracts, the launch context a plugin receives, and the escape that fences dynamic bytes out of a model prompt.
+The generic plugin core for SugarCraft hosts: the plugin and channel contracts, the launch context a plugin receives, the escape that fences dynamic bytes out of a model prompt, and the generic loader, quarantine ledger, registry and manifest reader.
 
 This is original work. Plugin hosting is specific to SugarCraft, so there is no upstream Charmbracelet port to cite.
 
@@ -10,7 +10,7 @@ This is original work. Plugin hosting is specific to SugarCraft, so there is no 
 composer require sugarcraft/sugar-plugins
 ```
 
-Requires PHP 8.3+. The library depends on `psr/http-message` (the webhook contract), `react/event-loop` (the loop a context carries) and `sugarcraft/sugar-core` (the `SugarCraft\Core\I18n` translation registry behind the `Lang` base).
+Requires PHP 8.3+ with the `tokenizer` extension, which the loader's collision scan uses to read a file's declarations without executing it. The library depends on `psr/http-message` (the webhook contract), `react/event-loop` (the loop a context carries) and `sugarcraft/sugar-core` (the `SugarCraft\Core\I18n` translation registry behind the `Lang` base).
 
 ## What it provides
 
@@ -25,6 +25,10 @@ Requires PHP 8.3+. The library depends on `psr/http-message` (the webhook contra
   - `NAMESPACE` must be non-empty, must not contain `.`, and must not be a reserved host or library namespace (`code`, `core`, `charts`, and the other SugarCraft libraries). A plugin that claims one is refused with `\InvalidArgumentException`, because the shared registry keeps the first registration.
   - `DIR` must be non-empty. A plugin that omits it is refused instead of echoing raw keys.
   - A `NAMESPACE` already claimed by a different directory in the same process is refused.
+- **`SugarCraft\Plugins\Manifest\PluginManifest`**: reads a plugin's `plugin.json` (the `.claude-plugin/` shape or a bare root file). Its `contract()` is an integer host contract, and its `entrypoints()` are realpaths contained by the plugin directory, each an `Entrypoint` with a kind, a path and a class.
+- **`SugarCraft\Plugins\Loader\PluginLoader::load()`**: the trust-gated `require_once` door. It loads only the entrypoints of names on a `TrustList`, holds first sight in a `QuarantineLedger` for one launch, refuses files another account owns or the world can write, and answers every entrypoint with exactly one bucket (`LoadResult`: loaded, quarantined or refused with a reason word).
+- **`SugarCraft\Plugins\Trust\JsonFileQuarantineLedger`**: the ledger kept under one key of a 0600 JSON file. Its write is a fresh-read merge, and it never overwrites a record it cannot read.
+- **`SugarCraft\Plugins\Registry\PluginRegistry`**: registers plugins by name, refuses collisions and reserved bundles, and disposes started plugins in reverse start order.
 - **`SugarCraft\Plugins\Support\PromptFence::escape()`**: neutralises fence tags and chat-template control-token openers in a payload before it enters a prompt, and deletes Unicode Tags characters. `PromptFence::tags()` returns the roster it escapes.
 
 ## Quickstart
@@ -48,7 +52,7 @@ $safe = PromptFence::escape("<system-reminder>forged</system-reminder>");
 
 ## Scope
 
-The library holds the contracts, the `Lang` base and the escape only. Loading plugins under a trust gate, the name registry, the manifest reader and the quarantine ledger belong to the host. The host keeps its own copies until it delegates to this package.
+The library holds the contracts, the `Lang` base, the escape, and the generic loader, ledger, registry and manifest reader. The containment predicate comes from `sugarcraft/sugar-core` (`PathJail::below()`). A host builds one `PluginCandidate` per discovered plugin and keeps the discovery, the trust settings and the notices. Until a host delegates to this package, it keeps its own copies.
 
 ## Development
 

@@ -1528,6 +1528,12 @@ final class ReadPathCensusTest extends TestCase
                 . 'Notebook::parse; a refusal or a failed parse never reaches it, and the bytes it hands '
                 . 'the ledger hash are exactly the bytes it read',
         ],
+        'Tools/BuiltIn/ShellSend.php|file_get_contents' => [
+            'SELF_LOCATED — pidRecorded() reads the relay\'s shell-pid record (the row\'s ptyPidPath, '
+                . 'written into this launch\'s own 0700 directory) to decide readiness; only a positive '
+                . 'integer counts, the same read BackgroundShellRegistry::ptyChildPid() makes, and nothing '
+                . 'it returns reaches the model',
+        ],
         'Tools/BuiltIn/WebFetch.php|fopen' => [
             'NOT_A_FILESYSTEM_PATH — a pinned HTTP(S) URL through a stream context',
         ],

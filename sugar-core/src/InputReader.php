@@ -1337,6 +1337,12 @@ final class InputReader
             'y' => new KeyMsg(KeyType::Kp9),
             'l' => new KeyMsg(KeyType::KpDecimal),
             'm' => new KeyMsg(KeyType::KpSubtract),
+            // Om is minus; the remaining operator keys are Oj multiply, Ok add,
+            // On decimal and Oo divide.
+            'j' => new KeyMsg(KeyType::KpMultiply),
+            'k' => new KeyMsg(KeyType::KpAdd),
+            'n' => new KeyMsg(KeyType::KpDecimal),
+            'o' => new KeyMsg(KeyType::KpDivide),
             'M' => new KeyMsg(KeyType::Enter),
             default => null,
         };

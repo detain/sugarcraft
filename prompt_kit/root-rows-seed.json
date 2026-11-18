@@ -337,7 +337,7 @@
         "sugar-async": {
             "readme": {
                 "needles": [
-                    "Shared async vocabulary for ReactPHP — CancellationToken, Subscriptions, AsyncOps helpers (withTimeout, withDeadline, cancellable, retry, debounce, throttle, all/race, onPending, singleFlight) + TTL async cache."
+                    "Shared async vocabulary for ReactPHP — CancellationToken, Subscriptions, AsyncOps helpers (withTimeout, withDeadline, cancellable, retry, debounce, throttle, all/race, pendingNotice, singleFlight) + TTL async cache."
                 ],
                 "dead": []
             },
@@ -902,6 +902,20 @@
             "matchups": {
                 "needles": [
                     "gitignore-style ignore matching over injected file contents (no IO)"
+                ],
+                "dead": []
+            }
+        },
+        "sugar-serve-protocol": {
+            "readme": {
+                "needles": [
+                    "Wire contract for the `candy-code.v1` serve protocol — WebSocket subprotocol names, frame cap, discovery and token readers, and address-to-WebSocket URL normalisation."
+                ],
+                "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "Wire contract for the `candy-code.v1` serve protocol — subprotocol names"
                 ],
                 "dead": []
             }
