@@ -1155,9 +1155,11 @@ $armed->confirms($key);
 // ${VAR} and ${VAR:-default} inside a config value. Pass a lookup to avoid the environment.
 Interpolate::expand('https://${HOST:-localhost}/mcp');
 
-// Containment. resolve() refuses a dangling leaf and an empty path; resolveDir()
-// and resolveForCreate() keep the base rules. Pass an overflow hook to resolve()
-// to admit paths outside the root that the application vouches for.
+// Containment. resolve() refuses a dangling leaf and an empty path. resolveForCreate()
+// also refuses a `..` that follows a symlink and every new path on Windows, and
+// resolveDir() never accepts a missing path. The PathJail class docblock lists
+// every refusal per method. Pass an overflow hook to resolve() to admit paths
+// outside the root that the application vouches for.
 PathJail::resolve($root, 'notes/today.md');        // ?string
 PathJail::resolveForCreate($root, 'new/dir/x.md'); // ?string
 ```
