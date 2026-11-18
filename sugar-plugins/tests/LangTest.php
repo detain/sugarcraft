@@ -88,4 +88,100 @@ final class LangTest extends TestCase
         $this->assertSame('Hello Ada', FixtureLang::t('greeting', ['name' => 'Ada']));
         $this->assertSame('Other Ada', $other::t('greeting', ['name' => 'Ada']));
     }
+
+    public function testEmptyNamespaceIsRefused(): void
+    {
+        $plugin = new class () extends Lang {
+            protected const NAMESPACE = '';
+            protected const DIR = __DIR__ . '/fixtures/lang-other';
+        };
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('non-empty NAMESPACE');
+        $plugin::t('greeting');
+    }
+
+    public function testDottedNamespaceIsRefused(): void
+    {
+        $plugin = new class () extends Lang {
+            protected const NAMESPACE = 'dotted.ns';
+            protected const DIR = __DIR__ . '/fixtures/lang-other';
+        };
+
+        $this->expectException(\InvalidArgumentException::class);
+        $plugin::t('greeting');
+    }
+
+    public function testMissingDirIsRefusedInsteadOfEchoingRawKeys(): void
+    {
+        $plugin = new class () extends Lang {
+            protected const NAMESPACE = 'nodir-plugin';
+        };
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('non-empty DIR');
+        $plugin::t('greeting');
+    }
+
+    public function testHostNamespaceCodeIsReserved(): void
+    {
+        $plugin = new class () extends Lang {
+            protected const NAMESPACE = 'code';
+            protected const DIR = __DIR__ . '/fixtures/lang-other';
+        };
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("reserved for the host or a library");
+        $plugin::t('greeting');
+    }
+
+    public function testCoreNamespaceIsReserved(): void
+    {
+        $plugin = new class () extends Lang {
+            protected const NAMESPACE = 'core';
+            protected const DIR = __DIR__ . '/fixtures/lang-other';
+        };
+
+        $this->expectException(\InvalidArgumentException::class);
+        $plugin::t('greeting');
+    }
+
+    public function testLibraryNamespaceIsReserved(): void
+    {
+        $plugin = new class () extends Lang {
+            protected const NAMESPACE = 'charts';
+            protected const DIR = __DIR__ . '/fixtures/lang-other';
+        };
+
+        $this->expectException(\InvalidArgumentException::class);
+        $plugin::t('greeting');
+    }
+
+    public function testNamespaceClaimedByAnotherDirectoryIsRefused(): void
+    {
+        $first = new class () extends Lang {
+            protected const NAMESPACE = 'claim-clash';
+            protected const DIR = __DIR__ . '/fixtures/lang';
+        };
+        $second = new class () extends Lang {
+            protected const NAMESPACE = 'claim-clash';
+            protected const DIR = __DIR__ . '/fixtures/lang-other';
+        };
+
+        $this->assertSame('Hello Ada', $first::t('greeting', ['name' => 'Ada']));
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('already claimed by another plugin directory');
+        $second::t('greeting');
+    }
+
+    public function testSameNamespaceFromTheSameDirectoryIsAccepted(): void
+    {
+        $again = new class () extends Lang {
+            protected const NAMESPACE = 'fixture';
+            protected const DIR = __DIR__ . '/Support/../fixtures/lang';
+        };
+
+        $this->assertSame('Hello Ada', $again::t('greeting', ['name' => 'Ada']));
+    }
 }

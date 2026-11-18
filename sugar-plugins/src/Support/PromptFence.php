@@ -81,7 +81,7 @@ final class PromptFence
      * `project-instructions` (Runtime::systemPromptSections() inline
      * construction), `system-reminder` — not a PromptSection fence at all but
      * SkillPathNudge's trust channel
-     * ({@see \SugarCraft\Code\Skills\SkillPathNudge::HEADER}); it joins the
+     * (`Skills\SkillPathNudge::HEADER` in candy-code); it joins the
      * roster because a payload that can forge `<system-reminder>` inside any
      * section forges the platform's own reminder voice, which is the more
      * dangerous of the two attacks the acceptance matrix names — and
@@ -94,7 +94,7 @@ final class PromptFence
      * golden bytes (the fixture rule body carries no fence marker) — and
      * `prior-summary`, the seventh entry and the first the roster takes from a
      * fence that opens OUTSIDE the assembled system prompt:
-     * {@see \SugarCraft\Code\Chat::renderPriorSummariesForSummary()} wraps it in a
+     * `Chat::renderPriorSummariesForSummary()` in candy-code wraps it in a
      * summariser request, around summary rows read back out of the wire history, whose
      * user half the heuristic fold writes raw. So the bytes between those tags are
      * foreign by exactly the route a repo file is, and a row carrying
@@ -104,7 +104,7 @@ final class PromptFence
      * a prior block — and at the cost of re-ruling the verbatim-carry promise the rows
      * travel under, which is a promise about WORDING and survives an escape that
      * changes BYTES (the frame is the FF1 note on
-     * {@see \SugarCraft\Code\Chat::COMPACT_SUMMARY_PROMPT}) — and
+     * `Chat::COMPACT_SUMMARY_PROMPT` in candy-code) — and
      * `harness-injected`, the eighth entry and the only one the roster carries
      * with NO emitter: no `PromptSection` reports it and no construction site
      * opens it, so unlike the seven above it is not derived from a fence that
@@ -126,16 +126,16 @@ final class PromptFence
      *
      * WHAT PINS THIS ROSTER — NINE SITES, counted from the tests that read it and not
      * from the note that used to name one. Two are whole-roster: the SORTED list in
-     * {@see \SugarCraft\Code\Tests\Context\PromptSectionTest::testTheEscapeRosterIsExactlyTheDerivedFenceTagList()}
+     * `Tests\Context\PromptSectionTest::testTheEscapeRosterIsExactlyTheDerivedFenceTagList()` in candy-code
      * and the DECLARATION-order map in
-     * {@see \SugarCraft\Code\Tests\BaseSystemPromptTest::testForgedInstructionDocumentCannotForgeFencesOrAuthorityVoice()},
+     * `Tests\BaseSystemPromptTest::testForgedInstructionDocumentCannotForgeFencesOrAuthorityVoice()` in candy-code,
      * whose `assertSame(array_keys($expected), tags())` tripwire reddens any
      * widening until the expectation grows with it. Three are tier forgery
      * guards in the same file —
-     * {@see \SugarCraft\Code\Tests\BaseSystemPromptTest::testAForgedUserRuleBodyCannotEscapeItsOwnFence()},
-     * {@see \SugarCraft\Code\Tests\BaseSystemPromptTest::testAForgedProjectRuleBodyCannotEscapeTheProjectInstructionsFence()}
+     * `Tests\BaseSystemPromptTest::testAForgedUserRuleBodyCannotEscapeItsOwnFence()` in candy-code,
+     * `Tests\BaseSystemPromptTest::testAForgedProjectRuleBodyCannotEscapeTheProjectInstructionsFence()` in candy-code
      * and
-     * {@see \SugarCraft\Code\Tests\BaseSystemPromptTest::testAForgedRootRulesFileCannotEscapeTheProjectInstructionsFence()}
+     * `Tests\BaseSystemPromptTest::testAForgedRootRulesFileCannotEscapeTheProjectInstructionsFence()` in candy-code
      * — each reading a prompt the real assembler produced, so a tag DROPPED from
      * this array stops matching at a splice and reddens its guard's
      * neutralised-copy counts, but only for the tags that guard actually forges.
@@ -144,23 +144,23 @@ final class PromptFence
      * guards plant the `<user-rules>` pair, and none of the three forges
      * `harness-injected` — so dropping that tag reddens none of them and is
      * caught instead by the two whole-roster sites above, by the escape-level guard
-     * {@see \SugarCraft\Code\Tests\Context\PromptSectionTest::testEscapeNeutralisesTheHarnessInjectedTagThatNothingEmits()}
+     * `Tests\Context\PromptSectionTest::testEscapeNeutralisesTheHarnessInjectedTagThatNothingEmits()` in candy-code
      * — which reads the roster through escape() alone and never touches a splice —
      * and by the assembler guard below, which is the seventh and the one that proves
      * `harness-injected` is load-bearing on the roster plus guard evidence only:
-     * {@see \SugarCraft\Code\Tests\BaseSystemPromptTest::testAForgedHarnessInjectedCloserInsideAnInstructionDocumentCannotRender()}.
+     * `Tests\BaseSystemPromptTest::testAForgedHarnessInjectedCloserInsideAnInstructionDocumentCannotRender()` in candy-code.
      * No fixture byte moves for it, and that is what made that widening cost zero
      * golden bytes. The eighth is the guard for `prior-summary` at the splice that
      * emits it: the whole-roster map above already forges the tag in both polarities,
      * and
-     * {@see \SugarCraft\Code\Tests\Chat\CompactModelSummaryTest::testAForgedPriorSummaryCloserTravelsIntoTheNextRequestDefanged()}
+     * `Tests\Chat\CompactModelSummaryTest::testAForgedPriorSummaryCloserTravelsIntoTheNextRequestDefanged()` in candy-code
      * is the assembler-level one — it reads the request the real `/compact` route
      * builds, so a `prior-summary` dropped from this array reappears undefanged
      * inside the carried block and reddens there. The earlier prose here credited
      * only the user-tier guard and was understated by seven. The ninth is the
      * guard for `agent-instructions` at the splice that emits it: the two
      * whole-roster sites already forge the tag in both polarities, and
-     * {@see \SugarCraft\Code\Tests\Agents\PrimaryAgentTest::testAForgedCloserInsideAnAgentBodyCannotEscapeItsFence()}
+     * `Tests\Agents\PrimaryAgentTest::testAForgedCloserInsideAnAgentBodyCannotEscapeItsFence()` in candy-code
      * is the assembler-level one — it reads the section a real Runtime
      * assembles with instructions applied whose body spells its own fence, so
      * an `agent-instructions` dropped from this array reappears undefanged
@@ -168,16 +168,16 @@ final class PromptFence
      *
      * The last two fences open OUTSIDE the system prompt (step 1.A-1/1.A-2):
      * `turn-context` is the volatile per-step state row
-     * ({@see \SugarCraft\Code\Context\TurnContextBlock}) and `system-notice`
+     * (`Context\TurnContextBlock` in candy-code) and `system-notice`
      * the user-role row a history notice travels as
-     * ({@see \SugarCraft\Code\Providers\SglangProvider::systemNoticeContent()}).
+     * (`Providers\SglangProvider::systemNoticeContent()` in candy-code).
      * Both are harness voice in the request the model reads, so a repository
      * byte inside the system prompt must not be able to spell them either; each
      * class still neutralises its own name in its own payload as well.
      *
      * `agent-memory` is the twelfth entry (C-AGT-3.b): the fence around one
      * agent's per-store note index inside a delegated child's prompt
-     * ({@see \SugarCraft\Code\Context\MemoryBlock::agentIndex()}). Its body is
+     * (`Context\MemoryBlock::agentIndex()` in candy-code). Its body is
      * agent-written bytes — a note that quotes a fetched document included —
      * so the closer must defang even where the tag is never forged in the
      * parent prompt; the roster is what escape() refuses to trust, not what a
@@ -186,8 +186,8 @@ final class PromptFence
      *
      * `agent-instructions` is the thirteenth entry (C-AGT-4.a): the fence
      * around the active primary agent's preset body in the MAIN chat's prompt
-     * ({@see \SugarCraft\Code\Runtime::$agentInstructions}, assembled by
-     * {@see \SugarCraft\Code\Agents\PrimaryAgent}). Its body is a file a
+     * (`Runtime::$agentInstructions` in candy-code, assembled by
+     * `Agents\PrimaryAgent` in candy-code). Its body is a file a
      * human wrote — possibly one dropped into the repository by a clone,
      * through the foreign tiers — so the closer must defang exactly as it
      * does for the instruction documents it sits beside. It joins at zero
@@ -272,7 +272,7 @@ final class PromptFence
      * reach the model WITHOUT a fence: a tool result is the model's input as
      * surely as the system prompt is, and an invisible instruction smuggled in
      * a fetched page or an MCP server's reply is the same attack there.
-     * {@see \SugarCraft\Code\Runtime} strips it at its one tool-result seam.
+     * `Runtime` in candy-code strips it at its one tool-result seam.
      * Only this block — fence-tag escaping would rewrite legitimate `<env>`
      * text a tool printed.
      */
