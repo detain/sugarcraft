@@ -114,6 +114,8 @@ final class Program
      * rides exit.
      */
     private bool $kittyKeyboardPushed = false;
+    /** True while a saturated backlog has already surfaced its overflow ExceptionMsg. */
+    private bool $outputOverflowReported = false;
     /**
      * True between a {@see setupTerminal()} that acquired the terminal and
      * the {@see teardownTerminal()} that releases it. Makes teardown
@@ -738,6 +740,7 @@ final class Program
 
     private function onOutputDrained(): void
     {
+        $this->outputOverflowReported = false;
         if ($this->dirty && $this->renderLive && $this->renderTimer === null) {
             $this->armRender();
         }
@@ -1178,14 +1181,14 @@ final class Program
             if (preg_match('/\A\x1b\[([><])(\d+)u\z/', $msg->bytes, $m)) {
                 $this->kittyKeyboardPushed = $m[1] === '>';
             }
-            $this->writeOutput($msg->bytes);
+            $this->writeNonFrameOutput($msg->bytes);
             return;
         }
         if ($msg instanceof PrintMsg) {
             // Print above the program region. The renderer's diff state
             // is now stale, so reset it so the next render() repaints
             // every visible row.
-            $this->writeOutput($msg->text . "\n");
+            $this->writeNonFrameOutput($msg->text . "\n");
             $this->renderer->reset();
             $this->lastRenderedBody = null;
             $this->lastImageSignature = '';
@@ -1260,10 +1263,19 @@ final class Program
                 if ($resolvedMsg !== null) {
                     $this->dispatch($resolvedMsg);
                 }
-            })->otherwise(function (\Throwable $e) use ($generation): void {
+            })->otherwise(function (\Throwable $e) use ($generation, $msg): void {
                 if ($generation !== $this->runtimeGeneration) {
                     // Same law on the reject path: no log line, no ExceptionMsg,
                     // and crucially no user exception handler after teardown.
+                    return;
+                }
+                if ($msg->onFailure !== null) {
+                    // A producer that scopes its own failures (TabScope) owns the
+                    // rejection, timeouts included: its Msg replaces the raw
+                    // ExceptionMsg, and the user handler is skipped as it is for
+                    // every other scoped result.
+                    $this->log('error', 'async command failed: ' . $e->getMessage());
+                    $this->dispatch(($msg->onFailure)($e));
                     return;
                 }
                 // Surface the async failure as an ExceptionMsg (models can react /
@@ -2686,6 +2698,29 @@ final class Program
     }
 
     /**
+     * Write RawMsg / PrintMsg bytes. Frames are held by the saturation gate in
+     * {@see onRenderDue()}, but these producers are not, so they get a hard cap
+     * instead: once the backlog reaches the writer's threshold the bytes are
+     * dropped and one ExceptionMsg is surfaced per saturation episode. Without
+     * the cap a stalled reader grows the backlog with output volume until
+     * PHP's memory_limit fatals the process. Bytes already queued still drain,
+     * and {@see onOutputDrained()} re-arms the report once the backlog clears.
+     */
+    private function writeNonFrameOutput(string $bytes): void
+    {
+        if (!$this->writer->isSaturated()) {
+            $this->writeOutput($bytes);
+            return;
+        }
+        if ($this->outputOverflowReported) {
+            return;
+        }
+        $this->outputOverflowReported = true;
+        $this->log('error', Lang::t('program.output_backlog_full'));
+        $this->send(new ExceptionMsg(new \RuntimeException(Lang::t('program.output_backlog_full'))));
+    }
+
+    /**
      * Compare two progress states for equality.
      *
      * Null-asymmetry contract: both must be non-null to be considered
@@ -2866,6 +2901,15 @@ final class Program
      * so a model that declares a tick must get it started without every
      * consumer having to hand-wire the closure. Models that don't subscribe
      * use the {@see SubscriptionCapable} trait and return null → empty set.
+     */
+    /**
+     * Not cached per model identity: the set is re-walked on every update
+     * cycle. A cache keyed on identity served stale subscriptions when a
+     * model's children changed without a new identity (commit 8093ee2d9, after
+     * a Codex P2 review), so the re-read is the correctness choice and the
+     * planned cache is dropped. The walk is O(nodes) per message; a deep tree at a high
+     * message rate is the cost to revisit with a per-update invalidation
+     * signal, not an identity key.
      */
     private function wantedSubscriptions(): ?Subscriptions
     {

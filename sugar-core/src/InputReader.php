@@ -110,6 +110,16 @@ final class InputReader
     private bool $ss3Semicolon = false;
 
     /**
+     * Whether the parked head is a malformed digit-led SS3 span whose
+     * printable tail is still being dropped (`ESC O 1;5;` then `3A` in the
+     * next feed). The drop must survive the read boundary: resuming it as a
+     * fresh span would print the tail as typed keys, and dropping at the
+     * buffer end would leak the tail the same way. Only meaningful while
+     * {@see $scanResume} is set by that park site.
+     */
+    private bool $ss3Dropping = false;
+
+    /**
      * @param bool $sanitizePaste When true (default), bracketed-paste payloads
      *                            are run through
      *                            {@see Sanitize::untrustedForMarkedFrames()}
@@ -139,7 +149,8 @@ final class InputReader
         if ($this->scanResume > 0
             && ($this->buf === '' || $this->buf[0] !== "\x1b" || $this->scanResume > strlen($this->buf))
         ) {
-            $this->scanResume = 0;
+            $this->scanResume  = 0;
+            $this->ss3Dropping = false;
         }
         $msgs = [];
         $i = 0;
@@ -237,6 +248,20 @@ final class InputReader
                     break;
                 }
                 if ($next === 'O') {
+                    // A malformed digit-led span parked mid-drop resumes its
+                    // printable tail here, so the drop covers the whole span
+                    // across feeds exactly as a one-shot parse would.
+                    if ($this->ss3Dropping && $this->scanResume > 0) {
+                        $end = $this->skipMalformedSs3Tail($i + $this->scanResume, $len);
+                        if ($end === null) {
+                            $this->scanResume = $len - $i;
+                            break;
+                        }
+                        $this->ss3Dropping = false;
+                        $this->scanResume  = 0;
+                        $i = $end;
+                        continue;
+                    }
                     // Digit-led SS3 (xterm legacy modified keys): ESC O
                     // <digits> [; <digits>] <final>. The first run is the
                     // key's own parameter (xterm sends "1") and the optional
@@ -270,7 +295,8 @@ final class InputReader
                             // byte. The `;` flag rides alongside because the
                             // offset alone cannot tell the two digit runs apart.
                             $this->scanResume    = $len - $i;
-                            $this->ss3Semicolon = $semi;
+                            $this->ss3Semicolon  = $semi;
+                            $this->ss3Dropping   = false;
                             break;
                         }
                         // The span is complete (final byte, or a malformed
@@ -279,26 +305,36 @@ final class InputReader
                         $c = ord($this->buf[$j]);
                         if ($c < 0x40 || $c > 0x7e) {
                             // Not a final byte: the span is malformed and is
-                            // dropped. A printable byte keeps the span open,
-                            // as CSI parameters do, so the drop runs through
-                            // the printable tail to its real final byte; ESC,
-                            // a control byte or a high byte ends the drop and
-                            // resyncs on itself.
-                            $i = $j;
-                            if ($c >= 0x20 && $c < 0x40) {
-                                $k = $j + 1;
-                                while ($k < $len) {
-                                    $e = ord($this->buf[$k]);
-                                    if ($e < 0x20 || $e > 0x7e) {
-                                        break;
-                                    }
-                                    $k++;
-                                    if ($e >= 0x40) {
-                                        break;
-                                    }
+                            // dropped. Only a span that has opened its `;`
+                            // modifier is an attempted modified key, so only
+                            // that span keeps a printable byte open, as CSI
+                            // parameters do, and drops the tail to its real
+                            // final byte. A bare `ESC O <digits>` followed by
+                            // ordinary text is consumed alone, so the text is
+                            // typed. ESC, a control byte or a high byte ends
+                            // the drop and resyncs on itself.
+                            if ($c >= 0x20 && $c < 0x40 && $semi) {
+                                $end = $this->skipMalformedSs3Tail($j + 1, $len);
+                                if ($end === null) {
+                                    // The tail reaches the buffer end before
+                                    // its final byte: park the drop at the
+                                    // first unscanned byte, with the head ESC
+                                    // kept so the next feed resumes it.
+                                    $this->scanResume  = $len - $i;
+                                    $this->ss3Dropping = true;
+                                    break;
                                 }
-                                $i = $k;
+                                $i = $end;
+                                continue;
                             }
+                            $i = $j;
+                            continue;
+                        }
+                        // A bare digit run with no `;` cannot be a modified
+                        // key, so a keypad final after it is ordinary text:
+                        // `ESC O 1` then `x` types the `x`, not keypad 8.
+                        if (!$semi && strpos(self::SS3_KEYPAD_FINALS, chr($c)) !== false) {
+                            $i = $j;
                             continue;
                         }
                         $msg = $this->decodeModifiedSs3(substr($this->buf, $i + 2, $j - $i - 2), chr($c));
@@ -544,8 +580,9 @@ final class InputReader
             $msgs[] = new ExceptionMsg(new TerminalException(Lang::t('input.incomplete_overflow', [
                 'limit' => self::MAX_INCOMPLETE_BYTES,
             ])));
-            $this->buf        = '';
-            $this->scanResume = 0;
+            $this->buf         = '';
+            $this->scanResume  = 0;
+            $this->ss3Dropping = false;
         }
 
         return $msgs;
@@ -1065,6 +1102,35 @@ final class InputReader
     private const BEL = "\x07";
 
     /**
+     * The SS3 finals that decodeSs3() maps to keypad keys and Enter (DECKPAM):
+     * `l m p-y` and `M`. A digit-led span without a modifier cannot end on one
+     * of these as a keypad key, so the byte reads as typed text.
+     */
+    private const SS3_KEYPAD_FINALS = 'lmMpqrstuvwxy';
+
+    /**
+     * Walk the printable tail of a malformed digit-led SS3 span from `$from`
+     * and return the offset just past it: past the real final byte (0x40-0x7E),
+     * or at the first ESC, control or high byte that ends the drop and resyncs.
+     * Returns null when the buffer ends first, so the caller parks the drop.
+     */
+    private function skipMalformedSs3Tail(int $from, int $len): ?int
+    {
+        $k = $from;
+        while ($k < $len) {
+            $e = ord($this->buf[$k]);
+            if ($e < 0x20 || $e > 0x7e) {
+                return $k;
+            }
+            $k++;
+            if ($e >= 0x40) {
+                return $k;
+            }
+        }
+        return null;
+    }
+
+    /**
      * Decode a digit-led SS3 span, `ESC O <digits>[;<mod>] <final>`.
      *
      * The span is resolved against the SS3 final table only, never the CSI
@@ -1160,8 +1226,6 @@ final class InputReader
      * X11 function-keysym block (0xFF00-0xFFFF) names for modifyOtherKeys
      * reports. Only keysyms with a KeyType of their own appear; Pause (0xFF13),
      * Select (0xFF60) and KP_Space stay unmapped rather than inventing names.
-     * Delete (0xFFFF) is excluded: it is the unknown-keysym witness that
-     * modifyOtherKeys tests pin as a drop.
      */
     private const X11_KEYSYM_MAP = [
         0xFF08 => KeyType::Backspace,
@@ -1177,6 +1241,7 @@ final class InputReader
         0xFF56 => KeyType::PageDown,
         0xFF57 => KeyType::End,
         0xFF63 => KeyType::Insert,
+        0xFFFF => KeyType::Delete,
         0xFFBE => KeyType::F1,  0xFFBF => KeyType::F2,  0xFFC0 => KeyType::F3,  0xFFC1 => KeyType::F4,
         0xFFC2 => KeyType::F5,  0xFFC3 => KeyType::F6,  0xFFC4 => KeyType::F7,  0xFFC5 => KeyType::F8,
         0xFFC6 => KeyType::F9,  0xFFC7 => KeyType::F10, 0xFFC8 => KeyType::F11, 0xFFC9 => KeyType::F12,

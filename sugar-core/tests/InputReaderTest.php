@@ -860,16 +860,126 @@ final class InputReaderTest extends TestCase
 
     public function testMalformedDigitSpanSs3DropsPrintableTailWithoutLeak(): void
     {
-        // A printable non-final byte keeps the span open, so the tail through
-        // its real final byte is dropped rather than typed as Char events.
+        // A printable non-final byte after an opened `;` keeps the span open,
+        // so the tail through its real final byte is dropped rather than typed
+        // as Char events.
         $this->assertSame([], (new InputReader())->parse("\x1bO1;5;3A"));
-        $this->assertSame([], (new InputReader())->parse("\x1bO1 A"));
 
         // ESC still ends the drop and resyncs on itself, so the Up after the
         // printable tail is the only key produced.
         $msgs = (new InputReader())->parse("\x1bO1;5;3\x1b[A");
         $this->assertCount(1, $msgs);
         $this->assertSame(KeyType::Up, $msgs[0]->type);
+    }
+
+    public function testLoneDigitSpanSs3FollowedByTypedTextKeepsEveryKeystroke(): void
+    {
+        // A vim-style Esc, then `O`, then `1`, then typed text. With no `;`
+        // the span is not a modified key, so only `ESC O 1` is consumed and
+        // every typed byte after it arrives, in one feed and split across feeds.
+        $expected = ['.', ' ', 'f', 'o', 'o'];
+        $msgs = (new InputReader())->parse("\x1bO1. foo");
+        $this->assertSame($expected, array_map(static fn($m) => $m->rune, $msgs));
+        $this->assertSame(KeyType::Char, $msgs[0]->type);
+        $this->assertSame(KeyType::Space, $msgs[1]->type);
+
+        $reader = new InputReader();
+        $this->assertSame([], $reader->parse("\x1bO1"));
+        $split = $reader->parse(". foo");
+        $this->assertSame($expected, array_map(static fn($m) => $m->rune, $split));
+
+        // Every split of the same bytes must match the one-shot decode.
+        $seq = "\x1bO1. foo";
+        $n = strlen($seq);
+        for ($cut = 1; $cut < $n; $cut++) {
+            $reader = new InputReader();
+            $fed = array_merge($reader->parse(substr($seq, 0, $cut)), $reader->parse(substr($seq, $cut)));
+            $this->assertSame($expected, array_map(static fn($m) => $m->rune, $fed), "cut at $cut");
+        }
+    }
+
+    public function testLoneDigitSpanSs3FollowedByLetterIsTheLetterNotKeypad(): void
+    {
+        // `x` is SS3 keypad 8 and `M` is keypad Enter. After a bare `ESC O 1`
+        // they are the letters the user typed, in one feed and split.
+        foreach (['x', 'M', 'p', 'y', 'l', 'm'] as $letter) {
+            $msgs = (new InputReader())->parse("\x1bO1" . $letter);
+            $this->assertCount(1, $msgs, $letter);
+            $this->assertSame($letter, $msgs[0]->rune, $letter);
+            $this->assertSame(KeyType::Char, $msgs[0]->type, $letter);
+
+            $reader = new InputReader();
+            $this->assertSame([], $reader->parse("\x1bO1"));
+            $split = $reader->parse($letter);
+            $this->assertCount(1, $split, "$letter split");
+            $this->assertSame($letter, $split[0]->rune, "$letter split");
+        }
+
+        // A keypad final still decodes once a `;` modifier makes the span a
+        // real modified key.
+        $ctrlKp8 = (new InputReader())->parse("\x1bO1;5x");
+        $this->assertCount(1, $ctrlKp8);
+        $this->assertSame(KeyType::Kp8, $ctrlKp8[0]->type);
+        $this->assertTrue($ctrlKp8[0]->ctrl);
+
+        // The F1 mirror stays: `ESC O 1 P` is F1 by the sugar-input decoder's
+        // digit-run rule, pinned by testDigitSpanSs3AcceptsAnyParameterAndModifier.
+        $this->assertSame(KeyType::F1, (new InputReader())->parse("\x1bO1P")[0]->type);
+    }
+
+    public function testMalformedDigitSpanSs3TailDropSurvivesReadBoundary(): void
+    {
+        // The printable tail of a malformed span that reaches the buffer end
+        // is parked, not dropped at once: the next feed must keep dropping
+        // it, or the tail leaks as typed keys ('3' and 'A' here).
+        $reader = new InputReader();
+        $this->assertSame([], $reader->parse("\x1bO1;5;"));
+        $this->assertSame([], $reader->parse("3A"));
+
+        // Without a `;` the span is not a modifier, so a space-led tail is
+        // typed: `ESC O 1` is consumed and the space and `A` arrive as keys.
+        $reader = new InputReader();
+        $this->assertSame([' '], array_map(static fn($m) => $m->rune, $reader->parse("\x1bO1 ")));
+        $this->assertSame(['A'], array_map(static fn($m) => $m->rune, $reader->parse("A")));
+
+        // Every split of a malformed span followed by Up, and the byte-wise
+        // feed, must yield exactly the Up the one-shot parse yields.
+        foreach (["\x1bO1;5;3A\x1b[A"] as $seq) {
+            $oneShot = (new InputReader())->parse($seq);
+            $this->assertCount(1, $oneShot, bin2hex($seq));
+            $this->assertSame(KeyType::Up, $oneShot[0]->type, bin2hex($seq));
+
+            $n = strlen($seq);
+            for ($cut = 1; $cut < $n; $cut++) {
+                $reader = new InputReader();
+                $fed = array_merge(
+                    $reader->parse(substr($seq, 0, $cut)),
+                    $reader->parse(substr($seq, $cut)),
+                );
+                $this->assertCount(1, $fed, bin2hex($seq) . " cut at $cut");
+                $this->assertSame(KeyType::Up, $fed[0]->type, bin2hex($seq) . " cut at $cut");
+            }
+
+            $reader = new InputReader();
+            $bytewise = [];
+            for ($k = 0; $k < $n; $k++) {
+                foreach ($reader->parse($seq[$k]) as $m) {
+                    $bytewise[] = $m;
+                }
+            }
+            $this->assertCount(1, $bytewise, bin2hex($seq) . ' byte-wise');
+            $this->assertSame(KeyType::Up, $bytewise[0]->type, bin2hex($seq) . ' byte-wise');
+        }
+    }
+
+    public function testModifyOtherKeysX11DeleteKeysym(): void
+    {
+        // 0xFFFF is the X11 Delete keysym: Ctrl+Delete reports as Delete
+        // with the control bit, not a dropped event.
+        $msgs = (new InputReader())->parse("\x1b[27;5;65535~");
+        $this->assertCount(1, $msgs);
+        $this->assertSame(KeyType::Delete, $msgs[0]->type);
+        $this->assertTrue($msgs[0]->ctrl);
     }
 
     public function testModifyOtherKeysTabAndControlKeysyms(): void
@@ -926,8 +1036,8 @@ final class InputReaderTest extends TestCase
     {
         // Zero modifier: would fabricate every modifier bit.
         $this->assertSame([], (new InputReader())->parse("\x1b[27;0;9~"));
-        // 0xFFFF is the Delete witness that stays a drop.
-        $this->assertSame([], (new InputReader())->parse("\x1b[27;5;65535~"));
+        // 0xFFFE is unassigned in the X11 block, so it stays a drop.
+        $this->assertSame([], (new InputReader())->parse("\x1b[27;5;65534~"));
         // Unnamed control keysym.
         $this->assertSame([], (new InputReader())->parse("\x1b[27;5;1234~"));
     }

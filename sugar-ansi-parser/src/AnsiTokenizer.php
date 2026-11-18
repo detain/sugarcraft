@@ -191,6 +191,13 @@ final class AnsiTokenizer
         }
         $second = $buf[$i + 1];
 
+        // ESC ESC: the VT500 Escape state clears on ESC and restarts, so the
+        // first ESC is abandoned without a token and the second opens the
+        // sequence. Emitting it as a two-byte ESC token would strand the
+        // sequence's own bytes as text.
+        if ($second === "\x1b") {
+            return 1;
+        }
         if ($second === '[') {
             return $this->consumeCsi($buf, $i, $len, $tokens);
         }
@@ -208,6 +215,29 @@ final class AnsiTokenizer
         }
         if ($second === '^') {
             return $this->consumeStTerminated($buf, $i, $len, $tokens, Token::PM, $scanFrom);
+        }
+
+        // ESC intermediates: `ESC <0x20-0x2F>+ <0x30-0x7E>`, as the VT500
+        // EscapeIntermediate state takes them. Charset designation (`ESC ( 0`),
+        // DECALN (`ESC # 8`) and S7C1T (`ESC SP F`) are all of this shape, and
+        // splitting them after the first byte would leak the final as TEXT.
+        if (ord($second) >= 0x20 && ord($second) <= 0x2f) {
+            $j = $i + 2;
+            while ($j < $len && ord($buf[$j]) >= 0x20 && ord($buf[$j]) <= 0x2f) {
+                $j++;
+            }
+            if ($j >= $len) {
+                return -1;
+            }
+            $finalOrd = ord($buf[$j]);
+            // An ESC or a non-final byte abandons the sequence without a token,
+            // as the VT500 machine clears on ESC; the byte then opens (or is)
+            // the next token, as in consumeCsi().
+            if ($finalOrd < 0x30 || $finalOrd > 0x7e) {
+                return $j - $i;
+            }
+            $tokens[] = new Token(Token::ESC, $buf[$j], substr($buf, $i + 1, $j - $i - 1));
+            return $j + 1 - $i;
         }
 
         // Two-byte sequence: ESC 7, ESC 8, ESC c, ESC D, ESC M, and any other printable.
@@ -258,6 +288,12 @@ final class AnsiTokenizer
         if ($j >= $len) {
             return -1;
         }
+        // An ESC inside a CSI abandons the partial sequence without a token,
+        // as the VT500 machine clears on ESC from any CSI state; the ESC
+        // itself starts the next sequence.
+        if ($buf[$j] === "\x1b") {
+            return $j - $i;
+        }
         $finalByte = $buf[$j];
         $finalOrd = ord($finalByte);
         if ($finalOrd < 0x40 || $finalOrd > 0x7e) {
@@ -286,9 +322,21 @@ final class AnsiTokenizer
                 $tokens[] = new Token($type, substr($buf, $bodyStart, $j - $bodyStart), terminator: "\x07");
                 return $j + 1 - $i;
             }
-            if ($b === "\x1b" && ($buf[$j + 1] ?? '') === '\\') {
-                $tokens[] = new Token($type, substr($buf, $bodyStart, $j - $bodyStart), terminator: "\x1b\\");
-                return $j + 2 - $i;
+            if ($b === "\x1b") {
+                // The verdict on this ESC waits for the byte after it.
+                if ($j + 1 >= $len) {
+                    break;
+                }
+                if ($buf[$j + 1] === '\\') {
+                    $tokens[] = new Token($type, substr($buf, $bodyStart, $j - $bodyStart), terminator: "\x1b\\");
+                    return $j + 2 - $i;
+                }
+                // Any other ESC aborts the string as the VT500 machine does:
+                // the body so far is dispatched with no terminator, and the
+                // ESC opens the next sequence. Swallowing it into the body
+                // would lose the key or SGR that follows.
+                $tokens[] = new Token($type, substr($buf, $bodyStart, $j - $bodyStart));
+                return $j - $i;
             }
             $j++;
         }

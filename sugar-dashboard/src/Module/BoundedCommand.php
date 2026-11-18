@@ -8,6 +8,7 @@ use React\EventLoop\LoopInterface;
 use React\Promise\PromiseInterface;
 use SugarCraft\Async\ChildResult;
 use SugarCraft\Async\ChildRun;
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 
 use function React\Promise\resolve;
 
@@ -47,6 +48,16 @@ final class BoundedCommand
 
     /** Combined stdout+stderr ceiling — a chatty child cannot exhaust memory. */
     public const MAX_OUTPUT_BYTES = 1048576;
+
+    /**
+     * Longest a run started now can take to settle: the deadline, then the
+     * TERM and KILL grace budgets. A module that latches "a command is in
+     * flight" may trust that latch only this long, because the result is
+     * the only thing that clears it and a host is free to drop the Cmd.
+     */
+    public const SETTLE_CEILING_SECONDS = self::DEFAULT_TIMEOUT_SECONDS
+        + BoundedShutdown::TERMINATE_GRACE_SECONDS
+        + BoundedShutdown::KILL_GRACE_SECONDS;
 
     /**
      * Run $argv and report the outcome as output plus, when the run could

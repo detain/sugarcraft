@@ -33,6 +33,7 @@ use SugarCraft\Code\Bundles\MarketplaceRegistry;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\Keychain;
 use SugarCraft\Code\Support\ProcessContainment;
+use SugarCraft\Code\Support\ProjectRoot;
 use SugarCraft\Code\Support\ReservedSessionGrammar;
 use SugarCraft\Code\Session\Import\ImportFormat;
 use SugarCraft\Code\Session\Import\ImportRefusedException;
@@ -4062,9 +4063,10 @@ final class Subcommands
         $configured = Bootstrap::readUserConfig()[BundleDiscovery::SETTING_KEY] ?? [];
         $paths = \array_values(\array_filter(\is_array($configured) ? $configured : [], 'is_string'));
         // The same base `bundles install --project` writes to (`--root`, else the
-        // working directory): without it `list` scans `/.candy-code/bundles` and
-        // cannot see the bundle the install just placed.
-        $discovery = new BundleDiscovery((string) ($args->root ?? (\getcwd() ?: '')), $paths);
+        // working directory, resolved to its project root): without it `list`
+        // scans `/.candy-code/bundles` and cannot see the bundle the install
+        // just placed.
+        $discovery = new BundleDiscovery(ProjectRoot::resolve((string) ($args->root ?? (\getcwd() ?: ''))), $paths);
         $bundles = $discovery->discover();
 
         if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
@@ -4357,13 +4359,18 @@ final class Subcommands
 
     /**
      * The `--project` install destination: `<root>/.candy-code/bundles`,
-     * where `<root>` is `--root` or the working directory — the same base
-     * {@see BundleDiscovery} reads the project tier from, so an install is
-     * listed by the very next `bundles list` in that directory. The operator
-     * typed the scope, so the directory is created on demand. A symlink in
-     * either segment is refused: the install writes through that path, and a
-     * checkout must not be able to steer the write out of its own tree.
-     * Prints its own refusal line and returns null when it refuses.
+     * where `<root>` is the project root {@see ProjectRoot} resolves `--root`
+     * or the working directory to — the same base {@see BundleDiscovery} and
+     * the launch read the project tier from, so an install is listed by the
+     * very next `bundles list` in that repository, from any subdirectory of it.
+     * The base is resolved, not taken raw: a raw subdirectory would get its own
+     * `.candy-code/` here, and {@see ProjectRoot} would then treat that
+     * subdirectory as the project, hiding the repository's settings and trust
+     * from every launch below it. The operator typed the scope, so the
+     * directory is created on demand. A symlink in either segment is refused:
+     * the install writes through that path, and a checkout must not be able to
+     * steer the write out of its own tree. Prints its own refusal line and
+     * returns null when it refuses.
      */
     private static function bundlesProjectRoot(ParsedArgs $args): ?string
     {
@@ -4374,7 +4381,7 @@ final class Subcommands
             return null;
         }
 
-        $base = \rtrim($base, '/');
+        $base = ProjectRoot::resolve(\rtrim($base, '/'));
         $root = $base . '/.candy-code/bundles';
         $dotDir = \dirname($root);
 
@@ -4407,7 +4414,7 @@ final class Subcommands
             return null;
         }
 
-        $base = \rtrim($base, '/');
+        $base = ProjectRoot::resolve(\rtrim($base, '/'));
         $root = $base . '/.candy-code/bundles';
         $dotDir = \dirname($root);
 
@@ -5441,7 +5448,7 @@ final class Subcommands
      */
     private static function bundlesRecommend(ParsedArgs $args): int
     {
-        $root = (string) ($args->root ?? '') !== '' ? (string) $args->root : (string) \getcwd();
+        $root = ProjectRoot::resolve((string) ($args->root ?? '') !== '' ? (string) $args->root : (string) \getcwd());
         $registry = MarketplaceRegistry::loadDefault();
 
         foreach ($registry->loadErrors() as $error) {

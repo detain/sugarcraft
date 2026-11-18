@@ -692,6 +692,59 @@ final class AsyncProbeTest extends TestCase
         }
     }
 
+    /**
+     * CP-13: a child killed by a signal answered nothing, so it mints no memo
+     * entry. The planted child prints nothing and SIGKILLs itself (react emits
+     * a null exit code for an external signal death). The spawn counter pins
+     * that the next call spawns again, so a TERM that advertises TrueColor is
+     * not demoted for the life of the process by one transient kill.
+     */
+    public function testSignalKilledChildMintsNoMemoEntryAndTheNextCallRespawns(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('the planted /bin/sh stub needs a POSIX shell.');
+        }
+
+        AsyncProbe::resetForTesting();
+        $log = \tempnam(\sys_get_temp_dir(), 'cp13kill');
+        $this->assertIsString($log);
+        $script = $this->plantProbe('#!/bin/sh' . "\n" . 'echo spawn >> ' . \escapeshellarg($log) . "\n" . "kill -KILL \$\$\n");
+        $_ENV['TERM'] = 'xterm';
+        putenv('TERM=xterm');
+
+        try {
+            $loop = new \React\EventLoop\StreamSelectLoop();
+            $first = null;
+            AsyncProbe::colorProfile($loop)->then(function (ColorProfile $p) use (&$first): void {
+                $first = $p;
+            });
+            $this->runUntilSettled($loop, $first);
+            $this->assertNotNull($first, 'the killed child still settles the caller');
+            $this->assertSame(
+                [],
+                (new \ReflectionProperty(AsyncProbe::class, 'settledMemo'))->getValue(),
+                'a signal-killed child mints no memo entry',
+            );
+
+            $second = null;
+            $loop2 = new \React\EventLoop\StreamSelectLoop();
+            AsyncProbe::colorProfile($loop2)->then(function (ColorProfile $p) use (&$second): void {
+                $second = $p;
+            });
+            $this->runUntilSettled($loop2, $second);
+            $this->assertNotNull($second);
+            $this->assertSame(
+                2,
+                \substr_count((string) \file_get_contents($log), 'spawn'),
+                'with no memo entry the next call spawns a fresh child',
+            );
+        } finally {
+            AsyncProbe::resetForTesting();
+            @\unlink($script);
+            @\unlink($log);
+        }
+    }
+
     public function testNegativeVerdictIsTermStaticWhileTheEnvRungIsReDerived(): void
     {
         // The child proved this TERM advertises no promotion; the ANSWER to
