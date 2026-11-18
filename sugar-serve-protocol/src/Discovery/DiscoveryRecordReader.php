@@ -20,6 +20,13 @@ final class DiscoveryRecordReader
     /** The JSON nesting limit. A discovery record is flat; anything deeper is not one. */
     public const MAX_DEPTH = 8;
 
+    /**
+     * The byte limit on a record. Read with a bound so an oversized file is
+     * refused rather than loaded whole, which would exhaust memory before the
+     * depth check ever runs.
+     */
+    public const MAX_BYTES = 65536;
+
     private const TYPE_MASK = 0o170000;
 
     private const TYPE_REGULAR = 0o100000;
@@ -31,8 +38,9 @@ final class DiscoveryRecordReader
     /**
      * The decoded record at $path, or null when there is none or it is not a
      * record: the path is absent, a symbolic link, or not a regular file, or
-     * the content is not JSON within {@see MAX_DEPTH} that decodes to an array.
-     * A torn or hand-edited file is no server.
+     * the content is longer than {@see MAX_BYTES}, or it is not JSON within
+     * {@see MAX_DEPTH} that decodes to an array. A torn or hand-edited file is
+     * no server.
      *
      * @return array<mixed>|null
      */
@@ -44,8 +52,10 @@ final class DiscoveryRecordReader
             return null;
         }
 
-        $raw = @\file_get_contents($path);
-        if ($raw === false) {
+        // One byte past the limit is enough to tell an oversized file apart,
+        // and the bound holds even if the file grows between lstat and read.
+        $raw = @\file_get_contents($path, false, null, 0, self::MAX_BYTES + 1);
+        if ($raw === false || \strlen($raw) > self::MAX_BYTES) {
             return null;
         }
 

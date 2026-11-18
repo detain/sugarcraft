@@ -356,6 +356,13 @@
         },
         {
             "type": "path",
+            "url": "sugar-serve-protocol",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
             "url": "sugar-spring",
             "options": {
                 "symlink": true

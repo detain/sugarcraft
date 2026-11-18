@@ -122,4 +122,33 @@ final class DiscoveryRecordReaderTest extends TestCase
     {
         self::assertSame(8, DiscoveryRecordReader::MAX_DEPTH);
     }
+
+    public function testRecordLargerThanMaxBytesIsRefusedWhateverItsShape(): void
+    {
+        $path = $this->root . '/server.json';
+        $head = '{"pid": 1, "url": "http://x", "pad": "';
+        $tail = '"}';
+        $pad = \str_repeat('a', DiscoveryRecordReader::MAX_BYTES + 1 - \strlen($head . $tail));
+        \file_put_contents($path, $head . $pad . $tail);
+
+        self::assertSame(DiscoveryRecordReader::MAX_BYTES + 1, \filesize($path));
+        self::assertNull(DiscoveryRecordReader::read($path));
+    }
+
+    public function testRecordAtExactlyMaxBytesIsAccepted(): void
+    {
+        $path = $this->root . '/server.json';
+        $head = '{"pid": 1, "url": "http://x", "pad": "';
+        $tail = '"}';
+        $pad = \str_repeat('a', DiscoveryRecordReader::MAX_BYTES - \strlen($head . $tail));
+        \file_put_contents($path, $head . $pad . $tail);
+
+        self::assertSame(DiscoveryRecordReader::MAX_BYTES, \filesize($path));
+        self::assertSame(1, DiscoveryRecordReader::read($path)['pid'] ?? null);
+    }
+
+    public function testMaxBytesIs64KiB(): void
+    {
+        self::assertSame(65536, DiscoveryRecordReader::MAX_BYTES);
+    }
 }

@@ -70,4 +70,22 @@ final class TokenFileTest extends TestCase
 
         self::assertNull(TokenFile::read($this->dir));
     }
+
+    public function testPresentButUnreadableTokenThrowsInsteadOfReadingAsNull(): void
+    {
+        if (\function_exists('posix_geteuid') && \posix_geteuid() === 0) {
+            self::markTestSkipped('root reads a mode 000 file, so the unreadable case cannot be built');
+        }
+        $path = $this->dir . '/token';
+        \file_put_contents($path, self::TOKEN);
+        \chmod($path, 0o000);
+
+        try {
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('cannot be read');
+            TokenFile::read($this->dir);
+        } finally {
+            \chmod($path, 0o600);
+        }
+    }
 }
