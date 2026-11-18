@@ -158,10 +158,19 @@ final class Width
         if (isset(self::$memo[$s])) {
             return self::$memo[$s];
         }
-        $width = self::extend($s) ?? self::compute($s);
+        $prevKey = self::$extendKey;
+        $width = self::extend($s);
+        if ($width === null) {
+            $width = self::compute($s);
+            self::$extendKeyHasEsc = self::leavesSequenceOpen($s);
+        } else {
+            // The door only fires when the previous key was inert, so the
+            // whole key is inert exactly when its appended tail is. Scanning
+            // the tail keeps a growing line O(delta) rather than O(length).
+            self::$extendKeyHasEsc = self::leavesSequenceOpen(\substr($s, \strlen($prevKey)));
+        }
         self::$extendKey = $s;
         self::$extendWidth = $width;
-        self::$extendKeyHasEsc = self::leavesSequenceOpen($s);
         while (self::$memo !== []
             && (\count(self::$memo) >= self::MEMO_MAX
                 || self::$memoBytes + \strlen($s) > self::MEMO_MAX_BYTES)
@@ -659,17 +668,24 @@ final class Width
             $paragraphStart = \count($lines);
             foreach (self::splitWords($paragraph) as $word) {
                 $wordWidth = self::string($word);
-                if ($breakWords) {
-                    while ($wordWidth > $width) {
-                        if ($line !== '') {
-                            $lines[] = $line;
-                            $line = '';
-                            $lineWidth = 0;
-                        }
-                        [$chunk, $word] = self::cutAtWidth($word, $width);
-                        $lines[] = $chunk;
-                        $wordWidth = self::string($word);
+                if ($breakWords && $wordWidth > $width) {
+                    if ($line !== '') {
+                        $lines[] = $line;
+                        $line = '';
+                        $lineWidth = 0;
                     }
+                    // Walk the word once with a byte offset. Re-measuring the
+                    // remainder after every cut made a long unbroken token
+                    // quadratic: each cut copied and re-scanned the whole tail.
+                    $offset = 0;
+                    $len = \strlen($word);
+                    while ($wordWidth > $width && $offset < $len) {
+                        [$chunk, $offset, $chunkWidth] = self::cutAtWidth($word, $offset, $width);
+                        $lines[] = $chunk;
+                        $wordWidth -= $chunkWidth;
+                    }
+                    $word = \substr($word, $offset);
+                    $wordWidth = self::string($word);
                 }
                 if ($line === '') {
                     $line = $word;
@@ -717,32 +733,46 @@ final class Width
     }
 
     /**
-     * Cut `$word` after as many grapheme clusters as fit in `$width` cells.
-     * The first cluster is always taken, even when it is wider than the
-     * budget, so every cut makes progress.
+     * Cut `$word` from byte `$offset` after as many grapheme clusters as fit
+     * in `$width` cells. The first cluster is always taken, even when it is
+     * wider than the budget, so every cut makes progress.
      *
-     * @return array{0: string, 1: string} the chunk, then the unconsumed rest
+     * @return array{0: string, 1: int, 2: int} the chunk, the byte offset where
+     *         it ends (the next cut starts there), and the chunk's width
      */
-    private static function cutAtWidth(string $word, int $width): array
+    private static function cutAtWidth(string $word, int $offset, int $width): array
     {
-        $chunk = '';
+        $start = $offset;
         $used = 0;
         $taken = 0;
-        $i = 0;
+        $i = $offset;
         $len = \strlen($word);
         while ($i < $len) {
+            // Printable ASCII followed by another ASCII byte (or the end) is a
+            // one-byte, one-cell cluster: no ASCII byte extends or joins, so the
+            // segmenter would answer the same. Skipping it keeps a long token
+            // off the grapheme walk for the common case.
+            $b = \ord($word[$i]);
+            if ($b >= 0x20 && $b <= 0x7E && ($i + 1 === $len || \ord($word[$i + 1]) < 0x80)) {
+                if ($taken > 0 && $used + 1 > $width) {
+                    break;
+                }
+                $used++;
+                $taken++;
+                $i++;
+                continue;
+            }
             $cluster = self::nextCluster($word, $i);
             $clusterWidth = self::graphemeWidth($cluster);
             if ($taken > 0 && $used + $clusterWidth > $width) {
                 break;
             }
-            $chunk .= $cluster;
             $used += $clusterWidth;
             $taken++;
             $i += \strlen($cluster);
         }
 
-        return [$chunk, \substr($word, $i)];
+        return [\substr($word, $start, $i - $start), $i, $used];
     }
 
     /**
