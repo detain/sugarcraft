@@ -36,6 +36,9 @@ use SugarCraft\Core\Lang;
  * Unlike the immutable `with*()` value objects elsewhere in sugar-core, this is
  * a live cache: identity matters, so {@see put()} et al. mutate the receiver and
  * {@see resize()} changes the cap in place rather than returning a new map.
+ * The one exception is {@see withTtl()}, which returns a snapshot and leaves the
+ * receiver untouched, so its result must be assigned: `$cache = $cache->withTtl(300.0)`.
+ * Calling it for effect silently leaves the map without expiry.
  * `clone` is allowed and yields an independent snapshot — the entries array is
  * copied, but any object values are shared by reference, exactly as PHP's clone
  * semantics dictate. Unlike {@see Semaphore}, cloning a cache is safe: two maps
@@ -71,9 +74,17 @@ final class LruMap implements \Countable, \IteratorAggregate
      * Expiry instant per key, present only while a TTL is set. Kept beside
      * {@see $data} rather than folded into it so the untimed path stays as it was.
      *
+     * Its insertion order is the order entries were stamped, which is also the
+     * order their expiry instants are non-decreasing in (see {@see stamp()}). That
+     * is what lets {@see expireStale()} stop at the first live entry rather than
+     * scan the whole map on every put() at capacity.
+     *
      * @var array<array-key, float>
      */
     private array $expiresAt = [];
+
+    /** The largest expiry instant handed out; {@see stamp()} never goes below it. */
+    private float $latestExpiry = 0.0;
 
     private function __construct(
         private int $capacity,
@@ -124,6 +135,8 @@ final class LruMap implements \Countable, \IteratorAggregate
      * capacity bound alone. Reads do not refresh an entry's lifetime, so a hot
      * key still expires on schedule.
      *
+     * The receiver is left untouched: assign the result to use the timed map.
+     *
      * @param (\Closure(): float)|null $clock Test seam: the clock in seconds.
      * @return self<V>
      * @throws \InvalidArgumentException when $seconds is not a positive finite number.
@@ -143,7 +156,10 @@ final class LruMap implements \Countable, \IteratorAggregate
         $next->clock = $clock;
         $next->expiresAt = [];
 
+        // Every survivor takes the same instant, so the previous latest expiry
+        // (which may belong to a longer lifetime) must not floor this one.
         $expiry = $next->now() + $seconds;
+        $next->latestExpiry = $expiry;
         foreach (array_keys($next->data) as $key) {
             $next->expiresAt[$key] = $expiry;
         }
@@ -255,7 +271,7 @@ final class LruMap implements \Countable, \IteratorAggregate
 
         $this->data[$key] = $value;
         if ($this->ttl !== null) {
-            $this->expiresAt[$key] = $this->now() + $this->ttl;
+            $this->expiresAt[$key] = $this->stamp();
         }
     }
 
@@ -296,6 +312,7 @@ final class LruMap implements \Countable, \IteratorAggregate
     {
         $this->data = [];
         $this->expiresAt = [];
+        $this->latestExpiry = 0.0;
     }
 
     /**
@@ -417,7 +434,13 @@ final class LruMap implements \Countable, \IteratorAggregate
         unset($this->data[$key], $this->expiresAt[$key]);
     }
 
-    /** Drop every entry whose TTL has run out. Expiry is not an eviction. */
+    /**
+     * Drop every entry whose TTL has run out. Expiry is not an eviction.
+     *
+     * Stops at the first live entry: stamps never decrease in insertion order,
+     * so nothing behind it can have expired. Iterating by key rather than with
+     * foreach avoids copying the whole stamp array on the first unset.
+     */
     private function expireStale(): void
     {
         if ($this->expiresAt === []) {
@@ -425,11 +448,30 @@ final class LruMap implements \Countable, \IteratorAggregate
         }
 
         $now = $this->now();
-        foreach ($this->expiresAt as $key => $expiry) {
-            if ($expiry <= $now) {
-                unset($this->data[$key], $this->expiresAt[$key]);
+        while ($this->expiresAt !== []) {
+            $key = array_key_first($this->expiresAt);
+            if ($this->expiresAt[$key] > $now) {
+                return;
             }
+
+            unset($this->data[$key], $this->expiresAt[$key]);
         }
+    }
+
+    /**
+     * The expiry instant for an entry written now.
+     *
+     * Floored at the latest instant already handed out, so a clock that steps
+     * backwards cannot stamp an entry ahead of an older one and break the order
+     * {@see expireStale()} depends on. Under a monotonic clock the floor never
+     * applies; after a backwards step the entry lives until the old instant
+     * rather than its nominal lifetime, which is the safer error for a cache.
+     */
+    private function stamp(): float
+    {
+        $this->latestExpiry = max($this->latestExpiry, $this->now() + (float) $this->ttl);
+
+        return $this->latestExpiry;
     }
 
     private function now(): float
