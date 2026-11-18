@@ -286,7 +286,7 @@ library's full surface.
 | `TERM_PROGRAM` | `Util\ColorProfile::detect()`, `Util\Tty\EnvDetect` (mintty), `Util\Clipboard` (backend plan) | no known-terminal match |
 | `NO_COLOR` | `Util\ColorProfile::detect()` | colour stays enabled; a force variable (`FORCE_COLOR`, `CLICOLOR_FORCE`) outranks it when sugar-colorprofile is installed |
 | `CLICOLOR` | `Util\ColorProfile::detect()` (`CLICOLOR=0` opts out of colour) | no opt-out signal |
-| `CLICOLOR_FORCE` | `Util\ColorProfile::detect()` | no force (truthy = non-empty, not `0`, not `false`) |
+| `CLICOLOR_FORCE` | `Util\ColorProfile::detect()` | no force (truthy = non-empty and not `0`; `false` is truthy, matching the chain's grammar) |
 | `FORCE_COLOR` | `Util\ColorProfile::detect()` | no force |
 | `WT_SESSION` | `Util\ColorProfile::detect()` | not Windows Terminal |
 | `CI` | `Util\ColorProfile::detect()` | not treated as CI |
@@ -305,12 +305,17 @@ delegates to its `DetectionChain` (guarded by `class_exists`, no `require`
 cycle; `sugar-colorprofile` is a `suggest`). Without it there is no local
 ladder (P1-10a deleted it): every terminal answers `Ascii`, and the
 `Util\ColorProfile` enum is `@deprecated`. With the chain installed, its
-answers differ from the old ladder in four corners:
-`TERM=dumb` on a non-TTY is `Ascii` (was `NoTty`), `FORCE_COLOR=1` is `Ansi`
+answers differ from the old ladder in four corners, on a terminal (or with
+`$stdout` null, which assumes one):
+`TERM=dumb` is `Ascii` (was `NoTty`), `FORCE_COLOR=1` is `Ansi`
 (was `TrueColor`), `CI=true` without `TERM` is `Ascii` (was `Ansi`), and a
 force variable now outranks `NO_COLOR`: `NO_COLOR=1 FORCE_COLOR=1` is `Ansi`
 (was `Ascii`) and `NO_COLOR=1 CLICOLOR_FORCE=1` is `TrueColor` (was `Ascii`).
-The old ladder let `NO_COLOR` win. The chain's order is the house order
+On a non-terminal stream with no force variable, `detect()` answers `NoTty`
+before the chain runs, so the four corners do not apply there: `TERM=dumb`
+redirected to a file stays `NoTty`, and a force variable is the only way a
+pipe gets escape bytes. The old ladder let `NO_COLOR` win.
+The chain's order is the house order
 (`CLICOLOR_FORCE`/`FORCE_COLOR` are active overrides, `NO_COLOR` a passive
 preference), so a child process that inherits `FORCE_COLOR=1` gets colour even
 when the parent exported `NO_COLOR=1`. This is declared here, not only in the

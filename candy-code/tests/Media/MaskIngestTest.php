@@ -83,6 +83,26 @@ final class MaskIngestTest extends TestCase
         MaskIngest::fromBytes((string) file_get_contents(self::CORRUPT), 'corrupt.png');
     }
 
+    public function testATransparencyChunkWithAFailedCrcIsRefusedNotClassified(): void
+    {
+        // libpng drops an ancillary chunk whose CRC fails and still loads the
+        // picture, so the image door admits the file. The byte walk read the damaged
+        // tRNS key and classified it, while PngPixels refuses the same bytes. (A
+        // damaged IDAT is already refused by the GD load before the walk runs.)
+        $good = self::rawPng(2, 2, 0, str_repeat("\x00\x00\xff", 2), 8, "\x00\x00");
+        $this->assertSame(MaskIngest::MODE_ALPHA, MaskIngest::fromBytes($good, 'good.png')->mode, 'the intact file still classifies');
+
+        // Signature (8) + IHDR chunk (25) put tRNS at bytes 33..46: length, type,
+        // two data bytes, then the CRC whose last byte is 46.
+        $damaged = $good;
+        $damaged[46] = chr(ord($good[46]) ^ 0x01);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('CRC');
+
+        MaskIngest::fromBytes($damaged, 'damaged.png');
+    }
+
     public function testNotAnImageAtAllIsRefused(): void
     {
         $this->expectException(\InvalidArgumentException::class);
