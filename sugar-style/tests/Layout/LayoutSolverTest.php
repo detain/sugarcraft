@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Style\Tests\Layout;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Constraints\Direction;
 use SugarCraft\Style\Layout\Constraint;
-use SugarCraft\Style\Layout\Direction;
 use SugarCraft\Style\Layout\Fill;
 use SugarCraft\Style\Layout\Layout;
 use SugarCraft\Style\Layout\Length;
@@ -70,6 +70,16 @@ final class LayoutSolverTest extends TestCase
         $v = Direction::Vertical;
         $this->assertSame('Horizontal', $h->name);
         $this->assertSame('Vertical', $v->name);
+    }
+
+    /**
+     * P1-14f regression: sugar-constraints owns the only Direction enum. A
+     * second copy under the Style\Layout namespace would let the two drift.
+     */
+    public function testStyleLayoutNoLongerShipsADirectionEnum(): void
+    {
+        $this->assertFalse(enum_exists('SugarCraft\\Style\\Layout\\Direction'));
+        $this->assertTrue(enum_exists(Direction::class));
     }
 
     // ── Rect ───────────────────────────────────────────────────────────────
