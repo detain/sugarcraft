@@ -369,4 +369,64 @@ final class LockFileTest extends TestCase
         self::assertNotNull($syncHolder);
         self::assertNotNull($asyncHolder);
     }
+
+    public function testSweepNeverUnlinksAFreshInodeAnotherWaiterTookSinceItInspectedTheStaleOne(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('Windows will not unlink a file held open by this process');
+        }
+        $path = $this->dir . '/l';
+        $stale = LockFile::on($path)->tryAcquire();
+        self::assertNotNull($stale);
+        file_put_contents($path, '999999');
+
+        // The second waiter's deadline has passed too: it sweeps the stale inode
+        // after the first waiter has already unlinked it and locked a fresh one.
+        $fresh = null;
+        $probe = static function (int $pid) use ($path, &$fresh): bool {
+            @unlink($path);
+            $fresh = LockFile::on($path)->tryAcquire();
+
+            return false;
+        };
+
+        $late = LockFile::on($path)->withAliveProbe($probe)->tryAcquire(0.0);
+        self::assertNotNull($fresh, 'the first waiter locked the fresh inode');
+        self::assertNull($late, 'the late sweep must not drop the fresh holder file');
+        self::assertNull(LockFile::on($path)->tryAcquire(), 'the fresh holder still excludes everyone');
+
+        $fresh->release();
+        $stale->release();
+    }
+
+    public function testAsyncSweepNeverUnlinksAFreshInodeAnotherWaiterTook(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('Windows will not unlink a file held open by this process');
+        }
+        $path = $this->dir . '/l';
+        $stale = LockFile::on($path)->tryAcquire();
+        self::assertNotNull($stale);
+        file_put_contents($path, '999999');
+
+        $fresh = null;
+        $probe = static function (int $pid) use ($path, &$fresh): bool {
+            @unlink($path);
+            $fresh = LockFile::on($path)->tryAcquire();
+
+            return false;
+        };
+
+        $loop = new StreamSelectLoop();
+        $late = $this->settle(
+            $loop,
+            LockFile::on($path)->withAliveProbe($probe)->tryAcquireAsync($loop, 0.0),
+        );
+        self::assertNotNull($fresh, 'the first waiter locked the fresh inode');
+        self::assertNull($late, 'the late async sweep must not drop the fresh holder file');
+        self::assertNull(LockFile::on($path)->tryAcquire(), 'the fresh holder still excludes everyone');
+
+        $fresh->release();
+        $stale->release();
+    }
 }

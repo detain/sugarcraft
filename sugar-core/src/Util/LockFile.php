@@ -266,6 +266,16 @@ final class LockFile
             return null;
         }
 
+        // WHY the identity check: another waiter whose deadline has also passed
+        // may have swept this same stale inode already and locked its fresh one.
+        // Unlinking by path then would delete that live holder's file and let
+        // both processes hold the lock. Only the inode we inspected is ours to drop.
+        if (!$this->pathNamesInode($contended)) {
+            fclose($contended);
+
+            return null;
+        }
+
         @unlink($this->path);
         fclose($contended);
 
@@ -280,6 +290,23 @@ final class LockFile
         }
 
         return $fresh;
+    }
+
+    /**
+     * Whether the path still names the same inode as the handle $contended.
+     * False when the path is gone or was replaced, so the caller must not unlink it.
+     *
+     * @param resource $contended
+     */
+    private function pathNamesInode($contended): bool
+    {
+        $held = fstat($contended);
+        $named = @stat($this->path);
+        if ($held === false || $named === false) {
+            return false;
+        }
+
+        return $held['dev'] === $named['dev'] && $held['ino'] === $named['ino'];
     }
 
     /**
