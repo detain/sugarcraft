@@ -47,6 +47,7 @@ return [
     'lru_map.capacity_invalid'    => 'LRU capacity must be at least 1, got {capacity}',
     'lru_map.capacity_too_large'  => 'LRU capacity {capacity} exceeds growth guard {max}',
     'lru_map.evict_from_empty'    => 'cannot evict from an empty LRU map',
+    'lru_map.ttl_invalid'         => 'LRU TTL must be a positive, finite number of seconds, got {seconds}',
 
     // Util/Validation.php
     'errors.negative_not_allowed'  => 'negative not allowed for {name}',

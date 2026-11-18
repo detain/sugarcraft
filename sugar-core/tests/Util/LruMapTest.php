@@ -511,4 +511,171 @@ final class LruMapTest extends TestCase
         self::assertSame($obj, $withObj->peek('k'));
         self::assertSame($obj, (clone $withObj)->peek('k'));
     }
+
+    /** A clock the test moves by hand, so TTL expiry is exact rather than slept for. */
+    private function clockAt(float &$now): \Closure
+    {
+        return static function () use (&$now): float {
+            return $now;
+        };
+    }
+
+    public function testWithTtlRejectsAZeroNegativeOrNonFiniteLifetime(): void
+    {
+        $map = LruMap::new(4);
+
+        foreach ([0.0, -1.0, NAN, INF] as $seconds) {
+            try {
+                $map->withTtl($seconds);
+                self::fail('withTtl(' . var_export($seconds, true) . ') must throw');
+            } catch (\InvalidArgumentException) {
+                self::assertTrue(true);
+            }
+        }
+    }
+
+    public function testWithTtlReturnsASnapshotAndLeavesTheReceiverUntimed(): void
+    {
+        $now = 0.0;
+        $plain = LruMap::new(4);
+        $plain->put('a', 1);
+
+        $timed = $plain->withTtl(10.0, $this->clockAt($now));
+        self::assertNotSame($plain, $timed);
+
+        $now = 100.0;
+        self::assertSame(1, $plain->get('a'), 'the receiver keeps no expiry');
+        self::assertNull($timed->get('a'), 'the snapshot expires the entry it stamped');
+    }
+
+    public function testAnEntryExpiresOnceItsLifetimeFromThePutHasElapsed(): void
+    {
+        $now = 0.0;
+        $map = LruMap::new(4)->withTtl(10.0, $this->clockAt($now));
+        $map->put('a', 'v');
+
+        $now = 9.9;
+        self::assertSame('v', $map->get('a'));
+
+        $now = 10.0;
+        self::assertFalse($map->has('a'));
+        self::assertNull($map->get('a'));
+        self::assertSame(0, $map->count());
+    }
+
+    public function testPutRestartsTheLifetimeOfAnExistingKey(): void
+    {
+        $now = 0.0;
+        $map = LruMap::new(4)->withTtl(10.0, $this->clockAt($now));
+        $map->put('a', 'first');
+
+        $now = 8.0;
+        $map->put('a', 'second');
+
+        $now = 15.0;
+        self::assertSame('second', $map->peek('a'), 'the overwrite restarts the clock');
+
+        $now = 18.0;
+        self::assertFalse($map->has('a'));
+    }
+
+    public function testReadsDoNotExtendALifetime(): void
+    {
+        $now = 0.0;
+        $map = LruMap::new(4)->withTtl(10.0, $this->clockAt($now));
+        $map->put('hot', 'v');
+
+        for ($t = 1.0; $t < 10.0; $t += 1.0) {
+            $now = $t;
+            self::assertSame('v', $map->get('hot'));
+        }
+
+        $now = 10.0;
+        self::assertNull($map->get('hot'), 'a hot key still expires on schedule');
+    }
+
+    public function testPeekTouchAndRemoveTreatAnExpiredKeyAsAbsent(): void
+    {
+        $now = 0.0;
+        $map = LruMap::new(4)->withTtl(5.0, $this->clockAt($now));
+        $map->put('a', 'v');
+        $map->put('b', 'v');
+        $map->put('c', 'v');
+
+        $now = 5.0;
+        self::assertNull($map->peek('a'));
+        self::assertFalse($map->touch('b'));
+        self::assertFalse($map->remove('c'), 'removing an expired key reports nothing removed');
+    }
+
+    public function testCountKeysEntriesAndIterationSkipExpiredEntries(): void
+    {
+        $now = 0.0;
+        $map = LruMap::new(8)->withTtl(10.0, $this->clockAt($now));
+        $map->put('old', 1);
+
+        $now = 6.0;
+        $map->put('new', 2);
+
+        $now = 12.0;
+        self::assertSame(1, $map->count());
+        self::assertSame(['new'], $map->keys());
+        self::assertSame(['new' => 2], $map->entries());
+        self::assertSame(['new' => 2], iterator_to_array($map));
+    }
+
+    public function testExpiredEntriesDoNotCostALiveEntryItsSlot(): void
+    {
+        $now = 0.0;
+        $map = LruMap::new(2)->withTtl(10.0, $this->clockAt($now));
+        $map->put('a', 1);
+
+        $now = 6.0;
+        $map->put('b', 2);
+
+        $now = 11.0;
+        $map->put('c', 3);
+
+        self::assertSame(0, $map->evictions(), 'expiry must not be counted as a capacity eviction');
+        self::assertSame(['c', 'b'], $map->keys(), 'the expired entry gave up its slot, not the live one');
+    }
+
+    public function testResizeShedsExpiredEntriesWithoutCountingThemAsEvictions(): void
+    {
+        $now = 0.0;
+        $map = LruMap::new(4)->withTtl(10.0, $this->clockAt($now));
+        $map->put('a', 1);
+        $map->put('b', 2);
+
+        $now = 20.0;
+        $map->put('c', 3);
+        $map->resize(1);
+
+        self::assertSame(0, $map->evictions());
+        self::assertSame(['c'], $map->keys());
+    }
+
+    public function testClearForgetsExpiryStampsSoANewPutIsStampedFresh(): void
+    {
+        $now = 0.0;
+        $map = LruMap::new(4)->withTtl(10.0, $this->clockAt($now));
+        $map->put('a', 'first');
+
+        $now = 4.0;
+        $map->clear();
+        $map->put('a', 'second');
+
+        $now = 13.0;
+        self::assertSame('second', $map->get('a'), 'the clear reset the old stamp; the new one runs from 4s');
+    }
+
+    public function testAMapWithoutATtlNeverExpiresAnything(): void
+    {
+        $now = 0.0;
+        $map = LruMap::new(4);
+        $map->put('a', 1);
+
+        $now = 1.0e9;
+        self::assertSame(1, $map->get('a'));
+    }
 }

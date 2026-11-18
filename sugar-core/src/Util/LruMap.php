@@ -61,6 +61,20 @@ final class LruMap implements \Countable, \IteratorAggregate
     /** Entries dropped by the capacity bound — overwrites and removes are not evictions. */
     private int $evictions = 0;
 
+    /** Seconds an entry lives after the put() that wrote it, or null for no expiry. */
+    private ?float $ttl = null;
+
+    /** Test seam for the clock in seconds; null reads microtime(true). */
+    private ?\Closure $clock = null;
+
+    /**
+     * Expiry instant per key, present only while a TTL is set. Kept beside
+     * {@see $data} rather than folded into it so the untimed path stays as it was.
+     *
+     * @var array<array-key, float>
+     */
+    private array $expiresAt = [];
+
     private function __construct(
         private int $capacity,
         private readonly ?int $maxCapacity,
@@ -101,6 +115,41 @@ final class LruMap implements \Countable, \IteratorAggregate
     }
 
     /**
+     * A copy of this map whose entries expire $seconds after their last put().
+     *
+     * Returns a snapshot rather than mutating, in keeping with the other
+     * `with*()` setters; the entries held at the call are stamped as freshly
+     * written. Expired entries are dropped on the next read that touches them,
+     * and expiry never counts toward {@see evictions()}: that counter is for the
+     * capacity bound alone. Reads do not refresh an entry's lifetime, so a hot
+     * key still expires on schedule.
+     *
+     * @param (\Closure(): float)|null $clock Test seam: the clock in seconds.
+     * @return self<V>
+     * @throws \InvalidArgumentException when $seconds is not a positive finite number.
+     */
+    public function withTtl(float $seconds, ?\Closure $clock = null): self
+    {
+        if (!is_finite($seconds) || $seconds <= 0.0) {
+            throw new \InvalidArgumentException(Lang::t('lru_map.ttl_invalid', [
+                'seconds' => (string) $seconds,
+            ]));
+        }
+
+        $next = clone $this;
+        $next->ttl = $seconds;
+        $next->clock = $clock;
+        $next->expiresAt = [];
+
+        $expiry = $next->now() + $seconds;
+        foreach (array_keys($next->data) as $key) {
+            $next->expiresAt[$key] = $expiry;
+        }
+
+        return $next;
+    }
+
+    /**
      * Change how many entries the map holds, evicting LRU-first if it now
      * exceeds the new cap.
      *
@@ -129,6 +178,7 @@ final class LruMap implements \Countable, \IteratorAggregate
      */
     public function get(string $key): mixed
     {
+        $this->dropIfExpired($key);
         if (!array_key_exists($key, $this->data)) {
             return null;
         }
@@ -148,6 +198,7 @@ final class LruMap implements \Countable, \IteratorAggregate
      */
     public function peek(string $key): mixed
     {
+        $this->dropIfExpired($key);
         if (!array_key_exists($key, $this->data)) {
             return null;
         }
@@ -163,6 +214,7 @@ final class LruMap implements \Countable, \IteratorAggregate
      */
     public function touch(string $key): bool
     {
+        $this->dropIfExpired($key);
         if (!array_key_exists($key, $this->data)) {
             return false;
         }
@@ -183,23 +235,33 @@ final class LruMap implements \Countable, \IteratorAggregate
     {
         // PHP keeps the original position of a re-assigned key, so a plain
         // overwrite would leave a hot entry stuck at the eviction end.
-        unset($this->data[$key]);
+        unset($this->data[$key], $this->expiresAt[$key]);
 
         // Evict before inserting so the capacity test reads the occupancy that
         // excludes the newcomer: a full map then sheds exactly one entry to make
         // room. (The victim is still taken from the head, so the newcomer at the
         // tail is never itself the eviction — the ordering here is about the
         // count, not about which entry is chosen.)
+        // Expired entries are dead weight, not live occupancy: shed them before
+        // deciding whether the map is full, so they never cost a live entry.
+        if (count($this->data) >= $this->capacity) {
+            $this->expireStale();
+        }
         if (count($this->data) >= $this->capacity) {
             $this->evictOldest();
         }
 
         $this->data[$key] = $value;
+        if ($this->ttl !== null) {
+            $this->expiresAt[$key] = $this->now() + $this->ttl;
+        }
     }
 
     /** Whether the key is present, regardless of recency (does not promote). */
     public function has(string $key): bool
     {
+        $this->dropIfExpired($key);
+
         return array_key_exists($key, $this->data);
     }
 
@@ -211,11 +273,12 @@ final class LruMap implements \Countable, \IteratorAggregate
      */
     public function remove(string $key): bool
     {
+        $this->dropIfExpired($key);
         if (!array_key_exists($key, $this->data)) {
             return false;
         }
 
-        unset($this->data[$key]);
+        unset($this->data[$key], $this->expiresAt[$key]);
 
         return true;
     }
@@ -230,6 +293,7 @@ final class LruMap implements \Countable, \IteratorAggregate
     public function clear(): void
     {
         $this->data = [];
+        $this->expiresAt = [];
     }
 
     /**
@@ -245,6 +309,8 @@ final class LruMap implements \Countable, \IteratorAggregate
      */
     public function keys(): array
     {
+        $this->expireStale();
+
         // Reverse for MRU-first, then cast: see the docblock for why strval().
         return array_map('strval', array_reverse(array_keys($this->data)));
     }
@@ -263,6 +329,8 @@ final class LruMap implements \Countable, \IteratorAggregate
      */
     public function entries(): array
     {
+        $this->expireStale();
+
         return array_reverse($this->data, true);
     }
 
@@ -275,6 +343,8 @@ final class LruMap implements \Countable, \IteratorAggregate
     /** Entries currently held. */
     public function count(): int
     {
+        $this->expireStale();
+
         return count($this->data);
     }
 
@@ -316,7 +386,7 @@ final class LruMap implements \Countable, \IteratorAggregate
             throw new \LogicException(Lang::t('lru_map.evict_from_empty'));
         }
 
-        unset($this->data[$victim]);
+        unset($this->data[$victim], $this->expiresAt[$victim]);
         $this->evictions++;
     }
 
@@ -325,9 +395,44 @@ final class LruMap implements \Countable, \IteratorAggregate
      */
     private function trimToCapacity(): void
     {
+        $this->expireStale();
+
         while (count($this->data) > $this->capacity) {
             $this->evictOldest();
         }
+    }
+
+    /**
+     * Drop $key when its TTL has run out, so the caller's next check sees a miss.
+     * A key with no expiry, or with no TTL set, costs one array lookup.
+     */
+    private function dropIfExpired(string $key): void
+    {
+        if (!array_key_exists($key, $this->expiresAt) || $this->expiresAt[$key] > $this->now()) {
+            return;
+        }
+
+        unset($this->data[$key], $this->expiresAt[$key]);
+    }
+
+    /** Drop every entry whose TTL has run out. Expiry is not an eviction. */
+    private function expireStale(): void
+    {
+        if ($this->expiresAt === []) {
+            return;
+        }
+
+        $now = $this->now();
+        foreach ($this->expiresAt as $key => $expiry) {
+            if ($expiry <= $now) {
+                unset($this->data[$key], $this->expiresAt[$key]);
+            }
+        }
+    }
+
+    private function now(): float
+    {
+        return $this->clock !== null ? ($this->clock)() : microtime(true);
     }
 
     /**

@@ -30,6 +30,7 @@ return [
     'lru_map.capacity_invalid' => 'ёмкость LRU должна быть не меньше 1, получено {capacity}',
     'lru_map.capacity_too_large' => 'ёмкость LRU {capacity} превышает ограничитель роста {max}',
     'lru_map.evict_from_empty' => 'невозможно вытеснить из пустой карты LRU',
+    'lru_map.ttl_invalid' => 'TTL карты LRU должен быть положительным конечным числом секунд, получено {seconds}',
     'errors.negative_not_allowed' => 'отрицательное значение недопустимо для {name}',
     'errors.value_must_be_positive' => '{name} должно быть положительным, получено {value}',
     'errors.value_out_of_range' => '{name} должно быть от {min} до {max}, получено {value}',

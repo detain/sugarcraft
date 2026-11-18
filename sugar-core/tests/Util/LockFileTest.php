@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Core\Tests\Util;
 
 use PHPUnit\Framework\TestCase;
+use React\EventLoop\LoopInterface;
+use React\EventLoop\StreamSelectLoop;
+use React\Promise\PromiseInterface;
 use SugarCraft\Core\Util\LockFile;
 
 final class LockFileTest extends TestCase
@@ -181,5 +184,104 @@ final class LockFileTest extends TestCase
         file_put_contents($path, '4194999');
         self::assertNotNull(LockFile::on($path)->tryAcquire(0.02), 'pid beyond pid_max is ESRCH: swept');
         self::assertNotNull($holder);
+    }
+
+    /**
+     * Run the loop until $promise settles, bounded so a stuck wait fails by name.
+     */
+    private function settle(LoopInterface $loop, PromiseInterface $promise): mixed
+    {
+        $settled = false;
+        $value = null;
+        $promise->then(static function (mixed $v) use (&$settled, &$value, $loop): void {
+            $settled = true;
+            $value = $v;
+            $loop->stop();
+        });
+
+        if (!$settled) {
+            $bound = $loop->addTimer(3.0, static function () use ($loop): void {
+                $loop->stop();
+            });
+            $loop->run();
+            $loop->cancelTimer($bound);
+        }
+
+        self::assertTrue($settled, 'the promise must settle within the bound');
+
+        return $value;
+    }
+
+    public function testAsyncAcquireResolvesTheGuardSynchronouslyWhenUncontended(): void
+    {
+        $loop = new StreamSelectLoop();
+        $promise = LockFile::on($this->dir . '/l')->tryAcquireAsync($loop, 0.0);
+
+        $resolved = null;
+        $promise->then(static function (mixed $v) use (&$resolved): void {
+            $resolved = $v;
+        });
+
+        self::assertNotNull($resolved, 'the first attempt is synchronous, so an open lock resolves at once');
+    }
+
+    public function testAsyncAcquireWaitsOutAHolderThenResolvesWhenItReleases(): void
+    {
+        $loop = new StreamSelectLoop();
+        $path = $this->dir . '/l';
+        $holder = LockFile::on($path)->tryAcquire();
+        self::assertNotNull($holder);
+
+        $loop->addTimer(0.05, static function () use ($holder): void {
+            $holder->release();
+        });
+
+        $guard = $this->settle($loop, LockFile::on($path)->tryAcquireAsync($loop, 2.0));
+
+        self::assertNotNull($guard, 'the waiter takes the lock once the holder lets go');
+        self::assertTrue($guard->held());
+    }
+
+    public function testAsyncAcquireResolvesNullAtItsDeadlineWhileTheHolderLives(): void
+    {
+        $loop = new StreamSelectLoop();
+        $path = $this->dir . '/l';
+        $holder = LockFile::on($path)->tryAcquire();
+        self::assertNotNull($holder);
+
+        $guard = $this->settle($loop, LockFile::on($path)->tryAcquireAsync($loop, 0.05));
+
+        self::assertNull($guard);
+        self::assertNotNull($holder);
+    }
+
+    public function testAsyncAcquireResolvesNullForAnUnopenablePath(): void
+    {
+        $loop = new StreamSelectLoop();
+        $guard = $this->settle(
+            $loop,
+            LockFile::on($this->dir . '/missing/dir/l')->tryAcquireAsync($loop, 0.0),
+        );
+
+        self::assertNull($guard);
+    }
+
+    public function testAsyncAcquireSweepsADeadInheritedHolderAtItsDeadline(): void
+    {
+        $loop = new StreamSelectLoop();
+        $path = $this->dir . '/l';
+        $holder = LockFile::on($path)->tryAcquire();
+        self::assertNotNull($holder);
+        file_put_contents($path, '999999');
+
+        $guard = $this->settle(
+            $loop,
+            LockFile::on($path)
+                ->withAliveProbe(static fn (int $pid): bool => false)
+                ->tryAcquireAsync($loop, 0.05),
+        );
+
+        self::assertNotNull($guard, 'the async path applies the same stale-holder sweep');
+        self::assertSame((string) getmypid(), file_get_contents($path));
     }
 }

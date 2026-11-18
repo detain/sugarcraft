@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core\Util;
 
+use React\EventLoop\LoopInterface;
+use React\Promise\Deferred;
+use React\Promise\PromiseInterface;
 use SugarCraft\Core\Lang;
 
 /**
@@ -109,6 +112,77 @@ final class LockFile
         }
 
         return $this->guard($handle);
+    }
+
+    /**
+     * The event-loop spelling of {@see tryAcquire()}: the same attempt, the same
+     * deadline and the same stale sweep, but the wait is a loop timer instead of
+     * a blocking sleep, so a ReactPHP program keeps its ticks running while it
+     * waits for another process.
+     *
+     * The promise resolves to the guard, or to null when still contended at the
+     * deadline or when the lock file cannot be opened. The first attempt runs
+     * synchronously, so an uncontended lock resolves before this returns.
+     *
+     * @return PromiseInterface<LockGuard|null>
+     */
+    public function tryAcquireAsync(LoopInterface $loop, float $timeoutSeconds = 0.0): PromiseInterface
+    {
+        $deferred = new Deferred();
+
+        $handle = $this->open();
+        if ($handle === null) {
+            $deferred->resolve(null);
+
+            return $deferred->promise();
+        }
+
+        $flags = ($this->exclusive ? \LOCK_EX : \LOCK_SH) | \LOCK_NB;
+        $deadline = microtime(true) + max(0.0, $timeoutSeconds);
+        $this->attemptAsync($loop, $handle, $flags, $deadline, $deferred);
+
+        return $deferred->promise();
+    }
+
+    /**
+     * One poll of {@see tryAcquireAsync()}: settle the deferred, or re-arm a
+     * timer for the next poll. Shares its deadline and sweep rule with
+     * {@see tryAcquire()}.
+     *
+     * @param resource $handle
+     */
+    private function attemptAsync(
+        LoopInterface $loop,
+        $handle,
+        int $flags,
+        float $deadline,
+        Deferred $deferred,
+    ): void {
+        if (@flock($handle, $flags)) {
+            $deferred->resolve($this->guard($handle));
+
+            return;
+        }
+
+        if (microtime(true) >= $deadline) {
+            $swept = $this->sweepIfStale($handle);
+            if ($swept === null) {
+                fclose($handle);
+                $deferred->resolve(null);
+
+                return;
+            }
+            $deferred->resolve($this->guard($swept));
+
+            return;
+        }
+
+        $loop->addTimer(
+            self::POLL_MICROSECONDS / 1_000_000,
+            function () use ($loop, $handle, $flags, $deadline, $deferred): void {
+                $this->attemptAsync($loop, $handle, $flags, $deadline, $deferred);
+            },
+        );
     }
 
     /**

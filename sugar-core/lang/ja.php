@@ -30,6 +30,7 @@ return [
     'lru_map.capacity_invalid' => 'LRU 容量は 1 以上である必要があります。取得値: {capacity}',
     'lru_map.capacity_too_large' => 'LRU 容量 {capacity} が成長ガード {max} を超えています',
     'lru_map.evict_from_empty' => '空の LRU マップから退避できません',
+    'lru_map.ttl_invalid' => 'LRU の TTL は正の有限な秒数でなければなりません（指定値: {seconds}）',
     'errors.negative_not_allowed' => '{name} に負の値は使用できません',
     'errors.value_must_be_positive' => '{name} は正の値である必要があります。取得値: {value}',
     'errors.value_out_of_range' => '{name} は {min} と {max} の間である必要があります。取得値: {value}',
