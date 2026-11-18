@@ -107,4 +107,61 @@ final class DeclaredClassesTest extends TestCase
 
         $this->assertSame('stdClass', DeclaredClasses::declaredElsewhere($path));
     }
+
+    public function testItListsOnlyTopLevelFunctionsInBothNamespaceForms(): void
+    {
+        $path = $this->file(<<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            namespace Alpha {
+                function one(): void {}
+                function &byRef(): int { return $x; }
+            }
+
+            namespace Beta;
+
+            function two(): void {}
+
+            const NOT_A_FUNCTION = 1;
+
+            if (!function_exists('Beta\\guarded')) {
+                function guarded(): void {}
+            }
+
+            final class Holder
+            {
+                public function method(): void {}
+
+                public function viaClosure(): \Closure
+                {
+                    return function (): void {};
+                }
+            }
+
+            $closure = function (): void {};
+            PHP);
+
+        $this->assertSame(['Alpha\one', 'Alpha\byRef', 'Beta\two'], DeclaredClasses::functionsOf($path));
+        $this->assertSame(['Beta\Holder'], DeclaredClasses::of($path));
+    }
+
+    public function testAFunctionAnotherFileDeclaresIsReportedBeforeRequireWouldFatal(): void
+    {
+        $ns = 'PluginFixtures\\' . Plugins::tag();
+        $first = $this->file("<?php\n\ndeclare(strict_types=1);\n\nnamespace {$ns};\n\nfunction helper(): void {}\n");
+        require_once $first;
+        $second = $this->file("<?php\n\ndeclare(strict_types=1);\n\nnamespace {$ns};\n\nfunction helper(): void {}\n");
+
+        $this->assertSame($ns . '\\helper', DeclaredClasses::declaredElsewhere($second));
+        $this->assertNull(DeclaredClasses::declaredElsewhere($first), 'a file may keep its own function');
+    }
+
+    public function testAnEngineFunctionOfTheSameNameIsReportedAsDeclaredElsewhere(): void
+    {
+        $path = $this->file("<?php\n\ndeclare(strict_types=1);\n\nfunction str_repeat(): void {}\n");
+
+        $this->assertSame('str_repeat', DeclaredClasses::declaredElsewhere($path));
+    }
 }

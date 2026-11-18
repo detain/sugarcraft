@@ -97,7 +97,7 @@ final class PluginLoaderTest extends TestCase
         $this->assertTrue(class_exists($plugin['class'], false));
     }
 
-    public function testOnePathIsRequiredOnceAndEveryKindGetsItsOwnRow(): void
+    public function testOnePathUnderTwoKindsIsRequiredOnceAndYieldsTheFirstKindsRowOnly(): void
     {
         $ns = 'PluginFixtures\\' . Plugins::tag();
         $fqcn = $ns . '\\Impl';
@@ -115,15 +115,15 @@ final class PluginLoaderTest extends TestCase
             interfaces: ['channel' => Plugin::class, 'subscriber' => Plugin::class],
         );
 
-        // The file runs once; each kind that names it is still judged and
-        // lands in exactly one bucket.
-        $this->assertSame(['channel', 'subscriber'], array_column($result->loaded, 'kind'));
+        // One path, one row: the first kind in the list wins, and the second
+        // kind's entry is never judged against its own interface.
+        $this->assertSame(['channel'], array_column($result->loaded, 'kind'));
         $this->assertSame([], $result->quarantined);
         $this->assertSame([], $result->refusals);
         $this->assertTrue(class_exists($fqcn, false));
     }
 
-    public function testADuplicatePathUnderTwoKindsLandsEachRowInOneBucket(): void
+    public function testADuplicatePathUnderTwoKindsQuarantinesOneRowAndRefusesOnlyTheFirstKind(): void
     {
         $ns = 'PluginFixtures\\' . Plugins::tag();
         $fqcn = $ns . '\\Impl';
@@ -131,21 +131,33 @@ final class PluginLoaderTest extends TestCase
             'channel' => ['file' => 'src/Impl.php', 'class' => $fqcn],
             'subscriber' => ['file' => 'src/Impl.php', 'class' => $fqcn],
         ]);
+        $candidate = [Plugins::candidate('demo', $built['dir'])];
         $ledger = new MemoryLedger();
-        $ledger->prime($built['file']);
 
-        $result = $this->load(
-            [Plugins::candidate('demo', $built['dir'])],
+        // First sight: the notice counts the file once, under the first kind.
+        $first = $this->load(
+            $candidate,
             $ledger,
             kinds: ['channel', 'subscriber'],
             interfaces: ['channel' => Plugin::class, 'subscriber' => SubscribesToSessionEvents::class],
         );
+        $this->assertSame([['channel']], array_map(static fn (array $row): array => [$row['kind']], $first->quarantined));
+        $this->assertSame([$built['file']], $ledger->recorded);
+        $this->assertFalse(class_exists($fqcn, false));
 
-        $this->assertSame(['channel'], array_column($result->loaded, 'kind'));
+        // Next launch: the first kind is judged and refused, and the second
+        // kind never produces a row for the same file.
+        $second = $this->load(
+            $candidate,
+            $ledger,
+            kinds: ['subscriber', 'channel'],
+            interfaces: ['channel' => Plugin::class, 'subscriber' => SubscribesToSessionEvents::class],
+        );
+        $this->assertSame([], $second->loaded);
         $this->assertSame(
             [['subscriber', 'interface-mismatch']],
-            array_map(static fn (array $row): array => [$row['kind'], $row['reason']], $result->refusals),
-            'the subscriber row must be judged and refused, never dropped',
+            array_map(static fn (array $row): array => [$row['kind'], $row['reason']], $second->refusals),
+            'one path, one refusal row, for the first kind in the list',
         );
     }
 

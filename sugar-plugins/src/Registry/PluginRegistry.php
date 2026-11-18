@@ -96,6 +96,8 @@ final class PluginRegistry
     /** Remove a registration, for a plugin the host refused to start. */
     public function unregister(string $bundleName, string $name): void
     {
+        // register() keys on the trimmed name, so a padded name must find that key here too.
+        $name = \trim($name);
         $key = $bundleName . '|' . $name;
 
         unset($this->plugins[$key]);

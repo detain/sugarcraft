@@ -160,6 +160,18 @@ final class PluginRegistryTest extends TestCase
         $this->assertTrue($registry->register('demo', $this->plugin('gone', $events)), 'the name is free again');
     }
 
+    public function testUnregisterFindsAPaddedNameTheRegistryTrimmedOnRegister(): void
+    {
+        $events = [];
+        $registry = PluginRegistry::new();
+        $registry->register('bundle', $this->plugin(' demo ', $events));
+
+        $registry->unregister('bundle', ' demo ');
+
+        $this->assertNull($registry->pluginNamed('demo'), 'a failed start must not leave its plugin under the trimmed name');
+        $this->assertTrue($registry->register('other', $this->plugin('demo', $events)), 'the name is free again');
+    }
+
     public function testAnotherBundlesUnregisterNeverFreesAForeignName(): void
     {
         $events = [];

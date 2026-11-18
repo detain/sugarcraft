@@ -44,10 +44,11 @@ final class PluginLoader
      * Load every trusted plugin's entrypoints of $kinds into this process.
      *
      * One trust list, one quarantine ledger, one private-bytes door: the kind
-     * only selects which manifest section is read. A path named under two kinds
-     * or by two trusted candidates is decided ONCE per launch: quarantined or
-     * required at most once, whatever the number of entries that name it. Each
-     * entry still lands in its own bucket, judged against its own class.
+     * only selects which manifest section is read. Within one bundle, a path
+     * named under two kinds yields ONE row, the first kind's, so a quarantine
+     * notice or a refusal never counts the same file twice. Across trusted
+     * candidates, a path is quarantined or required at most once per launch, so
+     * the second bundle cannot run a file the first has only just seen.
      *
      * @param list<PluginCandidate>            $candidates    discovered plugins
      * @param QuarantineLedger                 $ledger        the seen-ledger backing quarantine
@@ -118,8 +119,17 @@ final class PluginLoader
             $unsupported = $contract !== null && $contract > $hostContract;
             $declared = $manifest->entrypoints();
 
+            // Per candidate: one path, one row for this bundle, however many kinds
+            // name it. The first kind in $kinds wins the row.
+            $seenPaths = [];
+
             foreach ($kinds as $kind) {
                 foreach ($declared[$kind] ?? [] as $entry) {
+                    if (isset($seenPaths[$entry->path])) {
+                        continue;
+                    }
+                    $seenPaths[$entry->path] = true;
+
                     $where = ['bundle' => $candidate->name, 'path' => $entry->path, 'class' => $entry->class, 'kind' => $kind];
 
                     if (!PathJail::below($entry->path, $candidate->dir)) {
