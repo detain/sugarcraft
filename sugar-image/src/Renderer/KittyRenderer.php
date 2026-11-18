@@ -308,7 +308,8 @@ final class KittyRenderer implements Renderer, IncrementalRenderer
      *
      * This is an explicit opt-in: {@see render()} and
      * {@see renderWithOptions()} keep emitting their historical f=100
-     * PNG frames byte-for-byte.
+     * PNG frames byte-for-byte. Like {@see renderRgb()} the frame is anonymous
+     * and no delete retires it; use {@see renderRgbFrame()} for a frame loop.
      */
     public function renderUncompressed(ImageSource $image, int $width, ?int $height = null, ?string $rgba = null): string
     {
@@ -323,6 +324,10 @@ final class KittyRenderer implements Renderer, IncrementalRenderer
      *
      * The payload is the caller's pixel buffer as-is, so this is the path
      * {@see renderRgb()} takes, and there is no GD decode on the way out.
+     *
+     * The frame is anonymous: no `i=` names it, so no `delete()` can retire it
+     * and a frame loop calling this once per frame grows the terminal's image
+     * store by one image each time. Frame loops use {@see renderRgbFrame()}.
      */
     public function renderRgb(string $rgba, int $pixelWidth, int $pixelHeight, int $width, ?int $height = null): string
     {
@@ -330,6 +335,28 @@ final class KittyRenderer implements Renderer, IncrementalRenderer
         $payload         = RawRgba::validate($rgba, $pixelWidth, $pixelHeight);
 
         return $this->rawTransmission($payload, $pixelWidth, $pixelHeight, $width, $effectiveHeight, null);
+    }
+
+    /**
+     * Transmit a raw RGBA8 buffer under a caller-owned image id.
+     *
+     * The id-addressed sibling of {@see renderRgb()}: the frame carries `i=`
+     * and `q=2`, so a later {@see delete()} with the same id retires it. A
+     * frame loop keeps two ids and retires the previous one after drawing the
+     * next, the same double buffer {@see present()} runs for ImageSource frames.
+     *
+     * @throws \InvalidArgumentException when $imageId is not a positive integer,
+     *                                   or the buffer is not pixelWidth × pixelHeight × 4 bytes
+     */
+    public function renderRgbFrame(string $rgba, int $pixelWidth, int $pixelHeight, int $width, ?int $height, int $imageId): string
+    {
+        // delete() casts ids to int, so a non-positive id would reach Kitty as
+        // `i=0` or a negative and retire nothing, or every image.
+        self::assertPositiveId((string) $imageId);
+        $effectiveHeight = $this->prepareRenderFor($pixelWidth, $pixelHeight, $width, $height);
+        $payload         = RawRgba::validate($rgba, $pixelWidth, $pixelHeight);
+
+        return $this->rawTransmission($payload, $pixelWidth, $pixelHeight, $width, $effectiveHeight, $imageId);
     }
 
     /**

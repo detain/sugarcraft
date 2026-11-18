@@ -1048,8 +1048,12 @@ final class Player implements Model
         if ($msg->type === KeyType::Escape
             || ($msg->type === KeyType::Char && $msg->rune === 'q')
             || ($msg->ctrl && $msg->rune === 'c')) {
+            // The last Kitty frame is still on screen, and quitting is the last
+            // chance to retire it: stop() cannot hand the runtime bytes, so the
+            // delete rides the quit Cmd ahead of the QuitMsg.
+            $retire = $this->retirementCmd();
             $this->stop();
-            return [$this, Cmd::quit()];
+            return [$this, self::joinCmds($retire, Cmd::quit())];
         }
 
         // Space: toggle pause/resume.
@@ -2422,6 +2426,9 @@ final class Player implements Model
      * teardown is measured on Linux only; the Windows disposition (refused at
      * spawn by SV-M44, unmeasured-by-design otherwise) is documented at
      * {@see \SugarCraft\Video\Decode\FfmpegDecoder::isTeardownExit()}.
+     *
+     * stop() writes nothing to the terminal. A host that tore down a Kitty player
+     * runs {@see teardownCmd()} first, or the last frame stays in the image store.
      */
     public function stop(): void
     {
@@ -2676,6 +2683,17 @@ final class Player implements Model
         // Cmd::tick chain; a wall-clock subscription here would double-tick
         // the pump. Input and resize arrive through sugar-core's own wiring.
         return null;
+    }
+
+    /**
+     * The Cmd a host runs before {@see stop()} when it tears the player down outside
+     * update(). stop() is void, so this is the only way to hand the runtime the delete
+     * for the last Kitty frame; without it the frame outlives the player. Null when
+     * nothing was drawn or the current mode cannot delete by id.
+     */
+    public function teardownCmd(): ?\Closure
+    {
+        return $this->retirementCmd();
     }
 
     /**
