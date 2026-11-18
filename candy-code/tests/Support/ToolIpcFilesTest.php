@@ -616,15 +616,21 @@ final class ToolIpcFilesTest extends TestCase
     {
         ToolIpcFiles::recordReservations(true);
 
-        $foreign = sys_get_temp_dir() . '/' . ToolIpcFiles::CHAT_PREFIX
+        // Both files live in this test's own directory. The shared temp dir is
+        // swept at age 0 by HookContextFilesTest, which can run in a parallel
+        // shard and reap a fresh chat payload written here.
+        $foreign = $this->dir . '/' . ToolIpcFiles::CHAT_PREFIX
             . bin2hex(random_bytes(8)) . '.json';
-        $mine = ToolIpcFiles::reserve(ToolIpcFiles::CHAT_PREFIX, 'json');
+        $mine = $this->dir . '/' . ToolIpcFiles::CHAT_PREFIX . bin2hex(random_bytes(8)) . '.json';
+        // The reservation ledger is seeded directly because reserve() always
+        // names its path in the shared temp dir.
+        (new \ReflectionProperty(ToolIpcFiles::class, 'reserved'))->setValue(null, [$mine]);
 
         try {
             file_put_contents($foreign, '{}');
             ToolIpcFiles::write($mine, '{}');
 
-            $window = glob(sys_get_temp_dir() . '/' . ToolIpcFiles::CHAT_PREFIX . '*') ?: [];
+            $window = glob($this->dir . '/' . ToolIpcFiles::CHAT_PREFIX . '*') ?: [];
             self::assertContains($foreign, $window, 'the fixture must be a file the old window diff would have counted');
 
             self::assertSame([$mine], ToolIpcFiles::strandedReservations());

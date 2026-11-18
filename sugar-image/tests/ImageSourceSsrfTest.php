@@ -128,6 +128,54 @@ final class ImageSourceSsrfTest extends TestCase
         );
     }
 
+    /**
+     * Regression: the redirect hop compared the Location scheme with a strict
+     * in_array, so a 3xx to `HTTP://` was refused even though the initial URL
+     * (lower-case) passed. Every hop now applies the same case-insensitive rule,
+     * so the upper-case target is followed to the image.
+     */
+    public function testRedirectHopWithAnUpperCaseSchemeIsFollowed(): void
+    {
+        $img = ImageSource::fromUrl(
+            "http://127.0.0.1:{$this->port}/redirect-upper",
+            allowedHosts: ['127.0.0.1'],
+        );
+
+        $this->assertSame('image/png', $img->format);
+        $this->assertSame(4, $img->width);
+        $this->assertSame(2, $img->height);
+    }
+
+    public function testInitialUrlWithAnUpperCaseSchemeIsFetched(): void
+    {
+        // RFC 3986 §3.1: `HTTP://` is http. The initial URL goes through the same
+        // case-insensitive scheme rule as the redirect hops, so it reaches the
+        // image instead of being refused as "not in the allowed list".
+        $img = ImageSource::fromUrl(
+            "HTTP://127.0.0.1:{$this->port}/poster.png",
+            allowedHosts: ['127.0.0.1'],
+        );
+
+        $this->assertSame('image/png', $img->format);
+        $this->assertSame(4, $img->width);
+        $this->assertSame(2, $img->height);
+    }
+
+    public function testUpperCaseAllowListEntryMatchesALowerCaseUrl(): void
+    {
+        // A caller's allow-list entry in upper case must match the lower-case
+        // scheme parse_url() returns for `http://`. Master compared the two with
+        // a strict in_array, so ['HTTP'] refused every http URL.
+        $img = ImageSource::fromUrl(
+            "http://127.0.0.1:{$this->port}/poster.png",
+            allowedSchemes: ['HTTP'],
+            allowedHosts: ['127.0.0.1'],
+        );
+
+        $this->assertSame('image/png', $img->format);
+        $this->assertSame(4, $img->width);
+    }
+
     public function testSyncSameAuthorityRedirectKeepsCredentials(): void
     {
         // finding sugar-image-101 (sync twin): a relative redirect stays on
@@ -289,6 +337,9 @@ final class ImageSourceSsrfTest extends TestCase
                 return true;
             case '/redirect-metadata':
                 header('Location: http://169.254.169.254/latest/meta-data/', true, 302);
+                return true;
+            case '/redirect-upper':
+                header('Location: HTTP://127.0.0.1:' . \$_SERVER['SERVER_PORT'] . '/poster.png', true, 302);
                 return true;
             default:
                 http_response_code(404);
