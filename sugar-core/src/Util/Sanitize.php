@@ -47,7 +47,7 @@ namespace SugarCraft\Core\Util;
  * | A row of a line-oriented frame, from outside the process       | {@see untrustedForDisplay()}          | As `untrusted()`, plus CR and CRLF become LF; bidi and zero-width shown as `<U+XXXX>`. |
  * | A frame carrying sugar-mouse zone markup, from outside         | {@see untrustedForMarkedFrames()}     | As `untrusted()`, plus the zone sentinels U+E000 and U+E001.              |
  * | A data-grid cell from an already-stringified value             | {@see cellValue()}                    | Invalid UTF-8 repaired; remaining control bytes shown as a dot; newlines collapsed unless asked to keep them. |
- * | A single-line field that must not hold any control character   | {@see controlChars()}                 | C0 removed, `\n` `\r` `\t` become spaces. SGR parameter text is left behind. |
+ * | A single-line field that must not hold any C0 control byte     | {@see controlChars()}                 | C0 removed, `\n` `\r` `\t` become spaces. SGR parameter text is left behind. DEL and C1 survive: use {@see untrusted()} for those. |
  * | A gate (permission, confirmation) where every byte must be seen | {@see visibleControls()}             | Nothing removed. Controls rendered as caret notation or `<U+XXXX>`.       |
  * | Text that must be free of invisible formatting                 | {@see stripInvisibleFormatting()}     | Bidi and zero-width format characters removed. {@see markInvisibleFormatting()} marks them instead. |
  * | Building blocks                                                 | {@see stripZoneSentinels()}, {@see stripPrivateUse()} | The first removes only the sentinel pair; the second removes the whole BMP Private Use Area. |
