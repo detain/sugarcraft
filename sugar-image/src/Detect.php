@@ -399,7 +399,12 @@ final class Detect
     }
 
     /**
-     * Clear the cached capability and last DA1 reply (for testing).
+     * Clear the cached capability, the last DA1 reply and the memoised
+     * {@see Mosaic::auto()} answer (for testing).
+     *
+     * The auto memo is dropped here because it is a memo of this probe: a
+     * caller that resets the probe (after changing the environment, say)
+     * must get a fresh auto() answer, not the one from before the change.
      *
      * Deliberately does NOT clear the override seams ($repeatOverride,
      * $tmuxTermFeatures, $terminfoSixel) — tests that armed one must call
@@ -412,6 +417,7 @@ final class Detect
         self::$cached           = null;
         self::$lastDa1Reply     = null;
         self::$strayInputBytes  = '';
+        Mosaic::resetAutoMemo();
     }
 
     /**

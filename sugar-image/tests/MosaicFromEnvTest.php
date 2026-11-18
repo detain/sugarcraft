@@ -14,6 +14,7 @@ use SugarCraft\Image\TmuxPassthroughDecorator;
  * @covers \SugarCraft\Image\Mosaic::fromModeString
  * @covers \SugarCraft\Image\Mosaic::auto
  * @covers \SugarCraft\Image\Mosaic::resetAutoMemo
+ * @covers \SugarCraft\Image\Detect::reset
  */
 final class MosaicFromEnvTest extends TestCase
 {
@@ -100,6 +101,19 @@ final class MosaicFromEnvTest extends TestCase
     public function testFromModeStringUnknownModeIsNull(): void
     {
         $this->assertNull(Mosaic::fromModeString('no-such-mode', false));
+    }
+
+    public function testDetectResetDropsTheAutoMemo(): void
+    {
+        // Regression (candy-code ToolResultRenderModeTest): a probe reset after
+        // an environment change must not hand back the pre-change auto answer.
+        putenv('TERM=xterm-kitty');
+        $this->assertSame('kitty', Mosaic::auto()->protocol());
+
+        putenv('TERM=dumb');
+        Detect::reset();
+
+        $this->assertNotSame('kitty', Mosaic::auto()->protocol());
     }
 
     public function testAutoIsMemoisedUntilReset(): void
