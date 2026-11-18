@@ -72,6 +72,15 @@ final class BoundedShutdown
      */
     public const REAP_POLL_SECONDS = 0.25;
 
+    /**
+     * When each group last had a live member seen by a /proc walk, keyed by pgid.
+     * A walk costs tens of milliseconds on a busy host and the async ladders ask
+     * on every 5 ms tick, so the answer is reused for REAP_POLL_SECONDS.
+     *
+     * @var array<int, float>
+     */
+    private static array $groupScannedAt = [];
+
     private function __construct()
     {
     }
@@ -702,18 +711,48 @@ final class BoundedShutdown
     /**
      * Whether no live member remains in the process group $groupPid.
      *
+     * Public so a sibling ladder (candy-code's ProcessReaper) applies the same
+     * group rule instead of its own leader-only check. An empty group answers
+     * at once; a non-empty one is re-scanned at most every
+     * {@see REAP_POLL_SECONDS}, and between scans it answers "not empty".
+     * The ladder therefore notices a drained group up to one poll cadence late,
+     * which is the price of not walking /proc on every 5 ms tick.
+     */
+    public static function groupEmpty(int $groupPid): bool
+    {
+        if (!\function_exists('posix_kill') || !@\posix_kill(-$groupPid, 0)) {
+            unset(self::$groupScannedAt[$groupPid]);
+
+            return true;
+        }
+
+        $now = self::now();
+        if (isset(self::$groupScannedAt[$groupPid]) && $now - self::$groupScannedAt[$groupPid] < self::REAP_POLL_SECONDS) {
+            return false;
+        }
+
+        if (self::noLiveMemberScanned($groupPid)) {
+            unset(self::$groupScannedAt[$groupPid]);
+
+            return true;
+        }
+
+        self::$groupScannedAt[$groupPid] = $now;
+
+        return false;
+    }
+
+    /**
+     * The /proc half of {@see groupEmpty()}: no member outside states Z and X.
+     *
      * `kill(-pgid, 0)` answers true for a ZOMBIE as well as a live process, and
      * a zombie waiting on a reaper that is slow to act would otherwise hold the
      * ladder open for its whole budget. So members in state Z (or X) are
      * skipped when /proc can be read; without /proc the probe stays conservative
      * and counts them.
      */
-    private static function groupEmpty(int $groupPid): bool
+    private static function noLiveMemberScanned(int $groupPid): bool
     {
-        if (!\function_exists('posix_kill') || !@\posix_kill(-$groupPid, 0)) {
-            return true;
-        }
-
         $stats = @\glob('/proc/[0-9]*/stat');
         if ($stats === false || $stats === []) {
             return false;

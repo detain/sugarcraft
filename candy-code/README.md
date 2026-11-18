@@ -3024,11 +3024,11 @@ final class MyProvider implements ProviderInterface
 ## Accessor deprecation
 
 Per the house bare-accessor convention (`AGENTS.md`: *"Bare accessors (no* `get`*"),
-the 2026-10-24 remediation pass renamed 55 public `get*()` accessors
+a rename pass moved 55 public `get*()` accessors
 across 27 classes to their bare twins. The 23 forwarders on the `Agents`/`Workflows`
 classes (`AgentManager`, `AgentWorkerPool`, `Mailbox`, `TaskList`, `Team`,
-`TeamManager`, `Teammate`, `WorkflowEngine`, `WorktreeManager`) were swept in the
-2026-11 remediation (G-03) — the bare names are the only API there. The legacy
+`TeamManager`, `Teammate`, `WorkflowEngine`, `WorktreeManager`) were swept to the
+bare names, which are the only API there. The legacy
 names on the remaining classes stay as one-line BC forwarders, each marked `@deprecated` with `REMOVED-IN: 2.0.0` — they will be
 removed in candy-code v2.0.0. Internal call sites in `src/` were switched to the
 bare forms in the same pass.

@@ -114,6 +114,19 @@ final class PathJailTest extends TestCase
         $this->assertNull($resolved);
     }
 
+    /**
+     * A dangling leaf link inside the jail, aimed outside it, must be refused.
+     * resolve() used to hand back `<root>/dangling` because its parent was in
+     * the jail, and a write through it would land at the link's target.
+     */
+    public function testResolveRefusesDanglingLeafLinkToOutside(): void
+    {
+        symlink($this->outside . '/never-created', $this->jail . '/dangling');
+
+        self::assertNull(PathJail::resolve($this->jail, 'dangling'));
+        self::assertNull(PathJail::resolve($this->jail, $this->jail . '/dangling'));
+    }
+
     public function testResolveReturnsNullForMissingRoot(): void
     {
         $resolved = PathJail::resolve($this->jail . '/does-not-exist', 'x');
