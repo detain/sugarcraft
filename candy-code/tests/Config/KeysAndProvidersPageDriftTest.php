@@ -69,6 +69,10 @@ final class KeysAndProvidersPageDriftTest extends TestCase
         foreach (['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GEMINI_API_KEY', 'OPENROUTER_API_KEY'] as $expected) {
             self::assertContains($expected, $names, "the env scan no longer sees the read of {$expected}");
         }
+
+        // AWS_REGION is read through REQUIRED_KEY_ENVS, not a literal getenv(),
+        // so the scan cannot see it. It must still be demanded of the page.
+        self::assertContains('AWS_REGION', $names, 'the bedrock region variable is no longer in the factory env oracle');
     }
 
     public function testEveryEnvironmentVariableProviderFactoryReadsIsOnTheProvidersPage(): void
@@ -134,9 +138,34 @@ final class KeysAndProvidersPageDriftTest extends TestCase
         $source = self::read('src/Providers/ProviderFactory.php');
         $scanner = new EnvReadScanner(['src/Providers/ProviderFactory.php' => $source]);
 
-        $names = [...array_keys($scanner->reads()), ...array_keys($scanner->ambientReads())];
+        $names = [
+            ...array_keys($scanner->reads()),
+            ...array_keys($scanner->ambientReads()),
+            ...self::requiredKeyEnvNames(),
+        ];
         $names = array_values(array_unique($names));
         sort($names);
+
+        return $names;
+    }
+
+    /**
+     * The environment names the factory's missing-key refusals point at. The
+     * factory reads them through its REQUIRED_KEY_ENVS map rather than a literal
+     * getenv(), so the token scan never sees them; the map itself is the source.
+     *
+     * @return list<string>
+     */
+    private static function requiredKeyEnvNames(): array
+    {
+        $map = (new \ReflectionClassConstant(ProviderFactory::class, 'REQUIRED_KEY_ENVS'))->getValue();
+
+        $names = [];
+        foreach ($map as $keys) {
+            foreach ($keys as $env) {
+                $names[] = $env;
+            }
+        }
 
         return $names;
     }
