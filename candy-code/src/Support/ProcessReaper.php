@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Support;
 
 use React\EventLoop\LoopInterface;
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 
 /**
  * Bounded shutdown for a `proc_open()` child: SIGTERM, a polled grace period,
@@ -127,7 +128,7 @@ final class ProcessReaper
         // Already exited on its own — the overwhelmingly common case. Skip
         // straight out so a normal completion pays no signal at all
         // and no part of the escalation budget.
-        if (!self::isRunning($process)) {
+        if (self::isGone($process, $groupPid)) {
             return true;
         }
 
@@ -138,8 +139,8 @@ final class ProcessReaper
             static function (int $signal) use ($process, $groupPid): void {
                 self::signal($process, $groupPid, $signal);
             },
-            static function () use ($process): bool {
-                return !self::isRunning($process);
+            static function () use ($process, $groupPid): bool {
+                return self::isGone($process, $groupPid);
             },
         );
     }
@@ -283,7 +284,9 @@ final class ProcessReaper
 
             return;
         }
-        if (!self::isRunning($process)) {
+        // A leader that exited on SIGTERM can leave a TERM-ignoring descendant
+        // in its group; isGone() keeps the ladder open for that case.
+        if (self::isGone($process, $groupPid)) {
             $finish(\proc_close($process));
 
             return;
@@ -293,7 +296,7 @@ final class ProcessReaper
             static function (int $signal) use ($process, $groupPid): void {
                 self::signal($process, $groupPid, $signal);
             },
-            static fn (): bool => !self::isRunning($process),
+            static fn (): bool => self::isGone($process, $groupPid),
             static function (bool $gone) use ($loop, $process, $finish): void {
                 // Only a poll that saw the exit may take the blocking reap: then
                 // proc_close() cannot wait. Anything else is deferred to the loop.
@@ -509,5 +512,23 @@ final class ProcessReaper
         }
 
         return \proc_get_status($process)['running'] === true;
+    }
+
+    /**
+     * "Is the child gone?" — the leader has exited AND, when the caller named
+     * the group it leads, that group is empty. The leader alone is not enough:
+     * a descendant that ignores SIGTERM outlives its wrapper, and declaring the
+     * child gone then would end the ladder before the signal 9 rung reaches it.
+     * Same rule as {@see \SugarCraft\Core\Util\Proc\BoundedShutdown}'s ladders.
+     *
+     * @param resource $process
+     */
+    private static function isGone($process, ?int $groupPid): bool
+    {
+        if (self::isRunning($process)) {
+            return false;
+        }
+
+        return $groupPid === null || BoundedShutdown::groupEmpty($groupPid);
     }
 }
