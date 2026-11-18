@@ -64,11 +64,13 @@ final class LockFile
 
     /**
      * @param (\Closure(int): bool)|null $aliveProbe Test seam: is $pid alive?
+     * @param (\Closure(): float)|null   $clock      Test seam: the clock in seconds.
      */
     private function __construct(
         private readonly string $path,
         private readonly bool $exclusive = true,
         private readonly ?\Closure $aliveProbe = null,
+        private readonly ?\Closure $clock = null,
     ) {
     }
 
@@ -80,7 +82,7 @@ final class LockFile
     /** Derive a LOCK_SH variant (many readers, no writer). Shared holders record no pid. */
     public function shared(): self
     {
-        return new self($this->path, false, $this->aliveProbe);
+        return new self($this->path, false, $this->aliveProbe, $this->clock);
     }
 
     /**
@@ -91,7 +93,27 @@ final class LockFile
      */
     public function withAliveProbe(\Closure $probe): self
     {
-        return new self($this->path, $this->exclusive, $probe);
+        return new self($this->path, $this->exclusive, $probe, $this->clock);
+    }
+
+    /**
+     * Replace the clock the wait deadline is read from — a test seam, as in
+     * {@see \SugarCraft\Core\Util\LruMap::withTtl()}. Must be monotonic.
+     *
+     * @param \Closure(): float $clock
+     */
+    public function withClock(\Closure $clock): self
+    {
+        return new self($this->path, $this->exclusive, $this->aliveProbe, $clock);
+    }
+
+    /**
+     * Monotonic seconds for the wait deadline. WHY: a wall clock stepped by NTP
+     * would stretch or cut the wait well past or short of the caller's budget.
+     */
+    private function now(): float
+    {
+        return $this->clock !== null ? ($this->clock)() : hrtime(true) / 1e9;
     }
 
     public function path(): string
@@ -112,7 +134,7 @@ final class LockFile
         }
 
         $flags = ($this->exclusive ? \LOCK_EX : \LOCK_SH) | \LOCK_NB;
-        $deadline = microtime(true) + max(0.0, $timeoutSeconds);
+        $deadline = $this->now() + max(0.0, $timeoutSeconds);
         $suspect = null;
 
         while (true) {
@@ -131,7 +153,7 @@ final class LockFile
                 continue;
             }
 
-            if (microtime(true) >= $deadline) {
+            if ($this->now() >= $deadline) {
                 if ($suspect === null) {
                     $suspect = $this->deadRecord($handle);
                     if ($suspect !== null) {
@@ -180,7 +202,7 @@ final class LockFile
         }
 
         $flags = ($this->exclusive ? \LOCK_EX : \LOCK_SH) | \LOCK_NB;
-        $deadline = microtime(true) + max(0.0, $timeoutSeconds);
+        $deadline = $this->now() + max(0.0, $timeoutSeconds);
         $timer = null;
         $deferred = new Deferred(static function () use ($loop, &$timer, &$handle, &$deferred): void {
             if ($timer !== null) {
@@ -239,7 +261,7 @@ final class LockFile
         }
 
         $confirming = false;
-        if (microtime(true) >= $deadline) {
+        if ($this->now() >= $deadline) {
             if ($suspect === null) {
                 $suspect = $this->deadRecord($handle);
                 $confirming = $suspect !== null;

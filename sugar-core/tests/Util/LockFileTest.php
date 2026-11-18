@@ -748,4 +748,49 @@ final class LockFileTest extends TestCase
         $waiter->release();
         self::assertNotNull(LockFile::on($path)->tryAcquire(), 'the path is free once the guard on B is released');
     }
+
+    /**
+     * A deadline read from the wall clock would ignore a monotonic clock that
+     * has moved past it, and wait the full 60 s budget instead. The first read
+     * sets the deadline, every later read reports the clock already past it.
+     */
+    public function testSyncWaitDeadlineIsReadFromTheMonotonicClock(): void
+    {
+        $path = $this->dir . '/l';
+        $holder = LockFile::on($path)->tryAcquire();
+        self::assertNotNull($holder);
+
+        $reads = 0;
+        $clock = static function () use (&$reads): float {
+            return ++$reads === 1 ? 100.0 : 200.0;
+        };
+
+        $t = microtime(true);
+        self::assertNull(LockFile::on($path)->withClock($clock)->tryAcquire(60.0));
+        self::assertLessThan(5.0, microtime(true) - $t, 'the 60 s budget must not be waited out on the wall clock');
+        self::assertGreaterThanOrEqual(2, $reads, 'the deadline must be read from the injected clock');
+    }
+
+    public function testAsyncWaitDeadlineIsReadFromTheMonotonicClock(): void
+    {
+        $path = $this->dir . '/l';
+        $holder = LockFile::on($path)->tryAcquire();
+        self::assertNotNull($holder);
+
+        $reads = 0;
+        $clock = static function () use (&$reads): float {
+            return ++$reads === 1 ? 100.0 : 200.0;
+        };
+
+        $loop = new StreamSelectLoop();
+        $t = microtime(true);
+        $resolved = 'pending';
+        LockFile::on($path)->withClock($clock)->tryAcquireAsync($loop, 60.0)
+            ->then(static function (mixed $v) use (&$resolved): void {
+                $resolved = $v;
+            });
+
+        self::assertNull($resolved, 'the deadline passes on the injected clock, so the wait resolves null at once');
+        self::assertLessThan(5.0, microtime(true) - $t, 'the 60 s budget must not be waited out on the wall clock');
+    }
 }
