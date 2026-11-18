@@ -851,7 +851,7 @@ final class InputReaderTest extends TestCase
         // SS3 key is the letter the user typed. Every letter here is a
         // non-keypad final that SS3 does not map, so each must arrive as a
         // Char, in one feed and split at every byte.
-        foreach (["\x1bO1a" => ['a'], "\x1bO2nd" => ['n', 'd'], "\x1bO1Z" => ['Z'], "\x1bO2Zx" => ['Z', 'x']] as $seq => $expected) {
+        foreach (["\x1bO1a" => ['a'], "\x1bO2gd" => ['g', 'd'], "\x1bO1Z" => ['Z'], "\x1bO2Zx" => ['Z', 'x']] as $seq => $expected) {
             $oneShot = (new InputReader())->parse($seq);
             $this->assertSame($expected, array_map(static fn($m) => $m->rune, $oneShot), bin2hex($seq));
             foreach ($oneShot as $m) {
@@ -1183,6 +1183,18 @@ final class InputReaderTest extends TestCase
         $this->assertCount(2, $msgs);
         $this->assertSame(KeyType::KpDecimal, $msgs[0]->type);
         $this->assertSame(KeyType::KpSubtract, $msgs[1]->type);
+    }
+
+    public function testKeypadMultiplyAddDecimalAndDivideViaSs3(): void
+    {
+        // DECKPAM finals for the operator keys: ESC O j * , ESC O k +, ESC O n .,
+        // ESC O o /. Each was dropped silently, so the keypad operators did nothing.
+        $msgs = (new InputReader())->parse("\x1bOj\x1bOk\x1bOn\x1bOo");
+        $this->assertCount(4, $msgs);
+        $this->assertSame(KeyType::KpMultiply, $msgs[0]->type);
+        $this->assertSame(KeyType::KpAdd, $msgs[1]->type);
+        $this->assertSame(KeyType::KpDecimal, $msgs[2]->type);
+        $this->assertSame(KeyType::KpDivide, $msgs[3]->type);
     }
 
     public function testKeypadEnterViaSs3IsPlainEnter(): void

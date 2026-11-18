@@ -353,8 +353,8 @@ and its callers move in that step.
 |---|---|
 | Printable and 8-bit bytes accumulate into one TEXT token | `AnsiTokenizer::parse()`, same |
 | C0 controls and DEL: one CONTROL token per byte | `AnsiTokenizer::parse()`, same |
-| `ESC` plus a byte: two-byte ESC token | `AnsiTokenizer::consumeEsc()`, same for two-byte finals. ESC intermediates (`ESC ( 0`, `ESC # 8`) are a declared change (below) |
-| CSI: private marker, parameter bytes, intermediate bytes, final 0x40–0x7E | `AnsiTokenizer::consumeCsi()`, same, except an ESC inside the CSI (declared change below) |
+| `ESC` plus a byte: two-byte ESC token | `AnsiTokenizer::consumeEsc()`, same for two-byte finals. ESC intermediates (`ESC ( 0`, `ESC # 8`) are a declared change (below). An ESC followed by a C0 byte or a UTF-8 lead is a declared change too (below) |
+| CSI: private marker, parameter bytes, intermediate bytes, final 0x40–0x7E | `AnsiTokenizer::consumeCsi()`, same, except an ESC inside the CSI and a C0 byte inside the CSI (declared changes below) |
 | CSI with an invalid final: bare `ESC [` token, then resynchronize | `consumeCsi()`, same |
 | OSC, DCS, APC, SOS, PM closed by BEL or ST, with `terminator` | `AnsiTokenizer::consumeStTerminated()`, same, except an ESC inside the body (declared change below) |
 | Incomplete sequence held across `parse()` calls | `AnsiTokenizer::$pending`, same |
@@ -383,6 +383,24 @@ the final came back as TEXT and a DEC graphics switch printed as literal
 characters. A sequence cut short by ESC or a non-final byte is dropped with no
 token, as a CSI is. Pinned by `AnsiTokenizerTest::testEscIntermediateDesignationIsOneEscTokenWithNoTextLeak`,
 `testEscDecalnAndS7c1tCarryTheirIntermediates` and `testEscIntermediateAbandonedByEscOrControlResyncs`.
+
+**Declared behavior change (C0 and UTF-8 after ESC, C0 inside CSI).** The copy
+treated the byte after an `ESC` as the ESC's final, and it read a C0 byte inside a
+CSI as part of the CSI body. `AnsiTokenizer` does neither. A C0 byte after `ESC`
+(`ESC 0x00 x`, `ESC 0x18 [ A`) is a CONTROL token that executes, and the ESC carries
+on to the next byte. For `ESC 0x18`, the ESC is dropped. `ESC` followed by a UTF-8
+lead (`ESC é`, bytes `1B C3 A9`) is dropped, and the rune after it is one TEXT token
+with no ESC token, so an Alt+é arrives as the character rather than as an ESC with a
+stray lead byte. A C0 byte inside a CSI (`ESC [ 3 BEL m`) executes first, and the
+CSI is then dispatched with its parameters. The C0 byte is not inside the
+parameters. DEL inside a CSI is ignored and the sequence continues. Copy output:
+`ESC 0x00 x` gave ESC(0x00) + TEXT `x` and now gives CONTROL(0x00) + ESC `x`.
+`ESC 0x18 [ A` gave ESC(0x18) + TEXT `[A` and now gives CONTROL(0x18) + TEXT `[A`.
+`ESC 0xC3 0xA9` gave ESC(0xC3) + TEXT(0xA9) and now gives TEXT(0xC3A9). `ESC [ 3 BEL m`
+gave ESC `[` + TEXT `3` + CONTROL BEL + TEXT `m` and now gives CONTROL BEL + CSI with
+parameter `3` and final `m`. Pinned by `AnsiTokenizerTest::testC0AfterEscExecutesAndTheEscapeGoesOn`,
+`testC0InsideCsiExecutesBeforeTheCsiIsDispatched`, `testEscBeforeAHighByteDoesNotSplitTheRune`
+and `testDelInsideCsiIsIgnoredAndTheSequenceContinues`.
 
 **Declared behavior change.** A chunk longer than 64 KiB whose tail is a short
 unfinished sequence now holds that tail, as a short chunk does. The copy
