@@ -13,8 +13,9 @@ types and their settings, see [SETTINGS.md](SETTINGS.md).
 
 ## What `login` does per provider
 
-`login` accepts exactly one provider name. With no name, or with more than one
-word, it prints the usage line and exits `2`. A name outside the list is refused
+`login` accepts exactly one provider name. With no name it prints the usage line
+and exits `2`. With more than one word it prints `login takes exactly one
+provider name, got N words.` and exits `2`. A name outside the list is refused
 the same way.
 
 | Provider | What `login` does | Where the credential ends up |
@@ -85,7 +86,9 @@ key:
 { "providers": { "anthropic": { "type": "anthropic", "apiKey": "${keychain:anthropic}" } } }
 ```
 
-Any config value can spell `${keychain:<name>}`. candy-code reads the entry
+A string value inside a provider block can spell `${keychain:<name>}`. MCP
+`env` and `headers` values expand only `${VAR}`, not the keychain form.
+candy-code reads the entry
 through the same helper on that OS (`secret-tool lookup` on Linux,
 `security find-generic-password -w` on macOS), each lookup has a 5-second
 limit, and each name is looked up once per process. A missing entry does not
@@ -96,7 +99,8 @@ entry that was not found.
 
 1. A `providers.<name>` entry in `config.json` is merged over the built-in
    defaults for its `type`. Keys the entry sets win. Keys it leaves out come
-   from the defaults.
+   from the defaults. An entry without a string `type` is skipped entirely,
+   not merged.
 2. The built-in defaults for each type read their environment variable, for
    example `OPENAI_API_KEY` for `openai`. The full list is in
    [ENVIRONMENT.md](ENVIRONMENT.md#provider-credential-variables).

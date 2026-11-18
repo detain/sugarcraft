@@ -11,7 +11,9 @@ have different costs and different switches, so this page keeps them apart:
 
 The first two are about what the model sees before it starts. The tool is about
 what the model asks for mid-task. The symbol map and the `RepoMap` tool read
-`git ls-files`, so a file git does not track is not mapped there. The package
+`git ls-files --cached --others --exclude-standard`, so ignored files and files
+outside the repository are not mapped there, while untracked files that git
+does not ignore are. The package
 map reads each `composer.json` and the directory tree, and does not consult git.
 
 ## The package map
@@ -46,7 +48,9 @@ costs the most to build on a large checkout, so it has explicit limits:
   On an unchanged tree the cost is one `git ls-files` and a stat per file.
 - If the tree changes, the session is served the previous map while a
   background process builds the new one, and the next session uses it. The
-  turn does not wait.
+  turn does not wait when that detached rebuild can start. When no worker can
+  start (no `pcntl`, or an in-memory cache), or there is no previous map yet,
+  the build runs in-line under the 4-second budget and the turn waits for it.
 
 To keep it out of the prompt entirely:
 
@@ -63,8 +67,9 @@ the session starts.
 
 ## The `RepoMap` tool
 
-The tool is `RepoMap`, in the read-only permission class, so it does not write
-anything or run commands. The model calls it when
+The tool is `RepoMap`, in the read-only permission class, so it writes nothing.
+It runs only fixed read-only helpers: `git ls-files` through `GitRunner`, and,
+when Universal Ctags is present, a `ctags --version` probe. The model calls it when
 it wants an outline of the code that matters for the task at hand.
 
 | Argument | Type | Effect |

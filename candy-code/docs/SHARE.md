@@ -78,9 +78,11 @@ the `/s/<token>` path on your own server.
   whoever holds the link can read the page until it expires or you revoke it.
 - Without `--live`, the page is a snapshot. Later edits to the session do not
   change it, so publishing the new state is a second `/share serve`.
-- With `--live`, every request re-renders the session's current transcript,
-  through the same redaction. A live page of a deleted session answers the same
-  `404` as an expired one.
+- With `--live`, every request serves the session's current transcript, through
+  the same redaction. The render is memoized per session revision, so it
+  re-renders only when the session changes. The live render keeps the newest
+  500 rows and at most 512 KiB, and a truncation notice marks a cut. A live page
+  of a deleted session answers the same `404` as an expired one.
 
 Responses carry `Cache-Control: no-store`, so intermediaries should not keep a
 copy.
@@ -95,10 +97,13 @@ copy.
 
 `/share list` shows each page by a 12-character prefix, never the whole token,
 so a transcript that contains the listing does not leak a working link.
-`revoke` accepts the whole token or the prefix. An unknown, expired and revoked
-token all get the same `404`, so the page cannot be probed for valid tokens.
-A bare `revoke` revokes only when the one live page belongs to the current
-session. Otherwise it prints the list and changes nothing.
+`revoke` accepts the whole token or the prefix. The page answers an unknown,
+expired and revoked token with the same `404`, so it cannot be probed for valid
+tokens. The `revoke` command gives its own reply for an unknown token; that reply
+is text, not a `404`.
+A bare `revoke` revokes only when there is exactly one live page and it belongs
+to the current session. With no live page it prints `There is no live share page
+to revoke.` Otherwise it prints the list and changes nothing.
 
 ## What is sent, and to whom
 
