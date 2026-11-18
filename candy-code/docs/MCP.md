@@ -252,8 +252,8 @@ block of a Claude Code config (`~/.claude.json` is where that block lives) for
 the root `--root` names, defaulting to the working directory — it is a READ
 source, and the verb never writes a foreign file or a project tier.
 
-The verb started life print-only. That law was amended by this
-campaign's ruling: `--write user` is the one allowed exception. With the flag
+The verb started life print-only. That rule was amended: `--write user` is the
+one allowed exception. With the flag
 the translated entries are appended into `~/.candy-code/mcp.json` — behind the
 same `HomeDirectory::owned()` gate every user-tier write uses, published by
 `AtomicFileWriter` at mode `0600` via a temp-then-rename. The refusals are all

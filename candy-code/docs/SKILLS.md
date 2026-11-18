@@ -808,9 +808,8 @@ planted cannot pass for one the dream proposed.
 ## Learned skills
 
 The drafts above are the *unattended* write path, and they wait. The
-`SkillWorkshop` tool is the *attended* one: under the comparison campaign's
-owner ruling, a skill the model writes during a live turn goes **live
-immediately, with an announce-and-undo notice** — because the turn itself is
+`SkillWorkshop` tool is the *attended* one: a skill the model writes during a
+live turn goes **live immediately, with an announce-and-undo notice** — because the turn itself is
 the review. Three doors make that safe rather than merely fast:
 
 - **The gate.** `SkillWorkshop` is a Write-class tool

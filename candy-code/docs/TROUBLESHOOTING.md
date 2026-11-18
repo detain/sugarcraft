@@ -493,9 +493,11 @@ That refusal is the design. An empty *success* would read to the model as "this
 symbol has no references" — a confident, fabricated claim about your code that
 it would then act on. An error reads as "I could not look", which is true.
 
-`diagnostics` carries the same caveat from the other side: it reads the map
-filled from the server's `publishDiagnostics` notifications, and nothing pumps
-one, so an empty map is not "this file is clean".
+`diagnostics` carries the same caveat from the other side: it asks the server
+for a fresh verdict (`textDocument/diagnostic`) and waits up to 5 seconds for
+it. When the server delivers nothing in that window the result says so (a NOTE
+that an empty list means none was delivered), so an empty list is not "this file
+is clean" unless the verdict was delivered.
 
 ---
 

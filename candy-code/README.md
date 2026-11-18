@@ -2252,7 +2252,8 @@ one.
 ### Exit codes and the JSON document
 
 The same three exit codes govern every subcommand below, except that
-`candy-code workflow run` also exits `3`, explained after the table.
+`candy-code workflow run` and `candy-code workflow resume` also exit `3`,
+explained after the table.
 
 | exit | meaning |
 | --- | --- |
@@ -2266,9 +2267,10 @@ retries on `1` would otherwise retry it forever. It also covers a subcommand
 handed a missing or unknown operand (`candy-code session`, `candy-code mcp
 bogus`, `candy-code completion tcsh`).
 
-`workflow run` exits `3` when a run stopped for a person: a verification stage
-escalated, or a cooperative signal pause completed. That code is not one of the
-shared `NonInteractive` codes, so it sits outside the table.
+`workflow run` and `workflow resume` both exit `3` when a run stopped for a
+person: a verification stage escalated, or a cooperative signal pause completed.
+That code is not one of the shared `NonInteractive` codes, so it sits outside
+the table.
 
 A stop by signal is outside this table, and the TUI is the
 surface that reports it: when SIGINT, SIGTERM or SIGHUP ends the loop, the
@@ -3022,7 +3024,7 @@ final class MyProvider implements ProviderInterface
 ## Accessor deprecation
 
 Per the house bare-accessor convention (`AGENTS.md`: *"Bare accessors (no* `get`*"),
-ruling 3b), the 2026-10-24 remediation pass renamed 55 public `get*()` accessors
+the 2026-10-24 remediation pass renamed 55 public `get*()` accessors
 across 27 classes to their bare twins. The 23 forwarders on the `Agents`/`Workflows`
 classes (`AgentManager`, `AgentWorkerPool`, `Mailbox`, `TaskList`, `Team`,
 `TeamManager`, `Teammate`, `WorkflowEngine`, `WorktreeManager`) were swept in the
