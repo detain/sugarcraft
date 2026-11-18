@@ -6,10 +6,12 @@ asking.
 
 | Page | What it answers | Read it when |
 |---|---|---|
-| [GLOSSARY.md](GLOSSARY.md) | What TUI, MCP, OSC 52, sixel, PTY, SGR… mean | Any page's vocabulary stops you |
-| [SECURITY.md](SECURITY.md) | How to report a vulnerability, and where each surface's security model lives | You found a security issue or are assessing the trust model |
+| [TUTORIAL.md](TUTORIAL.md) | A first session, from an offline first run to a committed change | You are new, or want one end-to-end walk-through |
+| [FAQ.md](FAQ.md) | Short answers to the common questions on providers, permissions, sessions and serving | A question comes up that the reference pages answer at length |
+| [GLOSSARY.md](GLOSSARY.md) | What TUI, MCP, OSC 52, sixel, PTY, SGR, permission modes, checkpoints, sessions and the rest mean | Any page's vocabulary stops you |
+| [SECURITY.md](SECURITY.md) | The threat model, the trust boundaries, where each secret is stored, how to report a vulnerability, and where each surface's security model lives | You found a security issue or are assessing the trust model |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Dev modes, the sharded suite, the drift guards, docs cadence | You are changing this package's code or docs |
-| [ADDING_A_PROVIDER.md](ADDING_A_PROVIDER.md) | The provider contract: capabilities, carrier fields, registration, behaviour laws | You are wiring a new model API |
+| [ADDING_A_PROVIDER.md](ADDING_A_PROVIDER.md) | The provider contract: capabilities, carrier fields, registration, behavior laws | You are wiring a new model API |
 | [COMMANDS.md](COMMANDS.md) | Every slash command, argument-for-argument | You want to know what you can type |
 | [SETTINGS.md](SETTINGS.md) | Every config key, its tier and its risk | You are editing `config.json` |
 | [ENVIRONMENT.md](ENVIRONMENT.md) | Every environment variable the app reads | You are configuring a shell, container or CI job |
@@ -30,11 +32,20 @@ asking.
 | [MEDIA.md](MEDIA.md) | Image/video generation, render modes, presets | You generate media |
 | [CI.md](CI.md) | The GitHub Action around `-p`, fork-PR and prompt-injection doctrine | You run the agent in CI |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | The code's shape, seams and invariants, incl. [the screen, zone by zone](ARCHITECTURE.md#the-screen-zone-by-zone) | You are reading or changing `src/` |
-| [PROMPT_ENGINEERING.md](PROMPT_ENGINEERING.md) | How the system prompt is assembled | You tune agent behaviour |
+| [PROMPT_ENGINEERING.md](PROMPT_ENGINEERING.md) | How the system prompt is assembled | You tune agent behavior |
 | [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Symptom-first error recovery, incl. CI automation notes | Something is broken |
-| [ACCESSIBILITY.md](ACCESSIBILITY.md) | Screen-reader mode, reduced motion, the contrast floor, audible cues | You drive the TUI with a reader, motion or colour is a problem, or you are checking what is enforced vs promised |
+| [ACCESSIBILITY.md](ACCESSIBILITY.md) | Screen-reader mode, reduced motion, the contrast floor, audible cues | You drive the TUI with a reader, motion or color is a problem, or you are checking what is enforced vs promised |
 | [protocol/](protocol/) | Generated JSON schema of the serve wire | You build a client |
 | [examples/](examples/) | systemd unit, the PR-comment bot workflow, other deployment samples | You install it as a service or wire the bot into CI |
+
+## Reading paths
+
+- **New to candy-code:** [TUTORIAL.md](TUTORIAL.md), then [GLOSSARY.md](GLOSSARY.md) for
+  the terms, then [FAQ.md](FAQ.md).
+- **Deciding what the agent may do:** [PERMISSIONS.md](PERMISSIONS.md), then
+  [SETTINGS.md](SETTINGS.md), then [SECURITY.md](SECURITY.md) for the trust boundaries.
+- **Running it headless or in CI:** [FLEET-DRIVING.md](FLEET-DRIVING.md), then
+  [CI.md](CI.md), then [ENVIRONMENT.md](ENVIRONMENT.md).
 
 ## The `AGENTS.md` name collision
 
