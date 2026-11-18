@@ -75,6 +75,7 @@
         "sugarcraft/candy-vcr": "dev-master",
         "sugarcraft/sugar-vterm": "dev-master",
         "sugarcraft/sugar-ssh-server": "dev-master",
+        "sugarcraft/sugar-serve-protocol": "dev-master",
         "sugarcraft/sugar-spring": "dev-master",
         "sugarcraft/candy-flappy": "dev-master",
         "sugarcraft/sugar-widgets": "dev-master",
