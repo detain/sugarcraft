@@ -291,9 +291,9 @@ final class AsyncProbeBoundedTest extends TestCase
                 'the slot table must drain',
             );
             self::assertSame(
-                [$term => null],
+                [],
                 (new \ReflectionProperty(AsyncProbe::class, 'settledMemo'))->getValue(),
-                'a grace-killed child is a recorded miss, the sync door\'s verdict for an overrun: the late exit must not overwrite it',
+                'a grace-killed child answered nothing: it mints no memo entry (CP-13), and the late exit must not memoize its partial dump',
             );
         } finally {
             if ($process !== null && $process->isRunning()) {
@@ -319,8 +319,8 @@ final class AsyncProbeBoundedTest extends TestCase
     /**
      * CP-28 behavior pin (ii): the positive control — a child that HONOURS
      * SIGTERM exits at the deadline rung with a clean status, never needing
-     * the grace kill (5 s grace vs ~1 s to exit), and its clean exit mints
-     * the CP-13 negative sentinel like any other zero-status child.
+     * the grace kill (5 s grace vs ~1 s to exit). The deadline rung sent the
+     * TERM, so the child answered nothing of its own and mints no memo entry.
      */
     public function testATermHonoringChildExitsAtTheDeadlineRungWithoutWaitingForGrace(): void
     {
@@ -380,9 +380,9 @@ final class AsyncProbeBoundedTest extends TestCase
             self::assertSame([0, null], $exit, 'a handler exit carries status 0 and no kill signal — the grace KILL never fired');
             self::assertFalse($process->isRunning());
             self::assertSame(
-                [$term => null],
+                [],
                 (new \ReflectionProperty(AsyncProbe::class, 'settledMemo'))->getValue(),
-                'a clean zero-output child is a NEGATIVE verdict (CP-13 sentinel), not a promotion',
+                'the deadline rung terminated this child, so it answered nothing and mints no memo entry (CP-13)',
             );
         } finally {
             if ($process !== null && $process->isRunning()) {
@@ -462,9 +462,9 @@ final class AsyncProbeBoundedTest extends TestCase
             );
             self::assertNotNull($exit, 'the KILLed child must exit inside the run, after the deadline settle');
             self::assertSame(
-                [$term => null],
+                [],
                 (new \ReflectionProperty(AsyncProbe::class, 'settledMemo'))->getValue(),
-                'the late exit must not promote the recorded miss to TrueColor',
+                'the late exit must not memoize the printed Tc line: a ladder-killed child mints no entry (CP-13)',
             );
         } finally {
             if ($process !== null && $process->isRunning()) {

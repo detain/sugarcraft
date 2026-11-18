@@ -235,7 +235,10 @@ final class AsyncCommandTest extends TestCase
         // (macOS CI measured 19 ticks where the same round gives ~41 on Linux).
         // A blocked loop shows as one gap as long as the 0.4 s sleep; spawn cost
         // does not, so the gap is what the assertion checks.
-        $ticks = [hrtime(true) / 1e9];
+        // The first sample is the first tick the loop delivers, not the moment
+        // before poll(): the synchronous proc_open cost of poll() runs before the
+        // loop turns and is not a stall, so it must not enter the first gap.
+        $ticks = [];
         $timer = $loop->addPeriodicTimer(0.01, static function () use (&$ticks): void {
             $ticks[] = hrtime(true) / 1e9;
         });
@@ -250,11 +253,11 @@ final class AsyncCommandTest extends TestCase
         $this->assertSame('ESC8000A-E12', $snapshot->info?->machine());
         $this->assertCount(107, $snapshot->sensors ?? []);
         $this->assertGreaterThan(0.4, $elapsed);
+        $this->assertGreaterThan(1, count($ticks), 'the timer fired during the round');
         $gaps = [];
         for ($i = 1, $n = count($ticks); $i < $n; $i++) {
             $gaps[] = $ticks[$i] - $ticks[$i - 1];
         }
-        $this->assertGreaterThan(1, count($ticks), 'the timer fired during the round');
         $this->assertLessThan(0.4, max($gaps), 'the loop never stalled for the 0.4 s ipmitool sleep');
         $this->assertSame(0, AsyncCommand::liveCount(), 'every child reaped');
         $this->assertNotSame('', $ipmi->cache());

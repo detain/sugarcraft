@@ -369,9 +369,9 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
      * captured into the scheduling closure but never consulted (see the
      * property docblock). The parameter is accepted for signature parity
      * with the planned offload path — wiring real offloading is deferred to
-     * the follow-up async lane (findings/plan_sugar-forms.md Phase 6.3).
-     * Until then passing a pool has NO effect, and fetchers that block will
-     * block the loop.
+     * a follow-up async lane that has no tracked plan file yet. Until then
+     * passing a pool has NO effect, and fetchers that block will block the
+     * loop.
      *
      * ASYNC DESIGN (E736-F2/6.1-6.2-6.4, round 85): the fetcher promise is
      * single-resolve by contract — suggestions arrive whole via

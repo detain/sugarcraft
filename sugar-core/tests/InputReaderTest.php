@@ -872,6 +872,59 @@ final class InputReaderTest extends TestCase
         $this->assertSame(KeyType::Up, $msgs[0]->type);
     }
 
+    public function testMalformedDigitSpanSs3TailDropSurvivesReadBoundary(): void
+    {
+        // The printable tail of a malformed span that reaches the buffer end
+        // is parked, not dropped at once: the next feed must keep dropping
+        // it, or the tail leaks as typed keys ('3' and 'A' here).
+        $reader = new InputReader();
+        $this->assertSame([], $reader->parse("\x1bO1;5;"));
+        $this->assertSame([], $reader->parse("3A"));
+
+        $reader = new InputReader();
+        $this->assertSame([], $reader->parse("\x1bO1 "));
+        $this->assertSame([], $reader->parse("A"));
+
+        // Every split of a malformed span followed by Up, and the byte-wise
+        // feed, must yield exactly the Up the one-shot parse yields.
+        foreach (["\x1bO1;5;3A\x1b[A", "\x1bO1 A\x1b[A"] as $seq) {
+            $oneShot = (new InputReader())->parse($seq);
+            $this->assertCount(1, $oneShot, bin2hex($seq));
+            $this->assertSame(KeyType::Up, $oneShot[0]->type, bin2hex($seq));
+
+            $n = strlen($seq);
+            for ($cut = 1; $cut < $n; $cut++) {
+                $reader = new InputReader();
+                $fed = array_merge(
+                    $reader->parse(substr($seq, 0, $cut)),
+                    $reader->parse(substr($seq, $cut)),
+                );
+                $this->assertCount(1, $fed, bin2hex($seq) . " cut at $cut");
+                $this->assertSame(KeyType::Up, $fed[0]->type, bin2hex($seq) . " cut at $cut");
+            }
+
+            $reader = new InputReader();
+            $bytewise = [];
+            for ($k = 0; $k < $n; $k++) {
+                foreach ($reader->parse($seq[$k]) as $m) {
+                    $bytewise[] = $m;
+                }
+            }
+            $this->assertCount(1, $bytewise, bin2hex($seq) . ' byte-wise');
+            $this->assertSame(KeyType::Up, $bytewise[0]->type, bin2hex($seq) . ' byte-wise');
+        }
+    }
+
+    public function testModifyOtherKeysX11DeleteKeysym(): void
+    {
+        // 0xFFFF is the X11 Delete keysym: Ctrl+Delete reports as Delete
+        // with the control bit, not a dropped event.
+        $msgs = (new InputReader())->parse("\x1b[27;5;65535~");
+        $this->assertCount(1, $msgs);
+        $this->assertSame(KeyType::Delete, $msgs[0]->type);
+        $this->assertTrue($msgs[0]->ctrl);
+    }
+
     public function testModifyOtherKeysTabAndControlKeysyms(): void
     {
         // xterm modifyOtherKeys: CSI 27 ; <mods> ; <keysym> ~. Ctrl+Tab
@@ -926,8 +979,8 @@ final class InputReaderTest extends TestCase
     {
         // Zero modifier: would fabricate every modifier bit.
         $this->assertSame([], (new InputReader())->parse("\x1b[27;0;9~"));
-        // 0xFFFF is the Delete witness that stays a drop.
-        $this->assertSame([], (new InputReader())->parse("\x1b[27;5;65535~"));
+        // 0xFFFE is unassigned in the X11 block, so it stays a drop.
+        $this->assertSame([], (new InputReader())->parse("\x1b[27;5;65534~"));
         // Unnamed control keysym.
         $this->assertSame([], (new InputReader())->parse("\x1b[27;5;1234~"));
     }
