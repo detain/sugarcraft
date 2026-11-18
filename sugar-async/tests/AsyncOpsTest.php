@@ -859,46 +859,16 @@ final class AsyncOpsTest extends TestCase
         $this->assertSame(2, $attempts, 'the cycle dies at the offending stage instead of keep retrying');
     }
 
-    public function testLoopFirstCallOrderStillWorksButIsDeprecated(): void
+    public function testLoopFirstCallOrderIsRefusedAfterTheShimRemoval(): void
     {
-        // The one-release compat shim: historical (loop, promise, seconds,
-        // label) positional calls transpose with a notice — external callers
-        // (sugar-forms) ride it until they flip; REMOVED-IN 2.0.0.
+        // The loop-first compat shim is gone (its REMOVED-IN 2.0.0 window was
+        // pulled forward): the promise leads, and a loop passed first is a
+        // type error at the call site, not a silent transpose.
         $loop = new \React\EventLoop\StreamSelectLoop();
         $inner = new Deferred();
 
-        $notices = [];
-        $previous = set_error_handler(
-            static function (int $severity, string $message) use (&$notices): bool {
-                $notices[] = [$severity, $message];
-                return true;
-            },
-        );
-        try {
-            $wrapped = AsyncOps::withTimeout($loop, $inner->promise(), 30.0, 'legacy-label');
-        } finally {
-            restore_error_handler();
-        }
-
-        $this->assertCount(1, $notices, 'exactly one deprecation notice per loop-first call');
-        [$severity, $message] = $notices[0];
-        $this->assertSame(E_USER_DEPRECATED, $severity);
-        $this->assertStringContainsString('passing the event loop first is deprecated', $message);
-        $this->assertStringContainsString('ends in 2.0.0', $message);
-
-        // The transpose is behaviour, not just noise: same wrapper, same
-        // loop binding, same label threading through the abandonment.
-        $error = null;
-        $wrapped->then(null, static function (\Throwable $e) use (&$error): void {
-            $error = $e;
-        });
-        $wrapped->cancel();
-        $this->assertInstanceOf(OperationCancelledException::class, $error);
-        $this->assertStringContainsString('legacy-label', $error->getMessage());
-
-        // If the shim misbound the slots the timer would sit on another loop
-        // and this private run() would hang; it must return immediately.
-        $loop->run();
+        $this->expectException(\TypeError::class);
+        AsyncOps::withTimeout($loop, $inner->promise(), 30.0, 'legacy-label');
     }
 
     public function testTwoArgumentDeadlineCallWorks(): void

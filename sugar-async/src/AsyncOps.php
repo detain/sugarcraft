@@ -31,9 +31,7 @@ use function React\Promise\resolve;
  *
  * Parameter order is uniform: the wrapped promise leads, and the event loop
  * is always a trailing optional parameter (house rule: no static here takes
- * the loop first). withTimeout() and withDeadline() still accept the
- * historical loop-first positional call for one more release — transposed
- * with an E_USER_DEPRECATED notice, support ends in 2.0.0.
+ * the loop first). The loop-first positional form is removed.
  */
 final class AsyncOps
 {
@@ -112,17 +110,12 @@ final class AsyncOps
      *        catching one TimeoutException among several wrapped calls needs
      *        the identity as data, not archaeology through the stack trace.
      * @return PromiseInterface
-     *
-     * @deprecated Passing the loop FIRST (loop, promise, seconds, ...) is
-     *             deprecated since 1.x: such calls are transposed with an
-     *             E_USER_DEPRECATED notice. Loop-first support is REMOVED-IN
-     *             2.0.0 — call withTimeout($promise, $seconds, $loop).
      */
     public static function withTimeout(
-        PromiseInterface|LoopInterface $promise,
-        mixed $seconds = null,
-        LoopInterface|float|int|string|null $loop = null,
-        string|null $label = null,
+        PromiseInterface $promise,
+        float $seconds,
+        ?LoopInterface $loop = null,
+        ?string $label = null,
     ): PromiseInterface {
         return Timeouts::withTimeout($promise, $seconds, $loop, $label);
     }
@@ -165,16 +158,11 @@ final class AsyncOps
      * @param string|null $label  Operation name for the rejection message and
      *        {@see TimeoutException::label()}; see withTimeout().
      * @return PromiseInterface
-     *
-     * @deprecated Passing the loop FIRST (loop, promise, seconds, ...) is
-     *             deprecated since 1.x: such calls are transposed with an
-     *             E_USER_DEPRECATED notice. Loop-first support is REMOVED-IN
-     *             2.0.0 — call withDeadline($promise, $seconds, $loop).
      */
     public static function withDeadline(
-        PromiseInterface|LoopInterface $promise,
-        mixed $seconds = null,
-        LoopInterface|float|int|string|null $loop = null,
+        PromiseInterface $promise,
+        float $seconds,
+        ?LoopInterface $loop = null,
         ?callable $onTimeout = null,
         ?string $label = null,
     ): PromiseInterface {
@@ -572,24 +560,6 @@ final class AsyncOps
     ): PromiseInterface {
         return Pending::boundWait($promise, $seconds, $loop, $label);
     }
-
-    /**
-     * @deprecated REMOVED-IN: 2.0.0 — the dual contract is split into
-     *             {@see pendingNotice()} (advisory hook) and
-     *             {@see boundWait()} (bounded rejection) so the mode is
-     *             visible at the call site. This shim delegates: a hook
-     *             goes to pendingNotice(), a null hook to boundWait().
-     */
-    public static function onPending(
-        PromiseInterface $promise,
-        float $seconds,
-        ?callable $onPending = null,
-        ?LoopInterface $loop = null,
-        ?string $label = null,
-    ): PromiseInterface {
-        return Pending::onPending($promise, $seconds, $onPending, $loop, $label);
-    }
-
 
     /**
      * Wrap a callable with debounce — only the last call within the window

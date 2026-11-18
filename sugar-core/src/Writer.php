@@ -22,10 +22,13 @@ use React\EventLoop\LoopInterface;
  *
  * Frame coalescing: every write made while bytes are pending joins the same
  * buffer, so one drain pass sends them in as few syscalls as the stream
- * accepts. Nothing is discarded. The diff renderer assumes every diff it
- * emitted reaches the terminal, so superseding a queued frame would leave
- * the screen wrong; a saturated writer instead tells its producer to hold
- * the next frame ({@see isSaturated()}).
+ * accepts. A queued frame is never superseded: the diff renderer assumes
+ * every diff it emitted reaches the terminal, so dropping one would leave
+ * the screen wrong. A saturated writer instead tells its producer to hold
+ * the next frame ({@see isSaturated()}). The backlog is discarded only when
+ * the stream dies ({@see fail()}), on {@see release()}, or when a flush
+ * misses its deadline ({@see detach()}); teardown bytes such as cursor-show
+ * can be lost in that last case when a terminal stalls past the deadline.
  */
 final class Writer
 {

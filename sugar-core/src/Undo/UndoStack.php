@@ -23,8 +23,9 @@ namespace SugarCraft\Core\Undo;
  *     the far end of the lane.
  *   - undo() and redo() move one entry between the two lanes and report the
  *     moved entry alongside the new stack. On an empty lane the entry is null
- *     and the stack is returned unchanged, so a caller can branch on the
- *     entry alone.
+ *     and the stack is returned unchanged. A null is also a valid pushed
+ *     entry, so a null `entry` does not by itself say whether anything moved:
+ *     branch on canUndo() or canRedo() before reading it.
  *
  * The limit counts entries. Byte or weight budgets (candy-files caps the
  * file legs it remembers) stay with the application, which trims the lanes
@@ -77,8 +78,9 @@ final class UndoStack
     /**
      * Step back one action.
      *
-     * @return array{entry: mixed, stack: self} `entry` is the action undone,
-     *         or null when there was nothing to undo (and `stack` is `$this`).
+     * @return array{entry: mixed, stack: self} `entry` is the action undone.
+     *         It is null when the undo lane was empty (and `stack` is `$this`),
+     *         and also when a null was pushed; check canUndo() first.
      */
     public function undo(): array
     {
@@ -101,8 +103,9 @@ final class UndoStack
     /**
      * Step forward one action that was previously undone.
      *
-     * @return array{entry: mixed, stack: self} `entry` is the action redone,
-     *         or null when there was nothing to redo (and `stack` is `$this`).
+     * @return array{entry: mixed, stack: self} `entry` is the action redone.
+     *         It is null when the redo lane was empty (and `stack` is `$this`),
+     *         and also when a null was pushed; check canRedo() first.
      */
     public function redo(): array
     {
