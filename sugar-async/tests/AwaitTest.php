@@ -86,6 +86,34 @@ final class AwaitTest extends TestCase
         Await::until($outer, 2.0, $loop);
     }
 
+    public function testRefusesToNestInsideALoopCallbackThatIsNotAnAwait(): void
+    {
+        // Regression: only a nested Await was caught, so a plain timer that
+        // called until() started a second run(), whose stop() then ended the
+        // outer run() early. The refusal must come before any run() starts,
+        // and the outer loop must still reach its later timer.
+        $loop = new StreamSelectLoop();
+        $nested = null;
+        $laterTimerFired = false;
+
+        $loop->addTimer(0.01, static function () use ($loop, &$nested): void {
+            try {
+                Await::until((new Deferred())->promise(), 0.5, $loop);
+            } catch (\Throwable $e) {
+                $nested = $e;
+            }
+        });
+        $loop->addTimer(0.1, static function () use ($loop, &$laterTimerFired): void {
+            $laterTimerFired = true;
+            $loop->stop();
+        });
+
+        $loop->run();
+
+        self::assertInstanceOf(\LogicException::class, $nested);
+        self::assertTrue($laterTimerFired, 'the refused nested wait must not stop the outer loop');
+    }
+
     /** @dataProvider invalidSecondsProvider */
     public function testRejectsANonPositiveOrNonFiniteBudget(float $seconds): void
     {

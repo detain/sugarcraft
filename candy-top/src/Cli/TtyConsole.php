@@ -26,9 +26,10 @@ final class TtyConsole
             return false;
         }
         if ($ttyName === null) {
-            // Without ext-posix the console name is unreadable; the stream_isatty
-            // gate upstream already refused anything that is not a terminal.
-            return $osFamily !== 'Windows';
+            // Without ext-posix the console name is unreadable. The stream_isatty
+            // gate only proves STDIN is some terminal, and a /dev/pts session passes
+            // it too, so an unnamed STDIN is never trusted as a console.
+            return false;
         }
 
         return str_starts_with($ttyName, '/dev/tty');

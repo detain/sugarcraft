@@ -25,11 +25,11 @@
         "docs": "https://sugarcraft.github.io/lib/sugar-serve-protocol.html"
     },
     "require": {
-        "php": "^8.3",
-        "sugarcraft/sugar-mcp-client": "dev-master"
+        "php": "^8.3"
     },
     "require-dev": {
-        "phpunit/phpunit": "^10.5"
+        "phpunit/phpunit": "^10.5",
+        "sugarcraft/sugar-mcp-client": "dev-master"
     },
     "autoload": {
         "psr-4": {

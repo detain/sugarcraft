@@ -10,7 +10,7 @@ This is original work. The serve protocol is specific to SugarCraft's `candy-cod
 composer require sugarcraft/sugar-serve-protocol
 ```
 
-Requires PHP 8.3+ and `sugarcraft/sugar-mcp-client`, which supplies the `candy-code.v1` JSON-RPC 2.0 codec (`SugarCraft\McpClient\Protocol\JsonRpc`).
+Requires PHP 8.3+. The package itself has no runtime dependency beyond PHP. Its test suite pins the `candy-code.v1` JSON-RPC 2.0 codec from `sugarcraft/sugar-mcp-client` (`SugarCraft\McpClient\Protocol\JsonRpc`), which is a dev-only requirement here.
 
 ## What it provides
 

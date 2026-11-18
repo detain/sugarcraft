@@ -50,6 +50,37 @@ final class BoundedShutdownTest extends TestCase
         self::assertFalse(\is_resource($process), 'terminateBounded() reaps: the handle is consumed');
     }
 
+    public function testASignalDeathThroughTheLadderIsTheMinusOneSentinel(): void
+    {
+        // The ladder's poll consumes a signal death's status, so the documented
+        // answer is the -1 sentinel (see terminateBounded()), not the signal
+        // number. A bare `assertIsInt` let this value go unexamined before.
+        $process = $this->spawn(['sleep', '30']);
+        \proc_terminate($process, 9);
+
+        self::assertSame(-1, BoundedShutdown::terminateBounded($process, 0.2, 0.5));
+    }
+
+    public function testAnUnpolledSignalDeathReapsAsTheSignalNumber(): void
+    {
+        // The other side of the documented divergence: a proc_close() that no
+        // poll preceded reports the signal itself. proc_close() waits for the
+        // SIGKILL to land, so no sleep is needed for this to be deterministic.
+        $process = $this->spawn(['sleep', '30']);
+        \proc_terminate($process, 9);
+
+        self::assertSame(9, \proc_close($process));
+    }
+
+    public function testReapIfExitedReportsASignalDeathAsTheSentinel(): void
+    {
+        $process = $this->spawn(['sleep', '30']);
+        \proc_terminate($process, 9);
+
+        self::assertSame(-1, BoundedShutdown::reapIfExited($process, 2.0));
+        self::assertFalse(\is_resource($process));
+    }
+
     public function testTermResponsiveChildDiesAndYieldsAnExitStatus(): void
     {
         $process = $this->spawn(['sleep', '30']);

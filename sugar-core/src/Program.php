@@ -1177,11 +1177,13 @@ final class Program
             // M-14: a whole-string kitty push/pop is the one side-channel
             // shape with terminal state the teardown must account for — it
             // arms and disarms the pop mirror, so an escaping Throwable still
-            // gets the pairing pop (see teardownTerminal()).
-            if (preg_match('/\A\x1b\[([><])(\d+)u\z/', $msg->bytes, $m)) {
+            // gets the pairing pop (see teardownTerminal()). The mirror follows
+            // only bytes that were queued: a dropped push or pop leaves the
+            // terminal in its old state, and the mirror must still match it.
+            $queued = $this->writeNonFrameOutput($msg->bytes);
+            if ($queued && preg_match('/\A\x1b\[([><])(\d+)u\z/', $msg->bytes, $m)) {
                 $this->kittyKeyboardPushed = $m[1] === '>';
             }
-            $this->writeNonFrameOutput($msg->bytes);
             return;
         }
         if ($msg instanceof PrintMsg) {
@@ -2705,19 +2707,23 @@ final class Program
      * the cap a stalled reader grows the backlog with output volume until
      * PHP's memory_limit fatals the process. Bytes already queued still drain,
      * and {@see onOutputDrained()} re-arms the report once the backlog clears.
+     *
+     * Returns true only when the bytes were queued; callers whose bookkeeping
+     * mirrors terminal state must not record a dropped write.
      */
-    private function writeNonFrameOutput(string $bytes): void
+    private function writeNonFrameOutput(string $bytes): bool
     {
         if (!$this->writer->isSaturated()) {
             $this->writeOutput($bytes);
-            return;
+            return true;
         }
         if ($this->outputOverflowReported) {
-            return;
+            return false;
         }
         $this->outputOverflowReported = true;
         $this->log('error', Lang::t('program.output_backlog_full'));
         $this->send(new ExceptionMsg(new \RuntimeException(Lang::t('program.output_backlog_full'))));
+        return false;
     }
 
     /**

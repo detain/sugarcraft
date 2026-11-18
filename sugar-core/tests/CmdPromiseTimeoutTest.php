@@ -222,6 +222,28 @@ final class CmdPromiseTimeoutTest extends TestCase
         $this->assertSame(2.5, $async->timeoutSeconds);
     }
 
+    public function testPromiseRefusesANonPositiveOrNonFiniteTimeoutAtTheCallSite(): void
+    {
+        // A zero or negative bound would reject real pending work on the next
+        // loop turn, so the factory refuses it where the value was computed.
+        $factory = static fn () => (new Deferred())->promise();
+        foreach ([0.0, -1.0, NAN, INF, -INF] as $bad) {
+            try {
+                Cmd::promise($factory, $bad);
+                $this->fail('a timeout of ' . var_export($bad, true) . ' must be refused');
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('timeout', $e->getMessage());
+            }
+        }
+    }
+
+    public function testPromiseAcceptsAPositiveTimeoutOrNoneAtAll(): void
+    {
+        $factory = static fn () => (new Deferred())->promise();
+        $this->assertNull((Cmd::promise($factory, null))()->timeoutSeconds);
+        $this->assertSame(0.001, (Cmd::promise($factory, 0.001))()->timeoutSeconds);
+    }
+
     public function testWindowSizeCmdDispatchesTheForcedSize(): void
     {
         [$in, $out, $writer] = $this->pipes();

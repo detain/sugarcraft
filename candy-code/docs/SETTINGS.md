@@ -777,7 +777,7 @@ whose frontmatter already says disabled stays off whichever way you toggle, beca
 the session set only subtracts from the file's intent and never overrules it.
 
 **Persisting a toggle is a deferred step, not an omission.** The ruling in
-`prompt_plan.md` (P6.S4) kept the byte-identical contract standing and named the
+`prompt_plan.md` kept the byte-identical contract standing and named the
 cost of breaking it: a third key through `Chat`'s config-change door would
 collide with the two-key invariant above and with the census that guards that
 invariant, so the toggle waits for a guarded door of its own. That door now
@@ -1978,8 +1978,8 @@ outranks the session but never the environment or a flag
   `disabledMcpServers`, `mcp.lazySchemaTokens`, `providerRetryAttempts` and
   `providerRetryBaseBackoffMs` have none.
   <!-- settings:env-split:end -->
-  (`statusLine` was missing from this list when it joined the stack — P6.S4
-  counted the keys rather than copying the sentence, which is what found it.
+  (`statusLine` was missing from this list when it joined the stack; counting
+  the keys rather than copying the sentence is what found it.
   The sentence is now generated from `SettingsSchema`, so a key can no longer
   join the stack without landing in it.)
 - [`CONTEXT.md`](CONTEXT.md) — what the `compaction.*` and `contextPruning.*`

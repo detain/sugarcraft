@@ -80,6 +80,7 @@ return [
     'builder.framerate_positive' => 'Framerate must be positive',
     'builder.escape_delay_non_negative' => 'escapeDelay must be a finite number of seconds, zero or more',
     'program.async_timeout' => 'async command timed out after {seconds} seconds',
+    'cmd.promise_timeout_positive' => 'Cmd::promise() timeout must be a finite number of seconds greater than zero, got {seconds}',
     'builder.window_size_keys' => 'windowSize must have cols and rows keys',
     'builder.window_size_positive' => 'windowSize cols and rows must be positive',
     'worker.cap_invalid' => 'WorkerPool outstanding-job cap must be 0 (unbounded) or positive, got {cap}',
