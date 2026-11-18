@@ -186,6 +186,36 @@ final class LockFileTest extends TestCase
         self::assertNotNull($holder);
     }
 
+    public function testCancellingTheAsyncWaitStopsItsPollTimer(): void
+    {
+        $loop = new StreamSelectLoop();
+        $path = $this->dir . '/l';
+        $holder = LockFile::on($path)->tryAcquire();
+        self::assertNotNull($holder);
+
+        // The caller gives up after 50ms, as a timeout() wrapper would. With the
+        // deadline at 2s, a poll timer that survives the cancel keeps run() busy
+        // for the full 2s, which is what this test measures.
+        $promise = LockFile::on($path)->tryAcquireAsync($loop, 2.0);
+        $value = 'unsettled';
+        $promise->then(static function (mixed $v) use (&$value): void {
+            $value = $v;
+        });
+        $loop->addTimer(0.05, static function () use ($promise): void {
+            $promise->cancel();
+        });
+
+        $started = microtime(true);
+        $loop->run();
+        $elapsed = microtime(true) - $started;
+
+        self::assertLessThan(1.0, $elapsed, 'a cancelled wait must not keep polling until its deadline');
+        self::assertNull($value, 'a cancelled wait resolves null: no lock was taken');
+
+        $holder->release();
+        self::assertNotNull(LockFile::on($path)->tryAcquire(), 'the descriptor the cancel closed does not hold the lock');
+    }
+
     /**
      * Run the loop until $promise settles, bounded so a stuck wait fails by name.
      */

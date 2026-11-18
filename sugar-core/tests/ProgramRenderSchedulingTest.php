@@ -271,12 +271,21 @@ final class ProgramRenderSchedulingTest extends TestCase
         });
         // Nothing sends a message after the stall, so a later paint can only come
         // from the held frame being re-armed when the backlog clears.
-        $quit = static function () use (&$quit, &$drained, $program, $loop, $writer, $reader): void {
+        // The repaint lands on a tick after the queue empties, so quitting on the
+        // empty queue alone races it under load. Quit once the held frame has
+        // painted, or after a grace period that still fails the assertion below.
+        $quitDeadline = null;
+        $quit = static function () use (&$quit, &$drained, &$quitDeadline, &$heldViews, $program, $loop, $writer, $reader): void {
             // Empty the pipe so teardown's last writes cannot block on a full socket.
             while (($chunk = fread($reader, 1 << 20)) !== false && $chunk !== '') {
                 $drained++;
             }
             if ($writer->pendingBytes() > 0) {
+                $loop->addTimer(0.01, $quit);
+                return;
+            }
+            $quitDeadline ??= microtime(true) + 2.0;
+            if (SaturatingFrameModel::$views <= $heldViews && microtime(true) < $quitDeadline) {
                 $loop->addTimer(0.01, $quit);
                 return;
             }

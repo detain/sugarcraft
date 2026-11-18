@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Core\Util;
 
 use React\EventLoop\LoopInterface;
+use React\EventLoop\TimerInterface;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Core\Lang;
@@ -122,22 +123,35 @@ final class LockFile
      * deadline or when the lock file cannot be opened. The first attempt runs
      * synchronously, so an uncontended lock resolves before this returns.
      *
+     * Cancelling the promise (react/promise-timer's timeout() does this when the
+     * wait runs over) stops the poll timer and closes the descriptor, then
+     * resolves null. WHY: a caller that abandons the wait must not leave a timer
+     * re-arming until the original deadline, which would keep the loop alive
+     * and could take a lock nobody is waiting for any more.
+     *
      * @return PromiseInterface<LockGuard|null>
      */
     public function tryAcquireAsync(LoopInterface $loop, float $timeoutSeconds = 0.0): PromiseInterface
     {
-        $deferred = new Deferred();
-
         $handle = $this->open();
         if ($handle === null) {
-            $deferred->resolve(null);
+            $unopened = new Deferred();
+            $unopened->resolve(null);
 
-            return $deferred->promise();
+            return $unopened->promise();
         }
 
         $flags = ($this->exclusive ? \LOCK_EX : \LOCK_SH) | \LOCK_NB;
         $deadline = microtime(true) + max(0.0, $timeoutSeconds);
-        $this->attemptAsync($loop, $handle, $flags, $deadline, $deferred);
+        $timer = null;
+        $deferred = new Deferred(static function () use ($loop, &$timer, $handle, &$deferred): void {
+            if ($timer !== null) {
+                $loop->cancelTimer($timer);
+            }
+            fclose($handle);
+            $deferred->resolve(null);
+        });
+        $this->attemptAsync($loop, $handle, $flags, $deadline, $deferred, $timer);
 
         return $deferred->promise();
     }
@@ -145,7 +159,8 @@ final class LockFile
     /**
      * One poll of {@see tryAcquireAsync()}: settle the deferred, or re-arm a
      * timer for the next poll. Shares its deadline and sweep rule with
-     * {@see tryAcquire()}.
+     * {@see tryAcquire()}. $timer is the poll timer currently armed, so the
+     * canceller can stop it.
      *
      * @param resource $handle
      */
@@ -155,6 +170,7 @@ final class LockFile
         int $flags,
         float $deadline,
         Deferred $deferred,
+        ?TimerInterface &$timer,
     ): void {
         if (@flock($handle, $flags)) {
             $deferred->resolve($this->guard($handle));
@@ -174,10 +190,10 @@ final class LockFile
             return;
         }
 
-        $loop->addTimer(
+        $timer = $loop->addTimer(
             self::POLL_MICROSECONDS / 1_000_000,
-            function () use ($loop, $handle, $flags, $deadline, $deferred): void {
-                $this->attemptAsync($loop, $handle, $flags, $deadline, $deferred);
+            function () use ($loop, $handle, $flags, $deadline, $deferred, &$timer): void {
+                $this->attemptAsync($loop, $handle, $flags, $deadline, $deferred, $timer);
             },
         );
     }
