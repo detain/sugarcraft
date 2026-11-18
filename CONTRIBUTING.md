@@ -64,6 +64,7 @@ set before you push; each must exit 0:
 
 ```sh
 phpunit --no-configuration --colors=never tools/tests/  # the checker's own guards
+php tools/check-plugin-deps.php                         # plugin libs (sugar-plugins, sugar-serve-protocol) never reach into candy-code
 php tools/check-path-repos.php --no-lib-path-repos      # no sibling path-repos in a published manifest
 php tools/check-path-repos.php                          # the root closure is complete
 php tools/check-path-repos.php --unused                 # no path-repo dep nothing requires

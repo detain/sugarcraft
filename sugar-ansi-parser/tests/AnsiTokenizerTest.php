@@ -427,6 +427,66 @@ final class AnsiTokenizerTest extends TestCase
         $this->assertSame('X', $tokens[1]->data);
     }
 
+    public function testCsiSplitAtEveryByteMatchesSingleFeed(): void
+    {
+        // A held CSI resumes its body walk where it stopped. Every split, and the
+        // byte-wise feed, must agree with the one-shot tokens, including the
+        // controls, DEL, private markers and intermediates the walk steps over.
+        $streams = [
+            "\x1b[31m",
+            "\x1b[?25l",
+            "\x1b[>0;1;2c",
+            "\x1b[=3c",
+            "\x1b[1 q",
+            "\x1b[1;\x0a2H",
+            "\x1b[1\x7f;2m",
+            "\x1b[\x01?5h",
+            "\x1b[1\x18x",
+            "\x1b[1\x1b[2m",
+            "\x1b[1\x80x",
+            "\x1b[12\x0f ;3~",
+            "\x1b[1;\x0a2",
+        ];
+        foreach ($streams as $stream) {
+            $one = AnsiTokenizer::new();
+            $expected = self::coalesceText(array_merge($one->parse($stream), $one->flush()));
+            $this->assertEquals(
+                $expected,
+                self::coalesceText(self::feedOneByteAtATime($stream)),
+                bin2hex($stream) . ' byte-wise',
+            );
+            for ($cut = 1, $n = strlen($stream); $cut < $n; $cut++) {
+                $p = AnsiTokenizer::new();
+                $split = array_merge($p->parse(substr($stream, 0, $cut)), $p->parse(substr($stream, $cut)), $p->flush());
+                $this->assertEquals($expected, self::coalesceText($split), bin2hex($stream) . " cut at $cut");
+            }
+        }
+    }
+
+    public function testHeldCsiBodyIsNotRescannedOnEveryFeed(): void
+    {
+        // Regression: a held CSI was rescanned from its ESC on every feed, so a
+        // long body fed a byte at a time cost quadratic work. Resuming the walk
+        // keeps it linear. The bound is far above the linear cost, so only a
+        // return to the rescan fails it.
+        $body = str_repeat('1', 16384);
+        $stream = "\x1b[" . $body . 'm';
+        $p = AnsiTokenizer::new();
+        $tokens = [];
+        $start = hrtime(true);
+        for ($i = 0, $n = strlen($stream); $i < $n; $i++) {
+            foreach ($p->parse($stream[$i]) as $token) {
+                $tokens[] = $token;
+            }
+        }
+        $elapsed = (hrtime(true) - $start) / 1e9;
+
+        $this->assertCount(1, $tokens);
+        $this->assertSame(Token::CSI, $tokens[0]->type);
+        $this->assertSame($body, $tokens[0]->params);
+        $this->assertLessThan(5.0, $elapsed, 'held CSI body was rescanned per feed');
+    }
+
     public function testEscEscRestartsTheSequence(): void
     {
         // The first ESC of "ESC ESC [" is abandoned silently; the bare ESC

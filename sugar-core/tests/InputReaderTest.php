@@ -1128,8 +1128,65 @@ final class InputReaderTest extends TestCase
         $this->assertSame([], (new InputReader())->parse("\x1b[27;0;9~"));
         // 0xFFFE is unassigned in the X11 block, so it stays a drop.
         $this->assertSame([], (new InputReader())->parse("\x1b[27;5;65534~"));
-        // Unnamed control keysym.
-        $this->assertSame([], (new InputReader())->parse("\x1b[27;5;1234~"));
+        // 0xD800 is a UTF-16 surrogate: not a character, so it is unnamed.
+        $this->assertSame([], (new InputReader())->parse("\x1b[27;5;55296~"));
+        // 0x85 is a C1 control keysym: not printable, so it is unnamed.
+        $this->assertSame([], (new InputReader())->parse("\x1b[27;5;133~"));
+    }
+
+    public function testModifyOtherKeysPrintableLatin1AndBmpKeysyms(): void
+    {
+        // Regression: Latin-1 and BMP keysyms are the code point, and were
+        // dropped as unnamed. Alt+é is 233; Ctrl+α is 945; Cyrillic 1234 is Ӓ.
+        $altE = (new InputReader())->parse("\x1b[27;3;233~");
+        $this->assertCount(1, $altE);
+        $this->assertSame(KeyType::Char, $altE[0]->type);
+        $this->assertSame('é', $altE[0]->rune);
+        $this->assertTrue($altE[0]->alt);
+        $this->assertFalse($altE[0]->ctrl);
+
+        $ctrlAlpha = (new InputReader())->parse("\x1b[27;5;945~");
+        $this->assertCount(1, $ctrlAlpha);
+        $this->assertSame('α', $ctrlAlpha[0]->rune);
+        $this->assertTrue($ctrlAlpha[0]->ctrl);
+
+        $cyrillic = (new InputReader())->parse("\x1b[27;1;1234~");
+        $this->assertCount(1, $cyrillic);
+        $this->assertSame('Ӓ', $cyrillic[0]->rune);
+
+        // The non-breaking space keysym (0xA0) is a printable character too.
+        $nbsp = (new InputReader())->parse("\x1b[27;2;160~");
+        $this->assertCount(1, $nbsp);
+        $this->assertSame("\u{00A0}", $nbsp[0]->rune);
+        $this->assertTrue($nbsp[0]->shift);
+    }
+
+    public function testBareDigitSpanSs3TypesTheDigitsAfterItsKeyByte(): void
+    {
+        // Regression: a bare digit run followed by text swallowed every digit
+        // ("ESC O 2024y" typed only `y`). Only the SS3 key byte is consumed, so
+        // the rest of the run is typed, as the pre-P1-3 single-byte read did.
+        $expected = ['0', '2', '4', 'y'];
+        $oneShot = (new InputReader())->parse("\x1bO2024y");
+        $this->assertSame($expected, array_map(static fn($m) => $m->rune, $oneShot));
+
+        $reader = new InputReader();
+        $fed = [];
+        $seq = "\x1bO2024y";
+        for ($k = 0; $k < strlen($seq); $k++) {
+            foreach ($reader->parse($seq[$k]) as $m) {
+                $fed[] = $m;
+            }
+        }
+        $this->assertSame($expected, array_map(static fn($m) => $m->rune, $fed), 'byte-wise');
+        foreach ($fed as $m) {
+            $this->assertSame(KeyType::Char, $m->type);
+        }
+
+        // A parked digit run that then gets a `;` is still one modified key.
+        $up = (new InputReader())->parse("\x1bO2;5A");
+        $this->assertSame(KeyType::Up, $up[0]->type);
+        $this->assertTrue($up[0]->ctrl);
     }
 
     public function testPlainSs3F1StillDecodes(): void

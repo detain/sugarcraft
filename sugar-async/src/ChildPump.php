@@ -466,10 +466,13 @@ final class ChildPump
 
         if ($reason === DrainResult::EXPIRED || $reason === DrainResult::RETRY_BUDGET_GONE) {
             // Sweep what is already buffered in the kernel before letting go:
-            // a partial reason beats none. Non-blocking, so it cannot park.
+            // a partial reason beats none. One bounded read per pipe, never a
+            // read to EOF: a child still writing past its deadline refills the
+            // pipe as fast as it is read, so a walk to EOF never ends and
+            // buffers without bound.
             foreach ($open as $slot => $pipe) {
-                $rest = @stream_get_contents($pipe);
-                if (is_string($rest) && $rest !== '') {
+                $rest = fread($pipe, self::READ_BYTES);
+                if ($rest !== false && $rest !== '') {
                     $capture->offer($slot, $rest);
                 }
             }

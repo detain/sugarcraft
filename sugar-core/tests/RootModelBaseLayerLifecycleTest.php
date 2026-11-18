@@ -184,8 +184,8 @@ final class RootModelBaseLayerLifecycleTest extends TestCase
             'the pushed screen\'s subscription must start at the push, not on the next Msg');
 
         $dispatch->invoke($program, new \SugarCraft\Core\Msg\ScreenStackPoppedMsg());
-        $this->assertSame([], array_keys($activeProp->getValue($program)),
-            'the popped screen\'s subscription must be cancelled at the pop');
+        $this->assertSame(['base-tick'], array_keys($activeProp->getValue($program)),
+            'the popped screen\'s subscription must be cancelled at the pop, and the base layer\'s restarted');
 
         fclose($writer);
         fclose($in);

@@ -55,9 +55,12 @@ final class WebsocketUrl
         }
         // A zone id (`fe80::1%25eth0`, as a server prints a link-local address) is
         // kept as given, the way the host's Attach::websocketUrl keeps it; the
-        // address before the `%` is what must be a valid IPv6 literal.
+        // address before the `%` is what must be a valid IPv6 literal. The id must
+        // be non-empty and made of unreserved characters: an empty `%25` (or `%`)
+        // and a space in the id are both refused, so no unusable URL is built. A
+        // bare `%25` is not re-read as the raw zone `25`.
         $zone = '';
-        if ($ipv6 && \preg_match('/^([^%]+)(%.+)$/', $bare, $m) === 1) {
+        if ($ipv6 && \preg_match('/^([^%]+)(%25[A-Za-z0-9._~-]+|%(?!25$)[A-Za-z0-9._~-]+)$/', $bare, $m) === 1) {
             [, $bare, $zone] = $m;
         }
         if ($ipv6 && \filter_var($bare, \FILTER_VALIDATE_IP, \FILTER_FLAG_IPV6) === false) {

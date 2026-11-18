@@ -180,7 +180,7 @@ $url = WebsocketUrl::from('http://127.0.0.1:7420'); // "ws://127.0.0.1:7420/ws"<
       <div class="feature"><strong>Read side only</strong><span>Discovery, token and URL helpers read and normalise. A missing file answers null; an unreadable one throws, so a token is never silently replaced.</span></div>
       <div class="feature"><strong>Private state</strong><span>A state directory that is a symbolic link, a file, the wrong owner or a mode other than 0700 is refused, not followed.</span></div>
       <div class="feature"><strong>Bounded parsing</strong><span>Discovery records are decoded to a bounded depth and returned raw, so field-level checks stay with the host.</span></div>
-      <div class="feature"><strong>One envelope</strong><span>The serve wire uses the JSON-RPC 2.0 codec of <code>sugar-mcp-client</code>, so the serve wire and the MCP client share one envelope. That codec is a dev-only requirement of this package: install <code>sugarcraft/sugar-mcp-client</code> yourself to call <code>JsonRpc</code> from your own code.</span></div>
+      <div class="feature"><strong>One envelope, in progress</strong><span>This package's tests pin against the JSON-RPC 2.0 codec of <code>sugar-mcp-client</code>, a dev-only requirement. The running <code>candy-code serve</code> still uses its own copy of that codec, so the two are not yet one shared implementation: a fix made in one does not reach the other until the host delegates to this package. Install <code>sugarcraft/sugar-mcp-client</code> yourself to call <code>JsonRpc</code> from your own code.</span></div>
     </div>
 
     <h3 id="use-it-for" style="margin-top: 40px;">Use it for</h3>
