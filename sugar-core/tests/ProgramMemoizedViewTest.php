@@ -8,9 +8,14 @@ use PHPUnit\Framework\TestCase;
 use React\EventLoop\StreamSelectLoop;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
+use SugarCraft\Core\Msg\ScreenStackPoppedMsg;
+use SugarCraft\Core\Msg\ScreenStackPushedMsg;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Core\RevisionCapable;
+use SugarCraft\Core\Screen;
+use SugarCraft\Core\ScreenStack;
+use SugarCraft\Core\ScreenStackCapable;
 use SugarCraft\Core\SubscriptionCapable;
 
 /**
@@ -65,6 +70,12 @@ final class ProgramMemoizedViewTest extends TestCase
     {
         rewind($out);
         return (string) stream_get_contents($out);
+    }
+
+    /** Drive one dispatch synchronously, as the screen-stack integration suite does. */
+    private function dispatchMsg(Program $program, Msg $msg): void
+    {
+        (new \ReflectionMethod(Program::class, 'dispatch'))->invoke($program, $msg);
     }
 
     public function testViewIsSkippedWhenRevisionUnchangedAndCalledOnChange(): void
@@ -186,7 +197,42 @@ final class ProgramMemoizedViewTest extends TestCase
         $this->renderFrame($program);
 
         self::assertSame([], $seen, 'withoutRenderer must never call the diff hook');
-        self::assertSame(2, $model->viewCalls, 'headless frames still run view()');
+        self::assertSame(2, $model->viewCalls, 'headless frames call view() when the revision changes');
+    }
+
+    public function testHeadlessModeSkipsViewWhenRevisionUnchanged(): void
+    {
+        $model = new RevisionModel();
+        [$program] = $this->program($model, headless: true);
+
+        $this->renderFrame($program);
+        $model->label = 'two';
+        $this->renderFrame($program);
+        $this->renderFrame($program);
+
+        self::assertSame(1, $model->viewCalls, 'headless frames must honor the revision memo like painted frames');
+    }
+
+    public function testScreenStackPushAndPopDropTheMemoAcrossSameClassScreens(): void
+    {
+        $base = new RevisionModel();
+        $pushed = new RevisionModel();
+        $pushed->label = 'two';
+        $root = new StackRootModel(
+            (new ScreenStack())->push(new Screen($base, title: 'Base')),
+        );
+        [$program, $out] = $this->program($root);
+        $this->renderFrame($program);
+        self::assertSame(1, $base->viewCalls);
+
+        $this->dispatchMsg($program, new ScreenStackPushedMsg(new Screen($pushed, title: 'Pushed')));
+        $this->renderFrame($program);
+        self::assertSame(1, $pushed->viewCalls, 'the pushed screen must paint its own view, not the base memo');
+        self::assertStringContainsString('two', $this->readOutput($out));
+
+        $this->dispatchMsg($program, new ScreenStackPoppedMsg());
+        $this->renderFrame($program);
+        self::assertSame(2, $base->viewCalls, 'popping back must not reuse the pushed screen memo');
     }
 
     public function testFrameDiffHookSeesNullPreviousAfterForceRepaint(): void
@@ -335,5 +381,47 @@ final class OtherRevisionModel implements Model, RevisionCapable
     public function revision(): int|string|null
     {
         return 1;
+    }
+}
+
+/**
+ * Root that owns a screen stack and pushes or pops on the stack messages,
+ * so a test can move the active screen through the framework's own routing.
+ */
+final class StackRootModel implements Model, ScreenStackCapable
+{
+    use SubscriptionCapable;
+
+    public function __construct(private readonly ScreenStack $stack)
+    {
+    }
+
+    public function screens(): ScreenStack
+    {
+        return $this->stack;
+    }
+
+    public function init(): ?\Closure
+    {
+        return null;
+    }
+
+    /**
+     * @return array{0: Model, 1: ?\Closure}
+     */
+    public function update(Msg $msg): array
+    {
+        if ($msg instanceof ScreenStackPushedMsg) {
+            return [new self($this->stack->push($msg->screen)), null];
+        }
+        if ($msg instanceof ScreenStackPoppedMsg) {
+            return [new self($this->stack->pop()), null];
+        }
+        return [$this, null];
+    }
+
+    public function view(): string
+    {
+        return '';
     }
 }

@@ -1408,6 +1408,11 @@ final class Program
                 }
                 [$nextModel, $cmd] = $updated;
                 $this->model = $nextModel;
+                // A push or pop swaps the active screen, which can be the same
+                // class at the same revision. The memo keys on neither the
+                // instance nor the stack position, so it must not survive the
+                // transition or the new screen would paint the old screen's view.
+                $this->viewMemo = null;
                 $this->markDirty();
                 if ($cmd !== null) {
                     $this->scheduleCmd($cmd);
@@ -2580,10 +2585,11 @@ final class Program
         $this->lastRenderAt = hrtime(true);
 
         if ($this->options->withoutRenderer) {
-            // Headless mode: still call view() so the model's
+            // Headless mode: still run the view seat so the model's
             // computation runs (and any errors surface) but skip
-            // emitting any output.
-            $this->userView($this->activeModel());
+            // emitting any output. The revision memo applies here too:
+            // no paint is needed, so an unchanged revision skips view().
+            $this->renderedFrame($this->activeModel());
             $this->lastFrameDuration = microtime(true) - $frameStart;
             return;
         }
