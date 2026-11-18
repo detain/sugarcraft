@@ -261,8 +261,13 @@ final class ProcessReaper
 
     /**
      * Async twin of {@see terminateAndClose()}: ladder on loop timers, then
-     * `proc_close()` once the child is gone (or the budgets ran out — the
-     * least-bad reap, as in the sync path). `$then` gets the exit status.
+     * the reap once the child is gone. `$then` gets the exit status.
+     *
+     * A child that survives signal 9 within its budget is NOT reaped with a
+     * blocking `proc_close()`: that parks the loop thread on exactly the
+     * uninterruptible kernel wait the ladder could not break, freezing every
+     * other connection the gateway serves. The handle is polled by
+     * {@see reapWhenExited()} until the kernel releases the child.
      *
      * @param callable(?int):void|null $then
      */
@@ -289,10 +294,101 @@ final class ProcessReaper
                 self::signal($process, $groupPid, $signal);
             },
             static fn (): bool => !self::isRunning($process),
-            static function (bool $gone) use ($process, $finish): void {
+            static function (bool $gone) use ($loop, $process, $finish): void {
+                // Only a poll that saw the exit may take the blocking reap: then
+                // proc_close() cannot wait. Anything else is deferred to the loop.
+                if (!$gone) {
+                    self::reapWhenExited($loop, $process, $finish);
+
+                    return;
+                }
                 $finish(\is_resource($process) ? \proc_close($process) : null);
             },
         );
+    }
+
+    /**
+     * Reap a child on loop timers, never blocking: answer at once when it has
+     * already exited, otherwise poll every {@see POLL_INTERVAL_US} and
+     * `proc_close()` the tick it is seen gone.
+     *
+     * The reap half of {@see terminateAndCloseAsync()} for a child the ladder
+     * could not stop. A synchronous `proc_close()` there waits on the child with
+     * no bound. A non-resource argument answers null, matching the sync contract.
+     *
+     * @param callable(?int):void|null $then
+     */
+    public static function reapWhenExited(LoopInterface $loop, mixed $process, ?callable $then = null): void
+    {
+        $finish = static function (?int $status) use ($then): void {
+            if ($then !== null) {
+                $then($status);
+            }
+        };
+        if (!\is_resource($process)) {
+            $finish(null);
+
+            return;
+        }
+        $exitCode = null;
+        if (self::exitedWithCode($process, $exitCode)) {
+            $finish(self::closeReaped($process, $exitCode));
+
+            return;
+        }
+
+        $timer = null;
+        $timer = $loop->addPeriodicTimer(
+            self::POLL_INTERVAL_US / 1_000_000,
+            static function () use (&$timer, $loop, $process, $finish): void {
+                // A teardown that ran while this timer was armed may have closed
+                // the handle; the reap must not run on a consumed resource.
+                if (!\is_resource($process)) {
+                    $loop->cancelTimer($timer);
+                    $finish(null);
+
+                    return;
+                }
+                $exitCode = null;
+                if (!self::exitedWithCode($process, $exitCode)) {
+                    return;
+                }
+
+                $loop->cancelTimer($timer);
+                $finish(self::closeReaped($process, $exitCode));
+            },
+        );
+    }
+
+    /**
+     * Whether the child has exited, capturing its status from the poll that
+     * saw the exit: `proc_close()` reports -1 once the exit was observed here.
+     *
+     * @param resource $process
+     */
+    private static function exitedWithCode($process, ?int &$exitCode): bool
+    {
+        $status = \proc_get_status($process);
+        if ($status['running'] === true) {
+            return false;
+        }
+
+        $exitCode = (int) $status['exitcode'];
+
+        return true;
+    }
+
+    /**
+     * Release the handle of a child already seen gone. The poll's status wins
+     * when it captured one; `proc_close()` cannot block here.
+     *
+     * @param resource $process
+     */
+    private static function closeReaped($process, ?int $exitCode): ?int
+    {
+        $reaped = \proc_close($process);
+
+        return $exitCode !== null && $exitCode >= 0 ? $exitCode : $reaped;
     }
 
     /**

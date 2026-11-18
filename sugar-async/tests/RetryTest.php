@@ -175,6 +175,36 @@ final class RetryTest extends TestCase
         $this->assertSame([[1, 1, 'down 1'], [2, 2, 'down 2'], [3, 4, 'down 3'], [4, 4, 'down 4']], $delays);
     }
 
+    public function testReconnectRefusesANonPromiseDialByNameWithoutThrowing(): void
+    {
+        // A bare value from the dial used to be an Error raised inside a loop
+        // timer (or synchronously, on the first attempt). It is now a terminal
+        // refusal that travels the rejection channel, like retry()'s guard.
+        $loop = Loop::get();
+        $calls = 0;
+        $p = Retry::reconnect(
+            function () use (&$calls) {
+                $calls++;
+
+                return null;
+            },
+            Backoff::new(10.0)->withoutJitter(),
+            null,
+            $loop,
+        );
+        $err = null;
+        $p->then(null, function (\Throwable $e) use (&$err): void {
+            $err = $e;
+        });
+        $this->runUntil($loop, function () use (&$err): bool {
+            return $err !== null;
+        });
+
+        $this->assertInstanceOf(\InvalidArgumentException::class, $err);
+        $this->assertStringContainsString('must return a promise; null returned', $err->getMessage());
+        $this->assertSame(1, $calls, 'a refused non-promise is terminal, not redialled');
+    }
+
     public function testReconnectBoundedRejectsWithLastFailure(): void
     {
         $loop = Loop::get();

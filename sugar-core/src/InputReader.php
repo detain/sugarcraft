@@ -278,9 +278,27 @@ final class InputReader
                         $this->scanResume = 0;
                         $c = ord($this->buf[$j]);
                         if ($c < 0x40 || $c > 0x7e) {
-                            // Not a final byte: the span is malformed. Drop it
-                            // and resync on the byte that ended it.
+                            // Not a final byte: the span is malformed and is
+                            // dropped. A printable byte keeps the span open,
+                            // as CSI parameters do, so the drop runs through
+                            // the printable tail to its real final byte; ESC,
+                            // a control byte or a high byte ends the drop and
+                            // resyncs on itself.
                             $i = $j;
+                            if ($c >= 0x20 && $c < 0x40) {
+                                $k = $j + 1;
+                                while ($k < $len) {
+                                    $e = ord($this->buf[$k]);
+                                    if ($e < 0x20 || $e > 0x7e) {
+                                        break;
+                                    }
+                                    $k++;
+                                    if ($e >= 0x40) {
+                                        break;
+                                    }
+                                }
+                                $i = $k;
+                            }
                             continue;
                         }
                         $msg = $this->decodeModifiedSs3(substr($this->buf, $i + 2, $j - $i - 2), chr($c));

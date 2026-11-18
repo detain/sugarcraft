@@ -66,30 +66,6 @@ final class Pending
     }
 
     /**
-     * @deprecated REMOVED-IN: 2.0.0 — the dual contract is split into
-     *             {@see pendingNotice()} (advisory hook) and
-     *             {@see boundWait()} (bounded rejection) so the mode is
-     *             visible at the call site. This shim delegates: a hook
-     *             goes to pendingNotice(), a null hook to boundWait().
-     */
-    public static function onPending(
-        PromiseInterface $promise,
-        float $seconds,
-        ?callable $onPending = null,
-        ?LoopInterface $loop = null,
-        ?string $label = null,
-    ): PromiseInterface {
-        \trigger_error(
-            'AsyncOps::onPending(): the dual-contract helper is deprecated — call pendingNotice() with a hook or boundWait() without one (support ends in 2.0.0).',
-            \E_USER_DEPRECATED,
-        );
-
-        return $onPending !== null
-            ? self::pendingNotice($promise, $seconds, $onPending, $loop)
-            : self::boundWait($promise, $seconds, $loop, $label);
-    }
-
-    /**
      * Shared timer machinery for pendingNotice() and boundWait(): the hook
      * arm announces and keeps waiting, the no-hook arm rejects with a
      * TimeoutException at expiry while the inner runs on.

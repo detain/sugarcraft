@@ -170,6 +170,24 @@ final class UndoStackTest extends TestCase
         $this->assertSame($action, $entry);
     }
 
+    public function testANullPushedEntryMovesTheStackAndIsNotAnEmptyResult(): void
+    {
+        // Regression: a null entry is indistinguishable from the empty-lane
+        // result by `entry` alone, so the lane move is only visible on the lanes.
+        $pushed = UndoStack::new()->push(null);
+
+        $undone = $pushed->undo();
+        $this->assertNull($undone['entry']);
+        $this->assertNotSame($pushed, $undone['stack']);
+        $this->assertFalse($undone['stack']->canUndo());
+        $this->assertTrue($undone['stack']->canRedo());
+
+        $empty = UndoStack::new()->undo();
+        $this->assertNull($empty['entry']);
+        $this->assertFalse($empty['stack']->canUndo());
+        $this->assertFalse($empty['stack']->canRedo());
+    }
+
     public function testCanUndoAndCanRedoTrackTheLanes(): void
     {
         $stack = UndoStack::new()->push('a');
