@@ -176,7 +176,10 @@ final class PtyRelayTest extends TestCase
         $launched = $this->launchRelay('sleep 30', 80, 24);
         $paths = BackgroundShellRegistry::pathFor($launched['dir'], $launched['id']);
         self::assertTrue(
-            $this->relayWaitFor(static fn (): bool => \is_file($paths['ptyPid']), 8.0),
+            $this->relayWaitFor(
+                static fn (): bool => (int) \trim((string) @\file_get_contents($paths['ptyPid'])) > 0,
+                8.0,
+            ),
             'the relay never recorded the shell pid',
         );
         $ptyPid = (int) \trim((string) @\file_get_contents($paths['ptyPid']));
