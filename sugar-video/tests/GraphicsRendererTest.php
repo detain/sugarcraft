@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Video\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Image\Renderer\KittyRenderer;
 use SugarCraft\Video\Decode\RgbFrame;
 use SugarCraft\Video\Render\GraphicsRenderer;
 use SugarCraft\Video\Render\Mode;
@@ -334,5 +335,65 @@ final class GraphicsRendererTest extends TestCase
 
         $this->assertSame($first, $second, 'iTerm2 frames are byte-stable');
         $this->assertStringNotContainsString('a=d', $second, 'iTerm2 emits no Kitty delete');
+    }
+
+    /**
+     * A Player rebuild (resize or mode cycle) replaces the renderer. The successor
+     * must retire the frame the outgoing session drew last, or it stays in the
+     * terminal's image store.
+     */
+    public function testSuccessorRetiresTheOutgoingKittyFrameOnItsFirstDraw(): void
+    {
+        $frame = self::makeFrame();
+        $outgoing = new GraphicsRenderer(Mode::Kitty);
+        $outgoing->render($frame, Mode::Kitty);
+        $outgoing->render($frame, Mode::Kitty);
+
+        $retire = (new KittyRenderer())->delete('2');
+        $successor = (new GraphicsRenderer(Mode::Kitty))->carryingFrom($outgoing);
+
+        $this->assertStringStartsWith($retire, $successor->render($frame, Mode::Kitty));
+        $this->assertStringStartsNotWith($retire, $successor->render($frame, Mode::Kitty), 'the residue is written once');
+    }
+
+    /**
+     * The retirement crosses a mode change: a Kitty frame left by a Kitty session
+     * is deleted even when the successor draws through another backend.
+     */
+    public function testSuccessorInAnotherModeStillRetiresTheKittyFrame(): void
+    {
+        $frame = self::makeFrame();
+        $outgoing = new GraphicsRenderer(Mode::Kitty);
+        $outgoing->render($frame, Mode::Kitty);
+
+        $successor = (new GraphicsRenderer(Mode::Sixel))->carryingFrom($outgoing);
+
+        $this->assertStringStartsWith((new KittyRenderer())->delete('1'), $successor->render($frame, Mode::Sixel));
+    }
+
+    /**
+     * A second rebuild before any render must not drop the first rebuild's
+     * still-owed retirement.
+     */
+    public function testRebuildBeforeRenderKeepsThePredecessorsResidue(): void
+    {
+        $frame = self::makeFrame();
+        $outgoing = new GraphicsRenderer(Mode::Kitty);
+        $outgoing->render($frame, Mode::Kitty);
+
+        $unrendered = (new GraphicsRenderer(Mode::Kitty))->carryingFrom($outgoing);
+        $again = (new GraphicsRenderer(Mode::Kitty))->carryingFrom($unrendered);
+
+        $this->assertStringStartsWith((new KittyRenderer())->delete('1'), $again->render($frame, Mode::Kitty));
+    }
+
+    /**
+     * With no frame drawn before the rebuild there is nothing to retire.
+     */
+    public function testSuccessorOfAFreshRendererRetiresNothing(): void
+    {
+        $successor = (new GraphicsRenderer(Mode::Kitty))->carryingFrom(new GraphicsRenderer(Mode::Kitty));
+
+        $this->assertStringNotContainsString('a=d', $successor->render(self::makeFrame(), Mode::Kitty));
     }
 }

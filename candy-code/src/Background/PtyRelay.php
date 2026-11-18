@@ -301,7 +301,14 @@ final class PtyRelay
         // The registry's handle on the group we must not orphan. Write before
         // the first pump tick so there is no window where a stopped shell has
         // a recorded relay but no recorded child.
-        @\file_put_contents($paths['ptyPid'], (string) $childPid);
+        // Written to a sibling and renamed into place: ShellSend::relayReady()
+        // treats the file's existence as "the pump is reading", so a reader
+        // must never see the truncated-but-not-yet-written state that a direct
+        // file_put_contents() exposes between open and write.
+        $pidTmp = $paths['ptyPid'] . '.tmp';
+        if (@\file_put_contents($pidTmp, (string) $childPid) !== false) {
+            @\rename($pidTmp, $paths['ptyPid']);
+        }
 
         $out = @\fopen($paths['stdout'], 'ab');
         $fifo = @\fopen($paths['in'], 'r+');

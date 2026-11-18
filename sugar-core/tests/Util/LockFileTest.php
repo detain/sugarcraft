@@ -399,6 +399,41 @@ final class LockFileTest extends TestCase
         $stale->release();
     }
 
+    public function testSweepRunsOnlyWhileItHoldsTheSidecarLock(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('Windows will not unlink a file held open by this process');
+        }
+        $path = $this->dir . '/l';
+        $stale = LockFile::on($path)->tryAcquire();
+        self::assertNotNull($stale);
+        file_put_contents($path, '999999');
+
+        // Another sweeper is mid-sweep: it holds the sidecar. The dead record is
+        // provable, but the waiter must not unlink the inode while that sweeper runs.
+        $sidecar = fopen($path . '.sweep', 'cb+');
+        self::assertNotFalse($sidecar);
+        self::assertTrue(flock($sidecar, LOCK_EX | LOCK_NB));
+        clearstatcache();
+        $inode = fileinode($path);
+
+        $probe = static fn (int $pid): bool => false;
+        $blocked = LockFile::on($path)->withAliveProbe($probe)->tryAcquire(0.0);
+        clearstatcache();
+
+        self::assertNull($blocked, 'a waiter that cannot take the sidecar gives up as contended');
+        self::assertSame($inode, fileinode($path), 'the stale inode was unlinked without the sidecar');
+
+        // Once the sidecar is free the same waiter may sweep the dead record.
+        flock($sidecar, LOCK_UN);
+        fclose($sidecar);
+        $swept = LockFile::on($path)->withAliveProbe($probe)->tryAcquire(0.0);
+
+        self::assertNotNull($swept, 'the sweep proceeds once the sidecar is free');
+        $swept->release();
+        $stale->release();
+    }
+
     public function testAsyncSweepNeverUnlinksAFreshInodeAnotherWaiterTook(): void
     {
         if (PHP_OS_FAMILY === 'Windows') {

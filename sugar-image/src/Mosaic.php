@@ -155,6 +155,11 @@ final class Mosaic implements IncrementalRenderer
      * symbols → halfblock. Symbols, not HalfBlock, is the practical floor:
      * a probed text-capable terminal always lands one rung above it.
      *
+     * Memoised per process: the first call probes and later calls return the
+     * same instance. {@see self::resetAutoMemo()} forces the next call to probe
+     * again ({@see Detect::reset()} clears it too). {@see self::probe()} is not
+     * memoised.
+     *
      * @see Mosaic::diagnose() for structured probe report
      * @see Detect::probe() for the primary TTY-probing implementation
      */
