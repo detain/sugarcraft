@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Dashboard\Tests\Module;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Async\Await;
 use SugarCraft\Core\Msg;
 use SugarCraft\Dashboard\Module\BaseModule;
 use SugarCraft\Dashboard\Module\Module;
@@ -116,7 +117,9 @@ final class ModuleSpecConformanceTest extends TestCase
         $module = new GenericModule('echo "hello world"');
         $tickMsg = new TickMsg();
 
-        [$nextModule] = $module->update($tickMsg);
+        // A tick starts the command on the loop; its output lands in the next update.
+        [$inFlight, $cmd] = $module->update($tickMsg);
+        [$nextModule] = $inFlight->update(Await::until($cmd()->promise, 15.0));
         $view = $nextModule->view();
 
         $this->assertStringContainsString('hello world', $view);
