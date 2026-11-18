@@ -1,0 +1,45 @@
+{
+    "name": "sugarcraft/sugar-serve-protocol",
+    "description": "Wire contract for the candy-code.v1 serve protocol: subprotocol names, frame cap, discovery and token readers, and WebSocket URL normalisation.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "tui",
+        "serve",
+        "websocket",
+        "protocol",
+        "candy-code",
+        "sugarcraft"
+    ],
+    "homepage": "https://github.com/sugarcraft/sugar-serve-protocol",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/sugar-serve-protocol/issues",
+        "source": "https://github.com/sugarcraft/sugar-serve-protocol/tree/master",
+        "docs": "https://sugarcraft.github.io/lib/sugar-serve-protocol.html"
+    },
+    "require": {
+        "php": "^8.3"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\ServeProtocol\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\ServeProtocol\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
