@@ -156,13 +156,13 @@ final class GraphicsRendererTest extends TestCase
 
         // APC kitty intro: ESC _ G (0x1b 0x5f 0x47) — the Kitty graphics
         // protocol is APC-framed (xterm ctlseqs `ESC _`), followed by the
-        // `a=T,c=<w>,r=<h>,f=100,m=1;` begin chunk. The leading `a=T` states
-        // the transmit-and-display action: an absent `a=` defaults to
+        // `a=T,i=<id>,f=100,q=2,c=<w>,r=<h>,m=1;` begin chunk. The leading `a=T`
+        // states the transmit-and-display action: an absent `a=` defaults to
         // transmit-without-display (sugar-image 94d16dbb7), so the plain
-        // route must carry it. (The old DCS `ESC P q` pin here was the
-        // DECSIXEL introducer — ANSI audit defect #10, fixed in sugar-core
-        // kittyGraphicsBegin.)
-        $this->assertStringStartsWith("\x1b_Ga=T,c=1,r=1,f=100,m=1;", $output, 'Kitty output should begin with APC kitty header _Ga=T,');
+        // route must carry it. The `i=` id is what the next frame retires.
+        // (The old DCS `ESC P q` pin here was the DECSIXEL introducer — ANSI
+        // audit defect #10, fixed in sugar-core kittyGraphicsBegin.)
+        $this->assertStringStartsWith("\x1b_Ga=T,i=1,f=100,q=2,c=1,r=1,m=1;", $output, 'Kitty output should begin with APC kitty header _Ga=T,');
     }
 
     /**
@@ -231,7 +231,7 @@ final class GraphicsRendererTest extends TestCase
 
         $output = (new GraphicsRenderer(Mode::Kitty))->render($frame, Mode::Kitty);
 
-        $this->assertStringStartsWith("\x1b_Ga=T,c=4,r=2,f=100,m=1;", $output);
+        $this->assertStringStartsWith("\x1b_Ga=T,i=1,f=100,q=2,c=4,r=2,m=1;", $output);
     }
 
     /**
@@ -292,5 +292,47 @@ final class GraphicsRendererTest extends TestCase
         // 800 / 10 = 80 cells wide, 480 / 20 = 24 cells tall.
         $this->assertStringContainsString('width=80', $output);
         $this->assertStringContainsString('height=24', $output);
+    }
+
+    /**
+     * Regression: Kitty frames went out with no image id and were never
+     * deleted, so a video grew the terminal's image store by one image per
+     * frame. Consecutive frames must alternate ids and retire the one they
+     * replace.
+     */
+    public function testKittyFramesAlternateImageIdsAndRetireThePreviousFrame(): void
+    {
+        $renderer = new GraphicsRenderer(Mode::Kitty);
+        $frame    = self::makeFrame();
+
+        $first  = $renderer->render($frame, Mode::Kitty);
+        $second = $renderer->render($frame, Mode::Kitty);
+        $third  = $renderer->render($frame, Mode::Kitty);
+
+        $this->assertStringContainsString('i=1,', $first, 'frame 0 draws under slot 1');
+        $this->assertStringNotContainsString('a=d', $first, 'the first frame has nothing to retire');
+
+        $this->assertStringContainsString('i=2,', $second, 'frame 1 draws under slot 2');
+        $this->assertStringContainsString('a=d,d=I,i=1' . "\x1b\\", $second, 'frame 1 retires slot 1');
+        $this->assertStringNotContainsString('a=d,d=I,i=2', $second, 'frame 1 must not self-delete');
+
+        $this->assertStringContainsString('i=1,', $third, 'frame 2 reuses slot 1');
+        $this->assertStringContainsString('a=d,d=I,i=2' . "\x1b\\", $third, 'frame 2 retires slot 2');
+    }
+
+    /**
+     * iTerm2 has no id-addressed delete, so their output stays the
+     * plain per-frame render with no retire bytes.
+     */
+    public function testNonIdDeleteBackendsEmitNoRetireBytes(): void
+    {
+        $frame = self::makeFrame();
+
+        $renderer = new GraphicsRenderer(Mode::Iterm2);
+        $first    = $renderer->render($frame, Mode::Iterm2);
+        $second   = $renderer->render($frame, Mode::Iterm2);
+
+        $this->assertSame($first, $second, 'iTerm2 frames are byte-stable');
+        $this->assertStringNotContainsString('a=d', $second, 'iTerm2 emits no Kitty delete');
     }
 }

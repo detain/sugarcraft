@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Video\Render;
 
+use SugarCraft\Image\GraphicsFrameSession;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Dither;
 use SugarCraft\Image\Renderer\Iterm2Renderer;
@@ -24,7 +25,8 @@ use SugarCraft\Video\Decode\RgbFrame;
  * Protocol choice per frame:
  *   - **iTerm2 / Kitty**: the PNG is base64'd straight into the protocol envelope
  *     — no per-pixel PHP work, the terminal does the scaling. Full resolution,
- *     essentially free per frame.
+ *     essentially free per frame. Kitty frames carry image ids and the previous
+ *     frame is deleted once the new one is drawn (see {@see GraphicsFrameSession}).
  *   - **Sixel**: the pure-PHP {@see SixelRenderer} — this path spawns no
  *     external binary (the former external-encoder preference was retired
  *     once `candy-image` shipped as the chafa frontend; see the README for
@@ -64,8 +66,25 @@ final class GraphicsRenderer implements FrameRenderer
         $cellsW = max(1, (int) round($frame->w / $this->cellPxW));
         $cellsH = max(1, (int) round($frame->h / $this->cellPxH));
 
-        return $this->delegate()->render($source, $cellsW, $cellsH);
+        $delegate = $this->delegate();
+        if ($delegate->supportsIdDelete()) {
+            // Kitty: draw each frame under an alternating image id and retire the
+            // previous one, so playback does not leave one image in the terminal's
+            // store per frame. The session lives as long as this renderer, which
+            // the Player keeps for the whole playback.
+            $this->session ??= GraphicsFrameSession::new($delegate);
+
+            return $this->session->present($source, $cellsW, $cellsH);
+        }
+
+        return $delegate->render($source, $cellsW, $cellsH);
     }
+
+    /**
+     * Frame-to-frame id rotation for id-addressable backends (Kitty). Null for
+     * the others, which never retire a frame.
+     */
+    private ?GraphicsFrameSession $session = null;
 
     /**
      * Build an ImageSource from the frame without a needless re-encode: a PNG

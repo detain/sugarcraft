@@ -15,7 +15,10 @@ namespace SugarCraft\AnsiParser;
  *               cap. Such a partial always begins with ESC, and it is returned
  *               whole rather than dropped.
  * - `CONTROL` — `$data` is a single C0 control byte (or DEL, 0x7F).
- * - `ESC`     — short two-byte sequence; `$data` is the byte after ESC.
+ * - `ESC`     — `ESC <final>`; `$data` is the final byte. An ESC intermediate
+ *               sequence (`ESC ( 0`, `ESC # 8`, `ESC SP F`) carries its
+ *               0x20-0x2F bytes in `$intermediate`, so a two-byte ESC token
+ *               has an empty `$intermediate`.
  * - `CSI`     — `ESC [ … final`. `$intermediate` carries the leading private
  *               marker (`?`, `>`, `=`, `<`) plus any trailing intermediate
  *               bytes; `$params` is the raw parameter substring; `$final` is

@@ -21,8 +21,11 @@ use DOMText;
  * (the document can never reach out) and WITHOUT `LIBXML_NOENT` (entity
  * references stay text — nothing is substituted, so there is no external
  * entity path at all), and diagnostics are suppressed so a garbage document
- * cannot spray warnings into the runner's error stream. Every fence failing
- * — ext-dom absent, oversized, unparseable, or nothing renderable — returns
+ * cannot spray warnings into the runner's error stream. An oversized body is
+ * converted from its first {@see MAX_PARSE_BYTES} only, and the output closes
+ * with a note saying so: a refusal here would hand the caller the raw bytes,
+ * and the raw bytes are exactly what the drop rule exists to keep from the
+ * model. ext-dom absent, unparseable, or nothing renderable still returns
  * null, and the caller hands the raw body to the model with a one-line note
  * rather than pretending a conversion happened.
  *
@@ -61,10 +64,9 @@ use DOMText;
 final class HtmlToMarkdown
 {
     /**
-     * Largest body handed to the parser, checked before parsing. A caller's
-     * own byte cap may sit far above this, so the parser does not lean on
-     * it: libxml's cost on megabytes of markup is real, and a
-     * hostile page should meet a refusal to parse, not a slow parse.
+     * Largest body handed to the parser. A longer body is cut to this many
+     * bytes before parsing, so the parse cost stays bounded whatever a caller's
+     * own byte cap allows, and whatever sits past the cut is never converted.
      */
     public const MAX_PARSE_BYTES = 512 * 1024;
 
@@ -124,7 +126,7 @@ final class HtmlToMarkdown
      */
     public static function convert(string $html, string $baseUrl, ?string $charset = null): ?string
     {
-        if ($html === '' || strlen($html) > self::MAX_PARSE_BYTES) {
+        if ($html === '') {
             return null;
         }
         if (!class_exists(DOMDocument::class)) {
@@ -136,6 +138,14 @@ final class HtmlToMarkdown
         // encoding it was never told; undeclared BOMs are common in the wild.
         if (str_starts_with($html, "\xEF\xBB\xBF")) {
             $html = substr($html, 3);
+        }
+
+        // Past the cap the cut body is what gets converted. An unclosed
+        // <script> at the cut runs to the end of the parsed text and is
+        // dropped whole, so nothing past the cut can surface either way.
+        $truncated = strlen($html) > self::MAX_PARSE_BYTES;
+        if ($truncated) {
+            $html = self::utf8Prefix(substr($html, 0, self::MAX_PARSE_BYTES));
         }
 
         // Without any declaration the HTML parser reads bytes as its
@@ -173,8 +183,31 @@ final class HtmlToMarkdown
         $blocks = self::renderBlocks($root, $baseUrl);
 
         $markdown = trim(implode("\n\n", $blocks));
+        if (!$truncated) {
+            return $markdown === '' ? null : $markdown . "\n";
+        }
 
-        return $markdown === '' ? null : $markdown . "\n";
+        // A truncated body that renders nothing still returns the note: a null
+        // here would send the caller the raw bytes of the part it refused.
+        $note = '*(The page is larger than the ' . intdiv(self::MAX_PARSE_BYTES, 1024)
+            . ' KiB conversion limit; only its first part is shown.)*';
+
+        return ($markdown === '' ? $note : $markdown . "\n\n" . $note) . "\n";
+    }
+
+    /**
+     * The longest prefix of $bytes that is valid UTF-8 once the trailing
+     * partial sequence is dropped. A cut through a multibyte character would
+     * otherwise make libxml reject the whole fragment. At most three bytes can
+     * be dangling, since a UTF-8 sequence is at most four bytes long.
+     */
+    private static function utf8Prefix(string $bytes): string
+    {
+        for ($i = 0; $i < 3 && preg_match('//u', $bytes) !== 1; $i++) {
+            $bytes = substr($bytes, 0, -1);
+        }
+
+        return $bytes;
     }
 
     /**

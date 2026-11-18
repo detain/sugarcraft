@@ -62,6 +62,13 @@ final class PngPixels
      * Returns a {@see RawRgba} (width, height and buffer) rather than a bare
      * buffer, because every caller needs the geometry with the bytes.
      *
+     * Cost: the unfilter and RGBA expansion are per-byte PHP on the calling
+     * thread and scale linearly with the pixel count. Measured on PHP 8.3.6, a
+     * 1000×1000 RGBA still took about 3.4 s and a 2000×2000 about 14 s, so the
+     * largest admissible RGBA still (4095², under the 64 MiB scanline cap) runs
+     * for tens of seconds. Call this off the event loop, or pass a lower
+     * $maxPixels, when the bytes come from an untrusted user.
+     *
      * @param int $maxPixels Largest width×height accepted. A non-positive value
      *                       declines every image.
      */

@@ -186,6 +186,36 @@ final class LockFileTest extends TestCase
         self::assertNotNull($holder);
     }
 
+    public function testCancellingTheAsyncWaitStopsItsPollTimer(): void
+    {
+        $loop = new StreamSelectLoop();
+        $path = $this->dir . '/l';
+        $holder = LockFile::on($path)->tryAcquire();
+        self::assertNotNull($holder);
+
+        // The caller gives up after 50ms, as a timeout() wrapper would. With the
+        // deadline at 2s, a poll timer that survives the cancel keeps run() busy
+        // for the full 2s, which is what this test measures.
+        $promise = LockFile::on($path)->tryAcquireAsync($loop, 2.0);
+        $value = 'unsettled';
+        $promise->then(static function (mixed $v) use (&$value): void {
+            $value = $v;
+        });
+        $loop->addTimer(0.05, static function () use ($promise): void {
+            $promise->cancel();
+        });
+
+        $started = microtime(true);
+        $loop->run();
+        $elapsed = microtime(true) - $started;
+
+        self::assertLessThan(1.0, $elapsed, 'a cancelled wait must not keep polling until its deadline');
+        self::assertNull($value, 'a cancelled wait resolves null: no lock was taken');
+
+        $holder->release();
+        self::assertNotNull(LockFile::on($path)->tryAcquire(), 'the descriptor the cancel closed does not hold the lock');
+    }
+
     /**
      * Run the loop until $promise settles, bounded so a stuck wait fails by name.
      */
@@ -338,5 +368,188 @@ final class LockFileTest extends TestCase
 
         self::assertNotNull($syncHolder);
         self::assertNotNull($asyncHolder);
+    }
+
+    public function testSweepNeverUnlinksAFreshInodeAnotherWaiterTookSinceItInspectedTheStaleOne(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('Windows will not unlink a file held open by this process');
+        }
+        $path = $this->dir . '/l';
+        $stale = LockFile::on($path)->tryAcquire();
+        self::assertNotNull($stale);
+        file_put_contents($path, '999999');
+
+        // The second waiter's deadline has passed too: it sweeps the stale inode
+        // after the first waiter has already unlinked it and locked a fresh one.
+        $fresh = null;
+        $probe = static function (int $pid) use ($path, &$fresh): bool {
+            @unlink($path);
+            $fresh = LockFile::on($path)->tryAcquire();
+
+            return false;
+        };
+
+        $late = LockFile::on($path)->withAliveProbe($probe)->tryAcquire(0.0);
+        self::assertNotNull($fresh, 'the first waiter locked the fresh inode');
+        self::assertNull($late, 'the late sweep must not drop the fresh holder file');
+        self::assertNull(LockFile::on($path)->tryAcquire(), 'the fresh holder still excludes everyone');
+
+        $fresh->release();
+        $stale->release();
+    }
+
+    public function testAsyncSweepNeverUnlinksAFreshInodeAnotherWaiterTook(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('Windows will not unlink a file held open by this process');
+        }
+        $path = $this->dir . '/l';
+        $stale = LockFile::on($path)->tryAcquire();
+        self::assertNotNull($stale);
+        file_put_contents($path, '999999');
+
+        $fresh = null;
+        $probe = static function (int $pid) use ($path, &$fresh): bool {
+            @unlink($path);
+            $fresh = LockFile::on($path)->tryAcquire();
+
+            return false;
+        };
+
+        $loop = new StreamSelectLoop();
+        $late = $this->settle(
+            $loop,
+            LockFile::on($path)->withAliveProbe($probe)->tryAcquireAsync($loop, 0.0),
+        );
+        self::assertNotNull($fresh, 'the first waiter locked the fresh inode');
+        self::assertNull($late, 'the late async sweep must not drop the fresh holder file');
+        self::assertNull(LockFile::on($path)->tryAcquire(), 'the fresh holder still excludes everyone');
+
+        $fresh->release();
+        $stale->release();
+    }
+
+    /**
+     * A dead exclusive holder left its pid note behind and a live shared reader
+     * now holds the inode. The reader writes no pid, so the note still reads as
+     * dead: an exclusive waiter that times out must not unlink the inode the
+     * reader is using, or it would take exclusion beside that reader.
+     */
+    public function testExclusiveWaiterNeverSweepsOverALiveSharedReader(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('Windows will not unlink a file held open by this process');
+        }
+        $path = $this->dir . '/l';
+        file_put_contents($path, '999999');
+        $reader = LockFile::on($path)->shared()->tryAcquire();
+        self::assertNotNull($reader);
+        clearstatcache();
+        $inode = fileinode($path);
+
+        $probed = 0;
+        $guard = LockFile::on($path)
+            ->withAliveProbe(static function (int $pid) use (&$probed): bool {
+                $probed++;
+
+                return false;
+            })
+            ->tryAcquire(0.05);
+
+        self::assertNull($guard, 'a live shared reader keeps exclusion, even over a dead pid note');
+        self::assertSame(1, $probed, 'the dead pid was judged, and the sweep still refused');
+        clearstatcache();
+        self::assertSame($inode, fileinode($path), 'the reader\'s inode must not be unlinked');
+        self::assertTrue($reader->held());
+        self::assertNull(LockFile::on($path)->tryAcquire(), 'exclusion still holds beside the reader');
+
+        $reader->release();
+    }
+
+    public function testAsyncExclusiveWaiterNeverSweepsOverALiveSharedReader(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('Windows will not unlink a file held open by this process');
+        }
+        $path = $this->dir . '/l';
+        file_put_contents($path, '999999');
+        $reader = LockFile::on($path)->shared()->tryAcquire();
+        self::assertNotNull($reader);
+
+        $loop = new StreamSelectLoop();
+        $guard = $this->settle(
+            $loop,
+            LockFile::on($path)
+                ->withAliveProbe(static fn (int $pid): bool => false)
+                ->tryAcquireAsync($loop, 0.05),
+        );
+
+        self::assertNull($guard, 'the async sweep refuses a live shared reader too');
+        self::assertTrue($reader->held());
+        $reader->release();
+    }
+
+    /**
+     * A new exclusive holder has taken the flock but not yet written its pid
+     * note, so the file still names a dead holder. The pid note lands while the
+     * contender is judging it. The contender must re-read it after the
+     * confirmation poll, see the live note, and leave the file alone.
+     */
+    public function testSweepIsCancelledWhenAPidNoteLandsDuringTheConfirmationPoll(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('Windows will not unlink a file held open by this process');
+        }
+        $path = $this->dir . '/l';
+        $blocker = LockFile::on($path)->tryAcquire();
+        self::assertNotNull($blocker);
+        file_put_contents($path, '999999');
+        clearstatcache();
+        $inode = fileinode($path);
+
+        $probe = static function (int $pid) use ($path): bool {
+            file_put_contents($path, (string) getmypid());
+
+            return false;
+        };
+
+        $guard = LockFile::on($path)->withAliveProbe($probe)->tryAcquire(0.02);
+
+        self::assertNull($guard, 'a pid note that changed during the confirmation poll must not be swept');
+        clearstatcache();
+        self::assertSame($inode, fileinode($path), 'the live holder\'s file must not be unlinked');
+        self::assertNull(LockFile::on($path)->tryAcquire(), 'the blocker still excludes everyone');
+        self::assertNotNull($blocker);
+    }
+
+    public function testAsyncSweepIsCancelledWhenAPidNoteLandsDuringTheConfirmationPoll(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('Windows will not unlink a file held open by this process');
+        }
+        $path = $this->dir . '/l';
+        $blocker = LockFile::on($path)->tryAcquire();
+        self::assertNotNull($blocker);
+        file_put_contents($path, '999999');
+        clearstatcache();
+        $inode = fileinode($path);
+
+        $probe = static function (int $pid) use ($path): bool {
+            file_put_contents($path, (string) getmypid());
+
+            return false;
+        };
+
+        $loop = new StreamSelectLoop();
+        $guard = $this->settle(
+            $loop,
+            LockFile::on($path)->withAliveProbe($probe)->tryAcquireAsync($loop, 0.02),
+        );
+
+        self::assertNull($guard, 'the async confirmation re-reads the note too');
+        clearstatcache();
+        self::assertSame($inode, fileinode($path));
+        self::assertNotNull($blocker);
     }
 }

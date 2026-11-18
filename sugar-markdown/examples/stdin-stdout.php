@@ -23,7 +23,12 @@ foreach ($argv as $arg) {
         $themeName = $m[1];
     }
 }
-$theme = Theme::byName($themeName) ?? Theme::ansi();
+// The catalog adds the bundled slugs (solarized, monokai, github) that byName() does not know.
+$theme = Theme::byName($themeName) ?? Theme::catalogByName($themeName);
+if ($theme === null) {
+    fwrite(STDERR, "unknown theme '{$themeName}'; using ansi\n");
+    $theme = Theme::ansi();
+}
 
 // Bounded read: a pipe can carry any size, and the renderer's cost grows
 // with what it is given. Past the cap the demo refuses rather than stalling.

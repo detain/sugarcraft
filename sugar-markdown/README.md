@@ -541,7 +541,9 @@ quotes and simple tables. It drops `script`, `style`, `nav`, `svg`, `iframe`,
 `Html\UrlReference::resolve($base, $reference)`, an RFC 3986 resolver. It
 returns `null` when the document cannot be converted, so the caller can fall
 back to the raw body. Parsing needs `ext-dom`; without it the converter
-returns `null`. Inputs over 512 KiB are refused before parsing.
+returns `null`. Inputs over 512 KiB are cut to their first 512 KiB before
+parsing, and the output closes with a note saying so, so the drop rule still
+covers everything that is converted.
 
 ## Renderer options
 
