@@ -331,14 +331,12 @@ final class Detect
         // A Kitty claim from the environment is a hypothesis until the terminal
         // answers an APC `a=q` query (P1-13b). Capability::kitty() is true only
         // on that reply: no reply, or no tty to ask on, drops the claim and the
-        // ladder below decides as it would for any other terminal. A DA1 answer
-        // that arrived without the reply was already read by that query, so the
-        // sixel arm reads it from there instead of asking a second time.
-        $da1Consumed = false;
+        // ladder below decides as it would for any other terminal. The query
+        // also asked DA1, so the sixel arm reads that window instead of asking a
+        // second time: a silent terminal costs one window, not two.
+        $kittyWindow = null;
         if ($cap->kitty) {
-            $kittyReply = self::probeKittyApc();
-            if ($kittyReply !== true) {
-                $da1Consumed = $kittyReply === false;
+            if (self::probeKittyApc($kittyWindow) !== true) {
                 $cap = Capability::unknown(null, $inTmux)->withTerminalFacts($cap->quirks, $cap->passthroughMode);
             }
         }
@@ -387,9 +385,9 @@ final class Detect
                 return self::finishProbe(Capability::sixel(self::probeFontSize(), $inTmux)->withTerminalFacts($cap->quirks, $cap->passthroughMode));
             }
 
-            // A DA1 answer the Kitty query already read is parsed, not re-asked:
-            // a second query would wait out the window for an answer that never comes.
-            $sixelViaDa1 = $da1Consumed ? self::parseDa1Reply((string) self::$lastDa1Reply) : self::probeDa1();
+            // The Kitty query already asked DA1 on a tty: its window is parsed,
+            // not asked again. A silent window reads as no sixel.
+            $sixelViaDa1 = $kittyWindow !== null ? self::parseDa1Reply($kittyWindow) : self::probeDa1();
             if ($sixelViaDa1 === true) {
                 return self::finishProbe(Capability::sixel(self::probeFontSize(), $inTmux)->withTerminalFacts($cap->quirks, $cap->passthroughMode));
             }
@@ -961,12 +959,16 @@ final class Detect
      * terminal answers DA1. Terminals answer in order, so the OK reply, when
      * there is one, precedes the DA1 answer.
      *
+     * @param string|null $window  set to the reply window read from the tty
+     *                             (the DA1 answer, when one came back) once the
+     *                             query has been written; left null when no
+     *                             query was asked (no tty, or a failed write)
      * @return bool|null  true = the `i=31;OK` reply came back; false = DA1 came
      *                    back without it (the terminal parsed the query and
      *                    declined it, or ignored it); null = no tty, a failed
      *                    write, or no answer within the window
      */
-    private static function probeKittyApc(): ?bool
+    private static function probeKittyApc(?string &$window): ?bool
     {
         if (!self::isInteractiveTty()) {
             return null;
@@ -983,7 +985,8 @@ final class Detect
         // The terminator consumes the APC reply together with the DA1 answer:
         // stashSurplus() removes one match per pattern, so an APC reply left
         // out of it would be replayed to the input parser as a stray keystroke.
-        $reply = self::readStdinTimed(self::TIMEOUT_MS, $fd, self::KITTY_APC_THEN_DA1);
+        $reply  = self::readStdinTimed(self::TIMEOUT_MS, $fd, self::KITTY_APC_THEN_DA1);
+        $window = $reply;
         if (preg_match(self::KITTY_APC_REPLY, $reply) === 1) {
             return true;
         }
@@ -991,7 +994,6 @@ final class Detect
         if (preg_match(self::DA1_REPLY_TERMINATOR, $reply) !== 1) {
             return null;
         }
-        // The DA1 answer is in hand: the sixel arm reads it from here (see probeQueries).
         self::$lastDa1Reply = $reply;
 
         return false;

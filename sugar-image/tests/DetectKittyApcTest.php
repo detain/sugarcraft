@@ -138,6 +138,7 @@ final class DetectKittyApcTest extends TestCase
         $cap = Detect::probe();
 
         $this->assertFalse($cap->kitty);
+        $this->assertSame(1, substr_count($this->queriesWritten(), "\x1b[c"), 'a silent window is not asked for DA1 a second time');
     }
 
     public function testWithoutATtyTheClaimCannotBeConfirmedAndIsDropped(): void

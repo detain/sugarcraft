@@ -682,8 +682,10 @@ removes only the topmost image. Sixel and the text tiers have nothing to delete.
 followed by DA1, and `Capability::kitty()` is true only when the terminal
 answers `ESC _ G i=31;OK`. A DA1 answer without that reply, no answer in the
 window, or no tty to ask on drops the claim, and the ladder decides as it does
-for any other terminal. `Detect::fromEnv()` is unchanged: it still names the
-claim, and it never asks.
+for any other terminal. `Mosaic::auto()` keeps that answer: its palette fallback
+grants iTerm2 from the environment, never Kitty, since a Kitty graphics claim
+needs the reply. `Detect::fromEnv()` is unchanged: it still names the claim, and
+it never asks.
 
 ## Sprite sheets, timelines and the decode cache
 

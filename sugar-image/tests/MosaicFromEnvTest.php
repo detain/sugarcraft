@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Image\Detect;
 use SugarCraft\Image\Mosaic;
 use SugarCraft\Image\TmuxPassthroughDecorator;
+use SugarCraft\Image\Tests\Support\KittyTerminal;
 
 /**
  * @covers \SugarCraft\Image\Mosaic::fromEnv
@@ -108,7 +109,10 @@ final class MosaicFromEnvTest extends TestCase
         // Regression (candy-code ToolResultRenderModeTest): a probe reset after
         // an environment change must not hand back the pre-change auto answer.
         putenv('TERM=xterm-kitty');
-        $this->assertSame('kitty', Mosaic::auto()->protocol());
+        KittyTerminal::answer();
+        $first = Mosaic::auto()->protocol();
+        KittyTerminal::clear();
+        $this->assertSame('kitty', $first);
 
         putenv('TERM=dumb');
         Detect::reset();

@@ -6,6 +6,7 @@ namespace SugarCraft\Image\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Image\Mosaic;
+use SugarCraft\Image\Tests\Support\KittyTerminal;
 use SugarCraft\ColorProfile\Probe\Capability;
 
 /**
@@ -144,14 +145,27 @@ final class MosaicAutoTest extends TestCase
         $this->assertTrue($report->has(Capability::NoColor));
     }
 
-    public function testAutoWithXtermKitty(): void
+    public function testAutoWithXtermKittyNeedsTheKittyReply(): void
     {
+        // TERM=xterm-kitty is a claim, not a confirmation: with no tty to ask,
+        // neither Detect nor the palette fallback may grant Kitty (P1-13b).
         $this->env('TERM', 'xterm-kitty');
 
-        $mosaic = Mosaic::auto();
+        $this->assertNotSame('kitty', Mosaic::auto()->protocol());
+    }
 
-        // Should detect Kitty capability
-        $this->assertSame('kitty', $mosaic->protocol());
+    public function testAutoWithXtermKittyAndTheReplyIsKitty(): void
+    {
+        $this->env('TERM', 'xterm-kitty');
+        \SugarCraft\Image\Detect::reset();
+        KittyTerminal::answer();
+        try {
+            $protocol = Mosaic::auto()->protocol();
+        } finally {
+            KittyTerminal::clear();
+        }
+
+        $this->assertSame('kitty', $protocol);
     }
 
     public function testAutoWithTermProgramIterm(): void

@@ -217,9 +217,12 @@ final class Mosaic implements IncrementalRenderer
      * Explicit fallback detection via sugar-colorprofile's TerminalProbe.
      *
      * Only consulted when {@see Detect::probe()} identified no graphics
-     * protocol. The palette report can still see Kitty/iTerm2 environment
-     * advertisements Detect's env table misses; anything else keeps the
-     * Detect snapshot (whose bestBackend lands on the Symbols rung).
+     * protocol. The palette report can still see iTerm2 environment
+     * advertisements Detect's env table misses. It is never a Kitty source:
+     * its Kitty keyboard flag comes from TERM alone, and a Kitty graphics
+     * claim needs the APC `a=q` reply that Detect already asked for (P1-13b).
+     * Anything else keeps the Detect snapshot (whose bestBackend lands on the
+     * Symbols rung).
      * Consumer wire: the rebuilt capabilities inherit the snapshot's
      * probed OSC 10/11 default colours — dropping them used to hand the
      * terminal a colour-blind text fallback two rungs down the ladder.
@@ -231,15 +234,6 @@ final class Mosaic implements IncrementalRenderer
         } catch (\Throwable) {
             // TerminalProbe itself threw — keep the Detect snapshot.
             return self::fromCapability($fallbackCap);
-        }
-
-        // Kitty keyboard support implies the Kitty graphics protocol.
-        if ($report->has(PaletteCapability::KittyKeyboard)) {
-            return self::fromCapability(
-                Capability::kitty($fallbackCap->cellSize, $fallbackCap->inTmux)
-                    ->withDefaultColors($fallbackCap->defaultFg, $fallbackCap->defaultBg)
-                    ->withTerminalFacts($fallbackCap->quirks, $fallbackCap->passthroughMode),
-            );
         }
 
         // iTerm2 inline image support.
