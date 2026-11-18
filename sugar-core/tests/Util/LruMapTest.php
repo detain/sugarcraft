@@ -678,4 +678,17 @@ final class LruMapTest extends TestCase
         $now = 1.0e9;
         self::assertSame(1, $map->get('a'));
     }
+
+    public function testWithTtlDoesNotReviveAnEntryPastItsOldLifetime(): void
+    {
+        $now = 0.0;
+        $map = LruMap::new(4)->withTtl(10.0, $this->clockAt($now));
+        $map->put('a', 'v');
+
+        $now = 11.0;
+        $snapshot = $map->withTtl(60.0, $this->clockAt($now));
+
+        self::assertFalse($snapshot->has('a'), 'restamping must not resurrect an expired entry');
+        self::assertSame([], $snapshot->keys());
+    }
 }

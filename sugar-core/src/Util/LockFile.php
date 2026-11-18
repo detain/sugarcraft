@@ -101,8 +101,6 @@ final class LockFile
             if (microtime(true) >= $deadline) {
                 $swept = $this->sweepIfStale($handle);
                 if ($swept === null) {
-                    fclose($handle);
-
                     return null;
                 }
 
@@ -167,7 +165,6 @@ final class LockFile
         if (microtime(true) >= $deadline) {
             $swept = $this->sweepIfStale($handle);
             if ($swept === null) {
-                fclose($handle);
                 $deferred->resolve(null);
 
                 return;
@@ -233,10 +230,13 @@ final class LockFile
     }
 
     /**
-     * On a timed-out exclusive attempt: read the recorded pid; if provably
-     * dead, drop the file and lock the fresh inode. Returns the locked handle,
-     * or null when nothing was swept or the retry lost the race. Closes the
-     * contended handle when it sweeps.
+     * On a timed-out exclusive attempt: if the recorded pid is provably dead,
+     * drop the file and lock the fresh inode. Returns the locked handle, or
+     * null when nothing was swept or the retry lost the race.
+     *
+     * This method owns $contended: it is closed exactly once on every path, so
+     * callers must not close it again after a null (that double close is a
+     * TypeError).
      *
      * @param resource $contended
      *
@@ -244,17 +244,9 @@ final class LockFile
      */
     private function sweepIfStale($contended): mixed
     {
-        if (!$this->exclusive) {
-            return null;
-        }
+        if (!$this->isStale($contended)) {
+            fclose($contended);
 
-        rewind($contended);
-        $recorded = trim((string) stream_get_contents($contended, 32));
-        if ($recorded === '' || !ctype_digit($recorded)) {
-            return null;
-        }
-        $pid = (int) $recorded;
-        if ($pid <= 1 || $pid === getmypid() || $this->alive($pid)) {
             return null;
         }
 
@@ -272,6 +264,28 @@ final class LockFile
         }
 
         return $fresh;
+    }
+
+    /**
+     * Whether the holder recorded in $contended is provably dead. Read-only:
+     * it neither unlinks nor closes anything.
+     *
+     * @param resource $contended
+     */
+    private function isStale($contended): bool
+    {
+        if (!$this->exclusive) {
+            return false;
+        }
+
+        rewind($contended);
+        $recorded = trim((string) stream_get_contents($contended, 32));
+        if ($recorded === '' || !ctype_digit($recorded)) {
+            return false;
+        }
+        $pid = (int) $recorded;
+
+        return !($pid <= 1 || $pid === getmypid() || $this->alive($pid));
     }
 
     private function alive(int $pid): bool

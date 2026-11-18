@@ -137,6 +137,8 @@ final class LruMap implements \Countable, \IteratorAggregate
         }
 
         $next = clone $this;
+        // Entries already past their old lifetime must not be revived by restamping.
+        $next->expireStale();
         $next->ttl = $seconds;
         $next->clock = $clock;
         $next->expiresAt = [];

@@ -284,4 +284,37 @@ final class LockFileTest extends TestCase
         self::assertNotNull($guard, 'the async path applies the same stale-holder sweep');
         self::assertSame((string) getmypid(), file_get_contents($path));
     }
+
+    /**
+     * A dead holder is judged stale, the lock file is unlinked, and the retry
+     * then cannot reopen a file (the path is now a directory). The sweep must
+     * resolve null exactly once, without closing its handle a second time.
+     */
+    public function testLostSweepRaceResolvesNullWithoutDoubleClosing(): void
+    {
+        $path = $this->dir . '/l';
+        $holder = LockFile::on($path)->tryAcquire();
+        self::assertNotNull($holder);
+        file_put_contents($path, '999999');
+
+        $probe = static function (int $pid) use ($path): bool {
+            @unlink($path);
+            @mkdir($path);
+
+            return false;
+        };
+
+        $guard = LockFile::on($path)->withAliveProbe($probe)->tryAcquire(0.05);
+        self::assertNull($guard);
+
+        $asyncLoop = new StreamSelectLoop();
+        $asyncGuard = $this->settle(
+            $asyncLoop,
+            LockFile::on($path)->withAliveProbe($probe)->tryAcquireAsync($asyncLoop, 0.05),
+        );
+        self::assertNull($asyncGuard);
+
+        rmdir($path);
+        self::assertNotNull($holder);
+    }
 }
