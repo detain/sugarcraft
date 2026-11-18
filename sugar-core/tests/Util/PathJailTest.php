@@ -505,4 +505,47 @@ final class PathJailTest extends TestCase
         $method = new \ReflectionMethod(PathJail::class, 'insideBeneath');
         $this->assertSame($inside, $method->invoke(null, $candidate, $root, $separator));
     }
+
+    /**
+     * within() and below() judge canonical paths by the same separator rule as
+     * resolve(). Windows rows run through the separator seam on POSIX.
+     *
+     * @return iterable<string, array{string, string, string, bool, bool}>
+     */
+    public static function relationRows(): iterable
+    {
+        // [canonical path, canonical boundary, separator, exactCounts, expected]
+        yield 'posix within child' => ['/ws/a.txt', '/ws', '/', true, true];
+        yield 'posix within boundary' => ['/ws', '/ws', '/', true, true];
+        yield 'posix below boundary refused' => ['/ws', '/ws', '/', false, false];
+        yield 'posix below child' => ['/ws/a.txt', '/ws', '/', false, true];
+        yield 'posix sibling prefix' => ['/wsx/a.txt', '/ws', '/', true, false];
+        yield 'windows within child' => ['C:\\ws\\a.txt', 'C:\\ws', '\\', true, true];
+        yield 'windows within nested' => ['C:\\ws\\sub\\a.txt', 'C:\\ws', '\\', true, true];
+        yield 'windows within boundary' => ['C:\\ws', 'C:\\ws', '\\', true, true];
+        yield 'windows below child' => ['C:\\ws\\a.txt', 'C:\\ws', '\\', false, true];
+        yield 'windows below boundary refused' => ['C:\\ws', 'C:\\ws', '\\', false, false];
+        yield 'windows sibling prefix' => ['C:\\wsx\\a.txt', 'C:\\ws', '\\', true, false];
+        yield 'windows drive root contains entry' => ['C:\\Windows', 'C:\\', '\\', false, true];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('relationRows')]
+    public function testWithinAndBelowUseThePlatformSeparator(string $path, string $boundary, string $separator, bool $exactCounts, bool $expected): void
+    {
+        $method = new \ReflectionMethod(PathJail::class, 'relation');
+        $this->assertSame($expected, $method->invoke(null, $path, $boundary, $exactCounts, $separator));
+    }
+
+    public function testEveryMethodRefusesAnEmptyPathTheSameWay(): void
+    {
+        // Regression. resolveDir() and confine() answered '' with the root, while
+        // resolve() and resolveForCreate() refused it. A preview built on confine()
+        // then treated '' as a write target at the root.
+        $this->assertNull(PathJail::resolve($this->root, ''));
+        $this->assertNull(PathJail::resolveForCreate($this->root, ''));
+        $this->assertNull(PathJail::resolveDir($this->root, ''));
+        $this->assertNull(PathJail::confine($this->root, ''));
+        $this->assertFalse(PathJail::within('', $this->root));
+        $this->assertFalse(PathJail::below('', $this->root));
+    }
 }

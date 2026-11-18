@@ -298,6 +298,25 @@ final class HtmlToMarkdownTest extends TestCase
         $this->assertSame("one\ntwo\n", $markdown);
     }
 
+    public function testALineBreakInsideAPreBlockKeepsItsLine(): void
+    {
+        // The whole-subtree text read must see a br as a newline, or the two
+        // lines of code run together into one.
+        $this->assertSame(
+            "```\nline1\nline2\n```\n",
+            HtmlToMarkdown::convert('<pre>line1<br>line2</pre>', ''),
+        );
+        $this->assertSame(
+            "```\nx = 1\ny = 2\n```\n",
+            HtmlToMarkdown::convert('<pre><code>x = 1<br>y = 2</code></pre>', ''),
+        );
+    }
+
+    public function testALineBreakInsideInlineCodeStaysOnOneLine(): void
+    {
+        $this->assertSame("`a b`\n", HtmlToMarkdown::convert('<p><code>a<br>b</code></p>', ''));
+    }
+
     public function testDefinitionListsFallThroughAsTextBlocks(): void
     {
         $markdown = HtmlToMarkdown::convert('<dl><dt>Term</dt><dd>Def</dd></dl>', '');

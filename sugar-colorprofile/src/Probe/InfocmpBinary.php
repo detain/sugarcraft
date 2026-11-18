@@ -80,7 +80,8 @@ final class InfocmpBinary
     /**
      * Per-lowercased-TERM dump memo behind {@see runBounded()} — the ONE
      * shared table every sync exec surface answers from (a null entry is a
-     * recorded miss: absent binary or overrun, never re-execed either).
+     * recorded miss: absent binary, deadline overrun or signal kill, never
+     * re-execed either; a failed launch mints no entry at all).
      * Bounded cardinality via {@see self::MEMO_MAX_ENTRIES} — see memoWrite().
      *
      * @var array<string, string|null>
@@ -143,16 +144,18 @@ final class InfocmpBinary
      *    {@see self::TIMEOUT_SECONDS}) with a SIGTERM → grace → SIGKILL
      *    escalation ladder, {@see self::GRACE_SECONDS} per rung;
      *  - fail-open: null on absent binary, unshaped TERM (the name gate is
-     *    enforced AT THE DOOR, not only in callers), launch failure, or
-     *    deadline overrun — the caller's chain answer stands;
+     *    enforced AT THE DOOR, not only in callers), launch failure, deadline
+     *    overrun, or signal kill — the caller's chain answer stands;
      *  - the child always closes: pipes `fclose` + `proc_close` in
      *    `finally` (repo child-lifetime law).
      *
-     * Results are memoized per lowercased TERM for the process lifetime —
-     * including the null verdicts, so a failing binary is never re-execed
-     * either — with the cardinality ceiling documented at
-     * {@see self::MEMO_MAX_ENTRIES} (full ⇒ clear). {@see reset()} drains
-     * the table (test isolation).
+     * Verdicts are memoized per lowercased TERM for the process lifetime: a
+     * completed child (any exit code), an absent binary, and a child the
+     * deadline ladder or a signal killed (a recorded miss, so a wedged binary
+     * is never re-execed per tick). A failed launch is transient (fork or fd
+     * pressure) and mints no entry (CP-13). The cardinality ceiling is
+     * documented at {@see self::MEMO_MAX_ENTRIES} (full ⇒ clear).
+     * {@see reset()} drains the table (test isolation).
      *
      * @param float|null $timeoutSeconds test seam for a shorter deadline
      */
@@ -175,7 +178,12 @@ final class InfocmpBinary
             return self::memoWrite($key, null);
         }
 
-        return self::memoWrite($key, self::execOnce($binary, $term, $timeoutSeconds ?? self::TIMEOUT_SECONDS));
+        $launched = false;
+        $dump = self::execOnce($binary, $term, $timeoutSeconds ?? self::TIMEOUT_SECONDS, $launched);
+
+        // A failed launch says nothing about the TERM, so it mints no entry and
+        // the next call may spawn again (CP-13).
+        return $launched ? self::memoWrite($key, $dump) : null;
     }
 
     /**
@@ -196,9 +204,13 @@ final class InfocmpBinary
     /**
      * Single bounded launch behind {@see runBounded()}; see it for the
      * contract. Returns the capped dump, or null when the deadline ladder
-     * had to intervene (a partial dump is not a verdict).
+     * had to intervene or a signal ended the child (a partial dump is not a
+     * verdict).
+     *
+     * $launched reports whether a child was actually started: false means the
+     * launch itself failed, which the caller must not memoize (CP-13).
      */
-    private static function execOnce(string $binary, string $term, float $timeoutSeconds): ?string
+    private static function execOnce(string $binary, string $term, float $timeoutSeconds, bool &$launched): ?string
     {
         $pipes = [];
         $handle = @\proc_open(
@@ -213,9 +225,11 @@ final class InfocmpBinary
             return null;
         }
 
+        $launched = true;
         $stdout = '';
         $pastCap = false;
         $escalation = 0;
+        $signaled = false;
         $deadline = \microtime(true) + $timeoutSeconds;
 
         try {
@@ -281,12 +295,24 @@ final class InfocmpBinary
                     @\fclose($pipe);
                 }
             }
+            // proc_close() hands back the signal number for a signal death, the
+            // same value an exit code N carries, so it cannot tell a kill from
+            // an exit. proc_get_status() does: it reports 'signaled' for a dead
+            // child. EOF on the pipes arrives before the parent can reap, so
+            // wait (within the deadline) for the child to settle first.
+            $status = \proc_get_status($handle);
+            while ($status['running'] && \microtime(true) < $deadline) {
+                \usleep(10000);
+                $status = \proc_get_status($handle);
+            }
+            $signaled = $status['signaled'];
             \proc_close($handle);
         }
 
-        // A child that only ended after the TERM/KILL ladder answered
-        // nothing trustworthy — fail open to the caller's chain answer.
-        return $escalation > 0 ? null : $stdout;
+        // A child that only ended after the TERM/KILL ladder answered nothing
+        // trustworthy, and a child a signal killed printed only a partial dump:
+        // both fail open to the caller's chain answer.
+        return $escalation > 0 || $signaled ? null : $stdout;
     }
 
     /**

@@ -322,9 +322,17 @@ Both arms land content-only trees: the copy skips every `.git` directory and
 the clone sheds its own before the rename. A git clone runs as a bounded,
 non-interactive child: `--depth 1`,
 no tags, terminal prompts and askpass disabled, killed with its process group
-if it overstays. Its only destination is the user bundle root — a clone can
-land in `~/.candy-code/bundles/<name>` and nowhere else, under a name that can
-not traverse out of it.
+if it overstays. Its destination is the bundle root the verb resolves: the user
+root, `~/.candy-code/bundles/<name>`, by default, or the project root,
+`<root>/.candy-code/bundles/<name>`, under `--project` (the clone's scratch
+sits in that same root). Either way the name cannot traverse out of it.
+
+Scope is kept exclusive. `install` also refuses a name that is already held in
+the other tier (`cli.bundles.install.other_tier`), so one name never sits in
+both the user and the project tier. `--project` refuses a launch directory that
+is the home directory itself (`cli.bundles.install.project_is_home`), because
+that directory names the user root and the install would silently land there
+instead of in a project.
 
 ## Marketplaces
 
@@ -358,6 +366,15 @@ a link, so no upstream tree can aim a removal at your home directory. A
 bundle whose upstream renamed itself is refused rather than re-keyed, and
 bundles installed from a bare path or URL simply carry no record — the scan
 answers that they were left alone.
+
+`bundles update` keeps each bundle in the tier it occupies: a `--project`
+bundle is re-installed into its project root, never moved to the user root. It
+walks the owned home's bundle root and the project root (`--root`, else the
+working directory's). Named, it refuses with `cli.bundles.update.ambiguous` when
+the name sits in both tiers, and leaves both copies untouched. A project-tier
+bundle that carries a marketplace record is refused by name
+(`cli.bundles.update.no_home`) when this process has no owned home, because its
+pin is recorded in the user registry; nothing is changed.
 
 `bundles search <query>` and `bundles recommend` read the same catalogs and
 write nothing: the first matches name, source, description, category and

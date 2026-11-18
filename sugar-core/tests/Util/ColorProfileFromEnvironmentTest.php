@@ -161,6 +161,30 @@ final class ColorProfileFromEnvironmentTest extends TestCase
         }
     }
 
+    /**
+     * Regression. CLICOLOR_FORCE=false read as off here, while the chain's
+     * Env::isForceValue reads every set, non-empty, non-'0' value as a force, so
+     * the same environment got NoTty from fromEnvironment() and TrueColor from
+     * detect(). Only '' and '0' are colour-off for CLICOLOR_FORCE.
+     */
+    public function testClicolorForceUsesTheChainsGrammarOnAPipe(): void
+    {
+        foreach (['false', 'no', 'off', '1', 'true'] as $value) {
+            $this->assertNotSame(
+                ColorProfile::NoTty,
+                ColorProfile::fromEnvironment(['CLICOLOR_FORCE' => $value, 'TERM' => 'xterm'], false),
+                "CLICOLOR_FORCE={$value} on a pipe",
+            );
+        }
+        foreach (['0', ''] as $value) {
+            $this->assertSame(
+                ColorProfile::NoTty,
+                ColorProfile::fromEnvironment(['CLICOLOR_FORCE' => $value, 'TERM' => 'xterm'], false),
+                "CLICOLOR_FORCE='{$value}' on a pipe",
+            );
+        }
+    }
+
     /** A truthy word or a level of 1+ still forces a pipe, as the chain reads it. */
     public function testForceSpellingsThatGrantColourStillForceAPipe(): void
     {

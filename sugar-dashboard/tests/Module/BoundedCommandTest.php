@@ -61,6 +61,18 @@ final class BoundedCommandTest extends TestCase
         );
     }
 
+    /**
+     * A child killed by a signal has no exit code; its failure must still be
+     * named, or a crashed command renders as a silent success.
+     */
+    public function testSignalDeathIsNamedAsAFailure(): void
+    {
+        $this->assertSame(
+            ['output' => '', 'failure' => 'Command failed (exit -1)'],
+            BoundedCommand::run(['sh', '-c', 'kill -9 $$']),
+        );
+    }
+
     public function testOutputWinsOverANonZeroExit(): void
     {
         // grep exits 1 while printing the answer; the answer is what the panel shows.
@@ -136,6 +148,21 @@ final class BoundedCommandTest extends TestCase
         $outcome = Await::until(BoundedCommand::runAsync($loop, self::php('echo "hi";')), 15.0, $loop);
 
         $this->assertSame(['output' => 'hi', 'failure' => null], $outcome);
+    }
+
+    /**
+     * Regression: runAsync() reported a signal-killed child as success with no
+     * failure, because the async exit code was null. It must name the crash as
+     * run() does.
+     */
+    public function testRunAsyncNamesASignalDeathAsRunDoes(): void
+    {
+        $loop = new StreamSelectLoop();
+
+        $outcome = Await::until(BoundedCommand::runAsync($loop, ['sh', '-c', 'kill -9 $$']), 15.0, $loop);
+
+        $this->assertSame(BoundedCommand::run(['sh', '-c', 'kill -9 $$']), $outcome);
+        $this->assertSame(['output' => '', 'failure' => 'Command failed (exit -1)'], $outcome);
     }
 
     /**

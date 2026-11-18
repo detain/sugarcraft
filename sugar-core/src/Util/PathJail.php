@@ -24,12 +24,12 @@ namespace SugarCraft\Core\Util;
  *     working directory, so an empty string would silently anchor containment
  *     wherever the process happens to stand.
  *
- * Every method refuses an empty root and a NUL byte before any filesystem
- * call, because an empty root anchors on the working directory and realpath()
- * throws on NUL. The empty-path and dangling-leaf refusals are resolve()'s
- * alone. `resolveForCreate()`, `resolveDir()` and `confine()` keep the base
- * rules otherwise: `resolveForCreate()` already refuses a dangling leaf by its
- * own ancestor walk, and `resolveDir()` never accepts a missing path.
+ * Every method refuses an empty root, an empty path and a NUL byte before any
+ * filesystem call. An empty root or path anchors on the working directory,
+ * because realpath('') answers with it, and realpath() throws on NUL. The
+ * dangling-leaf refusal belongs to resolve() and confine(); resolveForCreate()
+ * already refuses a dangling link by its own ancestor walk, and resolveDir()
+ * never accepts a missing path.
  *
  * ## The overflow hook (the one path outside the root)
  *
@@ -336,16 +336,17 @@ final class PathJail
     /**
      * Whether a root/path pair is unusable as a filesystem path at all.
      *
-     * An empty root is refused because realpath('') answers with the process
-     * working directory, which would make the working directory the jail. A NUL
-     * byte can never appear in a real path, and realpath() and is_dir() THROW a
-     * ValueError on one instead of answering false. An unguarded NUL would turn a
-     * containment question into an uncaught crash in whichever caller asked it,
-     * so both refusals live here, before any filesystem call.
+     * An empty root or path is refused because realpath('') answers with the
+     * process working directory, which would make the working directory the jail
+     * (or the target). A NUL byte can never appear in a real path, and realpath()
+     * and is_dir() THROW a ValueError on one instead of answering false. An
+     * unguarded NUL would turn a containment question into an uncaught crash in
+     * whichever caller asked it, so both refusals live here, before any
+     * filesystem call.
      */
     private static function unusable(string $root, string $path): bool
     {
-        return $root === '' || str_contains($root, "\0") || str_contains($path, "\0");
+        return $root === '' || $path === '' || str_contains($root, "\0") || str_contains($path, "\0");
     }
 
     /**
@@ -431,6 +432,18 @@ final class PathJail
             return false;
         }
 
+        return self::relation($realPath, $realBoundary, $exactCounts, DIRECTORY_SEPARATOR);
+    }
+
+    /**
+     * The canonical-path half of {@see compare()}, with the separator passed in
+     * so the Windows rule is testable on POSIX, as {@see insideBeneath()} is. The
+     * separator must match the one realpath() answers with: a `/`-only check
+     * refused every entry under a Windows boundary while {@see resolve()} accepted
+     * the same entry.
+     */
+    private static function relation(string $realPath, string $realBoundary, bool $exactCounts, string $separator): bool
+    {
         if ($realPath === $realBoundary) {
             return $exactCounts;
         }
@@ -438,6 +451,6 @@ final class PathJail
         // The trailing separator on both sides stops `/a/b` from being read as
         // containing `/a/bevil`. A boundary of `/` leaves the empty string after
         // rtrim, and that is correct: every absolute path is inside `/`.
-        return str_starts_with($realPath . '/', rtrim($realBoundary, '/') . '/');
+        return str_starts_with($realPath . $separator, rtrim($realBoundary, $separator) . $separator);
     }
 }
