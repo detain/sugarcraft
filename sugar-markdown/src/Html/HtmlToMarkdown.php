@@ -510,6 +510,8 @@ final class HtmlToMarkdown
 
     /**
      * Raw text of a subtree with dropped elements removed from the walk.
+     * A `br` reads as a newline, so a line break inside a `<pre>` keeps its
+     * line instead of running the code together.
      * `textContent` reads through everything, which would hand a `<pre>`,
      * an inline code span, or a form-control label the literal payload of a
      * nested `<script>` — exactly the injection the drop list exists to
@@ -528,6 +530,8 @@ final class HtmlToMarkdown
         foreach ($node->childNodes as $child) {
             if ($child instanceof DOMText || $child instanceof DOMCdataSection) {
                 $out .= $child->nodeValue ?? '';
+            } elseif ($child instanceof DOMElement && strtolower($child->nodeName) === 'br') {
+                $out .= "\n";
             } elseif ($child instanceof DOMElement && !in_array(strtolower($child->nodeName), self::DROP_TAGS, true)) {
                 $out .= self::visibleText($child);
             }
