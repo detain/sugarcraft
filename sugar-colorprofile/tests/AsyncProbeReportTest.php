@@ -485,7 +485,45 @@ final class AsyncProbeReportTest extends TestCase
                 'a failed spawn answers with the environment report, not a terminfo leg',
             );
             $this->assertCount(0, $this->inFlightSlots(), 'a failed spawn releases its booked cap slot');
-            $this->assertSame(['xterm-256color' => null], $this->settledDumps(), 'a failed launch is a recorded miss, as on the sync door');
+            $this->assertSame([], $this->settledDumps(), 'a failed launch is transient and mints no dump entry (CP-13)');
+
+            // The same refused loop on the colorProfile() surface: a transient
+            // launch failure must not demote the TERM in the settled-answer memo.
+            AsyncProbe::colorProfile($loop);
+            $settledMemo = (new \ReflectionProperty(AsyncProbe::class, 'settledMemo'))->getValue();
+            $this->assertSame([], $settledMemo, 'a failed launch mints no colorProfile memo entry either (CP-13)');
+        } finally {
+            @\unlink($path);
+        }
+    }
+
+    /**
+     * CP-13 on the report() surface, the partial-dump half: a child that a
+     * signal kills after printing part of its terminfo dump answers "no dump".
+     * The prefix it printed (here a Tc cap that would promote the report) must
+     * reach neither the replay nor the memo for the life of the process. The
+     * kill comes after the output, so the vendor exit path sees a signal death
+     * with a null exit code.
+     */
+    public function testSignalKilledChildAfterAPartialDumpReplaysNoDumpAndMintsNoEntry(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('the planted /bin/sh stub needs a POSIX shell.');
+        }
+
+        $this->setTerm('xterm-256color');
+        $path = $this->plantBinary('#!/bin/sh' . "\n" . "printf 'xterm-256color|x,\\n\\tTc,\\n'\n" . "kill -KILL \$\$\n");
+        try {
+            $loop = new StreamSelectLoop();
+
+            $report = self::settle(AsyncProbe::report($loop), $loop);
+            $this->assertInstanceOf(ProbeReport::class, $report);
+            $this->assertSame(
+                self::sources(TerminfoReplayProbe::replaying(null)->runProbe()),
+                self::sources($report),
+                'a signal-killed child replays as "no dump": its partial prefix never builds the report',
+            );
+            $this->assertSame([], $this->settledDumps(), 'a signal-killed child mints no dump entry, so the partial prefix is never memoized (CP-13)');
         } finally {
             @\unlink($path);
         }
