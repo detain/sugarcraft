@@ -869,7 +869,9 @@ final class Width
             $i += strlen($cluster);
         }
         $commitWord($word, $wordWidth);
-        if ($line !== '') {
+        // A trailing hard break leaves an empty final row, which is kept so
+        // the output has the same row count as the input (wrap()'s contract).
+        if ($line !== '' || str_ends_with($s, "\n")) {
             $lines[] = rtrim($line);
         }
         return implode("\n", $lines);

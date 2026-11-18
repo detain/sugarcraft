@@ -71,6 +71,45 @@ final class WidthWrapAnsiHardBreakTest extends TestCase
         $this->assertSame(Width::wrap($in, 10), Width::wrapAnsi($in, 10));
     }
 
+    /**
+     * A trailing hard break ends the last row, and the empty row after it is
+     * kept, as wrap() keeps it. The final append used to test only for a
+     * non-empty line, so `wrapAnsi("a\n")` dropped the blank row and
+     * Style::render() with word wrap lost the row the no-wrap path keeps.
+     *
+     * @return iterable<string, array{string, int, string}>
+     */
+    public static function trailingBreakCases(): iterable
+    {
+        yield 'single trailing LF keeps the blank row' => ["a\n", 10, "a\n"];
+        yield 'two trailing LFs keep both blank rows' => ["a\n\n", 10, "a\n\n"];
+        yield 'LF alone is one blank row' => ["\n", 10, "\n"];
+        yield 'trailing space before LF is trimmed, row kept' => ["a \n", 10, "a\n"];
+        yield 'trailing CRLF keeps the blank row' => ["a\r\n", 10, "a\n"];
+        yield 'LF between text and trailing LF' => ["a\nb\n", 10, "a\nb\n"];
+        yield 'wrapped text then trailing LF' => ["aaaa bbbb x\n", 10, "aaaa bbbb\nx\n"];
+    }
+
+    #[DataProvider('trailingBreakCases')]
+    public function testTrailingHardBreakKeepsItsBlankRow(string $in, int $max, string $expected): void
+    {
+        $this->assertSame($expected, Width::wrapAnsi($in, $max));
+    }
+
+    /** @return iterable<string, array{string, int, string}> */
+    public static function noTrailingBreakCases(): iterable
+    {
+        yield 'plain word' => ['a', 10, 'a'];
+        yield 'two rows, no trailing break' => ["a\nb", 10, "a\nb"];
+        yield 'wrapped text, no trailing break' => ['aaaa bbbb x', 10, "aaaa bbbb\nx"];
+    }
+
+    #[DataProvider('noTrailingBreakCases')]
+    public function testInputWithoutTrailingBreakIsUnchanged(string $in, int $max, string $expected): void
+    {
+        $this->assertSame($expected, Width::wrapAnsi($in, $max));
+    }
+
     public function testOverWideClusterBranchChecksTheLineToo(): void
     {
         // A leading space leaves the line non-empty at width 1; the word
