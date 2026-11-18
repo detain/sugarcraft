@@ -34,8 +34,13 @@ the run selected.
 
 ### Where does my code go?
 
-To the provider you select, and nowhere else. The echo provider contains no
-HTTP client code, so a run without a configured provider sends no code or prompts.
+To the provider you select, plus whichever network tools you enable. WebSearch
+sends its model-composed queries to `CANDY_CODE_SEARCH_ENDPOINT`, and they often
+quote code. WebFetch sends its model-composed URLs to the host they name. MCP servers
+you trust receive their tool arguments, and Bash commands can reach the network. The
+echo provider contains no HTTP client code, so a run without a configured provider
+sends no code or prompts. The egress notes for each tool are in
+[ENVIRONMENT.md](ENVIRONMENT.md).
 Phar installs do make one background GET a day to the GitHub release list for the
 "update available" notice; set `CANDY_CODE_NO_UPDATE_CHECK=1` to stop it. The shipped
 `dev-sglang` block in `config.dev.json` sends no API key, and this repository does not

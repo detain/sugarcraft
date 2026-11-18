@@ -10,7 +10,7 @@ story.
 | Term | Meaning |
 |---|---|
 | **ANSI** | The family of escape-sequence conventions (ECMA-48 and its successors) terminals use for cursor movement, colors, and modes like the alternate screen. Everything a TUI "draws" is ANSI text. |
-| **chafa** | A terminal image renderer that converts pictures to character art. As a render mode it is the last-resort rung: works in any terminal, lowest fidelity ([MEDIA.md](MEDIA.md)). |
+| **chafa** | A terminal image renderer that converts pictures to character art. As a render mode it works in any terminal and sits between sixel and symbols/halfblock in the `auto` ladder (kitty > iterm2 > sixel > chafa > symbols > halfblock, see `src/ToolResult.php`) ([MEDIA.md](MEDIA.md)). |
 | **kitty protocol** | The Kitty terminal's graphics protocol (and its keyboard-extension counterpart): images addressed as numbered, animatable objects at full color; the keyboard side lets Ctrl+Enter arrive as itself. Used when detected, ignored otherwise. |
 | **OSC 52** | An escape sequence (Operating System Command 52) that asks the terminal to copy text into the *system* clipboard, even over ssh. How selecting with the mouse in CandyCode reaches your paste buffer. |
 | **PTY** | Pseudo-TTY — a kernel terminal pair: a master the parent program reads/writes and a slave that behaves like a real terminal for a child process. How `Bash interactive:true`, `PtyRun`, and tmux-style embedding work. |
