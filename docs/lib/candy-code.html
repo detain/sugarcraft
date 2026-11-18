@@ -237,7 +237,7 @@ candy-code -p "audit this" --output-format json | jq -r .result</code></pre>
 <tr><td>PermissionGate</td><td>mode(): PermissionMode</td><td>One of <code>default</code>, <code>accept-edits</code>, <code>plan</code>, <code>auto</code>, <code>dont-ask</code>, <code>bypass-permissions</code></td></tr>
 <tr><td>WorkflowEngine</td><td>run(workflowPath, context): WorkflowResult</td><td>Execute a YAML multi-stage agent pipeline</td></tr>
 <tr><td>WorkflowEngine</td><td>runFromPhp(workflowClass, context): WorkflowResult</td><td>Same, from the PHP builder DSL</td></tr>
-<tr><td>WorkflowEngine</td><td>pause(id), resume(id), getStatus(id)</td><td>Stage-granularity pause / resume across a signal</td></tr>
+<tr><td>WorkflowEngine</td><td>pause(id), resume(id), status(id)</td><td>Stage-granularity pause / resume across a signal</td></tr>
 <tr><td>SessionStore</td><td>createSession(id, provider, model, ?systemPrompt, ?name)</td><td>Open a session row in the SQLite (WAL) store</td></tr>
 <tr><td>SessionStore</td><td>addMessage(sessionId, message), addToolCall(sessionId, messageId, toolCall)</td><td>Append a turn and its tool calls, FK-enforced</td></tr>
 <tr><td>SessionStore</td><td>listSessions(limit), forkSession(id), renameSession(id, name)</td><td>Back the <code>/sessions</code>, <code>/fork</code> and <code>/rename</code> commands</td></tr>

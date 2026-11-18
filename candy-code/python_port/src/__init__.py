@@ -1,6 +1,12 @@
 """
 CandyCode Python Port
 A Python implementation of the candy-code TUI chat renderer.
+
+Experimental. This package does not import: `candycode.chat` and
+`candycode.pane` are named below but do not exist (the pane lives at
+`candycode.tui.pane`), and `candycode.renderer` imports
+`candycode.renderer.chat_renderer`, which does not exist. Importing `candycode`
+raises ModuleNotFoundError until those imports are fixed.
 """
 
 from candycode.renderer import Renderer

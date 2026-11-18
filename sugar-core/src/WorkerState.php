@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core;
 
+use React\EventLoop\TimerInterface;
+
 /**
  * @internal
  *
@@ -23,6 +25,15 @@ final class WorkerState
     public ?string $currentJobId = null;
 
     public string $buffer = '';
+
+    /** Offset of the first unread byte in $buffer (line cursor, P1-1). */
+    public int $bufferOffset = 0;
+
+    /** Queued writer for this worker's stdin; created on first dispatch. */
+    public ?Writer $writer = null;
+
+    /** Fires when a payload has sat queued past the write deadline. */
+    public ?TimerInterface $writeDeadline = null;
 
     /**
      * sc-30: bounded keep-last capture of this worker's stderr (the pool
