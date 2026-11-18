@@ -56,7 +56,7 @@ Provider failures surface as `error.type` `backend` with a raw English message
 
 Drivers must treat **stdout as the only truth channel**. stderr carries launch
 notices and advisories — e.g. the autoReview cost warning behind the
-`autoReview` setting (defined at src/Config/Settings/Definitions/PermissionSettings.php:79, announced through src/Host/TitleService.php:468 from src/Cli/Bootstrap.php:7508) — and is *advisory*: never gate on it,
+`autoReview` setting (defined at src/Config/Settings/Definitions/PermissionSettings.php:79, announced through src/Host/TitleService.php:468 from src/Cli/Bootstrap.php:7511) — and is *advisory*: never gate on it,
 never parse it for the result. One probe run paid ~20.7k cold input tokens and
 then cache reads on follow-ups; expect the first turn of a fresh model pairing
 to be the expensive one.
@@ -120,12 +120,12 @@ Both options ship on every build. Their contract for drivers:
   sessions are reconstructible after the fact. Verb roster at src/Cli/ParsedArgs.php:80; `list` flags at src/Cli/Subcommands.php:3333
   (`--all`, `--archived`, `--children`, `--limit`).
 - Cost rollups across a fleet: `session import` exists for migrating stores
-  (src/Cli/Subcommands.php:1114), and the usage surface answers
+  (src/Cli/Subcommands.php:1115), and the usage surface answers
   `--output-format json` with a machine rollup shaped `scopeAll` / `windowDays`
   / `days` — the shape is built at src/Cli/Subcommands.php:3902.
   The facts come from `UsageHostCommand::rollupFacts()`, declared at
   src/Host/Commands/UsageHostCommand.php:153, and the verb serves them through
-  `renderUsage()` at src/Cli/Subcommands.php:3921.
+  `renderUsage()` at src/Cli/Subcommands.php:3922.
 
 ## Structured answers: `--json-schema`
 

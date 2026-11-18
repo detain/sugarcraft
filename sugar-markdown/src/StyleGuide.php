@@ -74,6 +74,13 @@ use SugarCraft\Style\Style;
 final class StyleGuide
 {
     /**
+     * Hard ceiling on style-file bytes {@see fromFile()} will read. Matches
+     * candy-mdview's GlamourTheme::MAX_CONFIG_BYTES, which this loader replaced
+     * on the consumer side, so the ceiling survives the move.
+     */
+    public const MAX_CONFIG_BYTES = 1_000_000;
+
+    /**
      * @param string $blockPrefix    document `block_prefix` literal.
      * @param string $blockSuffix    document `block_suffix` literal.
      * @param int    $documentIndent coerced non-negative document `indent`.
@@ -124,7 +131,12 @@ final class StyleGuide
      * sweep byte-identical. An indent or margin above
      * {@see Theme::MAX_DOCUMENT_DECORATION} refuses by name.
      *
-     * @throws \RuntimeException        when the file cannot be read
+     * A file over {@see MAX_CONFIG_BYTES} refuses by name after a stat and before
+     * any read, so a hostile or mistaken multi-gigabyte path cannot exhaust
+     * memory. The ceiling is the one candy-mdview's GlamourTheme door enforces.
+     *
+     * @throws \RuntimeException        when the file cannot be read or exceeds
+     *                                   {@see MAX_CONFIG_BYTES}
      * @throws \InvalidArgumentException when its contents are not a JSON object,
      *                                   or carry an over-ceiling indent or margin
      */
@@ -132,6 +144,13 @@ final class StyleGuide
     {
         if (!is_file($path)) {
             throw new \RuntimeException(Lang::t('theme.read_failed', ['path' => $path]));
+        }
+        $size = filesize($path);
+        if ($size !== false && $size > self::MAX_CONFIG_BYTES) {
+            throw new \RuntimeException(Lang::t('theme.file_too_large', [
+                'path'  => $path,
+                'bytes' => self::MAX_CONFIG_BYTES,
+            ]));
         }
         $warning = null;
         set_error_handler(static function (int $errno, string $message) use (&$warning): bool {

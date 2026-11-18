@@ -345,7 +345,7 @@ their checksum and signature assets (plus the `candy-code.phar.packages.json` bu
 manifest), as a GitHub Release.
 Nothing else mints a stable artifact.
 
-Since reviews-1103 G6-P the workflow is **gated in CI, not in the tagger's good intentions**
+The workflow is **gated in CI, not in the tagger's good intentions**
 (owner rulings OD-5/6/7/8). A `gate` job runs before any build: it resolves the tag to its
 commit, refuses (`git merge-base --is-ancestor`) any tag whose commit is not on `master`, and
 polls the `CI` workflow to a **green verdict at that exact SHA** — bounded, fail-closed, so a

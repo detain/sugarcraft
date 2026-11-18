@@ -160,6 +160,27 @@ final class RendererFoldsTest extends TestCase
         $this->assertStringNotContainsString('Hidden body.', $out);
     }
 
+    public function testAHeadingWithASoftBreakFoldsByItsVisibleText(): void
+    {
+        // The break shows as a word gap, so the visible heading is "Foo Bar".
+        $out = (new Renderer(Theme::plain()))
+            ->withFolds(['foo-bar'])
+            ->render("Foo\nBar\n===\n\nHidden body.\n\n# Next\n");
+
+        $this->assertStringNotContainsString('Hidden body.', $out);
+        $this->assertStringContainsString('Next', $out);
+    }
+
+    public function testAHeadingWithInlineHtmlFoldsByItsVisibleText(): void
+    {
+        // Raw inline HTML renders as written, tags included, so the ID carries them.
+        $out = (new Renderer(Theme::plain()))
+            ->withFolds(['foo-span-bar-span'])
+            ->render("# Foo <span>bar</span>\n\nHidden body.\n\n# Next\n");
+
+        $this->assertStringNotContainsString('Hidden body.', $out);
+    }
+
     public function testFoldMarkerIsLocalised(): void
     {
         // The marker is catalogued, so no locale string is hard-coded here.
