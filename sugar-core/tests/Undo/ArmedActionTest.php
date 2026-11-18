@@ -72,6 +72,17 @@ final class ArmedActionTest extends TestCase
         $this->assertTrue(ArmedAction::new('delete', 'Удалить?', [], 'д')->confirms('д'));
     }
 
+    public function testACapitalisedLocaleWordConfirmsOnlyItsLowercaseKeystroke(): void
+    {
+        // Regression: new()'s docblock promised case-insensitive matching for a
+        // capitalised locale word. The word folds to `j`; the typed rune does not.
+        $armed = ArmedAction::new('delete', 'Löschen?', [], 'J');
+
+        $this->assertTrue($armed->confirms('j'));
+        $this->assertFalse($armed->confirms('J'));
+        $this->assertTrue($armed->confirms('y'));
+    }
+
     public function testTheLocaleAffirmativeDoesNotOverrideAnotherKey(): void
     {
         // A locale that teaches `e` must not turn `j` into a confirmation.

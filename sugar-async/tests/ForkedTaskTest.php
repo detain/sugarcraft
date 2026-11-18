@@ -156,4 +156,96 @@ final class ForkedTaskTest extends TestCase
         yield 'negative' => [-1.0];
         yield 'infinite' => [INF];
     }
+
+    public function testTheParentLoopKeepsTickingWhileAChildThatClosedItsChannelStillRuns(): void
+    {
+        // A child that closes its channel early and keeps running used to park
+        // the loop in a blocking waitpid() from the onClose path: the ticks
+        // below would not fire until the child was gone.
+        $loop = new StreamSelectLoop();
+        $ticks = 0;
+        $status = null;
+        $ticker = $loop->addPeriodicTimer(0.02, static function () use (&$ticks): void {
+            $ticks++;
+        });
+        $failsafe = $loop->addTimer(5.0, static function () use ($loop): void {
+            $loop->stop();
+        });
+
+        $promise = ForkedTask::run(
+            static function (ForkChannel $channel): void {
+                $channel->close();
+                \usleep(600_000);
+            },
+            static function (string $frame): void {
+            },
+            $loop,
+        );
+        $promise->then(static function (int $code) use (&$status, $loop): void {
+            $status = $code;
+            $loop->stop();
+        });
+        $loop->run();
+        $loop->cancelTimer($ticker);
+        $loop->cancelTimer($failsafe);
+
+        self::assertSame(0, $status, 'the closed child was not reaped with its exit status');
+        self::assertGreaterThanOrEqual(5, $ticks, 'the loop was parked while the closed child ran');
+    }
+
+    public function testTheChildDoesNotReEmitTheParentsBufferedOutput(): void
+    {
+        // The child inherits the parent's ob_* stack. A normal exit() flushes
+        // it onto the shared stdout, so the parent's pending bytes used to
+        // appear twice. The probe runs in a real subprocess because only a
+        // separate stdout shows the duplicate.
+        $probe = \tempnam(\sys_get_temp_dir(), 'forked-ob-probe-');
+        \file_put_contents($probe, <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+require $argv[1];
+
+use React\EventLoop\StreamSelectLoop;
+use SugarCraft\Async\ForkChannel;
+use SugarCraft\Async\ForkedTask;
+
+$loop = new StreamSelectLoop();
+ob_start();
+echo 'STALE-FRAME';
+$done = ForkedTask::run(
+    static function (ForkChannel $channel): void {
+        $channel->send('frame');
+    },
+    static function (string $frame): void {
+    },
+    $loop,
+);
+$done->then(static function () use ($loop): void {
+    $loop->stop();
+});
+$loop->run();
+
+PHP);
+        try {
+            $process = \proc_open(
+                [\PHP_BINARY, $probe, \dirname(__DIR__) . '/vendor/autoload.php'],
+                [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+                $pipes,
+            );
+            self::assertIsResource($process);
+            \fclose($pipes[0]);
+            $stdout = (string) \stream_get_contents($pipes[1]);
+            $stderr = (string) \stream_get_contents($pipes[2]);
+            \fclose($pipes[1]);
+            \fclose($pipes[2]);
+            $exit = \proc_close($process);
+        } finally {
+            @\unlink($probe);
+        }
+
+        self::assertSame(0, $exit, 'the probe failed: ' . $stderr);
+        self::assertSame(1, \substr_count($stdout, 'STALE-FRAME'), 'the parent buffer was emitted twice');
+    }
 }

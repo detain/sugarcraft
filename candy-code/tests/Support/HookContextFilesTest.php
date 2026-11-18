@@ -197,15 +197,19 @@ final class HookContextFilesTest extends TestCase
         } finally {
             umask($previous);
         }
+        // Backdated past the hourly cutoff so the sweep's DEFAULT age rule reaps
+        // it. The sweep runs against the SHARED temp dir, and suites are sharded
+        // across parallel processes (scripts/parallel-tests.sh): a cutoff of 0
+        // would reap another shard's in-flight IPC payload written a moment ago.
+        // Only a payload older than the hour can be reaped here.
+        touch($decoy, time() - 2 * 3600);
 
         try {
-            // This exercises the REAL sweep against the SHARED temp dir by design:
-            // only a real `HookContextFiles::dir()` proves the two stores are
-            // disjoint, which is the whole point. A cutoff of 0 could therefore reap
-            // another LIVE candy-code process's in-flight IPC payloads — so suites
-            // are run serially in this repo. `ToolIpcFilesTest` keeps the sandboxed
-            // positive-control pin for the reap behaviour in isolation.
-            $removed = ToolIpcFiles::sweep(sys_get_temp_dir(), 0);
+            // The REAL sweep against the SHARED temp dir, at its production cutoff.
+            // Only a real `HookContextFiles::dir()` proves the two stores are
+            // disjoint, which is the whole point. `ToolIpcFilesTest` keeps the
+            // sandboxed positive-control pin for the reap behaviour in isolation.
+            $removed = ToolIpcFiles::sweep(sys_get_temp_dir());
         } finally {
             @unlink($decoy);
         }

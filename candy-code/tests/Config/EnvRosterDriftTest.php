@@ -1793,4 +1793,121 @@ final class EnvRosterDriftTest extends TestCase
 
         return array_keys($found);
     }
+
+    /**
+     * The literal-read leg for names OUTSIDE the CANDY_CODE_ prefix. EnvReadScanner
+     * places only prefixed names, and the non-prefixed ones come from an exact
+     * ambient list, so a `getenv('HTTPS_PROXY')` added to src/ would reach no
+     * oracle while README still promises that every variable CandyCode reads is
+     * documented. This leg takes every upper-case literal handed to getenv(),
+     * $_ENV[] or $_SERVER[] in src/ and demands a row for it on ENVIRONMENT.md
+     * (or on the ambient list). Variable-name reads are not followed; the
+     * prefixed ones keep their own scanner.
+     */
+    public function testEveryLiteralNonPrefixedEnvironmentReadInSrcIsTabulated(): void
+    {
+        $tabulated = array_merge(
+            $this->osTableNames(),
+            $this->colourTableNames(),
+            $this->ambientTableNames(),
+            explode('|', EnvReadScanner::AMBIENT_NAMES),
+        );
+
+        $unlisted = [];
+        foreach ($this->srcSources() as $file => $source) {
+            foreach (self::literalEnvReadsIn($source) as $name) {
+                if (!str_starts_with($name, 'CANDY_CODE_') && !in_array($name, $tabulated, true)) {
+                    $unlisted[$name][] = $file;
+                }
+            }
+        }
+
+        $this->assertSame(
+            [],
+            $unlisted,
+            'src/ reads environment variables that docs/ENVIRONMENT.md does not tabulate, so '
+            . 'README\'s "every environment variable CandyCode reads is documented" is false for them — '
+            . 'add a row (and to OS_ENV_ROSTER when it is an OS variable), or stop reading them',
+        );
+    }
+
+    public function testTheLiteralReadScanSeesCallsAndSuperglobalsButNotPlainStrings(): void
+    {
+        $this->assertSame(
+            ['HTTPS_PROXY', 'TZ', 'LANG'],
+            self::literalEnvReadsIn(
+                '<?php function f() { $a = getenv("HTTPS_PROXY"); $b = \\getenv(\'TZ\'); '
+                . '$c = $_SERVER["LANG"] ?? null; return [$a, $b, $c]; }',
+            ),
+        );
+        $this->assertSame(
+            [],
+            self::literalEnvReadsIn('<?php $names = ["HTTPS_PROXY"]; function f($n) { return getenv($n); }'),
+        );
+        $this->assertSame(
+            ['CANDY_CODE_TRAILING_'],
+            self::literalEnvReadsIn('<?php function f() { return getenv("CANDY_CODE_TRAILING_" . $x); }'),
+        );
+    }
+
+    /**
+     * @return array<string, string> src/ PHP file path => source text
+     */
+    private function srcSources(): array
+    {
+        $root = \dirname(__DIR__, 2) . '/src';
+        $sources = [];
+        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS));
+        foreach ($files as $file) {
+            if ($file instanceof \SplFileInfo && $file->getExtension() === 'php') {
+                $sources[substr($file->getPathname(), strlen($root) + 1)] = (string) file_get_contents($file->getPathname());
+            }
+        }
+        ksort($sources);
+
+        return $sources;
+    }
+
+    /**
+     * Upper-case literal names passed straight to getenv() or indexed out of
+     * $_ENV / $_SERVER, in source order. Comments and plain strings that are not
+     * the first argument of such a call do not count.
+     *
+     * @return list<string>
+     */
+    private static function literalEnvReadsIn(string $source): array
+    {
+        $tokens = [];
+        foreach (token_get_all($source) as $token) {
+            if (\is_array($token) && \in_array($token[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+            $tokens[] = $token;
+        }
+
+        $names = [];
+        $count = \count($tokens);
+        for ($i = 0; $i < $count; ++$i) {
+            $token = $tokens[$i];
+            if (!\is_array($token)) {
+                continue;
+            }
+            $literal = null;
+            $isGetenv = \in_array($token[0], [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true)
+                && preg_match('/(?:^|\\\\)getenv$/i', $token[1]) === 1;
+            $isSuperglobal = $token[0] === T_VARIABLE && ($token[1] === '$_ENV' || $token[1] === '$_SERVER');
+            $open = $tokens[$i + 1] ?? null;
+            $first = $tokens[$i + 2] ?? null;
+            if (($isGetenv && $open === '(') || ($isSuperglobal && $open === '[')) {
+                if (\is_array($first) && $first[0] === T_CONSTANT_ENCAPSED_STRING) {
+                    $literal = trim($first[1], "\"'");
+                }
+            }
+            if ($literal !== null && preg_match('/^[A-Z][A-Z0-9_]*$/', $literal) === 1) {
+                $names[] = $literal;
+            }
+        }
+
+        return $names;
+    }
 }

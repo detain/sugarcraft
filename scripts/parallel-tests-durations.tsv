@@ -133,6 +133,7 @@ candy-code/tests/Backend/RemoteBackendTest.php	5.126	13
 candy-code/tests/Config/ConfigWriteProducerDocumentationDriftTest.php	5.070	19
 candy-code/tests/Tools/PtyRunToolTest.php	5.064	14
 candy-code/tests/Tools/WorkflowToolForkTest.php	5.051	8
+candy-code/tests/Cli/ServeForegroundSigtermTest.php	4.993	3
 candy-code/tests/Providers/RuntimeRetryAfterProductionPathTest.php	4.993	4
 candy-code/tests/Config/DocumentParagraphsTest.php	4.966	18
 candy-code/tests/Agents/SubagentSettingsTest.php	4.964	15
@@ -308,7 +309,6 @@ candy-code/tests/Backend/ProviderErrorSurfacingTest.php	2.322	10
 candy-code/tests/Server/GatewayScopeEnforcementTest.php	2.305	11
 candy-code/tests/Host/ServedSkillSlashTest.php	2.299	7
 candy-code/tests/Tools/BuiltIn/ScheduleToolTest.php	2.285	13
-candy-code/tests/Cli/ServeForegroundSigtermTest.php	2.282	2
 candy-code/tests/Cli/BinInteractiveTtyGuardTest.php	2.275	8
 candy-code/tests/Chat/WorkflowControlMidRunTest.php	2.274	8
 candy-code/tests/MCP/StdioMcpServerToolListRobustnessTest.php	2.260	13
@@ -505,6 +505,7 @@ candy-code/tests/Chat/ExecuteAgentsEngineTest.php	1.183	3
 candy-code/tests/MCP/McpClientDispatchPumpTest.php	1.183	2
 candy-code/tests/Support/ToolIpcFilesTest.php	1.183	28
 candy-code/tests/Support/ProcessReaperEscalationOrderTest.php	1.173	5
+candy-code/tests/Support/ProcessReaperAsyncReapTest.php	1.000	3
 candy-code/tests/MCP/StdioMcpEnvScrubTest.php	1.170	6
 candy-code/tests/Server/SessionListBodySearchTest.php	1.162	5
 candy-code/tests/Tui/MediaForm/MediaFormPopupSizeTest.php	1.143	8
@@ -1063,6 +1064,7 @@ candy-code/tests/App/AgentShellCommandsTest.php	0.081	15
 candy-code/tests/ChatScrollTest.php	0.081	18
 candy-code/tests/Channels/ChannelsStoreTest.php	0.080	15
 candy-code/tests/Skills/SlashSkillInvocationTest.php	0.080	14
+candy-code/tests/Config/CandyCodeBodyClaimDriftTest.php	0.080	10
 candy-code/tests/Bundles/BundleInstallTest.php	0.079	20
 candy-code/tests/Permissions/PlanModePlansDirExceptionTest.php	0.079	22
 candy-code/tests/Providers/SseDecodeFrameBoundTest.php	0.079	4
