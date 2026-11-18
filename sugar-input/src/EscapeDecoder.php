@@ -109,6 +109,10 @@ final class EscapeDecoder
         'y' => 'KP9',
         'l' => 'KPDecimal',
         'm' => 'KPSubtract',
+        'j' => 'KPMultiply',
+        'k' => 'KPAdd',
+        'n' => 'KPDecimal',
+        'o' => 'KPDivide',
     ];
 
     /** Bare arrows: final byte of a parameter-less CSI (e.g. ESC [ A). */
@@ -551,7 +555,8 @@ final class EscapeDecoder
             return $len - $i; // ran off the stream end: incomplete — full tail
         }
 
-        if ($introducer === ']' || $introducer === 'P' || $introducer === '_' || $introducer === '^') {
+        if ($introducer === ']' || $introducer === '_' || $introducer === '^'
+            || ($introducer === 'P' && $i + 2 < $len && $stream[$i + 2] === '>')) {
             // String sequence: the payload legs bound themselves at
             // MAX_STRING_LENGTH + MAX_STRING_ABANDON; never hand them more.
             $cap = self::MAX_STRING_LENGTH + self::MAX_STRING_ABANDON + 1;
@@ -671,13 +676,23 @@ final class EscapeDecoder
             ];
         }
 
-        // ESC ] / ESC P / ESC _ / ESC ^ — OSC / DCS / APC / PM string sequences.
-        // A terminal answers color/capability queries (e.g. OSC 4 replies) on the
-        // **same** fd the user types on; these payloads are replies, never keystrokes —
-        // drain them to their terminator as a TerminalReplyEvent instead of leaking
-        // the body as Alt-key spam.
+        // ESC P opens a DCS only when `>` follows: the XTVERSION reply (`ESC P > |`)
+        // is the one DCS a user never types, while a bare ESC P is the user's
+        // Alt+Shift+P. Opening a string on every ESC P swallowed all later input
+        // until BEL, ST or reset(). sugar-core's InputReader makes the same split.
+        if ($next === 'P' && strlen($stream) === 2 && $this->options->deferTrailingEscape) {
+            // A chunk ending on ESC P may be the head of that reply split across
+            // reads: hold it, and flushDeferredEscape() resolves it as Alt+P.
+            return ['events' => [], 'remaining' => $stream];
+        }
+
+        // ESC ] / ESC _ / ESC ^ — OSC / APC / PM string sequences, and ESC P only
+        // when it is the DCS reply introducer. A terminal answers color/capability
+        // queries (e.g. OSC 4 replies) on the **same** fd the user types on; these
+        // payloads are replies, never keystrokes — drain them to their terminator
+        // as a TerminalReplyEvent instead of leaking the body as Alt-key spam.
         // @see xterm ctlseqs — OSC/DCS/APC/PM framing with ST or BEL terminators.
-        if ($next === ']' || $next === 'P' || $next === '_' || $next === '^') {
+        if ($next === ']' || $next === '_' || $next === '^' || ($next === 'P' && substr($stream, 2, 1) === '>')) {
             return $this->handleStringStart($stream);
         }
 
@@ -2295,7 +2310,8 @@ final class EscapeDecoder
      * Resolve a lone trailing ESC deferred by the `deferTrailingEscape` option
      * into the Escape key it (probably) was. Call from an application timer once
      * no more input arrives within the escape-timeout window; if the buffered
-     * tail is exactly one ESC byte, clear it and return that KeyEvent.
+     * tail is exactly one ESC byte, clear it and return that KeyEvent. A held
+     * lone `ESC P` (no `>` followed) resolves the same way, to Alt+P.
      *
      * A bare ESC also sits in the buffer while a bracketed paste is open (it is
      * the held-back prefix of a split end marker) — flushing there would invent
@@ -2308,6 +2324,13 @@ final class EscapeDecoder
     {
         if ($this->inPaste === true || $this->inString === true) {
             return [];
+        }
+        if ($this->remainder === "\x1bP") {
+            // A held ESC P that no `>` followed is the Alt+P key handleEscape would
+            // have emitted for it.
+            $this->remainder = '';
+
+            return [new KeyEvent($this->mapChar('P'), KeyModifier::alt(), "\x1bP")];
         }
         if ($this->remainder !== "\x1b") {
             return [];

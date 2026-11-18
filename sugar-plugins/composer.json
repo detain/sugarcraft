@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-plugins",
-    "description": "Generic plugin core for SugarCraft hosts: the plugin and channel contracts, the plugin launch context, and the prompt-fence escape.",
+    "description": "Generic plugin core for SugarCraft hosts: the plugin and channel contracts, the plugin launch context, the prompt-fence escape, and the generic loader, quarantine ledger, registry and manifest reader.",
     "type": "library",
     "license": "MIT",
     "keywords": [
@@ -24,6 +24,7 @@
     },
     "require": {
         "php": "^8.3",
+        "ext-tokenizer": "*",
         "psr/http-message": "^1.1 || ^2.0",
         "react/event-loop": "^1.6",
         "sugarcraft/sugar-core": "dev-master"

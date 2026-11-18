@@ -4066,7 +4066,7 @@ final class Subcommands
         // working directory, resolved to its project root): without it `list`
         // scans `/.candy-code/bundles` and cannot see the bundle the install
         // just placed.
-        $discovery = new BundleDiscovery(ProjectRoot::resolve((string) ($args->root ?? (\getcwd() ?: ''))), $paths);
+        $discovery = new BundleDiscovery(ProjectRoot::lookup((string) ($args->root ?? (\getcwd() ?: ''))), $paths);
         $bundles = $discovery->discover();
 
         if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
@@ -4460,14 +4460,16 @@ final class Subcommands
      * a symlink — discovery refuses a symlinked bundle floor too, so update
      * does not reach through one.
      */
-    private static function bundlesExistingProjectRoot(ParsedArgs $args): ?string
+    private static function bundlesExistingProjectRoot(ParsedArgs $args, bool $migrate = true): ?string
     {
         $base = $args->root ?? \getcwd();
         if ($base === false) {
             return null;
         }
 
-        $base = ProjectRoot::resolve(\rtrim($base, '/'));
+        $base = $migrate
+            ? ProjectRoot::resolve(\rtrim($base, '/'))
+            : ProjectRoot::lookup(\rtrim($base, '/'));
         $root = $base . '/.candy-code/bundles';
         $dotDir = \dirname($root);
 
@@ -5509,7 +5511,7 @@ final class Subcommands
      */
     private static function bundlesRecommend(ParsedArgs $args): int
     {
-        $root = ProjectRoot::resolve((string) ($args->root ?? '') !== '' ? (string) $args->root : (string) \getcwd());
+        $root = ProjectRoot::lookup((string) ($args->root ?? '') !== '' ? (string) $args->root : (string) \getcwd());
         $registry = MarketplaceRegistry::loadDefault();
 
         foreach ($registry->loadErrors() as $error) {
@@ -5542,7 +5544,7 @@ final class Subcommands
         // and the names are unioned, so that is one name, not two.
         $home = HomeDirectory::owned();
         $installed = $home === null ? [] : self::bundlesBundleRootNames($home . '/.candy-code/bundles');
-        $projectRoot = self::bundlesExistingProjectRoot($args);
+        $projectRoot = self::bundlesExistingProjectRoot($args, migrate: false);
         if ($projectRoot !== null) {
             $installed = \array_values(\array_unique(\array_merge($installed, self::bundlesBundleRootNames($projectRoot))));
         }
@@ -6060,8 +6062,8 @@ final class Subcommands
      * it config'd into existence is refused fail-closed by the host
      * ({@see McpServeHost}) — nothing can be answered in this terminal.
      * The roster is {@see McpServeRoster::build()}'s own
-     * output — the read-only four, classified, never a hand-list widened at
-     * this call site (r1 NIT-2). The host answers until stdin closes and
+     * output — the read-only tools named in {@see McpServeRoster::NAMES},
+     * classified, never a hand-list widened at this call site (r1 NIT-2). The host answers until stdin closes and
      * returns 0 itself; nothing here duplicates its framing or touches
      * `--output-format`, which governs candy-code's own documents, not the
      * MCP wire.

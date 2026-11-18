@@ -105,10 +105,18 @@ final class AsyncCache
         return count($this->store->values);
     }
 
-    /** Stored keys (fresh or stale), least-recently-stored first. */
+    /**
+     * Stored keys (fresh or stale), least-recently-stored first.
+     *
+     * PHP turns a numeric-string key into an int, so the cast restores the
+     * declared string contract: a caller comparing against '123' strictly, or
+     * passing the key to a string-typed function, must not see int 123.
+     *
+     * @return list<string>
+     */
     public function keys(): array
     {
-        return array_keys($this->store->values);
+        return array_map('strval', array_keys($this->store->values));
     }
 
     /** True when the key is fresh OR a load is in flight — the loading-indicator read. */
