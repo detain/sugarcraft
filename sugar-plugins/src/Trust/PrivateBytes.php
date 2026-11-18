@@ -14,9 +14,17 @@ namespace SugarCraft\Plugins\Trust;
  */
 final class PrivateBytes
 {
-    /** Returns a refusal reason word, or null when the file and its directory are private. */
-    public static function refusal(string $path): ?string
+    /**
+     * Returns a refusal reason word, or null when the file and its directory are private.
+     *
+     * $processUid is the uid the owner must match. Null reads the process's
+     * effective uid; a test passes one explicitly so the foreign-owner branch runs
+     * without root.
+     */
+    public static function refusal(string $path, ?int $processUid = null): ?string
     {
+        $uid = $processUid ?? (\function_exists('posix_geteuid') ? \posix_geteuid() : null);
+
         foreach ([$path, \dirname($path)] as $target) {
             if (!\file_exists($target)) {
                 continue; // a vanished file fails the require, not this gate
@@ -26,7 +34,9 @@ final class PrivateBytes
                 return 'world-writable';
             }
 
-            if (\function_exists('posix_geteuid') && @\fileowner($target) !== false && @\fileowner($target) !== \posix_geteuid()) {
+            $owner = @\fileowner($target);
+
+            if ($uid !== null && $owner !== false && $owner !== $uid) {
                 return 'foreign-owner';
             }
         }

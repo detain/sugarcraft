@@ -149,7 +149,10 @@ final class PluginLoader
                         continue;
                     }
 
-                    if (!\class_exists($entry->class, false)) {
+                    // The class must exist AND be declared by this entry's file. A
+                    // class another plugin's file declared is not this plugin's.
+                    if (!\class_exists($entry->class, false)
+                        || (new \ReflectionClass($entry->class))->getFileName() !== $entry->path) {
                         $refusals[] = $where + ['reason' => 'class-not-declared'];
                         continue;
                     }

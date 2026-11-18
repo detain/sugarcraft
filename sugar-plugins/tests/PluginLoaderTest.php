@@ -292,6 +292,32 @@ final class PluginLoaderTest extends TestCase
         $this->assertSame(['class-not-declared'], array_column($result->refusals, 'reason'));
     }
 
+    public function testAClassDeclaredByAnotherPluginsFileIsNotCreditedToThisOne(): void
+    {
+        $ns = 'PluginFixtures\\' . Plugins::tag();
+        $fqcn = $ns . '\\Shared';
+        $owner = $this->build('pa', Plugins::pluginSource($ns, 'Shared', 'pa'), [
+            'channel' => ['file' => 'src/Impl.php', 'class' => $fqcn],
+        ]);
+        $squatter = $this->build('pb', "<?php\n\ndeclare(strict_types=1);\n\n// declares nothing\n", [
+            'channel' => ['file' => 'src/Impl.php', 'class' => $fqcn],
+        ]);
+        $ledger = new MemoryLedger();
+        $ledger->prime($owner['file']);
+        $ledger->prime($squatter['file']);
+
+        $result = $this->load([
+            Plugins::candidate('pa', $owner['dir']),
+            Plugins::candidate('pb', $squatter['dir']),
+        ], $ledger, trusted: ['pa', 'pb']);
+
+        $this->assertSame(['pa'], array_column($result->loaded, 'bundle'));
+        $this->assertSame([['pb', 'class-not-declared']], array_map(
+            static fn (array $row): array => [$row['bundle'], $row['reason']],
+            $result->refusals,
+        ));
+    }
+
     public function testAClassOfTheWrongInterfaceIsRefusedAsInterfaceMismatch(): void
     {
         $ns = 'PluginFixtures\\' . Plugins::tag();

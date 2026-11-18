@@ -226,7 +226,9 @@ final readonly class PluginManifest
         $raw = \is_string($item) ? $item : ($item['file'] ?? '');
         $file = \is_string($raw) ? \trim($raw) : '';
 
-        if ($file === '') {
+        // realpath() throws ValueError on a NUL byte, and that throw would abort
+        // the load for every other trusted plugin, so the byte is refused first.
+        if ($file === '' || \str_contains($file, "\0")) {
             return null;
         }
 

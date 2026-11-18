@@ -48,6 +48,23 @@ final class PrivateBytesTest extends TestCase
         $this->assertSame('world-writable', PrivateBytes::refusal($file));
     }
 
+    public function testAFileOwnedByAnotherUidIsRefused(): void
+    {
+        $file = Scratch::put($this->dir . '/Impl.php', '<?php');
+        chmod($file, 0600);
+        $owner = (int) fileowner($file);
+
+        $this->assertSame('foreign-owner', PrivateBytes::refusal($file, processUid: $owner + 1));
+    }
+
+    public function testAFileOwnedByTheProcessUidIsAccepted(): void
+    {
+        $file = Scratch::put($this->dir . '/Impl.php', '<?php');
+        chmod($file, 0600);
+
+        $this->assertNull(PrivateBytes::refusal($file, processUid: (int) fileowner($file)));
+    }
+
     public function testAVanishedFileIsLeftToTheRequireNotThisGate(): void
     {
         $this->assertNull(PrivateBytes::refusal($this->dir . '/absent.php'));

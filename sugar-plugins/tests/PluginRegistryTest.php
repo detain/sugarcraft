@@ -113,6 +113,20 @@ final class PluginRegistryTest extends TestCase
         $this->assertTrue($registry->register('demo', $this->plugin('gone', $events)), 'the name is free again');
     }
 
+    public function testAnotherBundlesUnregisterNeverFreesAForeignName(): void
+    {
+        $events = [];
+        $registry = PluginRegistry::new();
+        $owner = $this->plugin('foo', $events);
+        $this->assertTrue($registry->register('bundleA', $owner));
+
+        $registry->unregister('bundleB', 'foo');
+
+        $this->assertSame($owner, $registry->pluginNamed('foo'), 'the name still belongs to bundleA');
+        $this->assertFalse($registry->register('bundleC', $this->plugin('foo', $events), $reason));
+        $this->assertSame('collision', $reason);
+    }
+
     public function testStartedNamesAreInStartOrder(): void
     {
         $events = [];

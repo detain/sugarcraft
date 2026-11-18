@@ -198,6 +198,23 @@ final class PluginManifestTest extends TestCase
         Scratch::remove(dirname($outside));
     }
 
+    public function testANulByteInAnEntrypointFileIsDroppedWithoutAbortingTheRead(): void
+    {
+        Scratch::put($this->dir . '/src/Ok.php', '<?php');
+        $this->writeBare([
+            'name' => 'nul',
+            'entrypoints' => ['channel' => [
+                ['file' => "src/Chan\u{0}.php", 'class' => 'Demo\\Chan'],
+                ['file' => 'src/Ok.php', 'class' => 'Demo\\Ok'],
+            ]],
+        ]);
+
+        $entries = PluginManifest::fromDir($this->dir)?->entrypoints()['channel'] ?? [];
+
+        $this->assertCount(1, $entries, 'realpath() throws ValueError on a NUL byte; the item must be refused, not thrown');
+        $this->assertSame('Demo\\Ok', $entries[0]->class);
+    }
+
     public function testAMissingEntrypointFileIsDropped(): void
     {
         $this->writeBare(['name' => 'gone', 'entrypoints' => ['channel' => 'src/Missing.php']]);

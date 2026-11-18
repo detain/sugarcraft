@@ -84,7 +84,15 @@ final class PluginRegistry
     /** Remove a registration, for a plugin the host refused to start. */
     public function unregister(string $bundleName, string $name): void
     {
-        unset($this->plugins[$bundleName . '|' . $name], $this->byName[$name]);
+        $key = $bundleName . '|' . $name;
+
+        unset($this->plugins[$key]);
+
+        // The bare name belongs to whichever bundle registered it first; another
+        // bundle's unregister must not free a name it never owned.
+        if (($this->byName[$name] ?? null) === $key) {
+            unset($this->byName[$name]);
+        }
     }
 
     /** Note that a registered plugin started, so it is disposed in reverse start order. */
