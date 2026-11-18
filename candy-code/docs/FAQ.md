@@ -35,8 +35,11 @@ the run selected.
 ### Where does my code go?
 
 To the provider you select, plus whichever network tools you enable. WebSearch
-sends its model-composed queries to `CANDY_CODE_SEARCH_ENDPOINT`, and they often
-quote code. WebFetch sends its model-composed URLs to the host they name. MCP servers
+sends its model-composed queries, which often quote code, to the backend named by
+`webSearchBackend`. With the default `searxng` backend that is the endpoint in
+`CANDY_CODE_SEARCH_ENDPOINT`. The hosted `brave`, `tavily` and `exa` backends dial
+their own fixed service hosts, and the `anthropic` backend runs the search inside your
+Anthropic request. WebFetch sends its model-composed URLs to the host they name. MCP servers
 you trust receive their tool arguments, and Bash commands can reach the network. The
 echo provider contains no HTTP client code, so a run without a configured provider
 sends no code or prompts. The egress notes for each tool are in
@@ -121,8 +124,10 @@ without that check. The hook events and exit codes are in [HOOKS.md](HOOKS.md).
 
 ### Can a cloned repository change my settings?
 
-Not your settings. A project's settings file can fill in only what your own
-files leave unset, so a clone cannot override a value you chose
+Not unless you trust that project. A project's settings file is ignored until the
+project root is listed under `trustedProjectSettings` (`src/Config/LayeredSettings.php:234`),
+a grant recorded in your user `config.json`. Once trusted, the file can fill in only
+what your own files leave unset, so a trusted clone cannot override a value you chose
 (`src/Config/LayeredSettings.php`, class doc). The trust keys
 (`trustedProject*`) cannot be written from a lower layer at all
 (`src/Config/LayeredSettings.php:109-118`).

@@ -91,10 +91,10 @@ story.
 
 ## Identifier conventions in code comments
 
-Reading `src/` and `tests/`, you will meet short audit-style labels —
-`E707`, `ISS-037`, `SEC-3`, `TUI-4a`, `round-61`. They are **internal
-working identifiers** from the hardening and comparison programs: each one
-named a specific finding, and the comment carrying it explains why the code
+Reading `src/` and `tests/`, you will meet short audit-style labels: letter-and-number
+finding codes, issue and security tags, UI audit tags and review-round counters. They
+are **internal working identifiers** from the hardening and comparison programs: each
+one named a specific finding, and the comment carrying it explains why the code
 looks the way it does ("the brake the spend cap cannot be", "refuses while
 it stands"). Two rules govern them:
 
@@ -104,8 +104,8 @@ it stands"). Two rules govern them:
   is drift — strip it and keep the sentence.
 - **They are not resolvable outside the repo.** There is no issue tracker
   behind them; the ledger that defined them lives under `docs/plans/` in
-  the monorepo. A code comment naming `E707` is pointing at history, not
-  at a dependency. Treat the label as decoration and the sentence around
+  the monorepo. A code comment carrying one of these labels is pointing at
+  history, not at a dependency. Treat the label as decoration and the sentence around
   it as the contract.
 
 ## See also
