@@ -759,4 +759,48 @@ final class LruMapTest extends TestCase
             'the default clock is the monotonic hrtime seconds, not microtime',
         );
     }
+
+    /**
+     * Regression: expireStale() called array_key_first() once per removed entry,
+     * and each call rescanned the tombstones that earlier unsets left at the head
+     * of the hash, so one bulk expiry was quadratic. A single pass is linear. The
+     * bound is a ratio of two sizes so it holds across machines: linear work grows
+     * about 5x from 10,000 to 50,000 entries, the per-removal scan about 25x.
+     */
+    public function testBulkExpiryOfFiftyThousandEntriesScalesLinearly(): void
+    {
+        $small = $this->bestBulkExpirySeconds(10_000);
+        $large = $this->bestBulkExpirySeconds(50_000);
+
+        self::assertLessThan(
+            12.0,
+            $large / max($small, 1e-6),
+            'expiring 50,000 entries in one call must cost about 5x expiring 10,000',
+        );
+    }
+
+    /**
+     * Fills a map with $entries TTL'd entries, lets them all expire, and returns
+     * the fastest of three timed count() calls: the call that runs the bulk expiry.
+     */
+    private function bestBulkExpirySeconds(int $entries): float
+    {
+        $best = INF;
+        for ($run = 0; $run < 3; $run++) {
+            $now = 0.0;
+            $map = LruMap::new($entries)->withTtl(10.0, $this->clockAt($now));
+            for ($i = 0; $i < $entries; $i++) {
+                $map->put('k' . $i, $i);
+            }
+
+            $now = 11.0;
+            $start = hrtime(true);
+            $live = $map->count();
+            $best = min($best, (hrtime(true) - $start) / 1e9);
+
+            self::assertSame(0, $live, 'every entry is past its 10s lifetime');
+        }
+
+        return $best;
+    }
 }

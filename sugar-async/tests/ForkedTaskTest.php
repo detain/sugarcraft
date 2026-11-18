@@ -6,6 +6,7 @@ namespace SugarCraft\Async\Tests;
 
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\StreamSelectLoop;
+use React\Promise\Deferred;
 use SugarCraft\Async\Await;
 use SugarCraft\Async\CancellationSource;
 use SugarCraft\Async\ForkChannel;
@@ -111,6 +112,42 @@ final class ForkedTaskTest extends TestCase
             // expected
         }
         self::assertLessThan(10.0, microtime(true) - $started, 'the child must be killed, not waited out');
+    }
+
+    public function testCancellingThePromiseReapsTheChildBeforeTheRejectionIsObserved(): void
+    {
+        // The class docblock promises the child is reaped before the promise
+        // settles. Cancelling through the promise must honour that too: a caller
+        // that re-forks for the same resource on rejection must not race a live child.
+        $loop = new StreamSelectLoop();
+        $childPid = new Deferred();
+        $promise = ForkedTask::run(
+            static function (ForkChannel $channel): void {
+                $channel->send((string) getmypid());
+                sleep(30);
+            },
+            static function (string $frame) use ($childPid): void {
+                $childPid->resolve((int) $frame);
+            },
+            $loop,
+        );
+        $pid = Await::until($childPid->promise(), 5.0, $loop);
+
+        $aliveWhenRejected = null;
+        $promise->then(null, static function () use (&$aliveWhenRejected, $pid): void {
+            // posix_kill(pid, 0) is false only once the child has been reaped (ESRCH);
+            // a zombie or a still-exiting child answers true.
+            $aliveWhenRejected = \posix_kill($pid, 0);
+        });
+        $promise->cancel();
+
+        try {
+            Await::until($promise, 10.0, $loop);
+            self::fail('A cancelled forked task must reject');
+        } catch (OperationCancelledException) {
+            // expected
+        }
+        self::assertFalse($aliveWhenRejected, 'the child must be reaped before the rejection is observed');
     }
 
     public function testTheParentSideDeadlineKillsTheChildAndRejectsWithATimeout(): void

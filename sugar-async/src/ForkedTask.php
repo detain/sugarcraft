@@ -64,9 +64,14 @@ final class ForkedTask
         // The cancel closure exists only after the fork; a cancel before that
         // point has no child to stop, so the reference is still null then.
         $fail = null;
-        $deferred = new Deferred(static function () use (&$fail): never {
+        // Returning rather than throwing matters: react/promise turns a throwing
+        // canceller into a synchronous rejection, which would settle the promise
+        // before the child is reaped. Returning leaves it pending until the reap
+        // callback rejects it with the outcome $fail recorded.
+        $deferred = new Deferred(static function () use (&$fail): void {
             if ($fail !== null) {
                 $fail(new OperationCancelledException('Forked task cancelled'));
+                return;
             }
             throw new OperationCancelledException('Forked task cancelled');
         });
