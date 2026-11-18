@@ -927,6 +927,9 @@ small, innocuous-looking value deletes almost everything.
 model does next is not less work, it is the *same* work through `Bash`, which
 reaches the permission gate as opaque shell text instead of as a reviewable
 path. Strictly fewer tools, strictly coarser review.
+`Task` is the one built-in the whitelist cannot reach: it is appended after the
+filter (`LaunchContext::tools()`), so a chat launched with an agent manager keeps
+sub-agent spawning under `allowedTools: ["Bash"]` too.
 
 **A previous version of this page claimed `disabledTools` can only express that
 attack "by naming every tool it removes — a value you can see when you read the
