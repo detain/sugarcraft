@@ -399,6 +399,41 @@ final class LockFileTest extends TestCase
         $stale->release();
     }
 
+    public function testSweepRunsOnlyWhileItHoldsTheSidecarLock(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('Windows will not unlink a file held open by this process');
+        }
+        $path = $this->dir . '/l';
+        $stale = LockFile::on($path)->tryAcquire();
+        self::assertNotNull($stale);
+        file_put_contents($path, '999999');
+
+        // Another sweeper is mid-sweep: it holds the sidecar. The dead record is
+        // provable, but the waiter must not unlink the inode while that sweeper runs.
+        $sidecar = fopen($path . '.sweep', 'cb+');
+        self::assertNotFalse($sidecar);
+        self::assertTrue(flock($sidecar, LOCK_EX | LOCK_NB));
+        clearstatcache();
+        $inode = fileinode($path);
+
+        $probe = static fn (int $pid): bool => false;
+        $blocked = LockFile::on($path)->withAliveProbe($probe)->tryAcquire(0.0);
+        clearstatcache();
+
+        self::assertNull($blocked, 'a waiter that cannot take the sidecar gives up as contended');
+        self::assertSame($inode, fileinode($path), 'the stale inode was unlinked without the sidecar');
+
+        // Once the sidecar is free the same waiter may sweep the dead record.
+        flock($sidecar, LOCK_UN);
+        fclose($sidecar);
+        $swept = LockFile::on($path)->withAliveProbe($probe)->tryAcquire(0.0);
+
+        self::assertNotNull($swept, 'the sweep proceeds once the sidecar is free');
+        $swept->release();
+        $stale->release();
+    }
+
     public function testAsyncSweepNeverUnlinksAFreshInodeAnotherWaiterTook(): void
     {
         if (PHP_OS_FAMILY === 'Windows') {
@@ -428,6 +463,37 @@ final class LockFileTest extends TestCase
 
         $fresh->release();
         $stale->release();
+    }
+
+    public function testForkedChildExitDoesNotReleaseTheParentsLock(): void
+    {
+        if (!\function_exists('pcntl_fork') || !\function_exists('posix_kill')) {
+            self::markTestSkipped('needs ext-pcntl and ext-posix');
+        }
+        $path = $this->dir . '/l';
+        $guard = LockFile::on($path)->tryAcquire();
+        self::assertNotNull($guard);
+
+        $pid = \pcntl_fork();
+        self::assertNotSame(-1, $pid);
+        if ($pid === 0) {
+            // A normal exit runs __destruct() on every object the fork inherited,
+            // including the parent's guard. That run must leave the lock alone.
+            exit(0);
+        }
+        \pcntl_waitpid($pid, $status);
+        self::assertTrue(\pcntl_wifexited($status));
+
+        $probe = fopen($path, 'c');
+        self::assertIsResource($probe);
+        // flock() is per open file description: a fresh fopen() is a second holder.
+        self::assertFalse(flock($probe, LOCK_EX | LOCK_NB), 'a forked child must not drop the parent lock');
+        fclose($probe);
+
+        $guard->release();
+        $again = LockFile::on($path)->tryAcquire();
+        self::assertNotNull($again, 'the parent can still release and re-take the lock');
+        $again->release();
     }
 
     /**

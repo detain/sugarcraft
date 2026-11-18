@@ -66,19 +66,65 @@ final class GraphicsRenderer implements FrameRenderer
         $cellsW = max(1, (int) round($frame->w / $this->cellPxW));
         $cellsH = max(1, (int) round($frame->h / $this->cellPxH));
 
+        // Emitted once, ahead of the first frame, and only after a Player rebuild
+        // (see carryingFrom()); the terminal processes it in the same write as the draw.
+        $residue = $this->residue;
+        $this->residue = '';
+
         $delegate = $this->delegate();
         if ($delegate->supportsIdDelete()) {
             // Kitty: draw each frame under an alternating image id and retire the
             // previous one, so playback does not leave one image in the terminal's
-            // store per frame. The session lives as long as this renderer, which
-            // the Player keeps for the whole playback.
+            // store per frame. The session lives as long as this renderer; the
+            // Player hands the last id to the successor when it rebuilds.
             $this->session ??= GraphicsFrameSession::new($delegate);
 
-            return $this->session->present($source, $cellsW, $cellsH);
+            return $residue . $this->session->present($source, $cellsW, $cellsH);
         }
 
-        return $delegate->render($source, $cellsW, $cellsH);
+        return $residue . $delegate->render($source, $cellsW, $cellsH);
     }
+
+    /**
+     * Successor for a Player rebuild (resize, mode cycle): the same geometry,
+     * with the outgoing renderer's last drawn Kitty frame retired ahead of this
+     * one's first draw. Without it the new session starts at frame zero and never
+     * deletes the frame the old session left in the terminal's image store.
+     */
+    public function carryingFrom(self $previous): self
+    {
+        $next = new self($this->mode, $this->cellPxW, $this->cellPxH);
+        $next->residue = $previous->retirement();
+
+        return $next;
+    }
+
+    /**
+     * Escape bytes this renderer still owes the terminal: the delete of the frame it
+     * drew last, or a predecessor's residue it has not yet written (a second rebuild
+     * before any render). '' when neither exists or the backend cannot delete by id.
+     */
+    private function retirement(): string
+    {
+        if ($this->session === null || $this->session->frameCount() === 0) {
+            return $this->residue;
+        }
+
+        $delegate = $this->delegate();
+        if (!$delegate->supportsIdDelete()) {
+            return '';
+        }
+
+        $last = $this->session->imageId + (($this->session->frameCount() - 1) % 2);
+
+        return $delegate->delete((string) $last);
+    }
+
+    /**
+     * Delete sequence owed to the terminal from a predecessor renderer; consumed by
+     * the next render().
+     */
+    private string $residue = '';
 
     /**
      * Frame-to-frame id rotation for id-addressable backends (Kitty). Null for

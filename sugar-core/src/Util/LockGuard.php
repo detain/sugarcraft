@@ -17,6 +17,12 @@ final class LockGuard
     private $handle;
 
     /**
+     * The process that minted the guard. A forked child inherits this object
+     * and runs its destructor when it exits; that run must not unlock.
+     */
+    private readonly int|false $owner;
+
+    /**
      * @param resource $handle An open stream already holding the flock.
      *
      * @internal Minted by {@see LockFile}; construct no other way.
@@ -24,6 +30,7 @@ final class LockGuard
     public function __construct($handle, private readonly string $path, private readonly bool $exclusive)
     {
         $this->handle = $handle;
+        $this->owner = \getmypid();
     }
 
     public function path(): string
@@ -44,6 +51,18 @@ final class LockGuard
     public function release(): void
     {
         if (!\is_resource($this->handle)) {
+            $this->handle = null;
+
+            return;
+        }
+
+        // A forked child that exits normally runs this destructor on the
+        // parent's guard. flock() locks belong to the open file description the
+        // fork shares, so LOCK_UN here would drop the parent's lock. Closing the
+        // child's copy of the descriptor is harmless: the parent's copy keeps
+        // the description, and the lock, alive.
+        if ($this->owner !== \getmypid()) {
+            @fclose($this->handle);
             $this->handle = null;
 
             return;

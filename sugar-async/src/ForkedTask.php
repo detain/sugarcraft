@@ -22,9 +22,11 @@ use React\Promise\PromiseInterface;
  *
  * Requires ext-pcntl and ext-posix; without them it refuses up front rather
  * than returning a promise that can never settle. The child exits through
- * PHP's normal exit path, the same as candy-git-server's WorkerFork, so a
- * child that must not run parent shutdown work should not be forked from
- * here.
+ * PHP's normal exit path, so every object the fork inherited runs its
+ * __destruct() there, including objects the parent holds. A destructor with
+ * external effects is therefore unsafe to hold across the fork unless it
+ * checks the process that minted it: {@see \SugarCraft\Core\Util\LockGuard}
+ * does, so a held file lock survives the child's exit.
  */
 final class ForkedTask
 {
