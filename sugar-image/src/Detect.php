@@ -494,7 +494,7 @@ final class Detect
      * chafa models this per-emulator in its term.c tables
      * (CHAFA_TERM_SEQ_REPEAT_CHAR set only for the emulators audited to
      * implement REP); a mosaic emitter must AND this fact with the
-     * {@see \SugarCraft\CellBuffer\Diff\RepeatGate} byte arithmetic before
+     * {@see \SugarCraft\CellBuffer\Support\RepeatGate} byte arithmetic before
      * compressing a run.
      *
      * This is the env-only truth table that lives until the audited

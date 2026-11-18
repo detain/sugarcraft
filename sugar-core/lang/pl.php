@@ -30,6 +30,7 @@ return [
     'lru_map.capacity_invalid' => 'pojemność LRU musi wynosić co najmniej 1, otrzymano {capacity}',
     'lru_map.capacity_too_large' => 'pojemność LRU {capacity} przekracza strażnika wzrostu {max}',
     'lru_map.evict_from_empty' => 'nie można usunąć z pustej mapy LRU',
+    'lru_map.ttl_invalid' => 'TTL mapy LRU musi być dodatnią, skończoną liczbą sekund, otrzymano {seconds}',
     'errors.negative_not_allowed' => 'wartość ujemna niedozwolona dla {name}',
     'errors.value_must_be_positive' => '{name} musi być dodatnia, otrzymano {value}',
     'errors.value_out_of_range' => '{name} musi być między {min} a {max}, otrzymano {value}',
@@ -57,6 +58,8 @@ return [
 
     // sc-20 (sugar-core-022): the localized throw corpus — en.php rows are the authentic byte-for-byte form of each swept message; the 15 fallback locales carry English verbatim per the in-step precedent.
     'builder.framerate_positive' => 'Framerate must be positive',
+    'builder.escape_delay_non_negative' => 'escapeDelay must be a finite number of seconds, zero or more',
+    'program.async_timeout' => 'async command timed out after {seconds} seconds',
     'builder.window_size_keys' => 'windowSize must have cols and rows keys',
     'builder.window_size_positive' => 'windowSize cols and rows must be positive',
     'worker.cap_invalid' => 'WorkerPool outstanding-job cap must be 0 (unbounded) or positive, got {cap}',

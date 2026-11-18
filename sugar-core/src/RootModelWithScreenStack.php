@@ -85,6 +85,24 @@ final class RootModelWithScreenStack implements Model, ScreenStackCapable
             return [$next, null];
         }
 
+        // Every other Msg goes to the live top of the stack (or to the
+        // base model when no screen is pushed) and the result is written
+        // back, so a screen's state change survives this call. Program
+        // routes straight to the active screen, so this path serves direct
+        // callers and nested roots.
+        if (!$this->screens->isEmpty()) {
+            [$nextTop, $cmd] = $this->screens->current()->model->update($msg);
+            $next = clone $this;
+            $next->screens = $this->screens->replaceCurrentModel($nextTop);
+            $next->currentModel = $nextTop;
+            return [$next, $cmd];
+        }
+        if ($this->currentModel !== null) {
+            [$nextBase, $cmd] = $this->currentModel->update($msg);
+            $next = clone $this;
+            $next->currentModel = $nextBase;
+            return [$next, $cmd];
+        }
         return [$this, null];
     }
 

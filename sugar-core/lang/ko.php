@@ -30,6 +30,7 @@ return [
     'lru_map.capacity_invalid' => 'LRU 용량은 최소 1이어야 합니다. 입력값: {capacity}',
     'lru_map.capacity_too_large' => 'LRU 용량 {capacity}이(가) 증가 가드 {max}를 초과합니다',
     'lru_map.evict_from_empty' => '빈 LRU 맵에서 내쫓을 수 없습니다',
+    'lru_map.ttl_invalid' => 'LRU TTL은 양수이고 유한한 초 단위 값이어야 합니다. 입력값: {seconds}',
     'errors.negative_not_allowed' => '{name}에 음수 값은 허용되지 않습니다',
     'errors.value_must_be_positive' => '{name}은(는) 양수여야 합니다. 입력값: {value}',
     'errors.value_out_of_range' => '{name}은(는) {min}과(와) {max} 사이여야 합니다. 입력값: {value}',
@@ -57,6 +58,8 @@ return [
 
     // sc-20 (sugar-core-022): the localized throw corpus — en.php rows are the authentic byte-for-byte form of each swept message; the 15 fallback locales carry English verbatim per the in-step precedent.
     'builder.framerate_positive' => 'Framerate must be positive',
+    'builder.escape_delay_non_negative' => 'escapeDelay must be a finite number of seconds, zero or more',
+    'program.async_timeout' => 'async command timed out after {seconds} seconds',
     'builder.window_size_keys' => 'windowSize must have cols and rows keys',
     'builder.window_size_positive' => 'windowSize cols and rows must be positive',
     'worker.cap_invalid' => 'WorkerPool outstanding-job cap must be 0 (unbounded) or positive, got {cap}',

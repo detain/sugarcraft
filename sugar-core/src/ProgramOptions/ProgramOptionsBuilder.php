@@ -68,6 +68,7 @@ final class ProgramOptionsBuilder
     private bool $sanitizePaste = true;
     private bool $exitOnStdinEof = true;
     private bool $synchronizedOutput = true;
+    private float $escapeDelay = 0.05;
 
     /**
      * The single mutate door: clone, set one field, return the new
@@ -254,6 +255,15 @@ final class ProgramOptionsBuilder
         return $this->mutate('exitOnStdinEof', $exitOnStdinEof);
     }
 
+    /** @throws \InvalidArgumentException when negative or not finite */
+    public function withEscapeDelay(float $escapeDelay): self
+    {
+        if ($escapeDelay < 0.0 || !is_finite($escapeDelay)) {
+            throw new \InvalidArgumentException(Lang::t('builder.escape_delay_non_negative'));
+        }
+        return $this->mutate('escapeDelay', $escapeDelay);
+    }
+
     public function withSynchronizedOutput(bool $synchronizedOutput): self
     {
         return $this->mutate('synchronizedOutput', $synchronizedOutput);
@@ -294,6 +304,7 @@ final class ProgramOptionsBuilder
             sanitizePaste: $this->sanitizePaste,
             exitOnStdinEof: $this->exitOnStdinEof,
             synchronizedOutput: $this->synchronizedOutput,
+            escapeDelay: $this->escapeDelay,
         );
     }
 }

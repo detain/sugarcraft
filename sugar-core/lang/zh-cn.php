@@ -30,6 +30,7 @@ return [
     'lru_map.capacity_invalid' => 'LRU 容量至少为 1，实际为 {capacity}',
     'lru_map.capacity_too_large' => 'LRU 容量 {capacity} 超出增长上限 {max}',
     'lru_map.evict_from_empty' => '无法从空 LRU 映射中逐出',
+    'lru_map.ttl_invalid' => 'LRU TTL 必须是正的有限秒数，实际为 {seconds}',
     'errors.negative_not_allowed' => '{name} 不允许为负值',
     'errors.value_must_be_positive' => '{name} 必须为正数，实际为 {value}',
     'errors.value_out_of_range' => '{name} 必须在 {min} 和 {max} 之间，实际为 {value}',
@@ -57,6 +58,8 @@ return [
 
     // sc-20 (sugar-core-022): the localized throw corpus — en.php rows are the authentic byte-for-byte form of each swept message; the 15 fallback locales carry English verbatim per the in-step precedent.
     'builder.framerate_positive' => 'Framerate must be positive',
+    'builder.escape_delay_non_negative' => 'escapeDelay must be a finite number of seconds, zero or more',
+    'program.async_timeout' => 'async command timed out after {seconds} seconds',
     'builder.window_size_keys' => 'windowSize must have cols and rows keys',
     'builder.window_size_positive' => 'windowSize cols and rows must be positive',
     'worker.cap_invalid' => 'WorkerPool outstanding-job cap must be 0 (unbounded) or positive, got {cap}',

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core\Util\Proc;
 
+use React\EventLoop\LoopInterface;
 use SugarCraft\Core\Lang;
 
 /**
@@ -63,6 +64,13 @@ final class BoundedShutdown
 
     /** Poll granularity: fine enough that a prompt exit is not rounded up to the whole budget. */
     public const POLL_INTERVAL_US = 5000;
+
+    /**
+     * Seconds between exit polls while {@see reapWhenExited()} waits on a child
+     * the ladder could not stop. Coarse on purpose: a stuck child is rare and a
+     * prompt reap is not worth a 200Hz wakeup on a loop that is serving others.
+     */
+    public const REAP_POLL_SECONDS = 0.25;
 
     private function __construct()
     {
@@ -213,6 +221,213 @@ final class BoundedShutdown
         $signal(9);
 
         return self::waitBounded($isGone, $killGraceSeconds);
+    }
+
+    /**
+     * {@see escalate()} driven by loop timers instead of `usleep()`: each wait
+     * ticks on $loop at the poll cadence, so a wedged child costs the loop
+     * nothing while it waits. A gateway that recycles hosts on its own event
+     * loop cannot afford the sync ladder, which would freeze every other
+     * connection for up to both budgets. CLI call sites keep the sync variant:
+     * they have no loop to yield to.
+     *
+     * Same rung order and the same literal-9 doctrine. $done receives whether
+     * the child is gone by the end of the budgets.
+     *
+     * @param callable(int):void $signal
+     * @param callable():bool $isGone
+     * @param callable(bool):void|null $done
+     * @param callable():void|null $onEscalate
+     */
+    public static function escalateAsync(
+        LoopInterface $loop,
+        callable $signal,
+        callable $isGone,
+        ?callable $done = null,
+        float $terminateGrace = self::TERMINATE_GRACE_SECONDS,
+        float $killGraceSeconds = self::KILL_GRACE_SECONDS,
+        ?callable $onEscalate = null,
+    ): void {
+        $signal(15);
+        $killed = false;
+        $deadline = self::now() + $terminateGrace;
+        $timer = null;
+        $timer = $loop->addPeriodicTimer(
+            self::POLL_INTERVAL_US / 1_000_000,
+            static function () use (&$timer, &$killed, &$deadline, $loop, $signal, $isGone, $done, $killGraceSeconds, $onEscalate): void {
+                if ($isGone()) {
+                    $loop->cancelTimer($timer);
+                    if ($done !== null) {
+                        $done(true);
+                    }
+
+                    return;
+                }
+                if (self::now() < $deadline) {
+                    return;
+                }
+                if ($killed) {
+                    $loop->cancelTimer($timer);
+                    if ($done !== null) {
+                        $done($isGone());
+                    }
+
+                    return;
+                }
+                if ($onEscalate !== null) {
+                    $onEscalate();
+                }
+                // Signal 9 as an INTEGER LITERAL, never the `SIGKILL` constant — see
+                // the class doc-block's ext-pcntl rule.
+                $signal(9);
+                $killed = true;
+                $deadline = self::now() + $killGraceSeconds;
+            },
+        );
+    }
+
+    /**
+     * Async {@see terminateBounded()}: the ladder on loop timers, then the reap
+     * once the child is gone. $then receives the exit status, captured the same
+     * way the sync call captures it: from the poll that saw the exit, falling
+     * back to `proc_close()` only when the poll never did.
+     *
+     * A child that survives signal 9 within its budget is NOT reaped with a
+     * blocking `proc_close()` — that would park the loop thread on exactly the
+     * uninterruptible kernel wait the ladder cannot break. The handle is kept
+     * and polled by {@see reapWhenExited()} until the kernel releases the
+     * child, so the loop keeps serving every other connection in the meantime.
+     * Trade-off: that poll is a loop timer, so a child that never dies holds
+     * the loop open; a caller that must exit regardless cancels its own work.
+     *
+     * An already-exited child is answered at once with no signal spent, and a
+     * non-resource argument answers null, matching the sync contract.
+     *
+     * @param callable(?int):void|null $then
+     */
+    public static function terminateBoundedAsync(
+        LoopInterface $loop,
+        mixed $process,
+        ?callable $then = null,
+        float $graceSeconds = self::TERMINATE_GRACE_SECONDS,
+        float $killGraceSeconds = self::KILL_GRACE_SECONDS,
+        ?int $groupPid = null,
+    ): void {
+        $finish = static function (?int $status) use ($then): void {
+            if ($then !== null) {
+                $then($status);
+            }
+        };
+
+        if (!\is_resource($process)) {
+            $finish(null);
+
+            return;
+        }
+
+        // Reap in every branch: the status poll only captures the exit code, it
+        // does not release the handle, and a skipped proc_close() leaks it.
+        $exitCode = null;
+        if (self::exited($process, $exitCode)) {
+            $reaped = \proc_close($process);
+            $finish($exitCode ?? $reaped);
+
+            return;
+        }
+
+        self::escalateAsync(
+            $loop,
+            static function (int $signal) use ($process, $groupPid): void {
+                self::signal($process, $groupPid, $signal);
+            },
+            static function () use ($process, &$exitCode): bool {
+                return self::exited($process, $exitCode);
+            },
+            static function (bool $gone) use ($loop, $process, &$exitCode, $finish): void {
+                // Only a poll that saw the exit may take the blocking reap: then
+                // proc_close() cannot wait. Anything else is deferred to the loop.
+                if (!$gone) {
+                    self::reapWhenExited($loop, $process, $finish);
+
+                    return;
+                }
+
+                $reaped = \is_resource($process) ? \proc_close($process) : null;
+                $finish($exitCode ?? $reaped);
+            },
+            $graceSeconds,
+            $killGraceSeconds,
+        );
+    }
+
+    /**
+     * Reap a child on loop timers, never blocking: answer at once when it has
+     * already exited, otherwise poll it every {@see REAP_POLL_SECONDS} and
+     * `proc_close()` it the tick it is seen gone.
+     *
+     * This is the reap half of {@see terminateBoundedAsync()} for a child the
+     * ladder could not stop. A synchronous `proc_close()` there would wait on
+     * the child with no bound. The status reported is the one the poll captured,
+     * matching the sync contract; a non-resource argument answers null.
+     *
+     * @param callable(?int):void|null $then
+     */
+    public static function reapWhenExited(
+        LoopInterface $loop,
+        mixed $process,
+        ?callable $then = null,
+        float $pollSeconds = self::REAP_POLL_SECONDS,
+    ): void {
+        $finish = static function (?int $status) use ($then): void {
+            if ($then !== null) {
+                $then($status);
+            }
+        };
+
+        if (!\is_resource($process)) {
+            $finish(null);
+
+            return;
+        }
+
+        $exitCode = null;
+        if (self::exited($process, $exitCode)) {
+            $reaped = \proc_close($process);
+            $finish($exitCode ?? $reaped);
+
+            return;
+        }
+
+        $timer = null;
+        $timer = $loop->addPeriodicTimer(
+            $pollSeconds,
+            static function () use (&$timer, $loop, $process, $finish): void {
+                // Another teardown may have closed the handle while this timer was
+                // armed. exited() answers true for that, so without this guard the
+                // proc_close() below would run on a consumed resource and throw.
+                if (!\is_resource($process)) {
+                    $loop->cancelTimer($timer);
+                    $finish(null);
+
+                    return;
+                }
+
+                $code = null;
+                if (!self::exited($process, $code)) {
+                    return;
+                }
+
+                $loop->cancelTimer($timer);
+                $reaped = \proc_close($process);
+                $finish($code ?? $reaped);
+            },
+        );
+    }
+
+    /** Monotonic seconds: the deadline clock every ladder variant shares. */
+    private static function now(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 
     /**

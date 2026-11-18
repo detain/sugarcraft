@@ -47,6 +47,7 @@ return [
     'lru_map.capacity_invalid'    => 'LRU capacity must be at least 1, got {capacity}',
     'lru_map.capacity_too_large'  => 'LRU capacity {capacity} exceeds growth guard {max}',
     'lru_map.evict_from_empty'    => 'cannot evict from an empty LRU map',
+    'lru_map.ttl_invalid'         => 'LRU TTL must be a positive, finite number of seconds, got {seconds}',
 
     // Util/Validation.php
     'errors.negative_not_allowed'  => 'negative not allowed for {name}',
@@ -76,6 +77,8 @@ return [
 
     // sc-20 (sugar-core-022): the localized throw corpus — en.php rows are the authentic byte-for-byte form of each swept message; the 15 fallback locales carry English verbatim per the in-step precedent.
     'builder.framerate_positive' => 'Framerate must be positive',
+    'builder.escape_delay_non_negative' => 'escapeDelay must be a finite number of seconds, zero or more',
+    'program.async_timeout' => 'async command timed out after {seconds} seconds',
     'builder.window_size_keys' => 'windowSize must have cols and rows keys',
     'builder.window_size_positive' => 'windowSize cols and rows must be positive',
     'worker.cap_invalid' => 'WorkerPool outstanding-job cap must be 0 (unbounded) or positive, got {cap}',

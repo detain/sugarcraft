@@ -154,7 +154,7 @@ when that's more convenient.
 
 ## ProgramOptions
 
-`ProgramOptions` is a 24-parameter value object (`readonly` promoted
+`ProgramOptions` is a 27-parameter value object (`readonly` promoted
 properties). Pass it as `Program`'s second argument:
 
 ```php
@@ -442,7 +442,9 @@ line-end normalisation and renders bidi/zero-width characters as visible
 - **`KeyBindings`** (in `Keys/`) — immutable action→tokens key registry. Named actions each own a lowercase token set; `matches(KeyMsg, id)` answers "does this press actuate that action" (press-only, case-folded; both space wire shapes normalize to `space`), `withOverride(id, ...tokens)` returns a new registry, and `label(id)` renders the display column from the same map. The runtime does **not** consult it: `Program`/`Renderer` dispatch raw keys to the model, so the registry is consumer-side — an app that wants action indirection and remap-safe help builds its dispatch on it, and one map then serves both. (Wiring it into the runtime itself is an open design question, not a defect.) Modifier chords are a declared non-goal (bare letters match as they always did).
 - **`Writer`** — the ordered byte sink `Program`, its `Renderer` and each `WorkerPool` worker's stdin write through. Unattached it writes synchronously (bounded by a deadline). Attached to a loop (`Program` does this for the life of `run()`) it never blocks: bytes the stream refuses wait in one ordered backlog that drains on writability, and `isSaturated()` tells the producer to hold the next frame. Nothing queued is dropped.
 - **`Semaphore`** (in `Util/`) — bounded-concurrency permit pool over ReactPHP promises: `Semaphore::new(6)->run(fn() => fetch($url))` caps in-flight work, parks the rest FIFO, and returns each permit when its promise settles. Share one pool across every component touching the same scarce resource, and `close()` it when the owner is retired so parked waiters fail (with `SemaphoreClosedException`) instead of pending. Distinct from `WorkerPool` (subprocess concurrency) — see its docblock.
-- **`LruMap`** (in `Util/`) — fixed-capacity least-recently-used map: `get()` promotes, `peek()` reads without disturbing recency, `put()` evicts the longest-unused entry past the cap, `evictions()` reports how often that happened, and an optional `maxCapacity` growth guard caps `resize()`. Iterates most-recently-used first; `keys()` is the string-safe key view. The size bound that complements a TTL cache; it does not replace one.
+- **`LruMap`** (in `Util/`) — fixed-capacity least-recently-used map: `get()` promotes, `peek()` reads without disturbing recency, `put()` evicts the longest-unused entry past the cap, `evictions()` reports how often that happened, and an optional `maxCapacity` growth guard caps `resize()`. Iterates most-recently-used first; `keys()` is the string-safe key view. `withTtl($seconds)` returns a snapshot whose entries expire that long after their last `put()`; expiry is not counted in `evictions()`.
+- **`Util\Proc\BoundedShutdown`** — the child teardown ladder (SIGTERM, bounded wait, literal signal 9, bounded wait, then the reap). `terminateBounded()` and `escalate()` run it on a blocking poll; `terminateBoundedAsync($loop, ...)` and `escalateAsync($loop, ...)` run the same rungs on loop timers, so a wedged child costs the loop nothing while it waits. The async reap reports the exit status captured from the poll that saw the exit. A child that survives signal 9 within its budget is never reaped with a blocking `proc_close()`: `reapWhenExited($loop, ...)` polls it on a loop timer and reaps it the tick it is gone, so the loop stays live for the whole wait.
+- **`LockFile`** (in `Util/`) — cross-process advisory lock with a bounded wait and a stale-holder sweep. `tryAcquire($s)` blocks, `tryAcquireAsync($loop, $s)` returns a promise for the same attempt on a ReactPHP loop timer, and `acquire($s)` throws on timeout.
 - **`Sanitize`** (in `Util/`) — the fleet's untrusted-string vocabulary; the contract and the method-by-method list live in [Security and the trust boundary](#security-and-the-trust-boundary).
 - **`Subscription`** — value object: id, Kind, params, produce closure.
 - **`Subscriptions`** — immutable collection with `withTick()`, `withKey()`, `withSignal()`, `withCustom()`, `all()`, `has()`.
@@ -763,6 +765,9 @@ maps common orchestration needs to the PHP combinators:
 | Run several Cmds in parallel | `Cmd::batch(...$cmds)` |
 | Run several Cmds one-after-the-other | `Cmd::sequence(...$cmds)` |
 | Schedule a Msg in N seconds | `Cmd::tick($seconds, fn () => $msg)` |
+| Schedule a Msg in N seconds, cancellable | `$handle = Cmd::cancellableTick($seconds, fn () => $msg)`; return `$handle->cmd()`; `$handle->cancel()` drops it |
+| Bound an async wait | `Cmd::promise($factory, timeoutSeconds: 5.0)` (a timed-out promise dispatches `ExceptionMsg`) |
+| Re-read the terminal size | `Cmd::windowSize()` → `WindowSizeMsg` built from the live size |
 | Schedule a Msg on every wall-clock multiple of N seconds | `Cmd::every($seconds, fn () => $msg)` |
 | Dispatch a Msg right away | `Cmd::send($msg)` |
 | Quit the program | `Cmd::quit()` |
@@ -826,7 +831,7 @@ tick), [`sequence`](examples/sequence.php) (`Cmd::sequence`),
 
 ### Complete Cmd factory index
 
-Every `public static` factory on `Cmd` (45 as of this writing), by family —
+Every `public static` factory on `Cmd` (47 as of this writing), by family —
 the discovery index so capability checks do not need a grep of
 `src/Cmd.php`. The cheat-sheet above stays the start-here view.
 
@@ -839,9 +844,11 @@ the discovery index so capability checks do not need a grep of
 - `batch(...$cmds)` — run concurrently, each returned Msg dispatched independently; `null` entries dropped.
 - `sequence(...$cmds)` — run one after another, ordered (a mode request lands before the colour-dependent render that follows).
 - `tick($seconds, $produce)` — fire `$produce` once after a delay.
+- `cancellableTick($seconds, $produce)` — like `tick()`, but returns a `TickHandle`; `cmd()` gives the Cmd to return, `cancel()` drops the tick whether or not it is armed yet. Cancelling after it fired is a no-op.
+- `windowSize()` — dispatch a `WindowSizeMsg` with the Program's current size (honours `ProgramOptions::$windowSize`).
 - `every($seconds, $produce)` — fire on wall-clock multiples of `$seconds` (synchronised animations).
 - `send($msg)` — dispatch a Msg right away.
-- `promise($factory)` — run an async closure off the loop; its resolved Msg is dispatched on settle (wraps `AsyncCmd`).
+- `promise($factory, timeoutSeconds: null)` — run an async closure off the loop; its resolved Msg is dispatched on settle (wraps `AsyncCmd`). With `timeoutSeconds`, a promise still pending at the deadline is rejected with a timeout error and dispatches `ExceptionMsg`.
 
 **Output**
 - `println($text)` / `printf($fmt, ...$args)` — print above the program region (inline-mode logging without disturbing the view).
