@@ -208,11 +208,12 @@ final class BoundedShutdownTest extends TestCase
             'a direct child inherits OUR group; claiming it as a groupPid would arm a group-kill on this very process',
         );
 
-        if (!\SugarCraft\Core\Util\Executable\Locator::exists('setsid')) {
+        $setsid = \SugarCraft\Core\Util\Executable\Locator::locate('setsid');
+        if ($setsid === null) {
             self::markTestSkipped('setsid(1) is not installed on this host');
         }
 
-        $wrapped = $this->spawn(['/usr/bin/setsid', 'sleep', '30']);
+        $wrapped = $this->spawn([$setsid, 'sleep', '30']);
         $wrappedPid = (int) (\proc_get_status($wrapped)['pid'] ?? 0);
         $deadline = \hrtime(true) / 1_000_000_000 + 2.0;
         while (\posix_getpgid($wrappedPid) !== $wrappedPid && \hrtime(true) / 1_000_000_000 < $deadline) {
@@ -460,7 +461,8 @@ final class BoundedShutdownTest extends TestCase
     public function testTerminateBoundedAsyncEscalatesAndReapsTheWholeProcessGroup(): void
     {
         self::requirePosix();
-        if (!\SugarCraft\Core\Util\Executable\Locator::exists('setsid')) {
+        $setsid = \SugarCraft\Core\Util\Executable\Locator::locate('setsid');
+        if ($setsid === null) {
             self::markTestSkipped('setsid(1) is not installed on this host');
         }
 
@@ -472,7 +474,7 @@ final class BoundedShutdownTest extends TestCase
         $grandchild = 0;
 
         try {
-            $wrapped = $this->spawn(['/usr/bin/setsid', 'sh', '-c', 'sleep 30 & echo $! > "$0"; wait', $marker]);
+            $wrapped = $this->spawn([$setsid, 'sh', '-c', 'sleep 30 & echo $! > "$0"; wait', $marker]);
             $wrappedPid = (int) (\proc_get_status($wrapped)['pid'] ?? 0);
 
             $deadline = \hrtime(true) / 1_000_000_000 + 2.0;
@@ -622,6 +624,49 @@ final class BoundedShutdownTest extends TestCase
         });
 
         self::assertSame(5, $status);
+        self::assertFalse(\is_resource($process));
+    }
+
+    public function testReapWhenExitedSettlesOnceWhenAnotherTeardownClosesTheHandle(): void
+    {
+        self::requirePosix();
+
+        // A second teardown closes the handle while the deferred reap is armed.
+        // The reap's next tick must settle once and stay quiet: proc_close() on
+        // the consumed resource would throw, and that throw escapes $loop->run().
+        $process = $this->spawn(['sleep', '30']);
+
+        $loop = new StreamSelectLoop();
+        $settles = 0;
+        $status = 'unset';
+
+        BoundedShutdown::reapWhenExited(
+            $loop,
+            $process,
+            static function (?int $s) use (&$settles, &$status): void {
+                ++$settles;
+                $status = $s;
+            },
+            0.01,
+        );
+
+        $loop->addTimer(0.05, static function () use ($process): void {
+            BoundedShutdown::terminateBounded($process, 0.3, 0.3);
+        });
+        $loop->addTimer(0.6, static function () use ($loop): void {
+            $loop->stop();
+        });
+
+        $escaped = null;
+        try {
+            $loop->run();
+        } catch (\Throwable $e) {
+            $escaped = $e;
+        }
+
+        self::assertNull($escaped, 'no throwable may escape the loop when the reap finds its handle already closed');
+        self::assertSame(1, $settles, 'the deferred reap must settle exactly once');
+        self::assertNull($status, 'a handle closed by another teardown settles the reap with no status');
         self::assertFalse(\is_resource($process));
     }
 

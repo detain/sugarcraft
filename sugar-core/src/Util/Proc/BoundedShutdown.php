@@ -402,6 +402,16 @@ final class BoundedShutdown
         $timer = $loop->addPeriodicTimer(
             $pollSeconds,
             static function () use (&$timer, $loop, $process, $finish): void {
+                // Another teardown may have closed the handle while this timer was
+                // armed. exited() answers true for that, so without this guard the
+                // proc_close() below would run on a consumed resource and throw.
+                if (!\is_resource($process)) {
+                    $loop->cancelTimer($timer);
+                    $finish(null);
+
+                    return;
+                }
+
                 $code = null;
                 if (!self::exited($process, $code)) {
                     return;
