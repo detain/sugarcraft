@@ -22,8 +22,10 @@ use SugarCraft\Markdown\Frontmatter\Split;
  *    spaces or tabs, so `----` is not a fence and an empty block (two fences
  *    back to back) is a valid, empty `meta`;
  *  - a closing fence on the last line needs no line break after it;
- *  - whitespace-only lines are dropped from both ends of the body and from
+ *  - whitespace-only lines are dropped from the start of the body and from
  *    the start of `meta`, so the first real line keeps its own indentation;
+ *    the end of the body is never trimmed, so a whitespace-only tail stays
+ *    exactly as written, including one with no line break after it;
  *  - CRLF and LF endings are both accepted, and the line break in front of
  *    the closing fence is not part of `meta`;
  *  - a block with no closing fence is not a block: the whole input is body.
