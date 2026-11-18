@@ -46,9 +46,14 @@ final class RootModelWithScreenStack implements Model, ScreenStackCapable
         return $next;
     }
 
+    /**
+     * Program calls init() on the active model only. With no screen pushed
+     * that is this root, so the base layer's startup Cmd is returned here;
+     * with a screen on top the screen's own init() is the one Program runs.
+     */
     public function init(): ?\Closure
     {
-        return null;
+        return $this->screens->isEmpty() ? $this->currentModel?->init() : null;
     }
 
     public function update(Msg $msg): array
@@ -65,7 +70,9 @@ final class RootModelWithScreenStack implements Model, ScreenStackCapable
             $msg->screen->onEnter?->__invoke();
             $next->screens = $next->screens->push($msg->screen);
             $next->currentModel = $msg->screen->model;
-            return [$next, null];
+            // A pushed screen starts like the root's own init(): nothing else
+            // calls init() on it, so its startup Cmd is returned to the caller.
+            return [$next, $model->init()];
         }
 
         if ($msg instanceof Msg\ScreenStackPoppedMsg) {
