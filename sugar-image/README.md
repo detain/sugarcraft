@@ -331,6 +331,53 @@ connector and timeout yourself.
 > process-wide — it is a test seam for exercising these checks without real
 > DNS, not a configuration knob; leave it alone outside tests.
 
+## Raw pixels, MIME sniffing and URL checks
+
+Three pure helpers sit beside the loaders, for callers that must decide before
+they decode or fetch:
+
+- `ImageSource::sniffMime($bytes)` returns the media type of PNG, JPEG, GIF or
+  WebP bytes by magic number, or `null`. It never refuses; an animated WebP is
+  still labelled `image/webp`.
+- `ImageSource::isFetchableUrl($url, $allowedSchemes = ['http', 'https'])` is a
+  predicate: a host is present and the scheme is allowed, compared
+  case-insensitively. It never throws.
+- `PngPixels::decode($bytes)` returns the stored RGBA8 samples of a still PNG as
+  a `Codec\RawRgba` (`width`, `height`, `rgba`), with no GD quantisation, so
+  alpha 254 stays 254. It returns `null` for anything it declines: a non-PNG
+  prefix, a malformed or CRC-failing stream, 16-bit or interlaced data, an
+  image over `$maxPixels` (default: the 50 MP `ImageSource` cap), or an image
+  whose inflated scanlines exceed 64 MiB (`PngPixels::MAX_RAW_BYTES`). The
+  second limit is what declines a 4096² RGBA frame.
+
+```php
+use SugarCraft\Image\ImageSource;
+use SugarCraft\Image\PngPixels;
+
+if (ImageSource::isFetchableUrl($url)) {
+    $image = ImageSource::fromUrl($url);
+}
+
+$pixels = PngPixels::decode($bytes); // null means: fall back to GD
+```
+
+The chunk walk, scanline unfilter and colour expansion behind `PngPixels` are
+shared with the APNG frame path. Two behaviour changes come with the sharing,
+both declared here:
+
+- **APNG tRNS (changed).** A gray (type 0) or RGB (type 2) APNG frame whose
+  `tRNS` names a colour key now marks exact key matches fully transparent.
+  Before, the APNG frame path ignored the key and those pixels stayed opaque.
+- **Scheme case (changed).** The fetch path (`fromUrl()`, including every
+  redirect hop) compares the scheme case-insensitively, the same rule
+  `isFetchableUrl()` uses. `HTTPS://example.test/a.png` now passes the scheme
+  check, where it was refused as "not in the allowed list" before.
+
+`PngPixels::walkChunks()`, `parseIhdr()`, `parsePalette()`, `parseTrns()` and
+`inflateAndUnfilter()` are `public static` only so `ApngDecoder` can call them
+from another class. They are tagged `@internal`, are not part of the supported
+API, and may change without notice.
+
 ## Async and precomputed renders
 
 Encoding a poster is the expensive part, and a whole-buffer encode monopolises
@@ -844,6 +891,7 @@ SugarCraft\Image
 ├── ApngDecoder            # Pure-PHP APNG frame walk (GD collapses APNG to its base frame)
 ├── FrameTickMsg           # Internal Msg for frame-advance ticks
 ├── ImageLayer             # Per-frame image registry: marker blocks + placements
+├── PngPixels              # Still-PNG pixel decoder (exact samples, shares the APNG chunk walk)
 ├── ImageSource            # Image bytes + metadata + decode budgets (Limits)
 ├── KittyOptions           # Kitty protocol options (transmit / place / compress)
 ├── Lang                   # i18n facade

@@ -76,7 +76,8 @@ final class ColourGateTest extends TestCase
             'TERM screen is 16'       => [['TERM' => 'screen'], ColorProfile::Ansi],
             'TERM screen-256color'    => [['TERM' => 'screen-256color'], ColorProfile::Ansi256],
             'TERM xterm-256color'     => [['TERM' => 'xterm-256color'], ColorProfile::Ansi256],
-            'TERM vt100 has no colour' => [['TERM' => 'vt100'], ColorProfile::Ascii],
+            // The chain keeps the 16-colour tier for vt100/vt220 (CP-10); the local ladder that said Ascii is gone (P1-10a).
+            'TERM vt100 keeps 16 colours' => [['TERM' => 'vt100'], ColorProfile::Ansi],
             'TERM linux console'      => [['TERM' => 'linux'], ColorProfile::Ansi],
             'COLORTERM wins over TERM' => [['TERM' => 'screen', 'COLORTERM' => '24bit'], ColorProfile::TrueColor],
             'NO_DECORATION is plain'  => [['TERM' => 'xterm-256color', 'CANDY_SCRIPTUI_NO_DECORATION' => '1'], ColorProfile::NoTty],

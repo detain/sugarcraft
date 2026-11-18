@@ -11,7 +11,10 @@ use SugarCraft\Dashboard\Foundation\ColorMode;
 /**
  * The ColorMode chain and ColorProfile::detect() are NOT the same answer,
  * and finding sugar-dashboard-110 says the README may not pretend they are.
- * These pins are the falsifiable record of the three documented divergences
+ * These pins are the falsifiable record of the documented divergences. Since
+ * P1-10a, ColorProfile::detect() answers through sugar-colorprofile's chain
+ * when it is installed, so NO_COLOR=0 and the force-over-NO_COLOR order now
+ * agree; what still differs is pinned below.
  * — if either side's behavior changes, this test is where the README's
  * Color Environment paragraph needs its truth re-derived from.
  */
@@ -46,26 +49,29 @@ final class ColorModeDetectDivergenceTest extends TestCase
         return [$chain, ColorProfile::detect($env, null)];
     }
 
-    public function testNoColorZeroIsHonoredByTheChainAndIgnoredByDetect(): void
+    public function testNoColorZeroIsHonoredByBothAuthorities(): void
     {
-        // no-color.org: NO_COLOR present with ANY value disables color.
-        // detect()'s truthiness test treats '0' as unset.
+        // no-color.org: NO_COLOR present with ANY value disables color. Both
+        // answers agree now that detect() delegates to the chain (P1-10a).
         [$chain, $detected] = $this->pair(
             ['TERM' => 'xterm-256color', 'NO_COLOR' => '0'],
             ['TERM' => 'xterm-256color', 'NO_COLOR' => '0'],
         );
         $this->assertSame(ColorProfile::Ascii, $chain);
-        $this->assertSame(ColorProfile::Ansi256, $detected);
+        $this->assertSame(ColorProfile::Ascii, $detected);
     }
 
-    public function testForceOutranksNoColorInTheChainAndLosesToItInDetect(): void
+    public function testForceOutranksNoColorInBothButTheLevelDiffers(): void
     {
+        // Both let the force variable win over NO_COLOR. The level differs:
+        // this funnel maps any truthy force to TrueColor, while the chain's
+        // FORCE_COLOR=1 is its Ansi floor (level 1).
         [$chain, $detected] = $this->pair(
             ['TERM' => 'xterm-256color', 'NO_COLOR' => '1', 'FORCE_COLOR' => '1'],
             ['TERM' => 'xterm-256color', 'NO_COLOR' => '1', 'FORCE_COLOR' => '1'],
         );
         $this->assertSame(ColorProfile::TrueColor, $chain);
-        $this->assertSame(ColorProfile::Ascii, $detected);
+        $this->assertSame(ColorProfile::Ansi, $detected);
     }
 
     public function testTheChainNeverNegotiatesSubTiers(): void

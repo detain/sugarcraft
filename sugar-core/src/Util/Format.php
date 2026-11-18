@@ -72,6 +72,43 @@ final class Format
     }
 
     /**
+     * Format a byte count with binary (1024-based) IEC units: `B`, `KiB`,
+     * `MiB`, `GiB`, `TiB`, `PiB`.
+     *
+     * Counts below 1 KiB render as whole bytes (`512 B`); larger counts
+     * render with exactly one decimal (`4.0 KiB`, `1.5 MiB`). A value that
+     * rounds up to 1024 of one unit is promoted to the next, so the output
+     * never reads `1024.0 KiB`. PiB is the largest unit, so very large counts
+     * grow the PiB figure rather than changing unit. Negative counts keep a
+     * leading minus sign.
+     *
+     * Shaped after the byte-size copies that migrate to it (`candy-code`
+     * DoctorChecks, `sugar-animation` Decoder): one binary unit set, one
+     * decimal, one space before the unit. Those consumers move in later work
+     * packages; this helper changes no caller.
+     */
+    public static function iecBytes(int $bytes): string
+    {
+        $sign = $bytes < 0 ? '-' : '';
+        // abs() on the float view: -PHP_INT_MIN overflows an int.
+        $value = abs((float) $bytes);
+        if ($value < 1024) {
+            return $sign . (string) (int) $value . ' B';
+        }
+
+        $units = ['KiB', 'MiB', 'GiB', 'TiB', 'PiB'];
+        $i = 0;
+        $last = count($units) - 1;
+        $value /= 1024;
+        while (round($value, 1) >= 1024 && $i < $last) {
+            $value /= 1024;
+            $i++;
+        }
+
+        return $sign . number_format($value, 1, '.', '') . ' ' . $units[$i];
+    }
+
+    /**
      * Format a picosecond count into a human-readable duration.
      *
      * Steps ps → us → ms → s, then composes m/h for longer spans. Useful for

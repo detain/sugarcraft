@@ -294,9 +294,10 @@ library's full surface.
 **`ColorProfile::detect()` delegation (CP-22).** `sugar-colorprofile` is the
 colour-detection SSOT. When it is installed, `Util\ColorProfile::detect()`
 delegates to its `DetectionChain` (guarded by `class_exists`, no `require`
-cycle; `sugar-colorprofile` is a `suggest`). Without it the local ladder
-remains as the legacy fallback and the `Util\ColorProfile` enum is
-`@deprecated`. The answers differ deliberately in three corners:
+cycle; `sugar-colorprofile` is a `suggest`). Without it there is no local
+ladder (P1-10a deleted it): every terminal answers `Ascii`, and the
+`Util\ColorProfile` enum is `@deprecated`. With the chain installed, its
+answers differ from the old ladder in three corners:
 `TERM=dumb` on a non-TTY is `Ascii` (was `NoTty`), `FORCE_COLOR=1` is `Ansi`
 (was `TrueColor`), and `CI=true` without `TERM` is `Ascii` (was `Ansi`).
 `SugarCraft\Colorprofile\ColorProfile::fromCore()` / `toCore()` bridge the
@@ -316,31 +317,34 @@ two enums. Tests that depend on an answer must pin the env explicitly.
 | `DISPLAY` | `Util\Clipboard` (X11 backend plan) | no X11 clipboard candidate |
 | `WAYLAND_DISPLAY` | `Util\Clipboard` (Wayland backend plan) | no Wayland clipboard candidate |
 
+**`ColorProfile::fromEnvironment(array $env, bool $isTty, ?bool $override = null)`**
+is the pure form of that negotiation. It reads no `getenv()`, no stream and
+runs no probe, so `[]` is hermetic and the same arguments always answer the
+same. `detect()` is `fromEnvironment()` fed the process environment and the
+stdout stream. `$override` is an explicit caller decision such as a `--color`
+flag: `true` forces `TrueColor`, `false` forces colour off (`Ascii` on a
+terminal, `NoTty` otherwise), and both outrank the environment.
+
+**Text helpers.** `Util\Format::iecBytes(int)` renders binary sizes
+(`4.0 KiB`, `1.0 MiB`). `Util\Width::truncateEllipsis($s, $n, '...')` clips
+to a cell budget with an ellipsis that counts against it.
+`Util\Width::wrapWords($s, $n, breakWords: true)` returns the wrapped lines
+as a list, for callers that place each line themselves. `breakWords: false`
+leaves an over-wide word whole on its own line.
+
 ### Color-profile detection order
 
-`ColorProfile::detect()` decides in exactly this order (the docblock on
-the enum carries the same list; both are derived from the code):
+`ColorProfile::detect()` delegates to sugar-colorprofile's `DetectionChain`
+when that package is installed. The chain's decision order (force variables,
+`NO_COLOR`, `CLICOLOR`, `TERM=dumb`, `COLORTERM`, `TERM_PROGRAM`,
+`WT_SESSION`, `TERM`) is documented on the class, in
+`sugar-colorprofile/src/DetectionChain.php`.
 
-1. `CLICOLOR_FORCE` or `FORCE_COLOR` truthy counts as a terminal;
-   otherwise, when a stdout resource is passed and it is **not** a tty →
-   `NoTty` (so `NO_COLOR` on a pipe yields `NoTty`, never escape bytes).
-2. `TERM=dumb` → `NoTty` unless forced.
-3. `NO_COLOR` truthy → `Ascii` (decoration kept, per no-color.org) — it
-   outranks the force variables because it is consulted first.
-4. `CLICOLOR=0` → `Ascii` (the BSD opt-out: colour disabled, decoration
-   kept), unless a force variable already won.
-5. Forced (`CLICOLOR_FORCE`/`FORCE_COLOR`) → `TrueColor`.
-6. `COLORTERM` = `truecolor` or `24bit` → `TrueColor`.
-7. Known `TERM_PROGRAM` values → the matched tier (iTerm/WezTerm/VS Code/
-   Kitty/alacritty/Ghostty/Hyper → `TrueColor`; Apple_Terminal →
-   `Ansi256`).
-8. `WT_SESSION` set → `TrueColor`.
-9. `TERM` contains `truecolor` or `direct` → `TrueColor`; contains `256`
-   → `Ansi256`; contains `color` or equals `xterm`/`screen`/`tmux` →
-   `Ansi`.
-10. Any CI variable truthy (`CI`, `GITHUB_ACTIONS`, `GITLAB_CI`,
-    `BUILDKITE`) → `Ansi`.
-11. Fallback → `Ascii`.
+Without sugar-colorprofile there is no local ladder. A non-terminal stdout
+answers `NoTty` (no escape bytes) unless a force variable is set, and a
+terminal answers `Ascii`: colour off, decoration kept. Install
+`sugar-colorprofile` to get environment negotiation. This is a declared
+behaviour change from the removed fallback ladder (P1-10a).
 
 Colour note: the runtime's own renderer emits SGR unconditionally —
 `ColorProfile` tells *your* code which tier the terminal supports, but it
@@ -348,10 +352,10 @@ is not a suppression switch inside the renderer. If your app must honor
 `NO_COLOR` end-to-end, consult `ColorProfile::detect()` and emit plain
 text yourself; there is no automatic downgrade.
 
-Completeness boundary: the ladder decides **colour only**. The terminal
+Completeness boundary: colour detection decides **colour only**. The terminal
 control sequences the runtime emits — alt-screen `?1049h`, cursor
 save/restore, synchronized output (DEC 2026), mouse and focus tracking,
-bracketed paste — are gated on `ProgramOptions`, never on the ladder: a
+bracketed paste — are gated on `ProgramOptions`, never on colour detection: a
 `TERM=dumb` program or a non-tty stdout still receives every one of them
 once `setupTerminal()` runs. There is no plain-text degraded path in the
 runtime, inline mode included. (The same scope applies to the terminal
