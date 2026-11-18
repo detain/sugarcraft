@@ -152,16 +152,16 @@ final class GitHardeningTest extends TestCase
 
     // ------------------------------------------------- TERM->grace->KILL ladder
 
-    public function testTeardownSendsSigtermBeforeSigkill(): void
+    public function testPosixTeardownDelegatesToTheSharedBoundedLadder(): void
     {
+        // The TERM -> grace -> KILL rungs live in sugar-core BoundedShutdown;
+        // Process must reach them through it rather than carry a second copy.
+        // Behaviour (TERM before KILL, bounded wall time) is pinned by the
+        // timeout tests in this file and in ProcessTest.
         $src = (string) file_get_contents((new \ReflectionClass(Process::class))->getFileName());
 
-        $term = strpos($src, 'proc_terminate($proc, 15)');
-        $kill = strpos($src, 'proc_terminate($proc, 9)');
-
-        self::assertNotFalse($term, 'ladder must start with SIGTERM');
-        self::assertNotFalse($kill, 'ladder must escalate to SIGKILL');
-        self::assertLessThan((int) $kill, (int) $term, 'TERM must precede KILL');
+        self::assertStringContainsString('BoundedShutdown::terminateBounded($proc, self::TERMINATE_GRACE_SECONDS)', $src);
+        self::assertSame(0, substr_count($src, 'proc_terminate($proc, 9)'), 'no second SIGKILL rung inside Process');
     }
 
     public function testDefaultDispositionChildDiesOnSigtermWithinGrace(): void

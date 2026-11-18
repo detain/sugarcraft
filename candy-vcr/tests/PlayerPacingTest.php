@@ -120,7 +120,14 @@ final class PlayerPacingTest extends TestCase
         $this->assertCount(1, $yields, 'exactly the pre-Quit flush yield, no per-event pacing');
         // Arm order: initial step, cap safety-net (armed at play setup),
         // then the flush yield discovered at the Quit boundary.
-        $this->assertSame([0.0, 2.0, Player::INSTANT_YIELD_SECONDS], $armed);
+        $this->assertSame([0.0, 2.0, Player::INSTANT_YIELD_SECONDS], array_slice($armed, 0, 3));
+        // sugar-core renders on dirty through a one-shot frame timer capped at one
+        // frame interval (P1-1), so a frame timer may follow the flush yield. Only
+        // that shape is allowed after the player's own arms.
+        foreach (array_slice($armed, 3) as $frameDelay) {
+            $this->assertGreaterThan(0.0, $frameDelay);
+            $this->assertLessThanOrEqual(1.0 / 60.0, $frameDelay, 'only a frame-interval timer may follow the flush yield');
+        }
         $this->assertSame(2, $result->outputCount);
         $this->assertSame(1, $result->inputCount);
         $this->assertTrue($result->programQuitCleanly);

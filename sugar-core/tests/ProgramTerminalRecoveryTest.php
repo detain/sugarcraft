@@ -223,9 +223,16 @@ final class ProgramTerminalRecoveryTest extends TestCase
         $prop = new \ReflectionProperty(Program::class, 'output');
         $dead = fopen('php://memory', 'w');
         fclose($dead);
+        // The program writes through its Writer, which holds the stream itself,
+        // so the dead stream is swapped in on both (the writer is the seat that
+        // actually writes).
+        $writerStream = new \ReflectionProperty(\SugarCraft\Core\Writer::class, 'stream');
+        $programWriter = (new \ReflectionProperty(Program::class, 'writer'))->getValue($program);
         $prop->setValue($program, $dead);
+        $writerStream->setValue($programWriter, $dead);
         $write->invoke($program, "lost");          // must not throw
         $prop->setValue($program, $out);
+        $writerStream->setValue($programWriter, $out);
         $write->invoke($program, "later");
         $this->assertStringContainsString('later', $this->drain($out));
         fclose($out);
