@@ -366,6 +366,52 @@ final class PathJailTest extends TestCase
         $this->assertFalse(file_exists($this->outside . '/escaped.txt'));
     }
 
+    public function testConfineRefusesAMissingLeafThatResolveForCreateRefuses(): void
+    {
+        // Regression. confine() judged a missing leaf by the parent check alone, so
+        // `link/../new.txt` (an in-root link onto a directory, then `..`) was
+        // accepted while the writer's resolveForCreate() refused it. A preview on
+        // confine() then showed a diff for a write the writer would refuse.
+        mkdir($this->root . '/sub/deeper', 0700, true);
+        $this->link($this->root . '/sub/deeper', $this->root . '/link');
+
+        $this->assertNull(PathJail::resolveForCreate($this->root, 'link/../new.txt'));
+        $this->assertNull(PathJail::confine($this->root, 'link/../new.txt'));
+        $this->assertFalse(file_exists($this->root . '/sub/new.txt'));
+    }
+
+    /**
+     * Regression. For a path that does not exist, confine() and resolveForCreate()
+     * must give the same verdict, because a preview is meant to show exactly the
+     * writes the writer accepts.
+     *
+     * @return iterable<string, array{string}>
+     */
+    public static function missingPaths(): iterable
+    {
+        yield 'plain new file' => ['new.txt'];
+        yield 'new file in a real dir' => ['sub/new.txt'];
+        yield 'new file under missing dirs' => ['sub/x/y/new.txt'];
+        yield 'dot-dot inside the root' => ['sub/../new.txt'];
+        yield 'dot-dot after an in-root link' => ['link/../new.txt'];
+        yield 'missing under an in-root link' => ['link/new.txt'];
+        yield 'dangling link leaf' => ['dangling.txt'];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('missingPaths')]
+    public function testConfineAgreesWithResolveForCreateForAMissingPath(string $path): void
+    {
+        mkdir($this->root . '/sub/deeper', 0700, true);
+        $this->link($this->root . '/sub/deeper', $this->root . '/link');
+        $this->link($this->outside . '/never-created.txt', $this->root . '/dangling.txt');
+
+        $this->assertSame(
+            PathJail::resolveForCreate($this->root, $path),
+            PathJail::confine($this->root, $path),
+            "confine() and resolveForCreate() disagree on {$path}",
+        );
+    }
+
     public function testConfineRefusesADanglingLeafReachedThroughADotDotAfterASymlinkedDirectory(): void
     {
         // Regression. A dangling link is reached through `..` after a symlinked
