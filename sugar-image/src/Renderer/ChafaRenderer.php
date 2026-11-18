@@ -4,10 +4,17 @@ declare(strict_types=1);
 
 namespace SugarCraft\Image\Renderer;
 
+use React\EventLoop\Loop;
+use React\EventLoop\LoopInterface;
+use React\Promise\PromiseInterface;
+use SugarCraft\Async\ChildResult;
+use SugarCraft\Async\ChildRun;
 use SugarCraft\Core\Util\Proc\WindowsPipes;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Lang;
+use function React\Promise\reject;
+use function React\Promise\resolve;
 
 /**
  * Chafa graphics renderer — invokes the chafa command-line tool.
@@ -236,6 +243,95 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
         return self::$available = ($exit === 0);
     }
 
+    /**
+     * Off-loop twin of {@see render()} (rank 74): the chafa child runs through
+     * {@see ChildRun::launch()} on $loop, so the loop keeps serving its other
+     * watchers while the encode is in flight, instead of parking in a blocking
+     * drain and a usleep reap.
+     *
+     * The repaint memo is consulted first and an unchanged frame resolves
+     * without spawning anything, exactly as render() does. Only a success is
+     * stored in the memo. Geometry refusals throw and an unavailable binary
+     * rejects, the same refusals render() makes.
+     *
+     * The output is bounded by {@see ASYNC_MAX_BYTES} and the child by
+     * {@see ASYNC_DEADLINE_SECONDS}; a child past either is a failure, not a
+     * truncated frame. These are the only bounds on this path.
+     *
+     * @return PromiseInterface<string>
+     *
+     * @throws \InvalidArgumentException on the same geometry refusals as render()
+     */
+    public function renderAsync(ImageSource $image, int $width, ?int $height = null, ?LoopInterface $loop = null): PromiseInterface
+    {
+        $effectiveHeight = $this->prepareRender($image, $width, $height);
+
+        $binary = ChafaBinary::path();
+        if ($binary === null) {
+            return reject(new \RuntimeException(Lang::t('chafa.not_found')));
+        }
+
+        $size    = "{$width}x{$effectiveHeight}";
+        $memoKey = hash('xxh3', $image->bytes . '|' . $size . '|' . $this->configFingerprint());
+        $cached  = self::$renderCache[$memoKey] ?? null;
+        if ($cached !== null) {
+            return resolve($cached);
+        }
+
+        $cmd = $this->commandFor($binary, $size, $image);
+
+        return ChildRun::new($cmd)
+            ->withTimeout(self::ASYNC_DEADLINE_SECONDS)
+            ->withMaxBytes(self::ASYNC_MAX_BYTES)
+            ->launch($loop ?? Loop::get())
+            ->then(function (ChildResult $result) use ($memoKey): string {
+                if ($result->timedOut()) {
+                    throw new \RuntimeException(Lang::t('chafa.command_failed', ['error' => 'timed out']));
+                }
+                if ($result->truncated()) {
+                    throw new \RuntimeException(Lang::t('chafa.command_failed', ['error' => 'output exceeded the frame ceiling']));
+                }
+                if (!$result->succeeded()) {
+                    $tail = trim(substr($result->stderr, -512));
+                    $code = $result->exitCode ?? -1;
+
+                    throw new \RuntimeException(
+                        Lang::t('chafa.command_failed', [
+                            'error' => $tail === '' ? "exit code $code" : "exit code $code: $tail",
+                        ])
+                    );
+                }
+
+                self::rememberRender($memoKey, $result->stdout);
+
+                return $result->stdout;
+            });
+    }
+
+    /** Wall budget for one off-loop chafa encode (see {@see renderAsync()}). */
+    public const ASYNC_DEADLINE_SECONDS = 30.0;
+
+    /** Output ceiling for one off-loop chafa encode, per stream (see {@see renderAsync()}). */
+    public const ASYNC_MAX_BYTES = 67108864;
+
+    /**
+     * The argv both paths spawn: the size, the format, the caller's options and
+     * the scratch copy of the source, in the order render() always used.
+     *
+     * @return list<string>
+     */
+    private function commandFor(string $binary, string $size, ImageSource $image): array
+    {
+        $cmd = [$binary, '--size=' . $size];
+        if ($this->format !== null) {
+            $cmd[] = '--format=' . $this->format;
+        }
+        $cmd = array_merge($cmd, $this->options);
+        $cmd[] = self::scratchFile($image->bytes);
+
+        return $cmd;
+    }
+
     public function render(ImageSource $image, int $width, ?int $height = null): string
     {
         $effectiveHeight = $this->prepareRender($image, $width, $height);
@@ -270,13 +366,7 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
             return $cached;
         }
 
-        $cmd = [$binary, '--size=' . $size];
-        if ($this->format !== null) {
-            $cmd[] = '--format=' . $this->format;
-        }
-        $cmd = array_merge($cmd, $this->options);
-
-        $cmd[] = self::scratchFile($image->bytes);
+        $cmd = $this->commandFor($binary, $size, $image);
 
         // The child's diagnostics go to a private file sink, never to
         // this process's stderr. An inherited fd 2 let chafa's own error
