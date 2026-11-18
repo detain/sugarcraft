@@ -237,6 +237,13 @@ final class Retry
                             // Advisory hook.
                         }
                     }
+                    // The hook may have cancelled the token: the registration above
+                    // has then already settled the promise and ran with $timer null,
+                    // so a timer armed now could never be cancelled and would keep
+                    // the loop alive for the whole backoff.
+                    if ($done) {
+                        return;
+                    }
                     $timer = $loop->addTimer($delayMs / 1000, static function () use (&$attempt, $n): void {
                         $attempt($n + 1);
                     });
@@ -557,6 +564,13 @@ final class Retry
                         'Retry cancelled during backoff after attempt ' . $attempt,
                     ));
                 });
+
+                // The progress hook may have cancelled the token. The listener above
+                // then fired at once with $pending still null and rejected $deferred,
+                // so no timer may be armed: nothing could cancel it afterwards.
+                if ($settled === true) {
+                    return $deferred->promise();
+                }
 
                 $pending = $loop->addTimer(
                     $delay,
