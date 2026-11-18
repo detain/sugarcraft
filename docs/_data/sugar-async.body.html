@@ -16,7 +16,7 @@ $source->cancel(); // prints "Cancelled!"
 // Timeout wrapper
 $loop = \React\EventLoop\Loop::get();
 $somePromise = \React\Promise\resolve('eventually');
-$promise = AsyncOps::withTimeout($loop, $somePromise, 5.0);
+$promise = AsyncOps::withTimeout($somePromise, 5.0, $loop);
 
 // Retry with backoff
 $attempts = 0;
@@ -102,8 +102,8 @@ $promise = AsyncOps::retry(
 <tr><td>Subscriptions</td><td>count(): int · isEmpty(): bool</td><td>Size of the composite</td></tr>
 <tr><td>Subscriptions</td><td>disposeAll(): void</td><td>@internal teardown worker behind unsubscribe(): snapshot-and-clear first, then dispose every handle; a throwing unsubscribe() is logged and never propagated — <code>error_log()</code> by default, redirectable via <code>AsyncOps::setLogSink()</code> (the same hook-failure contract as CancellationToken::fireCallbacks())</td></tr>
 <tr><td>AsyncOps</td><td>setLogSink(?callable $sink): void</td><td>The diagnostics door for the four swallowed-failure sites (cancellation callbacks, retry <code>onRetry:</code>, <code>pendingNotice</code> hooks, the <code>Subscriptions::unsubscribe()</code> disposal pass): route the notices into host logging; <code>null</code> restores the <code>error_log()</code> default</td></tr>
-<tr><td>AsyncOps</td><td>withTimeout(?LoopInterface, PromiseInterface, float, ?string label): PromiseInterface</td><td>Wrap a promise with a timeout; rejects with TimeoutException (seconds and optional label readable on it); null loop uses the shared one</td></tr>
-<tr><td>AsyncOps</td><td>withDeadline(?LoopInterface, PromiseInterface, float, ?callable onTimeout, ?string label): PromiseInterface</td><td>Ceiling on the remaining budget: on expiry rejects with TimeoutException and cancels the inner promise; late results are dropped, never adopted</td></tr>
+<tr><td>AsyncOps</td><td>withTimeout(PromiseInterface, float, ?LoopInterface, ?string label): PromiseInterface</td><td>Wrap a promise with a timeout; rejects with TimeoutException (seconds and optional label readable on it); null loop uses the shared one</td></tr>
+<tr><td>AsyncOps</td><td>withDeadline(PromiseInterface, float, ?LoopInterface, ?callable onTimeout, ?string label): PromiseInterface</td><td>Ceiling on the remaining budget: on expiry rejects with TimeoutException and cancels the inner promise; late results are dropped, never adopted</td></tr>
 <tr><td>AsyncOps</td><td>cancellable(PromiseInterface, ?CancellationToken, ?callable onCancel): PromiseInterface</td><td>Token guard: cancellation rejects with OperationCancelledException and runs the onCancel hook; the registration auto-un-registers when the inner promise settles — no loop parameter</td></tr>
 <tr><td>AsyncOps</td><td>singleFlight(callable keyFn, callable worker): callable</td><td>Coalesces concurrent same-key calls into one in-flight worker — every joined caller receives the outcome; the slot frees on settle so the next call may start a fresh flight; the join is not abandonable by design (wrap it in <code>cancellable()</code> when the wait itself must be abandonable); stateful — never share across pcntl_fork</td></tr>
 <tr><td>AsyncOps</td><td>retry(operation, attempts: 3, baseBackoffSeconds: 0.1, token:, maxTotalSeconds:, jitter: 0.0, loop:, now:, onRetry:): PromiseInterface</td><td>Retries a thunk with exponential backoff; a canceled token stops the remaining attempts (reject OperationCancelledException); maxTotalSeconds rejects with TimeoutException on budget exhaustion; onRetry fires when each backoff is scheduled and its errors are never propagated (they route through the log sink)</td></tr>
