@@ -345,7 +345,7 @@ What each replaced copy does, and where that behavior lives now. Nothing is
 deleted in this change. Each copy is removed in the series step named below,
 and its callers move in that step.
 
-**Behavior map: sugar-core `Util\Parser`** (deleted in P1-14b)
+**Behavior map: sugar-core `Util\Parser`** (kept as a deprecated shim until the follow-up consumer step; the copy is not deleted in P1-14b)
 
 | Behavior of the copy | Where it lives now |
 |---|---|
@@ -356,21 +356,27 @@ and its callers move in that step.
 | CSI with an invalid final: bare `ESC [` token, then resynchronize | `consumeCsi()`, same |
 | OSC, DCS, APC, SOS, PM closed by BEL or ST, with `terminator` | `AnsiTokenizer::consumeStTerminated()`, same |
 | Incomplete sequence held across `parse()` calls | `AnsiTokenizer::$pending`, same |
-| `MAX_PENDING_BYTES` = 65536 | `AnsiTokenizer::MAX_PENDING_BYTES`, same value. **Judged on the held partial, not the buffer (declared change below)** |
+| `MAX_PENDING_BYTES` = 65536 | `AnsiTokenizer::MAX_PENDING_BYTES`, same value. `AnsiTokenizer` judges it on the held partial, not the buffer (declared change below). The `Util\Parser` shim still judges the whole buffer, as the copy did |
 | `flush()` returns held bytes as one TEXT token and clears them | `AnsiTokenizer::flush()`, same |
 | Token type constants and field names | `SugarCraft\AnsiParser\Token`, same values |
 | `Token::paramInts()` | `SugarCraft\AnsiParser\Token::paramInts()`, same |
-| Construction `new Parser()` | `AnsiTokenizer::new()`. Changes at the call sites in P1-14b |
+| Construction `new Parser()` | The `Util\Parser` shim keeps `new Parser()` and delegates to `AnsiTokenizer::new()`. Call sites move in the follow-up consumer step |
+| Cap check on the whole buffer (held bytes plus the chunk) | `Util\Parser::parse()` with `AnsiTokenizer::pendingBytes()` (new, read-only), so the shim keeps the copy's rule |
 
-**Declared behavior change.** A chunk longer than 64 KiB whose tail is a short
-unfinished sequence now holds that tail, as a short chunk does. The copy
-judged the cap on the whole buffer, so it emitted the tail as text and
-resynchronized. Checked on the copy and on this class with a chunk of 70,000 bytes
-followed by `ESC [ 38;5;` (the first call), then a chunk `196m` (the second). `Util\Parser` gives TEXT
-(70,000 bytes), then TEXT (`ESC [ 38;5;`), then TEXT (`196m`). `AnsiTokenizer`
-gives TEXT (70,000 bytes) on the first call, then CSI with params `38;5;196`
-and final `m` on the second. Pinned by
-`AnsiTokenizerTest::testShortPartialAfterALargeChunkIsStillHeld`.
+**Declared behavior change (`AnsiTokenizer` only).** A chunk longer than 64 KiB
+whose tail is a short unfinished sequence now holds that tail on
+`AnsiTokenizer`, as a short chunk does. The copy judged the cap on the whole
+buffer, so it emitted the tail as text and resynchronized. `Util\Parser` keeps
+the copy's rule: it judges the cap on the whole buffer and returns the held
+tail as TEXT, so its callers see no change. Checked on the copy, on the shim,
+and on `AnsiTokenizer` with a chunk of 70,000 bytes followed by `ESC [ 38;5;`
+(the first call), then a chunk `196m` (the second). The copy and the shim give
+TEXT (70,000 bytes), then TEXT (`ESC [ 38;5;`), then TEXT (`196m`).
+`AnsiTokenizer` gives TEXT (70,000 bytes) on the first call, then CSI with
+params `38;5;196` and final `m` on the second. The `AnsiTokenizer` behavior is
+pinned by `AnsiTokenizerTest::testShortPartialAfterALargeChunkIsStillHeld`;
+the shim behavior by `ParserTest::testOversizedChunkReturnsShortHeldTailAsTextLikeTheLegacyParser`
+and `ParserTest::testOversizedBacklogCountsBytesHeldFromEarlierFeeds`.
 
 **Behavior map: candy-ansi-inspect `C0C1.php`** (deleted in P4-9e)
 
@@ -397,10 +403,14 @@ Inspector until P4-9e)
 
 **Token types (sugar-core `Util\Token` → this package's `Token`)**
 
-`Util\Token` becomes a `class_alias` of `SugarCraft\AnsiParser\Token` in
-P1-14b. sugar-core then requires `sugarcraft/sugar-ansi-parser`, which has no
-dependencies, so there is no cycle. Until then the two classes are not
-interchangeable. Files that name `Util\Token` and must be checked in P1-14b:
+`Util\Token` is not aliased in P1-14b. It stays a separate class, because
+`SgrState::apply*()` is public and typed to `Util\Token`. `Renderer` copies each
+`SugarCraft\AnsiParser\Token` into a `Util\Token` at the boundary
+(`Renderer::legacyToken()`). The alias, and the cut-over of the typed
+callers, wait for the follow-up consumer step. sugar-core already requires
+`sugarcraft/sugar-ansi-parser`, which has no dependencies, so there is no cycle.
+The two classes are still not interchangeable. Files that name `Util\Token` and
+must be checked when the alias lands:
 `sugar-core/src/Renderer.php`, `sugar-core/src/SgrState.php`,
 `sugar-core/tests/SgrStateTest.php`, `sugar-core/tests/Util/ParserTest.php`,
 `candy-code/src/Renderer.php`, and `sugar-flexbox/tests/SgrStateDifferentialTest.php`.
@@ -409,7 +419,7 @@ interchangeable. Files that name `Util\Token` and must be checked in P1-14b:
 for the 19 C1 bytes listed above, and the public `ControlNames::C0` and
 `ControlNames::C1` tables. Both exist only in this package.
 
-### Consumers P1-14b and P4-9e must move
+### Consumers the follow-up steps must move (Util\Parser, Util\Token) and P4-9e (C0C1)
 
 Found by `grep -rnF 'Util\Parser'` and `grep -rnF 'C0C1'` over the whole repo
 (excluding `vendor/`), on this commit. A line listed as "use" is an import;

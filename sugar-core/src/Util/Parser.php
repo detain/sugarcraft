@@ -16,10 +16,12 @@ use SugarCraft\AnsiParser\Token as AnsiToken;
  * their type checks. Nothing in sugar-core uses it any more except the
  * legacy-token consumers that have not yet moved.
  *
- * One difference from the original state machine: a held partial that is
- * short while the backlog before it is over {@see MAX_PENDING_BYTES} is kept
- * for the next call rather than returned as text straight away. The
- * tokenizer judges the cap on the held bytes, not the whole buffer.
+ * The legacy cap is kept. {@see MAX_PENDING_BYTES} is judged on the whole
+ * buffer (held bytes plus the chunk), as the original state machine did: when
+ * that total is over the cap and a sequence is still open, the held bytes come
+ * back as one TEXT token on that call and the next call starts clean. The
+ * tokenizer alone judges the held partial, so callers that need that rule use
+ * {@see \SugarCraft\AnsiParser\AnsiTokenizer} directly.
  *
  * @deprecated Use {@see \SugarCraft\AnsiParser\AnsiTokenizer} directly.
  */
@@ -36,13 +38,22 @@ final class Parser
     }
 
     /**
-     * Tokenise `$chunk`. An unfinished trailing sequence is held for the next call.
+     * Tokenise `$chunk`. An unfinished trailing sequence is held for the next call,
+     * unless held bytes plus `$chunk` exceed {@see MAX_PENDING_BYTES}, in which case
+     * the held bytes are returned as TEXT.
      *
      * @return list<Token>
      */
     public function parse(string $chunk): array
     {
-        return array_map(self::toLegacy(...), $this->tokenizer->parse($chunk));
+        $whole = $this->tokenizer->pendingBytes() + strlen($chunk);
+        $tokens = $this->tokenizer->parse($chunk);
+        if ($whole > self::MAX_PENDING_BYTES) {
+            // flush() is empty unless the tokenizer just held a partial. That
+            // partial is the tail the legacy parser recovered as text.
+            $tokens = [...$tokens, ...$this->tokenizer->flush()];
+        }
+        return array_map(self::toLegacy(...), $tokens);
     }
 
     /**

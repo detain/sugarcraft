@@ -272,6 +272,19 @@ final class AnsiTokenizerTest extends TestCase
         $this->assertSame([], $p->flush());
     }
 
+    public function testPendingBytesReportsTheHeldPartial(): void
+    {
+        $p = AnsiTokenizer::new();
+        $this->assertSame(0, $p->pendingBytes());
+        $p->parse("ab\x1b[38;5");
+        $this->assertSame(6, $p->pendingBytes());
+        $p->parse('m');
+        $this->assertSame(0, $p->pendingBytes());
+        $p->parse("\x1b[3");
+        $p->flush();
+        $this->assertSame(0, $p->pendingBytes());
+    }
+
     public function testOscFedOneByteAtATimeMatchesSingleFeed(): void
     {
         // The body holds an ESC that is not part of ST, and both ST and BEL
