@@ -480,6 +480,83 @@ final class WorkerPoolTest extends TestCase
         $pool->stop();
     }
 
+    public function testWriteDeadlineSparesAChildThatKeepsDraining(): void
+    {
+        // The write deadline is a stall window, not a budget for the whole
+        // payload: a child that keeps taking bytes is never declared dead
+        // for the payload's size. The swapped pipe is drained slowly (2 KiB
+        // every 250 ms), so the job is still in flight past the first
+        // WRITE_DEADLINE_SECONDS window. The old total-wall-clock deadline
+        // rejected it at exactly that boundary.
+        $pool = new WorkerPool($this->loop, 1);
+
+        if (!function_exists('socket_import_stream')) {
+            $pool->stop();
+            $this->markTestSkipped('ext-sockets is needed to pin SO_SNDBUF on the slow-pipe swap');
+        }
+
+        $first = null;
+        $pool->dispatch([WorkerPoolTasks::class, 'pi'])
+            ->then(function (WorkerResultMsg $msg) use (&$first): void {
+                $first = $msg;
+                $this->loop->stop();
+            });
+        $setupTimeout = $this->loop->addTimer(10.0, function (): void {
+            $this->loop->stop();
+            $this->fail('setup job timed out');
+        });
+        $this->spinLoop();
+        $this->loop->cancelTimer($setupTimeout);
+        $this->assertInstanceOf(WorkerResultMsg::class, $first);
+
+        $workersProp = new \ReflectionProperty(WorkerPool::class, 'workers');
+        $pooled = $workersProp->getValue($pool);
+        $worker = reset($pooled);
+        [$keep, $sink] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, 0);
+        $this->assertNotFalse(stream_set_blocking($sink, false));
+        $this->assertNotFalse(stream_set_blocking($keep, false));
+        $sock = \socket_import_stream($sink);
+        $this->assertNotFalse($sock);
+        $this->assertTrue(\socket_set_option($sock, SOL_SOCKET, SO_SNDBUF, 8192));
+        $oldStdin = $worker->stdin;
+        $worker->stdin = $sink;
+
+        $drained = 0;
+        $drain = $this->loop->addPeriodicTimer(0.25, function () use ($keep, &$drained): void {
+            $chunk = @fread($keep, 2048);
+            if (is_string($chunk)) {
+                $drained += strlen($chunk);
+            }
+        });
+
+        $task = new WorkerPoolTasks();
+        $task->blob = str_repeat('B', 400_000);
+
+        $started = microtime(true);
+        $rejected = null;
+        $pool->dispatch($task)
+            ->then(null, function (\Throwable $e) use (&$rejected): void {
+                $rejected = $e;
+            });
+        $stop = $this->loop->addTimer(11.0, function (): void {
+            $this->loop->stop();
+        });
+        $this->spinLoop();
+        $elapsed = microtime(true) - $started;
+        $this->loop->cancelTimer($stop);
+        $this->loop->cancelTimer($drain);
+
+        $this->assertGreaterThan(10.5, $elapsed, 'the first stall window expired while the child was still draining');
+        $this->assertGreaterThan(0, $drained, 'the child took bytes throughout the window');
+        $this->assertNull($rejected, 'a child that keeps taking bytes is not declared dead at the window boundary');
+
+        $pool->stop();
+        if (is_resource($oldStdin)) {
+            fclose($oldStdin);
+        }
+        fclose($keep);
+    }
+
     public function testPollTimerReleasedWhenPoolDrains(): void
     {
         // sc-30: the 20 Hz poll exists only while work is in flight. An idle
