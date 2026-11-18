@@ -1689,6 +1689,9 @@ cannot add a tool that `Bootstrap::tools()` did not build — but its effect is
 defined by what it *omits*, so `allowedTools: ["Bash"]` deletes <!-- tools:others:begin -->all thirty-seven of the others a plain launch builds — `Read`, `Edit`, `Glob`, `Grep`, `Write`, `WebFetch`, `WebSearch`, `doctor`, `Skill`, `Lsp`, `Memory`, `RepoMap`, `Prune`, `Todo`, `Compress`, `Workflow`, `Recall`, `Team`, `ApplyPatch`, `AskUser`, `PlanExit`, `SendMessage`, `Subagents`, `InterruptAgent`, `GenerateImage`, `GenerateVideo`, `PtyRun`, `Ls`, `ShellOutput`, `ShellStop`, `Schedule`, `skills_search`, `SkillWorkshop`, `Canvas`, `Script`, `ShellSend` and `NotebookEdit` —<!-- tools:others:end --> in one line, and what the model does next is the
 same work through `Bash`, which reaches the permission gate as opaque shell text
 instead of as a reviewable path. Strictly fewer tools, strictly coarser review.
+`Task` is the one built-in the whitelist cannot reach: it is appended after the
+filter (`LaunchContext::tools()`), so a chat launched with an agent manager keeps
+sub-agent spawning under `allowedTools: ["Bash"]` too.
 
 Its sibling `disabledTools` *is* available to a trusted project — with a
 caveat about how its names actually match.
