@@ -58,6 +58,7 @@ final class ToolResultRenderModeTest extends TestCase
 
         $this->resetToolResultStatics();
         Detect::setProbeStdin(null);
+        Detect::setProbeStdout(null);
         Detect::reset();
 
         parent::tearDown();
@@ -72,6 +73,20 @@ final class ToolResultRenderModeTest extends TestCase
     {
         (new \ReflectionProperty(ToolResult::class, 'renderMode'))->setValue(null, 'auto');
         (new \ReflectionProperty(ToolResult::class, 'mosaics'))->setValue(null, []);
+    }
+
+    /**
+     * sugar-image confirms a Kitty env claim only through the APC `a=q` reply
+     * (P1-13b). A piped suite has no ctty, so the probe seams stand in for a
+     * Kitty terminal: the OK reply, then the DA1 answer that closes the window.
+     */
+    private static function answerAsKittyTerminal(): void
+    {
+        $in = fopen('php://temp', 'r+b');
+        fwrite($in, "\x1b_Gi=31;OK\x1b\\" . "\x1b[?62;4c");
+        rewind($in);
+        Detect::setProbeStdin($in);
+        Detect::setProbeStdout(fopen('php://temp', 'r+b'));
     }
 
     /**
@@ -111,10 +126,11 @@ final class ToolResultRenderModeTest extends TestCase
 
     public function testAutoUnderFakedKittyEnvironmentDetectsKitty(): void
     {
-        // The detect-based half stays detect-based: sugar-image's env table
-        // answers definitively for kitty without any TTY (DA1 is skipped).
+        // The detect-based half stays detect-based: sugar-image confirms the
+        // env claim through the Kitty APC reply, which the faked terminal gives.
         putenv('KITTY_WINDOW_ID=1');
         Detect::reset();
+        self::answerAsKittyTerminal();
 
         self::assertSame('kitty', self::innerProtocol(ToolResult::mosaic()->protocol()));
     }
@@ -185,6 +201,7 @@ final class ToolResultRenderModeTest extends TestCase
         // back forever.
         putenv('KITTY_WINDOW_ID=1');
         Detect::reset();
+        self::answerAsKittyTerminal();
         $auto = ToolResult::mosaic();
         self::assertSame('kitty', self::innerProtocol($auto->protocol()));
 
