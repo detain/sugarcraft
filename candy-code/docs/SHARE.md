@@ -52,9 +52,10 @@ without the redactor. Its path rules differ: a plain path is jailed to the proje
 root or the `~/.candy-code/` shelf, and its `--path` flag writes anywhere without
 the project jail. Its reply says so: the file is not secret-redacted, so
 treat it like the transcript itself. `text` output is also cleaned for display:
-terminal control bytes are stripped, invisible bidi and zero-width format
-characters become visible `<U+XXXX>` markers, and private-use characters are
-removed. This is display hygiene and does not remove secrets. `md`, `html` and `json` are written byte for byte, because
+terminal control bytes are stripped. Bidi embeddings, overrides and isolates,
+zero-width spaces, word joiners and byte-order marks become visible `<U+XXXX>`
+markers. Zero-width joiners, non-joiners and direction marks become markers only
+where they cannot do their job. Private-use characters are removed. This is display hygiene and does not remove secrets. `md`, `html` and `json` are written byte for byte, because
 other tools parse them.
 
 ## `/share serve`: a self-hosted page

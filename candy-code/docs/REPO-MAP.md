@@ -62,12 +62,14 @@ Any value other than empty or `0` opts out. The `RepoMap` tool still works with
 the variable set, so a checkout where you want to skip the prompt cost keeps
 the model's ability to ask for a map.
 
-The setting is `symbolMap.enabled` in a settings file, and it takes effect when
-the session starts.
+The setting is `symbolMap.enabled` in your user `~/.candy-code/config.json`. A
+project settings file cannot set it, and a value there is ignored. It takes
+effect when the session starts.
 
 ## The `RepoMap` tool
 
-The tool is `RepoMap`, in the read-only permission class, so it writes nothing.
+The tool is `RepoMap`, in the read-only permission class. Its one write is the tag cache under
+`~/.candy-code/cache/repomap/`.
 It runs only fixed read-only helpers: `git ls-files` through `GitRunner`, and,
 when Universal Ctags is present, `ctags` too: a `--version` probe, then batched
 tag extraction over the non-PHP files. The model calls it when
@@ -81,7 +83,9 @@ it wants an outline of the code that matters for the task at hand.
 | `mentioned_idents` | array of identifiers | Class, function or method names the task is about. Ranked up |
 
 The reply says how many code files it mapped and the budget it used. For
-languages other than PHP, the reply notes whether Universal Ctags is available.
+languages other than PHP, the reply notes whether Universal Ctags is available. A project with more than
+10,000 code files is mapped only up to that cap, and the reply header says only
+the first N files that git lists were mapped.
 
 ### Languages
 
