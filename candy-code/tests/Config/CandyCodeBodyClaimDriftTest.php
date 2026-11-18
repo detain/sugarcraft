@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tests\Config;
 
+use PHPUnit\Framework\AssertionFailedError;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Hooks\HookEvent;
 use SugarCraft\Code\Permissions\PermissionMode;
@@ -77,19 +78,18 @@ final class CandyCodeBodyClaimDriftTest extends TestCase
             'the candy-code body no longer carries the Key Classes table'
         );
 
-        $rows = preg_match_all('#<tr><td>([^<]+)</td><td>(.*?)</td><td>(.*?)</td></tr>#s', $table[1], $matches, PREG_SET_ORDER);
-        self::assertGreaterThan(0, $rows, 'the Key Classes table parsed to no rows — the row shape changed, re-pin this scan');
+        $rows = self::keyClassRows($table[1]);
+        self::assertNotSame([], $rows, 'the Key Classes table parsed to no rows — the row shape changed, re-pin this scan');
 
         $missing = [];
         $checked = 0;
-        foreach ($matches as $row) {
-            $short = trim($row[1]);
+        foreach ($rows as [$short, $methods]) {
             $fqn = self::declaredClass($short, $missing);
             if ($fqn === null) {
                 continue;
             }
 
-            self::assertMethodList($fqn, strip_tags($row[2]), $missing);
+            self::assertMethodList($fqn, strip_tags($methods), $missing);
             $checked++;
         }
 
@@ -104,7 +104,7 @@ final class CandyCodeBodyClaimDriftTest extends TestCase
 
         foreach ($refs as $ref) {
             $fqn = self::declaredClass($ref[1], $missing);
-            if ($fqn !== null && !method_exists($fqn, $ref[2])) {
+            if ($fqn !== null && self::publicMethodMissing($fqn, $ref[2])) {
                 $missing[] = "{$fqn}::{$ref[2]}()";
             }
         }
@@ -131,9 +131,7 @@ final class CandyCodeBodyClaimDriftTest extends TestCase
         $body = strip_tags(self::body());
         $live = \count(PermissionMode::cases());
 
-        preg_match_all('/\b(' . self::countPattern() . ')-mode\b/i', $body, $hyphen);
-        preg_match_all('/\b(' . self::countPattern() . ') permission modes\b/i', $body, $plural);
-        $quoted = array_merge($hyphen[1], $plural[1]);
+        $quoted = self::quotedPermissionModeCounts($body);
         self::assertNotEmpty($quoted, 'the body no longer quotes a permission-mode count — re-pin this leg with the page');
 
         foreach ($quoted as $word) {
@@ -180,6 +178,87 @@ final class CandyCodeBodyClaimDriftTest extends TestCase
         }
     }
 
+    public function testAMethodDeclaredOnlyPrivatelyIsNotAPublicMethod(): void
+    {
+        self::assertFalse(self::publicMethodMissing(self::class, 'testAMethodDeclaredOnlyPrivatelyIsNotAPublicMethod'));
+        self::assertTrue(self::publicMethodMissing(self::class, 'declaredClass'), 'a private method must not count as public API');
+        self::assertTrue(self::publicMethodMissing(self::class, 'noSuchMethod'));
+    }
+
+    public function testPermissionModeCountFormsAreAllCaptured(): void
+    {
+        self::assertSame(
+            ['seven', 'six', 'five'],
+            self::quotedPermissionModeCounts('seven permission-mode gates, six modes, five permission modes')
+        );
+    }
+
+    public function testKeyClassRowsReadMarkupInTheClassCellAndRefuseARowItCannotRead(): void
+    {
+        $header = '<tr><th>Class</th><th>Method</th><th>Description</th></tr>';
+
+        self::assertSame(
+            [['SessionStore', 'getSession(id)']],
+            self::keyClassRows($header . '<tr><td><code>SessionStore</code></td><td>getSession(id)</td><td>Gloss</td></tr>')
+        );
+
+        $this->expectException(AssertionFailedError::class);
+        self::keyClassRows($header . '<tr class="row"><td>SessionStore</td><td>getSession(id)</td><td>Gloss</td></tr>');
+    }
+
+    /**
+     * Every data row of the Key Classes table as [class short name, method
+     * cell]. A data row the scan cannot read fails the test rather than being
+     * skipped: the table's data-row count must equal the count parsed.
+     *
+     * @return list<array{0: string, 1: string}>
+     */
+    private static function keyClassRows(string $table): array
+    {
+        preg_match_all('#<tr\b[^>]*>(.*?)</tr>#s', $table, $all);
+        $dataRows = array_filter($all[1], static fn (string $inner): bool => !str_contains($inner, '<th'));
+
+        preg_match_all('#<tr><td>(.*?)</td><td>(.*?)</td><td>.*?</td></tr>#s', $table, $matches, PREG_SET_ORDER);
+        $rows = [];
+        foreach ($matches as $row) {
+            $rows[] = [trim(strip_tags($row[1])), $row[2]];
+        }
+
+        self::assertSame(
+            \count($dataRows),
+            \count($rows),
+            'the Key Classes table holds ' . \count($dataRows) . ' data rows but ' . \count($rows) . ' parsed — a row changed shape, re-pin this scan'
+        );
+
+        return $rows;
+    }
+
+    /**
+     * Every spelled permission-mode count in the text, as written: "six-mode",
+     * "six modes", "seven permission-mode gates", "five permission modes".
+     *
+     * @return list<string>
+     */
+    private static function quotedPermissionModeCounts(string $text): array
+    {
+        preg_match_all('/\b(' . self::countPattern() . ')(?:-| )(?:permission(?:-| ))?(?:mode|gate)s?\b/i', $text, $found);
+
+        return $found[1];
+    }
+
+    /**
+     * method_exists() also answers yes to private and protected methods, which
+     * the page must not present as public API.
+     */
+    private static function publicMethodMissing(string $fqn, string $method): bool
+    {
+        if (!method_exists($fqn, $method)) {
+            return true;
+        }
+
+        return !(new \ReflectionMethod($fqn, $method))->isPublic();
+    }
+
     /**
      * Records a missing reference in $missing and returns null, or returns the
      * one FQN the short name declares.
@@ -223,7 +302,7 @@ final class CandyCodeBodyClaimDriftTest extends TestCase
         }
 
         foreach ($names as $method) {
-            if (!method_exists($fqn, $method)) {
+            if (self::publicMethodMissing($fqn, $method)) {
                 $missing[] = "{$fqn}::{$method}()";
             }
         }
