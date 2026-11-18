@@ -47,7 +47,7 @@ final class ModeCycleRetirementTest extends TestCase
         $player = $this->kittyPlayer();
 
         self::assertSame(1, preg_match('/\bi=(\d+)/', $player->view(), $m), 'the Kitty view must draw an image');
-        $retire = (new KittyRenderer())->delete($m[1]);
+        $retire = self::pairRetirement($m[1]);
 
         [$text, $cmd] = $player->update(new KeyMsg(KeyType::Char, 'm'));
         self::assertSame(Mode::Ascii, $text->mode, 'Kitty is the last graphics rung, so m wraps to a text mode');
@@ -61,7 +61,7 @@ final class ModeCycleRetirementTest extends TestCase
         $player = $this->kittyPlayer();
 
         self::assertSame(1, preg_match('/\bi=(\d+)/', $player->view(), $m), 'the Kitty view must draw an image');
-        $retire = (new KittyRenderer())->delete($m[1]);
+        $retire = self::pairRetirement($m[1]);
 
         [$text, $cmd] = $player->update(new KeyMsg(KeyType::Char, 'm'));
         // A view whose output is thrown away (a snapshot helper, a second layout pass)
@@ -79,7 +79,7 @@ final class ModeCycleRetirementTest extends TestCase
         $player = $this->kittyPlayer();
 
         self::assertSame(1, preg_match('/\bi=(\d+)/', $player->view(), $m), 'the Kitty view must draw an image');
-        $retire = (new KittyRenderer())->delete($m[1]);
+        $retire = self::pairRetirement($m[1]);
 
         [$text, $firstCmd] = $player->update(new KeyMsg(KeyType::Char, 'm'));
         self::assertSame($retire, self::runCmd($firstCmd));
@@ -87,6 +87,17 @@ final class ModeCycleRetirementTest extends TestCase
         [$nextText, $secondCmd] = $text->update(new KeyMsg(KeyType::Char, 'm'));
         self::assertNull($secondCmd, 'a text-to-text cycle has no graphics frame left to retire');
         self::assertStringNotContainsString($retire, $nextText->view(), 'the delete is written once, not on every view');
+    }
+
+    /**
+     * The retirement for a Kitty session whose first drawn id is $firstId: the renderer
+     * deletes both slots of its pair, so the runtime is owed both deletes, in order.
+     */
+    private static function pairRetirement(string $firstId): string
+    {
+        $kitty = new KittyRenderer();
+
+        return $kitty->delete($firstId) . $kitty->delete((string) ((int) $firstId + 1));
     }
 
     private function kittyPlayer(): Player

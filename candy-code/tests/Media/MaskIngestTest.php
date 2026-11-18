@@ -57,7 +57,7 @@ final class MaskIngestTest extends TestCase
     {
         // PHP 8.3 GD truncates the 8-bit→7-bit alpha conversion on load
         // (255-254=1 → 127*1/255 = 0), so imagecolorat reports this image
-        // fully opaque. The byte walk sees the 254 and must win — the
+        // fully opaque. PngPixels reads the 254 and must win — the
         // §2.7 "any even slightly transparent area becomes mask" law in
         // its sharpest form: ONE pixel out of sixty-four is transparent.
         $mask = MaskIngest::fromPath(self::MASK_ALPHA254);
@@ -83,12 +83,12 @@ final class MaskIngestTest extends TestCase
         MaskIngest::fromBytes((string) file_get_contents(self::CORRUPT), 'corrupt.png');
     }
 
-    public function testATransparencyChunkWithAFailedCrcIsRefusedNotClassified(): void
+    public function testADamagedTransparencyChunkFallsThroughToGdAndIsNotReadAsAKey(): void
     {
-        // libpng drops an ancillary chunk whose CRC fails and still loads the
-        // picture, so the image door admits the file. The byte walk read the damaged
-        // tRNS key and classified it, while PngPixels refuses the same bytes. (A
-        // damaged IDAT is already refused by the GD load before the walk runs.)
+        // PngPixels declines a stream with any failed CRC, so the damaged tRNS key
+        // is never applied. libpng drops a bad ancillary chunk and still loads the
+        // picture, so the GD pixel walk classifies the opaque gray pixels: luminance.
+        // The intact file is alpha, which is what the damaged copy must NOT keep.
         $good = self::rawPng(2, 2, 0, str_repeat("\x00\x00\xff", 2), 8, "\x00\x00");
         $this->assertSame(MaskIngest::MODE_ALPHA, MaskIngest::fromBytes($good, 'good.png')->mode, 'the intact file still classifies');
 
@@ -97,10 +97,28 @@ final class MaskIngestTest extends TestCase
         $damaged = $good;
         $damaged[46] = chr(ord($good[46]) ^ 0x01);
 
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('CRC');
+        $mask = MaskIngest::fromBytes($damaged, 'damaged.png');
+        $this->assertSame(MaskIngest::MODE_LUMINANCE, $mask->mode, 'the damaged key is dropped, not applied');
+    }
 
-        MaskIngest::fromBytes($damaged, 'damaged.png');
+    public function testADamagedAncillaryChunkStillClassifiesAsItDidBeforeTheCrcCheck(): void
+    {
+        // A bad CRC on a chunk the walk never reads (tEXt) must not refuse the file:
+        // PngPixels declines it, GD drops the chunk and loads the picture, and the
+        // pixels classify exactly as they do with the chunk intact.
+        $rows = "\x00\x00\xff\x00\x00\xff";
+        $text = self::chunk('tEXt', "Comment\x00hello");
+        $text[strlen($text) - 1] = chr(ord($text[strlen($text) - 1]) ^ 0x01);
+        $png = "\x89PNG\r\n\x1a\n"
+            . self::chunk('IHDR', \pack('NNCCCCC', 2, 2, 8, 0, 0, 0, 0))
+            . $text
+            . self::chunk('IDAT', \gzcompress($rows))
+            . self::chunk('IEND', '');
+
+        $mask = MaskIngest::fromBytes($png, 'damaged-text.png');
+
+        $this->assertSame(MaskIngest::MODE_LUMINANCE, $mask->mode);
+        $this->assertNull($mask->advisory, 'half black, half white: varied, so no advisory');
     }
 
     public function testNotAnImageAtAllIsRefused(): void
@@ -248,26 +266,9 @@ final class MaskIngestTest extends TestCase
         $this->assertNull($mask->advisory);
     }
 
-    public function testEachScanlineReadsItsPredictorFromTheRowAlreadyUnfiltered(): void
-    {
-        // 3x3 gray. Row 1 Up adds row 0 (10,20,30) → 11,22,33. Row 2 Average
-        // predicts from the row above (11,22,33) and the left neighbor in the
-        // same row: x0 = 0 + 11/2 = 5, x1 = 0 + (5+22)/2 = 13, x2 = 0 + (13+33)/2 = 23.
-        // The linear unfilter writes into one buffer by offset, so this pins
-        // that the "previous" row it reads is the one it just wrote.
-        $raw = "\x00\x0A\x14\x1E" . "\x02\x01\x02\x03" . "\x03\x00\x00\x00";
-        $unfilter = new \ReflectionMethod(MaskIngest::class, 'unfilter');
-        $unfilter->setAccessible(true);
-
-        $this->assertSame(
-            [10, 20, 30, 11, 22, 33, 5, 13, 23],
-            $unfilter->invoke(null, $raw, 3, 3, 1),
-        );
-    }
-
     public function testA1024SquareRgbaMaskClassifiesInLinearTime(): void
     {
-        // MaskIngest audit row 2 (candy-code src/Media/MaskIngest.php unfilter):
+        // MaskIngest audit row 2 (the unfilter that PngPixels now owns):
         // the per-scanline `[...$samples, ...$current]` re-copied every earlier
         // row, so a 1024x1024 RGBA mask took 31 s to walk (33 s on the measuring
         // box) and ~136 MB at peak. The offset-write walk does the same work in
@@ -286,52 +287,9 @@ final class MaskIngestTest extends TestCase
         $this->assertLessThan(15.0, $seconds, sprintf('1024x1024 RGBA classified in %.2f s; budget 15 s', $seconds));
     }
 
-    public function testAMalformedLateRowDeclinesWithoutWalkingTheEarlierRows(): void
-    {
-        // 4000x400 gray, filter byte 5 on the last row. The per-scanline walk
-        // re-copied every earlier row before it reached the bad byte (quadratic:
-        // ~3e8 element copies here, several seconds). The pre-scan declines before
-        // any sample is written, so the budget is generous for any runner.
-        $width = 4000;
-        $height = 400;
-        $raw = \str_repeat("\x00" . \str_repeat("\x00", $width), $height - 1)
-            . "\x05" . \str_repeat("\x00", $width);
-        $unfilter = new \ReflectionMethod(MaskIngest::class, 'unfilter');
-        $unfilter->setAccessible(true);
-
-        $start = \hrtime(true);
-        $result = $unfilter->invoke(null, $raw, $width, $height, 1);
-        $seconds = (\hrtime(true) - $start) / 1e9;
-
-        $this->assertNull($result);
-        $this->assertLessThan(1.0, $seconds, sprintf('declining a late bad filter byte took %.2f s; budget 1 s', $seconds));
-    }
-
-    public function testAnUnknownFilterByteDeclinesBeforeTheBufferIsAllocated(): void
-    {
-        // 4000x4000 gray: a sample buffer for it is 16M slots (~256 MB as a PHP
-        // array). A bad filter byte on row 0 must decline without allocating it,
-        // and must not read past row 0 although the raw stream is far shorter
-        // than the header claims. Master also declines here (it never allocates
-        // for row 0); the late-row test above is the one that fails on master.
-        $raw = "\x05" . \str_repeat("\x00", 16);
-        $unfilter = new \ReflectionMethod(MaskIngest::class, 'unfilter');
-        $unfilter->setAccessible(true);
-
-        $peakBefore = \memory_get_peak_usage();
-        $this->assertNull($unfilter->invoke(null, $raw, 4000, 4000, 1));
-        $grew = \memory_get_peak_usage() - $peakBefore;
-
-        $this->assertLessThan(
-            16 * 1024 * 1024,
-            $grew,
-            sprintf('declining a bad filter byte grew peak memory by %d bytes; the buffer was allocated first', $grew),
-        );
-    }
-
     // ---- GD fallback paths ----------------------------------------------------
 
-    public function testAPalettePngWithTransparentIndexClassifiesAsAlphaViaGd(): void
+    public function testAPalettePngWithTransparentIndexClassifiesAsAlpha(): void
     {
         $im = \imagecreate(2, 2) ?: self::fail('GD unavailable');
         $white = \imagecolorallocate($im, 255, 255, 255);
@@ -346,7 +304,7 @@ final class MaskIngestTest extends TestCase
         $this->assertSame(MaskIngest::MODE_ALPHA, $mask->mode);
     }
 
-    public function testAnInterlacedPngFallsThroughTheByteWalkToGdAndStillClassifies(): void
+    public function testAnInterlacedPngFallsThroughPngPixelsToGdAndStillClassifies(): void
     {
         $im = \imagecreate(4, 4) ?: self::fail('GD unavailable');
         $white = \imagecolorallocate($im, 255, 255, 255);
@@ -362,9 +320,9 @@ final class MaskIngestTest extends TestCase
         $this->assertNull($mask->advisory, 'half black, half white');
     }
 
-    public function testA16BitPngFallsThroughTheByteWalkToGd(): void
+    public function testA16BitPngFallsThroughPngPixelsToGd(): void
     {
-        // depth-16 grayscale, all samples 0xFFFF → white. The walk refuses
+        // depth-16 grayscale, all samples 0xFFFF → white. PngPixels declines
         // depth != 8 and GD resolves the picture.
         $bytes = self::rawPng(2, 2, 0, "\x00\xFF\xFF\xFF\xFF\x00\xFF\xFF\xFF\xFF", depth: 16);
 
@@ -374,20 +332,15 @@ final class MaskIngestTest extends TestCase
         $this->assertSame(MaskIngest::ADVISORY_COVERS_EVERYTHING, $mask->advisory);
     }
 
-    // ---- W7 seam cure: capped IDAT inflate -------------------------------------
+    // ---- W7 seam cure: capped IDAT inflate (PngPixels owns the cap) ---------------
 
     public function testAnOverCapIdatBombRidesTheGdFallbackWithTheSameVerdict(): void
     {
         // MED-1 family (sibling of the Png tEXt cure): a 1×1 header paired
         // with a ratio-bomb IDAT. libpng inflates only the declared rows —
         // "Too much image data" is a warning, so ImageIngress ADMITS the
-        // file — which left the byte walk's second inflate as the one place
-        // the full expansion was minted. Post-cure the walk declines on the
-        // capped inflate and GD answers; the verdict is deliberately the
-        // pre-cure verdict (this pin proves the decline is wired, GD still
-        // resolving the picture — the cap itself is pinned structurally
-        // below, because cap-present and cap-absent are indistinguishable
-        // through any verdict).
+        // file. PngPixels caps its inflate at the declared scanline budget and
+        // declines, and GD answers; the verdict is the one GD gives the picture.
         $png = "\x89PNG\r\n\x1a\n"
             . self::chunk('IHDR', \pack('NNCCCCC', 1, 1, 8, 0, 0, 0, 0))
             . self::chunk('IDAT', \gzcompress("\x00\xFF" . \str_repeat("\x00", 200_000)))
@@ -397,27 +350,6 @@ final class MaskIngestTest extends TestCase
 
         $this->assertSame(MaskIngest::MODE_LUMINANCE, $mask->mode, 'one white pixel via GD');
         $this->assertSame(MaskIngest::ADVISORY_COVERS_EVERYTHING, $mask->advisory);
-    }
-
-    public function testTheIdatInflateCarriesTheCapAndBothHonestyGatesStructurally(): void
-    {
-        // The walkPngBytes inflate MUST carry the header-derived budget as
-        // max_length, and the two gates keeping that argument honest must be
-        // present: `< 1` (max_length 0 behaves as UNLIMITED — measured PHP
-        // 8.3 — so a zero-dimension lie must never reach the call) and the
-        // ceiling (an absurd declaration is declined before inflating). No
-        // functional mode detects their absence — the ceiling branch is not
-        // reachable through fromBytes at all for gray masks, since every
-        // header over the ceiling ALSO trips ImageIngress's own pixel/container
-        // doors first, and the <1 gate is defense-in-depth behind the door
-        // that refuses zero-dimension files. The source slice is the
-        // discriminator (same doctrine as PngTest's tEXt census).
-        $src = (string) \file_get_contents(__DIR__ . '/../../src/Media/MaskIngest.php');
-
-        $this->assertSame(1, \substr_count($src, 'gzuncompress($idat, $expected)'), 'the inflate is capped, once, nowhere uncapped');
-        $this->assertSame(1, \substr_count($src, '$expected < 1'), 'zero-dimension gate present');
-        $this->assertSame(1, \substr_count($src, '$expected > self::MAX_IDAT_RAW_BYTES'), 'ceiling gate present');
-        $this->assertSame(67_108_864, MaskIngest::MAX_IDAT_RAW_BYTES, '64 MiB — no larger than the admitted container');
     }
 
     // ---- builders --------------------------------------------------------------
