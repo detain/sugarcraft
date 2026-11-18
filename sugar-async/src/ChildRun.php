@@ -34,10 +34,11 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * LogicException from run(), a rejected promise from launch()), because the
  * Windows runtime cannot give a non-blocking stdin pipe.
  *
- * Mirrors the process runners that grew in candy-git-server (BoundedCommand),
- * candy-top (AsyncCommand) and candy-code (CommandBackend). Those copies stay
- * live until their consumers move to this class in the P1-5c lanes; this class
- * is the planned replacement for them, not yet a replacement.
+ * Consumers: sugar-dashboard's BoundedCommand has moved, running every child
+ * through run() and launch() and mapping the ChildResult onto its outcome. The
+ * process runners in candy-git-server (BoundedCommand), candy-top (AsyncCommand)
+ * and candy-code (CommandBackend) are the same pattern and still pending their
+ * move to this class in the P1-5c lanes; their copies stay live until then.
  */
 final class ChildRun
 {
