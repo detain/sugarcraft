@@ -9,6 +9,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Async\Await;
 use SugarCraft\Core\Msg;
 use SugarCraft\Dashboard\Module\BoundedCommand;
+use SugarCraft\Dashboard\Modules\Generic\CommandOutputMsg;
 use SugarCraft\Dashboard\Modules\Generic\GenericModule;
 use SugarCraft\Dashboard\Modules\Generic\TickMsg;
 
@@ -127,6 +128,28 @@ final class GenericModuleTest extends TestCase
         $this->assertNotNull($cmd, 'a dropped command must not silence the module');
         $settled = $again->update(Await::until($cmd()->promise, 15.0))[0];
         $this->assertSame('x', $settled->view());
+    }
+
+    /**
+     * Regression: a hung run that settles after a newer run started used to clear
+     * the newer run's latch and schedule a second tick chain beside the live one.
+     * Only the newest run may settle the latch and reschedule.
+     */
+    public function testAStaleRunsOutputNeitherClearsTheLatchNorSchedulesATick(): void
+    {
+        $module = new GenericModule('printf "x"', 5);
+        [$first] = $module->update(new TickMsg());
+        // Run 1 is still hung past the ceiling, so the next tick starts run 2.
+        $this->backdateLatch($first, BoundedCommand::SETTLE_CEILING_SECONDS + 1.0);
+        [$second] = $first->update(new TickMsg());
+
+        [$afterStale, $cmd] = $second->update(new CommandOutputMsg('generic', 'stale', 1));
+        $this->assertNull($cmd, 'a stale run schedules no tick');
+        $this->assertSame($second, $afterStale, 'a stale run changes nothing');
+
+        [$again, $tickCmd] = $afterStale->update(new TickMsg());
+        $this->assertSame($afterStale, $again, 'the live run keeps the latch');
+        $this->assertNull($tickCmd);
     }
 
     private function backdateLatch(GenericModule $module, float $seconds): void

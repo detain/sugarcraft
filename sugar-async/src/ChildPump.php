@@ -295,38 +295,42 @@ final class ChildPump
             ?? (WindowsPipes::runtimeNeedsIt()
                 && array_filter($this->pipes, static fn ($p): bool => !self::isSocket($p)) !== []);
 
-        if ($pollArm && $this->stdinPipe !== null && (string) $this->stdinBytes !== '') {
-            throw new \LogicException(
-                'A stdin feed needs non-blocking pipes, which the Windows poll arm cannot give; '
-                . 'pass the payload to the child as a file instead.',
-            );
-        }
-
-        $clock = $this->clock ?? Clock::monotonicSeconds(...);
-        $deadline = $this->deadline ?? ($clock() + self::DEFAULT_TIMEOUT_SECONDS);
-
-        foreach ($this->pipes as $pipe) {
-            stream_set_blocking($pipe, false);
-        }
-
-        $capture = new ChildCapture(
-            array_keys($this->pipes),
-            $this->discard,
-            $this->maxBytes,
-            $this->onChunk,
-        );
-
+        // The refusal sits inside the try so the reap still runs on it, as withReap()
+        // promises for a throw; the handed-over stdin pipe is closed here for the same reason.
         $feed = null;
-        if ($this->stdinPipe !== null) {
-            if ((string) $this->stdinBytes === '') {
-                fclose($this->stdinPipe);
-            } else {
-                stream_set_blocking($this->stdinPipe, false);
-                $feed = ['pipe' => $this->stdinPipe, 'bytes' => (string) $this->stdinBytes, 'offset' => 0];
-            }
-        }
-
         try {
+            if ($pollArm && $this->stdinPipe !== null && (string) $this->stdinBytes !== '') {
+                fclose($this->stdinPipe);
+
+                throw new \LogicException(
+                    'A stdin feed needs non-blocking pipes, which the Windows poll arm cannot give; '
+                    . 'pass the payload to the child as a file instead.',
+                );
+            }
+
+            $clock = $this->clock ?? Clock::monotonicSeconds(...);
+            $deadline = $this->deadline ?? ($clock() + self::DEFAULT_TIMEOUT_SECONDS);
+
+            foreach ($this->pipes as $pipe) {
+                stream_set_blocking($pipe, false);
+            }
+
+            $capture = new ChildCapture(
+                array_keys($this->pipes),
+                $this->discard,
+                $this->maxBytes,
+                $this->onChunk,
+            );
+
+            if ($this->stdinPipe !== null) {
+                if ((string) $this->stdinBytes === '') {
+                    fclose($this->stdinPipe);
+                } else {
+                    stream_set_blocking($this->stdinPipe, false);
+                    $feed = ['pipe' => $this->stdinPipe, 'bytes' => (string) $this->stdinBytes, 'offset' => 0];
+                }
+            }
+
             return $pollArm
                 ? $this->drainPolled($deadline, $clock, $capture)
                 : $this->drainSelected($deadline, $clock, $capture, $feed);
