@@ -42,16 +42,48 @@ final class WindowsPath
      */
     public static function absolutise(string $root, string $path): ?string
     {
-        $rootParts = self::parts($root);
+        $parts = self::resolve($root, $path);
+
+        return $parts === null ? null : self::render($parts[0], $parts[1]);
+    }
+
+    /**
+     * The unnormalised [anchor, segments] of $path under $root, keeping any `..`,
+     * or null.
+     *
+     * $root is trusted: a jail root is canonical (realpath() answers with long
+     * names), so its names are not checked for 8.3 short-name aliases. Only the
+     * path the caller typed is checked for them, because only that can alias.
+     *
+     * @return array{0: string, 1: list<string>}|null
+     */
+    public static function resolve(string $root, string $path): ?array
+    {
+        $rootParts = self::split($root, trusted: true);
         if ($rootParts === null) {
             return null;
         }
         [$anchor, $rootSegments] = $rootParts;
 
         if (self::isAbsolute($path)) {
-            $parts = self::parts($path);
+            $typed = self::split($path, trusted: true);
+            if ($typed === null) {
+                return null;
+            }
+            [$typedAnchor, $typedSegments] = $typed;
+            if ($typedAnchor !== $anchor || array_slice($typedSegments, 0, count($rootSegments)) !== $rootSegments) {
+                return self::parts($path);
+            }
 
-            return $parts === null ? null : self::render($parts[0], $parts[1]);
+            // The leading segments spell the root itself, so only the rest is the
+            // caller's own spelling and gets the short-name check.
+            foreach (array_slice($typedSegments, count($rootSegments)) as $segment) {
+                if ($segment !== '..' && !self::validName($segment, trusted: false)) {
+                    return null;
+                }
+            }
+
+            return [$anchor, $typedSegments];
         }
 
         // Rooted (`\x`, `/x`) and drive-relative (`C:x`) paths name a location that
@@ -60,9 +92,9 @@ final class WindowsPath
             return null;
         }
 
-        $relative = self::segments($path);
+        $relative = self::segments($path, trusted: false);
 
-        return $relative === null ? null : self::render($anchor, [...$rootSegments, ...$relative]);
+        return $relative === null ? null : [$anchor, [...$rootSegments, ...$relative]];
     }
 
     /**
@@ -77,8 +109,24 @@ final class WindowsPath
             return null;
         }
 
+        $normal = self::normalise($parts);
+
+        return $normal === null ? null : self::render($normal[0], $normal[1]);
+    }
+
+    /**
+     * [anchor, segments] with every `..` applied, or null when one climbs above
+     * the anchor. The input segments must already be validated.
+     *
+     * @param array{0: string, 1: list<string>} $parts
+     * @return array{0: string, 1: list<string>}|null
+     */
+    public static function normalise(array $parts): ?array
+    {
+        [$anchor, $segments] = $parts;
+
         $stack = [];
-        foreach ($parts[1] as $segment) {
+        foreach ($segments as $segment) {
             if ($segment !== '..') {
                 $stack[] = $segment;
                 continue;
@@ -89,7 +137,7 @@ final class WindowsPath
             array_pop($stack);
         }
 
-        return self::render($parts[0], $stack);
+        return [$anchor, $stack];
     }
 
     /**
@@ -102,24 +150,27 @@ final class WindowsPath
      */
     public static function within(string $root, string $path): ?string
     {
-        $rootCanonical = self::collapse($root);
+        $rootParts = self::split($root, trusted: true);
+        $rootCanonical = $rootParts === null ? null : self::normalise($rootParts);
         if ($rootCanonical === null) {
             return null;
         }
+        [$rootAnchor, $rootSegments] = $rootCanonical;
 
-        $absolute = self::absolutise($rootCanonical, $path);
-        $candidate = $absolute === null ? null : self::collapse($absolute);
+        $resolved = self::resolve(self::render($rootAnchor, $rootSegments), $path);
+        $candidate = $resolved === null ? null : self::normalise($resolved);
         if ($candidate === null) {
             return null;
         }
+        [$anchor, $segments] = $candidate;
 
-        [$rootAnchor, $rootSegments] = self::parts($rootCanonical) ?? ['', []];
-        [$anchor, $segments] = self::parts($candidate) ?? ['', []];
         if ($anchor !== $rootAnchor) {
             return null;
         }
 
-        return array_slice($segments, 0, count($rootSegments)) === $rootSegments ? $candidate : null;
+        return array_slice($segments, 0, count($rootSegments)) === $rootSegments
+            ? self::render($anchor, $segments)
+            : null;
     }
 
     /**
@@ -140,26 +191,7 @@ final class WindowsPath
      */
     public static function parts(string $path): ?array
     {
-        if (str_contains($path, "\0")) {
-            return null;
-        }
-
-        if (preg_match('#^([A-Za-z]):[\\\\/](.*)$#s', $path, $match) === 1) {
-            $anchor = strtoupper($match[1]) . ':';
-            $tail = $match[2];
-        } elseif (preg_match('#^[\\\\/]{2}([^\\\\/]+)[\\\\/]+([^\\\\/]+)(?:[\\\\/]+(.*))?$#s', $path, $match) === 1) {
-            if (!self::validName($match[1]) || !self::validName($match[2])) {
-                return null;
-            }
-            $anchor = '\\\\' . $match[1] . '\\' . $match[2];
-            $tail = $match[3] ?? '';
-        } else {
-            return null;
-        }
-
-        $segments = self::segments($tail);
-
-        return $segments === null ? null : [$anchor, $segments];
+        return self::split($path, trusted: false);
     }
 
     /**
@@ -173,12 +205,41 @@ final class WindowsPath
     }
 
     /**
+     * {@see parts()}, with $trusted passed down to the 8.3 short-name rule.
+     *
+     * @return array{0: string, 1: list<string>}|null
+     */
+    private static function split(string $path, bool $trusted): ?array
+    {
+        if (str_contains($path, "\0")) {
+            return null;
+        }
+
+        if (preg_match('#^([A-Za-z]):[\\\\/](.*)$#s', $path, $match) === 1) {
+            $anchor = strtoupper($match[1]) . ':';
+            $tail = $match[2];
+        } elseif (preg_match('#^[\\\\/]{2}([^\\\\/]+)[\\\\/]+([^\\\\/]+)(?:[\\\\/]+(.*))?$#s', $path, $match) === 1) {
+            if (!self::validName($match[1], $trusted) || !self::validName($match[2], $trusted)) {
+                return null;
+            }
+            $anchor = '\\\\' . $match[1] . '\\' . $match[2];
+            $tail = $match[3] ?? '';
+        } else {
+            return null;
+        }
+
+        $segments = self::segments($tail, $trusted);
+
+        return $segments === null ? null : [$anchor, $segments];
+    }
+
+    /**
      * Split a tail on any run of separators, dropping empty and `.` parts and
      * keeping `..`. Null when a real name fails validation.
      *
      * @return list<string>|null
      */
-    private static function segments(string $tail): ?array
+    private static function segments(string $tail, bool $trusted): ?array
     {
         $out = [];
         foreach (preg_split('#[\\\\/]+#', $tail) ?: [] as $segment) {
@@ -189,7 +250,7 @@ final class WindowsPath
                 $out[] = $segment;
                 continue;
             }
-            if (!self::validName($segment)) {
+            if (!self::validName($segment, $trusted)) {
                 return null;
             }
             $out[] = $segment;
@@ -200,8 +261,11 @@ final class WindowsPath
 
     /**
      * Whether one name is safe to treat as exactly one file or directory.
+     *
+     * $trusted skips only the 8.3 short-name rule, for a canonical root. Every
+     * other rule applies to a root too.
      */
-    private static function validName(string $name): bool
+    private static function validName(string $name, bool $trusted): bool
     {
         if ($name === '' || preg_match('/[\x00-\x1F<>:"|?*]/', $name) === 1) {
             return false;
@@ -214,7 +278,7 @@ final class WindowsPath
         }
 
         // A short-name alias such as PROGRA~1 opens a different long name.
-        if (preg_match('/~[0-9]/', $name) === 1) {
+        if (!$trusted && preg_match('/~[0-9]/', $name) === 1) {
             return false;
         }
 

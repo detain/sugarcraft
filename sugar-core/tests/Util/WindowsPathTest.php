@@ -40,6 +40,14 @@ final class WindowsPathTest extends TestCase
         yield 'UNC traversal that stays inside' => ["\\\\server\\share", "\\\\server\\share\\sub\\..\\a.txt", "\\\\server\\share\\a.txt"];
         yield 'UNC root itself' => ["\\\\server\\share", "\\\\server\\share", "\\\\server\\share\\"];
 
+        // A canonical root is trusted, so a real name that looks like an 8.3 alias
+        // still anchors the jail. Only the caller's own path is checked for aliases.
+        yield 'root with a literal tilde-digit segment' => ["C:\\work\\proj~2", "C:\\work\\proj~2\\a.txt", "C:\\work\\proj~2\\a.txt"];
+        yield 'relative path under a tilde-digit root' => ["C:\\work\\proj~2", "sub\\deep.txt", "C:\\work\\proj~2\\sub\\deep.txt"];
+        yield 'tilde-digit root itself' => ["C:\\work\\proj~2", "C:\\work\\proj~2", "C:\\work\\proj~2"];
+        yield 'absolute path typed under a tilde-digit root' => ["C:\\work\\proj~2", "C:\\work\\proj~2\\sub\\a.txt", "C:\\work\\proj~2\\sub\\a.txt"];
+        yield 'tilde-digit UNC share root' => ["\\\\server\\share~2", "\\\\server\\share~2\\a.txt", "\\\\server\\share~2\\a.txt"];
+
         // Refusals: each row must be null, never a path.
         yield 'sibling sharing a prefix' => ["C:\\root", "C:\\rootevil\\x.txt", null];
         yield 'traversal past the root' => ["C:\\root", "C:\\root\\..\\outside\\x.txt", null];
@@ -61,6 +69,10 @@ final class WindowsPathTest extends TestCase
         yield 'trailing space' => ["C:\\root", "C:\\root\\file ", null];
         yield 'leading space' => ["C:\\root", "C:\\root\\ file", null];
         yield '8.3 short name' => ["C:\\root", "C:\\root\\PROGRA~1\\x", null];
+        yield '8.3 short name under a tilde-digit root' => ["C:\\work\\proj~2", "C:\\work\\proj~2\\PROGRA~1\\x", null];
+        yield 'relative 8.3 short name under a tilde-digit root' => ["C:\\work\\proj~2", "PROGRA~1\\x", null];
+        yield 'traversal past a tilde-digit root' => ["C:\\work\\proj~2", "..\\other\\a.txt", null];
+        yield 'reserved name still refused under a tilde-digit root' => ["C:\\work\\proj~2", "C:\\work\\proj~2\\CON", null];
         yield 'wildcard character' => ["C:\\root", "C:\\root\\a*b", null];
         yield 'control character' => ["C:\\root", "C:\\root\\a\x01b", null];
         yield 'NUL byte' => ["C:\\root", "C:\\root\\x\0", null];
