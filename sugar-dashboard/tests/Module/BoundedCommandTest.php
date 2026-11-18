@@ -38,6 +38,35 @@ final class BoundedCommandTest extends TestCase
         );
     }
 
+    public function testScalarArgvEntriesAreCoercedToStrings(): void
+    {
+        // proc_open coerced ['echo', 42] before ChildRun began rejecting non-strings;
+        // a config entry like that must keep printing, not throw out of run().
+        $this->assertSame(
+            ['output' => '42', 'failure' => null],
+            BoundedCommand::run([PHP_BINARY, '-r', 'echo $argv[1];', 42]),
+        );
+    }
+
+    public function testScalarArgvEntriesAreCoercedOnTheLoopToo(): void
+    {
+        $loop = new StreamSelectLoop();
+        $result = Await::until(
+            BoundedCommand::runAsync($loop, [PHP_BINARY, '-r', 'echo $argv[1];', 7]),
+            5.0,
+            $loop,
+        );
+
+        $this->assertSame(['output' => '7', 'failure' => null], $result);
+    }
+
+    public function testNonScalarArgvEntryIsRefused(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        BoundedCommand::run([PHP_BINARY, ['nested']]);
+    }
+
     public function testStderrFollowsStdoutInTheOutput(): void
     {
         $result = BoundedCommand::run(self::php('fwrite(STDOUT, "out"); fwrite(STDERR, "err");'));

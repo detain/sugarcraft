@@ -6062,8 +6062,8 @@ final class Subcommands
      * it config'd into existence is refused fail-closed by the host
      * ({@see McpServeHost}) — nothing can be answered in this terminal.
      * The roster is {@see McpServeRoster::build()}'s own
-     * output — the read-only four, classified, never a hand-list widened at
-     * this call site (r1 NIT-2). The host answers until stdin closes and
+     * output — the read-only tools named in {@see McpServeRoster::NAMES},
+     * classified, never a hand-list widened at this call site (r1 NIT-2). The host answers until stdin closes and
      * returns 0 itself; nothing here duplicates its framing or touches
      * `--output-format`, which governs candy-code's own documents, not the
      * MCP wire.
