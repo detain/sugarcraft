@@ -34,12 +34,13 @@ final class SessionTabs
      *     this entry serves callers that pass raw bytes.
      *   - xterm modifyOtherKeys `CSI 27;5;9~`: sugar-input/src/EscapeDecoder.php
      *     (the `^27;(\d+);(\d+)~$` arm and modifyOtherKeysName, keysym 9 =>
-     *     'Tab'). sugar-core's InputReader does not decode this form, so on the
-     *     live path it never reaches handleKey(); the entry is reachable only
-     *     by a raw-byte caller. Closing that gap needs a sugar-core change.
+     *     'Tab'). sugar-core's InputReader decodes this form too
+     *     (decodeModifyOtherKeys), so the live path delivers KeyMsg(Tab, ctrl)
+     *     to handleKey() and this entry serves raw-byte callers as well.
      *     App::init() negotiates kitty DISAMBIGUATE and deliberately not
      *     modifyOtherKeys (candy-code/src/App/App.php, the CSI > 1 u push), so
-     *     this app does not ask a terminal for the xterm form either.
+     *     this app does not ask a terminal for the xterm form; a terminal that
+     *     sends it anyway still reaches the tab switch.
      *
      * @var list<string>
      */

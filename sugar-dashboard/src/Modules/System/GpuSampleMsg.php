@@ -13,6 +13,8 @@ use SugarCraft\Core\Msg;
  *
  * `$load` is the GPU percentage, or the unmeasured sentinel (-1.0) when this
  * sample produced none. `$spawnFailed` latches "no nvidia-smi on this host".
+ * `$sample` names the sample that produced it: a hung sample can settle after
+ * a newer one has started, and only the newest may clear the in-flight latch.
  */
 final readonly class GpuSampleMsg implements Msg
 {
@@ -20,6 +22,7 @@ final readonly class GpuSampleMsg implements Msg
         public string $source,
         public float $load,
         public bool $spawnFailed,
+        public int $sample,
     ) {
     }
 }

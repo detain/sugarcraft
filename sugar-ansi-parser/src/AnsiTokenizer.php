@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\AnsiParser;
 
 /**
- * Stream tokenizer for terminal byte input: raw bytes in, a list of
+ * Stream tokenizer for terminal output bytes: raw bytes in, a list of
  * {@see Token} records out.
  *
  * This is the flat, dispatch-free view of the stream, for consumers that want
@@ -13,6 +13,12 @@ namespace SugarCraft\AnsiParser;
  * {@see Parser\Parser}. It recognizes C0 controls, two-byte ESC sequences,
  * CSI, and the string envelopes OSC, DCS, APC, SOS and PM. A C1 byte (0x80-0x9F)
  * is ordinary text here: only the 7-bit spellings open a sequence.
+ *
+ * It is an output-stream tokenizer, not a keyboard decoder. A string opener
+ * holds every byte after it until a terminator or the cap, so a bare `ESC P`
+ * typed as Alt+Shift+P would swallow the keys that follow it. Keyboard input
+ * belongs to sugar-core's InputReader, which narrows the DCS arm to the
+ * XTVERSION reply.
  *
  * An incomplete sequence at the end of a chunk is held and joined to the next
  * {@see parse()} call. {@see flush()} drains whatever is still held, as text,
@@ -238,6 +244,15 @@ final class AnsiTokenizer
             }
             $tokens[] = new Token(Token::ESC, $buf[$j], substr($buf, $i + 1, $j - $i - 1));
             return $j + 1 - $i;
+        }
+
+        // ESC before a high byte is not a two-byte sequence. The high byte
+        // opens a UTF-8 rune (or is a stray 8-bit byte), and an ESC token
+        // would take its lead byte and strand the continuation bytes as an
+        // invalid TEXT token. The ESC is abandoned without a token, as the
+        // intermediate path does, so the rune reads whole as TEXT.
+        if (ord($second) >= 0x80) {
+            return 1;
         }
 
         // Two-byte sequence: ESC 7, ESC 8, ESC c, ESC D, ESC M, and any other printable.

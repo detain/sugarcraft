@@ -527,6 +527,27 @@ final class AnsiTokenizerTest extends TestCase
         $this->assertSame('q', $tokens[1]->data);
     }
 
+    public function testEscBeforeAHighByteDoesNotSplitTheRune(): void
+    {
+        // ESC then U+00E9 (C3 A9): the ESC is abandoned without a token, so the
+        // rune reads whole as one TEXT token. An ESC token would take the lead
+        // byte and strand the continuation as an invalid TEXT token.
+        $tokens = AnsiTokenizer::new()->parse("\x1b\xc3\xa9");
+        $this->assertCount(1, $tokens);
+        $this->assertSame(Token::TEXT, $tokens[0]->type);
+        $this->assertSame("\xc3\xa9", $tokens[0]->data);
+    }
+
+    public function testEscBeforeAHighByteSplitAcrossChunksKeepsTheRune(): void
+    {
+        $tokenizer = AnsiTokenizer::new();
+        $this->assertSame([], $tokenizer->parse("\x1b"));
+        $tokens = $tokenizer->parse("\xc3\xa9");
+        $this->assertCount(1, $tokens);
+        $this->assertSame(Token::TEXT, $tokens[0]->type);
+        $this->assertSame("\xc3\xa9", $tokens[0]->data);
+    }
+
     public function testTokenIsImmutable(): void
     {
         $t = new Token(Token::TEXT, 'x');

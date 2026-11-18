@@ -34,9 +34,17 @@ use SugarCraft\Core\Lang;
  * times out reads it, and when that pid is provably dead (ext-posix says
  * ESRCH — EPERM means alive, an unreadable or absent ext means "cannot tell"
  * and nothing is swept) it unlinks the file and takes the lock on the fresh
- * inode, once, instead of failing. The sweep is a best-effort recovery with a
- * small race (a third process may hold the old inode for the same reason),
- * never a first resort: a live holder is always waited out in full.
+ * inode, once, instead of failing.
+ *
+ * The sweep is a best-effort recovery, never a first resort, and it has three
+ * guards. A live holder is always waited out in full. A shared (LOCK_SH)
+ * reader is never swept over: shared holders record no pid, so a dead pid in
+ * the file says nothing about them, and the sweep proceeds only when an
+ * exclusive lock is what blocks the waiter. The recorded pid must also read
+ * the same after one poll interval, which covers the gap between a new
+ * exclusive holder's flock() and its pid note. The residual race is a pid
+ * note delayed past that poll (a suspended holder), or a third process still
+ * holding the old inode for the same reason.
  *
  * The file is created on demand with mode 0600 and never deleted on release.
  * flock() is advisory and per open file description: a second lock on the
@@ -97,10 +105,19 @@ final class LockFile
 
         $flags = ($this->exclusive ? \LOCK_EX : \LOCK_SH) | \LOCK_NB;
         $deadline = microtime(true) + max(0.0, $timeoutSeconds);
+        $suspect = null;
 
         while (!@flock($handle, $flags)) {
             if (microtime(true) >= $deadline) {
-                $swept = $this->sweepIfStale($handle);
+                if ($suspect === null) {
+                    $suspect = $this->deadRecord($handle);
+                    if ($suspect !== null) {
+                        // Confirm the dead record one poll later before any unlink.
+                        usleep(self::POLL_MICROSECONDS);
+                        continue;
+                    }
+                }
+                $swept = $this->sweepIfStale($handle, $suspect);
                 if ($swept === null) {
                     return null;
                 }
@@ -151,16 +168,17 @@ final class LockFile
             fclose($handle);
             $deferred->resolve(null);
         });
-        $this->attemptAsync($loop, $handle, $flags, $deadline, $deferred, $timer);
+        $this->attemptAsync($loop, $handle, $flags, $deadline, $deferred, $timer, null);
 
         return $deferred->promise();
     }
 
     /**
      * One poll of {@see tryAcquireAsync()}: settle the deferred, or re-arm a
-     * timer for the next poll. Shares its deadline and sweep rule with
-     * {@see tryAcquire()}. $timer is the poll timer currently armed, so the
-     * canceller can stop it.
+     * timer for the next poll. Shares its deadline, confirmation and sweep rules
+     * with {@see tryAcquire()}. $timer is the poll timer currently armed, so the
+     * canceller can stop it. $suspect is the dead record seen at the deadline on
+     * an earlier poll, awaiting confirmation.
      *
      * @param resource $handle
      */
@@ -171,6 +189,7 @@ final class LockFile
         float $deadline,
         Deferred $deferred,
         ?TimerInterface &$timer,
+        ?string $suspect,
     ): void {
         if (@flock($handle, $flags)) {
             $deferred->resolve($this->guard($handle));
@@ -178,22 +197,24 @@ final class LockFile
             return;
         }
 
+        $confirming = false;
         if (microtime(true) >= $deadline) {
-            $swept = $this->sweepIfStale($handle);
-            if ($swept === null) {
-                $deferred->resolve(null);
+            if ($suspect === null) {
+                $suspect = $this->deadRecord($handle);
+                $confirming = $suspect !== null;
+            }
+            if (!$confirming) {
+                $swept = $this->sweepIfStale($handle, $suspect);
+                $deferred->resolve($swept === null ? null : $this->guard($swept));
 
                 return;
             }
-            $deferred->resolve($this->guard($swept));
-
-            return;
         }
 
         $timer = $loop->addTimer(
             self::POLL_MICROSECONDS / 1_000_000,
-            function () use ($loop, $handle, $flags, $deadline, $deferred, &$timer): void {
-                $this->attemptAsync($loop, $handle, $flags, $deadline, $deferred, $timer);
+            function () use ($loop, $handle, $flags, $deadline, $deferred, &$timer, $suspect): void {
+                $this->attemptAsync($loop, $handle, $flags, $deadline, $deferred, $timer, $suspect);
             },
         );
     }
@@ -250,6 +271,11 @@ final class LockFile
      * drop the file and lock the fresh inode. Returns the locked handle, or
      * null when nothing was swept or the retry lost the race.
      *
+     * $suspect is the dead record {@see deadRecord()} returned at an earlier
+     * deadline. The sweep proceeds only when the record still reads the same
+     * text, so a holder that wrote its own pid during the confirmation poll
+     * is left alone.
+     *
      * This method owns $contended: it is closed exactly once on every path, so
      * callers must not close it again after a null (that double close is a
      * TypeError).
@@ -258,9 +284,9 @@ final class LockFile
      *
      * @return resource|null
      */
-    private function sweepIfStale($contended): mixed
+    private function sweepIfStale($contended, ?string $suspect): mixed
     {
-        if (!$this->isStale($contended)) {
+        if ($suspect === null || $this->recordText($contended) !== $suspect) {
             fclose($contended);
 
             return null;
@@ -271,6 +297,15 @@ final class LockFile
         // Unlinking by path then would delete that live holder's file and let
         // both processes hold the lock. Only the inode we inspected is ours to drop.
         if (!$this->pathNamesInode($contended)) {
+            fclose($contended);
+
+            return null;
+        }
+
+        // WHY the shared probe: the dead pid describes the last EXCLUSIVE holder.
+        // When the blocker is a shared reader, unlinking would split the inode
+        // out from under that reader and let this waiter take exclusion beside it.
+        if ($this->blockedOnlyBySharedReaders($contended)) {
             fclose($contended);
 
             return null;
@@ -310,25 +345,59 @@ final class LockFile
     }
 
     /**
-     * Whether the holder recorded in $contended is provably dead. Read-only:
-     * it neither unlinks nor closes anything.
+     * Whether the inode can take a LOCK_SH right now, which holds exactly when
+     * no exclusive lock is held on it. True therefore means the waiter's
+     * contention came from shared readers (or from nothing at all).
      *
      * @param resource $contended
      */
-    private function isStale($contended): bool
+    private function blockedOnlyBySharedReaders($contended): bool
     {
-        if (!$this->exclusive) {
+        if (!@flock($contended, \LOCK_SH | \LOCK_NB)) {
             return false;
         }
+        @flock($contended, \LOCK_UN);
 
-        rewind($contended);
-        $recorded = trim((string) stream_get_contents($contended, 32));
+        return true;
+    }
+
+    /**
+     * The recorded pid text when the exclusive holder recorded there is provably
+     * dead, else null. Read-only: it neither unlinks nor closes anything, and it
+     * probes liveness at most once per call.
+     *
+     * @param resource $contended
+     */
+    private function deadRecord($contended): ?string
+    {
+        if (!$this->exclusive) {
+            return null;
+        }
+
+        $recorded = $this->recordText($contended);
         if ($recorded === '' || !ctype_digit($recorded)) {
-            return false;
+            return null;
         }
         $pid = (int) $recorded;
 
-        return !($pid <= 1 || $pid === getmypid() || $this->alive($pid));
+        if ($pid <= 1 || $pid === getmypid() || $this->alive($pid)) {
+            return null;
+        }
+
+        return $recorded;
+    }
+
+    /**
+     * The pid note currently in the file, trimmed. Empty while a new holder has
+     * truncated the file and not yet written its pid.
+     *
+     * @param resource $contended
+     */
+    private function recordText($contended): string
+    {
+        rewind($contended);
+
+        return trim((string) stream_get_contents($contended, 32));
     }
 
     private function alive(int $pid): bool

@@ -56,6 +56,13 @@ final class SystemModule extends BaseModule
     private bool $gpuInFlight = false;
 
     /**
+     * Counts every GPU sample started. The newest value names the sample the
+     * latch belongs to: a result from an older, still-hung sample must not clear
+     * the latch a newer sample holds.
+     */
+    private int $gpuSampleSeq = 0;
+
+    /**
      * Monotonic second the GPU latch was taken; the latch only holds for as
      * long as its sample can still settle (see {@see gpuLatched()}).
      */
@@ -112,12 +119,19 @@ final class SystemModule extends BaseModule
         $clone = clone $this;
         $clone->gpuInFlight = true;
         $clone->gpuInFlightSince = hrtime(true) / 1_000_000_000;
+        $clone->gpuSampleSeq = $this->gpuSampleSeq + 1;
 
         return $clone;
     }
 
     private function withGpuSample(GpuSampleMsg $sample): static
     {
+        // Only the sample the latch belongs to may settle it. An older sample that
+        // was still hung past the ceiling settles later and is stale; it is dropped.
+        if (!$this->gpuInFlight || $sample->sample !== $this->gpuSampleSeq) {
+            return $this;
+        }
+
         $clone = $this->withState([
             'gpuLoad' => $sample->load,
         ]);
@@ -316,19 +330,20 @@ final class SystemModule extends BaseModule
     private function gpuSampleCmd(): \Closure
     {
         $source = $this->name();
+        $sample = $this->gpuSampleSeq;
 
         return Cmd::promise(
             static fn (): PromiseInterface => BoundedCommand::runAsync(
                 Loop::get(),
                 ['nvidia-smi', '--query-gpu=utilization.gpu', '--format=csv,noheader,nounits'],
             )->then(
-                static function (array $result) use ($source): Msg {
+                static function (array $result) use ($source, $sample): Msg {
                     [$load, $spawnFailed] = self::gpuReading($result);
 
-                    return new GpuSampleMsg($source, $load, $spawnFailed);
+                    return new GpuSampleMsg($source, $load, $spawnFailed, $sample);
                 },
                 // Unexpected rejection: a transient unmeasured tick, never a stuck in-flight latch.
-                static fn (\Throwable $e): Msg => new GpuSampleMsg($source, -1.0, false),
+                static fn (\Throwable $e): Msg => new GpuSampleMsg($source, -1.0, false, $sample),
             ),
         );
     }

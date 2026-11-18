@@ -538,10 +538,12 @@ the catalog.
 document to Markdown: headings, paragraphs, emphasis, links, lists, code,
 quotes and simple tables. It drops `script`, `style`, `nav`, `svg`, `iframe`,
 `noscript`, `template`, `noembed` and `noframes` subtrees whole, and resolves links against `$baseUrl` with
-`Html\UrlReference::resolve($base, $reference)`, an RFC 3986 resolver. It
-returns `null` when the document cannot be converted, so the caller can fall
-back to the raw body. Parsing needs `ext-dom`; without it the converter
-returns `null`. Inputs over 512 KiB are cut to their first 512 KiB before
+`Html\UrlReference::resolve($base, $reference)`, an RFC 3986 resolver. A body
+the parser refuses, or one holding no renderable text (a lone `script`, say),
+returns a one-line note rather than `null`, so the dropped text never reaches
+the caller's raw-body fallback. The converter returns `null` only for empty
+input and when `ext-dom` is absent; then the caller can fall back to the raw
+body. Inputs over 512 KiB are cut to their first 512 KiB before
 parsing, and the output closes with a note saying so, so the drop rule still
 covers everything that is converted.
 

@@ -839,11 +839,79 @@ final class InputReaderTest extends TestCase
 
         $this->assertSame([], (new InputReader())->parse("\x1bO1;5~"));
 
-        // An unknown final is one counted drop of the whole span; the bytes
-        // after it still decode.
+        // An unknown final is not a key, so it is typed as the text it is:
+        // `ESC O 2` is consumed alone and `Z` then `x` arrive as keys.
         $msgs = (new InputReader())->parse("\x1bO2Zx");
+        $this->assertSame(['Z', 'x'], array_map(static fn($m) => $m->rune, $msgs));
+    }
+
+    public function testBareDigitSpanSs3TypesOrdinaryLetterFinals(): void
+    {
+        // A bare `ESC O <digits>` has no modifier, so a final that is not an
+        // SS3 key is the letter the user typed. Every letter here is a
+        // non-keypad final that SS3 does not map, so each must arrive as a
+        // Char, in one feed and split at every byte.
+        foreach (["\x1bO1a" => ['a'], "\x1bO2nd" => ['n', 'd'], "\x1bO1Z" => ['Z'], "\x1bO2Zx" => ['Z', 'x']] as $seq => $expected) {
+            $oneShot = (new InputReader())->parse($seq);
+            $this->assertSame($expected, array_map(static fn($m) => $m->rune, $oneShot), bin2hex($seq));
+            foreach ($oneShot as $m) {
+                $this->assertSame(KeyType::Char, $m->type, bin2hex($seq));
+            }
+
+            $reader = new InputReader();
+            $fed = [];
+            $n = strlen($seq);
+            for ($k = 0; $k < $n; $k++) {
+                foreach ($reader->parse($seq[$k]) as $m) {
+                    $fed[] = $m;
+                }
+            }
+            $this->assertSame($expected, array_map(static fn($m) => $m->rune, $fed), bin2hex($seq) . ' byte-wise');
+        }
+    }
+
+    public function testBareDigitSpanSs3KeyFinalStillDecodesWhileLettersType(): void
+    {
+        // `ESC O 1 P` stays F1 by the digit-run rule, and a letter final that
+        // SS3 does map (Up, `A`) is still a key with no modifier.
+        $this->assertSame(KeyType::F1, (new InputReader())->parse("\x1bO1P")[0]->type);
+        $this->assertSame(KeyType::Up, (new InputReader())->parse("\x1bO1A")[0]->type);
+    }
+
+    public function testLoneEscPAtBufferEndWaitsForTheXtversionReply(): void
+    {
+        // The reply's ESC P can end a read on its own. Parking it keeps the
+        // split reply from decoding as Alt+P plus typed text.
+        $r = new InputReader();
+        $this->assertSame([], $r->parse("\x1bP"));
+        $msgs = $r->parse(">|xterm(1.0)\x1b\\");
         $this->assertCount(1, $msgs);
-        $this->assertSame('x', $msgs[0]->rune);
+        $this->assertInstanceOf(TerminalVersionMsg::class, $msgs[0]);
+        $this->assertSame('xterm(1.0)', $msgs[0]->version);
+
+        // A byte-wise feed of the same reply matches the one-shot decode.
+        $r = new InputReader();
+        $bytewise = [];
+        foreach (str_split("\x1bP>|xterm(1.0)\x1b\\") as $byte) {
+            foreach ($r->parse($byte) as $m) {
+                $bytewise[] = $m;
+            }
+        }
+        $this->assertCount(1, $bytewise);
+        $this->assertSame('xterm(1.0)', $bytewise[0]->version);
+    }
+
+    public function testLoneEscPFollowedByAKeyIsAltPThenTheKey(): void
+    {
+        // The next byte decides: a non-`>` byte makes the held ESC P an Alt+P
+        // key, so the Alt+P and the byte after it both arrive.
+        $r = new InputReader();
+        $this->assertSame([], $r->parse("\x1bP"));
+        $msgs = $r->parse('x');
+        $this->assertCount(2, $msgs);
+        $this->assertSame('P', $msgs[0]->rune);
+        $this->assertTrue($msgs[0]->alt);
+        $this->assertSame('x', $msgs[1]->rune);
     }
 
     public function testMalformedDigitSpanSs3IsDroppedWithoutLeak(): void
@@ -1532,9 +1600,12 @@ final class InputReaderTest extends TestCase
 
     public function testEscPWithoutAngleBracketIsAltP(): void
     {
-        // Plain ESC P (no XTVERSION marker) is Alt-P, not DCS.
-        $msgs = (new InputReader())->parse("\x1bP");
-        $this->assertCount(1, $msgs);
+        // Plain ESC P (no XTVERSION marker) is Alt-P, not DCS. A lone ESC P at
+        // the buffer end parks until the next byte decides (see
+        // testLoneEscPFollowedByAKeyIsAltPThenTheKey), so the key is pinned
+        // with the byte that completes it.
+        $msgs = (new InputReader())->parse("\x1bPx");
+        $this->assertCount(2, $msgs);
         $this->assertInstanceOf(KeyMsg::class, $msgs[0]);
         $this->assertSame('P', $msgs[0]->rune);
         $this->assertTrue($msgs[0]->alt);
