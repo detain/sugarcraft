@@ -273,6 +273,37 @@ final class PathJailTest extends TestCase
         $this->assertNull(PathJail::resolveForCreate($this->root, $this->outside . '/new.txt'));
     }
 
+    public function testResolveForCreateRefusesADotDotAfterASymlinkedDirectory(): void
+    {
+        // Regression. `a` is a link to outside/x. The kernel resolves `a/..` to
+        // outside/, so `a/../escaped.txt` creates outside/escaped.txt. The lexical
+        // collapse used to approve root/escaped.txt, and the write escaped the root.
+        mkdir($this->base . '/outside/x', 0700);
+        $this->link($this->outside . '/x', $this->root . '/a');
+
+        $this->assertNull(PathJail::resolveForCreate($this->root, 'a/../escaped.txt'));
+        $this->assertFalse(file_exists($this->outside . '/escaped.txt'));
+    }
+
+    public function testResolveForCreateRefusesADotDotAfterASymlinkedPrefixNestedDeeper(): void
+    {
+        // The link sits one level down, and the `..` follows a real directory that
+        // only exists through the link. The check must walk every prefix, not
+        // just the component directly before the `..`.
+        mkdir($this->base . '/outside/x/b', 0700, true);
+        $this->link($this->outside . '/x', $this->root . '/sub/a');
+
+        $this->assertNull(PathJail::resolveForCreate($this->root, 'sub/a/b/../escaped.txt'));
+        $this->assertFalse(file_exists($this->outside . '/x/escaped.txt'));
+    }
+
+    public function testResolveForCreateStillCollapsesADotDotThroughARealDirectory(): void
+    {
+        // The guard refuses only `..` that crosses a symlink. An ordinary `..`
+        // through a real in-root directory is still collapsed to the in-root path.
+        $this->assertSame($this->root . '/new.txt', PathJail::resolveForCreate($this->root, 'sub/../new.txt'));
+    }
+
     // ------------------------------------------------------------- resolveDir()
 
     public function testResolveDirAcceptsAnExistingDirectoryInside(): void
@@ -322,6 +353,17 @@ final class PathJailTest extends TestCase
     public function testConfineRefusesANulByte(): void
     {
         $this->assertNull(PathJail::confine($this->root, "x\0y"));
+    }
+
+    public function testConfineRefusesADotDotAfterASymlinkedDirectory(): void
+    {
+        // Regression. confine() approves a write when resolveForCreate() does, so
+        // it must refuse the same symlink-then-`..` shape.
+        mkdir($this->base . '/outside/x', 0700);
+        $this->link($this->outside . '/x', $this->root . '/a');
+
+        $this->assertNull(PathJail::confine($this->root, 'a/../escaped.txt'));
+        $this->assertFalse(file_exists($this->outside . '/escaped.txt'));
     }
 
     // ------------------------------------------------------------ within() / below()

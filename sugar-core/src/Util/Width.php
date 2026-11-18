@@ -123,15 +123,16 @@ final class Width
 
     /**
      * Last key measured by {@see string()}, its exact width, and whether
-     * that key carries an ESC byte — the extension door's slot (F15c). A
+     * that key leaves an escape sequence open (see leavesSequenceOpen()) —
+     * the extension door's slot (F15c). A
      * streaming caller that re-asks for the same logical line with bytes
      * appended (the preview-ladder shape sugar-markdown's open section
      * produces every frame, and every TEA app previewing a growing line)
      * is answered `lastWidth + compute(tail)`, which is exact whenever the
      * seam provably splits nothing: both seam bytes are printable ASCII
      * (0x20-0x7E — no cluster and no \r\n pair can span them) and the
-     * previous key is ESC-free (so no ANSI sequence is open across the
-     * seam either). One slot, one string of overhead; no new cache to
+     * previous key is inert under Ansi::strip() (so no ANSI sequence, ESC-led
+     * or 8-bit C1, is open across the seam either). One slot, one string of overhead; no new cache to
      * bound. WHY THE DOOR EXISTS AT ALL: sc-36's 1 MiB byte budget is
      * load-bearing (the burst-eviction pin defends it), but a growing-key
      * working set that crosses the budget re-purges the keys the warm run
@@ -160,7 +161,7 @@ final class Width
         $width = self::extend($s) ?? self::compute($s);
         self::$extendKey = $s;
         self::$extendWidth = $width;
-        self::$extendKeyHasEsc = \strpos($s, "\x1b") !== false;
+        self::$extendKeyHasEsc = self::leavesSequenceOpen($s);
         while (self::$memo !== []
             && (\count(self::$memo) >= self::MEMO_MAX
                 || self::$memoBytes + \strlen($s) > self::MEMO_MAX_BYTES)
@@ -189,6 +190,22 @@ final class Width
         }
         self::$memoBytes += \strlen($s);
         return self::$memo[$s] = $width;
+    }
+
+    /**
+     * Whether a key could leave an escape sequence open across the door's seam.
+     *
+     * An ESC byte is one way to open a sequence. The 8-bit C1 introducers
+     * (0x80-0x9F outside a well-formed UTF-8 sequence) are another, and
+     * {@see Ansi::strip()} consumes them too: a raw `\x9b` followed by `3` is an
+     * unterminated CSI, and the whole run vanishes. A key is inert only when
+     * strip() leaves it unchanged, which also covers ESC, because every ESC
+     * introduces a removal. Valid multi-byte UTF-8 that contains continuation
+     * bytes in 0x80-0x9F is not a removal and stays on the door.
+     */
+    private static function leavesSequenceOpen(string $s): bool
+    {
+        return Ansi::strip($s) !== $s;
     }
 
     /**
