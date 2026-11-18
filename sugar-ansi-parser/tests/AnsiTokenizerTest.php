@@ -467,6 +467,66 @@ final class AnsiTokenizerTest extends TestCase
         $this->assertSame(65536, AnsiTokenizer::MAX_PENDING_BYTES);
     }
 
+    public function testEscIntermediateDesignationIsOneEscTokenWithNoTextLeak(): void
+    {
+        // ESC ( 0 switches to the DEC graphics set. Its final `0` is part of
+        // the designation, not text, and the VT500 Parser agrees: it dispatches
+        // final '0' with intermediate '(' and prints only "lqk".
+        $tokens = AnsiTokenizer::new()->parse("\x1b(0lqk\x1b(B");
+        $this->assertCount(3, $tokens);
+        $this->assertSame(Token::ESC, $tokens[0]->type);
+        $this->assertSame('0', $tokens[0]->data);
+        $this->assertSame('(', $tokens[0]->intermediate);
+        $this->assertSame(Token::TEXT, $tokens[1]->type);
+        $this->assertSame('lqk', $tokens[1]->data);
+        $this->assertSame(Token::ESC, $tokens[2]->type);
+        $this->assertSame('B', $tokens[2]->data);
+        $this->assertSame('(', $tokens[2]->intermediate);
+    }
+
+    public function testEscDecalnAndS7c1tCarryTheirIntermediates(): void
+    {
+        // DECALN (ESC # 8) and S7C1T (ESC SP F) are two-byte intermediate
+        // forms; neither final may come back as text.
+        $decaln = AnsiTokenizer::new()->parse("\x1b#8");
+        $this->assertCount(1, $decaln);
+        $this->assertSame(Token::ESC, $decaln[0]->type);
+        $this->assertSame('8', $decaln[0]->data);
+        $this->assertSame('#', $decaln[0]->intermediate);
+
+        $s7c1t = AnsiTokenizer::new()->parse("\x1b F");
+        $this->assertCount(1, $s7c1t);
+        $this->assertSame('F', $s7c1t[0]->data);
+        $this->assertSame(' ', $s7c1t[0]->intermediate);
+    }
+
+    public function testEscIntermediateSplitAcrossChunksIsHeldUntilItsFinal(): void
+    {
+        $tokenizer = AnsiTokenizer::new();
+        $this->assertSame([], $tokenizer->parse("\x1b("));
+        $tokens = $tokenizer->parse('0x');
+        $this->assertCount(2, $tokens);
+        $this->assertSame(Token::ESC, $tokens[0]->type);
+        $this->assertSame('0', $tokens[0]->data);
+        $this->assertSame('(', $tokens[0]->intermediate);
+        $this->assertSame('x', $tokens[1]->data);
+    }
+
+    public function testEscIntermediateAbandonedByEscOrControlResyncs(): void
+    {
+        // A non-final byte ends the intermediate sequence without a token, the
+        // way ESC does, and the byte after it is handled as usual.
+        $tokens = AnsiTokenizer::new()->parse("\x1b(\x1b[A");
+        $this->assertCount(1, $tokens);
+        $this->assertSame(Token::CSI, $tokens[0]->type);
+        $this->assertSame('A', $tokens[0]->final);
+
+        $tokens = AnsiTokenizer::new()->parse("\x1b(\rq");
+        $this->assertSame(Token::CONTROL, $tokens[0]->type);
+        $this->assertSame("\r", $tokens[0]->data);
+        $this->assertSame('q', $tokens[1]->data);
+    }
+
     public function testTokenIsImmutable(): void
     {
         $t = new Token(Token::TEXT, 'x');

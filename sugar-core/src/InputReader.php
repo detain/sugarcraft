@@ -305,12 +305,15 @@ final class InputReader
                         $c = ord($this->buf[$j]);
                         if ($c < 0x40 || $c > 0x7e) {
                             // Not a final byte: the span is malformed and is
-                            // dropped. A printable byte keeps the span open,
-                            // as CSI parameters do, so the drop runs through
-                            // the printable tail to its real final byte; ESC,
-                            // a control byte or a high byte ends the drop and
-                            // resyncs on itself.
-                            if ($c >= 0x20 && $c < 0x40) {
+                            // dropped. Only a span that has opened its `;`
+                            // modifier is an attempted modified key, so only
+                            // that span keeps a printable byte open, as CSI
+                            // parameters do, and drops the tail to its real
+                            // final byte. A bare `ESC O <digits>` followed by
+                            // ordinary text is consumed alone, so the text is
+                            // typed. ESC, a control byte or a high byte ends
+                            // the drop and resyncs on itself.
+                            if ($c >= 0x20 && $c < 0x40 && $semi) {
                                 $end = $this->skipMalformedSs3Tail($j + 1, $len);
                                 if ($end === null) {
                                     // The tail reaches the buffer end before
@@ -324,6 +327,13 @@ final class InputReader
                                 $i = $end;
                                 continue;
                             }
+                            $i = $j;
+                            continue;
+                        }
+                        // A bare digit run with no `;` cannot be a modified
+                        // key, so a keypad final after it is ordinary text:
+                        // `ESC O 1` then `x` types the `x`, not keypad 8.
+                        if (!$semi && strpos(self::SS3_KEYPAD_FINALS, chr($c)) !== false) {
                             $i = $j;
                             continue;
                         }
@@ -1090,6 +1100,13 @@ final class InputReader
     }
 
     private const BEL = "\x07";
+
+    /**
+     * The SS3 finals that decodeSs3() maps to keypad keys and Enter (DECKPAM):
+     * `l m p-y` and `M`. A digit-led span without a modifier cannot end on one
+     * of these as a keypad key, so the byte reads as typed text.
+     */
+    private const SS3_KEYPAD_FINALS = 'lmMpqrstuvwxy';
 
     /**
      * Walk the printable tail of a malformed digit-led SS3 span from `$from`
