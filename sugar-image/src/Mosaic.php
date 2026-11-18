@@ -1240,10 +1240,11 @@ final class Mosaic implements IncrementalRenderer
      * fulfillment chain, so a rejected fetch stores nothing. Error semantics
      * are inherited from the source call: an unsupported URL scheme throws
      * synchronously, SSRF/host rejections come back as a rejected promise.
-     * The render itself is synchronous on the event loop (decode + resample
-     * + encode) — for large posters route the source through
-     * {@see Mosaic::adaptive()} + {@see AdaptiveImage::withAsync()} or
-     * offload the whole call so the loop keeps serving other sockets.
+     *
+     * The encode runs through a {@see PacedAsyncRenderer} over this mosaic's
+     * row-lazy seam (AUD §3.9): each slice is budgeted and the loop is
+     * yielded between slices, so a large poster no longer occupies the loop for
+     * one whole encode. The bytes are the ones {@see poster()} returns.
      *
      * @return PromiseInterface<string>
      */
@@ -1262,14 +1263,16 @@ final class Mosaic implements IncrementalRenderer
             }
         }
 
-        $poster = $this->scaledForPoster();
+        $paced = new PacedAsyncRenderer($this->scaledForPoster());
 
         return ImageSource::fromUrlAsync($url, allowedHosts: $allowedHosts)
-            ->then(static function (ImageSource $source) use ($poster, $cellW, $cellH, $cache, $key): string {
-                $rendered = $poster->render($source, $cellW, $cellH);
-                $cache?->put($key, $rendered);
+            ->then(static function (ImageSource $source) use ($paced, $cellW, $cellH, $cache, $key): PromiseInterface {
+                return $paced->renderAsync($source, $cellW, $cellH)
+                    ->then(static function (string $rendered) use ($cache, $key): string {
+                        $cache?->put($key, $rendered);
 
-                return $rendered;
+                        return $rendered;
+                    });
             });
     }
 

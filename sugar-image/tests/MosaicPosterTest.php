@@ -200,6 +200,21 @@ final class MosaicPosterTest extends TestCase
         $this->assertSame($out, $again);
     }
 
+    public function testPosterAsyncThroughThePacedRendererMatchesTheSyncPoster(): void
+    {
+        // posterAsync encodes through PacedAsyncRenderer (slice-budgeted, loop
+        // yielded between slices); the bytes must be the ones poster() returns.
+        $this->startServer();
+        $mosaic = Mosaic::halfBlock();
+        $url    = "http://127.0.0.1:{$this->port}/poster.png";
+
+        $sync  = $mosaic->poster($url, 8, 4, null, ['127.0.0.1']);
+        $async = $this->await($mosaic->posterAsync($url, 8, 4, null, ['127.0.0.1']));
+
+        $this->assertNotSame('', $async);
+        $this->assertSame($sync, $async);
+    }
+
     public function testPosterAsyncRejectsOnBlockedPrivateHost(): void
     {
         $this->startServer();
