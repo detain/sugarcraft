@@ -41,9 +41,10 @@ On a machine where nothing is chosen or configured, a first-run wizard can open
 
 ## 2. Connect a real model
 
-`CANDY_CODE_PROVIDER` selects a provider by type key. The full list, with the
-credential variable for each, is in
-[ENVIRONMENT.md](ENVIRONMENT.md) under `CANDY_CODE_PROVIDER`. For OpenAI:
+`CANDY_CODE_PROVIDER` selects a provider by type key. The full list is in
+[ENVIRONMENT.md](ENVIRONMENT.md) under `CANDY_CODE_PROVIDER`, and the credential
+variable for each is in
+[Provider credential variables](ENVIRONMENT.md#provider-credential-variables). For OpenAI:
 
 ```sh
 export CANDY_CODE_PROVIDER=openai

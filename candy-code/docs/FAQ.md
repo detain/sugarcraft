@@ -183,10 +183,11 @@ of it, as the refusal message says. Also set `--allowed-ips` to narrow who may
 connect, because an empty list admits every address beside loopback
 (`src/Server/ServerConfig.php:115`). The full model is in [SERVER.md](SERVER.md).
 
-### Why does `serve` refuse `bypass-permissions`?
+### Why does `serve` refuse `bypass-permissions` and `dont-ask`?
 
-Because it answers every permission ask without asking. The server refuses
-that mode unless you pass `--allow-bypass` or set `server.allowBypass`
+Because both modes answer every permission ask without a human: `bypass-permissions`
+approves it, and `dont-ask` refuses it. The server refuses either mode unless you
+pass `--allow-bypass` or set `server.allowBypass`
 (`src/Server/ServerConfig.php:262-305`, and the check at `:677`).
 
 ### How do I update it?
