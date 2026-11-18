@@ -48,6 +48,10 @@ composer require sugarcraft/sugar-mcp-client
 | `McpRouter` | Deny-before-allow SERVER narrowing over raw config keys (tool rosters follow servers); empty allow-list means allow-all |
 | `RequestIdSequence` | JSON-RPC ids unique across `pcntl_fork()`: plain counters in the owner, `<pid>-<nonce>-<n>` elsewhere; the transport stringifies what it sends, so an outbound request carries `"5"` on the wire, never a bare `5` |
 | `ExchangeLock` | Cross-process `flock` for one connection, carrying the shared read buffer and the dead-holder phase marker |
+| `Protocol\JsonRpc` | The `candy-code.v1` JSON-RPC 2.0 codec: `decode()` reads one client message, `result()` / `error()` / `notification()` / `encode()` build the four wire shapes this protocol uses; undecodable text comes back as an `RpcError`, never null |
+| `Protocol\Request` | One decoded client message: a request (it has an `id` and is answered) or a notification, exposing `id`, `hasId`, `method` and `params` |
+| `Protocol\RpcError` | A `candy-code.v1` method's refusal, thrown by a method and answered as a JSON-RPC error: an `ErrorCode`, a `kind` and `data`; `of()`, `invalidParams()` and `notFound()` build the common cases |
+| `Protocol\ErrorCode` | The `candy-code.v1` error codes as an int-backed enum, with `kind()` and `isRetryable()` |
 
 ## Quick start
 

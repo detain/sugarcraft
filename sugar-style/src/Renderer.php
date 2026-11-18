@@ -77,8 +77,10 @@ final class Renderer
 
     /**
      * Auto-detect the color profile from the environment via
-     * {@see ColorProfile::detect()}, memoised per process and per distinct
-     * environment fingerprint ({@see self::$environmentMemo}). The
+     * {@see ColorProfile::detectTerminal()}, memoised per process and per
+     * distinct environment fingerprint ({@see self::$environmentMemo}). The
+     * dumb-terminal veto matters here: `TERM=dumb` answers NoTty, so no SGR
+     * reaches a terminal that cannot honour it, as before P1-10a. The
      * dark-background flag stays at its default (true) since that's not
      * detectable without an OSC 11 round trip — toggle it explicitly via
      * {@see withHasDarkBackground()} once the program has the answer.
@@ -94,7 +96,7 @@ final class Renderer
             self::$environmentMemo = [];
         }
 
-        return self::$environmentMemo[$key] = new self(ColorProfile::detect(), true);
+        return self::$environmentMemo[$key] = new self(ColorProfile::detectTerminal(), true);
     }
 
     /**

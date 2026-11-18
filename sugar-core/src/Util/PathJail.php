@@ -13,9 +13,12 @@ namespace SugarCraft\Core\Util;
  * `null` means "rejected, do not touch this path", never "unknown".
  *
  * The base algorithm is candy-code's `Tools\PathJail`, which is the rule set
- * most callers already depend on. The one difference is what `resolve()`
- * refuses, and it follows owner decision D18 in UPSTREAM-PLAN.md: `resolve()`
- * also takes ContainedPath's two refusals.
+ * most callers already depend on. Each method refuses somewhat more than that
+ * base, and the lists below are the contract a caller moving off
+ * `Tools\PathJail` must check for the method it uses.
+ *
+ * `resolve()` also takes ContainedPath's two refusals, per owner decision D18
+ * in UPSTREAM-PLAN.md:
  *
  *   - A DANGLING LEAF: a symlink whose target does not exist. realpath() cannot
  *     see it, and a parent-directory check would vouch for it, so a write
@@ -23,6 +26,19 @@ namespace SugarCraft\Core\Util;
  *   - AN EMPTY PATH or EMPTY ROOT: realpath('') answers with the process
  *     working directory, so an empty string would silently anchor containment
  *     wherever the process happens to stand.
+ *
+ * `resolveForCreate()` refuses three shapes the base admits:
+ *
+ *   - a `..` whose preceding prefix is a symlink, or is moved by realpath(),
+ *     even when the collapsed path would stay inside the root, because the
+ *     kernel steps up from the link's target and the collapse from its parent;
+ *   - a symlink in the missing-path walk that does not point at an existing
+ *     directory, including a dangling one;
+ *   - every new path on Windows, whose lexical walk has no drive-aware form.
+ *
+ * `confine()` judges an existing path by `resolve()`'s rule and a missing one
+ * by `resolveForCreate()`, so it refuses everything `resolveForCreate()`
+ * refuses. `resolveDir()` never accepts a missing path.
  *
  * Every method refuses an empty root, an empty path and a NUL byte before any
  * filesystem call. An empty root or path anchors on the working directory,
@@ -219,14 +235,19 @@ final class PathJail
 
         // The raw path, not a lexically collapsed one: `s/../dl` reaches the link
         // through the kernel's `..`, which the collapse would drop.
-        $existing = self::settle($root, $path, null, refuseDanglingLeaf: true);
-        if ($existing !== null && self::inside($existing, $rootReal)) {
-            return $existing;
+        $probe = str_starts_with($path, '/') ? $path : self::under($rootReal, $path);
+        if (realpath($probe) === false) {
+            // A missing leaf takes the writer's verdict. settle() would accept
+            // `link/../new.txt` on its parent check alone, which resolveForCreate()
+            // refuses, so a preview would show a diff the writer then refuses.
+            $fresh = self::resolveForCreate($root, $path);
+
+            return $fresh !== null && self::inside($fresh, $rootReal) ? $fresh : null;
         }
 
-        $fresh = self::resolveForCreate($root, $path);
+        $existing = self::settle($root, $path, null, refuseDanglingLeaf: true);
 
-        return $fresh !== null && self::inside($fresh, $rootReal) ? $fresh : null;
+        return $existing !== null && self::inside($existing, $rootReal) ? $existing : null;
     }
 
     /**

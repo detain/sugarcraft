@@ -258,7 +258,7 @@ final class FileMentions
      *
      * Delegates to sugar-image's sniffer so an `@file` mention, a session.send
      * image and a mask all label the same bytes the same way. A private copy of
-     * the PNG rule drifted: it demanded the full eight-byte signature where
+     * the PNG rule drifted: it demanded the complete PNG signature where
      * ImageSource keeps the label for a damaged tail.
      */
     public static function sniffImage(string $bytes): ?string

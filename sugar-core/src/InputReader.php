@@ -327,6 +327,13 @@ final class InputReader
                                 $i = $end;
                                 continue;
                             }
+                            if (!$semi) {
+                                // Without a `;` only the SS3 key byte is
+                                // consumed: the rest of the digit run is typed,
+                                // as the pre-P1-3 single-byte SS3 read did.
+                                $i += 3;
+                                continue;
+                            }
                             $i = $j;
                             continue;
                         }
@@ -339,7 +346,9 @@ final class InputReader
                         $final = chr($c);
                         if (!$semi && (strpos(self::SS3_KEYPAD_FINALS, $final) !== false
                             || $this->decodeSs3($final) === null)) {
-                            $i = $j;
+                            // Only the SS3 key byte is consumed; the rest of
+                            // the run is typed, so `ESC O 2024y` types `024y`.
+                            $i += 3;
                             continue;
                         }
                         $msg = $this->decodeModifiedSs3(substr($this->buf, $i + 2, $j - $i - 2), chr($c));
@@ -1207,8 +1216,9 @@ final class InputReader
      * Decode an xterm modifyOtherKeys report, `CSI 27 ; <mods> ; <keysym> ~`.
      *
      * The keysym is an X11 keysym, not a Kitty functional codepoint, so the
-     * two ranges are read separately: printable ASCII and the control
-     * keysyms by value, the X11 function block through {@see X11_KEYSYM_MAP}
+     * two ranges are read separately: printable ASCII, the Latin-1 and BMP
+     * characters below the surrogates, and the control keysyms by value, the
+     * X11 function block through {@see X11_KEYSYM_MAP}
      * (consulted before the Kitty range, since 0xFF00 outranks 0xE000), and
      * the rest of 0xE000 and up through the Kitty functional table. Anything
      * unnamed yields null and is consumed without an event.
@@ -1230,7 +1240,12 @@ final class InputReader
         } elseif ($keysym >= 33 && $keysym <= 126) {
             $type = KeyType::Char;
             $rune = chr($keysym);
-        } elseif ($keysym === 9 || $keysym === 13 || $keysym === 27 || $keysym === 127) {
+        } elseif ($keysym >= 0xA0 && $keysym <= 0xD7FF) {
+            // Latin-1 and BMP keysyms below the surrogates are the code point
+            // itself, so Alt+é (233) and Ctrl+α (945) arrive as characters.
+            $type = KeyType::Char;
+            $rune = mb_chr($keysym, 'UTF-8');
+        } elseif ($keysym === 9|| $keysym === 13 || $keysym === 27 || $keysym === 127) {
             $type = match ($keysym) {
                 9       => KeyType::Tab,
                 13      => KeyType::Enter,
