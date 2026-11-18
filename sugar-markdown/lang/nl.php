@@ -29,4 +29,5 @@ return [
     'theme.mapper_not_style' => 'Theme::mapStyles() verwacht dat de mapper een Style teruggeeft, ontvangen: {type}',
     'theme.with_slot_not_style' => 'Theme::with(): "{slot}" is geen Style-slot; geldige slots: {slots}',
     'fold.marker' => '▸ ingeklapt',
+    'glamour.value_too_large' => 'thema {key} overschrijdt het maximum van {limit}',
 ];
