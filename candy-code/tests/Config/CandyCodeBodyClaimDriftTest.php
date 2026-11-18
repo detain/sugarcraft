@@ -69,8 +69,18 @@ final class CandyCodeBodyClaimDriftTest extends TestCase
         'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10,
         'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14,
         'fifteen' => 15, 'sixteen' => 16, 'seventeen' => 17, 'eighteen' => 18,
-        'nineteen' => 19, 'twenty' => 20,
+        'nineteen' => 19, 'twenty' => 20, 'thirty' => 30, 'forty' => 40,
+        'fifty' => 50, 'sixty' => 60, 'seventy' => 70, 'eighty' => 80,
+        'ninety' => 90,
     ];
+
+    /**
+     * The tens and units of a hyphenated compound count ("twenty-six"). The
+     * compound is matched whole and valued as one number: read as bare words,
+     * "twenty-six" would surface as "six" and "thirty-one" as "one".
+     */
+    private const COMPOUND_TENS = 'twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety';
+    private const COMPOUND_UNITS = 'one|two|three|four|five|six|seven|eight|nine';
 
     /** @var array<string, list<string>>|null short name => declaring FQNs */
     private static ?array $declarations = null;
@@ -168,18 +178,31 @@ final class CandyCodeBodyClaimDriftTest extends TestCase
         ];
         self::assertGreaterThan(0, $live['locale'], 'the lang catalog directory is empty or unreadable');
 
-        $body = strip_tags(self::body());
-        preg_match_all('/\b(' . self::countPattern() . ')\s+(hook events?|locales?)\b/i', $body, $quoted, PREG_SET_ORDER);
-
-        foreach ($quoted as $match) {
-            $noun = strtolower($match[2]);
-            $kind = str_starts_with($noun, 'hook') ? 'hook event' : 'locale';
+        foreach (self::quotedNounCounts(strip_tags(self::body()), 'hook events?|locales?') as [$word, $noun]) {
+            $kind = str_starts_with(strtolower($noun), 'hook') ? 'hook event' : 'locale';
             self::assertSame(
                 $live[$kind],
-                self::countValue($match[1]),
-                "the candy-code body quotes '{$match[1]} {$match[2]}' while the live count is {$live[$kind]}"
+                self::countValue($word),
+                "the candy-code body quotes '{$word} {$noun}' while the live count is {$live[$kind]}"
             );
         }
+    }
+
+    public function testHyphenatedCompoundCountsAreReadWholeAndValuedAsOneNumber(): void
+    {
+        self::assertSame(
+            ['twenty-six', 'forty-two'],
+            self::quotedPermissionModeCounts('twenty-six permission modes, forty-two modes')
+        );
+        self::assertSame(
+            [['twenty-one', 'hook events'], ['thirty-one', 'locales'], ['one', 'locale']],
+            self::quotedNounCounts('twenty-one hook events, thirty-one locales, one locale', 'hook events?|locales?')
+        );
+
+        self::assertSame(21, self::countValue('twenty-one'));
+        self::assertSame(26, self::countValue('Twenty-Six'));
+        self::assertSame(30, self::countValue('thirty'));
+        self::assertSame(-1, self::countValue('one-two'), 'only a tens word takes a hyphenated unit');
     }
 
     public function testClassTokenScanReadsNamespacedAndCallFormTokensAndResolvesThemAgainstTheirNamespace(): void
@@ -277,6 +300,18 @@ final class CandyCodeBodyClaimDriftTest extends TestCase
     }
 
     /**
+     * Every "<count> <noun>" pair in the text, as written: [count, noun].
+     *
+     * @return list<array{0: string, 1: string}>
+     */
+    private static function quotedNounCounts(string $text, string $nouns): array
+    {
+        preg_match_all('/\b(' . self::countPattern() . ')\s+(' . $nouns . ')\b/i', $text, $found, PREG_SET_ORDER);
+
+        return array_map(static fn (array $match): array => [$match[1], $match[2]], $found);
+    }
+
+    /**
      * method_exists() also answers yes to private and protected methods, which
      * the page must not present as public API.
      */
@@ -369,11 +404,14 @@ final class CandyCodeBodyClaimDriftTest extends TestCase
 
     /**
      * Only the spellings COUNT_WORDS knows, or digits. An open word class would
-     * match "the locales" or "a mode" in future prose and call it a count.
+     * match "the locales" or "a mode" in future prose and call it a count. The
+     * compound alternative comes first so the regex never settles for its tens
+     * word alone, nor for its unit read as a count of its own.
      */
     private static function countPattern(): string
     {
-        return implode('|', array_keys(self::COUNT_WORDS)) . '|\d+';
+        return '(?:(?:' . self::COMPOUND_TENS . ')-(?:' . self::COMPOUND_UNITS . ')|'
+            . implode('|', array_keys(self::COUNT_WORDS)) . '|\d+)';
     }
 
     private static function countValue(string $word): int
@@ -381,6 +419,10 @@ final class CandyCodeBodyClaimDriftTest extends TestCase
         $lower = strtolower($word);
         if (ctype_digit($lower)) {
             return (int) $lower;
+        }
+
+        if (preg_match('/^(' . self::COMPOUND_TENS . ')-(' . self::COMPOUND_UNITS . ')$/', $lower, $parts) === 1) {
+            return self::COUNT_WORDS[$parts[1]] + self::COUNT_WORDS[$parts[2]];
         }
 
         return self::COUNT_WORDS[$lower] ?? -1;
