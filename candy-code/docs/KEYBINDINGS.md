@@ -68,9 +68,11 @@ The name is the command without its slash, and the chord follows the same rules:
 }
 ```
 
-The name may use letters, digits, `-` and `_`, with `/` between segments and an
-optional `bundle:` or `mcp:` prefix. A `command:` binding runs the command
-itself, so it does not stand in for another row's chord.
+The name may use letters, digits, `-` and `_`, with `/` between segments. It may
+open with one namespace and a colon: a bundle's name for one of its commands
+(`reviewkit:review`), or `mcp:` for an MCP server's command. A second colon is
+refused. A `command:` binding runs the command itself, so it does not stand in
+for another row's chord.
 
 ## Key map by section
 

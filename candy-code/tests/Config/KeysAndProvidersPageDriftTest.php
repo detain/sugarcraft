@@ -43,19 +43,66 @@ final class KeysAndProvidersPageDriftTest extends TestCase
     #[DataProvider('liveBindings')]
     public function testEveryLiveKeyBindingIsOnTheKeysPage(string $id, string $keys): void
     {
-        $page = self::page('KEYBINDINGS.md');
-
-        foreach (explode("\n", $page) as $line) {
-            if (str_contains($line, '`' . $id . '`') && str_contains($line, $keys)) {
-                self::assertTrue(true);
-                return;
-            }
+        if (self::keysRowMatches(self::page('KEYBINDINGS.md'), $id, $keys)) {
+            self::assertTrue(true);
+            return;
         }
 
         self::fail(
             "KeyBindingRegistry declares '{$id}' (keys '{$keys}') but docs/KEYBINDINGS.md has no row "
             . 'naming both. Add the row to the section for its context, with the id and the key label as '
             . 'they appear in the registry.',
+        );
+    }
+
+    /**
+     * The row must carry the id and the key label in their own Id and Keys
+     * cells. A bare substring test passes when the label is a single character
+     * found elsewhere in the row (`e` in "session" for `p`), so the cells are
+     * matched whole.
+     */
+    private static function keysRowMatches(string $page, string $id, string $keys): bool
+    {
+        $row = '| `' . $id . '` | `' . $keys . '` |';
+
+        foreach (explode("\n", $page) as $line) {
+            if (str_starts_with($line, $row)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public function testTheKeysRowMatcherRefusesAWrongLabelInsideAnotherCell(): void
+    {
+        // The page documents picker.pin as `p`. A registry that moved it to `e`
+        // must not be satisfied by the `e` in the row's description.
+        $page = "| `picker.pin` | `p` | Pin or unpin the session (or Ctrl+F) |\n";
+
+        self::assertTrue(self::keysRowMatches($page, 'picker.pin', 'p'));
+        self::assertFalse(self::keysRowMatches($page, 'picker.pin', 'e'));
+        self::assertFalse(self::keysRowMatches($page, 'picker.pin', 'Ctrl+F'));
+    }
+
+    public function testEveryIdOnTheKeysPageIsARegistryRow(): void
+    {
+        // The forward check above only catches a registry row the page lacks.
+        // A row the registry dropped or renamed would otherwise stay on the
+        // page, documenting a key nothing answers.
+        $known = array_map(static fn($binding): string => $binding->id, KeyBindingRegistry::all());
+
+        $unknown = [];
+        foreach (explode("\n", self::page('KEYBINDINGS.md')) as $line) {
+            if (preg_match('/^\| `([^`]+)` \| `/', $line, $match) === 1 && !in_array($match[1], $known, true)) {
+                $unknown[] = $match[1];
+            }
+        }
+
+        self::assertSame(
+            [],
+            array_values(array_unique($unknown)),
+            'docs/KEYBINDINGS.md names these ids in its Keys tables, and KeyBindingRegistry::all() does not declare them',
         );
     }
 
