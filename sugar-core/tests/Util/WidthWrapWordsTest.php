@@ -263,4 +263,43 @@ final class WidthWrapWordsTest extends TestCase
             $this->assertLessThanOrEqual(7, Width::string($line), "line '$line' overflows");
         }
     }
+
+    /**
+     * A long unbroken token (a base64 blob or URL) used to re-measure its
+     * remainder after every cut, which made the cut quadratic. These pin the
+     * one-pass walk: every chunk fits, the chunks rejoin to the input, and the
+     * line count is exact.
+     */
+    public function testLongUnbrokenWordIsCutIntoExactChunks(): void
+    {
+        $word = str_repeat('a', 20_000);
+        $lines = Width::wrapWords($word, 80);
+        $this->assertCount(250, $lines);
+        $this->assertSame($word, implode('', $lines));
+        foreach ($lines as $line) {
+            $this->assertSame(80, Width::string($line));
+        }
+    }
+
+    public function testLongWideGraphemeWordKeepsTheBudgetPerLine(): void
+    {
+        $word = str_repeat('中', 3000);
+        $lines = Width::wrapWords($word, 80);
+        $this->assertCount(75, $lines);
+        $this->assertSame($word, implode('', $lines));
+        foreach ($lines as $line) {
+            $this->assertLessThanOrEqual(80, Width::string($line));
+        }
+    }
+
+    public function testLongCombiningWordIsCutOnClusterBoundaries(): void
+    {
+        $word = str_repeat("e\u{0301}", 500);
+        $lines = Width::wrapWords($word, 10);
+        $this->assertCount(50, $lines);
+        $this->assertSame($word, implode('', $lines));
+        foreach ($lines as $line) {
+            $this->assertSame(10, Width::string($line));
+        }
+    }
 }
