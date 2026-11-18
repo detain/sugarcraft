@@ -479,12 +479,13 @@ candy-code models          # every selectable provider, "*" marks the selected o
 
 ---
 
-## `Lsp` always returns an error
+## `Lsp` returns an error for a language
 
-Expected on every launch today. `LspTool` is registered and reachable, but
-**nothing in `src/` reads a language-server command**, so no server is ever
-started and the tool has no client. Every call returns an error naming the
-language it could not ask.
+Expected until you configure a server for that language. `LspTool` is
+registered on every launch. Servers listed under the `lsp` setting are started
+at launch (`lspAutoDetect` can add the ones it finds); a language with no
+configured server has no client, so every call for it returns an error naming
+the language it could not ask.
 
 That refusal is the design. An empty *success* would read to the model as "this
 symbol has no references" — a confident, fabricated claim about your code that
