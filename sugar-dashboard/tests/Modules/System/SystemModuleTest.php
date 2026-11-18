@@ -6,6 +6,7 @@ namespace SugarCraft\Dashboard\Tests\Modules\System;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Msg;
+use SugarCraft\Dashboard\Module\BoundedCommand;
 use SugarCraft\Dashboard\Module\ProcAvailability;
 use SugarCraft\Dashboard\Modules\System\GpuSampleMsg;
 use SugarCraft\Dashboard\Modules\System\RefreshMsg;
@@ -306,6 +307,36 @@ final class SystemModuleTest extends TestCase
         [$sampled, $sampledCmd] = $ticked->update(new GpuSampleMsg('system', 42.0, false));
         $this->assertNull($sampledCmd);
         $this->assertStringContainsString('GPU  42%', $sampled->view());
+    }
+
+    /**
+     * Regression: the GPU latch used to hold for good when the host dropped the
+     * sample Cmd, so the GPU row froze for the session. Past the settle ceiling
+     * a tick samples again, which shows as a refreshed latch timestamp.
+     */
+    public function testAGpuSampleDroppedByTheHostIsReissuedAfterTheSettleCeiling(): void
+    {
+        $module = new SystemModule();
+        [$dropped] = $module->update(new RefreshMsg());
+        $backdated = $this->gpuInFlightSince($dropped) - BoundedCommand::SETTLE_CEILING_SECONDS - 1.0;
+        $this->setGpuInFlightSince($dropped, $backdated);
+
+        [$again, $cmd] = $dropped->update(new RefreshMsg());
+
+        $this->assertNotNull($cmd);
+        $this->assertGreaterThan($backdated, $this->gpuInFlightSince($again), 'a fresh GPU sample must be issued');
+    }
+
+    private function gpuInFlightSince(SystemModule $module): float
+    {
+        $since = new \ReflectionProperty(SystemModule::class, 'gpuInFlightSince');
+
+        return (float) $since->getValue($module);
+    }
+
+    private function setGpuInFlightSince(SystemModule $module, float $value): void
+    {
+        (new \ReflectionProperty(SystemModule::class, 'gpuInFlightSince'))->setValue($module, $value);
     }
 
     public function testAGpuSampleForAnotherModuleIsIgnored(): void

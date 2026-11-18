@@ -40,6 +40,12 @@ final class GenericModule extends BaseModule
     private bool $inFlight = false;
 
     /**
+     * Monotonic second the in-flight latch was taken. The latch only holds for
+     * as long as its child can still settle; see {@see latched()}.
+     */
+    private ?float $inFlightSince = null;
+
+    /**
      * @param string|array<string> $command  Trusted shell string OR argv list (no shell).
      *                                      When array, runs via proc_open with no shell
      *                                      interpolation — the safe form for untrusted args.
@@ -70,7 +76,7 @@ final class GenericModule extends BaseModule
         }
 
         if ($msg instanceof TickMsg && $msg->isFor($this->name())) {
-            if ($this->inFlight) {
+            if ($this->latched()) {
                 return [$this, null];
             }
 
@@ -102,6 +108,7 @@ final class GenericModule extends BaseModule
         $clone = clone $this;
         $clone->output = $output;
         $clone->inFlight = false;
+        $clone->inFlightSince = null;
         return $clone;
     }
 
@@ -109,7 +116,25 @@ final class GenericModule extends BaseModule
     {
         $clone = clone $this;
         $clone->inFlight = true;
+        $clone->inFlightSince = hrtime(true) / 1_000_000_000;
         return $clone;
+    }
+
+    /**
+     * A latch holds only while its child can still settle. The Cmd belongs to
+     * the host: a host that drops it never delivers CommandOutputMsg, so past
+     * the settle ceiling the latch is stale and the next tick runs the command
+     * again. Inside the ceiling a live child is never stacked.
+     */
+    private function latched(): bool
+    {
+        if (!$this->inFlight) {
+            return false;
+        }
+
+        $elapsed = hrtime(true) / 1_000_000_000 - (float) $this->inFlightSince;
+
+        return $elapsed < BoundedCommand::SETTLE_CEILING_SECONDS;
     }
 
     /**

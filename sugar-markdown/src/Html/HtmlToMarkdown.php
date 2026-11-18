@@ -116,7 +116,11 @@ final class HtmlToMarkdown
      *
      * @return ?string Markdown ending in one newline, or null when the body
      *                 could not be converted and the caller should fall back
-     *                 to the raw bytes
+     *                 to the raw bytes. The output is Markdown source, not
+     *                 display text: brackets and backslashes from the page
+     *                 text are backslash-escaped in it (see escapeText()), so
+     *                 a raw consumer sees the escapes; render it, or unescape
+     *                 it, before showing it as plain text
      */
     public static function convert(string $html, string $baseUrl, ?string $charset = null): ?string
     {
@@ -660,7 +664,10 @@ final class HtmlToMarkdown
     /**
      * Text as it may sit inside a link label, image alt or comment: backslash,
      * `[` and `]` are backslash-escaped, so no run of page text can close a
-     * link or image label early. Rendered, the escapes are invisible.
+     * link or image label early. A Markdown renderer shows the escapes as the
+     * plain characters, but {@see convert()} returns Markdown SOURCE: a consumer
+     * that reads the output raw (a model, a plain-text view) sees `\[`, `\]` and
+     * `\\` where the page had brackets and backslashes.
      */
     private static function escapeText(string $text): string
     {
