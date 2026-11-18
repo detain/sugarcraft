@@ -952,6 +952,7 @@ function build_prefix(string $slug, string $title, string $desc, string $ogTitle
                             <a href="/lib/sugar-mcp-client.html">sugar-mcp-client</a>
                             <a href="/lib/sugar-releases.html">sugar-releases</a>
                             <a href="/lib/sugar-ignore.html">sugar-ignore</a>
+                            <a href="/lib/sugar-serve-protocol.html">sugar-serve-protocol</a>
                             <a href="/lib/sugar-testing.html">sugar-testing</a>
                         </div>
                     </li>

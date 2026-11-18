@@ -8,9 +8,11 @@ use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
 use SugarCraft\Code\Bundles\BundleDiscovery;
 use SugarCraft\Code\Cli\ArgvParser;
+use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Cli\NonInteractive;
 use SugarCraft\Code\Cli\Subcommands;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Support\ProjectRoot;
 use SugarCraft\Code\Tests\Skills\TemporaryDirectoryTrait;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Code\Tests\Support\PathMarketplaceFixtureTrait;
@@ -439,6 +441,101 @@ final class BundleInstallScopeTest extends TestCase
     }
 
     /** A real bundle directory to install FROM, returned as its path. */
+    public function testAProjectInstallFromASubdirectoryLandsInTheRepositoryRootAndWritesNoMarkerBelowIt(): void
+    {
+        $repo = $this->gitRepo('repo');
+        $source = $this->stagedBundle('demo-src', 'demo');
+        $src = $repo . '/src';
+        mkdir($src, 0777, true);
+
+        $this->inDirectory($src, function () use ($source): void {
+            self::assertSame(NonInteractive::EXIT_OK, $this->verb('install', $source, '--project'));
+        });
+
+        self::assertFileExists($repo . '/.candy-code/bundles/demo/.claude-plugin/plugin.json');
+        self::assertDirectoryDoesNotExist($src . '/.candy-code', 'an install must not make the subdirectory its own project root');
+        ProjectRoot::forget();
+        self::assertSame($repo, ProjectRoot::resolve($src), 'settings keep resolving to the repository, not the subdirectory');
+    }
+
+    public function testTheProjectRootFlagNamingASubdirectoryInstallsIntoTheRepositoryRoot(): void
+    {
+        $repo = $this->gitRepo('repo');
+        $source = $this->stagedBundle('demo-src', 'demo');
+        $src = $repo . '/src';
+        mkdir($src, 0777, true);
+
+        self::assertSame(NonInteractive::EXIT_OK, $this->verb('install', $source, '--project', '--root', $src));
+
+        self::assertFileExists($repo . '/.candy-code/bundles/demo/.claude-plugin/plugin.json');
+        self::assertDirectoryDoesNotExist($src . '/.candy-code');
+    }
+
+    public function testBundlesListFromASubdirectoryShowsTheRepositoryProjectInstall(): void
+    {
+        $repo = $this->gitRepo('repo');
+        $source = $this->stagedBundle('demo-src', 'demo');
+        $src = $repo . '/src';
+        mkdir($src, 0777, true);
+
+        $this->inDirectory($repo, function () use ($source): void {
+            self::assertSame(NonInteractive::EXIT_OK, $this->verb('install', $source, '--project'));
+        });
+
+        [$exit, $out] = $this->inDirectory($src, fn (): array => $this->verbCapture('list'));
+
+        self::assertSame(NonInteractive::EXIT_OK, $exit);
+        self::assertMatchesRegularExpression('/^demo\s.*\bproject\b/m', $out, 'list from a subdirectory reads the repository project tier');
+    }
+
+    public function testTheLaunchDiscoversTheRepositoryProjectTierFromASubdirectory(): void
+    {
+        $repo = $this->gitRepo('repo');
+        $source = $this->stagedBundle('demo-src', 'demo');
+        $src = $repo . '/src';
+        mkdir($src, 0777, true);
+
+        $this->inDirectory($repo, function () use ($source): void {
+            self::assertSame(NonInteractive::EXIT_OK, $this->verb('install', $source, '--project'));
+        });
+
+        $found = [];
+        foreach (Bootstrap::bundles($src) as $bundle) {
+            $found[$bundle->name] = $bundle->tier;
+        }
+
+        self::assertSame(['demo' => 'project'], $found, 'a launch from a subdirectory sees the bundle the repository install placed');
+    }
+
+    private function gitRepo(string $name): string
+    {
+        $dir = $this->tempDir . '/' . $name;
+        mkdir($dir, 0777, true);
+        exec('git -C ' . escapeshellarg($dir) . ' init -q 2>&1', $out, $code);
+        self::assertSame(0, $code, implode("\n", $out));
+
+        return (string) realpath($dir);
+    }
+
+    /**
+     * @template T
+     * @param callable(): T $work
+     * @return T
+     */
+    private function inDirectory(string $dir, callable $work): mixed
+    {
+        $before = getcwd();
+        self::assertNotFalse($before);
+
+        chdir($dir);
+
+        try {
+            return $work();
+        } finally {
+            chdir($before);
+        }
+    }
+
     private function stagedBundle(string $folder, string $name): string
     {
         $dir = $this->tempDir . '/' . $folder;

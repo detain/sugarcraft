@@ -602,9 +602,11 @@ image (or `''` when the protocol has nothing to remove). The interface
 types `$imageId` as a string — `delete('1')` — even where the protocol
 addresses images numerically: the numeric id Kitty's wire uses is
 assigned at render time and handed to `KittyOptions::place()` or
-`KittyOptions::transmit()` there, and `delete()` simply formats it into
-the APC `a=d;I=<id>` control sequence (the id alone does nothing
-without a number qualifier). iTerm2's Pop carries no id at all — it
+`KittyOptions::transmit()` there, and `delete()` formats it into the APC
+`a=d,d=I,i=<id>` control sequence. The uppercase `d=I` removes the
+placement and frees the image data; a lowercase `d=i` keeps the data, and
+a bare `a=d` with no `d` key erases every visible placement, the frame just
+drawn included. iTerm2's Pop carries no id at all — it
 removes the most recent image from the cursor, so its `delete()` returns
 a constant Pop and ignores the argument — and every text-protocol tier
 (Sixel, HalfBlock, QuarterBlock, Chafa, Ascii, SymbolMap) has no stored
@@ -613,7 +615,7 @@ argument is a placeholder for interface uniformity.
 
 | Renderer | Sequence | Notes |
 |---------|----------|-------|
-| Kitty | APC `a=d` | Deletes specific image by id |
+| Kitty | APC `a=d,d=I,i=<id>` | Deletes specific image by id and frees its data |
 | iTerm2 | OSC 1337 Pop | Removes topmost image from stack; `$imageId` ignored |
 | Sixel | _(none)_ | DECSIXEL has no delete command; returns `''` |
 | HalfBlock | _(none)_ | Plain text SGR; no stored image identity; returns `''` |
