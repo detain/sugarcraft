@@ -109,13 +109,13 @@ final class Renderer
 
     public readonly Theme $theme;
     /**
-     * CommonMark parser, built lazily on first {@see render()} and cached
-     * on the instance. Left null by the constructor so the chainable
-     * `with*()` builders (which spin up a fresh instance via {@see mutate()})
-     * do NOT rebuild the parser/Environment on every call — only an actual
-     * render pays that cost, once per instance.
+     * The CommonMark parser and the seed the parse in flight reads, built
+     * lazily on first {@see render()}. Shared by every renderer that
+     * {@see mutate()} derives from this one, so the chainable `with*()`
+     * builders never rebuild the parser/Environment: only the first render
+     * in a family pays that cost.
      */
-    private ?MarkdownParser $parser = null;
+    private ParserBundle $bundle;
 
     /**
      * Per-stock-theme render bundles for {@see renderMarkdown()}
@@ -142,15 +142,6 @@ final class Renderer
      */
     private static array $cache = [];
 
-    /**
-     * Link reference definitions {@see parseSection()} seeds into the parse
-     * in flight, null outside one. Only the stream family sets it, and only
-     * after narrowing to the labels the section could look up
-     * ({@see narrowSeed()}).
-     *
-     * @var list<ReferenceInterface>|null
-     */
-    private ?array $seedReferences = null;
     /**
      * The options in effect, readable after construction (SM-S12): the
      * constructor is their single gate (SM-S50: a non-positive wrapWidth
@@ -230,6 +221,7 @@ final class Renderer
         array $folds = [],
     ) {
         $this->theme = $theme ?? Theme::ansi();
+        $this->bundle = new ParserBundle();
         // SM-S50: a zero/negative width is not "off" — off is null. Fail
         // fast at the boundary instead of silently normalising a bug away.
         if ($wrapWidth !== null && $wrapWidth <= 0) {
@@ -254,16 +246,17 @@ final class Renderer
     }
 
     /**
-     * Lazily build (and memoise) the CommonMark parser. Deferring
-     * construction out of `__construct()` means the `with*()` builders no
-     * longer rebuild the whole Environment + extension set on every call —
-     * the parser is assembled exactly once, on the first render of an
-     * instance. Extension set is identical to the previous eager build, so
+     * Lazily build (and memoise, on the shared {@see ParserBundle}) the
+     * CommonMark parser. Deferring construction out of `__construct()` means
+     * the `with*()` builders do not assemble the Environment + extension set
+     * on every call; the parser is assembled once per family, on its first
+     * render. Extension set is identical to the previous eager build, so
      * render output is byte-for-byte unchanged.
      */
     private function parser(): MarkdownParser
     {
-        if ($this->parser === null) {
+        $bundle = $this->bundle;
+        if ($bundle->parser === null) {
             $env = new Environment();
             $env->addExtension(new CommonMarkCoreExtension());
             $env->addExtension(new TableExtension());
@@ -280,20 +273,22 @@ final class Renderer
             // map the parse resolves references against. Seeded entries go
             // in first, so the section's own duplicates lose to them, which
             // is CommonMark's first-definition-wins across the whole document.
-            $env->addEventListener(DocumentPreParsedEvent::class, function (DocumentPreParsedEvent $event): void {
-                if ($this->seedReferences === null) {
+            // It closes over the bundle, not $this: the parser is shared by
+            // derived renderers, and each must see the seed it set.
+            $env->addEventListener(DocumentPreParsedEvent::class, function (DocumentPreParsedEvent $event) use ($bundle): void {
+                if ($bundle->seedReferences === null) {
                     return;
                 }
                 $map = $event->getDocument()->getReferenceMap();
-                foreach ($this->seedReferences as $reference) {
+                foreach ($bundle->seedReferences as $reference) {
                     if (!$map->contains($reference->getLabel())) {
                         $map->add($reference);
                     }
                 }
             });
-            $this->parser = new MarkdownParser($env);
+            $bundle->parser = new MarkdownParser($env);
         }
-        return $this->parser;
+        return $bundle->parser;
     }
 
     public static function ansi(): self
@@ -585,11 +580,11 @@ final class Renderer
         // the stream channel and the whole-document channel see the same
         // nodes and stay byte-identical.
 
-        $this->seedReferences = $seed === null ? null : self::narrowSeed($section, $seed);
+        $this->bundle->seedReferences = $seed === null ? null : self::narrowSeed($section, $seed);
         try {
             return $this->parser()->parse($section);
         } finally {
-            $this->seedReferences = null;
+            $this->bundle->seedReferences = null;
         }
     }
 
@@ -1038,7 +1033,7 @@ final class Renderer
         ?bool $lineNumbers = null,
         ?array $folds = null,
     ): self {
-        return new self(
+        $derived = new self(
             $theme            ?? $this->theme,
             $wrapWidthSet ? $wrapWidth : $this->wrapWidth,
             $emitHyperlinks   ?? $this->emitHyperlinks,
@@ -1054,6 +1049,11 @@ final class Renderer
             $lineNumbers      ?? $this->lineNumbers,
             $folds            ?? $this->folds,
         );
+        // The parser depends on nothing a builder can change, so the derived
+        // renderer reuses this family's parser instead of building its own.
+        $derived->bundle = $this->bundle;
+
+        return $derived;
     }
 
     public function render(string $markdown): string

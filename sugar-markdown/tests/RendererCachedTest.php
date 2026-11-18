@@ -5,7 +5,11 @@ declare(strict_types=1);
 namespace SugarCraft\Markdown\Tests;
 
 use InvalidArgumentException;
+use League\CommonMark\Reference\Reference;
+use League\CommonMark\Reference\ReferenceMap;
 use PHPUnit\Framework\TestCase;
+use ReflectionProperty;
+use SugarCraft\Markdown\ParserBundle;
 use SugarCraft\Markdown\Renderer;
 use SugarCraft\Markdown\Style\StyleSheet;
 use SugarCraft\Markdown\Theme;
@@ -16,6 +20,12 @@ final class RendererCachedTest extends TestCase
     private static function fresh(): Theme
     {
         return Theme::fromJsonString('{"paragraph": {"bold": true}}');
+    }
+
+    /** The bundle a renderer shares with its family: parser and seed live there. */
+    private static function bundleOf(Renderer $renderer): ParserBundle
+    {
+        return (new ReflectionProperty(Renderer::class, 'bundle'))->getValue($renderer);
     }
 
     public function testTheSamePairReturnsTheSameInstance(): void
@@ -112,6 +122,39 @@ final class RendererCachedTest extends TestCase
         $this->assertNotSame($first, Renderer::cached($cold, 12));
         // An evicted renderer still works for whoever holds it.
         $this->assertStringContainsString('ok', $first->render("ok\n"));
+    }
+
+    public function testBuilderDerivedRenderersReuseTheCachedParser(): void
+    {
+        // The frame loop from the docblock: every frame derives a fresh
+        // renderer from the cached one. Each must reuse its parser rather
+        // than building a new Environment.
+        $theme = Theme::dark();
+        $first = Renderer::cached($theme, 30)->withFolds([]);
+        $first->render("# Title\n\nbody\n");
+        $parser = self::bundleOf($first)->parser;
+        $this->assertNotNull($parser);
+
+        $second = Renderer::cached($theme, 30)->withFolds(['title']);
+        $second->render("# Title\n\nbody\n");
+
+        $this->assertSame($parser, self::bundleOf($second)->parser);
+    }
+
+    public function testADerivedRendererSeedsItsSectionFromItsOwnSeed(): void
+    {
+        // The shared parser's listener must read the seed the derived renderer
+        // set for this parse, not the seed of the instance that built the parser.
+        $seed = new ReferenceMap();
+        $seed->add(new Reference('docs', '/docs', ''));
+        $base = Renderer::cached(Theme::dark(), 30);
+        $base->render("warm the parser\n");
+        $derived = $base->withFolds([]);
+
+        $document = $derived->parseSection('[docs]', $seed);
+
+        $this->assertTrue($document->getReferenceMap()->contains('docs'));
+        $this->assertNull(self::bundleOf($derived)->seedReferences);
     }
 
     public function testStyleSheetBaseIsBuiltOnce(): void

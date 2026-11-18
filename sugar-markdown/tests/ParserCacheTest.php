@@ -18,12 +18,17 @@ use PHPUnit\Framework\TestCase;
  */
 final class ParserCacheTest extends TestCase
 {
-    /** @return object|string|null the parser value, or null when uninitialised */
-    private function parserValue(Renderer $r): mixed
+    /**
+     * The parser the renderer's family shares, or null while unbuilt. It lives
+     * on the shared ParserBundle, so renderers derived by a with*() chain report
+     * the same value as the renderer they came from.
+     *
+     * @return object|null
+     */
+    private function parserValue(Renderer $r): ?object
     {
-        $prop = new \ReflectionProperty(Renderer::class, 'parser');
-        $prop->setAccessible(true);
-        return $prop->isInitialized($r) ? $prop->getValue($r) : null;
+        $bundle = (new \ReflectionProperty(Renderer::class, 'bundle'))->getValue($r);
+        return $bundle->parser;
     }
 
     public function testParserNotBuiltByBuilderChaining(): void
@@ -116,9 +121,7 @@ final class ParserCacheTest extends TestCase
 
         // The parser object is the identity that proves the Environment
         // was assembled once and survived the second call.
-        $parserProp = new \ReflectionProperty(Renderer::class, 'parser');
-        $parserProp->setAccessible(true);
-        $this->assertNotNull($parserProp->getValue($held));
+        $this->assertNotNull($this->parserValue($held));
     }
 
     public function testCustomThemeDoesNotPolluteTheStockCache(): void
