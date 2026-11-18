@@ -27,7 +27,7 @@ namespace SugarCraft\Image;
  *  - RepeatCells = 1<<2 — coalesce runs of an identical glyph (under an
  *    unchanged pen) into `ESC[count b` (REP). Only byte-saving when the
  *    literal cost beats the framing, so emission goes through
- *    {@see \SugarCraft\CellBuffer\Diff\RepeatGate::worth()} (one gate for
+ *    {@see \SugarCraft\CellBuffer\Support\RepeatGate::worth()} (one gate for
  *    the diff path and the mosaic path), and only when the terminal
  *    advertises REP via {@see Detect::supportsRepeat()}.
  *

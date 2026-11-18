@@ -194,4 +194,56 @@ final class BufferBuilderTest extends TestCase
             $built->toAnsi(),
         );
     }
+
+    public function testToBuilderSeedsFromTheExistingCellsWithoutMutatingTheSource(): void
+    {
+        $source = Buffer::new(4, 2)->withCellAt(1, 0, Cell::new('A'))->withCellAt(3, 1, Cell::new('B'));
+        $before = $source->toAnsi();
+
+        $builder = $source->toBuilder();
+        self::assertSame($before, $builder->toBuffer()->toAnsi(), 'an untouched builder freezes to the seed');
+
+        $builder->setCellAt(0, 0, Cell::new('Z'));
+        self::assertSame($before, $source->toAnsi(), 'painting the builder must not change the source buffer');
+        self::assertSame('Z', $builder->toBuffer()->cellAt(0, 0)->rune());
+        self::assertSame('A', $builder->toBuffer()->cellAt(1, 0)->rune());
+    }
+
+    public function testToBuilderPaintingMatchesTheWithCellAtChainOverASeededFrame(): void
+    {
+        // A wide lead straddling a seeded continuation exercises the pair law
+        // against pre-existing cells, not only against blank canvases.
+        $seed = Buffer::new(6, 1)->withCellAt(0, 0, Cell::new('中', null, null, 2));
+        $chain = $seed->withCellAt(1, 0, Cell::new('x'))->withCellAt(4, 0, Cell::new('界', null, null, 2));
+        $builder = $seed->toBuilder()->setCellAt(1, 0, Cell::new('x'))->setCellAt(4, 0, Cell::new('界', null, null, 2));
+
+        self::assertSame($chain->toAnsi(), $builder->toBuffer()->toAnsi());
+    }
+
+    public function testFromGridRefusesAWrongSizedGrid(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        BufferBuilder::fromGrid(2, 2, [Cell::blank(), Cell::blank(), Cell::blank()]);
+    }
+
+    public function testBuilderReportsItsDimensionsLikeTheBuffer(): void
+    {
+        $builder = Buffer::builder(7, 3);
+
+        self::assertSame(7, $builder->width());
+        self::assertSame(3, $builder->height());
+        self::assertSame(7, $builder->toBuffer()->width());
+        self::assertSame(3, $builder->toBuffer()->height());
+    }
+
+    public function testOversizedSeedMismatchIsRefusedBeforeTheCanvasIsAllocated(): void
+    {
+        // Regression (Codex P2): the constructor used to fill a blank 10^8-cell
+        // canvas before fromGrid() saw the 1-cell seed, which exhausts the
+        // memory limit with a fatal error that no caller can catch. The seed
+        // must be refused first, as an InvalidArgumentException.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('must contain exactly 100000000 cells');
+        BufferBuilder::fromGrid(10000, 10000, [Cell::blank()]);
+    }
 }
