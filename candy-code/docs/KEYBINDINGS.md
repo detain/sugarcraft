@@ -27,8 +27,10 @@ only work when your terminal reports mouse events.
 
 ## Rebinding keys
 
-Put a `keybindings` object in any settings file (see [SETTINGS.md](SETTINGS.md)).
-Each key names a binding id from the tables below, and its value is either a
+Put a `keybindings` object in one of your own user files: `~/.candy-code/settings.json`,
+`~/.candy-code/config.json`, or the file named by `--config`. A `keybindings` object in a
+project's `.candy-code/settings.json` is ignored, even in a trusted project (see
+[SETTINGS.md](SETTINGS.md)). Each key names a binding id from the tables below, and its value is either a
 replacement chord or `null`:
 
 ```json
