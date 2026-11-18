@@ -23,6 +23,14 @@ final class RootModelWithScreenStack implements Model, ScreenStackCapable
     /** @var list<string> */
     public array $poppedIds = [];
 
+    /**
+     * The base layer while a screen is pushed. {@see $currentModel} mirrors the
+     * live top then, so the base is parked here and restored when the stack
+     * empties; with no screen pushed it stays null and the base is
+     * {@see $currentModel} itself.
+     */
+    private ?Model $baseLayer = null;
+
     public function __construct(
         public ScreenStack $screens = new ScreenStack(),
         public ?Model $currentModel = null,
@@ -41,8 +49,16 @@ final class RootModelWithScreenStack implements Model, ScreenStackCapable
     public function withScreens(ScreenStack $screens): self
     {
         $next = clone $this;
+        if ($this->screens->isEmpty() && !$screens->isEmpty()) {
+            $next->baseLayer = $this->currentModel;
+        }
         $next->screens = $screens;
-        $next->currentModel = $screens->isEmpty() ? null : $screens->current()->model;
+        if ($screens->isEmpty()) {
+            $next->currentModel = $this->baseLayer;
+            $next->baseLayer = null;
+        } else {
+            $next->currentModel = $screens->current()->model;
+        }
         return $next;
     }
 
@@ -68,6 +84,9 @@ final class RootModelWithScreenStack implements Model, ScreenStackCapable
                 $next->pushedIds[] = (string) $model->id;
             }
             $msg->screen->onEnter?->__invoke();
+            if ($next->screens->isEmpty()) {
+                $next->baseLayer = $next->currentModel;
+            }
             $next->screens = $next->screens->push($msg->screen);
             $next->currentModel = $msg->screen->model;
             // A pushed screen starts like the root's own init(): nothing else
@@ -85,9 +104,13 @@ final class RootModelWithScreenStack implements Model, ScreenStackCapable
                     $next->poppedIds[] = (string) $poppedModel->id;
                 }
                 $next->screens = $next->screens->pop();
-                $next->currentModel = $next->screens->isEmpty()
-                    ? null
-                    : $next->screens->current()->model;
+                if ($next->screens->isEmpty()) {
+                    // The base layer comes back with its state as it was at the push.
+                    $next->currentModel = $next->baseLayer;
+                    $next->baseLayer = null;
+                } else {
+                    $next->currentModel = $next->screens->current()->model;
+                }
             }
             return [$next, null];
         }

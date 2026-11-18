@@ -274,9 +274,6 @@ final class Program
         // and program writes keep their order. Synchronous until run() attaches
         // the loop.
         $this->writer = new Writer($this->output);
-        $this->writer->onDrain(function (): void {
-            $this->onOutputDrained();
-        });
         $this->renderer = new Renderer(
             $this->output,
             inline:   $options->inlineMode,
@@ -582,6 +579,13 @@ final class Program
         // run #2 diff against the CLOSED screen — a stale tail instead of a
         // fresh paint. Reset at the same door as stopSignal.
         $this->lastRenderedBody = null;
+        // Bind the drain hook to the instance that is running. The writer is
+        // shared with every clone (withExceptionHandler()/withLogger()), so a
+        // hook captured in the constructor would drain into the original and
+        // leave this instance's held frame and overflow flag stranded.
+        $this->writer->onDrain(function (): void {
+            $this->onOutputDrained();
+        });
         $this->setupTerminal();
         $this->installSignalHandlers();
 
