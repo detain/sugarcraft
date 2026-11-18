@@ -7,6 +7,7 @@ namespace SugarCraft\GitServer\Support;
 use React\EventLoop\LoopInterface;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
+use SugarCraft\Async\OperationCancelledException;
 
 use function React\Promise\resolve;
 
@@ -52,12 +53,20 @@ final class PromisePool
 
         $limit = \max(1, $limit);
         $total = \count($items);
-        $deferred = new Deferred();
 
         $results = [];
         $next = 0;
         $active = 0;
         $settled = false;
+
+        // Cancelling the aggregate must stop the batch: nothing else sets
+        // $settled on an abandoned wait, so the futureTick chain would keep
+        // calling $fn for every remaining item. In-flight items run to
+        // completion; no new item is started.
+        $deferred = new Deferred(static function () use (&$settled): void {
+            $settled = true;
+            throw new OperationCancelledException('PromisePool batch cancelled');
+        });
 
         $settleError = static function (\Throwable $e) use (&$settled, $deferred): void {
             if ($settled) {
