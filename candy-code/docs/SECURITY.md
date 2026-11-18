@@ -31,9 +31,11 @@ every fix lands there first. Tagged, signed releases are built into a single
 `candy-code.phar`, and `candy-code self-update` installs a newer one only after
 the signature verifies against the public key pinned in
 `src/Cli/SelfUpdate.php:75`. A build with an empty key constant is keyless, and
-binds its bytes only through the SHA-256 sidecar (`src/Cli/SelfUpdate.php:70-75`). Releases are not
-backported to old tags before 1.0, so the fix for a version you run is the next
-release.
+binds its bytes only through the SHA-256 sidecar (`src/Cli/SelfUpdate.php:70-75`).
+`candy-code self-update --allow-unsigned` is the dev/test-only bypass of that
+signature leg: it removes the signature protection for that run, while the
+SHA-256 sidecar still applies. Releases are not backported to old tags before
+1.0, so the fix for a version you run is the next release.
 
 ## Trust boundaries
 

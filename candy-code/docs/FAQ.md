@@ -203,7 +203,10 @@ pass `--allow-bypass` or set `server.allowBypass`
 `candy-code self-update` downloads the phar, checks it against the pinned
 Ed25519 key (`src/Cli/SelfUpdate.php:75`), and refuses a payload that does not
 verify. A build with an empty key constant is keyless, and binds its bytes only
-through the SHA-256 sidecar (`src/Cli/SelfUpdate.php:70-75`). The root policy
+through the SHA-256 sidecar (`src/Cli/SelfUpdate.php:70-75`). The dev/test-only
+`--allow-unsigned` flag is the one exception: it skips the signature check for
+that run, removing the signature protection, while the SHA-256 sidecar still
+applies. The root policy
 describes the release channels in
 [`SECURITY.md`](https://github.com/detain/sugarcraft/blob/master/SECURITY.md).
 
