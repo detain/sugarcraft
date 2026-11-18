@@ -673,6 +673,345 @@ final class InputReaderTest extends TestCase
         $this->assertSame(KeyType::F1, $msgs[0]->type);
     }
 
+    // ---- legacy key completeness (merged from sugar-input EscapeDecoder) --
+
+    public function testInsertViaCsiTilde(): void
+    {
+        // Regression: CSI 2 ~ had no arm, so Insert was silently dropped.
+        $msgs = (new InputReader())->parse("\x1b[2~");
+        $this->assertCount(1, $msgs);
+        $this->assertInstanceOf(KeyMsg::class, $msgs[0]);
+        $this->assertSame(KeyType::Insert, $msgs[0]->type);
+        $this->assertFalse($msgs[0]->ctrl);
+        $this->assertFalse($msgs[0]->alt);
+    }
+
+    public function testModifiedInsertViaCsiTildeKeepsModifier(): void
+    {
+        // CSI 2 ; 5 ~ is Ctrl+Insert: the modifier parameter is stripped
+        // before the key lookup, so the Insert arm must see the bare "2".
+        $msgs = (new InputReader())->parse("\x1b[2;5~");
+        $this->assertCount(1, $msgs);
+        $this->assertSame(KeyType::Insert, $msgs[0]->type);
+        $this->assertTrue($msgs[0]->ctrl);
+        $this->assertFalse($msgs[0]->alt);
+    }
+
+    public function testF13ThroughF20ViaCsiTilde(): void
+    {
+        // Regression: the tilde table stopped at F12. Codes follow the VT220
+        // numbering, which skips 27 and 30.
+        $codes = [25, 26, 28, 29, 31, 32, 33, 34];
+        $expected = [
+            KeyType::F13, KeyType::F14, KeyType::F15, KeyType::F16,
+            KeyType::F17, KeyType::F18, KeyType::F19, KeyType::F20,
+        ];
+        $input = '';
+        foreach ($codes as $code) {
+            $input .= "\x1b[{$code}~";
+        }
+        $msgs = (new InputReader())->parse($input);
+        $this->assertCount(count($expected), $msgs);
+        foreach ($expected as $i => $type) {
+            $this->assertSame($type, $msgs[$i]->type, "tilde code {$codes[$i]}");
+        }
+    }
+
+    public function testUnassignedTildeCodesBetweenFunctionKeysAreDropped(): void
+    {
+        // 27 and 30 sit in the VT220 gaps and must not borrow a neighbour's key.
+        $this->assertSame([], (new InputReader())->parse("\x1b[27~"));
+        $this->assertSame([], (new InputReader())->parse("\x1b[30~"));
+    }
+
+    public function testModifiedSs3ArrowDecodesAsKeyNotPrintable(): void
+    {
+        // Legacy xterm modified SS3 `ESC O 1 ; <mod> <final>`: the whole span
+        // is one key. The old single-byte SS3 scan dropped the digit and
+        // leaked ";5" and the final as printable characters.
+        $msgs = (new InputReader())->parse("\x1bO1;5C");
+        $this->assertCount(1, $msgs);
+        $this->assertInstanceOf(KeyMsg::class, $msgs[0]);
+        $this->assertSame(KeyType::Right, $msgs[0]->type);
+        $this->assertTrue($msgs[0]->ctrl);
+    }
+
+    public function testModifiedSs3ShiftArrowAndF1(): void
+    {
+        $left = (new InputReader())->parse("\x1bO1;2D");
+        $this->assertCount(1, $left);
+        $this->assertSame(KeyType::Left, $left[0]->type);
+        $this->assertTrue($left[0]->shift);
+
+        $f1 = (new InputReader())->parse("\x1bO1;2P");
+        $this->assertCount(1, $f1);
+        $this->assertSame(KeyType::F1, $f1[0]->type);
+        $this->assertTrue($f1[0]->shift);
+    }
+
+    public function testModifiedSs3SplitAcrossFeedsCompletesWithoutLeaking(): void
+    {
+        $reader = new InputReader();
+        $this->assertSame([], $reader->parse("\x1bO1"));
+        $msgs = $reader->parse(";2D");
+        $this->assertCount(1, $msgs);
+        $this->assertSame(KeyType::Left, $msgs[0]->type);
+        $this->assertTrue($msgs[0]->shift);
+
+        $reader = new InputReader();
+        $this->assertSame([], $reader->parse("\x1bO1;"));
+        $msgs = $reader->parse("2D");
+        $this->assertCount(1, $msgs);
+        $this->assertSame(KeyType::Left, $msgs[0]->type);
+        $this->assertTrue($msgs[0]->shift);
+    }
+
+    public function testDigitSpanSs3AcceptsAnyParameterAndModifier(): void
+    {
+        // sugar-input's EscapeDecoder reads ESC O <digits>[;<mod>] <final> for
+        // any digit run, not only the literal "1" xterm sends. "2;5A" must be
+        // Ctrl+Up, not a leaked ";5A".
+        $up = (new InputReader())->parse("\x1bO2;5A");
+        $this->assertCount(1, $up);
+        $this->assertSame(KeyType::Up, $up[0]->type);
+        $this->assertTrue($up[0]->ctrl);
+
+        $f1 = (new InputReader())->parse("\x1bO5;3P");
+        $this->assertCount(1, $f1);
+        $this->assertSame(KeyType::F1, $f1[0]->type);
+        $this->assertTrue($f1[0]->alt);
+        $this->assertFalse($f1[0]->ctrl);
+
+        $plainF1 = (new InputReader())->parse("\x1bO1P");
+        $this->assertCount(1, $plainF1);
+        $this->assertSame(KeyType::F1, $plainF1[0]->type);
+        $this->assertFalse($plainF1[0]->alt);
+    }
+
+    public function testDigitSpanSs3ByteByByteMatchesOneShotAndResumesTheScan(): void
+    {
+        // A digit-led SS3 span parked across feeds must record its scan
+        // offset, so each feed walks only the bytes it added. Every split
+        // must decode to the same single key as a one-shot feed.
+        $resume = new \ReflectionProperty(InputReader::class, 'scanResume');
+        foreach (["\x1bO2;5A", "\x1bO12345;5A", "\x1bO1;2D", "\x1bO25P"] as $seq) {
+            $oneShot = (new InputReader())->parse($seq);
+            $this->assertCount(1, $oneShot, bin2hex($seq));
+
+            $reader = new InputReader();
+            $fed = [];
+            $n = strlen($seq);
+            for ($k = 0; $k < $n; $k++) {
+                foreach ($reader->parse($seq[$k]) as $m) {
+                    $fed[] = $m;
+                }
+                if ($k >= 2 && $k < $n - 1) {
+                    // Parked after k+1 bytes: the cursor sits at the buffer end.
+                    $this->assertSame($k + 1, $resume->getValue($reader), bin2hex($seq) . " after byte $k");
+                }
+            }
+            $this->assertCount(1, $fed, bin2hex($seq) . ' byte-by-byte');
+            $this->assertSame(0, $resume->getValue($reader), 'completion clears the cursor');
+            $this->assertSame($oneShot[0]->type, $fed[0]->type, bin2hex($seq));
+            $this->assertSame($oneShot[0]->ctrl, $fed[0]->ctrl, bin2hex($seq));
+            $this->assertSame($oneShot[0]->alt, $fed[0]->alt, bin2hex($seq));
+            $this->assertSame($oneShot[0]->shift, $fed[0]->shift, bin2hex($seq));
+        }
+
+        // The `;` flag decides which digit run a resumed walk is in: after a
+        // parked "ESC O 2;" the next digit is the modifier, not more key digits.
+        $reader = new InputReader();
+        $reader->parse("\x1bO2;");
+        $msgs = $reader->parse("5A");
+        $this->assertCount(1, $msgs);
+        $this->assertSame(KeyType::Up, $msgs[0]->type);
+        $this->assertTrue($msgs[0]->ctrl);
+    }
+
+    public function testDigitSpanSs3NeverReadsAsCsi(): void
+    {
+        // The CSI table would read "1;5R" as a cursor-position report and
+        // "1;5~" as a tilde key. In SS3 both are plain SS3 finals or drops.
+        $f3 = (new InputReader())->parse("\x1bO1;5R");
+        $this->assertCount(1, $f3);
+        $this->assertSame(KeyType::F3, $f3[0]->type);
+        $this->assertTrue($f3[0]->ctrl);
+
+        $this->assertSame([], (new InputReader())->parse("\x1bO1;5~"));
+
+        // An unknown final is one counted drop of the whole span; the bytes
+        // after it still decode.
+        $msgs = (new InputReader())->parse("\x1bO2Zx");
+        $this->assertCount(1, $msgs);
+        $this->assertSame('x', $msgs[0]->rune);
+    }
+
+    public function testMalformedDigitSpanSs3IsDroppedWithoutLeak(): void
+    {
+        $this->assertSame([], (new InputReader())->parse("\x1bO1;0A"));
+        $this->assertSame([], (new InputReader())->parse("\x1bO1;A"));
+
+        // A non-final byte ends the span early. The span is dropped and the
+        // following ESC starts a new sequence.
+        $msgs = (new InputReader())->parse("\x1bO1;\x1b[A");
+        $this->assertCount(1, $msgs);
+        $this->assertSame(KeyType::Up, $msgs[0]->type);
+    }
+
+    public function testModifyOtherKeysTabAndControlKeysyms(): void
+    {
+        // xterm modifyOtherKeys: CSI 27 ; <mods> ; <keysym> ~. Ctrl+Tab
+        // reaches here as keysym 9 with mods 5.
+        $tab = (new InputReader())->parse("\x1b[27;5;9~");
+        $this->assertCount(1, $tab);
+        $this->assertSame(KeyType::Tab, $tab[0]->type);
+        $this->assertTrue($tab[0]->ctrl);
+
+        $enter = (new InputReader())->parse("\x1b[27;1;13~");
+        $this->assertSame(KeyType::Enter, $enter[0]->type);
+        $this->assertFalse($enter[0]->ctrl);
+
+        $esc = (new InputReader())->parse("\x1b[27;1;27~");
+        $this->assertSame(KeyType::Escape, $esc[0]->type);
+
+        $bs = (new InputReader())->parse("\x1b[27;5;127~");
+        $this->assertSame(KeyType::Backspace, $bs[0]->type);
+    }
+
+    public function testModifyOtherKeysPrintableKeysyms(): void
+    {
+        // Ctrl+a arrives as keysym 97 with mods 5, so the character is named
+        // and the modifier rides alongside it.
+        $ctrlA = (new InputReader())->parse("\x1b[27;5;97~");
+        $this->assertCount(1, $ctrlA);
+        $this->assertSame(KeyType::Char, $ctrlA[0]->type);
+        $this->assertSame('a', $ctrlA[0]->rune);
+        $this->assertTrue($ctrlA[0]->ctrl);
+
+        $shiftSpace = (new InputReader())->parse("\x1b[27;2;32~");
+        $this->assertSame(KeyType::Space, $shiftSpace[0]->type);
+        $this->assertTrue($shiftSpace[0]->shift);
+    }
+
+    public function testModifyOtherKeysX11AndKittyKeysyms(): void
+    {
+        // 65360 is X11 Home (0xFF50); its shift-modified form is named.
+        $home = (new InputReader())->parse("\x1b[27;2;65360~");
+        $this->assertCount(1, $home);
+        $this->assertSame(KeyType::Home, $home[0]->type);
+        $this->assertTrue($home[0]->shift);
+
+        // 57399 (0xE037) is in the Kitty functional range and is Kp0.
+        $kp0 = (new InputReader())->parse("\x1b[27;5;57399~");
+        $this->assertCount(1, $kp0);
+        $this->assertSame(KeyType::Kp0, $kp0[0]->type);
+        $this->assertTrue($kp0[0]->ctrl);
+    }
+
+    public function testModifyOtherKeysDropsMalformedAndUnnamedKeysyms(): void
+    {
+        // Zero modifier: would fabricate every modifier bit.
+        $this->assertSame([], (new InputReader())->parse("\x1b[27;0;9~"));
+        // 0xFFFF is the Delete witness that stays a drop.
+        $this->assertSame([], (new InputReader())->parse("\x1b[27;5;65535~"));
+        // Unnamed control keysym.
+        $this->assertSame([], (new InputReader())->parse("\x1b[27;5;1234~"));
+    }
+
+    public function testPlainSs3F1StillDecodes(): void
+    {
+        $msgs = (new InputReader())->parse("\x1bOP");
+        $this->assertCount(1, $msgs);
+        $this->assertSame(KeyType::F1, $msgs[0]->type);
+    }
+
+    public function testKeypadDigitsViaSs3(): void
+    {
+        // Regression: DECKPAM ESC O p..y (keypad 0..9) was dropped entirely.
+        $finals = ['p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y'];
+        $input = '';
+        foreach ($finals as $final) {
+            $input .= "\x1bO{$final}";
+        }
+        $msgs = (new InputReader())->parse($input);
+        $this->assertCount(10, $msgs);
+        foreach ($msgs as $i => $msg) {
+            $this->assertSame(KeyType::from('kp' . $i), $msg->type, "keypad digit $i");
+            $this->assertSame('', $msg->rune);
+            $this->assertFalse($msg->alt);
+            $this->assertFalse($msg->ctrl);
+        }
+    }
+
+    public function testKeypadDecimalAndSubtractViaSs3(): void
+    {
+        // ESC O l is the keypad decimal separator and ESC O m is minus.
+        $msgs = (new InputReader())->parse("\x1bOl\x1bOm");
+        $this->assertCount(2, $msgs);
+        $this->assertSame(KeyType::KpDecimal, $msgs[0]->type);
+        $this->assertSame(KeyType::KpSubtract, $msgs[1]->type);
+    }
+
+    public function testKeypadEnterViaSs3IsPlainEnter(): void
+    {
+        // ESC O M predates the KP* names, so it surfaces as plain Enter. Kitty
+        // 57414 is the path that reports KpEnter. Both spellings are pinned.
+        $msgs = (new InputReader())->parse("\x1bOM");
+        $this->assertCount(1, $msgs);
+        $this->assertSame(KeyType::Enter, $msgs[0]->type);
+
+        $kitty = (new InputReader())->parse("\x1b[57414u");
+        $this->assertSame(KeyType::KpEnter, $kitty[0]->type);
+    }
+
+    public function testKeypadSs3SplitAcrossReads(): void
+    {
+        $r = new InputReader();
+        $this->assertSame([], $r->parse("\x1bO"));
+        $msgs = $r->parse('p');
+        $this->assertCount(1, $msgs);
+        $this->assertSame(KeyType::Kp0, $msgs[0]->type);
+    }
+
+    public function testF21ThroughF24ViaCsiTilde(): void
+    {
+        // Ported from sugar-input's TILDE_FUNCTION_KEYS (35..38). The table
+        // here stopped at F20, so these were silently dropped.
+        $msgs = (new InputReader())->parse("\x1b[35~\x1b[36~\x1b[37~\x1b[38~");
+        $this->assertSame(
+            [KeyType::F21, KeyType::F22, KeyType::F23, KeyType::F24],
+            array_map(static fn (KeyMsg $m): KeyType => $m->type, $msgs),
+        );
+    }
+
+    public function testKittyPauseAndMenuFunctionalKeys(): void
+    {
+        // Pause and Menu have no legacy encoding (see the tilde table note in
+        // InputReader), so the Kitty codepoints are their only input path.
+        $msgs = (new InputReader())->parse("\x1b[57362u\x1b[57363u");
+        $this->assertCount(2, $msgs);
+        $this->assertSame(KeyType::Pause, $msgs[0]->type);
+        $this->assertSame(KeyType::Menu, $msgs[1]->type);
+    }
+
+    public function testRxvtTildeSevenEightAreHomeAndEnd(): void
+    {
+        // Ported from sugar-input: rxvt/aterm send 7~ and 8~ for Home and End.
+        $msgs = (new InputReader())->parse("\x1b[7~\x1b[8~");
+        $this->assertCount(2, $msgs);
+        $this->assertSame(KeyType::Home, $msgs[0]->type);
+        $this->assertSame(KeyType::End, $msgs[1]->type);
+    }
+
+    public function testCtrlFunctionKeyNumberTildeForm(): void
+    {
+        // Ported from sugar-input: CSI 21;5~ is Ctrl+F10.
+        $msgs = (new InputReader())->parse("\x1b[21;5~");
+        $this->assertCount(1, $msgs);
+        $this->assertSame(KeyType::F10, $msgs[0]->type);
+        $this->assertTrue($msgs[0]->ctrl);
+    }
+
     // ---- bracketed paste -------------------------------------------------
 
     public function testBracketedPasteSingleFrame(): void
