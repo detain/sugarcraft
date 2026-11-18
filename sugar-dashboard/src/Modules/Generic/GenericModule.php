@@ -46,6 +46,13 @@ final class GenericModule extends BaseModule
     private ?float $inFlightSince = null;
 
     /**
+     * Counts every run started. The newest value names the run the latch belongs
+     * to: a result from an older, still-hung run must neither clear the latch nor
+     * schedule a second tick chain beside the live one.
+     */
+    private int $runSeq = 0;
+
+    /**
      * @param string|array<string> $command  Trusted shell string OR argv list (no shell).
      *                                      When array, runs via proc_open with no shell
      *                                      interpolation — the safe form for untrusted args.
@@ -72,6 +79,12 @@ final class GenericModule extends BaseModule
     public function update(Msg $msg): array
     {
         if ($msg instanceof CommandOutputMsg && $msg->source === $this->name()) {
+            // Only the newest run settles the latch and reschedules; an older run that
+            // was still hung past the ceiling is stale, and the live run schedules next.
+            if (!$this->inFlight || $msg->run !== $this->runSeq) {
+                return [$this, null];
+            }
+
             return [$this->withOutput($msg->output), $this->selfTickCmd()];
         }
 
@@ -117,6 +130,7 @@ final class GenericModule extends BaseModule
         $clone = clone $this;
         $clone->inFlight = true;
         $clone->inFlightSince = hrtime(true) / 1_000_000_000;
+        $clone->runSeq = $this->runSeq + 1;
         return $clone;
     }
 
@@ -154,15 +168,17 @@ final class GenericModule extends BaseModule
             ? $this->command
             : ['sh', '-c', $this->command];
         $source = $this->name();
+        $run = $this->runSeq;
 
         return Cmd::promise(
             static fn (): PromiseInterface => BoundedCommand::runAsync(Loop::get(), $argv)->then(
                 static fn (array $result): Msg => new CommandOutputMsg(
                     $source,
                     $result['failure'] ?? $result['output'],
+                    $run,
                 ),
                 // Unexpected rejection: name it rather than leave the module in flight forever.
-                static fn (\Throwable $e): Msg => new CommandOutputMsg($source, 'Command failed'),
+                static fn (\Throwable $e): Msg => new CommandOutputMsg($source, 'Command failed', $run),
             ),
         );
     }

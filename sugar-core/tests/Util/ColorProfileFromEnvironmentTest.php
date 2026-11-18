@@ -144,4 +144,32 @@ final class ColorProfileFromEnvironmentTest extends TestCase
         $this->assertSame(self::terminalAnswer($env), ColorProfile::detect($env, null));
         $this->assertNotSame(ColorProfile::NoTty, ColorProfile::detect($env, null));
     }
+
+    /**
+     * FORCE_COLOR=off|no|0|false answer colour-off in the chain (DetectionChain
+     * step 2), so the pipe gate must not read them as a force: a pipe gets no
+     * escape bytes at all. Chain-independent, the gate runs before any delegation.
+     */
+    public function testColourOffSpellingsDoNotForceAPipe(): void
+    {
+        foreach (['off', 'no', '0', 'false', 'OFF'] as $value) {
+            $this->assertSame(
+                ColorProfile::NoTty,
+                ColorProfile::fromEnvironment(['FORCE_COLOR' => $value, 'TERM' => 'xterm'], false),
+                "FORCE_COLOR={$value} on a pipe",
+            );
+        }
+    }
+
+    /** A truthy word or a level of 1+ still forces a pipe, as the chain reads it. */
+    public function testForceSpellingsThatGrantColourStillForceAPipe(): void
+    {
+        foreach (['1', 'true', 'yes', 'on', '2'] as $value) {
+            $this->assertNotSame(
+                ColorProfile::NoTty,
+                ColorProfile::fromEnvironment(['FORCE_COLOR' => $value, 'TERM' => 'xterm'], false),
+                "FORCE_COLOR={$value} on a pipe",
+            );
+        }
+    }
 }
