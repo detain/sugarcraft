@@ -46,7 +46,7 @@ story.
 | **repo map** | A symbol map of the project, built from the code. The `RepoMap` tool reads it, and the prompt can carry it (`src/RepoMap/`, `src/Tools/BuiltIn/RepoMapTool.php`). |
 | **skill** | A folder of instructions the model loads on demand. You mention one with `$name` ([SKILLS.md](SKILLS.md)). |
 | **sub-agent** | A child session that the `Task` tool starts to work on part of a job, in parallel with the parent ([AGENTS.md](AGENTS.md)). |
-| **team** | A group of sub-agents that share a task board, stored in SQLite. The `Team` tool drives it ([AGENTS.md](AGENTS.md), `candy-code doctor`). |
+| **team** | A group of sub-agents that share a task board, stored in SQLite. The `Team` tool drives it ([AGENTS.md](AGENTS.md), `src/Tools/BuiltIn/TeamTool.php`). |
 | **workflow** | A multi-stage pipeline, written in YAML or PHP, run by `/workflow` ([WORKFLOWS.md](WORKFLOWS.md)). |
 | **worktree** | A git worktree of its own, created for a session with `--worktree` or for a sub-agent with worktree isolation (`candy-code --help`, [AGENTS.md](AGENTS.md)). |
 
@@ -84,7 +84,7 @@ story.
 | **doctor** | `candy-code doctor`: checks the installation and the selected provider, and exits `1` if a check fails ([TROUBLESHOOTING.md](TROUBLESHOOTING.md)). |
 | **exit codes** | `0` for an answer, `1` when the backend ran and failed, `2` for a usage or pre-flight error (`src/Cli/NonInteractive.php:108-187`). |
 | **gc** | `candy-code gc`: inspects session storage and reclaims space. Run with no action, it lists the actions it offers (`candy-code --help`). |
-| **headless mode** | `-p` or `run`: one prompt, one answer, then exit. An unattended run refuses every call that would ask (`src/Cli/NonInteractive.php`, [FLEET-DRIVING.md](FLEET-DRIVING.md)). |
+| **headless mode** | `-p`: one prompt, one answer, then exit. An unattended run refuses every call that would ask (`src/Cli/NonInteractive.php`, [FLEET-DRIVING.md](FLEET-DRIVING.md)). |
 | **JSON envelope** | The one-document output of `-p --output-format json`. It carries `schema: 1` and sits on the last line of the output (`src/Cli/NonInteractive.php:84`). |
 | **schedule** | A recurring prompt in `schedules.json`, fired on a cadence ([SCHEDULES.md](SCHEDULES.md)). |
 | **serve** | `candy-code serve`: a WebSocket server that hosts sessions for a browser or another client. It binds `127.0.0.1` unless you say otherwise ([SERVER.md](SERVER.md)). |

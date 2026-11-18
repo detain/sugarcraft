@@ -103,7 +103,7 @@ them all.
 
 | Secret | Where | Protection |
 |---|---|---|
-| Provider API keys, saved by `candy-code login` or the first-run wizard | `~/.candy-code/config.json` | Plain text. The file is written at mode `0600` (`src/Cli/Bootstrap.php:5156-5159`). |
+| Provider API keys, saved by `candy-code login` or the first-run wizard | `~/.candy-code/config.json` | Plain text, unless you pass `--keychain` to `candy-code login`, which keeps the secret in the OS keychain and writes only a `${keychain:<provider>}` reference (`src/Support/Keychain.php`). The file is written at mode `0600` (`src/Cli/Bootstrap.php:5160`). |
 | MCP OAuth tokens | `~/.local/share/candy-code/mcp-auth.json` (`src/MCP/OAuthClientRegistration.php:772`) | Written at mode `0600` through an atomic rename, so no looser copy is ever on disk (`src/MCP/OAuthClientRegistration.php:821`). |
 | MCP trust pins | The MCP trust file | Hashes and display summaries only, at mode `0600` (`src/MCP/McpTrustPins.php:37`, `:197`). |
 | TUI error log | `~/.candy-code/logs/candy-code.log` | The directory is made `0700` and the file `0600` before the log is opened (`src/Diagnostics/TuiErrorLog.php:24-25`). |

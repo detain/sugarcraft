@@ -35,9 +35,9 @@ the provider cannot be built (`src/Cli/LaunchContext.php:2198`). Type
 nothing leaves the machine. `/exit` quits, and it still quits while a reply is
 streaming (`src/Host/TurnController.php:309-310`, `src/Chat.php:9595`).
 
-On a machine where nothing is chosen or configured, a first-run wizard opens
-once. Its code is in `src/Tui/FirstRunWizard/`. You can skip it, and
-`candy-code login` reopens the same door from the command line.
+On a machine where nothing is chosen or configured, a first-run wizard can open
+(its code is in `src/Tui/FirstRunWizard/`). If you skip it, the status line names
+`candy-code login <provider>` as the way to finish setup (`src/Cli/Bootstrap.php:2116`).
 
 ## 2. Connect a real model
 
@@ -61,6 +61,9 @@ Exporting variables in every shell gets tedious. `candy-code login openai`
 stores the key in the `providers` block of `~/.candy-code/config.json` instead
 (`src/Config/ProviderKeyStore.php:87-99`). That file keeps the key as plain text,
 so read [SECURITY.md](SECURITY.md#credentials-on-disk) before you store one there.
+Pass `--keychain` to keep the secret in the operating system's keychain instead
+(`secret-tool` on Linux, `security` on macOS). The config then holds only a
+`${keychain:<provider>}` reference (`src/Support/Keychain.php`).
 
 For `claude-code` and `codex`, `login` hands the terminal to the vendor's own
 CLI, and the token never passes through candy-code. Those two need no API key,
@@ -98,7 +101,8 @@ In `default` mode a `Write` waits for your reply. The keys are bound in
 | `a` | `Always` | Allows calls like this one for the rest of the session. |
 | `p` | persist | Saves the allowance as a rule in your user `permissionRules`, so the next launch answers it too. Offered only where a rule can reproduce the grant: a pipeline's per-part grant and an exact-call grant have no `p` (`src/Commands/KeyBindingRegistry.php:1318-1320`). |
 | `n` | `Reject` | Refuses this call, so it does not run (`src/Chat.php:3595`). |
-| `x` | `Reject` with a note | Refuses this call and stops the turn at the next step boundary (`src/Chat.php:3578`, `src/Commands/KeyBindingRegistry.php:1329`). |
+| `r` | `Reject` with a note | Refuses this call with words the model reads (`src/Chat.php:3565`, `src/Commands/KeyBindingRegistry.php:1328`). |
+| `x` | `Reject` with a fixed note | Refuses this call and stops the turn at the next step boundary. The note reads "The user refused this call and stopped the turn." (`src/Chat.php:3578`, `src/Commands/KeyBindingRegistry.php:1329`). |
 
 The reply enum is `src/Permissions/PermissionReply.php`. Esc stops the running
 turn (`chat.stop`, `src/Commands/KeyBindingRegistry.php:1132`).

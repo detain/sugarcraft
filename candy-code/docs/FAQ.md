@@ -17,7 +17,7 @@ No. With no provider configured, the TUI and `-p` both answer from the offline
 
 Eleven built-in type keys, listed under `CANDY_CODE_PROVIDER` in
 [ENVIRONMENT.md](ENVIRONMENT.md), plus any provider the shipped
-`config.dev.json` declares (`dev-sglang` in this repository's copy).
+`.candy-code/config.dev.json` declares (`dev-sglang` in this repository's copy).
 `candy-code models` prints the same providers with each one's default model,
 and marks the one this install has selected.
 Every provider is built in `src/Providers/ProviderFactory.php`.
@@ -119,8 +119,10 @@ files leave unset, so a clone cannot override a value you chose
 
 ### Where are my API keys stored, and how safe are they?
 
-In `~/.candy-code/config.json`, as plain text. The file is written at mode
-`0600`, so only your user can read it (`src/Cli/Bootstrap.php:5156-5159`).
+In `~/.candy-code/config.json`, as plain text, unless you saved it with
+`candy-code login --keychain`, which keeps it in the OS keychain and writes only a
+reference. The file is written at mode `0600`, so only your user can read it
+(`src/Cli/Bootstrap.php:5160`).
 Anything that can read files as you can read the key too, including backups and
 dotfile sync. The full list of stored secrets is in
 [SECURITY.md](SECURITY.md#credentials-on-disk).
@@ -183,7 +185,7 @@ connect, because an empty list admits every address beside loopback
 
 Because it answers every permission ask without asking. The server refuses
 that mode unless you pass `--allow-bypass` or set `server.allowBypass`
-(`src/Server/ServerConfig.php:262-305`, and the refusal at `:676`).
+(`src/Server/ServerConfig.php:262-305`, and the check at `:677`).
 
 ### How do I update it?
 
