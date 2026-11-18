@@ -177,6 +177,10 @@ final class Player implements Model
         // $stopped latch above is the precedent: it is a CACHE, not a value
         // the model is presented with.
         private readonly \ArrayObject $frameAtMemo = new \ArrayObject(),
+        // A Kitty frame the last mode cycle left on screen, owed to the terminal as
+        // its delete. Only a text successor can owe it (a graphics successor carries
+        // the residue itself), and view() writes it once before update() spends it.
+        private readonly string $retirement = '',
     ) {
     }
 
@@ -662,6 +666,12 @@ final class Player implements Model
      */
     public function update(Msg $msg): array
     {
+        // The retirement belongs to the one view that follows the mode cycle; the
+        // next message spends it, so later views do not repeat the delete.
+        if ($this->retirement !== '') {
+            return $this->mutate(['retirement' => ''])->update($msg);
+        }
+
         try {
             return $this->updateModel($msg);
         } catch (FfmpegDecodeFailure $failure) {
@@ -1151,14 +1161,18 @@ final class Player implements Model
             // equal-geometry mode renders, so re-spawning ffmpeg and decoding
             // forward to the current playhead would be pure churn.
             if (self::decodeGeometry($nextMode) === self::decodeGeometry($this->mode)) {
+                $nextRenderer = $this->successorRenderer(RendererFactory::new($nextMode, $this->ramp, $this->cellPxW, $this->cellPxH));
+
                 return [$this->mutate([
                     'mode' => $nextMode,
-                    'renderer' => $this->successorRenderer(RendererFactory::new($nextMode, $this->ramp, $this->cellPxW, $this->cellPxH)),
+                    'renderer' => $nextRenderer,
+                    'retirement' => $this->retirementOwedTo($nextRenderer),
                 ]), null];
             }
 
             [$decoder, $frame, $landed] = $this->rebuildDecoderAt($this->cellsW, $this->cellsH, $nextMode, $this->frameIndex);
 
+            $nextRenderer = $this->successorRenderer(RendererFactory::new($nextMode, $this->ramp, $this->cellPxW, $this->cellPxH));
             $nextPlayer = $this->mutate([
                 'mode' => $nextMode,
                 'decoder' => $decoder,
@@ -1166,7 +1180,8 @@ final class Player implements Model
                 // Budget-yielded walk: record the true landed playhead.
                 'frameIndex' => $landed,
                 'videoTime' => $landed / $this->fps,
-                'renderer' => $this->successorRenderer(RendererFactory::new($nextMode, $this->ramp, $this->cellPxW, $this->cellPxH)),
+                'renderer' => $nextRenderer,
+                'retirement' => $this->retirementOwedTo($nextRenderer),
             ]);
             return [$nextPlayer, null];
         }
@@ -1245,6 +1260,11 @@ final class Player implements Model
      * @return string
      */
     public function view(): string
+    {
+        return $this->retirement . $this->paint();
+    }
+
+    private function paint(): string
     {
         // SV-PGEO/068: a below-floor terminal cannot hold even one pane row —
         // every line this model can emit soft-wraps and corrupts the whole
@@ -2648,6 +2668,7 @@ final class Player implements Model
             // SV-L86/086: pinned — the thumbnail memo belongs to the stream,
             // not to one state; a tick or seek mid-scrub must not reset it.
             frameAtMemo: $this->frameAtMemo,
+            retirement: array_key_exists('retirement', $changes) ? $changes['retirement'] : $this->retirement,
         );
         // Teardown is not a value the model is built with, so it cannot ride the
         // named-argument list — copy the latch forward instead. Every derived
@@ -2677,5 +2698,19 @@ final class Player implements Model
         }
 
         return $next;
+    }
+
+    /**
+     * The delete a rebuild owes the terminal when the successor is a text renderer:
+     * the outgoing Kitty frame, which no text successor would ever retire. Graphics
+     * successors carry the residue through {@see successorRenderer()} instead.
+     */
+    private function retirementOwedTo(FrameRenderer $next): string
+    {
+        if ($next instanceof GraphicsRenderer || !$this->renderer instanceof GraphicsRenderer) {
+            return '';
+        }
+
+        return $this->renderer->retirement();
     }
 }
