@@ -35,6 +35,18 @@ final class PathJailTest extends TestCase
         self::removeTree($this->base);
     }
 
+    /**
+     * Create a symlink, or skip the test where the platform refuses one. Windows
+     * runners without developer mode cannot create symlinks, and the rest of the
+     * suite still needs to run there.
+     */
+    private function link(string $target, string $link): void
+    {
+        if (!@symlink($target, $link)) {
+            $this->markTestSkipped('symlink() not permitted on this platform');
+        }
+    }
+
     private static function removeTree(string $path): void
     {
         if (is_link($path) || is_file($path)) {
@@ -97,7 +109,7 @@ final class PathJailTest extends TestCase
 
     public function testResolveRefusesAnExistingSymlinkThatLeavesTheRoot(): void
     {
-        symlink($this->outside . '/secret.txt', $this->root . '/escape.txt');
+        $this->link($this->outside . '/secret.txt', $this->root . '/escape.txt');
 
         $this->assertNull(PathJail::resolve($this->root, 'escape.txt'));
     }
@@ -107,7 +119,7 @@ final class PathJailTest extends TestCase
         // Regression. The link's target is inside the root but does not exist.
         // Before this rule, the parent check accepted the path, and a write
         // would have followed the link once its target was created.
-        symlink($this->root . '/not-yet.txt', $this->root . '/dangling.txt');
+        $this->link($this->root . '/not-yet.txt', $this->root . '/dangling.txt');
 
         $this->assertNull(PathJail::resolve($this->root, 'dangling.txt'));
     }
@@ -117,7 +129,7 @@ final class PathJailTest extends TestCase
         // Regression. The link points outside the root at a file that does
         // not exist. The parent of the link is inside the root, so the old
         // parent-only check would have accepted it.
-        symlink($this->outside . '/not-yet.txt', $this->root . '/escape-dangling.txt');
+        $this->link($this->outside . '/not-yet.txt', $this->root . '/escape-dangling.txt');
 
         $this->assertNull(PathJail::resolve($this->root, 'escape-dangling.txt'));
     }
@@ -244,7 +256,7 @@ final class PathJailTest extends TestCase
 
     public function testResolveForCreateRefusesADanglingLink(): void
     {
-        symlink($this->outside . '/not-yet.txt', $this->root . '/dangling.txt');
+        $this->link($this->outside . '/not-yet.txt', $this->root . '/dangling.txt');
 
         $this->assertNull(PathJail::resolveForCreate($this->root, 'dangling.txt'));
     }
@@ -302,7 +314,7 @@ final class PathJailTest extends TestCase
 
     public function testConfineRefusesADanglingLeafInsideTheRoot(): void
     {
-        symlink($this->root . '/not-yet.txt', $this->root . '/dangling.txt');
+        $this->link($this->root . '/not-yet.txt', $this->root . '/dangling.txt');
 
         $this->assertNull(PathJail::confine($this->root, 'dangling.txt'));
     }
@@ -346,7 +358,7 @@ final class PathJailTest extends TestCase
 
     public function testWithinRefusesADanglingLinkEvenWhenItsTargetWouldBeInside(): void
     {
-        symlink($this->root . '/not-yet.txt', $this->root . '/dangling.txt');
+        $this->link($this->root . '/not-yet.txt', $this->root . '/dangling.txt');
 
         $this->assertFalse(PathJail::within($this->root . '/dangling.txt', $this->root));
     }

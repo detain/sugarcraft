@@ -48,6 +48,14 @@ namespace SugarCraft\Core\Util;
  * not count there: a repository linking its workflows directory onto its own
  * checkout root would expose every untracked file in the working tree.
  *
+ * ## POSIX paths only
+ *
+ * Containment compares canonical paths with a `/` separator. On Windows,
+ * realpath() answers with backslashes, so every entry below the root is
+ * refused. That fails closed, but it is not working Windows containment. A
+ * Windows caller needs separator normalization and drive-letter absolute-path
+ * detection before it relies on this class.
+ *
  * ## Not covered
  *
  * A hard link inside the root to a file outside it is invisible to every check
@@ -171,8 +179,9 @@ final class PathJail
      * Whether a WRITE of $path belongs under $root. A preview calls this to
      * answer the containment question without a third copy of the algorithm.
      *
-     * The verdict is taken from {@see resolve()} when the path exists, and from
-     * {@see resolveForCreate()} when it does not. The answer is accepted only
+     * The verdict is taken from the base rule behind {@see resolve()} when the
+     * path exists, and from {@see resolveForCreate()} when it does not. The
+     * answer is accepted only
      * when the path it vouched for really sits under the real root, so a spill
      * path outside every root never counts as a write target.
      */
