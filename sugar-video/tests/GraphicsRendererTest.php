@@ -343,17 +343,40 @@ final class GraphicsRendererTest extends TestCase
     }
 
     /**
-     * retirement() names the Kitty frame drawn last: the frame a replacing Player
+     * retirement() deletes both slots of the Kitty pair: the frame a replacing Player
      * must delete so it does not outlive the session in the terminal's image store.
      */
-    public function testRetirementNamesTheKittyFrameDrawnLast(): void
+    public function testRetirementDeletesBothSlotsOfTheKittyPair(): void
     {
         $frame = self::makeFrame();
         $renderer = new GraphicsRenderer(Mode::Kitty);
         $slot = self::drawnImageId($renderer->render($frame, Mode::Kitty));
         $renderer->render($frame, Mode::Kitty);
 
-        $this->assertSame((new KittyRenderer())->delete((string) ($slot + 1)), $renderer->retirement());
+        $kitty = new KittyRenderer();
+        $this->assertSame(
+            $kitty->delete((string) $slot) . $kitty->delete((string) ($slot + 1)),
+            $renderer->retirement(),
+        );
+    }
+
+    /**
+     * A view whose output is never written still advances the session. The frame on
+     * screen is the one written before it, so retirement() must still delete that
+     * slot, not only the newest id.
+     */
+    public function testRetirementStillDeletesTheWrittenFrameAfterAnUnwrittenView(): void
+    {
+        $frame = self::makeFrame();
+        $renderer = new GraphicsRenderer(Mode::Kitty);
+        $written = self::drawnImageId($renderer->render($frame, Mode::Kitty));
+        $renderer->render($frame, Mode::Kitty); // measured, then discarded: never written
+
+        $this->assertStringContainsString(
+            (new KittyRenderer())->delete((string) $written),
+            $renderer->retirement(),
+            'the frame on screen must be retired even though a later view was never written',
+        );
     }
 
     /**
