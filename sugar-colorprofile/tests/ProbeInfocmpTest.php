@@ -229,6 +229,33 @@ final class ProbeInfocmpTest extends TestCase
         );
     }
 
+    public function testBoundedExecSignalKilledChildAnswersNoDump(): void
+    {
+        // A child a signal kills after printing part of its dump must not hand
+        // that prefix to the caller. proc_close() returns the signal number for
+        // a signal death, indistinguishable from an exit code, so the kill is
+        // read from proc_get_status() instead. The async report replays the
+        // same "no dump" for this shape.
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('the planted /bin/sh stub needs a POSIX shell.');
+        }
+
+        $printer = \tempnam(\sys_get_temp_dir(), 'infocmp');
+        $this->assertIsString($printer);
+        \file_put_contents($printer, "#!/bin/sh\nprintf '\\tTc,\\n'\nkill -KILL \$\$\n");
+        \chmod($printer, 0755);
+        (new \ReflectionProperty(InfocmpBinary::class, 'path'))->setValue(null, $printer);
+
+        try {
+            $dump = InfocmpBinary::runBounded('xterm');
+        } finally {
+            @\unlink($printer);
+            Probe::resetForTesting();
+        }
+
+        $this->assertNull($dump, 'a signal-killed child answers no dump, so its partial Tc prefix never reaches the verdict');
+    }
+
     public function testDumpMemoAnswersRepeatedProbesWithoutAChild(): void
     {
         // 013: every gated re-probe used to re-exec. The shared per-TERM
