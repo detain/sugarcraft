@@ -224,6 +224,8 @@ final class LockFile
             }
             // WHY: same as tryAcquire(): the lock sits on an inode a sweep has
             // superseded, so release it and poll the inode the path names now.
+            // The retry is immediate, before the deadline check, so a free inode
+            // is won even when the deadline has already passed.
             fclose($handle);
             $handle = $this->open();
             if ($handle === null) {
@@ -231,7 +233,9 @@ final class LockFile
 
                 return;
             }
-            $suspect = null;
+            $this->attemptAsync($loop, $handle, $flags, $deadline, $deferred, $timer, null);
+
+            return;
         }
 
         $confirming = false;
