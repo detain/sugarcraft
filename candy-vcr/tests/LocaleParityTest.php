@@ -38,9 +38,11 @@ final class LocaleParityTest extends TestCase
         foreach ($files as $file) {
             $data = require $file;
             self::assertIsArray($data, \basename($file) . ' must return an array');
+            /** @var array<string, string> $data */
             $out[\basename($file, '.php')] = $data;
         }
 
+        /** @var array<string, array<string, string>> $out */
         return $out;
     }
 

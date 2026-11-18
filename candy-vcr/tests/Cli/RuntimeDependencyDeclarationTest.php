@@ -103,7 +103,7 @@ final class RuntimeDependencyDeclarationTest extends TestCase
         $required = self::requiredPackages();
         $offenders = [];
 
-        foreach (array_keys(self::manifest()['suggest'] ?? []) as $package) {
+        foreach (array_keys((array) (self::manifest()['suggest'] ?? [])) as $package) {
             if (in_array((string) $package, $required, true)) {
                 $offenders[] = (string) $package;
             }
@@ -187,6 +187,7 @@ final class RuntimeDependencyDeclarationTest extends TestCase
             self::fail("{$path} must parse as a JSON object");
         }
 
+        /** @var array<string, mixed> $decoded */
         return $decoded;
     }
 
@@ -225,7 +226,10 @@ final class RuntimeDependencyDeclarationTest extends TestCase
             self::fail("{$package} is not installed — run composer install before the suite (missing {$path}).");
         }
 
-        $autoload = (array) (json_decode((string) file_get_contents($path), true)['autoload']['psr-4'] ?? []);
+        $manifest = json_decode((string) file_get_contents($path), true);
+        $autoloadSection = is_array($manifest) ? ($manifest['autoload'] ?? []) : [];
+        $psr4 = is_array($autoloadSection) ? ($autoloadSection['psr-4'] ?? []) : [];
+        $autoload = (array) $psr4;
         $roots = [];
         foreach (array_keys($autoload) as $namespace) {
             if (preg_match('#^SugarCraft\\\\([A-Za-z0-9_]+)\\\\?$#', (string) $namespace, $m) === 1) {
@@ -289,15 +293,19 @@ final class RuntimeDependencyDeclarationTest extends TestCase
             new \RecursiveDirectoryIterator($root . '/src', \FilesystemIterator::SKIP_DOTS),
         );
         foreach ($iterator as $file) {
+            /** @var \SplFileInfo $file */
             if ($file->isFile() && $file->getExtension() === 'php') {
                 $files['src/' . ltrim(substr($file->getPathname(), strlen($root . '/src')), '/')] = $file->getPathname();
             }
         }
 
         foreach ((array) (self::manifest()['bin'] ?? []) as $binary) {
+            if (!is_string($binary)) {
+                continue;
+            }
             $path = $root . '/' . $binary;
             if (is_file($path)) {
-                $files[(string) $binary] = $path;
+                $files[$binary] = $path;
             }
         }
 

@@ -137,6 +137,9 @@ final class DecompilerRoundTripTest extends TestCase
         return new Cassette($this->header(env: [$key => $value]), []);
     }
 
+    /**
+     * @param array<string, string> $env
+     */
     private function header(array $env = []): CassetteHeader
     {
         return new CassetteHeader(
@@ -159,7 +162,7 @@ final class DecompilerRoundTripTest extends TestCase
         $bytes = '';
         foreach ($this->compileTape($tape)->events as $event) {
             if ($event->kind === EventKind::Input) {
-                $bytes .= (string) $event->payload['b'];
+                $bytes .= (\is_string($event->payload['b']) ? $event->payload['b'] : '');
             }
         }
 

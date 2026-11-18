@@ -256,6 +256,40 @@ final class ProbeInfocmpTest extends TestCase
         $this->assertNull($dump, 'a signal-killed child answers no dump, so its partial Tc prefix never reaches the verdict');
     }
 
+    public function testBoundedExecEofThenWedgedChildFailsOpenInsideItsDeadline(): void
+    {
+        // The child closes both pipes at once (EOF before the deadline) and
+        // then sleeps on. The drain loop breaks on EOF, so the deadline ladder
+        // must still run after it: without it proc_close() blocks for the
+        // child's whole 20 s lifetime, and the empty stdout reads as a
+        // completed verdict. Expect a null answer well inside the sleep.
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('the planted /bin/sh stub needs a POSIX shell.');
+        }
+
+        $printer = \tempnam(\sys_get_temp_dir(), 'infocmp');
+        $this->assertIsString($printer);
+        \file_put_contents($printer, "#!/bin/sh\nexec >&- 2>&-\nexec sleep 20\n");
+        \chmod($printer, 0755);
+        (new \ReflectionProperty(InfocmpBinary::class, 'path'))->setValue(null, $printer);
+
+        try {
+            $started = \microtime(true);
+            $answer = InfocmpBinary::runBounded('xterm', 1.0);
+            $elapsed = \microtime(true) - $started;
+        } finally {
+            @\unlink($printer);
+            Probe::resetForTesting();
+        }
+
+        $this->assertNull($answer, 'an overrun child answers no completed verdict, even with its pipes already closed');
+        $this->assertLessThan(
+            6.0,
+            $elapsed,
+            'the ladder must reap a child that outlives EOF within its deadline plus grace ' . \sprintf('(took %.2f s)', $elapsed),
+        );
+    }
+
     public function testDumpMemoAnswersRepeatedProbesWithoutAChild(): void
     {
         // 013: every gated re-probe used to re-exec. The shared per-TERM

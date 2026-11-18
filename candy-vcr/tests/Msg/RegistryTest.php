@@ -96,9 +96,12 @@ final class RegistryTest extends TestCase
 
             public function decode(array $envelope): Msg
             {
+                $name = $envelope['name'] ?? '';
+                $count = $envelope['count'] ?? 0;
+
                 return new UserJsonableMsg(
-                    name: (string) ($envelope['name'] ?? ''),
-                    count: (int) ($envelope['count'] ?? 0),
+                    name: \is_scalar($name) ? (string) $name : '',
+                    count: \is_scalar($count) ? (int) $count : 0,
                 );
             }
         };
