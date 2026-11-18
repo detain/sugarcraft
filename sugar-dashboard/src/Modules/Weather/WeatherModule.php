@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Dashboard\Modules\Weather;
 
 use React\EventLoop\Loop;
+use React\EventLoop\LoopInterface;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Async\ForkChannel;
@@ -63,6 +64,9 @@ class WeatherModule extends BaseModule
     /**
      * @param float $tickSeconds refresh cadence; @param int $ttlSeconds
      *     cache-freshness window. Both were frozen class constants before.
+     * @param ?LoopInterface $loop  The loop the host runs (see SystemModule): the
+     *     fetch's child and its deadline are registered on it, so a host with its
+     *     own loop must pass it here or the fetch never settles.
      */
     public function __construct(
         private readonly HttpClient $httpClient,
@@ -70,6 +74,7 @@ class WeatherModule extends BaseModule
         private readonly float $tickSeconds = self::TICK_INTERVAL,
         private readonly int $ttlSeconds = self::TTL_SECONDS,
         private readonly ?string $name = null,
+        private readonly ?LoopInterface $loop = null,
     ) {
         $this->current = null;
         $this->lastFetch = new \DateTimeImmutable('@0');
@@ -266,7 +271,7 @@ class WeatherModule extends BaseModule
                 static function (string $reply) use (&$frame): void {
                     $frame = $reply;
                 },
-                Loop::get(),
+                $this->loop ?? Loop::get(),
                 null,
                 self::FETCH_DEADLINE_SECONDS,
             )->then(

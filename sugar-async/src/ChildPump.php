@@ -77,6 +77,12 @@ final class ChildPump
     /** Bytes taken per ready pipe per iteration — one non-blocking read. */
     public const READ_BYTES = 8192;
 
+    /**
+     * Bytes the expiry sweep may take from one pipe: the default Linux pipe
+     * capacity, so everything a quiet child left buffered is taken in full.
+     */
+    public const SWEEP_BYTES = 65536;
+
     /** Consecutive failed selects ridden out before giving up. */
     public const SELECT_RETRIES = 128;
 
@@ -466,19 +472,43 @@ final class ChildPump
 
         if ($reason === DrainResult::EXPIRED || $reason === DrainResult::RETRY_BUDGET_GONE) {
             // Sweep what is already buffered in the kernel before letting go:
-            // a partial reason beats none. One bounded read per pipe, never a
-            // read to EOF: a child still writing past its deadline refills the
-            // pipe as fast as it is read, so a walk to EOF never ends and
-            // buffers without bound.
+            // a partial reason beats none.
             foreach ($open as $slot => $pipe) {
-                $rest = fread($pipe, self::READ_BYTES);
-                if ($rest !== false && $rest !== '') {
-                    $capture->offer($slot, $rest);
-                }
+                $this->sweepPipe($slot, $pipe, $capture);
             }
         }
 
         return $capture->result($reason);
+    }
+
+    /**
+     * The expiry sweep for one pipe: takes what the kernel already holds, up to
+     * {@see SWEEP_BYTES}, then stops. It never walks to EOF: a child still writing
+     * past its deadline refills the pipe as fast as it is read, so such a walk
+     * never ends and buffers without bound. A pipe still yielding past the budget
+     * is one that keeps refilling, so the unread remainder is recorded as
+     * truncation instead of being lost without a trace.
+     *
+     * @param resource $pipe
+     */
+    private function sweepPipe(int|string $slot, $pipe, ChildCapture $capture): void
+    {
+        $budget = self::SWEEP_BYTES;
+        while ($budget > 0) {
+            $chunk = fread($pipe, min(self::READ_BYTES, $budget));
+            if ($chunk === false || $chunk === '') {
+                return;
+            }
+            $capture->offer($slot, $chunk);
+            $budget -= strlen($chunk);
+        }
+
+        // The budget is spent: one peek tells a pipe that just ended from one with bytes left.
+        $peek = fread($pipe, self::READ_BYTES);
+        if ($peek !== false && $peek !== '') {
+            $capture->offer($slot, $peek);
+            $capture->unread($slot);
+        }
     }
 
     /**

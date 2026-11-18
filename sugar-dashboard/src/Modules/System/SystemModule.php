@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Dashboard\Modules\System;
 
 use React\EventLoop\Loop;
+use React\EventLoop\LoopInterface;
 use React\Promise\PromiseInterface;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Msg;
@@ -12,6 +13,7 @@ use SugarCraft\Dashboard\Msg\TickMsg;
 use SugarCraft\Dashboard\Module\BaseModule;
 use SugarCraft\Dashboard\Module\BoundedCommand;
 use SugarCraft\Dashboard\Module\ProcAvailability;
+use SugarCraft\Dashboard\Module\RunLaunch;
 
 /**
  * System module that displays CPU, memory, GPU, and uptime statistics.
@@ -63,19 +65,27 @@ final class SystemModule extends BaseModule
     private int $gpuSampleSeq = 0;
 
     /**
-     * Monotonic second the GPU latch was taken; the latch only holds for as
-     * long as its sample can still settle (see {@see gpuLatched()}).
+     * Monotonic second the GPU latch was taken, by the tick that asked for the
+     * sample; the latch counts from the child's launch once it has one (see
+     * {@see gpuLatched()}).
      */
     private ?float $gpuInFlightSince = null;
+
+    /** When the in-flight sample's child was actually launched; see {@see gpuLatched()}. */
+    private ?RunLaunch $gpuInFlightLaunch = null;
 
     /**
      * @param float $refreshSeconds sampling cadence; the constructor knob
      *     exists so hosts (and tests) can retune what used to be a frozen
      *     class constant.
+     * @param ?LoopInterface $loop  The loop the host runs. Pass the Program's loop
+     *     when it is not the global one, or nvidia-smi's pipes and timers sit on
+     *     a loop nobody runs and the GPU row never updates.
      */
     public function __construct(
         private readonly float $refreshSeconds = self::TICK_INTERVAL,
         private readonly ?string $name = null,
+        private readonly ?LoopInterface $loop = null,
     ) {
     }
 
@@ -119,6 +129,7 @@ final class SystemModule extends BaseModule
         $clone = clone $this;
         $clone->gpuInFlight = true;
         $clone->gpuInFlightSince = hrtime(true) / 1_000_000_000;
+        $clone->gpuInFlightLaunch = new RunLaunch();
         $clone->gpuSampleSeq = $this->gpuSampleSeq + 1;
 
         return $clone;
@@ -138,6 +149,7 @@ final class SystemModule extends BaseModule
         $clone->gpuSpawnFailed = $sample->spawnFailed;
         $clone->gpuInFlight = false;
         $clone->gpuInFlightSince = null;
+        $clone->gpuInFlightLaunch = null;
 
         return $clone;
     }
@@ -146,7 +158,9 @@ final class SystemModule extends BaseModule
      * A GPU latch holds only while its sample can still settle. The Cmd belongs
      * to the host, and a host that drops it never delivers a GpuSampleMsg, so
      * past the settle ceiling the next tick samples again rather than freezing
-     * the GPU row for the rest of the session.
+     * the GPU row for the rest of the session. The ceiling counts from the
+     * child's launch once the host has run the Cmd, so a late-run sample is never
+     * stacked over while its nvidia-smi is still alive.
      */
     private function gpuLatched(): bool
     {
@@ -154,7 +168,9 @@ final class SystemModule extends BaseModule
             return false;
         }
 
-        $elapsed = hrtime(true) / 1_000_000_000 - (float) $this->gpuInFlightSince;
+        $since = $this->gpuInFlightLaunch?->latchedSince((float) $this->gpuInFlightSince)
+            ?? (float) $this->gpuInFlightSince;
+        $elapsed = hrtime(true) / 1_000_000_000 - $since;
 
         return $elapsed < BoundedCommand::SETTLE_CEILING_SECONDS;
     }
@@ -331,20 +347,27 @@ final class SystemModule extends BaseModule
     {
         $source = $this->name();
         $sample = $this->gpuSampleSeq;
+        $loop = $this->loop ?? Loop::get();
+        $launch = $this->gpuInFlightLaunch;
 
         return Cmd::promise(
-            static fn (): PromiseInterface => BoundedCommand::runAsync(
-                Loop::get(),
-                ['nvidia-smi', '--query-gpu=utilization.gpu', '--format=csv,noheader,nounits'],
-            )->then(
-                static function (array $result) use ($source, $sample): Msg {
-                    [$load, $spawnFailed] = self::gpuReading($result);
+            static function () use ($loop, $source, $sample, $launch): PromiseInterface {
+                // Stamped when the host actually runs this Cmd, so the latch counts from the launch.
+                $launch?->markLaunched();
 
-                    return new GpuSampleMsg($source, $load, $spawnFailed, $sample);
-                },
-                // Unexpected rejection: a transient unmeasured tick, never a stuck in-flight latch.
-                static fn (\Throwable $e): Msg => new GpuSampleMsg($source, -1.0, false, $sample),
-            ),
+                return BoundedCommand::runAsync(
+                    $loop,
+                    ['nvidia-smi', '--query-gpu=utilization.gpu', '--format=csv,noheader,nounits'],
+                )->then(
+                    static function (array $result) use ($source, $sample): Msg {
+                        [$load, $spawnFailed] = self::gpuReading($result);
+
+                        return new GpuSampleMsg($source, $load, $spawnFailed, $sample);
+                    },
+                    // Unexpected rejection: a transient unmeasured tick, never a stuck in-flight latch.
+                    static fn (\Throwable $e): Msg => new GpuSampleMsg($source, -1.0, false, $sample),
+                );
+            },
         );
     }
 

@@ -56,6 +56,19 @@ final class ChildCapture
         $this->dropped[$slot] += strlen($chunk) - max(0, min($room, strlen($chunk)));
     }
 
+    /**
+     * Records that bytes were left unread on $slot. The count is a floor, not a
+     * measurement: one byte, so {@see DrainResult::truncated()} reports the loss
+     * without claiming to know its size. A discarded slot is never retained, so
+     * it has no count to raise and nothing to report.
+     */
+    public function unread(int|string $slot): void
+    {
+        if (isset($this->dropped[$slot])) {
+            $this->dropped[$slot]++;
+        }
+    }
+
     /** Whether any retained slot has reached the ceiling. */
     public function anyFull(): bool
     {
