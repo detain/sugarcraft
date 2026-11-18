@@ -612,7 +612,7 @@ TTY mode is btop's mode for the Linux console and other limited terminals:
 - Every graph is forced to the `tty` symbol set and box corners are square.
 - The dimmed frame behind menus is always frozen.
 
-It turns on automatically when stdin is a real console, meaning `posix_ttyname()` starts with `/dev/tty` (`/dev/tty1`, a serial `/dev/ttyS0`, ...). Set `force_tty = true` to force it anywhere. There is no command-line flag; turning `force_tty` on in the options menu applies TTY mode at once, except on a real console, where it is always on.
+It turns on automatically when stdin is a real console, meaning `posix_ttyname()` starts with `/dev/tty` (`/dev/tty1`, a serial `/dev/ttyS0`, ...). macOS is never a console: on Darwin the check answers no even though its terminal sessions are named `/dev/ttysNNN`, so a Mac terminal does not turn it on. Set `force_tty = true` to force it anywhere. There is no command-line flag; turning `force_tty` on in the options menu applies TTY mode at once, except on a real console, where it is always on.
 
 ## Data sources and permissions
 

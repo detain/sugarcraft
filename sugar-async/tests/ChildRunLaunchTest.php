@@ -12,6 +12,7 @@ use SugarCraft\Async\ChildResult;
 use SugarCraft\Async\ChildRun;
 use SugarCraft\Async\ChildRunLaunch;
 use SugarCraft\Async\WindowsPipes;
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 
 /**
  * launch() on a private StreamSelectLoop, never the shared Loop::get(), so no
@@ -142,28 +143,68 @@ final class ChildRunLaunchTest extends TestCase
             $result = $r;
         });
 
+        // Settling with the child still alive is the kill-budget-spent path: the
+        // result must not wait for the child, and the handle is left to the loop.
         $t0 = microtime(true);
-        $this->reflect(ChildRunLaunch::class, 'forceFinish')->invoke($launch);
+        $this->reflect(ChildRunLaunch::class, 'finish')->invoke($launch, ChildResult::TIMED_OUT);
         $this->assertLessThan(1.0, microtime(true) - $t0, 'settling a live child must not wait for it');
         $this->assertInstanceOf(ChildResult::class, $result);
         $this->assertSame(ChildResult::TIMED_OUT, $result->status);
         $this->assertNull($result->exitCode);
-        $this->assertNotNull($this->reflect(ChildRunLaunch::class, 'reaper')->getValue($launch), 'a live child keeps a reap poll armed');
+        $this->assertTrue(is_resource($proc), 'a live child is not proc_closed on the settle path');
 
         proc_terminate($proc, 9);
-        $reaper = $this->reflect(ChildRunLaunch::class, 'reaper');
-        $loop->addPeriodicTimer(0.01, static function () use ($loop, $launch, $reaper): void {
-            if ($reaper->getValue($launch) === null) {
-                $loop->stop();
-            }
-        });
         $guard = $loop->addTimer(5.0, static function () use ($loop): void {
             $loop->stop();
+        });
+        $loop->addPeriodicTimer(0.01, static function () use ($loop, $proc): void {
+            if (!is_resource($proc)) {
+                $loop->stop();
+            }
         });
         $loop->run();
         $loop->cancelTimer($guard);
 
-        $this->assertNull($reaper->getValue($launch), 'the poll reaps the child once it is gone');
+        $this->assertFalse(is_resource($proc), 'the loop reaps the child once the kernel releases it');
+    }
+
+    public function testAChildThatIgnoresSigtermIsKilledByTheLadderAndSettlesTimedOut(): void
+    {
+        $this->requirePosixPipes();
+        // The TERM rung is ignored (inherited across exec), so only the KILL rung
+        // can end the child: the run must take at least the TERM grace to settle.
+        $loop = new StreamSelectLoop();
+        $proc = proc_open(['sh', '-c', 'trap "" TERM; exec sleep 30'], [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $pipes);
+        $this->assertIsResource($proc);
+
+        $deferred = new \React\Promise\Deferred();
+        $launch = new \SugarCraft\Async\ChildRunLaunch(
+            $loop,
+            $proc,
+            $pipes,
+            '',
+            0.2,
+            ChildRun::DEFAULT_MAX_BYTES,
+            $deferred,
+        );
+        $result = null;
+        $deferred->promise()->then(static function (ChildResult $r) use (&$result, $loop): void {
+            $result = $r;
+            $loop->stop();
+        });
+        $guard = $loop->addTimer(10.0, static function () use ($loop): void {
+            $loop->stop();
+        });
+        $t0 = microtime(true);
+        $launch->start();
+        $loop->run();
+        $loop->cancelTimer($guard);
+        $elapsed = microtime(true) - $t0;
+
+        $this->assertInstanceOf(ChildResult::class, $result, 'the ladder must settle the run');
+        $this->assertSame(ChildResult::TIMED_OUT, $result->status);
+        $this->assertGreaterThanOrEqual(BoundedShutdown::TERMINATE_GRACE_SECONDS, $elapsed, 'the TERM rung must be given its grace before KILL');
+        $this->assertLessThan(5.0, $elapsed, 'the kill budget bounds the run');
     }
 
     public function testLaunchFeedsStdinAndReadsItBackLineByLine(): void

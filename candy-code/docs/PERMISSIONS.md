@@ -585,7 +585,7 @@ explicit rule still comes first — `Allow mcp__git__*` grants those tools under
 per file, and per registration names one client's one tool, so a rule can
 never widen past the tool it names).
 
-**What a flagged call becomes** (roadmap 5.11-2). The categories split in two:
+**What a flagged call becomes**. The categories split in two:
 
 - **Security findings ask, every time**: `curl/wget-into-shell`,
   `external-endpoint`, `live-credentials`, `granting-iam-permissions`,

@@ -209,7 +209,7 @@ lists, second loads, dark until enabled); what differs is trust and plumbing:
    once|always|deny` fallback; the approver roster is enforced server-side
    on both the card-invoke path and the text path — the in-card list is
    display only.
-6. Graph-hosted media and file consent are a deferred phase (P3.5): v1
+6. Graph-hosted media and file consent are a deferred phase: v1
    reads platform-hosted attachment bytes only and refuses a Graph url
    loudly rather than silently. `teams-meetings` is a separate plugin, not
    part of this bundle.

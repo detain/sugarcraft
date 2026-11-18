@@ -13,7 +13,7 @@ prompt, in assembly order"); this page is the *why* beside that *what*.
 ## The thirteen slots, in order of record
 
 `Runtime::systemPromptSections()` returns an ordered list of `PromptSection`s, base first and the
-static `<env>` block last. Counted from the live method, there are thirteen slots:
+static `<env>` block last. By design there are thirteen slots: the list below is that order. The method skips a conditional slot (agent instructions, the symbol map, the user and project rules, and so on) when its input is absent, so a given launch can send fewer sections than the design lists:
 
 1. **Base identity** (`Runtime::basePrompt()`) — the Static heredoc that opens every prompt.
    Unfenced, because it is harness voice with no untrusted input. For the DeepSeek-V4, Qwen3.8
@@ -37,10 +37,9 @@ static `<env>` block last. Counted from the live method, there are thirteen slot
 4. **Repo map** (`RepoMapBlock`) — fenced `repo-map`; per-session memoized snapshot of derived
    repository facts. `repoMap.enabled: false` leaves the slot out (and skips the walk), and
    `repoMap.maxBytes` moves each section's 8,192-byte budget (`RepoMapBlock::MAX_SECTION_BYTES`);
-   both are read once per turn (`Runtime::repoMapSnapshot()`, roadmap N-P4d).
+   both are read once per turn (`Runtime::repoMapSnapshot()`).
 5. **Symbol map** (`SymbolMapBlock`) — fenced `symbol-map`; the definitions the rest of the workspace
-   references most, ranked by PageRank over which files use which names (an Aider repo map, roadmap
-   5.5-5), unfocused and capped at 1,024 tokens. PerSession and byte-stable: `EngineBackend` captures
+   references most, ranked by PageRank over which files use which names (an Aider repo map), unfocused and capped at 1,024 tokens. PerSession and byte-stable: `EngineBackend` captures
    it once per session in the parent before a turn's fork (`Runtime::primeSymbolMap()`) and the
    session memo holds it until a refresh point; a session with no capture assembles no slot at all,
    so every other prompt build is unchanged. A changed tree does not stall that first turn: when the
@@ -52,7 +51,7 @@ static `<env>` block last. Counted from the live method, there are thirteen slot
    own fence, `user-rules`, with the operator-authority preamble — except a `paths:`-scoped rule,
    which is delivered at tool time instead (see the trigger bullets below). The user and project
    standing rules share one budget, `Runtime::MAX_STANDING_RULE_BYTES` (65,536 framed bytes), which
-   `rules.standingMaxBytes` (`config.json` only, roadmap N-P4d) replaces; a rule past it becomes one
+   `rules.standingMaxBytes` (`config.json` only) replaces; a rule past it becomes one
    pointer line.
 7. **Instruction documents** — `InstructionFileLoader::loadRoot()` then `loadForced()` (read
    through their path-keyed sibling `loadDocuments()`), each non-blank document its own

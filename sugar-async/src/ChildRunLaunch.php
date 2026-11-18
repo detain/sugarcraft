@@ -20,9 +20,11 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * SIGTERM, then SIGKILL after the sugar-core grace budgets, and the result
  * settles as TIMED_OUT. Signals are integer literals, the sugar-core doctrine.
  *
- * These are the rungs of {@see \SugarCraft\Core\Util\Proc\BoundedShutdown::terminateBounded()}
- * re-driven by loop timers: that method sleeps between rungs and so cannot run
- * on the loop. Only the budgets and the signal numbers are shared with it.
+ * The TERM/KILL ladder and the reap are sugar-core's loop variants,
+ * {@see \SugarCraft\Core\Util\Proc\BoundedShutdown::escalateAsync()} and
+ * {@see \SugarCraft\Core\Util\Proc\BoundedShutdown::reapWhenExited()}, so a rung
+ * or reap change in sugar-core reaches this path too. The sync
+ * terminateBounded() sleeps between rungs and cannot run on the loop.
  *
  * A child still running when the kill budget is spent is not waited for by
  * proc_close(), which would block the loop. Its handle is reaped by a periodic
@@ -44,9 +46,6 @@ final class ChildRunLaunch
 
     /** @var list<TimerInterface> */
     private array $timers = [];
-
-    /** The poll that reaps a child still running at settle time; null when none is needed. */
-    private ?TimerInterface $reaper = null;
 
     private ChildCapture $capture;
 
@@ -178,16 +177,30 @@ final class ChildRunLaunch
             return;
         }
 
-        if (!$this->exited) {
-            $status = proc_get_status($this->proc);
-            if ($status['running'] === false) {
-                $this->exited = true;
-                $this->exitedAt = Clock::monotonicSeconds();
-                $this->exitCode = $status['exitcode'] >= 0 ? $status['exitcode'] : null;
-            }
+        $this->probeGone();
+        $this->checkDone();
+    }
+
+    /**
+     * Records the exit the status poll sees. True once the child is gone, which
+     * is what lets proc_close() run without blocking.
+     */
+    private function probeGone(): bool
+    {
+        if ($this->exited) {
+            return true;
         }
 
-        $this->checkDone();
+        $status = proc_get_status($this->proc);
+        if ($status['running'] !== false) {
+            return false;
+        }
+
+        $this->exited = true;
+        $this->exitedAt = Clock::monotonicSeconds();
+        $this->exitCode = $status['exitcode'] >= 0 ? $status['exitcode'] : null;
+
+        return true;
     }
 
     private function onDeadline(): void
@@ -206,30 +219,27 @@ final class ChildRunLaunch
             return;
         }
 
-        @proc_terminate($this->proc, 15);
-        $this->timers[] = $this->loop->addTimer(
+        // The ladder settles on its own: a child gone after TERM answers at once,
+        // and one that survives the kill budget settles whether or not SIGKILL
+        // landed, so the loop never waits on the child.
+        BoundedShutdown::escalateAsync(
+            $this->loop,
+            $this->signal(...),
+            $this->probeGone(...),
+            function (): void {
+                if (!$this->settled) {
+                    $this->finish(ChildResult::TIMED_OUT);
+                }
+            },
             BoundedShutdown::TERMINATE_GRACE_SECONDS,
-            fn () => $this->escalate(),
-        );
-        $this->timers[] = $this->loop->addTimer(
-            BoundedShutdown::TERMINATE_GRACE_SECONDS + BoundedShutdown::KILL_GRACE_SECONDS,
-            fn () => $this->forceFinish(),
+            BoundedShutdown::KILL_GRACE_SECONDS,
         );
     }
 
-    private function escalate(): void
+    /** Signals are integer literals (sugar-core doctrine); a gone child takes the signal as a no-op. */
+    private function signal(int $signal): void
     {
-        if (!$this->settled && !$this->exited) {
-            @proc_terminate($this->proc, 9);
-        }
-    }
-
-    /** The kill budget is spent: settle now, whether or not SIGKILL has landed. */
-    private function forceFinish(): void
-    {
-        if (!$this->settled) {
-            $this->finish(ChildResult::TIMED_OUT);
-        }
+        @proc_terminate($this->proc, $signal);
     }
 
     private function checkDone(): void
@@ -257,7 +267,8 @@ final class ChildRunLaunch
             $reaped = proc_close($this->proc);
             $code ??= $reaped >= 0 ? $reaped : null;
         } else {
-            $this->reapWhenGone();
+            // Survived the kill budget: reaped on the loop once the kernel releases it.
+            BoundedShutdown::reapWhenExited($this->loop, $this->proc);
         }
 
         $r = $this->capture->result(DrainResult::CLOSED);
@@ -268,22 +279,6 @@ final class ChildRunLaunch
             $status,
             $r->droppedBytes(1) + $r->droppedBytes(2),
         ));
-    }
-
-    /**
-     * The child outlived its kill budget. Its handle is reaped on the loop once
-     * the status poll sees it gone, never by a blocking proc_close().
-     */
-    private function reapWhenGone(): void
-    {
-        $this->reaper = $this->loop->addPeriodicTimer(self::EXIT_POLL_SECONDS, function (): void {
-            if (proc_get_status($this->proc)['running'] !== false) {
-                return;
-            }
-            $this->loop->cancelTimer($this->reaper);
-            $this->reaper = null;
-            proc_close($this->proc);
-        });
     }
 
     private function closeSlot(int $slot): void

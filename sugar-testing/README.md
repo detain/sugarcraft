@@ -213,7 +213,13 @@ but it is a simulator, not the real runtime, and the boundary is explicit:
   Members must be `Closure` instances (production's own `scheduleCmd()`
   types them the same way); anything else throws. The container itself never reaches `update()`.
 - `TickRequest` — `produce()` fires **immediately**. There is no virtual clock:
-  the requested delay is not simulated, and nothing is armed on a loop.
+  the requested delay is not simulated, and nothing is armed on a loop. A tick
+  whose `TickHandle` was cancelled before the drain reached it is dropped, the
+  same as `Program::dispatch()` drops it, so its producer never runs.
+- `WindowSizeRequest` (`Cmd::windowSize()`) — resolved to a `WindowSizeMsg`
+  carrying the size armed with `->withWindowSize()`, as `Program` resolves it
+  against its own terminal size. With no size armed the simulator throws a
+  named `RuntimeException` rather than guess one.
 - `RawMsg` / `PrintMsg` — written to `$result->output` as a side channel; no
   model turn, no frame.
 - `QuitMsg` / `InterruptMsg` — halt the drain, production-style: the model
