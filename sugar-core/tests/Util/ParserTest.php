@@ -196,4 +196,21 @@ final class ParserTest extends TestCase
         $this->assertSame(Token::TEXT, $flushed[0]->type);
         $this->assertSame("\x1b[31", $flushed[0]->data);
     }
+
+    public function testShimReturnsLegacyTokensCarryingEveryField(): void
+    {
+        $p = new Parser();
+        $tokens = $p->parse("\x1b[?25l\x1b]0;t\x1b\\");
+        $this->assertCount(2, $tokens);
+        foreach ($tokens as $token) {
+            $this->assertInstanceOf(Token::class, $token);
+        }
+        $this->assertSame(Token::CSI, $tokens[0]->type);
+        $this->assertSame('?', $tokens[0]->intermediate);
+        $this->assertSame('25', $tokens[0]->params);
+        $this->assertSame('l', $tokens[0]->final);
+        $this->assertSame(Token::OSC, $tokens[1]->type);
+        $this->assertSame('0;t', $tokens[1]->data);
+        $this->assertSame("\x1b\\", $tokens[1]->terminator);
+    }
 }
