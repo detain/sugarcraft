@@ -105,8 +105,9 @@ session. Otherwise it prints the list and changes nothing.
 | `/share serve` | nothing by candy-code | The page is served from your own `candy-code serve`, to whoever you give the link |
 
 `CANDY_CODE_SHARE_UPLOAD_URL` is retired. candy-code never uploads a
-transcript. If the variable is still set, the `/share` reply refuses it and
-names `/share serve` as the replacement. See the variable's row in
+transcript. If the variable is still set, the `/share` reply still writes the
+local export, prints a notice that uploads are retired, and names `/share serve`
+as the replacement. See the variable's row in
 [ENVIRONMENT.md](ENVIRONMENT.md).
 
 ## Where the files are
@@ -118,8 +119,7 @@ names `/share serve` as the replacement. See the variable's row in
 
 Export files stay until you delete them. The one exception is session
 retention: when `sessionRetentionDays` is set (it is off by default), exports
-older than that window are swept at launch along with the sessions they belong
-to. Published pages are rows in the session database, and an expired or revoked
+whose files are older than that window are swept at launch, by file age. Published pages are rows in the session database, and an expired or revoked
 page answers `404`. To reclaim the space a session took, see [GC.md](GC.md).
 
 ## See also

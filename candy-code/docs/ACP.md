@@ -2,8 +2,10 @@
 
 `candy-code acp` runs candy-code as an agent inside an editor. The editor starts
 the process, and the two talk over stdin and stdout using the Agent Client
-Protocol (ACP), which is JSON-RPC 2.0 with one message per line. Zed, JetBrains
-IDEs and Neovim (through an ACP plugin) all host agents this way.
+Protocol (ACP), which is JSON-RPC 2.0 with one message per line. Editors that
+speak ACP can host it this way. Their settings live outside this repo, so the
+examples below show the shape and the editor's own ACP documentation is the
+reference.
 
 Nothing needs to be running beforehand. There is no port and no token, because
 the editor is the only client and it starts the process as your own user.
@@ -92,7 +94,7 @@ reason.
 | `max_tokens` | The provider stopped at its length limit |
 | `max_turn_requests` | The step budget, the spend cap or the loop guard stopped the turn |
 | `cancelled` | You cancelled it |
-| `refusal` | The session would not take the prompt, for example because the spend cap is reached or the prompt is empty |
+| `refusal` | The turn was not admitted, for example because the spend cap is reached |
 
 A turn that fails returns a JSON-RPC error with the cause.
 
@@ -101,9 +103,10 @@ A turn that fails returns a JSON-RPC error with the cause.
 - The editor's `fs/*` and `terminal/*` methods are not used. candy-code reads
   and writes files through its own tools.
 - Image and audio prompt blocks are not used.
-- Built-in slash commands that need a terminal screen, such as `/help`, are
-  answered with a refusal that says so. Other slash commands work as they do in
-  `serve`.
+- Built-in slash commands that need a terminal screen, such as `/theme`,
+  `/keys` or `/settings`, are answered with a refusal that says so. Commands
+  with a host binding, such as `/help`, answer normally. Other slash commands
+  work as they do in `serve`.
 
 ## Troubleshooting
 
@@ -112,7 +115,7 @@ A turn that fails returns a JSON-RPC error with the cause.
 | The agent never starts in the editor | The editor cannot find `candy-code` on its `PATH`. Give the full path to the binary in the agent's `command` |
 | `candy-code acp` exits with code `2` | It was given an operand, or `--output-format json`. The protocol is the output, so no format flag applies. Remove them from the arguments |
 | The editor shows an agent log full of warnings | Anything PHP prints goes to stderr, which the editor shows as the agent's log. Those lines are not protocol errors. The protocol runs on stdout only |
-| Every turn ends `refusal` | The spend cap is reached, or the prompt was empty. `/budget` in the TUI shows the cap |
+| Every turn ends `refusal` | The spend cap is reached. `/budget` in the TUI shows the cap. A prompt with no text is a JSON-RPC invalid-params error, not a refusal |
 | Every turn fails with a provider error | No provider is configured for this process. Run `candy-code models` and `candy-code login <provider>` in a terminal, then restart the editor's agent |
 | A second project will not open | One process serves one project root. Start another `candy-code acp` for it |
 

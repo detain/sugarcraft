@@ -81,7 +81,7 @@ languages other than PHP, the reply notes whether Universal Ctags is available.
 - **PHP** is parsed by the engine's own tokenizer, with no extra install.
 - **Every other language** needs Universal Ctags built with `+json` on `PATH`.
   Without it, the map covers PHP only, and the reply says so.
-- `doctor` reports whether Universal Ctags is found.
+- The `Doctor` tool reports whether Universal Ctags is found.
 
 Files come from `git ls-files --cached --others --exclude-standard`. Ignored
 files and files outside the repository are not mapped. The tool needs `git` on

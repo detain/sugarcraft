@@ -73,7 +73,8 @@ the service name and the entry name appear in the argument list:
 | macOS | `security add-generic-password -U -s candy-code -a <provider> -w` | the same service and account |
 
 `-U` replaces an existing entry, so running `login --keychain` again rotates
-the key. On Linux, `secret-tool` comes from the `libsecret` tools package. If
+the key. On Linux, `secret-tool` usually comes from the `libsecret` tools package in
+your distribution. If
 it is missing, `login` says which backend it looked for and stops. Windows has
 no backend here. `login` says so and stores nothing.
 
