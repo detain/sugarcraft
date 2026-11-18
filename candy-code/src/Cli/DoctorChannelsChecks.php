@@ -11,6 +11,7 @@ use SugarCraft\Code\Channels\ChannelInboundLog;
 use SugarCraft\Code\Channels\ChannelsStore;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Support\ContainedPath;
+use SugarCraft\Code\Support\ProjectRoot;
 
 /**
  * The three channel/bundle legs of `doctor`, kept out of DoctorChecks so the
@@ -107,7 +108,11 @@ final class DoctorChannelsChecks
 
         if ($bundles === null) {
             $paths = Bootstrap::readUserConfig()[BundleDiscovery::SETTING_KEY] ?? [];
-            $bundles = (new BundleDiscovery($root ?? '', is_array($paths) ? $paths : []))->discover();
+            // The launch and serve boot resolve the project tier through
+            // ProjectRoot, so a subdirectory launch sees the repository's
+            // bundles; doctor must read the same tree or it calls them stale.
+            $projectRoot = ProjectRoot::resolve($root ?? (getcwd() ?: ''));
+            $bundles = (new BundleDiscovery($projectRoot, is_array($paths) ? $paths : []))->discover();
         }
         $store ??= ChannelsStore::new();
 

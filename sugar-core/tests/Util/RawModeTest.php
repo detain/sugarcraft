@@ -182,6 +182,26 @@ final class RawModeTest extends TestCase
         self::assertStringContainsString("PHP_OS_FAMILY === 'Windows'", $source);
     }
 
+    public function testShutdownBackstopRestoresNothingInAForkedChild(): void
+    {
+        // A forked child runs the parent's shutdown queue; restoring the
+        // snapshot there would flip the parent's shared tty back to cooked.
+        // The device is a path that cannot exist, so a real restore is a no-op.
+        $property = new \ReflectionProperty(RawMode::class, 'savedSnapshots');
+        $device = '/nonexistent/sugarcraft-rawmode-probe';
+        $property->setValue(null, [$device => 'snapshot-probe']);
+        try {
+            $restore = new \ReflectionMethod(RawMode::class, 'restoreAtShutdown');
+            $restore->invoke(null, \getmypid() + 1);
+            self::assertArrayHasKey($device, $property->getValue(), 'a foreign pid must not consume the snapshot');
+
+            $restore->invoke(null, \getmypid());
+            self::assertArrayNotHasKey($device, $property->getValue(), 'the installing pid restores and consumes it');
+        } finally {
+            $property->setValue(null, []);
+        }
+    }
+
     /** @return array<string, mixed>|null */
     private function runPtyProbe(string $mode): ?array
     {

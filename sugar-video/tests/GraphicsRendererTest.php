@@ -163,7 +163,8 @@ final class GraphicsRendererTest extends TestCase
         // route must carry it. The `i=` id is what the next frame retires.
         // (The old DCS `ESC P q` pin here was the DECSIXEL introducer — ANSI
         // audit defect #10, fixed in sugar-core kittyGraphicsBegin.)
-        $this->assertStringStartsWith("\x1b_Ga=T,i=1,f=100,q=2,c=1,r=1,m=1;", $output, 'Kitty output should begin with APC kitty header _Ga=T,');
+        $id = self::drawnImageId($output);
+        $this->assertStringStartsWith("\x1b_Ga=T,i={$id},f=100,q=2,c=1,r=1,m=1;", $output, 'Kitty output should begin with APC kitty header _Ga=T,');
     }
 
     /**
@@ -232,7 +233,8 @@ final class GraphicsRendererTest extends TestCase
 
         $output = (new GraphicsRenderer(Mode::Kitty))->render($frame, Mode::Kitty);
 
-        $this->assertStringStartsWith("\x1b_Ga=T,i=1,f=100,q=2,c=4,r=2,m=1;", $output);
+        $id = self::drawnImageId($output);
+        $this->assertStringStartsWith("\x1b_Ga=T,i={$id},f=100,q=2,c=4,r=2,m=1;", $output);
     }
 
     /**
@@ -310,15 +312,18 @@ final class GraphicsRendererTest extends TestCase
         $second = $renderer->render($frame, Mode::Kitty);
         $third  = $renderer->render($frame, Mode::Kitty);
 
-        $this->assertStringContainsString('i=1,', $first, 'frame 0 draws under slot 1');
+        $slot1 = self::drawnImageId($first);
+        $slot2 = $slot1 + 1;
+
+        $this->assertStringContainsString("i={$slot1},", $first, 'frame 0 draws under slot 1');
         $this->assertStringNotContainsString('a=d', $first, 'the first frame has nothing to retire');
 
-        $this->assertStringContainsString('i=2,', $second, 'frame 1 draws under slot 2');
-        $this->assertStringContainsString('a=d,d=I,i=1' . "\x1b\\", $second, 'frame 1 retires slot 1');
-        $this->assertStringNotContainsString('a=d,d=I,i=2', $second, 'frame 1 must not self-delete');
+        $this->assertStringContainsString("i={$slot2},", $second, 'frame 1 draws under slot 2');
+        $this->assertStringContainsString("a=d,d=I,i={$slot1}\x1b\\", $second, 'frame 1 retires slot 1');
+        $this->assertStringNotContainsString("a=d,d=I,i={$slot2}", $second, 'frame 1 must not self-delete');
 
-        $this->assertStringContainsString('i=1,', $third, 'frame 2 reuses slot 1');
-        $this->assertStringContainsString('a=d,d=I,i=2' . "\x1b\\", $third, 'frame 2 retires slot 2');
+        $this->assertStringContainsString("i={$slot1},", $third, 'frame 2 reuses slot 1');
+        $this->assertStringContainsString("a=d,d=I,i={$slot2}\x1b\\", $third, 'frame 2 retires slot 2');
     }
 
     /**
@@ -346,10 +351,10 @@ final class GraphicsRendererTest extends TestCase
     {
         $frame = self::makeFrame();
         $outgoing = new GraphicsRenderer(Mode::Kitty);
-        $outgoing->render($frame, Mode::Kitty);
+        $slot1 = self::drawnImageId($outgoing->render($frame, Mode::Kitty));
         $outgoing->render($frame, Mode::Kitty);
 
-        $retire = (new KittyRenderer())->delete('2');
+        $retire = (new KittyRenderer())->delete((string) ($slot1 + 1));
         $successor = (new GraphicsRenderer(Mode::Kitty))->carryingFrom($outgoing);
 
         $this->assertStringStartsWith($retire, $successor->render($frame, Mode::Kitty));
@@ -364,11 +369,11 @@ final class GraphicsRendererTest extends TestCase
     {
         $frame = self::makeFrame();
         $outgoing = new GraphicsRenderer(Mode::Kitty);
-        $outgoing->render($frame, Mode::Kitty);
+        $slot = self::drawnImageId($outgoing->render($frame, Mode::Kitty));
 
         $successor = (new GraphicsRenderer(Mode::Sixel))->carryingFrom($outgoing);
 
-        $this->assertStringStartsWith((new KittyRenderer())->delete('1'), $successor->render($frame, Mode::Sixel));
+        $this->assertStringStartsWith((new KittyRenderer())->delete((string) $slot), $successor->render($frame, Mode::Sixel));
     }
 
     /**
@@ -379,12 +384,52 @@ final class GraphicsRendererTest extends TestCase
     {
         $frame = self::makeFrame();
         $outgoing = new GraphicsRenderer(Mode::Kitty);
-        $outgoing->render($frame, Mode::Kitty);
+        $slot = self::drawnImageId($outgoing->render($frame, Mode::Kitty));
 
         $unrendered = (new GraphicsRenderer(Mode::Kitty))->carryingFrom($outgoing);
         $again = (new GraphicsRenderer(Mode::Kitty))->carryingFrom($unrendered);
 
-        $this->assertStringStartsWith((new KittyRenderer())->delete('1'), $again->render($frame, Mode::Kitty));
+        $this->assertStringStartsWith((new KittyRenderer())->delete((string) $slot), $again->render($frame, Mode::Kitty));
+    }
+
+    /**
+     * Two live Kitty sessions on one terminal must not share image ids: each one's
+     * frames and retirements address only its own pair, so neither can delete the
+     * other's frame.
+     */
+    public function testConcurrentSessionsOnOneTerminalUseDistinctImageIds(): void
+    {
+        $frame = self::makeFrame();
+        $a = new GraphicsRenderer(Mode::Kitty);
+        $b = new GraphicsRenderer(Mode::Kitty);
+
+        $aFirst = $a->render($frame, Mode::Kitty);
+        $bFirst = $b->render($frame, Mode::Kitty);
+        $aSecond = $a->render($frame, Mode::Kitty);
+
+        $aId = self::drawnImageId($aFirst);
+        $bId = self::drawnImageId($bFirst);
+        self::assertNotSame($aId, $bId, 'two sessions must draw under distinct ids');
+        self::assertStringContainsString(
+            (new KittyRenderer())->delete((string) $aId),
+            $aSecond,
+            'A retires its own previous frame',
+        );
+        self::assertStringNotContainsString(
+            (new KittyRenderer())->delete((string) $bId),
+            $aSecond,
+            'A must never delete the frame B is showing',
+        );
+    }
+
+    /**
+     * The first image id a Kitty draw addresses, read from its `i=` control key.
+     */
+    private static function drawnImageId(string $output): int
+    {
+        self::assertSame(1, preg_match('/\bi=(\d+)/', $output, $m), 'the draw must address an image id');
+
+        return (int) $m[1];
     }
 
     /**
