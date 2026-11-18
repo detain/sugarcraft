@@ -10,6 +10,7 @@ use SugarCraft\Image\AnimationDriver;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Renderer\KittyRenderer;
 use SugarCraft\Image\Renderer\Renderer;
+use SugarCraft\Image\TmuxPassthroughDecorator;
 
 /**
  * Byte-order pins for AnimationDriver::view() per renderer family.
@@ -84,6 +85,35 @@ final class AnimationDriverFlickerTest extends TestCase
             $renderer->renderFrame($this->frame, 4, 2, 11) . $renderer->delete('10'),
             $this->kittyDriver($renderer, index: 1)->view(),
         );
+    }
+
+    public function testPassthroughWrappedKittyGetsIdAddressedFramesAndRetire(): void
+    {
+        // Regression: view() dispatched on `instanceof KittyRenderer`, and the
+        // tmux decorator is not a KittyRenderer subclass. The wrapped renderer
+        // then emitted anonymous frames and deleted an id it never assigned, so
+        // every frame stayed in the terminal's image store. The wrapper reports
+        // supportsIdDelete() and forwards present(), so the id-addressed shape
+        // must arrive through it unchanged.
+        $tmux   = new TmuxPassthroughDecorator(new KittyRenderer());
+        $driver = new AnimationDriver(
+            animation: $this->animation,
+            renderer:  $tmux,
+            cellWidth: 4,
+            cellHeight: 2,
+            index:     0,
+            imageId:   10,
+        );
+
+        $bytes = $driver->view();
+
+        $this->assertSame(
+            $tmux->present($this->frame, 4, 2, '10', '11'),
+            $bytes,
+            'the wrapped Kitty frame must be the id-addressed present() shape',
+        );
+        $this->assertStringContainsString('a=d,d=I,i=11', $bytes, 'frame 0 retires the odd slot');
+        $this->assertStringNotContainsString('a=d,d=I,i=10', $bytes, 'frame 0 must not self-delete');
     }
 
     public function testPopSemanticRendererRetiresBeforeCommitting(): void

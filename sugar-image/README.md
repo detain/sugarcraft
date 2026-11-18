@@ -350,6 +350,12 @@ they decode or fetch:
   whose inflated scanlines exceed 64 MiB (`PngPixels::MAX_RAW_BYTES`). The
   second limit is what declines a 4096² RGBA frame.
 
+  The decode runs synchronously in pure PHP and its cost grows linearly with
+  the pixel count: about 3.4 s for a 1000×1000 RGBA still and about 14 s for
+  2000×2000 on PHP 8.3.6, so the largest admissible image takes tens of
+  seconds. Decode untrusted bytes off the event loop, or lower `$maxPixels`,
+  before handing them to a presenter.
+
 ```php
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\PngPixels;
