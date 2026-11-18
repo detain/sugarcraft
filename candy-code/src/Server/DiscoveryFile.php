@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Server;
 
 use SugarCraft\Code\Support\Daemonize;
 use SugarCraft\Code\Support\PrivateRetainedDir;
+use SugarCraft\ServeProtocol\Discovery\DiscoveryRecordReader;
 
 /**
  * `server.json`: the running server's discovery record (Appendix O §4.6;
@@ -94,20 +95,9 @@ final class DiscoveryFile
      */
     public static function read(StateDir $dir): ?self
     {
-        $path = $dir->discoveryPath();
-        clearstatcache(true, $path);
-        $stat = @\lstat($path);
-        if ($stat === false || ((int) $stat['mode'] & 0o170000) !== 0o100000) {
-            return null;
-        }
+        $data = DiscoveryRecordReader::read($dir->discoveryPath());
 
-        try {
-            $data = \json_decode((string) @\file_get_contents($path), true, 8, \JSON_THROW_ON_ERROR);
-        } catch (\JsonException) {
-            return null;
-        }
-
-        return \is_array($data) ? self::fromArray($data) : null;
+        return $data === null ? null : self::fromArray($data);
     }
 
     /**
