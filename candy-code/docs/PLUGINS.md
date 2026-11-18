@@ -370,7 +370,7 @@ answers that they were left alone.
 `bundles update` keeps each bundle in the tier it occupies: a `--project`
 bundle is re-installed into its project root, never moved to the user root. It
 walks the owned home's bundle root and the project root (`--root`, else the
-working directory's). Named, it refuses with `cli.bundles.update.ambiguous` when
+repository the working directory is in). Named, it refuses with `cli.bundles.update.ambiguous` when
 the name sits in both tiers, and leaves both copies untouched. A project-tier
 bundle that carries a marketplace record is refused by name
 (`cli.bundles.update.no_home`) when this process has no owned home, because its
