@@ -128,7 +128,7 @@ final class Writer
         $this->loop = $loop;
         if (is_resource($this->stream)) {
             $meta = stream_get_meta_data($this->stream);
-            $this->wasBlocking = (bool) ($meta['blocked'] ?? true);
+            $this->wasBlocking = $meta['blocked'];
             @stream_set_blocking($this->stream, false);
         }
     }
