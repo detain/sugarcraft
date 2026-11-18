@@ -239,10 +239,24 @@ final class Readline
         self::$rawOwned = true;
         if (!self::$rawBackstopArmed) {
             self::$rawBackstopArmed = true;
-            register_shutdown_function(static function (): void {
-                self::exitRawMode();
+            $installPid = getmypid();
+            register_shutdown_function(static function () use ($installPid): void {
+                self::restoreAtShutdown($installPid);
             });
         }
+    }
+
+    /**
+     * Shutdown body of the raw-mode backstop. A forked child inherits the
+     * shutdown queue, and restoring the parent's snapshot from there would
+     * switch the shared tty back to cooked mode under the live parent.
+     */
+    private static function restoreAtShutdown(int $installPid): void
+    {
+        if (getmypid() !== $installPid) {
+            return;
+        }
+        self::exitRawMode();
     }
 
     /** Hand STDIN's terminal back the snapshot enterRawMode() captured. */

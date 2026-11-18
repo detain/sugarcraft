@@ -377,6 +377,32 @@ final class GraphicsRendererTest extends TestCase
     }
 
     /**
+     * A draw that throws must not spend the predecessor's delete: the residue is
+     * written only once the bytes exist, so it stays owed after the failure.
+     */
+    public function testFailedDrawKeepsThePredecessorsResidueOwed(): void
+    {
+        $frame = self::makeFrame();
+        $outgoing = new GraphicsRenderer(Mode::Kitty);
+        $slot = self::drawnImageId($outgoing->render($frame, Mode::Kitty));
+
+        // A text mode has no graphics delegate, so this render throws after the
+        // residue would otherwise have been taken.
+        $successor = (new GraphicsRenderer(Mode::HalfBlock))->carryingFrom($outgoing);
+        try {
+            $successor->render($frame, Mode::HalfBlock);
+            $this->fail('a text mode must not render through the graphics delegate');
+        } catch (\InvalidArgumentException) {
+        }
+
+        $this->assertSame(
+            (new KittyRenderer())->delete((string) $slot),
+            $successor->retirement(),
+            'the failed draw must leave the delete owed',
+        );
+    }
+
+    /**
      * A second rebuild before any render must not drop the first rebuild's
      * still-owed retirement.
      */

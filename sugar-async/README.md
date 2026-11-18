@@ -541,7 +541,7 @@ per-load timeout stays the caller's concern (compose with `withDeadline`).
 - `AsyncCache::new(ttlSeconds: 60.0, serveStaleOnError: false, clock: null, maxEntries: null)`
   — entry point; `ttlSeconds` must be a positive finite number; `clock` is a
   monotonic-seconds seam for tests (no sleeping at TTL boundaries); `maxEntries`
-  caps stored values — beyond it, adoption evicts the LEAST-recently-stored entry.
+  caps stored values — beyond it, adoption evicts the LEAST-recently-stored entry, in amortized O(1) per eviction.
   Expired entries are NOT eagerly reaped without a cap: memory follows caller key
   discipline (`invalidate()`/`clear()`).
 - `fetch(string $key, callable $loader)` — fresh hit resolves immediately; a load

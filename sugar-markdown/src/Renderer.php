@@ -852,8 +852,10 @@ final class Renderer
      * is a heading of its own and shows, so the fold never has to know about
      * sections the stream family renders separately.
      *
-     * IDs are the values {@see headingId()} returns for the heading text. An
-     * ID that matches no heading is ignored. Pass an empty list to unfold
+     * IDs are the values {@see headingId()} returns for the heading's rendered
+     * text, the text a reader sees (with emoji expansion on, `:rocket: Launch`
+     * is "launch", not "rocket-launch"). A caller deriving IDs from source
+     * markdown must expand the same way first. An ID that matches no heading is ignored. Pass an empty list to unfold
      * everything; the returned renderer carries the list given, without repeats.
      *
      * @param list<string> $headingIds

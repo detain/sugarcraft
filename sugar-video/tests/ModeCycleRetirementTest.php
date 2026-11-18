@@ -11,6 +11,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Image\Renderer\KittyRenderer;
 use SugarCraft\Video\Decode\RgbFrame;
+use SugarCraft\Video\Msg\TickMsg;
 use SugarCraft\Video\Player;
 use SugarCraft\Video\Render\Mode;
 use SugarCraft\Video\Render\RendererFactory;
@@ -65,5 +66,57 @@ final class ModeCycleRetirementTest extends TestCase
 
         [$later,] = $text->update(new KeyMsg(KeyType::Char, 'x'));
         self::assertStringNotContainsString($retire, $later->view(), 'the delete is written once, not on every view');
+    }
+
+    public function testRetirementSurvivesAMessageThatArrivesBeforeTheView(): void
+    {
+        $frame = new RgbFrame(str_repeat("\x11\x22\x33", 20 * 10), 20, 10);
+        $player = $this->mutatePlayer(
+            Player::fromDecoder(
+                new FakeDecoder(array_fill(0, 4, $frame)),
+                cellsW: 20,
+                cellsH: 10,
+                fps: 24.0,
+                mode: Mode::Kitty,
+                totalFrames: 4,
+                videoPath: '/fake',
+            ),
+            ['currentFrame' => $frame],
+        );
+
+        self::assertSame(1, preg_match('/\bi=(\d+)/', $player->view(), $m), 'the Kitty view must draw an image');
+        $retire = (new KittyRenderer())->delete($m[1]);
+
+        [$text,] = $player->update(new KeyMsg(KeyType::Char, 'm'));
+        // The runtime renders from a one-shot timer, so a tick can be dispatched
+        // between the mode cycle and the view that finally writes the frame.
+        [$ticked,] = $text->update(TickMsg::instance());
+
+        self::assertStringStartsWith($retire, $ticked->view(), 'a message coalesced before the view must not spend the delete');
+    }
+
+    public function testRetirementSurvivesATextToTextCycleBeforeTheView(): void
+    {
+        $frame = new RgbFrame(str_repeat("\x11\x22\x33", 20 * 10), 20, 10);
+        $player = $this->mutatePlayer(
+            Player::fromDecoder(
+                new FakeDecoder(array_fill(0, 4, $frame)),
+                cellsW: 20,
+                cellsH: 10,
+                fps: 24.0,
+                mode: Mode::Kitty,
+                totalFrames: 4,
+                videoPath: '/fake',
+            ),
+            ['currentFrame' => $frame],
+        );
+
+        self::assertSame(1, preg_match('/\bi=(\d+)/', $player->view(), $m), 'the Kitty view must draw an image');
+        $retire = (new KittyRenderer())->delete($m[1]);
+
+        [$text,] = $player->update(new KeyMsg(KeyType::Char, 'm'));
+        [$nextText,] = $text->update(new KeyMsg(KeyType::Char, 'm'));
+
+        self::assertStringStartsWith($retire, $nextText->view(), 'a further text cycle must keep the owed delete');
     }
 }
