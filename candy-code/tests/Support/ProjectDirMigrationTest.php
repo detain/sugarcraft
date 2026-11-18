@@ -97,6 +97,34 @@ final class ProjectDirMigrationTest extends TestCase
         self::assertNotNull($manager->hook('PreToolUse', 'lanef-probe'), 'the project hooks still load after the move');
     }
 
+    public function testLookupAnswersTheRootWithoutMovingTheLegacyDir(): void
+    {
+        // A read-only verb (bundles list, bundles recommend, doctor) must see
+        // the same root a launch sees, yet leave the checkout as it found it.
+        $this->seedLegacyProjectDir();
+        mkdir($this->project . '/.git', 0700);
+
+        self::assertSame($this->project, ProjectRoot::lookup($this->project));
+
+        self::assertDirectoryExists($this->project . '/.sugar-crush'); // @rename-keep
+        self::assertDirectoryDoesNotExist($this->project . '/.candy-code');
+        self::assertSame([], RuntimeNoticeSink::drain());
+    }
+
+    public function testResolveAfterLookupStillMovesTheLegacyDir(): void
+    {
+        // The memo filled by lookup() must not swallow the one-time move: the
+        // launch resolves the same directory later and still performs it.
+        $this->seedLegacyProjectDir();
+        mkdir($this->project . '/.git', 0700);
+
+        ProjectRoot::lookup($this->project);
+        self::assertSame($this->project, ProjectRoot::resolve($this->project));
+
+        self::assertDirectoryDoesNotExist($this->project . '/.sugar-crush'); // @rename-keep
+        self::assertFileExists($this->project . '/.candy-code/settings.json');
+    }
+
     private function seedLegacyProjectDir(): void
     {
         $old = $this->project . '/.sugar-crush'; // @rename-keep

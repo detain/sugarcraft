@@ -750,6 +750,133 @@ final class BoundedShutdownTest extends TestCase
         return $stat === false || \preg_match('/\)\s+Z/', $stat) !== 1;
     }
 
+    /**
+     * Regression: the group-aware ladders declared the child gone the moment
+     * the wrapper exited, so a descendant that ignored SIGTERM was never sent
+     * signal 9 and survived the teardown. The wrapper dies on TERM here while
+     * its background sleeper has TERM ignored, so only the 9 rung reaches it.
+     */
+    public function testTerminateBoundedReachesATermIgnoringDescendantAfterTheWrapperDiesOnTerm(): void
+    {
+        [$wrapped, $wrappedPid, $grandchild] = $this->spawnGroupWithTermIgnoringGrandchild($this->setsidOrSkip());
+
+        try {
+            BoundedShutdown::terminateBounded($wrapped, 0.3, 0.3, $wrappedPid);
+
+            self::assertFalse(\is_resource($wrapped), 'the sync reap consumes the handle');
+            self::assertFalse(
+                self::stillRunning($grandchild),
+                'the group ladder must not call the child gone while a TERM-ignoring descendant lives; signal 9 has to reach the group',
+            );
+        } finally {
+            if ($grandchild > 0 && self::stillRunning($grandchild)) {
+                @\posix_kill($grandchild, 9);
+            }
+        }
+    }
+
+    public function testTerminateBoundedAsyncReachesATermIgnoringDescendantAfterTheWrapperDiesOnTerm(): void
+    {
+        [$wrapped, $wrappedPid, $grandchild] = $this->spawnGroupWithTermIgnoringGrandchild($this->setsidOrSkip());
+
+        try {
+            $status = $this->settleAsync(static function (LoopInterface $loop, callable $done) use ($wrapped, $wrappedPid): void {
+                BoundedShutdown::terminateBoundedAsync(
+                    $loop,
+                    $wrapped,
+                    static fn (?int $s) => $done($s),
+                    0.3,
+                    0.3,
+                    $wrappedPid,
+                );
+            });
+
+            self::assertIsInt($status);
+            self::assertFalse(\is_resource($wrapped), 'the async reap consumes the handle');
+            self::assertFalse(
+                self::stillRunning($grandchild),
+                'the async group ladder must not call the child gone while a TERM-ignoring descendant lives',
+            );
+        } finally {
+            if ($grandchild > 0 && self::stillRunning($grandchild)) {
+                @\posix_kill($grandchild, 9);
+            }
+        }
+    }
+
+    public function testTerminateAndAwaitExitReachesATermIgnoringDescendantAfterTheWrapperDiesOnTerm(): void
+    {
+        [$wrapped, $wrappedPid, $grandchild] = $this->spawnGroupWithTermIgnoringGrandchild($this->setsidOrSkip());
+
+        try {
+            self::assertTrue(BoundedShutdown::terminateAndAwaitExit($wrapped, 0.3, 0.3, $wrappedPid));
+            self::assertFalse(
+                self::stillRunning($grandchild),
+                'terminateAndAwaitExit reports gone only once the group is empty, so the descendant must already be down',
+            );
+        } finally {
+            if ($grandchild > 0 && self::stillRunning($grandchild)) {
+                @\posix_kill($grandchild, 9);
+            }
+        }
+    }
+
+    private function setsidOrSkip(): string
+    {
+        self::requirePosix();
+        $setsid = \SugarCraft\Core\Util\Executable\Locator::locate('setsid');
+        if ($setsid === null) {
+            self::markTestSkipped('setsid(1) is not installed on this host');
+        }
+
+        return $setsid;
+    }
+
+    /**
+     * A setsid-wrapped shell whose background sleeper ignores SIGTERM. The
+     * sleeper signals readiness only after its TERM disposition is set, so the
+     * teardown can never race a sleeper that has not yet armed the trap.
+     *
+     * @return array{0: resource, 1: int, 2: int} the wrapper, its pid, and the grandchild pid
+     */
+    private function spawnGroupWithTermIgnoringGrandchild(string $setsid): array
+    {
+        $marker = \tempnam(\sys_get_temp_dir(), 'bounded-shutdown-');
+        self::assertNotFalse($marker, 'could not create the grandchild marker file');
+        $ready = $marker . '.ready';
+
+        try {
+            $wrapped = $this->spawn([
+                $setsid,
+                'sh',
+                '-c',
+                '(trap "" TERM; : > "$0.ready"; exec sleep 30) & echo $! > "$0"; wait',
+                $marker,
+            ]);
+            $wrappedPid = (int) (\proc_get_status($wrapped)['pid'] ?? 0);
+
+            $deadline = \hrtime(true) / 1_000_000_000 + 2.0;
+            while (\posix_getpgid($wrappedPid) !== $wrappedPid && \hrtime(true) / 1_000_000_000 < $deadline) {
+                \usleep(10_000);
+            }
+            while (!\is_file($ready) && \hrtime(true) / 1_000_000_000 < $deadline) {
+                \usleep(10_000);
+            }
+            while (\trim((string) \file_get_contents($marker)) === '' && \hrtime(true) / 1_000_000_000 < $deadline) {
+                \usleep(10_000);
+            }
+            self::assertFileExists($ready, 'the sleeper never armed its TERM trap');
+            $grandchild = (int) \trim((string) \file_get_contents($marker));
+            self::assertGreaterThan(0, $grandchild, 'the wrapper never reported its grandchild');
+            self::assertTrue(self::stillRunning($grandchild), 'the grandchild must be alive before the teardown');
+        } finally {
+            @\unlink($marker);
+            @\unlink($ready);
+        }
+
+        return [$wrapped, $wrappedPid, $grandchild];
+    }
+
     public function testTerminateBoundedAsyncAnswersNullForANonResourceAtOnce(): void
     {
         $loop = new StreamSelectLoop();

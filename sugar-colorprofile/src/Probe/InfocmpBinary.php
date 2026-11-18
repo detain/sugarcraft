@@ -230,6 +230,7 @@ final class InfocmpBinary
         $pastCap = false;
         $escalation = 0;
         $signaled = false;
+        $eofSeen = false;
         $deadline = \microtime(true) + $timeoutSeconds;
 
         try {
@@ -265,6 +266,8 @@ final class InfocmpBinary
                     ? $exited && WindowsPipes::available($pipes[1]) === 0 && WindowsPipes::available($pipes[2]) === 0
                     : \feof($pipes[1]) && \feof($pipes[2])
                 ) {
+                    $eofSeen = true;
+
                     break;
                 }
 
@@ -300,7 +303,7 @@ final class InfocmpBinary
             // an exit. proc_get_status() does: it reports 'signaled' for a dead
             // child. EOF on the pipes arrives before the parent can reap, so
             // wait (within the deadline) for the child to settle first.
-            $status = self::awaitExit($handle, $deadline);
+            $status = self::reapAfterEof($handle, $deadline, $eofSeen);
             if ($status['running']) {
                 // Both pipes reached EOF before the deadline, yet the child is
                 // still alive past it. Run the same TERM → KILL ladder the loop
@@ -322,6 +325,27 @@ final class InfocmpBinary
         // trustworthy, and a child a signal killed printed only a partial dump:
         // both fail open to the caller's chain answer.
         return $escalation > 0 || $signaled ? null : $stdout;
+    }
+
+    /**
+     * Settle the child once the drain loop has ended, and return its last status.
+     *
+     * Each loop pass checks EOF before the deadline, so EOF can end the loop
+     * in the very pass the deadline passed; a child that closed its pipes and
+     * then exited on its own still needs time to be reaped. Judging it against
+     * the already-expired deadline would read it as running and escalate a
+     * finished child, losing its verdict for the process lifetime. After EOF
+     * the child is therefore owed at least one grace window to be reaped.
+     *
+     * @param resource $handle
+     *
+     * @return array<string,mixed>
+     */
+    private static function reapAfterEof($handle, float $deadline, bool $eofSeen): array
+    {
+        $until = $eofSeen ? \max($deadline, \microtime(true) + self::GRACE_SECONDS) : $deadline;
+
+        return self::awaitExit($handle, $until);
     }
 
     /**

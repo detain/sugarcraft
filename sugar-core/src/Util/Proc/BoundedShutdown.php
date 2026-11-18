@@ -119,16 +119,16 @@ final class BoundedShutdown
 
         $exitCode = null;
 
-        // Already exited on its own — the overwhelmingly common case. Skip
+        // Already gone on its own — the overwhelmingly common case. Skip
         // straight to the reap so a normal completion pays no signal at all
         // and none of the escalation budget.
-        if (!self::exited($process, $exitCode)) {
+        if (!self::gone($process, $groupPid, $exitCode)) {
             self::escalate(
                 static function (int $signal) use ($process, $groupPid): void {
                     self::signal($process, $groupPid, $signal);
                 },
-                static function () use ($process, &$exitCode): bool {
-                    return self::exited($process, $exitCode);
+                static function () use ($process, $groupPid, &$exitCode): bool {
+                    return self::gone($process, $groupPid, $exitCode);
                 },
                 $graceSeconds,
                 $killGraceSeconds,
@@ -167,7 +167,7 @@ final class BoundedShutdown
         }
 
         $exitCode = null;
-        if (self::exited($process, $exitCode)) {
+        if (self::gone($process, $groupPid, $exitCode)) {
             return true;
         }
 
@@ -175,10 +175,10 @@ final class BoundedShutdown
             static function (int $signal) use ($process, $groupPid): void {
                 self::signal($process, $groupPid, $signal);
             },
-            static function () use ($process): bool {
+            static function () use ($process, $groupPid): bool {
                 $code = null;
 
-                return self::exited($process, $code);
+                return self::gone($process, $groupPid, $code);
             },
             $graceSeconds,
             $killGraceSeconds,
@@ -336,7 +336,7 @@ final class BoundedShutdown
         // Reap in every branch: the status poll only captures the exit code, it
         // does not release the handle, and a skipped proc_close() leaks it.
         $exitCode = null;
-        if (self::exited($process, $exitCode)) {
+        if (self::gone($process, $groupPid, $exitCode)) {
             $reaped = \proc_close($process);
             $finish($exitCode ?? $reaped);
 
@@ -348,8 +348,8 @@ final class BoundedShutdown
             static function (int $signal) use ($process, $groupPid): void {
                 self::signal($process, $groupPid, $signal);
             },
-            static function () use ($process, &$exitCode): bool {
-                return self::exited($process, $exitCode);
+            static function () use ($process, $groupPid, &$exitCode): bool {
+                return self::gone($process, $groupPid, $exitCode);
             },
             static function (bool $gone) use ($loop, $process, &$exitCode, $finish): void {
                 // Only a poll that saw the exit may take the blocking reap: then
@@ -672,6 +672,70 @@ final class BoundedShutdown
         }
 
         \proc_terminate($process, $signal);
+    }
+
+    /**
+     * "Is the child gone?" for a handle, and for a containment-wrapped child
+     * also "is its process group empty?".
+     *
+     * The leader exiting is not enough. A descendant that ignores SIGTERM
+     * outlives its wrapper, and declaring the child gone at that point would
+     * end the ladder before the signal 9 rung — the only rung that reaches it.
+     * A non-resource is gone by definition, so a handle another teardown
+     * already closed never keeps a poll alive.
+     *
+     * @param mixed $process the value a `proc_open()` call returned
+     */
+    private static function gone(mixed $process, ?int $groupPid, ?int &$exitCode): bool
+    {
+        if (!\is_resource($process)) {
+            return true;
+        }
+
+        if (!self::exited($process, $exitCode)) {
+            return false;
+        }
+
+        return $groupPid === null || self::groupEmpty($groupPid);
+    }
+
+    /**
+     * Whether no live member remains in the process group $groupPid.
+     *
+     * `kill(-pgid, 0)` answers true for a ZOMBIE as well as a live process, and
+     * a zombie waiting on a reaper that is slow to act would otherwise hold the
+     * ladder open for its whole budget. So members in state Z (or X) are
+     * skipped when /proc can be read; without /proc the probe stays conservative
+     * and counts them.
+     */
+    private static function groupEmpty(int $groupPid): bool
+    {
+        if (!\function_exists('posix_kill') || !@\posix_kill(-$groupPid, 0)) {
+            return true;
+        }
+
+        $stats = @\glob('/proc/[0-9]*/stat');
+        if ($stats === false || $stats === []) {
+            return false;
+        }
+
+        foreach ($stats as $statFile) {
+            $stat = @\file_get_contents($statFile);
+            if ($stat === false) {
+                continue;
+            }
+            // "pid (comm) state ppid pgrp ..." — comm may hold spaces and parens,
+            // so the match anchors on the LAST ") " before the fixed-shape tail.
+            if (\preg_match('/^\d+ \(.*\) ([A-Za-z]) \d+ (\d+) /s', $stat, $m) === 1
+                && (int) $m[2] === $groupPid
+                && $m[1] !== 'Z'
+                && $m[1] !== 'X'
+            ) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

@@ -71,7 +71,8 @@ final class GraphicsRenderer implements FrameRenderer
             // Kitty: draw each frame under an alternating image id and retire the
             // previous one, so playback does not leave one image in the terminal's
             // store per frame. The session lives as long as this renderer; the
-            // Player asks it for the last id (retirement()) when it rebuilds.
+            // Player asks it for the deletes that retire its pair (retirement())
+            // when it rebuilds.
             $this->session ??= GraphicsFrameSession::new($delegate)->withImageId(self::allocateImageBase());
 
             return $this->session->present($source, $cellsW, $cellsH);
@@ -81,10 +82,16 @@ final class GraphicsRenderer implements FrameRenderer
     }
 
     /**
-     * The delete for the frame this renderer drew last: the escape bytes a Player
-     * writes as a Cmd when it replaces the renderer, so the Kitty frame does not
-     * outlive the session in the terminal's image store. '' when nothing was drawn
-     * or the backend cannot delete by id.
+     * The deletes that retire this renderer's Kitty frames: the escape bytes a Player
+     * writes as a Cmd when it replaces the renderer, so no frame outlives the session
+     * in the terminal's image store. '' when nothing was drawn or the backend cannot
+     * delete by id.
+     *
+     * Both slots of the session's pair, not only the last id: {@see render()} advances
+     * the session on every call, so a view whose output was never written can leave
+     * the frame on screen under the slot before the newest one. Deleting an id the
+     * terminal does not hold is a no-op in the Kitty protocol, so the extra delete is
+     * free and no write-path bookkeeping is needed.
      *
      * Pure: reading it spends nothing, so a view whose output is discarded cannot
      * lose the delete.
@@ -100,9 +107,9 @@ final class GraphicsRenderer implements FrameRenderer
             return '';
         }
 
-        $last = $this->session->imageId + (($this->session->frameCount() - 1) % 2);
+        $base = $this->session->imageId;
 
-        return $delegate->delete((string) $last);
+        return $delegate->delete((string) $base) . $delegate->delete((string) ($base + 1));
     }
 
     /**

@@ -54,8 +54,10 @@ final class AnsiTokenizer
      * The cap bounds the buffer, not the total work per feed. An unterminated
      * OSC/DCS/APC/SOS/PM body keeps its scan position across feeds, so each body
      * byte is examined once however many feeds it arrives in. A held CSI is still
-     * rescanned from its ESC on every feed, so a stream of 1-byte feeds that keeps
-     * a CSI open costs up to roughly MAX_PENDING_BYTES^2 / 2 steps in total.
+     * rescanned from its ESC on every feed, and so is an ESC held on its
+     * intermediates or on the C0 controls after it (neither keeps a scan offset).
+     * A stream of 1-byte feeds that keeps any of these open costs up to roughly
+     * MAX_PENDING_BYTES^2 / 2 steps in total.
      */
     public const MAX_PENDING_BYTES = 65536;
 

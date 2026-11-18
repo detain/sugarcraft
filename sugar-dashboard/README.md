@@ -817,9 +817,11 @@ in the same namespace are its value parts.
 > sentinels and clips over-length labels. The same bounded-teardown story
 > covers `GenericModule` and `SystemModule` command runs (5 s deadline, 1 MiB
 > output cap via `BoundedCommand`, with the same direct-children-only reap), and
-> the weather fetch (synchronous inside the
-> dispatched command, bounded by the HTTP client's 5 s timeout —
-> `WttrInClient`'s stream context).
+> the weather fetch, which runs off the update door: on a host with `pcntl`
+> it forks a `ForkedTask` child under a 15 s parent deadline, and the
+> child's HTTP client is capped by `WttrInClient`'s 5 s stream timeout. A
+> host without `pcntl` falls back to an in-process fetch that blocks the
+> frame for up to that 5 s timeout.
 >
 > **What a plugin can react to.** A legacy plugin panel is non-interactive by
 > construction: `LegacyModuleAdapter::update()` forwards exactly two message
