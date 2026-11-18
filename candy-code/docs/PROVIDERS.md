@@ -51,7 +51,10 @@ missing key (and the environment variable to set, where there is one).
   which the provider rejects.
 - **Optional:** `organization` (from `OPENAI_ORG_ID`, default unset), `baseUrl`
   (from `OPENAI_BASE_URL`, default is the SDK's own `api.openai.com`), `model`
-  (default `gpt-4o`).
+  (default `gpt-4o`), `api`, `modelPrices`, `contextWindow`, `supportsVision` and
+  `fallbackModels`.
+- `api` picks the wire. Unset or `"chat"` keeps the Chat Completions path, and
+  `"responses"` sends every request to the Responses endpoint.
 - Set `baseUrl` to point this type at a gateway or a compatible server.
 
 ### `azure`
@@ -64,6 +67,8 @@ missing key (and the environment variable to set, where there is one).
   wins.
 - **Model:** Azure names deployments yourself, so `model` must be your deployment
   name. The default `gpt-4o` is a placeholder.
+- **Optional:** `api` (`"chat"` or `"responses"`, the same choice as `openai`),
+  `modelPrices`, `contextWindow`, `supportsVision` and `fallbackModels`.
 
 ### `anthropic`
 
@@ -71,7 +76,8 @@ missing key (and the environment variable to set, where there is one).
 - **Optional:** `baseUrl`, from `ANTHROPIC_BASE_URL`, default
   `https://api.anthropic.com`. The root is given without `/v1`, and a base that
   already ends in `/v1` is used as it is. `model` defaults to `claude-sonnet-4-6`.
-- `thinkingBudget` is accepted for extended thinking.
+- `thinkingBudget` is accepted for extended thinking. `modelPrices`,
+  `contextWindow` and `fallbackModels` are accepted as well.
 
 ### `claude-code`
 
@@ -106,6 +112,10 @@ missing key (and the environment variable to set, where there is one).
 - `reasoningEffort` and `toolCallParser` are unset by default and derived from
   the model. The DeepSeek-V4 family gets its own reasoning and parser defaults;
   other models get the OpenAI-shaped parser. Set either key to override.
+- **Also accepts:** `templateKwargs`, `discoverServerInfo` (`false` turns off the
+  server-info reads), `supportsVision`, `fallbackModels`, `contextWindow`, and the
+  media keys `mediaKinds`, `mediaBaseUrl` and `mediaApiKey`, which
+  [MEDIA.md](MEDIA.md#configuration) describes.
 
 ### `bedrock`
 
@@ -125,8 +135,8 @@ missing key (and the environment variable to set, where there is one).
 
 - **Required:** `projectId`, from `GCP_PROJECT_ID`.
 - **Optional:** `location` (default `us-central1`), `model` (default
-  `claude-sonnet-4-6`), `thinkingBudget`, `promptCache`, `fallbackModels`,
-  `contextWindow`.
+  `claude-sonnet-4-6`), `thinkingBudget`, `modelPrices`, `promptCache`,
+  `fallbackModels`, `contextWindow`.
 - Credentials come from Google's application default chain:
   `GOOGLE_APPLICATION_CREDENTIALS`, then `gcloud` configuration, then the metadata
   server.
@@ -137,7 +147,8 @@ missing key (and the environment variable to set, where there is one).
   header. `GOOGLE_API_KEY` is not read.
 - **Optional:** `baseUrl`, from `GEMINI_BASE_URL`, default
   `https://generativelanguage.googleapis.com`. `model` defaults to
-  `gemini-2.5-flash`. `thinkingBudget` is accepted.
+  `gemini-2.5-flash`. `thinkingBudget` is accepted, and so are `modelPrices`,
+  `fallbackModels` and `contextWindow`.
 - This is the API-key front door. For Claude on Google Cloud, use `vertex`.
 
 ### `openrouter`
@@ -148,6 +159,10 @@ missing key (and the environment variable to set, where there is one).
   `model` defaults to `openai/gpt-4o`. OpenRouter model ids are `vendor/model`.
 - `headers` replaces the attribution pair key by key. `baseUrl` overrides the
   default for a regional endpoint.
+- **Also accepts:** `supportsStreaming`, `supportsFunctionCalling`, `extraBody`,
+  `headers`, `supportsVision`, `modelPrices`, `contextWindow`, `fallbackModels`,
+  and the media keys `mediaKinds`, `mediaBaseUrl` and `mediaApiKey`, which
+  [MEDIA.md](MEDIA.md#configuration) describes.
 
 ### `custom`
 
@@ -155,7 +170,9 @@ missing key (and the environment variable to set, where there is one).
   `OPENAI_BASE_URL`, then `http://localhost:8080`. `model` defaults to `gpt-4o`.
 - **Optional:** `apiKey` (no default), `supportsStreaming` and
   `supportsFunctionCalling` (both default to `true`), `extraBody`, `headers`,
-  `supportsVision`, `modelPrices`, `contextWindow`, `fallbackModels`.
+  `supportsVision`, `modelPrices`, `contextWindow`, `fallbackModels`, and the
+  media keys `mediaKinds`, `mediaBaseUrl` and `mediaApiKey`, which
+  [MEDIA.md](MEDIA.md#configuration) describes.
 - Use `custom` for any server that speaks the OpenAI chat wire and is not one of
   the named types above.
 
@@ -201,7 +218,7 @@ environment. The defaults apply when the variable is unset or empty.
 | `GEMINI_API_KEY` | `gemini` | The Gemini API key. | empty, which the provider rejects |
 | `GEMINI_BASE_URL` | `gemini` | The Gemini API root. | `https://generativelanguage.googleapis.com` |
 | `OPENROUTER_API_KEY` | `openrouter` | The OpenRouter key. | empty, which the provider rejects |
-| `AWS_REGION` | `bedrock` | The region, but only when the block's `region` is the placeholder `"${AWS_REGION}"`. The factory does not read it otherwise. | empty: the placeholder path refuses the launch. A block that omits `region` uses `us-east-1`. |
+| `AWS_REGION` | `bedrock` | The region, but only when the block's `region` is a placeholder that names it, `"${AWS_REGION}"` or `"${AWS_REGION:-<default>}"`. The factory does not read it otherwise. | with `"${AWS_REGION}"`, empty: the launch refuses. With a `:-<default>` form, the default is used. A block that omits `region` uses `us-east-1`. |
 | `AWS_DEFAULT_REGION` | `bedrock` | Not read by the provider factory. A directly built `BedrockProvider` with an empty region falls back to it when `AWS_REGION` is unset. | `us-east-1` |
 
 The provider-selection variables `CANDY_CODE_PROVIDER` and `CANDY_CODE_MODEL` are
