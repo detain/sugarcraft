@@ -100,6 +100,10 @@ final class TapeToGifFontPlumbingTest extends TestCase
             /** @var array{0: int, 1: int}|null */
             public ?array $firstCell = null;
 
+            /**
+             * @param positive-int $cellW
+             * @param positive-int $cellH
+             */
             public function rasterize(
                 Snapshot $snapshot,
                 int $cellW,

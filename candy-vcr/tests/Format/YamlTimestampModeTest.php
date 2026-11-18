@@ -38,7 +38,7 @@ final class YamlTimestampModeTest extends TestCase
     public function testRelativeHeaderEmitsDtIntervalRows(): void
     {
         $encoded = (new YamlFormat())->encode($this->relativeCassette());
-        $tree = Yaml::parse($encoded);
+        $tree = self::parseTree($encoded);
 
         $this->assertSame('relative', $tree['header']['timestampMode']);
 
@@ -55,7 +55,7 @@ final class YamlTimestampModeTest extends TestCase
     public function testAbsoluteHeaderStillEmitsTAndNoModeStamp(): void
     {
         $encoded = (new YamlFormat())->encode($this->absoluteCassette());
-        $tree = Yaml::parse($encoded);
+        $tree = self::parseTree($encoded);
 
         $this->assertArrayNotHasKey('timestampMode', $tree['header'], 'absolute mode stays off the wire');
 
@@ -145,7 +145,7 @@ final class YamlTimestampModeTest extends TestCase
         // carries are exactly the ones RelativeFormat's JSONL writes.
         $cassette = $this->relativeCassette();
 
-        $yamlTree = Yaml::parse((new YamlFormat())->encode($cassette));
+        $yamlTree = self::parseTree((new YamlFormat())->encode($cassette));
         $jsonlLines = array_values(array_filter(
             explode("\n", rtrim((new RelativeFormat())->encode($cassette), "\n")),
             static fn (string $l): bool => $l !== '',
@@ -153,7 +153,7 @@ final class YamlTimestampModeTest extends TestCase
 
         $this->assertCount(5, $jsonlLines, '1 header + 4 event lines');
         $jsonlEvents = array_map(
-            static fn (string $line): array => json_decode($line, true, 512, JSON_THROW_ON_ERROR),
+            static fn (string $line): array => (array) json_decode($line, true, 512, JSON_THROW_ON_ERROR),
             array_slice($jsonlLines, 1),
         );
 
@@ -162,7 +162,7 @@ final class YamlTimestampModeTest extends TestCase
             // Float-cast compare: Symfony's dumper emits the interval 0.0
             // as `0`, which reparses as int — the timeline value is what
             // must match across the two spellings, not the PHP scalar type.
-            $this->assertSame((float) $yamlTree['events'][$i]['dt'], (float) $row['dt'], "event #{$i} dt spelling");
+            $this->assertSame(self::floatOf($yamlTree['events'][$i]['dt']), self::floatOf($row['dt']), "event #{$i} dt spelling");
             $this->assertSame($yamlTree['events'][$i]['k'], $row['k']);
         }
     }
@@ -212,7 +212,7 @@ final class YamlTimestampModeTest extends TestCase
             new Event(t: 0.223456789, kind: EventKind::Quit, payload: []),
         ]);
 
-        $tree = Yaml::parse((new YamlFormat())->encode($cassette));
+        $tree = self::parseTree((new YamlFormat())->encode($cassette));
         $this->assertEqualsWithDelta(0.0, $tree['events'][0]['dt'], 0.0005);
         $this->assertEqualsWithDelta(0.123, $tree['events'][1]['dt'], 0.0005);
         $this->assertEqualsWithDelta(0.1, $tree['events'][2]['dt'], 0.0005);
@@ -264,5 +264,27 @@ final class YamlTimestampModeTest extends TestCase
             rows: 24,
             runtime: 'sugarcraft/candy-vcr@dev',
         );
+    }
+
+    /**
+     * @return array{header: array<string, mixed>, events: list<array<string, mixed>>}
+     */
+    private static function parseTree(string $yaml): array
+    {
+        $tree = Yaml::parse($yaml);
+        if (!is_array($tree)) {
+            throw new \RuntimeException('YAML root must be a mapping');
+        }
+        /** @var array{header: array<string, mixed>, events: list<array<string, mixed>>} $tree */
+        return $tree;
+    }
+
+    private static function floatOf(mixed $value): float
+    {
+        if (!is_numeric($value)) {
+            throw new \RuntimeException('expected a numeric YAML scalar');
+        }
+
+        return (float) $value;
     }
 }

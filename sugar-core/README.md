@@ -173,10 +173,18 @@ under **Status → Terminal recovery**. Set it to `false` only when you take
 ownership of terminal restoration on bailout paths yourself; the explicit
 pre-arm `Program::armTerminalRelease()` remains honored regardless of the flag.
 
+`escapeDelay` (default `0.05` seconds, `withEscapeDelay()` on the builder) is
+the settling window after a lone ESC byte before it is reported as the
+standalone Escape key. Raise it for slow SSH or multiplexer links that split
+escape sequences; lower it for a snappier Esc. `0` disables the window, and a
+negative or non-finite value is refused with `\InvalidArgumentException`.
+
 For code that assembles options incrementally there is
 `SugarCraft\Core\ProgramOptions\ProgramOptionsBuilder` — a fluent mirror
-of the same 24 options (`withFramerate()`, `withUseAltScreen()`,
-`withMouseMode()`, `withInlineMode()`, …); `build()` returns the
+of the same 27 options (`withFramerate()`, `withUseAltScreen()`,
+`withMouseMode()`, `withInlineMode()`, `withEscapeDelay()`, …; the two
+deprecated double-negative aliases `withWithoutRenderer()` and
+`withWithoutSignalHandler()` are kept for BC only); `build()` returns the
 `ProgramOptions` and performs no validation beyond the types:
 
 ```php

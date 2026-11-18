@@ -28,6 +28,7 @@ final class LangUsageTest extends TestCase
         $en = require \dirname(__DIR__) . '/lang/en.php';
         self::assertIsArray($en);
 
+        /** @var array<string, string> $en */
         return $en;
     }
 

@@ -40,7 +40,7 @@ final class SrcExitCensusTest extends TestCase
         $found = [];
         foreach (self::srcPhpFiles() as $relative => $absolute) {
             $count = 0;
-            foreach (\PhpToken::tokenize(\file_get_contents($absolute)) as $token) {
+            foreach (\PhpToken::tokenize((string) \file_get_contents($absolute)) as $token) {
                 if ($token->is(\T_EXIT)) {
                     $count++;
                 }
@@ -64,9 +64,9 @@ final class SrcExitCensusTest extends TestCase
 
     public function testTheJustifiedExitLivesInsideHandleRescueSignal(): void
     {
-        $tokens = \PhpToken::tokenize(
-            \file_get_contents(\dirname(__DIR__, 2) . '/src/Cli/RecordCommand.php'),
-        );
+        $tokens = array_values(\PhpToken::tokenize(
+            (string) \file_get_contents(\dirname(__DIR__, 2) . '/src/Cli/RecordCommand.php'),
+        ));
 
         $methodRange = self::methodBraceRange($tokens, 'handleRescueSignal');
         $this->assertNotNull($methodRange, 'handleRescueSignal() must exist');
@@ -180,6 +180,7 @@ final class SrcExitCensusTest extends TestCase
             new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS),
         );
         foreach ($iterator as $file) {
+            /** @var \SplFileInfo $file */
             if ($file->isFile() && $file->getExtension() === 'php') {
                 $files[\str_replace('\\', '/', \substr($file->getPathname(), \strlen(\dirname($root)) + 1))] = $file->getPathname();
             }

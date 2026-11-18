@@ -506,6 +506,7 @@ final class RecordCommand implements DocumentedCommand
             throw new \InvalidArgumentException(Lang::t('record.dims_invalid', ['cols' => $cols, 'rows' => $rows]));
         }
 
+        /** @var list<string> $cmd */
         return [
             'output' => $output,
             'cols'   => $cols,
@@ -521,15 +522,6 @@ final class RecordCommand implements DocumentedCommand
     }
 
     /**
-     * Resolve the shell to invoke for `--shell`: honour `$SHELL`,
-     * fall back to {@see FALLBACK_SHELL}. Always passes `-l` so the
-     * recorded session runs as a login shell (sources the user's
-     * profile and reads `$HOME/.profile` chain just like a fresh
-     * terminal login).
-     *
-     * @return list<string>
-     */
-    /**
      * COPY-10 door: `--cols abc` used to cast to 0 and the run reported a
      * `(cols=0 rows=24)` geometry nobody typed. The flag takes a whole
      * number or the parse refuses with the value named.
@@ -543,6 +535,15 @@ final class RecordCommand implements DocumentedCommand
         }
     }
 
+    /**
+     * Resolve the shell to invoke for `--shell`: honour `$SHELL`,
+     * fall back to {@see FALLBACK_SHELL}. Always passes `-l` so the
+     * recorded session runs as a login shell (sources the user's
+     * profile and reads `$HOME/.profile` chain just like a fresh
+     * terminal login).
+     *
+     * @return list<string>
+     */
     private static function shellCommand(): array
     {
         $shell = (string) (\getenv('SHELL') ?: '');
