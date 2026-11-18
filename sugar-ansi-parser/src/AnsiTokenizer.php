@@ -201,6 +201,13 @@ final class AnsiTokenizer
         }
         $second = $buf[$i + 1];
 
+        // ESC ESC: the VT500 Escape state clears on ESC and restarts, so the
+        // first ESC is abandoned without a token and the second opens the
+        // sequence. Emitting it as a two-byte ESC token would strand the
+        // sequence's own bytes as text.
+        if ($second === "\x1b") {
+            return 1;
+        }
         if ($second === '[') {
             return $this->consumeCsi($buf, $i, $len, $tokens);
         }
@@ -268,6 +275,12 @@ final class AnsiTokenizer
         if ($j >= $len) {
             return -1;
         }
+        // An ESC inside a CSI abandons the partial sequence without a token,
+        // as the VT500 machine clears on ESC from any CSI state; the ESC
+        // itself starts the next sequence.
+        if ($buf[$j] === "\x1b") {
+            return $j - $i;
+        }
         $finalByte = $buf[$j];
         $finalOrd = ord($finalByte);
         if ($finalOrd < 0x40 || $finalOrd > 0x7e) {
@@ -296,9 +309,21 @@ final class AnsiTokenizer
                 $tokens[] = new Token($type, substr($buf, $bodyStart, $j - $bodyStart), terminator: "\x07");
                 return $j + 1 - $i;
             }
-            if ($b === "\x1b" && ($buf[$j + 1] ?? '') === '\\') {
-                $tokens[] = new Token($type, substr($buf, $bodyStart, $j - $bodyStart), terminator: "\x1b\\");
-                return $j + 2 - $i;
+            if ($b === "\x1b") {
+                // The verdict on this ESC waits for the byte after it.
+                if ($j + 1 >= $len) {
+                    break;
+                }
+                if ($buf[$j + 1] === '\\') {
+                    $tokens[] = new Token($type, substr($buf, $bodyStart, $j - $bodyStart), terminator: "\x1b\\");
+                    return $j + 2 - $i;
+                }
+                // Any other ESC aborts the string as the VT500 machine does:
+                // the body so far is dispatched with no terminator, and the
+                // ESC opens the next sequence. Swallowing it into the body
+                // would lose the key or SGR that follows.
+                $tokens[] = new Token($type, substr($buf, $bodyStart, $j - $bodyStart));
+                return $j - $i;
             }
             $j++;
         }

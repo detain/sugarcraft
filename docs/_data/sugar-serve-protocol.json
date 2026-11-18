@@ -1,0 +1,11 @@
+{
+    "title": "SugarCraft — SugarServeProtocol",
+    "description": "SugarServeProtocol: the wire contract for the candy-code.v1 serve protocol — WebSocket subprotocol names, frame cap, discovery-record and token readers, and address-to-WebSocket URL normalisation. Original work; first-party.",
+    "ogTitle": "SugarCraft — SugarServeProtocol",
+    "ogDescription": "The candy-code.v1 serve protocol's wire constants and read-side helpers in one small package, so every client reads the same discovery record, token file and WebSocket URL.",
+    "emoji": "",
+    "displayName": "SugarServeProtocol",
+    "tagline": "candy-code.v1 wire contract — constants, discovery and token readers, URL rule",
+    "phpVersion": "8.3+",
+    "detailMeta": "          <span class=\"tag-chip accent\">first-party</span>\n          <span class=\"tag-chip\">websocket</span>\n          <span class=\"tag-chip\">protocol</span>\n          <span class=\"tag-chip\">no-io-writes</span>"
+}

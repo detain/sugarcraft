@@ -204,6 +204,9 @@ flag_management:
     - name: sugar-ignore
       paths: ["sugar-ignore/src/**"]
       carryforward: true
+    - name: sugar-serve-protocol
+      paths: ["sugar-serve-protocol/src/**"]
+      carryforward: true
     - name: sugar-toast
       paths: ["sugar-toast/src/**"]
       carryforward: true
@@ -579,6 +582,12 @@ component_management:
         - "sugar-ignore/src/**"
       flag_regexes:
         - "^sugar-ignore$"
+    - component_id: sugar-serve-protocol
+      name: sugar-serve-protocol
+      paths:
+        - "sugar-serve-protocol/src/**"
+      flag_regexes:
+        - "^sugar-serve-protocol$"
     - component_id: sugar-toast
       name: sugar-toast
       paths:

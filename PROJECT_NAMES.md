@@ -334,6 +334,16 @@ names.)
 
 ---
 
+## New names since the 2026-10 rename
+
+Not renames: these packages were minted under the law above and are listed
+here so the decision is recorded next to the rulebook. The renamed-package
+table above is generated from `tools/renames.json` and is never hand-edited.
+
+| Package | Prefix | Role | Decision |
+|---|---|---|---|
+| `sugar-serve-protocol` (`SugarCraft\ServeProtocol\`) | `sugar-` | library: the `candy-code.v1` serve wire contract (subprotocol names, frame cap, discovery and token readers, WebSocket URL normalisation) | Original work. The suffix names the contract, and the namespace follows the suffix rule. The slug is 20 characters, past the ~16-character guideline; kept because the plugin plan fixes the package name and the bundles import it by that name. |
+
 ## Naming conventions (cheat sheet — two prefixes, since 2026-10)
 
 | Prefix | Meaning | Example uses |

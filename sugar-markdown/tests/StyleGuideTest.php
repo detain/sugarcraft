@@ -155,6 +155,34 @@ final class StyleGuideTest extends TestCase
         $this->assertSame(0, $floaty->documentIndent, 'non-int types coerce to 0 rather than being guessed');
     }
 
+    public function testOverCeilingIndentAndMarginRefuseByName(): void
+    {
+        // candy-mdview's GlamourTheme refuses over-cap decoration at its door;
+        // the loader now does the same instead of saturating to the cap.
+        $cap = Theme::MAX_DOCUMENT_DECORATION;
+
+        $atCap = StyleGuide::fromJsonString(sprintf('{"document":{"indent":%d,"margin":"%d"}}', $cap, $cap));
+        $this->assertSame($cap, $atCap->documentIndent, 'the cap itself is accepted');
+        $this->assertSame($cap, $atCap->documentMargin, 'a digit-string at the cap is accepted');
+
+        try {
+            StyleGuide::fromJsonString('{"document":{"indent":' . ($cap + 1) . '}}');
+            $this->fail('an indent over the ceiling must refuse');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('document.indent', $e->getMessage());
+        }
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/document\.margin/');
+        StyleGuide::fromJsonString('{"document":{"margin":"1500000000"}}');
+    }
+
+    public function testOverCeilingRefusalReachesTheThemeDoor(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Theme::fromJsonString('{"document":{"margin":1000}}');
+    }
+
     public function testIndentTokenResolution(): void
     {
         $guide = StyleGuide::fromJsonString('{"document":{"indent":3},"block_quote":{"indent_token":"│ "}}');

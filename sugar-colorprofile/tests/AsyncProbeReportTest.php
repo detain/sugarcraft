@@ -246,7 +246,7 @@ final class AsyncProbeReportTest extends TestCase
                 'a ladder-killed child replays as "no dump": the environment answer stands',
             );
             $this->assertCount(0, $this->inFlightSlots(), 'the deadline rung releases the slot');
-            $this->assertSame(['xterm-256color' => null], $this->settledDumps(), 'a deadline overrun is a recorded miss, as on the sync door');
+            $this->assertSame([], $this->settledDumps(), 'a deadline overrun answered nothing: it mints no dump entry (CP-13)');
 
             // The grace KILL fires after the caller has settled. Drive the loop
             // past it so the child is observed, reaped and closed.
@@ -256,9 +256,9 @@ final class AsyncProbeReportTest extends TestCase
             $loop->run();
 
             $this->assertSame(
-                ['xterm-256color' => null],
+                [],
                 $this->settledDumps(),
-                'the late exit of a ladder-killed child must not overwrite the recorded miss with its partial dump',
+                'the late exit of a ladder-killed child must not memoize its partial dump (CP-13)',
             );
             $this->assertFalse($process->isRunning(), 'no live child survives the ladder');
             $this->assertNull(
@@ -306,6 +306,42 @@ final class AsyncProbeReportTest extends TestCase
             $this->assertInstanceOf(ProbeReport::class, $second);
             $this->assertSame(['xterm-256color' => ''], $this->settledDumps());
             $this->assertSame(1, \substr_count((string) \file_get_contents($log), 'spawn'), 'the memoized verdict answers the repeat report without a second spawn');
+        } finally {
+            @\unlink($path);
+            @\unlink($log);
+        }
+    }
+
+    /**
+     * CP-13: a child killed by a signal answered no dump, so the report memo
+     * keeps no entry for it. The planted child SIGKILLs itself before printing;
+     * the spawn counter pins that a repeat report spawns again rather than
+     * replaying a recorded miss.
+     */
+    public function testSignalKilledChildMintsNoDumpEntryAndTheNextReportRespawns(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('the planted /bin/sh stub needs a POSIX shell.');
+        }
+
+        $this->setTerm('xterm-256color');
+        $log = \tempnam(\sys_get_temp_dir(), 'cp13reportkill');
+        self::assertIsString($log);
+        $path = $this->plantBinary('#!/bin/sh' . "\n" . 'echo spawn >> ' . \escapeshellarg($log) . "\n" . "kill -KILL \$\$\n");
+        try {
+            $loop = new StreamSelectLoop();
+
+            $first = self::settle(AsyncProbe::report($loop), $loop);
+            $this->assertInstanceOf(ProbeReport::class, $first);
+            $this->assertSame([], $this->settledDumps(), 'a signal-killed child mints no dump entry (CP-13)');
+
+            $second = self::settle(AsyncProbe::report($loop), $loop);
+            $this->assertInstanceOf(ProbeReport::class, $second);
+            $this->assertSame(
+                2,
+                \substr_count((string) \file_get_contents($log), 'spawn'),
+                'with no dump entry the repeat report spawns a fresh child',
+            );
         } finally {
             @\unlink($path);
             @\unlink($log);

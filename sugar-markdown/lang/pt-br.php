@@ -29,4 +29,5 @@ return [
     'theme.mapper_not_style' => 'Theme::mapStyles() espera que o mapeador devolva um Style, obtido: {type}',
     'theme.with_slot_not_style' => 'Theme::with(): "{slot}" não é um slot Style; slots válidos: {slots}',
     'fold.marker' => '▸ recolhido',
+    'glamour.value_too_large' => 'o tema {key} excede o máximo de {limit}',
 ];

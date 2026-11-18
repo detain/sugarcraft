@@ -281,11 +281,20 @@ final class HangWatchdog
         }
         $this->process = null;
 
-        @\unlink($this->heartbeatPath);
-        foreach ((array) @\glob($this->heartbeatPath . '.*.tmp') as $stale) {
-            @\unlink((string) $stale);
+        // WHY THE EXISTENCE CHECKS: a missing file still makes unlink() and rmdir()
+        // raise a warning, and PHPUnit's error handler turns that into an exception
+        // even under @, so teardown could throw outside any test. Only touch what exists.
+        if (\is_file($this->heartbeatPath)) {
+            @\unlink($this->heartbeatPath);
         }
-        @\rmdir($this->stateDir);
+        foreach ((array) @\glob($this->heartbeatPath . '.*.tmp') as $stale) {
+            if (\is_file((string) $stale)) {
+                @\unlink((string) $stale);
+            }
+        }
+        if (\is_dir($this->stateDir)) {
+            @\rmdir($this->stateDir);
+        }
     }
 
     /**

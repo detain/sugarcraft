@@ -80,6 +80,7 @@ ships as `App\` — called out in the table below.
 | **SugarMCPClient** (`sugar-mcp-client/`) | 🟢 ready | MCP client core — JSON-RPC 2.0 codec + envelopes, stdio transport (newline framing, bounded lifecycle via sugar-core BoundedShutdown), initialize/tools handshake, deny-before-allow SERVER narrowing (tool rosters follow servers). Extracted from candy-code MCP stack; protocol per Model Context Protocol spec. |
 | **SugarReleases** (`sugar-releases/`) | 🟢 ready | Phar self-update engine + launch-time update notice — GitHub release selection (stable + rolling latest channel), sha256-sidecar + Ed25519 verification before the swap, one-shot `.old` rollback, Windows relaunch-dance swap helper. Extracted from candy-code's `SelfUpdate`/`UpdateCheck`/`WindowsSwap` (owner decision G-10=A); candy-top is the second consumer. |
 | **SugarIgnore** (`sugar-ignore/`) | 🟢 ready | gitignore-style ignore matching over injected file contents (no IO) — negation, dir-only, anchoring, `**`, escapes, nested ignore files, `.git/info/exclude` precedence, backtrack-free matcher that fails closed on hostile patterns. Extracted from candy-code's `IgnoreRules` (owner decision G-10=A); candy-git, candy-files and candy-git-server are the intended second consumers. |
+| **SugarServeProtocol** (`sugar-serve-protocol/`) | 🟢 ready | Wire contract for the `candy-code.v1` serve protocol — subprotocol names, frame cap, discovery and token readers, WebSocket URL normalisation. Original work: no upstream port. |
 
 ## Apps
 
@@ -223,6 +224,7 @@ maps each package to its upstream.
 | SugarQuickpick (sugar-quickpick/) | [theHermit](https://github.com/Genekkion/theHermit) |
 | SugarReadline (sugar-readline/) | [promptkit](https://github.com/erikgeiser/promptkit) |
 | SugarReleases (sugar-releases/) | none — first-party |
+| SugarServeProtocol (sugar-serve-protocol/) | none — first-party (original work; no upstream port) |
 | SugarSpring (sugar-spring/) | [harmonica](https://github.com/charmbracelet/harmonica) |
 | SugarSshServer (sugar-ssh-server/) | [wish](https://github.com/charmbracelet/wish) |
 | SugarStyle (sugar-style/) | [lipgloss](https://github.com/charmbracelet/lipgloss) |

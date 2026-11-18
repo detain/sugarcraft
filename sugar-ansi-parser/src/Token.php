@@ -23,7 +23,9 @@ namespace SugarCraft\AnsiParser;
  * - `OSC`, `DCS`, `APC`, `SOS`, `PM` — `$data` is the body between the opener
  *               and its terminator. `$terminator` is the exact byte run that
  *               closed it (`"\x1b\\"` for ST, `"\x07"` for BEL), which a
- *               byte-offset consumer needs to measure the span consumed.
+ *               byte-offset consumer needs to measure the span consumed. It is
+ *               `''` when another ESC aborted the string: the body is then
+ *               dispatched as it stands and that ESC opens the next token.
  *
  * The shape and type constants match the tokens sugar-core's `Util\Token`
  * emits, so a consumer moving onto this class sees the same fields.

@@ -576,7 +576,7 @@ tree; `/memory export` bundles CandyCode's own stores for the user, never a
 foreign tree.
 
 **`Host\Commands\MemoryCommand::import()` constructs it behind `/memory import claude|opencode`**
-(wired in P7.S6). The importer writes every entry at the scope it is handed,
+The importer writes every entry at the scope it is handed,
 defaulting to `MemoryScope::Local`, which `MemoryStore::normalizeScope()` lands
 in the `agent` directory — so an import on the default path reaches
 `/memory list agent` and `/memory search` and, per the project-scope-only policy

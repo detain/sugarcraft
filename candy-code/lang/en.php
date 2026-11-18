@@ -451,7 +451,10 @@ answers from the pause records alone):
   bundles install <src>  Copy a bundle directory, or clone a git URL with a
                          bounded depth-one clone, into the user bundle root
                          (~/.candy-code/bundles), where only you own it.
-                         --project: <root>/.candy-code/bundles instead.
+                         --project: the repository's project tier instead,
+                         <root>/.candy-code/bundles, where <root> is --root or
+                         the repository the directory is in; --user names the
+                         user root explicitly. The two cannot be combined.
   doctor                 Check this installation and report every problem it
                          finds: PHP version, the extensions the session store
                          and serve need, the config file, the permission
