@@ -66,10 +66,14 @@ final class DeclaredClasses
     }
 
     /**
-     * The fully qualified names of the functions $path declares at top level.
-     * Methods, closures and declarations inside a plain block (an `if`, a function
-     * body) are left out: a guarded declaration cannot fatal, and a method is not a
-     * global name.
+     * The fully qualified names of the functions $path declares as global names:
+     * top-level functions, and functions nested in a plain block or another
+     * function's body. A nested declaration fatals just as a top-level one does when
+     * it redeclares a name another file holds, and the guard around it does not
+     * catch that, so it is listed too. A guard that already prevents the redeclaration
+     * is refused as well; that false refusal is accepted because the fatal it would
+     * otherwise allow cannot be caught. Methods are left out (a method is not a
+     * global name), and so are closures (they are not named).
      *
      * @return list<string>
      */
@@ -100,47 +104,55 @@ final class DeclaredClasses
         $types = [];
         $functions = [];
         $namespace = '';
-        // One entry per open brace: true when it opens a braced namespace block,
-        // whose contents are still top level. Only plain braces push $plainOpen.
+        // One entry per open brace: true when it opens a class-like body, whose
+        // functions are methods and so not global names.
         $braces = [];
-        $plainOpen = 0;
-        $namespaceBlockPending = false;
+        // The paren depth of a class-like header whose body brace is still to come.
+        // `new class(function () { ... }) {` must not take the argument's brace.
+        $bodyDue = null;
+        $parens = 0;
         $count = \count($tokens);
         for ($i = 0; $i < $count; $i++) {
             [$id] = $tokens[$i];
             $next = $tokens[$i + 1][0] ?? null;
+            $prev = $tokens[$i - 1][0] ?? null;
 
             // `namespace\foo()` is a relative name in code, not a declaration.
             if ($id === T_NAMESPACE && $next !== T_NS_SEPARATOR) {
                 $named = $next === T_STRING || $next === T_NAME_QUALIFIED;
                 $namespace = $named ? $tokens[$i + 1][1] : '';
-                $after = $named ? ($tokens[$i + 2][0] ?? null) : $next;
-                $namespaceBlockPending = $after === '{';
                 continue;
             }
 
+            if ($id === '(') {
+                $parens++;
+            } elseif ($id === ')') {
+                $parens--;
+            }
+
             if ($id === '{' || $id === T_CURLY_OPEN || $id === T_DOLLAR_OPEN_CURLY_BRACES) {
-                $block = $id === '{' && $namespaceBlockPending;
-                $namespaceBlockPending = false;
-                $braces[] = $block;
-                if (!$block) {
-                    $plainOpen++;
+                $body = $id === '{' && $bodyDue === $parens;
+                if ($body) {
+                    $bodyDue = null;
                 }
+                $braces[] = $body;
                 continue;
             }
 
             if ($id === '}') {
-                if (\array_pop($braces) === false) {
-                    $plainOpen--;
-                }
+                \array_pop($braces);
                 continue;
             }
 
-            if (\in_array($id, [T_CLASS, T_INTERFACE, T_TRAIT, T_ENUM], true) && $next === T_STRING) {
-                $types[] = self::qualify($namespace, $tokens[$i + 1][1]);
+            // `Foo::class` is a name lookup, not a declaration, so it opens no body.
+            if (\in_array($id, [T_CLASS, T_INTERFACE, T_TRAIT, T_ENUM], true) && $prev !== T_DOUBLE_COLON) {
+                $bodyDue = $parens;
+                if ($next === T_STRING) {
+                    $types[] = self::qualify($namespace, $tokens[$i + 1][1]);
+                }
             }
 
-            if ($id === T_FUNCTION && $plainOpen === 0) {
+            if ($id === T_FUNCTION && \end($braces) !== true) {
                 $j = $i + 1;
                 if (\in_array($tokens[$j][0] ?? null, [T_AMPERSAND_NOT_FOLLOWED_BY_VAR_OR_VARARG, T_AMPERSAND_FOLLOWED_BY_VAR_OR_VARARG], true)) {
                     $j++;

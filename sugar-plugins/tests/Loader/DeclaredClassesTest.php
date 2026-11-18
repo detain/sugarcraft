@@ -108,7 +108,7 @@ final class DeclaredClassesTest extends TestCase
         $this->assertSame('stdClass', DeclaredClasses::declaredElsewhere($path));
     }
 
-    public function testItListsOnlyTopLevelFunctionsInBothNamespaceForms(): void
+    public function testItListsEveryGlobalFunctionButNoMethodOrClosure(): void
     {
         $path = $this->file(<<<'PHP'
             <?php
@@ -143,8 +143,51 @@ final class DeclaredClassesTest extends TestCase
             $closure = function (): void {};
             PHP);
 
-        $this->assertSame(['Alpha\one', 'Alpha\byRef', 'Beta\two'], DeclaredClasses::functionsOf($path));
+        $this->assertSame(['Alpha\one', 'Alpha\byRef', 'Beta\two', 'Beta\guarded'], DeclaredClasses::functionsOf($path));
         $this->assertSame(['Beta\Holder'], DeclaredClasses::of($path));
+    }
+
+    public function testAFunctionNestedInAPlainBlockRedeclaringAnEngineFunctionIsReportedBeforeRequire(): void
+    {
+        // The engine's strlen() is not a file, so the nested declaration would fatal
+        // at require time with no catchable error. It must be refused before that.
+        $path = $this->file("<?php\n\ndeclare(strict_types=1);\n\nif (true) {\n    function strlen(string \$s): int { return 0; }\n}\n");
+
+        $this->assertSame(['strlen'], DeclaredClasses::functionsOf($path));
+        $this->assertSame('strlen', DeclaredClasses::declaredElsewhere($path));
+    }
+
+    public function testAFunctionNestedInAnotherFunctionsBodyIsListed(): void
+    {
+        $path = $this->file("<?php\n\ndeclare(strict_types=1);\n\nfunction outer(): void\n{\n    function inner(): void {}\n}\n");
+
+        $this->assertSame(['outer', 'inner'], DeclaredClasses::functionsOf($path));
+    }
+
+    public function testAMethodNamedAsAnEngineFunctionIsNotAGlobalCollision(): void
+    {
+        $path = $this->file("<?php\n\ndeclare(strict_types=1);\n\nfinal class Shouter\n{\n    public function strlen(string \$s): int { return 0; }\n}\n");
+
+        $this->assertSame([], DeclaredClasses::functionsOf($path));
+        $this->assertNull(DeclaredClasses::declaredElsewhere($path));
+    }
+
+    public function testAnonymousClassMethodsStayOutOfTheGlobalListAfterAClosureArgument(): void
+    {
+        // The closure's brace sits inside the argument list, so it is not the body
+        // brace; the anonymous class's own methods must stay out of the global list.
+        $path = $this->file(<<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            $obj = new class(function () { return 1; }) {
+                public function strlen(): int { return 0; }
+            };
+            PHP);
+
+        $this->assertSame([], DeclaredClasses::functionsOf($path));
+        $this->assertNull(DeclaredClasses::declaredElsewhere($path));
     }
 
     public function testAFunctionAnotherFileDeclaresIsReportedBeforeRequireWouldFatal(): void
