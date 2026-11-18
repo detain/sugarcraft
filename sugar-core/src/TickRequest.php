@@ -17,6 +17,7 @@ final class TickRequest implements Msg
     public function __construct(
         public readonly float $seconds,
         public readonly \Closure $produce,
+        public readonly ?TickHandle $handle = null,
     ) {
     }
 }

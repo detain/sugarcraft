@@ -24,6 +24,8 @@ use SugarCraft\Core\Util\Tty;
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
+use React\Promise\Deferred;
+use React\Promise\PromiseInterface;
 use WeakReference;
 
 /**
@@ -141,6 +143,17 @@ final class Program
     private ?Recorder $recorder = null;
     /** @var array<string, array{0: mixed, 1: Subscription}> */
     private array $activeSubscriptions = [];
+
+    /**
+     * Model-tree subscription collections, keyed by the active model's
+     * identity. Models are immutable, so an unchanged identity means an
+     * unchanged tree; the WeakMap lets a dropped model's entry go with it.
+     * The value is a one-slot array because WeakMap treats a null value as
+     * absent, and "no subscriptions" is a result worth remembering.
+     *
+     * @var \WeakMap<Model, array{0: ?Subscriptions}>
+     */
+    private \WeakMap $subscriptionMemo;
     /**
      * Signal-subscription chains, keyed by signal number (sugar-core-017).
      * Each signo owns ONE dispatcher we install; `prev` is the handler the
@@ -272,6 +285,7 @@ final class Program
             writer: $this->writer,
         );
         $this->tty = new Tty($this->input, $options->termios);
+        $this->subscriptionMemo = new \WeakMap();
     }
 
     /**
@@ -1100,7 +1114,12 @@ final class Program
             return;
         }
         if ($msg instanceof TickRequest) {
-            $this->addOneShotTimer($msg->seconds, function () use ($msg): void {
+            // A tick cancelled before it reached the loop never arms, so its
+            // produce closure cannot run (see TickHandle).
+            if ($msg->handle?->isCancelled()) {
+                return;
+            }
+            $timer = $this->addOneShotTimer($msg->seconds, function () use ($msg): void {
                 try {
                     $produced = ($msg->produce)();
                 } catch (\Throwable $t) {
@@ -1111,6 +1130,12 @@ final class Program
                     $this->dispatch($produced);
                 }
             });
+            $msg->handle?->attach(fn () => $this->cancelOneShotTimer($timer));
+            return;
+        }
+        if ($msg instanceof WindowSizeRequest) {
+            $size = $this->options->windowSize ?? $this->tty->size();
+            $this->dispatch(new WindowSizeMsg($size['cols'], $size['rows']));
             return;
         }
         if ($msg instanceof EveryRequest) {
@@ -1201,7 +1226,10 @@ final class Program
             // generation at arm-time and refusing to act on a mismatch makes
             // post-teardown settlement a silent no-op.
             $generation = $this->runtimeGeneration;
-            $msg->promise->then(function (?Msg $resolvedMsg) use ($generation): void {
+            $promise = $msg->timeoutSeconds === null
+                ? $msg->promise
+                : $this->boundPromise($msg->promise, $msg->timeoutSeconds);
+            $promise->then(function (?Msg $resolvedMsg) use ($generation): void {
                 if ($generation !== $this->runtimeGeneration) {
                     return;
                 }
@@ -1825,7 +1853,7 @@ final class Program
         }
         $this->escapeFlushPending = true;
         $generation = $this->runtimeGeneration;
-        $this->addOneShotTimer(0.05, function () use ($generation): void {
+        $this->addOneShotTimer($this->options->escapeDelay, function () use ($generation): void {
             $this->escapeFlushPending = false;
             // Teardown law (crush_libs.md sugar-core #3, pinned by
             // ProgramRuntimeTeardownTest): a flush must never promote into a
@@ -2053,6 +2081,43 @@ final class Program
                 $this->dispatch($msg);
             }
         });
+    }
+
+    /**
+     * Settle $promise with its own outcome, or reject with a timeout error
+     * once $seconds pass, whichever comes first. The timer lives on the
+     * Program's loop, so teardown cancels it like any other one-shot.
+     */
+    private function boundPromise(PromiseInterface $promise, float $seconds): PromiseInterface
+    {
+        $deferred = new Deferred();
+        $settled = false;
+        $timer = $this->addOneShotTimer($seconds, function () use ($deferred, &$settled, $seconds): void {
+            if ($settled) {
+                return;
+            }
+            $settled = true;
+            $deferred->reject(new \RuntimeException(Lang::t('program.async_timeout', ['seconds' => (string) $seconds])));
+        });
+        $promise->then(
+            function (mixed $value) use ($deferred, &$settled, $timer): void {
+                if ($settled) {
+                    return;
+                }
+                $settled = true;
+                $this->cancelOneShotTimer($timer);
+                $deferred->resolve($value);
+            },
+            function (\Throwable $error) use ($deferred, &$settled, $timer): void {
+                if ($settled) {
+                    return;
+                }
+                $settled = true;
+                $this->cancelOneShotTimer($timer);
+                $deferred->reject($error);
+            },
+        );
+        return $deferred->promise();
     }
 
     private function addOneShotTimer(float $seconds, \Closure $callback): TimerInterface
@@ -2787,7 +2852,22 @@ final class Program
         // subscription declarations structurally dead).
         return $this->options->subscriptions !== null
             ? ($this->options->subscriptions)($this->model)
-            : $this->collectSubscriptions($this->activeModel());
+            : $this->memoizedSubscriptions($this->activeModel());
+    }
+
+    /**
+     * Collect the model tree's subscriptions once per model identity. Every
+     * update cycle asks for them, and most updates return the same model
+     * (`[$this, null]`), so re-walking the tree each time is wasted work.
+     */
+    private function memoizedSubscriptions(Model $model): ?Subscriptions
+    {
+        if (isset($this->subscriptionMemo[$model])) {
+            return $this->subscriptionMemo[$model][0];
+        }
+        $collected = $this->collectSubscriptions($model);
+        $this->subscriptionMemo[$model] = [$collected];
+        return $collected;
     }
 
     /**
