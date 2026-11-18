@@ -88,13 +88,24 @@ final class AsyncCache
         return $this->maxEntries;
     }
 
+    /**
+     * Epoch of the store: advanced by every invalidate() and clear(). A caller
+     * that starts a load records the epoch first and discards the result when
+     * the epoch has moved on, the same guard phlix's stores hand-rolled as a
+     * generation counter. Shared by every handle over the store.
+     */
+    public function generation(): int
+    {
+        return $this->store->generation;
+    }
+
     /** Number of stored values, fresh or stale. In-flight loads are not stored. */
     public function count(): int
     {
         return count($this->store->values);
     }
 
-    /** Stored keys (fresh or stale) in insertion order. */
+    /** Stored keys (fresh or stale), least-recently-stored first. */
     public function keys(): array
     {
         return array_keys($this->store->values);
@@ -249,6 +260,7 @@ final class AsyncCache
     {
         unset($this->store->values[$key], $this->store->storedAt[$key]);
         $this->store->flights->forget($key);
+        $this->store->generation++;
     }
 
     /** Drop every entry and supersede every in-flight load. */
@@ -257,6 +269,7 @@ final class AsyncCache
         $this->store->values = [];
         $this->store->storedAt = [];
         $this->store->flights->forgetAll();
+        $this->store->generation++;
     }
 
     private static function guardMaxEntries(?int $maxEntries): void
@@ -267,30 +280,21 @@ final class AsyncCache
     }
 
     /**
-     * Cap enforcement at adoption time: evict least-recently-stored keys
-     * (equal stamps break insertion-first via a strict '<' scan) until the
-     * store sits at or below the cap. A drain loop, never self-recursion:
-     * a shrink below size would otherwise cost stack depth per excess entry.
-     * The just-adopted key carries the newest stamp, so it is never a
-     * candidate. Flights are untouched — a coalescing load is not a stored
-     * value.
+     * Cap enforcement at adoption time. {@see adopt()} moves every stored key to
+     * the tail of the value map, so the map's head is always the least-recently
+     * stored entry: each eviction is an array_key_first() plus an unset, with no
+     * scan of the store (amortized O(1) per evicted key). The just-adopted key
+     * sits at the tail and is never a candidate. A drain loop, never
+     * self-recursion: a shrink below size would otherwise cost stack depth per
+     * excess entry. Flights are untouched; a coalescing load is not a stored value.
      */
     private function evictOverflow(): void
     {
         if ($this->maxEntries === null) {
             return;
         }
-
         while (count($this->store->values) > $this->maxEntries) {
             $oldest = array_key_first($this->store->values);
-            $oldestStamp = $this->store->storedAt[$oldest];
-            foreach ($this->store->values as $candidate => $_) {
-                if ($this->store->storedAt[$candidate] < $oldestStamp) {
-                    $oldest = $candidate;
-                    $oldestStamp = $this->store->storedAt[$candidate];
-                }
-            }
-
             unset($this->store->values[$oldest], $this->store->storedAt[$oldest]);
         }
     }
@@ -301,6 +305,9 @@ final class AsyncCache
         // displaced mid-load by invalidate()/clear() resolved its callers but
         // never writes into the store — the invalidation was the newer truth.
         if ($this->store->flights->end($key, $flight) === true) {
+            // Re-inserting moves the key to the tail: the map stays in
+            // least-recently-stored order, which evictOverflow() relies on.
+            unset($this->store->values[$key]);
             $this->store->values[$key] = $value;
             $this->store->storedAt[$key] = ($this->store->clock)();
             $this->evictOverflow();
