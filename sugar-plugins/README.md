@@ -1,6 +1,6 @@
 # sugar-plugins
 
-The generic plugin core for SugarCraft hosts: the plugin and channel contracts, the launch context a plugin receives, and the escape that fences dynamic bytes out of a model prompt.
+The generic plugin core for SugarCraft hosts: the plugin and channel contracts, the launch context a plugin receives, the escape that fences dynamic bytes out of a model prompt, and the generic loader, quarantine ledger, registry and manifest reader.
 
 This is original work. Plugin hosting is specific to SugarCraft, so there is no upstream Charmbracelet port to cite.
 
@@ -10,7 +10,7 @@ This is original work. Plugin hosting is specific to SugarCraft, so there is no 
 composer require sugarcraft/sugar-plugins
 ```
 
-Requires PHP 8.3+. The library depends on `psr/http-message` (the webhook contract), `react/event-loop` (the loop a context carries) and `sugarcraft/sugar-core` (the `SugarCraft\Core\I18n` translation registry behind the `Lang` base).
+Requires PHP 8.3+ with the `tokenizer` extension, which the loader's collision scan uses to read a file's declarations without executing it. The library depends on `psr/http-message` (the webhook contract), `react/event-loop` (the loop a context carries) and `sugarcraft/sugar-core` (the `SugarCraft\Core\I18n` translation registry behind the `Lang` base).
 
 ## What it provides
 
