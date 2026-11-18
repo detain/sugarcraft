@@ -737,6 +737,19 @@ instead: `ScreenPacketizer` and `ScreenPassthrough`, which live under
 tmux half of the family — `TmuxPassthrough` + `TmuxPassthroughDecorator`
 — sits in the root namespace, not in `Passthrough/`.
 
+**Kitty inside tmux needs the APC reply.** This is a behavior change for tmux
+users. Before it, a Kitty environment claim inside tmux (`TMUX` set with
+`KITTY_WINDOW_ID`, `TERM=xterm-kitty` or a known `TERM_PROGRAM`) selected
+Kitty on its own. Now `Capability::kitty()` is true only when the APC `a=q`
+reply arrives, and that reply crosses tmux like any other APC string. With
+`allow-passthrough` off, tmux swallows the reply, so the claim is dropped and
+the ladder falls to halfblock or sixel. The probe runs before
+`TmuxPassthrough::ensure()` flips the option (that happens when the renderer
+is built), so the automatic flip cannot rescue the first probe. Set
+`allow-passthrough` to `on` in tmux (`set -g allow-passthrough on`) so the
+reply reaches the program. The query is written raw: there is no tmux
+exception to the reply rule and no DCS passthrough wrap around the query.
+
 ## Animation
 
 Drive a sequence of frames through `AnimationDriver`, a `Model`-implementing
