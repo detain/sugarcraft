@@ -4015,6 +4015,12 @@ final class Subcommands
     private static function bundles(ParsedArgs $args): int
     {
         $verb = $args->subcommandArgs[0] ?? null;
+        if ($verb !== null && $verb !== 'install' && self::bundlesScopeFlagsGiven($args)) {
+            // PLG-2a: `--project` and `--user` choose where an install lands.
+            // Update keeps each bundle in the tier it already occupies, so a
+            // scope flag there would promise a move that never happens.
+            return self::bundlesUsage($args, 'cli.bundles.scope_not_install', ['verb' => $verb]);
+        }
         if ($verb === 'list') {
             return self::bundlesList($args);
         }
@@ -4055,7 +4061,10 @@ final class Subcommands
     {
         $configured = Bootstrap::readUserConfig()[BundleDiscovery::SETTING_KEY] ?? [];
         $paths = \array_values(\array_filter(\is_array($configured) ? $configured : [], 'is_string'));
-        $discovery = new BundleDiscovery((string) ($args->root ?? ''), $paths);
+        // The same base `bundles install --project` writes to (`--root`, else the
+        // working directory): without it `list` scans `/.candy-code/bundles` and
+        // cannot see the bundle the install just placed.
+        $discovery = new BundleDiscovery((string) ($args->root ?? (\getcwd() ?: '')), $paths);
         $bundles = $discovery->discover();
 
         if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
@@ -4194,18 +4203,30 @@ final class Subcommands
             );
         }
 
-        $home = HomeDirectory::owned();
-        if ($home === null) {
-            self::bundlesLine(Lang::t('cli.bundles.install.no_home'));
-
-            return NonInteractive::EXIT_FAILURE;
+        $project = isset($args->subcommandFlags['--project']);
+        if ($project && isset($args->subcommandFlags['--user'])) {
+            return self::bundlesUsage($args, 'cli.bundles.install.project_user');
         }
 
-        $root = $home . '/.candy-code/bundles';
-        if (!is_dir($root) && !@\mkdir($root, 0700, true) && !is_dir($root)) {
-            self::bundlesLine(Lang::t('cli.bundles.install.no_home'));
+        if ($project) {
+            $root = self::bundlesProjectRoot($args);
+            if ($root === null) {
+                return NonInteractive::EXIT_FAILURE; // bundlesProjectRoot printed its line
+            }
+        } else {
+            $home = HomeDirectory::owned();
+            if ($home === null) {
+                self::bundlesLine(Lang::t('cli.bundles.install.no_home'));
 
-            return NonInteractive::EXIT_FAILURE;
+                return NonInteractive::EXIT_FAILURE;
+            }
+
+            $root = $home . '/.candy-code/bundles';
+            if (!is_dir($root) && !@\mkdir($root, 0700, true) && !is_dir($root)) {
+                self::bundlesLine(Lang::t('cli.bundles.install.no_home'));
+
+                return NonInteractive::EXIT_FAILURE;
+            }
         }
 
         if (is_dir($source) && realpath($source) === realpath($root)) {
@@ -4322,6 +4343,79 @@ final class Subcommands
         echo Lang::t('cli.bundles.installed', ['name' => $name, 'dest' => $dest]) . "\n";
 
         return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * Whether the operator typed `--project` or `--user` on this `bundles`
+     * verb. Both are verb flags, so the parser records them only once the
+     * verb is open; a bare `candy-code --project` never reaches here.
+     */
+    private static function bundlesScopeFlagsGiven(ParsedArgs $args): bool
+    {
+        return isset($args->subcommandFlags['--project']) || isset($args->subcommandFlags['--user']);
+    }
+
+    /**
+     * The `--project` install destination: `<root>/.candy-code/bundles`,
+     * where `<root>` is `--root` or the working directory — the same base
+     * {@see BundleDiscovery} reads the project tier from, so an install is
+     * listed by the very next `bundles list` in that directory. The operator
+     * typed the scope, so the directory is created on demand. A symlink in
+     * either segment is refused: the install writes through that path, and a
+     * checkout must not be able to steer the write out of its own tree.
+     * Prints its own refusal line and returns null when it refuses.
+     */
+    private static function bundlesProjectRoot(ParsedArgs $args): ?string
+    {
+        $base = $args->root ?? \getcwd();
+        if ($base === false || !is_dir($base)) {
+            self::bundlesLine(Lang::t('cli.bundles.install.project_root', ['root' => (string) $base]));
+
+            return null;
+        }
+
+        $base = \rtrim($base, '/');
+        $root = $base . '/.candy-code/bundles';
+        $dotDir = \dirname($root);
+
+        if (\is_link($dotDir) || \is_link($root)) {
+            self::bundlesLine(Lang::t('cli.bundles.install.project_link', ['path' => \is_link($dotDir) ? $dotDir : $root]));
+
+            return null;
+        }
+
+        if (!is_dir($root) && !@\mkdir($root, 0755, true) && !is_dir($root)) {
+            self::bundlesLine(Lang::t('cli.bundles.install.project_root', ['root' => $base]));
+
+            return null;
+        }
+
+        return $root;
+    }
+
+    /**
+     * The project-tier bundle root `bundles update` may also walk: the same
+     * `<root>/.candy-code/bundles` {@see bundlesProjectRoot()} installs into,
+     * but read-only and silent. Null when there is no such directory or it is
+     * a symlink — discovery refuses a symlinked bundle floor too, so update
+     * does not reach through one.
+     */
+    private static function bundlesExistingProjectRoot(ParsedArgs $args): ?string
+    {
+        $base = $args->root ?? \getcwd();
+        if ($base === false) {
+            return null;
+        }
+
+        $base = \rtrim($base, '/');
+        $root = $base . '/.candy-code/bundles';
+        $dotDir = \dirname($root);
+
+        if (\is_link($dotDir) || \is_link($root) || !is_dir($root)) {
+            return null;
+        }
+
+        return $root;
     }
 
     /**
@@ -5036,49 +5130,113 @@ final class Subcommands
      * an update never leaves a bundle absent. A bundle with no record, or
      * one whose marketplace is gone, is refused per name when named and
      * skipped with a line when the root is scanned — update never invents
-     * a source for what install did not record.
+     * a source for what install did not record. Each bundle is refreshed in
+     * the tier it occupies (user root, or the project root the working
+     * directory holds), so a `--project` install is never moved to the user
+     * tier. Without an owned home the pins are unreadable, and every recorded
+     * bundle is refused by name instead of being re-staged from its record.
      */
     private static function bundlesUpdate(ParsedArgs $args): int
     {
+        // PLG-2a: each bundle is updated in the root it already occupies, so a
+        // `--project` install stays in its project tier. The user root comes
+        // first; the project root is read only when the working directory (or
+        // --root) holds one. An unowned home drops the user root but never the
+        // project root: `bundles install --project` does not consult the home,
+        // so update must still see what it installed.
         $home = HomeDirectory::owned();
-        if ($home === null) {
-            self::bundlesLine(Lang::t('cli.bundles.install.no_home'));
-
-            return NonInteractive::EXIT_FAILURE;
+        $candidates = [self::bundlesExistingProjectRoot($args)];
+        if ($home !== null) {
+            \array_unshift($candidates, $home . '/.candy-code/bundles');
         }
 
-        $root = $home . '/.candy-code/bundles';
+        // A working directory that IS the home directory names the user root
+        // again; the realpath check keeps that one root from being walked twice.
+        $roots = [];
+        $seenRoots = [];
+        foreach ($candidates as $candidate) {
+            $real = $candidate === null ? false : realpath($candidate);
+            if ($real === false || isset($seenRoots[$real])) {
+                continue;
+            }
+            $seenRoots[$real] = true;
+            $roots[] = $candidate;
+        }
 
-        if (!is_dir($root)) {
+        if ($roots === []) {
+            if ($home === null) {
+                self::bundlesLine(Lang::t('cli.bundles.install.no_home'));
+
+                return NonInteractive::EXIT_FAILURE;
+            }
+
             echo Lang::t('cli.bundles.update.nothing') . "\n";
 
             return NonInteractive::EXIT_OK;
         }
 
+        // The pinned marketplace entries live in the user registry under the
+        // owned home. With no owned home there is no pin to re-resolve, and
+        // update never re-stages from the record's own url or sha (that would
+        // walk around the marketplace install gate), so each recorded bundle
+        // is refused by name below rather than silently skipped or moved.
+        $registry = $home === null ? null : MarketplaceRegistry::loadDefault();
+
         $wanted = $args->subcommandArgs[1] ?? null;
         $named = $wanted !== null && $wanted !== '';
 
+        /** @var list<array{name: string, root: string}> $targets */
+        $targets = [];
+
         if ($named) {
-            if (!is_dir($root . '/' . $wanted)) {
+            $owners = \array_values(\array_filter(
+                $roots,
+                static fn (string $candidate): bool => is_dir($candidate . '/' . $wanted),
+            ));
+
+            if ($owners === []) {
                 self::bundlesLine(Lang::t('cli.bundles.update.unknown', ['name' => (string) $wanted]));
 
                 return NonInteractive::EXIT_FAILURE;
             }
 
-            $names = [(string) $wanted];
+            if (\count($owners) > 1) {
+                // The same name in both tiers: which one to re-stage is the
+                // operator's call, and guessing would move the wrong bytes.
+                self::bundlesLine(Lang::t('cli.bundles.update.ambiguous', ['name' => (string) $wanted]));
+
+                return NonInteractive::EXIT_FAILURE;
+            }
+
+            $targets[] = ['name' => (string) $wanted, 'root' => $owners[0]];
         } else {
-            $names = self::bundlesBundleRootNames($root);
+            foreach ($roots as $candidate) {
+                foreach (self::bundlesBundleRootNames($candidate) as $name) {
+                    $targets[] = ['name' => $name, 'root' => $candidate];
+                }
+            }
         }
 
-        $registry = MarketplaceRegistry::loadDefault();
         $status = NonInteractive::EXIT_OK;
 
-        foreach ($names as $name) {
+        foreach ($targets as ['name' => $name, 'root' => $root]) {
             $dir = $root . '/' . $name;
             $record = BundleSource::read($dir, $root);
 
             if ($record === null) {
                 self::bundlesLine(Lang::t('cli.bundles.update.no_record', ['name' => $name]));
+
+                if ($named) {
+                    $status = NonInteractive::EXIT_FAILURE;
+                }
+
+                continue;
+            }
+
+            if ($registry === null) {
+                // Named per bundle: an unnamed update may refuse several project
+                // bundles in one run, and the operator must see which one it was.
+                self::bundlesLine(Lang::t('cli.bundles.update.no_home', ['name' => $name]));
 
                 if ($named) {
                     $status = NonInteractive::EXIT_FAILURE;
@@ -5310,8 +5468,16 @@ final class Subcommands
             }
         }
 
+        // PLG-2a: a bundle installed with `--project` into this directory is as
+        // installed as one in the user root, so both tiers are excluded. The
+        // two roots coincide when the working directory is the home directory,
+        // and the names are unioned, so that is one name, not two.
         $home = HomeDirectory::owned();
         $installed = $home === null ? [] : self::bundlesBundleRootNames($home . '/.candy-code/bundles');
+        $projectRoot = self::bundlesExistingProjectRoot($args);
+        if ($projectRoot !== null) {
+            $installed = \array_values(\array_unique(\array_merge($installed, self::bundlesBundleRootNames($projectRoot))));
+        }
 
         $recommended = (new BundleRecommender($root, $catalog, $installed))->recommend();
 

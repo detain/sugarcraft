@@ -110,6 +110,13 @@ final readonly class ParsedArgs
         'attach' => [
             '--url' => true,
         ],
+        // `bundles install` (PLG-2a): where the bundle lands. Bare = the user
+        // bundle root; `--project` = `<root>/.candy-code/bundles`; both at once
+        // is refused by the verb. Every other `bundles` verb refuses them.
+        'bundles' => [
+            '--project' => false,
+            '--user' => false,
+        ],
         // `gc` (gc-cli-1106 B1+B2+B3): storage inspection, per-session fold
         // and reclaim. `-f` is the alias of `--force` and `-n` of `--dry-run`;
         // which ACTION each flag belongs to is

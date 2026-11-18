@@ -146,6 +146,9 @@ return [
     'cli.bundles.install.no_home' => 'bundles install：此进程无可确认归属的主目录，无法在其中创建 bundle 根目录',
     'cli.bundles.install.not_a_source' => 'bundles install：{source} 既不是现有目录也不是 git URL',
     'cli.bundles.install.not_bundle' => 'bundles install：{source} 不含 .claude-plugin/plugin.json（也无裸 plugin.json），不是插件 bundle',
+    'cli.bundles.install.project_link' => 'bundles install：{path} 是符号链接；经由链接到达的项目 bundle 根目录会被拒绝，因此未安装任何内容',
+    'cli.bundles.install.project_root' => 'bundles install：项目根目录 {root} 不是本进程可以安装到的目录；未写入任何内容',
+    'cli.bundles.install.project_user' => 'bundles install：--project 与 --user 指向两个不同的 bundle 根目录；请只指定一个，或都不指定以使用用户根目录',
     'cli.bundles.install.read_failed' => 'bundles install：无法将 {source} 暂存到 bundle 根目录',
     'cli.bundles.install.via_marketplace' => '已记录 {name}（来自 marketplace {marketplace}，commit {sha}）；`candy-code bundles update {name}` 可从该记录刷新。',
     'cli.bundles.installed' => '已将 bundle {name} 安装到 {dest}。',
@@ -170,17 +173,20 @@ return [
     'cli.bundles.no_action' => 'bundles：未指定操作',
     'cli.bundles.none' => '未找到插件 bundle（已搜索 .candy-code/bundles 及所有 pluginPaths 条目）。',
     'cli.bundles.recommend.none' => '此项目无推荐：已添加的 marketplace 未提供其文件所指向的新内容。',
+    'cli.bundles.scope_not_install' => 'bundles {verb}：--project 与 --user 决定安装位置，只有 `bundles install` 接受它们',
     'cli.bundles.search.needs_query' => 'bundles search：请提供查询字符串',
     'cli.bundles.search.none' => '无目录条目匹配 {query}。',
     'cli.bundles.unknown_action' => 'bundles {action}：未知操作',
+    'cli.bundles.update.ambiguous' => 'bundle update：{name} 同时安装在用户根目录和项目根目录中，update 无法选择；请先移开其中一份再重新运行',
     'cli.bundles.update.done' => '已从 marketplace 记录将 bundle {name} 更新到 commit {sha}。',
     'cli.bundles.update.marketplace_gone' => 'bundle {name} 记录 marketplace {marketplace}，但该 marketplace 未添加；bundle 保持原样——重新添加 marketplace 以更新',
+    'cli.bundles.update.no_home' => 'bundle update: {name} 被拒绝：其 marketplace 固定记录位于用户注册表中，而本进程没有可确认归其所有的主目录；未做任何更改',
     'cli.bundles.update.no_record' => 'bundle {name} 无 marketplace 来源记录（从路径或 URL 安装），更新已跳过',
     'cli.bundles.update.nothing' => '尚无 bundle 根目录；无需更新。',
     'cli.bundles.update.renamed' => 'bundle update：{from} 上游已更名为 {to}；更新拒绝重新键控已安装的 bundle，未做任何更改',
     'cli.bundles.update.swap_failed' => 'bundle update：{name} 的树替换失败；原有树完好',
     'cli.bundles.update.unknown' => 'bundles update：未安装名为 {name} 的 bundle',
-    'cli.bundles.usage' => '用法：candy-code bundles list | install <path|git-url|plugin@marketplace> | marketplace add <path|git-url> | marketplace list | marketplace remove <name> | marketplace update [name] | update [bundle] | search <query> | recommend',
+    'cli.bundles.usage' => '用法：candy-code bundles list | install <path|git-url|plugin@marketplace> [--project|--user] | marketplace add <path|git-url> | marketplace list | marketplace remove <name> | marketplace update [name] | update [bundle] | search <query> | recommend',
     'cli.completion.no_shell' => 'completion：未指定 shell',
     'cli.completion.option.agent' => '以智能体预设收窄启动（仅交互式）',
     'cli.completion.option.append_system_prompt' => '向一次性系统提示追加操作者规则（内联文本或 @file）',
@@ -405,6 +411,7 @@ CandyCode — 终端 AI 编程助手。
   bundles install <src>  复制包目录，或以浅层克隆（深度为 1）
                          克隆 git URL 到用户包根目录
                          （~/.candy-code/bundles），仅你拥有。
+                         --project：改装到 <root>/.candy-code/bundles。
   doctor                 检查此安装并报告发现的每个问题：
                          PHP 版本、会话存储和 serve 所需的扩展、
                          配置文件、权限策略、
