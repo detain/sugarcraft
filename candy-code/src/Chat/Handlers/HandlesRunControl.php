@@ -265,7 +265,12 @@ trait HandlesRunControl
             // the queue: produce the hop now, skipping only the delay, never
             // the event. The real host intercepts TickRequest in
             // Program::dispatch() before update() ever sees one, so this arm
-            // exists for the headless shape alone.
+            // exists for the headless shape alone. A tick cancelled before it
+            // reached here stays dead: TickHandle promises produce never runs
+            // after cancel(), and Program and ProgramSimulator honour that too.
+            if ($msg->handle?->isCancelled()) {
+                return [$this, null];
+            }
             $produced = ($msg->produce)();
 
             return $produced === null ? [$this, null] : [$this, Cmd::send($produced)];
