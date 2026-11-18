@@ -349,6 +349,26 @@ final class HtmlToMarkdownTest extends TestCase
         $this->assertSame("![pic](data:image/png;base64,AAA)![r](http://example.test/dir/real.png)\n", $markdown);
     }
 
+    public function testInlineSvgDataImageKeepsItsHashWhenABaseIsGiven(): void
+    {
+        $markdown = HtmlToMarkdown::convert(
+            '<img src="data:image/svg+xml,<svg fill=\'#fff\'/>" alt="logo">',
+            'https://example.com/',
+        );
+
+        $this->assertSame("![logo](data:image/svg+xml,<svg%20fill='#fff'/>)\n", $markdown);
+    }
+
+    public function testInlineSvgDataImageKeepsItsQueryWhenABaseIsGiven(): void
+    {
+        $markdown = HtmlToMarkdown::convert(
+            '<img src="data:image/svg+xml,<svg data-x=\'a?b\'/>" alt="logo">',
+            'https://example.com/',
+        );
+
+        $this->assertSame("![logo](data:image/svg+xml,<svg%20data-x='a?b'/>)\n", $markdown);
+    }
+
     public function testOversizedBodiesAreConvertedFromTheirFirstPartOnly(): void
     {
         $html = str_repeat('<p>word filler here</p>', (int) ceil(HtmlToMarkdown::MAX_PARSE_BYTES / 19));
@@ -611,6 +631,13 @@ final class HtmlToMarkdownTest extends TestCase
         $markdown = HtmlToMarkdown::convert('<p><a href="/wiki/Foo_(bar">x</a></p>', 'https://e.com/');
 
         $this->assertSame("[x](https://e.com/wiki/Foo_%28bar)\n", $markdown);
+    }
+
+    public function testBackslashesInAnHrefAreEncodedSoTheLinkStillParses(): void
+    {
+        $markdown = HtmlToMarkdown::convert('<p><a href="https://x.com/a\\">q</a> and more text</p>', 'https://example.com/');
+
+        $this->assertSame("[q](https://x.com/a%5C) and more text\n", $markdown);
     }
 
     public function testBalancedParenthesesInAnHrefAreKeptAsWritten(): void

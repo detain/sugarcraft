@@ -10,6 +10,7 @@ use SugarCraft\Code\Channels\ChannelInboundLog;
 use SugarCraft\Code\Channels\ChannelsStore;
 use SugarCraft\Code\Cli\DoctorChannelsChecks;
 use SugarCraft\Code\Tests\Cli\Support\DoctorChannelsProbeFixture;
+use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
 /**
  * The three channel rows judged against fixture trees, never the live HOME.
@@ -23,6 +24,8 @@ use SugarCraft\Code\Tests\Cli\Support\DoctorChannelsProbeFixture;
  */
 final class DoctorChannelsChecksTest extends TestCase
 {
+    use HomeSandboxTrait;
+
     private const SECRET = 'azure-secret-value-xyz';
 
     private string $dir;
@@ -30,10 +33,14 @@ final class DoctorChannelsChecksTest extends TestCase
     protected function setUp(): void
     {
         $this->dir = DoctorChannelsProbeFixture::makeChannelProbeDir();
+        // Live discovery reads the user tier through the home directory; the
+        // sandbox keeps a developer's real ~/.candy-code/bundles out of the rows.
+        $this->useHomeSandbox($this->dir . '/home');
     }
 
     protected function tearDown(): void
     {
+        $this->restoreHomeSandbox();
         DoctorChannelsProbeFixture::purgeProbeDir($this->dir);
     }
 
@@ -145,6 +152,26 @@ final class DoctorChannelsChecksTest extends TestCase
         self::assertSame('WARN', $row['status']);
         self::assertStringContainsString('ghost', $row['detail']);
         self::assertStringContainsString('matches no discovered bundle', $row['detail']);
+    }
+
+    public function testALiveProjectTierBundleIsNotCalledStale(): void
+    {
+        // `doctor` with no --root sits in the repository; its project-tier
+        // bundles are the ones the launch and serve boot load, so the row must
+        // discover them rather than name the trusted bundle a ghost.
+        $bundleDir = $this->liveProjectBundle('alpha');
+        $cwd = \getcwd();
+        \chdir($this->dir);
+
+        try {
+            $row = DoctorChannelsChecks::channelBundlesRow(null, null, ['alpha'], $this->store());
+        } finally {
+            \chdir($cwd === false ? \sys_get_temp_dir() : $cwd);
+        }
+
+        self::assertDirectoryExists($bundleDir);
+        self::assertStringNotContainsString('matches no discovered bundle', $row['detail']);
+        self::assertStringContainsString('not yet armed', $row['detail']);
     }
 
     public function testAFirstSightEntryPointWarnsQuarantine(): void
@@ -311,6 +338,21 @@ final class DoctorChannelsChecksTest extends TestCase
             '{"rows":[]}',
             $mode
         );
+    }
+
+    /** A project-tier bundle under the repository's `.candy-code/bundles`, with one channel entry point. */
+    private function liveProjectBundle(string $name): string
+    {
+        $bundlesRoot = $this->dir . '/.candy-code/bundles';
+        \mkdir($bundlesRoot, 0755, true);
+        $dir = DoctorChannelsProbeFixture::makeChannelProbeBundle($bundlesRoot, $name);
+        \mkdir($dir . '/.claude-plugin', 0755, true);
+        \file_put_contents(
+            $dir . '/.claude-plugin/plugin.json',
+            \json_encode(['name' => $name, 'entrypoints' => ['channel' => 'channel.php']]),
+        );
+
+        return $dir;
     }
 
     private function bundleNamed(string $name): Bundle
