@@ -178,6 +178,43 @@ final class PluginLoaderTest extends TestCase
         $this->assertSame([], $ledger->recorded, 'a refused plugin must not be recorded as seen');
     }
 
+    public function testAMalformedContractIsRefusedWithOneRowNotDropped(): void
+    {
+        $dir = Scratch::dir('loader');
+        $this->dirs[] = $dir;
+        Scratch::put($dir . '/plugin.json', (string) json_encode([
+            'name' => 'demo',
+            'contract' => ['sugar-plugins' => '^1.0'],
+            'entrypoints' => ['channel' => ['file' => 'src/Impl.php', 'class' => 'X\\Impl']],
+        ]));
+        $ledger = new MemoryLedger();
+
+        $result = $this->load([Plugins::candidate('demo', $dir)], $ledger);
+
+        $this->assertSame([], $result->loaded);
+        $this->assertSame([], $result->quarantined);
+        $this->assertSame([[
+            'bundle' => 'demo',
+            'path' => $dir,
+            'class' => '',
+            'kind' => 'channel',
+            'reason' => 'manifest-refused',
+        ]], $result->refusals, 'a trusted plugin with a refused manifest must land in exactly one refusal row');
+        $this->assertSame([], $ledger->recorded);
+    }
+
+    public function testANonObjectManifestIsRefusedWithOneRowPerRequestedKind(): void
+    {
+        $dir = Scratch::dir('loader');
+        $this->dirs[] = $dir;
+        Scratch::put($dir . '/plugin.json', '["not", "an", "object"]');
+
+        $result = $this->load([Plugins::candidate('demo', $dir)], new MemoryLedger(), kinds: ['channel', 'theme'], interfaces: ['channel' => Plugin::class, 'theme' => Plugin::class]);
+
+        $this->assertSame(['manifest-refused', 'manifest-refused'], array_column($result->refusals, 'reason'));
+        $this->assertSame(['channel', 'theme'], array_column($result->refusals, 'kind'));
+    }
+
     public function testAContractAtOrBelowTheHostIsAccepted(): void
     {
         $plugin = $this->declaring('Impl', contract: 3);

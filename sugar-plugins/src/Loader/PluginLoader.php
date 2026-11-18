@@ -33,9 +33,9 @@ use SugarCraft\Plugins\Trust\TrustList;
  * (a name clashing with another accepted plugin) belongs to the registry, which
  * never overrides.
  *
- * Refusal reason words: uncontained, contract-unsupported, world-writable,
- * foreign-owner, require-failed, class-missing, class-not-declared,
- * interface-mismatch.
+ * Refusal reason words: manifest-refused, uncontained, contract-unsupported,
+ * world-writable, foreign-owner, require-failed, class-missing,
+ * class-not-declared, interface-mismatch.
  */
 final class PluginLoader
 {
@@ -86,6 +86,12 @@ final class PluginLoader
 
             $manifest = $candidate->manifest();
             if ($manifest === null) {
+                // A trusted name whose manifest was refused (non-object, dot-name,
+                // malformed contract) still owes every requested kind a row, or the
+                // host would see the plugin in no bucket at all.
+                foreach ($kinds as $kind) {
+                    $refusals[] = ['bundle' => $candidate->name, 'path' => $candidate->dir, 'class' => '', 'kind' => $kind, 'reason' => 'manifest-refused'];
+                }
                 continue;
             }
 
