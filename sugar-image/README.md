@@ -75,8 +75,8 @@ use SugarCraft\Image\Renderer\SixelRenderer;
 
 $image  = ImageSource::fromFile('examples/fixture-gradient.png');
 
-// Probe the terminal — auto()/probe() re-resolve on every call;
-// wrap Detect::cached() to memoise one answer per process.
+// Probe the terminal — probe() re-resolves on every call (wrap Detect::cached()
+// to memoise one answer per process); auto() is already memoised per process.
 $mosaic = Mosaic::probe();
 
 // Force a specific backend
@@ -147,14 +147,22 @@ door; `fromAnimatedFile()` — a container's frame list into an `Animation`
 (see **Supported image formats**); and `fromUrl()`/`fromUrlAsync()` — see
 **Remote images**.
 
-Every backend implements `Renderer`: `render()` for the bytes, `name()` for
-the stable identifier (`sixel`, `kitty`, `iterm2`, `chafa`, `halfblock`,
+Every backend implements `Renderer`. The interface's required methods are
+`render()`, `name()`, `supportsAlpha()`, `isInline()`, `delete()`,
+`renderRgb()`, `present()` and `supportsIdDelete()`; the last three were added
+with the raw-pixel and frame-present paths, so an out-of-tree implementation must
+add them (the `ImageSourceRgbFallback` trait supplies working defaults for
+`renderRgb()`, `present()` and `supportsIdDelete()`). Their roles: `render()`
+for the bytes, `name()` for the stable identifier (`sixel`, `kitty`, `iterm2`, `chafa`, `halfblock`,
 `quarterblock`, `ascii`, `symbols`), `supportsAlpha()` — true for the
 graphics tiers, false for the text tiers, and informational for now (no
 auto-ladder steers on it yet), `isInline()` — true when `render()` emits
 newline-separated cell text that composes directly into a frame, false when
 it emits one opaque escape blob that must ride an out-of-band overlay (see
-**ImageLayer**) — and `delete()` (**Deleting images**). `Mosaic::renderer()`
+**ImageLayer**) — and `delete()` (**Deleting images**). `renderRgb()` takes a
+raw RGBA8 buffer (see below), `present()` draws one frame of a re-displayed
+sequence and retires the frame it replaces, and `supportsIdDelete()` says
+whether `delete()` removes one named frame (Kitty only). `Mosaic::renderer()`
 hands back the live instance, tmux envelope included, and `Mosaic` answers
 `isInline()` itself for callers that should not know the protocol.
 
@@ -536,10 +544,11 @@ $compressed = $renderer->renderWithOptions($image, 40, null, $opts);
 
 `Mosaic::auto()` asks `Detect::probe()` — environment variables first, then a
 DA1/XTWINOPS round trip on the TTY — and `bestBackend()` seats a renderer on
-the answer: kitty → iterm2 → sixel → the symbol-map tier. Both `Mosaic::auto()`
-and `Mosaic::probe()` resolve capabilities on every call; wrap
-`Detect::cached()` at the application boundary to memoise the probe per-process
-(`Detect::reset()` drops the memo). Chafa is not on that
+the answer: kitty → iterm2 → sixel → the symbol-map tier. `Mosaic::auto()` is
+memoised per process (see **Auto memo** below; `Mosaic::resetAutoMemo()` forces
+a fresh probe). `Mosaic::probe()` resolves capabilities on every call; wrap
+`Detect::cached()` at the application boundary to memoise that probe per-process.
+`Detect::reset()` drops both memos. Chafa is not on that
 ladder (its capability slot is written only by `Capability::universal()`), and
 plain half-block appears only when the text-availability slot is itself off, so
 the practical floor is the glyph-coverage engine. `Mosaic::diagnose()` returns
@@ -640,9 +649,10 @@ explicit `name => value` map, or `null` to read the process environment.
 The answer is the env stage of `Detect::probe()`; a DA1 sixel promotion, a
 tmux feature veto and the OSC colour queries need the tty and are absent here.
 
-`Mosaic::auto()` is memoised per process: the first call probes, later calls
-return the same `Mosaic`. `Mosaic::resetAutoMemo()` forces the next call to
-probe again.
+**Auto memo.** `Mosaic::auto()` is memoised per process: the first call probes,
+later calls return the same `Mosaic`. `Mosaic::resetAutoMemo()` forces the next
+call to probe again, and `Detect::reset()` clears it along with the
+`Detect::cached()` memo. `Mosaic::probe()` is not memoised.
 
 Every renderer also takes a raw straight-alpha RGBA8 buffer through
 `renderRgb($rgba, $pixelWidth, $pixelHeight, $cellsWidth, $cellsHeight = null)`.
