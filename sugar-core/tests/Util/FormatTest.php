@@ -80,4 +80,48 @@ final class FormatTest extends TestCase
         $this->assertSame('2h 07m', Format::duration(7620));
         $this->assertSame('5h', Format::duration(18000));
     }
+
+    /** Mirrors the byte-size copies sugar-core's Format::iecBytes replaces: one binary unit set, one decimal. */
+    public function testIecBytesBelowOneKibIsWholeBytes(): void
+    {
+        $this->assertSame('0 B', Format::iecBytes(0));
+        $this->assertSame('512 B', Format::iecBytes(512));
+        $this->assertSame('1023 B', Format::iecBytes(1023));
+    }
+
+    public function testIecBytesOneDecimalAndSpaceBeforeUnit(): void
+    {
+        $this->assertSame('1.0 KiB', Format::iecBytes(1024));
+        $this->assertSame('4.0 KiB', Format::iecBytes(4096));
+        $this->assertSame('1.5 KiB', Format::iecBytes(1536));
+        $this->assertSame('1.0 MiB', Format::iecBytes(1024 * 1024));
+        $this->assertSame('2.0 GiB', Format::iecBytes(2 * 1024 ** 3));
+        $this->assertSame('3.0 TiB', Format::iecBytes(3 * 1024 ** 4));
+        $this->assertSame('5.0 PiB', Format::iecBytes(5 * 1024 ** 5));
+    }
+
+    /** A value that rounds up to 1024 of one unit moves to the next, never "1024.0 KiB". */
+    public function testIecBytesPromotesRoundingOverflowToNextUnit(): void
+    {
+        $this->assertSame('1.0 MiB', Format::iecBytes(1024 * 1024 - 1));
+        $this->assertSame('1.0 GiB', Format::iecBytes(1024 ** 3 - 1));
+    }
+
+    public function testIecBytesPibIsTheLargestUnit(): void
+    {
+        $this->assertSame('1024.0 PiB', Format::iecBytes(1 << 60));
+        $this->assertSame('8192.0 PiB', Format::iecBytes(PHP_INT_MAX));
+    }
+
+    public function testIecBytesNegativeKeepsSign(): void
+    {
+        $this->assertSame('-2.0 KiB', Format::iecBytes(-2048));
+        $this->assertSame('-1 B', Format::iecBytes(-1));
+    }
+
+    /** -PHP_INT_MIN overflows an int; the float view must carry it instead of throwing. */
+    public function testIecBytesHandlesIntMin(): void
+    {
+        $this->assertSame('-8192.0 PiB', Format::iecBytes(PHP_INT_MIN));
+    }
 }

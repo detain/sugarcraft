@@ -411,7 +411,7 @@ final class DocumentationFidelityTest extends TestCase
         self::assertSame(ColorProfile::Ascii, ColorProfile::detect(['TERM' => 'xterm-256color', 'CLICOLOR' => '0']));
         self::assertSame(ColorProfile::Ansi256, ColorProfile::detect(['TERM' => 'xterm-256color', 'CLICOLOR' => '1']));
         self::assertSame(ColorProfile::TrueColor, ColorProfile::detect(['CLICOLOR' => '0', 'CLICOLOR_FORCE' => '1']), 'force outranks CLICOLOR=0');
-        self::assertSame(ColorProfile::Ascii, ColorProfile::detect(['NO_COLOR' => '1', 'CLICOLOR_FORCE' => '1']), 'NO_COLOR precedes even force');
+        self::assertSame(ColorProfile::TrueColor, ColorProfile::detect(['NO_COLOR' => '1', 'CLICOLOR_FORCE' => '1']), 'force outranks NO_COLOR: the chain reads NO_COLOR as a passive preference');
 
         $readme = self::flattened(dirname(__DIR__) . '/README.md');
         self::assertStringContainsString('is honoured', $readme, 'the env roster must state CLICOLOR is consulted');
