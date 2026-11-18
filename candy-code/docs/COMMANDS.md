@@ -37,7 +37,7 @@ Inside the floor the last write wins, ordered project-claude, project-opencode,
 user-claude, user-opencode — so user beats project inside foreign, opencode
 beats claude inside a tier, and XDG beats the legacy `~/.opencode` pair (the
 same convention order `ForeignSkillDiscovery` uses). Foreign-vs-native losses
-are silent (owner ruling R7): the import never announces itself and never
+are silent by design: the import never announces itself and never
 lands on `overrides()`. That silence is the whole point of the floor — a
 cloned `.claude/commands/exit.md` cannot replace `/exit`; imports never win a
 native name.
