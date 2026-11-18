@@ -106,6 +106,21 @@ final class ChildPumpTest extends TestCase
         $this->assertLessThan(5.0, $this->now() - $t0);
     }
 
+    public function testDeadlineSweepIsBoundedWhileTheChildKeepsFloodingPastIt(): void
+    {
+        // Regression: the expiry sweep read each pipe to EOF, which a child
+        // still writing never reaches. It buffered without bound and ran for
+        // seconds past the deadline (or exhausted memory).
+        $pipes = $this->spawn('while (true) { fwrite(STDOUT, str_repeat("y", 65536)); }');
+        $t0 = $this->now();
+        $r = ChildPump::drain($pipes, $t0 + 0.3, 4096, $this->now(...), sliceSeconds: 0.05, running: $this->running);
+        $this->assertSame(DrainResult::EXPIRED, $r->reason);
+        $this->assertTrue($r->timedOut());
+        $this->assertSame(4096, strlen($r->buffer(1)));
+        $this->assertGreaterThan(0, $r->droppedBytes(1));
+        $this->assertLessThan(3.0, $this->now() - $t0, 'the sweep must not run on past the deadline');
+    }
+
     public function testInjectedClockDrivesDeadlineWithoutWallTime(): void
     {
         $pipes = $this->spawn('sleep(30);');
