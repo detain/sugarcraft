@@ -3214,7 +3214,7 @@ Every cell of the matrix in §3 is expanded below with its full detail and evide
 </details>
 <details><summary><b>MCP-13</b> Act as an MCP server (expose self)</summary>
 
-- **candy-code** 🟡 — `candy-code mcp serve` is a stdio MCP host (`McpServeHost`) that answers `initialize` and `tools/list` with a read-only roster (`McpServeRoster`: Read, Glob, Grep, Ls, RepoMap), every call jailed to the launch root. The in-process `type: git` server in docs/MCP.md is a client-side entry, not a server mode. — _Evidence:_ `src/Cli/Subcommands.php:5978`; `src/MCP/Serve/McpServeHost.php`; `src/MCP/Serve/McpServeRoster.php:51`; `docs/MCP.md:1330-1345`
+- **candy-code** 🟡 — `candy-code mcp serve` is a stdio MCP host (`McpServeHost`) that answers `initialize` and `tools/list` with a read-only roster (`McpServeRoster`: Read, Glob, Grep, Ls, RepoMap), every call jailed to the launch root. The in-process `type: git` server in docs/MCP.md is a client-side entry, not a server mode. — _Evidence:_ `src/Cli/Subcommands.php:6071`; `src/MCP/Serve/McpServeHost.php`; `src/MCP/Serve/McpServeRoster.php:51`; `docs/MCP.md:1330-1345`
 - **candy-code-web** ➖ — —
 - **Claude Code 2.1.311** ✅ — Usable from Claude Desktop and other clients. — _Evidence:_ help (`mcp serve`); cc:mcp#use-claude-code-as-an-mcp-server
 - **OpenCode 1.19.4** ❌ — The TUI is an MCP **client** to IDEs for selection context only. — _Evidence:_ DOCS/acp, DOCS/server; TUI/context/editor.ts
