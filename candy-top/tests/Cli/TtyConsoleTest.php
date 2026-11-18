@@ -23,7 +23,11 @@ final class TtyConsoleTest extends TestCase
         yield 'macOS terminal session is not a console' => ['/dev/ttys003', 'Darwin', false];
         yield 'macOS with an unknown name' => ['', 'Darwin', false];
         yield 'unknown name on Linux' => ['', 'Linux', false];
-        yield 'no ext-posix on Linux trusts the isatty gate' => [null, 'Linux', true];
+        // Regression: the isatty gate passes every pty, so an unnamed STDIN on
+        // Linux must not read as a console (it froze the dashboard backdrop).
+        yield 'no ext-posix on Linux refuses an unnamed STDIN' => [null, 'Linux', false];
+        yield 'no ext-posix on FreeBSD refuses an unnamed STDIN' => [null, 'FreeBSD', false];
+        yield 'no ext-posix on Darwin stays false' => [null, 'Darwin', false];
         yield 'no ext-posix on Windows stays false' => [null, 'Windows', false];
     }
 
