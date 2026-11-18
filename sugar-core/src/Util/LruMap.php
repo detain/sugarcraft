@@ -67,7 +67,10 @@ final class LruMap implements \Countable, \IteratorAggregate
     /** Seconds an entry lives after the put() that wrote it, or null for no expiry. */
     private ?float $ttl = null;
 
-    /** Test seam for the clock in seconds; null reads microtime(true). */
+    /**
+     * Test seam for the clock in seconds; null reads the monotonic hrtime clock.
+     * A wall clock would let an NTP step lengthen or shorten lifetimes.
+     */
     private ?\Closure $clock = null;
 
     /**
@@ -136,6 +139,10 @@ final class LruMap implements \Countable, \IteratorAggregate
      * key still expires on schedule.
      *
      * The receiver is left untouched: assign the result to use the timed map.
+     *
+     * The default clock is monotonic, so an entry lives its nominal lifetime. An
+     * injected clock that can step backwards is the caller's responsibility: the
+     * stamp floor then keeps entries alive past their nominal expiry.
      *
      * @param (\Closure(): float)|null $clock Test seam: the clock in seconds.
      * @return self<V>
@@ -464,8 +471,9 @@ final class LruMap implements \Countable, \IteratorAggregate
      * Floored at the latest instant already handed out, so a clock that steps
      * backwards cannot stamp an entry ahead of an older one and break the order
      * {@see expireStale()} depends on. Under a monotonic clock the floor never
-     * applies; after a backwards step the entry lives until the old instant
-     * rather than its nominal lifetime, which is the safer error for a cache.
+     * applies. Only an injected clock that steps backwards reaches it: the entry
+     * then lives until the old instant instead of its nominal lifetime. The
+     * default hrtime clock never steps, so production stamps are never floored.
      */
     private function stamp(): float
     {
@@ -474,9 +482,10 @@ final class LruMap implements \Countable, \IteratorAggregate
         return $this->latestExpiry;
     }
 
+    /** Monotonic seconds: an NTP step cannot move it, unlike the wall clock. */
     private function now(): float
     {
-        return $this->clock !== null ? ($this->clock)() : microtime(true);
+        return $this->clock !== null ? ($this->clock)() : hrtime(true) / 1e9;
     }
 
     /**
