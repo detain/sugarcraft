@@ -29,6 +29,11 @@ asking.
 | [GC.md](GC.md) | The session store: `gc status`, `sessions`, `analyze`, `purge` (plan first with `--dry-run`), and `vacuum` | The disk is filling up, or you want to prune old sessions safely |
 | [HOOKS.md](HOOKS.md) | Lifecycle hooks, exit-code semantics, env | You automate reactions to events |
 | [OBSERVABILITY.md](OBSERVABILITY.md) | OpenTelemetry export: what is sent, what never leaves the machine, retries, and the `doctor` row | You point candy-code at an OTLP collector, or wonder what it reports |
+| [CREDENTIALS.md](CREDENTIALS.md) | `login` per provider, the key in `config.json` or the OS keychain (`--keychain`), and how a key is found at launch | You need to give a provider its key, or wonder where a key is coming from |
+| [USAGE.md](USAGE.md) | The spend ledger (`usage`, `/usage`), the session tracker and cap (`/budget`, `--max-cost`), and reports (`/insights`) | You want to know what a run cost, or set a spend cap |
+| [SHARE.md](SHARE.md) | `/share` and `/export` files, `/share serve` pages, listing and revoking them, and what leaves the machine | You want to hand a transcript to someone, or publish one |
+| [REPO-MAP.md](REPO-MAP.md) | The package map, the symbol map, the `RepoMap` tool, and the switches for each | The model finds the wrong code, or session start is slow |
+| [ACP.md](ACP.md) | Running `candy-code acp` as the agent in Zed, JetBrains or Neovim: setup, permission modes, cancelling, troubleshooting | You want an editor to host candy-code |
 | [MEMORY.md](MEMORY.md) | The memory stores and what reaches the prompt | You wonder what the model remembers |
 | [CONTEXT.md](CONTEXT.md) | Context budget, compaction, "turn was NOT sent" | Long sessions start dropping turns |
 | [SERVER.md](SERVER.md) | `candy-code serve`, the WebSocket protocol, tokens | You embed or remote-control the agent |
@@ -53,6 +58,13 @@ asking.
   if you export telemetry.
 - **Running it headless or in CI:** [FLEET-DRIVING.md](FLEET-DRIVING.md), then
   [CI.md](CI.md), then [ENVIRONMENT.md](ENVIRONMENT.md).
+- **Getting a provider working:** [CREDENTIALS.md](CREDENTIALS.md), then
+  [ENVIRONMENT.md](ENVIRONMENT.md) for every provider variable, then [USAGE.md](USAGE.md)
+  to see what the calls cost.
+- **Sharing a transcript:** [SHARE.md](SHARE.md), then [SECURITY.md](SECURITY.md) for
+  what a shared page exposes.
+- **Working inside an editor:** [ACP.md](ACP.md), then [PERMISSIONS.md](PERMISSIONS.md)
+  for the modes the editor can switch between.
 
 ## The `AGENTS.md` name collision
 

@@ -5331,7 +5331,8 @@ final class DocFigureProseDriftTest extends TestCase
         // 28 as of 2026-11-12: SECURITY.md joins the docs/ census.
         // 30 as of 2026-11-18: TUTORIAL.md and FAQ.md join the docs/ census.
         // 34 as of 2026-11-18: GC.md, BACKGROUND.md, OBSERVABILITY.md and LSP.md join the docs/ census.
-        self::assertCount(34, $pages, 'the docs page census moved — this anchor guard would silently stop covering a page');
+        // 39 as of 2026-11-18: CREDENTIALS.md, SHARE.md, REPO-MAP.md, USAGE.md and ACP.md join the docs/ census.
+        self::assertCount(39, $pages, 'the docs page census moved — this anchor guard would silently stop covering a page');
 
         // CCD-DOC-06: the root README.md joins the census. It was never on any
         // target list of this family, so a bare File.php:NNN cite planted there
