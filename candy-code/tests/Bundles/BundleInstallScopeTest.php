@@ -385,6 +385,56 @@ final class BundleInstallScopeTest extends TestCase
         self::assertFileExists($this->project . '/.candy-code/bundles/dup/.claude-plugin/plugin.json');
     }
 
+    public function testAProjectInstallIsRefusedWhenTheUserTierAlreadyHoldsTheName(): void
+    {
+        $this->plainBundleAt($this->root . '/alpha', 'alpha');
+        $source = $this->stagedBundle('alpha-src', 'alpha');
+
+        [$exit, , $stderr] = $this->runCli($this->project, 'bundles', 'install', $source, '--project', '--root', $this->project);
+
+        self::assertSame(NonInteractive::EXIT_FAILURE, $exit);
+        self::assertStringContainsString(
+            'bundles install: a bundle named alpha is already installed at',
+            $stderr,
+            'the install must refuse the cross-tier duplicate with its own line',
+        );
+        self::assertDirectoryDoesNotExist($this->project . '/.candy-code/bundles/alpha', 'a refused install writes nothing');
+        self::assertFileExists($this->root . '/alpha/.claude-plugin/plugin.json', 'the user-tier copy is untouched');
+    }
+
+    public function testAUserInstallIsRefusedWhenTheProjectTierAlreadyHoldsTheName(): void
+    {
+        $this->plainBundleAt($this->project . '/.candy-code/bundles/alpha', 'alpha');
+        $source = $this->stagedBundle('alpha-src', 'alpha');
+
+        [$exit, , $stderr] = $this->runCli($this->project, 'bundles', 'install', $source);
+
+        self::assertSame(NonInteractive::EXIT_FAILURE, $exit);
+        self::assertStringContainsString(
+            'bundles install: a bundle named alpha is already installed at',
+            $stderr,
+            'the bare install must refuse a name the project tier already holds',
+        );
+        self::assertDirectoryDoesNotExist($this->root . '/alpha', 'a refused install writes nothing');
+        self::assertFileExists($this->project . '/.candy-code/bundles/alpha/.claude-plugin/plugin.json', 'the project-tier copy is untouched');
+    }
+
+    public function testAProjectInstallFromTheHomeDirectoryIsRefusedInsteadOfLandingInTheUserTier(): void
+    {
+        mkdir($this->home . '/.candy-code', 0777, true);
+        $source = $this->stagedBundle('demo-src', 'demo');
+
+        [$exit, , $stderr] = $this->runCli($this->home, 'bundles', 'install', $source, '--project');
+
+        self::assertSame(NonInteractive::EXIT_FAILURE, $exit);
+        self::assertStringContainsString(
+            'bundles install: --project resolves to your home directory',
+            $stderr,
+            'the home directory is the user tier, so --project there is refused, not collapsed',
+        );
+        self::assertDirectoryDoesNotExist($this->root . '/demo', 'nothing lands in the user root under the project scope');
+    }
+
     public function testRecommendDoesNotOfferBackABundleTheProjectAlreadyInstalledWithProject(): void
     {
         // composer.json is a manifest signal whose vocabulary includes `php`,
