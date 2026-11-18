@@ -151,4 +151,36 @@ final class ForkChannelTest extends TestCase
 
         self::assertTrue(\pcntl_wifexited($status) && \pcntl_wexitstatus($status) === 0, 'the reader must receive the whole frame');
     }
+
+    /**
+     * Regression: a read holding thousands of small frames must split them all
+     * in order. The framing walks one offset and trims the buffer once, so the
+     * frames straddling the 64 KiB read boundary are the ones that would break
+     * if the offset bookkeeping drifted.
+     */
+    public function testManySmallFramesInOneReadAllArriveInOrder(): void
+    {
+        [$a, $b] = ForkChannel::pair();
+        $loop = new StreamSelectLoop();
+        $count = 5000;
+        $received = [];
+        $done = new Deferred();
+        $b->onFrame(static function (string $frame) use (&$received, $done, $count): void {
+            $received[] = $frame;
+            if (count($received) === $count) {
+                $done->resolve(true);
+            }
+        }, $loop);
+        $expected = [];
+        for ($i = 0; $i < $count; $i++) {
+            $expected[] = sprintf('%010d', $i);
+            $a->send(sprintf('%010d', $i));
+        }
+
+        Await::until($done->promise(), 5.0, $loop);
+
+        self::assertSame($expected, $received);
+        $a->close();
+        $b->close();
+    }
 }
