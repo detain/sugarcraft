@@ -4394,8 +4394,12 @@ final class Subcommands
         // ProjectRoot answers the home directory itself when the launch sits
         // there. Installing under it would write the user tier while the
         // operator asked for the project tier, so refuse instead of collapsing.
-        $home = HomeDirectory::owned();
-        if ($home !== null && realpath($base) === realpath($home)) {
+        // Compare against the NAMED home, not the owned one: an unowned home
+        // (world-writable, foreign uid) must still refuse, or the project-tier
+        // install lands in ~/.candy-code/bundles where the default verb refuses.
+        $home = HomeDirectory::resolved();
+        $realHome = $home === null ? false : realpath($home);
+        if ($realHome !== false && realpath($base) === $realHome) {
             self::bundlesLine(Lang::t('cli.bundles.install.project_is_home', ['root' => $base]));
 
             return null;
