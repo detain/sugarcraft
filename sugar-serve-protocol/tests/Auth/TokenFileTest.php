@@ -55,6 +55,20 @@ final class TokenFileTest extends TestCase
         self::assertNull(TokenFile::read($this->dir));
     }
 
+    public function testOversizedTokenFileIsMalformedNotLoaded(): void
+    {
+        \file_put_contents($this->dir . '/token', self::TOKEN . \str_repeat('a', 1 << 20));
+
+        self::assertNull(TokenFile::read($this->dir));
+    }
+
+    public function testTokenFilePaddedToTheByteLimitStillReads(): void
+    {
+        \file_put_contents($this->dir . '/token', self::TOKEN . \str_repeat(' ', TokenFile::MAX_BYTES - 64));
+
+        self::assertSame(self::TOKEN, TokenFile::read($this->dir));
+    }
+
     public function testSymlinkedTokenIsIgnored(): void
     {
         $real = $this->dir . '/real-token';

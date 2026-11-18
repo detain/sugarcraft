@@ -38,7 +38,17 @@ final class WebsocketUrl
         if ($scheme === null || $parts['host'] === '') {
             return null;
         }
-        $host = \str_contains($parts['host'], ':') && !\str_starts_with($parts['host'], '[') ? '[' . $parts['host'] . ']' : $parts['host'];
+        // parse_url() cannot split a bare IPv6 host without a port: `http://::1`
+        // comes back as host `:` and port 1. A host that is not a valid IPv6
+        // literal once its brackets are stripped is refused, not bracketed.
+        $bare = \str_starts_with($parts['host'], '[') && \str_ends_with($parts['host'], ']')
+            ? \substr($parts['host'], 1, -1)
+            : $parts['host'];
+        $ipv6 = \str_contains($bare, ':');
+        if ($ipv6 && \filter_var($bare, \FILTER_VALIDATE_IP, \FILTER_FLAG_IPV6) === false) {
+            return null;
+        }
+        $host = $ipv6 ? '[' . $bare . ']' : $bare;
 
         return $scheme . '://' . $host . (isset($parts['port']) ? ':' . $parts['port'] : '') . self::WS_PATH;
     }
