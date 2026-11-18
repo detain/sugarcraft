@@ -821,6 +821,59 @@ final class BoundedShutdownTest extends TestCase
         }
     }
 
+    /**
+     * Regression: the group probe walked every /proc entry on each poll tick of
+     * the async ladders, a ~40 ms loop stall per tick on a busy host. Inside one
+     * REAP_POLL_SECONDS cadence a live group must cost one walk, not one per tick.
+     */
+    public function testGroupEmptyReusesALiveGroupScanInsideThePollCadence(): void
+    {
+        [$wrapped, $wrappedPid, $grandchild] = $this->spawnGroupWithTermIgnoringGrandchild($this->setsidOrSkip());
+
+        try {
+            $started = \hrtime(true);
+            for ($i = 0; $i < 200; $i++) {
+                self::assertFalse(BoundedShutdown::groupEmpty($wrappedPid), 'a live group is never reported empty');
+            }
+            $elapsed = (\hrtime(true) - $started) / 1_000_000_000;
+
+            self::assertLessThan(2.0, $elapsed, '200 probes inside one cadence must cost one /proc walk, not 200');
+        } finally {
+            @\posix_kill(-$wrappedPid, 9);
+            if (\is_resource($wrapped)) {
+                \proc_close($wrapped);
+            }
+        }
+    }
+
+    /**
+     * The cache must not pin a group as busy: once its last member is gone the
+     * probe answers empty within a few cadences.
+     */
+    public function testGroupEmptyReportsADrainedGroupAfterTheCadence(): void
+    {
+        [$wrapped, $wrappedPid, $grandchild] = $this->spawnGroupWithTermIgnoringGrandchild($this->setsidOrSkip());
+
+        try {
+            self::assertFalse(BoundedShutdown::groupEmpty($wrappedPid));
+            @\posix_kill($grandchild, 9);
+
+            $empty = false;
+            $deadline = \hrtime(true) / 1_000_000_000 + 3.0;
+            while (!$empty && \hrtime(true) / 1_000_000_000 < $deadline) {
+                $empty = BoundedShutdown::groupEmpty($wrappedPid);
+                \usleep(50_000);
+            }
+
+            self::assertTrue($empty, 'a drained group must read as empty once the poll cadence has passed');
+        } finally {
+            @\posix_kill(-$wrappedPid, 9);
+            if (\is_resource($wrapped)) {
+                \proc_close($wrapped);
+            }
+        }
+    }
+
     private function setsidOrSkip(): string
     {
         self::requirePosix();

@@ -130,13 +130,14 @@ final class WebhookDispatcher
 
     /**
      * The delivery retry policy: 2 s, 8 s, 30 s, then the delivery is given up.
-     * Three retries after the first attempt, expressed as a {@see Backoff} so
-     * the cap and the attempt budget follow the same rules as every other
-     * retry ladder, rather than a hand-kept array with its own exhaustion rule.
+     * Four total attempts, which is three retries after the first send. The
+     * budget is a {@see Backoff} so the cap and the attempt budget follow the
+     * same rules as every other retry ladder: `withAttempts()` counts TOTAL
+     * tries, so the declared 4 is what the ladder actually makes.
      */
     public static function retryPolicy(): Backoff
     {
-        return Backoff::new(2000.0, 4.0, 30_000)->withAttempts(3);
+        return Backoff::new(2000.0, 4.0, 30_000)->withAttempts(4);
     }
 
     /**
@@ -230,8 +231,10 @@ final class WebhookDispatcher
 
     private function afterAttempt(string $name, array $endpoint, WebhookEvent $event, int $retriesSpent, bool $retryable, bool $accepted = false): void
     {
-        if ($retryable && $this->backoff->allows($retriesSpent)) {
-            $delay = $this->backoff->secondsForAttempt($retriesSpent + 1);
+        // Backoff counts failures, 1-based: the first failed send is failure 1.
+        $failures = $retriesSpent + 1;
+        if ($retryable && $this->backoff->allows($failures)) {
+            $delay = $this->backoff->secondsForAttempt($failures);
             // The slot stays occupied across the wait: a delivery retrying
             // is the same delivery, and queue bounds count deliveries.
             $this->loop->addTimer($delay, function () use ($name, $endpoint, $event, $retriesSpent): void {
