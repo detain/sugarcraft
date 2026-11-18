@@ -29,4 +29,5 @@ return [
     'theme.mapper_not_style' => 'Theme::mapStyles() はマッパーが Style を返すことを期待していますが、{type} を受け取りました',
     'theme.with_slot_not_style' => 'Theme::with(): "{slot}" は Style スロットではありません。有効なスロット: {slots}',
     'fold.marker' => '▸ 折りたたみ',
+    'glamour.value_too_large' => 'テーマの {key} は上限 {limit} を超えています',
 ];

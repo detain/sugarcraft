@@ -153,6 +153,24 @@ final class TabScopeTest extends TestCase
         $this->assertSame(10.0, $mapped->timeoutSeconds);
     }
 
+    public function testATimedOutTabPromiseDispatchesATabScopedFailure(): void
+    {
+        // Program rejects a timed-out promise itself, so the rejection leg
+        // never sees it. The timeout must map through onFailure, or the
+        // owning tab never receives its failure and the root gets an
+        // unscoped ExceptionMsg.
+        $mapped = TabScope::msg(self::SCOPE_KEY, new AsyncCmd(
+            (new \React\Promise\Deferred())->promise(),
+            5.0,
+        ));
+
+        $this->assertInstanceOf(AsyncCmd::class, $mapped);
+        $this->assertNotNull($mapped->onFailure, 'a timed AsyncCmd keeps a scoped failure path');
+        $failed = ($mapped->onFailure)(new RuntimeException('timed out'));
+        $this->assertInstanceOf(TabScopedMsg::class, $failed);
+        $this->assertInstanceOf(ExceptionMsg::class, $failed->inner());
+    }
+
     public function testAnEveryRequestKeepsItsPeriodAndScopesItsProducerButNotItsStepDown(): void
     {
         $inner = $this->scopeProbeMsg();

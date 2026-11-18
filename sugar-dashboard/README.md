@@ -777,7 +777,7 @@ in the same namespace are its value parts.
 | `ImagePlacer` | Optional interface for image placements |
 | `ImagePlacement` | Image placement data |
 | `TickEpoch` | Focus-regain epoch counter |
-| `BoundedCommand` | One bounded child-process run: argv array (no shell interpolation), wall-clock deadline (default 5s), 1 MiB output ceiling, and a guaranteed TERM→KILL reap before `proc_close` | `run(array $argv, float $timeoutSeconds, int $maxOutputBytes): array` |
+| `BoundedCommand` | One bounded child-process run: argv array (no shell interpolation), wall-clock deadline (default 5s), 1 MiB output ceiling, and a guaranteed TERM→KILL reap. The pump and the ladder are sugar-async's `ChildRun`. A Model update or tick must use `runAsync()`, which runs the child on the loop and settles on a promise; `run()` blocks the caller until the deadline and is for code outside the loop. `SETTLE_CEILING_SECONDS` is how long a started run can take to settle, and bounds how long a module may treat a command as in flight | `runAsync(LoopInterface $loop, array $argv, float $timeoutSeconds, int $maxOutputBytes): PromiseInterface` · `run(array $argv, float $timeoutSeconds, int $maxOutputBytes): array` |
 | `ProcAvailability` | Probe-once availability of Linux `/proc` pseudo-files — probe once, degrade quietly, show a visible 'n/a' sentinel on hosts without `/proc` instead of failing | `has(string $path): bool` |
 
 ## Registry Namespace (Module Registry)

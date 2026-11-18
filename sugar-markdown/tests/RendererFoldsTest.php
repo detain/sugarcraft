@@ -137,6 +137,29 @@ final class RendererFoldsTest extends TestCase
         $this->assertSame('日本語-見出し', Renderer::headingId('日本語 見出し'));
     }
 
+    public function testFoldIdsFollowTheVisibleTextWhenEmojiExpands(): void
+    {
+        // `:rocket: Launch` renders as "🚀 Launch", so the reader's ID is
+        // headingId('🚀 Launch') = 'launch'. The source literal would yield
+        // 'rocket-launch', and folding by the visible ID must still hide the body.
+        $doc = "## :rocket: Launch\n\nHidden body.\n\n## Next\n\nShown body.\n";
+        $renderer = (new Renderer(Theme::plain()))->withEmoji(true);
+
+        $this->assertSame('launch', Renderer::headingId('🚀 Launch'));
+        $out = $renderer->withFolds([Renderer::headingId('🚀 Launch')])->render($doc);
+        $this->assertStringNotContainsString('Hidden body.', $out);
+        $this->assertStringContainsString('Shown body.', $out);
+
+        $bySource = $renderer->withFolds(['rocket-launch'])->render($doc);
+        $this->assertStringContainsString('Hidden body.', $bySource, 'the source spelling is not the visible ID');
+    }
+
+    public function testFoldIdsWithoutEmojiStillUseTheSourceText(): void
+    {
+        $out = (new Renderer(Theme::plain()))->withFolds(['rocket-launch'])->render("## :rocket: Launch\n\nHidden body.\n");
+        $this->assertStringNotContainsString('Hidden body.', $out);
+    }
+
     public function testFoldMarkerIsLocalised(): void
     {
         // The marker is catalogued, so no locale string is hard-coded here.

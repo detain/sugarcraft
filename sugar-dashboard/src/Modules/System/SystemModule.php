@@ -56,6 +56,12 @@ final class SystemModule extends BaseModule
     private bool $gpuInFlight = false;
 
     /**
+     * Monotonic second the GPU latch was taken; the latch only holds for as
+     * long as its sample can still settle (see {@see gpuLatched()}).
+     */
+    private ?float $gpuInFlightSince = null;
+
+    /**
      * @param float $refreshSeconds sampling cadence; the constructor knob
      *     exists so hosts (and tests) can retune what used to be a frozen
      *     class constant.
@@ -90,7 +96,7 @@ final class SystemModule extends BaseModule
 
         $next = $this->withSystemState();
         $tick = $next->selfTickCmd();
-        if ($next->gpuInFlight || $next->gpuSpawnFailed) {
+        if ($next->gpuLatched() || $next->gpuSpawnFailed) {
             return [$next, $tick];
         }
 
@@ -105,6 +111,7 @@ final class SystemModule extends BaseModule
     {
         $clone = clone $this;
         $clone->gpuInFlight = true;
+        $clone->gpuInFlightSince = hrtime(true) / 1_000_000_000;
 
         return $clone;
     }
@@ -116,8 +123,26 @@ final class SystemModule extends BaseModule
         ]);
         $clone->gpuSpawnFailed = $sample->spawnFailed;
         $clone->gpuInFlight = false;
+        $clone->gpuInFlightSince = null;
 
         return $clone;
+    }
+
+    /**
+     * A GPU latch holds only while its sample can still settle. The Cmd belongs
+     * to the host, and a host that drops it never delivers a GpuSampleMsg, so
+     * past the settle ceiling the next tick samples again rather than freezing
+     * the GPU row for the rest of the session.
+     */
+    private function gpuLatched(): bool
+    {
+        if (!$this->gpuInFlight) {
+            return false;
+        }
+
+        $elapsed = hrtime(true) / 1_000_000_000 - (float) $this->gpuInFlightSince;
+
+        return $elapsed < BoundedCommand::SETTLE_CEILING_SECONDS;
     }
 
     protected function tickIntervalSeconds(): ?float
