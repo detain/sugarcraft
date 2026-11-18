@@ -310,11 +310,12 @@ held for the next `parse()` call. If the held bytes pass
 that starts at the ESC, and the tokenizer resynchronizes, so a stuck stream
 cannot grow the buffer. The cap applies to the held partial only, so a large
 chunk that ends in a short partial still holds that partial. The cap bounds
-memory, not time. A held CSI is rescanned from its ESC on every feed, and so is
-an ESC held on its intermediates or on the C0 controls after it. A stream of
-1-byte feeds that keeps a 64 KiB CSI open costs about 2e9 byte steps in total,
-and the same bound applies to those ESC holds. An unterminated OSC, DCS, APC, SOS or PM body keeps its scan offset
-across feeds, so each body byte is examined once. `Token` carries `type` (`TEXT`, `CONTROL`, `ESC`,
+memory, not time. A held CSI and an unterminated OSC, DCS, APC, SOS or PM body
+each keep their scan position across feeds, so each of their bytes is examined
+once. An ESC held on its intermediates or on the C0 controls after it is still
+rescanned from its ESC on every feed. A stream of 1-byte feeds that keeps one of
+those ESC holds open for a 64 KiB partial costs about 2e9 byte steps in total.
+`Token` carries `type` (`TEXT`, `CONTROL`, `ESC`,
 `CSI`, `OSC`, `DCS`, `APC`, `SOS`, `PM`), `data`, `intermediate`, `params`,
 `final`, and `terminator`, and `paramInts()` reads the parameters as integers.
 The field shape and type values match sugar-core's `Util\Token`. Unlike the
