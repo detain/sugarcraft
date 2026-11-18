@@ -2602,8 +2602,10 @@ candy-code attach [<session>]        # the TUI on a session of the running serve
                                      #   [--url URL]
 candy-code acp                       # an Agent Client Protocol agent on stdio, for an editor to start
 candy-code bundles list              # plugin bundles this directory sees, with the declined surfaces named
-candy-code bundles install <path|git-url|plugin@marketplace>
-                                     # a bundle copied, cloned, or gated in from an added marketplace
+candy-code bundles install <path|git-url|plugin@marketplace> [--project|--user]
+                                     # a bundle copied, cloned, or gated in from an added marketplace;
+                                     #   --project lands it in the repository's project tier instead
+                                     #   of ~/.candy-code/bundles (--user names that root explicitly)
 candy-code bundles marketplace add|list|remove|update
                                      # pinned plugin catalogs under ~/.candy-code/
 candy-code bundles update [bundle]   # re-install recorded bundles from their marketplace pins
