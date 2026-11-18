@@ -352,15 +352,25 @@ and its callers move in that step.
 | Printable and 8-bit bytes accumulate into one TEXT token | `AnsiTokenizer::parse()`, same |
 | C0 controls and DEL: one CONTROL token per byte | `AnsiTokenizer::parse()`, same |
 | `ESC` plus a byte: two-byte ESC token | `AnsiTokenizer::consumeEsc()`, same |
-| CSI: private marker, parameter bytes, intermediate bytes, final 0x40–0x7E | `AnsiTokenizer::consumeCsi()`, same |
+| CSI: private marker, parameter bytes, intermediate bytes, final 0x40–0x7E | `AnsiTokenizer::consumeCsi()`, same, except an ESC inside the CSI (declared change below) |
 | CSI with an invalid final: bare `ESC [` token, then resynchronize | `consumeCsi()`, same |
-| OSC, DCS, APC, SOS, PM closed by BEL or ST, with `terminator` | `AnsiTokenizer::consumeStTerminated()`, same |
+| OSC, DCS, APC, SOS, PM closed by BEL or ST, with `terminator` | `AnsiTokenizer::consumeStTerminated()`, same, except an ESC inside the body (declared change below) |
 | Incomplete sequence held across `parse()` calls | `AnsiTokenizer::$pending`, same |
 | `MAX_PENDING_BYTES` = 65536 | `AnsiTokenizer::MAX_PENDING_BYTES`, same value. **Judged on the held partial, not the buffer (declared change below)** |
 | `flush()` returns held bytes as one TEXT token and clears them | `AnsiTokenizer::flush()`, same |
 | Token type constants and field names | `SugarCraft\AnsiParser\Token`, same values |
 | `Token::paramInts()` | `SugarCraft\AnsiParser\Token::paramInts()`, same |
 | Construction `new Parser()` | `AnsiTokenizer::new()`. Changes at the call sites in P1-14b |
+
+**Declared behavior change (ESC inside a body).** An `ESC` inside a CSI or a
+string body now ends that sequence, as the VT500 `Parser` does. A CSI cut short by
+an ESC is dropped with no token, and the ESC opens the next sequence. A string cut
+short by an ESC (not `ESC \`) is dispatched with an empty `terminator`, and the ESC
+opens the next token. `ESC ESC` drops the first ESC. The copy in `Util\Parser`
+swallowed the ESC into the body, so `ESC ] 0 ; t ESC [ A` gave one OSC token and
+lost the key press. Pinned by `AnsiTokenizerTest::testEscInsideCsiAbortsTheSequenceAndRestarts`,
+`testEscEscRestartsTheSequence`, `testEscInsideOscAbortsTheStringAndKeepsTheNextKey` and
+`testEscInsideDcsAndApcAbortTheString`.
 
 **Declared behavior change.** A chunk longer than 64 KiB whose tail is a short
 unfinished sequence now holds that tail, as a short chunk does. The copy

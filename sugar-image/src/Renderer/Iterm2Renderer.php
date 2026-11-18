@@ -97,21 +97,6 @@ final class Iterm2Renderer implements Renderer
     }
 
     /**
-     * Transmit as an uncompressed TIFF (`type=tiff`) — the GD-free wire format.
-     *
-     * Per chafa's iTerm2 path (chafa/internal/chafa-iterm2-renderer.c
-     * wraps raw RGBA8_UNASSOCIATED quads in an 11-entry IFD TIFF and never
-     * calls an image library): the payload comes from `$rgba` directly —
-     * no GD — or from a GD decode when omitted. iTerm2 composites on the
-     * terminal's own background color when the stream carries
-     * unassociated alpha (chafa-iterm2-renderer.c:266-275 notes the two
-     * valid alpha paths); flatten against a background BEFORE encoding if
-     * that is not the desired look.
-     *
-     * {@see render()} keeps its historical base64-PNG envelope byte-for-
-     * byte; this is the explicit opt-in sibling.
-     */
-    /**
      * Raw RGBA straight to an uncompressed TIFF, with no PNG container.
      *
      * Same inline-image envelope as {@see renderTiff()}; the only difference
@@ -130,6 +115,21 @@ final class Iterm2Renderer implements Renderer
         ]);
     }
 
+    /**
+     * Transmit as an uncompressed TIFF (`type=tiff`) — the GD-free wire format.
+     *
+     * Per chafa's iTerm2 path (chafa/internal/chafa-iterm2-renderer.c
+     * wraps raw RGBA8_UNASSOCIATED quads in an 11-entry IFD TIFF and never
+     * calls an image library): the payload comes from `$rgba` directly —
+     * no GD — or from a GD decode when omitted. iTerm2 composites on the
+     * terminal's own background color when the stream carries
+     * unassociated alpha (chafa-iterm2-renderer.c:266-275 notes the two
+     * valid alpha paths); flatten against a background BEFORE encoding if
+     * that is not the desired look.
+     *
+     * {@see render()} keeps its historical base64-PNG envelope byte-for-
+     * byte; this is the explicit opt-in sibling.
+     */
     public function renderTiff(ImageSource $image, int $width, ?int $height = null, ?string $rgba = null): string
     {
         $effectiveHeight = $this->prepareRender($image, $width, $height);
