@@ -7,7 +7,7 @@ have different costs and different switches, so this page keeps them apart:
 |---|---|---|---|
 | **Package map** | Where the code lives: the packages and PSR-4 source directories | Put into the system prompt, every turn | `repoMap.enabled` (default `true`), `repoMap.maxBytes` |
 | **Symbol map** | The definitions the rest of the workspace references most, ranked | Captured once per session, at its first turn, into the system prompt | `symbolMap.enabled` (default `true`), or the environment variable `CANDY_CODE_DISABLE_SYMBOL_MAP` |
-| **`RepoMap` tool** | The same ranking as the symbol map, drawn on demand and steered by what the model is working on | Called by the model, or by you asking for it | Always on; read-only |
+| **`RepoMap` tool** | The same ranking as the symbol map, drawn on demand and steered by what the model is working on | Called by the model, or by you asking for it | On by default; read-only. The `disabledTools` setting can remove it |
 
 The first two are about what the model sees before it starts. The tool is about
 what the model asks for mid-task. The symbol map and the `RepoMap` tool read
@@ -69,7 +69,8 @@ the session starts.
 
 The tool is `RepoMap`, in the read-only permission class, so it writes nothing.
 It runs only fixed read-only helpers: `git ls-files` through `GitRunner`, and,
-when Universal Ctags is present, a `ctags --version` probe. The model calls it when
+when Universal Ctags is present, `ctags` too: a `--version` probe, then batched
+tag extraction over the non-PHP files. The model calls it when
 it wants an outline of the code that matters for the task at hand.
 
 | Argument | Type | Effect |
@@ -116,4 +117,4 @@ for the files that changed.
 - [ENVIRONMENT.md](ENVIRONMENT.md): `CANDY_CODE_DISABLE_SYMBOL_MAP`
 - [CONTEXT.md](CONTEXT.md): how the map fits the context budget
 - [PROMPT_ENGINEERING.md](PROMPT_ENGINEERING.md): where each block sits in the system prompt
-- [TROUBLESHOOTING.md](TROUBLESHOOTING.md): "PHP only" and a slow first session
+- [TROUBLESHOOTING.md](TROUBLESHOOTING.md): what the maps do when git is missing

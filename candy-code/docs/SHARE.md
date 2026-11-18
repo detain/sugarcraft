@@ -24,9 +24,10 @@ is served by a `candy-code serve` process you started.
 /share json notes.json  # JSON, to notes.json inside the project
 ```
 
-The format is the first word, `md`, `html`, `json` or `text` (`txt` and `plain`
-also work for text). If there is no format word, the path's extension decides,
-and otherwise the format is Markdown.
+The format is the first word: `md` or `markdown`, `html` or `htm`, `json`, or
+`text` (`txt` and `plain` also work for text). A bare word that is neither a
+format nor a path is refused as an invalid format. A path (a word containing `/`
+or `.`) takes its format from the extension, and otherwise the format is Markdown.
 
 - With no path, the file goes to `~/.candy-code/exports/`. The directory is
   created `0700` and the file `0600`.
@@ -50,9 +51,10 @@ why `/share` is the one to use when the file might be shared.
 without the redactor. Its path rules differ: a plain path is jailed to the project
 root or the `~/.candy-code/` shelf, and its `--path` flag writes anywhere without
 the project jail. Its reply says so: the file is not secret-redacted, so
-treat it like the transcript itself. `text` output is also cleaned of invisible
-formatting and terminal control noise, which is display hygiene and does not
-remove secrets. `md`, `html` and `json` are written byte for byte, because
+treat it like the transcript itself. `text` output is also cleaned for display:
+terminal control bytes are stripped, invisible bidi and zero-width format
+characters become visible `<U+XXXX>` markers, and private-use characters are
+removed. This is display hygiene and does not remove secrets. `md`, `html` and `json` are written byte for byte, because
 other tools parse them.
 
 ## `/share serve`: a self-hosted page
@@ -65,7 +67,8 @@ other tools parse them.
 
 `/share serve` renders the transcript to HTML at that moment and stores the
 rendered page in the `shares` table of the session database. The reply gives
-the `/s/<token>` path on your own server.
+the full URL on your own server when a `candy-code serve` is live, and otherwise
+the bare `/s/<token>` path.
 
 - The token is 128 random bits. It is the only credential the page needs. Listings
   show a prefix only, but `/share serve` prints the whole token once, so it lands

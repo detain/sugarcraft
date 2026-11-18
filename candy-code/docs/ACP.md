@@ -105,8 +105,8 @@ A turn that fails returns a JSON-RPC error with the cause.
 - The editor's `fs/*` and `terminal/*` methods are not used. candy-code reads
   and writes files through its own tools.
 - Image and audio prompt blocks are not used.
-- Built-in slash commands with no host binding are refused with a message that
-  the command runs only in a terminal. That includes `/theme`, `/keys` and
+- Built-in slash commands with no host binding are refused with the message `/{name}
+  runs in the TUI client only; nothing was run in this session.` That includes `/theme`, `/keys` and
   `/settings`, which need a screen, and others such as `/sessions`, `/compress`
   and `/copy`. Commands with a host binding, such as `/help`, answer normally.
 
