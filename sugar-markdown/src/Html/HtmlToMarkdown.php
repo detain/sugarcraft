@@ -45,6 +45,13 @@ use DOMText;
  * dropped whole: their text is never
  * rendered, not even as inert markup, so a "ignore all previous
  * instructions" payload inside a `<script>` never reaches the model at all.
+ * So are elements the page hides from its own view: one carrying the `hidden`
+ * attribute or an inline `display:none` style. Hiding by a stylesheet rule,
+ * a class or script is not evaluated, so text a page hides only through its
+ * CSS still reaches the model; that gap is accepted, and the README says so.
+ * A non-block element that holds blocks (`details`, `center`, `span` around
+ * paragraphs) splices like a block container, so its paragraphs keep their
+ * breaks instead of fusing into one run of words.
  * The drop rule also governs every whole-subtree text read (fenced `pre`,
  * inline code, form-control labels): those walk children with
  * {@see visibleText()} instead of `textContent`, which would otherwise read
@@ -82,7 +89,8 @@ final class HtmlToMarkdown
     /**
      * Elements dropped whole, text included. `template`, `noembed` and
      * `noframes` hold markup a browser never shows, so their text is no more
-     * the page's visible content than a script's is.
+     * the page's visible content than a script's is. Elements the page hides
+     * itself (`hidden`, inline `display:none`) are dropped by {@see isHidden()}.
      */
     private const DROP_TAGS = [
         'script', 'style', 'nav', 'svg', 'iframe', 'noscript', 'template', 'noembed', 'noframes',
@@ -97,6 +105,18 @@ final class HtmlToMarkdown
         'figcaption', 'figure', 'footer', 'form', 'h1', 'h2', 'h3', 'h4', 'h5',
         'h6', 'header', 'hr', 'li', 'main', 'ol', 'p', 'pre', 'section',
         'table', 'ul',
+    ];
+
+    /**
+     * Inline elements with their own inline rendering (a link, an emphasis
+     * span, a code span, a form control). A block-bearing element outside this
+     * list splices like a block container instead, so its paragraphs keep
+     * their breaks; these keep their own form, since a link around a block
+     * must still be a link.
+     */
+    private const INLINE_RENDERED = [
+        'a', 'img', 'code', 'kbd', 'samp', 'tt', 'strong', 'b', 'em', 'i', 'cite',
+        'var', 'dfn', 'del', 's', 'strike', 'button', 'input', 'textarea', 'select', 'option',
     ];
 
     /** Block containers whose children splice into the parent's block flow. */
@@ -265,7 +285,7 @@ final class HtmlToMarkdown
             }
 
             $name = strtolower($child->nodeName);
-            if (in_array($name, self::DROP_TAGS, true)) {
+            if (self::isDropped($child)) {
                 continue;
             }
             if ($name === 'head') {
@@ -280,7 +300,7 @@ final class HtmlToMarkdown
                 continue;
             }
 
-            if (!in_array($name, self::BLOCK_TAGS, true)) {
+            if (!in_array($name, self::BLOCK_TAGS, true) && !self::wrapsBlock($child, $name)) {
                 $inline .= self::renderInline($child, $baseUrl);
                 continue;
             }
@@ -310,7 +330,8 @@ final class HtmlToMarkdown
 
     /**
      * One block element as one Markdown block (or several, spliced; null when
-     * it renders nothing at all).
+     * it renders nothing at all). An inline element that holds blocks reaches
+     * here through {@see wrapsBlock()} and splices like a container.
      */
     private static function renderBlock(DOMElement $node, string $name, string $baseUrl): ?string
     {
@@ -320,7 +341,7 @@ final class HtmlToMarkdown
             return $inner === '' ? null : str_repeat('#', self::HEADING_LEVELS[$name]) . ' ' . $inner;
         }
 
-        if (in_array($name, self::SPLICE_TAGS, true)) {
+        if (in_array($name, self::SPLICE_TAGS, true) || !in_array($name, self::BLOCK_TAGS, true)) {
             $blocks = self::renderBlocks($node, $baseUrl);
 
             return $blocks === [] ? null : implode("\n\n", $blocks);
@@ -403,6 +424,9 @@ final class HtmlToMarkdown
                 }
                 continue;
             }
+            if (self::isDropped($child)) {
+                continue; // A hidden item shows nothing, so it is not a list entry either.
+            }
 
             $marker = $ordered ? $number++ . '. ' : '- ';
             $blocks = self::renderBlocks($child, $baseUrl);
@@ -452,7 +476,7 @@ final class HtmlToMarkdown
         foreach (self::tableRows($node) as $tr) {
             $cells = [];
             foreach ($tr->childNodes as $cell) {
-                if ($cell instanceof DOMElement && in_array(strtolower($cell->nodeName), ['td', 'th'], true)) {
+                if ($cell instanceof DOMElement && in_array(strtolower($cell->nodeName), ['td', 'th'], true) && !self::isDropped($cell)) {
                     $cells[] = str_replace('|', '\\|', self::joinBlocks($cell, $baseUrl));
                 }
             }
@@ -490,7 +514,7 @@ final class HtmlToMarkdown
     {
         $rows = [];
         foreach ($table->childNodes as $child) {
-            if (!($child instanceof DOMElement)) {
+            if (!($child instanceof DOMElement) || self::isDropped($child)) {
                 continue;
             }
             $name = strtolower($child->nodeName);
@@ -498,7 +522,7 @@ final class HtmlToMarkdown
                 $rows[] = $child;
             } elseif (in_array($name, ['thead', 'tbody', 'tfoot'], true)) {
                 foreach ($child->childNodes as $row) {
-                    if ($row instanceof DOMElement && strtolower($row->nodeName) === 'tr') {
+                    if ($row instanceof DOMElement && strtolower($row->nodeName) === 'tr' && !self::isDropped($row)) {
                         $rows[] = $row;
                     }
                 }
@@ -530,14 +554,69 @@ final class HtmlToMarkdown
         foreach ($node->childNodes as $child) {
             if ($child instanceof DOMText || $child instanceof DOMCdataSection) {
                 $out .= $child->nodeValue ?? '';
+            } elseif ($child instanceof DOMElement && self::isDropped($child)) {
+                continue;
             } elseif ($child instanceof DOMElement && strtolower($child->nodeName) === 'br') {
                 $out .= "\n";
-            } elseif ($child instanceof DOMElement && !in_array(strtolower($child->nodeName), self::DROP_TAGS, true)) {
+            } elseif ($child instanceof DOMElement) {
                 $out .= self::visibleText($child);
             }
         }
 
         return $out;
+    }
+
+    /**
+     * True when the element is dropped whole: a script-like tag in DROP_TAGS,
+     * or an element the page hides from its own view (see {@see isHidden()}).
+     */
+    private static function isDropped(DOMElement $node): bool
+    {
+        return in_array(strtolower($node->nodeName), self::DROP_TAGS, true) || self::isHidden($node);
+    }
+
+    /**
+     * True when the page hides the element: the `hidden` attribute, or an
+     * inline `display:none`. As in a browser, the last `display` declaration
+     * in the style attribute decides, and `!important` does not change it.
+     * Hiding by a stylesheet rule, a class or a script is not evaluated, so
+     * text a page hides only through its CSS still reaches the model.
+     */
+    private static function isHidden(DOMElement $node): bool
+    {
+        if ($node->hasAttribute('hidden')) {
+            return true;
+        }
+
+        $style = $node->getAttribute('style');
+        $count = $style === '' ? 0 : preg_match_all('/(?:^|;)\s*display\s*:([^;]*)/i', $style, $matches);
+        if ($count === false || $count === 0) {
+            return false;
+        }
+
+        $declared = strtolower(trim(preg_replace('/!\s*important/i', '', end($matches[1])) ?? ''));
+
+        return $declared === 'none';
+    }
+
+    /**
+     * True when an element outside {@see INLINE_RENDERED} holds a block
+     * element anywhere below it: `details`, `center`, `span` or `font` around
+     * paragraphs. Flattened as inline text, those paragraphs would fuse into
+     * one run of words.
+     */
+    private static function wrapsBlock(DOMElement $node, string $name): bool
+    {
+        if (in_array($name, self::INLINE_RENDERED, true)) {
+            return false;
+        }
+        foreach ($node->getElementsByTagName('*') as $descendant) {
+            if (in_array(strtolower($descendant->nodeName), self::BLOCK_TAGS, true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -547,7 +626,7 @@ final class HtmlToMarkdown
     private static function renderInline(DOMElement $node, string $baseUrl): string
     {
         $name = strtolower($node->nodeName);
-        if (in_array($name, self::DROP_TAGS, true)) {
+        if (self::isDropped($node)) {
             return '';
         }
 

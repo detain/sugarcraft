@@ -56,7 +56,10 @@ namespace SugarCraft\Core\Util;
  * Containment compares canonical paths against the platform separator
  * (`DIRECTORY_SEPARATOR`), which is what realpath() answers with: `/` on POSIX,
  * `\\` on Windows. Direct and nested entries are judged by the same rule
- * there. Drive-letter and case handling are not exercised on Windows, so a
+ * there. Paths that already exist are judged by realpath(), as on POSIX. A path
+ * that does NOT exist yet is refused by {@see resolveForCreate()} and so by
+ * {@see confine()} on Windows, because its lexical walk has no drive-aware form
+ * and has not been tested there. Drive-letter and case handling are not exercised on Windows, so a
  * Windows caller must test before it relies on this class.
  *
  * ## Not covered
@@ -125,6 +128,12 @@ final class PathJail
         // kernel follows the link first and steps up from its target. Refuse that
         // shape before collapsing, or the approved path lands outside the root.
         if (self::parentWalkCrossesLink($fullPath)) {
+            return null;
+        }
+
+        // The walk below anchors a missing path with a leading `/`, which turns a
+        // drive-letter root into `/C:\...` and answers no ancestor. Refuse instead.
+        if (!self::lexicalWalkSupported(DIRECTORY_SEPARATOR)) {
             return null;
         }
 
@@ -208,15 +217,9 @@ final class PathJail
             return null;
         }
 
-        // A dangling leaf is invisible to realpath(), so the resolve() verdict
-        // below would vouch for it. Refuse it first, on the normalized path.
-        $full = str_starts_with($path, '/') ? $path : self::under($rootReal, $path);
-        $leaf = self::normalizeLexically($full);
-        if (is_link($leaf) && realpath($leaf) === false) {
-            return null;
-        }
-
-        $existing = self::settle($root, $path, null, refuseDanglingLeaf: false);
+        // The raw path, not a lexically collapsed one: `s/../dl` reaches the link
+        // through the kernel's `..`, which the collapse would drop.
+        $existing = self::settle($root, $path, null, refuseDanglingLeaf: true);
         if ($existing !== null && self::inside($existing, $rootReal)) {
             return $existing;
         }
@@ -252,8 +255,9 @@ final class PathJail
     /**
      * The base algorithm behind {@see resolve()} and {@see confine()}.
      *
-     * $refuseDanglingLeaf is the one rule {@see resolve()} adds. {@see confine()}
-     * passes false because it refuses a dangling leaf before it gets here.
+     * $refuseDanglingLeaf is the one rule {@see resolve()} and {@see confine()}
+     * add. It must test the raw path: a link reached through `..` after a
+     * symlinked directory is invisible to a check on the lexically collapsed path.
      */
     private static function settle(
         string $root,
@@ -322,6 +326,19 @@ final class PathJail
     {
         return $candidate === $rootReal
             || str_starts_with($candidate, rtrim($rootReal, $separator) . $separator);
+    }
+
+    /**
+     * Whether resolveForCreate() may walk a path that does not exist yet.
+     *
+     * The walk normalizes the path lexically with a leading `/`, which holds only
+     * on POSIX. Windows is refused, fail closed, until the walk has a drive-aware
+     * form that is tested on Windows. The separator is passed in
+     * so the refusal is testable on POSIX, as insideBeneath() is.
+     */
+    private static function lexicalWalkSupported(string $separator): bool
+    {
+        return $separator === '/';
     }
 
     /**

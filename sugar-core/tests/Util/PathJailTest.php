@@ -366,6 +366,21 @@ final class PathJailTest extends TestCase
         $this->assertFalse(file_exists($this->outside . '/escaped.txt'));
     }
 
+    public function testConfineRefusesADanglingLeafReachedThroughADotDotAfterASymlinkedDirectory(): void
+    {
+        // Regression. A dangling link is reached through `..` after a symlinked
+        // directory, so the lexical normalization sees a plain in-root name while
+        // the kernel follows the link. settle() must refuse the raw link itself.
+        mkdir($this->root . '/a/b/c', 0700, true);
+        $this->link($this->root . '/a/b/c', $this->root . '/s');
+        $this->link($this->outside . '/new.txt', $this->root . '/a/b/dl');
+
+        $this->assertNull(PathJail::confine($this->root, 's/../dl'));
+        $this->assertNull(PathJail::resolve($this->root, 's/../dl'));
+        $this->assertNull(PathJail::resolveForCreate($this->root, 's/../dl'));
+        $this->assertFalse(file_exists($this->outside . '/new.txt'));
+    }
+
     // ------------------------------------------------------------ within() / below()
 
     public function testWithinAcceptsAPathInsideTheBoundary(): void
@@ -476,6 +491,17 @@ final class PathJailTest extends TestCase
         $this->assertFalse(PathJail::within("{$this->root}/inside.txt\0", $this->root));
         $this->assertFalse(PathJail::within($this->root, "{$this->root}\0"));
         $this->assertFalse(PathJail::below("{$this->root}/sub\0", $this->root));
+    }
+
+    public function testMissingPathWalkIsRefusedOnWindowsAndAllowedOnPosix(): void
+    {
+        // Regression. On Windows the lexical walk built `/C:\ws/new.txt` and
+        // answered null for every new file under a drive root. Until a
+        // drive-aware walk is tested on Windows, the walk is refused there. The
+        // Windows branch cannot run on POSIX, so the separator seam stands in.
+        $method = new \ReflectionMethod(PathJail::class, 'lexicalWalkSupported');
+        $this->assertTrue($method->invoke(null, '/'));
+        $this->assertFalse($method->invoke(null, '\\'));
     }
 
     /**
