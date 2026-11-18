@@ -245,6 +245,10 @@ jobs:
       # `path-repo-check` is a hard gate whose classifier nothing checked.
       - name: Verify the tools/ guards
         run: phpunit --no-configuration --colors=never tools/tests/
+      # plan_plugin.md 3.3 / 6.5: the plugin libs must not depend on candy-code,
+      # by manifest or by symbol. The bundles join the roster in phase 1c-i.
+      - name: Verify plugin libs stay independent of candy-code
+        run: php tools/check-plugin-deps.php
 
   # G6-P (OD-6, reviews-1103): the publishers (sync-sugarcraft, phar-latest) poll
   # THIS workflow for their gate, so a green CI must already mean the shipped
