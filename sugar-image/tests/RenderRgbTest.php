@@ -18,6 +18,7 @@ use SugarCraft\Image\TmuxPassthroughDecorator;
  * @covers \SugarCraft\Image\Renderer\KittyRenderer::renderRgb
  * @covers \SugarCraft\Image\Renderer\KittyRenderer::present
  * @covers \SugarCraft\Image\Renderer\KittyRenderer::supportsIdDelete
+ * @covers \SugarCraft\Image\Renderer\KittyRenderer::assertPositiveId
  * @covers \SugarCraft\Image\Renderer\Iterm2Renderer::renderRgb
  * @covers \SugarCraft\Image\Renderer\Iterm2Renderer::present
  * @covers \SugarCraft\Image\Renderer\Iterm2Renderer::supportsIdDelete
@@ -148,6 +149,16 @@ final class RenderRgbTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
 
         (new KittyRenderer())->present($this->source($this->rgba()), 4, null, $id, null);
+    }
+
+    /** @dataProvider badIds */
+    public function testKittyPresentRefusesAMalformedPreviousIdBeforeDeleting(string $id): void
+    {
+        // Regression (Codex review on #1521): a bad prevId used to reach delete(),
+        // cast to 0, and Kitty's i=0 delete clears every image.
+        $this->expectException(\InvalidArgumentException::class);
+
+        (new KittyRenderer())->present($this->source($this->rgba()), 4, null, '2', $id);
     }
 
     public function testKittySupportsIdDelete(): void

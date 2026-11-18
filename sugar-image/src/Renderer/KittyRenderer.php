@@ -341,8 +341,11 @@ final class KittyRenderer implements Renderer, IncrementalRenderer
      */
     public function present(ImageSource $image, int $width, ?int $height, string $imageId, ?string $prevId): string
     {
-        if (!ctype_digit($imageId) || $imageId === '0') {
-            throw new \InvalidArgumentException("Kitty image id must be a positive integer, got '{$imageId}'");
+        self::assertPositiveId($imageId);
+        if ($prevId !== null) {
+            // delete() casts its argument to int, so a malformed id would
+            // become 0, and Kitty's `i=0` delete clears every image.
+            self::assertPositiveId($prevId);
         }
 
         $frame = $this->renderFrame($image, $width, $height, (int) $imageId);
@@ -352,6 +355,16 @@ final class KittyRenderer implements Renderer, IncrementalRenderer
         }
 
         return $frame . $this->delete($prevId);
+    }
+
+    /**
+     * @throws \InvalidArgumentException unless $id is a positive decimal integer
+     */
+    private static function assertPositiveId(string $id): void
+    {
+        if (!ctype_digit($id) || $id === '0') {
+            throw new \InvalidArgumentException("Kitty image id must be a positive integer, got '{$id}'");
+        }
     }
 
     public function supportsIdDelete(): bool
