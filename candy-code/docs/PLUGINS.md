@@ -298,6 +298,9 @@ candy-code bundles install <path>         # copy a bundle directory into
 candy-code bundles install <git-url>      # depth-one clone into the same place
 candy-code bundles install <plugin>@<marketplace>
                                           # gated install from an added marketplace
+candy-code bundles install <src> --project
+                                          # into <root>/.candy-code/bundles/ instead, where <root>
+                                          # is --root or the repository the directory is in
 candy-code bundles marketplace add <path|git-url>
                                           # pin a marketplace catalog under ~/.candy-code/
 candy-code bundles marketplace list       # the added rows and their pins
