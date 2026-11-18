@@ -85,6 +85,38 @@ final class PluginRegistryTest extends TestCase
         $this->assertSame('invalid-name', $reason, 'a second blank name must not be refused as a collision');
     }
 
+    public function testANameOutsideTheRouteSlugGrammarIsRefusedAsInvalidName(): void
+    {
+        $events = [];
+
+        foreach (['my channel', 'a/b', 'b|c', '-lead', '.dot', "tab\there"] as $name) {
+            $registry = PluginRegistry::new();
+
+            $this->assertFalse($registry->register('demo', $this->plugin($name, $events), $reason), $name);
+            $this->assertSame('invalid-name', $reason, $name);
+            $this->assertNull($registry->pluginNamed($name), $name);
+        }
+    }
+
+    public function testABundleAndNameSeparatorCannotForgeAnotherPluginsKey(): void
+    {
+        $events = [];
+        $registry = PluginRegistry::new();
+        $first = $this->plugin('a', $events);
+        $this->assertTrue($registry->register('a', $first));
+
+        // With the grammar refusing '|' in a name, the key "a|b|c" can only mean
+        // bundle "a|b" and name "c", so no second plugin can overwrite the first.
+        $this->assertFalse($registry->register('a', $this->plugin('b|c', $events), $reason));
+        $this->assertSame('invalid-name', $reason);
+        $this->assertTrue($registry->register('a|b', $second = $this->plugin('c', $events), $reason));
+        $this->assertNull($reason);
+
+        $this->assertSame($first, $registry->pluginNamed('a'));
+        $this->assertSame($second, $registry->pluginNamed('c'));
+        $this->assertNull($registry->pluginNamed('b|c'));
+    }
+
     public function testAReservedBundleIsRefused(): void
     {
         $events = [];

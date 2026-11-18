@@ -438,6 +438,35 @@ final class PluginLoaderTest extends TestCase
         ));
     }
 
+    public function testAFileRedeclaringAnotherPluginsClassIsRefusedBeforeItsRequire(): void
+    {
+        // Without the pre-require check this second require is an uncatchable
+        // compile error, and the test process itself would die here.
+        $ns = 'PluginFixtures\\' . Plugins::tag();
+        $fqcn = $ns . '\\Greeter';
+        $owner = $this->build('pa', Plugins::pluginSource($ns, 'Greeter', 'pa'), [
+            'channel' => ['file' => 'src/Impl.php', 'class' => $fqcn],
+        ]);
+        $redeclarer = $this->build('pb', Plugins::pluginSource($ns, 'Greeter', 'pb'), [
+            'channel' => ['file' => 'src/Impl.php', 'class' => $fqcn],
+        ]);
+        $ledger = new MemoryLedger();
+        $ledger->prime($owner['file']);
+        $ledger->prime($redeclarer['file']);
+
+        $result = $this->load([
+            Plugins::candidate('pa', $owner['dir']),
+            Plugins::candidate('pb', $redeclarer['dir']),
+        ], $ledger, trusted: ['pa', 'pb']);
+
+        $this->assertSame(['pa'], array_column($result->loaded, 'bundle'));
+        $this->assertSame([['pb', 'class-collision']], array_map(
+            static fn (array $row): array => [$row['bundle'], $row['reason']],
+            $result->refusals,
+        ));
+        $this->assertStringContainsString($fqcn, (string) $result->refusals[0]['error']);
+    }
+
     public function testAClassOfTheWrongInterfaceIsRefusedAsInterfaceMismatch(): void
     {
         $ns = 'PluginFixtures\\' . Plugins::tag();

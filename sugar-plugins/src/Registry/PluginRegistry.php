@@ -48,8 +48,8 @@ final class PluginRegistry
     /**
      * Accept one plugin under $bundleName. A collision (a reserved bundle, or a
      * name another accepted plugin already owns) is refused, never overridden.
-     * A blank name is refused as `invalid-name`. Returns false and names the
-     * reason word in $reason when it refuses.
+     * A name outside the route-slug grammar is refused as `invalid-name`. Returns
+     * false and names the reason word in $reason when it refuses.
      */
     public function register(string $bundleName, object $plugin, ?string &$reason = null): bool
     {
@@ -69,9 +69,12 @@ final class PluginRegistry
 
         $name = \trim($plugin->name());
 
-        // An empty name would index under '' and collide with every other
-        // nameless plugin, so it is refused as a name, not as a collision.
-        if ($name === '') {
+        // The name is also the route slug a host addresses the plugin by, so it
+        // takes the grammar candy-code's ChannelRegistry applies. An empty name
+        // would index under '' and collide with every other nameless plugin.
+        // The grammar also keeps the "bundle|name" key unambiguous: with no '|'
+        // in a name, the last '|' always splits the key back into its parts.
+        if ($name === '' || \preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]*$/', $name) !== 1) {
             $reason = 'invalid-name';
 
             return false;

@@ -35,7 +35,7 @@ use SugarCraft\Plugins\Trust\TrustList;
  * never overrides.
  *
  * Refusal reason words: manifest-refused, uncontained, contract-unsupported,
- * world-writable, foreign-owner, require-failed, class-missing,
+ * world-writable, foreign-owner, require-failed, class-collision, class-missing,
  * class-not-declared, interface-mismatch.
  */
 final class PluginLoader
@@ -90,6 +90,8 @@ final class PluginLoader
         $pathState = [];
         /** @var array<string, string> $requireErrors realpath => diagnostic of the failed require */
         $requireErrors = [];
+        /** @var array<string, string> $collisions realpath => the type another file already declares */
+        $collisions = [];
 
         foreach ($candidates as $candidate) {
             if (!$trust->contains($candidate->name)) {
@@ -144,6 +146,11 @@ final class PluginLoader
                             // NEXT launch loads it and this launch only lists it.
                             $ledger->record($entry->path);
                             $pathState[$entry->path] = 'quarantined';
+                        } elseif (($collision = DeclaredClasses::declaredElsewhere($entry->path)) !== null) {
+                            // Checked before require_once: a redeclared type is a fatal
+                            // compile error that no catch below can reach.
+                            $pathState[$entry->path] = 'collision';
+                            $collisions[$entry->path] = $collision;
                         } else {
                             try {
                                 require_once $entry->path;
@@ -164,6 +171,11 @@ final class PluginLoader
 
                     if ($pathState[$entry->path] === 'failed') {
                         $refusals[] = $where + ['reason' => 'require-failed', 'error' => $requireErrors[$entry->path]];
+                        continue;
+                    }
+
+                    if ($pathState[$entry->path] === 'collision') {
+                        $refusals[] = $where + ['reason' => 'class-collision', 'error' => 'class ' . $collisions[$entry->path] . ' is already declared by another file'];
                         continue;
                     }
 
