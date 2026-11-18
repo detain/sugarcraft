@@ -42,7 +42,11 @@ final class ArmedAction
      * @param string               $prompt      The text shown while the gate is armed.
      * @param array<string, mixed> $payload     What the action will do when confirmed.
      * @param string               $localeAffirmative  Extra confirming word for the active locale.
-     *                                          Matched case-insensitively. An empty string adds nothing.
+     *                                          The word is lower-cased before matching,
+     *                                          so `J` and `j` configure the same key. The
+     *                                          typed keystroke is compared as typed, so a
+     *                                          capital `J` does not confirm, as with `Y`.
+     *                                          An empty string adds nothing.
      */
     public static function new(
         string $kind,

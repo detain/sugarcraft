@@ -28,10 +28,12 @@ namespace SugarCraft\Core\Config;
  * comes back unchanged. That is the honest answer when nothing can be checked,
  * and it never invents a substitution.
  *
- * Replaces the two copies in candy-code: `ProviderFactory::resolveEnv()`
- * (uppercase names, `0` kept) and `McpClient::resolveEnv()` (shell names,
- * `0` unset). The provider reader's `${keychain:...}` pass is not env
- * expansion and stays with its caller.
+ * This is the target for the two copies in candy-code:
+ * `ProviderFactory::resolveEnv()` (uppercase names, `0` kept) and
+ * `McpClient::resolveEnv()` (shell names, `0` unset). Those callers still run
+ * their own expansion until their migration lands, so the rules above do not
+ * yet cover every reader. The provider reader's `${keychain:...}` pass is not
+ * env expansion and stays with its caller.
  */
 final class Interpolate
 {
