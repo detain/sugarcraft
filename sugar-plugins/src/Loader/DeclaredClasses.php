@@ -116,6 +116,7 @@ final class DeclaredClasses
             [$id] = $tokens[$i];
             $next = $tokens[$i + 1][0] ?? null;
             $prev = $tokens[$i - 1][0] ?? null;
+            $prevPrev = $tokens[$i - 2][0] ?? null;
 
             // `namespace\foo()` is a relative name in code, not a declaration.
             if ($id === T_NAMESPACE && $next !== T_NS_SEPARATOR) {
@@ -144,8 +145,13 @@ final class DeclaredClasses
                 continue;
             }
 
-            // `Foo::class` is a name lookup, not a declaration, so it opens no body.
-            if (\in_array($id, [T_CLASS, T_INTERFACE, T_TRAIT, T_ENUM], true) && $prev !== T_DOUBLE_COLON) {
+            // A keyword opens a body only as a declaration (`class Foo`) or an anonymous
+            // class (`new class`, `new readonly class`). `Foo::class` is a name lookup and
+            // `class: 'x'` is a named argument; neither may arm a brace that belongs to a closure.
+            $anonymous = $prev === T_NEW || ($prev === T_READONLY && $prevPrev === T_NEW);
+            if (\in_array($id, [T_CLASS, T_INTERFACE, T_TRAIT, T_ENUM], true)
+                && $prev !== T_DOUBLE_COLON
+                && ($next === T_STRING || $anonymous)) {
                 $bodyDue = $parens;
                 if ($next === T_STRING) {
                     $types[] = self::qualify($namespace, $tokens[$i + 1][1]);

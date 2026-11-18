@@ -207,4 +207,36 @@ final class DeclaredClassesTest extends TestCase
 
         $this->assertSame('str_repeat', DeclaredClasses::declaredElsewhere($path));
     }
+
+    public function testANamedArgumentClassKeywordDoesNotTakeAClosureBodyBraceSoItsFunctionsAreStillListed(): void
+    {
+        // `class:` is a named argument, not a declaration. Arming a body for it made the
+        // closure's brace look like a class body, which hid str_pad() from the global list,
+        // so a host that already defines str_pad() would fatal on require.
+        $path = $this->file(<<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            register(class: 'x', callback: function () { function str_pad(): void {} });
+            PHP);
+
+        $this->assertSame(['str_pad'], DeclaredClasses::functionsOf($path));
+        $this->assertSame('str_pad', DeclaredClasses::declaredElsewhere($path));
+    }
+
+    public function testAnonymousReadonlyClassMethodsStayOutOfTheGlobalList(): void
+    {
+        $path = $this->file(<<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            $obj = new readonly class(function () { return 1; }) {
+                public function strlen(): int { return 0; }
+            };
+            PHP);
+
+        $this->assertSame([], DeclaredClasses::functionsOf($path));
+    }
 }
