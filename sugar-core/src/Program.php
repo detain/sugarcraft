@@ -615,7 +615,7 @@ final class Program
             $size = $this->options->windowSize ?? $this->tty->size();
             $this->dispatch(new WindowSizeMsg($size['cols'], $size['rows']));
             $this->dispatch(new EnvMsg($this->options->environment ?? $this->collectEnv()));
-            $this->dispatch(new ColorProfileMsg($this->options->colorProfile ?? ColorProfile::detect()));
+            $this->dispatch(new ColorProfileMsg($this->options->colorProfile ?? ColorProfile::detectTerminal()));
 
             try {
                 $initCmd = $this->activeModel()->init();

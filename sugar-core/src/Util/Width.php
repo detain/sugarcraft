@@ -294,13 +294,19 @@ final class Width
         $len = strlen($clean);
         $i = 0;
         while ($i < $len) {
-            // M19 perf fast path: printable ASCII (0x20-0x7E) is always a
-            // one-cell, zero-combining character on its own — UTF-8
-            // continuation bytes and every combining mark are >= 0x80, so a
-            // maximal run of these bytes cannot share a cluster with its
-            // neighbours. Consume the whole run without touching the
-            // segmenter; everything else falls through to the cluster walk.
+            // M19 perf fast path: printable ASCII (0x20-0x7E) is one cell on
+            // its own, so a run of these bytes can be consumed without the
+            // segmenter. The run's LAST byte is not safe to take, though: a
+            // spacing mark (Mc, U+0903) or any other Extend codepoint that
+            // follows an ASCII base joins that base's UAX#29 cluster, and
+            // summing it alone would score "e" + U+0903 as 2 cells where
+            // nextCluster() (and so truncate()) keeps it as one. So when the
+            // run is followed by a non-ASCII byte, stop one byte short and let
+            // the cluster walk start at that last ASCII character.
             $run = strspn($clean, $asciiRuns, $i);
+            if ($run > 0 && $i + $run < $len && \ord($clean[$i + $run]) >= 0x80) {
+                $run--;
+            }
             if ($run > 0) {
                 $width += $run;
                 $i += $run;

@@ -366,6 +366,51 @@ final class ProgramTest extends TestCase
         fclose($out);
     }
 
+    /**
+     * A TEA app that gates on NoTty ("this device cannot honor addressing")
+     * and leaves colorProfile unset must still be refused on TERM=dumb. The
+     * default message therefore carries detectTerminal()'s dumb-terminal veto,
+     * not the bare detect() answer, which is Ascii on a dumb terminal.
+     */
+    public function testDefaultColorProfileMsgVetoesDumbTerminalAsNoTty(): void
+    {
+        $keys = ['TERM', 'COLORTERM', 'FORCE_COLOR', 'CLICOLOR_FORCE', 'NO_COLOR', 'CLICOLOR'];
+        $saved = [];
+        foreach ($keys as $key) {
+            $saved[$key] = getenv($key);
+        }
+        try {
+            putenv('TERM=dumb');
+            foreach (array_slice($keys, 1) as $key) {
+                putenv($key);
+            }
+
+            [$in, $out, $writer] = $this->pipes();
+            $loop = new StreamSelectLoop();
+
+            $model = new RecordingModel(quitAfter: PHP_INT_MAX);
+            $program = new Program($model, $this->makeOptions($in, $out, $loop));
+            $program->quit();
+            $final = $program->run();
+
+            $msg = $final->log[2];
+            $this->assertInstanceOf(ColorProfileMsg::class, $msg);
+            $this->assertSame(\SugarCraft\Core\Util\ColorProfile::NoTty, $msg->profile);
+
+            fclose($writer);
+            fclose($in);
+            fclose($out);
+        } finally {
+            foreach ($saved as $key => $value) {
+                if ($value === false) {
+                    putenv($key);
+                } else {
+                    putenv("$key=$value");
+                }
+            }
+        }
+    }
+
     public function testViewStructEmitsTitleAndCursorEscapes(): void
     {
         [$in, $out, $writer] = $this->pipes();
