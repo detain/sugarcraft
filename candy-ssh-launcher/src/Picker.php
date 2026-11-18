@@ -1137,6 +1137,12 @@ class Picker
      * keys one byte at a time. Delegates to sugar-core's portable
      * {@see RawMode} helper, which is a safe no-op on non-tty streams
      * (e.g. piped input in tests).
+     *
+     * Stay on RawMode. Util\Tty::enableRawMode() also toggles raw mode, but
+     * it reaches sugar-pty's makeRaw() (cfmakeraw, or stty raw on the fallback),
+     * and both clear ISIG. Ctrl-C would then arrive as byte 0x03 instead of
+     * raising SIGINT, so the exit-130 trap above would never fire. A move to
+     * Tty needs an ISIG-preserving mode first.
      */
     protected function setRawMode(bool $on): void
     {
