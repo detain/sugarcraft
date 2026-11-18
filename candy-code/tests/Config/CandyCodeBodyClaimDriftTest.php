@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Tests\Config;
 use PHPUnit\Framework\AssertionFailedError;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Hooks\HookEvent;
+use SugarCraft\Code\MCP\Serve\McpServeRoster;
 use SugarCraft\Code\Permissions\PermissionMode;
 
 /**
@@ -48,8 +49,11 @@ use SugarCraft\Code\Permissions\PermissionMode;
 final class CandyCodeBodyClaimDriftTest extends TestCase
 {
     private const BODY = __DIR__ . '/../../../docs/_data/candy-code.body.html';
+    private const COMPARISON = __DIR__ . '/../../COMPARISON.md';
     private const SOURCE = __DIR__ . '/../../src';
     private const LANG = __DIR__ . '/../../lang';
+    private const EXAMPLES = __DIR__ . '/../../examples';
+    private const VHS = __DIR__ . '/../../.vhs';
 
     /**
      * Class-shaped names the body puts in `<code>`: a bare name, a namespaced
@@ -187,6 +191,67 @@ final class CandyCodeBodyClaimDriftTest extends TestCase
                 "the candy-code body quotes '{$word} {$noun}' while the live count is {$live[$kind]}"
             );
         }
+    }
+
+    public function testTheComparisonPageQuotesTheLiveHookEventCountForCandyCode(): void
+    {
+        $text = (string) file_get_contents(self::COMPARISON);
+        // Only the candy-code count is pinned: the same page quotes Claude Code's
+        // own event count ("vs Claude Code's 33"), which is not this enum.
+        preg_match_all(
+            '/\b(' . self::countPattern() . ')\s+hook events\s+vs\s+Claude Code/i',
+            $text,
+            $found,
+        );
+        self::assertNotEmpty($found[1], 'COMPARISON.md no longer states the candy-code hook event count against Claude Code');
+
+        $live = \count(HookEvent::cases());
+        foreach ($found[1] as $word) {
+            self::assertSame(
+                $live,
+                self::countValue($word),
+                "COMPARISON.md quotes '{$word} hook events' while the HookEvent enum has {$live}"
+            );
+        }
+    }
+
+    public function testTheMcpServeRosterOnThePageIsTheRosterTheServerServes(): void
+    {
+        self::assertSame(
+            1,
+            preg_match('/read-only tool roster \(([^)]*)\)/', strip_tags(self::body()), $listed),
+            'the body no longer names the mcp serve read-only roster — re-pin this leg with the page'
+        );
+
+        $named = array_map('trim', explode(',', $listed[1]));
+        $served = McpServeRoster::NAMES;
+        sort($named);
+        sort($served);
+        self::assertSame($served, $named, 'the body names an MCP read-only roster that differs from McpServeRoster::NAMES');
+    }
+
+    public function testEveryShippedExampleHasADemoGifOnThePage(): void
+    {
+        $examples = array_map('basename', glob(self::EXAMPLES . '/*.php') ?: []);
+        self::assertNotEmpty($examples, 'the examples directory is empty or unreadable');
+
+        $tapes = glob(self::VHS . '/*.tape') ?: [];
+        $tapeText = implode("\n", array_map(static fn (string $tape): string => (string) file_get_contents($tape), $tapes));
+
+        $unrecorded = [];
+        foreach ($examples as $example) {
+            if (!str_contains($tapeText, 'examples/' . $example)) {
+                $unrecorded[] = $example;
+            }
+        }
+        self::assertSame([], $unrecorded, 'the body says every shipped example has a demo, but no .vhs tape runs these: ' . implode(', ', $unrecorded));
+
+        preg_match_all('#\.vhs/([\w-]+)\.gif#', self::body(), $shown);
+        $gifs = array_values(array_unique($shown[1]));
+        $recorded = array_map(static fn (string $tape): string => basename($tape, '.tape'), $tapes);
+        sort($gifs);
+        sort($recorded);
+        self::assertSame($recorded, $gifs, 'the demo grid on the page does not show exactly one GIF per .vhs tape');
     }
 
     public function testHyphenatedCompoundCountsAreReadWholeAndValuedAsOneNumber(): void

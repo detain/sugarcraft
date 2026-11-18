@@ -359,13 +359,17 @@ depth of **every** `Style` the process mints afterwards:
 
 | Variable | Used for |
 |----------|----------|
-| `NO_COLOR` | Colour off, decoration kept. When truthy the profile becomes `Ascii` — bold, faint and italic still ship, `38;2;…` sweeps never do — per [no-color.org](https://no-color.org). It outranks the two force variables below. Truthy means non-empty, not `0`, not `false`. |
-| `FORCE_COLOR` | The escape-anyways switch. When truthy the ladder returns `TrueColor`, and a non-tty or `TERM=dumb` destination is treated as a terminal rather than silenced. |
-| `CLICOLOR_FORCE` | The libcli-family spelling of the same switch as `FORCE_COLOR`; either one truthy forces the same way. |
+| `NO_COLOR` | Colour off, decoration kept. When set to any non-empty value (`0` and `false` included) the profile becomes `Ascii` — bold, faint and italic still ship, `38;2;…` sweeps never do — per [no-color.org](https://no-color.org). An empty value counts as unset. It is outranked by the two force variables below: a stream forced on keeps its colour. |
+| `FORCE_COLOR` | The escape-anyways switch. A non-empty value sets the level: `true`, `yes` and `on` give `TrueColor`, `1` gives `Ansi`, `2` gives `Ansi256`, `3` and up give `TrueColor`, and any other spelling (`0`, `false`, `off`) gives `Ascii`. A value that names colour on (`true`, `yes`, `on`, or a level of 1 or more) is also enough to write escapes to a non-tty destination, and a forced `TERM=dumb` keeps its colour. |
+| `CLICOLOR_FORCE` | The libcli-family spelling of the same switch: any non-empty value other than `0` forces `TrueColor`, so `CLICOLOR_FORCE=false` forces colour too. It is resolved first, ahead of `FORCE_COLOR`. |
 | `CLICOLOR` | The BSD/libcli "disable colour without unsetting it" switch: exactly `0` (no other value) drops the profile to `Ascii` like `NO_COLOR`. Unlike `NO_COLOR` it does **not** outrank the force variables — `CLICOLOR=0` with `CLICOLOR_FORCE=1` still publishes colour. |
 
-The ladder picks colour from the four variables above plus the capability hints
-named here: `TERM`, `TERM_PROGRAM`, `COLORTERM`,
+The ladder is first match wins, in this order: `CLICOLOR_FORCE`, `FORCE_COLOR`,
+`NO_COLOR`, `CLICOLOR=0`, `TERM=dumb`. A stream that is not a terminal answers
+`NoTty` before the ladder runs unless a force variable above names colour on.
+The order is the one `sugar-core`'s `ColorProfile::detect()` delegates to
+`sugar-colorprofile`'s `DetectionChain`, and `sugar-cli/README.md` states the
+same order. The capability hints named here steer the chosen profile too: `TERM`, `TERM_PROGRAM`, `COLORTERM`,
 `WT_SESSION` and the CI-family variables ride the same ladder and steer the
 chosen profile, not just the rest of the launch's beliefs. `TERM` and
 `TERM_PROGRAM` keep their own rows in the

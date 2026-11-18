@@ -298,15 +298,6 @@ final class AsyncProbe
 
         self::reclaimStaleSlots();
 
-        if (\count(self::$inFlight) >= self::MAX_CONCURRENT_PROBES) {
-            return \React\Promise\resolve(self::settleFromChain($chain));
-        }
-
-        $infocmpPath = InfocmpBinary::path();
-        if ($infocmpPath === null) {
-            return \React\Promise\resolve(self::settleFromChain($chain));
-        }
-
         $term = $chain->term();
         if ($term === '' || \strtolower($term) === 'dumb') {
             // Do not fabricate a terminal type. Unknown TERM means the
@@ -328,6 +319,19 @@ final class AsyncProbe
         $memoKey = \strtolower($term);
         if (\array_key_exists($memoKey, self::$settledMemo)) {
             return \React\Promise\resolve(self::$settledMemo[$memoKey] ?? self::settleFromChain($chain));
+        }
+
+        // The memo lookup sits above the in-flight cap and the binary check:
+        // a hit books no slot and spawns nothing, so neither gate may flip
+        // the answer for one TERM with unrelated probe load (report() orders
+        // these the same way).
+        if (\count(self::$inFlight) >= self::MAX_CONCURRENT_PROBES) {
+            return \React\Promise\resolve(self::settleFromChain($chain));
+        }
+
+        $infocmpPath = InfocmpBinary::path();
+        if ($infocmpPath === null) {
+            return \React\Promise\resolve(self::settleFromChain($chain));
         }
 
         $deferred = new Deferred();

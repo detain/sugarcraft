@@ -1854,6 +1854,31 @@ final class EnvRosterDriftTest extends TestCase
         );
     }
 
+    public function testTheLiteralReadScanSeesLowerCaseGetenvNamesAndNamedArguments(): void
+    {
+        $this->assertSame(
+            ['http_proxy', 'no_proxy'],
+            self::literalEnvReadsIn('<?php function f() { return [getenv(\'http_proxy\'), getenv("no_proxy")]; }'),
+            'proxy variables are conventionally lower-case, so getenv() must not drop them',
+        );
+        $this->assertSame(
+            ['HTTPS_PROXY'],
+            self::literalEnvReadsIn('<?php function f() { return getenv(name: \'HTTPS_PROXY\'); }'),
+            'a named argument is still the read, the label before it is not',
+        );
+        $this->assertSame(
+            ['NO_PROXY'],
+            self::literalEnvReadsIn(
+                '<?php class A { const N = "NO_PROXY"; function f() { return getenv(name: self::N); } }',
+            ),
+        );
+        $this->assertSame(
+            [],
+            self::literalEnvReadsIn('<?php function f() { return $_SERVER[\'argv\']; }'),
+            'a lower-case $_SERVER key is PHP\'s own entry, not an environment variable',
+        );
+    }
+
     public function testTheLiteralReadScanFollowsASameFileStringConstant(): void
     {
         $this->assertSame(
@@ -1924,9 +1949,10 @@ final class EnvRosterDriftTest extends TestCase
     }
 
     /**
-     * Upper-case literal names passed straight to getenv() or indexed out of
-     * $_ENV / $_SERVER, in source order. Comments and plain strings that are not
-     * the first argument of such a call do not count.
+     * Literal names passed straight to getenv() (any case, the first argument or
+     * a `name:` named argument) or upper-case keys indexed out of $_ENV / $_SERVER,
+     * in source order. Comments and plain strings that are not the first argument
+     * of such a call do not count.
      *
      * @return list<string>
      */
@@ -1955,8 +1981,12 @@ final class EnvRosterDriftTest extends TestCase
             if (!($isGetenv && $open === '(') && !($isSuperglobal && $open === '[')) {
                 continue;
             }
+            // getenv() takes any case (`http_proxy` is read by many HTTP stacks); a
+            // $_SERVER key is only an environment read in upper case, since the
+            // lower-case ones ($_SERVER['argv']) are PHP's own entries, not the environment.
+            $pattern = $isGetenv ? '/^[A-Za-z][A-Za-z0-9_]*$/' : '/^[A-Z][A-Z0-9_]*$/';
             foreach (self::keyValuesAt($tokens, $i + 2, $constants) as $literal) {
-                if (preg_match('/^[A-Z][A-Z0-9_]*$/', $literal) === 1) {
+                if (preg_match($pattern, $literal) === 1) {
                     $names[] = $literal;
                 }
             }
@@ -1980,6 +2010,10 @@ final class EnvRosterDriftTest extends TestCase
         $first = $tokens[$at] ?? null;
         if (\is_array($first) && $first[0] === T_CONSTANT_ENCAPSED_STRING) {
             return [trim($first[1], "\"'")];
+        }
+        // getenv(name: 'X'): the label is not the key, the value after it is.
+        if (\is_array($first) && $first[0] === T_STRING && ($tokens[$at + 1] ?? null) === ':') {
+            return self::keyValuesAt($tokens, $at + 2, $constants);
         }
         $scope = \is_array($first) ? $first[0] : null;
         $isScope = \in_array($scope, [T_STRING, T_STATIC, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true);
