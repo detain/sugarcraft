@@ -179,6 +179,14 @@ final class Program
     /** True once pcntl async signal delivery has been enabled (see installSignalHandlers()). */
     private bool $asyncSignals = false;
     /**
+     * Fallback signal-dispatch pump, armed only while run() owns the loop and
+     * a signal arm exists that async delivery does not cover (see
+     * {@see armSignalPump()}). Null = not armed.
+     */
+    private mixed $signalPump = null;
+    /** True while run() owns the loop; gates {@see armSignalPump()}. */
+    private bool $signalPumpLive = false;
+    /**
      * Sole-Resume latch (sugar-core-014): true from just before the real
      * SIGTSTP stop until the post-wake re-setup has completed, so a SIGCONT
      * arriving as part of this stop cycle is attributed to it.
@@ -585,7 +593,6 @@ final class Program
         // straight-line tail; teardownTerminal() is idempotent ($terminalAttached)
         // and releaseRuntime() clears the state it walks, so the normal return,
         // the early-quit return and the throw path share this single exit.
-        $tickTimer = null;
         $inputWatched = false;
         // M-14: the two `return $this->model;` sites below flip this before
         // the finally runs; a still-false flag means a Throwable is unwinding
@@ -636,14 +643,11 @@ final class Program
             // Render scheduling. There is no 60 Hz poll: markDirty() arms a
             // one-shot timer, capped at one frame interval after the last frame,
             // so an idle program wakes for input and timers only (rank 16).
-            // The periodic tick survives only as the fallback signal pump, for
-            // environments where async signal delivery is unavailable.
-            $tickInterval = 1.0 / max(1.0, $this->options->framerate);
-            if (!$this->asyncSignals && function_exists('pcntl_signal_dispatch')) {
-                $tickTimer = $this->loop->addPeriodicTimer($tickInterval, function (): void {
-                    pcntl_signal_dispatch();
-                });
-            }
+            // The periodic signal pump is the fallback for environments where
+            // async signal delivery is unavailable, and only while a signal arm
+            // actually needs it (see armSignalPump()).
+            $this->signalPumpLive = true;
+            $this->armSignalPump();
             $this->renderLive = true;
 
             // Paint the initial frame synchronously, before the loop starts, so the
@@ -679,9 +683,8 @@ final class Program
             $normalReturn = true;
             return $this->model;
         } finally {
-            if ($tickTimer !== null) {
-                $this->loop->cancelTimer($tickTimer);
-            }
+            $this->signalPumpLive = false;
+            $this->cancelSignalPump();
             $this->cancelRenderTimer();
             if ($inputWatched) {
                 $this->loop->removeReadStream($this->input);
@@ -737,6 +740,38 @@ final class Program
     {
         if ($this->dirty && $this->renderLive && $this->renderTimer === null) {
             $this->armRender();
+        }
+    }
+
+    /**
+     * Arm the fallback signal pump when pcntl signals need polling: no async
+     * delivery, pcntl_signal_dispatch() available, and at least one program
+     * handler or signal subscription installed. An idle program with signal
+     * handling off (withoutSignalHandler / catchInterrupts false) therefore
+     * never wakes at the framerate. Idempotent; a signal arm installed while
+     * run() is live calls this again.
+     */
+    private function armSignalPump(): void
+    {
+        if (!$this->signalPumpLive
+            || $this->signalPump !== null
+            || $this->asyncSignals
+            || !function_exists('pcntl_signal_dispatch')
+            || ($this->prevProgramSignalHandlers === [] && $this->signalSubscriptions === [])
+        ) {
+            return;
+        }
+        $interval = 1.0 / max(1.0, $this->options->framerate);
+        $this->signalPump = $this->loop->addPeriodicTimer($interval, function (): void {
+            pcntl_signal_dispatch();
+        });
+    }
+
+    private function cancelSignalPump(): void
+    {
+        if ($this->signalPump !== null) {
+            $this->loop->cancelTimer($this->signalPump);
+            $this->signalPump = null;
         }
     }
 
@@ -2791,6 +2826,7 @@ final class Program
                 : null;
         }
         pcntl_signal($signo, $handler);
+        $this->armSignalPump();
     }
 
     /**
@@ -3082,6 +3118,7 @@ final class Program
             });
         }
         $this->signalSubscriptions[$signo]['subs'][] = $sub;
+        $this->armSignalPump();
         return null;
     }
 
