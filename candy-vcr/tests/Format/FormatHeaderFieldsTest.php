@@ -30,6 +30,9 @@ final class FormatHeaderFieldsTest extends TestCase
 {
     use HostFilesystem;
 
+    /**
+     * @param 'absolute'|'relative' $mode
+     */
     private function fullHeader(string $mode = CassetteHeader::TIMESTAMP_MODE_ABSOLUTE): CassetteHeader
     {
         return new CassetteHeader(

@@ -80,6 +80,9 @@ final class JsonableSerializer implements MsgSerializer
      */
     public function allowedClasses(): array
     {
+        // allow() admits only class names that exist and implement Msg, so
+        // every key is a class-string by construction.
+        /** @var list<class-string> $list */
         $list = array_keys($this->allowed);
         sort($list);
 
@@ -145,7 +148,8 @@ final class JsonableSerializer implements MsgSerializer
     }
 
     /**
-     * @param class-string $tag
+     * @param string $tag the @type value; the class is not loaded, so it is
+     *                    not yet a class-string the autoloader can resolve
      */
     private function assertNotUnloaded(string $tag): void
     {
@@ -157,11 +161,14 @@ final class JsonableSerializer implements MsgSerializer
      * BEFORE spreading: unknown/positional keys and missing required
      * parameters are named refusals, not TypeError soup (finding 034).
      *
-     * @param class-string  $tag
+     * @param string $tag the @type value, resolved by reflection below
      * @param array<array-key, mixed> $data
      */
     private function assertConstructorArgs(string $tag, array $data): void
     {
+        // The caller only reaches here once class_exists() has passed, so the
+        // @type value names a loaded class.
+        /** @var class-string $tag */
         $reflection = new \ReflectionClass($tag);
         $constructor = $reflection->getConstructor();
         $params = $constructor !== null ? $constructor->getParameters() : [];

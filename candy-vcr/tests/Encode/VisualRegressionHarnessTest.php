@@ -40,6 +40,7 @@ final class VisualRegressionHarnessTest extends TestCase
             \RecursiveIteratorIterator::CHILD_FIRST,
         );
         foreach ($it as $entry) {
+            /** @var \SplFileInfo $entry */
             $entry->isDir() ? @rmdir($entry->getPathname()) : @unlink($entry->getPathname());
         }
         @rmdir($this->tmpDir);
@@ -82,6 +83,7 @@ final class VisualRegressionHarnessTest extends TestCase
     public function testIdenticalCanvasesWalkZero(): void
     {
         $png = $this->solidPng('a', 60, 60, [10, 20, 30]);
+        /** @var array<string, mixed> $stats */
         $stats = self::call('pixelDiffStats', $png, $png);
         $this->assertSame(0.0, $stats['pct']);
         $this->assertSame(0.0, $stats['worstRow']);
@@ -91,6 +93,7 @@ final class VisualRegressionHarnessTest extends TestCase
     {
         $a = $this->solidPng('wa', 80, 80, [0, 0, 0]);
         $b = $this->solidPng('wb', 80, 80, [255, 255, 255]);
+        /** @var array<string, mixed> $stats */
         $stats = self::call('pixelDiffStats', $a, $b);
         $this->assertSame(1.0, $stats['pct']);
         $verdict = self::call(
@@ -111,6 +114,7 @@ final class VisualRegressionHarnessTest extends TestCase
         // "one corrupted text row" regression from the finding.
         $a = $this->solidPng('ra', 100, 500, [5, 5, 5]);
         $b = $this->rowBrokenPng('rb', 100, 500, [5, 5, 5], 250);
+        /** @var array<string, mixed> $stats */
         $stats = self::call('pixelDiffStats', $a, $b);
         $this->assertLessThan(0.02, $stats['pct'], 'damage must hide inside the old total budget');
         $this->assertSame(250, $stats['worstRowY']);
@@ -128,6 +132,7 @@ final class VisualRegressionHarnessTest extends TestCase
         // through, which is why the budgets exist.
         $a = $this->solidPng('sa', 200, 200, [40, 40, 40]);
         $b = $this->scatterPng('sb', 200, 200, [40, 40, 40], 600);
+        /** @var array<string, mixed> $stats */
         $stats = self::call('pixelDiffStats', $a, $b);
         $this->assertLessThan(0.02, $stats['pct']);
         $this->assertLessThan(0.15, $stats['worstRow']);
@@ -138,6 +143,7 @@ final class VisualRegressionHarnessTest extends TestCase
     {
         $a = $this->solidPng('ta', 100, 500, [7, 7, 7]);
         $b = $this->scatterPng('tb', 100, 500, [7, 7, 7], 1400); // 2.8% of 50 000
+        /** @var array<string, mixed> $stats */
         $stats = self::call('pixelDiffStats', $a, $b);
         $this->assertGreaterThanOrEqual(0.02, $stats['pct']);
         $this->assertLessThan(0.15, $stats['worstRow'], 'scattered, not localized');
@@ -154,10 +160,14 @@ final class VisualRegressionHarnessTest extends TestCase
         $short = $this->lavGif('short', 0.2);
         $long = $this->lavGif('long', 1.0);
 
+        /** @var array<string, mixed> $pair */
+
         $pair = self::call('compareFramePairs', $long, $short, $this->tmpDir . '/pairing');
         $this->assertTrue($pair['performed'], 'ffmpeg extraction must run when ffmpeg runs');
         $this->assertIsString($pair['reason']);
         $this->assertStringContainsString('animation length changed', $pair['reason']);
+
+        /** @var array<string, mixed> $same */
 
         $same = self::call('compareFramePairs', $short, $short, $this->tmpDir . '/pairing2');
         $this->assertTrue($same['performed']);
@@ -181,7 +191,9 @@ final class VisualRegressionHarnessTest extends TestCase
     }
 
     /**
-     * @param array{0:int,1:int,2:int} $rgb
+     * @param positive-int $w
+     * @param positive-int $h
+     * @param array{0:int<0,255>,1:int<0,255>,2:int<0,255>} $rgb
      */
     private function solidPng(string $name, int $w, int $h, array $rgb): string
     {
@@ -197,7 +209,9 @@ final class VisualRegressionHarnessTest extends TestCase
     }
 
     /**
-     * @param array{0:int,1:int,2:int} $rgb
+     * @param positive-int $w
+     * @param positive-int $h
+     * @param array{0:int<0,255>,1:int<0,255>,2:int<0,255>} $rgb
      */
     private function rowBrokenPng(string $name, int $w, int $h, array $rgb, int $badRow): string
     {
@@ -213,7 +227,9 @@ final class VisualRegressionHarnessTest extends TestCase
     }
 
     /**
-     * @param array{0:int,1:int,2:int} $rgb
+     * @param positive-int $w
+     * @param positive-int $h
+     * @param array{0:int<0,255>,1:int<0,255>,2:int<0,255>} $rgb
      */
     private function scatterPng(string $name, int $w, int $h, array $rgb, int $diffPixels): string
     {

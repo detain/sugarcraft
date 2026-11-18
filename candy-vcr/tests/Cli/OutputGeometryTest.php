@@ -27,7 +27,13 @@ final class OutputGeometryTest extends TestCase
     /** @return array{0: resource, 1: resource} */
     private function memoryPair(): array
     {
-        return [fopen('php://memory', 'w+'), fopen('php://memory', 'w+')];
+        $first = fopen('php://memory', 'w+');
+        $second = fopen('php://memory', 'w+');
+        if (!is_resource($first) || !is_resource($second)) {
+            throw new \RuntimeException('php://memory is unavailable');
+        }
+
+        return [$first, $second];
     }
 
     /** @param resource $stream */

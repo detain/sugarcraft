@@ -238,7 +238,8 @@ final class AsyncProbe
      * each is transient (load, fork or fd pressure) and must not demote a TERM
      * that advertises TrueColor for the life of the process. The sync door
      * ({@see InfocmpBinary::runBounded()}) still records overruns and signal
-     * kills as misses, so the two surfaces differ on those two verdicts only.
+     * kills as misses, so the two surfaces differ on whether those two verdicts
+     * are memoized, never on the answer they settle to.
      * Cap-full, unsafe-TERM and absent-binary early returns never launch a
      * child and never write.
      *
@@ -336,14 +337,18 @@ final class AsyncProbe
             $term,
             $deferred,
             static function (?int $exitCode, string $stdout) use ($chain, $memoKey): ColorProfile {
-                // A completed child is a verdict whatever its exit code: its
-                // printed dump is TERM-static. A signal kill (null code) is not
-                // a verdict and mints no entry (CP-13), so the promotion it
-                // printed is honored for this call only.
-                $promoted = TerminfoParser::hasCapName($stdout, TerminfoParser::TRUECOLOR_NAMES);
-                if ($exitCode !== null) {
-                    self::memoWrite($memoKey, $promoted ? ColorProfile::TrueColor : null);
+                // A signal kill (null code) is no dump at all: the partial
+                // stdout it left behind is never promoted, mints no entry
+                // (CP-13), and settles to the chain answer exactly as the sync
+                // door does.
+                if ($exitCode === null) {
+                    return self::settleFromChain($chain);
                 }
+
+                // A completed child is a verdict whatever its exit code: its
+                // printed dump is TERM-static.
+                $promoted = TerminfoParser::hasCapName($stdout, TerminfoParser::TRUECOLOR_NAMES);
+                self::memoWrite($memoKey, $promoted ? ColorProfile::TrueColor : null);
 
                 return $promoted ? ColorProfile::TrueColor : self::settleFromChain($chain);
             },

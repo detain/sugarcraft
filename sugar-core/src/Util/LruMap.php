@@ -454,13 +454,19 @@ final class LruMap implements \Countable, \IteratorAggregate
             return;
         }
 
+        // One forward pass, then the unsets. Calling array_key_first() per removal
+        // rescans the tombstones each earlier unset left at the head of the hash,
+        // which made a bulk expiry quadratic.
         $now = $this->now();
-        while ($this->expiresAt !== []) {
-            $key = array_key_first($this->expiresAt);
-            if ($this->expiresAt[$key] > $now) {
-                return;
+        $expired = [];
+        foreach ($this->expiresAt as $key => $expiry) {
+            if ($expiry > $now) {
+                break;
             }
+            $expired[] = $key;
+        }
 
+        foreach ($expired as $key) {
             unset($this->data[$key], $this->expiresAt[$key]);
         }
     }

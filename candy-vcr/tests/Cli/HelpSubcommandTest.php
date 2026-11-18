@@ -15,7 +15,11 @@ use SugarCraft\Vcr\Tests\Support\Stream;
  */
 final class HelpSubcommandTest extends TestCase
 {
-    /** @param list<string> $argv @return array{0:int,1:string} */
+    /**
+     * @param list<string> $argv
+     *
+     * @return array{0:int,1:string}
+     */
     private function runHelp(array $argv): array
     {
         $stdout = Stream::memory('w+');

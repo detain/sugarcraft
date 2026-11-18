@@ -21,8 +21,13 @@ use SugarCraft\Vcr\Lang;
 final class ChoiceOption
 {
     /**
-     * @param list<string> $known the closed set of accepted values
-     * @param string $default the value an absent flag takes (must be in $known)
+     * @template T of string
+     *
+     * @param list<T> $known the closed set of accepted values
+     * @param T $default the value an absent flag takes (must be in $known)
+     *
+     * @return T the member of $known the flag named, so callers can hand it
+     *           to a closed-shape option array without a widening cast
      *
      * @throws InvalidArgumentException when the spelling is not one of $known
      */
@@ -36,8 +41,10 @@ final class ChoiceOption
         }
 
         if (is_string($raw)) {
-            if (in_array($raw, $known, true)) {
-                return $raw;
+            foreach ($known as $candidate) {
+                if ($raw === $candidate) {
+                    return $candidate;
+                }
             }
 
             throw new InvalidArgumentException(Lang::t('choice.invalid', [

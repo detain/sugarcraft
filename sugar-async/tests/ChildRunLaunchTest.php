@@ -134,6 +134,22 @@ final class ChildRunLaunchTest extends TestCase
     }
 
     /**
+     * Regression for the loop path of the run() case: closing both pipes is not
+     * an exit. A child that closes its output and keeps running must still be
+     * ended at the deadline, not settled as soon as the pipes reach EOF.
+     */
+    public function testLaunchKillsAChildThatClosesItsOutputButLingersPastItsDeadline(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+        $t0 = microtime(true);
+        $r = $this->settle($loop, ChildRun::new($this->php('fclose(STDOUT); fclose(STDERR); sleep(30);'))->withTimeout(0.5)->launch($loop));
+
+        $this->assertSame(ChildResult::TIMED_OUT, $r->status);
+        $this->assertLessThan(5.0, microtime(true) - $t0, 'the lingering child is killed at its deadline, not reaped at EOF');
+    }
+
+    /**
      * The kill budget is spent while the child is still running (a kernel wait
      * after SIGKILL, simulated here by a child that is simply still alive). The
      * result must settle without proc_close() blocking the loop, and the handle
