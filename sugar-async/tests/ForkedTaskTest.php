@@ -6,12 +6,14 @@ namespace SugarCraft\Async\Tests;
 
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\StreamSelectLoop;
+use React\Promise\Deferred;
 use SugarCraft\Async\Await;
 use SugarCraft\Async\CancellationSource;
 use SugarCraft\Async\ForkChannel;
 use SugarCraft\Async\ForkedTask;
 use SugarCraft\Async\OperationCancelledException;
 use SugarCraft\Async\TimeoutException;
+use SugarCraft\Core\Util\LockFile;
 
 final class ForkedTaskTest extends TestCase
 {
@@ -39,6 +41,37 @@ final class ForkedTaskTest extends TestCase
 
         self::assertSame(0, Await::until($status, 5.0, $loop));
         self::assertSame(['one', 'two'], $frames);
+    }
+
+    public function testAChildExitLeavesALockTheParentHoldsAcrossTheForkHeld(): void
+    {
+        $dir = sys_get_temp_dir() . '/sugar-async-fork-lock-' . bin2hex(random_bytes(6));
+        mkdir($dir, 0700);
+        $path = $dir . '/l';
+        $guard = LockFile::on($path)->tryAcquire();
+        self::assertNotNull($guard);
+        try {
+            // The child's normal exit runs __destruct() on the parent's guard;
+            // the lock must survive it.
+            $loop = new StreamSelectLoop();
+            $status = ForkedTask::run(
+                static function (): void {
+                },
+                static function (): void {
+                },
+                $loop,
+            );
+            self::assertSame(0, Await::until($status, 5.0, $loop));
+
+            $probe = fopen($path, 'c');
+            self::assertIsResource($probe);
+            self::assertFalse(flock($probe, LOCK_EX | LOCK_NB), 'the child must not unlock the parent lock');
+            fclose($probe);
+        } finally {
+            $guard->release();
+            @unlink($path);
+            @rmdir($dir);
+        }
     }
 
     public function testAThrowingChildSettlesWithExitStatusOne(): void
@@ -79,6 +112,42 @@ final class ForkedTaskTest extends TestCase
             // expected
         }
         self::assertLessThan(10.0, microtime(true) - $started, 'the child must be killed, not waited out');
+    }
+
+    public function testCancellingThePromiseReapsTheChildBeforeTheRejectionIsObserved(): void
+    {
+        // The class docblock promises the child is reaped before the promise
+        // settles. Cancelling through the promise must honour that too: a caller
+        // that re-forks for the same resource on rejection must not race a live child.
+        $loop = new StreamSelectLoop();
+        $childPid = new Deferred();
+        $promise = ForkedTask::run(
+            static function (ForkChannel $channel): void {
+                $channel->send((string) getmypid());
+                sleep(30);
+            },
+            static function (string $frame) use ($childPid): void {
+                $childPid->resolve((int) $frame);
+            },
+            $loop,
+        );
+        $pid = Await::until($childPid->promise(), 5.0, $loop);
+
+        $aliveWhenRejected = null;
+        $promise->then(null, static function () use (&$aliveWhenRejected, $pid): void {
+            // posix_kill(pid, 0) is false only once the child has been reaped (ESRCH);
+            // a zombie or a still-exiting child answers true.
+            $aliveWhenRejected = \posix_kill($pid, 0);
+        });
+        $promise->cancel();
+
+        try {
+            Await::until($promise, 10.0, $loop);
+            self::fail('A cancelled forked task must reject');
+        } catch (OperationCancelledException) {
+            // expected
+        }
+        self::assertFalse($aliveWhenRejected, 'the child must be reaped before the rejection is observed');
     }
 
     public function testTheParentSideDeadlineKillsTheChildAndRejectsWithATimeout(): void
@@ -191,6 +260,34 @@ final class ForkedTaskTest extends TestCase
 
         self::assertSame(0, $status, 'the closed child was not reaped with its exit status');
         self::assertGreaterThanOrEqual(5, $ticks, 'the loop was parked while the closed child ran');
+    }
+
+    public function testTheDeadlineStillKillsAChildThatClosedItsChannelAndKeepsRunning(): void
+    {
+        // Closing the channel used to disarm the deadline, so a child that
+        // closed early and then blocked was never killed and the promise
+        // stayed pending. The deadline must still bound the reap.
+        $loop = new StreamSelectLoop();
+        $promise = ForkedTask::run(
+            static function (ForkChannel $channel): void {
+                $channel->close();
+                \usleep(4_000_000);
+            },
+            static function (): void {
+            },
+            $loop,
+            null,
+            0.5,
+        );
+
+        $start = \microtime(true);
+        try {
+            Await::until($promise, 5.0, $loop);
+            self::fail('A channel-closed child past its deadline must be killed and rejected');
+        } catch (TimeoutException $e) {
+            self::assertSame(0.5, $e->seconds());
+            self::assertLessThan(3.0, \microtime(true) - $start, 'the kill must land at the deadline, not when the child exits');
+        }
     }
 
     public function testTheChildDoesNotReEmitTheParentsBufferedOutput(): void

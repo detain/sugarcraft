@@ -110,14 +110,14 @@ final class PhpGifEncoderPaletteTest extends TestCase
         $decoded = $this->decode($gif);
         try {
             // Hot colors are untouchable: exact RGB, indices 0 and 1.
-            $bgIndex = imagecolorat($decoded, 0, 0);
-            $bgColor = imagecolorsforindex($decoded, $bgIndex);
+            $bgIndex = self::indexAt($decoded, 0, 0);
+            $bgColor = self::rgbAt($decoded, $bgIndex);
             self::assertSame($bg, [$bgColor['red'], $bgColor['green'], $bgColor['blue']]);
             self::assertSame(0, $bgIndex, 'dominant background keeps palette slot 0');
 
             $fgPos = 2900; // inside the fg block
-            $fgIndex = imagecolorat($decoded, $fgPos % 64, intdiv($fgPos, 64));
-            $fgColor = imagecolorsforindex($decoded, $fgIndex);
+            $fgIndex = self::indexAt($decoded, $fgPos % 64, intdiv($fgPos, 64));
+            $fgColor = self::rgbAt($decoded, $fgIndex);
             self::assertSame($fg, [$fgColor['red'], $fgColor['green'], $fgColor['blue']]);
             self::assertSame(1, $fgIndex, 'second-dominant keeps palette slot 1');
 
@@ -126,7 +126,7 @@ final class PhpGifEncoderPaletteTest extends TestCase
                 $pos = 3840 + ($k - 1); // cold block: 1-indexed k at 3840+k-1
                 $x = $pos % 64;
                 $y = intdiv($pos, 64);
-                $rgb = imagecolorsforindex($decoded, imagecolorat($decoded, $x, $y));
+                $rgb = self::rgbAt($decoded, self::indexAt($decoded, $x, $y));
                 self::assertSame(
                     [16, 16, $k],
                     [$rgb['red'], $rgb['green'], $rgb['blue']],
@@ -137,9 +137,9 @@ final class PhpGifEncoderPaletteTest extends TestCase
             // Dropped colors snap to their nearest kept entry (ties → lowest
             // index): (16,16,255) sits at pixel 4094 (62,63); (16,17,1) at
             // pixel 4095 (63,63).
-            $droppedA = imagecolorsforindex($decoded, imagecolorat($decoded, 62, 63));
+            $droppedA = self::rgbAt($decoded, self::indexAt($decoded, 62, 63));
             self::assertSame([16, 16, 254], [$droppedA['red'], $droppedA['green'], $droppedA['blue']]);
-            $droppedB = imagecolorsforindex($decoded, imagecolorat($decoded, 63, 63));
+            $droppedB = self::rgbAt($decoded, self::indexAt($decoded, 63, 63));
             self::assertSame([16, 16, 1], [$droppedB['red'], $droppedB['green'], $droppedB['blue']]);
         } finally {
             imagedestroy($decoded);
@@ -199,6 +199,8 @@ final class PhpGifEncoderPaletteTest extends TestCase
      * Lay the given RGB list left-to-right, top-to-bottom onto a truecolor
      * image and write it as a 24-bit PNG.
      *
+     * @param positive-int $width
+     * @param positive-int $height
      * @param list<array{int,int,int}> $pixels
      */
     private function writeTruecolorPng(string $name, int $width, int $height, array $pixels): string
@@ -212,7 +214,7 @@ final class PhpGifEncoderPaletteTest extends TestCase
                 $rgb = $pixels[$i++];
                 $key = ($rgb[0] << 16) | ($rgb[1] << 8) | $rgb[2];
                 if (!isset($allocated[$key])) {
-                    $color = imagecolorallocate($image, $rgb[0], $rgb[1], $rgb[2]);
+                    $color = imagecolorallocate($image, \max(0, \min(255, $rgb[0])), \max(0, \min(255, $rgb[1])), \max(0, \min(255, $rgb[2])));
                     self::assertNotFalse($color);
                     $allocated[$key] = $color;
                 }
@@ -230,6 +232,7 @@ final class PhpGifEncoderPaletteTest extends TestCase
      */
     private function encode(string $png): string
     {
+        \assert($png !== '');
         $gif = $this->tmpDir . '/' . basename($png, '.png') . '.gif';
         self::assertTrue((new PhpGifEncoder())->encode([$png], $gif, 30));
         return $gif;
@@ -242,5 +245,29 @@ final class PhpGifEncoderPaletteTest extends TestCase
         $decoded = imagecreatefromstring($bytes);
         self::assertNotFalse($decoded, 'encoded GIF must decode with GD');
         return $decoded;
+    }
+
+    /**
+     * Palette index at a pixel. GD answers false only for a point off the
+     * image, which the fixtures never ask for, so it is a hard failure here.
+     */
+    private static function indexAt(\GdImage $image, int $x, int $y): int
+    {
+        $index = imagecolorat($image, $x, $y);
+        if (!is_int($index)) {
+            throw new \RuntimeException("no palette index at {$x},{$y}");
+        }
+
+        return $index;
+    }
+
+    /**
+     * @return array{red: int, green: int, blue: int}
+     */
+    private static function rgbAt(\GdImage $image, int $index): array
+    {
+        $color = imagecolorsforindex($image, $index);
+
+        return ['red' => (int) $color['red'], 'green' => (int) $color['green'], 'blue' => (int) $color['blue']];
     }
 }

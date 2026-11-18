@@ -233,14 +233,15 @@ final class AsyncProbe
      * for clean misses too). The ENV-side half of any negative answer is
      * re-derived from the CURRENT chain per call, so env drift after the
      * first probe can never be served stale. A completed child (any exit code)
-     * and a failed launch are memoized. A child the deadline ladder or a signal
-     * killed mints no entry (CP-13, per the UPSTREAM-PLAN P1-15 behaviour map):
-     * a transient kill under load must not demote a TERM that advertises
-     * TrueColor for the life of the process. The sync door
-     * ({@see InfocmpBinary::runBounded()}) still records overruns as misses, so
-     * the two surfaces do not share one policy for killed children. Cap-full,
-     * unsafe-TERM and absent-binary early returns never launch a child and
-     * never write.
+     * is memoized. A child the deadline ladder or a signal killed, and a failed
+     * launch, mint no entry (CP-13, per the UPSTREAM-PLAN P1-15 behaviour map):
+     * each is transient (load, fork or fd pressure) and must not demote a TERM
+     * that advertises TrueColor for the life of the process. The sync door
+     * ({@see InfocmpBinary::runBounded()}) still records overruns and signal
+     * kills as misses, so the two surfaces differ on whether those two verdicts
+     * are memoized, never on the answer they settle to.
+     * Cap-full, unsafe-TERM and absent-binary early returns never launch a
+     * child and never write.
      *
      * @var array<string, ColorProfile|null>
      */
@@ -248,9 +249,9 @@ final class AsyncProbe
 
     /**
      * Dump verdicts for {@see report()}, keyed by lowercased TERM: the capped
-     * stdout of a completed child (any exit code), or null for a failed launch.
-     * A child the deadline ladder or a signal killed mints no entry (CP-13), so
-     * a later report may spawn again. The cardinality ceiling is
+     * stdout of a completed child (any exit code). A child the deadline ladder
+     * or a signal killed, and a failed launch, mint no entry (CP-13), so a
+     * later report may spawn again. The cardinality ceiling is
      * {@see self::MEMO_MAX_ENTRIES}.
      *
      * @var array<string, string|null>
@@ -297,15 +298,6 @@ final class AsyncProbe
 
         self::reclaimStaleSlots();
 
-        if (\count(self::$inFlight) >= self::MAX_CONCURRENT_PROBES) {
-            return \React\Promise\resolve(self::settleFromChain($chain));
-        }
-
-        $infocmpPath = InfocmpBinary::path();
-        if ($infocmpPath === null) {
-            return \React\Promise\resolve(self::settleFromChain($chain));
-        }
-
         $term = $chain->term();
         if ($term === '' || \strtolower($term) === 'dumb') {
             // Do not fabricate a terminal type. Unknown TERM means the
@@ -329,6 +321,19 @@ final class AsyncProbe
             return \React\Promise\resolve(self::$settledMemo[$memoKey] ?? self::settleFromChain($chain));
         }
 
+        // The memo lookup sits above the in-flight cap and the binary check:
+        // a hit books no slot and spawns nothing, so neither gate may flip
+        // the answer for one TERM with unrelated probe load (report() orders
+        // these the same way).
+        if (\count(self::$inFlight) >= self::MAX_CONCURRENT_PROBES) {
+            return \React\Promise\resolve(self::settleFromChain($chain));
+        }
+
+        $infocmpPath = InfocmpBinary::path();
+        if ($infocmpPath === null) {
+            return \React\Promise\resolve(self::settleFromChain($chain));
+        }
+
         $deferred = new Deferred();
         $spawned = self::spawnInfocmp(
             $loop,
@@ -336,14 +341,18 @@ final class AsyncProbe
             $term,
             $deferred,
             static function (?int $exitCode, string $stdout) use ($chain, $memoKey): ColorProfile {
-                // A completed child is a verdict whatever its exit code: its
-                // printed dump is TERM-static. A signal kill (null code) is not
-                // a verdict and mints no entry (CP-13), so the promotion it
-                // printed is honored for this call only.
-                $promoted = TerminfoParser::hasCapName($stdout, TerminfoParser::TRUECOLOR_NAMES);
-                if ($exitCode !== null) {
-                    self::memoWrite($memoKey, $promoted ? ColorProfile::TrueColor : null);
+                // A signal kill (null code) is no dump at all: the partial
+                // stdout it left behind is never promoted, mints no entry
+                // (CP-13), and settles to the chain answer exactly as the sync
+                // door does.
+                if ($exitCode === null) {
+                    return self::settleFromChain($chain);
                 }
+
+                // A completed child is a verdict whatever its exit code: its
+                // printed dump is TERM-static.
+                $promoted = TerminfoParser::hasCapName($stdout, TerminfoParser::TRUECOLOR_NAMES);
+                self::memoWrite($memoKey, $promoted ? ColorProfile::TrueColor : null);
 
                 return $promoted ? ColorProfile::TrueColor : self::settleFromChain($chain);
             },
@@ -354,8 +363,8 @@ final class AsyncProbe
             },
         );
         if (!$spawned) {
-            self::memoWrite($memoKey, null);
-
+            // A failed launch is transient (fork or fd pressure) and says
+            // nothing about the TERM, so it mints no entry (CP-13).
             return \React\Promise\resolve(self::settleFromChain($chain));
         }
 
@@ -573,13 +582,19 @@ final class AsyncProbe
             $infocmpPath,
             $term,
             $deferred,
-            static function (?int $exitCode, string $stdout) use ($memoKey): string {
-                // A completed child keeps its capped stdout as the verdict,
-                // whatever its exit code. A signal kill (null code) is not a
-                // verdict and mints no entry (CP-13).
-                if ($exitCode !== null) {
-                    self::dumpMemoWrite($memoKey, $stdout);
+            static function (?int $exitCode, string $stdout) use ($memoKey): ?string {
+                // A signal kill arrives with a null code (react takes it from
+                // its status refresh). Its partial stdout is no verdict: replaying
+                // it would build the report from a truncated terminfo dump, and
+                // memoizing it would make the truncation permanent. So it replays
+                // as "no dump" and mints no entry (CP-13).
+                if ($exitCode === null) {
+                    return null;
                 }
+
+                // A completed child keeps its capped stdout as the verdict,
+                // whatever its exit code.
+                self::dumpMemoWrite($memoKey, $stdout);
 
                 return $stdout;
             },
@@ -590,8 +605,7 @@ final class AsyncProbe
             },
         );
         if (!$spawned) {
-            self::dumpMemoWrite($memoKey, null);
-
+            // A failed launch is transient, so it mints no entry (CP-13).
             return \React\Promise\resolve($environmentReport);
         }
 

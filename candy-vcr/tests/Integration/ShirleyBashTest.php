@@ -60,7 +60,7 @@ final class ShirleyBashTest extends TestCase
             $rc = $cmd->run([
                 '--force', '--output', $cassette,
                 '--',
-                $this->bash, '-c',
+                (string) $this->bash, '-c',
                 "echo hello; sleep 0.2; echo world",
             ], $stdout, $stderr);
             $elapsed = \microtime(true) - $start;

@@ -121,9 +121,13 @@ final class JsonThemeTest extends TestCase
         $resolve = new \ReflectionMethod(TapeToGif::class, 'resolveTheme');
         $pipeline = new TapeToGif(new Lexer(), new Parser(), new Compiler(), new Renderer(), new GdRasterizer(), new PhpGifEncoder());
 
+        /** @var Theme $theme */
+
         $theme = $resolve->invoke($pipeline, '{"background":"#1a1b26","red":"#ff8800"}', false);
         self::assertSame(0x1a1b26, $theme->color(0));
         self::assertSame(0xff8800, $theme->color(1));
+
+        /** @var Theme $stock */
 
         $stock = $resolve->invoke($pipeline, 'Dracula', false);
         self::assertSame(Theme::dracula()->color(0), $stock->color(0), 'named themes keep working');
@@ -149,6 +153,7 @@ final class JsonThemeTest extends TestCase
         self::assertIsString($log);
         $previous = ini_set('error_log', $log);
         try {
+            /** @var Theme $theme */
             $theme = $resolve->invoke($pipeline, '{"red":"crimson"}', false);
         } finally {
             if (is_string($previous)) {

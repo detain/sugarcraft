@@ -57,6 +57,9 @@ final class FakeClockLoop implements LoopInterface
     /** @var array<int, callable> write streams keyed by resource id */
     private array $writeStreams = [];
 
+    /**
+     * @return list<float>
+     */
     public function oneShotIntervals(): array
     {
         return $this->armedOneShots;
@@ -254,8 +257,16 @@ final class FakeClockTimer implements TimerInterface
         return $this->interval;
     }
 
+    /**
+     * Variadic so a timer callback that takes the timer (the fake loop
+     * passes it, as the sync pump does) still matches the declared shape.
+     *
+     * @return callable(mixed ...): mixed
+     */
     public function getCallback(): mixed
     {
+        \assert(\is_callable($this->callback));
+
         return $this->callback;
     }
 

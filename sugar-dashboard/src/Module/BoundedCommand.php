@@ -81,7 +81,7 @@ final class BoundedCommand
         }
 
         try {
-            $result = ChildRun::new($argv)
+            $result = ChildRun::new(self::argv($argv))
                 ->withTimeout($timeoutSeconds)
                 ->withMaxBytes($maxOutputBytes)
                 ->run();
@@ -112,7 +112,7 @@ final class BoundedCommand
             return resolve(['output' => '', 'failure' => 'No command configured']);
         }
 
-        return ChildRun::new($argv)
+        return ChildRun::new(self::argv($argv))
             ->withTimeout($timeoutSeconds)
             ->withMaxBytes($maxOutputBytes)
             ->launch($loop)
@@ -126,6 +126,25 @@ final class BoundedCommand
                     throw $e;
                 },
             );
+    }
+
+    /**
+     * Scalar argv entries are coerced to strings, as proc_open always did before
+     * ChildRun began to reject them: a config entry such as ['echo', 42] keeps
+     * running and prints 42 instead of throwing out of the Cmd.
+     *
+     * @param list<string> $argv
+     * @return list<string>
+     * @throws \InvalidArgumentException for an entry that is not a scalar
+     */
+    private static function argv(array $argv): array
+    {
+        return array_map(
+            static fn (mixed $arg): string => is_scalar($arg)
+                ? (string) $arg
+                : throw new \InvalidArgumentException('BoundedCommand argv entries must be scalars'),
+            $argv,
+        );
     }
 
     /** @return array{output: string, failure: string} */

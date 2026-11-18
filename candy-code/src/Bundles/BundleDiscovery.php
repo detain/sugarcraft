@@ -62,12 +62,20 @@ final class BundleDiscovery
         $this->warnings = [];
         $this->refusedDirectories = [];
 
-        $this->scanTier($this->projectRoot . '/' . Bundle::INSTALLED_RELATIVE_PATH, 'project', $this->projectRoot);
-
         $home = HomeDirectory::owned();
+        $userFloor = $home === null ? null : $home . '/' . Bundle::INSTALLED_RELATIVE_PATH;
+        $projectFloor = $this->projectRoot . '/' . Bundle::INSTALLED_RELATIVE_PATH;
+
+        // A project root that IS the home directory names the user floor a second
+        // time. Scanning it as the project tier would list every user bundle twice
+        // and hand the user's own hooks to the project-tier trust path, so the user
+        // tier wins — the same first-root-wins rule `bundles update` applies.
+        if (!self::isSameDirectory($projectFloor, $userFloor)) {
+            $this->scanTier($projectFloor, 'project', $this->projectRoot);
+        }
 
         if ($home !== null) {
-            $this->scanTier($home . '/' . Bundle::INSTALLED_RELATIVE_PATH, 'user', $home);
+            $this->scanTier($userFloor, 'user', $home);
         }
 
         foreach ($this->configPaths as $path) {
@@ -139,6 +147,23 @@ final class BundleDiscovery
         }
 
         $this->scanContainer($real, $tier, $boundary);
+    }
+
+    /**
+     * True when both floors name the same existing directory once symlinks are
+     * resolved. A missing floor is never "the same", so an absent home or project
+     * root leaves the other tier's scan untouched.
+     */
+    private static function isSameDirectory(string $a, ?string $b): bool
+    {
+        if ($b === null) {
+            return false;
+        }
+
+        $realA = realpath($a);
+        $realB = realpath($b);
+
+        return $realA !== false && $realB !== false && $realA === $realB;
     }
 
     /**

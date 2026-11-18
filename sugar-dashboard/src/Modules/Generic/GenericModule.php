@@ -34,7 +34,7 @@ final class GenericModule extends BaseModule
 
     /**
      * True while the command is on the loop. Its output returns as a
-     * CommandOutputMsg, and only that message schedules the next tick, so one
+     * CommandOutputMsg. Each tick schedules the next one itself, so one tick
      * chain runs at a time and a hung command never stacks children.
      */
     private bool $inFlight = false;
@@ -44,6 +44,13 @@ final class GenericModule extends BaseModule
      * as long as its child can still settle; see {@see latched()}.
      */
     private ?float $inFlightSince = null;
+
+    /**
+     * Counts every run started. The newest value names the run the latch belongs
+     * to: a result from an older, still-hung run must neither clear the latch nor
+     * schedule a second tick chain beside the live one.
+     */
+    private int $runSeq = 0;
 
     /**
      * @param string|array<string> $command  Trusted shell string OR argv list (no shell).
@@ -72,17 +79,28 @@ final class GenericModule extends BaseModule
     public function update(Msg $msg): array
     {
         if ($msg instanceof CommandOutputMsg && $msg->source === $this->name()) {
-            return [$this->withOutput($msg->output), $this->selfTickCmd()];
-        }
-
-        if ($msg instanceof TickMsg && $msg->isFor($this->name())) {
-            if ($this->latched()) {
+            // Only the newest run settles the latch; an older run that was still hung
+            // past the ceiling is stale and changes nothing.
+            if (!$this->inFlight || $msg->run !== $this->runSeq) {
                 return [$this, null];
             }
 
-            $next = $this->withInFlight();
+            return [$this->withOutput($msg->output), null];
+        }
 
-            return [$next, $next->runCmd()];
+        if ($msg instanceof TickMsg && $msg->isFor($this->name())) {
+            // The tick re-arms itself on every path, as SystemModule does. A cmd-only
+            // host that drops the run's Cmd then still gets the next tick, and with it
+            // the stale-latch expiry; re-arming only on the output would freeze the module.
+            if ($this->latched()) {
+                return [$this, $this->selfTickCmd()];
+            }
+
+            $next = $this->withInFlight();
+            $tick = $next->selfTickCmd();
+            $run = $next->runCmd();
+
+            return [$next, $tick === null ? $run : Cmd::batch($tick, $run)];
         }
 
         return [$this, null];
@@ -117,6 +135,7 @@ final class GenericModule extends BaseModule
         $clone = clone $this;
         $clone->inFlight = true;
         $clone->inFlightSince = hrtime(true) / 1_000_000_000;
+        $clone->runSeq = $this->runSeq + 1;
         return $clone;
     }
 
@@ -154,15 +173,17 @@ final class GenericModule extends BaseModule
             ? $this->command
             : ['sh', '-c', $this->command];
         $source = $this->name();
+        $run = $this->runSeq;
 
         return Cmd::promise(
             static fn (): PromiseInterface => BoundedCommand::runAsync(Loop::get(), $argv)->then(
                 static fn (array $result): Msg => new CommandOutputMsg(
                     $source,
                     $result['failure'] ?? $result['output'],
+                    $run,
                 ),
                 // Unexpected rejection: name it rather than leave the module in flight forever.
-                static fn (\Throwable $e): Msg => new CommandOutputMsg($source, 'Command failed'),
+                static fn (\Throwable $e): Msg => new CommandOutputMsg($source, 'Command failed', $run),
             ),
         );
     }

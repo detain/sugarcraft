@@ -128,7 +128,10 @@ final class PlayerPacingTest extends TestCase
         $tail = array_slice($armed, 3);
         $this->assertLessThanOrEqual(1, count($tail), 'at most one frame-interval timer may follow the flush yield');
         foreach ($tail as $frameDelay) {
-            $this->assertGreaterThan(0.0, $frameDelay);
+            // 0.0 is legitimate: Program::armRender() clamps an already-overdue
+            // frame to max(0.0, interval - elapsed) when real time ran past a
+            // frame interval between the last paint and the dirtying message.
+            $this->assertGreaterThanOrEqual(0.0, $frameDelay);
             $this->assertLessThanOrEqual(1.0 / 60.0, $frameDelay, 'only a frame-interval timer may follow the flush yield');
         }
         $this->assertSame(2, $result->outputCount);
@@ -175,13 +178,17 @@ final class PlayerPacingTest extends TestCase
      */
     private static function neverSelfQuitFactory(): \Closure
     {
-        return static fn ($input, $output, $loop): Program => new Program(
-            new EchoModel(quitAfter: \PHP_INT_MAX),
-            new ProgramOptions(
-                input: $input,
-                output: $output,
-                loop: $loop,
-            ),
-        );
+        return static function ($input, $output, $loop): Program {
+            \assert(\is_resource($input) && \is_resource($output) && $loop instanceof \React\EventLoop\LoopInterface);
+
+            return new Program(
+                new EchoModel(quitAfter: \PHP_INT_MAX),
+                new ProgramOptions(
+                    input: $input,
+                    output: $output,
+                    loop: $loop,
+                ),
+            );
+        };
     }
 }

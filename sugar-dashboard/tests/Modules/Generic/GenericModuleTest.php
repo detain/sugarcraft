@@ -7,8 +7,11 @@ namespace SugarCraft\Dashboard\Tests\Modules\Generic;
 use PHPUnit\Framework\Attributes\WithoutErrorHandler;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Async\Await;
+use SugarCraft\Core\BatchMsg;
 use SugarCraft\Core\Msg;
+use SugarCraft\Core\TickRequest;
 use SugarCraft\Dashboard\Module\BoundedCommand;
+use SugarCraft\Dashboard\Modules\Generic\CommandOutputMsg;
 use SugarCraft\Dashboard\Modules\Generic\GenericModule;
 use SugarCraft\Dashboard\Modules\Generic\TickMsg;
 
@@ -30,10 +33,23 @@ final class GenericModuleTest extends TestCase
         [$inFlight, $cmd] = $module->update(new TickMsg());
         self::assertNotNull($cmd, 'a tick must start its command');
 
-        $output = Await::until($cmd()->promise, 15.0);
+        $output = Await::until($this->runOf($cmd)()->promise, 15.0);
         [$settled] = $inFlight->update($output);
 
         return $settled;
+    }
+
+    /**
+     * A tick returns a batch: the next tick, re-armed beside the run. The run is
+     * the second member, so tests reach it here rather than by calling the batch.
+     */
+    private function runOf(\Closure $cmd): \Closure
+    {
+        $batch = $cmd();
+        self::assertInstanceOf(BatchMsg::class, $batch);
+        self::assertCount(2, $batch->cmds, 'a tick re-arms its chain beside the run');
+
+        return $batch->cmds[1];
     }
 
     public function testNameReturnsGeneric(): void
@@ -94,7 +110,7 @@ final class GenericModuleTest extends TestCase
         $this->assertNotNull($cmd);
         $this->assertSame('', $inFlight->view(), 'nothing is shown until the command settles');
 
-        $output = Await::until($cmd()->promise, 15.0);
+        $output = Await::until($this->runOf($cmd)()->promise, 15.0);
         [$settled] = $inFlight->update($output);
         $this->assertSame('Command timed out', $settled->view());
     }
@@ -107,7 +123,31 @@ final class GenericModuleTest extends TestCase
         [$again, $cmd] = $inFlight->update(new TickMsg());
 
         $this->assertSame($inFlight, $again);
-        $this->assertNull($cmd);
+        $this->assertNotNull($cmd);
+        $this->assertInstanceOf(TickRequest::class, $cmd(), 'a latched tick only re-arms the chain');
+    }
+
+    /**
+     * Regression: a cmd-only host that drops the run's Cmd never sent a
+     * CommandOutputMsg, and the chain died with it, so the stale-latch expiry
+     * never fired and the module went silent. Each tick re-arms the chain beside
+     * its run, so the tick survives a dropped run.
+     */
+    public function testATickReArmsTheChainBesideItsRunSoADroppedRunCannotSilenceTheModule(): void
+    {
+        $module = new GenericModule('printf "x"', 5);
+        [$dropped, $cmd] = $module->update(new TickMsg());
+        $this->assertNotNull($cmd);
+        $batch = $cmd();
+        $this->assertInstanceOf(BatchMsg::class, $batch);
+        // The host keeps the tick and drops the run.
+        $this->assertInstanceOf(TickRequest::class, $batch->cmds[0]());
+
+        $this->backdateLatch($dropped, BoundedCommand::SETTLE_CEILING_SECONDS + 1.0);
+        [$again, $next] = $dropped->update(new TickMsg());
+        $this->assertNotNull($next, 'a dropped run must not silence the module');
+        $settled = $again->update(Await::until($this->runOf($next)()->promise, 15.0))[0];
+        $this->assertSame('x', $settled->view());
     }
 
     /**
@@ -125,8 +165,31 @@ final class GenericModuleTest extends TestCase
         [$again, $cmd] = $dropped->update(new TickMsg());
 
         $this->assertNotNull($cmd, 'a dropped command must not silence the module');
-        $settled = $again->update(Await::until($cmd()->promise, 15.0))[0];
+        $settled = $again->update(Await::until($this->runOf($cmd)()->promise, 15.0))[0];
         $this->assertSame('x', $settled->view());
+    }
+
+    /**
+     * Regression: a hung run that settles after a newer run started used to clear
+     * the newer run's latch and schedule a second tick chain beside the live one.
+     * Only the newest run may settle the latch and reschedule.
+     */
+    public function testAStaleRunsOutputNeitherClearsTheLatchNorSchedulesATick(): void
+    {
+        $module = new GenericModule('printf "x"', 5);
+        [$first] = $module->update(new TickMsg());
+        // Run 1 is still hung past the ceiling, so the next tick starts run 2.
+        $this->backdateLatch($first, BoundedCommand::SETTLE_CEILING_SECONDS + 1.0);
+        [$second] = $first->update(new TickMsg());
+
+        [$afterStale, $cmd] = $second->update(new CommandOutputMsg('generic', 'stale', 1));
+        $this->assertNull($cmd, 'a stale run schedules no tick');
+        $this->assertSame($second, $afterStale, 'a stale run changes nothing');
+
+        [$again, $tickCmd] = $afterStale->update(new TickMsg());
+        $this->assertSame($afterStale, $again, 'the live run keeps the latch');
+        $this->assertNotNull($tickCmd);
+        $this->assertInstanceOf(TickRequest::class, $tickCmd(), 'the latched tick only re-arms');
     }
 
     private function backdateLatch(GenericModule $module, float $seconds): void

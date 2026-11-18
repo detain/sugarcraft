@@ -93,6 +93,45 @@ final class WorkflowSafetyRailsTest extends TestCase
         self::assertGreaterThanOrEqual(1, CpuCount::detect());
     }
 
+    public function testNumberOfProcessorsIsReadBeforeTheLinuxProbesOnlyWhenPositive(): void
+    {
+        // CpuCount memoises detect() and keeps the probe private, so the test
+        // reaches both through reflection and resets the memo on the way out.
+        $probe = new \ReflectionMethod(CpuCount::class, 'probe');
+        $memo = new \ReflectionProperty(CpuCount::class, 'detected');
+        $saved = getenv('NUMBER_OF_PROCESSORS');
+        try {
+            putenv('NUMBER_OF_PROCESSORS');
+            $fallthrough = $probe->invoke(null);
+
+            putenv('NUMBER_OF_PROCESSORS=12');
+            self::assertSame(12, $probe->invoke(null), 'a positive integer wins over the /sys and /proc probes');
+
+            putenv('NUMBER_OF_PROCESSORS= 7 ');
+            self::assertSame(7, $probe->invoke(null), 'surrounding whitespace is trimmed');
+
+            foreach (['0', '-3', '2.5', 'many', ''] as $unusable) {
+                putenv('NUMBER_OF_PROCESSORS=' . $unusable);
+                self::assertSame(
+                    $fallthrough,
+                    $probe->invoke(null),
+                    "an unusable value ('{$unusable}') falls through to the Linux probes",
+                );
+            }
+
+            $memo->setValue(null, null);
+            putenv('NUMBER_OF_PROCESSORS=9');
+            self::assertSame(9, CpuCount::detect(), 'detect() memoises the environment answer');
+        } finally {
+            $memo->setValue(null, null);
+            if ($saved === false) {
+                putenv('NUMBER_OF_PROCESSORS');
+            } else {
+                putenv('NUMBER_OF_PROCESSORS=' . $saved);
+            }
+        }
+    }
+
     // -------------------------------------------------------------------------
     // Fan-out ceiling and from.max
     // -------------------------------------------------------------------------

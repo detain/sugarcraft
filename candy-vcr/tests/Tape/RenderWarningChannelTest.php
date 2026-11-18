@@ -34,6 +34,7 @@ final class RenderWarningChannelTest extends TestCase
         $this->assertIsString($log);
         $previous = ini_set('error_log', $log);
         try {
+            /** @var Theme $theme */
             $theme = $resolve->invoke($pipeline, 'NoSuchTheme', false);
         } finally {
             is_string($previous) ? ini_set('error_log', $previous) : ini_set('error_log', '');

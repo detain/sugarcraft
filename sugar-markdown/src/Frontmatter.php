@@ -32,6 +32,13 @@ use SugarCraft\Markdown\Frontmatter\Split;
  *
  * Deliberately not handled: a leading byte-order mark (the document is then
  * plain body) and any YAML-level meaning of the block's contents.
+ *
+ * Deliberate divergence: candy-mdview keeps its own glow-parity detector
+ * (`candy-mdview/src/FrontMatter.php`), which also accepts a `...` fence and
+ * refuses a block with no body after its closer, so a trailing `---` is left
+ * as a setext underline. Those two rules are not in this grammar, so the two
+ * readers can strip different blocks from the same file. A consumer that
+ * needs one answer for both must reconcile them first; this class does not.
  */
 final class Frontmatter
 {

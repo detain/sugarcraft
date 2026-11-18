@@ -331,9 +331,14 @@ final class InputReader
                             continue;
                         }
                         // A bare digit run with no `;` cannot be a modified
-                        // key, so a keypad final after it is ordinary text:
-                        // `ESC O 1` then `x` types the `x`, not keypad 8.
-                        if (!$semi && strpos(self::SS3_KEYPAD_FINALS, chr($c)) !== false) {
+                        // key, so its final is typed when it is not an SS3
+                        // key final: `ESC O 1` then `x` types the `x` (not
+                        // keypad 8), and `ESC O 2` then `Zx` types `Z` and `x`.
+                        // Only a final that names a non-keypad SS3 key (`ESC O
+                        // 1 P` is F1) is decoded as a key.
+                        $final = chr($c);
+                        if (!$semi && (strpos(self::SS3_KEYPAD_FINALS, $final) !== false
+                            || $this->decodeSs3($final) === null)) {
                             $i = $j;
                             continue;
                         }
@@ -348,6 +353,15 @@ final class InputReader
                     // terminals (xterm sends "ESC O P" for F1, etc.).
                     if ($remain < 3) {
                         break;
+                    }
+                    // A C0 control or DEL cannot be an SS3 final: the SS3 state
+                    // ends there, so only `ESC O` is dropped and the byte
+                    // resumes the parse. Consuming it would lose the ESC that
+                    // starts the next sequence (`ESC O ESC [ A` is Up, not `[A`).
+                    $ss3Byte = ord($this->buf[$i + 2]);
+                    if ($ss3Byte < 0x20 || $ss3Byte === 0x7f) {
+                        $i += 2;
+                        continue;
                     }
                     $msg = $this->decodeSs3($this->buf[$i + 2]);
                     if ($msg !== null) {
@@ -388,6 +402,14 @@ final class InputReader
                 // the next byte is `>` (the XTVERSION reply marker)
                 // so we don't shadow Alt-P keypresses (`ESC P` from
                 // the user) for the general case.
+                // A lone `ESC P` at the buffer end may be the head of that
+                // reply split across reads, so it parks until the next byte
+                // says whether it is `>` or an Alt+P key. If no byte follows
+                // within the escape timeout, flushPending() promotes it to
+                // Alt+Shift+P, the same as a lone ESC.
+                if ($next === 'P' && $remain === 2) {
+                    break;
+                }
                 if ($next === 'P' && $remain >= 3 && $this->buf[$i + 2] === '>') {
                     $scan = $this->scanStringTerminator(
                         $i + 2,
@@ -588,6 +610,12 @@ final class InputReader
         return $msgs;
     }
 
+    /**
+     * Promotes a parked key once the escape timeout has passed with no
+     * follow-up byte: a lone ESC is the Escape key, and a lone `ESC P` (held
+     * for a possible XTVERSION reply) is Alt+Shift+P, as it decodes when the
+     * next byte is not `>`.
+     */
     public function flushPending(): ?Msg
     {
         // Inside a paste, a buffered ESC is the head of the end marker (or a
@@ -596,21 +624,25 @@ final class InputReader
         if ($this->buf === '' || $this->pasting) {
             return null;
         }
-        if (ord($this->buf[0]) === 0x1b && strlen($this->buf) === 1) {
+        if ($this->buf === "\x1b") {
             $this->buf = '';
             return new KeyMsg(KeyType::Escape);
+        }
+        if ($this->buf === "\x1bP") {
+            $this->buf = '';
+            return $this->decodeChar(0x50, true);
         }
         return null;
     }
 
     /**
-     * True when the parser is holding a single ESC byte awaiting
+     * True when the parser is holding a lone ESC, or a lone `ESC P`, awaiting
      * disambiguation. {@see \SugarCraft\Core\Program} polls this so it can
-     * promote the byte to a bare Escape after a short timeout.
+     * promote the held key after a short timeout via {@see flushPending()}.
      */
     public function hasPendingEscape(): bool
     {
-        return !$this->pasting && $this->buf === "\x1b";
+        return !$this->pasting && ($this->buf === "\x1b" || $this->buf === "\x1bP");
     }
 
     /**

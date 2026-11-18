@@ -55,6 +55,9 @@ final class Await
         // Only the active wait may stop the loop: a promise abandoned by a
         // timeout can still settle later, during someone else's run().
         $waiting = false;
+        // Set only by the budget timer: run() also returns when something else
+        // stops the loop, and that is not a timeout.
+        $timedOut = false;
         $promise->then(
             static function (mixed $v) use (&$settled, &$ok, &$value, &$waiting, $loop): void {
                 $settled = true;
@@ -79,7 +82,8 @@ final class Await
             if (self::loopIsRunning($loop)) {
                 throw new \LogicException('Await::until() cannot run inside a loop callback that is already driving the loop');
             }
-            $timer = $loop->addTimer($seconds, static function () use ($loop, &$waiting): void {
+            $timer = $loop->addTimer($seconds, static function () use ($loop, &$waiting, &$timedOut): void {
+                $timedOut = true;
                 if ($waiting) {
                     $loop->stop();
                 }
@@ -87,7 +91,11 @@ final class Await
             $waiting = true;
             self::$driving = true;
             try {
-                $loop->run();
+                // An outside stop() ends one run() early, not the wait: drive
+                // again until the promise settles or the budget has elapsed.
+                do {
+                    $loop->run();
+                } while ($settled === false && $timedOut === false);
             } finally {
                 self::$driving = false;
                 $waiting = false;

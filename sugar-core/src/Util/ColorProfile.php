@@ -81,10 +81,7 @@ enum ColorProfile: int
             return $isTty ? self::Ascii : self::NoTty;
         }
 
-        $force = self::truthy($env['CLICOLOR_FORCE'] ?? '')
-              || self::truthy($env['FORCE_COLOR']    ?? '');
-
-        if (!$force && !$isTty) {
+        if (!self::forcesColor($env) && !$isTty) {
             return self::NoTty;
         }
 
@@ -145,14 +142,41 @@ enum ColorProfile: int
         return $this->value >= self::TrueColor->value;
     }
 
-    /** @return array<string,string> */
+    /**
+     * Whether a force variable asks for colour on a non-terminal, read with the
+     * chain's own FORCE_COLOR grammar (DetectionChain step 2): a truthy word or
+     * a level of 1 or more forces colour, while `0`, `false`, `off`, `no` and
+     * other level-0 spellings are a colour-off request and must not let a pipe
+     * receive escape bytes.
+     *
+     * @param array<string,string> $env
+     */
+    private static function forcesColor(array $env): bool
+    {
+        if (self::isForceValue($env['CLICOLOR_FORCE'] ?? '')) {
+            return true;
+        }
+        $forceColor = strtolower($env['FORCE_COLOR'] ?? '');
+
+        return $forceColor !== ''
+            && (in_array($forceColor, ['true', 'yes', 'on'], true) || (int) $forceColor >= 1);
+    }
+
+    /**
+     * The environment keys the chain reads when it snapshots the process
+     * itself. TMUX, STY and GOOGLE_CLOUD_SHELL are chain rungs (6, 10, 11), so
+     * they must be present or a no-argument detect() answers differently from
+     * DetectionChain::detect() on the same ambient environment.
+     *
+     * @return array<string,string>
+     */
     private static function defaultEnv(): array
     {
         $out = [];
         foreach ([
             'NO_COLOR', 'CLICOLOR', 'CLICOLOR_FORCE', 'FORCE_COLOR',
             'TERM', 'COLORTERM', 'TERM_PROGRAM',
-            'WT_SESSION',
+            'WT_SESSION', 'TMUX', 'STY', 'GOOGLE_CLOUD_SHELL',
             'CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'BUILDKITE',
         ] as $k) {
             $v = getenv($k);
@@ -163,8 +187,14 @@ enum ColorProfile: int
         return $out;
     }
 
-    private static function truthy(string $v): bool
+    /**
+     * CLICOLOR_FORCE's grammar, the one {@see \SugarCraft\ColorProfile\Env::isForceValue()}
+     * applies on the chain side: set, non-empty, and not exactly `0`. The word
+     * `false` forces here just as it does there, so the pipe gate and the chain
+     * give the same answer for the same environment.
+     */
+    private static function isForceValue(string $v): bool
     {
-        return $v !== '' && $v !== '0' && strtolower($v) !== 'false';
+        return $v !== '' && $v !== '0';
     }
 }

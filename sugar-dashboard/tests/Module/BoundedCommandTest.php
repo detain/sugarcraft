@@ -38,6 +38,35 @@ final class BoundedCommandTest extends TestCase
         );
     }
 
+    public function testScalarArgvEntriesAreCoercedToStrings(): void
+    {
+        // proc_open coerced ['echo', 42] before ChildRun began rejecting non-strings;
+        // a config entry like that must keep printing, not throw out of run().
+        $this->assertSame(
+            ['output' => '42', 'failure' => null],
+            BoundedCommand::run([PHP_BINARY, '-r', 'echo $argv[1];', 42]),
+        );
+    }
+
+    public function testScalarArgvEntriesAreCoercedOnTheLoopToo(): void
+    {
+        $loop = new StreamSelectLoop();
+        $result = Await::until(
+            BoundedCommand::runAsync($loop, [PHP_BINARY, '-r', 'echo $argv[1];', 7]),
+            5.0,
+            $loop,
+        );
+
+        $this->assertSame(['output' => '7', 'failure' => null], $result);
+    }
+
+    public function testNonScalarArgvEntryIsRefused(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        BoundedCommand::run([PHP_BINARY, ['nested']]);
+    }
+
     public function testStderrFollowsStdoutInTheOutput(): void
     {
         $result = BoundedCommand::run(self::php('fwrite(STDOUT, "out"); fwrite(STDERR, "err");'));
@@ -58,6 +87,18 @@ final class BoundedCommandTest extends TestCase
         $this->assertSame(
             ['output' => '', 'failure' => 'Command failed (exit 3)'],
             BoundedCommand::run(self::php('exit(3);')),
+        );
+    }
+
+    /**
+     * A child killed by a signal has no exit code; its failure must still be
+     * named, or a crashed command renders as a silent success.
+     */
+    public function testSignalDeathIsNamedAsAFailure(): void
+    {
+        $this->assertSame(
+            ['output' => '', 'failure' => 'Command failed (exit -1)'],
+            BoundedCommand::run(['sh', '-c', 'kill -9 $$']),
         );
     }
 
@@ -136,6 +177,21 @@ final class BoundedCommandTest extends TestCase
         $outcome = Await::until(BoundedCommand::runAsync($loop, self::php('echo "hi";')), 15.0, $loop);
 
         $this->assertSame(['output' => 'hi', 'failure' => null], $outcome);
+    }
+
+    /**
+     * Regression: runAsync() reported a signal-killed child as success with no
+     * failure, because the async exit code was null. It must name the crash as
+     * run() does.
+     */
+    public function testRunAsyncNamesASignalDeathAsRunDoes(): void
+    {
+        $loop = new StreamSelectLoop();
+
+        $outcome = Await::until(BoundedCommand::runAsync($loop, ['sh', '-c', 'kill -9 $$']), 15.0, $loop);
+
+        $this->assertSame(BoundedCommand::run(['sh', '-c', 'kill -9 $$']), $outcome);
+        $this->assertSame(['output' => '', 'failure' => 'Command failed (exit -1)'], $outcome);
     }
 
     /**

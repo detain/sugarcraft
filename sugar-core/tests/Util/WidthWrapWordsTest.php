@@ -193,6 +193,19 @@ final class WidthWrapWordsTest extends TestCase
         $this->assertSame(['a b'], Width::wrapWords("a\tb", 10, breakWords: true));
     }
 
+    /**
+     * Not in the 2026-11-17 ruling: Unicode whitespace separates words here,
+     * while the minesweeper copy splits on spaces only. Pinned so P4-3c cannot
+     * change NBSP- or ideographic-space-separated text without noticing.
+     */
+    public function testDivergenceUnicodeWhitespaceSeparatesWordsWhereMinesweeperKeepsItInTheWord(): void
+    {
+        $this->assertSame(["a\u{00A0}b"], self::minesweeperWrapReference("a\u{00A0}b", 10));
+        $this->assertSame(['a b'], Width::wrapWords("a\u{00A0}b", 10, breakWords: true));
+        $this->assertSame(["a\u{3000}b"], self::minesweeperWrapReference("a\u{3000}b", 10));
+        $this->assertSame(['a b'], Width::wrapWords("a\u{3000}b", 10, breakWords: true));
+    }
+
     public function testDivergenceZwjClusterStaysWholeWhereMinesweeperBreaksPerCodepoint(): void
     {
         // At width 1 the family (2 cells) is over-wide, so the copy cuts it
@@ -248,6 +261,45 @@ final class WidthWrapWordsTest extends TestCase
         $lines = Width::wrapWords('the quick brown fox 中文字符 jumps over the lazy dog', 7);
         foreach ($lines as $line) {
             $this->assertLessThanOrEqual(7, Width::string($line), "line '$line' overflows");
+        }
+    }
+
+    /**
+     * A long unbroken token (a base64 blob or URL) used to re-measure its
+     * remainder after every cut, which made the cut quadratic. These pin the
+     * one-pass walk: every chunk fits, the chunks rejoin to the input, and the
+     * line count is exact.
+     */
+    public function testLongUnbrokenWordIsCutIntoExactChunks(): void
+    {
+        $word = str_repeat('a', 20_000);
+        $lines = Width::wrapWords($word, 80);
+        $this->assertCount(250, $lines);
+        $this->assertSame($word, implode('', $lines));
+        foreach ($lines as $line) {
+            $this->assertSame(80, Width::string($line));
+        }
+    }
+
+    public function testLongWideGraphemeWordKeepsTheBudgetPerLine(): void
+    {
+        $word = str_repeat('中', 3000);
+        $lines = Width::wrapWords($word, 80);
+        $this->assertCount(75, $lines);
+        $this->assertSame($word, implode('', $lines));
+        foreach ($lines as $line) {
+            $this->assertLessThanOrEqual(80, Width::string($line));
+        }
+    }
+
+    public function testLongCombiningWordIsCutOnClusterBoundaries(): void
+    {
+        $word = str_repeat("e\u{0301}", 500);
+        $lines = Width::wrapWords($word, 10);
+        $this->assertCount(50, $lines);
+        $this->assertSame($word, implode('', $lines));
+        foreach ($lines as $line) {
+            $this->assertSame(10, Width::string($line));
         }
     }
 }

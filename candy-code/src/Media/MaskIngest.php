@@ -168,6 +168,7 @@ final readonly class MaskIngest
      *
      * @return array{0: string, 1: ?string}|null mode/advisory, VERDICT_NEITHER,
      *         or null = not my shape (fall through)
+     * @throws \InvalidArgumentException when a chunk's CRC does not match its bytes
      */
     private static function walkPngBytes(string $bytes): ?array
     {
@@ -189,11 +190,21 @@ final readonly class MaskIngest
             $type = substr($bytes, $position + 4, 4);
             $size = (int) $chunk['len'];
             $dataStart = $position + 8;
-            if ($size > $length - $dataStart) {
+            $crcStart = $dataStart + $size;
+            if ($crcStart + 4 > $length) {
                 return null;
             }
             $data = substr($bytes, $dataStart, $size);
-            $position = $dataStart + $size + 4;
+            $position = $crcStart + 4;
+
+            // Every chunk's CRC is checked, not only the ones this walk reads: a chunk
+            // whose stored CRC disagrees is damaged even when its zlib stream still
+            // inflates. PngPixels refuses the same bytes, so the two PNG readers must
+            // not classify one file differently.
+            $storedCrc = unpack('N', substr($bytes, $crcStart, 4));
+            if ($storedCrc === false || $storedCrc[1] !== crc32($type . $data)) {
+                throw new \InvalidArgumentException('mask PNG chunk ' . $type . ' fails its CRC check; the file is damaged');
+            }
 
             if ($type === 'IHDR') {
                 $header = unpack('Nw/Nh/Cdepth/Cctype/Ccomp/Cfilt/Cinter', $data);

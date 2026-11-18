@@ -529,7 +529,7 @@ The loop-side primitives that used to be hand-rolled in each app:
 | `LoopDeadline::arm($loop, $seconds, $onFire)` | One-shot deadline on the loop; `fired()` and `disarm()`. |
 | `ForkChannel::pair()` and `ForkedTask::run(...)` | A length-prefixed frame channel over a socket pair, and a forked child whose frames reach the parent loop. Settles with the child's exit status; a token or deadline kills the child with SIGKILL. Needs ext-pcntl and ext-posix. |
 
-`AsyncOps` keeps its public names, now forwarding to `Timeouts` (`withTimeout`, `withDeadline`), `Pending` (`pendingNotice`, `boundWait`) and `Retry` (`retry`). `AsyncCache` evicts in O(1) amortized and exposes `generation()`, an epoch advanced by `invalidate()` and `clear()`.
+`AsyncOps` keeps its public names, now forwarding to `Timeouts` (`withTimeout`, `withDeadline`), `Pending` (`pendingNotice`, `boundWait`) and `Retry` (`retry`). `AsyncCache` evicts the least-recently stored entry when `maxEntries` is exceeded and exposes `generation()`, an epoch advanced by `invalidate()` and `clear()`.
 
 ## AsyncCache
 
@@ -541,7 +541,7 @@ per-load timeout stays the caller's concern (compose with `withDeadline`).
 - `AsyncCache::new(ttlSeconds: 60.0, serveStaleOnError: false, clock: null, maxEntries: null)`
   — entry point; `ttlSeconds` must be a positive finite number; `clock` is a
   monotonic-seconds seam for tests (no sleeping at TTL boundaries); `maxEntries`
-  caps stored values — beyond it, adoption evicts the LEAST-recently-stored entry.
+  caps stored values — beyond it, adoption evicts the LEAST-recently-stored entry, in amortized O(1) per eviction.
   Expired entries are NOT eagerly reaped without a cap: memory follows caller key
   discipline (`invalidate()`/`clear()`).
 - `fetch(string $key, callable $loader)` — fresh hit resolves immediately; a load

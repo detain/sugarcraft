@@ -1077,6 +1077,27 @@ final class WidthTest extends TestCase
     }
 
     /**
+     * Regression. A raw 8-bit CSI (0x9B) opens a sequence that Ansi::strip()
+     * consumes to end of input, so `\x9b3` measures 0. The door used to treat
+     * that key as sequence-free and answered `\x9b31m` as 0 + width("1m") = 2,
+     * which made the answer depend on what was measured first. A fresh cold
+     * measurement of the grown line is the truth.
+     */
+    public function testExtensionDoorDoesNotCarryAnOpenEightBitCsiAcrossTheSeam(): void
+    {
+        $this->resetWidthCaches();
+        $cold = Width::string("\x9b31m");
+
+        $this->resetWidthCaches();
+        Width::string("\x9b3");
+
+        $this->assertSame($cold, Width::string("\x9b31m"));
+        $this->assertSame(0, $cold);
+
+        $this->resetWidthCaches();
+    }
+
+    /**
      * Put every Width static back to factory state (the door slot is new
      * state in the sc-36 memo's neighbourhood, so the burst test's
      * hygiene pattern extends to it — a leaked slot must never make one
