@@ -479,8 +479,9 @@ the fences, for your own YAML or key/value reader), the `body` after the
 closing fence, and `bodyOffset`, the byte where the body starts. The fence
 is a line of `---` (spaces and tabs allowed after it); `----` is not one.
 An empty block (`---` then `---`) is a valid block with empty `meta`.
-Whitespace-only lines are dropped from both ends of the block, and CRLF
-documents work. A byte-order mark is not stripped: strip it first if your
+Whitespace-only lines are dropped from the start of `meta` and from the start
+of the body; trailing blank lines in `meta` are kept as written, so trim it
+yourself if you need it exact. CRLF documents work. A byte-order mark is not stripped: strip it first if your
 input may carry one.
 
 ```php
@@ -535,8 +536,8 @@ the catalog.
 
 `Html\HtmlToMarkdown::convert($html, $baseUrl, $charset)` converts an HTML
 document to Markdown: headings, paragraphs, emphasis, links, lists, code,
-quotes and simple tables. It drops `script`, `style`, `nav`, `svg`, `iframe`
-and `noscript` subtrees whole, and resolves links against `$baseUrl` with
+quotes and simple tables. It drops `script`, `style`, `nav`, `svg`, `iframe`,
+`noscript`, `template`, `noembed` and `noframes` subtrees whole, and resolves links against `$baseUrl` with
 `Html\UrlReference::resolve($base, $reference)`, an RFC 3986 resolver. It
 returns `null` when the document cannot be converted, so the caller can fall
 back to the raw body. Parsing needs `ext-dom`; without it the converter

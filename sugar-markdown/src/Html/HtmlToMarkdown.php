@@ -517,7 +517,8 @@ final class HtmlToMarkdown
                     return '';
                 }
 
-                return '![' . self::escapeText($node->getAttribute('alt')) . '](' . $link . ')';
+                // Collapsed and trimmed like a link label: a line break in alt would split the paragraph and break the image.
+                return '![' . self::escapeText(trim(self::collapseWhitespace($node->getAttribute('alt')))) . '](' . $link . ')';
 
             case 'code':
             case 'kbd':

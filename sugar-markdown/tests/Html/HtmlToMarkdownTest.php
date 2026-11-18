@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Markdown\Tests\Html;
 
+use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Markdown\Html\HtmlToMarkdown;
 
@@ -13,8 +14,10 @@ use SugarCraft\Markdown\Html\HtmlToMarkdown;
  * the markup it promises to DROP (script/style/nav/svg/iframe/noscript —
  * text included, so an injected directive never reaches the model), and the
  * fence failures that must end in "null, caller falls back to raw" instead
- * of a half-converted guess.
+ * of a half-converted guess. Every case needs ext-dom; the no-DOM path is
+ * pinned by {@see HtmlToMarkdownWithoutDomTest}.
  */
+#[RequiresPhpExtension('dom')]
 final class HtmlToMarkdownTest extends TestCase
 {
     public function testHeadingsAndInlineEmphasisBecomeMarkdown(): void
@@ -487,5 +490,22 @@ final class HtmlToMarkdownTest extends TestCase
         $markdown = HtmlToMarkdown::convert('<p><a href="/w/Foo_(bar)">x</a></p>', 'https://e.com/');
 
         $this->assertSame("[x](https://e.com/w/Foo_(bar))\n", $markdown);
+    }
+
+    public function testAMultiLineImageAltIsCollapsedSoTheImageStaysOnOneLine(): void
+    {
+        $markdown = HtmlToMarkdown::convert(
+            '<p>one <img alt="x&#10;&#10;y" src="a.png"> two</p>',
+            'https://e.com/',
+        );
+
+        $this->assertSame("one ![x y](https://e.com/a.png) two\n", $markdown);
+    }
+
+    public function testImageAltIsTrimmedLikeALinkLabel(): void
+    {
+        $markdown = HtmlToMarkdown::convert('<p><img alt="  x&#9;y  " src="a.png"></p>', 'https://e.com/');
+
+        $this->assertSame("![x y](https://e.com/a.png)\n", $markdown);
     }
 }
