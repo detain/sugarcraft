@@ -1473,7 +1473,7 @@ final class EnvRosterDriftTest extends TestCase
     private const OS_ENV_ROSTER = [
         'HOME', 'USERPROFILE', 'LANG', 'LC_ALL', 'LC_MESSAGES',
         'PATH', 'VISUAL', 'EDITOR', 'TMUX', 'TERM_PROGRAM', 'TERM', 'COLORFGBG',
-        'DISPLAY', 'WAYLAND_DISPLAY', 'CDPATH', 'TMPDIR',
+        'DISPLAY', 'WAYLAND_DISPLAY', 'CDPATH', 'TMPDIR', 'COLUMNS', 'NUMBER_OF_PROCESSORS',
         // C-TUI-7.b: emulator identity carriers that survive a multiplexer,
         // read by Support\MacAltNotice's kitty probe (docs row names all three).
         'KITTY_WINDOW_ID', 'GHOSTTY_RESOURCES_DIR', 'WEZTERM_PANE',
