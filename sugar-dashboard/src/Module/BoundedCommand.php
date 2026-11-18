@@ -4,20 +4,21 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dashboard\Module;
 
-use SugarCraft\Core\Util\Proc\WindowsPipes;
-use SugarCraft\Core\Util\Proc\BoundedShutdown;
+use SugarCraft\Async\ChildResult;
+use SugarCraft\Async\ChildRun;
 
 /**
  * One bounded child-process run: argv, no shell interpolation, wall-clock
- * deadline, output ceiling, and a guaranteed TERM→KILL reap before the
- * lexical proc_close.
+ * deadline, output ceiling, and a guaranteed TERM→KILL reap before return.
  *
  * This is the shared engine behind every synchronous child the dashboard
  * spawns from a Model update. A tick must never hand the dashboard's
  * liveness to a child process: the reads stop at the deadline, excess
  * output is drained and DISCARDED (so a spamming child never EPIPEs
- * mid-write and never exhausts memory), and the sugar-core ladder
- * guarantees the direct child is gone on return.
+ * mid-write and never exhausts memory), and the kill ladder guarantees the
+ * direct child is gone on return. The pump and the ladder are sugar-async's
+ * {@see ChildRun}; this class only maps its result onto the dashboard's
+ * output/failure contract.
  *
  * Honest limits, disclosed rather than papered over:
  * - Grandchildren outlive the ladder. The TERM/KILL pair targets the
@@ -41,12 +42,6 @@ final class BoundedCommand
     /** Combined stdout+stderr ceiling — a chatty child cannot exhaust memory. */
     public const MAX_OUTPUT_BYTES = 1048576;
 
-    /** fread granularity inside one readable round. */
-    private const READ_CHUNK_BYTES = 8192;
-
-    /** stream_select slice: fine enough that EOF is noticed quickly, coarse enough to not spin. */
-    private const SELECT_SLICE_US = 50000;
-
     /**
      * Run $argv and report the outcome as output plus, when the run could
      * not complete, ONE specific human-readable cause. The four former
@@ -57,6 +52,7 @@ final class BoundedCommand
      *
      * @param list<string> $argv
      * @return array{output: string, failure: ?string}
+     * @throws \InvalidArgumentException for a non-positive timeout or a negative output ceiling
      */
     public static function run(
         array $argv,
@@ -67,110 +63,34 @@ final class BoundedCommand
             return ['output' => '', 'failure' => 'No command configured'];
         }
 
-        // @ is honest suppression here, not evasion: a missing binary makes
-        // proc_open() raise an E_WARNING and return false, and the guarded
-        // false path below is the designed outcome, not an unhandled state.
-        $process = @proc_open(
-            $argv,
-            [
-                0 => ['pipe', 'r'],
-                1 => ['pipe', 'w'],
-                2 => ['pipe', 'w'],
-            ],
-            $pipes
-        );
-
-        if (!is_resource($process)) {
+        try {
+            $result = ChildRun::new($argv)
+                ->withTimeout($timeoutSeconds)
+                ->withMaxBytes($maxOutputBytes)
+                ->run();
+        } catch (\RuntimeException) {
+            // ChildRun raises RuntimeException only when the child cannot be spawned.
             return ['output' => '', 'failure' => 'Command could not be started'];
         }
 
-        // Close stdin immediately — no interactive input expected.
-        fclose($pipes[0]);
-
-        $buffers = ['out' => '', 'err' => ''];
-        $streams = ['out' => $pipes[1], 'err' => $pipes[2]];
-        $deadline = hrtime(true) + (int) ($timeoutSeconds * 1_000_000_000);
-        $timedOut = false;
-        $interrupted = false;
-
-        if (WindowsPipes::runtimeNeedsIt()) {
-            // Windows: the pipes stay blocking there and select() calls them
-            // ready while empty, so the fread below parked until the command
-            // exited and the deadline never fired (a hung command ran 30 s past
-            // a 15 s bound). Read what fstat reports waiting until it exits.
-            $drained = WindowsPipes::drainUntilExit($streams, WindowsPipes::runningProbe($process), microtime(true) + $timeoutSeconds, $maxOutputBytes);
-            $buffers['out'] = $drained['buffers']['out'];
-            $buffers['err'] = substr($drained['buffers']['err'], 0, max(0, $maxOutputBytes - strlen($buffers['out'])));
-            $timedOut = $drained['timedOut'];
-        }
-
-        while ($streams !== [] && !WindowsPipes::runtimeNeedsIt()) {
-            if (hrtime(true) >= $deadline) {
-                $timedOut = true;
-                break;
-            }
-
-            $read = array_values($streams);
-            $write = null;
-            $except = null;
-            if (@stream_select($read, $write, $except, 0, self::SELECT_SLICE_US) === false) {
-                $interrupted = true; // the ladder below still guarantees the reap
-                break;
-            }
-
-            foreach ($read as $stream) {
-                // stream_select reindexes $read, so recover the channel by
-                // identity over the live map — a positional guess against
-                // $streams['out'] read an already-unset key once stdout hit
-                // EOF first (E_WARNING mid-frame).
-                $key = array_search($stream, $streams, true);
-                if ($key === false) {
-                    continue;
-                }
-
-                $chunk = fread($stream, self::READ_CHUNK_BYTES);
-                if ($chunk === false || $chunk === '') {
-                    if (feof($stream)) {
-                        unset($streams[$key]);
-                    }
-                    continue;
-                }
-
-                $room = $maxOutputBytes - strlen($buffers['out']) - strlen($buffers['err']);
-                if ($room > 0) {
-                    $buffers[$key] .= strlen($chunk) > $room ? substr($chunk, 0, $room) : $chunk;
-                }
-            }
-        }
-
-        foreach ($streams as $stream) {
-            fclose($stream);
-        }
-
-        // TERM → bounded poll → KILL → bounded poll, THEN the reap:
-        // proc_close() alone waits out a child that ignores the closed
-        // stdin, which is exactly the hang a bounded run must not inherit.
-        BoundedShutdown::terminateAndAwaitExit($process);
-        $exitCode = proc_close($process);
-
-        $stdout = $buffers['out'];
-        $stderr = $buffers['err'];
+        // The dashboard's contract is ONE combined ceiling across both streams,
+        // not one per stream, so stdout keeps its bytes first and stderr gets
+        // whatever room is left. ChildRun keeps up to $maxOutputBytes per stream.
+        $stdout = substr($result->stdout, 0, $maxOutputBytes);
+        $stderr = substr($result->stderr, 0, $maxOutputBytes - strlen($stdout));
         $combined = trim($stdout . ($stderr !== '' ? "\n$stderr" : ''));
 
         if ($combined !== '') {
             return ['output' => $combined, 'failure' => null];
         }
 
-        // Nothing arrived — name WHY, in the one cause the loop actually saw.
-        if ($timedOut) {
-            return ['output' => '', 'failure' => 'Command timed out'];
-        }
-        if ($interrupted) {
-            return ['output' => '', 'failure' => 'Command read interrupted'];
-        }
-        if ($exitCode !== 0) {
-            return ['output' => '', 'failure' => "Command failed (exit {$exitCode})"];
-        }
-        return ['output' => '', 'failure' => null];
+        // Nothing arrived — name WHY, in the one cause the run actually saw.
+        return match ($result->status) {
+            ChildResult::TIMED_OUT => ['output' => '', 'failure' => 'Command timed out'],
+            ChildResult::PIPE_FAILED => ['output' => '', 'failure' => 'Command read interrupted'],
+            default => $result->exitCode !== 0 && $result->exitCode !== null
+                ? ['output' => '', 'failure' => "Command failed (exit {$result->exitCode})"]
+                : ['output' => '', 'failure' => null],
+        };
     }
 }

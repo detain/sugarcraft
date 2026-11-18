@@ -254,4 +254,46 @@ final class ImageOverlayTest extends TestCase
         self::assertSame(6, Width::string($rows[0]), 'top row is width cells (marker + spaces)');
         self::assertSame(str_repeat(' ', 6), $rows[1], 'lower rows are blank');
     }
+
+    public function testLongPrintableAsciiRunBeforeMarkerKeepsItsColumn(): void
+    {
+        // The printable-ASCII run is copied in one step; the marker after it must
+        // still land on the column the per-codepoint walk would have given it.
+        $frame = str_repeat('a', 100) . ImageOverlay::marker(0) . 'z';
+        [$body, $paints] = ImageOverlay::resolve($frame, self::images([0 => ['X']]));
+
+        self::assertSame(101, $paints[0]['col']);
+        self::assertSame(str_repeat('a', 100) . ' z', $body);
+    }
+
+    public function testControlAndDeleteBytesBreakTheAsciiRunAndStillCountAsTheyDid(): void
+    {
+        // A tab and DEL are outside the printable run, so they take the slow path;
+        // the column after them must match Width's answer for each.
+        $frame = "ab\tcd\x7fe" . ImageOverlay::marker(0);
+        $expected = 1 + 1 + Width::string("\t") + 2 + Width::string("\x7f") + 1 + 1;
+        [, $paints] = ImageOverlay::resolve($frame, self::images([0 => ['X']]));
+
+        self::assertSame($expected, $paints[0]['col']);
+    }
+
+    public function testALineWithoutAnEscapeIsPassedThroughUntouched(): void
+    {
+        // The prefilter: no ESC byte means no marker, so the line is not walked.
+        $frame = "plain ascii\n日本語 and a \u{E002}\u{E000} private-use glyph";
+        [$body, $paints] = ImageOverlay::resolve($frame, self::images([0 => ['X']]));
+
+        self::assertSame($frame, $body);
+        self::assertSame([], $paints);
+    }
+
+    public function testAMarkerOnALaterLineIsStillResolvedAfterAPlainLine(): void
+    {
+        $frame = "no escapes here\nrow" . ImageOverlay::marker(1);
+        [$body, $paints] = ImageOverlay::resolve($frame, self::images([1 => ['Y']]));
+
+        self::assertSame("no escapes here\nrow ", $body);
+        self::assertSame(2, $paints[0]['row']);
+        self::assertSame(4, $paints[0]['col']);
+    }
 }
