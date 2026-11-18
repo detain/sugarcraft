@@ -479,8 +479,9 @@ the fences, for your own YAML or key/value reader), the `body` after the
 closing fence, and `bodyOffset`, the byte where the body starts. The fence
 is a line of `---` (spaces and tabs allowed after it); `----` is not one.
 An empty block (`---` then `---`) is a valid block with empty `meta`.
-Whitespace-only lines are dropped from both ends of the block, and CRLF
-documents work. A byte-order mark is not stripped: strip it first if your
+Whitespace-only lines are dropped from the start of `meta` and from the start
+of the body; trailing blank lines in `meta` are kept as written, so trim it
+yourself if you need it exact. CRLF documents work. A byte-order mark is not stripped: strip it first if your
 input may carry one.
 
 ```php
@@ -498,9 +499,12 @@ top-level headings. A folded heading keeps its own line, then a fold marker
 line, and the blocks after it are hidden up to the next heading of any level.
 A heading nested under a folded one is its own section and still shows.
 
-IDs come from `Renderer::headingId($text)`: lowercase, each run of characters
-that are neither letters nor digits becomes one hyphen, and the ends are
-trimmed. Two headings with the same text share an ID. Folding an ID that
+IDs come from `Renderer::headingId($text)` applied to the heading's rendered
+text, not its source: lowercase, each run of characters that are neither letters
+nor digits becomes one hyphen, and the ends are trimmed. With `withEmoji(true)`,
+`# :rocket: Launch` is the text "🚀 Launch", so its ID is `launch`, not
+`rocket-launch`. A TOC built from source text must expand shortcodes first, or
+it will fold nothing. Two headings with the same text share an ID. Folding an ID that
 matches no heading changes nothing, and `withFolds([])` unfolds everything.
 Folds work on the streaming path too, since each section starts at a heading.
 
@@ -535,12 +539,21 @@ the catalog.
 
 `Html\HtmlToMarkdown::convert($html, $baseUrl, $charset)` converts an HTML
 document to Markdown: headings, paragraphs, emphasis, links, lists, code,
-quotes and simple tables. It drops `script`, `style`, `nav`, `svg`, `iframe`
-and `noscript` subtrees whole, and resolves links against `$baseUrl` with
-`Html\UrlReference::resolve($base, $reference)`, an RFC 3986 resolver. It
-returns `null` when the document cannot be converted, so the caller can fall
-back to the raw body. Parsing needs `ext-dom`; without it the converter
-returns `null`. Inputs over 512 KiB are refused before parsing.
+quotes and simple tables. It drops `script`, `style`, `nav`, `svg`, `iframe`,
+`noscript`, `template`, `noembed` and `noframes` subtrees whole, and also drops
+any element the page hides itself: one with the `hidden` attribute or an inline
+`display:none` style. Hiding by a stylesheet rule or a class is not evaluated, so
+text a page hides only through its CSS still reaches the model; that is an
+accepted gap. Resolves links against `$baseUrl` with
+`Html\UrlReference::resolve($base, $reference)`, an RFC 3986 resolver. A non-block element that holds
+paragraphs (`details`, `center`, a `span` around blocks) keeps their breaks. A body
+the parser refuses, or one holding no renderable text (a lone `script`, say),
+returns a one-line note rather than `null`, so the dropped text never reaches
+the caller's raw-body fallback. The converter returns `null` only for empty
+input and when `ext-dom` is absent; then the caller can fall back to the raw
+body. Inputs over 512 KiB are cut to their first 512 KiB before
+parsing, and the output closes with a note saying so, so the drop rule still
+covers everything that is converted.
 
 ## Renderer options
 

@@ -36,6 +36,9 @@ final class ReplayCapTest extends TestCase
         $this->files = [];
     }
 
+    /**
+     * @param list<Event> $events
+     */
     private function cassette(array $events): string
     {
         $path = tempnam(sys_get_temp_dir(), 'cv-cap-');

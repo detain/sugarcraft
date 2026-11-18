@@ -161,6 +161,14 @@ final class Cmd
      */
     public static function promise(\Closure $factory, ?float $timeoutSeconds = null): \Closure
     {
+        // Validated here, not at dispatch: a zero or negative bound would
+        // reject real pending work on the next loop turn, so the mistake must
+        // surface at the call site that computed it.
+        if ($timeoutSeconds !== null && (!is_finite($timeoutSeconds) || $timeoutSeconds <= 0.0)) {
+            throw new \InvalidArgumentException(Lang::t('cmd.promise_timeout_positive', [
+                'seconds' => (string) $timeoutSeconds,
+            ]));
+        }
         return static fn (): AsyncCmd => new AsyncCmd($factory(), $timeoutSeconds);
     }
 

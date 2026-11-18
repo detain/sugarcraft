@@ -175,6 +175,61 @@ final class RetryTest extends TestCase
         $this->assertSame([[1, 1, 'down 1'], [2, 2, 'down 2'], [3, 4, 'down 3'], [4, 4, 'down 4']], $delays);
     }
 
+    public function testReconnectClampsItsRedialDelayToTheLadderPlateau(): void
+    {
+        // A 2 h base would arm a 2 h redial; retry() plateaus at
+        // MAX_BACKOFF_SECONDS, and reconnect() must report and arm that same
+        // clamped delay.
+        $loop = Loop::get();
+        $source = CancellationSource::new();
+        $reported = null;
+        $p = Retry::reconnect(
+            static fn () => reject(new \RuntimeException('down')),
+            Backoff::new(7_200_000.0)->withoutJitter(),
+            $source->token(),
+            $loop,
+            function (int $n, int $ms) use (&$reported): void {
+                $reported ??= $ms;
+            },
+        );
+        $p->then(null, static function (): void {
+        });
+        $this->runUntil($loop, static fn (): bool => $reported !== null);
+        $source->cancel();
+
+        self::assertSame((int) (Retry::MAX_BACKOFF_SECONDS * 1000), $reported);
+    }
+
+    public function testReconnectRefusesANonPromiseDialByNameWithoutThrowing(): void
+    {
+        // A bare value from the dial used to be an Error raised inside a loop
+        // timer (or synchronously, on the first attempt). It is now a terminal
+        // refusal that travels the rejection channel, like retry()'s guard.
+        $loop = Loop::get();
+        $calls = 0;
+        $p = Retry::reconnect(
+            function () use (&$calls) {
+                $calls++;
+
+                return null;
+            },
+            Backoff::new(10.0)->withoutJitter(),
+            null,
+            $loop,
+        );
+        $err = null;
+        $p->then(null, function (\Throwable $e) use (&$err): void {
+            $err = $e;
+        });
+        $this->runUntil($loop, function () use (&$err): bool {
+            return $err !== null;
+        });
+
+        $this->assertInstanceOf(\InvalidArgumentException::class, $err);
+        $this->assertStringContainsString('must return a promise; null returned', $err->getMessage());
+        $this->assertSame(1, $calls, 'a refused non-promise is terminal, not redialled');
+    }
+
     public function testReconnectBoundedRejectsWithLastFailure(): void
     {
         $loop = Loop::get();

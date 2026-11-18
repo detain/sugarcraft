@@ -2544,7 +2544,10 @@ final class Bootstrap
             return LaunchContext::bundlesMemo($key);
         }
 
-        $discovery = new BundleDiscovery($root ?? '', $paths);
+        // The project tier is the repository the launch resolves its settings
+        // from, not the raw working directory, so a launch from a subdirectory
+        // sees the bundles `bundles install --project` placed at the root.
+        $discovery = new BundleDiscovery(ProjectRoot::resolve($root ?? ''), $paths);
         $bundles = $discovery->discover();
 
         foreach ($discovery->warnings() as $warning) {
@@ -11318,6 +11321,12 @@ public static function useMaxCost(?string $maxCost): void
         if ($root === null || $root === '') {
             return;
         }
+
+        // The project tier is the repository the launch resolves its settings
+        // from, not the directory it was started in, so a launch from a
+        // subdirectory excludes what `bundles install --project` placed at the
+        // root, the same answer `bundles recommend` gives from that directory.
+        $root = ProjectRoot::resolve($root);
 
         $registry ??= MarketplaceRegistry::loadDefault();
 

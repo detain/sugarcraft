@@ -148,6 +148,8 @@ return [
     'cli.bundles.install.not_bundle' => 'bundles install: в {source} нет .claude-plugin/plugin.json (и нет просто plugin.json), поэтому это не plugin bundle',
     'cli.bundles.install.project_link' => 'bundles install: {path} — это символическая ссылка; корень бандла проекта, достигнутый через ссылку, отклоняется, поэтому ничего не установлено',
     'cli.bundles.install.project_root' => 'bundles install: корень проекта {root} — не каталог, в который этот процесс может установить бандл; ничего не записано',
+    'cli.bundles.install.other_tier' => 'bundles install: бандл с именем {name} уже установлен в {path} на другом уровне; установка отклонена, чтобы одно имя не оказалось одновременно на пользовательском и проектном уровне',
+    'cli.bundles.install.project_is_home' => 'bundles install: --project указывает на ваш домашний каталог {root}, который является пользовательским уровнем, а не проектом; запустите команду внутри проекта, передайте --root или уберите --project, чтобы установить в корень пользователя; ничего не записано',
     'cli.bundles.install.project_user' => 'bundles install: --project и --user задают два разных корня бандлов; укажите один из них или ни одного для пользовательского корня',
     'cli.bundles.install.read_failed' => 'bundles install: {source} не удалось подготовить в корне bundle',
     'cli.bundles.install.via_marketplace' => 'Записан {name} из marketplace {marketplace} на коммите {sha}; `candy-code bundles update {name}` обновит его из этой записи.',

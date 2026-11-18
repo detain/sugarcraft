@@ -42,7 +42,20 @@ final class WidthTruncateEllipsisTest extends TestCase
     {
         // Three cells of '...' in a two-cell budget: no room for it, so cut the text.
         $this->assertSame('he', Width::truncateEllipsis('hello', 2));
-        $this->assertSame('hel', Width::truncateEllipsis('hello', 3, '...'));
+        // A four-cell ellipsis in a three-cell budget does not fit: plain head cut.
+        $this->assertSame('hel', Width::truncateEllipsis('hello', 3, '....'));
+    }
+
+    /**
+     * An ellipsis that exactly fills the budget fits, so the marker stays. The
+     * docblock promises the head cut only when the ellipsis alone does not fit.
+     */
+    public function testEllipsisThatExactlyFillsTheBudgetKeepsTheMarker(): void
+    {
+        $this->assertSame('...', Width::truncateEllipsis('hello', 3, '...'));
+        $this->assertSame('h...', Width::truncateEllipsis('hello', 4, '...'));
+        $this->assertSame('a...', Width::truncateEllipsis('abcdefgh', 4, '...'));
+        $this->assertSame('...', Width::truncateEllipsis('hello', 3));
     }
 
     public function testNonPositiveBudgetIsEmpty(): void

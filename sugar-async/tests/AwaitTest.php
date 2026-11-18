@@ -55,6 +55,27 @@ final class AwaitTest extends TestCase
         }
     }
 
+    public function testAnOutsideLoopStopIsNotReportedAsATimeout(): void
+    {
+        // A stop() from another callback ends one run() early. The budget has
+        // not elapsed, so the wait must keep driving until it does.
+        $loop = new StreamSelectLoop();
+        $deferred = new Deferred();
+        $loop->addTimer(0.05, static function () use ($loop): void {
+            $loop->stop();
+        });
+
+        $start = \microtime(true);
+        try {
+            Await::until($deferred->promise(), 0.3, $loop);
+            self::fail('A pending promise must time out');
+        } catch (TimeoutException $e) {
+            $elapsed = \microtime(true) - $start;
+            self::assertGreaterThanOrEqual(0.25, $elapsed, 'the timeout must wait out the budget, not the stop');
+            self::assertSame(0.3, $e->seconds());
+        }
+    }
+
     public function testAnAbandonedPromiseSettlingLaterDoesNotStopAnotherRun(): void
     {
         $loop = new StreamSelectLoop();
@@ -84,6 +105,34 @@ final class AwaitTest extends TestCase
 
         $this->expectException(\LogicException::class);
         Await::until($outer, 2.0, $loop);
+    }
+
+    public function testRefusesToNestInsideALoopCallbackThatIsNotAnAwait(): void
+    {
+        // Regression: only a nested Await was caught, so a plain timer that
+        // called until() started a second run(), whose stop() then ended the
+        // outer run() early. The refusal must come before any run() starts,
+        // and the outer loop must still reach its later timer.
+        $loop = new StreamSelectLoop();
+        $nested = null;
+        $laterTimerFired = false;
+
+        $loop->addTimer(0.01, static function () use ($loop, &$nested): void {
+            try {
+                Await::until((new Deferred())->promise(), 0.5, $loop);
+            } catch (\Throwable $e) {
+                $nested = $e;
+            }
+        });
+        $loop->addTimer(0.1, static function () use ($loop, &$laterTimerFired): void {
+            $laterTimerFired = true;
+            $loop->stop();
+        });
+
+        $loop->run();
+
+        self::assertInstanceOf(\LogicException::class, $nested);
+        self::assertTrue($laterTimerFired, 'the refused nested wait must not stop the outer loop');
     }
 
     /** @dataProvider invalidSecondsProvider */

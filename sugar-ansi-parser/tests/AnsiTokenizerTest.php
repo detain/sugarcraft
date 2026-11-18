@@ -110,14 +110,75 @@ final class AnsiTokenizerTest extends TestCase
 
     public function testInvalidCsiFinalEmitsBareEscAndResynchronizes(): void
     {
-        // 0x01 is below the 0x40-0x7E final range: the ESC [ pair is emitted
-        // as an ESC token and the control byte that follows is still seen.
-        $tokens = AnsiTokenizer::new()->parse("\x1b[\x01");
+        // 0x80 is above the 0x40-0x7E final range and is not an in-place
+        // control, so the ESC [ pair is emitted as an ESC token and the byte
+        // that follows is still seen as text. (A C0 such as 0x01 executes in
+        // place instead, and the CSI stays open for its final.)
+        $tokens = AnsiTokenizer::new()->parse("\x1b[\x80");
         $this->assertCount(2, $tokens);
         $this->assertSame(Token::ESC, $tokens[0]->type);
         $this->assertSame('[', $tokens[0]->data);
+        $this->assertSame(Token::TEXT, $tokens[1]->type);
+        $this->assertSame("\x80", $tokens[1]->data);
+    }
+
+    public function testDelInsideCsiIsIgnoredAndTheSequenceContinues(): void
+    {
+        // The VT500 CsiEntry, CsiParam and CsiIntermediate states ignore DEL,
+        // so the SGR is dispatched intact and no DEL token is emitted.
+        $tokens = AnsiTokenizer::new()->parse("\x1b[3\x7f1m");
+        $this->assertCount(1, $tokens);
+        $this->assertSame(Token::CSI, $tokens[0]->type);
+        $this->assertSame('31', $tokens[0]->params);
+        $this->assertSame('m', $tokens[0]->final);
+
+        $tokens = AnsiTokenizer::new()->parse("\x1b[\x7f31m");
+        $this->assertCount(1, $tokens);
+        $this->assertSame('31', $tokens[0]->params);
+        $this->assertSame('m', $tokens[0]->final);
+
+        $tokens = AnsiTokenizer::new()->parse("\x1b[1\x7f;2m");
+        $this->assertCount(1, $tokens);
+        $this->assertSame('1;2', $tokens[0]->params);
+        $this->assertSame('m', $tokens[0]->final);
+    }
+
+    public function testDelAfterEscIsIgnoredAndTheNextByteDispatches(): void
+    {
+        // The VT500 Escape state ignores DEL, so ESC DEL c is still ESC c.
+        $tokens = AnsiTokenizer::new()->parse("\x1b\x7fc");
+        $this->assertCount(1, $tokens);
+        $this->assertSame(Token::ESC, $tokens[0]->type);
+        $this->assertSame('c', $tokens[0]->data);
+    }
+
+    public function testCanAndSubEndAnOscBodyAndTheTextAfterThemSurfaces(): void
+    {
+        // Regression: CAN and SUB were body bytes in the string states, so the
+        // text after them was swallowed into the OSC token.
+        $tokens = AnsiTokenizer::new()->parse("\x1b]0;title\x18hello\x07");
+        $this->assertCount(4, $tokens);
+        $this->assertSame(Token::OSC, $tokens[0]->type);
+        $this->assertSame('0;title', $tokens[0]->data);
+        $this->assertSame('', $tokens[0]->terminator);
         $this->assertSame(Token::CONTROL, $tokens[1]->type);
-        $this->assertSame("\x01", $tokens[1]->data);
+        $this->assertSame("\x18", $tokens[1]->data);
+        $this->assertSame(Token::TEXT, $tokens[2]->type);
+        $this->assertSame('hello', $tokens[2]->data);
+        $this->assertSame(Token::CONTROL, $tokens[3]->type);
+        $this->assertSame("\x07", $tokens[3]->data);
+    }
+
+    public function testCanAndSubEndDcsApcSosAndPmBodies(): void
+    {
+        foreach (["\x1bPabc\x1ahello\x1b\\", "\x1b_abc\x18hello\x1b\\", "\x1bXabc\x1ahello\x1b\\", "\x1b^abc\x18hello\x1b\\"] as $input) {
+            $tokens = AnsiTokenizer::new()->parse($input);
+            $this->assertGreaterThanOrEqual(3, count($tokens), $input);
+            $this->assertSame('', $tokens[0]->terminator, $input);
+            $this->assertSame(Token::CONTROL, $tokens[1]->type, $input);
+            $this->assertSame(Token::TEXT, $tokens[2]->type, $input);
+            $this->assertSame('hello', $tokens[2]->data, $input);
+        }
     }
 
     public function testOscWithBel(): void
@@ -274,9 +335,10 @@ final class AnsiTokenizerTest extends TestCase
 
     public function testOscFedOneByteAtATimeMatchesSingleFeed(): void
     {
-        // The body holds an ESC that is not part of ST, and both ST and BEL
-        // terminators, so every resume point sees a different kind of byte.
-        $stream = "\x1b]0;tit\x1ble\x07after\x1b]2;a\x1b\\end";
+        // Both BEL and ST terminators, so every resume point sees a different
+        // kind of byte. An ESC inside the body is not tested here: it aborts
+        // the string (testEscInsideOscAbortsTheStringAndKeepsTheNextKey).
+        $stream = "\x1b]0;tit\x07after\x1b]2;a\x1b\\end";
         $single = AnsiTokenizer::new()->parse($stream);
         $this->assertSame(
             [Token::OSC, Token::TEXT, Token::OSC, Token::TEXT],
@@ -339,6 +401,105 @@ final class AnsiTokenizerTest extends TestCase
         $this->assertSame('3;e', $tokens[0]->data);
     }
 
+    public function testEscInsideCsiAbortsTheSequenceAndRestarts(): void
+    {
+        // The VT500 machine clears on ESC from any CSI state, so the partial
+        // "ESC [ 31" is dropped with no token and the SGR after it survives.
+        $tokens = AnsiTokenizer::new()->parse("\x1b[31\x1b[32mX");
+        $this->assertCount(2, $tokens);
+        $this->assertSame(Token::CSI, $tokens[0]->type);
+        $this->assertSame('32', $tokens[0]->params);
+        $this->assertSame('m', $tokens[0]->final);
+        $this->assertSame(Token::TEXT, $tokens[1]->type);
+        $this->assertSame('X', $tokens[1]->data);
+    }
+
+    public function testEscEscRestartsTheSequence(): void
+    {
+        // The first ESC of "ESC ESC [" is abandoned silently; the bare ESC
+        // token of the old behavior stranded "[31mX" as text.
+        $tokens = AnsiTokenizer::new()->parse("\x1b\x1b[31mX");
+        $this->assertCount(2, $tokens);
+        $this->assertSame(Token::CSI, $tokens[0]->type);
+        $this->assertSame('31', $tokens[0]->params);
+        $this->assertSame('m', $tokens[0]->final);
+        $this->assertSame('X', $tokens[1]->data);
+
+        $tokenizer = AnsiTokenizer::new();
+        $this->assertSame([], $tokenizer->parse("\x1b\x1b"));
+        $rest = $tokenizer->flush();
+        $this->assertCount(1, $rest);
+        $this->assertSame("\x1b", $rest[0]->data);
+    }
+
+    public function testEscInsideOscAbortsTheStringAndKeepsTheNextKey(): void
+    {
+        // The body stops at the ESC: the CSI A after it is a key press, not
+        // part of the OSC body. The OSC carries no terminator because ESC
+        // closed it, which a byte-offset consumer relies on.
+        $tokens = AnsiTokenizer::new()->parse("\x1b]0;t\x1b[A");
+        $this->assertCount(2, $tokens);
+        $this->assertSame(Token::OSC, $tokens[0]->type);
+        $this->assertSame('0;t', $tokens[0]->data);
+        $this->assertSame('', $tokens[0]->terminator);
+        $this->assertSame(Token::CSI, $tokens[1]->type);
+        $this->assertSame('A', $tokens[1]->final);
+    }
+
+    public function testEscInsideDcsAndApcAbortTheString(): void
+    {
+        $dcs = AnsiTokenizer::new()->parse("\x1bPq1\x1b[2J");
+        $this->assertCount(2, $dcs);
+        $this->assertSame(Token::DCS, $dcs[0]->type);
+        $this->assertSame('q1', $dcs[0]->data);
+        $this->assertSame('J', $dcs[1]->final);
+
+        $apc = AnsiTokenizer::new()->parse("\x1b_hi\x1b7");
+        $this->assertCount(2, $apc);
+        $this->assertSame(Token::APC, $apc[0]->type);
+        $this->assertSame('hi', $apc[0]->data);
+        $this->assertSame(Token::ESC, $apc[1]->type);
+        $this->assertSame('7', $apc[1]->data);
+    }
+
+    public function testStEscapeStillClosesAStringAfterAnAbortCandidate(): void
+    {
+        // ESC \ is ST, not an abort: a body with no inner ESC keeps its
+        // terminator, so the ESC-abort branch does not steal real closers.
+        $tokens = AnsiTokenizer::new()->parse("\x1b]0;t\x1b\\");
+        $this->assertCount(1, $tokens);
+        $this->assertSame('0;t', $tokens[0]->data);
+        $this->assertSame("\x1b\\", $tokens[0]->terminator);
+    }
+
+    public function testEscInsideStringOrCsiSplitAcrossFeedsMatchesOneShot(): void
+    {
+        // A trailing ESC inside a body is held until the next byte decides
+        // ST or abort; every split and the byte-wise feed must agree with
+        // the one-shot tokens.
+        foreach (["\x1b]0;t\x1b[A", "\x1b[31\x1b[32mX", "\x1bPq1\x1b\x1b[2J"] as $seq) {
+            $oneShot = AnsiTokenizer::new()->parse($seq);
+            $n = strlen($seq);
+            for ($cut = 1; $cut < $n; $cut++) {
+                $tokenizer = AnsiTokenizer::new();
+                $fed = array_merge(
+                    $tokenizer->parse(substr($seq, 0, $cut)),
+                    $tokenizer->parse(substr($seq, $cut)),
+                );
+                $this->assertEquals($oneShot, $fed, bin2hex($seq) . " cut at $cut");
+            }
+
+            $tokenizer = AnsiTokenizer::new();
+            $bytewise = [];
+            for ($k = 0; $k < $n; $k++) {
+                foreach ($tokenizer->parse($seq[$k]) as $token) {
+                    $bytewise[] = $token;
+                }
+            }
+            $this->assertEquals($oneShot, $bytewise, bin2hex($seq) . ' byte-wise');
+        }
+    }
+
     public function testFlushReturnsBufferedAsText(): void
     {
         $p = AnsiTokenizer::new();
@@ -365,6 +526,159 @@ final class AnsiTokenizerTest extends TestCase
     public function testMaxPendingBytesIsTheDocumentedCap(): void
     {
         $this->assertSame(65536, AnsiTokenizer::MAX_PENDING_BYTES);
+    }
+
+    public function testEscIntermediateDesignationIsOneEscTokenWithNoTextLeak(): void
+    {
+        // ESC ( 0 switches to the DEC graphics set. Its final `0` is part of
+        // the designation, not text, and the VT500 Parser agrees: it dispatches
+        // final '0' with intermediate '(' and prints only "lqk".
+        $tokens = AnsiTokenizer::new()->parse("\x1b(0lqk\x1b(B");
+        $this->assertCount(3, $tokens);
+        $this->assertSame(Token::ESC, $tokens[0]->type);
+        $this->assertSame('0', $tokens[0]->data);
+        $this->assertSame('(', $tokens[0]->intermediate);
+        $this->assertSame(Token::TEXT, $tokens[1]->type);
+        $this->assertSame('lqk', $tokens[1]->data);
+        $this->assertSame(Token::ESC, $tokens[2]->type);
+        $this->assertSame('B', $tokens[2]->data);
+        $this->assertSame('(', $tokens[2]->intermediate);
+    }
+
+    public function testEscDecalnAndS7c1tCarryTheirIntermediates(): void
+    {
+        // DECALN (ESC # 8) and S7C1T (ESC SP F) are two-byte intermediate
+        // forms; neither final may come back as text.
+        $decaln = AnsiTokenizer::new()->parse("\x1b#8");
+        $this->assertCount(1, $decaln);
+        $this->assertSame(Token::ESC, $decaln[0]->type);
+        $this->assertSame('8', $decaln[0]->data);
+        $this->assertSame('#', $decaln[0]->intermediate);
+
+        $s7c1t = AnsiTokenizer::new()->parse("\x1b F");
+        $this->assertCount(1, $s7c1t);
+        $this->assertSame('F', $s7c1t[0]->data);
+        $this->assertSame(' ', $s7c1t[0]->intermediate);
+    }
+
+    public function testEscIntermediateSplitAcrossChunksIsHeldUntilItsFinal(): void
+    {
+        $tokenizer = AnsiTokenizer::new();
+        $this->assertSame([], $tokenizer->parse("\x1b("));
+        $tokens = $tokenizer->parse('0x');
+        $this->assertCount(2, $tokens);
+        $this->assertSame(Token::ESC, $tokens[0]->type);
+        $this->assertSame('0', $tokens[0]->data);
+        $this->assertSame('(', $tokens[0]->intermediate);
+        $this->assertSame('x', $tokens[1]->data);
+    }
+
+    public function testEscIntermediateAbandonedByEscOrControlResyncs(): void
+    {
+        // A non-final byte ends the intermediate sequence without a token, the
+        // way ESC does, and the byte after it is handled as usual.
+        $tokens = AnsiTokenizer::new()->parse("\x1b(\x1b[A");
+        $this->assertCount(1, $tokens);
+        $this->assertSame(Token::CSI, $tokens[0]->type);
+        $this->assertSame('A', $tokens[0]->final);
+
+        // A C0 control executes in the EscapeIntermediate state without leaving
+        // it, so the CR surfaces first and `q` still dispatches the ESC ( designation.
+        $tokens = AnsiTokenizer::new()->parse("\x1b(\rq");
+        $this->assertCount(2, $tokens);
+        $this->assertSame(Token::CONTROL, $tokens[0]->type);
+        $this->assertSame("\r", $tokens[0]->data);
+        $this->assertSame(Token::ESC, $tokens[1]->type);
+        $this->assertSame('q', $tokens[1]->data);
+        $this->assertSame('(', $tokens[1]->intermediate);
+    }
+
+    public function testC0AfterEscExecutesAndTheEscapeGoesOn(): void
+    {
+        // VT500: LF executes in the Escape state, and the `b` after it is the
+        // final of ESC b. Swallowing the LF as the ESC's final loses the control.
+        $tokens = AnsiTokenizer::new()->parse("a\x1b\nb");
+        $this->assertCount(3, $tokens);
+        $this->assertSame(Token::TEXT, $tokens[0]->type);
+        $this->assertSame('a', $tokens[0]->data);
+        $this->assertSame(Token::CONTROL, $tokens[1]->type);
+        $this->assertSame("\n", $tokens[1]->data);
+        $this->assertSame(Token::ESC, $tokens[2]->type);
+        $this->assertSame('b', $tokens[2]->data);
+    }
+
+    public function testC0InsideCsiExecutesBeforeTheCsiIsDispatched(): void
+    {
+        // The erase-display CSI survives the CR: it is dispatched whole, with
+        // the CR emitted ahead of it, and no `;2J` leaks out as printable text.
+        $tokens = AnsiTokenizer::new()->parse("\x1b[1\r;2J");
+        $this->assertCount(2, $tokens);
+        $this->assertSame(Token::CONTROL, $tokens[0]->type);
+        $this->assertSame("\r", $tokens[0]->data);
+        $this->assertSame(Token::CSI, $tokens[1]->type);
+        $this->assertSame('1;2', $tokens[1]->params);
+        $this->assertSame('J', $tokens[1]->final);
+    }
+
+    public function testCanAndSubAbandonAnEscapeOrCsiAndAreReadAsControls(): void
+    {
+        // CAN and SUB are "anywhere" transitions: they end the sequence rather
+        // than execute inside it, so the byte after them is plain text.
+        $tokens = AnsiTokenizer::new()->parse("\x1b\x18x");
+        $this->assertCount(2, $tokens);
+        $this->assertSame(Token::CONTROL, $tokens[0]->type);
+        $this->assertSame("\x18", $tokens[0]->data);
+        $this->assertSame('x', $tokens[1]->data);
+
+        $tokens = AnsiTokenizer::new()->parse("\x1b[1\x1ax");
+        $this->assertCount(2, $tokens);
+        $this->assertSame(Token::CONTROL, $tokens[0]->type);
+        $this->assertSame("\x1a", $tokens[0]->data);
+        $this->assertSame(Token::TEXT, $tokens[1]->type);
+        $this->assertSame('x', $tokens[1]->data);
+    }
+
+    public function testHeldEscapeWithControlsEmitsEachControlOnce(): void
+    {
+        // The controls of a sequence that is still incomplete are held with it,
+        // not emitted: emitting them now and again on the next feed would
+        // duplicate them.
+        $tokenizer = AnsiTokenizer::new();
+        $this->assertSame([], $tokenizer->parse("\x1b[1\r"));
+        $tokens = $tokenizer->parse(';2J');
+        $this->assertCount(2, $tokens);
+        $this->assertSame(Token::CONTROL, $tokens[0]->type);
+        $this->assertSame(Token::CSI, $tokens[1]->type);
+        $this->assertSame('J', $tokens[1]->final);
+
+        $tokenizer = AnsiTokenizer::new();
+        $this->assertSame([], $tokenizer->parse("\x1b\n"));
+        $tokens = $tokenizer->parse('[A');
+        $this->assertCount(2, $tokens);
+        $this->assertSame(Token::CONTROL, $tokens[0]->type);
+        $this->assertSame("\n", $tokens[0]->data);
+        $this->assertSame('A', $tokens[1]->final);
+    }
+
+    public function testEscBeforeAHighByteDoesNotSplitTheRune(): void
+    {
+        // ESC then U+00E9 (C3 A9): the ESC is abandoned without a token, so the
+        // rune reads whole as one TEXT token. An ESC token would take the lead
+        // byte and strand the continuation as an invalid TEXT token.
+        $tokens = AnsiTokenizer::new()->parse("\x1b\xc3\xa9");
+        $this->assertCount(1, $tokens);
+        $this->assertSame(Token::TEXT, $tokens[0]->type);
+        $this->assertSame("\xc3\xa9", $tokens[0]->data);
+    }
+
+    public function testEscBeforeAHighByteSplitAcrossChunksKeepsTheRune(): void
+    {
+        $tokenizer = AnsiTokenizer::new();
+        $this->assertSame([], $tokenizer->parse("\x1b"));
+        $tokens = $tokenizer->parse("\xc3\xa9");
+        $this->assertCount(1, $tokens);
+        $this->assertSame(Token::TEXT, $tokens[0]->type);
+        $this->assertSame("\xc3\xa9", $tokens[0]->data);
     }
 
     public function testTokenIsImmutable(): void

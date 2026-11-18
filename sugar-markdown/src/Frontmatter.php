@@ -22,14 +22,23 @@ use SugarCraft\Markdown\Frontmatter\Split;
  *    spaces or tabs, so `----` is not a fence and an empty block (two fences
  *    back to back) is a valid, empty `meta`;
  *  - a closing fence on the last line needs no line break after it;
- *  - whitespace-only lines are dropped from both ends of the body and from
+ *  - whitespace-only lines are dropped from the start of the body and from
  *    the start of `meta`, so the first real line keeps its own indentation;
+ *    the end of the body is never trimmed, so a whitespace-only tail stays
+ *    exactly as written, including one with no line break after it;
  *  - CRLF and LF endings are both accepted, and the line break in front of
  *    the closing fence is not part of `meta`;
  *  - a block with no closing fence is not a block: the whole input is body.
  *
  * Deliberately not handled: a leading byte-order mark (the document is then
  * plain body) and any YAML-level meaning of the block's contents.
+ *
+ * Deliberate divergence: candy-mdview keeps its own glow-parity detector
+ * (`candy-mdview/src/FrontMatter.php`), which also accepts a `...` fence and
+ * refuses a block with no body after its closer, so a trailing `---` is left
+ * as a setext underline. Those two rules are not in this grammar, so the two
+ * readers can strip different blocks from the same file. A consumer that
+ * needs one answer for both must reconcile them first; this class does not.
  */
 final class Frontmatter
 {

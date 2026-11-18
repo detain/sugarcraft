@@ -8,9 +8,11 @@ use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
 use SugarCraft\Code\Bundles\BundleDiscovery;
 use SugarCraft\Code\Cli\ArgvParser;
+use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Cli\NonInteractive;
 use SugarCraft\Code\Cli\Subcommands;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Support\ProjectRoot;
 use SugarCraft\Code\Tests\Skills\TemporaryDirectoryTrait;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Code\Tests\Support\PathMarketplaceFixtureTrait;
@@ -128,6 +130,42 @@ final class BundleInstallScopeTest extends TestCase
         }
 
         self::assertSame(['demo' => 'project'], $found, 'the bundle is listed in the project tier and nowhere else');
+    }
+
+    public function testAUserBundleIsDiscoveredOnceInTheUserTierWhenTheHomeDirectoryIsTheProjectRoot(): void
+    {
+        $this->plainBundleAt($this->root . '/demo', 'demo');
+
+        $found = [];
+        foreach ((new BundleDiscovery(ProjectRoot::resolve($this->home)))->discover() as $bundle) {
+            $found[] = [$bundle->name, $bundle->tier];
+        }
+
+        self::assertSame(
+            [['demo', 'user']],
+            $found,
+            'home is both the project root and the user root: the bundle is one row, in the user tier',
+        );
+    }
+
+    public function testBundlesListFromTheHomeDirectoryShowsAUserBundleOnce(): void
+    {
+        $this->plainBundleAt($this->root . '/demo', 'demo');
+
+        $before = getcwd();
+        self::assertNotFalse($before);
+
+        chdir($this->home);
+
+        try {
+            [$exit, $out] = $this->verbCapture('list');
+        } finally {
+            chdir($before);
+        }
+
+        self::assertSame(NonInteractive::EXIT_OK, $exit);
+        self::assertSame(1, preg_match_all('/^demo\s/m', $out), 'list shows one row for the bundle, not one per tier');
+        self::assertMatchesRegularExpression('/^demo\s.*\buser\b/m', $out, 'the one row is the user-tier copy');
     }
 
     public function testProjectAndUserTogetherAreRefusedWithTheirOwnLineAndNothingIsWritten(): void
@@ -347,6 +385,76 @@ final class BundleInstallScopeTest extends TestCase
         self::assertFileExists($this->project . '/.candy-code/bundles/dup/.claude-plugin/plugin.json');
     }
 
+    public function testAProjectInstallIsRefusedWhenTheUserTierAlreadyHoldsTheName(): void
+    {
+        $this->plainBundleAt($this->root . '/alpha', 'alpha');
+        $source = $this->stagedBundle('alpha-src', 'alpha');
+
+        [$exit, , $stderr] = $this->runCli($this->project, 'bundles', 'install', $source, '--project', '--root', $this->project);
+
+        self::assertSame(NonInteractive::EXIT_FAILURE, $exit);
+        self::assertStringContainsString(
+            'bundles install: a bundle named alpha is already installed at',
+            $stderr,
+            'the install must refuse the cross-tier duplicate with its own line',
+        );
+        self::assertDirectoryDoesNotExist($this->project . '/.candy-code/bundles/alpha', 'a refused install writes nothing');
+        self::assertFileExists($this->root . '/alpha/.claude-plugin/plugin.json', 'the user-tier copy is untouched');
+    }
+
+    public function testAUserInstallIsRefusedWhenTheProjectTierAlreadyHoldsTheName(): void
+    {
+        $this->plainBundleAt($this->project . '/.candy-code/bundles/alpha', 'alpha');
+        $source = $this->stagedBundle('alpha-src', 'alpha');
+
+        [$exit, , $stderr] = $this->runCli($this->project, 'bundles', 'install', $source);
+
+        self::assertSame(NonInteractive::EXIT_FAILURE, $exit);
+        self::assertStringContainsString(
+            'bundles install: a bundle named alpha is already installed at',
+            $stderr,
+            'the bare install must refuse a name the project tier already holds',
+        );
+        self::assertDirectoryDoesNotExist($this->root . '/alpha', 'a refused install writes nothing');
+        self::assertFileExists($this->project . '/.candy-code/bundles/alpha/.claude-plugin/plugin.json', 'the project-tier copy is untouched');
+    }
+
+    public function testAProjectInstallFromAnUnownedHomeIsStillRefusedAndWritesNothing(): void
+    {
+        // A world-writable home is not an owned home, so the user root cannot
+        // be used; --project from that directory must still refuse rather than
+        // write the bundle into ~/.candy-code/bundles through the back door.
+        mkdir($this->home . '/.candy-code', 0777, true);
+        chmod($this->home, 0777);
+        $source = $this->stagedBundle('demo-src', 'demo');
+
+        [$exit, , $stderr] = $this->runCli($this->home, 'bundles', 'install', $source, '--project');
+
+        self::assertSame(NonInteractive::EXIT_FAILURE, $exit);
+        self::assertStringContainsString(
+            'bundles install: --project resolves to your home directory',
+            $stderr,
+            'the named home is refused whether or not it is an owned home',
+        );
+        self::assertDirectoryDoesNotExist($this->root . '/demo', 'nothing lands in the unowned user root');
+    }
+
+    public function testAProjectInstallFromTheHomeDirectoryIsRefusedInsteadOfLandingInTheUserTier(): void
+    {
+        mkdir($this->home . '/.candy-code', 0777, true);
+        $source = $this->stagedBundle('demo-src', 'demo');
+
+        [$exit, , $stderr] = $this->runCli($this->home, 'bundles', 'install', $source, '--project');
+
+        self::assertSame(NonInteractive::EXIT_FAILURE, $exit);
+        self::assertStringContainsString(
+            'bundles install: --project resolves to your home directory',
+            $stderr,
+            'the home directory is the user tier, so --project there is refused, not collapsed',
+        );
+        self::assertDirectoryDoesNotExist($this->root . '/demo', 'nothing lands in the user root under the project scope');
+    }
+
     public function testRecommendDoesNotOfferBackABundleTheProjectAlreadyInstalledWithProject(): void
     {
         // composer.json is a manifest signal whose vocabulary includes `php`,
@@ -439,6 +547,101 @@ final class BundleInstallScopeTest extends TestCase
     }
 
     /** A real bundle directory to install FROM, returned as its path. */
+    public function testAProjectInstallFromASubdirectoryLandsInTheRepositoryRootAndWritesNoMarkerBelowIt(): void
+    {
+        $repo = $this->gitRepo('repo');
+        $source = $this->stagedBundle('demo-src', 'demo');
+        $src = $repo . '/src';
+        mkdir($src, 0777, true);
+
+        $this->inDirectory($src, function () use ($source): void {
+            self::assertSame(NonInteractive::EXIT_OK, $this->verb('install', $source, '--project'));
+        });
+
+        self::assertFileExists($repo . '/.candy-code/bundles/demo/.claude-plugin/plugin.json');
+        self::assertDirectoryDoesNotExist($src . '/.candy-code', 'an install must not make the subdirectory its own project root');
+        ProjectRoot::forget();
+        self::assertSame($repo, ProjectRoot::resolve($src), 'settings keep resolving to the repository, not the subdirectory');
+    }
+
+    public function testTheProjectRootFlagNamingASubdirectoryInstallsIntoTheRepositoryRoot(): void
+    {
+        $repo = $this->gitRepo('repo');
+        $source = $this->stagedBundle('demo-src', 'demo');
+        $src = $repo . '/src';
+        mkdir($src, 0777, true);
+
+        self::assertSame(NonInteractive::EXIT_OK, $this->verb('install', $source, '--project', '--root', $src));
+
+        self::assertFileExists($repo . '/.candy-code/bundles/demo/.claude-plugin/plugin.json');
+        self::assertDirectoryDoesNotExist($src . '/.candy-code');
+    }
+
+    public function testBundlesListFromASubdirectoryShowsTheRepositoryProjectInstall(): void
+    {
+        $repo = $this->gitRepo('repo');
+        $source = $this->stagedBundle('demo-src', 'demo');
+        $src = $repo . '/src';
+        mkdir($src, 0777, true);
+
+        $this->inDirectory($repo, function () use ($source): void {
+            self::assertSame(NonInteractive::EXIT_OK, $this->verb('install', $source, '--project'));
+        });
+
+        [$exit, $out] = $this->inDirectory($src, fn (): array => $this->verbCapture('list'));
+
+        self::assertSame(NonInteractive::EXIT_OK, $exit);
+        self::assertMatchesRegularExpression('/^demo\s.*\bproject\b/m', $out, 'list from a subdirectory reads the repository project tier');
+    }
+
+    public function testTheLaunchDiscoversTheRepositoryProjectTierFromASubdirectory(): void
+    {
+        $repo = $this->gitRepo('repo');
+        $source = $this->stagedBundle('demo-src', 'demo');
+        $src = $repo . '/src';
+        mkdir($src, 0777, true);
+
+        $this->inDirectory($repo, function () use ($source): void {
+            self::assertSame(NonInteractive::EXIT_OK, $this->verb('install', $source, '--project'));
+        });
+
+        $found = [];
+        foreach (Bootstrap::bundles($src) as $bundle) {
+            $found[$bundle->name] = $bundle->tier;
+        }
+
+        self::assertSame(['demo' => 'project'], $found, 'a launch from a subdirectory sees the bundle the repository install placed');
+    }
+
+    private function gitRepo(string $name): string
+    {
+        $dir = $this->tempDir . '/' . $name;
+        mkdir($dir, 0777, true);
+        exec('git -C ' . escapeshellarg($dir) . ' init -q 2>&1', $out, $code);
+        self::assertSame(0, $code, implode("\n", $out));
+
+        return (string) realpath($dir);
+    }
+
+    /**
+     * @template T
+     * @param callable(): T $work
+     * @return T
+     */
+    private function inDirectory(string $dir, callable $work): mixed
+    {
+        $before = getcwd();
+        self::assertNotFalse($before);
+
+        chdir($dir);
+
+        try {
+            return $work();
+        } finally {
+            chdir($before);
+        }
+    }
+
     private function stagedBundle(string $folder, string $name): string
     {
         $dir = $this->tempDir . '/' . $folder;

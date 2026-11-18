@@ -29,4 +29,5 @@ return [
     'theme.mapper_not_style' => 'Theme::mapStyles() očekává, že mapper vrátí Style, obdrželi jsme {type}',
     'theme.with_slot_not_style' => 'Theme::with(): „{slot}“ není pole Style; platná pole: {slots}',
     'fold.marker' => '▸ sbaleno',
+    'glamour.value_too_large' => 'theme {key} překračuje maximum {limit}',
 ];

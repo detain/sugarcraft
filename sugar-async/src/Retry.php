@@ -196,6 +196,18 @@ final class Retry
             } catch (\Throwable $e) {
                 $promise = \React\Promise\reject($e);
             }
+            // Same guard retryAttempt() uses: a non-promise is refused by name and
+            // is terminal (a caller bug redialled down the ladder only burns the
+            // budget). Without it, ->then() on a bare value is an Error raised
+            // inside a loop timer, where it escapes $loop->run().
+            if (!$promise instanceof PromiseInterface) {
+                $finish();
+                $deferred->reject(new \InvalidArgumentException(
+                    'Reconnect dial must return a promise; ' . get_debug_type($promise) . ' returned.',
+                ));
+
+                return;
+            }
             $pending = $promise;
             $promise->then(
                 static function (mixed $value) use (&$done, $deferred, $finish): void {
@@ -215,7 +227,9 @@ final class Retry
 
                         return;
                     }
-                    $delayMs = $backoff->forAttempt($n);
+                    // The ladder plateau retry() applies: an uncapped Backoff would
+                    // otherwise arm a redial timer days out. Reported clamped too.
+                    $delayMs = min($backoff->forAttempt($n), (int) (self::MAX_BACKOFF_SECONDS * 1000));
                     if ($onRetry !== null) {
                         try {
                             $onRetry($n, $delayMs, $failure);

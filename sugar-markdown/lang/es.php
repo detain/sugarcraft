@@ -29,4 +29,5 @@ return [
     'theme.mapper_not_style' => 'Theme::mapStyles() espera que el asignador devuelva un Style, se obtuvo {type}',
     'theme.with_slot_not_style' => 'Theme::with(): «{slot}» no es un slot Style; slots válidos: {slots}',
     'fold.marker' => '▸ plegado',
+    'glamour.value_too_large' => 'el tema {key} supera el máximo de {limit}',
 ];

@@ -13,6 +13,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\ExceptionMsg;
+use SugarCraft\Core\RawMsg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Program;
@@ -50,6 +51,15 @@ final class TimeoutProbeModel implements Model
         }
         if ($msg instanceof KeyMsg && $msg->rune === 'w') {
             return [$next, Cmd::windowSize()];
+        }
+        if ($msg instanceof KeyMsg && $msg->rune === 's') {
+            // A timed promise that owns its failure: the timeout must dispatch
+            // the mapped Msg, never the raw ExceptionMsg.
+            return [$next, static fn (): AsyncCmd => new AsyncCmd(
+                (new Deferred())->promise(),
+                0.05,
+                static fn (\Throwable $e): Msg => new KeyMsg(KeyType::Char, 'scoped'),
+            )];
         }
         return [$next, null];
     }
@@ -108,6 +118,62 @@ final class CmdPromiseTimeoutTest extends TestCase
         fclose($out);
     }
 
+    public function testATimeoutDispatchesTheOnFailureMsgInsteadOfTheRawExceptionMsg(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+        $program = new Program(new TimeoutProbeModel(), $this->options($in, $out, $loop));
+
+        $program->send(new KeyMsg(KeyType::Char, 's'));
+        $loop->addTimer(0.5, static fn () => $program->quit());
+        $loop->addTimer(2.0, static fn () => $loop->stop());
+        $final = $program->run();
+
+        $this->assertSame([], array_values(array_filter($final->seen, static fn ($m) => $m instanceof ExceptionMsg)));
+        $scoped = array_values(array_filter(
+            $final->seen,
+            static fn ($m) => $m instanceof KeyMsg && $m->rune === 'scoped',
+        ));
+        $this->assertCount(1, $scoped, 'the timeout must reach the model as the onFailure Msg');
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    public function testNonFrameOutputIsDroppedOnceTheBacklogSaturatesAndReportedOnce(): void
+    {
+        // A pipe whose reader never reads stalls for real: a unix socket pair
+        // accepts far more than the 8 MiB threshold before blocking, and
+        // php://memory never blocks at all. Raw output is 64 KiB per message.
+        [$in, , $writer] = $this->pipes();
+        $proc = proc_open(['sleep', '30'], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $procPipes);
+        $this->assertIsResource($proc);
+        [$out] = $procPipes;
+        $loop = new StreamSelectLoop();
+        $program = new Program(new TimeoutProbeModel(), $this->options($in, $out, $loop));
+
+        $chunk = str_repeat('x', 65536);
+        for ($i = 0; $i < 200; $i++) {
+            $program->send(new RawMsg($chunk));
+        }
+        $loop->addTimer(0.5, static fn () => $program->quit());
+        $loop->addTimer(2.0, static fn () => $loop->stop());
+        $final = $program->run();
+
+        $overflows = array_values(array_filter(
+            $final->seen,
+            static fn ($m) => $m instanceof ExceptionMsg && str_contains($m->exception->getMessage(), 'backlog is full'),
+        ));
+        $this->assertCount(1, $overflows, 'a saturated backlog reports exactly once per episode');
+        proc_terminate($proc);
+        foreach ($procPipes as $pipe) {
+            @fclose($pipe);
+        }
+        proc_close($proc);
+        fclose($writer);
+        fclose($in);
+    }
+
     public function testAPromiseThatSettlesInTimeDispatchesItsResultAndNoTimeout(): void
     {
         [$in, $out, $writer] = $this->pipes();
@@ -154,6 +220,28 @@ final class CmdPromiseTimeoutTest extends TestCase
         $async = (Cmd::promise($factory, 2.5))();
         $this->assertInstanceOf(AsyncCmd::class, $async);
         $this->assertSame(2.5, $async->timeoutSeconds);
+    }
+
+    public function testPromiseRefusesANonPositiveOrNonFiniteTimeoutAtTheCallSite(): void
+    {
+        // A zero or negative bound would reject real pending work on the next
+        // loop turn, so the factory refuses it where the value was computed.
+        $factory = static fn () => (new Deferred())->promise();
+        foreach ([0.0, -1.0, NAN, INF, -INF] as $bad) {
+            try {
+                Cmd::promise($factory, $bad);
+                $this->fail('a timeout of ' . var_export($bad, true) . ' must be refused');
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('timeout', $e->getMessage());
+            }
+        }
+    }
+
+    public function testPromiseAcceptsAPositiveTimeoutOrNoneAtAll(): void
+    {
+        $factory = static fn () => (new Deferred())->promise();
+        $this->assertNull((Cmd::promise($factory, null))()->timeoutSeconds);
+        $this->assertSame(0.001, (Cmd::promise($factory, 0.001))()->timeoutSeconds);
     }
 
     public function testWindowSizeCmdDispatchesTheForcedSize(): void

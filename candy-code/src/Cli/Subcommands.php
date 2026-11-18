@@ -33,6 +33,7 @@ use SugarCraft\Code\Bundles\MarketplaceRegistry;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\Keychain;
 use SugarCraft\Code\Support\ProcessContainment;
+use SugarCraft\Code\Support\ProjectRoot;
 use SugarCraft\Code\Support\ReservedSessionGrammar;
 use SugarCraft\Code\Session\Import\ImportFormat;
 use SugarCraft\Code\Session\Import\ImportRefusedException;
@@ -4062,9 +4063,10 @@ final class Subcommands
         $configured = Bootstrap::readUserConfig()[BundleDiscovery::SETTING_KEY] ?? [];
         $paths = \array_values(\array_filter(\is_array($configured) ? $configured : [], 'is_string'));
         // The same base `bundles install --project` writes to (`--root`, else the
-        // working directory): without it `list` scans `/.candy-code/bundles` and
-        // cannot see the bundle the install just placed.
-        $discovery = new BundleDiscovery((string) ($args->root ?? (\getcwd() ?: '')), $paths);
+        // working directory, resolved to its project root): without it `list`
+        // scans `/.candy-code/bundles` and cannot see the bundle the install
+        // just placed.
+        $discovery = new BundleDiscovery(ProjectRoot::resolve((string) ($args->root ?? (\getcwd() ?: ''))), $paths);
         $bundles = $discovery->discover();
 
         if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
@@ -4324,6 +4326,14 @@ final class Subcommands
             return NonInteractive::EXIT_FAILURE;
         }
 
+        $held = self::bundlesOtherTierHolder($args, $root, $name);
+        if ($held !== null) {
+            self::bundlesLine(Lang::t('cli.bundles.install.other_tier', ['name' => $name, 'path' => $held]));
+            self::removeTree($scratch);
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
         if (!@\rename($staged, $dest)) {
             // Cross-device or non-directory root: fall back to the same
             // copy used for path sources, then drop the scratch.
@@ -4357,13 +4367,18 @@ final class Subcommands
 
     /**
      * The `--project` install destination: `<root>/.candy-code/bundles`,
-     * where `<root>` is `--root` or the working directory — the same base
-     * {@see BundleDiscovery} reads the project tier from, so an install is
-     * listed by the very next `bundles list` in that directory. The operator
-     * typed the scope, so the directory is created on demand. A symlink in
-     * either segment is refused: the install writes through that path, and a
-     * checkout must not be able to steer the write out of its own tree.
-     * Prints its own refusal line and returns null when it refuses.
+     * where `<root>` is the project root {@see ProjectRoot} resolves `--root`
+     * or the working directory to — the same base {@see BundleDiscovery} and
+     * the launch read the project tier from, so an install is listed by the
+     * very next `bundles list` in that repository, from any subdirectory of it.
+     * The base is resolved, not taken raw: a raw subdirectory would get its own
+     * `.candy-code/` here, and {@see ProjectRoot} would then treat that
+     * subdirectory as the project, hiding the repository's settings and trust
+     * from every launch below it. The operator typed the scope, so the
+     * directory is created on demand. A symlink in either segment is refused:
+     * the install writes through that path, and a checkout must not be able to
+     * steer the write out of its own tree. Prints its own refusal line and
+     * returns null when it refuses.
      */
     private static function bundlesProjectRoot(ParsedArgs $args): ?string
     {
@@ -4374,7 +4389,22 @@ final class Subcommands
             return null;
         }
 
-        $base = \rtrim($base, '/');
+        $base = ProjectRoot::resolve(\rtrim($base, '/'));
+
+        // ProjectRoot answers the home directory itself when the launch sits
+        // there. Installing under it would write the user tier while the
+        // operator asked for the project tier, so refuse instead of collapsing.
+        // Compare against the NAMED home, not the owned one: an unowned home
+        // (world-writable, foreign uid) must still refuse, or the project-tier
+        // install lands in ~/.candy-code/bundles where the default verb refuses.
+        $home = HomeDirectory::resolved();
+        $realHome = $home === null ? false : realpath($home);
+        if ($realHome !== false && realpath($base) === $realHome) {
+            self::bundlesLine(Lang::t('cli.bundles.install.project_is_home', ['root' => $base]));
+
+            return null;
+        }
+
         $root = $base . '/.candy-code/bundles';
         $dotDir = \dirname($root);
 
@@ -4394,6 +4424,36 @@ final class Subcommands
     }
 
     /**
+     * The copy of {@see $name} that already sits in the OTHER owned bundle
+     * root, or null when that root holds none. The root being written is the
+     * user root when it resolves to the owned home's bundle directory; every
+     * other root is the project tier. Discovery lists both copies, and `bundles
+     * update` then refuses the name as ambiguous, with no verb to remove either
+     * one, so the install is refused here instead of creating the pair.
+     */
+    private static function bundlesOtherTierHolder(ParsedArgs $args, string $root, string $name): ?string
+    {
+        $home = HomeDirectory::owned();
+        $userRoot = $home === null ? null : $home . '/.candy-code/bundles';
+        $realRoot = realpath($root);
+        $writesUser = $userRoot !== null && $realRoot !== false && realpath($userRoot) === $realRoot;
+
+        $other = $writesUser ? self::bundlesExistingProjectRoot($args) : $userRoot;
+        if ($other === null) {
+            return null;
+        }
+
+        $realOther = realpath($other);
+        if ($realOther === false || $realOther === $realRoot) {
+            return null;
+        }
+
+        $held = $other . '/' . $name;
+
+        return \file_exists($held) ? $held : null;
+    }
+
+    /**
      * The project-tier bundle root `bundles update` may also walk: the same
      * `<root>/.candy-code/bundles` {@see bundlesProjectRoot()} installs into,
      * but read-only and silent. Null when there is no such directory or it is
@@ -4407,7 +4467,7 @@ final class Subcommands
             return null;
         }
 
-        $base = \rtrim($base, '/');
+        $base = ProjectRoot::resolve(\rtrim($base, '/'));
         $root = $base . '/.candy-code/bundles';
         $dotDir = \dirname($root);
 
@@ -5029,6 +5089,14 @@ final class Subcommands
             return NonInteractive::EXIT_FAILURE;
         }
 
+        $held = self::bundlesOtherTierHolder($args, $root, $name);
+        if ($held !== null) {
+            self::bundlesLine(Lang::t('cli.bundles.install.other_tier', ['name' => $name, 'path' => $held]));
+            self::removeTree($staged);
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
         if (!@\rename($staged, $dest)) {
             $fallback = self::copyBundleTree($staged, $dest);
 
@@ -5441,7 +5509,7 @@ final class Subcommands
      */
     private static function bundlesRecommend(ParsedArgs $args): int
     {
-        $root = (string) ($args->root ?? '') !== '' ? (string) $args->root : (string) \getcwd();
+        $root = ProjectRoot::resolve((string) ($args->root ?? '') !== '' ? (string) $args->root : (string) \getcwd());
         $registry = MarketplaceRegistry::loadDefault();
 
         foreach ($registry->loadErrors() as $error) {

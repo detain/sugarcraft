@@ -273,6 +273,37 @@ final class PathJailTest extends TestCase
         $this->assertNull(PathJail::resolveForCreate($this->root, $this->outside . '/new.txt'));
     }
 
+    public function testResolveForCreateRefusesADotDotAfterASymlinkedDirectory(): void
+    {
+        // Regression. `a` is a link to outside/x. The kernel resolves `a/..` to
+        // outside/, so `a/../escaped.txt` creates outside/escaped.txt. The lexical
+        // collapse used to approve root/escaped.txt, and the write escaped the root.
+        mkdir($this->base . '/outside/x', 0700);
+        $this->link($this->outside . '/x', $this->root . '/a');
+
+        $this->assertNull(PathJail::resolveForCreate($this->root, 'a/../escaped.txt'));
+        $this->assertFalse(file_exists($this->outside . '/escaped.txt'));
+    }
+
+    public function testResolveForCreateRefusesADotDotAfterASymlinkedPrefixNestedDeeper(): void
+    {
+        // The link sits one level down, and the `..` follows a real directory that
+        // only exists through the link. The check must walk every prefix, not
+        // just the component directly before the `..`.
+        mkdir($this->base . '/outside/x/b', 0700, true);
+        $this->link($this->outside . '/x', $this->root . '/sub/a');
+
+        $this->assertNull(PathJail::resolveForCreate($this->root, 'sub/a/b/../escaped.txt'));
+        $this->assertFalse(file_exists($this->outside . '/x/escaped.txt'));
+    }
+
+    public function testResolveForCreateStillCollapsesADotDotThroughARealDirectory(): void
+    {
+        // The guard refuses only `..` that crosses a symlink. An ordinary `..`
+        // through a real in-root directory is still collapsed to the in-root path.
+        $this->assertSame($this->root . '/new.txt', PathJail::resolveForCreate($this->root, 'sub/../new.txt'));
+    }
+
     // ------------------------------------------------------------- resolveDir()
 
     public function testResolveDirAcceptsAnExistingDirectoryInside(): void
@@ -322,6 +353,32 @@ final class PathJailTest extends TestCase
     public function testConfineRefusesANulByte(): void
     {
         $this->assertNull(PathJail::confine($this->root, "x\0y"));
+    }
+
+    public function testConfineRefusesADotDotAfterASymlinkedDirectory(): void
+    {
+        // Regression. confine() approves a write when resolveForCreate() does, so
+        // it must refuse the same symlink-then-`..` shape.
+        mkdir($this->base . '/outside/x', 0700);
+        $this->link($this->outside . '/x', $this->root . '/a');
+
+        $this->assertNull(PathJail::confine($this->root, 'a/../escaped.txt'));
+        $this->assertFalse(file_exists($this->outside . '/escaped.txt'));
+    }
+
+    public function testConfineRefusesADanglingLeafReachedThroughADotDotAfterASymlinkedDirectory(): void
+    {
+        // Regression. A dangling link is reached through `..` after a symlinked
+        // directory, so the lexical normalization sees a plain in-root name while
+        // the kernel follows the link. settle() must refuse the raw link itself.
+        mkdir($this->root . '/a/b/c', 0700, true);
+        $this->link($this->root . '/a/b/c', $this->root . '/s');
+        $this->link($this->outside . '/new.txt', $this->root . '/a/b/dl');
+
+        $this->assertNull(PathJail::confine($this->root, 's/../dl'));
+        $this->assertNull(PathJail::resolve($this->root, 's/../dl'));
+        $this->assertNull(PathJail::resolveForCreate($this->root, 's/../dl'));
+        $this->assertFalse(file_exists($this->outside . '/new.txt'));
     }
 
     // ------------------------------------------------------------ within() / below()
@@ -434,5 +491,87 @@ final class PathJailTest extends TestCase
         $this->assertFalse(PathJail::within("{$this->root}/inside.txt\0", $this->root));
         $this->assertFalse(PathJail::within($this->root, "{$this->root}\0"));
         $this->assertFalse(PathJail::below("{$this->root}/sub\0", $this->root));
+    }
+
+    public function testMissingPathWalkIsRefusedOnWindowsAndAllowedOnPosix(): void
+    {
+        // Regression. On Windows the lexical walk built `/C:\ws/new.txt` and
+        // answered null for every new file under a drive root. Until a
+        // drive-aware walk is tested on Windows, the walk is refused there. The
+        // Windows branch cannot run on POSIX, so the separator seam stands in.
+        $method = new \ReflectionMethod(PathJail::class, 'lexicalWalkSupported');
+        $this->assertTrue($method->invoke(null, '/'));
+        $this->assertFalse($method->invoke(null, '\\'));
+    }
+
+    /**
+     * Containment must treat a direct child, a nested entry and the root the
+     * same way for each platform separator. The Windows rows run on POSIX
+     * through the separator seam, because realpath() there answers backslashes.
+     *
+     * @return iterable<string, array{string, string, string, bool}>
+     */
+    public static function boundaryRows(): iterable
+    {
+        yield 'posix direct child' => ['/ws/a.txt', '/ws', '/', true];
+        yield 'posix nested' => ['/ws/sub/a.txt', '/ws', '/', true];
+        yield 'posix root itself' => ['/ws', '/ws', '/', true];
+        yield 'posix sibling sharing a prefix' => ['/wsx/a.txt', '/ws', '/', false];
+        yield 'posix backslash in a name is not a boundary' => ['/ws\\evil', '/ws', '/', false];
+        yield 'windows direct child' => ['C:\\ws\\a.txt', 'C:\\ws', '\\', true];
+        yield 'windows nested' => ['C:\\ws\\sub\\a.txt', 'C:\\ws', '\\', true];
+        yield 'windows root itself' => ['C:\\ws', 'C:\\ws', '\\', true];
+        yield 'windows sibling sharing a prefix' => ['C:\\wsx\\a.txt', 'C:\\ws', '\\', false];
+        yield 'windows drive root' => ['C:\\Windows', 'C:\\', '\\', true];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('boundaryRows')]
+    public function testContainmentIsTheSameForDirectAndNestedEntries(string $candidate, string $root, string $separator, bool $inside): void
+    {
+        $method = new \ReflectionMethod(PathJail::class, 'insideBeneath');
+        $this->assertSame($inside, $method->invoke(null, $candidate, $root, $separator));
+    }
+
+    /**
+     * within() and below() judge canonical paths by the same separator rule as
+     * resolve(). Windows rows run through the separator seam on POSIX.
+     *
+     * @return iterable<string, array{string, string, string, bool, bool}>
+     */
+    public static function relationRows(): iterable
+    {
+        // [canonical path, canonical boundary, separator, exactCounts, expected]
+        yield 'posix within child' => ['/ws/a.txt', '/ws', '/', true, true];
+        yield 'posix within boundary' => ['/ws', '/ws', '/', true, true];
+        yield 'posix below boundary refused' => ['/ws', '/ws', '/', false, false];
+        yield 'posix below child' => ['/ws/a.txt', '/ws', '/', false, true];
+        yield 'posix sibling prefix' => ['/wsx/a.txt', '/ws', '/', true, false];
+        yield 'windows within child' => ['C:\\ws\\a.txt', 'C:\\ws', '\\', true, true];
+        yield 'windows within nested' => ['C:\\ws\\sub\\a.txt', 'C:\\ws', '\\', true, true];
+        yield 'windows within boundary' => ['C:\\ws', 'C:\\ws', '\\', true, true];
+        yield 'windows below child' => ['C:\\ws\\a.txt', 'C:\\ws', '\\', false, true];
+        yield 'windows below boundary refused' => ['C:\\ws', 'C:\\ws', '\\', false, false];
+        yield 'windows sibling prefix' => ['C:\\wsx\\a.txt', 'C:\\ws', '\\', true, false];
+        yield 'windows drive root contains entry' => ['C:\\Windows', 'C:\\', '\\', false, true];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('relationRows')]
+    public function testWithinAndBelowUseThePlatformSeparator(string $path, string $boundary, string $separator, bool $exactCounts, bool $expected): void
+    {
+        $method = new \ReflectionMethod(PathJail::class, 'relation');
+        $this->assertSame($expected, $method->invoke(null, $path, $boundary, $exactCounts, $separator));
+    }
+
+    public function testEveryMethodRefusesAnEmptyPathTheSameWay(): void
+    {
+        // Regression. resolveDir() and confine() answered '' with the root, while
+        // resolve() and resolveForCreate() refused it. A preview built on confine()
+        // then treated '' as a write target at the root.
+        $this->assertNull(PathJail::resolve($this->root, ''));
+        $this->assertNull(PathJail::resolveForCreate($this->root, ''));
+        $this->assertNull(PathJail::resolveDir($this->root, ''));
+        $this->assertNull(PathJail::confine($this->root, ''));
+        $this->assertFalse(PathJail::within('', $this->root));
+        $this->assertFalse(PathJail::below('', $this->root));
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Video\Render;
 
+use SugarCraft\Image\GraphicsFrameSession;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Dither;
 use SugarCraft\Image\Renderer\Iterm2Renderer;
@@ -24,7 +25,8 @@ use SugarCraft\Video\Decode\RgbFrame;
  * Protocol choice per frame:
  *   - **iTerm2 / Kitty**: the PNG is base64'd straight into the protocol envelope
  *     — no per-pixel PHP work, the terminal does the scaling. Full resolution,
- *     essentially free per frame.
+ *     essentially free per frame. Kitty frames carry image ids and the previous
+ *     frame is deleted once the new one is drawn (see {@see GraphicsFrameSession}).
  *   - **Sixel**: the pure-PHP {@see SixelRenderer} — this path spawns no
  *     external binary (the former external-encoder preference was retired
  *     once `candy-image` shipped as the chafa frontend; see the README for
@@ -64,8 +66,105 @@ final class GraphicsRenderer implements FrameRenderer
         $cellsW = max(1, (int) round($frame->w / $this->cellPxW));
         $cellsH = max(1, (int) round($frame->h / $this->cellPxH));
 
-        return $this->delegate()->render($source, $cellsW, $cellsH);
+        // Emitted once, ahead of the first frame, and only after a Player rebuild
+        // (see carryingFrom()); the terminal processes it in the same write as the draw.
+        // Spent only once the bytes exist: a draw that throws must leave the
+        // predecessor's delete owed to the next render, not lose it for good.
+        $residue = $this->residue;
+
+        $delegate = $this->delegate();
+        if ($delegate->supportsIdDelete()) {
+            // Kitty: draw each frame under an alternating image id and retire the
+            // previous one, so playback does not leave one image in the terminal's
+            // store per frame. The session lives as long as this renderer; the
+            // Player hands the last id to the successor when it rebuilds.
+            $this->session ??= GraphicsFrameSession::new($delegate)->withImageId(self::allocateImageBase());
+
+            $bytes = $residue . $this->session->present($source, $cellsW, $cellsH);
+        } else {
+            $bytes = $residue . $delegate->render($source, $cellsW, $cellsH);
+        }
+
+        $this->residue = '';
+
+        return $bytes;
     }
+
+    /**
+     * Successor for a Player rebuild (resize, mode cycle): the same geometry,
+     * with the outgoing renderer's last drawn Kitty frame retired ahead of this
+     * one's first draw. Without it the new session starts at frame zero and never
+     * deletes the frame the old session left in the terminal's image store.
+     */
+    public function carryingFrom(self $previous): self
+    {
+        $next = new self($this->mode, $this->cellPxW, $this->cellPxH);
+        $next->residue = $previous->retirement();
+
+        return $next;
+    }
+
+    /**
+     * Escape bytes this renderer still owes the terminal: the delete of the frame it
+     * drew last, or a predecessor's residue it has not yet written (a second rebuild
+     * before any render). '' when neither exists or the backend cannot delete by id.
+     *
+     * Public so a Player can retire a Kitty frame when a mode cycle hands the
+     * terminal to a text renderer, which cannot consume the residue itself.
+     */
+    public function retirement(): string
+    {
+        if ($this->session === null || $this->session->frameCount() === 0) {
+            return $this->residue;
+        }
+
+        $delegate = $this->delegate();
+        if (!$delegate->supportsIdDelete()) {
+            return '';
+        }
+
+        $last = $this->session->imageId + (($this->session->frameCount() - 1) % 2);
+
+        return $delegate->delete((string) $last);
+    }
+
+    /**
+     * Kitty image ids are per terminal, not per renderer. Every session takes a
+     * fresh pair (its double buffer) from this process-wide allocator, so two video
+     * Players on one terminal never draw or delete each other's frames.
+     *
+     * The range sits at 2^30 and starts at a random even offset: a bare sugar-image
+     * caller (AnimationDriver defaults to id 1) cannot land on a video pair, and two
+     * video processes sharing a terminal are unlikely to start on the same pair.
+     */
+    private const IMAGE_ID_FLOOR = 0x4000_0000;
+
+    /** Largest base whose pair (base, base + 1) still fits Kitty's 32-bit id. */
+    private const IMAGE_ID_CEILING = 0xFFFF_FFFE;
+
+    private static ?int $nextImageBase = null;
+
+    private static function allocateImageBase(): int
+    {
+        $base = self::$nextImageBase
+            ?? (self::IMAGE_ID_FLOOR + (random_int(0, 0x0FFF_FFFF) & ~1));
+
+        self::$nextImageBase = $base >= self::IMAGE_ID_CEILING ? self::IMAGE_ID_FLOOR : $base + 2;
+
+        return $base;
+    }
+
+    /**
+     * Delete sequence owed to the terminal from a predecessor renderer; consumed by
+     * the next render().
+     */
+    private string $residue = '';
+
+    /**
+     * Frame-to-frame id rotation for id-addressable backends (Kitty). Null for
+     * the others, which never retire a frame.
+     */
+    private ?GraphicsFrameSession $session = null;
 
     /**
      * Build an ImageSource from the frame without a needless re-encode: a PNG

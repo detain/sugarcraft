@@ -173,10 +173,18 @@ under **Status → Terminal recovery**. Set it to `false` only when you take
 ownership of terminal restoration on bailout paths yourself; the explicit
 pre-arm `Program::armTerminalRelease()` remains honored regardless of the flag.
 
+`escapeDelay` (default `0.05` seconds, `withEscapeDelay()` on the builder) is
+the settling window after a lone ESC byte before it is reported as the
+standalone Escape key. Raise it for slow SSH or multiplexer links that split
+escape sequences; lower it for a snappier Esc. `0` disables the window, and a
+negative or non-finite value is refused with `\InvalidArgumentException`.
+
 For code that assembles options incrementally there is
 `SugarCraft\Core\ProgramOptions\ProgramOptionsBuilder` — a fluent mirror
-of the same 24 options (`withFramerate()`, `withUseAltScreen()`,
-`withMouseMode()`, `withInlineMode()`, …); `build()` returns the
+of the same 27 options (`withFramerate()`, `withUseAltScreen()`,
+`withMouseMode()`, `withInlineMode()`, `withEscapeDelay()`, …; the two
+deprecated double-negative aliases `withWithoutRenderer()` and
+`withWithoutSignalHandler()` are kept for BC only); `build()` returns the
 `ProgramOptions` and performs no validation beyond the types:
 
 ```php
@@ -276,7 +284,7 @@ library's full surface.
 | `TERM` | `Util\ColorProfile::detect()` | falls through to the `Ascii` tier |
 | `COLORTERM` | `Util\ColorProfile::detect()` | no early TrueColor bail |
 | `TERM_PROGRAM` | `Util\ColorProfile::detect()`, `Util\Tty\EnvDetect` (mintty), `Util\Clipboard` (backend plan) | no known-terminal match |
-| `NO_COLOR` | `Util\ColorProfile::detect()` | colour stays enabled |
+| `NO_COLOR` | `Util\ColorProfile::detect()` | colour stays enabled; a force variable (`FORCE_COLOR`, `CLICOLOR_FORCE`) outranks it when sugar-colorprofile is installed |
 | `CLICOLOR` | `Util\ColorProfile::detect()` (`CLICOLOR=0` opts out of colour) | no opt-out signal |
 | `CLICOLOR_FORCE` | `Util\ColorProfile::detect()` | no force (truthy = non-empty, not `0`, not `false`) |
 | `FORCE_COLOR` | `Util\ColorProfile::detect()` | no force |
@@ -297,9 +305,16 @@ delegates to its `DetectionChain` (guarded by `class_exists`, no `require`
 cycle; `sugar-colorprofile` is a `suggest`). Without it there is no local
 ladder (P1-10a deleted it): every terminal answers `Ascii`, and the
 `Util\ColorProfile` enum is `@deprecated`. With the chain installed, its
-answers differ from the old ladder in three corners:
+answers differ from the old ladder in four corners:
 `TERM=dumb` on a non-TTY is `Ascii` (was `NoTty`), `FORCE_COLOR=1` is `Ansi`
-(was `TrueColor`), and `CI=true` without `TERM` is `Ascii` (was `Ansi`).
+(was `TrueColor`), `CI=true` without `TERM` is `Ascii` (was `Ansi`), and a
+force variable now outranks `NO_COLOR`: `NO_COLOR=1 FORCE_COLOR=1` is `Ansi`
+(was `Ascii`) and `NO_COLOR=1 CLICOLOR_FORCE=1` is `TrueColor` (was `Ascii`).
+The old ladder let `NO_COLOR` win. The chain's order is the house order
+(`CLICOLOR_FORCE`/`FORCE_COLOR` are active overrides, `NO_COLOR` a passive
+preference), so a child process that inherits `FORCE_COLOR=1` gets colour even
+when the parent exported `NO_COLOR=1`. This is declared here, not only in the
+sugar-cli README.
 `SugarCraft\Colorprofile\ColorProfile::fromCore()` / `toCore()` bridge the
 two enums. Tests that depend on an answer must pin the env explicitly.
 | `PATH` | `Util\Executable\Locator` (the search path `locate()` walks, after any `$extraPath` argument) | empty — nothing is found unless the caller passed `$extraPath` |
@@ -440,9 +455,9 @@ line-end normalisation and renders bidi/zero-width characters as visible
 - **`Renderer`** — line-diff full-screen renderer by default (repaints only changed rows inside a DEC 2026 synchronized-output update); pass `cellDiffRenderer: true` for the per-cell "cursed" diff. Both are implemented; there is no plain full-repaint mode. `synchronizedOutput: false` drops the DEC 2026 wrap for a terminal that never advertised it (dumb terminals would print the raw sequences).
 - **`Util/`** — `Ansi`, `Color`, `ColorProfile`, `Width`, `Tty`, `TtyDetect`, `RawMode`, `Sanitize`, `Open` foundation utilities, shared with SugarStyle. `RawMode::enable($stream)` / `RawMode::disable($stream)` is the portable `stty`-based raw-mode toggle for the controlling terminal — a safe no-op on non-tty streams.
 - **`KeyBindings`** (in `Keys/`) — immutable action→tokens key registry. Named actions each own a lowercase token set; `matches(KeyMsg, id)` answers "does this press actuate that action" (press-only, case-folded; both space wire shapes normalize to `space`), `withOverride(id, ...tokens)` returns a new registry, and `label(id)` renders the display column from the same map. The runtime does **not** consult it: `Program`/`Renderer` dispatch raw keys to the model, so the registry is consumer-side — an app that wants action indirection and remap-safe help builds its dispatch on it, and one map then serves both. (Wiring it into the runtime itself is an open design question, not a defect.) Modifier chords are a declared non-goal (bare letters match as they always did).
-- **`Writer`** — the ordered byte sink `Program`, its `Renderer` and each `WorkerPool` worker's stdin write through. Unattached it writes synchronously (bounded by a deadline). Attached to a loop (`Program` does this for the life of `run()`) it never blocks: bytes the stream refuses wait in one ordered backlog that drains on writability, and `isSaturated()` tells the producer to hold the next frame. Nothing queued is dropped.
+- **`Writer`** — the ordered byte sink `Program`, its `Renderer` and each `WorkerPool` worker's stdin write through. Unattached it writes synchronously (bounded by a deadline). Attached to a loop (`Program` does this for the life of `run()`) it never blocks: bytes the stream refuses wait in one ordered backlog that drains on writability, and `isSaturated()` tells the producer to hold the next frame. A queued frame is never superseded. Non-frame output (`Cmd::raw()`, `Cmd::println()`) has no hold, so once the backlog reaches the 8 MiB threshold `Program` drops those bytes and surfaces one `ExceptionMsg`; the backlog therefore stays near the threshold instead of growing with output volume, and reporting re-arms once it drains. The backlog is discarded only on a dead stream, on `release()`, or when a `detach()`/`flush()` misses its deadline (teardown bytes can be lost then).
 - **`Semaphore`** (in `Util/`) — bounded-concurrency permit pool over ReactPHP promises: `Semaphore::new(6)->run(fn() => fetch($url))` caps in-flight work, parks the rest FIFO, and returns each permit when its promise settles. Share one pool across every component touching the same scarce resource, and `close()` it when the owner is retired so parked waiters fail (with `SemaphoreClosedException`) instead of pending. Distinct from `WorkerPool` (subprocess concurrency) — see its docblock.
-- **`LruMap`** (in `Util/`) — fixed-capacity least-recently-used map: `get()` promotes, `peek()` reads without disturbing recency, `put()` evicts the longest-unused entry past the cap, `evictions()` reports how often that happened, and an optional `maxCapacity` growth guard caps `resize()`. Iterates most-recently-used first; `keys()` is the string-safe key view. `withTtl($seconds)` returns a snapshot whose entries expire that long after their last `put()`; expiry is not counted in `evictions()`.
+- **`LruMap`** (in `Util/`) — fixed-capacity least-recently-used map: `get()` promotes, `peek()` reads without disturbing recency, `put()` evicts the longest-unused entry past the cap, `evictions()` reports how often that happened, and an optional `maxCapacity` growth guard caps `resize()`. Iterates most-recently-used first; `keys()` is the string-safe key view. `withTtl($seconds)` returns a snapshot whose entries expire that long after their last `put()`, except that entries already held when `withTtl()` is called are stamped as freshly written at that moment, so their lifetime restarts there; later `put()` calls restart it again. Expiry is not counted in `evictions()`.
 - **`Util\Proc\BoundedShutdown`** — the child teardown ladder (SIGTERM, bounded wait, literal signal 9, bounded wait, then the reap). `terminateBounded()` and `escalate()` run it on a blocking poll; `terminateBoundedAsync($loop, ...)` and `escalateAsync($loop, ...)` run the same rungs on loop timers, so a wedged child costs the loop nothing while it waits. The async reap reports the exit status captured from the poll that saw the exit. A child that survives signal 9 within its budget is never reaped with a blocking `proc_close()`: `reapWhenExited($loop, ...)` polls it on a loop timer and reaps it the tick it is gone, so the loop stays live for the whole wait.
 - **`LockFile`** (in `Util/`) — cross-process advisory lock with a bounded wait and a stale-holder sweep. `tryAcquire($s)` blocks, `tryAcquireAsync($loop, $s)` returns a promise for the same attempt on a ReactPHP loop timer, and `acquire($s)` throws on timeout.
 - **`Sanitize`** (in `Util/`) — the fleet's untrusted-string vocabulary; the contract and the method-by-method list live in [Security and the trust boundary](#security-and-the-trust-boundary).
@@ -655,7 +670,7 @@ the cut.
 
 - **Foundation utilities**: 🟢 complete.
 - **Runtime**: 🟢
-  - **Event loop + rendering**: Program loop with mouse (cell-motion + all-motion + SGR 1006), focus / blur, bracketed paste, and function keys F1–F35 reachable (legacy SS3 and CSI `~` cover F1–F12; the Kitty PUA functional-key range extends to F35 — the F36–F63 enum cases exist for upstream value-space parity but carry no decoder input path). The cell-diff "cursed" renderer and inline-mode rendering, declarative `View` struct, with synchronized output (DEC 2026) wrapping **every** renderer frame in every mode; Unicode mode (DEC 2027) is a separate `unicodeMode` startup option, not a cell-diff feature.
+  - **Event loop + rendering**: Program loop with mouse (cell-motion + all-motion + SGR 1006), focus / blur, bracketed paste, and function keys F1–F35 reachable (legacy SS3 covers F1–F4 and CSI `~` covers F1–F24; the Kitty PUA functional-key range extends to F35 — the F36–F63 enum cases exist for upstream value-space parity but carry no decoder input path). The cell-diff "cursed" renderer and inline-mode rendering, declarative `View` struct, with synchronized output (DEC 2026) wrapping **every** renderer frame in every mode; Unicode mode (DEC 2027) is a separate `unicodeMode` startup option, not a cell-diff feature.
   - **Cmd surface**: `Suspend` / `Interrupt` / `Exec` / `Sequence` / `Every` / `Printf` / `Raw` and more — full factory index under **Composing Cmds**. A resume is deliberately not a Cmd: SIGCONT dispatches a `ResumeMsg` from the runtime.
   - **Program control methods**: `wait()` blocks until the loop has stopped — with `run()` itself blocking in PHP, it serves as a "no longer running" status query. `kill()` hard-stops synchronously (loop down, terminal torn down, the model is *not* notified — unlike `quit()`, which routes through `QuitMsg` and lets the model react). `releaseTerminal()` hands the tty back in cooked/line-buffered state so an `$EDITOR`-style external command can run without fighting the renderer for raw-mode keys; `restoreTerminal()` completes that handoff — re-entering alt screen / raw mode / mouse / paste / focus exactly as startup did, then triggering a full repaint on the next tick.
   - **Upstream levers not ported** (dated 2026-11-13): bubbletea's `WithReporter` metrics hook and `WithSignalHandler` handler-replacement option have no sugar-core counterpart — signal installation is the built-in SIGINT/SIGTERM/SIGHUP/SIGWINCH/SIGTSTP/SIGCONT set behind `withoutSignalHandler`, and observability rides the injected logger. `Program.Techo` is likewise unported: raw side-channel output outside the diff state is intentionally the `Cmd::raw()` + `Program::forceRepaint()` pair.

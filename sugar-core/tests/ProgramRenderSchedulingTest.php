@@ -11,6 +11,7 @@ use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Core\Tests\Support\BigFrameModel;
 use SugarCraft\Core\Tests\Support\BumpMsg;
+use SugarCraft\Core\Tests\Support\SaturatingFrameModel;
 use SugarCraft\Core\Tests\Support\CountingModel;
 use SugarCraft\Core\Writer;
 
@@ -225,5 +226,78 @@ final class ProgramRenderSchedulingTest extends TestCase
         self::assertTrue($fired, 'a timer fired while the output was stalled');
         self::assertGreaterThan(0, $pending, 'the frame was queued, not written into the full pipe');
         self::assertLessThan(5.0, $elapsed, 'teardown is bounded once the reader is gone');
+    }
+
+    public function testASaturatedWriterHoldsTheFrameAndPaintsOnceTheBacklogDrains(): void
+    {
+        if (!function_exists('socket_import_stream')) {
+            self::markTestSkipped('ext-sockets is needed to pin SO_SNDBUF on the output end');
+        }
+        [$input] = $this->pair();
+        [$output, $reader] = $this->pair();
+        $sock = socket_import_stream($output);
+        self::assertNotFalse($sock);
+        self::assertTrue(socket_set_option($sock, SOL_SOCKET, SO_SNDBUF, 8192));
+        $loop = new StreamSelectLoop();
+        SaturatingFrameModel::$views = 0;
+        $program = $this->program(new SaturatingFrameModel(), $output, $input, $loop);
+        $writer = (new \ReflectionProperty(Program::class, 'writer'))->getValue($program);
+        self::assertInstanceOf(Writer::class, $writer);
+
+        // Twelve dirtying messages, each a ~1 MiB frame, while nothing reads.
+        for ($i = 0; $i < 12; $i++) {
+            $loop->addTimer(0.05 + $i * 0.02, static function () use ($program): void {
+                $program->send(new BumpMsg());
+            });
+        }
+        $stalledViews = -1;
+        $saturatedWhileStalled = false;
+        $heldViews = -1;
+        $drained = 0;
+        $loop->addTimer(0.6, static function () use (&$stalledViews, &$saturatedWhileStalled, $writer): void {
+            $stalledViews = SaturatingFrameModel::$views;
+            $saturatedWhileStalled = $writer->isSaturated();
+        });
+        // Still stalled: no new paint while the writer is saturated.
+        $loop->addTimer(0.7, static function () use (&$heldViews, $reader, $loop, &$drained): void {
+            $heldViews = SaturatingFrameModel::$views;
+            stream_set_blocking($reader, false);
+            // Reading frees the pipe; the writer's own write watcher drains the backlog.
+            $loop->addPeriodicTimer(0.01, static function () use ($reader, &$drained): void {
+                while (($chunk = fread($reader, 1 << 20)) !== false && $chunk !== '') {
+                    $drained++;
+                }
+            });
+        });
+        // Nothing sends a message after the stall, so a later paint can only come
+        // from the held frame being re-armed when the backlog clears.
+        // The repaint lands on a tick after the queue empties, so quitting on the
+        // empty queue alone races it under load. Quit once the held frame has
+        // painted, or after a grace period that still fails the assertion below.
+        $quitDeadline = null;
+        $quit = static function () use (&$quit, &$drained, &$quitDeadline, &$heldViews, $program, $loop, $writer, $reader): void {
+            // Empty the pipe so teardown's last writes cannot block on a full socket.
+            while (($chunk = fread($reader, 1 << 20)) !== false && $chunk !== '') {
+                $drained++;
+            }
+            if ($writer->pendingBytes() > 0) {
+                $loop->addTimer(0.01, $quit);
+                return;
+            }
+            $quitDeadline ??= microtime(true) + 2.0;
+            if (SaturatingFrameModel::$views <= $heldViews && microtime(true) < $quitDeadline) {
+                $loop->addTimer(0.01, $quit);
+                return;
+            }
+            $program->quit();
+        };
+        $loop->addTimer(1.0, $quit);
+
+        $program->run();
+
+        self::assertTrue($saturatedWhileStalled, 'the stalled reader saturated the writer');
+        self::assertSame($stalledViews, $heldViews, 'a saturated writer holds the frame: no paint while stalled');
+        self::assertGreaterThan($heldViews, SaturatingFrameModel::$views, 'the held frame paints once the backlog drains');
+        self::assertGreaterThan(0, $drained, 'the reader drained the queued output');
     }
 }

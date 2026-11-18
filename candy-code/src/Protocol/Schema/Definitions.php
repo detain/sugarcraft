@@ -94,7 +94,7 @@ final class Definitions
                 // say so once closed — that is the point).
                 'archived' => Schema::boolean(),
                 'ephemeral' => Schema::boolean(),
-                'root' => Schema::string()->describe('Set by the serve gateway on a session another project root\'s workspace host answered for (roadmap O-7).'),
+                'root' => Schema::string()->describe('Set by the serve gateway on a session another project root\'s workspace host answered for.'),
             ], ['id', 'open', 'status']),
             self::PENDING_ASK => Schema::object([
                 'askId' => Schema::string(16),
@@ -195,7 +195,7 @@ final class Definitions
                 'turnId' => Schema::string(),
                 'durable' => Schema::boolean(),
                 'data' => Schema::map(Schema::any()),
-                'root' => Schema::string()->describe('Set by the serve gateway on an event relayed from another project root\'s workspace host (roadmap O-7).'),
+                'root' => Schema::string()->describe('Set by the serve gateway on an event relayed from another project root\'s workspace host.'),
             ], ['sessionId', 'type', 'ts', 'durable', 'data']),
             self::ERROR => Schema::object([
                 'code' => Schema::integer(),
@@ -361,7 +361,7 @@ final class Definitions
                             'personal' => Schema::boolean()->describe('True when the document came from the personal tier.'),
                             'note' => Schema::string()->nullable()->describe('Replaces the figures with the reason there are none (the never-sent MCP instructions row).'),
                         ], ['label', 'tokens', 'bytes', 'personal', 'note'])),
-                    ], ['key', 'label', 'tokens', 'share', 'sub']))->describe('The `/context` `By category` block (roadmap P-CTX.a / P-CTX.f): every measured token attributed by owner. Summing law — all rows except `autocompact-buffer` and `free-space` equal `window` less the reservation and what is left; content + buffer + free-space is the window.'),
+                    ], ['key', 'label', 'tokens', 'share', 'sub']))->describe('The `/context` `By category` block: every measured token attributed by owner. Summing law — all rows except `autocompact-buffer` and `free-space` equal `window` less the reservation and what is left; content + buffer + free-space is the window.'),
                     'buffer' => Schema::integer(0)->nullable()->describe('The autocompact reservation — room between where background compaction fires and the window end; 0 when compaction is off, null when this session reports no compaction config.'),
                     'mcpServers' => Schema::arrayOf(Schema::object([
                         'name' => Schema::string(),

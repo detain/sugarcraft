@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Dashboard\Tests\Module;
 
 use PHPUnit\Framework\TestCase;
+use React\EventLoop\StreamSelectLoop;
+use SugarCraft\Async\Await;
 use SugarCraft\Dashboard\Module\BoundedCommand;
 
 /**
@@ -56,6 +58,18 @@ final class BoundedCommandTest extends TestCase
         $this->assertSame(
             ['output' => '', 'failure' => 'Command failed (exit 3)'],
             BoundedCommand::run(self::php('exit(3);')),
+        );
+    }
+
+    /**
+     * A child killed by a signal has no exit code; its failure must still be
+     * named, or a crashed command renders as a silent success.
+     */
+    public function testSignalDeathIsNamedAsAFailure(): void
+    {
+        $this->assertSame(
+            ['output' => '', 'failure' => 'Command failed (exit -1)'],
+            BoundedCommand::run(['sh', '-c', 'kill -9 $$']),
         );
     }
 
@@ -125,5 +139,65 @@ final class BoundedCommandTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
 
         BoundedCommand::run(self::php('exit(0);'), BoundedCommand::DEFAULT_TIMEOUT_SECONDS, -1);
+    }
+
+    public function testRunAsyncResolvesWithTheSameOutcomeAsRun(): void
+    {
+        $loop = new StreamSelectLoop();
+
+        $outcome = Await::until(BoundedCommand::runAsync($loop, self::php('echo "hi";')), 15.0, $loop);
+
+        $this->assertSame(['output' => 'hi', 'failure' => null], $outcome);
+    }
+
+    /**
+     * Regression: runAsync() reported a signal-killed child as success with no
+     * failure, because the async exit code was null. It must name the crash as
+     * run() does.
+     */
+    public function testRunAsyncNamesASignalDeathAsRunDoes(): void
+    {
+        $loop = new StreamSelectLoop();
+
+        $outcome = Await::until(BoundedCommand::runAsync($loop, ['sh', '-c', 'kill -9 $$']), 15.0, $loop);
+
+        $this->assertSame(BoundedCommand::run(['sh', '-c', 'kill -9 $$']), $outcome);
+        $this->assertSame(['output' => '', 'failure' => 'Command failed (exit -1)'], $outcome);
+    }
+
+    /**
+     * Regression: a tick that blocked on its child froze every timer on the
+     * loop for the child's whole deadline. The loop must keep ticking while the
+     * child is alive, and the child must still settle as timed out.
+     */
+    public function testRunAsyncKeepsTheLoopTickingWhileTheChildRuns(): void
+    {
+        $loop = new StreamSelectLoop();
+        $ticks = 0;
+        $timer = $loop->addPeriodicTimer(0.01, static function () use (&$ticks): void {
+            $ticks++;
+        });
+
+        $outcome = Await::until(BoundedCommand::runAsync($loop, self::php('sleep(5);'), 0.3), 15.0, $loop);
+        $loop->cancelTimer($timer);
+
+        $this->assertSame('Command timed out', $outcome['failure']);
+        $this->assertGreaterThanOrEqual(5, $ticks, 'the loop must keep ticking while the child is alive');
+    }
+
+    public function testRunAsyncNamesAnEmptyArgvWithoutTouchingTheLoop(): void
+    {
+        $loop = new StreamSelectLoop();
+
+        $outcome = Await::until(BoundedCommand::runAsync($loop, []), 5.0, $loop);
+
+        $this->assertSame(['output' => '', 'failure' => 'No command configured'], $outcome);
+    }
+
+    public function testRunAsyncRejectsANonPositiveTimeoutBeforeTheChildStarts(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        BoundedCommand::runAsync(new StreamSelectLoop(), self::php('exit(0);'), 0.0);
     }
 }

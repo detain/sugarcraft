@@ -114,6 +114,8 @@ final class Program
      * rides exit.
      */
     private bool $kittyKeyboardPushed = false;
+    /** True while a saturated backlog has already surfaced its overflow ExceptionMsg. */
+    private bool $outputOverflowReported = false;
     /**
      * True between a {@see setupTerminal()} that acquired the terminal and
      * the {@see teardownTerminal()} that releases it. Makes teardown
@@ -178,6 +180,14 @@ final class Program
     private ?bool $prevAsyncSignals = null;
     /** True once pcntl async signal delivery has been enabled (see installSignalHandlers()). */
     private bool $asyncSignals = false;
+    /**
+     * Fallback signal-dispatch pump, armed only while run() owns the loop and
+     * a signal arm exists that async delivery does not cover (see
+     * {@see armSignalPump()}). Null = not armed.
+     */
+    private mixed $signalPump = null;
+    /** True while run() owns the loop; gates {@see armSignalPump()}. */
+    private bool $signalPumpLive = false;
     /**
      * Sole-Resume latch (sugar-core-014): true from just before the real
      * SIGTSTP stop until the post-wake re-setup has completed, so a SIGCONT
@@ -585,7 +595,6 @@ final class Program
         // straight-line tail; teardownTerminal() is idempotent ($terminalAttached)
         // and releaseRuntime() clears the state it walks, so the normal return,
         // the early-quit return and the throw path share this single exit.
-        $tickTimer = null;
         $inputWatched = false;
         // M-14: the two `return $this->model;` sites below flip this before
         // the finally runs; a still-false flag means a Throwable is unwinding
@@ -636,14 +645,11 @@ final class Program
             // Render scheduling. There is no 60 Hz poll: markDirty() arms a
             // one-shot timer, capped at one frame interval after the last frame,
             // so an idle program wakes for input and timers only (rank 16).
-            // The periodic tick survives only as the fallback signal pump, for
-            // environments where async signal delivery is unavailable.
-            $tickInterval = 1.0 / max(1.0, $this->options->framerate);
-            if (!$this->asyncSignals && function_exists('pcntl_signal_dispatch')) {
-                $tickTimer = $this->loop->addPeriodicTimer($tickInterval, function (): void {
-                    pcntl_signal_dispatch();
-                });
-            }
+            // The periodic signal pump is the fallback for environments where
+            // async signal delivery is unavailable, and only while a signal arm
+            // actually needs it (see armSignalPump()).
+            $this->signalPumpLive = true;
+            $this->armSignalPump();
             $this->renderLive = true;
 
             // Paint the initial frame synchronously, before the loop starts, so the
@@ -679,9 +685,8 @@ final class Program
             $normalReturn = true;
             return $this->model;
         } finally {
-            if ($tickTimer !== null) {
-                $this->loop->cancelTimer($tickTimer);
-            }
+            $this->signalPumpLive = false;
+            $this->cancelSignalPump();
             $this->cancelRenderTimer();
             if ($inputWatched) {
                 $this->loop->removeReadStream($this->input);
@@ -735,8 +740,41 @@ final class Program
 
     private function onOutputDrained(): void
     {
+        $this->outputOverflowReported = false;
         if ($this->dirty && $this->renderLive && $this->renderTimer === null) {
             $this->armRender();
+        }
+    }
+
+    /**
+     * Arm the fallback signal pump when pcntl signals need polling: no async
+     * delivery, pcntl_signal_dispatch() available, and at least one program
+     * handler or signal subscription installed. An idle program with signal
+     * handling off (withoutSignalHandler / catchInterrupts false) therefore
+     * never wakes at the framerate. Idempotent; a signal arm installed while
+     * run() is live calls this again.
+     */
+    private function armSignalPump(): void
+    {
+        if (!$this->signalPumpLive
+            || $this->signalPump !== null
+            || $this->asyncSignals
+            || !function_exists('pcntl_signal_dispatch')
+            || ($this->prevProgramSignalHandlers === [] && $this->signalSubscriptions === [])
+        ) {
+            return;
+        }
+        $interval = 1.0 / max(1.0, $this->options->framerate);
+        $this->signalPump = $this->loop->addPeriodicTimer($interval, function (): void {
+            pcntl_signal_dispatch();
+        });
+    }
+
+    private function cancelSignalPump(): void
+    {
+        if ($this->signalPump !== null) {
+            $this->loop->cancelTimer($this->signalPump);
+            $this->signalPump = null;
         }
     }
 
@@ -1139,18 +1177,20 @@ final class Program
             // M-14: a whole-string kitty push/pop is the one side-channel
             // shape with terminal state the teardown must account for — it
             // arms and disarms the pop mirror, so an escaping Throwable still
-            // gets the pairing pop (see teardownTerminal()).
-            if (preg_match('/\A\x1b\[([><])(\d+)u\z/', $msg->bytes, $m)) {
+            // gets the pairing pop (see teardownTerminal()). The mirror follows
+            // only bytes that were queued: a dropped push or pop leaves the
+            // terminal in its old state, and the mirror must still match it.
+            $queued = $this->writeNonFrameOutput($msg->bytes);
+            if ($queued && preg_match('/\A\x1b\[([><])(\d+)u\z/', $msg->bytes, $m)) {
                 $this->kittyKeyboardPushed = $m[1] === '>';
             }
-            $this->writeOutput($msg->bytes);
             return;
         }
         if ($msg instanceof PrintMsg) {
             // Print above the program region. The renderer's diff state
             // is now stale, so reset it so the next render() repaints
             // every visible row.
-            $this->writeOutput($msg->text . "\n");
+            $this->writeNonFrameOutput($msg->text . "\n");
             $this->renderer->reset();
             $this->lastRenderedBody = null;
             $this->lastImageSignature = '';
@@ -1225,10 +1265,19 @@ final class Program
                 if ($resolvedMsg !== null) {
                     $this->dispatch($resolvedMsg);
                 }
-            })->otherwise(function (\Throwable $e) use ($generation): void {
+            })->otherwise(function (\Throwable $e) use ($generation, $msg): void {
                 if ($generation !== $this->runtimeGeneration) {
                     // Same law on the reject path: no log line, no ExceptionMsg,
                     // and crucially no user exception handler after teardown.
+                    return;
+                }
+                if ($msg->onFailure !== null) {
+                    // A producer that scopes its own failures (TabScope) owns the
+                    // rejection, timeouts included: its Msg replaces the raw
+                    // ExceptionMsg, and the user handler is skipped as it is for
+                    // every other scoped result.
+                    $this->log('error', 'async command failed: ' . $e->getMessage());
+                    $this->dispatch(($msg->onFailure)($e));
                     return;
                 }
                 // Surface the async failure as an ExceptionMsg (models can react /
@@ -1284,6 +1333,10 @@ final class Program
                 if ($cmd !== null) {
                     $this->scheduleCmd($cmd);
                 }
+                // A push or pop moves the active model, so the subscriptions
+                // of the new top (pushed screen, or the base on pop) must be
+                // reconciled now, not on the next unrelated Msg.
+                $this->reconcileWantedSubscriptions();
                 return;
             }
             // sugar-core-034 (RUN-9): a stack message reaching a root that does
@@ -2651,6 +2704,33 @@ final class Program
     }
 
     /**
+     * Write RawMsg / PrintMsg bytes. Frames are held by the saturation gate in
+     * {@see onRenderDue()}, but these producers are not, so they get a hard cap
+     * instead: once the backlog reaches the writer's threshold the bytes are
+     * dropped and one ExceptionMsg is surfaced per saturation episode. Without
+     * the cap a stalled reader grows the backlog with output volume until
+     * PHP's memory_limit fatals the process. Bytes already queued still drain,
+     * and {@see onOutputDrained()} re-arms the report once the backlog clears.
+     *
+     * Returns true only when the bytes were queued; callers whose bookkeeping
+     * mirrors terminal state must not record a dropped write.
+     */
+    private function writeNonFrameOutput(string $bytes): bool
+    {
+        if (!$this->writer->isSaturated()) {
+            $this->writeOutput($bytes);
+            return true;
+        }
+        if ($this->outputOverflowReported) {
+            return false;
+        }
+        $this->outputOverflowReported = true;
+        $this->log('error', Lang::t('program.output_backlog_full'));
+        $this->send(new ExceptionMsg(new \RuntimeException(Lang::t('program.output_backlog_full'))));
+        return false;
+    }
+
+    /**
      * Compare two progress states for equality.
      *
      * Null-asymmetry contract: both must be non-null to be considered
@@ -2791,6 +2871,7 @@ final class Program
                 : null;
         }
         pcntl_signal($signo, $handler);
+        $this->armSignalPump();
     }
 
     /**
@@ -2830,6 +2911,15 @@ final class Program
      * so a model that declares a tick must get it started without every
      * consumer having to hand-wire the closure. Models that don't subscribe
      * use the {@see SubscriptionCapable} trait and return null → empty set.
+     */
+    /**
+     * Not cached per model identity: the set is re-walked on every update
+     * cycle. A cache keyed on identity served stale subscriptions when a
+     * model's children changed without a new identity (commit 8093ee2d9, after
+     * a Codex P2 review), so the re-read is the correctness choice and the
+     * planned cache is dropped. The walk is O(nodes) per message; a deep tree at a high
+     * message rate is the cost to revisit with a per-update invalidation
+     * signal, not an identity key.
      */
     private function wantedSubscriptions(): ?Subscriptions
     {
@@ -2872,6 +2962,14 @@ final class Program
                 foreach ($node->panes() as $pane) {
                     $collect($pane->model);
                 }
+            } elseif ($node instanceof RootModelWithScreenStack
+                && $node->screens()->isEmpty()
+                && $node->currentModel !== null
+            ) {
+                // With no screen pushed the root is the active model, and its
+                // base layer is the live one: walk it, or its subscriptions
+                // never start (the root itself declares none).
+                $collect($node->currentModel);
             }
         };
         $collect($model);
@@ -3082,6 +3180,7 @@ final class Program
             });
         }
         $this->signalSubscriptions[$signo]['subs'][] = $sub;
+        $this->armSignalPump();
         return null;
     }
 

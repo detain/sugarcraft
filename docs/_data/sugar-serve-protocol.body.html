@@ -1,0 +1,49 @@
+<p class="lede" style="margin-top: 28px;">The wire contract for the <code>candy-code.v1</code> serve protocol, in one small package. Clients that talk to a running <code>candy-code serve</code> read the same discovery record, token file and WebSocket URL through it, so the rule lives in one place. <strong>It only reads:</strong> writing the token, creating the state directory and running the server stay with the host. First-party: original work, with no upstream Go port.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-serve-protocol</code></pre>
+
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\ServeProtocol\Auth\TokenFile;
+use SugarCraft\ServeProtocol\Discovery\StateDirReader;
+use SugarCraft\ServeProtocol\Url\WebsocketUrl;
+
+$dir = StateDirReader::existing('/home/me/.local/state/candy-code');
+$token = $dir === null ? null : TokenFile::read($dir);
+$url = WebsocketUrl::from('http://127.0.0.1:7420'); // "ws://127.0.0.1:7420/ws"</code></pre>
+
+    <h3 style="margin-top: 32px;">The laws</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Read side only</strong><span>Discovery, token and URL helpers read and normalise. A missing file answers null; an unreadable one throws, so a token is never silently replaced.</span></div>
+      <div class="feature"><strong>Private state</strong><span>A state directory that is a symbolic link, a file, the wrong owner or a mode other than 0700 is refused, not followed.</span></div>
+      <div class="feature"><strong>Bounded parsing</strong><span>Discovery records are decoded to a bounded depth and returned raw, so field-level checks stay with the host.</span></div>
+      <div class="feature"><strong>One envelope</strong><span>The serve wire uses the JSON-RPC 2.0 codec of <code>sugar-mcp-client</code>, so the serve wire and the MCP client share one envelope. That codec is a dev-only requirement of this package: install <code>sugarcraft/sugar-mcp-client</code> yourself to call <code>JsonRpc</code> from your own code.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Use it for</h3>
+    <ul>
+      <li><strong>Attaching to a running server</strong> — the TUI and the bundles that reach <code>candy-code serve</code>.</li>
+      <li><strong>Discovery tooling</strong> — anything that needs the server's URL or token without starting it.</li>
+    </ul>
+
+    <h3 style="margin-top: 40px;">Source</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-serve-protocol">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-serve-protocol/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-serve-protocol/blob/master/tests">Test suite</a></li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<caption>API surface</caption>
+<thead><tr><th scope="col">Class</th><th scope="col">Method</th><th scope="col">Description</th></tr></thead>
+<tr><td>Protocol</td><td>MAJOR, SUBPROTOCOL, AUTH_SUBPROTOCOL_PREFIX, MAX_SERVER_FRAME_BYTES, ASK_EXPIRY_SECONDS</td><td>The wire constants (<code>candy-code.v1</code>, 4 MiB frame cap, 1800 s ask expiry)</td></tr>
+<tr><td>WebsocketUrl</td><td>static from(string $address): ?string</td><td><code>http(s)</code> or <code>ws(s)</code> address to its <code>/ws</code> URL; null for anything else</td></tr>
+<tr><td>StateDirReader</td><td>static existing(string $path): ?string</td><td>An existing private state directory; null when absent; throws when present but not private</td></tr>
+<tr><td>DiscoveryRecordReader</td><td>static read(string $path): ?array</td><td>The raw <code>server.json</code> record; null when absent, a symbolic link, or not a JSON object</td></tr>
+<tr><td>TokenFile</td><td>static read(string $stateDir): ?string</td><td>The 64-hex bearer token; null when there is no usable token; throws when unreadable</td></tr>
+</table>
+  </div>
+</section>

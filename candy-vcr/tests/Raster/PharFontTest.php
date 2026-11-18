@@ -63,6 +63,7 @@ final class PharFontTest extends TestCase
         $phar = $this->buildFontPhar(alias: 'vcrfonts.phar');
         $loader = new FontLoader(['phar://' . $phar . '/fonts']);
 
+        /** @var string $path */
         $path = $loader->load('VcrPharMono', 14.0);
 
         self::assertStringStartsNotWith('phar://', $path, 'load() must never hand GD a phar:// path.');
@@ -84,12 +85,14 @@ final class PharFontTest extends TestCase
         // a running archive's path seen as /abs/app.phar/inner — no phar://
         // prefix. Capability-gated: this host's CLI resolves only the
         // explicit scheme, so the arm is pinned wherever translation exists.
+        /** @var non-empty-string $phar */
         $phar = $this->buildFontPhar(alias: null);
         if (!is_dir($phar . '/fonts')) {
             $this::markTestSkipped('host PHP does not translate implicit phar paths.');
         }
         $loader = new FontLoader([$phar . '/fonts']);
 
+        /** @var string $path */
         $path = $loader->load('VcrPharMono', 14.0);
 
         self::assertStringStartsNotWith($phar, $path, 'an archive-internal path must never reach GD');

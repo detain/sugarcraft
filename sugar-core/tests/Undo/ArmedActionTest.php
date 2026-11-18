@@ -72,6 +72,33 @@ final class ArmedActionTest extends TestCase
         $this->assertTrue(ArmedAction::new('delete', 'Удалить?', [], 'д')->confirms('д'));
     }
 
+    public function testACapitalisedLocaleWordConfirmsOnlyItsLowercaseKeystroke(): void
+    {
+        // Regression: new()'s docblock promised case-insensitive matching for a
+        // capitalised locale word. The word folds to `j`; the typed rune does not.
+        $armed = ArmedAction::new('delete', 'Löschen?', [], 'J');
+
+        $this->assertTrue($armed->confirms('j'));
+        $this->assertFalse($armed->confirms('J'));
+        $this->assertTrue($armed->confirms('y'));
+    }
+
+    public function testAMultiCharacterLocaleAffirmativeIsRefusedAtConstruction(): void
+    {
+        // Regression. A confirmation is one keystroke, so a word such as `ja` could
+        // never match, and every confirmation would cancel without any error.
+        $this->expectException(\InvalidArgumentException::class);
+
+        ArmedAction::new('delete', 'Delete 2 files?', [], 'ja');
+    }
+
+    public function testASingleCharacterLocaleAffirmativeIsAccepted(): void
+    {
+        // The guard counts characters, not bytes: the Cyrillic `Д` is two bytes in
+        // UTF-8 and still one keystroke.
+        $this->assertTrue(ArmedAction::new('delete', 'Удалить?', [], 'Д')->confirms('д'));
+    }
+
     public function testTheLocaleAffirmativeDoesNotOverrideAnotherKey(): void
     {
         // A locale that teaches `e` must not turn `j` into a confirmation.

@@ -209,7 +209,7 @@ lists, second loads, dark until enabled); what differs is trust and plumbing:
    once|always|deny` fallback; the approver roster is enforced server-side
    on both the card-invoke path and the text path — the in-card list is
    display only.
-6. Graph-hosted media and file consent are a deferred phase (P3.5): v1
+6. Graph-hosted media and file consent are a deferred phase: v1
    reads platform-hosted attachment bytes only and refuses a Graph url
    loudly rather than silently. `teams-meetings` is a separate plugin, not
    part of this bundle.
@@ -298,6 +298,9 @@ candy-code bundles install <path>         # copy a bundle directory into
 candy-code bundles install <git-url>      # depth-one clone into the same place
 candy-code bundles install <plugin>@<marketplace>
                                           # gated install from an added marketplace
+candy-code bundles install <src> --project
+                                          # into <root>/.candy-code/bundles/ instead, where <root>
+                                          # is --root or the repository the directory is in
 candy-code bundles marketplace add <path|git-url>
                                           # pin a marketplace catalog under ~/.candy-code/
 candy-code bundles marketplace list       # the added rows and their pins
@@ -319,9 +322,17 @@ Both arms land content-only trees: the copy skips every `.git` directory and
 the clone sheds its own before the rename. A git clone runs as a bounded,
 non-interactive child: `--depth 1`,
 no tags, terminal prompts and askpass disabled, killed with its process group
-if it overstays. Its only destination is the user bundle root — a clone can
-land in `~/.candy-code/bundles/<name>` and nowhere else, under a name that can
-not traverse out of it.
+if it overstays. Its destination is the bundle root the verb resolves: the user
+root, `~/.candy-code/bundles/<name>`, by default, or the project root,
+`<root>/.candy-code/bundles/<name>`, under `--project` (the clone's scratch
+sits in that same root). Either way the name cannot traverse out of it.
+
+Scope is kept exclusive. `install` also refuses a name that is already held in
+the other tier (`cli.bundles.install.other_tier`), so one name never sits in
+both the user and the project tier. `--project` refuses a launch directory that
+is the home directory itself (`cli.bundles.install.project_is_home`), because
+that directory names the user root and the install would silently land there
+instead of in a project.
 
 ## Marketplaces
 
@@ -355,6 +366,15 @@ a link, so no upstream tree can aim a removal at your home directory. A
 bundle whose upstream renamed itself is refused rather than re-keyed, and
 bundles installed from a bare path or URL simply carry no record — the scan
 answers that they were left alone.
+
+`bundles update` keeps each bundle in the tier it occupies: a `--project`
+bundle is re-installed into its project root, never moved to the user root. It
+walks the owned home's bundle root and the project root (`--root`, else the
+working directory's). Named, it refuses with `cli.bundles.update.ambiguous` when
+the name sits in both tiers, and leaves both copies untouched. A project-tier
+bundle that carries a marketplace record is refused by name
+(`cli.bundles.update.no_home`) when this process has no owned home, because its
+pin is recorded in the user registry; nothing is changed.
 
 `bundles search <query>` and `bundles recommend` read the same catalogs and
 write nothing: the first matches name, source, description, category and

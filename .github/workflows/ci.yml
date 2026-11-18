@@ -618,7 +618,7 @@ jobs:
       # table. THE WALL IS FLOOR-BOUND: no K ever beats the slowest single
       # file, and the LPT K=4 MAX BUCKET is what --timeout must clear, not
       # the average shard.
-      # TSV-PIN tests=33094 files=2126 serial_sum=3536.1 floor=302.5 floor_file=candy-code/tests/Renderer/KeyHelpTest.php lpt_k4_max=884.0 timeout_test=2400
+      # TSV-PIN tests=33162 files=2128 serial_sum=3540.7 floor=302.5 floor_file=candy-code/tests/Renderer/KeyHelpTest.php lpt_k4_max=885.2 timeout_test=2400
       # Every value on that line is re-derived from the committed durations
       # table and suite-figure.json by tools/tests/ParallelShardTuningTest.php
       # — prose and probe drift only as far as the next red suite. 2400s is

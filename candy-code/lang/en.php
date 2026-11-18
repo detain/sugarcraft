@@ -186,6 +186,8 @@ return [
     'cli.bundles.install.not_bundle' => 'bundles install: {source} carries no .claude-plugin/plugin.json (and no bare plugin.json), so it is not a plugin bundle',
     'cli.bundles.install.project_link' => 'bundles install: {path} is a symbolic link; a project bundle root reached through one is refused, so nothing was installed',
     'cli.bundles.install.project_root' => 'bundles install: the project root {root} is not a directory this process can install into; nothing was written',
+    'cli.bundles.install.other_tier' => 'bundles install: a bundle named {name} is already installed at {path} in the other tier; the install refused, so one name never sits in both the user and the project tier',
+    'cli.bundles.install.project_is_home' => 'bundles install: --project resolves to your home directory {root}, which is the user tier and not a project; run it inside a project or pass --root, or drop --project to install to the user root; nothing was written',
     'cli.bundles.install.project_user' => 'bundles install: --project and --user name two different bundle roots; give one of them, or neither for the user root',
     'cli.bundles.install.read_failed' => 'bundles install: {source} could not be staged into the bundle root',
     'cli.bundles.install.via_marketplace' => 'Recorded {name} from marketplace {marketplace} at commit {sha}; `candy-code bundles update {name}` refreshes it from that row.',
@@ -451,7 +453,10 @@ answers from the pause records alone):
   bundles install <src>  Copy a bundle directory, or clone a git URL with a
                          bounded depth-one clone, into the user bundle root
                          (~/.candy-code/bundles), where only you own it.
-                         --project: <root>/.candy-code/bundles instead.
+                         --project: the repository's project tier instead,
+                         <root>/.candy-code/bundles, where <root> is --root or
+                         the repository the directory is in; --user names the
+                         user root explicitly. The two cannot be combined.
   doctor                 Check this installation and report every problem it
                          finds: PHP version, the extensions the session store
                          and serve need, the config file, the permission

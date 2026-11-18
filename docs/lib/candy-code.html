@@ -77,6 +77,7 @@
                     <a href="/lib/sugar-mcp-client.html">sugar-mcp-client</a>
                     <a href="/lib/sugar-releases.html">sugar-releases</a>
                     <a href="/lib/sugar-ignore.html">sugar-ignore</a>
+                    <a href="/lib/sugar-serve-protocol.html">sugar-serve-protocol</a>
                     <a href="/lib/sugar-testing.html">sugar-testing</a>
                 </div>
             </li>
@@ -159,6 +160,11 @@
             <li class="toc-h3"><a href="#key-classes">Key Classes</a></li>
             <li class="toc-h2"><a href="#demos">Demos.</a></li>
             <li class="toc-h3"><a href="#chat">Chat</a></li>
+            <li class="toc-h3"><a href="#agents">Agents</a></li>
+            <li class="toc-h3"><a href="#cli">CLI</a></li>
+            <li class="toc-h3"><a href="#diff">Diff</a></li>
+            <li class="toc-h3"><a href="#media-form">Media form</a></li>
+            <li class="toc-h3"><a href="#permission">Permission</a></li>
         </ul>
     </nav>
 
@@ -195,7 +201,7 @@ candy-code -p "audit this" --output-format json | jq -r .result</code></pre>
       <div class="feature"><strong>Progressive skills</strong><span>Frontmatter <code>SKILL.md</code> files inject prompt context. The system prompt carries only name + description; the model pulls a full body through the <code>Skill</code> tool. Ten built-ins, plus <code>~/.candy-code/skills</code>, <code>&lt;project&gt;/.candy-code/skills</code> and skills imported from Claude Code and opencode.</span></div>
       <div class="feature"><strong>Sub-agents, teams &amp; worktrees</strong><span>The <code>Task</code> tool delegates to presets with their own model, tools, skills and permission mode — in parallel, nested, in the background or in a git worktree of their own, every run resumable; a preset model the provider does not serve falls back to the session's model. Each run gets a live line, an agents strip and an Agent View with its own transcript, where you can message, pause, cancel or send it to the background (<code>Ctrl+X b</code>). The agent messages, waits on and interrupts its sub-agents with <code>SendMessage</code>, <code>Subagents</code> and <code>InterruptAgent</code>, sub-agents reply to their parent, a parallel batch shares a board, and teammates claim tasks from a shared SQLite board through the <code>Team</code> tool.</span></div>
       <div class="feature"><strong>Workflows</strong><span><code>WorkflowEngine</code> runs multi-stage agent pipelines — sequential, fan-out parallel, chained pipeline, and task-then-verifier — from a PHP DSL or YAML, with SIGINT-safe pause and stage-granularity resume, per-task agent presets, hard token and cost budgets that pause the run, and model-authored plans that resume from their longest unchanged prefix.</span></div>
-      <div class="feature"><strong>MCP (Model Context Protocol) client &amp; server</strong><span>Multi-server client over stdio + HTTP reading <code>.mcp.json</code> with <code>${VAR}</code> interpolation, plus stdio/HTTP servers to host your own tools. Per-preset <code>mcpServers</code> allowlists are enforced, not decorative.</span></div>
+      <div class="feature"><strong>MCP (Model Context Protocol) client &amp; server</strong><span>Multi-server client over stdio + HTTP reading <code>.mcp.json</code> with <code>${VAR}</code> interpolation, and a stdio host (<code>candy-code mcp serve</code>) that exposes a fixed read-only tool roster (Read, Glob, Grep, Ls, RepoMap) to the client that spawns it. Per-preset <code>mcpServers</code> allowlists are enforced, not decorative.</span></div>
       <div class="feature"><strong>SQLite sessions</strong><span>WAL-mode persistence of sessions, messages and tool calls with FK-enforced cascade, fork/rename/resume, and opt-in retention pruning that never drops a session you named.</span></div>
       <div class="feature"><strong>Context engine</strong><span>Compaction tiers with absolute token caps and summaries requested ahead of need, in-turn pruning of stale tool output, the agent's own <code>Prune</code>/<code>Compress</code>/<code>Recall</code> tools, re-injection after a compaction, and recovery from overflows, cut-off replies and dropped streams.</span></div>
       <div class="feature"><strong>Permissions &amp; checkpoints</strong><span>Six permission modes (the TUI asks by default; <code>Alt+M</code> toggles plan mode and the model leaves it with <code>PlanExit</code>, asking you to approve its plan; <code>auto</code> puts security findings to you and can have the title model review the rest), argument-scoped rules; shell lines proven read-only — <code>sed</code> scripts that only read, simple <code>awk</code> programs, <code>for</code>/<code>while read</code> loops over read-only bodies — run unasked (<code>permissions.autoAllowReadOnly</code>); <code>a</code> remembers each part of a chain and answers at once, <code>e</code> edits the scope first, a grant ignores a leading in-project <code>cd</code>, and <code>/permissions mode</code> / <code>/permissions revoke</code> switch the mode and drop grants; an optional bubblewrap sandbox for <code>Bash</code>, and a per-turn workspace checkpoint behind <code>/undo</code>, <code>/redo</code>, <code>/rewind</code> and <code>/diff</code>, with opt-in auto-commit, post-edit lint, LSP diagnostics and auto-test.</span></div>
@@ -256,6 +262,31 @@ candy-code -p "audit this" --output-format json | jq -r .result</code></pre>
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-code/.vhs/chat.gif" alt="Chat" onerror="this.parentElement.style.display='none'">
                 <h3 id="chat">Chat</h3>
                 <span class="demo-caption">Full chat session with scrollback + Markdown-rendered replies.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-code/.vhs/agents.gif" alt="Agents" onerror="this.parentElement.style.display='none'">
+                <h3 id="agents">Agents</h3>
+                <span class="demo-caption">Sub-agents running in parallel, each with its own transcript.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-code/.vhs/cli.gif" alt="CLI" onerror="this.parentElement.style.display='none'">
+                <h3 id="cli">CLI</h3>
+                <span class="demo-caption">Command-line help and the argument surface.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-code/.vhs/diff.gif" alt="Diff" onerror="this.parentElement.style.display='none'">
+                <h3 id="diff">Diff</h3>
+                <span class="demo-caption">Unified diffs rendered for Edit results.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-code/.vhs/media-form.gif" alt="Media form" onerror="this.parentElement.style.display='none'">
+                <h3 id="media-form">Media form</h3>
+                <span class="demo-caption">Form-driven input for media generation.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-code/.vhs/permission.gif" alt="Permission" onerror="this.parentElement.style.display='none'">
+                <h3 id="permission">Permission</h3>
+                <span class="demo-caption">A permission prompt for a guarded tool call.</span>
             </div>
         </div>
     </div>

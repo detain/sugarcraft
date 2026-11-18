@@ -24,9 +24,17 @@ final class SupportMoveTest extends TestCase
         self::assertIsString(SgrEmitter::emit(null));
     }
 
+    /**
+     * Checks the source files rather than autoloading the names: a stale vendor
+     * classmap can still list a deleted Diff\ shim, and an autoloading
+     * class_exists() would then include a missing file and raise a warning.
+     */
     public function testRetiredDiffShimsAreGone(): void
     {
-        self::assertFalse(class_exists('SugarCraft\\CellBuffer\\Diff\\RepeatGate'));
-        self::assertFalse(class_exists('SugarCraft\\CellBuffer\\Diff\\SgrEmitter'));
+        $srcDir = dirname(__DIR__) . '/src/Diff';
+        self::assertFileDoesNotExist($srcDir . '/RepeatGate.php');
+        self::assertFileDoesNotExist($srcDir . '/SgrEmitter.php');
+        self::assertFalse(class_exists('SugarCraft\\CellBuffer\\Diff\\RepeatGate', false));
+        self::assertFalse(class_exists('SugarCraft\\CellBuffer\\Diff\\SgrEmitter', false));
     }
 }

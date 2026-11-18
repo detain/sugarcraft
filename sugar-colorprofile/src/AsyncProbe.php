@@ -58,8 +58,9 @@ use SugarCraft\ColorProfile\Probe\TerminfoReplayProbe;
  *
  * A child that RUNS TO COMPLETION settles its verdict into a per-TERM memo
  * (CP-13 — the async twin of the sync surface's dump memo): a repeat call for
- * the same TERM answers from memory without re-spawning, so the two surfaces
- * keep one cache policy for one question.
+ * the same TERM answers from memory without re-spawning. A child the deadline
+ * ladder or a signal killed answered nothing, so it mints no entry and the
+ * next call may spawn again.
  *
  * Probe results are ADVISORY ONLY: the terminfo snapshot answers "what could
  * this terminal type advertise", not "what will the renderer emit" — callers
@@ -231,11 +232,16 @@ final class AsyncProbe
      * surface caches carries the same property, and its table mints entries
      * for clean misses too). The ENV-side half of any negative answer is
      * re-derived from the CURRENT chain per call, so env drift after the
-     * first probe can never be served stale. Every verdict the sync door
-     * memoizes is memoized here too (a completed child of any exit code, a
-     * deadline overrun as a miss, a failed launch), so the two surfaces share
-     * one cache policy. Cap-full, unsafe-TERM and absent-binary early returns
-     * never launch a child and never write.
+     * first probe can never be served stale. A completed child (any exit code)
+     * is memoized. A child the deadline ladder or a signal killed, and a failed
+     * launch, mint no entry (CP-13, per the UPSTREAM-PLAN P1-15 behaviour map):
+     * each is transient (load, fork or fd pressure) and must not demote a TERM
+     * that advertises TrueColor for the life of the process. The sync door
+     * ({@see InfocmpBinary::runBounded()}) still records overruns and signal
+     * kills as misses, so the two surfaces differ on whether those two verdicts
+     * are memoized, never on the answer they settle to.
+     * Cap-full, unsafe-TERM and absent-binary early returns never launch a
+     * child and never write.
      *
      * @var array<string, ColorProfile|null>
      */
@@ -243,10 +249,10 @@ final class AsyncProbe
 
     /**
      * Dump verdicts for {@see report()}, keyed by lowercased TERM: the capped
-     * stdout of a completed child (any exit code), or null for a recorded miss
-     * (deadline overrun, failed launch). This is the same table policy as
-     * {@see InfocmpBinary::runBounded()}, so repeat reports never re-spawn on
-     * either surface. The cardinality ceiling is {@see self::MEMO_MAX_ENTRIES}.
+     * stdout of a completed child (any exit code). A child the deadline ladder
+     * or a signal killed, and a failed launch, mint no entry (CP-13), so a
+     * later report may spawn again. The cardinality ceiling is
+     * {@see self::MEMO_MAX_ENTRIES}.
      *
      * @var array<string, string|null>
      */
@@ -331,25 +337,30 @@ final class AsyncProbe
             $term,
             $deferred,
             static function (?int $exitCode, string $stdout) use ($chain, $memoKey): ColorProfile {
-                // Every completed verdict is memoized, the exit code
-                // notwithstanding: the sync door keeps whatever dump the child
-                // printed (InfocmpBinary::execOnce), so the async memo must
-                // hold the same TERM-static answer for the same child.
+                // A signal kill (null code) is no dump at all: the partial
+                // stdout it left behind is never promoted, mints no entry
+                // (CP-13), and settles to the chain answer exactly as the sync
+                // door does.
+                if ($exitCode === null) {
+                    return self::settleFromChain($chain);
+                }
+
+                // A completed child is a verdict whatever its exit code: its
+                // printed dump is TERM-static.
                 $promoted = TerminfoParser::hasCapName($stdout, TerminfoParser::TRUECOLOR_NAMES);
                 self::memoWrite($memoKey, $promoted ? ColorProfile::TrueColor : null);
 
                 return $promoted ? ColorProfile::TrueColor : self::settleFromChain($chain);
             },
-            static function () use ($chain, $memoKey): ColorProfile {
-                // A deadline overrun is a recorded miss, as on the sync door.
-                self::memoWrite($memoKey, null);
-
+            static function () use ($chain): ColorProfile {
+                // A deadline overrun answered nothing: no entry, so a later
+                // call may retry (CP-13). The caller takes the chain answer.
                 return self::settleFromChain($chain);
             },
         );
         if (!$spawned) {
-            self::memoWrite($memoKey, null);
-
+            // A failed launch is transient (fork or fd pressure) and says
+            // nothing about the TERM, so it mints no entry (CP-13).
             return \React\Promise\resolve(self::settleFromChain($chain));
         }
 
@@ -493,9 +504,9 @@ final class AsyncProbe
         $process->on('exit', function (?int $exitCode, ?int $signal = null) use ($deferred, &$stdout, &$laddered, $release, $cancelLadder, $onExit): void {
             $cancelLadder();
             $release();
-            // The deadline rung already settled this verdict (and its memo
-            // entry) through $onLadder; a late exit must not re-run $onExit,
-            // which would overwrite that recorded miss with the partial dump.
+            // The deadline rung already settled this verdict through $onLadder;
+            // a late exit must not re-run $onExit, which would memoize the
+            // partial dump of a child the ladder killed (CP-13).
             if ($laddered) {
                 return;
             }
@@ -567,25 +578,30 @@ final class AsyncProbe
             $infocmpPath,
             $term,
             $deferred,
-            static function (?int $exitCode, string $stdout) use ($memoKey): string {
-                // Every completed verdict is memoized, the exit code
-                // notwithstanding: InfocmpBinary::execOnce returns the capped
-                // stdout for any child the ladder did not drive, so the async
-                // memo keeps the same dump for the same child.
+            static function (?int $exitCode, string $stdout) use ($memoKey): ?string {
+                // A signal kill arrives with a null code (react takes it from
+                // its status refresh). Its partial stdout is no verdict: replaying
+                // it would build the report from a truncated terminfo dump, and
+                // memoizing it would make the truncation permanent. So it replays
+                // as "no dump" and mints no entry (CP-13).
+                if ($exitCode === null) {
+                    return null;
+                }
+
+                // A completed child keeps its capped stdout as the verdict,
+                // whatever its exit code.
                 self::dumpMemoWrite($memoKey, $stdout);
 
                 return $stdout;
             },
-            static function () use ($memoKey): ?string {
-                // A deadline overrun is a recorded miss, as on the sync door.
-                self::dumpMemoWrite($memoKey, null);
-
+            static function (): ?string {
+                // A deadline overrun answered nothing: no entry (CP-13), so a
+                // later report may retry.
                 return null;
             },
         );
         if (!$spawned) {
-            self::dumpMemoWrite($memoKey, null);
-
+            // A failed launch is transient, so it mints no entry (CP-13).
             return \React\Promise\resolve($environmentReport);
         }
 

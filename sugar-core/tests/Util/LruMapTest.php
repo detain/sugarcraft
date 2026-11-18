@@ -691,4 +691,116 @@ final class LruMapTest extends TestCase
         self::assertFalse($snapshot->has('a'), 'restamping must not resurrect an expired entry');
         self::assertSame([], $snapshot->keys());
     }
+
+    public function testPromotingAnEntryDoesNotDelayTheExpiryOfTheOnesStampedBeforeIt(): void
+    {
+        $now = 0.0;
+        $map = LruMap::new(4)->withTtl(10.0, $this->clockAt($now));
+        $map->put('a', 1);
+
+        $now = 5.0;
+        $map->put('b', 2);
+
+        $now = 6.0;
+        self::assertSame(1, $map->get('a'), 'a is now the most recent, but still stamped at 10s');
+
+        $now = 12.0;
+        self::assertSame(['b'], $map->keys(), 'a expired at 10s even though it was read at 6s');
+    }
+
+    public function testAClockThatStepsBackwardsKeepsCountAndLookupsAgreed(): void
+    {
+        $now = 0.0;
+        $map = LruMap::new(4)->withTtl(10.0, $this->clockAt($now));
+
+        $now = 10.0;
+        $map->put('a', 'first');
+
+        $now = 5.0;
+        $map->put('b', 'second');
+
+        $now = 17.0;
+        self::assertSame(2, $map->count());
+        self::assertSame('second', $map->get('b'), 'the stamp is floored at 20s, so the lookup agrees with the count');
+
+        $now = 20.0;
+        self::assertSame(0, $map->count());
+    }
+
+    public function testShorteningTheLifetimeWithWithTtlIsNotFlooredByTheLongerStamp(): void
+    {
+        $now = 0.0;
+        $long = LruMap::new(4)->withTtl(100.0, $this->clockAt($now));
+        $long->put('a', 'v');
+
+        $now = 1.0;
+        $short = $long->withTtl(10.0, $this->clockAt($now));
+
+        $now = 12.0;
+        self::assertFalse($short->has('a'), 'restamped at 1s for 10s, so it is gone by 12s');
+        self::assertSame(1, $long->count(), 'the receiver keeps its original 100s lifetime');
+    }
+
+    /**
+     * Regression: the default clock was microtime(true), so an NTP step back
+     * lengthened every later entry's lifetime through the stamp floor. The
+     * default must read the monotonic hrtime clock, which is seconds since boot
+     * and so sits far from the epoch-based wall clock.
+     */
+    public function testDefaultTtlClockIsMonotonicHrtimeNotWallClock(): void
+    {
+        $now = new \ReflectionMethod(LruMap::class, 'now');
+        $map = LruMap::new(4)->withTtl(60.0);
+
+        self::assertEqualsWithDelta(
+            hrtime(true) / 1e9,
+            $now->invoke($map),
+            1.0,
+            'the default clock is the monotonic hrtime seconds, not microtime',
+        );
+    }
+
+    /**
+     * Regression: expireStale() called array_key_first() once per removed entry,
+     * and each call rescanned the tombstones that earlier unsets left at the head
+     * of the hash, so one bulk expiry was quadratic. A single pass is linear. The
+     * bound is a ratio of two sizes so it holds across machines: linear work grows
+     * about 5x from 10,000 to 50,000 entries, the per-removal scan about 25x.
+     */
+    public function testBulkExpiryOfFiftyThousandEntriesScalesLinearly(): void
+    {
+        $small = $this->bestBulkExpirySeconds(10_000);
+        $large = $this->bestBulkExpirySeconds(50_000);
+
+        self::assertLessThan(
+            12.0,
+            $large / max($small, 1e-6),
+            'expiring 50,000 entries in one call must cost about 5x expiring 10,000',
+        );
+    }
+
+    /**
+     * Fills a map with $entries TTL'd entries, lets them all expire, and returns
+     * the fastest of three timed count() calls: the call that runs the bulk expiry.
+     */
+    private function bestBulkExpirySeconds(int $entries): float
+    {
+        $best = INF;
+        for ($run = 0; $run < 3; $run++) {
+            $now = 0.0;
+            $map = LruMap::new($entries)->withTtl(10.0, $this->clockAt($now));
+            for ($i = 0; $i < $entries; $i++) {
+                $map->put('k' . $i, $i);
+            }
+
+            $now = 11.0;
+            $start = hrtime(true);
+            $live = $map->count();
+            $best = min($best, (hrtime(true) - $start) / 1e9);
+
+            self::assertSame(0, $live, 'every entry is past its 10s lifetime');
+        }
+
+        return $best;
+    }
 }

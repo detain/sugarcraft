@@ -21,10 +21,16 @@ use DOMText;
  * (the document can never reach out) and WITHOUT `LIBXML_NOENT` (entity
  * references stay text — nothing is substituted, so there is no external
  * entity path at all), and diagnostics are suppressed so a garbage document
- * cannot spray warnings into the runner's error stream. Every fence failing
- * — ext-dom absent, oversized, unparseable, or nothing renderable — returns
- * null, and the caller hands the raw body to the model with a one-line note
- * rather than pretending a conversion happened.
+ * cannot spray warnings into the runner's error stream. An oversized body is
+ * converted from its first {@see MAX_PARSE_BYTES} only, and the output closes
+ * with a note saying so: a refusal here would hand the caller the raw bytes,
+ * and the raw bytes are exactly what the drop rule exists to keep from the
+ * model. ext-dom absent still returns null, and the caller hands the raw body
+ * to the model with a one-line note rather than pretending a conversion
+ * happened. A body the parser refuses, or one that renders nothing (only
+ * dropped subtrees such as a lone `<script>`), returns a one-line note
+ * instead: a null there would send the raw body, dropped text and all, to the
+ * model.
  *
  * Markup kept: headings 1-6, paragraphs, inline emphasis, links with
  * relative hrefs resolved against the final fetch URL through
@@ -35,9 +41,17 @@ use DOMText;
  * (fence length chosen longer than any backtick run inside), inline code
  * with the same run rule, blockquotes, `hr` as `---`, and simple pipe tables
  * from `table/tr/td/th` with `|` escaped. `script`, `style`, `nav`, `svg`,
- * `iframe` and `noscript` subtrees are dropped whole: their text is never
+ * `iframe`, `noscript`, `template`, `noembed` and `noframes` subtrees are
+ * dropped whole: their text is never
  * rendered, not even as inert markup, so a "ignore all previous
  * instructions" payload inside a `<script>` never reaches the model at all.
+ * So are elements the page hides from its own view: one carrying the `hidden`
+ * attribute or an inline `display:none` style. Hiding by a stylesheet rule,
+ * a class or script is not evaluated, so text a page hides only through its
+ * CSS still reaches the model; that gap is accepted, and the README says so.
+ * A non-block element that holds blocks (`details`, `center`, `span` around
+ * paragraphs) splices like a block container, so its paragraphs keep their
+ * breaks instead of fusing into one run of words.
  * The drop rule also governs every whole-subtree text read (fenced `pre`,
  * inline code, form-control labels): those walk children with
  * {@see visibleText()} instead of `textContent`, which would otherwise read
@@ -49,23 +63,41 @@ use DOMText;
  * declares UTF-8 only in the header does not decode as mojibake.
  *
  * Everything else renders as its inline content, so unknown tags do not
- * silently swallow what they contain. Text nodes are NOT escaped for
- * Markdown syntax: a page containing `# heading` shows `# heading`. The
- * content is untrusted data and the model is told so; escaping every
- * sigil would mangle most real documents' prose for no safety gain.
+ * silently swallow what they contain. Text is escaped only where a page's
+ * words could close a link or image label early: backslash, `[` and `]`
+ * become `\\`, `\[` and `\]`, so `[go](javascript:...)` in prose stays
+ * literal text rather than becoming a link. Other sigils are NOT escaped:
+ * a page containing `# heading` shows `# heading`. The content is untrusted
+ * data and the model is told so; escaping every sigil would mangle most real
+ * documents' prose for no safety gain.
  */
 final class HtmlToMarkdown
 {
     /**
-     * Largest body handed to the parser, checked before parsing. A caller's
-     * own byte cap may sit far above this, so the parser does not lean on
-     * it: libxml's cost on megabytes of markup is real, and a
-     * hostile page should meet a refusal to parse, not a slow parse.
+     * Largest body handed to the parser. A longer body is cut to this many
+     * bytes before parsing, so the parse cost stays bounded whatever a caller's
+     * own byte cap allows, and whatever sits past the cut is never converted.
      */
     public const MAX_PARSE_BYTES = 512 * 1024;
 
-    /** Elements dropped whole, text included. */
-    private const DROP_TAGS = ['script', 'style', 'nav', 'svg', 'iframe', 'noscript'];
+    /** The line returned for a parsed body that has no renderable text. */
+    private const EMPTY_NOTE = '*(The page has no readable text.)*';
+
+    /** The line returned for a body the HTML parser refuses outright. */
+    private const UNREADABLE_NOTE = '*(The page could not be read as HTML.)*';
+
+    /**
+     * Elements dropped whole, text included. `template`, `noembed` and
+     * `noframes` hold markup a browser never shows, so their text is no more
+     * the page's visible content than a script's is. Elements the page hides
+     * itself (`hidden`, inline `display:none`) are dropped by {@see isHidden()}.
+     */
+    private const DROP_TAGS = [
+        'script', 'style', 'nav', 'svg', 'iframe', 'noscript', 'template', 'noembed', 'noframes',
+    ];
+
+    /** A code span as the inline renderer writes one: a backtick run closed by the same run. */
+    private const CODE_SPAN = '(?<!`)(`+)(?!`).*?(?<!`)\1(?!`)';
 
     /** Elements that end the current inline run and render as their own block. */
     private const BLOCK_TAGS = [
@@ -73,6 +105,18 @@ final class HtmlToMarkdown
         'figcaption', 'figure', 'footer', 'form', 'h1', 'h2', 'h3', 'h4', 'h5',
         'h6', 'header', 'hr', 'li', 'main', 'ol', 'p', 'pre', 'section',
         'table', 'ul',
+    ];
+
+    /**
+     * Inline elements with their own inline rendering (a link, an emphasis
+     * span, a code span, a form control). A block-bearing element outside this
+     * list splices like a block container instead, so its paragraphs keep
+     * their breaks; these keep their own form, since a link around a block
+     * must still be a link.
+     */
+    private const INLINE_RENDERED = [
+        'a', 'img', 'code', 'kbd', 'samp', 'tt', 'strong', 'b', 'em', 'i', 'cite',
+        'var', 'dfn', 'del', 's', 'strike', 'button', 'input', 'textarea', 'select', 'option',
     ];
 
     /** Block containers whose children splice into the parent's block flow. */
@@ -101,13 +145,19 @@ final class HtmlToMarkdown
      *                        not a bare charset name is ignored, never
      *                        interpolated
      *
-     * @return ?string Markdown ending in one newline, or null when the body
-     *                 could not be converted and the caller should fall back
-     *                 to the raw bytes
+     * @return ?string Markdown ending in one newline; a one-line note when the
+     *                 body is refused by the parser or holds nothing
+     *                 renderable; or null only for empty input and when ext-dom
+     *                 is absent, where the caller should fall back to the raw
+     *                 bytes. The output is Markdown source, not
+     *                 display text: brackets and backslashes from the page
+     *                 text are backslash-escaped in it (see escapeText()), so
+     *                 a raw consumer sees the escapes; render it, or unescape
+     *                 it, before showing it as plain text
      */
     public static function convert(string $html, string $baseUrl, ?string $charset = null): ?string
     {
-        if ($html === '' || strlen($html) > self::MAX_PARSE_BYTES) {
+        if ($html === '') {
             return null;
         }
         if (!class_exists(DOMDocument::class)) {
@@ -119,6 +169,14 @@ final class HtmlToMarkdown
         // encoding it was never told; undeclared BOMs are common in the wild.
         if (str_starts_with($html, "\xEF\xBB\xBF")) {
             $html = substr($html, 3);
+        }
+
+        // Past the cap the cut body is what gets converted. An unclosed
+        // <script> at the cut runs to the end of the parsed text and is
+        // dropped whole, so nothing past the cut can surface either way.
+        $truncated = strlen($html) > self::MAX_PARSE_BYTES;
+        if ($truncated) {
+            $html = self::utf8Prefix(substr($html, 0, self::MAX_PARSE_BYTES));
         }
 
         // Without any declaration the HTML parser reads bytes as its
@@ -142,7 +200,7 @@ final class HtmlToMarkdown
             libxml_use_internal_errors($previous);
         }
         if ($loaded === false) {
-            return null;
+            return self::UNREADABLE_NOTE . "\n";
         }
 
         // Start inside <body>: libxml's standard HTML parsing puts fragments
@@ -150,14 +208,40 @@ final class HtmlToMarkdown
         // metadata (the <title>, inline <style> text) stays out of the page.
         $root = $document->getElementsByTagName('body')->item(0) ?? $document->documentElement;
         if ($root === null) {
-            return null;
+            return self::UNREADABLE_NOTE . "\n";
         }
 
         $blocks = self::renderBlocks($root, $baseUrl);
 
         $markdown = trim(implode("\n\n", $blocks));
+        // A parsed body that renders nothing gets the note, not null: the caller
+        // falls back to the raw bytes on null, and those bytes may be the very
+        // script text the drop rule removed.
+        if (!$truncated) {
+            return ($markdown === '' ? self::EMPTY_NOTE : $markdown) . "\n";
+        }
 
-        return $markdown === '' ? null : $markdown . "\n";
+        // A truncated body that renders nothing still returns the note: a null
+        // here would send the caller the raw bytes of the part it refused.
+        $note = '*(The page is larger than the ' . intdiv(self::MAX_PARSE_BYTES, 1024)
+            . ' KiB conversion limit; only its first part is shown.)*';
+
+        return ($markdown === '' ? $note : $markdown . "\n\n" . $note) . "\n";
+    }
+
+    /**
+     * The longest prefix of $bytes that is valid UTF-8 once the trailing
+     * partial sequence is dropped. A cut through a multibyte character would
+     * otherwise make libxml reject the whole fragment. At most three bytes can
+     * be dangling, since a UTF-8 sequence is at most four bytes long.
+     */
+    private static function utf8Prefix(string $bytes): string
+    {
+        for ($i = 0; $i < 3 && preg_match('//u', $bytes) !== 1; $i++) {
+            $bytes = substr($bytes, 0, -1);
+        }
+
+        return $bytes;
     }
 
     /**
@@ -170,17 +254,30 @@ final class HtmlToMarkdown
      */
     private static function renderBlocks(DOMNode $parent, string $baseUrl): array
     {
+        return self::renderNodes($parent->childNodes, $baseUrl);
+    }
+
+    /**
+     * The given child nodes as block-level strings; {@see renderBlocks()} for
+     * a whole parent, and list rendering for a single non-item child.
+     *
+     * @param iterable<DOMNode> $children
+     *
+     * @return list<string>
+     */
+    private static function renderNodes(iterable $children, string $baseUrl): array
+    {
         $blocks = [];
         $lines = [];
         $inline = '';
 
-        foreach ($parent->childNodes as $child) {
+        foreach ($children as $child) {
             if ($child instanceof DOMText) {
-                $inline .= self::collapseWhitespace($child->nodeValue ?? '');
+                $inline .= self::escapeText(self::collapseWhitespace($child->nodeValue ?? ''));
                 continue;
             }
             if ($child instanceof DOMComment) {
-                $inline .= '<!--' . ($child->nodeValue ?? '') . '-->';
+                $inline .= '<!--' . self::escapeText($child->nodeValue ?? '') . '-->';
                 continue;
             }
             if (!($child instanceof DOMElement)) {
@@ -188,7 +285,7 @@ final class HtmlToMarkdown
             }
 
             $name = strtolower($child->nodeName);
-            if (in_array($name, self::DROP_TAGS, true)) {
+            if (self::isDropped($child)) {
                 continue;
             }
             if ($name === 'head') {
@@ -203,7 +300,7 @@ final class HtmlToMarkdown
                 continue;
             }
 
-            if (!in_array($name, self::BLOCK_TAGS, true)) {
+            if (!in_array($name, self::BLOCK_TAGS, true) && !self::wrapsBlock($child, $name)) {
                 $inline .= self::renderInline($child, $baseUrl);
                 continue;
             }
@@ -233,7 +330,8 @@ final class HtmlToMarkdown
 
     /**
      * One block element as one Markdown block (or several, spliced; null when
-     * it renders nothing at all).
+     * it renders nothing at all). An inline element that holds blocks reaches
+     * here through {@see wrapsBlock()} and splices like a container.
      */
     private static function renderBlock(DOMElement $node, string $name, string $baseUrl): ?string
     {
@@ -243,7 +341,7 @@ final class HtmlToMarkdown
             return $inner === '' ? null : str_repeat('#', self::HEADING_LEVELS[$name]) . ' ' . $inner;
         }
 
-        if (in_array($name, self::SPLICE_TAGS, true)) {
+        if (in_array($name, self::SPLICE_TAGS, true) || !in_array($name, self::BLOCK_TAGS, true)) {
             $blocks = self::renderBlocks($node, $baseUrl);
 
             return $blocks === [] ? null : implode("\n\n", $blocks);
@@ -292,6 +390,12 @@ final class HtmlToMarkdown
      * second paragraph) are re-indented to the marker's width; a nested list
      * continues the parent line directly, so the tight shape of ordinary
      * menus stays tight.
+     *
+     * Children that are not `li` (a sub-list written directly under the list,
+     * a `div`, stray text) are rendered like any other block and attached
+     * under the item before them, so their text is kept. Before the first
+     * item they render ahead of the list. Whitespace between items renders as
+     * nothing, so it still does not count.
      */
     private static function renderList(DOMElement $node, string $baseUrl): ?string
     {
@@ -304,10 +408,24 @@ final class HtmlToMarkdown
             }
         }
 
+        /** @var list<array{pad: string, text: string}> $items */
         $items = [];
+        $leading = [];
         foreach ($node->childNodes as $child) {
             if (!($child instanceof DOMElement) || strtolower($child->nodeName) !== 'li') {
-                continue; // Inter-item whitespace and stray text are not items.
+                $extra = self::renderNodes([$child], $baseUrl);
+                if ($items === []) {
+                    $leading = array_merge($leading, $extra);
+                    continue;
+                }
+                $last = array_key_last($items);
+                foreach ($extra as $block) {
+                    $items[$last]['text'] = self::attachBlock($items[$last]['text'], $block, $items[$last]['pad']);
+                }
+                continue;
+            }
+            if (self::isDropped($child)) {
+                continue; // A hidden item shows nothing, so it is not a list entry either.
             }
 
             $marker = $ordered ? $number++ . '. ' : '- ';
@@ -316,16 +434,32 @@ final class HtmlToMarkdown
                 continue; // An empty item renders as nothing.
             }
 
-            $first = (string) array_shift($blocks);
-            $item = $marker . $first;
             $pad = str_repeat(' ', strlen($marker));
+            $text = $marker . (string) array_shift($blocks);
             foreach ($blocks as $block) {
-                $item .= (self::isLeadingList($block) ? "\n" : "\n\n") . self::indentLines($block, $pad);
+                $text = self::attachBlock($text, $block, $pad);
             }
-            $items[] = $item;
+            $items[] = ['pad' => $pad, 'text' => $text];
         }
 
-        return $items === [] ? null : implode("\n", $items);
+        $parts = $leading;
+        if ($items !== []) {
+            $parts[] = implode("\n", array_column($items, 'text'));
+        }
+
+        return $parts === [] ? null : implode("\n\n", $parts);
+    }
+
+    /**
+     * $block appended under $text, re-indented to $pad. A block that opens on
+     * a list marker continues on the next line; any other block gets its own
+     * paragraph gap.
+     */
+    private static function attachBlock(string $text, string $block, string $pad): string
+    {
+        return $text
+            . (self::isLeadingList($block) ? "\n" : "\n\n")
+            . self::indentLines($block, $pad);
     }
 
     /**
@@ -342,7 +476,7 @@ final class HtmlToMarkdown
         foreach (self::tableRows($node) as $tr) {
             $cells = [];
             foreach ($tr->childNodes as $cell) {
-                if ($cell instanceof DOMElement && in_array(strtolower($cell->nodeName), ['td', 'th'], true)) {
+                if ($cell instanceof DOMElement && in_array(strtolower($cell->nodeName), ['td', 'th'], true) && !self::isDropped($cell)) {
                     $cells[] = str_replace('|', '\\|', self::joinBlocks($cell, $baseUrl));
                 }
             }
@@ -380,7 +514,7 @@ final class HtmlToMarkdown
     {
         $rows = [];
         foreach ($table->childNodes as $child) {
-            if (!($child instanceof DOMElement)) {
+            if (!($child instanceof DOMElement) || self::isDropped($child)) {
                 continue;
             }
             $name = strtolower($child->nodeName);
@@ -388,7 +522,7 @@ final class HtmlToMarkdown
                 $rows[] = $child;
             } elseif (in_array($name, ['thead', 'tbody', 'tfoot'], true)) {
                 foreach ($child->childNodes as $row) {
-                    if ($row instanceof DOMElement && strtolower($row->nodeName) === 'tr') {
+                    if ($row instanceof DOMElement && strtolower($row->nodeName) === 'tr' && !self::isDropped($row)) {
                         $rows[] = $row;
                     }
                 }
@@ -400,6 +534,8 @@ final class HtmlToMarkdown
 
     /**
      * Raw text of a subtree with dropped elements removed from the walk.
+     * A `br` reads as a newline, so a line break inside a `<pre>` keeps its
+     * line instead of running the code together.
      * `textContent` reads through everything, which would hand a `<pre>`,
      * an inline code span, or a form-control label the literal payload of a
      * nested `<script>` — exactly the injection the drop list exists to
@@ -418,12 +554,69 @@ final class HtmlToMarkdown
         foreach ($node->childNodes as $child) {
             if ($child instanceof DOMText || $child instanceof DOMCdataSection) {
                 $out .= $child->nodeValue ?? '';
-            } elseif ($child instanceof DOMElement && !in_array(strtolower($child->nodeName), self::DROP_TAGS, true)) {
+            } elseif ($child instanceof DOMElement && self::isDropped($child)) {
+                continue;
+            } elseif ($child instanceof DOMElement && strtolower($child->nodeName) === 'br') {
+                $out .= "\n";
+            } elseif ($child instanceof DOMElement) {
                 $out .= self::visibleText($child);
             }
         }
 
         return $out;
+    }
+
+    /**
+     * True when the element is dropped whole: a script-like tag in DROP_TAGS,
+     * or an element the page hides from its own view (see {@see isHidden()}).
+     */
+    private static function isDropped(DOMElement $node): bool
+    {
+        return in_array(strtolower($node->nodeName), self::DROP_TAGS, true) || self::isHidden($node);
+    }
+
+    /**
+     * True when the page hides the element: the `hidden` attribute, or an
+     * inline `display:none`. As in a browser, the last `display` declaration
+     * in the style attribute decides, and `!important` does not change it.
+     * Hiding by a stylesheet rule, a class or a script is not evaluated, so
+     * text a page hides only through its CSS still reaches the model.
+     */
+    private static function isHidden(DOMElement $node): bool
+    {
+        if ($node->hasAttribute('hidden')) {
+            return true;
+        }
+
+        $style = $node->getAttribute('style');
+        $count = $style === '' ? 0 : preg_match_all('/(?:^|;)\s*display\s*:([^;]*)/i', $style, $matches);
+        if ($count === false || $count === 0) {
+            return false;
+        }
+
+        $declared = strtolower(trim(preg_replace('/!\s*important/i', '', end($matches[1])) ?? ''));
+
+        return $declared === 'none';
+    }
+
+    /**
+     * True when an element outside {@see INLINE_RENDERED} holds a block
+     * element anywhere below it: `details`, `center`, `span` or `font` around
+     * paragraphs. Flattened as inline text, those paragraphs would fuse into
+     * one run of words.
+     */
+    private static function wrapsBlock(DOMElement $node, string $name): bool
+    {
+        if (in_array($name, self::INLINE_RENDERED, true)) {
+            return false;
+        }
+        foreach ($node->getElementsByTagName('*') as $descendant) {
+            if (in_array(strtolower($descendant->nodeName), self::BLOCK_TAGS, true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -433,7 +626,7 @@ final class HtmlToMarkdown
     private static function renderInline(DOMElement $node, string $baseUrl): string
     {
         $name = strtolower($node->nodeName);
-        if (in_array($name, self::DROP_TAGS, true)) {
+        if (self::isDropped($node)) {
             return '';
         }
 
@@ -458,7 +651,8 @@ final class HtmlToMarkdown
                     return '';
                 }
 
-                return '![' . $node->getAttribute('alt') . '](' . $link . ')';
+                // Collapsed and trimmed like a link label: a line break in alt would split the paragraph and break the image.
+                return '![' . self::escapeText(trim(self::collapseWhitespace($node->getAttribute('alt')))) . '](' . $link . ')';
 
             case 'code':
             case 'kbd':
@@ -492,7 +686,7 @@ final class HtmlToMarkdown
                 // Form controls: only their label text is meaningful as
                 // content, and it is set off with spaces so a control never
                 // welds itself to the text on either side of it.
-                $label = self::collapseWhitespace(self::visibleText($node));
+                $label = self::escapeText(self::collapseWhitespace(self::visibleText($node)));
 
                 return $label === '' ? '' : ' ' . $label . ' ';
 
@@ -511,9 +705,9 @@ final class HtmlToMarkdown
         $out = '';
         foreach ($node->childNodes as $child) {
             if ($child instanceof DOMText) {
-                $out .= self::collapseWhitespace($child->nodeValue ?? '');
+                $out .= self::escapeText(self::collapseWhitespace($child->nodeValue ?? ''));
             } elseif ($child instanceof DOMComment) {
-                $out .= '<!--' . ($child->nodeValue ?? '') . '-->';
+                $out .= '<!--' . self::escapeText($child->nodeValue ?? '') . '-->';
             } elseif ($child instanceof DOMElement) {
                 if (strtolower($child->nodeName) === 'br') {
                     $out .= ' ';
@@ -533,8 +727,12 @@ final class HtmlToMarkdown
     private static function joinBlocks(DOMElement $node, string $baseUrl): string
     {
         $text = implode(' ', self::renderBlocks($node, $baseUrl));
+        // Newlines go before the code-span-aware collapse: a stray backtick in
+        // page text can look like a code span to that pattern, which would keep
+        // a newline (from a br or a fenced pre) and split the heading or row.
+        $text = preg_replace('/\r\n|\r|\n/', ' ', $text) ?? $text;
 
-        return trim(self::collapseWhitespace($text));
+        return trim(self::collapseOutsideCode($text, '\s+'));
     }
 
     /**
@@ -544,7 +742,8 @@ final class HtmlToMarkdown
      * link the model later proposes can never carry an executable URL. The
      * scheme is read off the href after whitespace and control characters are
      * stripped, because HTML allows `href=" javascript:..."` and browsers
-     * obey it.
+     * obey it. The label and alt text are escaped by {@see escapeText()}, so
+     * no page text can close the link early and append a target of its own.
      */
     private static function safeHref(string $href, string $baseUrl, bool $allowDataImage = false): ?string
     {
@@ -552,6 +751,7 @@ final class HtmlToMarkdown
         if ($probe === '') {
             return null;
         }
+        $isDataImage = false;
         if (preg_match('~^([a-zA-Z][a-zA-Z0-9+.\-]*):~', $probe, $m) === 1) {
             $scheme = strtolower($m[1]);
             $allowed = in_array($scheme, self::LINK_SCHEMES, true)
@@ -559,9 +759,76 @@ final class HtmlToMarkdown
             if (!$allowed) {
                 return null;
             }
+            $isDataImage = $scheme === 'data';
         }
 
-        return $baseUrl === '' ? $href : UrlReference::resolve($baseUrl, $href);
+        // A data URI is already absolute, and its payload may hold '#' or '?'
+        // that UrlReference would read as a fragment or query and cut short.
+        if ($baseUrl === '' || $isDataImage) {
+            return self::encodeDestination($href);
+        }
+
+        return self::encodeDestination(UrlReference::resolve($baseUrl, $href));
+    }
+
+    /**
+     * A destination CommonMark reads whole: spaces and control characters are
+     * percent-encoded, since a space ends the destination. Backslashes are too,
+     * because CommonMark reads `\)` as an escaped parenthesis that never closes
+     * the link. Parentheses are left as the page wrote them while they balance
+     * (`Foo_(bar)`); once any prefix has more `)` than `(`, or the totals
+     * differ, every parenthesis is percent-encoded, because an unbalanced one
+     * ends the destination early.
+     */
+    private static function encodeDestination(string $url): string
+    {
+        $url = preg_replace_callback(
+            '/[\x00-\x20\x7F\\\\]/',
+            static fn (array $m): string => sprintf('%%%02X', ord($m[0])),
+            $url,
+        ) ?? $url;
+
+        $depth = 0;
+        $balanced = true;
+        $length = strlen($url);
+        for ($index = 0; $index < $length; $index++) {
+            if ($url[$index] === '(') {
+                $depth++;
+            } elseif ($url[$index] === ')') {
+                $depth--;
+                if ($depth < 0) {
+                    $balanced = false;
+                }
+            }
+        }
+
+        return $balanced && $depth === 0 ? $url : strtr($url, ['(' => '%28', ')' => '%29']);
+    }
+
+    /**
+     * Text as it may sit inside a link label, image alt or comment: backslash,
+     * `[` and `]` are backslash-escaped, so no run of page text can close a
+     * link or image label early. A Markdown renderer shows the escapes as the
+     * plain characters, but {@see convert()} returns Markdown SOURCE: a consumer
+     * that reads the output raw (a model, a plain-text view) sees `\[`, `\]` and
+     * `\\` where the page had brackets and backslashes.
+     */
+    private static function escapeText(string $text): string
+    {
+        return str_replace(['\\', '[', ']'], ['\\\\', '\\[', '\\]'], $text);
+    }
+
+    /**
+     * Collapses each match of $run to one space, leaving inline code spans
+     * exactly as written: their spacing is the page's code, not layout.
+     */
+    private static function collapseOutsideCode(string $text, string $run): string
+    {
+        return preg_replace_callback(
+            '~' . self::CODE_SPAN . '|' . $run . '~su',
+            static fn (array $m): string => str_starts_with($m[0], '`') ? $m[0] : ' ',
+            $text,
+        ) ?? $text;
     }
 
     private static function inlineCode(string $code): string
@@ -570,6 +837,9 @@ final class HtmlToMarkdown
             return '';
         }
 
+        // A code span is one line in the output; its line breaks become spaces,
+        // which is how Markdown itself reads a line break inside a code span.
+        $code = preg_replace('/\r\n|\r|\n/', ' ', $code) ?? $code;
         $fence = str_repeat('`', self::longestBacktickRun($code) + 1);
         // A code span that opens or closes on a backtick needs one space of
         // separation, INSIDE the fences, or the reader reads one long run.
@@ -617,11 +887,10 @@ final class HtmlToMarkdown
     {
         $trimmed = [];
         foreach ($lines as $line) {
-            $line = trim($line);
-            // Adjacent inline pieces can each carry a separating space;
-            // a paragraph never means a double one. Fenced blocks are
-            // rendered elsewhere, so real code spacing survives there.
-            $trimmed[] = preg_replace('/ {2,}/', ' ', $line) ?? $line;
+            // Adjacent inline pieces can each carry a separating space, so a
+            // paragraph never means a double one. Inline code keeps its own
+            // spacing; fenced blocks are rendered elsewhere and keep theirs too.
+            $trimmed[] = self::collapseOutsideCode(trim($line), ' {2,}');
         }
 
         $text = implode("\n", $trimmed);

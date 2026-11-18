@@ -6,15 +6,52 @@ namespace SugarCraft\Dashboard\Tests\Modules\Generic;
 
 use PHPUnit\Framework\Attributes\WithoutErrorHandler;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Async\Await;
+use SugarCraft\Core\BatchMsg;
 use SugarCraft\Core\Msg;
+use SugarCraft\Core\TickRequest;
+use SugarCraft\Dashboard\Module\BoundedCommand;
+use SugarCraft\Dashboard\Modules\Generic\CommandOutputMsg;
 use SugarCraft\Dashboard\Modules\Generic\GenericModule;
 use SugarCraft\Dashboard\Modules\Generic\TickMsg;
 
 /**
  * Tests for GenericModule.
+ *
+ * A tick starts the command on the loop and returns at once; the output arrives
+ * as a CommandOutputMsg that the module takes in. {@see self::tick()} plays that
+ * round trip to completion so each test sees the settled view.
  */
 final class GenericModuleTest extends TestCase
 {
+    /**
+     * Runs one tick's command to completion and feeds its result back in. A tick
+     * returns the module in flight, so the settled module is what the tests read.
+     */
+    private function tick(GenericModule $module): GenericModule
+    {
+        [$inFlight, $cmd] = $module->update(new TickMsg());
+        self::assertNotNull($cmd, 'a tick must start its command');
+
+        $output = Await::until($this->runOf($cmd)()->promise, 15.0);
+        [$settled] = $inFlight->update($output);
+
+        return $settled;
+    }
+
+    /**
+     * A tick returns a batch: the next tick, re-armed beside the run. The run is
+     * the second member, so tests reach it here rather than by calling the batch.
+     */
+    private function runOf(\Closure $cmd): \Closure
+    {
+        $batch = $cmd();
+        self::assertInstanceOf(BatchMsg::class, $batch);
+        self::assertCount(2, $batch->cmds, 'a tick re-arms its chain beside the run');
+
+        return $batch->cmds[1];
+    }
+
     public function testNameReturnsGeneric(): void
     {
         $module = new GenericModule('echo hello');
@@ -56,6 +93,111 @@ final class GenericModuleTest extends TestCase
         $this->assertInstanceOf(\Closure::class, $cmd);
     }
 
+    /**
+     * Regression: the tick used to run the child inside update(), so a hung
+     * command froze the dashboard for its whole deadline. The tick now returns
+     * at once with the command on the loop.
+     */
+    public function testTickReturnsAtOnceWhileACommandHangs(): void
+    {
+        $module = new GenericModule([\PHP_BINARY, '-r', 'sleep(30);']);
+
+        $start = hrtime(true);
+        [$inFlight, $cmd] = $module->update(new TickMsg());
+        $elapsedSeconds = (hrtime(true) - $start) / 1_000_000_000;
+
+        $this->assertLessThan(1.0, $elapsedSeconds, 'update() must not wait on the child');
+        $this->assertNotNull($cmd);
+        $this->assertSame('', $inFlight->view(), 'nothing is shown until the command settles');
+
+        $output = Await::until($this->runOf($cmd)()->promise, 15.0);
+        [$settled] = $inFlight->update($output);
+        $this->assertSame('Command timed out', $settled->view());
+    }
+
+    public function testATickWhileItsCommandIsInFlightStartsNoSecondRun(): void
+    {
+        $module = new GenericModule('printf "x"', 5);
+        [$inFlight] = $module->update(new TickMsg());
+
+        [$again, $cmd] = $inFlight->update(new TickMsg());
+
+        $this->assertSame($inFlight, $again);
+        $this->assertNotNull($cmd);
+        $this->assertInstanceOf(TickRequest::class, $cmd(), 'a latched tick only re-arms the chain');
+    }
+
+    /**
+     * Regression: a cmd-only host that drops the run's Cmd never sent a
+     * CommandOutputMsg, and the chain died with it, so the stale-latch expiry
+     * never fired and the module went silent. Each tick re-arms the chain beside
+     * its run, so the tick survives a dropped run.
+     */
+    public function testATickReArmsTheChainBesideItsRunSoADroppedRunCannotSilenceTheModule(): void
+    {
+        $module = new GenericModule('printf "x"', 5);
+        [$dropped, $cmd] = $module->update(new TickMsg());
+        $this->assertNotNull($cmd);
+        $batch = $cmd();
+        $this->assertInstanceOf(BatchMsg::class, $batch);
+        // The host keeps the tick and drops the run.
+        $this->assertInstanceOf(TickRequest::class, $batch->cmds[0]());
+
+        $this->backdateLatch($dropped, BoundedCommand::SETTLE_CEILING_SECONDS + 1.0);
+        [$again, $next] = $dropped->update(new TickMsg());
+        $this->assertNotNull($next, 'a dropped run must not silence the module');
+        $settled = $again->update(Await::until($this->runOf($next)()->promise, 15.0))[0];
+        $this->assertSame('x', $settled->view());
+    }
+
+    /**
+     * Regression: a host that fans a source-less TickMsg out to every module and
+     * keeps only the returned module drops the Cmd. The in-flight latch then
+     * never cleared, and the module went silent for the rest of the session.
+     * Past the settle ceiling the latch is stale, so the next tick runs again.
+     */
+    public function testATickAfterADroppedCommandsSettleCeilingRunsAgain(): void
+    {
+        $module = new GenericModule('printf "x"', 5);
+        [$dropped] = $module->update(new TickMsg());
+        $this->backdateLatch($dropped, BoundedCommand::SETTLE_CEILING_SECONDS + 1.0);
+
+        [$again, $cmd] = $dropped->update(new TickMsg());
+
+        $this->assertNotNull($cmd, 'a dropped command must not silence the module');
+        $settled = $again->update(Await::until($this->runOf($cmd)()->promise, 15.0))[0];
+        $this->assertSame('x', $settled->view());
+    }
+
+    /**
+     * Regression: a hung run that settles after a newer run started used to clear
+     * the newer run's latch and schedule a second tick chain beside the live one.
+     * Only the newest run may settle the latch and reschedule.
+     */
+    public function testAStaleRunsOutputNeitherClearsTheLatchNorSchedulesATick(): void
+    {
+        $module = new GenericModule('printf "x"', 5);
+        [$first] = $module->update(new TickMsg());
+        // Run 1 is still hung past the ceiling, so the next tick starts run 2.
+        $this->backdateLatch($first, BoundedCommand::SETTLE_CEILING_SECONDS + 1.0);
+        [$second] = $first->update(new TickMsg());
+
+        [$afterStale, $cmd] = $second->update(new CommandOutputMsg('generic', 'stale', 1));
+        $this->assertNull($cmd, 'a stale run schedules no tick');
+        $this->assertSame($second, $afterStale, 'a stale run changes nothing');
+
+        [$again, $tickCmd] = $afterStale->update(new TickMsg());
+        $this->assertSame($afterStale, $again, 'the live run keeps the latch');
+        $this->assertNotNull($tickCmd);
+        $this->assertInstanceOf(TickRequest::class, $tickCmd(), 'the latched tick only re-arms');
+    }
+
+    private function backdateLatch(GenericModule $module, float $seconds): void
+    {
+        $since = new \ReflectionProperty(GenericModule::class, 'inFlightSince');
+        $since->setValue($module, (float) $since->getValue($module) - $seconds);
+    }
+
     public function testUpdateWithNonTickMsgReturnsSameModule(): void
     {
         $module = new GenericModule('echo hello', 5);
@@ -70,10 +212,8 @@ final class GenericModuleTest extends TestCase
     public function testViewAfterTickShowsOutput(): void
     {
         $module = new GenericModule('printf "formatted"', 5);
-        $msg = new TickMsg();
 
-        [$nextModule] = $module->update($msg);
-        $view = $nextModule->view();
+        $view = $this->tick($module)->view();
 
         $this->assertStringContainsString('formatted', $view);
     }
@@ -82,10 +222,8 @@ final class GenericModuleTest extends TestCase
     {
         // Safe argv form - no shell interpolation
         $module = new GenericModule(['printf', 'array-output']);
-        $msg = new TickMsg();
 
-        [$nextModule] = $module->update($msg);
-        $view = $nextModule->view();
+        $view = $this->tick($module)->view();
 
         $this->assertStringContainsString('array-output', $view);
     }
@@ -93,10 +231,8 @@ final class GenericModuleTest extends TestCase
     public function testEmptyArrayCommandFailsGracefully(): void
     {
         $module = new GenericModule([]);
-        $msg = new TickMsg();
 
-        [$nextModule] = $module->update($msg);
-        $view = $nextModule->view();
+        $view = $this->tick($module)->view();
 
         // The empty command is named as such — not the old blanket 'Command failed'.
         $this->assertSame('No command configured', $view);
@@ -118,7 +254,7 @@ final class GenericModuleTest extends TestCase
         ]);
 
         $start = hrtime(true);
-        [$nextModule] = $module->update(new TickMsg());
+        $nextModule = $this->tick($module);
         $elapsedSeconds = (hrtime(true) - $start) / 1_000_000_000;
 
         $this->assertLessThan(15.0, $elapsedSeconds, 'the bounded runner must stop at the deadline, not wait the child out');
@@ -139,10 +275,8 @@ final class GenericModuleTest extends TestCase
     {
         // Use a command that's unlikely to exist
         $module = new GenericModule(['nonexistent-command-xyz', 'arg1']);
-        $msg = new TickMsg();
 
-        [$nextModule] = $module->update($msg);
-        $view = $nextModule->view();
+        $view = $this->tick($module)->view();
 
         // A child that cannot start is named, not lumped into a blanket error.
         $this->assertSame('Command could not be started', $view);
@@ -151,10 +285,8 @@ final class GenericModuleTest extends TestCase
     public function testCommandFailureReturnsErrorMessage(): void
     {
         $module = new GenericModule('exit 1');
-        $msg = new TickMsg();
 
-        [$nextModule] = $module->update($msg);
-        $view = $nextModule->view();
+        $view = $this->tick($module)->view();
 
         // Empty output from a non-zero exit names the exit status.
         $this->assertSame('Command failed (exit 1)', $view);
@@ -168,7 +300,7 @@ final class GenericModuleTest extends TestCase
         $module = new GenericModule('sleep 30');
 
         $start = hrtime(true);
-        [$nextModule] = $module->update(new TickMsg());
+        $nextModule = $this->tick($module);
         $elapsedSeconds = (hrtime(true) - $start) / 1_000_000_000;
 
         $this->assertLessThan(15.0, $elapsedSeconds, 'the string path must be bounded like the argv path');
@@ -181,17 +313,14 @@ final class GenericModuleTest extends TestCase
         // nothing to show — the old argv path disguised it as 'Command failed'.
         $module = new GenericModule(['/usr/bin/true']);
 
-        [$nextModule] = $module->update(new TickMsg());
-
-        $this->assertSame('', $nextModule->view());
+        $this->assertSame('', $this->tick($module)->view());
     }
 
     public function testStderrIsMergedIntoOutput(): void
     {
         $module = new GenericModule(['sh', '-c', 'echo to-stdout; echo to-stderr >&2']);
 
-        [$nextModule] = $module->update(new TickMsg());
-        $view = $nextModule->view();
+        $view = $this->tick($module)->view();
 
         $this->assertStringContainsString('to-stdout', $view);
         $this->assertStringContainsString('to-stderr', $view);
@@ -206,9 +335,7 @@ final class GenericModuleTest extends TestCase
         $code = 'fwrite(STDERR, "rawr-leak\n"); echo "ok-112\n";';
         $command = sprintf('%s -r %s 2>/dev/null', escapeshellarg(PHP_BINARY), escapeshellarg($code));
 
-        $module = new GenericModule($command);
-        [$nextModule] = $module->update(new TickMsg());
-        $view = $nextModule->view();
+        $view = $this->tick(new GenericModule($command))->view();
 
         $this->assertStringContainsString('ok-112', $view);
         $this->assertStringNotContainsString('rawr-leak', $view, "the command's own 2>/dev/null must survive");
@@ -226,10 +353,9 @@ final class GenericModuleTest extends TestCase
             $code = 'fwrite(STDERR, "spill\n");';
             $command = sprintf('%s -r %s > %s', escapeshellarg(PHP_BINARY), escapeshellarg($code), escapeshellarg($target));
 
-            $module = new GenericModule($command);
-            [$nextModule] = $module->update(new TickMsg());
+            $view = $this->tick(new GenericModule($command))->view();
 
-            $this->assertStringContainsString('spill', $nextModule->view(), 'stderr still surfaces via the err pipe');
+            $this->assertStringContainsString('spill', $view, 'stderr still surfaces via the err pipe');
             $this->assertSame('', (string) file_get_contents($target), 'the redirect target must not receive stderr');
         } finally {
             @unlink($target);
@@ -247,10 +373,9 @@ final class GenericModuleTest extends TestCase
     public function testMultipleTicksAccumulateOutput(): void
     {
         $module = new GenericModule('printf "tick"', 5);
-        $msg = new TickMsg();
 
-        [$next1] = $module->update($msg);
-        [$next2] = $next1->update($msg);
+        $next1 = $this->tick($module);
+        $next2 = $this->tick($next1);
 
         // Each tick should produce output
         $this->assertStringContainsString('tick', $next1->view());
