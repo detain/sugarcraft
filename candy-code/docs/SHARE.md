@@ -47,7 +47,9 @@ why `/share` is the one to use when the file might be shared.
 ```
 
 `/export` reads the same rows as `/share` and writes them in the same way, but
-without the redactor. Its reply says so: the file is not secret-redacted, so
+without the redactor. Its path rules differ: a plain path is jailed to the project
+root or the `~/.candy-code/` shelf, and its `--path` flag writes anywhere without
+the project jail. Its reply says so: the file is not secret-redacted, so
 treat it like the transcript itself. `text` output is also cleaned of invisible
 formatting and terminal control noise, which is display hygiene and does not
 remove secrets. `md`, `html` and `json` are written byte for byte, because
@@ -65,8 +67,10 @@ other tools parse them.
 rendered page in the `shares` table of the session database. The reply gives
 the `/s/<token>` path on your own server.
 
-- The token is 128 random bits. It is the only credential the page needs, and
-  it is never printed in full in listings.
+- The token is 128 random bits. It is the only credential the page needs. Listings
+  show a prefix only, but `/share serve` prints the whole token once, so it lands
+  in the transcript. Revoke with the prefix from `/share list`, and do not paste
+  the transcript anywhere the link must stay private.
 - The default expiry is 7 days. The maximum is 365.
 - The page is answered by `candy-code serve`. The server has to be running and
   reachable from the reader. See [SERVER.md](SERVER.md) for the bind address,

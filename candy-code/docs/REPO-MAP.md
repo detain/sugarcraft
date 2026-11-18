@@ -10,8 +10,9 @@ have different costs and different switches, so this page keeps them apart:
 | **`RepoMap` tool** | The same ranking as the symbol map, drawn on demand and steered by what the model is working on | Called by the model, or by you asking for it | Always on; read-only |
 
 The first two are about what the model sees before it starts. The tool is about
-what the model asks for mid-task. All three read the same source of truth:
-`git ls-files`, so a file git does not track is not mapped.
+what the model asks for mid-task. The symbol map and the `RepoMap` tool read
+`git ls-files`, so a file git does not track is not mapped there. The package
+map reads each `composer.json` and the directory tree, and does not consult git.
 
 ## The package map
 
@@ -81,7 +82,7 @@ languages other than PHP, the reply notes whether Universal Ctags is available.
 - **PHP** is parsed by the engine's own tokenizer, with no extra install.
 - **Every other language** needs Universal Ctags built with `+json` on `PATH`.
   Without it, the map covers PHP only, and the reply says so.
-- The `Doctor` tool reports whether Universal Ctags is found.
+- The `doctor` tool reports whether Universal Ctags is found.
 
 Files come from `git ls-files --cached --others --exclude-standard`. Ignored
 files and files outside the repository are not mapped. The tool needs `git` on
