@@ -247,6 +247,16 @@ final class AnsiTokenizer
     }
 
     /**
+     * Number of bytes held from earlier {@see parse()} calls. Read-only: a
+     * caller that judges the cap on the whole buffer (held bytes plus the next
+     * chunk) needs the held length before it feeds the chunk.
+     */
+    public function pendingBytes(): int
+    {
+        return strlen($this->pending);
+    }
+
+    /**
      * Return any held partial sequence as one TEXT token and clear the buffer.
      * Call at end of stream so a stuck partial comes back as text rather than
      * disappearing.

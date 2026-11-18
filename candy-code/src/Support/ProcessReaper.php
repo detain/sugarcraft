@@ -285,8 +285,9 @@ final class ProcessReaper
             return;
         }
         // A leader that exited on SIGTERM can leave a TERM-ignoring descendant
-        // in its group; isGone() keeps the ladder open for that case.
-        if (self::isGone($process, $groupPid)) {
+        // in its group; isGone() keeps the ladder open for that case. The probe
+        // runs on the loop every tick, so it skips the /proc walk.
+        if (self::isGone($process, $groupPid, false)) {
             $finish(\proc_close($process));
 
             return;
@@ -296,7 +297,7 @@ final class ProcessReaper
             static function (int $signal) use ($process, $groupPid): void {
                 self::signal($process, $groupPid, $signal);
             },
-            static fn (): bool => self::isGone($process, $groupPid),
+            static fn (): bool => self::isGone($process, $groupPid, false),
             static function (bool $gone) use ($loop, $process, $finish): void {
                 // Only a poll that saw the exit may take the blocking reap: then
                 // proc_close() cannot wait. Anything else is deferred to the loop.
@@ -520,15 +521,16 @@ final class ProcessReaper
      * a descendant that ignores SIGTERM outlives its wrapper, and declaring the
      * child gone then would end the ladder before the signal 9 rung reaches it.
      * Same rule as {@see \SugarCraft\Core\Util\Proc\BoundedShutdown}'s ladders.
+     * $walkProc false is the loop-safe probe: see BoundedShutdown::groupEmpty().
      *
      * @param resource $process
      */
-    private static function isGone($process, ?int $groupPid): bool
+    private static function isGone($process, ?int $groupPid, bool $walkProc = true): bool
     {
         if (self::isRunning($process)) {
             return false;
         }
 
-        return $groupPid === null || BoundedShutdown::groupEmpty($groupPid);
+        return $groupPid === null || BoundedShutdown::groupEmpty($groupPid, $walkProc);
     }
 }

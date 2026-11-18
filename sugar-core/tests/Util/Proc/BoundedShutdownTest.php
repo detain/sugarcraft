@@ -874,6 +874,32 @@ final class BoundedShutdownTest extends TestCase
         }
     }
 
+    /**
+     * Regression: the loop-driven ladders probe the group with `$walkProc` false,
+     * which must never run or cache a /proc walk. A live group still answers
+     * non-empty from the kernel's `kill(-pgid, 0)` alone, and a group with no
+     * members answers empty at once.
+     */
+    public function testLoopSafeGroupProbeNeverWalksProc(): void
+    {
+        [$wrapped, $wrappedPid, $grandchild] = $this->spawnGroupWithTermIgnoringGrandchild($this->setsidOrSkip());
+        $cache = new \ReflectionProperty(BoundedShutdown::class, 'groupScannedAt');
+
+        try {
+            $cache->setValue(null, []);
+            for ($i = 0; $i < 200; $i++) {
+                self::assertFalse(BoundedShutdown::groupEmpty($wrappedPid, false), 'a live group is never reported empty');
+            }
+            self::assertSame([], $cache->getValue(), 'the loop-safe probe must not run or cache a /proc scan');
+            self::assertTrue(BoundedShutdown::groupEmpty(2147483000, false), 'a group with no members is empty');
+        } finally {
+            @\posix_kill(-$wrappedPid, 9);
+            if (\is_resource($wrapped)) {
+                \proc_close($wrapped);
+            }
+        }
+    }
+
     private function setsidOrSkip(): string
     {
         self::requirePosix();

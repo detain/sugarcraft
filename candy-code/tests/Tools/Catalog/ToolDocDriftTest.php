@@ -79,4 +79,28 @@ final class ToolDocDriftTest extends TestCase
         self::assertSame('"Thirteen tools" means', ToolDocGenerator::withCount('"Twelve tools" means', '/"(\w+) tools"/', 13));
         self::assertSame('all twenty tools', ToolDocGenerator::withCount('all eleven tools', '/all (\w+) tools/', 20));
     }
+
+    public function testTheAllowedToolsParagraphsSayTaskSurvivesTheWhitelist(): void
+    {
+        // `Task` is appended after `filterToolSet()` (the feed is built only when
+        // a manager exists), so an `allowedTools` whitelist never removes it. The
+        // docs must say so, or "deletes all thirty-seven of the others" reads as
+        // leaving only Bash.
+        $launch = (string) file_get_contents(self::package() . '/src/Cli/LaunchContext.php');
+        $filtered = strpos($launch, 'Bootstrap::filterToolSet(self::unfilteredTools(');
+        $appended = strpos($launch, '$tools[] = (new TaskTool(');
+        self::assertIsInt($filtered);
+        self::assertIsInt($appended);
+        self::assertLessThan($appended, $filtered, 'Task must be appended after the filter');
+
+        foreach (['README.md', 'docs/SETTINGS.md'] as $file) {
+            $text = (string) file_get_contents(self::package() . '/' . $file);
+            $flat = (string) preg_replace('/\s+/', ' ', $text);
+            self::assertStringContainsString(
+                '`Task` is the one built-in the whitelist cannot reach',
+                $flat,
+                "{$file} must say Task survives allowedTools",
+            );
+        }
+    }
 }
