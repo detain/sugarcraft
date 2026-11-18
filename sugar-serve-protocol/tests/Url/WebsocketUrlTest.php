@@ -61,6 +61,22 @@ final class WebsocketUrlTest extends TestCase
         self::assertNull(WebsocketUrl::from('ws://[:]:1/ws'));
     }
 
+    public function testBracketedNameWithoutColonIsRefusedNotDialledAsDnsHost(): void
+    {
+        // Stripping the brackets would turn `[abc]` into the DNS name `abc`.
+        self::assertNull(WebsocketUrl::from('http://[abc]:8080'));
+    }
+
+    public function testBracketedDottedNameIsRefusedNotDialledAsDnsHost(): void
+    {
+        self::assertNull(WebsocketUrl::from('http://[v1.fe]:8080'));
+    }
+
+    public function testBracketedBlankHostIsRefused(): void
+    {
+        self::assertNull(WebsocketUrl::from('http://[ ]:1'));
+    }
+
     public function testSurroundingWhitespaceIsTrimmed(): void
     {
         self::assertSame('wss://agent.example.com/ws', WebsocketUrl::from("  https://agent.example.com/\n"));

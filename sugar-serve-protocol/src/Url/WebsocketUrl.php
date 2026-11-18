@@ -41,10 +41,14 @@ final class WebsocketUrl
         // parse_url() cannot split a bare IPv6 host without a port: `http://::1`
         // comes back as host `:` and port 1. A host that is not a valid IPv6
         // literal once its brackets are stripped is refused, not bracketed.
-        $bare = \str_starts_with($parts['host'], '[') && \str_ends_with($parts['host'], ']')
-            ? \substr($parts['host'], 1, -1)
-            : $parts['host'];
+        $bracketed = \str_starts_with($parts['host'], '[') && \str_ends_with($parts['host'], ']');
+        $bare = $bracketed ? \substr($parts['host'], 1, -1) : $parts['host'];
         $ipv6 = \str_contains($bare, ':');
+        // A bracketed host is only ever an IPv6 literal; `[abc]` must not be dialled as
+        // the DNS name `abc`, which is what dropping its brackets would do.
+        if ($bracketed && !$ipv6) {
+            return null;
+        }
         // A zone id (`fe80::1%25eth0`, as a server prints a link-local address) is
         // kept as given, the way the host's Attach::websocketUrl keeps it; the
         // address before the `%` is what must be a valid IPv6 literal.
