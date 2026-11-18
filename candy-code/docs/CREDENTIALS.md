@@ -109,7 +109,9 @@ entry that was not found.
    empty, and `${keychain:<name>}` reads the keychain.
 
 So a key stored by `login` is used whenever its provider is selected, and an
-exported variable is used when the config has no key for that provider.
+exported variable is used when the config has no key for that provider. A
+`${keychain:<name>}` key whose entry is missing resolves to an empty string, and
+that empty string overrides the exported variable, so the variable is not used.
 Selecting a provider is covered in [SETTINGS.md](SETTINGS.md) and in the
 `CANDY_CODE_PROVIDER` row of [ENVIRONMENT.md](ENVIRONMENT.md).
 

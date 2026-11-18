@@ -44,7 +44,7 @@ be shared.
 ## `/export`: the raw transcript
 
 ```text
-/export                 # the transcript, unredacted, to the exports directory
+/export                 # the transcript as plain text, unredacted, to the exports directory
 /export jsonl --path out.jsonl
 ```
 
@@ -98,7 +98,7 @@ copy.
 
 ```text
 /share list             # every live page, across all sessions
-/share revoke           # revokes the single live page of this session, if there is exactly one
+/share revoke           # revokes the only live page, if it belongs to this session
 /share revoke 3fa9c2d1e4b7   # by the 12-character prefix /share list shows
 ```
 
@@ -120,8 +120,10 @@ to revoke.` Otherwise it prints the list and changes nothing.
 | `/export` | nothing | Written locally, unredacted |
 | `/share serve` | nothing by candy-code | The page is served from your own `candy-code serve`, to whoever you give the link |
 
-`CANDY_CODE_SHARE_UPLOAD_URL` is retired. candy-code never uploads a
-transcript. If the variable is still set, the `/share` reply still writes the
+`CANDY_CODE_SHARE_UPLOAD_URL` is retired, and so are its legacy spellings
+`SUGARCRUSH_SHARE_UPLOAD_URL` and `SUGAR_CRUSH_SHARE_UPLOAD_URL`. candy-code never
+uploads a transcript. If any of the three is still set to a non-empty value, the
+`/share` reply still writes the
 local export, prints a notice that uploads are retired, and names `/share serve`
 as the replacement. See the variable's row in
 [ENVIRONMENT.md](ENVIRONMENT.md).
