@@ -18,8 +18,8 @@ use SugarCraft\Core\I18n\Lang as BaseLang;
  * The registry behind T is first-registration-wins, so a plugin that claimed
  * a host namespace would silently own that catalog for the whole process.
  * {@see t()} therefore refuses, before anything is registered, an empty or
- * dotted NAMESPACE, a reserved host or library namespace, an empty DIR, and a
- * NAMESPACE that another plugin directory already holds.
+ * dotted NAMESPACE, a reserved host or library namespace, an empty or missing
+ * DIR, and a NAMESPACE that another plugin directory already holds.
  *
  * Mirrors the sugar-pty `Lang` facade. The plugin catalog is approved under
  * O4 (plan_plugin.md section 4.11).
@@ -89,10 +89,17 @@ abstract class Lang extends BaseLang
             throw new \InvalidArgumentException("$class must declare a non-empty DIR.");
         }
         $held = self::$claimed[$namespace] ?? null;
-        if ($held !== null && $held !== $dir) {
-            throw new \InvalidArgumentException(
-                "$class NAMESPACE '$namespace' is already claimed by another plugin directory."
-            );
+        if ($held !== null) {
+            if ($held !== $dir) {
+                throw new \InvalidArgumentException(
+                    "$class NAMESPACE '$namespace' is already claimed by another plugin directory."
+                );
+            }
+            return;
+        }
+        // A mistyped DIR would otherwise register fine and then echo raw keys for every lookup.
+        if (!is_dir($dir)) {
+            throw new \InvalidArgumentException("$class DIR '$dir' is not a directory.");
         }
         self::$claimed[$namespace] = $dir;
     }

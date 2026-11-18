@@ -364,6 +364,13 @@
         },
         {
             "type": "path",
+            "url": "sugar-plugins",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
             "url": "sugar-spring",
             "options": {
                 "symlink": true

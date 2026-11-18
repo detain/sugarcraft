@@ -123,6 +123,18 @@ final class LangTest extends TestCase
         $plugin::t('greeting');
     }
 
+    public function testMissingDirectoryIsRefusedInsteadOfEchoingRawKeys(): void
+    {
+        $plugin = new class () extends Lang {
+            protected const NAMESPACE = 'missing-dir-plugin';
+            protected const DIR = __DIR__ . '/fixtures/no-such-lang-dir';
+        };
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('is not a directory');
+        $plugin::t('greeting');
+    }
+
     public function testHostNamespaceCodeIsReserved(): void
     {
         $plugin = new class () extends Lang {
