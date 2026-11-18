@@ -102,6 +102,7 @@ final class ThrowPrefixCensusTest extends TestCase
             new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS)
         );
         foreach ($iter as $entry) {
+            /** @var \SplFileInfo $entry */
             if ($entry->isFile() && str_ends_with($entry->getFilename(), '.php')) {
                 $files[] = $entry->getPathname();
             }

@@ -27,6 +27,9 @@ final class SocketPair
      */
     public static function open(): array|false
     {
-        return \stream_socket_pair(self::domain(), \STREAM_SOCK_STREAM, \STREAM_IPPROTO_IP);
+        /** @var array{resource, resource}|false $pair */
+        $pair = \stream_socket_pair(self::domain(), \STREAM_SOCK_STREAM, \STREAM_IPPROTO_IP);
+
+        return $pair;
     }
 }

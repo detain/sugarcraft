@@ -117,10 +117,7 @@ final class InspectFpsOptionFormsTest extends TestCase
      */
     private function fpsInspect(string ...$fpsArgv): array
     {
-        return $this->runCli(array_merge(
-            ['candy-vcr', 'inspect', $this->tapePath, '--frames'],
-            $fpsArgv,
-        ));
+        return $this->runCli(array_values(['candy-vcr', 'inspect', $this->tapePath, '--frames', ...$fpsArgv]));
     }
 
     /**

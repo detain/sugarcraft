@@ -45,9 +45,8 @@ final class SetKeysRosterTest extends TestCase
     {
         $this->assertCount(21, self::UPSTREAM_21);
 
-        $accepted = array_keys(
-            (new ReflectionClass(Parser::class))->getConstant('SET_KEYS') ?? [],
-        );
+        $setKeys = (new ReflectionClass(Parser::class))->getConstant('SET_KEYS');
+        $accepted = array_keys(is_array($setKeys) ? $setKeys : []);
         sort($accepted);
         $expected = self::UPSTREAM_21;
         sort($expected);

@@ -7,6 +7,7 @@ namespace SugarCraft\Vcr\Tests\Cli;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\Cli\RecordCommand;
 use SugarCraft\Vcr\Cli\WindowsRecordLoop;
+use SugarCraft\Vcr\Event;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Format\JsonlFormat;
 use SugarCraft\Vcr\Tests\Support\FakeExitingChild;
@@ -32,9 +33,9 @@ final class RecordWindowsTest extends TestCase
         $cassette = $dir . \DIRECTORY_SEPARATOR . 'live.cas';
         $input = $dir . \DIRECTORY_SEPARATOR . 'in.txt';
         \file_put_contents($input, "ping\r\n");
-        $stdin = \fopen($input, 'rb');
-        $stdout = \fopen('php://memory', 'w+b');
-        $stderr = \fopen('php://memory', 'w+b');
+        $stdin = self::openStream($input, 'rb');
+        $stdout = self::openStream('php://memory', 'w+b');
+        $stderr = self::openStream('php://memory', 'w+b');
 
         try {
             $rc = (new RecordCommand($stdin))->run(
@@ -50,8 +51,8 @@ final class RecordWindowsTest extends TestCase
             $output = '';
             $typed = '';
             foreach ($events as $event) {
-                $output .= $event->kind === EventKind::Output ? (string) ($event->payload['b'] ?? '') : '';
-                $typed .= $event->kind === EventKind::Input ? (string) ($event->payload['b'] ?? '') : '';
+                $output .= $event->kind === EventKind::Output ? self::bytesOf($event) : '';
+                $typed .= $event->kind === EventKind::Input ? self::bytesOf($event) : '';
             }
             self::assertStringContainsString('got:ping', $output);
             self::assertSame("ping\r\n", $typed, 'piped stdin reaches the child and the cassette');
@@ -72,7 +73,7 @@ final class RecordWindowsTest extends TestCase
         $recorder = new FakeLoopRecorder();
         $inputs = ['', 'k', '', '', '', ''];
         $sizes = [[80, 24], [100, 30]];
-        $stdout = \fopen('php://memory', 'w+b');
+        $stdout = self::openStream('php://memory', 'w+b');
 
         $loop = new WindowsRecordLoop(
             static function () use (&$inputs): string {
@@ -98,7 +99,7 @@ final class RecordWindowsTest extends TestCase
         $master = new FakeWindowsMaster([null, 'tail-bytes', null]);
         $child = new FakeExitingChild(exitAfterPolls: 1, code: 0);
         $recorder = new FakeLoopRecorder();
-        $stdout = \fopen('php://memory', 'w+b');
+        $stdout = self::openStream('php://memory', 'w+b');
 
         (new WindowsRecordLoop(static fn (): string => ''))->run($master, $stdout, $child, $recorder, 80, 24);
 
@@ -111,7 +112,7 @@ final class RecordWindowsTest extends TestCase
         $master = new FakeWindowsMaster(\array_fill(0, 30, null));
         $child = new FakeExitingChild(exitAfterPolls: 25, code: 0);
         $recorder = new FakeLoopRecorder();
-        $stdout = \fopen('php://memory', 'w+b');
+        $stdout = self::openStream('php://memory', 'w+b');
 
         (new WindowsRecordLoop(static fn (): string => '', static fn (): array => [120, 40]))
             ->run($master, $stdout, $child, $recorder, 80, 24);
@@ -123,7 +124,7 @@ final class RecordWindowsTest extends TestCase
 
     public function testStreamInputReadsAFileToEof(): void
     {
-        $file = \fopen('php://temp', 'w+b');
+        $file = self::openStream('php://temp', 'w+b');
         \fwrite($file, 'abc');
         \rewind($file);
         $read = WindowsRecordLoop::streamInput($file);
@@ -149,5 +150,25 @@ final class RecordWindowsTest extends TestCase
         (new \ReflectionMethod(RecordCommand::class, 'reapBounded'))->invoke(null, $child);
 
         self::assertSame([15, 9], $child->signals);
+    }
+
+    /**
+     * @return resource
+     */
+    private static function openStream(string $target, string $mode)
+    {
+        $stream = \fopen($target, $mode);
+        if (!\is_resource($stream)) {
+            throw new \RuntimeException("cannot open {$target}");
+        }
+
+        return $stream;
+    }
+
+    private static function bytesOf(Event $event): string
+    {
+        $bytes = $event->payload['b'] ?? '';
+
+        return \is_string($bytes) ? $bytes : '';
     }
 }

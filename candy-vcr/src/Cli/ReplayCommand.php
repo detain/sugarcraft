@@ -101,7 +101,7 @@ final class ReplayCommand implements DocumentedCommand
     {
         $this->ttyProbe = $ttyProbe !== null
             ? \Closure::fromCallable($ttyProbe)
-            : static fn ($stream): bool => \stream_isatty($stream);
+            : static fn (mixed $stream): bool => \is_resource($stream) && \stream_isatty($stream);
         $this->sleeper = $sleeper !== null
             ? \Closure::fromCallable($sleeper)
             : static function (float $seconds): void {
