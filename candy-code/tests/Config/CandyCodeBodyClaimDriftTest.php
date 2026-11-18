@@ -185,11 +185,17 @@ final class CandyCodeBodyClaimDriftTest extends TestCase
         self::assertTrue(self::publicMethodMissing(self::class, 'noSuchMethod'));
     }
 
-    public function testPermissionModeCountFormsAreAllCaptured(): void
+    public function testPermissionModeCountFormsAreAllCapturedAndGateProseIsNotCounted(): void
     {
         self::assertSame(
             ['seven', 'six', 'five'],
             self::quotedPermissionModeCounts('seven permission-mode gates, six modes, five permission modes')
+        );
+
+        // "gate" alone names a different thing: the body's gates guard the write path, they are not modes.
+        self::assertSame(
+            [],
+            self::quotedPermissionModeCounts('Two gates guard the write path. Three permission gates cover the tools.')
         );
     }
 
@@ -241,7 +247,7 @@ final class CandyCodeBodyClaimDriftTest extends TestCase
      */
     private static function quotedPermissionModeCounts(string $text): array
     {
-        preg_match_all('/\b(' . self::countPattern() . ')(?:-| )(?:permission(?:-| ))?(?:mode|gate)s?\b/i', $text, $found);
+        preg_match_all('/\b(' . self::countPattern() . ')(?:-| )(?:permission(?:-| ))?modes?\b/i', $text, $found);
 
         return $found[1];
     }
