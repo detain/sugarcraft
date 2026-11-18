@@ -637,7 +637,8 @@ results that answer it, so each result stays paired with its own call.
 
 `Runtime::systemPromptSections()` returns the prompt as an ordered list of
 sections — thirteen slots, though a session that qualifies none of the optional
-ones assembles fewer — and `buildSystemPrompt()` folds that list into the
+ones assembles fewer (the unnumbered agent-instructions layer, 3a, joins only with
+a primary agent preset) — and `buildSystemPrompt()` folds that list into the
 string the model receives. The order of record, each layer named as the code
 names it:
 
@@ -648,6 +649,9 @@ names it:
 3. the tool-guidance layer — one fragment per wired tool that implements
    `PromptGuidance`, ordered by `name()`; the slot appears only when at least
    one fragment is non-empty;
+3a. the agent-instructions layer — the active primary agent preset's body in
+   `<agent-instructions>`, escaped and fenced; the slot appears only when a
+   primary agent preset supplied bytes;
 4. `RepoMapBlock` — a `<repo-map>` of the workspace's Composer sub-packages and
    its PSR-4 source directories, memoized per session;
 5. `SymbolMapBlock` — a `<symbol-map>`: the definitions the rest of the

@@ -2617,7 +2617,9 @@ candy-code usage [7|30|all]          # the durable spend ledger folded by day an
                                      #   emits the facts map behind the page
 candy-code workflow run <name> [--param k=v | --param k:=json]...   # run a saved workflow to completion headlessly;
                                      #   lint errors refuse it (exit 1, nothing dispatched);
-                                     #   a paused run prints its resume id and exits 3
+                                     #   a run stopped for a person (an escalated verification
+                                     #   stage or a signal pause) prints its resume id and exits 3;
+                                     #   a budget-stop pause exits 1
 candy-code workflow status <name>    # live, remembered, or paused — the engine's own answer
 candy-code workflow resume <id>      # replay the recorded pause file; refuses records that
                                      #   are live in another process

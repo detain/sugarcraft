@@ -483,9 +483,11 @@ candy-code models          # every selectable provider, "*" marks the selected o
 
 Expected until you configure a server for that language. `LspTool` is
 registered on every launch. Servers listed under the `lsp` setting are started
-at launch (`lspAutoDetect` can add the ones it finds); a language with no
-configured server has no client, so every call for it returns an error naming
-the language it could not ask.
+at launch (`lspAutoDetect` can add the ones it finds, but only in a project whose
+hooks are trusted; in an untrusted project the auto-detect is skipped and
+`problems()` reports `lsp: auto-detect skipped — this project is not trusted for
+hooks`). A language with no configured server has no client, so every call for
+it returns an error naming the language it could not ask.
 
 That refusal is the design. An empty *success* would read to the model as "this
 symbol has no references" — a confident, fabricated claim about your code that
