@@ -11322,6 +11322,12 @@ public static function useMaxCost(?string $maxCost): void
             return;
         }
 
+        // The project tier is the repository the launch resolves its settings
+        // from, not the directory it was started in, so a launch from a
+        // subdirectory excludes what `bundles install --project` placed at the
+        // root, the same answer `bundles recommend` gives from that directory.
+        $root = ProjectRoot::resolve($root);
+
         $registry ??= MarketplaceRegistry::loadDefault();
 
         if ($registry->names() === []) {
