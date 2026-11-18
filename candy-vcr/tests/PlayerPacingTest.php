@@ -128,7 +128,10 @@ final class PlayerPacingTest extends TestCase
         $tail = array_slice($armed, 3);
         $this->assertLessThanOrEqual(1, count($tail), 'at most one frame-interval timer may follow the flush yield');
         foreach ($tail as $frameDelay) {
-            $this->assertGreaterThan(0.0, $frameDelay);
+            // 0.0 is legitimate: Program::armRender() clamps an already-overdue
+            // frame to max(0.0, interval - elapsed) when real time ran past a
+            // frame interval between the last paint and the dirtying message.
+            $this->assertGreaterThanOrEqual(0.0, $frameDelay);
             $this->assertLessThanOrEqual(1.0 / 60.0, $frameDelay, 'only a frame-interval timer may follow the flush yield');
         }
         $this->assertSame(2, $result->outputCount);

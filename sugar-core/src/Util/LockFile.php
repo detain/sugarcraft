@@ -42,11 +42,14 @@ use SugarCraft\Core\Lang;
  * the file says nothing about them, and the sweep proceeds only when an
  * exclusive lock is what blocks the waiter. The recorded pid must also read
  * the same after one poll interval, which covers the gap between a new
- * exclusive holder's flock() and its pid note. The residual race is a pid
- * note delayed past that poll (a suspended holder), or a third process still
- * holding the old inode for the same reason.
+ * exclusive holder's flock() and its pid note. Sweeps are serialised on a
+ * `<path>.sweep` sidecar lock, so two waiters can never unlink each other's
+ * fresh inode; a waiter that cannot take the sidecar gives up as contended. The
+ * residual race is a pid note delayed past that poll (a suspended holder), or a
+ * third process still holding the old inode for the same reason.
  *
- * The file is created on demand with mode 0600 and never deleted on release.
+ * The file and its sidecar are created on demand with mode 0600 and never
+ * deleted on release.
  * flock() is advisory and per open file description: a second lock on the
  * same path from the SAME process contends like another process would.
  */
@@ -292,6 +295,42 @@ final class LockFile
             return null;
         }
 
+        // WHY the sidecar: the identity check and the unlink are two path
+        // operations, and a second waiter can run its whole sweep between them.
+        // Its fresh inode would then be the one unlinked here, and both waiters
+        // would hold exclusion. Every sweep therefore runs under this lock, and
+        // the identity check runs again inside it. Non-blocking, so a loser gives
+        // up exactly as a contended lock does instead of waiting on the sweeper.
+        $sidecar = @fopen($this->path . '.sweep', 'cb+');
+        if ($sidecar === false) {
+            fclose($contended);
+
+            return null;
+        }
+        @chmod($this->path . '.sweep', 0600);
+        if (!@flock($sidecar, \LOCK_EX | \LOCK_NB)) {
+            fclose($sidecar);
+            fclose($contended);
+
+            return null;
+        }
+
+        try {
+            return $this->sweepUnderSidecar($contended);
+        } finally {
+            fclose($sidecar);
+        }
+    }
+
+    /**
+     * The body of {@see sweepIfStale()}, run while the sidecar lock is held.
+     *
+     * @param resource $contended
+     *
+     * @return resource|null
+     */
+    private function sweepUnderSidecar($contended): mixed
+    {
         // WHY the identity check: another waiter whose deadline has also passed
         // may have swept this same stale inode already and locked its fresh one.
         // Unlinking by path then would delete that live holder's file and let

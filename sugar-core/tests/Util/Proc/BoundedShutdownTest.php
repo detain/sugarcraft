@@ -200,6 +200,28 @@ final class BoundedShutdownTest extends TestCase
         self::assertGreaterThanOrEqual(2, $misses, 'zero budget still asks before and after — one-shot polls race');
     }
 
+    public function testZeroBudgetProbeNeverSleepsBetweenItsTwoPolls(): void
+    {
+        $misses = 0;
+        $started = \hrtime(true);
+        self::assertFalse(BoundedShutdown::waitBounded(
+            static function () use (&$misses): bool {
+                ++$misses;
+
+                return false;
+            },
+            0.0,
+        ));
+        $elapsedUs = (\hrtime(true) - $started) / 1000;
+
+        self::assertSame(2, $misses, 'a zero budget asks before and after, no more');
+        self::assertLessThan(
+            BoundedShutdown::POLL_INTERVAL_US,
+            $elapsedUs,
+            'a zero budget must not pay a poll interval it never asked for',
+        );
+    }
+
     public function testHasExitedPollsUpToItsBudgetAgainstALiveChild(): void
     {
         $process = $this->spawn(['sleep', '30']);

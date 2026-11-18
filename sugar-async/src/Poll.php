@@ -86,7 +86,10 @@ final class Poll
                 $deferred->reject(new TimeoutException('Poll gave up after ' . $n . ' attempt' . ($n === 1 ? '' : 's') . ' without a result'));
                 return;
             }
-            $timer = $loop->addTimer($backoff->secondsForAttempt($n), static function () use (&$attempt, $n): void {
+            // The ladder plateau retry() applies (Retry::MAX_BACKOFF_SECONDS): an uncapped
+            // Backoff must not arm a poll timer days out.
+            $delayMs = min($backoff->forAttempt($n), (int) (Retry::MAX_BACKOFF_SECONDS * 1000));
+            $timer = $loop->addTimer($delayMs / 1000, static function () use (&$attempt, $n): void {
                 $attempt($n + 1);
             });
         };

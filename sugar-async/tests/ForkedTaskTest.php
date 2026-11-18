@@ -12,6 +12,7 @@ use SugarCraft\Async\ForkChannel;
 use SugarCraft\Async\ForkedTask;
 use SugarCraft\Async\OperationCancelledException;
 use SugarCraft\Async\TimeoutException;
+use SugarCraft\Core\Util\LockFile;
 
 final class ForkedTaskTest extends TestCase
 {
@@ -39,6 +40,37 @@ final class ForkedTaskTest extends TestCase
 
         self::assertSame(0, Await::until($status, 5.0, $loop));
         self::assertSame(['one', 'two'], $frames);
+    }
+
+    public function testAChildExitLeavesALockTheParentHoldsAcrossTheForkHeld(): void
+    {
+        $dir = sys_get_temp_dir() . '/sugar-async-fork-lock-' . bin2hex(random_bytes(6));
+        mkdir($dir, 0700);
+        $path = $dir . '/l';
+        $guard = LockFile::on($path)->tryAcquire();
+        self::assertNotNull($guard);
+        try {
+            // The child's normal exit runs __destruct() on the parent's guard;
+            // the lock must survive it.
+            $loop = new StreamSelectLoop();
+            $status = ForkedTask::run(
+                static function (): void {
+                },
+                static function (): void {
+                },
+                $loop,
+            );
+            self::assertSame(0, Await::until($status, 5.0, $loop));
+
+            $probe = fopen($path, 'c');
+            self::assertIsResource($probe);
+            self::assertFalse(flock($probe, LOCK_EX | LOCK_NB), 'the child must not unlock the parent lock');
+            fclose($probe);
+        } finally {
+            $guard->release();
+            @unlink($path);
+            @rmdir($dir);
+        }
     }
 
     public function testAThrowingChildSettlesWithExitStatusOne(): void
