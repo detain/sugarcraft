@@ -287,25 +287,39 @@ final class LockFileTest extends TestCase
 
     /**
      * A dead holder is judged stale, the lock file is unlinked, and the retry
-     * then cannot reopen a file (the path is now a directory). The sweep must
-     * resolve null exactly once, without closing its handle a second time.
+     * then cannot reopen a file (the path is now a directory). Both the sync and
+     * the async sweep must resolve null exactly once, without closing their
+     * handle a second time.
+     *
+     * The async leg needs its own contended file: the sync leg leaves a
+     * directory at the path, and open() on a directory fails before any probe
+     * runs, which would skip the async sweep entirely.
      */
     public function testLostSweepRaceResolvesNullWithoutDoubleClosing(): void
     {
         $path = $this->dir . '/l';
-        $holder = LockFile::on($path)->tryAcquire();
-        self::assertNotNull($holder);
-        file_put_contents($path, '999999');
-
-        $probe = static function (int $pid) use ($path): bool {
+        $probes = 0;
+        $probe = static function (int $pid) use ($path, &$probes): bool {
+            $probes++;
             @unlink($path);
             @mkdir($path);
 
             return false;
         };
 
+        $syncHolder = LockFile::on($path)->tryAcquire();
+        self::assertNotNull($syncHolder);
+        file_put_contents($path, '999999');
+
         $guard = LockFile::on($path)->withAliveProbe($probe)->tryAcquire(0.05);
         self::assertNull($guard);
+        self::assertSame(1, $probes, 'the sync sweep reached the probe');
+        self::assertDirectoryExists($path, 'the sweep unlinked the file and the retry lost the race');
+        rmdir($path);
+
+        $asyncHolder = LockFile::on($path)->tryAcquire();
+        self::assertNotNull($asyncHolder);
+        file_put_contents($path, '999999');
 
         $asyncLoop = new StreamSelectLoop();
         $asyncGuard = $this->settle(
@@ -313,8 +327,11 @@ final class LockFileTest extends TestCase
             LockFile::on($path)->withAliveProbe($probe)->tryAcquireAsync($asyncLoop, 0.05),
         );
         self::assertNull($asyncGuard);
-
+        self::assertSame(2, $probes, 'the async sweep reached the probe, not an early open() miss');
+        self::assertDirectoryExists($path, 'the async sweep lost the race the same way');
         rmdir($path);
-        self::assertNotNull($holder);
+
+        self::assertNotNull($syncHolder);
+        self::assertNotNull($asyncHolder);
     }
 }
