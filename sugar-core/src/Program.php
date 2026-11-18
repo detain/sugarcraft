@@ -569,7 +569,6 @@ final class Program
         // run #2 diff against the CLOSED screen — a stale tail instead of a
         // fresh paint. Reset at the same door as stopSignal.
         $this->lastRenderedBody = null;
-        $this->writer->attach($this->loop);
         $this->setupTerminal();
         $this->installSignalHandlers();
 
@@ -592,6 +591,8 @@ final class Program
         // so teardown owes the kitty pairing pop.
         $normalReturn = false;
         try {
+            // Inside the try so the finally detaches the writer even if a step below throws.
+            $this->writer->attach($this->loop);
             // Initial size + env + colour-profile + init Cmd. Each
             // honours the matching ProgramOptions override when set —
             // unset falls back to the live tty / getenv() / detect().

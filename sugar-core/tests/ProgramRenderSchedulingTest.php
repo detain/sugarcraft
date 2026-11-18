@@ -129,6 +129,43 @@ final class ProgramRenderSchedulingTest extends TestCase
         self::assertSame(1, $after - $before, 'a burst of dirtying messages coalesces into one frame');
     }
 
+    public function testARunThatThrowsLeavesTheOutputBlocking(): void
+    {
+        // run() attaches the writer inside its try, so a throw anywhere after
+        // that point must still detach it: the caller's stream goes back to
+        // blocking mode instead of staying non-blocking after the program.
+        [$input] = $this->pair();
+        [$output] = $this->pair();
+        $model = new class () implements Model {
+            use \SugarCraft\Core\SubscriptionCapable;
+
+            public function init(): ?\Closure
+            {
+                return null;
+            }
+
+            public function update(\SugarCraft\Core\Msg $msg): array
+            {
+                return [$this, null];
+            }
+
+            public function view(): string
+            {
+                throw new \RuntimeException('boom');
+            }
+        };
+        $program = $this->program($model, $output, $input, new StreamSelectLoop());
+
+        try {
+            $program->run();
+            self::fail('the view throw must propagate');
+        } catch (\RuntimeException $e) {
+            self::assertSame('boom', $e->getMessage());
+        }
+
+        self::assertTrue(stream_get_meta_data($output)['blocked'], 'the output is blocking again after the throw');
+    }
+
     public function testReleasingTheTerminalHandsTheOutputBackInBlockingMode(): void
     {
         // An exec child or the shell inherits the output's open file description,
