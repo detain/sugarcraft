@@ -858,6 +858,20 @@ final class InputReaderTest extends TestCase
         $this->assertSame(KeyType::Up, $msgs[0]->type);
     }
 
+    public function testMalformedDigitSpanSs3DropsPrintableTailWithoutLeak(): void
+    {
+        // A printable non-final byte keeps the span open, so the tail through
+        // its real final byte is dropped rather than typed as Char events.
+        $this->assertSame([], (new InputReader())->parse("\x1bO1;5;3A"));
+        $this->assertSame([], (new InputReader())->parse("\x1bO1 A"));
+
+        // ESC still ends the drop and resyncs on itself, so the Up after the
+        // printable tail is the only key produced.
+        $msgs = (new InputReader())->parse("\x1bO1;5;3\x1b[A");
+        $this->assertCount(1, $msgs);
+        $this->assertSame(KeyType::Up, $msgs[0]->type);
+    }
+
     public function testModifyOtherKeysTabAndControlKeysyms(): void
     {
         // xterm modifyOtherKeys: CSI 27 ; <mods> ; <keysym> ~. Ctrl+Tab

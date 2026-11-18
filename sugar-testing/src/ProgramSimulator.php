@@ -20,6 +20,7 @@ use SugarCraft\Core\Program;
 use SugarCraft\Core\RawMsg;
 use SugarCraft\Core\SequenceMsg;
 use SugarCraft\Core\TickRequest;
+use SugarCraft\Core\WindowSizeRequest;
 use SugarCraft\Core\Util\ColorProfile;
 
 /**
@@ -572,6 +573,11 @@ final class ProgramSimulator
             }
 
             if ($msg instanceof TickRequest) {
+                // A tick cancelled before it reached the loop never arms, so
+                // its produce closure never runs (Program::dispatch does the same).
+                if ($msg->handle?->isCancelled()) {
+                    continue;
+                }
                 // No virtual clock here: the request fires immediately and
                 // its result dispatches like any message (Program::dispatch
                 // recurses the same way from inside its one-shot timer).
@@ -580,6 +586,18 @@ final class ProgramSimulator
                     $pending[] = $produced;
                 }
 
+                continue;
+            }
+
+            if ($msg instanceof WindowSizeRequest) {
+                // Cmd::windowSize() is resolved by Program against its own
+                // size; the simulator's size is the armed startup size. Without
+                // one there is no size to report, so refuse by name instead of
+                // handing the sentinel to update().
+                if ($this->startupSize === null) {
+                    throw new RuntimeException(Lang::t('simulator.window_size_unarmed'));
+                }
+                $pending[] = $this->startupSize;
                 continue;
             }
 

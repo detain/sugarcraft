@@ -148,7 +148,7 @@ final class TabScope
         }
 
         if ($msg instanceof TickRequest) {
-            return new TickRequest($msg->seconds, self::cmd($tabKey, $msg->produce));
+            return new TickRequest($msg->seconds, self::cmd($tabKey, $msg->produce), $msg->handle);
         }
 
         if ($msg instanceof EveryRequest) {
@@ -163,12 +163,15 @@ final class TabScope
             // reject path (raw ExceptionMsg plus the user handler) never
             // fires for tab work — the owning tab's model sees the
             // failure as an ordinary Msg instead.
-            return new AsyncCmd($msg->promise->then(
-                static fn (mixed $resolved): ?Msg => $resolved instanceof Msg
-                    ? self::msg($tabKey, $resolved)
-                    : null,
-                static fn (Throwable $failure): Msg => new TabScopedMsg($tabKey, new ExceptionMsg($failure)),
-            ));
+            return new AsyncCmd(
+                $msg->promise->then(
+                    static fn (mixed $resolved): ?Msg => $resolved instanceof Msg
+                        ? self::msg($tabKey, $resolved)
+                        : null,
+                    static fn (Throwable $failure): Msg => new TabScopedMsg($tabKey, new ExceptionMsg($failure)),
+                ),
+                $msg->timeoutSeconds,
+            );
         }
 
         foreach (self::PASS_THROUGH as $sentinel) {

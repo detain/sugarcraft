@@ -69,7 +69,7 @@ final class AsyncFetcher
             // (default) skips the wrapper entirely — byte-identical await
             // of the raw fetcher promise.
             if ($timeoutSeconds !== null) {
-                $promise = AsyncOps::withTimeout(Loop::get(), $promise, $timeoutSeconds);
+                $promise = AsyncOps::withTimeout($promise, $timeoutSeconds, Loop::get());
             }
         } catch (\Throwable $e) {
             $deferred->reject($e);

@@ -40,22 +40,13 @@ final class Timeouts
      *        catching one TimeoutException among several wrapped calls needs
      *        the identity as data, not archaeology through the stack trace.
      * @return PromiseInterface
-     *
-     * @deprecated Passing the loop FIRST (loop, promise, seconds, ...) is
-     *             deprecated since 1.x: such calls are transposed with an
-     *             E_USER_DEPRECATED notice. Loop-first support is REMOVED-IN
-     *             2.0.0 — call withTimeout($promise, $seconds, $loop).
      */
     public static function withTimeout(
-        PromiseInterface|LoopInterface $promise,
-        mixed $seconds = null,
-        LoopInterface|float|int|string|null $loop = null,
-        string|null $label = null,
+        PromiseInterface $promise,
+        float $seconds,
+        ?LoopInterface $loop = null,
+        ?string $label = null,
     ): PromiseInterface {
-        [$promise, $seconds, $loop, , $label] = Timeouts::normalizeWaitArgs(
-            __FUNCTION__, $promise, $seconds, $loop, null, $label,
-        );
-
         if ($seconds <= 0 || !is_finite($seconds)) {
             throw new \InvalidArgumentException('Timeout seconds must be a positive finite number');
         }
@@ -154,23 +145,14 @@ final class Timeouts
      * @param string|null $label  Operation name for the rejection message and
      *        {@see TimeoutException::label()}; see withTimeout().
      * @return PromiseInterface
-     *
-     * @deprecated Passing the loop FIRST (loop, promise, seconds, ...) is
-     *             deprecated since 1.x: such calls are transposed with an
-     *             E_USER_DEPRECATED notice. Loop-first support is REMOVED-IN
-     *             2.0.0 — call withDeadline($promise, $seconds, $loop).
      */
     public static function withDeadline(
-        PromiseInterface|LoopInterface $promise,
-        mixed $seconds = null,
-        LoopInterface|float|int|string|null $loop = null,
+        PromiseInterface $promise,
+        float $seconds,
+        ?LoopInterface $loop = null,
         ?callable $onTimeout = null,
         ?string $label = null,
     ): PromiseInterface {
-        [$promise, $seconds, $loop, $onTimeout, $label] = Timeouts::normalizeWaitArgs(
-            __FUNCTION__, $promise, $seconds, $loop, $onTimeout, $label,
-        );
-
         if ($seconds <= 0 || !is_finite($seconds)) {
             throw new \InvalidArgumentException('Deadline seconds must be a positive finite number');
         }
@@ -254,66 +236,6 @@ final class Timeouts
         );
 
         return $deferred->promise();
-    }
-
-    /**
-     * Accept the lawful (promise, seconds, ..., loop) order and the deprecated
-     * loop-first positional order, and hand back the lawful one.
-     *
-     * @param string $method  Caller name, for messages.
-     * @param PromiseInterface|LoopInterface $promise
-     * @param mixed $seconds
-     * @param mixed $loop
-     * @param mixed $onTimeout
-     * @param mixed $label
-     * @return array{0: PromiseInterface, 1: float, 2: LoopInterface|null, 3: mixed, 4: string|null}
-     */
-    public static function normalizeWaitArgs(
-        string $method,
-        PromiseInterface|LoopInterface $promise,
-        mixed $seconds,
-        mixed $loop,
-        mixed $onTimeout,
-        mixed $label,
-    ): array {
-        if ($promise instanceof LoopInterface) {
-            // Deprecated positional transpose: (loop, promise, seconds, [hook], [label]).
-            trigger_error(
-                $method . '(): passing the event loop first is deprecated — the loop is a trailing'
-                    . ' optional parameter; call ' . $method . '($promise, $seconds, $loop) instead'
-                    . ' (loop-first support ends in 2.0.0).',
-                E_USER_DEPRECATED,
-            );
-            if (!$seconds instanceof PromiseInterface) {
-                throw new \InvalidArgumentException(
-                    $method . '(): a loop-first call must pass the promise as its second argument.',
-                );
-            }
-            if (!is_numeric($loop)) {
-                throw new \InvalidArgumentException(
-                    $method . '(): a loop-first call must pass the seconds as its third argument.',
-                );
-            }
-            [$legacyLoop, $realPromise, $realSeconds] = [$promise, $seconds, $loop];
-            $promise = $realPromise;
-            $seconds = (float) $realSeconds;
-            $loop = $legacyLoop;
-        }
-
-        if (!$promise instanceof PromiseInterface) {
-            throw new \InvalidArgumentException($method . '(): the first argument must be the promise to wrap.');
-        }
-        if (!is_numeric($seconds)) {
-            throw new \InvalidArgumentException($method . '(): the second argument must be the timeout in seconds.');
-        }
-        if ($loop !== null && !$loop instanceof LoopInterface) {
-            throw new \InvalidArgumentException($method . '(): the loop must be an event loop or null.');
-        }
-        if ($label !== null && !is_string($label)) {
-            throw new \InvalidArgumentException($method . '(): the label must be a string or null.');
-        }
-
-        return [$promise, (float) $seconds, $loop, $onTimeout, $label];
     }
 
     public static function subject(?string $label): string
