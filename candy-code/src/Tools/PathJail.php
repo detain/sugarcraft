@@ -110,6 +110,14 @@ final class PathJail
         $resolved = realpath($fullPath);
 
         if ($resolved === false) {
+            // A DANGLING leaf link is invisible to realpath(), so the parent check
+            // below would vouch for `<root>/link` merely because its parent is in
+            // the jail, while a write through it lands wherever the link points
+            // once the target appears. Refuse it, as confine() and resolveForCreate()
+            // already do.
+            if (is_link($fullPath)) {
+                return null;
+            }
             $resolvedDir = realpath(dirname($fullPath));
             if ($resolvedDir !== false && (str_starts_with($resolvedDir, $rootReal . '/') || $resolvedDir === $rootReal)) {
                 return $fullPath;
