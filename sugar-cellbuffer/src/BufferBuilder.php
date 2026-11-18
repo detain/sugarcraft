@@ -51,6 +51,43 @@ final class BufferBuilder
     }
 
     /**
+     * Seed a builder with an existing flat grid, so a frame that already
+     * exists can be repainted in place. {@see Buffer::toBuilder()} is the
+     * in-tree caller and hands over a grid that Buffer already validated;
+     * the count and list checks here guard any other caller.
+     *
+     * @param list<Cell> $grid flat grid of exactly width*height cells, index = $row*$width + $col
+     *
+     * @throws \InvalidArgumentException on non-positive dimensions, a grid of
+     *         the wrong size, a keyed array, or an entry that is not a Cell
+     */
+    public static function fromGrid(int $width, int $height, array $grid): self
+    {
+        $builder = new self($width, $height);
+        $expected = $width * $height;
+        if (count($grid) !== $expected) {
+            throw new \InvalidArgumentException(
+                "BufferBuilder grid must contain exactly {$expected} cells ({$width}x{$height}), got " . count($grid)
+            );
+        }
+        if (!array_is_list($grid)) {
+            throw new \InvalidArgumentException(
+                'BufferBuilder grid must be a list (row-major keys 0..width*height-1)'
+            );
+        }
+        foreach ($grid as $idx => $cell) {
+            if (!$cell instanceof Cell) {
+                throw new \InvalidArgumentException(
+                    'BufferBuilder grid entry ' . $idx . ' must be a Cell, got ' . get_debug_type($cell)
+                );
+            }
+        }
+        $builder->grid = $grid;
+
+        return $builder;
+    }
+
+    /**
      * Paint one cell with the full pair law applied in place. Bounds are
      * fatal (Out Of Range) exactly as withCellAt(), not silently clipped —
      * a bulk loop hitting the edge is a caller bug the builder refuses to
@@ -86,6 +123,18 @@ final class BufferBuilder
         }
 
         return $this;
+    }
+
+    /** Width in cells. */
+    public function width(): int
+    {
+        return $this->width;
+    }
+
+    /** Height in cells. */
+    public function height(): int
+    {
+        return $this->height;
     }
 
     /** Bounding region of the entire canvas. */

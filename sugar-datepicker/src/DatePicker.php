@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\DatePicker;
 
 use SugarCraft\CellBuffer\Buffer;
+use SugarCraft\CellBuffer\BufferBuilder;
 use SugarCraft\CellBuffer\Cell;
 use SugarCraft\CellBuffer\Style;
 use SugarCraft\Core\Util\Color;
@@ -1075,7 +1076,7 @@ final class DatePicker
         $totalWidth = $this->renderWidth($width, $showWeekNumbers);
         $height = 9; // header + day-names + sep + 6 week rows
 
-        $buffer = Buffer::new($totalWidth, $height);
+        $buffer = Buffer::builder($totalWidth, $height);
 
         // Row 0: header via the locale template (dp-15) so year-first locales
         // can reorder without patching code; en renders "May 2026" exactly as
@@ -1088,7 +1089,7 @@ final class DatePicker
             'year'  => (string) $this->viewYear,
         ]);
         $headerText = Width::truncate($headerText, $totalWidth - $weekColWidth);
-        $buffer = $this->placeStringAt($buffer, $weekColWidth, 0, $headerText, $this->sgrToBufferStyle($this->headerStyle));
+        $this->placeStringAt($buffer, $weekColWidth, 0, $headerText, $this->sgrToBufferStyle($this->headerStyle));
 
         // Row 1: day-name row. Each name is clamped to its own 3-column
         // slot (the locale budget, see lang/*.php contract): an oversized
@@ -1097,12 +1098,12 @@ final class DatePicker
         for ($dow = 0; $dow < self::DAYS_IN_WEEK; $dow++) {
             $col = $weekColWidth + $dow * self::CELL_CHARS; // 3-char cells
             $dayName = Width::truncate(self::dayName($dow), self::CELL_CHARS);
-            $buffer = $this->placeStringAt($buffer, $col, 1, $dayName, $this->sgrToBufferStyle($this->dayNameStyle));
+            $this->placeStringAt($buffer, $col, 1, $dayName, $this->sgrToBufferStyle($this->dayNameStyle));
         }
 
         // Row 2: separator
         for ($col = $weekColWidth; $col < $totalWidth; $col++) {
-            $buffer = $buffer->withCellAt($col, 2, Cell::new('─'));
+            $buffer->setCellAt($col, 2, Cell::new('─'));
         }
 
         // Rows 3-8: week rows — rebuild the 42-cell grid on every render.
@@ -1118,7 +1119,7 @@ final class DatePicker
             // day (a ghost week number over an all-blank row is meaningless).
             if ($showWeekNumbers && $this->weekRowHasDay($cells, $week)) {
                 $weekNum = $this->isoWeekNumber($week);
-                $buffer = $this->placeStringAt($buffer, 0, $row, $weekNum, $this->sgrToBufferStyle('90'));
+                $this->placeStringAt($buffer, 0, $row, $weekNum, $this->sgrToBufferStyle('90'));
             }
 
             // Day cells — each day is a 2-char number centered in a 3-char cell
@@ -1129,11 +1130,11 @@ final class DatePicker
                     continue;
                 }
                 $col = $weekColWidth + $dow * self::CELL_CHARS;
-                $buffer = $this->placeStringAt($buffer, $col, $row, $plain, $style);
+                $this->placeStringAt($buffer, $col, $row, $plain, $style);
             }
         }
 
-        return $buffer->toAnsi();
+        return $buffer->toBuffer()->toAnsi();
     }
 
     /** Whether a displayed week row (0-5) contains at least one real day. */
@@ -1341,9 +1342,8 @@ final class DatePicker
      * verbatim — so untrusted translated text cannot smuggle control codes
      * (including the one-byte CSI at U+009B) into output.
      *
-     * @return Buffer
      */
-    private function placeStringAt(Buffer $buf, int $col, int $row, string $s, ?Style $style): Buffer
+    private function placeStringAt(BufferBuilder $buf, int $col, int $row, string $s, ?Style $style): void
     {
         $clusters = function_exists('grapheme_str_split')
             ? (grapheme_str_split($s) ?: \mb_str_split($s, 1, 'UTF-8'))
@@ -1377,18 +1377,17 @@ final class DatePicker
                 // sugar-cellbuffer's placeWithPair law explicitly instead of
                 // leaning on it, so the painted columns always sum to the
                 // declared width whatever the sibling internals do.
-                $buf = $buf->withCellAt($colCursor, $row, Cell::blank());
+                $buf->setCellAt($colCursor, $row, Cell::blank());
                 $colCursor += 1;
 
                 continue;
             }
-            $buf = $buf->withCellAt($colCursor, $row, new Cell($cluster, $style, null, $gw));
+            $buf->setCellAt($colCursor, $row, new Cell($cluster, $style, null, $gw));
             if ($gw === 2) {
-                $buf = $buf->withCellAt($colCursor + 1, $row, Cell::continuation());
+                $buf->setCellAt($colCursor + 1, $row, Cell::continuation());
             }
             $colCursor += $gw;
         }
-        return $buf;
     }
 
     /**

@@ -560,6 +560,18 @@ final class Buffer implements \JsonSerializable
         return new BufferBuilder($width, $height);
     }
 
+    /**
+     * Mutable scratch seeded with this buffer's cells, for repainting an
+     * existing frame in bulk. Writes follow the same pair law as
+     * {@see withCellAt()}, and {@see BufferBuilder::toBuffer()} on the
+     * result equals the immutable chain over the same writes; this buffer
+     * is not changed.
+     */
+    public function toBuilder(): BufferBuilder
+    {
+        return BufferBuilder::fromGrid($this->width, $this->height, $this->grid);
+    }
+
     // ─── Accessors ─────────────────────────────────────────────────────
 
     /** Width in cells. */
