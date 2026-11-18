@@ -1969,7 +1969,7 @@ one terminal verdict per stage. `status` reads the engine's liveness view
 | 2 | Usage error — bad action, misplaced flag, missing operand. |
 | 3 | Stopped for a person: a verification stage answered `ESCALATE:` (its failure carries the engine's escalation marker), or a `SIGINT`/`SIGTERM` produced a cooperative pause. |
 
-Exit 3 is the W-1/D4 row: `escalated: ` in the first failed stage's error, or
+Exit 3 is the stopped-for-a-person outcome: `escalated: ` in the first failed stage's error, or
 a signal pause. On a signal pause the engine writes the pause record first
 (the same serializer a cooperative pause uses), and under `--format json` the
 verb emits one final document — `status` `paused` plus the `pause_file` path —
