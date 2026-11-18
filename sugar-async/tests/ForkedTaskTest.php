@@ -225,6 +225,34 @@ final class ForkedTaskTest extends TestCase
         self::assertGreaterThanOrEqual(5, $ticks, 'the loop was parked while the closed child ran');
     }
 
+    public function testTheDeadlineStillKillsAChildThatClosedItsChannelAndKeepsRunning(): void
+    {
+        // Closing the channel used to disarm the deadline, so a child that
+        // closed early and then blocked was never killed and the promise
+        // stayed pending. The deadline must still bound the reap.
+        $loop = new StreamSelectLoop();
+        $promise = ForkedTask::run(
+            static function (ForkChannel $channel): void {
+                $channel->close();
+                \usleep(4_000_000);
+            },
+            static function (): void {
+            },
+            $loop,
+            null,
+            0.5,
+        );
+
+        $start = \microtime(true);
+        try {
+            Await::until($promise, 5.0, $loop);
+            self::fail('A channel-closed child past its deadline must be killed and rejected');
+        } catch (TimeoutException $e) {
+            self::assertSame(0.5, $e->seconds());
+            self::assertLessThan(3.0, \microtime(true) - $start, 'the kill must land at the deadline, not when the child exits');
+        }
+    }
+
     public function testTheChildDoesNotReEmitTheParentsBufferedOutput(): void
     {
         // The child inherits the parent's ob_* stack. A normal exit() flushes

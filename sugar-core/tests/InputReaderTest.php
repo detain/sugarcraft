@@ -1139,6 +1139,25 @@ final class InputReaderTest extends TestCase
         $this->assertSame(KeyType::F1, $msgs[0]->type);
     }
 
+    public function testSs3AbandonedByEscRestartsTheNextSequence(): void
+    {
+        // Regression: `ESC O` followed by `ESC [ A` (Alt+Shift+O then Up in one
+        // read) dropped the ESC and typed `[` and `A`. The SS3 state ends on
+        // the ESC, so the arrow must decode.
+        $msgs = (new InputReader())->parse("\x1bO\x1b[A");
+        $this->assertCount(1, $msgs);
+        $this->assertSame(KeyType::Up, $msgs[0]->type);
+    }
+
+    public function testSs3AbandonedByC0ControlResumesAtTheControl(): void
+    {
+        // A control byte is not an SS3 final, so the Enter after the dropped
+        // `ESC O` must still decode rather than being eaten with the SS3.
+        $msgs = (new InputReader())->parse("\x1bO\r");
+        $this->assertCount(1, $msgs);
+        $this->assertSame(KeyType::Enter, $msgs[0]->type);
+    }
+
     public function testKeypadDigitsViaSs3(): void
     {
         // Regression: DECKPAM ESC O p..y (keypad 0..9) was dropped entirely.

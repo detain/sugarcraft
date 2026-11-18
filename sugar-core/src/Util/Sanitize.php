@@ -38,7 +38,7 @@ namespace SugarCraft\Core\Util;
  *     see exactly what they are approving, and a strip would hide part of it.
  *
  * **Which entry point to call.** Choose by where the text lands, not by how
- * dangerous it looks. The first six rows are policies; the last row lists the
+ * dangerous it looks. The first seven rows are policies; the last row lists the
  * building blocks they are made from, which a caller may also use directly.
  *
  * | The text is headed for…                                        | Call                                  | Removes or renders                                                        |
