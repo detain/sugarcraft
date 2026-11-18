@@ -9,6 +9,7 @@ use React\EventLoop\LoopInterface;
 use React\EventLoop\StreamSelectLoop;
 use React\Promise\PromiseInterface;
 use SugarCraft\Core\Util\LockFile;
+use SugarCraft\Core\Util\LockGuard;
 
 final class LockFileTest extends TestCase
 {
@@ -617,5 +618,134 @@ final class LockFileTest extends TestCase
         clearstatcache();
         self::assertSame($inode, fileinode($path));
         self::assertNotNull($blocker);
+    }
+
+    /**
+     * The superseded-inode race: the waiter polls inode A, a sweep by another
+     * waiter unlinks A and locks a fresh inode B, then the dead holder's
+     * inherited lock on A is released. The waiter's next flock() on A succeeds,
+     * but A is no longer the path, so it must not return a guard on A.
+     */
+    public function testWaiterThatWinsASupersededInodeGivesItBackAndDoesNotHoldTheLock(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('Windows will not unlink a file held open by this process');
+        }
+        $path = $this->dir . '/l';
+        $stale = LockFile::on($path)->tryAcquire();
+        self::assertNotNull($stale);
+        file_put_contents($path, '999999');
+
+        $sweeper = null;
+        $hooked = false;
+        $probe = static function (int $pid) use ($path, &$stale, &$sweeper, &$hooked): bool {
+            if ($hooked) {
+                return false;
+            }
+            $hooked = true;
+            // The other waiter's deadline has passed: it confirms the dead pid,
+            // sweeps inode A and locks the fresh inode B.
+            $sweeper = LockFile::on($path)->withAliveProbe(static fn (int $p): bool => false)->tryAcquire(0.0);
+            // The dead holder's inherited descriptor closes, so A is free again.
+            $stale->release();
+
+            return false;
+        };
+
+        $waiter = LockFile::on($path)->withAliveProbe($probe)->tryAcquire(0.05);
+
+        self::assertNotNull($sweeper, 'the other waiter swept A and locked B');
+        self::assertNull($waiter, 'a lock won on the superseded inode A must be given back');
+        self::assertTrue($sweeper->held());
+        self::assertNull(LockFile::on($path)->tryAcquire(), 'the fresh holder on B still excludes a third contender');
+
+        $sweeper->release();
+        self::assertNotNull(LockFile::on($path)->tryAcquire(), 'the path is free once B is released');
+    }
+
+    /**
+     * The async spelling of {@see testWaiterThatWinsASupersededInodeGivesItBackAndDoesNotHoldTheLock()}:
+     * the poll timer must carry the reopened handle, not the superseded one.
+     */
+    public function testAsyncWaiterThatWinsASupersededInodeGivesItBackAndDoesNotHoldTheLock(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('Windows will not unlink a file held open by this process');
+        }
+        $path = $this->dir . '/l';
+        $stale = LockFile::on($path)->tryAcquire();
+        self::assertNotNull($stale);
+        file_put_contents($path, '999999');
+
+        $sweeper = null;
+        $hooked = false;
+        $probe = static function (int $pid) use ($path, &$stale, &$sweeper, &$hooked): bool {
+            if ($hooked) {
+                return false;
+            }
+            $hooked = true;
+            $sweeper = LockFile::on($path)->withAliveProbe(static fn (int $p): bool => false)->tryAcquire(0.0);
+            $stale->release();
+
+            return false;
+        };
+
+        $loop = new StreamSelectLoop();
+        $waiter = $this->settle(
+            $loop,
+            LockFile::on($path)->withAliveProbe($probe)->tryAcquireAsync($loop, 0.05),
+        );
+
+        self::assertNotNull($sweeper, 'the other waiter swept A and locked B');
+        self::assertNull($waiter, 'the async waiter must not resolve a guard on the superseded inode A');
+        self::assertTrue($sweeper->held());
+        self::assertNull(LockFile::on($path)->tryAcquire(), 'the fresh holder on B still excludes a third contender');
+
+        $sweeper->release();
+    }
+
+    /**
+     * The deadline has already passed when the stale holder on A is released and
+     * the path is swapped to a fresh, free inode B. The sync spelling retries the
+     * flock on B before its deadline check and wins it; the async spelling must
+     * do the same instead of resolving null on a free lock.
+     */
+    public function testAsyncWaiterPastItsDeadlineRetriesTheReopenedInodeAndWinsAFreeLock(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('Windows will not unlink a file held open by this process');
+        }
+        $path = $this->dir . '/l';
+        $stale = LockFile::on($path)->tryAcquire();
+        self::assertNotNull($stale);
+        file_put_contents($path, '999999');
+
+        $hooked = false;
+        $probe = static function (int $pid) use ($path, &$stale, &$hooked): bool {
+            if ($hooked) {
+                return false;
+            }
+            $hooked = true;
+            // The dead holder's inherited lock on A is released, and the path is
+            // swapped to a fresh, empty, unlocked inode B during the deadline check.
+            $stale->release();
+            unlink($path);
+            file_put_contents($path, '');
+
+            return false;
+        };
+
+        $loop = new StreamSelectLoop();
+        $waiter = $this->settle(
+            $loop,
+            LockFile::on($path)->withAliveProbe($probe)->tryAcquireAsync($loop, 0.0),
+        );
+
+        self::assertInstanceOf(LockGuard::class, $waiter, 'a free lock on the reopened inode B must be won');
+        self::assertTrue($waiter->held());
+        self::assertNull(LockFile::on($path)->tryAcquire(), 'the guard on B excludes a second contender');
+
+        $waiter->release();
+        self::assertNotNull(LockFile::on($path)->tryAcquire(), 'the path is free once the guard on B is released');
     }
 }

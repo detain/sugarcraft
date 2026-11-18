@@ -354,6 +354,15 @@ final class InputReader
                     if ($remain < 3) {
                         break;
                     }
+                    // A C0 control or DEL cannot be an SS3 final: the SS3 state
+                    // ends there, so only `ESC O` is dropped and the byte
+                    // resumes the parse. Consuming it would lose the ESC that
+                    // starts the next sequence (`ESC O ESC [ A` is Up, not `[A`).
+                    $ss3Byte = ord($this->buf[$i + 2]);
+                    if ($ss3Byte < 0x20 || $ss3Byte === 0x7f) {
+                        $i += 2;
+                        continue;
+                    }
                     $msg = $this->decodeSs3($this->buf[$i + 2]);
                     if ($msg !== null) {
                         $msgs[] = $msg;

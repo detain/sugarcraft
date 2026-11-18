@@ -203,14 +203,23 @@ final class AnsiTokenizer
 
     /**
      * Records the in-place controls from `$from` on, and returns the offset of
-     * the first byte that is not one.
+     * the first byte that is not one. DEL is skipped too, but not recorded: the
+     * VT500 table ignores it in the Escape and CSI states, so it neither emits
+     * a token nor ends the sequence.
      *
      * @param list<int> $controls offsets of the controls seen so far
      */
     private static function skipInPlace(string $buf, int $from, int $len, array &$controls): int
     {
         $j = $from;
-        while ($j < $len && self::executesInPlace($buf[$j])) {
+        while ($j < $len) {
+            if ($buf[$j] === "\x7f") {
+                $j++;
+                continue;
+            }
+            if (!self::executesInPlace($buf[$j])) {
+                break;
+            }
             $controls[] = $j;
             $j++;
         }
@@ -405,6 +414,14 @@ final class AnsiTokenizer
                 self::emitControls($buf, $controls, $tokens);
                 $tokens[] = new Token($type, substr($buf, $bodyStart, $j - $bodyStart), terminator: "\x07");
                 return $j + 1 - $i;
+            }
+            // CAN and SUB are "anywhere" transitions in the string states too:
+            // they cancel the body without a terminator, and the byte is read
+            // again as a control, so the text after it is not swallowed.
+            if ($b === "\x18" || $b === "\x1a") {
+                self::emitControls($buf, $controls, $tokens);
+                $tokens[] = new Token($type, substr($buf, $bodyStart, $j - $bodyStart));
+                return $j - $i;
             }
             if ($b === "\x1b") {
                 // The verdict on this ESC waits for the byte after it.

@@ -36,6 +36,11 @@ use SugarCraft\Core\Lang;
  * and nothing is swept) it unlinks the file and takes the lock on the fresh
  * inode, once, instead of failing.
  *
+ * A successful flock() is only a lock on the path while the path still names
+ * that inode. A waiter that polls an inode a sweep has since unlinked gives the
+ * lock back and polls the path's current inode, so the superseded inode never
+ * yields a second holder.
+ *
  * The sweep is a best-effort recovery, never a first resort, and it has three
  * guards. A live holder is always waited out in full. A shared (LOCK_SH)
  * reader is never swept over: shared holders record no pid, so a dead pid in
@@ -110,7 +115,22 @@ final class LockFile
         $deadline = microtime(true) + max(0.0, $timeoutSeconds);
         $suspect = null;
 
-        while (!@flock($handle, $flags)) {
+        while (true) {
+            if (@flock($handle, $flags)) {
+                if ($this->pathNamesInode($handle)) {
+                    return $this->guard($handle);
+                }
+                // WHY: a sweep unlinked this inode while we polled it. Its lock is
+                // no lock on the path, so give it back and poll the path's inode.
+                fclose($handle);
+                $handle = $this->open();
+                if ($handle === null) {
+                    return null;
+                }
+                $suspect = null;
+                continue;
+            }
+
             if (microtime(true) >= $deadline) {
                 if ($suspect === null) {
                     $suspect = $this->deadRecord($handle);
@@ -129,8 +149,6 @@ final class LockFile
             }
             usleep(self::POLL_MICROSECONDS);
         }
-
-        return $this->guard($handle);
     }
 
     /**
@@ -164,11 +182,13 @@ final class LockFile
         $flags = ($this->exclusive ? \LOCK_EX : \LOCK_SH) | \LOCK_NB;
         $deadline = microtime(true) + max(0.0, $timeoutSeconds);
         $timer = null;
-        $deferred = new Deferred(static function () use ($loop, &$timer, $handle, &$deferred): void {
+        $deferred = new Deferred(static function () use ($loop, &$timer, &$handle, &$deferred): void {
             if ($timer !== null) {
                 $loop->cancelTimer($timer);
             }
-            fclose($handle);
+            if (\is_resource($handle)) {
+                fclose($handle);
+            }
             $deferred->resolve(null);
         });
         $this->attemptAsync($loop, $handle, $flags, $deadline, $deferred, $timer, null);
@@ -181,13 +201,15 @@ final class LockFile
      * timer for the next poll. Shares its deadline, confirmation and sweep rules
      * with {@see tryAcquire()}. $timer is the poll timer currently armed, so the
      * canceller can stop it. $suspect is the dead record seen at the deadline on
-     * an earlier poll, awaiting confirmation.
+     * an earlier poll, awaiting confirmation. $handle is by reference because a
+     * lock won on a superseded inode is swapped for a reopened handle, and the
+     * canceller and the next poll must both see the swap.
      *
-     * @param resource $handle
+     * @param resource|null $handle
      */
     private function attemptAsync(
         LoopInterface $loop,
-        $handle,
+        &$handle,
         int $flags,
         float $deadline,
         Deferred $deferred,
@@ -195,7 +217,23 @@ final class LockFile
         ?string $suspect,
     ): void {
         if (@flock($handle, $flags)) {
-            $deferred->resolve($this->guard($handle));
+            if ($this->pathNamesInode($handle)) {
+                $deferred->resolve($this->guard($handle));
+
+                return;
+            }
+            // WHY: same as tryAcquire(): the lock sits on an inode a sweep has
+            // superseded, so release it and poll the inode the path names now.
+            // The retry is immediate, before the deadline check, so a free inode
+            // is won even when the deadline has already passed.
+            fclose($handle);
+            $handle = $this->open();
+            if ($handle === null) {
+                $deferred->resolve(null);
+
+                return;
+            }
+            $this->attemptAsync($loop, $handle, $flags, $deadline, $deferred, $timer, null);
 
             return;
         }
@@ -216,7 +254,7 @@ final class LockFile
 
         $timer = $loop->addTimer(
             self::POLL_MICROSECONDS / 1_000_000,
-            function () use ($loop, $handle, $flags, $deadline, $deferred, &$timer, $suspect): void {
+            function () use ($loop, &$handle, $flags, $deadline, $deferred, &$timer, $suspect): void {
                 $this->attemptAsync($loop, $handle, $flags, $deadline, $deferred, $timer, $suspect);
             },
         );

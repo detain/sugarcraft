@@ -34,6 +34,40 @@ final class AsyncCacheBoundedTest extends TestCase
         self::assertSame(['c', 'd'], $cache->keys());
     }
 
+    public function test_eviction_order_survives_churn_invalidation_and_clear(): void
+    {
+        // Eviction walks the adoption order past holes left by invalidate() and
+        // by earlier evictions; the observable order must still be least
+        // recently stored first after heavy churn.
+        $clock = new FakeClock(1000.0);
+        $cache = AsyncCache::new(ttlSeconds: 100.0, clock: $clock, maxEntries: 3);
+
+        for ($i = 0; $i < 500; $i++) {
+            $this->resolveWith($cache->fetch('k' . $i, self::loader('v' . $i)), 'v' . $i);
+        }
+        self::assertSame(['k497', 'k498', 'k499'], $cache->keys());
+
+        $cache->invalidate('k498');
+        self::assertSame(['k497', 'k499'], $cache->keys());
+        $this->resolveWith($cache->fetch('k500', self::loader('v500')), 'v500');
+        self::assertSame(['k497', 'k499', 'k500'], $cache->keys());
+        $this->resolveWith($cache->fetch('k501', self::loader('v501')), 'v501');
+        self::assertSame(['k499', 'k500', 'k501'], $cache->keys());
+
+        $cache->invalidate('k499');
+        $this->resolveWith($cache->fetch('k502', self::loader('v502')), 'v502');
+        $this->resolveWith($cache->fetch('k503', self::loader('v503')), 'v503');
+        self::assertSame(['k501', 'k502', 'k503'], $cache->keys());
+
+        $cache->clear();
+        self::assertSame([], $cache->keys());
+        foreach (['a', 'b', 'c', 'd'] as $key) {
+            $this->resolveWith($cache->fetch($key, self::loader('v' . $key)), 'v' . $key);
+        }
+        self::assertSame(['b', 'c', 'd'], $cache->keys());
+        self::assertSame(3, $cache->count());
+    }
+
     public function test_in_flight_loads_never_count_against_the_cap(): void
     {
         $clock = new FakeClock(1000.0);
