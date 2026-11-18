@@ -117,14 +117,14 @@ final class PluginLoaderTest extends TestCase
         );
 
         // One path, one row: the first kind in the list wins, and the second
-        // kind's entry is never judged against its own interface.
+        // kind's entry for the same file yields no row of its own.
         $this->assertSame(['channel'], array_column($result->loaded, 'kind'));
         $this->assertSame([], $result->quarantined);
         $this->assertSame([], $result->refusals);
         $this->assertTrue(class_exists($fqcn, false));
     }
 
-    public function testADuplicatePathUnderTwoKindsQuarantinesOneRowAndRefusesOnlyTheFirstKind(): void
+    public function testADuplicatePathUnderTwoKindsQuarantinesOneRowAndLoadsOnlyTheFirstKind(): void
     {
         $ns = 'PluginFixtures\\' . Plugins::tag();
         $fqcn = $ns . '\\Impl';
@@ -146,7 +146,7 @@ final class PluginLoaderTest extends TestCase
         $this->assertSame([$built['file']], $ledger->recorded);
         $this->assertFalse(class_exists($fqcn, false));
 
-        // Next launch: the first kind is judged and refused, and the second
+        // Next launch: the first kind is judged and loaded, and the second
         // kind never produces a row for the same file.
         $second = $this->load(
             $candidate,
@@ -154,12 +154,13 @@ final class PluginLoaderTest extends TestCase
             kinds: ['subscriber', 'channel'],
             interfaces: ['channel' => Plugin::class, 'subscriber' => SubscribesToSessionEvents::class],
         );
-        $this->assertSame([], $second->loaded);
+        $this->assertSame([], $second->refusals);
         $this->assertSame(
-            [['subscriber', 'interface-mismatch']],
-            array_map(static fn (array $row): array => [$row['kind'], $row['reason']], $second->refusals),
-            'one path, one refusal row, for the first kind in the list',
+            [['subscriber']],
+            array_map(static fn (array $row): array => [$row['kind']], $second->loaded),
+            'one path, one loaded row, for the first kind in the list',
         );
+        $this->assertTrue(class_exists($fqcn, false));
     }
 
     public function testASecondCallOnTheSameLedgerIsStillThisLaunchAndRunsNothingFirstSeen(): void
@@ -509,8 +510,11 @@ final class PluginLoaderTest extends TestCase
         $this->assertStringContainsString($fqcn, (string) $result->refusals[0]['error']);
     }
 
-    public function testAClassOfTheWrongInterfaceIsRefusedAsInterfaceMismatch(): void
+    public function testAClassOfAnotherInterfaceLoadsBecauseTheTypeCheckBelongsToTheCaller(): void
     {
+        // The loader checks that a file declares its class, not which interface
+        // the class implements: candy-code's ChannelRegistry judges the type it
+        // is handed. Pins the decision so an interface check cannot creep back in.
         $ns = 'PluginFixtures\\' . Plugins::tag();
         $built = $this->build('demo', "<?php\n\ndeclare(strict_types=1);\n\nnamespace {$ns};\n\nfinal class Impl\n{\n}\n", [
             'channel' => ['file' => 'src/Impl.php', 'class' => $ns . '\\Impl'],
@@ -520,8 +524,24 @@ final class PluginLoaderTest extends TestCase
 
         $result = $this->load([Plugins::candidate('demo', $built['dir'])], $ledger);
 
-        $this->assertSame(['interface-mismatch'], array_column($result->refusals, 'reason'));
-        $this->assertSame([], $result->loaded);
+        $this->assertSame([], $result->refusals);
+        $this->assertSame([$ns . '\\Impl'], array_column($result->loaded, 'class'));
+    }
+
+    public function testAGroupWritableEntrypointLoadsBecauseOnlyWorldWriteIsRefused(): void
+    {
+        // Regression: the gate must match candy-code's refuseLooseBytes, which
+        // refuses world write only. A 0664 file in a 0755 tree loads.
+        $plugin = $this->declaring('Impl');
+        $ledger = new MemoryLedger();
+        $ledger->prime($plugin['file']);
+        chmod($plugin['file'], 0664);
+
+        $result = $this->load([Plugins::candidate('demo', $plugin['dir'])], $ledger);
+
+        $this->assertSame([], $result->refusals);
+        $this->assertCount(1, $result->loaded);
+        $this->assertTrue(class_exists($plugin['class'], false));
     }
 
     public function testTwoTrustedNamesReachingOneFileThroughASymlinkYieldOneLoadedRowEachAndDeclareTheClassOnce(): void

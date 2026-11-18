@@ -6,12 +6,12 @@ namespace SugarCraft\Plugins\Trust;
 
 /**
  * The private-bytes gate: a file and its directory must be the process's own
- * and not writable by the group or the world before the host executes them.
+ * and not writable by the world before the host executes them.
  *
  * Name trust says who opted in, not that the bytes are intact. Another account
  * that can rewrite the file or its directory could swap the code under a
- * trusted name, so both are checked before every require. Group write counts:
- * a group member can rewrite the bytes just as the world can.
+ * trusted name, so both are checked before every require. Only world write is
+ * refused, matching candy-code's refuseLooseBytes; group write is accepted.
  */
 final class PrivateBytes
 {
@@ -35,10 +35,6 @@ final class PrivateBytes
 
             if (($perms & 0002) !== 0) {
                 return 'world-writable';
-            }
-
-            if (($perms & 0020) !== 0) {
-                return 'group-writable';
             }
 
             $owner = @\fileowner($target);

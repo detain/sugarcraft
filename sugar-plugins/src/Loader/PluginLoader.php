@@ -27,7 +27,7 @@ use SugarCraft\Plugins\Trust\TrustList;
  *    manifest swap under a trusted name cannot smuggle code in silently.
  * 4. THE BYTES THEMSELVES MUST BE PRIVATE. Before `require_once`, the file and
  *    its parent directory must be owned by this process and not writable by the
- *    group or the world.
+ *    world (the same gate candy-code applies; group write is accepted).
  *
  * The loader ANSWERS; it never announces. Every entry lands in exactly one
  * bucket (see {@see LoadResult}). A file that throws at require time is refused
@@ -35,9 +35,13 @@ use SugarCraft\Plugins\Trust\TrustList;
  * (a name clashing with another accepted plugin) belongs to the registry, which
  * never overrides.
  *
+ * The interface a class must implement is NOT checked here: the loader answers
+ * for the file and the class, and the caller that owns the channel contract
+ * (candy-code's ChannelRegistry) judges the type it is handed.
+ *
  * Refusal reason words: manifest-refused, uncontained, contract-unsupported,
- * world-writable, group-writable, foreign-owner, require-failed, class-collision,
- * class-missing, class-not-declared, interface-mismatch.
+ * world-writable, foreign-owner, require-failed, class-collision, class-missing,
+ * class-not-declared.
  */
 final class PluginLoader
 {
@@ -74,7 +78,9 @@ final class PluginLoader
      * @param list<PluginCandidate>            $candidates    discovered plugins
      * @param QuarantineLedger                 $ledger        the seen-ledger backing quarantine
      * @param list<string>                     $kinds         manifest entrypoint kinds to read
-     * @param array<string, class-string>      $kindInterfaces the interface each kind's class must implement
+     * @param array<string, class-string>      $kindInterfaces the interface each requested kind is mapped to; the
+     *                                                         loader only requires that a mapping exists, and the
+     *                                                         caller checks the type of what it is handed
      * @param int                              $hostContract  the host's contract integer; a plugin declaring a higher one is refused
      * @param ?int                             $processUid    the uid the bytes must belong to; null reads the process's own
      *
@@ -91,8 +97,8 @@ final class PluginLoader
     ): LoadResult {
         foreach ($kinds as $kind) {
             if (!isset($kindInterfaces[$kind])) {
-                // A kind with no interface has no contract to check a class
-                // against, so the caller is wrong, not the plugin.
+                // A kind with no interface mapping is a caller error, not a plugin
+                // refusal: the caller names the kinds it reads.
                 throw new \InvalidArgumentException('No interface is mapped for plugin kind "' . $kind . '".');
             }
         }
@@ -234,11 +240,6 @@ final class PluginLoader
                     if (!\class_exists($entry->class, false)
                         || (new \ReflectionClass($entry->class))->getFileName() !== $entry->path) {
                         $refusals[] = $where + ['reason' => 'class-not-declared'];
-                        continue;
-                    }
-
-                    if (!\is_a($entry->class, $kindInterfaces[$kind], true)) {
-                        $refusals[] = $where + ['reason' => 'interface-mismatch'];
                         continue;
                     }
 
