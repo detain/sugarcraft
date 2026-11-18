@@ -68,8 +68,9 @@ final class GraphicsRenderer implements FrameRenderer
 
         // Emitted once, ahead of the first frame, and only after a Player rebuild
         // (see carryingFrom()); the terminal processes it in the same write as the draw.
+        // Spent only once the bytes exist: a draw that throws must leave the
+        // predecessor's delete owed to the next render, not lose it for good.
         $residue = $this->residue;
-        $this->residue = '';
 
         $delegate = $this->delegate();
         if ($delegate->supportsIdDelete()) {
@@ -79,10 +80,14 @@ final class GraphicsRenderer implements FrameRenderer
             // Player hands the last id to the successor when it rebuilds.
             $this->session ??= GraphicsFrameSession::new($delegate)->withImageId(self::allocateImageBase());
 
-            return $residue . $this->session->present($source, $cellsW, $cellsH);
+            $bytes = $residue . $this->session->present($source, $cellsW, $cellsH);
+        } else {
+            $bytes = $residue . $delegate->render($source, $cellsW, $cellsH);
         }
 
-        return $residue . $delegate->render($source, $cellsW, $cellsH);
+        $this->residue = '';
+
+        return $bytes;
     }
 
     /**
