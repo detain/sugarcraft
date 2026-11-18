@@ -31,6 +31,7 @@ use SugarCraft\Core\SequenceMsg;
 use SugarCraft\Core\Subscriptions;
 use SugarCraft\Core\TickRequest;
 use SugarCraft\Core\View;
+use SugarCraft\Core\WindowSizeRequest;
 use SugarCraft\Code\App\Tabs\TabScope;
 use SugarCraft\Code\App\Tabs\TabScopedMsg;
 use Throwable;
@@ -218,6 +219,7 @@ final class TabScopeTest extends TestCase
             new InterruptMsg(),
             new QuitMsg(),
             new WindowSizeMsg(80, 24),
+            new WindowSizeRequest(),
             new SubscriptionsMsg(new Subscriptions()),
             new ScreenStackPushedMsg(new Screen($this->parkedTabModelStub())),
             new ScreenStackPoppedMsg(),
