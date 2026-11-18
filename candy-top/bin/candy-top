@@ -261,16 +261,15 @@ foreach ($loaded->warnings as $warning) {
 }
 // btop auto-enables tty mode on a console: Term::current_tty.starts_with("/dev/tty")
 // (btop.cpp) — /dev/tty1 and serial consoles like /dev/ttyS0 alike.
-// Finding 150: without ext-posix the console NAME is unreadable but the
-// console itself is not — the stream_isatty gate above already refused
-// anything that is not a terminal, so on a Unix-family host with no
-// extension STDIN is the /dev/tty console btop names (the old blind
-// fallback answered false and silently skipped the 16-colour mode a
-// stock php Linux build would have enabled). Windows keeps false either
-// way: it has no /dev/tty semantics, and force_tty stays inert by the
-// options-menu rule that refuses the pairing on purpose. macOS ttys are
-// /dev/ttysNNN pty slaves, not consoles: TtyConsole refuses Darwin outright
-// (tty mode froze the backdrop under the boot OS notice there).
+// Without ext-posix the console NAME is unreadable, and the stream_isatty
+// gate above only proves STDIN is some terminal. A /dev/pts session passes
+// that gate too, so TtyConsole answers false for a null name rather than
+// trusting every terminal: tty mode freezes the backdrop, and a pty session
+// must never get it. The cost is that a stock php build without ext-posix
+// does not auto-enable the 16-colour mode on a real VT; force_tty still
+// turns it on. macOS ttys are /dev/ttysNNN pty slaves, not consoles:
+// TtyConsole refuses Darwin outright (tty mode froze the backdrop under the
+// boot OS notice there).
 $onConsole = TtyConsole::isConsole(
     function_exists('posix_ttyname') ? (posix_ttyname(STDIN) ?: '') : null,
     PHP_OS_FAMILY,
