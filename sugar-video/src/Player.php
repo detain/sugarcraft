@@ -177,6 +177,13 @@ final class Player implements Model
         // $stopped latch above is the precedent: it is a CACHE, not a value
         // the model is presented with.
         private readonly \ArrayObject $frameAtMemo = new \ArrayObject(),
+        // Kitty frames the mode cycles left on screen, owed to the terminal as deletes.
+        // Only a text successor can owe one (a graphics successor carries its residue
+        // itself). A shared slot rather than a model field: update() may run several
+        // times before the runtime renders, and only the view() that actually emits
+        // the bytes may spend the debt, so the delete is never lost to a coalesced
+        // message. Carried by mutate() like the thumbnail memo above.
+        private readonly \ArrayObject $retirementOwed = new \ArrayObject(),
     ) {
     }
 
@@ -1151,14 +1158,19 @@ final class Player implements Model
             // equal-geometry mode renders, so re-spawning ffmpeg and decoding
             // forward to the current playhead would be pure churn.
             if (self::decodeGeometry($nextMode) === self::decodeGeometry($this->mode)) {
+                $nextRenderer = $this->successorRenderer(RendererFactory::new($nextMode, $this->ramp, $this->cellPxW, $this->cellPxH));
+                $this->oweRetirementTo($nextRenderer);
+
                 return [$this->mutate([
                     'mode' => $nextMode,
-                    'renderer' => $this->successorRenderer(RendererFactory::new($nextMode, $this->ramp, $this->cellPxW, $this->cellPxH)),
+                    'renderer' => $nextRenderer,
                 ]), null];
             }
 
             [$decoder, $frame, $landed] = $this->rebuildDecoderAt($this->cellsW, $this->cellsH, $nextMode, $this->frameIndex);
 
+            $nextRenderer = $this->successorRenderer(RendererFactory::new($nextMode, $this->ramp, $this->cellPxW, $this->cellPxH));
+            $this->oweRetirementTo($nextRenderer);
             $nextPlayer = $this->mutate([
                 'mode' => $nextMode,
                 'decoder' => $decoder,
@@ -1166,7 +1178,7 @@ final class Player implements Model
                 // Budget-yielded walk: record the true landed playhead.
                 'frameIndex' => $landed,
                 'videoTime' => $landed / $this->fps,
-                'renderer' => $this->successorRenderer(RendererFactory::new($nextMode, $this->ramp, $this->cellPxW, $this->cellPxH)),
+                'renderer' => $nextRenderer,
             ]);
             return [$nextPlayer, null];
         }
@@ -1245,6 +1257,22 @@ final class Player implements Model
      * @return string
      */
     public function view(): string
+    {
+        $owed = $this->pendingRetirement();
+        $frame = $this->paint();
+        // Spent only once the frame is built: a paint that throws leaves the delete
+        // owed to the next view that does reach the terminal.
+        unset($this->retirementOwed[0]);
+
+        return $owed . $frame;
+    }
+
+    private function pendingRetirement(): string
+    {
+        return (string) ($this->retirementOwed[0] ?? '');
+    }
+
+    private function paint(): string
     {
         // SV-PGEO/068: a below-floor terminal cannot hold even one pane row —
         // every line this model can emit soft-wraps and corrupts the whole
@@ -2648,6 +2676,7 @@ final class Player implements Model
             // SV-L86/086: pinned — the thumbnail memo belongs to the stream,
             // not to one state; a tick or seek mid-scrub must not reset it.
             frameAtMemo: $this->frameAtMemo,
+            retirementOwed: $this->retirementOwed,
         );
         // Teardown is not a value the model is built with, so it cannot ride the
         // named-argument list — copy the latch forward instead. Every derived
@@ -2677,5 +2706,32 @@ final class Player implements Model
         }
 
         return $next;
+    }
+
+    /**
+     * The delete a rebuild owes the terminal when the successor is a text renderer:
+     * the outgoing Kitty frame, which no text successor would ever retire. Graphics
+     * successors carry the residue through {@see successorRenderer()} instead.
+     */
+    private function retirementOwedTo(FrameRenderer $next): string
+    {
+        if ($next instanceof GraphicsRenderer || !$this->renderer instanceof GraphicsRenderer) {
+            return '';
+        }
+
+        return $this->renderer->retirement();
+    }
+
+    /**
+     * Adds the delete a mode cycle owes to the shared slot. Appends rather than
+     * replaces: a Kitty -> text -> Kitty sequence with no view in between still owes
+     * the first frame's delete, which the second cycle must not drop.
+     */
+    private function oweRetirementTo(FrameRenderer $next): void
+    {
+        $owed = $this->retirementOwedTo($next);
+        if ($owed !== '') {
+            $this->retirementOwed[0] = $this->pendingRetirement() . $owed;
+        }
     }
 }

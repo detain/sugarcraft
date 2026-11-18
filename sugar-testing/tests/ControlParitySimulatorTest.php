@@ -214,12 +214,15 @@ final class ControlParitySimulatorTest extends TestCase
         $result = ProgramSimulator::new(new ControlRecorderModel())
             ->withWindowSize(80, 24)
             ->withEnvironment(['K' => 'V'])
-            ->withColorProfile(ColorProfile::detect(['FORCE_COLOR' => '1']))
+            // Forced colour, passed explicitly: the detection chain is not a
+            // dependency of sugar-testing, so a FORCE_COLOR env read would
+            // answer Ascii here. The trace records the profile name.
+            ->withColorProfile(ColorProfile::TrueColor)
             ->run();
 
         // Program::run() dispatches the trio before init(); the trace shows
         // exactly that order, with init()'s produced key landing last.
-        self::assertSame('80x24K=VCPI', $result->model->trace);
+        self::assertSame('80x24K=VCPTrueColorI', $result->model->trace);
     }
 
     public function testStartupTrioIsAbsentByDefault(): void

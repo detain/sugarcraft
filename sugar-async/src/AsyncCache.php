@@ -259,6 +259,7 @@ final class AsyncCache
     public function invalidate(string $key): void
     {
         unset($this->store->values[$key], $this->store->storedAt[$key]);
+        $this->store->forgetOrder($key);
         $this->store->flights->forget($key);
         $this->store->generation++;
     }
@@ -266,8 +267,7 @@ final class AsyncCache
     /** Drop every entry and supersede every in-flight load. */
     public function clear(): void
     {
-        $this->store->values = [];
-        $this->store->storedAt = [];
+        $this->store->clearValues();
         $this->store->flights->forgetAll();
         $this->store->generation++;
     }
@@ -280,15 +280,15 @@ final class AsyncCache
     }
 
     /**
-     * Cap enforcement at adoption time. {@see adopt()} moves every stored key to
-     * the tail of the value map, so the map's head is always the least-recently
-     * stored entry: each eviction is an array_key_first() plus an unset. That is
-     * not O(1) in general: PHP keeps unset buckets as tombstones at the head
-     * until the table compacts, so array_key_first() steps over them, and the
-     * cost per eviction grows with the cap under churn. The just-adopted key
-     * sits at the tail and is never a candidate. A drain loop, never
-     * self-recursion: a shrink below size would otherwise cost stack depth per
-     * excess entry. Flights are untouched; a coalescing load is not a stored value.
+     * Cap enforcement at adoption time. The least recently stored entry is the
+     * lowest live slot of the adoption order in {@see CacheStore}, so an
+     * eviction never scans the value map. array_key_first() over that map was
+     * not O(1): PHP keeps unset buckets as tombstones at its head until the
+     * table compacts, and each eviction stepped over every tombstone left by
+     * earlier ones. The just-adopted key sits at the newest slot and is never a
+     * candidate. A drain loop, never self-recursion: a shrink below size would
+     * otherwise cost stack depth per excess entry. Flights are untouched; a
+     * coalescing load is not a stored value.
      */
     private function evictOverflow(): void
     {
@@ -296,8 +296,7 @@ final class AsyncCache
             return;
         }
         while (count($this->store->values) > $this->maxEntries) {
-            $oldest = array_key_first($this->store->values);
-            unset($this->store->values[$oldest], $this->store->storedAt[$oldest]);
+            $this->store->evictOldest();
         }
     }
 
@@ -307,11 +306,12 @@ final class AsyncCache
         // displaced mid-load by invalidate()/clear() resolved its callers but
         // never writes into the store — the invalidation was the newer truth.
         if ($this->store->flights->end($key, $flight) === true) {
-            // Re-inserting moves the key to the tail: the map stays in
-            // least-recently-stored order, which evictOverflow() relies on.
+            // Re-inserting moves the key to the tail of the value map and to the
+            // newest slot of the adoption order: both stay least-recently-stored first.
             unset($this->store->values[$key]);
             $this->store->values[$key] = $value;
             $this->store->storedAt[$key] = ($this->store->clock)();
+            $this->store->touchOrder($key);
             $this->evictOverflow();
         }
 

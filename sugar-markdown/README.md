@@ -499,9 +499,12 @@ top-level headings. A folded heading keeps its own line, then a fold marker
 line, and the blocks after it are hidden up to the next heading of any level.
 A heading nested under a folded one is its own section and still shows.
 
-IDs come from `Renderer::headingId($text)`: lowercase, each run of characters
-that are neither letters nor digits becomes one hyphen, and the ends are
-trimmed. Two headings with the same text share an ID. Folding an ID that
+IDs come from `Renderer::headingId($text)` applied to the heading's rendered
+text, not its source: lowercase, each run of characters that are neither letters
+nor digits becomes one hyphen, and the ends are trimmed. With `withEmoji(true)`,
+`# :rocket: Launch` is the text "🚀 Launch", so its ID is `launch`, not
+`rocket-launch`. A TOC built from source text must expand shortcodes first, or
+it will fold nothing. Two headings with the same text share an ID. Folding an ID that
 matches no heading changes nothing, and `withFolds([])` unfolds everything.
 Folds work on the streaming path too, since each section starts at a heading.
 
@@ -537,8 +540,13 @@ the catalog.
 `Html\HtmlToMarkdown::convert($html, $baseUrl, $charset)` converts an HTML
 document to Markdown: headings, paragraphs, emphasis, links, lists, code,
 quotes and simple tables. It drops `script`, `style`, `nav`, `svg`, `iframe`,
-`noscript`, `template`, `noembed` and `noframes` subtrees whole, and resolves links against `$baseUrl` with
-`Html\UrlReference::resolve($base, $reference)`, an RFC 3986 resolver. A body
+`noscript`, `template`, `noembed` and `noframes` subtrees whole, and also drops
+any element the page hides itself: one with the `hidden` attribute or an inline
+`display:none` style. Hiding by a stylesheet rule or a class is not evaluated, so
+text a page hides only through its CSS still reaches the model; that is an
+accepted gap. Resolves links against `$baseUrl` with
+`Html\UrlReference::resolve($base, $reference)`, an RFC 3986 resolver. A non-block element that holds
+paragraphs (`details`, `center`, a `span` around blocks) keeps their breaks. A body
 the parser refuses, or one holding no renderable text (a lone `script`, say),
 returns a one-line note rather than `null`, so the dropped text never reaches
 the caller's raw-body fallback. The converter returns `null` only for empty

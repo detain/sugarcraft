@@ -419,6 +419,26 @@ final class BundleInstallScopeTest extends TestCase
         self::assertFileExists($this->project . '/.candy-code/bundles/alpha/.claude-plugin/plugin.json', 'the project-tier copy is untouched');
     }
 
+    public function testAProjectInstallFromAnUnownedHomeIsStillRefusedAndWritesNothing(): void
+    {
+        // A world-writable home is not an owned home, so the user root cannot
+        // be used; --project from that directory must still refuse rather than
+        // write the bundle into ~/.candy-code/bundles through the back door.
+        mkdir($this->home . '/.candy-code', 0777, true);
+        chmod($this->home, 0777);
+        $source = $this->stagedBundle('demo-src', 'demo');
+
+        [$exit, , $stderr] = $this->runCli($this->home, 'bundles', 'install', $source, '--project');
+
+        self::assertSame(NonInteractive::EXIT_FAILURE, $exit);
+        self::assertStringContainsString(
+            'bundles install: --project resolves to your home directory',
+            $stderr,
+            'the named home is refused whether or not it is an owned home',
+        );
+        self::assertDirectoryDoesNotExist($this->root . '/demo', 'nothing lands in the unowned user root');
+    }
+
     public function testAProjectInstallFromTheHomeDirectoryIsRefusedInsteadOfLandingInTheUserTier(): void
     {
         mkdir($this->home . '/.candy-code', 0777, true);
