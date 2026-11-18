@@ -254,8 +254,10 @@ keep-a-prefix stdout cap, an array-form argv launch with no shell in the
 path, the child's stderr drained rather than redirected, and fail-open
 semantics — anything short of a clean, on-time dump leaves the env-anchored
 chain answer standing. Results are memoized per `TERM` for the process
-lifetime (including recorded misses), so a long-lived consumer pays at most
-one child per terminal type; `Probe::_reset()` drains the table in tests.
+lifetime: a completed child (any exit code) and a recorded miss (an overrun or
+a signal kill on this sync door), so a long-lived consumer pays at most one
+child per terminal type. A failed launch is transient and mints no entry, so
+the next call may spawn again. `Probe::_reset()` drains the table in tests.
 
 ### Env-var precedence
 
@@ -683,7 +685,9 @@ binary on PATH):
   The child spawns only on the loop you pass in, and it shares the one
   `AsyncProbe` spawn ladder, slot cap and deadline with `colorProfile()`.
   Completed dumps are memoized per TERM (the cardinality ceiling is the same
-  256 entries). Without a loop the promise resolves in place through
+  256 entries); a deadline overrun, a signal kill and a failed launch mint no
+  entry, and a signal-killed child replays as "no dump". Without a loop the
+  promise resolves in place through
   `TerminalProbe::run()`.
 
 ## Overriding detection
