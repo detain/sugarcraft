@@ -533,28 +533,16 @@ final class WorkerPool
 
         // P1-1: the payload goes through the worker's queued Writer, so dispatch()
         // never blocks the loop. Bytes the child's pipe refuses wait in that
-        // writer and drain as the child reads. A child that takes nothing for
-        // WRITE_DEADLINE_SECONDS is declared dead with a named error, as before:
-        // bounded, diagnosable, and the promise settles either way.
+        // writer and drain as the child reads. A child that hands off no bytes
+        // across a full WRITE_DEADLINE_SECONDS window is declared dead with a
+        // named error: bounded, diagnosable, and the promise settles either way.
+        // The window restarts on progress, so a slow child that keeps draining
+        // is not killed for the size of its payload.
         $writer = $this->stdinWriter($worker);
         $data = $serialized . "\n";
         $length = strlen($data);
         $handedBefore = $writer->handedOff();
         $this->clearWriteDeadline($worker);
-        $worker->writeDeadline = $this->loop->addTimer(
-            self::WRITE_DEADLINE_SECONDS,
-            function () use ($worker, $writer, $jobId, $handedBefore, $length): void {
-                $worker->writeDeadline = null;
-                if ($writer->pendingBytes() === 0) {
-                    return;
-                }
-                $this->handleWorkerDeath($worker, Lang::t('worker.stdin_write_timeout', [
-                    'seconds'   => self::WRITE_DEADLINE_SECONDS,
-                    'written'   => $writer->handedOff() - $handedBefore,
-                    'total'     => $length,
-                ]) . $this->stderrDetail($worker), $jobId);
-            },
-        );
         $writer->onDrain(function () use ($worker): void {
             $this->clearWriteDeadline($worker);
         });
@@ -562,8 +550,12 @@ final class WorkerPool
             $this->handleWorkerDeath($worker, 'Failed to write to worker stdin' . $this->stderrDetail($worker), $jobId);
         });
         $writer->write($data);
-        if ($writer->pendingBytes() === 0) {
-            $this->clearWriteDeadline($worker);
+        // The window opens after the synchronous hand-off, so bytes the pipe
+        // took at dispatch count as the baseline, not as progress inside the
+        // window. A write that killed the worker has already released the
+        // writer, which is why the guard checks it is still the live one.
+        if ($writer->pendingBytes() > 0 && $worker->writer === $writer) {
+            $this->armWriteDeadline($worker, $writer, $jobId, $handedBefore, $writer->handedOff(), $length);
         }
     }
 
@@ -587,6 +579,42 @@ final class WorkerPool
             $this->loop->cancelTimer($worker->writeDeadline);
             $worker->writeDeadline = null;
         }
+    }
+
+    /**
+     * Arm one stall window for a stdin write. When it fires with bytes still
+     * pending, the window is re-armed if the writer handed off anything since
+     * `$handedAtWindowStart`; otherwise the worker is declared dead. The
+     * progress baseline advances each window, so a steadily draining child
+     * is never killed, while a silent one is bounded to two windows at most.
+     */
+    private function armWriteDeadline(
+        WorkerState $worker,
+        Writer $writer,
+        string $jobId,
+        int $handedBefore,
+        int $handedAtWindowStart,
+        int $length,
+    ): void {
+        $worker->writeDeadline = $this->loop->addTimer(
+            self::WRITE_DEADLINE_SECONDS,
+            function () use ($worker, $writer, $jobId, $handedBefore, $handedAtWindowStart, $length): void {
+                $worker->writeDeadline = null;
+                if ($writer->pendingBytes() === 0) {
+                    return;
+                }
+                $handedNow = $writer->handedOff();
+                if ($handedNow > $handedAtWindowStart) {
+                    $this->armWriteDeadline($worker, $writer, $jobId, $handedBefore, $handedNow, $length);
+                    return;
+                }
+                $this->handleWorkerDeath($worker, Lang::t('worker.stdin_write_timeout', [
+                    'seconds'   => self::WRITE_DEADLINE_SECONDS,
+                    'written'   => $handedNow - $handedBefore,
+                    'total'     => $length,
+                ]) . $this->stderrDetail($worker), $jobId);
+            },
+        );
     }
 
     /**
