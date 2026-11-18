@@ -30,6 +30,7 @@ return [
     'lru_map.capacity_invalid' => 'LRU kapasitesi en az 1 olmalı, alınan: {capacity}',
     'lru_map.capacity_too_large' => 'LRU kapasitesi {capacity}, büyüme sınırını {max} aşıyor',
     'lru_map.evict_from_empty' => 'boş LRU haritasından çıkarma yapılamaz',
+    'lru_map.ttl_invalid' => 'LRU TTL değeri pozitif ve sonlu bir saniye sayısı olmalıdır, alınan: {seconds}',
     'errors.negative_not_allowed' => '{name} için negatif değer kabul edilmez',
     'errors.value_must_be_positive' => '{name} pozitif olmalı, alınan: {value}',
     'errors.value_out_of_range' => '{name} {min} ile {max} arasında olmalı, alınan: {value}',

@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core\Util;
 
+use React\EventLoop\LoopInterface;
+use React\Promise\Deferred;
+use React\Promise\PromiseInterface;
 use SugarCraft\Core\Lang;
 
 /**
@@ -98,8 +101,6 @@ final class LockFile
             if (microtime(true) >= $deadline) {
                 $swept = $this->sweepIfStale($handle);
                 if ($swept === null) {
-                    fclose($handle);
-
                     return null;
                 }
 
@@ -109,6 +110,76 @@ final class LockFile
         }
 
         return $this->guard($handle);
+    }
+
+    /**
+     * The event-loop spelling of {@see tryAcquire()}: the same attempt, the same
+     * deadline and the same stale sweep, but the wait is a loop timer instead of
+     * a blocking sleep, so a ReactPHP program keeps its ticks running while it
+     * waits for another process.
+     *
+     * The promise resolves to the guard, or to null when still contended at the
+     * deadline or when the lock file cannot be opened. The first attempt runs
+     * synchronously, so an uncontended lock resolves before this returns.
+     *
+     * @return PromiseInterface<LockGuard|null>
+     */
+    public function tryAcquireAsync(LoopInterface $loop, float $timeoutSeconds = 0.0): PromiseInterface
+    {
+        $deferred = new Deferred();
+
+        $handle = $this->open();
+        if ($handle === null) {
+            $deferred->resolve(null);
+
+            return $deferred->promise();
+        }
+
+        $flags = ($this->exclusive ? \LOCK_EX : \LOCK_SH) | \LOCK_NB;
+        $deadline = microtime(true) + max(0.0, $timeoutSeconds);
+        $this->attemptAsync($loop, $handle, $flags, $deadline, $deferred);
+
+        return $deferred->promise();
+    }
+
+    /**
+     * One poll of {@see tryAcquireAsync()}: settle the deferred, or re-arm a
+     * timer for the next poll. Shares its deadline and sweep rule with
+     * {@see tryAcquire()}.
+     *
+     * @param resource $handle
+     */
+    private function attemptAsync(
+        LoopInterface $loop,
+        $handle,
+        int $flags,
+        float $deadline,
+        Deferred $deferred,
+    ): void {
+        if (@flock($handle, $flags)) {
+            $deferred->resolve($this->guard($handle));
+
+            return;
+        }
+
+        if (microtime(true) >= $deadline) {
+            $swept = $this->sweepIfStale($handle);
+            if ($swept === null) {
+                $deferred->resolve(null);
+
+                return;
+            }
+            $deferred->resolve($this->guard($swept));
+
+            return;
+        }
+
+        $loop->addTimer(
+            self::POLL_MICROSECONDS / 1_000_000,
+            function () use ($loop, $handle, $flags, $deadline, $deferred): void {
+                $this->attemptAsync($loop, $handle, $flags, $deadline, $deferred);
+            },
+        );
     }
 
     /**
@@ -159,10 +230,13 @@ final class LockFile
     }
 
     /**
-     * On a timed-out exclusive attempt: read the recorded pid; if provably
-     * dead, drop the file and lock the fresh inode. Returns the locked handle,
-     * or null when nothing was swept or the retry lost the race. Closes the
-     * contended handle when it sweeps.
+     * On a timed-out exclusive attempt: if the recorded pid is provably dead,
+     * drop the file and lock the fresh inode. Returns the locked handle, or
+     * null when nothing was swept or the retry lost the race.
+     *
+     * This method owns $contended: it is closed exactly once on every path, so
+     * callers must not close it again after a null (that double close is a
+     * TypeError).
      *
      * @param resource $contended
      *
@@ -170,17 +244,9 @@ final class LockFile
      */
     private function sweepIfStale($contended): mixed
     {
-        if (!$this->exclusive) {
-            return null;
-        }
+        if (!$this->isStale($contended)) {
+            fclose($contended);
 
-        rewind($contended);
-        $recorded = trim((string) stream_get_contents($contended, 32));
-        if ($recorded === '' || !ctype_digit($recorded)) {
-            return null;
-        }
-        $pid = (int) $recorded;
-        if ($pid <= 1 || $pid === getmypid() || $this->alive($pid)) {
             return null;
         }
 
@@ -198,6 +264,28 @@ final class LockFile
         }
 
         return $fresh;
+    }
+
+    /**
+     * Whether the holder recorded in $contended is provably dead. Read-only:
+     * it neither unlinks nor closes anything.
+     *
+     * @param resource $contended
+     */
+    private function isStale($contended): bool
+    {
+        if (!$this->exclusive) {
+            return false;
+        }
+
+        rewind($contended);
+        $recorded = trim((string) stream_get_contents($contended, 32));
+        if ($recorded === '' || !ctype_digit($recorded)) {
+            return false;
+        }
+        $pid = (int) $recorded;
+
+        return !($pid <= 1 || $pid === getmypid() || $this->alive($pid));
     }
 
     private function alive(int $pid): bool

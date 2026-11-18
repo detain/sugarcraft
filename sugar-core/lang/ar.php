@@ -30,6 +30,7 @@ return [
     'lru_map.capacity_invalid' => 'سعة LRU يجب أن تكون 1 على الأقل، تم تلقي {capacity}',
     'lru_map.capacity_too_large' => 'سعة LRU {capacity} تتجاوز حاجز النمو {max}',
     'lru_map.evict_from_empty' => 'لا يمكن الإخراج من خريطة LRU فارغة',
+    'lru_map.ttl_invalid' => 'LRU TTL يجب أن يكون عددًا موجبًا محدودًا من الثواني، القيمة: {seconds}',
     'errors.negative_not_allowed' => 'القيمة السالبة غير مسموح بها لـ {name}',
     'errors.value_must_be_positive' => 'يجب أن تكون {name} موجبة، تم تلقي {value}',
     'errors.value_out_of_range' => 'يجب أن تكون {name} بين {min} و {max}، تم تلقي {value}',

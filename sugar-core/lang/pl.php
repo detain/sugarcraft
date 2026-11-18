@@ -30,6 +30,7 @@ return [
     'lru_map.capacity_invalid' => 'pojemność LRU musi wynosić co najmniej 1, otrzymano {capacity}',
     'lru_map.capacity_too_large' => 'pojemność LRU {capacity} przekracza strażnika wzrostu {max}',
     'lru_map.evict_from_empty' => 'nie można usunąć z pustej mapy LRU',
+    'lru_map.ttl_invalid' => 'TTL mapy LRU musi być dodatnią, skończoną liczbą sekund, otrzymano {seconds}',
     'errors.negative_not_allowed' => 'wartość ujemna niedozwolona dla {name}',
     'errors.value_must_be_positive' => '{name} musi być dodatnia, otrzymano {value}',
     'errors.value_out_of_range' => '{name} musi być między {min} a {max}, otrzymano {value}',

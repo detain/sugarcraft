@@ -30,6 +30,7 @@ return [
     'lru_map.capacity_invalid' => 'LRU 용량은 최소 1이어야 합니다. 입력값: {capacity}',
     'lru_map.capacity_too_large' => 'LRU 용량 {capacity}이(가) 증가 가드 {max}를 초과합니다',
     'lru_map.evict_from_empty' => '빈 LRU 맵에서 내쫓을 수 없습니다',
+    'lru_map.ttl_invalid' => 'LRU TTL은 양수이고 유한한 초 단위 값이어야 합니다. 입력값: {seconds}',
     'errors.negative_not_allowed' => '{name}에 음수 값은 허용되지 않습니다',
     'errors.value_must_be_positive' => '{name}은(는) 양수여야 합니다. 입력값: {value}',
     'errors.value_out_of_range' => '{name}은(는) {min}과(와) {max} 사이여야 합니다. 입력값: {value}',
