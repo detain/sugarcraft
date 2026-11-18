@@ -1029,6 +1029,7 @@ final class Toast
      */
     private function carryHostZoneMarkers(Buffer $viewport, Buffer $bg, int $x, int $y, int $w, int $h): Buffer
     {
+        $painter = $viewport->toBuilder();
         $frameWidth = $bg->width();
         for ($row = $y; $row < $y + $h && $row < $bg->height(); $row++) {
             $protect = [];
@@ -1065,11 +1066,11 @@ final class Toast
             }
             for ($col = $x; $col < $x + $w && $col < $frameWidth; $col++) {
                 if (isset($protect[$col])) {
-                    $viewport = $viewport->withCellAt($col, $row, $bg->cellAt($col, $row));
+                    $painter->setCellAt($col, $row, $bg->cellAt($col, $row));
                 }
             }
         }
-        return $viewport;
+        return $painter->toBuffer();
     }
 
     /**
