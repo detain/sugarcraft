@@ -28,4 +28,5 @@ return [
     'blockstack.pop_empty' => 'stos bloków jest pusty',
     'theme.mapper_not_style' => 'Theme::mapStyles() oczekuje, że mapownik zwróci Style, otrzymano: {type}',
     'theme.with_slot_not_style' => 'Theme::with(): "{slot}" nie jest polem Style; prawidłowe pola: {slots}',
+    'fold.marker' => '▸ zwinięto',
 ];

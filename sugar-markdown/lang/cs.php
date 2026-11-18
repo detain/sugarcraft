@@ -28,4 +28,5 @@ return [
     'blockstack.pop_empty' => 'zásobník bloků je prázdný',
     'theme.mapper_not_style' => 'Theme::mapStyles() očekává, že mapper vrátí Style, obdrželi jsme {type}',
     'theme.with_slot_not_style' => 'Theme::with(): „{slot}“ není pole Style; platná pole: {slots}',
+    'fold.marker' => '▸ sbaleno',
 ];

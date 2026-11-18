@@ -622,6 +622,34 @@ argument is a placeholder for interface uniformity.
 | Ascii | _(none)_ | Plain text SGR; character ramp; returns `''` |
 | SymbolMap | _(none)_ | Plain text SGR; glyph-coverage engine; returns `''` |
 
+## Env-only detection, raw RGBA and frame sessions
+
+`Detect::fromEnv(?array $env = null)` classifies the terminal from environment
+variables alone: no tty, no query bytes, no timeout, no tmux process. Pass an
+explicit `name => value` map, or `null` to read the process environment.
+`Mosaic::fromEnv()` builds the renderer from that answer, and
+`Mosaic::fromModeString('auto', false)` routes the `auto` mode through it.
+The answer is the env stage of `Detect::probe()`; a DA1 sixel promotion, a
+tmux feature veto and the OSC colour queries need the tty and are absent here.
+
+`Mosaic::auto()` is memoised per process: the first call probes, later calls
+return the same `Mosaic`. `Mosaic::resetAutoMemo()` forces the next call to
+probe again.
+
+Every renderer also takes a raw straight-alpha RGBA8 buffer through
+`renderRgb($rgba, $pixelWidth, $pixelHeight, $cellsWidth, $cellsHeight = null)`.
+Kitty sends it as `f=32` and iTerm2 as an uncompressed TIFF, so neither builds
+a PNG container. Sixel and the text tiers decode it through an `ImageSource`.
+
+`GraphicsFrameSession::new($renderer)->withImageId($id)` presents a frame
+sequence without leaking images. Each `present($frame, $width, $height = null)`
+draws the frame under an id from a two-slot double buffer and then retires the
+previous one. On Kitty the new frame lands before the old one is deleted, so
+the screen never shows an empty image cell and the terminal's image store does
+not grow. iTerm2 pops the previous frame before it draws, because its delete
+removes only the topmost image. Sixel and the text tiers have nothing to delete.
+`Renderer::supportsIdDelete()` reports which case applies.
+
 ## Inside tmux
 
 tmux panes **swallow** DCS, APC and OSC strings unless the window's

@@ -28,4 +28,5 @@ return [
     'blockstack.pop_empty' => '块栈为空',
     'theme.mapper_not_style' => 'Theme::mapStyles() 期望映射器返回 Style，实际收到 {type}',
     'theme.with_slot_not_style' => 'Theme::with(): "{slot}" 不是 Style 槽位；有效槽位: {slots}',
+    'fold.marker' => '▸ 已折叠',
 ];

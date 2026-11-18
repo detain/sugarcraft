@@ -256,6 +256,29 @@ final class Detect
     }
 
     /**
+     * Classify the terminal from environment variables alone: no tty, no
+     * query bytes, no timeout, no tmux process. Pure, so it can run in a
+     * test, in a pipeline, or before the program has a tty at all.
+     *
+     * `$env` is an explicit name => value map; null reads the process
+     * environment (the same keys {@see TermDb::snapshotEnv()} reads). A
+     * `TMUX` key, even an empty one, marks the session as inside tmux, as
+     * {@see probe()} does with getenv().
+     *
+     * The answer is the env stage of {@see probe()} and nothing more: a DA1
+     * sixel promotion, a tmux feature veto and the OSC colour queries all
+     * need the tty, so they are absent here by design.
+     *
+     * @param array<string,string>|null $env
+     */
+    public static function fromEnv(?array $env = null): Capability
+    {
+        $env ??= TermDb::snapshotEnv();
+
+        return self::envLadder($env, isset($env['TMUX']));
+    }
+
+    /**
      * Probe the terminal: env vars first, then optional DA1 query.
      *
      * If env vars already give a definite protocol (Kitty / iTerm2),
@@ -376,7 +399,12 @@ final class Detect
     }
 
     /**
-     * Clear the cached capability and last DA1 reply (for testing).
+     * Clear the cached capability, the last DA1 reply and the memoised
+     * {@see Mosaic::auto()} answer (for testing).
+     *
+     * The auto memo is dropped here because it is a memo of this probe: a
+     * caller that resets the probe (after changing the environment, say)
+     * must get a fresh auto() answer, not the one from before the change.
      *
      * Deliberately does NOT clear the override seams ($repeatOverride,
      * $tmuxTermFeatures, $terminfoSixel) — tests that armed one must call
@@ -389,6 +417,7 @@ final class Detect
         self::$cached           = null;
         self::$lastDa1Reply     = null;
         self::$strayInputBytes  = '';
+        Mosaic::resetAutoMemo();
     }
 
     /**
@@ -1553,7 +1582,19 @@ final class Detect
      */
     private static function probeEnv(bool $inTmux = false): Capability
     {
-        $info = TermDb::matchChain(TermDb::snapshotEnv());
+        return self::envLadder(TermDb::snapshotEnv(), $inTmux);
+    }
+
+    /**
+     * The env-only ladder over an explicit environment map. Pure: it reads
+     * nothing but $env, so {@see fromEnv()} and the live {@see probeEnv()}
+     * share one answer for one environment.
+     *
+     * @param array<string,string> $env
+     */
+    private static function envLadder(array $env, bool $inTmux): Capability
+    {
+        $info = TermDb::matchChain($env);
 
         // Family precedence: the old ladder's block order is now the table's
         // resolution order (wezterm/mintty/rio claim several protocols at

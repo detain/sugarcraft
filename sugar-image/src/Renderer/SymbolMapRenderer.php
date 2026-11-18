@@ -60,6 +60,8 @@ use SugarCraft\Image\Support\OutputOptimizer;
  */
 final class SymbolMapRenderer implements Renderer, AcceptsOptimization, ConfigFingerprintProvider, CanvasModeConfigurable, WorkFactorConfigurable
 {
+    use \SugarCraft\Image\Concerns\ImageSourceRgbFallback;
+
     use RenderValidationTrait;
     use OptimizationCarrierTrait;
 

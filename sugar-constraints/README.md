@@ -97,6 +97,8 @@ Cross-references only — nothing here depends on sugar-flexbox.
 ## Types
 
 ```
+Direction (enum)                 canonical split axis for the whole stack: Horizontal | Vertical,
+                                 other(). sugar-style's Layout consumes this enum (its own copy was removed).
 LayoutSolver (interface)         one method: solve(Region, Direction, list<Constraint>)
   └─ GreedySolver (final)        the supported solver
   └─ CassowarySolver (final)     deprecated shim — warns and delegates to GreedySolver

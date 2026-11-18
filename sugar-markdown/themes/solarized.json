@@ -1,0 +1,23 @@
+{
+  "heading1": {"foreground": "#dc322f", "bold": true},
+  "heading2": {"foreground": "#cb4b16", "bold": true},
+  "heading3": {"foreground": "#b58900", "bold": true},
+  "heading4": {"foreground": "#268bd2", "bold": true},
+  "heading5": {"foreground": "#2aa198", "bold": true},
+  "heading6": {"foreground": "#859900", "bold": true},
+  "paragraph": {"foreground": "#657b83"},
+  "bold": {"bold": true},
+  "italic": {"italic": true},
+  "code": {"foreground": "#268bd2", "background": "#073642"},
+  "codeBlock": {"foreground": "#268bd2", "background": "#073642"},
+  "link": {"foreground": "#268bd2", "underline": true},
+  "blockquote": {"foreground": "#93a1a1", "italic": true},
+  "listMarker": {"foreground": "#b58900"},
+  "rule": {"foreground": "#657b83"},
+  "keyword": {"foreground": "#859900", "bold": true},
+  "string": {"foreground": "#2aa198"},
+  "number": {"foreground": "#d33682"},
+  "comment": {"foreground": "#586e75", "italic": true},
+  "strike": {"strike": true, "foreground": "#657b83"},
+  "autolink": {"foreground": "#268bd2", "underline": true}
+}

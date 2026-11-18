@@ -28,4 +28,5 @@ return [
     'blockstack.pop_empty' => 'the block stack is empty',
     'theme.mapper_not_style' => 'Theme::mapStyles() expects the mapper to return a Style, got {type}',
     'theme.with_slot_not_style' => 'Theme::with(): "{slot}" is not a Style slot; valid slots: {slots}',
+    'fold.marker' => '▸ folded',
 ];

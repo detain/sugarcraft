@@ -178,6 +178,8 @@ final class AnimationDriverTest extends TestCase
         // docblock's paced-not-non-blocking claim (and this test) must be
         // updated together, not silently.
         $slow = new class implements Renderer {
+        use \SugarCraft\Image\Concerns\ImageSourceRgbFallback;
+
             public function render(ImageSource $image, int $width, ?int $height = null): string
             {
                 \usleep(60_000);

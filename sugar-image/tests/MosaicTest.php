@@ -30,6 +30,7 @@ final class MosaicTest extends TestCase
 
     protected function setUp(): void
     {
+        \SugarCraft\Image\Mosaic::resetAutoMemo();
         $this->fixture4x2 = __DIR__ . '/fixtures/4x2.png';
         if (!file_exists($this->fixture4x2)) {
             $this->markTestSkipped('Fixture tests/fixtures/4x2.png missing');

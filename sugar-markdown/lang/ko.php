@@ -28,4 +28,5 @@ return [
     'blockstack.pop_empty' => '블록 스택이 비어 있습니다',
     'theme.mapper_not_style' => 'Theme::mapStyles()는 매퍼가 Style을 반환해야 합니다. 받은 타입: {type}',
     'theme.with_slot_not_style' => 'Theme::with(): "{slot}"은(는) Style 슬롯이 아닙니다. 유효한 슬롯: {slots}',
+    'fold.marker' => '▸ 접힘',
 ];

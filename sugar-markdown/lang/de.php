@@ -28,4 +28,5 @@ return [
     'blockstack.pop_empty' => 'der Block-Stapel ist leer',
     'theme.mapper_not_style' => 'Theme::mapStyles() erwartet, dass der Mapper ein Style zurückgibt, erhalten: {type}',
     'theme.with_slot_not_style' => 'Theme::with(): »{slot}« ist kein Style-Slot; gültige Slots: {slots}',
+    'fold.marker' => '▸ eingeklappt',
 ];

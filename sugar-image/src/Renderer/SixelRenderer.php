@@ -39,6 +39,8 @@ use SugarCraft\Image\TermInfo;
  */
 final class SixelRenderer implements Renderer, ConfigFingerprintProvider
 {
+    use \SugarCraft\Image\Concerns\ImageSourceRgbFallback;
+
     use \SugarCraft\Image\Concerns\RenderValidationTrait;
 
     /**
