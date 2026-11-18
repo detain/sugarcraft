@@ -30,6 +30,7 @@ return [
     'lru_map.capacity_invalid' => 'kapacita LRU musí být alespoň 1, získáno {capacity}',
     'lru_map.capacity_too_large' => 'kapacita LRU {capacity} překračuje stráž růstu {max}',
     'lru_map.evict_from_empty' => 'z prázdné mapy LRU nelze vyřadit',
+    'lru_map.ttl_invalid' => 'TTL mapy LRU musí být kladný konečný počet sekund, obdrženo {seconds}',
     'errors.negative_not_allowed' => 'záporná hodnota není pro {name} povolena',
     'errors.value_must_be_positive' => '{name} musí být kladné, získáno {value}',
     'errors.value_out_of_range' => '{name} musí být mezi {min} a {max}, získáno {value}',

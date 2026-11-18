@@ -30,6 +30,7 @@ return [
     'lru_map.capacity_invalid' => 'LRU-capaciteit moet minstens 1 zijn, gekregen {capacity}',
     'lru_map.capacity_too_large' => 'LRU-capaciteit {capacity} overschrijdt groeibeperking {max}',
     'lru_map.evict_from_empty' => 'kan niets verwijderen uit een lege LRU-map',
+    'lru_map.ttl_invalid' => 'De LRU-TTL moet een positief, eindig aantal seconden zijn, kreeg {seconds}',
     'errors.negative_not_allowed' => 'negatieve waarde niet toegestaan voor {name}',
     'errors.value_must_be_positive' => '{name} moet positief zijn, gekregen {value}',
     'errors.value_out_of_range' => '{name} moet tussen {min} en {max} zijn, gekregen {value}',
