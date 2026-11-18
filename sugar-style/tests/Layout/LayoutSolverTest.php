@@ -78,7 +78,11 @@ final class LayoutSolverTest extends TestCase
      */
     public function testStyleLayoutNoLongerShipsADirectionEnum(): void
     {
-        $this->assertFalse(enum_exists('SugarCraft\\Style\\Layout\\Direction'));
+        // autoload=false: with autoload on, Composer's ClassLoader would try to
+        // include the deleted src/Layout/Direction.php and emit warnings that
+        // failOnWarning turns into a red run.
+        $this->assertFalse(enum_exists('SugarCraft\\Style\\Layout\\Direction', false));
+        $this->assertFileDoesNotExist(dirname(__DIR__, 2) . '/src/Layout/Direction.php');
         $this->assertTrue(enum_exists(Direction::class));
     }
 
