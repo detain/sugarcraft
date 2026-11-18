@@ -36,6 +36,7 @@ use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Server\Ws\Connection;
 use SugarCraft\Code\Server\Ws\MessageHandler;
 use SugarCraft\Code\Server\Ws\Outbox;
+use SugarCraft\ServeProtocol\Protocol;
 
 /**
  * The `candy-code.v1` protocol (roadmap O-3b, Appendix O §6): the
@@ -88,7 +89,7 @@ final class Dispatcher implements MessageHandler
     public const MAX_INFLIGHT = 64;
 
     /** Appendix O §6.1: the largest message this server sends. */
-    public const MAX_SERVER_FRAME_BYTES = 4_194_304;
+    public const MAX_SERVER_FRAME_BYTES = Protocol::MAX_SERVER_FRAME_BYTES;
 
     /** Appendix O §6.2: `limits.tickIntervalMs`. */
     public const TICK_INTERVAL_SECONDS = 15.0;
