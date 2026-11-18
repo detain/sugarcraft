@@ -176,7 +176,11 @@ final class DiffCommand implements DocumentedCommand
         return $diffs;
     }
 
-    /** @param array<array-key, mixed> $payload @return array<array-key, mixed> */
+    /**
+     * @param array<array-key, mixed> $payload
+     *
+     * @return array<array-key, mixed>
+     */
     private static function stripMigrationMetadata(array $payload): array
     {
         return array_diff_key($payload, array_flip(self::MIGRATION_METADATA_KEYS));
@@ -207,6 +211,8 @@ final class DiffCommand implements DocumentedCommand
             }
             return preg_replace('/[^\x20-\x7e]/', '.', $value) ?? '';
         }
-        return (string) $value;
+        // Only scalars reach here: null, array and string are answered above.
+        // An object has no honest text form, so it takes the array fallback.
+        return \is_scalar($value) ? (string) $value : '{...}';
     }
 }

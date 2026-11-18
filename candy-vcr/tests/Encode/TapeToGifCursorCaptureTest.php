@@ -81,6 +81,10 @@ final class TapeToGifCursorCaptureTest extends TestCase
             /** @var list<bool> */
             public array $flags = [];
 
+            /**
+             * @param positive-int $cellW
+             * @param positive-int $cellH
+             */
             public function rasterize(
                 Snapshot $snapshot,
                 int $cellW,

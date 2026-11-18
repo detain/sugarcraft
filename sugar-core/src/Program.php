@@ -1333,6 +1333,10 @@ final class Program
                 if ($cmd !== null) {
                     $this->scheduleCmd($cmd);
                 }
+                // A push or pop moves the active model, so the subscriptions
+                // of the new top (pushed screen, or the base on pop) must be
+                // reconciled now, not on the next unrelated Msg.
+                $this->reconcileWantedSubscriptions();
                 return;
             }
             // sugar-core-034 (RUN-9): a stack message reaching a root that does
@@ -2958,6 +2962,14 @@ final class Program
                 foreach ($node->panes() as $pane) {
                     $collect($pane->model);
                 }
+            } elseif ($node instanceof RootModelWithScreenStack
+                && $node->screens()->isEmpty()
+                && $node->currentModel !== null
+            ) {
+                // With no screen pushed the root is the active model, and its
+                // base layer is the live one: walk it, or its subscriptions
+                // never start (the root itself declares none).
+                $collect($node->currentModel);
             }
         };
         $collect($model);

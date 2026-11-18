@@ -89,6 +89,8 @@ final class ReplayCompletionNoticeTest extends TestCase
     }
 
     /**
+     * @param list<string> $argv
+     *
      * @return array{0: int, 1: string, 2: string}
      */
     private function exec(array $argv): array

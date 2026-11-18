@@ -49,7 +49,7 @@ final class LexerEscapeTest extends TestCase
         $bytes = '';
         foreach ($cassette->events as $event) {
             if ($event->kind === EventKind::Input) {
-                $bytes .= (string) $event->payload['b'];
+                $bytes .= (\is_string($event->payload['b']) ? $event->payload['b'] : '');
             }
         }
         $this->assertSame('echo "hello" world', $bytes, 'compile-time unescape resolves to the typed bytes');
@@ -66,7 +66,7 @@ final class LexerEscapeTest extends TestCase
         $bytes = '';
         foreach ($cassette->events as $event) {
             if ($event->kind === EventKind::Input) {
-                $bytes .= (string) $event->payload['b'];
+                $bytes .= (\is_string($event->payload['b']) ? $event->payload['b'] : '');
             }
         }
         $this->assertSame('a\\b', $bytes, 'the escape pair resolves to the single backslash it names');
@@ -177,7 +177,7 @@ final class LexerEscapeTest extends TestCase
         $bytes = '';
         foreach ($cassette->events as $event) {
             if ($event->kind === EventKind::Input) {
-                $bytes .= (string) $event->payload['b'];
+                $bytes .= (\is_string($event->payload['b']) ? $event->payload['b'] : '');
             }
         }
         $this->assertSame("\x1b]52;c;" . base64_encode('a"b') . "\x07", $bytes, 'OSC-52 carries the resolved payload');

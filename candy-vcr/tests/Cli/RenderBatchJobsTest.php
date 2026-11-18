@@ -181,6 +181,8 @@ final class RenderBatchJobsTest extends TestCase
     }
 
     /**
+     * @param list<string> $extraArgs
+     *
      * @return array{0: int, 1: string, 2: string} exit code, stdout, stderr
      */
     private function runBatch(string $dir, int $jobs, array $extraArgs = []): array
@@ -242,6 +244,7 @@ final class RenderBatchJobsTest extends TestCase
             \RecursiveIteratorIterator::CHILD_FIRST,
         );
         foreach ($items as $item) {
+            /** @var \SplFileInfo $item */
             if ($item->isDir()) {
                 @rmdir($item->getPathname());
             } else {

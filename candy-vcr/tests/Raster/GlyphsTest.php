@@ -181,6 +181,7 @@ final class GlyphsTest extends TestCase
         $this->assertSame(2, $g->cacheStats()['evictions']);
 
         // ... and the evicted pair is the LRU head (k1, k2), not k0.
+        /** @var int $missesBefore */
         $missesBefore = $g->cacheStats()['misses'];
         $g->tile('k0', 15, 0, false, false, false);
         $this->assertSame($missesBefore, $g->cacheStats()['misses'], 'touched k0 must still be cached');

@@ -88,6 +88,9 @@ final class ConfinePathTest extends TestCase
         return $path;
     }
 
+    /**
+     * @param non-empty-string $name
+     */
     private function shotTape(string $name = 'shot.tape'): string
     {
         return $this->tape($name, "Type \"X\"\nScreenshot shot.png\n");
