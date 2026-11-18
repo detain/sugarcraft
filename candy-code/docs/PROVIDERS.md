@@ -109,8 +109,10 @@ missing key (and the environment variable to set, where there is one).
 
 ### `bedrock`
 
-- **Required:** `region`. The bare default is `us-east-1`. An empty region falls
-  back to `AWS_REGION`, then `AWS_DEFAULT_REGION`.
+- **Required:** `region`. The bare default is `us-east-1`, and a block that
+  omits `region` launches there. To take the region from the environment, write
+  it as a placeholder, `"region": "${AWS_REGION}"`; the `AWS_*` variables are not
+  read otherwise.
 - **Optional:** `model` (default `us.anthropic.claude-sonnet-4-6`, an
   inference-profile id, which on-demand Claude 4.x throughput requires),
   `modelPrices`, `promptCache`, `fallbackModels`, `contextWindow`.
@@ -197,8 +199,8 @@ environment. The defaults apply when the variable is unset or empty.
 | `GEMINI_API_KEY` | `gemini` | The Gemini API key. | empty, which the provider rejects |
 | `GEMINI_BASE_URL` | `gemini` | The Gemini API root. | `https://generativelanguage.googleapis.com` |
 | `OPENROUTER_API_KEY` | `openrouter` | The OpenRouter key. | empty, which the provider rejects |
-| `AWS_REGION` | `bedrock` | The region when the block's `region` is empty. | `AWS_DEFAULT_REGION`, then `us-east-1` |
-| `AWS_DEFAULT_REGION` | `bedrock` | The region when `AWS_REGION` is unset. | `us-east-1` |
+| `AWS_REGION` | `bedrock` | The region, but only when the block's `region` is the placeholder `"${AWS_REGION}"`. The factory does not read it otherwise. | `us-east-1` |
+| `AWS_DEFAULT_REGION` | `bedrock` | Not read by the provider factory. A directly built `BedrockProvider` with an empty region falls back to it when `AWS_REGION` is unset. | `us-east-1` |
 
 The provider-selection variables `CANDY_CODE_PROVIDER` and `CANDY_CODE_MODEL` are
 described in the [environment reference](ENVIRONMENT.md#app-variables).

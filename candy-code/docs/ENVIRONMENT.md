@@ -265,7 +265,7 @@ instance roles), resolved by `aws/aws-sdk-php` rather than by CandyCode.
 
 | Variable | Provider | Description |
 |----------|----------|-------------|
-| `AWS_REGION` | `bedrock` | Region the request is signed against. Through the provider factory it has no effect: the `bedrock` default config already sets `us-east-1`, so the variable is read only by a directly built `BedrockProvider` whose region is empty. |
+| `AWS_REGION` | `bedrock` | Region the request is signed against. Through the provider factory it has effect only when the block's `region` is the placeholder `"${AWS_REGION}"`: the `bedrock` default config already sets `us-east-1`, so a bare launch never reads it. A directly built `BedrockProvider` whose region is empty also reads it. |
 | `AWS_DEFAULT_REGION` | `bedrock` | Fallback used only by a directly built `BedrockProvider` with an empty region, and only when `AWS_REGION` is unset. The provider factory never reaches it. |
 
 `CUSTOM_PROVIDER_API_KEY` is the *default* variable name for
