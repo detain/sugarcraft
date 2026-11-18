@@ -175,6 +175,31 @@ final class RetryTest extends TestCase
         $this->assertSame([[1, 1, 'down 1'], [2, 2, 'down 2'], [3, 4, 'down 3'], [4, 4, 'down 4']], $delays);
     }
 
+    public function testReconnectClampsItsRedialDelayToTheLadderPlateau(): void
+    {
+        // A 2 h base would arm a 2 h redial; retry() plateaus at
+        // MAX_BACKOFF_SECONDS, and reconnect() must report and arm that same
+        // clamped delay.
+        $loop = Loop::get();
+        $source = CancellationSource::new();
+        $reported = null;
+        $p = Retry::reconnect(
+            static fn () => reject(new \RuntimeException('down')),
+            Backoff::new(7_200_000.0)->withoutJitter(),
+            $source->token(),
+            $loop,
+            function (int $n, int $ms) use (&$reported): void {
+                $reported ??= $ms;
+            },
+        );
+        $p->then(null, static function (): void {
+        });
+        $this->runUntil($loop, static fn (): bool => $reported !== null);
+        $source->cancel();
+
+        self::assertSame((int) (Retry::MAX_BACKOFF_SECONDS * 1000), $reported);
+    }
+
     public function testReconnectRefusesANonPromiseDialByNameWithoutThrowing(): void
     {
         // A bare value from the dial used to be an Error raised inside a loop

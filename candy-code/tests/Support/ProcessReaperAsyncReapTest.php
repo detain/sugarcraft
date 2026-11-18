@@ -122,4 +122,14 @@ final class ProcessReaperAsyncReapTest extends TestCase
             \proc_close($process);
         }
     }
+
+    public function testGraceDeadlinesMeasureOnAMonotonicClock(): void
+    {
+        // A wall-clock step (NTP) must not stretch or cut the TERM/KILL window.
+        // A live clock step cannot be staged in a test, so the source is the guard.
+        $source = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Support/ProcessReaper.php');
+
+        self::assertStringNotContainsString('microtime(', $source);
+        self::assertStringContainsString('hrtime(true)', $source);
+    }
 }

@@ -282,8 +282,10 @@ final class AsyncCache
     /**
      * Cap enforcement at adoption time. {@see adopt()} moves every stored key to
      * the tail of the value map, so the map's head is always the least-recently
-     * stored entry: each eviction is an array_key_first() plus an unset, with no
-     * scan of the store (amortized O(1) per evicted key). The just-adopted key
+     * stored entry: each eviction is an array_key_first() plus an unset. That is
+     * not O(1) in general: PHP keeps unset buckets as tombstones at the head
+     * until the table compacts, so array_key_first() steps over them, and the
+     * cost per eviction grows with the cap under churn. The just-adopted key
      * sits at the tail and is never a candidate. A drain loop, never
      * self-recursion: a shrink below size would otherwise cost stack depth per
      * excess entry. Flights are untouched; a coalescing load is not a stored value.
