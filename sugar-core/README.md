@@ -1104,6 +1104,36 @@ echo $action->type->value;   // 'delete'
 echo $action->label;          // 'delete foo'
 ```
 
+## UndoStack, ArmedAction, Interpolate, PathJail
+
+Four small primitives for the undo, confirmation, config-expansion and
+containment logic that the monorepo's apps currently carry copies of.
+
+```php
+use SugarCraft\Core\Undo\UndoStack;
+use SugarCraft\Core\Undo\ArmedAction;
+use SugarCraft\Core\Config\Interpolate;
+use SugarCraft\Core\Util\PathJail;
+
+// Immutable undo/redo history. push() clears redo; the oldest entries drop at the limit.
+$stack = UndoStack::new(limit: 50)->push($action);
+['entry' => $undone, 'stack' => $stack] = $stack->undo();
+
+// A destructive action waiting for one keystroke. `y` confirms, and so does
+// the locale's affirmative word; anything else cancels.
+$armed = ArmedAction::new('delete', 'Delete 2 files?', ['paths' => $paths], localeAffirmative: 'j');
+$armed->confirms($key);
+
+// ${VAR} and ${VAR:-default} inside a config value. Pass a lookup to avoid the environment.
+Interpolate::expand('https://${HOST:-localhost}/mcp');
+
+// Containment. resolve() refuses a dangling leaf and an empty path; resolveDir()
+// and resolveForCreate() keep the base rules. Pass an overflow hook to resolve()
+// to admit paths outside the root that the application vouches for.
+PathJail::resolve($root, 'notes/today.md');        // ?string
+PathJail::resolveForCreate($root, 'new/dir/x.md'); // ?string
+```
+
 ## Atomic durable JSON files (`Util\AtomicJsonFile`)
 
 Usage: `AtomicJsonFile::new($file)->write($data)` serialises to a temp inode,
