@@ -52,7 +52,7 @@ final class DithererBatchRowCopyTest extends TestCase
     public function testFlattenTargetAppliesOnlyToSemiTransparentNonHolePixels(): void
     {
         $img = $this->fixture();
-        $bg  = new Color(255, 255, 255);
+        $bg  = Color::rgb(255, 255, 255);
         [$row, $holes] = $this->loadRow(new Ditherer(flattenBackground: $bg), $img, 4, 1);
 
         [$r, $g, $b] = Ditherer::flattenOnto(10, 20, 30, 64, $bg);

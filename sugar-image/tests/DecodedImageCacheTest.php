@@ -103,9 +103,9 @@ final class DecodedImageCacheTest extends TestCase
 
     public function testUndecodableBytesThrowAndCacheNothing(): void
     {
-        // Bytes that carry a PNG signature but no decodable payload: the
-        // constructor accepts them (dimensions are declared), GD refuses them.
-        $broken = new ImageSource("\x89PNG\r\n\x1a\nnot really", 'image/png', 2, 2);
+        // Bytes GD cannot parse: the constructor accepts them (dimensions are
+        // declared), GD refuses them, and nothing is cached.
+        $broken = new ImageSource('not an image at all', 'image/png', 2, 2);
 
         $this->expectException(\RuntimeException::class);
         try {
