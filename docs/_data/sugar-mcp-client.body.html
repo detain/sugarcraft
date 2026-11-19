@@ -1,9 +1,10 @@
-<p class="lede" style="margin-top: 28px;">A Model Context Protocol client core the whole ecosystem can share: <strong>JSON-RPC 2.0 envelopes, a newline-framed stdio transport with a bounded child lifecycle, the initialize/tools handshake, and deny-before-allow server narrowing — tool rosters follow servers</strong>. Here "client" means the tool-CALLING side: this library spawns and drives an MCP server child process; it does not host one. Extracted from candy-code's <code>src/MCP</code> stack and <code>McpMessage</code> codec, so every surface that talks to an MCP server rides the same framing and the same handshake-and-deadline doctrine wherever the transport is stdio. First-party — MCP is a spec, not a Go port.</p>
+<p class="lede" style="margin-top: 28px;">A Model Context Protocol client core the whole ecosystem can share: <strong>JSON-RPC 2.0 envelopes, a newline-framed stdio transport with a bounded child lifecycle, the initialize/tools handshake, and deny-before-allow server narrowing — tool rosters follow servers</strong>. Here "client" means the tool-CALLING side: this library spawns and drives an MCP server child process; it does not host one. It was extracted from candy-code's MCP stack, so every surface that talks to an MCP server over stdio shares the same framing and the same handshake-and-deadline rules. First-party: MCP is a specification, not a Go port.</p>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <h2 style="margin-top: 40px;">Install</h2>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-mcp-client</code></pre>
+    <p style="color: var(--ink-2);">Requires PHP 8.3 or newer. The only runtime dependency beyond PHP is <code>sugarcraft/sugar-core</code>, which supplies the output sanitizer used below.</p>
 
-    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
+    <h2 id="quickstart" style="margin-top: 40px;">Quickstart</h2>
     <pre class="code"><code class="language-php">use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\McpClient\StdioMcpServer;
 
@@ -13,20 +14,99 @@ $server = new StdioMcpServer(
     args: ['-y', '@modelcontextprotocol/server-everything'],
 );
 
-$server->start();              // initialize → notifications/initialized → tools/list, one 60 s clock
-foreach ($server->listTools() as $tool) {
-    echo $tool->name, ' — ', Sanitize::untrusted($tool->description), PHP_EOL;  // server-authored prose
+$server-&gt;start();              // initialize → notifications/initialized → tools/list, one 60 s clock
+foreach ($server-&gt;listTools() as $tool) {
+    echo $tool-&gt;name, ' — ', Sanitize::untrusted($tool-&gt;description), PHP_EOL;  // server-authored prose
 }
 
-$result = $server->callTool('echo', ['message' => 'hi']);
-// normally ['content' => [['type' => 'text', 'text' => '…']]], or ['error' => …]
-// naming the CAUSE — a failed call never throws and never answers bare.
+$result = $server-&gt;callTool('echo', ['message' =&gt; 'hi']);
+// normally ['content' =&gt; [['type' =&gt; 'text', 'text' =&gt; '…']]], or ['error' =&gt; …]
+// naming the CAUSE: a failed call never throws and never answers bare.
 
-$server->stop();               // close pipes first, then TERM→KILL→reap — bounded teardown (see Fork safety for the SIGKILLed-owner residual).
-// __destruct calls stop() for you if you forget.</code></pre>
-    <p style="margin-top: 12px;">The example spawns <code>npx -y @modelcontextprotocol/server-everything</code>, so it needs Node.js on PATH; the library itself depends only on PHP 8.3 and sugar-core — substitute any stdio MCP server command (name, command, argv list) for a dependency-free trial, or run <code>php examples/echo.php</code>, which is the whole trial in one file: it acts as the client when run plainly and as the stdio server when run with <code>--serve</code>, with nothing to install or download.</p>
+$server-&gt;stop();               // closes the pipes, then TERM → KILL → reap; __destruct calls stop() if you forget</code></pre>
+    <p style="margin-top: 12px;">The example spawns <code>npx -y @modelcontextprotocol/server-everything</code>, so it needs Node.js on PATH. Any stdio MCP server takes the same three arguments: a name, a command and an argv list. For a trial with nothing to install, run <code>php examples/echo.php</code> (see <em>Examples</em>).</p>
 
-    <h3 style="margin-top: 32px;">The model</h3>
+    <h2 style="margin-top: 40px;">Concepts</h2>
+    <p>The library is the client half of MCP. It launches a server as a child process, speaks newline-delimited JSON-RPC 2.0 over the child's stdin and stdout, and runs the handshake: <code>initialize</code>, then <code>notifications/initialized</code>, then <code>tools/list</code>. The handshake runs under a single monotonic deadline, so a slow start cannot stretch it leg by leg.</p>
+    <p>Failures are answers, not exceptions. <code>callTool()</code>, <code>listResources()</code> and the other convenience methods return either the result payload or <code>['error' =&gt; 'why']</code>. A handshake that cannot complete is different: <code>start()</code> stops the child and throws, with any captured stderr attached.</p>
+    <p>Launching a configured stdio entry runs third-party code as the invoking user, and the child inherits the full parent environment unless you narrow it. Read the <a href="https://github.com/sugarcraft/sugar-mcp-client/blob/master/README.md#trust-boundary">trust boundary</a> before you configure a server.</p>
+
+    <h2 style="margin-top: 40px;">Tasks</h2>
+    <h3 style="margin-top: 24px;">Use it for</h3>
+    <ul>
+      <li><strong>Speaking MCP from any PHP process</strong>: spawn a stdio server child, handshake, list and call tools, with the framing and timeout rules already in place.</li>
+      <li><strong>Agent tool surfaces</strong>: narrow which servers each agent may see with globs and deny-before-allow. Tool rosters follow servers, which is the same semantics candy-code builds on.</li>
+      <li><strong>Bounded subprocess I/O</strong>: the transport is a reference for newline-framed JSON-RPC over pipes, with deadlock-free pumping and bounded child teardown (TERM → KILL → reap on <code>stop()</code> and on destruct). A process SIGKILLed mid-use leaves its child to the embedding process manager.</li>
+    </ul>
+
+    <h3 style="margin-top: 24px;">Narrow which servers an agent sees</h3>
+    <p><code>McpRouter</code> takes the servers keyed by config name and a deny list. A deny pattern always wins over an allow entry. An empty allow list means allow all, minus the denied servers.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\McpClient\McpRouter;
+
+$router  = new McpRouter(['filesystem' =&gt; $fs, 'git' =&gt; $git], ['git']);  // deny 'git'
+$servers = $router-&gt;resolveAllowedServers(['filesystem', 'git']); // only 'filesystem' survives
+$tools   = $router-&gt;resolveAllowedTools(['filesystem']);          // tools of the surviving servers</code></pre>
+
+    <h3 style="margin-top: 24px;">Bound one tool call</h3>
+    <p>A call has no deadline unless you pass one. A bounded call answers with an error when the deadline passes, and the connection stays usable.</p>
+    <pre class="code"><code class="language-php">$result = $server-&gt;callTool(
+    name: 'slow-report',
+    arguments: ['days' =&gt; 30],
+    timeoutSeconds: 30.0,        // zero and negative values are refused at the door
+);
+// on timeout: ['error' =&gt; 'Tool call timed out after 30s and was cancelled; …']</code></pre>
+
+    <h3 style="margin-top: 24px;">Read a failure</h3>
+    <pre class="code"><code class="language-php">$result = $server-&gt;callTool('echo', ['message' =&gt; 'hi']);
+
+if (isset($result['error'])) {
+    fwrite(STDERR, Sanitize::untrusted((string) $result['error']) . PHP_EOL);
+    exit(1);
+}
+foreach ($result['content'] ?? [] as $block) {
+    echo Sanitize::untrusted((string) ($block['text'] ?? '')), PHP_EOL;
+}</code></pre>
+
+    <h3 style="margin-top: 24px;">Keep the child's environment small</h3>
+    <p>The child inherits the full parent environment by default. <code>envRemove:</code> drops named variables from that inheritance, and <code>curatedEnv:</code> replaces the environment outright. <code>spawnPlanner:</code> gives full control over the argv and the env that actually spawn.</p>
+    <pre class="code"><code class="language-php">$server = new StdioMcpServer(
+    name: 'narrow',
+    command: 'npx',
+    args: ['-y', '@modelcontextprotocol/server-everything'],
+    envRemove: ['AWS_SECRET_ACCESS_KEY', 'SSH_AUTH_SOCK'],
+);
+
+// Or replace the environment wholesale. curatedEnv: cannot be combined with env:,
+// envRemove: or spawnPlanner:, and the constructor throws if you try.
+$server = new StdioMcpServer(
+    name: 'curated',
+    command: 'npx',
+    args: ['-y', '@modelcontextprotocol/server-everything'],
+    curatedEnv: ['PATH' =&gt; '/usr/local/bin:/usr/bin:/bin'],
+);</code></pre>
+
+    <h2 style="margin-top: 40px;">Configuration</h2>
+    <p>The options are the named arguments of <code>StdioMcpServer</code>'s constructor. Only <code>name</code>, <code>command</code> and the argument list are routinely needed.</p>
+<table class="api-table">
+<caption>StdioMcpServer constructor options</caption>
+<thead><tr><th scope="col">Option</th><th scope="col">Type</th><th scope="col">Default</th><th scope="col">Effect</th></tr></thead>
+<tr><td><code>name</code></td><td><code>string</code></td><td>required</td><td>The config name. Routers key servers by it, and diagnostics name it.</td></tr>
+<tr><td><code>command</code>, <code>args</code></td><td><code>string</code>, <code>array</code></td><td>required, <code>[]</code></td><td>The executable and its argv. The spawn is an argv array, never a shell string.</td></tr>
+<tr><td><code>env</code></td><td><code>array</code></td><td><code>[]</code></td><td>Entries added to or overriding the inherited environment. It never removes an inherited name.</td></tr>
+<tr><td><code>envRemove</code></td><td><code>list&lt;string&gt;</code></td><td><code>[]</code></td><td>Names stripped from the inherited environment before <code>env</code> is applied. Must be distinct and non-empty.</td></tr>
+<tr><td><code>curatedEnv</code></td><td><code>?array</code></td><td><code>null</code></td><td>The exact environment the child receives. <code>[]</code> means an empty environment. Exclusive with <code>env</code>, <code>envRemove</code> and <code>spawnPlanner</code>.</td></tr>
+<tr><td><code>spawnPlanner</code></td><td><code>?\Closure</code></td><td><code>null</code></td><td>Receives the name, the argv and the authored env, and returns <code>[argv, env]</code> that actually spawn. Throwing from it refuses the launch.</td></tr>
+<tr><td><code>cwd</code></td><td><code>?string</code></td><td><code>null</code></td><td>Absolute working directory for the child. <code>null</code> inherits the parent's directory.</td></tr>
+<tr><td><code>startTimeoutSeconds</code></td><td><code>?float</code></td><td><code>60.0</code></td><td>The one handshake deadline. <code>null</code>, zero or negative values fall back to 60 seconds.</td></tr>
+<tr><td><code>clientInfo</code></td><td><code>array</code></td><td>package name and version</td><td>The <code>clientInfo</code> sent in <code>initialize</code>. Exclusive with <code>clientName</code> and <code>clientVersion</code>.</td></tr>
+<tr><td><code>clientName</code>, <code>clientVersion</code></td><td><code>?string</code></td><td>package values</td><td>Set one arm of the client identity. An empty string throws.</td></tr>
+<tr><td><code>capabilities</code></td><td><code>array</code></td><td><code>[]</code></td><td>Client capabilities advertised in <code>initialize</code>.</td></tr>
+<tr><td><code>onServerMessage</code></td><td><code>?\Closure</code></td><td><code>null</code></td><td>Handler for requests the server sends while a call is in flight. Unhandled methods are refused.</td></tr>
+<tr><td><code>lockDir</code></td><td><code>?string</code></td><td>the system temp directory</td><td>Where the <code>ExchangeLock</code> file lives. The directory must exist.</td></tr>
+</table>
+
+    <h2 style="margin-top: 40px;">Architecture</h2>
+    <p>The wire layers sit under <code>StdioMcpServer</code>. <code>JsonLines\Reader</code> turns raw pipe chunks into complete lines and caps how large one line may grow. <code>McpMessage</code> and the <code>Protocol</code> classes build and read the envelopes. <code>ExchangeLock</code> serializes exchanges when forked processes share one connection.</p>
     <div class="feature-grid">
       <div class="feature"><strong>McpMessage</strong><span>JSON-RPC 2.0 envelope: parse() / request() / notification() / success() / error(); a resultSet sentinel keeps explicit "result": null representable; toJson() is the wire and fails closed on unencodable payloads, toArray() is inspection.</span></div>
       <div class="feature"><strong>McpTool / McpServer</strong><span>One tool definition value object with a well-typedness gate that refuses malformed server output — control bytes in <em>names</em> are rejected at parse; <em>descriptions</em> are free-form prose that passes through verbatim, so display them through sugar-core Sanitize::untrusted — plus the <code>McpServer</code> interface: lifecycle, tool surface, and the shared raw legs <code>request()</code>/<code>notify()</code>.</span></div>
@@ -37,23 +117,7 @@ $server->stop();               // close pipes first, then TERM→KILL→reap —
       <div class="feature"><strong>Server requests &amp; trust</strong><span>A server's own requests (ping, roots/list, elicitation/create) are answered inline while a call is in flight — default <code>ping</code> acknowledged, anything else refused "Method not found" — with the handler's wall clock excluded from the call's budget. Running a configured stdio entry executes third-party code as the invoking user with the FULL parent environment: see the README's Trust boundary.</span></div>
     </div>
 
-    <h3 style="margin-top: 40px;">Use it for</h3>
-    <ul>
-      <li><strong>Speaking MCP from any PHP process</strong> — spawn a stdio server child, handshake, list and call tools, with the framing and timeout discipline already fought for.</li>
-      <li><strong>Agent tool surfaces</strong> — narrow which servers each agent may see with globs and deny-before-allow, tool rosters following servers, the same semantics candy-code builds on.</li>
-      <li><strong>Bounded subprocess I/O</strong> — the transport doubles as a reference for newline-framed JSON-RPC over pipes with deadlock-free pumping and bounded child teardown (TERM→KILL→reap on stop and on destruct); the named residual is external — a process SIGKILLed mid-use leaves its child to the embedding process manager.</li>
-    </ul>
-
-    <h3 style="margin-top: 40px;">Source</h3>
-    <ul>
-      <li><a href="https://github.com/sugarcraft/sugar-mcp-client">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-mcp-client/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-mcp-client/blob/master/tests">Test suite</a></li>
-    </ul>
-
-    <p style="margin-top: 48px;"><a href="#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
-
-    <h3 style="margin-top: 32px;">API</h3>
+    <h2 style="margin-top: 40px;">API</h2>
 <table class="api-table">
 <caption>API surface</caption>
 <thead><tr><th scope="col">Class</th><th scope="col">Method</th><th scope="col">Description</th></tr></thead>
@@ -87,5 +151,63 @@ $server->stop();               // close pipes first, then TERM→KILL→reap —
 <tr><td>RpcError</td><td>static of(ErrorCode $code, string $message, ?string $kind = null, array $data = []): self / static invalidParams(string $message, string $kind = 'invalid_params'): self / static notFound(string $message, string $kind = 'not_found'): self / toArray(): array</td><td>A method's refusal, extending <code>RuntimeException</code>; <code>toArray()</code> is the JSON-RPC error object the codec sends</td></tr>
 <tr><td>ErrorCode</td><td>kind(): string / isRetryable(): bool</td><td>The <code>candy-code.v1</code> error codes (int-backed enum, Appendix O &sect;6.2) with the stable <code>kind</code> string and whether a caller may retry</td></tr>
 </table>
+
+    <h2 style="margin-top: 40px;">Examples</h2>
+    <p><code>examples/echo.php</code> is a self-contained round trip. Run plainly, the file is the client: it starts itself as a server, runs initialize, tools/list and tools/call, and prints the exchange. Run with <code>--serve</code>, it is the stdio server. It needs no Node.js, no download and no network.</p>
+    <pre class="code"><code class="language-shell">php examples/echo.php</code></pre>
+    <pre class="code"><code class="language-text">server: example-echo 1.0.0
+tool: echo - Echoes the message argument back as text
+reply: echo: dependency-free round trip
+OK</code></pre>
+    <p>The suite runs this example headless (<code>ExamplesTest</code>), so the promise cannot rot.</p>
+
+    <h2 style="margin-top: 40px;">Testing</h2>
+    <pre class="code"><code class="language-shell">cd sugar-mcp-client &amp;&amp; composer install &amp;&amp; vendor/bin/phpunit</code></pre>
+    <p>The fixture servers under <code>tests/Fixtures</code> are PHP scripts that misbehave on purpose: they send oversized frames, stall, fork, write noise to stdout, or answer the handshake wrongly. The suite checks that the client refuses each of them with a named cause, so it needs no Node.js.</p>
+
+    <h2 style="margin-top: 40px;">Troubleshooting and FAQ</h2>
+    <h3 style="margin-top: 24px;">start() throws after 60 seconds</h3>
+    <p>The handshake deadline is 60 seconds by default, sized for a cold <code>npx</code> fetch. Raise <code>startTimeoutSeconds:</code> for a slow start. The exception carries the captured stderr, so the cause is usually in the message.</p>
+
+    <h3 style="margin-top: 24px;">A tool shows up with escape codes or fails to list</h3>
+    <p>Descriptions are server-authored prose. The transport does not scrub them, so pass every name and description through <code>Sanitize::untrusted()</code> before it reaches a terminal. A definition whose name carries control bytes is skipped. <code>malformedToolDefinitions()</code> lists what was skipped during the last <code>start()</code>, and <code>malformedToolDefinitionsReport()</code> gives a one-line summary.</p>
+    <pre class="code"><code class="language-php">foreach ($server-&gt;malformedToolDefinitions() as $label) {
+    error_log("skipped MCP tool definition: {$label}");
+}</code></pre>
+
+    <h3 style="margin-top: 24px;">A call returns ['error' =&gt; …] instead of throwing</h3>
+    <p>This is by design. A failed call never throws, so check for the <code>error</code> key, as the task above shows. The payload names the cause: the server's JSON-RPC code and message, a dead child, or a refused frame.</p>
+
+    <h3 style="margin-top: 24px;">A forked worker blocks on another worker's call</h3>
+    <p>Each connection has one <code>ExchangeLock</code>, so exchanges serialize by design. Give each worker its own server if it needs to call in parallel. If <code>start()</code> fails with a lock error, check that <code>lockDir:</code> exists and that the filesystem accepts mode 0600.</p>
+
+    <h3 style="margin-top: 24px;">The child sees my secrets</h3>
+    <p>It inherits the full parent environment by default. Use <code>envRemove:</code> to drop named variables, or <code>curatedEnv:</code> to replace the environment entirely.</p>
+
+    <h2 style="margin-top: 40px;">Upstream mapping</h2>
+    <p>There is no Go port. The protocol is the Model Context Protocol revision <a href="https://modelcontextprotocol.io/specification/2024-11-05">2024-11-05</a>, which <code>StdioMcpServer::PROTOCOL_VERSION</code> pins. The table maps each protocol element to the class that implements it.</p>
+<table class="api-table">
+<caption>MCP protocol element to SugarCraft class</caption>
+<thead><tr><th scope="col">Protocol element</th><th scope="col">Where it lives</th></tr></thead>
+<tr><td>JSON-RPC 2.0 envelopes</td><td><code>McpMessage</code>, <code>Protocol\JsonRpc</code></td></tr>
+<tr><td><code>initialize</code> and <code>notifications/initialized</code></td><td><code>StdioMcpServer::start()</code></td></tr>
+<tr><td><code>tools/list</code></td><td><code>StdioMcpServer::listTools()</code>, <code>McpTool</code></td></tr>
+<tr><td><code>tools/call</code></td><td><code>StdioMcpServer::callTool()</code>, <code>ArgumentShape::conform()</code> for argument shapes</td></tr>
+<tr><td>Resources and prompts</td><td><code>listResources()</code>, <code>readResource()</code>, <code>listPrompts()</code>, <code>getPrompt()</code></td></tr>
+<tr><td>Newline-delimited stdio transport</td><td><code>StdioMcpServer</code>, <code>JsonLines\Reader</code></td></tr>
+</table>
+
+    <h2 style="margin-top: 40px;">Changelog and versioning</h2>
+    <p>This page does not record a release history. The commit history on GitHub is the change record. Two facts are stable and worth pinning on: the protocol revision (<code>2024-11-05</code>), and the deprecated <code>ExchangeLock::create()</code> alias, which is scheduled for removal in the 2.0.0 major.</p>
+
+    <h2 style="margin-top: 40px;">Source and demos</h2>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-mcp-client">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-mcp-client/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-mcp-client/tree/master/examples">Runnable examples</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-mcp-client/tree/master/tests">Test suite</a></li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
   </div>
 </section>
