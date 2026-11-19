@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core\Util;
 
+use React\EventLoop\Loop;
+use React\EventLoop\LoopInterface;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Core\Exception\SemaphoreClosedException;
@@ -61,10 +63,10 @@ use function React\Promise\resolve;
  *
  * {@see \SugarCraft\Core\WorkerPool} bounds *subprocess* concurrency for
  * CPU-bound work (`proc_open` children fed over pipes); this bounds in-process
- * promise concurrency. The one-shot batch mapper in the candy-git-server layer maps a
- * single batch with a cap and cannot be shared between call sites. This class is
- * the reusable primitive: give one pool to every component that touches the same
- * scarce resource and the cap actually holds.
+ * promise concurrency. {@see map()} is the ordered, cancellable batch form built on
+ * the same permits, so a batch and the rest of a component share one cap. Give one
+ * pool to every component that touches the same scarce resource and the cap
+ * actually holds.
  */
 final class Semaphore
 {
@@ -288,6 +290,128 @@ final class Semaphore
         );
 
         return $done->promise();
+    }
+
+    /**
+     * Map $items through $fn with at most {@see limit()} items in flight,
+     * resolving with the results in input order.
+     *
+     * Each item starts on a loop tick, never inside this call, so a large batch
+     * spreads across ticks instead of monopolising the caller and timers keep
+     * firing between items. An item holds its permit from the moment it starts
+     * until the promise it returned settles, which is what makes the bound bite
+     * for asynchronous work.
+     *
+     * Error semantics mirror Promise\all(): the first rejection (or synchronous
+     * throw) rejects the aggregate and no further item starts. Cancelling the
+     * aggregate stops the batch the same way, rejecting with $cancelReason();
+     * items already running finish, and their results are discarded. Callers
+     * that need per-item error capture must catch inside $fn.
+     *
+     * Only the first window of items is submitted up front; each later item is
+     * submitted as one settles, so the FIFO never parks more than the window.
+     *
+     * @template T
+     * @template R
+     * @param list<T> $items
+     * @param callable(T, int): (PromiseInterface<R>|R) $fn
+     * @param LoopInterface|null $loop       loop that ticks the items; the global loop when null
+     * @param (\Closure(): \Throwable)|null $cancelReason the reason a cancelled batch rejects with;
+     *                                       a plain \RuntimeException when null
+     * @return PromiseInterface<list<R>>
+     */
+    public function map(
+        array $items,
+        callable $fn,
+        ?LoopInterface $loop = null,
+        ?\Closure $cancelReason = null,
+    ): PromiseInterface {
+        $items = \array_values($items);
+        $total = \count($items);
+        if ($total === 0) {
+            return resolve([]);
+        }
+
+        $loop ??= Loop::get();
+        $results = [];
+        $next = 0;
+        $settled = false;
+
+        // Cancelling must stop the batch: without the flag the tick chain would
+        // keep calling $fn for every item still queued behind the window.
+        $deferred = new Deferred(static function () use (&$settled, $cancelReason): void {
+            $settled = true;
+
+            throw $cancelReason !== null
+                ? $cancelReason()
+                : new \RuntimeException(Lang::t('semaphore.map_cancelled'));
+        });
+
+        $start = null;
+        $start = function (int $index) use (
+            &$start,
+            &$next,
+            &$results,
+            &$settled,
+            $items,
+            $fn,
+            $total,
+            $loop,
+            $deferred,
+        ): void {
+            $this->run(static function () use ($index, $items, $fn, $loop, &$settled): PromiseInterface {
+                $tick = new Deferred();
+                $loop->futureTick(static function () use ($tick, $index, $items, $fn, &$settled): void {
+                    if ($settled) {
+                        $tick->resolve(null);
+
+                        return;
+                    }
+
+                    try {
+                        $tick->resolve($fn($items[$index], $index));
+                    } catch (\Throwable $reason) {
+                        $tick->reject($reason);
+                    }
+                });
+
+                return $tick->promise();
+            })->then(
+                static function (mixed $value) use ($index, &$start, &$next, &$results, &$settled, $total, $deferred): void {
+                    if ($settled) {
+                        return;
+                    }
+
+                    $results[$index] = $value;
+                    if (\count($results) === $total) {
+                        $settled = true;
+                        \ksort($results);
+                        $deferred->resolve(\array_values($results));
+
+                        return;
+                    }
+
+                    if ($next < $total) {
+                        $start($next++);
+                    }
+                },
+                static function (\Throwable $reason) use (&$settled, $deferred): void {
+                    if ($settled) {
+                        return;
+                    }
+
+                    $settled = true;
+                    $deferred->reject($reason);
+                },
+            );
+        };
+
+        $window = \min($this->limit(), $total);
+        while ($next < $window) {
+            $start($next++);
+        }
+
+        return $deferred->promise();
     }
 
     /**

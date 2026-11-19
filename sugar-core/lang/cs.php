@@ -27,6 +27,7 @@ return [
     'semaphore.shutdown' => 'semafor byl uzavřen před udělením povolení',
     'semaphore.closed' => 'semafor je uzavřen a nemůže udělit další povolení',
     'semaphore.derive_closed' => 'z uzavřeného semaforu nelze odvodit nový fond',
+    'semaphore.map_cancelled' => 'dávka zrušena před dokončením všech položek',
     'lru_map.capacity_invalid' => 'kapacita LRU musí být alespoň 1, získáno {capacity}',
     'lru_map.capacity_too_large' => 'kapacita LRU {capacity} překračuje stráž růstu {max}',
     'lru_map.evict_from_empty' => 'z prázdné mapy LRU nelze vyřadit',
