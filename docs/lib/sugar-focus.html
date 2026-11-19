@@ -203,6 +203,8 @@ $ring = $ring-&gt;focus('grid'); // jump straight to a region
 $ring-&gt;current();             // 'grid'
 $ring-&gt;isFocused('grid');     // true</code></pre>
     <p style="color: var(--ink-2);">Every mutator returns a new <code>FocusRing</code>. Store the result, because the receiver is never changed.</p>
+    <p>The recorded demo is a committed artifact. It is rendered from <code>.vhs/focus-ring.tape</code> by CI, not by hand. The demo repaints the whole frame on each loop, so it can flicker on some displays.</p>
+    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-focus/.vhs/focus-ring.gif" alt="sugar-focus demo" onerror="this.parentElement.style.display='none'">
 
     <h2 id="concepts" style="margin-top: 40px;">Concepts</h2>
     <p>A non-empty ring always has exactly one focused region. An empty ring focuses nothing: <code>current()</code> is <code>null</code> and <code>index()</code> is <code>-1</code>. Traversal wraps at both ends and skips disabled regions.</p>
@@ -281,8 +283,6 @@ $ring = FocusRing::fromJson($json)
     <h2 id="examples" style="margin-top: 40px;">Examples</h2>
     <p><code>examples/focus-ring.php</code> draws four labeled panels and handles the keys listed above. The example hand-rolls its ANSI, so the library stays dependency-free. With no terminal attached, it draws one frame and exits 0.</p>
     <pre class="code"><code class="language-shell">php examples/focus-ring.php</code></pre>
-    <p>The recorded demo is a committed artifact. It is rendered from <code>.vhs/focus-ring.tape</code> by CI, not by hand. The demo repaints the whole frame on each loop, so it can flicker on some displays.</p>
-    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-focus/.vhs/focus-ring.gif" alt="sugar-focus demo" onerror="this.parentElement.style.display='none'">
 
     <h2 id="testing" style="margin-top: 40px;">Testing</h2>
     <pre class="code"><code class="language-shell">cd sugar-focus &amp;&amp; composer install &amp;&amp; vendor/bin/phpunit</code></pre>
