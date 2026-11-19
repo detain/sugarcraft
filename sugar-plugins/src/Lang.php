@@ -19,7 +19,8 @@ use SugarCraft\Core\I18n\Lang as BaseLang;
  * a host namespace would silently own that catalog for the whole process.
  * {@see t()} therefore refuses, before anything is registered, an empty or
  * dotted NAMESPACE, a reserved host or library namespace, an empty or missing
- * DIR, and a NAMESPACE that another plugin directory already holds.
+ * DIR, and a NAMESPACE that another plugin directory already holds with a
+ * different catalog. A second copy of the same catalog is accepted.
  *
  * Mirrors the sugar-pty `Lang` facade. The plugin catalog is approved under
  * O4 (plan_plugin.md section 4.11).
@@ -48,11 +49,14 @@ abstract class Lang extends BaseLang
     ];
 
     /**
-     * The directory each plugin namespace was claimed with in this process.
-     * T itself keeps only the first registration, so a second plugin asking
-     * for the same namespace with another directory is caught here.
+     * The directory and catalog fingerprint each plugin namespace was claimed
+     * with in this process. T itself keeps only the first registration, so a
+     * second plugin asking for the same namespace is compared here. The same
+     * catalog from another directory (a fresh copy of one bundle, say) is
+     * harmless and accepted; a different catalog would be served silently
+     * wrong and is refused.
      *
-     * @var array<string, string>
+     * @var array<string, array{dir: string, fingerprint: string}>
      */
     private static array $claimed = [];
 
@@ -89,12 +93,7 @@ abstract class Lang extends BaseLang
             throw new \InvalidArgumentException("$class must declare a non-empty DIR.");
         }
         $held = self::$claimed[$namespace] ?? null;
-        if ($held !== null) {
-            if ($held !== $dir) {
-                throw new \InvalidArgumentException(
-                    "$class NAMESPACE '$namespace' is already claimed by another plugin directory."
-                );
-            }
+        if ($held !== null && $held['dir'] === $dir) {
             return;
         }
         // A mistyped DIR would otherwise register fine and then echo raw keys for every lookup.
@@ -105,6 +104,38 @@ abstract class Lang extends BaseLang
         if (!is_file($dir . DIRECTORY_SEPARATOR . 'en.php')) {
             throw new \InvalidArgumentException("$class DIR '$dir' has no en.php catalog.");
         }
-        self::$claimed[$namespace] = $dir;
+        $fingerprint = self::fingerprint($dir);
+        if ($held !== null) {
+            if ($held['fingerprint'] !== $fingerprint) {
+                throw new \InvalidArgumentException(
+                    "$class NAMESPACE '$namespace' is already claimed by another plugin directory."
+                );
+            }
+            return;
+        }
+        self::$claimed[$namespace] = ['dir' => $dir, 'fingerprint' => $fingerprint];
+    }
+
+    /**
+     * Hashes the catalog files T reads from $dir (its top-level *.php files,
+     * by name, with their bytes), so two copies of one plugin hash alike and
+     * a copy that differs in any locale does not.
+     */
+    private static function fingerprint(string $dir): string
+    {
+        $names = array_filter(
+            scandir($dir) ?: [],
+            static fn (string $name): bool => str_ends_with($name, '.php') && is_file($dir . DIRECTORY_SEPARATOR . $name),
+        );
+        sort($names, SORT_STRING);
+
+        $payload = '';
+        foreach ($names as $name) {
+            $contents = (string) file_get_contents($dir . DIRECTORY_SEPARATOR . $name);
+            // Length-prefixed so no name and contents pair can run into the next.
+            $payload .= $name . "\0" . strlen($contents) . "\0" . $contents;
+        }
+
+        return hash('sha256', $payload);
     }
 }

@@ -219,6 +219,23 @@ final class LangTest extends TestCase
         $second::t('greeting');
     }
 
+    public function testIdenticalCatalogFromAnotherDirectoryIsAccepted(): void
+    {
+        // A fresh copy of one bundle (the weld tests' shape) must not trip the claim.
+        $first = new class () extends Lang {
+            protected const NAMESPACE = 'claim-copy';
+            protected const DIR = __DIR__ . '/fixtures/lang';
+        };
+        $copy = new class () extends Lang {
+            protected const NAMESPACE = 'claim-copy';
+            protected const DIR = __DIR__ . '/fixtures/lang-copy';
+        };
+
+        $this->assertSame('Hello Ada', $first::t('greeting', ['name' => 'Ada']));
+        $this->assertSame('Hello Ada', $copy::t('greeting', ['name' => 'Ada']));
+        $this->assertSame('Hello Ada', $first::t('greeting', ['name' => 'Ada']));
+    }
+
     public function testSameNamespaceFromTheSameDirectoryIsAccepted(): void
     {
         $again = new class () extends Lang {
