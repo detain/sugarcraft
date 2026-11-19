@@ -842,8 +842,10 @@ class Picker
      * honored by `| less -R` classic workflows) keeps escapes flowing on
      * pipes. Only explicit signals change behavior:
      *   NO_COLOR / CLICOLOR=0  → no SGR anywhere (layout glyphs stay)
-     *   TERM=dumb (→ NoTty via detectTerminal)  → no cursor addressing, no ?1049/?2004
-     *                            switches: the frame prints once, plain
+     *   TERM=dumb, unforced (→ NoTty via detectTerminal) → no cursor addressing,
+     *                            no ?1049/?2004 switches: the frame prints once, plain
+     *   TERM=dumb + CLICOLOR_FORCE / FORCE_COLOR → the force overrules the veto:
+     *                            the rich frame stays (testForceColorOverrulesTheDumbRung)
      * A capability-less TERM (unset, CI) keeps the legacy rich shape —
      * silence about capabilities must never COST the colors on terminals
      * that simply did not announce themselves.

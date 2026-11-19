@@ -377,4 +377,53 @@ final class ScaleTest extends TestCase
             $this->assertSame($name, $cases[$i]->name);
         }
     }
+
+    /**
+     * @dataProvider scaleNameProvider
+     */
+    public function testFromNameResolvesEverySpelling(string $name, Scale $expected): void
+    {
+        $this->assertSame($expected, Scale::fromName($name));
+    }
+
+    /** @return iterable<string, array{string, Scale}> */
+    public static function scaleNameProvider(): iterable
+    {
+        yield 'fit' => ['fit', Scale::Fit];
+        yield 'shrink' => ['shrink', Scale::ShrinkToFit];
+        yield 'fill' => ['fill', Scale::Fill];
+        yield 'stretch' => ['stretch', Scale::Stretch];
+        yield 'none' => ['none', Scale::None];
+        yield 'crop' => ['crop', Scale::Crop];
+    }
+
+    /**
+     * @dataProvider unknownScaleNameProvider
+     */
+    public function testFromNameRejectsUnknownAndNonExactSpellings(string $name): void
+    {
+        $this->assertNull(Scale::fromName($name));
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function unknownScaleNameProvider(): iterable
+    {
+        yield 'empty' => [''];
+        yield 'unknown word' => ['contain'];
+        yield 'enum case name' => ['ShrinkToFit'];
+        yield 'upper case' => ['FIT'];
+        yield 'padded' => [' fit'];
+    }
+
+    public function testNameTableReachesEveryMode(): void
+    {
+        $reached = [];
+        foreach (['fit', 'shrink', 'fill', 'stretch', 'none', 'crop'] as $name) {
+            $mode = Scale::fromName($name);
+            $this->assertNotNull($mode, $name);
+            $reached[] = $mode;
+        }
+
+        $this->assertSame(Scale::cases(), $reached);
+    }
 }

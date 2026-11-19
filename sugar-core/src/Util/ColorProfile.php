@@ -111,10 +111,11 @@ enum ColorProfile: int
      * switches on `NoTty` ("this device cannot honor addressing") must ask
      * THIS method: it maps an unforced dumb terminal back to `NoTty` whichever
      * ladder answered, so the veto does not depend on which siblings happen
-     * to be installed. With the chain installed, a force variable lifts the
-     * answer above `Ascii` and is left alone. Without it nothing lifts
-     * `Ascii`, so a forced dumb terminal also answers `NoTty` (declared
-     * behaviour change, P1-10a).
+     * to be installed. A force variable (CLICOLOR_FORCE or FORCE_COLOR, read
+     * with the chain's grammar) overrules the veto on either ladder: a forced
+     * dumb terminal keeps the rich frame, as the legacy ladder did. Without the
+     * chain that is an Ascii answer rather than a colour rung, which is still
+     * enough for the addressing switches to stay on.
      *
      * @param array<string,string>|null $env
      * @param resource|null             $stdout
@@ -123,7 +124,7 @@ enum ColorProfile: int
     {
         $env ??= self::defaultEnv();
         $profile = self::detect($env, $stdout);
-        if ($profile === self::Ascii && strtolower($env['TERM'] ?? '') === 'dumb') {
+        if ($profile === self::Ascii && !self::forcesColor($env) && strtolower($env['TERM'] ?? '') === 'dumb') {
             return self::NoTty;
         }
         return $profile;

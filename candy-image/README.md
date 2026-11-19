@@ -125,12 +125,14 @@ sha256sum -c candy-image.phar.sha256
 php candy-image.phar photo.png
 ```
 
-`--version` prints the `dev-<shortsha>` stamp of the commit the phar was
-built from. The full sidecar set sits beside every rolling asset:
-`.phar.sha256` (integrity — `sha256sum -c` checks it, as above),
-`.phar.commit` (the full build SHA) and `.phar.pins.json` (the sibling pin
-map); when the CI run holds the signing key, the `.phar.sha256.sig`,
-`.phar.minisig` and `.phar.minisig.sha256` signatures ride along too.
+The rolling CI phar's `--version` prints the `dev-<shortsha>` stamp of the
+commit it was built from. A local `tools/build-phar.php` run stamps the
+newest `candy-image/v*` tag, or `dev-build` when no tag is reachable.
+The full sidecar set sits beside every rolling asset: `.phar.sha256`
+(integrity — `sha256sum -c` checks it, as above), `.phar.commit` (the full
+build SHA) and `.phar.pins.json` (the sibling pin map); when the CI run holds
+the signing key, the `.phar.sha256.sig`, `.phar.minisig` and
+`.phar.minisig.sha256` signatures ride along too.
 Integrity is verifiable as shipped; authenticity of the signatures needs the
 sugarcraft public key, which candy-image pins none — candy-code and candy-top
 are the only apps that carry it, to verify their own self-updates.

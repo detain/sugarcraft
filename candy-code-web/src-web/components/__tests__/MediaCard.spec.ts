@@ -1,7 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { nextTick } from 'vue'
 import { objectUrls } from '../../lib/media'
 import type { MediaRef } from '../../protocol/generated'
 import type { ToolItem } from '../../stores/reducer'

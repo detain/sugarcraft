@@ -8,6 +8,11 @@ name: Sync to sugarcraft org
 # are pushed — same affected-libs logic as ci.yml. Monorepo-wide changes
 # (workflow files, root composer) push everything.
 #
+# Manual dispatch takes a `libs` input (space-separated lib dirs) and pushes
+# exactly those libs, creating any missing sugarcraft/<lib> repo first.
+# Use it to seed new repos, e.g.:
+#   gh workflow run sync-sugarcraft.yml -R detain/sugarcraft -f libs="sugar-jwt sugar-plugins"
+#
 # Auth: SUGARCRAFT_SYNC_TOKEN secret — a PAT with `repo` scope on
 # the sugarcraft org. Without it, all push steps will 403.
 
@@ -18,6 +23,11 @@ on:
   push:
     branches: [master]
   workflow_dispatch:
+    inputs:
+      libs:
+        description: 'Space-separated monorepo lib dirs to split-push, e.g. "sugar-jwt sugar-plugins". Empty = the affected-range logic. Each name must be a sugar-*/candy-* dir holding a composer.json; a missing sugarcraft/<lib> repo is created first.'
+        required: false
+        default: ''
 
 concurrency:
   group: sync-sugarcraft
@@ -107,8 +117,27 @@ jobs:
         env:
           BEFORE_SHA: ${{ github.event.before }}
           HEAD_SHA: ${{ github.sha }}
+          INPUT_LIBS: ${{ github.event.inputs.libs }}
         run: |
           set -euo pipefail
+          # Manual dispatch with explicit libs (new repos, a first sync, a
+          # re-push after a failed run): push exactly the named libs and skip
+          # the range math, which has no changed range for a lib that already
+          # sits on master. Every name must be a real monorepo lib dir, so
+          # nothing unvalidated reaches the push loop.
+          read -r -a named <<<"${INPUT_LIBS:-}"
+          if [ "${#named[@]}" -gt 0 ]; then
+            for lib in "${named[@]}"; do
+              if ! [[ "$lib" =~ ^(sugar|candy)-[a-z0-9-]+$ ]] || [ ! -f "$lib/composer.json" ]; then
+                echo "dispatch libs: '$lib' is not a monorepo lib dir (sugar-*/candy-* with composer.json)" >&2
+                exit 1
+              fi
+            done
+            echo "dispatch: explicit libs: ${named[*]}"
+            echo "affected_libs=${named[*]}" >> "$GITHUB_OUTPUT"
+            echo "force_all=no" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           # Same affected-libs logic as ci.yml: changed libs + transitive
           # dependents over the whole push (before..sha), not just its last
           # commit — a multi-commit push touching lib A then lib B must sync

@@ -166,7 +166,7 @@ export interface ContextSources {
         to: number
       } | null
     } | null
-    /** The `/context` `By category` block (roadmap P-CTX.a / P-CTX.f): every measured token attributed by owner. Summing law — all rows except `autocompact-buffer` and `free-space` equal `window` less the reservation and what is left; content + buffer + free-space is the window. */
+    /** The `/context` `By category` block: every measured token attributed by owner. Summing law — all rows except `autocompact-buffer` and `free-space` equal `window` less the reservation and what is left; content + buffer + free-space is the window. */
     categories?: ({
       /** The {@see \SugarCraft\Code\Context\ContextCategory} case value — stable vocabulary; `label` is the translated display name. */
       key: string
@@ -218,7 +218,7 @@ export interface EventEnvelope {
   turnId?: string
   durable: boolean
   data: Record<string, unknown>
-  /** Set by the serve gateway on an event relayed from another project root's workspace host (roadmap O-7). */
+  /** Set by the serve gateway on an event relayed from another project root's workspace host. */
   root?: string
 }
 
@@ -337,7 +337,7 @@ export interface SessionSummary {
   spendUnpriced?: boolean
   archived?: boolean
   ephemeral?: boolean
-  /** Set by the serve gateway on a session another project root's workspace host answered for (roadmap O-7). */
+  /** Set by the serve gateway on a session another project root's workspace host answered for. */
   root?: string
 }
 
@@ -1241,7 +1241,7 @@ export interface Methods {
       permissionMode?: PermissionMode
       /** Incognito: a live session that persists nothing — no store row, no transcript saves, no usage records, no title or memory passes — and is dropped by the hub on close. */
       ephemeral?: boolean
-      /** Another project root: the serve gateway routes the call to that root's workspace host (roadmap O-7). */
+      /** Another project root: the serve gateway routes the call to that root's workspace host. */
       root?: string
       /** A retry with the same key gets the original answer (5 min). */
       idempotencyKey?: string
@@ -1325,7 +1325,7 @@ export interface Methods {
       /** How to read the body; omitted, the importer detects it from the leading structure. */
       format?: "candy-code" | "claude-code" | "codex" | "opencode"
       name?: string
-      /** Another project root: the serve gateway routes the call to that root's workspace host (roadmap O-7). */
+      /** Another project root: the serve gateway routes the call to that root's workspace host. */
       root?: string
       /** A retry with the same key gets the original answer (5 min). */
       idempotencyKey?: string
@@ -1342,7 +1342,7 @@ export interface Methods {
       search?: string
       /** true lists ONLY archived sessions; omitted or false lists the unarchived ones (the historical law). */
       archived?: boolean
-      /** Another project root: the serve gateway routes the call to that root's workspace host (roadmap O-7). */
+      /** Another project root: the serve gateway routes the call to that root's workspace host. */
       root?: string
     }
     result: {
