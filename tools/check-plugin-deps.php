@@ -137,8 +137,8 @@ final class CheckPluginDeps
      */
     public static function isLangAllowance(string $written): bool
     {
-        $name = strtolower(ltrim(trim($written, "'\""), '\\'));
-        $name = stripslashes($name);
+        // A string literal spells its separators doubled; a name token spells them once.
+        $name = strtolower(ltrim(str_replace('\\\\', '\\', trim($written, "'\"")), '\\'));
 
         return $name === self::LANG_ALLOWANCE;
     }
