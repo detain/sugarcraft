@@ -153,6 +153,8 @@ final class MsTeamsBundleWeldTest extends TestCase
 
         // ── enabled walk behind the REAL P1 mount ──
         require_once \dirname(__DIR__, 3) . '/candy-msteams/tests/Fixture/FakeTeamsApi.php';
+        require_once \dirname(__DIR__, 3) . '/candy-msteams/tests/Fixture/FakeRefusal.php';
+        require_once \dirname(__DIR__, 3) . '/candy-msteams/tests/Fixture/FakeServe.php';
         $loop = Loop::get();
         $api = new \CandyCode\Bundles\MsTeams\Tests\Fixture\FakeTeamsApi($loop);
         $port = $api->listen();
@@ -197,19 +199,26 @@ final class MsTeamsBundleWeldTest extends TestCase
             ],
         ]));
 
+        // The serve the registry hands every channel (PL-5d): the bundle refuses to start without
+        // a host, so this window wires one the way ServeStartup does. The serve refuses session
+        // creates, which is the failure the pipeline below discloses in-chat. The channel shares
+        // the shared loop, as the serve's own channels do, so its outbound token dial progresses
+        // under runFor().
+        $serve = new \CandyCode\Bundles\MsTeams\Tests\Fixture\FakeServe($loop, refuseCreates: true);
         $channel = new $entryClass();
         $lightLines = [];
         $channel->start(ChannelContext::for(
             'candy-msteams',
             'msteams',
             $this->tempDir . '/root',
-            new StreamSelectLoop(),
+            $loop,
             static function (string $line) use (&$lightLines): void {
                 $lightLines[] = $line;
             },
             null,
             \SugarCraft\Code\Cli\Bootstrap::channelsMsteamsSettings(),
             \SugarCraft\Code\Cli\Bootstrap::trustedConfigDirPath(),
+            host: $serve,
         ), \SugarCraft\Code\Channels\ChannelsStore::new());
         self::assertSame(['default'], $channel->faceNames(), 'the store triple built exactly one face');
 
@@ -289,15 +298,16 @@ final class MsTeamsBundleWeldTest extends TestCase
         self::assertStringContainsString('Paired u-weld.', (string) $api->lastCallFor('/activities', 'POST')['body'], 'the approve answer rode the same raw door');
         self::assertContains('u-weld', (new CredentialStore(CredentialStore::pathIn(\SugarCraft\Code\Cli\Bootstrap::trustedConfigDirPath())))->msteamsAllowUsers('default'), 'approval appended the allowlist atomically');
 
-        // (e) the paired prompt meets the PLACEHOLDER serve — the refusal
-        // is disclosed in-chat, which proves the pipeline reached the
-        // router with store, sidecar, and redaction door all live.
+        // (e) the paired prompt meets a serve that refuses the session create
+        // — the refusal is disclosed in-chat, which proves the pipeline
+        // reached the router with store, sidecar, and redaction door all live.
         self::assertSame(200, $post($dm('a-act-3', 'u-weld', 'hello', '19:dm-conv@thread.v2'), $token('app-weld'))->getStatusCode());
         self::runFor($loop, 900);
         $failure = $api->lastCallFor('/activities', 'POST');
-        self::assertNotNull($failure, 'the undialled placeholder serve refuses loudly into the channel');
+        self::assertNotNull($failure, 'the refusing serve refuses loudly into the channel');
+        self::assertSame(1, $serve->createSeen, 'the paired prompt asked the serve for one session');
         self::assertStringContainsString('Could not open a session', (string) $failure['body']);
-        self::assertStringContainsString('not connected', (string) $failure['body']);
+        self::assertStringContainsString('fixture refuses create', (string) $failure['body']);
 
         // (f) an invoke fast-acks with the envelope even when the ask is
         // unknown to the placeholder router.
