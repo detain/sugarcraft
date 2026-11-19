@@ -28,13 +28,13 @@ cd my-app
 ├── CALIBER_LEARNINGS.md  # template gotchas for AI-agent config sync (fine to delete)
 ├── .gitignore            # vendor/, composer.lock, phpunit caches, *.gif except !.vhs/start.gif
 ├── .assets/icon.png      # icon for the docs site
-├── bin/start             # entry point: Program(new Counter()), run(), stopSignal() exit tail
+├── bin/start             # entry point: wraps the demo Counter in a Program, runs it, then the stopSignal() exit tail
 ├── lang/en.php           # the two UI strings; the other locales mirror these keys
 ├── src/
 │   ├── Counter.php       # demo Model: up, down, quit, styled border
 │   └── Lang.php          # the copyable Lang facade over sugar-core's translator
 ├── examples/
-│   └── headless.php      # drives Counter::update() from a fixed key list, no terminal
+│   └── headless.php      # drives Counter's update() from a fixed key list, no terminal
 ├── tests/
 │   ├── BinStartExecutionTest.php          # runs bin/start: autoload refusal, q and SIGINT exits
 │   ├── BinStartExitTailTest.php           # pins the bin's stopSignal() exit tail (128+N)
@@ -83,9 +83,10 @@ final class Greeter implements Model
     <p>Write your own Model with the four methods, then point <code>bin/start</code> at it. The starter names the demo Model in two places in <code>bin/start</code>, the <code>use App\Counter;</code> import and the <code>new Program(new Counter())</code> call, so change both lines:</p>
     <pre class="code"><code class="language-php">// bin/start
 use App\Counter;             // before
-use App\Dashboard;           // after: your own final class implementing Model
+use App\Tracker;             // after: your own final class implementing Model
+use SugarCraft\Core\Program;
 
-$program = new Program(new Dashboard());
+$program = new Program(new Tracker());
 $program-&gt;run();</code></pre>
     <h3 style="margin-top: 16px;">Add a translated string</h3>
     <p>Frame text goes through <code>Lang::t()</code>. Add a key to <code>lang/en.php</code> and mirror it in every other locale file. The <code>LocaleParityTest</code> fails when the key sets drift apart. Call <code>T::setLocale(T::detect())</code> at boot, as <code>bin/start</code> already does, so the locale follows <code>LC_ALL</code>, then <code>LC_MESSAGES</code>, then <code>LANG</code>.</p>
@@ -166,13 +167,16 @@ php bin/start &lt; /dev/null                # exits 0 at end of input (sugar-cor
     <pre class="code"><code class="language-php">use SugarCraft\Style\Border;
 use SugarCraft\Style\Style;
 
-private static ?Style $frameStyle = null;
-
-private static function frameStyle(): Style
+final class Frame
 {
-    return self::$frameStyle ??= Style::new()
-        ->border(Border::rounded())
-        ->padding(1, 2);
+    private static ?Style $frameStyle = null;
+
+    private static function frameStyle(): Style
+    {
+        return self::$frameStyle ??= Style::new()
+            ->border(Border::rounded())
+            ->padding(1, 2);
+    }
 }</code></pre>
     <p>The demo emits no palette, so it renders cleanly in monochrome. Add colour with the same <code>Style</code> builder, or build a palette from <code>Theme</code> in sugar-style, and keep the constant decoration memoized as shown above. Per-frame content styling can stay inline.</p>
 
