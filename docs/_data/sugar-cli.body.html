@@ -30,7 +30,7 @@ echo StatusLine::error  ('connection refused'), "\n";</code></pre>
 echo Stage::subStep('checking PATH', isLast: false), "\n";
 echo Stage::subStep('checking composer cache', isLast: true), "\n";
 echo Stage::subStepWithProgress('downloading', 40, 100, frame: 0), "\n";</code></pre>
-    <p><code>step()</code> takes the message first, then the current and total counts. Both counters are clamped before drawing, so a negative counter prints an empty bar and a counter above the total prints a full one. Pass <code>frame:</code> to <code>subStepWithProgress()</code> when the output must be byte-stable, such as in a golden test. Without it the spinner walks the wall clock.</p>
+    <p><code>step()</code> takes the message first, then the current and total counts, and prints the counts as text. Both counters are clamped to the total before drawing, so a negative counter prints 0 and a counter above the total prints the total. <code>step()</code> draws no bar. <code>subStepWithProgress()</code> draws the bar and clamps its counters the same way: a negative counter gives an empty bar and a counter above the total gives a full one. Pass <code>frame:</code> to <code>subStepWithProgress()</code> when the output must be byte-stable, such as in a golden test. Without it the spinner walks the wall clock.</p>
 
     <h3 style="margin-top: 24px;">Render a --help page</h3>
     <pre class="code"><code class="language-php">echo HelpText::render(

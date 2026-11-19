@@ -227,7 +227,7 @@ $nav->push('Display', 'display');
 $back = $nav->canPop() ? $nav->pop() : null;   // removes Display
 $nav->popToRoot();                              // back to Home only
 echo $nav->view();                              // Home</code></pre>
-    <p><code>pop()</code> returns <code>null</code> on an empty stack. Check <code>canPop()</code> before relying on the return value, or use <code>isEmpty()</code> for the same test.</p>
+    <p><code>pop()</code> returns <code>null</code> only on an empty stack. <code>canPop()</code> is true only when a pop leaves a non-empty stack, so it is false at depth 1 even though <code>pop()</code> still returns the root and empties the stack. To pop whatever is on top, check <code>isEmpty()</code> instead.</p>
 
     <h3 id="render-an-accessible-html-trail-with-links" style="margin-top: 24px;">Render an accessible HTML trail with links</h3>
     <pre class="code"><code class="language-php">use SugarCraft\NavStack\{NavStack, Url};
@@ -275,7 +275,7 @@ echo $bc->render($stack);</code></pre>
 $shell = Shell::new();
 $shell = $shell->withDirectory('/home/user/projects/sugarcraft/src');
 echo $shell->renderBreadcrumb();</code></pre>
-    <p><code>Shell</code> never watches the filesystem. The host detects a directory change and calls <code>withDirectory()</code>. <code>pushDirectory()</code> still works as a deprecated forwarder. Every <code>with*()</code> returns a new <code>Shell</code>, and each derived shell gets its own copy of the breadcrumb renderer.</p>
+    <p><code>Shell</code> never watches the filesystem. The host detects a directory change and calls <code>withDirectory()</code>. <code>pushDirectory()</code> still works as a deprecated forwarder. Every <code>with*()</code> returns a new <code>Shell</code>. All of them except <code>withBreadcrumb()</code> give the derived shell its own copy of the breadcrumb renderer. <code>withBreadcrumb()</code> keeps the instance you pass, so later changes to that renderer show through.</p>
 
     <h2 id="api-reference" style="margin-top: 40px;">API reference</h2>
     <h3 id="navstack" style="margin-top: 24px;">NavStack</h3>
@@ -284,7 +284,7 @@ echo $shell->renderBreadcrumb();</code></pre>
 <tr><td><code>new()</code> / <code>new NavStack()</code></td><td>Empty stack. Both forms work, and the class has no explicit constructor</td></tr>
 <tr><td><code>push(string $title, mixed $data = null): self</code></td><td>Push an item and return the same stack. Refuses titles that are empty after sanitizing, and growth past <code>MAX_STACK_DEPTH</code> (10000)</td></tr>
 <tr><td><code>pop(): ?NavigationItem</code> / <code>popTo(int $index)</code> / <code>popToRoot()</code></td><td>Remove the top item / truncate so the item at <code>$index</code> is the top / keep only the root. <code>popTo()</code> refuses negative indices</td></tr>
-<tr><td><code>current()</code> / <code>parent()</code> / <code>depth()</code> / <code>canPop()</code> / <code>isEmpty()</code></td><td>Top item / the item below it / item count / whether a pop has an effect / whether the stack is empty</td></tr>
+<tr><td><code>current()</code> / <code>parent()</code> / <code>depth()</code> / <code>canPop()</code> / <code>isEmpty()</code></td><td>Top item / the item below it / item count / whether a pop leaves a non-empty stack (depth above 1) / whether the stack is empty</td></tr>
 <tr><td><code>items(): array</code> / <code>updateTop(mixed $data)</code></td><td>All items, bottom first / replace the top item's payload</td></tr>
 <tr><td><code>setItems(array $items)</code> / <code>clear()</code></td><td>Replace the whole stack / empty it</td></tr>
 <tr><td><code>generation(): int</code></td><td>Mutation counter. A breadcrumb hit is refused when its stack generation no longer matches</td></tr>
