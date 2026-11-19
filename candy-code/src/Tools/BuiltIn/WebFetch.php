@@ -18,7 +18,7 @@ use SugarCraft\Code\Tools\Catalog\BuildsFromCatalog;
 use SugarCraft\Code\Tools\Catalog\BuiltInTool;
 use SugarCraft\Code\Tools\Catalog\ToolBuildContext;
 use SugarCraft\Code\Tools\Catalog\ToolPermissionClass;
-use SugarCraft\Code\Tools\Web\HtmlToMarkdown;
+use SugarCraft\Markdown\Html\HtmlToMarkdown;
 use SugarCraft\Markdown\Html\UrlReference;
 
 /**
@@ -709,7 +709,7 @@ final readonly class WebFetch implements Tool, ParallelSafe, BuildsFromCatalog
             $base .= (string) $parsed['path'];
         }
         if (isset($parsed['query'])) {
-            // chr(63): a bare '?' literal is glob-shaped (see HtmlToMarkdown).
+            // chr(63): a bare '?' literal is glob-shaped (see sugar-markdown HtmlToMarkdown).
             $base .= chr(63) . $parsed['query'];
         }
 
