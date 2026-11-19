@@ -65,6 +65,16 @@ final class Detect
     private const TIMEOUT_MS  = 100;
 
     /**
+     * Wall budget for the Kitty window: the APC reply and the DA1 answer that
+     * closes it. A remote session pays a network round trip (ssh to a Kitty
+     * terminal, about 150 ms), and {@see TIMEOUT_MS} dropped every reply that
+     * landed after 100 ms, so a real Kitty user was downgraded with no sign
+     * of it. The read returns as soon as the DA1 answer arrives, so a local
+     * terminal pays nothing extra; only a silent window waits the whole budget.
+     */
+    private const KITTY_WINDOW_MS = 300;
+
+    /**
      * The OSC 10/11 default fg/bg query pair, emitted as ONE write so
      * the terminal can pipeline both replies inside one read window. The
      * bytes are chafa's exactly (chafa-term-db.c:249/253): ``ESC ] 10 ; ? ST``
@@ -319,7 +329,7 @@ final class Detect
      */
     public static function probe(): Capability
     {
-        // Cooked-mode hazard (class docblock): every path below writes query bytes and waits ≤100 ms for
+        // Cooked-mode hazard (class docblock): every path below writes query bytes and waits a bounded window for
         // a reply. In the terminal's default COOKED mode that exchange is
         // broken three ways: the query echoes to the screen, the reply only
         // becomes readable after Enter, and any bytes left unread when we
@@ -970,7 +980,8 @@ final class Detect
      * APC `a=q` query for one 1x1 RGB pixel (image id 31), followed by DA1 so
      * the reply window closes even when the terminal ignores APC, since every
      * terminal answers DA1. Terminals answer in order, so the OK reply, when
-     * there is one, precedes the DA1 answer.
+     * there is one, precedes the DA1 answer. The window is {@see KITTY_WINDOW_MS},
+     * not {@see TIMEOUT_MS}: a remote Kitty terminal answers after a round trip.
      *
      * @param string|null $window  set to the reply window read from the tty
      *                             (the DA1 answer, when one came back) once the
@@ -998,12 +1009,14 @@ final class Detect
         // The terminator consumes the APC reply together with the DA1 answer:
         // stashSurplus() removes one match per pattern, so an APC reply left
         // out of it would be replayed to the input parser as a stray keystroke.
-        $reply  = self::readStdinTimed(self::TIMEOUT_MS, $fd, self::KITTY_APC_THEN_DA1);
+        $reply  = self::readStdinTimed(self::KITTY_WINDOW_MS, $fd, self::KITTY_APC_THEN_DA1);
         $window = $reply;
-        $answered = preg_match(self::DA1_REPLY_TERMINATOR, $reply) === 1;
+        // The DA1 answer alone is the diagnostic: the OK reply shares the window
+        // but is not a DA1 answer, and lastDa1Reply() reports the DA1 answer.
+        $answered = preg_match(self::DA1_REPLY_TERMINATOR, $reply, $da1) === 1;
         // Overwritten on every asked window, as probeDa1() does: a silent or
         // unanswered window must not leave an earlier probe's DA1 answer behind.
-        self::$lastDa1Reply = $answered ? $reply : '';
+        self::$lastDa1Reply = $answered ? $da1[0] : '';
 
         if (preg_match(self::KITTY_APC_REPLY, $reply) === 1) {
             return true;

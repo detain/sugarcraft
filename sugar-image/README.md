@@ -682,9 +682,24 @@ removes only the topmost image. Sixel and the text tiers have nothing to delete.
 (`KITTY_WINDOW_ID`, `TERM=xterm-kitty`, a known `TERM_PROGRAM`) is a hypothesis.
 `Detect::probe()` sends an APC `a=q` query for one 1x1 pixel under image id 31,
 followed by DA1, and `Capability::kitty()` is true only when the terminal
-answers `ESC _ G i=31;OK`. A DA1 answer without that reply, no answer in the
-window, or no tty to ask on drops the claim, and the ladder decides as it does
-for any other terminal. `Mosaic::auto()` keeps that answer: its palette fallback
+answers `ESC _ G i=31;OK`. The reply window is 300 ms. A DA1 answer without that
+reply, no answer in the window, or no tty to ask on drops the claim, and the
+ladder decides as it does for any other terminal.
+
+**Kitty over a slow link.** The window covers a round trip of about 300 ms, so
+a remote Kitty terminal (ssh, a Kitty pane across a satellite link) answers in
+time. A reply that arrives after the window is dropped: the claim falls to
+halfblock or sixel, and the late bytes are consumed by the input parser, not
+shown. A local terminal returns as soon as the DA1 answer lands, so the window
+costs nothing there; only a silent window waits the full 300 ms.
+
+**No tty, no Kitty.** This is a behavior change for callers that pre-render
+frames. Before it, a Kitty environment claim selected Kitty with no tty at all,
+so `candy-image --format auto photo.png > frame.txt` inside Kitty wrote Kitty
+APC bytes. Now the query needs a tty on stdin and stdout, so that run writes
+halfblock text, and a later `cat` of the file in Kitty shows text, not the
+image. To get the Kitty bytes into a file, force the protocol with
+`--format=kitty`, which skips the confirmation. `Mosaic::auto()` keeps that answer: its palette fallback
 grants iTerm2 from the environment, never Kitty, since a Kitty graphics claim
 needs the reply. `Detect::fromEnv()` and `Mosaic::fromEnv()` never ask, so they
 hold no reply and report the environment claim unconfirmed: `Capability::kitty()`

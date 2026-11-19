@@ -131,7 +131,35 @@ final class DetectKittyApcTest extends TestCase
 
         $reply = Detect::lastDa1Reply();
         $this->assertNotNull($reply, 'a confirmed Kitty window that also carries DA1 keeps the DA1 answer');
-        $this->assertStringContainsString(self::DA1_ANSWER, $reply);
+        // The diagnostic reports the DA1 answer alone: the OK reply is not a DA1
+        // reply, and `da1-reply:` in candy-image --dump-detect must not print it.
+        $this->assertSame(self::DA1_ANSWER, $reply);
+    }
+
+    public function testAReplyThatLandsAfterTheOldHundredMsBudgetStillConfirmsKitty(): void
+    {
+        // A remote Kitty terminal (ssh, about 150 ms round trip) answers after the
+        // 100 ms the window used to allow. A child that sleeps 150 ms and then
+        // writes the reply stands in for the far end; the window must still hold it.
+        $reply  = self::KITTY_OK . self::DA1_ANSWER;
+        $script = 'usleep(150000); fwrite(STDOUT, base64_decode("' . base64_encode($reply) . '"));';
+        $proc   = proc_open(
+            [PHP_BINARY, '-r', $script],
+            [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($proc, 'the stand-in terminal must start');
+        try {
+            Detect::setProbeStdin($pipes[1]);
+
+            $cap = Detect::probe();
+
+            $this->assertTrue($cap->kitty, 'a reply inside the Kitty window confirms the claim, however far away the terminal is');
+        } finally {
+            Detect::setProbeStdin(null);
+            fclose($pipes[1]);
+            proc_close($proc);
+        }
     }
 
     public function testInsideTmuxAKittyEnvClaimWithoutAnOkReplyIsDropped(): void

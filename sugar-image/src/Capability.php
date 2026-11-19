@@ -67,7 +67,14 @@ final class Capability
         return new self(true, true, true, true, true, $cellSize, $inTmux);
     }
 
-    /** Kitty-only capability (other protocols unknown until DA1 probing). */
+    /**
+     * Kitty-only capability built from an environment claim: the env
+     * hypothesis, not a confirmed result. {@see Detect::probe()} keeps it only
+     * when the terminal answers the APC `a=q` query, and {@see Detect::fromEnv()}
+     * reports the claim unconfirmed. A caller that builds it directly asserts
+     * Kitty on the environment alone, so it must not treat the result as a
+     * confirmed Kitty terminal.
+     */
     public static function kitty(?CellSize $cellSize = null, bool $inTmux = false): self
     {
         return new self(false, true, false, true, false, $cellSize, $inTmux);
