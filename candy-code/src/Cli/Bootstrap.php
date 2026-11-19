@@ -106,6 +106,7 @@ use SugarCraft\Code\Workflows\WorkflowEngine;
 use SugarCraft\Code\Workflows\WorkflowRegistry;
 use SugarCraft\Constraints\Dock\DockLayout;
 use SugarCraft\Core\Util\AtomicJsonFile;
+use SugarCraft\Core\Util\LockFile;
 
 /**
  * Wires up the CLI's shared, side-effecting collaborators: backend
@@ -5008,7 +5009,7 @@ public static function useMaxCost(?string $maxCost): void
      * refuses the persist instead; a missing or zero-byte file is still "nothing
      * configured", as {@see permissionConfig()} reads it.
      *
-     * THE READ-MERGE-WRITE IS SERIALISED by a {@see TimedFileLock} on a sidecar
+     * THE READ-MERGE-WRITE IS SERIALISED by a {@see LockFile} on a sidecar
      * beside the path being written through ({@see acquireUserConfigLock()}),
      * so two sessions persisting different keys no longer lose one of them. A
      * lock that cannot be had within the wait costs THIS setting, never a
@@ -5315,22 +5316,19 @@ public static function useMaxCost(?string $maxCost): void
      * anyone who can open it can hold it, and holding it is a way to make
      * this user's settings stop persisting.
      *
-     * A timeout or an unopenable sidecar is null rather than the
-     * {@see TimedFileLock} throw: see writeUserConfig() for why its callers
-     * must not receive one. The setting is lost and the file left as it was —
-     * failing CLOSED, which is the half of TimedFileLock's doctrine that
-     * matters here (a write that went ahead without the lock is the lost
-     * update this exists to prevent).
+     * A timeout or an unopenable sidecar is null, never a throw: see
+     * writeUserConfig() for why its callers must not receive one. The setting
+     * is lost and the file left as it was — failing CLOSED, which is the half
+     * of TimedFileLock's doctrine that matters here (a write that went ahead
+     * without the lock is the lost update this exists to prevent). LockFile
+     * answers null for both outcomes, so no catch is needed.
      *
      * @return \SugarCraft\Core\Util\LockGuard|null
      */
     private static function acquireUserConfigLock(string $path): ?\SugarCraft\Core\Util\LockGuard
     {
-        try {
-            return TimedFileLock::guard(\dirname($path) . '/.' . basename($path) . '.lock');
-        } catch (\RuntimeException) {
-            return null;
-        }
+        return LockFile::on(\dirname($path) . '/.' . basename($path) . '.lock')
+            ->tryAcquire(TimedFileLock::DEFAULT_WAIT_SECONDS);
     }
 
     /**
