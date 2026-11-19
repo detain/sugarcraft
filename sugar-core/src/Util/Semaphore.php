@@ -319,6 +319,11 @@ final class Semaphore
      * @param (\Closure(): \Throwable)|null $cancelReason the reason a cancelled batch rejects with;
      *                                       a plain \RuntimeException when null
      * @return PromiseInterface<list<R>>
+     * @throws \LogicException when the pool is already closed and $items is
+     *                         non-empty — the first window is submitted through
+     *                         {@see run()}, so the throw is synchronous and no
+     *                         promise is returned. An empty batch never touches
+     *                         the pool and still resolves with an empty list.
      */
     public function map(
         array $items,

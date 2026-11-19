@@ -1006,4 +1006,37 @@ final class SemaphoreTest extends TestCase
         $this->assertSame([1], $started, 'a retired pool must not start any further item');
         $this->assertInstanceOf(SemaphoreClosedException::class, $error);
     }
+
+    public function testMapOnAClosedPoolThrowsSynchronouslyAndStartsNothing(): void
+    {
+        $sem = Semaphore::new(2);
+        $sem->close();
+
+        $started = false;
+        $this->expectException(\LogicException::class);
+
+        try {
+            $sem->map([1, 2], static function () use (&$started): int {
+                $started = true;
+
+                return 0;
+            });
+        } finally {
+            $this->assertFalse($started, 'no item may start on a retired pool');
+        }
+    }
+
+    public function testMapOfNothingOnAClosedPoolStillResolvesEmpty(): void
+    {
+        $sem = Semaphore::new(2);
+        $sem->close();
+
+        $result = null;
+        $sem->map([], static fn ($x) => $x, new StreamSelectLoop())
+            ->then(static function (array $r) use (&$result): void {
+                $result = $r;
+            });
+
+        $this->assertSame([], $result);
+    }
 }
