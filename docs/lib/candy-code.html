@@ -264,7 +264,7 @@ You said:
     <div class="table-wrap"><table class="api-table">
 <tr><th>Mode</th><th>Runs without asking</th><th>Asks, or is refused</th></tr>
 <tr><td><code>default</code></td><td>read tools such as <code>Read</code>, <code>Glob</code> and <code>Grep</code>, and read-only shell lines (<code>ls</code>, <code>git log</code>, <code>grep</code> and similar)</td><td>asks for writes, other shell commands and network calls; <code>-p</code> refuses them</td></tr>
-<tr><td><code>accept-edits</code></td><td>in-project <code>Edit</code> and <code>Write</code>, and read-only shell lines</td><td>most other shell commands ask</td></tr>
+<tr><td><code>accept-edits</code></td><td>in-project <code>Edit</code> and <code>Write</code>, <code>mkdir</code>, <code>touch</code> and <code>rmdir</code> on paths below the working directory, and read-only shell lines</td><td>every other shell command asks, <code>rm</code>, <code>mv</code> and <code>cp</code> included, as does <code>WebFetch</code></td></tr>
 <tr><td><code>plan</code></td><td>read-only <code>Bash</code>, and Markdown plans in <code>.candy-code/plans/</code></td><td>refuses everything else, and asks for <code>WebFetch</code> and <code>WebSearch</code>; the model leaves with <code>PlanExit</code></td></tr>
 <tr><td><code>auto</code></td><td>calls the <code>SafetyClassifier</code> passes</td><td>a security finding asks; other flagged calls are refused, or reviewed by the title model with <code>autoReview</code></td></tr>
 <tr><td><code>dont-ask</code></td><td>read-only tools, such as <code>Read</code> and <code>Grep</code></td><td>refuses everything else, <code>WebFetch</code> included, without prompting</td></tr>
