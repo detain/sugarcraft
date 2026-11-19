@@ -767,10 +767,10 @@ final class RenderCommand extends Command
             if ($capable !== null) {
                 return $capable;
             }
-            // An EMPTY NO_COLOR takes no position (no-color.org: "if present
-            // and not empty"), but sugar-colorprofile's probe disables on ANY
-            // value including empty. Hide the empty value from the probe so
-            // the spec-correct "no opinion" answer reaches it, then restore.
+            // An EMPTY NO_COLOR is treated as unset (no-color.org: "if present
+            // and not empty" takes no position), but sugar-colorprofile's probe
+            // disables on ANY value including empty. So the empty value is
+            // removed from the environment for the probe, then restored.
             // The putenv hide spans the whole await. The infocmp child never
             // sees it either way: it runs under the minimal environment from
             // InfocmpBinary::childEnvironment() (TERM and PATH only). The
