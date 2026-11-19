@@ -94,7 +94,7 @@ php candy-files.phar [LEFT_DIR] [RIGHT_DIR]</code></pre>
 </table>
 
 <h3 id="constructing-manager" style="margin-top: 32px;">Constructing Manager</h3>
-<p>Prefer the builder to the 32-parameter constructor, which is kept only for backward compatibility. The state the machine itself produces, such as recursive search results, the in-flight copy count, and the help overlay, takes safe defaults and is not exposed on the builder.</p>
+<p>Prefer the builder to the 32-parameter constructor, which is kept only for backward compatibility. The state the machine itself produces, namely the per-result directories (<code>searchResultDirs</code>) and the recursive-search flag (<code>searchRecursive</code>), takes safe defaults and has no builder setter.</p>
 <pre class="code"><code class="language-php">use SugarCraft\Files\ConfirmState;
 use SugarCraft\Files\FsLister;
 use SugarCraft\Files\Manager;

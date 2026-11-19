@@ -100,7 +100,7 @@ $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pas
 <p>Type SQL in the Query pane. <code>Enter</code> inserts a newline, and <code>Ctrl+R</code>, <code>Ctrl+E</code> or <code>Ctrl+Enter</code> runs the statement. <code>Ctrl+F</code> saves the text to the favorites list for the session. A statement with <code>?</code> or <code>:name</code> placeholders opens a prompt for each parameter before it runs. An empty value binds NULL.</p>
 
 <h3 style="margin-top: 32px;">Export a table to CSV, or import a file</h3>
-<p>With rows on screen, press <code>x</code> in the Tables or Rows pane to open the export line. <code>Ctrl+S</code> is an alias for its export half. Press <code>i</code> to open the import line. In either line <code>Enter</code> submits and <code>Esc</code> closes it.</p>
+<p>With rows on screen, press <code>x</code> in the Tables or Rows pane to open the export line, or press <code>Ctrl+S</code> from any pane to open the same line. Press <code>i</code> in the Tables or Rows pane to open the import line. In either line <code>Enter</code> submits and <code>Esc</code> closes it.</p>
 
 <h3 style="margin-top: 32px;">Read the recorded status history</h3>
 <p>Press <code>H</code> in the Tables, Rows or Admin pane to read the recorded status history. Its counter trend is folded into the Rows pane. Recording is on by default in the launcher. Pass <code>--no-history</code> to turn it off, or <code>--history=PATH</code> to choose the file. See <a href="#status-snapshot-history">Status-snapshot history</a>.</p>
@@ -348,7 +348,8 @@ $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pas
 <tr><td><code>y</code> (Rows)</td><td>Yank the cell to the terminal clipboard over OSC 52. Dumb and Linux-console terminals never receive the sequence</td></tr>
 <tr><td><code>Ctrl+R</code>, <code>Ctrl+E</code>, <code>Ctrl+Enter</code></td><td>Run the SQL in the Query pane</td></tr>
 <tr><td><code>Ctrl+F</code></td><td>Save the Query pane's text to the favorites list. <code>Ctrl+Shift+F</code> removes it</td></tr>
-<tr><td><code>x</code>, <code>Ctrl+S</code>, <code>i</code></td><td>Open the export or import line (Tables or Rows)</td></tr>
+<tr><td><code>x</code>, <code>i</code></td><td>Open the export or import line (Tables or Rows)</td></tr>
+<tr><td><code>Ctrl+S</code></td><td>Open the export line from any pane while rows are on screen</td></tr>
 <tr><td><code>H</code></td><td>Read the recorded status history</td></tr>
 <tr><td><code>:tx</code>, <code>:tx begin</code>, <code>:tx commit</code>, <code>:tx rollback</code></td><td>Transaction control on the sync session, typed in the Query pane. <code>:tx</code> and <code>:tx begin</code> open, <code>commit</code> closes, and <code>rollback</code> closes and discards the work</td></tr>
 <tr><td><code>[p]</code> (Admin)</td><td>Pause or resume the admin auto-refresh</td></tr>
@@ -364,7 +365,7 @@ $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pas
 
 <h2 style="margin-top: 40px;">Examples</h2>
 <p><code>examples/play.php</code> seeds an in-memory SQLite database with two tables, <code>users</code> and <code>posts</code>, and opens the dashboard over it. It takes no arguments. Run it in a terminal with <code>php examples/play.php</code>, and quit with <code>q</code> or <code>Ctrl+C</code>. Non-interactively, <code>printf 'q' | php examples/play.php</code> starts the app, reads the quit key and exits 0. With stdin at <code>/dev/null</code> it exits 0 at once, because end of file on stdin ends the run. It keeps running only while stdin is an open stream, so write a key to an open pipe to drive it.</p>
-<p>The Admin pane needs a MySQL or PostgreSQL server, so on the example's SQLite database it shows the fallback. For the headless path, see <code>ResultTable::renderPlain()</code> in the Configuration section.</p>
+<p>The Admin pane needs a MySQL or PostgreSQL server, so on the example's SQLite database it shows the fallback. For the headless path, see <code>ResultTable::renderPlain()</code> under Tasks, in Drive it from a script.</p>
 
 <h2 style="margin-top: 40px;">Testing</h2>
 <p>Run the suite from the package root after <code>composer install</code>:</p>
@@ -419,7 +420,7 @@ $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pas
 </ul>
 
 <h2 style="margin-top: 40px;">Changelog and versioning</h2>
-<p>candy-sql is pre-1.0. The rolling prerelease is tagged <code>candy-sql/latest</code>, and it carries the MySQL, PostgreSQL and admin pages. The README records dated changes, such as the 2026-10-24 accessor deprecation: <code>Database</code> is now a deprecated alias for <code>SqliteDatabase</code>, and <code>DatabaseInterface</code> is the name to use.</p>
+<p>candy-sql is pre-1.0. The rolling prerelease is tagged <code>candy-sql/latest</code>, and it carries the MySQL, PostgreSQL and admin pages. The README's Deprecated: Database class section covers the move: <code>Database</code> is now a deprecated alias for <code>SqliteDatabase</code>, and <code>DatabaseInterface</code> is the name to use.</p>
 
 <h2 style="margin-top: 40px;">Related</h2>
 <ul>

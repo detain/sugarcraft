@@ -311,7 +311,7 @@ $git = new Git(getcwd());
 <table class="api-table">
 <tr><th>Variable</th><th>Default</th><th>Effect</th></tr>
 <tr><td><code>CANDY_GIT_STRICT_FILTERS</code></td><td>unset</td><td>Set to <code>1</code>, <code>true</code> or <code>yes</code> to refuse repositories whose filter drivers would run. Unset, filter drivers are announced on stderr and allowed to run.</td></tr>
-<tr><td><code>NO_COLOR</code>, <code>TERM</code>, <code>COLORTERM</code></td><td>detected</td><td>Read at launch through the color-profile detection. <code>NO_COLOR</code> strips color. <code>TERM=dumb</code> boots in inline mode, with no alternate screen and no cursor addressing.</td></tr>
+<tr><td><code>NO_COLOR</code>, <code>TERM</code>, <code>COLORTERM</code></td><td>detected</td><td>Read at launch through the color-profile detection. <code>NO_COLOR</code> strips color. <code>TERM=dumb</code> turns color off, but the full-screen alternate screen and cursor addressing are still used, so the terminal has to accept those sequences.</td></tr>
 <tr><td><code>PATH</code></td><td>system</td><td>Locates the <code>git</code> binary. A launch failure that is not a missing git prints the OS reason.</td></tr>
 </table>
 
@@ -360,11 +360,11 @@ $git = new Git(getcwd());
 
 <h2 id="theme-styling-and-accessibility" style="margin-top: 40px;">Theme, styling and accessibility</h2>
 <p>Every state the interface needs you to know is carried by text, not by color alone. Status rows show git's porcelain <code>XY</code> codes, and diff lines keep their leading <code>+</code> and <code>-</code>. The rebase todo spells its actions as words: <code>pick</code>, <code>reword</code>, <code>edit</code>, <code>squash</code>, <code>drop</code>. The ahead-and-behind summary is git's own header. The panes stay readable under <code>NO_COLOR</code>, under <code>TERM=dumb</code>, or with an ASCII-only palette.</p>
-<p>The focused pane shows two signals: the accent border and a <code>▸</code> text marker before its title. The selected row uses reverse video on styling terminals. Because <code>TERM=dumb</code> emits no escape sequences, the frame also carries a plain-text <code>cursor:</code> line that names the selected file, branch, commit or overlay entry.</p>
+<p>The focused pane shows two signals: the accent border and a <code>▸</code> text marker before its title. The selected row uses reverse video on styling terminals. The frame also carries a plain-text <code>cursor:</code> line that names the selected file, branch, commit or overlay entry. It has no styling, so it stays visible under every palette, including <code>TERM=dumb</code>.</p>
 <p>The palette is not tuned for WCAG conformance. Its hint strip lands near 3.4:1 against the dark background of the demos, and the unfocused border near 2.1:1. Actual ratios depend on your terminal palette.</p>
 
 <h2 id="internationalization" style="margin-top: 40px;">Internationalization</h2>
-<p>User-facing strings use <code>SugarCraft\Git\Lang::t()</code>. The catalog is <code>lang/en.php</code>, and the other locales are under <code>lang/</code>, 16 files in all. The keys carry a <code>git.</code> prefix inside the file, and you pass the file key verbatim: <code>Lang::t('git.timeout')</code>. The facade adds the library namespace on lookup, so the shared registry sees <code>git.git.timeout</code>. <code>Lang::t('timeout')</code> does not resolve. It returns the prefixed key <code>git.timeout</code> rather than a message, so always call through <code>SugarCraft\Git\Lang</code>.</p>
+<p>User-facing strings use <code>SugarCraft\Git\Lang::t()</code>. The catalog is <code>lang/en.php</code>, and the other locales are under <code>lang/</code>, 16 files in all. Only the twelve <code>git.*</code> keys carry a <code>git.</code> prefix inside the file, and you pass those as written: <code>Lang::t('git.timeout')</code>. Every other key has no prefix and is passed as written too: <code>Lang::t('status.clean')</code> and <code>Lang::t('cli.not_a_repo')</code>. The facade adds the library namespace on lookup, so the shared registry sees <code>git.git.timeout</code> and <code>git.status.clean</code>. <code>Lang::t('timeout')</code> does not resolve. It returns the prefixed key <code>git.timeout</code> rather than a message, so always call through <code>SugarCraft\Git\Lang</code>.</p>
 <table class="api-table">
 <tr><th>Key</th><th>Default text</th><th>Parameters</th></tr>
 <tr><td>git.spawn_failed</td><td>git: failed to spawn: {reason}</td><td>reason</td></tr>
