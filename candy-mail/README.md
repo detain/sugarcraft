@@ -194,8 +194,9 @@ masked in `__debugInfo()`, serialisation refused).
 candy-mail tui --from me@example.com --to you@example.com
 ```
 
-Tab/Shift+Tab (or Up/Down) change field, Enter advances (newline in the body),
-Ctrl+S sends, Ctrl+P toggles an offline MIME preview, Ctrl+U clears the field, Ctrl+Q
+Tab/Shift+Tab change field. In the body and the HTML field, Enter inserts a newline
+and Up/Down move between lines, changing field only from the first or last line; in
+the other fields Enter advances and Up/Down change field. Ctrl+S sends, Ctrl+P toggles an offline MIME preview, Ctrl+U clears the field, Ctrl+Q
 quits, and Esc quits on the edit screen (pressed twice when there are unsent edits; Esc
 in the preview returns to editing). Address fields are
 comma-separated; the Attachments field takes comma-separated file paths. Flags and
