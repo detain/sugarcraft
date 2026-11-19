@@ -161,7 +161,7 @@
             <li class="toc-h2"><a href="#concepts">Concepts</a></li>
             <li class="toc-h2"><a href="#tasks">Tasks</a></li>
             <li class="toc-h3"><a href="#pick-a-tier-explicitly">Pick a tier explicitly</a></li>
-            <li class="toc-h3"><a href="#choose-a-colour-depth-for-a-text-tier">Choose a colour depth for a text tier</a></li>
+            <li class="toc-h3"><a href="#choose-a-color-depth-for-a-text-tier">Choose a color depth for a text tier</a></li>
             <li class="toc-h3"><a href="#place-an-image-by-id-on-kitty">Place an image by id on Kitty</a></li>
             <li class="toc-h3"><a href="#render-from-a-remote-url-safely">Render from a remote URL safely</a></li>
             <li class="toc-h2"><a href="#api-reference">API reference</a></li>
@@ -172,7 +172,7 @@
             <li class="toc-h3"><a href="#environment-variables">Environment variables</a></li>
             <li class="toc-h3"><a href="#decode-budgets">Decode budgets</a></li>
             <li class="toc-h3"><a href="#chafa-binary-discovery">Chafa binary discovery</a></li>
-            <li class="toc-h2"><a href="#styling-and-colour-depth">Styling and colour depth</a></li>
+            <li class="toc-h2"><a href="#styling-and-color-depth">Styling and color depth</a></li>
             <li class="toc-h2"><a href="#examples">Examples</a></li>
             <li class="toc-h2"><a href="#testing">Testing</a></li>
             <li class="toc-h2"><a href="#troubleshooting-and-faq">Troubleshooting and FAQ</a></li>
@@ -209,7 +209,7 @@ echo $ansi;</code></pre>
     <p style="color: var(--ink-2);">The output is an ANSI byte string your program owns. Write it to stdout, to a socket, into a text frame, or into a file. Nothing is printed on your behalf.</p>
 
     <h2 id="concepts" style="margin-top: 40px;">Concepts</h2>
-    <p>Every tier is one of two kinds. <strong>Graphic tiers</strong> (Sixel, Kitty, iTerm2) send the terminal's own image escape sequences, so the picture is pixels. <strong>Text tiers</strong> (half-block, quarter-block, ASCII ramp, symbol map) send glyphs with 24-bit or 256-colour SGR, so they work in any Unicode terminal and survive a plain pipe. Use a graphic tier when the terminal supports it, and a text tier as the floor when it does not.</p>
+    <p>Every tier is one of two kinds. <strong>Graphic tiers</strong> (Sixel, Kitty, iTerm2) send the terminal's own image escape sequences, so the picture is pixels. <strong>Text tiers</strong> (half-block, quarter-block, ASCII ramp, symbol map) send glyphs with 24-bit or 256-color SGR, so they work in any Unicode terminal and survive a plain pipe. Use a graphic tier when the terminal supports it, and a text tier as the floor when it does not.</p>
     <p><code>Mosaic::probe()</code> picks the tier from the environment and a DA1 capability query, and <code>Mosaic::auto()</code> runs the same ladder. Both are fail-soft: the result is always a usable tier. Force a tier when you know the terminal, or when a probe answer is not what you see on screen.</p>
 
     <h2 id="tasks" style="margin-top: 40px;">Tasks</h2>
@@ -219,14 +219,14 @@ echo $ansi;</code></pre>
 $mosaic = Mosaic::probe();            // best tier for this terminal
 $mosaic = Mosaic::fromModeString('quarterblock');  // a named tier, or null if unknown</code></pre>
 
-    <h3 id="choose-a-colour-depth-for-a-text-tier" style="margin-top: 24px;">Choose a colour depth for a text tier</h3>
+    <h3 id="choose-a-color-depth-for-a-text-tier" style="margin-top: 24px;">Choose a color depth for a text tier</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Image\Renderer\AsciiColorMode;
 use SugarCraft\Image\Symbol\CanvasMode;
 
-$sixteen = Mosaic::ascii(AsciiColorMode::Ansi16);    // 16-colour character ramp
+$sixteen = Mosaic::ascii(AsciiColorMode::Ansi16);    // 16-color character ramp
 $mono    = Mosaic::ascii();                           // monochrome ramp (the default)
-$symbols = Mosaic::symbols(CanvasMode::Ansi256);      // symbol map on a 256-colour canvas</code></pre>
-    <p>Text tiers emit 24-bit or 256-colour SGR with no palette negotiation. On a limited-colour terminal, pick the canvas explicitly. <code>NO_COLOR</code> changes which graphic protocol is detected, but no renderer reads it to reduce the colours it emits.</p>
+$symbols = Mosaic::symbols(CanvasMode::Ansi256);      // symbol map on a 256-color canvas</code></pre>
+    <p>Text tiers emit 24-bit or 256-color SGR with no palette negotiation. On a limited-color terminal, pick the canvas explicitly. <code>NO_COLOR</code> changes which graphic protocol is detected, but no renderer reads it to reduce the colors it emits.</p>
 
     <h3 id="place-an-image-by-id-on-kitty" style="margin-top: 24px;">Place an image by id on Kitty</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Image\KittyOptions;
@@ -320,7 +320,7 @@ $ansi = $mosaic->render($image, 60);      // explicit width wins; height from as
       <div class="feature"><strong>Kitty zlib compression</strong><span>Compress the PNG payload with zlib before base64-encoding via <code>KittyOptions::withCompression(1)</code>, emitted as <code>f=100,o=z</code>. Useful for large images on slow links.</span></div>
       <div class="feature"><strong>Half-block transparency</strong><span>Transparent pixels (alpha=127) emit no SGR codes, so the terminal default background shows through. This enables overlay compositing on existing terminal content.</span></div>
       <div class="feature"><strong>Sixel 256-color fallback</strong><span>Pass <code>maxColors</code> (1–256) to the <code>SixelRenderer</code> constructor to limit palette size on terminals with limited truecolor support. It rides the builder: <code>Mosaic::builder()-&gt;withRenderer(new SixelRenderer(maxColors: 64))-&gt;build()</code>.</span></div>
-      <div class="feature"><strong>Symbol-map engine (chafa parity)</strong><span>Unicode braille, sextant, octant and block glyph cells chosen by Hamming-distance candidate search. Pure inline SGR that reaches any Unicode terminal. Glyph fidelity depends on the font's coverage, so restrict the corpus with <code>symbols:</code> when needed. <code>Mosaic::symbols(canvas:, workFactor:, symbols:)</code> selects the colour canvas, candidate budget and chafa's <code>--symbols=</code> tag grammar.</span></div>
+      <div class="feature"><strong>Symbol-map engine (chafa parity)</strong><span>Unicode braille, sextant, octant and block glyph cells chosen by Hamming-distance candidate search. Pure inline SGR that reaches any Unicode terminal. Glyph fidelity depends on the font's coverage, so restrict the corpus with <code>symbols:</code> when needed. <code>Mosaic::symbols(canvas:, workFactor:, symbols:)</code> selects the color canvas, candidate budget and chafa's <code>--symbols=</code> tag grammar.</span></div>
       <div class="feature"><strong>ASCII character ramp</strong><span><code>Mosaic::ascii()</code> maps one luminance sample per cell onto a character ramp. <code>AsciiColorMode::Ansi16 | Ansi256 | TrueColor</code> carries pixel colors on the characters themselves.</span></div>
       <div class="feature"><strong>chafa CLI tier</strong><span><code>ChafaRenderer</code> shells out to the <code>chafa</code> command with option passthrough. Output is bounded and the child is reaped on a TERM→KILL ladder. Binary discovery is gated (see Configuration). Opt-in only; the pure-PHP tiers never shell out for pixel data.</span></div>
       <div class="feature"><strong>Remote images</strong><span><code>ImageSource::fromUrl()</code> and <code>fromUrlAsync()</code> (ReactPHP) with a security floor: scheme allowlist re-checked every redirect hop, and any host resolving to a private, loopback, link-local or reserved address (including cloud metadata) is refused.</span></div>
@@ -343,7 +343,7 @@ $ansi = $mosaic->render($image, 60);      // explicit width wins; height from as
     <tr><td><code>SUGAR_IMAGE_STTY</code></td><td>Binary override for the terminal-state round trip. Same absolute-path gate.</td></tr>
     <tr><td><code>SUGAR_IMAGE_TMUX_PASSTHROUGH_TTL</code></td><td>Seconds between re-checks of tmux <code>allow-passthrough</code>. Default 30. <code>0</code> re-verifies before every frame. A negative or unparsable value falls back to the default.</td></tr>
     <tr><td>Identity variables (<code>TERM</code>, <code>TERM_PROGRAM</code>, <code>TERM_PROGRAM_VERSION</code>, <code>LC_TERMINAL</code>, <code>TERMINAL_NAME</code>, <code>TMUX</code>, <code>KITTY_WINDOW_ID</code>, <code>KITTY_PID</code>, <code>XTERM_VERSION</code>, <code>KONSOLE_VERSION</code>, <code>VTE_VERSION</code>, <code>MLTERM</code>, <code>GHOSTTY_BIN_DIR</code>, <code>WEZTERM_EXECUTABLE</code>, <code>ComSpec</code>)</td><td>Probe inputs for <code>Mosaic::probe()</code>. The table-driven identity stage reads exactly these fifteen names. The live DA1 round trip on the TTY decides what the table cannot.</td></tr>
-    <tr><td><code>NO_COLOR</code>, <code>CLICOLOR</code></td><td>Consulted only by the terminfo sixel-detection ladder. They can change which protocol is detected, never which colours are emitted.</td></tr>
+    <tr><td><code>NO_COLOR</code>, <code>CLICOLOR</code></td><td>Consulted only by the terminfo sixel-detection ladder. They can change which protocol is detected, never which colors are emitted.</td></tr>
     </tbody>
     </table>
 
@@ -364,8 +364,8 @@ $ansi = $mosaic->render($image, 60);      // explicit width wins; height from as
     <h3 id="chafa-binary-discovery" style="margin-top: 24px;">Chafa binary discovery</h3>
     <p>The chafa tier is the one place sugar-image executes an external program to produce image output. The binary is chosen through a strict gate, and a bare <code>chafa</code> argv[0] is never spawned, so a rogue <code>chafa</code> earlier on PATH never runs. The order is: the <code>SUGAR_IMAGE_CHAFA</code> override, then a fixed roster of absolute candidates (<code>/usr/bin/chafa</code>, <code>/usr/local/bin/chafa</code>, <code>/opt/homebrew/bin/chafa</code>), each checked for being a file and executable. When nothing resolves, <code>ChafaRenderer::available()</code> returns <code>false</code> and <code>render()</code> throws a <code>chafa.not_found</code> failure. The gate is POSIX-shaped, so the chafa tier does not run on Windows.</p>
 
-    <h2 id="styling-and-colour-depth" style="margin-top: 40px;">Styling and colour depth</h2>
-    <p>sugar-image does not ship a theme. Its styling choices are the colour depth and the dither mode. The depth is set by the text-tier factory (<code>AsciiColorMode</code> for the ramp, <code>CanvasMode</code> for the symbol map). The dither mode is set on the Sixel renderer, and <code>Mosaic::withDither()</code> changes it on a built Mosaic.</p>
+    <h2 id="styling-and-color-depth" style="margin-top: 40px;">Styling and color depth</h2>
+    <p>sugar-image does not ship a theme. Its styling choices are the color depth and the dither mode. The depth is set by the text-tier factory (<code>AsciiColorMode</code> for the ramp, <code>CanvasMode</code> for the symbol map). The dither mode is set on the Sixel renderer, and <code>Mosaic::withDither()</code> changes it on a built Mosaic.</p>
     <pre class="code"><code class="language-php">use SugarCraft\Image\Dither;
 use SugarCraft\Image\Mosaic;
 
@@ -376,7 +376,7 @@ $sixel = $sixel->withDither(Dither::FloydSteinberg);</code></pre>
     <h2 id="examples" style="margin-top: 40px;">Examples</h2>
     <ul>
       <li><code>examples/inline-image.php &lt;image-file&gt; [width-in-cells]</code> (default width 80) prints one image on the terminal's best tier. It is the shortest read of the detection path. Its exit codes are listed under Troubleshooting.</li>
-      <li><code>examples/text-tiers.php [width-in-cells]</code> (default 24) renders the committed fixture through the half-block, quarter-block, ASCII (mono and ansi16) and symbol-map tiers, one labelled block each. It needs no graphics protocol and no chafa binary, so its output can be captured or piped.</li>
+      <li><code>examples/text-tiers.php [width-in-cells]</code> (default 24) renders the committed fixture through the half-block, quarter-block, ASCII (mono and ansi16) and symbol-map tiers, one labeled block each. It needs no graphics protocol and no chafa binary, so its output can be captured or piped.</li>
       <li><code>examples/fixture-gradient.png</code> is a committed image, so the quickstart and both scripts run against the checkout without a separate file.</li>
     </ul>
 

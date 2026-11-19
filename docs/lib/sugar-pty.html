@@ -332,7 +332,7 @@ while (!$decoder-&gt;isEof()) {
 }</code></pre>
 
     <h2 id="styling-and-sgr-state" style="margin-top: 40px;">Styling and SGR state</h2>
-    <p><code>AnsiOutputParser</code> reads the master and returns the child's output verbatim, while tracking the SGR state (bold, colour and the rest) the child has set. Use it to inspect styling without consuming the bytes. <code>SgrHandler</code> records each style transition, and <code>drainTransitions()</code> returns them. Because the tracking is optimistic, OSC sequences are not tracked. The parser never rewrites output, so colour decisions stay with the child.</p>
+    <p><code>AnsiOutputParser</code> reads the master and returns the child's output verbatim, while tracking the SGR state (bold, color and the rest) the child has set. Use it to inspect styling without consuming the bytes. <code>SgrHandler</code> records each style transition, and <code>drainTransitions()</code> returns them. Because the tracking is optimistic, OSC sequences are not tracked. The parser never rewrites output, so color decisions stay with the child.</p>
 
     <h2 id="examples" style="margin-top: 40px;">Examples</h2>
     <ul>
