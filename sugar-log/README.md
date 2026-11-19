@@ -459,7 +459,7 @@ Untrusted data can never forge or reshape a record:
 - **Hostile shapes** — reference cycles in context terminate at a depth cap
   (`[...]`), non-finite floats become `'INF'`/`'-INF'`/`'NAN'`, a throwing
   `__toString()` is contained (the object reports its class name), and if an
-  encode fails anyway the JSON fallback drops only the offending field — the
+  encode fails anyway the JSON fallback replaces only the offending field's value with `"[unencodable]"` — the
   envelope and every other entry survive, flagged by `_encode_error`.
 
 ## Panic handlers

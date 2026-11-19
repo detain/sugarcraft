@@ -459,7 +459,7 @@ echo $config-&gt;angularFrequency;                                 // 13.416... 
     <pre class="code"><code class="language-shell">php examples/spring.php</code></pre>
 
     <h3 id="examples-projectile-php" style="margin-top: 24px;">examples/projectile.php</h3>
-    <p>Traces one two-dimensional arc. The initial velocity points up and to the right, gravity pulls it back down, and the example plots the trajectory as an ASCII curve. Projectile ignores the reduced-motion signal by design, and the example prints one line when the variable is set.</p>
+    <p>Traces one two-dimensional arc over its first 90 frames (1.5 s at 60 fps). The initial velocity points up and to the right, and gravity bends it over. The example plots those samples as an ASCII curve, and the plot stops before the apex, so it shows only the rising half of the arc. Projectile ignores the reduced-motion signal by design, and the example prints one line when the variable is set.</p>
     <pre class="code"><code class="language-shell">php examples/projectile.php</code></pre>
 
     <h3 id="examples-particle-php" style="margin-top: 24px;">examples/particle.php</h3>
