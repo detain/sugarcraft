@@ -231,7 +231,9 @@ final class PathJail
      * checks are the part this does not cover.
      *
      * $root must be canonical, as realpath() answers it: its names are trusted
-     * and are not checked for 8.3 short-name aliases. Only $path is checked.
+     * for the 8.3 short-name rule only. Every other name rule still refuses a
+     * bad root, so `C:\CON` or `C:\data\a:b` answers null, while `C:\PROGRA~1`
+     * is accepted. Only the 8.3 check is skipped for the root; $path gets it all.
      */
     public static function windowsLexical(string $root, string $path): ?string
     {

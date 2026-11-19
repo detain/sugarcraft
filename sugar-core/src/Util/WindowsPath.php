@@ -23,9 +23,12 @@ namespace SugarCraft\Core\Util;
  *     data streams (`file:stream`);
  *   - segments ending in a dot or a space, which Windows strips, so two names
  *     would reach one file;
+ *   - segments starting with a space, which no caller means as a name;
  *   - reserved device names (`CON`, `NUL.txt`, `COM1`, ...), which open a device
  *     rather than a file under the root;
- *   - 8.3 short-name forms (`PROGRA~1`), which can alias a long name;
+ *   - 8.3 short-name forms (`PROGRA~1`), which can alias a long name. The one
+ *     exception is a canonical root (`C:\PROGRA~1` as realpath() answers it):
+ *     its 8.3 names are trusted, while every other rule above still applies to it;
  *   - a `..` that climbs above the drive root or the share.
  *
  * Drive letters compare case-insensitively (the anchor is upper-cased). Segments
@@ -38,11 +41,16 @@ final class WindowsPath
      * The canonical absolute form of $path, with `..` kept, or null.
      *
      * A relative $path is joined onto $root, which must be absolute. An absolute
-     * $path is validated on its own and $root is then ignored.
+     * $path is checked in full, except that a leading run of segments spelling
+     * $root (compared case-insensitively) is trusted for the 8.3 rule only, as
+     * resolve() trusts it. $root therefore changes the verdict for the same
+     * $path: a root that prefixes $path admits a `~N` segment inside that prefix,
+     * while an unrelated root refuses the same segment.
      *
      * $root must be canonical, as realpath() answers it: its names are trusted
-     * and are not checked for 8.3 short-name aliases, so a root such as
-     * `C:\PROGRA~1` is accepted. Only the caller's own spelling is checked.
+     * for the 8.3 rule only, so a root such as `C:\PROGRA~1` is accepted, while
+     * every other name rule still refuses a bad root. Only the caller's own
+     * spelling below the root is checked for 8.3 aliases.
      */
     public static function absolutise(string $root, string $path): ?string
     {
@@ -153,8 +161,9 @@ final class WindowsPath
      * that follows a reparse point before it trusts the answer.
      *
      * $root must be canonical, as realpath() answers it: its names are trusted
-     * and are not checked for 8.3 short-name aliases, so a root such as
-     * `C:\PROGRA~1` is accepted. Only the caller's own spelling is checked.
+     * for the 8.3 short-name rule only, so a root such as `C:\PROGRA~1` is
+     * accepted, while every other name rule still refuses a bad root. Only the
+     * caller's own spelling below the root is checked for 8.3 aliases.
      */
     public static function within(string $root, string $path): ?string
     {
