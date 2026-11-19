@@ -35,7 +35,7 @@ $final = (new Program(Game::start(), new ProgramOptions(useAltScreen: true)))->r
     <tr><td><code>Bird::GRAVITY</code></td><td><code>18.0</code></td><td>Constant downward acceleration in cells per second squared</td></tr>
     <tr><td><code>Bird::TICKS_PER_SEC</code></td><td><code>30</code></td><td>Simulation rate, baked into the projectile's time step</td></tr>
     </table>
-    <p>Fall speed is clamped to <code>Projectile::TERMINAL_GRAVITY</code> on every tick. The clamp never engages in ordinary play, because the fastest reachable fall across the 18-row world peaks at about 25.8 cells per second, under one row per tick, so the bird cannot tunnel through a gap unchecked.</p>
+    <p>Fall speed is clamped to <code>Projectile::TERMINAL_GRAVITY</code> on every tick. The clamp never engages in ordinary play, because the fastest reachable fall peaks at about 25.4 cells per second while the bird is still inside the 18-row world, and at about 26 on the tick that reaches the floor. Both sit under one row per tick, so the bird cannot tunnel through a gap unchecked.</p>
 
     <h2 style="margin-top: 40px;">Tasks</h2>
 
