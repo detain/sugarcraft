@@ -118,6 +118,19 @@ final class DetectKittyApcTest extends TestCase
         $this->assertFalse($cap->kitty, 'the claim needs a reply, not just the environment');
     }
 
+    public function testAConfirmedKittyWindowStillKeepsTheDa1AnswerForLastDa1Reply(): void
+    {
+        // The OK reply and the DA1 answer share one window; the DA1 answer is
+        // still the last DA1 reply even though the Kitty claim was confirmed.
+        $this->answerWith(self::KITTY_OK . self::DA1_ANSWER);
+
+        Detect::probe();
+
+        $reply = Detect::lastDa1Reply();
+        $this->assertNotNull($reply, 'a confirmed Kitty window that also carries DA1 keeps the DA1 answer');
+        $this->assertStringContainsString(self::DA1_ANSWER, $reply);
+    }
+
     public function testInsideTmuxAKittyEnvClaimWithoutAnOkReplyIsDropped(): void
     {
         // A Kitty env claim inside tmux gets no exception: the pane's env is not

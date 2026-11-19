@@ -997,16 +997,16 @@ final class Detect
         // out of it would be replayed to the input parser as a stray keystroke.
         $reply  = self::readStdinTimed(self::TIMEOUT_MS, $fd, self::KITTY_APC_THEN_DA1);
         $window = $reply;
+        $answered = preg_match(self::DA1_REPLY_TERMINATOR, $reply) === 1;
+        if ($answered) {
+            self::$lastDa1Reply = $reply;
+        }
+
         if (preg_match(self::KITTY_APC_REPLY, $reply) === 1) {
             return true;
         }
 
-        if (preg_match(self::DA1_REPLY_TERMINATOR, $reply) !== 1) {
-            return null;
-        }
-        self::$lastDa1Reply = $reply;
-
-        return false;
+        return $answered ? false : null;
     }
 
     /**

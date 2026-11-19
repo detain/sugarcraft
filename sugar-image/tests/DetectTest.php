@@ -410,8 +410,8 @@ final class DetectTest extends TestCase
     public function testKittyEnvVarPreventsDa1Query(): void
     {
         // A Kitty claim the APC reply confirms skips the DA1 round-trip: the
-        // reply window closes on the DA1 answer the query already read.
-        // We verify this by checking that lastDa1Reply() is null.
+        // reply window closes on the DA1 answer the query already read, and
+        // that answer is kept as the last DA1 reply.
         putenv('KITTY_WINDOW_ID=99');
         Detect::reset();
 
@@ -419,7 +419,8 @@ final class DetectTest extends TestCase
         $cap = Detect::probe();
 
         $this->assertTrue($cap->kitty);
-        $this->assertNull(Detect::lastDa1Reply());
+        $this->assertNotNull(Detect::lastDa1Reply());
+        $this->assertStringContainsString("\x1b[?62;4c", (string) Detect::lastDa1Reply());
     }
 
     public function testLastDa1ReplyRecordsRawResponse(): void
