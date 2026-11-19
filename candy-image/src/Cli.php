@@ -43,9 +43,10 @@ use SugarCraft\Image\TermDb;
  * canvas mode, work factor) — a no-op on backends that do not
  * speak the dial. --passthrough=screen refuses with a pointer: the
  * Screen envelope is detection-chosen, never forced. --probe=off is refused
- * like any unknown flag: sugar-image's env-only seam (Detect::fromEnv) exists,
- * but mapping --probe=off onto it would change the auto() protocol choice
- * (Kitty unconfirmed, no DA1 sixel query), which this viewer does not take on.
+ * like any unknown flag. The probe-free seam is Mosaic::fromModeString(mode,
+ * probe: false) via Detect::fromEnv, and --format validation uses it. Mapping
+ * --probe=off onto it would change the auto() protocol choice (Kitty
+ * unconfirmed, no DA1 sixel query), which this viewer does not take on.
  * --format=chafa is REFUSED by design: candy-image's whole point is a viewer that
  * does not shell out to chafa.
  */
@@ -133,9 +134,10 @@ final class Cli
      * with chicle's short names as aliases.
      *
      * Hand-copied, not derived: fromModeString() is a match with no
-     * enumerable vocabulary. Accepted exception (recorded in the review-fix
-     * commit): a word added to fromModeString() is rejected here with
-     * 'bad --format' until it is also added to this list.
+     * enumerable vocabulary. Accepted exception: a word added to
+     * fromModeString() is rejected here with 'bad --format' until it is also
+     * added to this list. Its reason: fromModeString() exposes no list of its
+     * words to derive this from.
      */
     private const FORMATS = [
         'auto', 'sixel', 'kitty', 'iterm2',
@@ -265,12 +267,13 @@ final class Cli
 
                             return self::EXIT_USAGE;
                         }
-                        // Accepted exception: argv validation runs the default auto() probe
-                        // before --passthrough is applied, so under tmux it can turn
-                        // allow-passthrough on. probe:false moves that probe to render, after
-                        // passthrough is left off, which drops the Kitty and sixel bytes in
-                        // tmux. That render change is not accepted, so the probe stays here.
-                        if (!in_array(strtolower($raw), self::FORMATS, true) || Mosaic::fromModeString($raw) === null) {
+                        // Validation only needs the spelling, so it runs probe-free. The default
+                        // auto() probe here ran before --passthrough was applied, and under tmux
+                        // it could turn allow-passthrough on although the user asked for none.
+                        // Behavior change: the auto() probe now runs at render, after the
+                        // passthrough choice is applied. Under tmux with --passthrough=none,
+                        // Kitty APC and wrapped sixel may fall back to symbols.
+                        if (!in_array(strtolower($raw), self::FORMATS, true) || Mosaic::fromModeString($raw, probe: false) === null) {
                             self::err($stderr, Lang::t('cli.bad_format', ['value' => $raw]));
 
                             return self::EXIT_USAGE;

@@ -143,10 +143,11 @@ final class CliTest extends TestCase
 
     public function testProbeFlagIsRefusedAsUnknownOnThisBase(): void
     {
-        // Kept --probe off the surface: sugar-image's env-only seam
-        // (Detect::fromEnv) exists, but it reports an unconfirmed Kitty
-        // claim and no DA1 sixel, so mapping --probe=off onto it would
-        // change the auto() protocol choice rather than skip a probe.
+        // Kept --probe off the surface. The probe-free seam is
+        // Mosaic::fromModeString(mode, probe: false) via Detect::fromEnv;
+        // it reports an unconfirmed Kitty claim and no DA1 sixel, so
+        // mapping --probe=off onto it would change the auto() protocol
+        // choice rather than skip a probe.
         [, , $err] = self::drive(['--probe=off', 'x.png']);
 
         $this->assertStringContainsString('unknown option --probe', $err);
@@ -1043,14 +1044,12 @@ final class CliTest extends TestCase
     }
 
     /**
-     * Argv validation of --format=auto keeps the pre-change probe order: the
-     * default auto() probe runs during argv, and its memo is set before the
-     * --passthrough choice is applied. That order is an accepted exception
-     * (see the --format check in Cli.php), so this pins it: a silent move of
-     * the probe, in either direction, goes red. The file is missing, so the
-     * run stops after validation and nothing renders.
+     * Argv validation of --format is probe-free: Mosaic::fromModeString($raw,
+     * probe: false), so the auto() memo stays unset after the argv pass and
+     * --passthrough is applied before any terminal probe runs. The file is
+     * missing, so the run stops after validation and nothing renders.
      */
-    public function testFormatAutoValidationKeepsTheArgvProbeOrder(): void
+    public function testFormatValidationDoesNotRunTheTerminalProbe(): void
     {
         $memo = new \ReflectionProperty(Mosaic::class, 'autoMemo');
         $memo->setAccessible(true);
@@ -1059,9 +1058,9 @@ final class CliTest extends TestCase
         try {
             [$exit, , $err] = self::drive(['--format=auto', '--passthrough=none', '/nonexistent/candy-image-probe.png']);
 
-            $this->assertSame(Cli::EXIT_INPUT, $exit, 'auto is a known spelling, so argv passes and the missing file stops the run: ' . $err);
+            $this->assertNotSame(Cli::EXIT_USAGE, $exit, 'explicit --format=auto must pass argv validation: ' . $err);
             $this->assertStringNotContainsString('unknown render format', $err, 'explicit --format=auto must be accepted');
-            $this->assertNotNull($memo->getValue(), 'argv validation runs the default auto() probe, as before');
+            $this->assertNull($memo->getValue(), 'argv validation must not run the auto() probe before --passthrough is applied');
         } finally {
             Mosaic::resetAutoMemo();
         }
