@@ -103,7 +103,7 @@ return [
 Log::installPanicHandler();</code></pre>
     <p>The backtrace prints absolute paths and the arguments of every frame. That is what you want while debugging. On a shared or recorded terminal it can leak data, so ship with the uncaught errors routed to a log file or syslog, and keep on-screen backtraces for debug builds.</p>
     <h3 style="margin-top: 16px;">Pipe the program or run it under cron</h3>
-    <p>Raw mode needs an interactive input stream. Run the app with piped stdin, as in <code>php bin/start &lt; /dev/null</code> from cron or CI, and it does not enter raw mode. At end of input the harness sends a quit message, but the demo's <code>Counter</code> ignores it, so the process keeps running. Bound a cron or CI run with <code>timeout</code>, or have your Model return <code>Cmd::quit()</code> on <code>QuitMsg</code>. Build the options explicitly when you need a different behaviour, for example to read the terminal through <code>/dev/tty</code>:</p>
+    <p>Raw mode needs an interactive input stream. Run the app with piped stdin, as in <code>php bin/start &lt; /dev/null</code> from cron or CI, and it does not enter raw mode. It quits cleanly at end of input with exit code 0. Build the options explicitly when you need a different behaviour, for example to keep the program running at end of input:</p>
     <pre class="code"><code class="language-php">use SugarCraft\Core\ProgramOptions;
 
 $options = ProgramOptions::builder()
@@ -202,7 +202,7 @@ vendor/bin/phpunit</code></pre>
       <li><strong><code>create-project</code> stops with a stability error.</strong> The package is dev-only. Add <code>--stability=dev</code>, or use <code>sugarcraft/candy-starter:dev-master</code> as the package name.</li>
       <li><strong>PHP refuses the Model with <code>contains 1 abstract method</code>.</strong> A Model must implement all four methods, including <code>subscriptions()</code>. Return <code>null</code> from <code>init()</code> or <code>subscriptions()</code> when you have nothing to start or subscribe to.</li>
       <li><strong><code>bin/start: cannot find composer autoload.php</code>.</strong> Run <code>composer install</code> in the package directory. The entry point resolves the autoloader relative to its own file, so it runs from any working directory once <code>vendor/</code> exists.</li>
-      <li><strong>The app keeps running when run from cron or CI.</strong> Piped stdin reaches end of input and the harness sends a quit message, but the demo's <code>Counter</code> ignores it, so the process does not exit. Bound the run with <code>timeout</code>, for example <code>timeout 8 php bin/start &lt; /dev/null</code>, or return <code>Cmd::quit()</code> from your Model's <code>update()</code> on <code>QuitMsg</code>.</li>
+      <li><strong>The app exits at once when run from cron or CI.</strong> Piped stdin reaches end of input, and the program quits with exit code 0. Build the options with <code>ProgramOptions::builder()-&gt;withExitOnStdinEof(false)-&gt;build()</code> to keep it running.</li>
       <li><strong>The exit code is 128+N after a stop.</strong> The stop was delivered by the OS, for example <code>kill -INT</code> (130) or <code>kill</code> (143). A cooperative quit through <kbd>q</kbd>, <kbd>Esc</kbd> or <kbd>Ctrl+C</kbd> keeps exit code 0.</li>
       <li><strong>The output shows raw control sequences under <code>TERM=dumb</code>.</strong> The harness emits DEC private-mode escapes unconditionally and does not probe terminal capabilities. Run the demo in a real terminal.</li>
     </ul>

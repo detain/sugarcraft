@@ -77,19 +77,11 @@ final class SiteBodyTruthTest extends TestCase
             $this->markTestSkipped('monorepo docs tree not present in this clone');
         }
 
-        // Checked against the filesystem, not the text: every examples/*.php
-        // the page names must exist, and the page must name at least one.
-        preg_match_all('#examples/[A-Za-z0-9_./-]+\.php#', $body, $matches);
-        $this->assertNotEmpty(
-            $matches[0],
-            'the Examples section must name at least one runnable examples/*.php',
+        $this->assertStringNotContainsString(
+            '/examples',
+            $body,
+            'the starter ships no examples/ tree — no link or row may promise one',
         );
-        foreach (array_unique($matches[0]) as $relative) {
-            $this->assertFileExists(
-                dirname(__DIR__) . '/' . $relative,
-                "the site body names {$relative}, which is not on disk",
-            );
-        }
         $this->assertStringNotContainsString(
             'GIFs of every example',
             $body,

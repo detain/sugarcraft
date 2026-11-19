@@ -111,7 +111,7 @@ php bin/candy-vcr render-batch -r -j 4 -o out/ demos/</code></pre>
 {"t":0.05,"kind":"input","payload":{"b":"h"}}
 {"t":0.1,"kind":"input","payload":{"b":"p"}}</code></pre>
     <h3 style="margin-top: 16px;">Run real program output inside a GIF</h3>
-    <p>By default a tape only replays its keystrokes. Add <code>Set Shell "bash"</code> to the tape, or pass <code>--shell</code> or <code>--exec</code> on the command line, and the renderer runs the typed commands in a real pseudo-terminal and captures their output. The next section explains the risk.</p>
+    <p>By default a tape only replays its keystrokes. Add <code>Set Shell "bash"</code> to the tape, or pass <code>--shell=SHELL</code> or <code>--exec</code> on the command line, and the renderer runs the typed commands in a real pseudo-terminal and captures their output. The next section explains the risk.</p>
 
     <h3 style="margin-top: 40px;">Keys and input</h3>
     <p>candy-vcr binds no keys of its own. A recording captures the keystrokes the user types and the bytes they produce, unchanged. Replay sends the recorded input back into the Program, and it never interprets key names.</p>
@@ -181,7 +181,7 @@ php bin/candy-vcr render-batch -r -j 4 -o out/ demos/</code></pre>
 <tr><td><code>-b, --backend</code></td><td><code>gd</code></td><td><code>gd</code> or <code>imagick</code>.</td></tr>
 <tr><td><code>-e, --encoder</code></td><td><code>ffmpeg</code></td><td><code>ffmpeg</code> or the pure-PHP <code>php</code> encoder.</td></tr>
 <tr><td><code>--strict</code></td><td>off</td><td>Fail on an unknown directive instead of skipping it.</td></tr>
-<tr><td><code>--shell</code>, <code>--exec</code></td><td>off</td><td><code>render-tape</code> only. Run typed commands in a real pseudo-terminal, with the given shell or the default one.</td></tr>
+<tr><td><code>--shell=SHELL</code>, <code>--exec</code></td><td>off</td><td><code>render-tape</code> only. Run typed commands in a real pseudo-terminal, with the given shell or the default one.</td></tr>
 <tr><td><code>--dry-run</code></td><td>off</td><td><code>render-tape</code> only. Print the compiled event stream and write no GIF.</td></tr>
 <tr><td><code>-r, --recursive</code>, <code>-j, --jobs</code></td><td>off, 1</td><td><code>render-batch</code> only. Search subdirectories, and render tapes in parallel.</td></tr>
 </tbody>
@@ -243,7 +243,7 @@ git diff tests/fixtures/renderer-frame.golden</code></pre>
       <li><strong>The GIF render fails because <code>ffmpeg</code> is missing.</strong> The default encoder calls <code>ffmpeg</code> on the <code>PATH</code>. Install it, or pass <code>--encoder=php</code> to use the pure-PHP encoder, which needs no external binary.</li>
       <li><strong>The render fails with an imagick error.</strong> The default backend is GD. Use <code>--backend=gd</code> or install <code>ext-imagick</code> before passing <code>--backend=imagick</code>.</li>
       <li><strong>A freshly recorded replay fails with a diff.</strong> <code>examples/replay.php</code> asserts an 80 by 24 cell grid. Record at the same size as the assertion, or change the <code>ScreenAssertion</code> dimensions to match the session.</li>
-      <li><strong>A rendered tape runs unexpected commands.</strong> A tape that sets <code>Set Shell</code>, or is rendered with <code>--shell</code> or <code>--exec</code>, runs every typed command in a real shell. Read a third-party tape before you render it. Use <code>--dry-run</code> to list the events without running anything.</li>
+      <li><strong>A rendered tape runs unexpected commands.</strong> A tape that sets <code>Set Shell</code>, or is rendered with <code>--shell=SHELL</code> or <code>--exec</code>, runs every typed command in a real shell. Read a third-party tape before you render it. Use <code>--dry-run</code> to list the events without running anything.</li>
       <li><strong>A cassette contains a secret.</strong> A cassette stores the exact keystrokes typed, and redaction is not wired into the record path. Do not record commands that print secrets, and never use <code>--env-all</code> outside an isolated environment. Share a cassette only after checking its contents.</li>
       <li><strong>Replaying a large cassette uses a lot of memory.</strong> Reads load the whole cassette before the first event is returned, so peak memory is a small multiple of the file size. Split very long recordings with <code>--idle-trim</code> or record shorter sessions.</li>
       <li><strong><code>migrate</code> refuses my file.</strong> Migration accepts only JSON Lines cassettes (<code>.cas</code> or <code>.jsonl</code>), and refuses <code>.cast</code>, <code>.yaml</code>, <code>.tape</code>, <code>.gz</code> and relative-mode input.</li>
