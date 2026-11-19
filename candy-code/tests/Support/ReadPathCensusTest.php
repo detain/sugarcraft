@@ -305,10 +305,6 @@ final class ReadPathCensusTest extends TestCase
                 . 'reads above; a bundle dir is never user-supplied content, only a name under '
                 . 'a container the tier\'s boundary admitted',
         ],
-        'Bundles/BundleDiscovery.php|glob' => [
-            'NAMES_ONLY — lists one container\'s children; the jail decision rides guard()\'s '
-                . 'per-directory containment in this file, and manifest bytes are read in Bundle',
-        ],
         'Bundles/BundleRecommender.php|scandir' => [
             'NAMES_ONLY — recommend() lists the caller-supplied project root one level to see '
                 . 'which manifest signals exist; no content is read, nothing is installed, and '
@@ -1015,20 +1011,11 @@ final class ReadPathCensusTest extends TestCase
                 . '`serve` state dir PrivateRetainedDir::verified() created 0700 and checked is ours; lstat '
                 . 'refuses a link, it is decoded as JSON at depth 8 and only ever yields sha256 hashes',
         ],
-        'Server/Auth/TokenStore.php|file_get_contents' => [
-            'SELF_LOCATED — the owner-token file this store minted, in the `serve` state dir '
-                . 'PrivateRetainedDir::verified() created 0700 and checked is ours; lstat refuses a link',
-        ],
         'Server/Auth/ViewerTokens.php|file_get_contents' => [
             'SELF_LOCATED — viewer-tokens.json, the grant rows this store itself wrote 0600 through '
                 . 'PrivateRetainedDir into the `serve` state dir PrivateRetainedDir::verified() created '
                 . '0700 and checked is ours; filePath() lstat-refuses a link, and the bytes decode as '
                 . 'JSON at depth 8 (only token hashes and labels), never executed',
-        ],
-        'Server/DiscoveryFile.php|file_get_contents' => [
-            'SELF_LOCATED — server.json, the record a server wrote 0600 into the state dir '
-                . 'PrivateDir verified 0700 and ours; lstat refuses a link, and it is decoded as '
-                . 'JSON at depth 8, never executed',
         ],
         'Server/Http/CanvasPageController.php|file_get_contents' => [
             'CALLER_SUPPLIED — resolveDocument() reaches this read only with a path returned by '
