@@ -1256,6 +1256,14 @@ final class GitDaemon
      * needed. In-place truncate+write with checked results and fsync is
      * the correct shape for a lock-bearing file.
      *
+     * Not moved to sugar-core LockFile either. LockFile writes the same
+     * pid text, so the file layout is not the blocker. Two real ones:
+     * (1) the refusal names the incumbent's pid read back from the file
+     * (S24FsHygieneTest pins "424242"), which LockFile's null return
+     * cannot reproduce; (2) LockFile's stale-law sweep unlinks and
+     * recreates the inode when the recorded pid is dead, which breaks the
+     * single-instance inode semantics above.
+     *
      * @throws \RuntimeException When the directory cannot be created,
      *                           the file cannot be opened, a live
      *                           daemon holds the lock, or the bytes
