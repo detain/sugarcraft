@@ -971,4 +971,39 @@ final class SemaphoreTest extends TestCase
         $this->assertInstanceOf(\RuntimeException::class, $error);
         $this->assertSame('batch cancelled before every item finished', $error->getMessage());
     }
+
+    /**
+     * Retiring the pool while item 1 is still running leaves no permit for items
+     * 2 and 3. The aggregate must reject with SemaphoreClosedException; before the
+     * fix the LogicException from the next start was swallowed in the then-chain
+     * and the batch stayed pending forever.
+     */
+    public function testClosingThePoolMidBatchRejectsTheMapInsteadOfHanging(): void
+    {
+        $loop = new StreamSelectLoop();
+        $sem = Semaphore::new(1);
+
+        $started = [];
+        $pending = [];
+        $promise = $sem->map([1, 2, 3], static function (int $x) use (&$started, &$pending) {
+            $started[] = $x;
+            $pending[$x] = new Deferred();
+
+            return $pending[$x]->promise();
+        }, $loop);
+
+        $error = null;
+        $promise->then(null, static function (\Throwable $e) use (&$error): void {
+            $error = $e;
+        });
+
+        $loop->addTimer(0.01, static function () use ($sem, &$pending): void {
+            $sem->close();
+            $pending[1]->resolve(1);
+        });
+        $loop->run();
+
+        $this->assertSame([1], $started, 'a retired pool must not start any further item');
+        $this->assertInstanceOf(SemaphoreClosedException::class, $error);
+    }
 }

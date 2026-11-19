@@ -377,7 +377,7 @@ final class Semaphore
 
                 return $tick->promise();
             })->then(
-                static function (mixed $value) use ($index, &$start, &$next, &$results, &$settled, $total, $deferred): void {
+                function (mixed $value) use ($index, &$start, &$next, &$results, &$settled, $total, $deferred): void {
                     if ($settled) {
                         return;
                     }
@@ -392,6 +392,17 @@ final class Semaphore
                     }
 
                     if ($next < $total) {
+                        // A pool retired mid-batch can grant no further permit. Calling
+                        // $start() here would throw LogicException inside this then-callback,
+                        // and the throw would vanish into the derived promise, leaving the
+                        // aggregate pending forever. Fail the batch with the closed type.
+                        if ($this->closed) {
+                            $settled = true;
+                            $deferred->reject(new SemaphoreClosedException(Lang::t('semaphore.shutdown')));
+
+                            return;
+                        }
+
                         $start($next++);
                     }
                 },
