@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Plugins;
 
 use SugarCraft\Core\I18n\Lang as BaseLang;
+use SugarCraft\Core\I18n\T;
 
 /**
  * Translation base for a plugin's own catalog.
@@ -54,7 +55,8 @@ abstract class Lang extends BaseLang
      * second plugin asking for the same namespace is compared here. The same
      * catalog from another directory (a fresh copy of one bundle, say) is
      * harmless and accepted; a different catalog would be served silently
-     * wrong and is refused.
+     * wrong and is refused. Once the claimed copy has gone from disk, the
+     * accepted copy is the one T reads, so lookups do not fall back to raw keys.
      *
      * @var array<string, array{dir: string, fingerprint: string}>
      */
@@ -110,6 +112,11 @@ abstract class Lang extends BaseLang
                 throw new \InvalidArgumentException(
                     "$class NAMESPACE '$namespace' is already claimed by another plugin directory."
                 );
+            }
+            // T keeps reading the claimed directory, so once that copy is gone the accepted copy takes over.
+            if (!is_file($held['dir'] . DIRECTORY_SEPARATOR . 'en.php')) {
+                self::$claimed[$namespace] = ['dir' => $dir, 'fingerprint' => $fingerprint];
+                T::overrideNamespace($namespace, $dir);
             }
             return;
         }

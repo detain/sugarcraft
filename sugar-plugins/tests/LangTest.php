@@ -245,4 +245,54 @@ final class LangTest extends TestCase
 
         $this->assertSame('Hello Ada', $again::t('greeting', ['name' => 'Ada']));
     }
+
+    public function testAcceptedCopyTakesOverWhenTheClaimedDirectoryIsRemoved(): void
+    {
+        // The claimed copy is removed mid-process; the accepted copy must then serve the French catalog.
+        $claimed = __DIR__ . '/fixtures/lang-vanish';
+        $copy = __DIR__ . '/fixtures/lang-vanish-copy';
+        $this->copyCatalog(__DIR__ . '/fixtures/lang', $claimed);
+        $this->copyCatalog(__DIR__ . '/fixtures/lang', $copy);
+
+        try {
+            $first = new class () extends Lang {
+                protected const NAMESPACE = 'claim-vanish';
+                protected const DIR = __DIR__ . '/fixtures/lang-vanish';
+            };
+            $second = new class () extends Lang {
+                protected const NAMESPACE = 'claim-vanish';
+                protected const DIR = __DIR__ . '/fixtures/lang-vanish-copy';
+            };
+
+            $this->assertSame('Hello Ada', $first::t('greeting', ['name' => 'Ada']));
+            $this->assertSame('Hello Ada', $second::t('greeting', ['name' => 'Ada']));
+
+            $this->removeCatalog($claimed);
+            T::setLocale('fr');
+            $this->assertSame('Bonjour Ada', $second::t('greeting', ['name' => 'Ada']));
+        } finally {
+            if (is_dir($claimed)) {
+                $this->removeCatalog($claimed);
+            }
+            $this->removeCatalog($copy);
+        }
+    }
+
+    private function copyCatalog(string $from, string $to): void
+    {
+        mkdir($to);
+        foreach (scandir($from) ?: [] as $name) {
+            if (is_file($from . DIRECTORY_SEPARATOR . $name)) {
+                copy($from . DIRECTORY_SEPARATOR . $name, $to . DIRECTORY_SEPARATOR . $name);
+            }
+        }
+    }
+
+    private function removeCatalog(string $dir): void
+    {
+        foreach (glob($dir . DIRECTORY_SEPARATOR . '*') ?: [] as $file) {
+            unlink($file);
+        }
+        rmdir($dir);
+    }
 }
