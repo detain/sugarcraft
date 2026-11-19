@@ -3,6 +3,7 @@
     <h2 style="margin-top: 40px;">Install</h2>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-kv   # the candy-kv binary lands in vendor/bin/</code></pre>
     <p>Requires PHP 8.3 or newer with the <code>sqlite3</code> and <code>mbstring</code> extensions. A standalone phar is published with the releases. A monorepo checkout runs straight from the tree with <code>php bin/candy-kv</code> after <code>composer install</code>.</p>
+    <p>Sibling <code>sugarcraft/sugar-core</code> and <code>sugarcraft/sugar-fuzzy</code> requirements track <code>dev-master</code>, so the plain command above only resolves when dev stability is allowed. Pin the package with <code>composer require sugarcraft/candy-kv:@dev</code>, or set <code>minimum-stability</code> to <code>dev</code> with <code>prefer-stable</code> set to <code>true</code> in your consuming manifest. The pin covers the whole sibling closure, so allowing dev for candy-kv alone is not enough.</p>
 
     <h2 id="quickstart" style="margin-top: 40px;">Quickstart</h2>
     <pre class="code"><code class="language-php">use SugarCraft\Kv\Store;
