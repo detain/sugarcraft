@@ -116,7 +116,7 @@ $pair-&gt;master()-&gt;write("\x03");  // Ctrl+C → SIGINT to the child</code><
 </table>
 
     <h2 style="margin-top: 40px;">Configuration</h2>
-    <p>The library reads a small set of environment variables. <code>tests/EnvRosterTest.php</code> scans <code>src/</code>, <code>bin/</code> and <code>tests/</code>, and fails when a variable is read without a row here or a row names a variable nothing reads.</p>
+    <p>The library reads a small set of environment variables. <code>tests/EnvRosterTest.php</code> scans <code>src/</code>, <code>bin/</code> and <code>tests/</code>, and fails when a variable is read without a row in the README environment table, or a row names a variable nothing reads.</p>
     <table class="api-table">
     <caption>Environment variables read by sugar-pty.</caption>
     <thead>
@@ -128,6 +128,7 @@ $pair-&gt;master()-&gt;write("\x03");  // Ctrl+C → SIGINT to the child</code><
     <tr><td><code>SUGARCRAFT_TERMIOS</code></td><td><code>TermiosFactory</code></td><td><code>stty</code> forces the subprocess termios backend instead of the FFI one. Any other value keeps the default.</td></tr>
     <tr><td><code>SUGAR_PTY_HANG_BUDGET</code></td><td><code>tests/Support/HangWatchdog</code></td><td>Test suite only. Seconds a single test may run before the watchdog turns a wedged test into a named failure. The built-in budget is 90 s.</td></tr>
     <tr><td><code>SUGAR_PTY_DEBUG_ARGV</code></td><td><code>Argv</code></td><td>Opt-in debug output. When set (non-empty and not <code>0</code>), spawn-failure messages show the full command line. It is off by default because argv often carries secrets.</td></tr>
+    <tr><td><code>SUGAR_PTY_SHIM_AUTOLOAD</code></td><td><code>Spawn::proc</code>, <code>bin/pty-shim.php</code></td><td>Autoloader hand-off for <code>controllingTerminal: true</code> children: the shim requires this path before it claims the controlling terminal. Set by <code>Spawn</code>; a missing file makes the shim exit with an error.</td></tr>
     </tbody>
     </table>
 

@@ -114,6 +114,72 @@ $decoder-&gt;close();</code></pre>
     </tbody>
     </table>
 
+    <h2 style="margin-top: 40px;">API reference</h2>
+<table class="api-table">
+<caption>API surface: classes, constructors, and methods.</caption>
+<thead>
+<tr><th scope="col">Class</th><th scope="col">Method</th><th scope="col">Description</th></tr>
+</thead>
+<tbody>
+<tr><td>Reel</td><td>::open(path)</td><td>Open a video file</td></tr>
+<tr><td>Reel</td><td>::openUrl(url, headers, allowedHosts)</td><td>Open a remote stream behind the SSRF guard</td></tr>
+<tr><td>Reel</td><td>::new()</td><td>Create an unbound reel. play() falls back to the synthetic test pattern, but toPlayer() refuses to embed one</td></tr>
+<tr><td>Reel</td><td>withMode(Mode)</td><td>Set rendering mode</td></tr>
+<tr><td>Reel</td><td>withSize(cols, rows)</td><td>Set terminal cell dimensions</td></tr>
+<tr><td>Reel</td><td>withFps(?float)</td><td>FPS override (null = auto-detect)</td></tr>
+<tr><td>Reel</td><td>withLoop(bool)</td><td>Enable/disable loop</td></tr>
+<tr><td>Reel</td><td>withRamp(name)</td><td>Select the ascii/ansi256 luminance ramp (minimal, standard, dense)</td></tr>
+<tr><td>Reel</td><td>withSubtitles(path)</td><td>Attach a WebVTT (or lenient SRT) caption track</td></tr>
+<tr><td>Reel</td><td>withHeaders(headers)</td><td>Attach/replace request headers for remote sources</td></tr>
+<tr><td>Reel</td><td>withAllowedHosts(hosts)</td><td>Pin the remote host allowlist</td></tr>
+<tr><td>Reel</td><td>withCellPx(w, h)</td><td>Tell the player the terminal cell pixel size (graphics modes rasterize at cols&#183;w &#215; rows&#183;h)</td></tr>
+<tr><td>Reel</td><td>withAutoMode()</td><td>Switch to auto mode: the renderer ladder picks the best supported mode at open time</td></tr>
+<tr><td>Reel</td><td>toPlayer()</td><td>Build the Player (paused; source already opened). ffmpeg-routed sources spawn their ffmpeg child now, local GIF and animated-WebP decode in-process, and the ffprobe child is transient</td></tr>
+<tr><td>Reel</td><td>play()</td><td>Run the player</td></tr>
+<tr><td>Player</td><td>::open(videoPath, cellsW, cellsH, ?fpsOverride, ?Mode, loop, ramp, cellPxW, cellPxH, subtitles, headers, frameBudgetMs, ?autoModeChooser)</td><td>Open a video source; a null <code>Mode</code> auto-detects terminal capability (the default)</td></tr>
+<tr><td>Player</td><td>::fromDecoder(decoder, cellsW, cellsH, fps, mode, &#x2026;)</td><td>Mount playback over any injected Decoder (server-transcoded streams, test doubles)</td></tr>
+<tr><td>Player</td><td>::openForTest(decoder, fps, totalFrames, cellsW, cellsH, &#x2026;)</td><td>Deprecated alias of ::fromDecoder() for HalfBlock test wiring</td></tr>
+<tr><td>Player</td><td>::withSubtitles(WebVtt)</td><td>Attach a parsed subtitle track to the player</td></tr>
+<tr><td>Player</td><td>::seekToSeconds(sec)</td><td>Seek to a timeline position in seconds</td></tr>
+<tr><td>Player</td><td>::position() / ::duration()</td><td>Current playhead and total duration in seconds</td></tr>
+<tr><td>GifDecoder</td><td>open(source, cellsW, cellsH, fps, mode, startSec, headers) / next() / close()</td><td>Pure-PHP GIF decoder. <code>next()</code> returns an <code>RgbFrame</code> or <code>null</code> at the end; <code>loopCount()</code> reads the NETSCAPE loop field</td></tr>
+<tr><td>AnimatedWebpDecoder</td><td>open(...) / next() / frameDelaysMs() / loopCount() / isAnimated(path)</td><td>Pure-PHP animated WebP decoder over a RIFF walk, with per-frame GD decode. <code>supports()</code> reports whether the host can decode WebP</td></tr>
+<tr><td>FfmpegDecoder</td><td>open(...) / next() / fps() / exitCode() / buildCommand(...)</td><td>Decodes through an ffmpeg child that pipes raw RGB frames. Refuses video on Windows with a guidance error</td></tr>
+<tr><td>VideoSource</td><td>::probe(path, hostRestricted) / ::unprobed(path) / ::fromFfprobeJson(path, json)</td><td>Source description from ffprobe output. <code>unprobed()</code> defers the probe; <code>fromFfprobeJson()</code> parses a captured probe without running ffprobe</td></tr>
+<tr><td>RendererFactory</td><td>supportedModes() / supports(Mode) / support(Mode, cols, rows) / diagnose()</td><td>Which render modes this host can produce, and the probe report behind the answer</td></tr>
+<tr><td>FfmpegCommandBuilder</td><td>scrubbedEnv() / networkReconnectFlags() / headerInputFlags(headers) / inputSeekFlag(startSec)</td><td>Builds the argv for ffmpeg and the audio companions.</td></tr>
+<tr><td>WebVtt</td><td>::parse(text) / cueAt(seconds)</td><td>Parse a WebVTT (lenient SRT) track into cues; bounded at MAX_CUES. <code>cueAt()</code> finds the active caption for a playhead position</td></tr>
+<tr><td>Synthetic</td><td>::generate(path = DEFAULT_PATH, w = 120, h = 60, frames = 16, delayCs = 8)</td><td>Write a looping rainbow-gradient test animation as one valid GIF89a stream. The returned path, not the argument, is the source of truth: a refused target yields a private stand-in path</td></tr>
+<tr><td>AudioPlayer</td><td>::start() / ::stop()</td><td>Spawn and reap the audio child (ffplay/mpv) for the reel's source</td></tr>
+<tr><td>AudioPlayer</td><td>::pause() / ::resume()</td><td>Signal the audio child to pause and resume</td></tr>
+<tr><td>AudioPlayer</td><td>::position() / ::hasStarted() / ::isPlaying()</td><td>Child uptime in seconds, spawn state, and live-playback state</td></tr>
+<tr><td>AudioPlayer</td><td>::mute() / ::unmute() / ::isMuted() / ::exitCode()</td><td>Mute toggle, mute state, and the child's exit code once reaped</td></tr>
+<tr><td>HttpHeaders</td><td>::none() / ::parse(headers)</td><td>The empty header set, and validation of a name =&gt; value map (refusing list-shaped input and C0/DEL control bytes)</td></tr>
+<tr><td>HttpHeaders</td><td>::isEmpty() / ::pairs() / ::userAgent()</td><td>Emptiness, validated name/value pairs, and the User-Agent override</td></tr>
+<tr><td>HttpHeaders</td><td>::toFfmpegHeaderString() / ::toMpvHeaderFields()</td><td>Render the set into each player's CLI spelling</td></tr>
+<tr><td>LumaRamp</td><td>::char(luma, ramp)</td><td>Map 0-255 luminance to character</td></tr>
+<tr><td>LumaRamp</td><td>::compute(r, g, b)</td><td>Compute BT.601 luma from RGB</td></tr>
+</tbody>
+</table>
+  </div>
+</section>
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the app. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-video/.vhs/play.gif" alt="VHS recording of the play example: a synthetic rainbow-gradient test pattern scrolling through the terminal renderer in real time">
+                <h3>Play</h3>
+                <span class="demo-caption">Synthetic rainbow-gradient GIF used by the playback demos.</span>
+            </div>
+        </div>
+        <p class="lede" style="margin-top: 24px;">The recorded demos animate at full terminal speed and loop automatically. Flashing content can affect photosensitive viewers (WCAG 2.3.1 / 2.3.3); the player ships no static-fallback toggle today, so treat these GIFs as motion warnings.</p>
+    </div>
+</section>
+
+
     <h2 style="margin-top: 40px;">Configuration</h2>
     <h3 style="margin-top: 24px;">Reel options</h3>
     <table class="api-table">
@@ -157,7 +223,7 @@ $mpvArg    = $headers-&gt;toMpvHeaderFields();     // CLI spelling for mpv</code
 
     <h2 style="margin-top: 40px;">Subtitles and accessibility</h2>
     <p><code>Reel::withSubtitles('clip.vtt')</code> parses WebVTT, lenient enough for most SRT files, and paints the active cue as one caption line under the frame in every mode. <code>WebVtt::cueAt(seconds)</code> finds the active caption for a playhead position. The caption line is the one real-text channel in every graphics mode, so it is the text alternative for playback that image protocols draw as pixels.</p>
-    <p>Playback starts paused, and it never begins without a key press. A <code>REDUCE_MOTION</code> host is honored, because nothing moves unless the user asks for it. The README Accessibility section has the detail.</p>
+    <p>Playback starts paused, and it never begins without a key press. Nothing moves unless the user asks for it, so there is no ambient motion for a reduced-motion setting to suppress. The README Accessibility section has the detail.</p>
 
     <h2 style="margin-top: 40px;">Examples</h2>
     <ul>
@@ -248,68 +314,3 @@ php examples/decode-frames.php 6</code></pre>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
-
-    <h2 style="margin-top: 40px;">API reference</h2>
-<table class="api-table">
-<caption>API surface: classes, constructors, and methods.</caption>
-<thead>
-<tr><th scope="col">Class</th><th scope="col">Method</th><th scope="col">Description</th></tr>
-</thead>
-<tbody>
-<tr><td>Reel</td><td>::open(path)</td><td>Open a video file</td></tr>
-<tr><td>Reel</td><td>::openUrl(url, headers, allowedHosts)</td><td>Open a remote stream behind the SSRF guard</td></tr>
-<tr><td>Reel</td><td>::new()</td><td>Create an unbound reel. play() falls back to the synthetic test pattern, but toPlayer() refuses to embed one</td></tr>
-<tr><td>Reel</td><td>withMode(Mode)</td><td>Set rendering mode</td></tr>
-<tr><td>Reel</td><td>withSize(cols, rows)</td><td>Set terminal cell dimensions</td></tr>
-<tr><td>Reel</td><td>withFps(?float)</td><td>FPS override (null = auto-detect)</td></tr>
-<tr><td>Reel</td><td>withLoop(bool)</td><td>Enable/disable loop</td></tr>
-<tr><td>Reel</td><td>withRamp(name)</td><td>Select the ascii/ansi256 luminance ramp (minimal, standard, dense)</td></tr>
-<tr><td>Reel</td><td>withSubtitles(path)</td><td>Attach a WebVTT (or lenient SRT) caption track</td></tr>
-<tr><td>Reel</td><td>withHeaders(headers)</td><td>Attach/replace request headers for remote sources</td></tr>
-<tr><td>Reel</td><td>withAllowedHosts(hosts)</td><td>Pin the remote host allowlist</td></tr>
-<tr><td>Reel</td><td>withCellPx(w, h)</td><td>Tell the player the terminal cell pixel size (graphics modes rasterize at cols&#183;w &#215; rows&#183;h)</td></tr>
-<tr><td>Reel</td><td>withAutoMode()</td><td>Switch to auto mode: the renderer ladder picks the best supported mode at open time</td></tr>
-<tr><td>Reel</td><td>toPlayer()</td><td>Build the Player (paused; source already opened). ffmpeg-routed sources spawn their ffmpeg child now, local GIF and animated-WebP decode in-process, and the ffprobe child is transient</td></tr>
-<tr><td>Reel</td><td>play()</td><td>Run the player</td></tr>
-<tr><td>Player</td><td>::open(videoPath, cellsW, cellsH, ?fpsOverride, ?Mode, loop, ramp, cellPxW, cellPxH, subtitles, headers, frameBudgetMs, ?autoModeChooser)</td><td>Open a video source; a null <code>Mode</code> auto-detects terminal capability (the default)</td></tr>
-<tr><td>Player</td><td>::fromDecoder(decoder, cellsW, cellsH, fps, mode, &#x2026;)</td><td>Mount playback over any injected Decoder (server-transcoded streams, test doubles)</td></tr>
-<tr><td>Player</td><td>::openForTest(decoder, fps, totalFrames, cellsW, cellsH, &#x2026;)</td><td>Deprecated alias of ::fromDecoder() for HalfBlock test wiring</td></tr>
-<tr><td>Player</td><td>::withSubtitles(WebVtt)</td><td>Attach a parsed subtitle track to the player</td></tr>
-<tr><td>Player</td><td>::seekToSeconds(sec)</td><td>Seek to a timeline position in seconds</td></tr>
-<tr><td>Player</td><td>::position() / ::duration()</td><td>Current playhead and total duration in seconds</td></tr>
-<tr><td>GifDecoder</td><td>open(source, cellsW, cellsH, fps, mode, startSec, headers) / next() / close()</td><td>Pure-PHP GIF decoder. <code>next()</code> returns an <code>RgbFrame</code> or <code>null</code> at the end; <code>loopCount()</code> reads the NETSCAPE loop field</td></tr>
-<tr><td>AnimatedWebpDecoder</td><td>open(...) / next() / frameDelaysMs() / loopCount() / isAnimated(path)</td><td>Pure-PHP animated WebP decoder over a RIFF walk, with per-frame GD decode. <code>supports()</code> reports whether the host can decode WebP</td></tr>
-<tr><td>FfmpegDecoder</td><td>open(...) / next() / fps() / exitCode() / buildCommand(...)</td><td>Decodes through an ffmpeg child that pipes raw RGB frames. Refuses video on Windows with a guidance error</td></tr>
-<tr><td>VideoSource</td><td>::probe(path, hostRestricted) / ::unprobed(path) / ::fromFfprobeJson(path, json)</td><td>Source description from ffprobe output. <code>unprobed()</code> defers the probe; <code>fromFfprobeJson()</code> parses a captured probe without running ffprobe</td></tr>
-<tr><td>RendererFactory</td><td>supportedModes() / supports(Mode) / support(Mode, cols, rows) / diagnose()</td><td>Which render modes this host can produce, and the probe report behind the answer</td></tr>
-<tr><td>FfmpegCommandBuilder</td><td>scrubbedEnv() / networkReconnectFlags() / headerInputFlags(headers) / inputSeekFlag(startSec)</td><td>Builds the argv for ffmpeg and the audio companions.</td></tr>
-<tr><td>WebVtt</td><td>::parse(text) / cueAt(seconds)</td><td>Parse a WebVTT (lenient SRT) track into cues; bounded at MAX_CUES. <code>cueAt()</code> finds the active caption for a playhead position</td></tr>
-<tr><td>Synthetic</td><td>::generate(path = DEFAULT_PATH, w = 120, h = 60, frames = 16, delayCs = 8)</td><td>Write a looping rainbow-gradient test animation as one valid GIF89a stream. The returned path, not the argument, is the source of truth: a refused target yields a private stand-in path</td></tr>
-<tr><td>AudioPlayer</td><td>::start() / ::stop()</td><td>Spawn and reap the audio child (ffplay/mpv) for the reel's source</td></tr>
-<tr><td>AudioPlayer</td><td>::pause() / ::resume()</td><td>Signal the audio child to pause and resume</td></tr>
-<tr><td>AudioPlayer</td><td>::position() / ::hasStarted() / ::isPlaying()</td><td>Child uptime in seconds, spawn state, and live-playback state</td></tr>
-<tr><td>AudioPlayer</td><td>::mute() / ::unmute() / ::isMuted() / ::exitCode()</td><td>Mute toggle, mute state, and the child's exit code once reaped</td></tr>
-<tr><td>HttpHeaders</td><td>::none() / ::parse(headers)</td><td>The empty header set, and validation of a name =&gt; value map (refusing list-shaped input and C0/DEL control bytes)</td></tr>
-<tr><td>HttpHeaders</td><td>::isEmpty() / ::pairs() / ::userAgent()</td><td>Emptiness, validated name/value pairs, and the User-Agent override</td></tr>
-<tr><td>HttpHeaders</td><td>::toFfmpegHeaderString() / ::toMpvHeaderFields()</td><td>Render the set into each player's CLI spelling</td></tr>
-<tr><td>LumaRamp</td><td>::char(luma, ramp)</td><td>Map 0-255 luminance to character</td></tr>
-<tr><td>LumaRamp</td><td>::compute(r, g, b)</td><td>Compute BT.601 luma from RGB</td></tr>
-</tbody>
-</table>
-  </div>
-</section>
-
-<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
-    <div class="container">
-        <h2>Demos.</h2>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the app. Regenerated automatically on every push that touches the source.</p>
-        <div class="demo-grid">
-            <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-video/.vhs/play.gif" alt="VHS recording of the play example: a synthetic rainbow-gradient test pattern scrolling through the terminal renderer in real time">
-                <h3>Play</h3>
-                <span class="demo-caption">Synthetic rainbow-gradient GIF used by the playback demos.</span>
-            </div>
-        </div>
-        <p class="lede" style="margin-top: 24px;">The recorded demos animate at full terminal speed and loop automatically. Flashing content can affect photosensitive viewers (WCAG 2.3.1 / 2.3.3); the player ships no static-fallback toggle today, so treat these GIFs as motion warnings.</p>
-    </div>
-</section>
