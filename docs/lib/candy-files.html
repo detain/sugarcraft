@@ -475,7 +475,7 @@ $manager = Manager::builder()
 </table>
 
 <h2 id="changelog-and-versioning" style="margin-top: 40px;">Changelog and versioning</h2>
-<p>candy-files ships no separate changelog file, and the GitHub releases are the release history. The rolling phar is published under the <code>candy-files/latest</code> release tag, with <code>.sha256</code> and <code>.sig</code> sidecars and a <code>.phar.commit</code> build stamp. Stable cuts ride the <code>candy-files/v*</code> tags. <code>--version</code> prints the stamp that the running phar carries.</p>
+<p>candy-files ships no separate changelog file, and the GitHub releases are the release history. The rolling phar is published under the <code>candy-files/latest</code> release tag, with a <code>.sha256</code> sidecar, a <code>.phar.commit</code> build stamp, and, when the build is signed, a <code>.sig</code> sidecar (<code>.phar.sha256.sig</code>). A keyless build ships without the <code>.sig</code>. Stable cuts ride the <code>candy-files/v*</code> tags. <code>--version</code> prints the stamp that the running phar carries.</p>
 
 <h2 id="related" style="margin-top: 40px;">Related</h2>
 <ul>

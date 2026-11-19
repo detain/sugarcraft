@@ -114,7 +114,7 @@ $git = new Git(getcwd());
 <h3 style="margin-top: 32px;">Fixed limits</h3>
 <table class="api-table">
 <tr><th>Limit</th><th>Value</th></tr>
-<tr><td>Git call timeout</td><td>30 seconds, per call</td></tr>
+<tr><td>Git call timeout</td><td>30 seconds per read call; 120 seconds per mutating call (<code>fetch</code>, <code>pull</code>, <code>push</code>, <code>commit</code>, <code>merge</code>, <code>rebase</code> and the other verbs in <code>Git::MUTATING_VERBS</code>)</td></tr>
 <tr><td>Log page size</td><td>20 commits per fetch</td></tr>
 <tr><td>Undo and redo history</td><td>100 entries (<code>HistoryManager::MAX_HISTORY</code>)</td></tr>
 <tr><td>Minimum git version</td><td>2.23 (<code>GitRequirement::MINIMUM</code>)</td></tr>
@@ -214,7 +214,10 @@ $git = new Git(getcwd());
 <p>The repository configures a <code>clean</code>, <code>smudge</code> or <code>process</code> filter, such as git-lfs. CandyGit announces it rather than disabling it, because those tools need their filters to work. Set <code>CANDY_GIT_STRICT_FILTERS=1</code> to refuse such repositories instead.</p>
 
 <h3 style="margin-top: 32px;">git: command timed out after 30s</h3>
-<p>A git call ran past its 30-second budget, usually a slow remote or a fetch waiting on credentials. Git calls run on the UI thread, so the screen pauses until the call returns or times out. Check the network or the remote, then retry. The timed-out child is stopped with <code>TERM</code>, then <code>KILL</code>.</p>
+<p>A read git call ran past its 30-second budget, usually a slow remote or a fetch waiting on credentials. Git calls run on the UI thread, so the screen pauses until the call returns or times out. Check the network or the remote, then retry. The timed-out child is stopped with <code>TERM</code>, then <code>KILL</code>.</p>
+
+<h3 style="margin-top: 32px;">git: mutator timed out after 120s</h3>
+<p>A mutating call such as <code>fetch</code>, <code>pull</code>, <code>push</code>, <code>commit</code> or <code>merge</code> ran past its 120-second budget. The repository may be mid-operation, most often a stale <code>.git/index.lock</code> or a half-applied checkout. Run <code>git status</code> outside CandyGit, clear a lock you know is dead, then retry.</p>
 
 <h2 style="margin-top: 40px;">Upstream mapping</h2>
 <p>lazygit is the design antecedent. CandyGit mirrors its three-pane workflow and its single-key verbs, and it is native PHP rather than a port, so there is no class-for-class table. Each verb maps to a <code>git</code> subcommand, which is why the git documentation is the reference for behavior. The table in the API reference lists the classes that carry it.</p>
