@@ -319,6 +319,45 @@ final class ComposerIntegrationTest extends TestCase
     }
 
     /**
+     * @return iterable<string, array{array<string, mixed>}>
+     */
+    public static function rootChangeCases(): iterable
+    {
+        yield 'root changed' => [['sugar-plugin-installer' => ['scope' => 'project', 'root' => 'moved']]];
+        yield 'root key dropped' => [['sugar-plugin-installer' => ['scope' => 'project']]];
+    }
+
+    /**
+     * A root change or a dropped root key moves the configured tier away from the
+     * tree. Remove must still find the tree where Composer staged it, not report
+     * success and leave it on disk.
+     *
+     * @param array<string, mixed> $changed the section after the root change
+     */
+    #[DataProvider('rootChangeCases')]
+    public function testRemoveAfterARootChangeDeletesTheTreeStagedUnderTheOldRoot(array $changed): void
+    {
+        $this->writeProject(['sugar-plugin-installer' => ['scope' => 'project', 'root' => 'first']]);
+        [$status, $out] = $this->composer('require ' . escapeshellarg('sugarcraft/sugar-plugin-installer:*'));
+        $this->assertSame(0, $status, "installer require failed:\n$out");
+        [$status, $out] = $this->composer('require ' . escapeshellarg('sugarcraft/sample-plugin:*'));
+        $this->assertSame(0, $status, "sample require failed:\n$out");
+
+        $stage = $this->project . '/first/.candy-code/bundles/sample-plugin';
+        $this->assertFileExists($stage . '/composer.json');
+
+        $this->setProjectExtra($changed);
+
+        [$status, $out] = $this->composer('remove ' . escapeshellarg('sugarcraft/sample-plugin'));
+        $this->assertSame(0, $status, "remove failed after a root change:\n$out");
+
+        clearstatcache();
+        $this->assertDirectoryDoesNotExist($stage, 'remove orphaned the tree staged under the old root');
+        $this->assertDirectoryDoesNotExist($this->project . '/moved/.candy-code/bundles/sample-plugin', 'remove staged a tree under the new root');
+        $this->assertDirectoryDoesNotExist($this->project . '/.candy-code/bundles/sample-plugin', 'remove staged a tree under the default root');
+    }
+
+    /**
      * An update after a scope change must move the tree, not leave the old copy
      * behind and stage a second one beside it.
      */

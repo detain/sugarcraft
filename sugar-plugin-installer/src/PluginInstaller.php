@@ -8,6 +8,7 @@ use Composer\Factory;
 use Composer\Installer\LibraryInstaller;
 use Composer\Package\PackageInterface;
 use Composer\Repository\InstalledRepositoryInterface;
+use Composer\Util\Filesystem;
 use React\Promise\PromiseInterface;
 
 /**
@@ -167,7 +168,9 @@ final class PluginInstaller extends LibraryInstaller
      * The directory that already holds this package's tree, in whichever tier
      * it was staged. The configured path is checked first, so a tree in the
      * selected tier wins. The other tiers matter only after a scope or root
-     * change, which leaves the tree where the old section put it.
+     * change, which leaves the tree where the old section put it. The path
+     * Composer recorded last is the one place that still names a tree after the
+     * old root is gone, so it is checked last.
      */
     private function existingPath(PackageInterface $package): ?string
     {
@@ -184,6 +187,11 @@ final class PluginInstaller extends LibraryInstaller
             }
         } catch (\InvalidArgumentException | \RuntimeException) {
             return null;
+        }
+
+        $recorded = $this->recordedPath($package);
+        if ($recorded !== null) {
+            $paths[] = $recorded;
         }
 
         foreach (array_unique($paths) as $path) {
@@ -226,6 +234,66 @@ final class PluginInstaller extends LibraryInstaller
         }
 
         return is_array($decoded) && is_string($decoded['name'] ?? null) ? $decoded['name'] : null;
+    }
+
+    /**
+     * The install-path Composer wrote for this package in vendor/composer/installed.json
+     * the last time it saved the local repository. Composer records whatever
+     * getInstallPath() answered then, so the tree's location survives a root change
+     * or a dropped root key, which the tiers above no longer name. The file is read
+     * only, and the candidate is checked by holdsPackage() like every other one.
+     */
+    private function recordedPath(PackageInterface $package): ?string
+    {
+        $file = $this->installedJsonPath();
+        if ($file === null || !is_file($file)) {
+            return null;
+        }
+
+        try {
+            $decoded = json_decode((string) file_get_contents($file), true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return null;
+        }
+
+        $entries = is_array($decoded) && is_array($decoded['packages'] ?? null) ? $decoded['packages'] : [];
+        $filesystem = new Filesystem();
+        foreach ($entries as $entry) {
+            if (!is_array($entry) || !is_string($entry['name'] ?? null) || !is_string($entry['install-path'] ?? null)) {
+                continue;
+            }
+            if (strtolower($entry['name']) !== strtolower($package->getName()) || $entry['install-path'] === '') {
+                continue;
+            }
+
+            // Composer writes the path relative to the vendor/composer directory that holds the file.
+            $path = $entry['install-path'];
+            $absolute = $filesystem->isAbsolutePath($path) ? $path : dirname($file) . '/' . $path;
+
+            return $filesystem->normalizePath($absolute);
+        }
+
+        return null;
+    }
+
+    /**
+     * The vendor/composer/installed.json of this project, or null when the vendor
+     * directory cannot be resolved.
+     */
+    private function installedJsonPath(): ?string
+    {
+        $filesystem = new Filesystem();
+        $vendor = (string) $this->composer->getConfig()->get('vendor-dir');
+
+        try {
+            if (!$filesystem->isAbsolutePath($vendor)) {
+                $vendor = $this->projectDir() . '/' . $vendor;
+            }
+        } catch (\RuntimeException) {
+            return null;
+        }
+
+        return $filesystem->normalizePath($vendor) . '/composer/installed.json';
     }
 
     /**

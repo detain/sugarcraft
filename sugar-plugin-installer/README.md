@@ -70,7 +70,8 @@ Composer also asks where an installed plugin lives on `dump-autoload`, `show`,
 `validate` and `remove`. Those commands do not need a valid section, or a home
 directory under user scope. They use the
 staged tree that exists: the `root` tree when the section names one, then the
-project tier, then the user tier. `composer remove` therefore still deletes a
+project tier, then the user tier, then the directory Composer recorded for the
+package. `composer remove` therefore still deletes a
 plugin staged under a section that has since been broken.
 
 ## What the installer does, and does not do
@@ -88,9 +89,12 @@ plugin staged under a section that has since been broken.
   entries still run when the project's Composer autoloader loads. Treat a
   plugin package with the same trust you give any Composer dependency.
 - Changing `scope` or `root` after an install does not move the staged tree.
-  `remove` and `update` find the tree where it sits, in either tier, and delete
-  it. A tree counts only when its `composer.json` names the package, so another
-  package's tree is never touched. A plain `composer install` leaves the tree
+  `remove` and `update` find the tree where it sits and delete it. They check the
+  configured tier, the project and user default tiers, and the directory Composer
+  recorded for the package in `vendor/composer/installed.json` after its last
+  save. The recorded directory is what keeps a tree findable after a `root`
+  change or a dropped `root` key. A tree counts only when its `composer.json`
+  names the package, so another package's tree is never touched. A plain `composer install` leaves the tree
   where it is. To move it, `composer remove` and `composer require` the package
   again, or `composer update` it to a new version.
 - The home directory is taken from `HOME`, or from `USERPROFILE` when `HOME` is
