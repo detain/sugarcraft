@@ -12,6 +12,7 @@ use SugarCraft\Plugins\Tests\Bridge\Support\FakeServeClient;
 use SugarCraft\Plugins\Tests\Bridge\Support\FakeTextGuard;
 use SugarCraft\Plugins\Tests\Bridge\Support\FixedChunkSplitter;
 use SugarCraft\Plugins\Tests\Bridge\Support\MemorySessionStore;
+use SugarCraft\Plugins\Tests\Bridge\Support\PlainRouter;
 use SugarCraft\Plugins\Tests\Bridge\Support\RecordingLog;
 use SugarCraft\Plugins\Tests\Bridge\Support\RecordingQueueGate;
 
@@ -40,7 +41,7 @@ final class ConversationRouterCoreTest extends TestCase
     private function build(int $limit = 1000, array $policy = []): void
     {
         $this->face = new FakeFace('fake', $limit);
-        $this->router = new ConversationRouterCore(...$this->ctorArgs($policy));
+        $this->router = new PlainRouter(...$this->ctorArgs($policy));
         $this->router->addChannel($this->face, 'acc');
     }
 
@@ -279,7 +280,7 @@ final class ConversationRouterCoreTest extends TestCase
     {
         $args = $this->ctorArgs();
         $this->face = new FakeFace('fake', 1000);
-        $this->router = new class(...$args) extends ConversationRouterCore {
+        $this->router = new class(...$args) extends PlainRouter {
             protected function isMediaRefusal(\Throwable $error): bool
             {
                 return $error->getMessage() === 'images_not_a_list';
@@ -416,7 +417,7 @@ final class ConversationRouterCoreTest extends TestCase
     public function testAnOverrideCanConfirmAnInboundBeforeItsDispatch(): void
     {
         $args = $this->ctorArgs();
-        $this->router = new class(...$args) extends ConversationRouterCore {
+        $this->router = new class(...$args) extends PlainRouter {
             protected function confirmsInboundFirst(): bool
             {
                 return true;
@@ -434,7 +435,7 @@ final class ConversationRouterCoreTest extends TestCase
     public function testAnOverrideSuppliesTheSessionGrammar(): void
     {
         $args = $this->ctorArgs();
-        $this->router = new class(...$args) extends ConversationRouterCore {
+        $this->router = new class(...$args) extends PlainRouter {
             protected function sessionName(string $key): string
             {
                 return 'custom:' . $key;

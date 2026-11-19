@@ -321,6 +321,48 @@ final class ConversationRouter extends ConversationRouterCore
     }
 
     /**
+     * Distinct faces (the '<platform>:<account>' map also carries bare
+     * platform fallback aliases — retiring an approval must touch each
+     * face once, not once per alias). The bundle owns this copy, so the
+     * reply fallback below rides this bundle's catalog review.
+     *
+     * @return list<\SugarCraft\Plugins\Bridge\PlatformFace>
+     */
+    protected function channelFaces(): array
+    {
+        $seen = [];
+        foreach ($this->channels as $face) {
+            $seen[\spl_object_id($face)] = $face;
+        }
+
+        return \array_values($seen);
+    }
+
+    /**
+     * command.exec returns {rows: [{role, content, uiOnly}], effects: []}
+     * (CommandResult::toArray). uiOnly rows are transcript chrome for the
+     * TUI — the channel gets the human text, joined.
+     *
+     * @param array<string,mixed> $result
+     */
+    protected function commandResultText(array $result): string
+    {
+        $parts = [];
+        foreach ((array) ($result['rows'] ?? []) as $row) {
+            if (!\is_array($row) || (bool) ($row['uiOnly'] ?? false)) {
+                continue;
+            }
+            $content = \trim((string) ($row['content'] ?? ''));
+            if ($content !== '') {
+                $parts[] = $content;
+            }
+        }
+        $text = \implode("\n\n", $parts);
+
+        return $text === '' ? 'Done.' : $text;
+    }
+
+    /**
      * `/status` and `/cost`: one read of the session's own snapshot. The
      * host reports status, queue and spend there; nothing here is estimated.
      */

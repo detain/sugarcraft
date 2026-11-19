@@ -40,10 +40,13 @@ use React\Promise\PromiseInterface;
  * {@see deliverReply()} for the reply path, {@see sendPrompt()} for the prompt
  * door, and the event and command hooks. The hooks default to the shared
  * behavior, so a bundle overrides only where its platform differs.
+ * {@see channelFaces()} and {@see commandResultText()} have no shared default:
+ * each bundle supplies its own, so the user-facing fallback text ('Done.') rides
+ * that bundle's catalog review and never lives in this package.
  *
  * MUTABLE ON PURPOSE: it mirrors live session state.
  */
-class ConversationRouterCore
+abstract class ConversationRouterCore
 {
     /** Verdict words a text `/approve` or a button answer may name, mapped to the permission reply. */
     public const VERDICTS = [
@@ -947,15 +950,7 @@ class ConversationRouterCore
      *
      * @return list<PlatformFace>
      */
-    protected function channelFaces(): array
-    {
-        $seen = [];
-        foreach ($this->channels as $face) {
-            $seen[\spl_object_id($face)] = $face;
-        }
-
-        return \array_values($seen);
-    }
+    abstract protected function channelFaces(): array;
 
     /**
      * One prompt out the serve door, media included. A media refusal (the
@@ -1027,26 +1022,12 @@ class ConversationRouterCore
     /**
      * command.exec returns {rows: [{role, content, uiOnly}], effects: []}
      * (CommandResult::toArray). uiOnly rows are transcript chrome for the
-     * TUI — the channel gets the human text, joined.
+     * TUI — the channel gets the human text, joined. A bundle supplies the
+     * empty-result fallback in its own catalog.
      *
      * @param array<string,mixed> $result
      */
-    protected function commandResultText(array $result): string
-    {
-        $parts = [];
-        foreach ((array) ($result['rows'] ?? []) as $row) {
-            if (!\is_array($row) || (bool) ($row['uiOnly'] ?? false)) {
-                continue;
-            }
-            $content = \trim((string) ($row['content'] ?? ''));
-            if ($content !== '') {
-                $parts[] = $content;
-            }
-        }
-        $text = \implode("\n\n", $parts);
-
-        return $text === '' ? 'Done.' : $text;
-    }
+    abstract protected function commandResultText(array $result): string;
 
     /**
      * Operator-written regex doors. A pattern that fails to compile is a
