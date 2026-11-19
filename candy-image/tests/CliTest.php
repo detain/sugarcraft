@@ -143,8 +143,10 @@ final class CliTest extends TestCase
 
     public function testProbeFlagIsRefusedAsUnknownOnThisBase(): void
     {
-        // Kept --probe off the surface: Detect exposes no env-only
-        // probe seam, so honoring the spelling here would be a lie.
+        // Kept --probe off the surface: sugar-image's env-only seam
+        // (Detect::fromEnv) exists, but it reports an unconfirmed Kitty
+        // claim and no DA1 sixel, so mapping --probe=off onto it would
+        // change the auto() protocol choice rather than skip a probe.
         [, , $err] = self::drive(['--probe=off', 'x.png']);
 
         $this->assertStringContainsString('unknown option --probe', $err);

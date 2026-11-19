@@ -42,8 +42,10 @@ use SugarCraft\Image\TermDb;
  * dials the sugar-image exposes (the symbol-corpus selector grammar,
  * canvas mode, work factor) — a no-op on backends that do not
  * speak the dial. --passthrough=screen refuses with a pointer: the
- * Screen envelope is detection-chosen, never forced. --probe=off has no
- * seam in Detect yet, so the spelling is refused like any unknown flag.
+ * Screen envelope is detection-chosen, never forced. --probe=off is refused
+ * like any unknown flag: sugar-image's env-only seam (Detect::fromEnv) exists,
+ * but mapping --probe=off onto it would change the auto() protocol choice
+ * (Kitty unconfirmed, no DA1 sixel query), which this viewer does not take on.
  * --format=chafa is REFUSED by design: candy-image's whole point is a viewer that
  * does not shell out to chafa.
  */
@@ -129,6 +131,11 @@ final class Cli
      * 'ansi' alias for halfblock, deliberately off the CLI surface so the
      * documented words stay chicle's own. Text-grid tiers are spelled
      * with chicle's short names as aliases.
+     *
+     * Hand-copied, not derived: fromModeString() is a match with no
+     * enumerable vocabulary. Accepted exception (recorded in the review-fix
+     * commit): a word added to fromModeString() is rejected here with
+     * 'bad --format' until it is also added to this list.
      */
     private const FORMATS = [
         'auto', 'sixel', 'kitty', 'iterm2',

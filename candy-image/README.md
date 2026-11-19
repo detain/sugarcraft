@@ -171,7 +171,7 @@ remote-session cost.
 | `--symbols`      | ✅ tag classes | The default corpus is the byte-frozen 676-entry prefix. The `all` class expands it to 1,251 effective glyphs drawn from the 1,260-entry narrow array — the tables chafa's C build reads: ASCII, Latin, block table, legacy, misc-narrow, braille, sextant and octant. Nine narrow glyphs tagged ambiguous in those C tables are vetoed even by `all` (chafa's `all` omits the `bad` class, which contains them); re-including `bad` explicitly — `all,bad` — admits all 1,260. The opt-in `wide` kana tier (181 double-width glyphs) rides the double-width wide-glyph engine. |
 | `--scale`      | ✅          | chicle has a `scale` option (chicle-options.c); this CLI honors all six arms — `fit` `shrink` `fill` `stretch` `none` `crop` — mapped straight onto sugar-image's `Scale` enum. |
 | `--work`       | ✅          | chicle's integer work factor `1`–`9`, mapped onto the config float `(N−1)/8`, threaded onto whichever backend speaks it. |
-| `--probe=off`    | ⏭ refuses   | `Detect` exposes no env-only probe seam yet. |
+| `--probe=off`    | ⏭ refuses   | sugar-image does expose a probe-free seam (`Detect::fromEnv()`, reached through `Mosaic::fromModeString($mode, probe: false)`), but mapping `--probe=off` onto it would change the protocol `--format=auto` picks: a Kitty claim stays unconfirmed and no DA1 sixel query runs. That is a behavior change this viewer's compat contract does not take on, so the spelling stays refused. |
 | everything else  | ⏭ refuses   | out of scope for a thin composition-only viewer (façade law): the capability stays in the libs. |
 
 `--canvas` deliberately does not sit in this map: chafa's CLI has no
