@@ -354,6 +354,97 @@ final class InProcessHostServicesTest extends TestCase
         self::assertSame(self::shape($wireAnswer), self::shape($inAnswer));
     }
 
+    /**
+     * A negative resume point is refused by the handler, so a dropped afterSeq would answer the
+     * snapshot path instead of refusing: the refusal shows the cursor reached the host.
+     */
+    public function testSubscribeSessionForwardsAfterSeqToTheHost(): void
+    {
+        $this->connect();
+        $wireId = $this->wire->call('session.create', [])['id'];
+        $inId = $this->host->createSession(null, null)['id'];
+
+        $wireRefusal = $this->wire->request('session.subscribe', ['sessionId' => $wireId, 'afterSeq' => -1]);
+        $inRefusal = $this->refusalOf(fn () => $this->host->subscribeSession($inId, -1, null));
+
+        $this->assertSameRefusal($inRefusal, $wireRefusal);
+        self::assertSame(ErrorCode::InvalidParams, $inRefusal->errorCode);
+    }
+
+    /** The reserved `agent:` prefix and an unknown permission mode are refused by name, so both must reach the host. */
+    public function testCreateSessionForwardsNameAndPermissionMode(): void
+    {
+        $this->connect();
+
+        $wireName = $this->wire->request('session.create', ['name' => 'agent:probe']);
+        $inName = $this->refusalOf(fn () => $this->host->createSession('agent:probe', null));
+        $this->assertSameRefusal($inName, $wireName);
+        self::assertSame('reserved_session_name', $inName->kind);
+
+        $wireMode = $this->wire->request('session.create', ['permissionMode' => 'nope']);
+        $inMode = $this->refusalOf(fn () => $this->host->createSession(null, 'nope'));
+        $this->assertSameRefusal($inMode, $wireMode);
+    }
+
+    /**
+     * A /command takes no attachment, so the host refuses an image or document sent with one.
+     * A dropped attachment would let /help through and answer it.
+     */
+    public function testSendTurnForwardsImagesAndDocuments(): void
+    {
+        $this->connect();
+        $wireId = $this->wire->call('session.create', [])['id'];
+        $inId = $this->host->createSession(null, null)['id'];
+        $png = ['name' => 'shot.png', 'mime' => 'image/png', 'data' => \base64_encode("\x89PNG\r\n\x1a\n" . \str_repeat("\0", 8))];
+        $pdf = ['name' => 'spec.pdf', 'mime' => 'application/pdf', 'data' => \base64_encode('%PDF-1.4 ' . \str_repeat('x', 8))];
+
+        $wireImage = $this->wire->request('session.send', ['sessionId' => $wireId, 'text' => '/help', 'delivery' => 'queue', 'images' => [$png]]);
+        $inImage = $this->refusalOf(fn () => $this->host->sendTurn($inId, '/help', 'queue', null, [$png], []));
+        $this->assertSameRefusal($inImage, $wireImage);
+        self::assertSame('images_with_command', $inImage->kind);
+
+        $wireDocument = $this->wire->request('session.send', ['sessionId' => $wireId, 'text' => '/help', 'delivery' => 'queue', 'documents' => [$pdf]]);
+        $inDocument = $this->refusalOf(fn () => $this->host->sendTurn($inId, '/help', 'queue', null, [], [$pdf]));
+        $this->assertSameRefusal($inDocument, $wireDocument);
+        self::assertSame('documents_with_command', $inDocument->kind);
+    }
+
+    /**
+     * The note is capped at 2048 bytes and refused before the ask is looked up. A dropped note
+     * would reach the lookup and refuse as an unknown ask instead.
+     */
+    public function testRespondPermissionForwardsTheNote(): void
+    {
+        $this->connect();
+        $wireId = $this->wire->call('session.create', [])['id'];
+        $inId = $this->host->createSession(null, null)['id'];
+        $tooLong = \str_repeat('n', 2049);
+
+        $wireNote = $this->wire->request('permission.respond', ['sessionId' => $wireId, 'askId' => 'no-such-ask', 'reply' => 'once', 'note' => $tooLong]);
+        $inNote = $this->refusalOf(fn () => $this->host->respondPermission($inId, 'no-such-ask', 'once', $tooLong));
+
+        $this->assertSameRefusal($inNote, $wireNote);
+    }
+
+    /**
+     * `/rename` with a title renames the session; with none it opens the title editor. A dropped
+     * args reaches the bare form, so the title never appears in the answer.
+     */
+    public function testExecCommandForwardsArgs(): void
+    {
+        $this->connect();
+        $wireId = $this->wire->call('session.create', [])['id'];
+        $inId = $this->host->createSession(null, null)['id'];
+
+        $wireNamed = $this->wire->call('command.exec', ['sessionId' => $wireId, 'name' => 'rename', 'args' => 'Refactor notes']);
+        $inNamed = $this->host->execCommand($inId, 'rename', 'Refactor notes');
+
+        self::assertSame(self::shape($wireNamed), self::shape($inNamed));
+        self::assertSame($wireNamed['effects'], $inNamed['effects']);
+        self::assertContains('rename-session', $inNamed['effects']);
+        self::assertStringContainsString('Refactor notes', \json_encode($inNamed, \JSON_THROW_ON_ERROR));
+    }
+
     private function connect(): void
     {
         $this->fixture->await($this->host->connect());

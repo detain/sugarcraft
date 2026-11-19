@@ -26,17 +26,23 @@ use function React\Promise\resolve;
  * One instance is one in-process client of its host. {@see connect()} opens it
  * (the hello the wire makes first), {@see disconnect()} closes it, and events the
  * client follows reach {@see subscribeEvents()} listeners as {@see EventEnvelope}s,
- * in the order the host emitted them, with none dropped: delivery is queued and
- * drained on the loop, so a listener that calls back into the host cannot reorder
- * or re-enter the feed that is emitting: a drain already in progress is not entered
- * again, and the outer loop delivers whatever a listener's call queued.
+ * in the order the host emitted them. The feed bounds a catch-up buffer the same way
+ * it does for a wire client: past the feed's catch-up cap (`SessionFeed::MAX_PRELIVE_BUFFER`
+ * envelopes, or its byte cap) the events still buffered are dropped, and the listener
+ * is told so by a `server.overflow` envelope with `action: resubscribe`. A bundle must
+ * resubscribe from its last seq to recover them. Delivery is queued and drained on the loop, so a listener that calls back into the
+ * host cannot reorder or re-enter the feed that is emitting: a drain already in progress
+ * is not entered again, and the outer loop delivers whatever a listener's call queued.
  *
  * Refusals are the wire's own {@see RpcError}s: the same code, kind and data.
  *
- * Two deliberate differences from the wire, recorded for the Phase 5d bundles:
+ * Three deliberate differences from the wire, recorded for the Phase 5d bundles:
  * - Session calls go to the primary host's dispatcher. The wire's workspace routing
  *   (`root`, {@see \SugarCraft\Code\Server\Workspace\Gateway}) is not applied, so a
  *   session bound to a non-primary root is not found here. No bundle sends `root`.
+ * - Rate meters are not spent. {@see Dispatcher::invoke()} skips the per-client
+ *   `rate_limited` budgets the wire applies to each frame, because the caller is the
+ *   host itself, so a bundle's own loop is never refused `rate_limited`.
  * - Follow results: {@see subscribeFollowResults()} listeners receive the
  *   `session.subscribe` answer on every successful {@see subscribeSession()}, the
  *   first subscribe included. This host never reconnects, so each call is a follow.

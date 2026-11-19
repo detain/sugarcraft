@@ -293,7 +293,7 @@ candy-code/tests/Server/LoopCallbackFaultInjectionTest.php	2.495	5
 candy-code/tests/Session/Import/SessionImporterTest.php	2.481	11
 candy-code/tests/Tools/BashToolProgressTest.php	2.458	7
 candy-code/tests/MCP/McpLazyToolLoadingTest.php	2.433	7
-candy-code/tests/Host/InProcessHostServicesTest.php	2.430	11
+candy-code/tests/Host/InProcessHostServicesTest.php	3.926	21
 candy-code/tests/Cli/SessionEndHookTest.php	2.425	9
 candy-code/tests/Runtime/DroppedStreamContinueTest.php	2.423	7
 candy-code/tests/Agents/AgentWorkerPoolCancelKeepsLoopLiveTest.php	2.422	5
