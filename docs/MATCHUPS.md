@@ -83,6 +83,7 @@ ships as `App\` — called out in the table below.
 | **SugarServeProtocol** (`sugar-serve-protocol/`) | 🟢 ready | Wire contract for the `candy-code.v1` serve protocol — subprotocol names, frame cap, discovery and token readers, WebSocket URL normalisation. Original work: no upstream port. |
 | **SugarWsRpc** (`sugar-ws-rpc/`) | 🔴 planning | WebSocket RPC transport — skeleton (namespace and wiring only); the ServeBridge socket layer from the channel bundles moves here in P4-10d. Original work: no upstream port. |
 | **SugarJwt** (`sugar-jwt/`) | 🔴 planning | JWT and JWK verification — skeleton (namespace and wiring only); the Teams token and JWK code from the channel bundles moves here in P4-10d. Original work: no upstream port. |
+| **SugarCodec** (`sugar-codec/`) | 🔴 planning | YAML codec — skeleton (namespace and wiring only); the hand YAML subset from candy-ssh-launcher and the YamlDialect engine from candy-kv move here in a later step. Original work: no upstream port. |
 
 ## Apps
 
@@ -241,6 +242,7 @@ maps each package to its upstream.
 | SugarReleases (sugar-releases/) | none — first-party |
 | SugarServeProtocol (sugar-serve-protocol/) | none — first-party (original work; no upstream port) |
 | SugarJwt (sugar-jwt/) | none — first-party (original work; no upstream port) |
+| SugarCodec (sugar-codec/) | none — first-party (original work; no upstream port) |
 | SugarWsRpc (sugar-ws-rpc/) | none — first-party (original work; no upstream port) |
 | SugarSpring (sugar-spring/) | [harmonica](https://github.com/charmbracelet/harmonica) |
 | SugarSshServer (sugar-ssh-server/) | [wish](https://github.com/charmbracelet/wish) |

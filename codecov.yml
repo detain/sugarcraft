@@ -213,6 +213,9 @@ flag_management:
     - name: sugar-jwt
       paths: ["sugar-jwt/src/**"]
       carryforward: true
+    - name: sugar-codec
+      paths: ["sugar-codec/src/**"]
+      carryforward: true
     - name: sugar-plugin-installer
       paths: ["sugar-plugin-installer/src/**"]
       carryforward: true
@@ -609,6 +612,12 @@ component_management:
         - "sugar-jwt/src/**"
       flag_regexes:
         - "^sugar-jwt$"
+    - component_id: sugar-codec
+      name: sugar-codec
+      paths:
+        - "sugar-codec/src/**"
+      flag_regexes:
+        - "^sugar-codec$"
     - component_id: sugar-plugin-installer
       name: sugar-plugin-installer
       paths:
