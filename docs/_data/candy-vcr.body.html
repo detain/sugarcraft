@@ -174,7 +174,7 @@ php bin/candy-vcr render-batch -r -j 4 -o out/ demos/</code></pre>
 <tr><td><code>-b, --backend</code></td><td><code>gd</code></td><td><code>gd</code> or <code>imagick</code>.</td></tr>
 <tr><td><code>-e, --encoder</code></td><td><code>ffmpeg</code></td><td><code>ffmpeg</code> or the pure-PHP <code>php</code> encoder.</td></tr>
 <tr><td><code>--strict</code></td><td>off</td><td>Fail on an unknown directive instead of skipping it.</td></tr>
-<tr><td><code>--shell</code>, <code>--exec</code></td><td>off</td><td>Run typed commands in a real pseudo-terminal, with the given shell or the default one.</td></tr>
+<tr><td><code>--shell</code>, <code>--exec</code></td><td>off</td><td><code>render-tape</code> only. Run typed commands in a real pseudo-terminal, with the given shell or the default one.</td></tr>
 <tr><td><code>--dry-run</code></td><td>off</td><td><code>render-tape</code> only. Print the compiled event stream and write no GIF.</td></tr>
 <tr><td><code>-r, --recursive</code>, <code>-j, --jobs</code></td><td>off, 1</td><td><code>render-batch</code> only. Search subdirectories, and render tapes in parallel.</td></tr>
 </tbody>
@@ -204,7 +204,7 @@ php bin/candy-vcr render-batch -r -j 4 -o out/ demos/</code></pre>
 <tr><td>Event</td><td><code>$t</code>, <code>$kind</code>, payload</td><td>One recorded line. The kind is an <code>EventKind</code> case.</td></tr>
 <tr><td>Render\Renderer</td><td>render(player, terminal, fps)</td><td>Produces a <code>FrameStream</code> of snapshots at a fixed cadence.</td></tr>
 <tr><td>Render\FrameDedup</td><td>dedup(stream)</td><td>Collapses identical adjacent frames.</td></tr>
-<tr><td>Encode\TapeToGif</td><td>create(options)</td><td>Runs the full tape-to-GIF pipeline with the theme, fps, backend and encoder options.</td></tr>
+<tr><td>Encode\TapeToGif</td><td><code>new(options)</code>, then <code>render(tapePath, outputPath, options)</code></td><td>Runs the full tape-to-GIF pipeline with the theme, fps, backend and encoder options.</td></tr>
 <tr><td>RelativeFormat</td><td>new()</td><td>The delta-time format, used by asciinema casts.</td></tr>
 </tbody>
 </table>

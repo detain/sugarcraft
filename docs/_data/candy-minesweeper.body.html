@@ -65,7 +65,7 @@ won: yes</code></pre>
 candy-minesweeper 20 20                   # 20x20 with 50 mines by default</code></pre>
     <h3 style="margin-top: 16px;">Save and resume a game</h3>
     <p>Press <kbd>S</kbd> to write the live game to a single save slot, and <kbd>L</kbd> to load it. Loading works after a win or a loss too, so you can replay the exact board. Saving is refused once the board is finished, which leaves the slot unchanged.</p>
-    <p>The slot is <code>$XDG_CONFIG_HOME/candy-minesweeper/savegame.json</code> when <code>XDG_CONFIG_HOME</code> is set, and <code>~/.config/candy-minesweeper/savegame.json</code> otherwise. It is written with mode <code>0600</code> through an atomic write. The slot records the full mine layout as well as your progress. Treat the file as private if you sync dotfiles.</p>
+    <p>The slot is <code>$XDG_CONFIG_HOME/candy-minesweeper/savegame.json</code> when <code>XDG_CONFIG_HOME</code> is set to an absolute path (a relative value is ignored), and <code>~/.config/candy-minesweeper/savegame.json</code> otherwise. It is written with mode <code>0600</code> through an atomic write. The slot records the full mine layout as well as your progress. Treat the file as private if you sync dotfiles.</p>
     <h3 style="margin-top: 16px;">Keep statistics across sessions</h3>
     <p>Statistics are opt-in. Set <code>CANDY_MINESWEEPER_STATS</code> to a file path and each finished game is tallied there per preset: games, wins and best time. Only boards whose shape matches a preset are tallied, and a save restored with <kbd>L</kbd> never records a best time.</p>
     <pre class="code"><code class="language-shell">export CANDY_MINESWEEPER_STATS="$HOME/.local/state/candy-minesweeper/stats.json"
