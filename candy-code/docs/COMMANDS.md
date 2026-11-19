@@ -368,7 +368,7 @@ edit it by hand.
 | `/export` | ✓ | | `[md\|html\|json\|jsonl\|text] [file\|--path <file>]` | Export the transcript to a local file, raw bytes unredacted |
 | `/docs` | | | — | Open the documentation |
 | `/exit` | ✓ | ✓ | — | Quit the app |
-| `/theme` | ✓ | | — | Switch the colour theme |
+| `/theme` | ✓ | | — | Switch the color theme |
 | `/settings` | ✓ | ✓ | `[search\|reload]` | Show every setting, its value, where it came from and when it applies |
 | `/agents` | ✓ | | `[list\|<name>\|use <preset\|default>\|new <focus>\|proposed\|accept <name>]` | List the agent roster, inspect one by name, open a running one's Agent View, or draft a preset and promote it with accept |
 | `/mcp` | ✓ | | `<list\|add\|remove\|login\|reconnect\|enable\|disable> [server]` | Manage MCP server auth (list/add/remove; login prints the CLI command) and session enable/disable |
