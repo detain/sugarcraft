@@ -903,6 +903,12 @@ function cmdUserAdd(array $args): int
     }
 
     $username = $args[0];
+    // A '--'-shaped first word is a mistyped flag or --help, never an account
+    // name: refuse it as a usage error before anything is written, the same
+    // way repo create refuses a '--' argument.
+    if (\str_starts_with($username, '--')) {
+        return error(Lang::t('cli.usage_user_add') . "\n");
+    }
     $password = null;
     // 096: an argv-carried password (any of the three spellings below)
     // is cleartext in ps /proc/pid/cmdline for the whole bcrypt window;
