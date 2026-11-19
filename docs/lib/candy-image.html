@@ -268,9 +268,9 @@ candy-image --format=symbols --symbols=ascii logo.png        # ASCII-art glyph t
     <tr><th>Class</th><th>Method</th><th>Description</th></tr>
     <tr><td>Cli</td><td>main(argv, stdout, stderr, play)</td><td>Parse arguments, detect, then render or animate. Returns the exit code.</td></tr>
     <tr><td>Cli</td><td>viewportCells()</td><td>The TTY-sized cell box (columns, rows minus one) behind a <code>stream_isatty</code> gate, with a 60×24 fallback.</td></tr>
-    <tr><td>Cli</td><td>runningVersion()</td><td>The effective version string: the phar build stamp when running from a packaged phar, otherwise the <code>VERSION</code> constant.</td></tr>
+    <tr><td>Cli</td><td>runningVersion()</td><td>The effective version string: the phar build stamp when running from a packaged phar. Outside a phar it is the Composer install version (<code>dev-master</code> in a checkout), falling back to the <code>VERSION</code> constant only when Composer metadata is absent.</td></tr>
     <tr><td>Cli</td><td>workDialToFactor(raw)</td><td>Maps chafa's integer <code>--work</code> dial (1 to 9) onto the sugar-image float factor <code>(N−1)/8</code>. Returns null when the value is unmapped.</td></tr>
-    <tr><td>Support\Version</td><td>(constant and stamp)</td><td>The package version. A phar build replaces the stamp with the commit it was built from.</td></tr>
+    <tr><td>Support\Version</td><td>(constant and stamp)</td><td>The package version. A phar build replaces the stamp: the CI rolling build writes <code>dev-&lt;shortsha&gt;</code>, and a local <code>tools/build-phar.php</code> run writes the newest <code>candy-image/v*</code> tag, or <code>dev-build</code> when no tag is reachable.</td></tr>
     <tr><td>Lang</td><td>t(key, params)</td><td>Localised CLI messages in the <code>candy-image</code> namespace. The namespace is distinct from sugar-image's <code>image</code> namespace.</td></tr>
     </table>
 
