@@ -142,7 +142,6 @@ final class ChannelsStore implements CredentialWriter
         $this->write();
     }
 
-    /** Why the most recent read failed, or null while reads succeed. */
     /**
      * The single credential writer (O9): the closure receives the record as it
      * is on disk now, and its result is what gets persisted, so a plugin's
@@ -164,6 +163,7 @@ final class ChannelsStore implements CredentialWriter
         return $next;
     }
 
+    /** Why the most recent read failed, or null while reads succeed. */
     public function readFailure(): ?string
     {
         return $this->readFailure;
