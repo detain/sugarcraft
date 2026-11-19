@@ -42,8 +42,11 @@ use SugarCraft\Image\TermDb;
  * dials the sugar-image exposes (the symbol-corpus selector grammar,
  * canvas mode, work factor) — a no-op on backends that do not
  * speak the dial. --passthrough=screen refuses with a pointer: the
- * Screen envelope is detection-chosen, never forced. --probe=off has no
- * seam in Detect yet, so the spelling is refused like any unknown flag.
+ * Screen envelope is detection-chosen, never forced. --probe=off is refused
+ * like any unknown flag. The probe-free seam is Mosaic::fromModeString(mode,
+ * probe: false) via Detect::fromEnv, and --format validation uses it. Mapping
+ * --probe=off onto it would change the auto() protocol choice (Kitty
+ * unconfirmed, no DA1 sixel query), which this viewer does not take on.
  * --format=chafa is REFUSED by design: candy-image's whole point is a viewer that
  * does not shell out to chafa.
  */
@@ -129,6 +132,12 @@ final class Cli
      * 'ansi' alias for halfblock, deliberately off the CLI surface so the
      * documented words stay chicle's own. Text-grid tiers are spelled
      * with chicle's short names as aliases.
+     *
+     * Hand-copied, not derived: fromModeString() is a match with no
+     * enumerable vocabulary. Accepted exception: a word added to
+     * fromModeString() is rejected here with the cli.bad_format message
+     * ("unknown render format") until it is also added to this list. Its
+     * reason: fromModeString() exposes no list of its words to derive this from.
      */
     private const FORMATS = [
         'auto', 'sixel', 'kitty', 'iterm2',
@@ -137,7 +146,16 @@ final class Cli
         'symbols', 'symbol', 'sym',
     ];
 
-    /** chicle-style --scale spellings mapped onto the Scale enum. */
+    /**
+     * chicle-style --scale spellings mapped onto the Scale enum.
+     *
+     * Kept in candy-image. The upstream plan conflicts with itself: one line
+     * says "scale names mapped in the lib", and a later line says "scale and
+     * viewport names from sugar-image (P1-13)". This map follows the first,
+     * because sugar-image exposes no name-to-Scale mapping. The conflict is
+     * an open question for the owner to resolve; the plan file is not shipped
+     * with this package, so it is not cited by path here.
+     */
     private const SCALES = [
         'fit'     => Scale::Fit,
         'shrink'  => Scale::ShrinkToFit,
@@ -250,7 +268,13 @@ final class Cli
 
                             return self::EXIT_USAGE;
                         }
-                        if (!in_array(strtolower($raw), self::FORMATS, true) || Mosaic::fromModeString($raw) === null) {
+                        // Validation only needs the spelling, so it runs probe-free. The default
+                        // auto() probe here ran before --passthrough was applied, and under tmux
+                        // it could turn allow-passthrough on although the user asked for none.
+                        // Behavior change: the auto() probe now runs at render, after the
+                        // passthrough choice is applied. Under tmux with --passthrough=none,
+                        // Kitty APC and wrapped sixel may fall back to symbols.
+                        if (!in_array(strtolower($raw), self::FORMATS, true) || Mosaic::fromModeString($raw, probe: false) === null) {
                             self::err($stderr, Lang::t('cli.bad_format', ['value' => $raw]));
 
                             return self::EXIT_USAGE;
@@ -410,7 +434,9 @@ final class Cli
                 // one to steer the player and the pump spins CPU forever
                 // (candy-image-004). Refuse loudly, same lane as every other
                 // usage error. The $play seam is exempt: it replaces exactly
-                // that loop, so Program->run() is never reached.
+                // that loop, so Program->run() is never reached. This is a bare
+                // presence check, not protocol detection, so it stays on core
+                // stream_isatty() and is not migrated to the sugar-image presenter.
                 if ($play === null && !\stream_isatty(STDIN) && !\stream_isatty(STDOUT)) {
                     self::err($stderr, Lang::t('cli.animate_requires_terminal'));
 
@@ -556,14 +582,17 @@ final class Cli
         // Ghostty…) signal through their own variables (candy-image-025).
         // Absent-versus-empty is kept distinct — `(empty)` is itself a
         // finding (some wrappers blank TERM rather than unset it).
+        // One snapshot serves both the table and the chain match, so the
+        // printed evidence is exactly what the chain consumed (P1-13c-image).
+        $env = TermDb::snapshotEnv();
         $envParts = [];
         foreach (TermDb::ENV_KEYS as $envKey) {
-            $envValue = \getenv($envKey);
+            $envValue = $env[$envKey] ?? false;
             $envParts[] = $envKey . '=' . ($envValue === false ? '(unset)' : ($envValue === '' ? '(empty)' : $envValue));
         }
         $write('env: ' . implode('  ', $envParts));
 
-        $info = TermDb::matchChain(TermDb::snapshotEnv());
+        $info = TermDb::matchChain($env);
         $passthrough = [];
         foreach ($info->passthrough as $protocol => $needed) {
             $passthrough[] = $protocol . ($needed ? '=needs' : '=direct');
