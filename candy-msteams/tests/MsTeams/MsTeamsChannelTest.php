@@ -17,6 +17,7 @@ use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
 use SugarCraft\ServeProtocol\Auth\TokenFile;
+use SugarCraft\ServeProtocol\Discovery\LiveRecord;
 
 /**
  * Policy-door pins for the channel root, bundle-local (the marketplace
@@ -499,7 +500,7 @@ final class MsTeamsChannelTest extends TestCase
             $channel->dispose();
             $serve->stop();
             @unlink($tokenPath);
-            @unlink($dir->discoveryPath());
+            @unlink($dir . '/' . LiveRecord::FILE);
             @rmdir($serverDir);
             putenv('CANDY_CODE_SERVER_DIR');
         }
