@@ -48,7 +48,9 @@ function groupedParams(Parser $parser, array $params): array
 
     <p><strong>Decode an OSC 8 hyperlink.</strong> A hyperlink open carries a URI, and a close is an empty URI. <code>HandlerAdapter</code> reports both through <code>OscHandler::hyperlink()</code>, and it accepts the backtick-terminated form as well:</p>
     <pre class="code"><code class="language-php">use SugarCraft\AnsiParser\Parser\{HandlerAdapter, Parser, RecordingOscHandler};
+use SugarCraft\AnsiParser\Support\RecordingCsiHandler;
 
+$csi = new RecordingCsiHandler();
 $osc = new RecordingOscHandler();
 $parser = new Parser(new HandlerAdapter($csi, $osc));
 $parser-&gt;parseComplete("\x1b]8;;https://example.org\x1b\\link");
@@ -141,7 +143,7 @@ php examples/adapter.php</code></pre>
 <tr><td>A final CSI or ESC at the end of the stream never dispatches</td><td><code>flush()</code> and <code>parseComplete()</code> settle only string payloads. An in-flight CSI or ESC cannot be recovered, so it ends undispatched. Make sure the producer sends complete sequences.</td></tr>
 <tr><td>An OSC or DCS payload arrives truncated</td><td>Payloads cap at 64 KiB by default. Call <code>stringOverflowed()</code> inside the dispatch to detect the cut, or raise the cap with the third constructor argument.</td></tr>
 <tr><td>Invalid UTF-8 causes an error or a garbled rune</td><td>Pass <code>replaceMalformed: true</code> to turn malformed sequences into U+FFFD. The flag needs <code>ext-mbstring</code>, and the constructor fails loudly when the extension is missing.</td></tr>
-<tr><td>A fallback handler receives nothing for ESC, DCS or the C1 band</td><td><code>HandlerAdapter</code> is a sieve. It drops the whole ESC family, DCS, SOS, PM and APC payloads, and every execute except HT, LF, CR and BS. Pass the events to a <code>$fallback</code> handler, or implement <code>Handler</code> directly.</td></tr>
+<tr><td>A fallback handler receives no events for the ESC family, DCS, SOS, PM or APC</td><td><code>HandlerAdapter</code> consumes the events it maps, and consumes the HT, LF, CR and BS executes. It forwards ESC, DCS, SOS, PM and APC events to <code>$fallback</code> unchanged, so pass a fallback to see them, or implement <code>Handler</code> directly.</td></tr>
 <tr><td>Colon-separated color arguments arrive as separate values</td><td>The parser flags the structure but does not interpret it. Read <code>subparams()</code> during the dispatch, or implement <code>SubparamsAwareHandler</code>. <code>groupSubparameters()</code> regroups them.</td></tr>
 <tr><td>A <code>DebugHandler</code> log grows without bound</td><td>The default log is unbounded, which suits fixtures. Pass <code>maxLogRows</code> for a long-lived mirror.</td></tr>
 </table>
@@ -175,7 +177,7 @@ AnsiTokenizer  a flat tokenizer for consumers that want Token objects rather tha
     <p>Where the port deliberately diverges, the reason is in the library README under the Credits and inspiration section.</p>
 
     <h3 style="margin-top: 40px;">Changelog and versioning</h3>
-    <p>The library has no separate changelog file yet. Its history is the commit log of <code>sugar-ansi-parser/</code> in <a href="https://github.com/detain/sugarcraft">detain/sugarcraft</a>. The package was renamed from <code>sugarcraft/candy-ansi</code> in 2026-10, with its namespace changed from <code>SugarCraft\Ansi\</code> to <code>SugarCraft\AnsiParser\</code>. Depend on the new name only.</p>
+    <p>The library has no separate changelog file yet. Its history is the commit log of <code>sugar-ansi-parser/</code> in <a href="https://github.com/detain/sugarcraft">detain/sugarcraft</a>. The package was renamed from <code>sugarcraft/candy-ansi</code> in 2026-10. Depend on the new name only.</p>
 
     <h3 style="margin-top: 40px;">Related</h3>
     <ul>

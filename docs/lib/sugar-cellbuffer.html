@@ -392,7 +392,7 @@ php examples/diff_frames.php</code></pre>
 <tr><td><code>OutOfRangeException</code> from <code>cellAt()</code></td><td>Coordinates are zero-based and bounded by <code>width()</code> and <code>height()</code>. Clamp the coordinate, or check <code>region()-&gt;contains()</code> first.</td></tr>
 <tr><td><code>InvalidArgumentException</code> from <code>Hyperlink::new()</code></td><td>The URL or id contains a C0 or DEL control, a C1 introducer, or (in the id) a semicolon. Sanitize untrusted text first. Well-formed multibyte IRIs are accepted.</td></tr>
 <tr><td><code>Cell::new()</code> refuses a wide span</td><td>A width above 2 is a run-length span, and its rune must measure exactly that many display columns. Use a width-2 lead for a single wide glyph, or pad the rune to the span width.</td></tr>
-<tr><td>A diff replay leaves cells out of the grid unchanged</td><td><code>applyDiff()</code> skips positive writes past the last row or column by design, so the grid cannot grow from a diff. Check that the ops were produced from a buffer of the same dimensions.</td></tr>
+<tr><td>A diff replay leaves cells out of the grid unchanged</td><td><code>applyDiff()</code> skips any write that lands past the last row or column, by design, so a diff never grows the grid. Check that the ops were produced from a buffer of the same dimensions.</td></tr>
 </table>
 
     <h3 id="security-and-trust-boundaries" style="margin-top: 40px;">Security and trust boundaries</h3>
