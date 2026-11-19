@@ -19,8 +19,10 @@ use SugarCraft\Plugins\Discovery\Root;
  *     lands BELOW the plain foreign directories in every surface's precedence
  *     (the mapping is per-loader; see `Cli\Bootstrap`'s bundle wiring).
  *  2. `~/.candy-code/bundles/` — tier `user`, the destination
- *     `candy-code bundles install` writes to. A symlink inside it may point
- *     anywhere in home and nowhere outside it.
+ *     `candy-code bundles install` writes to. A bundle directory symlink may
+ *     point anywhere in home and nowhere outside it, but its manifest must
+ *     resolve inside that bundle (see {@see Bundle::manifestPath()}): a
+ *     manifest link that escapes the bundle is refused, never followed.
  *  3. Every directory listed in the `pluginPaths` setting — tier `user`, the
  *     operator's explicit word: a listed path is trusted as given (like every
  *     other user-tier path setting), and it may be either a bundle itself
