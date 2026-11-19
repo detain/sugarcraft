@@ -87,6 +87,26 @@ final class ThemeCatalogRenderTest extends TestCase
         $this->assertEquals($fromCatalog, RenderCommand::pickTheme($name));
     }
 
+    /**
+     * A built-in name must not read the bundled JSON files: sugar-markdown's
+     * catalog() loads all three eagerly, so a vendor copy without themes/ would
+     * otherwise refuse `--theme ansi` with theme.read_failed. The catalog cache
+     * is reset, the stock roster is resolved, and the cache must stay empty.
+     */
+    public function testStockNamesNeverLoadTheBundledThemeFiles(): void
+    {
+        $cache = new \ReflectionProperty(Theme::class, 'catalog');
+        $cache->setValue(null, null);
+
+        foreach (['ansi', 'ascii', 'plain', 'no', 'notty', 'auto-no', 'dark', 'light', 'dracula', 'tokyo-night', 'tokyonight', 'pink'] as $name) {
+            RenderCommand::pickTheme($name);
+        }
+        self::assertNull($cache->getValue(), 'stock names must answer from their factories, not catalog()');
+
+        RenderCommand::pickTheme('solarized');
+        self::assertIsArray($cache->getValue(), 'a bundled slug is the one place the catalog is read');
+    }
+
     public function testCliAliasesAreNotCatalogNames(): void
     {
         $this->assertNull(Theme::catalogByName('no'));

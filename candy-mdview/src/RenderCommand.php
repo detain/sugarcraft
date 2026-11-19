@@ -615,18 +615,26 @@ final class RenderCommand extends Command
     private const THEME_ALIASES = ['no' => 'plain', 'auto-no' => 'notty'];
 
     /**
-     * Resolve a theme name. The lookup moved to sugar-markdown's
-     * Theme::catalogByName() (P1-12c-mdview); the roster and the two aliases
+     * Resolve a theme name. The lookup lives in sugar-markdown's Theme
+     * (P1-12c-mdview): stock names through Theme::byName(), the bundled JSON
+     * slugs through Theme::catalogByName(). The roster and the two aliases
      * remain this CLI's contract.
      */
     public static function pickTheme(string $name): Theme
     {
         $key = strtolower(str_replace('_', '-', $name));
-        $theme = in_array($key, self::THEME_NAMES, true)
-            ? Theme::catalogByName(self::THEME_ALIASES[$key] ?? $key)
-            : null;
+        if (!in_array($key, self::THEME_NAMES, true)) {
+            throw new \InvalidArgumentException(Lang::t('render.unknown_theme', ['name' => $name]));
+        }
 
-        return $theme ?? throw new \InvalidArgumentException(Lang::t('render.unknown_theme', ['name' => $name]));
+        // The stock names answer from their factories. Only the three bundled
+        // slugs reach catalog(), which reads their JSON files: a built-in name
+        // must not depend on sugar-markdown's themes/ directory being present.
+        $slug = self::THEME_ALIASES[$key] ?? $key;
+
+        return Theme::byName($slug)
+            ?? Theme::catalogByName($slug)
+            ?? throw new \InvalidArgumentException(Lang::t('render.unknown_theme', ['name' => $name]));
     }
 
     /**

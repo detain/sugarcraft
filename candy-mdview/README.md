@@ -90,11 +90,13 @@ Flags:
   place of `-` (`DRACULA` and `Tokyo_Night` work). Pass `auto` to run the
   implicit ladder explicitly. Each built-in name maps one-to-one onto the
   same-named SugarMarkdown preset (`Theme::ansi()`, `Theme::notty()`,
-  `Theme::dracula()`, …). Names resolve through SugarMarkdown's
-  `Theme::catalogByName()`; `solarized`, `monokai`, and `github` are the three
-  bundled JSON themes it loads. candy-mdview keeps byte-identical copies in
-  `themes/` because `ThemeLoadTest` and `PharBuildScriptTest` pin them, and the
-  phar ships that directory. The three tiers: **ansi** is the terminal-native
+  `Theme::dracula()`, …). Stock names resolve through SugarMarkdown's
+  `Theme::byName()`, so they never read a JSON file; `solarized`, `monokai`, and
+  `github` are the three bundled JSON themes, read through
+  `Theme::catalogByName()` from `vendor/sugarcraft/sugar-markdown/themes/`. The
+  phar build refuses a vendor tree that lacks those files. candy-mdview keeps
+  byte-identical copies in `themes/` because `ThemeLoadTest` and
+  `PharBuildScriptTest` pin them; no runtime path reads that directory. The three tiers: **ansi** is the terminal-native
   palette, **ascii** keeps structure — bold/italic survive, color does not —
   and **plain** is undecorated bytes. With `--theme` omitted, the numbered
   color walk below picks the tier: **ansi** when the stream is decorated and

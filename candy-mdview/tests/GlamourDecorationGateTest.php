@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\MdView\Tests;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\MdView\GlamourDecorationGate;
 use SugarCraft\MdView\RenderCommand;
@@ -388,6 +389,75 @@ final class GlamourDecorationGateTest extends TestCase
         ], JSON_THROW_ON_ERROR));
 
         self::assertStringNotContainsString("\x1b[1m", $theme->bold->render('x'));
+    }
+
+    /**
+     * Every bold value the README's "Accepted edge changes" names as off, plus
+     * the values that keep their old reading. The off rows are the edge
+     * changes; the on rows guard against a flagOn that turns everything off.
+     *
+     * @return iterable<string, array{mixed, bool}> value => [raw JSON value, bold on?]
+     */
+    public static function boldFlagValues(): iterable
+    {
+        yield '"false"'             => ['false', false];
+        yield '"no"'                => ['no', false];
+        yield '"off"'               => ['off', false];
+        yield '"OFF" in capitals'   => ['OFF', false];
+        yield '"No" mixed case'     => ['No', false];
+        yield 'non-zero float 1.0'  => [1.0, false];
+        yield 'non-empty array'     => [['on'], false];
+        yield 'boolean false'       => [false, false];
+        yield 'integer 0'           => [0, false];
+        yield '"0"'                 => ['0', false];
+        yield 'empty string'        => ['', false];
+        yield 'boolean true'        => [true, true];
+        yield 'integer 1'           => [1, true];
+        yield '"yes"'               => ['yes', true];
+        yield '"on"'                => ['on', true];
+    }
+
+    #[DataProvider('boldFlagValues')]
+    public function testBoldFlagEdgeValuesFollowStyleGuide(mixed $value, bool $expectedOn): void
+    {
+        $theme = $this->themeFrom((string) json_encode([
+            'document' => [],
+            'strong'   => ['bold' => $value],
+        ], JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION));
+
+        $rendered = $theme->bold->render('x');
+        if ($expectedOn) {
+            self::assertStringContainsString("\x1b[1m", $rendered);
+        } else {
+            self::assertStringNotContainsString("\x1b[1m", $rendered);
+        }
+    }
+
+    /**
+     * The heading case flags share the reading: `"no"` and a non-empty array
+     * are off, so no uppercase is applied.
+     *
+     * @return iterable<string, array{mixed, string}> value => expected headingCase
+     */
+    public static function headingCaseFlagValues(): iterable
+    {
+        yield 'boolean true'       => [true, 'upper'];
+        yield '"yes"'              => ['yes', 'upper'];
+        yield '"no"'               => ['no', 'none'];
+        yield '"OFF" in capitals'  => ['OFF', 'none'];
+        yield 'non-zero float 1.0' => [1.0, 'none'];
+        yield 'non-empty array'    => [['on'], 'none'];
+    }
+
+    #[DataProvider('headingCaseFlagValues')]
+    public function testHeadingUppercaseEdgeValuesFollowStyleGuide(mixed $value, string $expectedCase): void
+    {
+        $theme = $this->themeFrom((string) json_encode([
+            'document' => [],
+            'h1'       => ['uppercase' => $value],
+        ], JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION));
+
+        self::assertSame($expectedCase, $theme->headingCase);
     }
 
     public function testThemeConfigFileWithGlamourSchemaReachesLivePath(): void
