@@ -123,7 +123,7 @@ Reel::ambient('art.mp4')->play();                 // silent open-time loop, auto
 | `sixel` | Sixel graphics protocol (DEC) | Sixel-capable |
 | `kitty` | Kitty graphics protocol (APC `\x1b_G`) | Kitty-compatible — `TERM=xterm-kitty` is only a hypothesis; the terminal must answer the APC `a=q` query on a tty (P1-13b), otherwise `kitty` is refused or skipped by `auto` |
 | `iterm2` | iTerm2 inline image (OSC 1337) | iTerm2 only — WezTerm is recognized as a TrueColor seat and never an OSC 1337 one, so explicit `iterm2` there takes the typed refusal |
-| `auto` | Selector, not a ninth mode: resolves the terminal from its environment at open and picks the best mode it can render — a lookup table, no protocol negotiation. There is no `Mode::Auto` case — `Mode::from('auto')` throws a `ValueError`; `Mode::AUTO_WIRE` carries the token and `Mode::wires()` the full accepted list | — |
+| `auto` | Selector, not a ninth mode: resolves the terminal from its environment at open and picks the best mode it can render — a lookup table, with one exception: a Kitty claim is confirmed by an APC `a=q` query on a tty, the only tty I/O in the selector (see the note below the table). There is no `Mode::Auto` case — `Mode::from('auto')` throws a `ValueError`; `Mode::AUTO_WIRE` carries the token and `Mode::wires()` the full accepted list | — |
 
 Styling convention, stated once: a backticked lowercase token (`halfblock`)
 is a selectable MODE — the CLI and wire vocabulary; capitalized names (Sixel,
@@ -155,7 +155,17 @@ when `TERM` equals `xterm-kitty`, and drops that claim unless sugar-image's
 `Detect::probe()` gets the Kitty APC `a=q` reply on a tty (P1-13b). The same
 contract applies to `supports()`, `support()`, `auto()` and the explicit door,
 so a TERM-only Kitty seat that never answers is not handed APC frames. With no
-tty the claim is dropped and `auto` falls back to the palette ladder. The
+tty the claim is dropped and `auto` falls back to the palette ladder.
+
+The confirming probe runs once per process, at the first `diagnose()` call on a
+Kitty seat (the first `auto`, `supports()` or `support()`, which in a player is
+the first video open or the first `m` keypress). It is a full sugar-image
+`Detect::probe()`, so that call does tty I/O, can wait up to the 300 ms APC
+window plus the DA1 window, and runs inside the caller's update loop. Keys typed
+during that wait are held in sugar-image's stray-input store, which only the
+candy-code launcher drains, before its TUI starts; a mid-session probe does not
+replay them. Probing at boot, before the TUI starts, avoids that loss; this
+library does not do it, and the cost is accepted as documented here. The
 sixel and iTerm2 rungs still use sugar-colorprofile's table as before.
 
 ### Luminance ramp selection

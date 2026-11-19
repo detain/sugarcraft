@@ -37,12 +37,15 @@ final class RendererFactory
      * WHY a memo: Mosaic::diagnose() does NOT negotiate with the terminal —
      * it delegates to sugar-colorprofile's TerminalProbe, a TERM_PROGRAM
      * lookup table over the environment and terminfo that (despite the
-     * historical name) issues no raw OSC query round-trips. A terminal's
+     * historical name) issues no raw OSC query round-trips. The one exception
+     * is a Kitty claim: kittyConfirmed() then runs sugar-image's Detect::probe(),
+     * which does tty I/O (see the P1-13b note on diagnose()). A terminal's
      * capabilities are fixed for the session, and the capability door below
      * runs on every renderer acquisition — which includes every `m`
      * keypress — so probing once per process keeps the auto() ladder, the
      * mode cycle list and the door permanently agreeing on what the seat
-     * can receive.
+     * can receive, and the Kitty probe runs once rather than on every
+     * acquisition.
      */
     private static ?ProbeReport $reportMemo = null;
 
@@ -67,6 +70,9 @@ final class RendererFactory
      * that, TERM=xterm-kitty on a terminal that never answers would still
      * select Mode::Kitty and paint APC frames into it. Only a Kitty claim
      * costs the confirming probe; every other seat keeps the report as-is.
+     * That probe runs on the first call, which can be mid-session inside a
+     * player's update loop, and keys typed in its window are not replayed; the
+     * README's Auto mode note records the accepted cost.
      */
     public static function diagnose(): ProbeReport
     {

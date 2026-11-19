@@ -689,7 +689,7 @@ ladder decides as it does for any other terminal.
 **Kitty over a slow link.** The window covers a round trip of about 300 ms, so
 a remote Kitty terminal (ssh, a Kitty pane across a satellite link) answers in
 time. A reply that arrives after the window is dropped: the claim falls to
-halfblock or sixel, and the late bytes are consumed by the input parser, not
+symbols or sixel, and the late bytes are consumed by the input parser, not
 shown. A local terminal returns as soon as the DA1 answer lands, so the window
 costs nothing there; only a silent window waits the full 300 ms.
 
@@ -697,7 +697,7 @@ costs nothing there; only a silent window waits the full 300 ms.
 frames. Before it, a Kitty environment claim selected Kitty with no tty at all,
 so `candy-image --format auto photo.png > frame.txt` inside Kitty wrote Kitty
 APC bytes. Now the query needs a tty on stdin and stdout, so that run writes
-halfblock text, and a later `cat` of the file in Kitty shows text, not the
+symbols text, and a later `cat` of the file in Kitty shows text, not the
 image. To get the Kitty bytes into a file, force the protocol with
 `--format=kitty`, which skips the confirmation. `Mosaic::auto()` keeps that answer: its palette fallback
 grants iTerm2 from the environment, never Kitty, since a Kitty graphics claim
@@ -765,7 +765,7 @@ users. Before it, a Kitty environment claim inside tmux (`TMUX` set with
 Kitty on its own. Now `Capability::kitty()` is true only when the APC `a=q`
 reply arrives, and that reply has to cross tmux to reach the program. With
 `allow-passthrough` off, tmux is expected to swallow the reply, so the claim is
-dropped and the ladder falls to halfblock or sixel. The probe runs before
+dropped and the ladder falls to symbols or sixel. The probe runs before
 `TmuxPassthrough::ensure()` flips the option (that happens when the renderer
 is built), so the automatic flip cannot rescue the first probe. Setting
 `allow-passthrough` to `on` (`set -g allow-passthrough on`) is the tmux setting
@@ -773,7 +773,7 @@ that governs passthrough and is worth trying first, but this library has not
 measured whether tmux forwards a raw, unwrapped APC query to the outer terminal
 or relays its reply. Until that is verified, treat Kitty inside tmux as
 unconfirmed: if no reply arrives, the claim is dropped as described above, and
-halfblock or sixel is the expected result. The query is written raw: there is
+symbols or sixel is the expected result. The query is written raw: there is
 no tmux exception to the reply rule and no DCS passthrough wrap around the
 query.
 

@@ -154,7 +154,7 @@ are the only apps that carry it, to verify their own self-updates.
 
 `--format=auto` confirms Kitty with an APC query, so it needs a tty on stdin and
 stdout. Redirected output (`candy-image --format=auto photo.png > frame.txt`)
-gets halfblock text, not Kitty bytes, even inside a Kitty terminal. Use
+gets symbols text, not Kitty bytes, even inside a Kitty terminal. Use
 `--format=kitty` to write the Kitty bytes without a probe. See sugar-image's
 README (Kitty is confirmed, not assumed) for the 300 ms reply window and the
 remote-session cost.
