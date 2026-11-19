@@ -451,4 +451,36 @@ final class LFSHandlerAsyncTest extends TestCase
         $this->assertInstanceOf(\SugarCraft\Async\OperationCancelledException::class, $error);
         $this->assertSame([], $backend->calls, 'a cancelled batch must not start any object');
     }
+
+    /**
+     * A concurrency limit of 0 is clamped to 1 by handleBatchAsync(), so the
+     * batch still resolves in full rather than the pool throwing synchronously
+     * on a zero-permit Semaphore. Pins the clamp at the LFS level: removing it
+     * makes this test fail with an InvalidArgumentException.
+     */
+    public function testZeroConcurrentTransfersIsClampedAndStillResolvesTheBatch(): void
+    {
+        $repo = $this->createRepo();
+        $lfsDir = $this->tmpDir . '/lfs';
+        $backend = new LocalStorageBackend($lfsDir);
+        $stream = \fopen('data://text/plain;base64,' . \base64_encode('Content'), 'r');
+        $backend->write(\str_repeat('a', 64), $stream);
+        \fclose($stream);
+
+        $handler = (new LFSHandler($repo, User::new('alice'), $lfsDir, $backend, 4, publicBaseUrl: ''))
+            ->withConcurrentTransfers(0);
+        $request = [
+            'operation' => 'download',
+            'objects' => [
+                ['oid' => \str_repeat('a', 64), 'size' => 7],
+                ['oid' => \str_repeat('b', 64), 'size' => 7],
+            ],
+        ];
+
+        $async = $this->awaitBatch($handler, $request);
+
+        $this->assertSame(0, $handler->concurrentTransfers());
+        $this->assertSame($handler->handleBatch($request), $async);
+        $this->assertCount(2, $async['objects']);
+    }
 }
