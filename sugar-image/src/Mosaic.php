@@ -116,7 +116,9 @@ final class Mosaic implements IncrementalRenderer
      * timeouts, no palette probe, and no tmux `allow-passthrough` toggle (that
      * toggle is a tmux process, which this pure entry point must not spawn).
      * Inside tmux the passthrough envelope is still applied, so the bytes
-     * match what the probed path would emit for the same terminal.
+     * match what the probed path would emit for the same terminal. A Kitty
+     * env claim is not enough here: {@see Detect::fromEnv()} reports it
+     * unconfirmed, so this never picks the Kitty renderer from TERM alone.
      *
      * @param array<string,string>|null $env  null reads the process environment
      */

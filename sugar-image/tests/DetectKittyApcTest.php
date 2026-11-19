@@ -70,6 +70,9 @@ final class DetectKittyApcTest extends TestCase
     /** Inject a stdin that already holds $reply, as a terminal would have answered. */
     private function answerWith(string $reply): void
     {
+        if (is_resource($this->input)) {
+            fclose($this->input);
+        }
         $this->input = fopen('php://temp', 'r+b');
         fwrite($this->input, $reply);
         rewind($this->input);
@@ -191,6 +194,21 @@ final class DetectKittyApcTest extends TestCase
 
         $this->assertFalse($cap->kitty);
         $this->assertSame(1, substr_count($this->queriesWritten(), "\x1b[c"), 'a silent window is not asked for DA1 a second time');
+    }
+
+    public function testASilentWindowDoesNotInheritAnEarlierDa1Reply(): void
+    {
+        // Probe #1 hears a DA1 answer; probe #2 in the same process (no reset)
+        // hears nothing. The silent window must clear the earlier answer, as
+        // probeDa1() does, rather than leave it readable as this probe's reply.
+        $this->answerWith(self::DA1_ANSWER);
+        Detect::probe();
+        $this->assertSame(self::DA1_ANSWER, Detect::lastDa1Reply());
+
+        $this->answerWith('');
+        Detect::probe();
+
+        $this->assertSame('', Detect::lastDa1Reply(), 'a silent window reports no DA1 answer, not the previous probe\'s');
     }
 
     public function testWithoutATtyTheClaimCannotBeConfirmedAndIsDropped(): void

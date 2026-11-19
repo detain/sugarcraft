@@ -283,9 +283,12 @@ final class Detect
      * `TMUX` key, even an empty one, marks the session as inside tmux, as
      * {@see probe()} does with getenv().
      *
-     * The answer is the env stage of {@see probe()} and nothing more: a DA1
-     * sixel promotion, a tmux feature veto and the OSC colour queries all
-     * need the tty, so they are absent here by design.
+     * The answer is the env stage of {@see probe()} with one deliberate
+     * difference: a Kitty env claim comes back UNCONFIRMED (kitty false),
+     * because the APC `a=q` reply that confirms it needs the tty. probe()'s
+     * env stage still reports the claim and drops it only when no reply
+     * comes back. A DA1 sixel promotion, a tmux feature veto and the OSC
+     * colour queries all need the tty, so they are absent here by design.
      *
      * @param array<string,string>|null $env
      */
@@ -998,9 +1001,9 @@ final class Detect
         $reply  = self::readStdinTimed(self::TIMEOUT_MS, $fd, self::KITTY_APC_THEN_DA1);
         $window = $reply;
         $answered = preg_match(self::DA1_REPLY_TERMINATOR, $reply) === 1;
-        if ($answered) {
-            self::$lastDa1Reply = $reply;
-        }
+        // Overwritten on every asked window, as probeDa1() does: a silent or
+        // unanswered window must not leave an earlier probe's DA1 answer behind.
+        self::$lastDa1Reply = $answered ? $reply : '';
 
         if (preg_match(self::KITTY_APC_REPLY, $reply) === 1) {
             return true;
