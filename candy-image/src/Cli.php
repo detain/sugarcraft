@@ -144,7 +144,15 @@ final class Cli
         'symbols', 'symbol', 'sym',
     ];
 
-    /** chicle-style --scale spellings mapped onto the Scale enum. */
+    /**
+     * chicle-style --scale spellings mapped onto the Scale enum.
+     *
+     * Kept in candy-image. The plan is not silent and conflicts with itself:
+     * reviews/UPSTREAM-PLAN.md:449 says "scale names mapped in the lib", and
+     * :688 says "scale and viewport names from sugar-image (P1-13)". This
+     * map follows :449, because sugar-image exposes no name-to-Scale mapping.
+     * :688 is an open conflict for the owner to resolve.
+     */
     private const SCALES = [
         'fit'     => Scale::Fit,
         'shrink'  => Scale::ShrinkToFit,
@@ -260,6 +268,12 @@ final class Cli
                         // Validation only needs to know the spelling is known: probe:false
                         // keeps the terminal probe (and its tmux passthrough toggle) out of
                         // argv parsing, before the --passthrough choice is applied below.
+                        // User-visible consequence: under tmux with --passthrough=none, the
+                        // auto() probe now runs at render, after allow-passthrough is left
+                        // off. The Kitty APC query and wrapped sixel then reach tmux with
+                        // passthrough off, so tmux may drop them and the image can fall back
+                        // to symbols. Before this change, argv ran the probe first and turned
+                        // passthrough on.
                         if (!in_array(strtolower($raw), self::FORMATS, true) || Mosaic::fromModeString($raw, probe: false) === null) {
                             self::err($stderr, Lang::t('cli.bad_format', ['value' => $raw]));
 

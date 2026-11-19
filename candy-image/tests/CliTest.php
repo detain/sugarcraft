@@ -1056,8 +1056,10 @@ final class CliTest extends TestCase
 
         Mosaic::resetAutoMemo();
         try {
-            self::drive(['--format=auto', '--passthrough=none', '/nonexistent/candy-image-probe.png']);
+            [$exit, , $err] = self::drive(['--format=auto', '--passthrough=none', '/nonexistent/candy-image-probe.png']);
 
+            $this->assertSame(Cli::EXIT_INPUT, $exit, 'auto is a known spelling, so argv passes and the missing file stops the run: ' . $err);
+            $this->assertStringNotContainsString('unknown render format', $err, 'explicit --format=auto must be accepted');
             $this->assertNull($memo->getValue(), 'argv validation must not memoise the auto() probe');
         } finally {
             Mosaic::resetAutoMemo();
