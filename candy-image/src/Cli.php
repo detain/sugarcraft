@@ -556,14 +556,17 @@ final class Cli
         // Ghostty…) signal through their own variables (candy-image-025).
         // Absent-versus-empty is kept distinct — `(empty)` is itself a
         // finding (some wrappers blank TERM rather than unset it).
+        // One snapshot serves both the table and the chain match, so the
+        // printed evidence is exactly what the chain consumed (P1-13c-image).
+        $env = TermDb::snapshotEnv();
         $envParts = [];
         foreach (TermDb::ENV_KEYS as $envKey) {
-            $envValue = \getenv($envKey);
+            $envValue = $env[$envKey] ?? false;
             $envParts[] = $envKey . '=' . ($envValue === false ? '(unset)' : ($envValue === '' ? '(empty)' : $envValue));
         }
         $write('env: ' . implode('  ', $envParts));
 
-        $info = TermDb::matchChain(TermDb::snapshotEnv());
+        $info = TermDb::matchChain($env);
         $passthrough = [];
         foreach ($info->passthrough as $protocol => $needed) {
             $passthrough[] = $protocol . ($needed ? '=needs' : '=direct');
