@@ -47,18 +47,19 @@ final class PluginInstaller extends LibraryInstaller
     /**
      * Composer calls this for every installed sugar-plugin package, on
      * dump-autoload, show, validate and remove, not only on install. So a
-     * malformed section must not throw here: the tree already on disk answers
-     * instead. The section is enforced where a tree is written (download,
-     * install, update), so a bad scope still refuses before anything is staged.
+     * malformed section, or a home directory that is missing under user scope,
+     * must not throw here: the tree already on disk answers instead. The section
+     * is enforced where a tree is written (download, install, update), so a bad
+     * scope or a missing home still refuses before anything is staged.
      *
-     * @throws \RuntimeException when the home directory or project directory cannot be resolved under the valid section
+     * @throws \RuntimeException when no bundle root can be resolved at all
      */
     public function getInstallPath(PackageInterface $package)
     {
         try {
             return $this->configuredPath($package);
-        } catch (\InvalidArgumentException $malformed) {
-            return $this->fallbackPath($package, $malformed);
+        } catch (\InvalidArgumentException | \RuntimeException $unresolved) {
+            return $this->fallbackPath($package, $unresolved);
         }
     }
 
@@ -83,15 +84,15 @@ final class PluginInstaller extends LibraryInstaller
      * tier, then the user tier. Every candidate that cannot be resolved is
      * skipped; nothing is written from here.
      *
-     * @throws \InvalidArgumentException the malformed-section error, when no candidate resolves at all
+     * @throws \InvalidArgumentException|\RuntimeException the error that stopped the configured path, when no candidate resolves at all
      */
-    private function fallbackPath(PackageInterface $package, \InvalidArgumentException $malformed): string
+    private function fallbackPath(PackageInterface $package, \Throwable $unresolved): string
     {
         $name = $package->getPrettyName();
         $roots = $this->bundleRoots();
 
         if ($roots === []) {
-            throw $malformed;
+            throw $unresolved;
         }
 
         $paths = array_map(static fn (string $root): string => StagingPath::forPackage($root, $name), $roots);
@@ -145,7 +146,7 @@ final class PluginInstaller extends LibraryInstaller
             foreach ($this->bundleRoots() as $root) {
                 $paths[] = StagingPath::forPackage($root, $package->getPrettyName());
             }
-        } catch (\InvalidArgumentException) {
+        } catch (\InvalidArgumentException | \RuntimeException) {
             return null;
         }
 
@@ -166,20 +167,41 @@ final class PluginInstaller extends LibraryInstaller
      */
     private function holdsPackage(string $path, PackageInterface $package): bool
     {
+        $name = $this->manifestName($path);
+
+        return $name !== null && strtolower($name) === strtolower($package->getName());
+    }
+
+    /**
+     * A tree that names some other package is never deleted by this package's
+     * remove, even when this package has no tree of its own. Such a tree sits at
+     * the configured path after another project staged the same directory name.
+     */
+    private function holdsAnotherPackage(string $path, PackageInterface $package): bool
+    {
+        $name = $this->manifestName($path);
+
+        return $name !== null && strtolower($name) !== strtolower($package->getName());
+    }
+
+    /**
+     * The `name` in the composer.json at $path, or null when the directory has
+     * no readable manifest that names a package.
+     */
+    private function manifestName(string $path): ?string
+    {
         $manifest = $path . '/composer.json';
         if (!is_file($manifest)) {
-            return false;
+            return null;
         }
 
         try {
             $decoded = json_decode((string) file_get_contents($manifest), true, 512, JSON_THROW_ON_ERROR);
         } catch (\JsonException) {
-            return false;
+            return null;
         }
 
-        return is_array($decoded)
-            && is_string($decoded['name'] ?? null)
-            && strtolower($decoded['name']) === strtolower($package->getName());
+        return is_array($decoded) && is_string($decoded['name'] ?? null) ? $decoded['name'] : null;
     }
 
     /**
@@ -269,6 +291,22 @@ final class PluginInstaller extends LibraryInstaller
     protected function getPackageBasePath(PackageInterface $package)
     {
         return $this->existingPath($package) ?? $this->getInstallPath($package);
+    }
+
+    /**
+     * The downloader deletes whatever sits at the path it is handed. When no tree
+     * names this package, getPackageBasePath falls back to the configured path,
+     * and that path can hold another package's tree after a scope or root change
+     * or a malformed section. Such a tree is left alone: nothing of this package
+     * is on disk, so there is nothing to remove.
+     */
+    protected function removeCode(PackageInterface $package)
+    {
+        if ($this->holdsAnotherPackage($this->getPackageBasePath($package), $package)) {
+            return null;
+        }
+
+        return parent::removeCode($package);
     }
 
     /**

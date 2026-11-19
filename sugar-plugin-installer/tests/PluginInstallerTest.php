@@ -15,6 +15,7 @@ use Composer\Repository\RepositoryManager;
 use Composer\Util\HttpDownloader;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\PluginInstaller\PluginInstaller;
+use SugarCraft\PluginInstaller\Tests\Support\RecordingDownloader;
 use SugarCraft\PluginInstaller\Tests\Support\Scratch;
 
 final class PluginInstallerTest extends TestCase
@@ -63,13 +64,18 @@ final class PluginInstallerTest extends TestCase
     /**
      * @param array<string, mixed>|null $extra the root package's `extra` map
      * @param list<Package> $installed the packages the project already has installed
+     * @param RecordingDownloader|null $downloader registered for the `file` dist type, so removal records its paths
      */
-    private function installerFor(?array $extra, array $installed = []): PluginInstaller
+    private function installerFor(?array $extra, array $installed = [], ?RecordingDownloader $downloader = null): PluginInstaller
     {
         $composer = new Composer();
         $config = new Config(false, $this->project);
         $composer->setConfig($config);
-        $composer->setDownloadManager(new DownloadManager(new NullIO()));
+        $downloads = new DownloadManager(new NullIO());
+        if ($downloader !== null) {
+            $downloads->setDownloader('file', $downloader);
+        }
+        $composer->setDownloadManager($downloads);
 
         $manager = new RepositoryManager(new NullIO(), $config, new HttpDownloader(new NullIO(), $config));
         $manager->setLocalRepository(new InstalledArrayRepository($installed));
@@ -88,6 +94,25 @@ final class PluginInstallerTest extends TestCase
         $package->setType('sugar-plugin');
 
         return $package;
+    }
+
+    /**
+     * A sample package with a dist source, so Composer routes its removal to the
+     * `file` downloader registered by installerFor().
+     */
+    private static function removablePackage(string $name = 'acme/sample-plugin'): Package
+    {
+        $package = self::samplePackage($name);
+        $package->setInstallationSource('dist');
+        $package->setDistType('file');
+
+        return $package;
+    }
+
+    /** A staged tree whose composer.json names $packageName, as a download writes it. */
+    private function stageTree(string $dir, string $packageName): void
+    {
+        Scratch::write($dir . '/composer.json', (string) json_encode(['name' => $packageName]));
     }
 
     public function testSupportsOnlyTheSugarPluginType(): void
@@ -128,7 +153,7 @@ final class PluginInstallerTest extends TestCase
         $this->assertSame($this->project . '/.candy-code/bundles/sample-plugin', $path);
     }
 
-    public function testUserScopeWithoutHomeIsRefused(): void
+    public function testUserScopeWithoutHomeIsRefusedForInstall(): void
     {
         putenv('HOME');
         putenv('USERPROFILE');
@@ -136,7 +161,59 @@ final class PluginInstallerTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('cannot resolve the user home directory');
 
-        $this->installerFor(null)->getInstallPath(self::samplePackage());
+        $this->installerFor(null)->install(new InstalledArrayRepository(), self::samplePackage());
+    }
+
+    public function testUserScopeWithoutHomeReadsTheProjectTreeAndRemovesIt(): void
+    {
+        // Composer reads the install path on dump-autoload and remove, where a
+        // missing HOME must not abort the command. A project-tier tree from an
+        // earlier project-scope install is the answer, and remove deletes it.
+        putenv('HOME');
+        putenv('USERPROFILE');
+        $staged = $this->project . '/.candy-code/bundles/sample-plugin';
+        $this->stageTree($staged, 'sugarcraft/sample-plugin');
+        $downloader = new RecordingDownloader();
+        $installer = $this->installerFor(null, [], $downloader);
+        $package = self::removablePackage('sugarcraft/sample-plugin');
+
+        $this->assertSame($staged, $installer->getInstallPath($package));
+
+        $installer->uninstall(new InstalledArrayRepository([$package]), $package);
+
+        $this->assertSame([$staged], $downloader->removed);
+    }
+
+    public function testRemoveLeavesAForeignTreeAtTheConfiguredPath(): void
+    {
+        // acme/sample-plugin has no tree of its own. The configured directory holds
+        // sugarcraft/sample-plugin, staged by another package under the same name.
+        // Remove must not hand that directory to the downloader.
+        $foreign = $this->home . '/.candy-code/bundles/sample-plugin';
+        $this->stageTree($foreign, 'sugarcraft/sample-plugin');
+        $downloader = new RecordingDownloader();
+        $installer = $this->installerFor(null, [], $downloader);
+        $package = self::removablePackage('acme/sample-plugin');
+
+        $installer->uninstall(new InstalledArrayRepository([$package]), $package);
+
+        $this->assertSame([], $downloader->removed);
+        $this->assertFileExists($foreign . '/composer.json');
+    }
+
+    public function testRemoveStillReachesThisPackagesOwnTreeAtTheConfiguredPath(): void
+    {
+        // The control for the foreign-tree case: a tree that names this package is
+        // still removed, so the guard does not block ordinary removal.
+        $own = $this->home . '/.candy-code/bundles/sample-plugin';
+        $this->stageTree($own, 'acme/sample-plugin');
+        $downloader = new RecordingDownloader();
+        $installer = $this->installerFor(null, [], $downloader);
+        $package = self::removablePackage('acme/sample-plugin');
+
+        $installer->uninstall(new InstalledArrayRepository([$package]), $package);
+
+        $this->assertSame([$own], $downloader->removed);
     }
 
     public function testComposerFileDecidesTheProjectDirectory(): void
