@@ -214,23 +214,79 @@ final class PluginInstallerTest extends TestCase
         $this->assertSame($this->home . '/.candy-code/bundles/sample-plugin', $base);
     }
 
-    public function testBadScopeIsRefusedWhenAPluginIsInstalled(): void
+    public function testBadScopeRefusesDownloadBeforeAnythingIsStaged(): void
+    {
+        $installer = $this->installerFor(['sugar-plugin-installer' => ['scope' => 'global']]);
+
+        try {
+            $installer->download(self::samplePackage());
+            $this->fail('a bad scope must refuse the download');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('must be "user" or "project"', $e->getMessage());
+        }
+
+        $this->assertDirectoryDoesNotExist($this->home . '/.candy-code/bundles/sample-plugin');
+    }
+
+    public function testBadScopeRefusesInstall(): void
     {
         $installer = $this->installerFor(['sugar-plugin-installer' => ['scope' => 'global']]);
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('must be "user" or "project"');
 
-        $installer->getInstallPath(self::samplePackage());
+        $installer->install(new InstalledArrayRepository(), self::samplePackage());
     }
 
-    public function testBadScopeDoesNotStopConstruction(): void
+    public function testBadScopeRefusesUpdate(): void
     {
-        // Only a sugar-plugin install reads the section, so a malformed one must
-        // not break the installer for every other Composer command.
+        $initial = self::samplePackage();
+        $target = new Package('sugarcraft/sample-plugin', '1.0.1.0', '1.0.1');
+        $target->setType('sugar-plugin');
         $installer = $this->installerFor(['sugar-plugin-installer' => ['scope' => 'global']]);
 
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('must be "user" or "project"');
+
+        $installer->update(new InstalledArrayRepository([$initial]), $initial, $target);
+    }
+
+    public function testBadScopeDoesNotStopTheReadPaths(): void
+    {
+        // Composer asks for the install path of every installed sugar-plugin on
+        // dump-autoload, show, validate and remove. A malformed section must not
+        // stop those, and the tree already staged is the answer.
+        $installer = $this->installerFor(['sugar-plugin-installer' => ['scope' => 'global']]);
+        $staged = $this->home . '/.candy-code/bundles/sample-plugin';
+        Scratch::write($staged . '/composer.json', '{}');
+
         $this->assertTrue($installer->supports('sugar-plugin'));
+        $this->assertSame($staged, $installer->getInstallPath(self::samplePackage()));
+    }
+
+    public function testBadScopeReadsTheProjectTreeWhenThatIsWhereItIs(): void
+    {
+        $installer = $this->installerFor(['sugar-plugin-installer' => ['scope' => 'global']]);
+        $staged = $this->project . '/.candy-code/bundles/sample-plugin';
+        Scratch::write($staged . '/composer.json', '{}');
+
+        $this->assertSame($staged, $installer->getInstallPath(self::samplePackage()));
+    }
+
+    public function testBadScopeReadsTheRootOverrideTreeWhenThatIsWhereItIs(): void
+    {
+        // The raw `root` is still honoured on the read paths, so a removal after a
+        // typo in the scope deletes the tree the root named rather than orphaning it.
+        $shared = Scratch::dir('shared');
+        try {
+            $installer = $this->installerFor(['sugar-plugin-installer' => ['scope' => 'global', 'root' => $shared]]);
+            $staged = $shared . '/.candy-code/bundles/sample-plugin';
+            Scratch::write($staged . '/composer.json', '{}');
+
+            $this->assertSame($staged, $installer->getInstallPath(self::samplePackage()));
+        } finally {
+            Scratch::remove($shared);
+        }
     }
 
     public function testInstallerSourceNeverReferencesTheTrustOrChannelStores(): void

@@ -62,9 +62,15 @@ Refused with an exception, before anything is written:
 - a home directory that is not an absolute `HOME` or `USERPROFILE`, under `user` scope.
   Project scope never reads the home directory.
 
-The section is read when a `sugar-plugin` package is installed, not when Composer
-starts. A malformed section therefore breaks only the install of a plugin, not
-every other Composer command.
+The section is enforced when a `sugar-plugin` package is downloaded, installed or
+updated, not when Composer starts. A malformed section therefore refuses only the
+install or update of a plugin. It does not break other Composer commands.
+
+Composer also asks where an installed plugin lives on `dump-autoload`, `show`,
+`validate` and `remove`. Those commands do not need a valid section. They use the
+staged tree that exists: the `root` tree when the section names one, then the
+project tier, then the user tier. `composer remove` therefore still deletes a
+plugin staged under a section that has since been broken.
 
 ## What the installer does, and does not do
 

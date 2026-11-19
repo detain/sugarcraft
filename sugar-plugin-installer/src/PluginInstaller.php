@@ -29,13 +29,28 @@ final class PluginInstaller extends LibraryInstaller
     }
 
     /**
-     * Read per call, not at activation: a malformed root `extra` should fail
-     * the install of a sugar-plugin package, not every Composer command.
+     * Composer calls this for every installed sugar-plugin package, on
+     * dump-autoload, show, validate and remove, not only on install. So a
+     * malformed section must not throw here: the tree already on disk answers
+     * instead. The section is enforced where a tree is written (download,
+     * install, update), so a bad scope still refuses before anything is staged.
      *
+     * @throws \RuntimeException when the home directory or project directory cannot be resolved under the valid section
+     */
+    public function getInstallPath(PackageInterface $package)
+    {
+        try {
+            return $this->configuredPath($package);
+        } catch (\InvalidArgumentException $malformed) {
+            return $this->fallbackPath($package, $malformed);
+        }
+    }
+
+    /**
      * @throws \InvalidArgumentException when the root's installer section is malformed
      * @throws \RuntimeException when the home directory or project directory cannot be resolved
      */
-    public function getInstallPath(PackageInterface $package)
+    private function configuredPath(PackageInterface $package): string
     {
         $config = InstallerConfig::fromExtra($this->composer->getPackage()->getExtra());
 
@@ -47,6 +62,87 @@ final class PluginInstaller extends LibraryInstaller
     }
 
     /**
+     * With the section unreadable, the scope is unknown, so the answer is the
+     * staged tree that exists: the configured-looking root, then the project
+     * tier, then the user tier. Every candidate that cannot be resolved is
+     * skipped; nothing is written from here.
+     *
+     * @throws \InvalidArgumentException the malformed-section error, when no candidate resolves at all
+     */
+    private function fallbackPath(PackageInterface $package, \InvalidArgumentException $malformed): string
+    {
+        $name = $package->getPrettyName();
+        $roots = [];
+
+        try {
+            $projectDir = $this->projectDir();
+            $root = $this->rawSection()['root'] ?? null;
+            if (is_string($root) && $root !== '') {
+                $roots[] = StagingPath::projectBundleRootAt($projectDir, $root);
+            }
+            $roots[] = StagingPath::projectBundleRootAt($projectDir, null);
+        } catch (\RuntimeException) {
+        }
+
+        try {
+            $roots[] = StagingPath::userBundleRoot(StagingPath::userHome());
+        } catch (\RuntimeException) {
+        }
+
+        if ($roots === []) {
+            throw $malformed;
+        }
+
+        $paths = array_map(static fn (string $root): string => StagingPath::forPackage($root, $name), $roots);
+        foreach ($paths as $path) {
+            if (is_dir($path)) {
+                return $path;
+            }
+        }
+
+        return $paths[0];
+    }
+
+    /**
+     * The raw `extra.sugar-plugin-installer` map, or an empty one. Used only
+     * when InstallerConfig refuses the section and the `root` must still be
+     * looked at for the read-only paths.
+     *
+     * @return array<array-key, mixed>
+     */
+    private function rawSection(): array
+    {
+        $extra = $this->composer->getPackage()->getExtra();
+        $section = is_array($extra) ? ($extra[InstallerConfig::KEY] ?? null) : null;
+
+        return is_array($section) ? $section : [];
+    }
+
+    /**
+     * Composer downloads a package before it installs or updates it, so the
+     * section is enforced here as well as in install(): a refused section must
+     * stop the download, not leave a staged tree behind.
+     *
+     * @throws \InvalidArgumentException when the root's installer section is malformed
+     */
+    public function download(PackageInterface $package, ?PackageInterface $prevPackage = null)
+    {
+        $this->configuredPath($package);
+
+        return parent::download($package, $prevPackage);
+    }
+
+    /**
+     * @throws \InvalidArgumentException when the root's installer section is malformed
+     */
+    public function update(InstalledRepositoryInterface $repo, PackageInterface $initial, PackageInterface $target)
+    {
+        $this->configuredPath($target);
+
+        return parent::update($repo, $initial, $target);
+    }
+
+    /**
      * Refuses an install whose staging directory belongs to another installed
      * sugar-plugin package. The directory is named after the part of the name
      * past the vendor slash, so `acme/candy-x` and `sugarcraft/candy-x` share one;
@@ -55,11 +151,12 @@ final class PluginInstaller extends LibraryInstaller
      * This sees packages installed in this project, not trees another project
      * staged under user scope.
      *
+     * @throws \InvalidArgumentException when the root's installer section is malformed
      * @throws \RuntimeException when another installed package stages to the same directory
      */
     public function install(InstalledRepositoryInterface $repo, PackageInterface $package)
     {
-        $path = $this->getInstallPath($package);
+        $path = $this->configuredPath($package);
         $bundleRoot = dirname($path);
 
         foreach ($this->composer->getRepositoryManager()->getLocalRepository()->getPackages() as $installed) {

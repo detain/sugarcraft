@@ -48,7 +48,16 @@ final class StagingPath
      */
     public static function projectBundleRoot(InstallerConfig $config, string $projectDir): string
     {
-        $base = $config->root === null ? $projectDir : self::resolve($config->root, $projectDir);
+        return self::projectBundleRootAt($projectDir, $config->root);
+    }
+
+    /**
+     * The project-tier tree for a raw `root` value. Used directly when the
+     * section is malformed and no InstallerConfig exists to ask.
+     */
+    public static function projectBundleRootAt(string $projectDir, ?string $root): string
+    {
+        $base = $root === null ? $projectDir : self::resolve($root, $projectDir);
 
         return self::join($base, self::BUNDLES_RELATIVE);
     }

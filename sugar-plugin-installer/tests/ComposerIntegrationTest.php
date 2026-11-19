@@ -98,13 +98,18 @@ final class ComposerIntegrationTest extends TestCase
      */
     private function composer(string $args): array
     {
+        // --no-progress and --no-audit exist only on the install-family commands;
+        // dump-autoload rejects them, so they are added per verb.
+        $verb = (string) strtok($args, ' ');
+        $installFlags = in_array($verb, ['require', 'remove', 'install', 'update'], true) ? ' --no-progress --no-audit' : '';
         $command = sprintf(
             'env HOME=%s COMPOSER_HOME=%s COMPOSER_CACHE_DIR=%s COMPOSER_DISABLE_NETWORK=1 '
-            . 'composer --working-dir=%s --no-interaction --no-progress --no-ansi --no-audit %s < /dev/null 2>&1',
+            . 'composer --working-dir=%s --no-interaction --no-ansi%s %s < /dev/null 2>&1',
             escapeshellarg($this->home),
             escapeshellarg($this->base . '/composer-home'),
             escapeshellarg($this->base . '/cache'),
             escapeshellarg($this->project),
+            $installFlags,
             $args,
         );
         exec($command, $lines, $status);
@@ -244,5 +249,47 @@ final class ComposerIntegrationTest extends TestCase
         // Composer wraps long lines, so compare with all whitespace removed.
         $this->assertStringContainsString('scopemustbe"user"or"project"', (string) preg_replace('/\s+/', '', $out));
         $this->assertDirectoryDoesNotExist($this->home . '/.candy-code/bundles/sample-plugin');
+    }
+
+    /**
+     * Replaces only the project's `extra` section, keeping its requires and repositories.
+     *
+     * @param array<string, mixed> $extra
+     */
+    private function setProjectExtra(array $extra): void
+    {
+        $path = $this->project . '/composer.json';
+        $manifest = json_decode((string) file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
+        $manifest['extra'] = $extra;
+        Scratch::write($path, json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    }
+
+    /**
+     * A section broken after the install must not stop dump-autoload or remove:
+     * Composer reads the installed plugin's path on both, and remove has to delete
+     * the tree that is already staged, not orphan it.
+     */
+    public function testBadScopeAfterInstallStillAutoloadsAndRemovesThePlugin(): void
+    {
+        $this->writeProject(null);
+        [$status, $out] = $this->composer('require ' . escapeshellarg('sugarcraft/sugar-plugin-installer:*'));
+        $this->assertSame(0, $status, "installer require failed:\n$out");
+        [$status, $out] = $this->composer('require ' . escapeshellarg('sugarcraft/sample-plugin:*'));
+        $this->assertSame(0, $status, "sample require failed:\n$out");
+
+        $stage = $this->home . '/.candy-code/bundles/sample-plugin';
+        $this->assertFileExists($stage . '/composer.json');
+
+        $this->setProjectExtra(['sugar-plugin-installer' => ['scope' => 'global']]);
+
+        [$status, $out] = $this->composer('dump-autoload');
+        $this->assertSame(0, $status, "dump-autoload failed on a malformed section:\n$out");
+        $this->assertFileExists($stage . '/composer.json', 'dump-autoload moved or removed the staged tree');
+
+        [$status, $out] = $this->composer('remove ' . escapeshellarg('sugarcraft/sample-plugin'));
+        $this->assertSame(0, $status, "remove failed on a malformed section:\n$out");
+
+        clearstatcache();
+        $this->assertDirectoryDoesNotExist($stage, 'remove orphaned the staged tree after the section broke');
     }
 }
