@@ -76,6 +76,14 @@ use SugarCraft\Markdown\Html\UrlReference;
  *     verbatim, and a body that cannot be converted falls back to raw with
  *     a one-line note. The cap applies to whatever the model receives,
  *     converted or not.
+ *     The converted text is Markdown source, not display text, so the model
+ *     sees the escapes: brackets and backslashes from the page's prose come
+ *     back as `\[`, `\]` and `\\`, and a copied path or pattern carries them
+ *     too. The page's hidden text is absent from that Markdown as well: an
+ *     element with the `hidden` attribute or an inline `display:none`, and
+ *     the text of `template`, `noembed` and `noframes`, are dropped whole
+ *     as are the `script`, `style`, `nav`, `svg`, `iframe` and `noscript`
+ *     subtrees. Both behaviors are pinned by WebFetchMarkdownTest.
  *
  * The two closure seams exist so tests can simulate rebinding-shaped DNS
  * answers and dial a loopback fixture without a nameserver or a public IP;
