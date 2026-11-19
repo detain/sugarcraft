@@ -14,6 +14,7 @@ use SugarCraft\Code\Tools\BuiltIn\Glob;
 use SugarCraft\Code\Tools\BuiltIn\Grep;
 use SugarCraft\Code\Tools\BuiltIn\Read;
 use SugarCraft\Code\Tools\BuiltIn\WebFetch;
+use SugarCraft\Markdown\Html\UrlReference;
 
 /**
  * Security regression tests for tools.
@@ -832,9 +833,7 @@ final class ToolSecurityTest extends TestCase
     #[\PHPUnit\Framework\Attributes\DataProvider('rfc3986ReferenceExamples')]
     public function testWebFetchResolvesLocationReferencesPerRfc3986(string $reference, string $expected): void
     {
-        $resolve = new \ReflectionMethod(WebFetch::class, 'resolveReference');
-
-        $this->assertSame($expected, $resolve->invoke(null, 'http://a/b/c/d;p?q', $reference));
+        $this->assertSame($expected, UrlReference::resolve('http://a/b/c/d;p?q', $reference));
     }
 
     // ------------------------------------------------------------------

@@ -12,6 +12,7 @@ use SugarCraft\Code\Support\Frontmatter;
 use SugarCraft\Code\Support\FrontmatterKeyAudit;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Tui\Components\PaneLabel;
+use SugarCraft\Markdown\Frontmatter as MarkdownFrontmatter;
 
 /**
  * Metadata for one command, used by BOTH command surfaces - the "/" popup
@@ -38,8 +39,6 @@ use SugarCraft\Code\Tui\Components\PaneLabel;
  */
 final class CommandSpec
 {
-    private const FRONTMATTER_PATTERN = '/^---\s*\n(.*?)\n---\s*\n/s';
-
     /**
      * A command name is typed after "/" and used as an array key, so it is
      * restricted to path-safe characters. "/" itself is allowed as the
@@ -376,13 +375,14 @@ final class CommandSpec
             throw new \RuntimeException(Lang::t('cmd.file.unreadable', ['path' => $path]));
         }
 
-        if (preg_match(self::FRONTMATTER_PATTERN, $content, $matches) === 1) {
+        $split = MarkdownFrontmatter::split($content);
+        if ($split !== null) {
             try {
-                $meta = Frontmatter::parse($matches[1]);
+                $meta = Frontmatter::parse($split->meta);
             } catch (ParseException $e) {
                 throw new \InvalidArgumentException(Lang::t('cmd.file.malformed', ['path' => $path, 'error' => $e->getMessage()]), 0, $e);
             }
-            $body = substr($content, strlen($matches[0]));
+            $body = $split->body;
         } else {
             $meta = [];
             $body = $content;

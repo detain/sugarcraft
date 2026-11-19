@@ -10,7 +10,7 @@ use DOMDocument;
 use DOMElement;
 use DOMNode;
 use DOMText;
-use SugarCraft\Code\Tools\BuiltIn\WebFetch;
+use SugarCraft\Markdown\Html\UrlReference;
 
 /**
  * Converts an HTML string into Markdown for WebFetch's default format
@@ -29,7 +29,7 @@ use SugarCraft\Code\Tools\BuiltIn\WebFetch;
  *
  * Markup kept: headings 1-6, paragraphs, inline emphasis, links with
  * relative hrefs resolved against the final fetch URL through
- * {@see WebFetch::resolveReference()} — the tool's own RFC 3986 resolver,
+ * {@see UrlReference::resolve()} — the RFC 3986 resolver this package shares,
  * shared rather than copied, so its fragment drop applies here too and an
  * in-document anchor lands on the document URL — hard breaks as line breaks,
  * ordered and unordered lists nested by indentation, fenced code from `pre`
@@ -562,7 +562,7 @@ final class HtmlToMarkdown
             }
         }
 
-        return $baseUrl === '' ? $href : WebFetch::resolveReference($baseUrl, $href);
+        return $baseUrl === '' ? $href : UrlReference::resolve($baseUrl, $href);
     }
 
     private static function inlineCode(string $code): string

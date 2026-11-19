@@ -11,6 +11,7 @@ use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\Log;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Skills\SkillSource;
+use SugarCraft\Markdown\Frontmatter as MarkdownFrontmatter;
 
 /**
  * Discovers agent definitions written for OTHER coding CLIs -- Claude Code's
@@ -116,8 +117,6 @@ use SugarCraft\Code\Skills\SkillSource;
  */
 final class ForeignAgentPresetRegistry
 {
-    private const FRONTMATTER_PATTERN = '/^---\s*\n(.*?)\n---\s*\n/s';
-
     /**
      * opencode names its built-in tools in lowercase; candy-code's own tools
      * report StudlyCase names ({@see \SugarCraft\Code\Tools\BuiltIn\Bash::name()}).
@@ -557,16 +556,17 @@ final class ForeignAgentPresetRegistry
             throw new \RuntimeException("Could not read agent file: {$file}");
         }
 
-        if (!preg_match(self::FRONTMATTER_PATTERN, $content, $matches)) {
+        $split = MarkdownFrontmatter::split($content);
+        if ($split === null) {
             throw new \RuntimeException("No YAML frontmatter found in: {$file}");
         }
 
-        $data = Frontmatter::parse($matches[1]);
+        $data = Frontmatter::parse($split->meta);
         if (!is_array($data)) {
             throw new \RuntimeException("Invalid YAML frontmatter in: {$file}");
         }
 
-        return [$data, trim(substr($content, strlen($matches[0])))];
+        return [$data, trim($split->body)];
     }
 
     /**

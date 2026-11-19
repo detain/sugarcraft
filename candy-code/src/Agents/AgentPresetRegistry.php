@@ -8,6 +8,7 @@ use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Support\EnumSpelling;
 use SugarCraft\Code\Support\Frontmatter;
 use SugarCraft\Code\Support\FrontmatterKeyAudit;
+use SugarCraft\Markdown\Frontmatter as MarkdownFrontmatter;
 
 /**
  * Registry for loading and resolving agent presets from the filesystem.
@@ -584,20 +585,20 @@ final class AgentPresetRegistry
         }
 
         // Extract YAML frontmatter block
-        if (!preg_match('/^---\s*\n(.*?)\n---\s*\n/s', $content, $matches)) {
+        $split = MarkdownFrontmatter::split($content);
+        if ($split === null) {
             throw new \RuntimeException("No YAML frontmatter found in: {$filePath}");
         }
 
-        $data = Frontmatter::parse($matches[1]);
+        $data = Frontmatter::parse($split->meta);
         if (!is_array($data)) {
             throw new \RuntimeException("Invalid YAML frontmatter in: {$filePath}");
         }
         $this->lastFrontmatter = $data;
 
-        // Everything after the closing `---` is the preset's prompt. $matches[0]
-        // is the whole delimited block, so slicing by its length is what leaves
-        // the body and nothing else.
-        return $this->arrayToPreset($data, $filePath, trim(substr($content, strlen($matches[0]))));
+        // Everything after the closing `---` is the preset's prompt; the split
+        // carries it as the body, so nothing of the block is left in it.
+        return $this->arrayToPreset($data, $filePath, trim($split->body));
     }
 
     /**
