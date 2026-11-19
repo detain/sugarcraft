@@ -213,7 +213,7 @@ php candy-image.phar photo.png</code></pre>
 candy-image --format=half --size=80x24 logo.png
 candy-image --dump-detect                      # why is my image blank?
 candy-image --animate clip.gif                 # sugar-animation playback of an animated GIF</code></pre>
-    <p>Without a terminal the viewer falls back to a fixed 60×24 cell box, so a render into a file or a pipe is stable. <code>--format=auto</code> confirms Kitty with a query, so on a pipe it writes symbols text rather than Kitty bytes. Use <code>--format=kitty</code> to force the bytes.</p>
+    <p>Without a terminal the viewer reads <code>COLUMNS</code> and <code>LINES</code> when both are set, and otherwise falls back to a fixed 60×24 cell box. A render into a file or a pipe is stable only when those two variables are unset or the box is passed with <code>--size</code>. <code>--format=auto</code> confirms Kitty with a query, so on a pipe it writes symbols text rather than Kitty bytes. Use <code>--format=kitty</code> to force the bytes.</p>
     <p>The dump names the environment and the detection chain the viewer consulted. On a tmux session it looks like this (the values are from one real run and will differ on your machine):</p>
     <pre class="code"><code class="language-text">candy-image dev-master — terminal detection dump
 env: TERM=tmux-256color  TERM_PROGRAM=tmux  TERM_PROGRAM_VERSION=next-3.6  TMUX=/tmp/tmux-1000/default,1642894,1  ...
@@ -231,7 +231,7 @@ detect: summary=Sixel</code></pre>
     <p>Graphics protocols (<code>sixel</code>, <code>kitty</code>, <code>iterm2</code>) hand the terminal an encoded payload. Text tiers (<code>half</code>, <code>quarter</code>, <code>ascii</code>, <code>ansi16</code>, <code>ansi256</code>, <code>truecolor</code>, <code>symbols</code>) draw characters that any terminal can show, at any colour depth. <code>--format=auto</code> prefers a graphics protocol when the terminal confirms one, and falls back to the text tiers otherwise.</p>
 
     <h3 id="cell-boxes-not-pixel-boxes" style="margin-top: 24px;">Cell boxes, not pixel boxes</h3>
-    <p>Every size is in terminal cells. <code>--size=WxH</code> is a cells box, and the image aspect never chooses the box height. A box leg is capped at 100,000 cells and the whole box at 25,000,000 cells, so an oversized request is refused with exit 1 rather than left to run for minutes.</p>
+    <p>Every size is in terminal cells. <code>--size=WxH</code> is a cells box, and the image aspect never chooses the box height. A box leg is capped at 100,000 cells and the whole box must stay below 25,000,000 cells, so an oversized request is refused with exit 1 rather than left to run for minutes.</p>
 
     <h2 id="tasks" style="margin-top: 40px;">Tasks</h2>
 
@@ -245,7 +245,7 @@ detect: summary=Sixel</code></pre>
 candy-image --format=iterm2 --size=100x30 photo.png</code></pre>
 
     <h3 id="render-plain-text-for-a-log-or-a-ci-artifact" style="margin-top: 24px;">Render plain text for a log or a CI artifact</h3>
-    <p>With stdout redirected the viewer uses its fixed 60×24 box, unless you set one. Redirect to a file to keep a text frame for a diff or a test fixture.</p>
+    <p>With stdout redirected the viewer uses <code>COLUMNS</code> and <code>LINES</code> when both are set in the environment, and otherwise its fixed 60×24 box, unless you pass <code>--size</code>. Redirect to a file to keep a text frame for a diff or a test fixture.</p>
     <pre class="code"><code class="language-shell">candy-image --format=ascii --size=60x20 logo.png > frame.txt
 candy-image --format=symbols --symbols=ascii logo.png        # ASCII-art glyph tier</code></pre>
 
@@ -282,7 +282,7 @@ candy-image --format=symbols --symbols=ascii logo.png        # ASCII-art glyph t
     <tr><td><code>--symbols=CLASS</code></td><td>tag list</td><td>default corpus</td><td>Selects the symbol tier's glyphs by chafa tag classes, such as <code>all</code>, <code>block</code>, <code>braille</code> or <code>ascii</code>. Signs add or remove classes.</td></tr>
     <tr><td><code>--canvas=MODE</code></td><td>enum</td><td><code>truecolor</code></td><td>The colour canvas for the text tiers: <code>truecolor</code>, <code>ansi256</code>, <code>ansi16</code> or <code>fgbg</code>.</td></tr>
     <tr><td><code>--work=N</code></td><td>int 1 to 9</td><td>sugar-image default</td><td>Candidate-search effort. <code>1</code> is the cheapest, <code>9</code> the exhaustive path.</td></tr>
-    <tr><td><code>--size=WxH</code></td><td>cells</td><td>viewport</td><td>The render box. The default is the terminal viewport, or 60×24 when there is no terminal.</td></tr>
+    <tr><td><code>--size=WxH</code></td><td>cells</td><td>viewport</td><td>The render box. The default is the terminal viewport. Without a terminal it is <code>COLUMNS</code> and <code>LINES</code> when both are set, and otherwise 60×24.</td></tr>
     <tr><td><code>--width=N</code> / <code>--height=N</code></td><td>cells</td><td>viewport</td><td>One leg of the box each. They cannot be mixed with <code>--size</code>.</td></tr>
     <tr><td><code>--scale=S</code></td><td>enum</td><td><code>fit</code></td><td>The fit policy: <code>fit</code>, <code>shrink</code>, <code>fill</code>, <code>stretch</code>, <code>none</code> or <code>crop</code>.</td></tr>
     <tr><td><code>--animate</code></td><td>flag</td><td>off</td><td>Plays an animated GIF in the alternate screen. The render dials <code>--format</code>, <code>--scale</code>, <code>--symbols</code>, <code>--canvas</code> and <code>--work</code> are refused with it.</td></tr>
@@ -332,7 +332,7 @@ vendor/bin/phpunit</code></pre>
     <p>The viewer accepts PNG, JPEG and GIF only. Convert the file first, for example with <code>convert in.webp out.png</code>. BMP is refused for the same reason.</p>
 
     <h3 id="f-photo-png-exits-1-with-an-unexpected-argument-message" style="margin-top: 24px;">-f photo.png exits 1 with an "unexpected argument" message</h3>
-    <p>Apart from <code>-h</code>, every flag is long. Single-dash flags from chafa, such as <code>-f</code>, <code>-s</code> and <code>-w</code>, are not parsed, so the value after them becomes the file name. Use <code>--format</code>, <code>--size</code> and <code>--work</code> instead.</p>
+    <p>Apart from <code>-h</code>, every flag is long. Single-dash flags from chafa, such as <code>-f</code>, <code>-s</code> and <code>-w</code>, are not parsed, so the flag token itself is taken as the input path and the next token is reported as an unexpected argument. Use <code>--format</code>, <code>--size</code> and <code>--work</code> instead.</p>
 
     <h3 id="animate-exits-1-when-stdin-and-stdout-are-both-redirected" style="margin-top: 24px;">--animate exits 1 when stdin and stdout are both redirected</h3>
     <p>The player is interactive. With no terminal to steer it the loop would spin forever, so the viewer refuses the run. Attach a terminal, or drop <code>--animate</code> to render one frame.</p>
@@ -359,7 +359,7 @@ vendor/bin/phpunit</code></pre>
     <p><code>bin/candy-image</code> is a thin shim. It probes for an autoloader and prefers a phar bundle over a working-tree vendor. Then it calls <code>Cli::main()</code>, which owns every branch. Detection, protocol selection, decoding and scaling are sugar-image calls, and no render logic may land in this package. The namespace is <code>SugarCraft\CandyImage\</code> rather than the mechanical <code>SugarCraft\Image\</code>, because the latter already belongs to sugar-image, as <code>PROJECT_NAMES.md</code> requires.</p>
 
     <h3 id="known-limitations" style="margin-top: 24px;">Known limitations</h3>
-    <p>macOS has never joined the CI pool for this app, so treat it as supported but untested. Windows renders should work, and the interactive paths need <code>ext-ffi</code>. Without FFI the size falls back to <code>COLUMNS</code> and <code>LINES</code>, then to 60×24.</p>
+    <p>macOS has never joined the CI pool for this app, so treat it as supported but untested. Windows renders should work, and the interactive paths need <code>ext-ffi</code>. Without a terminal, or without FFI to read one, the size falls back to <code>COLUMNS</code> and <code>LINES</code>, then to 60×24.</p>
 
     <h2 id="changelog-and-versioning" style="margin-top: 40px;">Changelog and versioning</h2>
     <p>There is no tagged release yet. The versions the viewer reports are <code>dev-&lt;shortsha&gt;</code> stamps from the phar build, and <code>candy-image --version</code> prints the stamp of the commit the phar was built from. The rolling phar lives at <code>candy-image/latest</code> on the GitHub releases page, with its <code>.sha256</code>, <code>.commit</code> and <code>.pins.json</code> sidecars. Signing keys are not pinned, so check the digest and the commit, and treat the signatures as informational.</p>

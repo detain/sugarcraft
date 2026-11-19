@@ -258,7 +258,7 @@ echo Assets::version(), PHP_EOL; // bundle version stamped into dist/build-info.
     <p>The mic button on the composer dictates through one of two engines, and its title says which one is live. The server engine is used when the server advertises <code>transcribe</code>, and it sends the audio to the server's own voice endpoint. The browser engine hands audio to the browser vendor's speech service, and Firefox has no such engine. Both need a secure context, so on a plain-HTTP LAN address the mic button is absent.</p>
 
     <h2 id="api-reference" style="margin-top: 40px;">API reference</h2>
-    <p>The whole PHP surface is <code>SugarCraft\CodeWeb\Assets</code>, a <code>final</code> class with static methods and no instances. Every method reads from the package's <code>dist/</code> directory, and the first three throw when the bundle is broken. <code>diagnose()</code> never throws, which makes it the one to call from a health check.</p>
+    <p>The whole PHP surface is <code>SugarCraft\CodeWeb\Assets</code>, a <code>final</code> class with static methods and no instances. Every method reads from the package's <code>dist/</code> directory. <code>distPath()</code>, <code>manifest()</code> and <code>version()</code> throw when the bundle is broken, while <code>tryDistPath()</code> returns null instead of throwing. <code>diagnose()</code> never throws, which makes it the one to call from a health check.</p>
     <pre class="code"><code class="language-php">Assets::distPath();     // absolute, realpath()-resolved dist/ — throws RuntimeException
                         // when dist/index.html is missing (a broken install)
 Assets::tryDistPath();  // soft probe: null instead of throwing
