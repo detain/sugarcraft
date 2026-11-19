@@ -118,6 +118,45 @@ final class DetectKittyApcTest extends TestCase
         $this->assertFalse($cap->kitty, 'the claim needs a reply, not just the environment');
     }
 
+    public function testInsideTmuxAKittyEnvClaimWithoutAnOkReplyIsDropped(): void
+    {
+        // A Kitty env claim inside tmux gets no exception: the pane's env is not
+        // the outer terminal's answer, so only the APC reply confirms it.
+        putenv('TMUX=/tmp/tmux-1000/default,1,0');
+        Detect::setTmuxTermFeaturesOverride(null); // AUTO: no tmux process is spawned
+        $this->answerWith(self::DA1_ANSWER);
+
+        $cap = Detect::probe();
+
+        $this->assertFalse($cap->kitty, 'a tmux pane with a Kitty env claim and no APC reply is not Kitty');
+        $this->assertFalse($cap->iterm2);
+    }
+
+    public function testInsideTmuxAnOkReplyStillConfirmsTheKittyClaim(): void
+    {
+        putenv('TMUX=/tmp/tmux-1000/default,1,0');
+        Detect::setTmuxTermFeaturesOverride(null);
+        $this->answerWith(self::KITTY_OK . self::DA1_ANSWER);
+
+        $cap = Detect::probe();
+
+        $this->assertTrue($cap->kitty, 'the APC reply is the confirmation inside tmux too');
+    }
+
+    public function testInsideTmuxTheKittyQueryIsWrittenRawWithoutADcsWrap(): void
+    {
+        // The README promises the query goes out raw; a DCS wrap would change what tmux forwards.
+        putenv('TMUX=/tmp/tmux-1000/default,1,0');
+        Detect::setTmuxTermFeaturesOverride(null);
+        $this->answerWith(self::KITTY_OK . self::DA1_ANSWER);
+
+        Detect::probe();
+
+        $written = $this->queriesWritten();
+        $this->assertStringStartsWith("\x1b_Gi=31,", $written);
+        $this->assertStringNotContainsString("\x1bPtmux;", $written, 'no tmux DCS passthrough wrap around the query');
+    }
+
     public function testADa1AnswerWithSixelKeepsTheSixelVerdictWithoutASecondQuery(): void
     {
         // The DA1 answer the Kitty query already read carries the sixel bit; the

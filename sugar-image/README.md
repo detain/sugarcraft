@@ -748,14 +748,19 @@ tmux half of the family — `TmuxPassthrough` + `TmuxPassthroughDecorator`
 users. Before it, a Kitty environment claim inside tmux (`TMUX` set with
 `KITTY_WINDOW_ID`, `TERM=xterm-kitty` or a known `TERM_PROGRAM`) selected
 Kitty on its own. Now `Capability::kitty()` is true only when the APC `a=q`
-reply arrives, and that reply crosses tmux like any other APC string. With
-`allow-passthrough` off, tmux swallows the reply, so the claim is dropped and
-the ladder falls to halfblock or sixel. The probe runs before
+reply arrives, and that reply has to cross tmux to reach the program. With
+`allow-passthrough` off, tmux is expected to swallow the reply, so the claim is
+dropped and the ladder falls to halfblock or sixel. The probe runs before
 `TmuxPassthrough::ensure()` flips the option (that happens when the renderer
-is built), so the automatic flip cannot rescue the first probe. Set
-`allow-passthrough` to `on` in tmux (`set -g allow-passthrough on`) so the
-reply reaches the program. The query is written raw: there is no tmux
-exception to the reply rule and no DCS passthrough wrap around the query.
+is built), so the automatic flip cannot rescue the first probe. Setting
+`allow-passthrough` to `on` (`set -g allow-passthrough on`) is the tmux setting
+that governs passthrough and is worth trying first, but this library has not
+measured whether tmux forwards a raw, unwrapped APC query to the outer terminal
+or relays its reply. Until that is verified, treat Kitty inside tmux as
+unconfirmed: if no reply arrives, the claim is dropped as described above, and
+halfblock or sixel is the expected result. The query is written raw: there is
+no tmux exception to the reply rule and no DCS passthrough wrap around the
+query.
 
 ## Animation
 
