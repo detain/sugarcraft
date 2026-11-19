@@ -188,7 +188,7 @@
 
     <h2 id="install" style="margin-top: 40px;">Install</h2>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-mail</code></pre>
-    <p>Requires PHP 8.3 or newer. The composer install puts the <code>candy-mail</code> binary in <code>vendor/bin/</code>. A standalone phar is also published; the README's Install section covers both.</p>
+    <p>Requires PHP 8.3 or newer. The Resend and Mailgun API transports need the <code>curl</code> extension, and STARTTLS or implicit-TLS SMTP needs <code>openssl</code>. Plain SMTP works without either. The composer install puts the <code>candy-mail</code> binary in <code>vendor/bin/</code>. A standalone phar is also published; the README's Install section covers both.</p>
 
     <h2 id="quickstart" style="margin-top: 40px;">Quickstart</h2>
     <pre class="code"><code class="language-php">use SugarCraft\Mail\{Email, ResendTransport, SmtpTransport};
@@ -217,7 +217,7 @@ $transport-&gt;send($email);
 echo $mime;   // headers, the multipart/alternative body and the base64 attachment part</code></pre>
 
     <h2 id="concepts" style="margin-top: 40px;">Concepts</h2>
-    <p>An <code>Email</code> is a value. It holds the sender and recipient lists, the subject, the plain and HTML bodies, the attachments and any extra headers. Each <code>with*()</code> returns a new instance, and <code>Email::new()</code> is the one-pair shortcut. The constructor sanitizes every header value and refuses a carriage return or line feed inside one, so a header cannot forge a second header.</p>
+    <p>An <code>Email</code> is a value. It holds the sender and recipient lists, the subject, the plain and HTML bodies, the attachments and any extra headers. Each <code>with*()</code> returns a new instance, and <code>Email::new()</code> is the one-pair shortcut. The constructor refuses, rather than cleans, any header value that holds a carriage return, line feed or other control byte, so a header cannot forge a second header.</p>
     <p>A <code>Transport</code> is the delivery contract. It has a <code>send(Email, ?CancellationToken)</code> method and a <code>name()</code> for logging. Three implementations ship: <code>SmtpTransport</code>, <code>ResendTransport</code> and <code>MailgunTransport</code>. Writing your own means implementing the interface.</p>
     <p><code>Mailer</code> wraps one transport. Before it dials, it refuses an email with no recipient in <code>to</code>, <code>cc</code> or <code>bcc</code>, and an email with no sender. The <code>candy-mail</code> CLI reports a missing transport configuration as <code>MissingTransportConfig</code>, a <code>RuntimeException</code>, and its offline <code>--render</code> fallback catches exactly that type, so a broken configuration stays a loud error. The library does not raise that type: a <code>ResendTransport</code> built with a blank key throws <code>InvalidArgumentException</code> when it sends.</p>
     <p>Attachments are read when they are built, not when the message is sent. <code>Attachment::fromPath()</code> reads the file eagerly, so an unreadable path throws at <code>withAttachment()</code> time. A single attachment is capped at <code>Attachment::MAX_BYTES</code> (25 MiB), and the whole message at <code>Email::MAX_TOTAL_BYTES</code> (64 MiB).</p>
