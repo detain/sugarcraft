@@ -6726,7 +6726,7 @@ final class Subcommands
      * {@see McpDecision::mcpUserConfigPath()} answers — a non-empty answer
      * exists only because HomeDirectory::owned() vouched for the home, so no
      * bytes of this verb ever land in a home another uid could have planted.
-     * HOW: {@see \SugarCraft\Code\Support\AtomicFileWriter}'s temp-then-rename
+     * HOW: {@see \SugarCraft\Core\Util\AtomicTextFile}'s temp-then-rename
      * with mode 0600 settled before the publish, exactly how McpTrustPins
      * records trust. The PROJECT tier is never written from here or anywhere:
      * `--write project` is refused at the door above, and a checkout is never
@@ -6801,7 +6801,7 @@ final class Subcommands
         }
 
         try {
-            \SugarCraft\Code\Support\AtomicFileWriter::write($userPath, $json . "\n", 0600);
+            \SugarCraft\Core\Util\AtomicTextFile::at($userPath)->withPermissions(0600)->write($json . "\n");
         } catch (\Throwable $e) {
             // Atomic by construction: the rename never happened, so the claim
             // "the file was not changed" is the writer's guarantee, not hope.
