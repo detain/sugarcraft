@@ -406,7 +406,15 @@ trait ServeStartup
                         'candy-msteams' => Bootstrap::channelsMsteamsSettings(),
                         default => [],
                     },
-                    self::channelStateDir(),
+                    // The candy-code configuration directory, or null when none resolves: a
+                    // channel then starts without a state directory and refuses what it cannot place.
+                    (static function (): ?string {
+                        try {
+                            return Bootstrap::trustedConfigDirPath();
+                        } catch (\Throwable) {
+                            return null;
+                        }
+                    })(),
                 ));
             } catch (\Throwable $e) {
                 // A broken channel never takes the serve down with it.
@@ -900,19 +908,5 @@ trait ServeStartup
         $path = $assets::tryDistPath();
 
         return \is_string($path) && \is_dir($path) ? $path : null;
-    }
-
-    /**
-     * The candy-code configuration directory a channel reads as its state
-     * directory, or null when none can be resolved; a channel then starts
-     * without one and refuses what it cannot place.
-     */
-    private static function channelStateDir(): ?string
-    {
-        try {
-            return Bootstrap::trustedConfigDirPath();
-        } catch (\Throwable) {
-            return null;
-        }
     }
 }

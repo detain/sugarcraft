@@ -460,7 +460,7 @@ final class ChannelRegistryTest extends TestCase
     {
         $id = $this->nextId();
         $journalExport = var_export($journal, true);
-        return "class {$id} implements \\SugarCraft\\Code\\Channels\\{$shortContract}\n{\n    private string \$journal = {$journalExport};\n    public function name(): string { return '" . $routeName . "'; }\n" . $members . "}\n";
+        return "class {$id} implements \\SugarCraft\\Plugins\\Channel\\{$shortContract}\n{\n    private string \$journal = {$journalExport};\n    public function name(): string { return '" . $routeName . "'; }\n" . $members . "}\n";
     }
 
     /** @param string|null $forcedId when the source was built without classText() */

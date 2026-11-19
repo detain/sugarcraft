@@ -171,7 +171,7 @@ final class MsTeamsBundleWeldTest extends TestCase
         // the bundle's own writer; the first approver is bootstrapped by
         // the operator (a store write), because pairing-mode refuses /pair
         // to the unpaired.
-        $creds = new CredentialStore(CredentialStore::defaultPath());
+        $creds = new CredentialStore(CredentialStore::pathIn(\SugarCraft\Code\Cli\Bootstrap::trustedConfigDirPath()), \SugarCraft\Code\Channels\ChannelsStore::new());
         $creds->writeMsteamsPairing('default', [], ['u-approver'], [
             'appId' => 'app-weld',
             'appPassword' => 'weld-secret-app',
@@ -207,7 +207,10 @@ final class MsTeamsBundleWeldTest extends TestCase
             static function (string $line) use (&$lightLines): void {
                 $lightLines[] = $line;
             },
-        ));
+            null,
+            \SugarCraft\Code\Cli\Bootstrap::channelsMsteamsSettings(),
+            \SugarCraft\Code\Cli\Bootstrap::trustedConfigDirPath(),
+        ), \SugarCraft\Code\Channels\ChannelsStore::new());
         self::assertSame(['default'], $channel->faceNames(), 'the store triple built exactly one face');
 
         $registry = new ChannelRegistry();
@@ -278,13 +281,13 @@ final class MsTeamsBundleWeldTest extends TestCase
         self::assertStringContainsString('Pairing required', (string) $notice['body']);
         self::assertSame(1, preg_match('/Your code: `([A-Z2-9]{8})`/', $notice['body'], $m), 'the notice carries the 8-glyph code');
         $code = $m[1];
-        self::assertArrayHasKey($code, (new CredentialStore(CredentialStore::defaultPath()))->read()['platforms']['msteams']['accounts']['default']['pairingPending'] ?? [], 'the pending row landed in the store');
+        self::assertArrayHasKey($code, (new CredentialStore(CredentialStore::pathIn(\SugarCraft\Code\Cli\Bootstrap::trustedConfigDirPath())))->read()['platforms']['msteams']['accounts']['default']['pairingPending'] ?? [], 'the pending row landed in the store');
 
         // (d) the approver answers in-chat; the store gains the peer.
         self::assertSame(200, $post($dm('a-act-2', 'u-approver', '/pair approve ' . $code, '19:dm-approver@thread.v2'), $token('app-weld'))->getStatusCode());
         self::runFor($loop, 700);
         self::assertStringContainsString('Paired u-weld.', (string) $api->lastCallFor('/activities', 'POST')['body'], 'the approve answer rode the same raw door');
-        self::assertContains('u-weld', (new CredentialStore(CredentialStore::defaultPath()))->msteamsAllowUsers('default'), 'approval appended the allowlist atomically');
+        self::assertContains('u-weld', (new CredentialStore(CredentialStore::pathIn(\SugarCraft\Code\Cli\Bootstrap::trustedConfigDirPath())))->msteamsAllowUsers('default'), 'approval appended the allowlist atomically');
 
         // (e) the paired prompt meets the PLACEHOLDER serve — the refusal
         // is disclosed in-chat, which proves the pipeline reached the
