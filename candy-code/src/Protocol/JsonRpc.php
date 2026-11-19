@@ -33,6 +33,12 @@ final class JsonRpc
     /** Appendix O §8.7: nested JSON deeper than this is refused unread. */
     public const MAX_DEPTH = 64;
 
+    /**
+     * The nesting a result may reach by itself: the envelope takes the outermost level
+     * of the encoding's own 512-level budget, so a bare value stops one level short.
+     */
+    public const MAX_DEPTH_VALUE = 511;
+
     private const FLAGS = \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_PRESERVE_ZERO_FRACTION;
 
     private function __construct()
@@ -99,6 +105,23 @@ final class JsonRpc
     public static function notification(string $method, array $params): array
     {
         return ['jsonrpc' => self::VERSION, 'method' => $method, 'params' => $params];
+    }
+
+    /**
+     * A bare value encoded under the wire's flags, with no envelope around it. The
+     * in-process door takes its answers through this so invalid UTF-8 is substituted the
+     * way the wire substitutes it, without building a JSON-RPC frame.
+     *
+     * @throws \JsonException
+     */
+    public static function encodeValue(mixed $value, int $depth = self::MAX_DEPTH_VALUE): string
+    {
+        $encoded = \json_encode($value, self::FLAGS, $depth);
+        if ($encoded === false) {
+            throw new \JsonException(\sprintf('cannot encode a wire value: %s', \json_last_error_msg()));
+        }
+
+        return $encoded;
     }
 
     /** @param array<string, mixed> $message */
