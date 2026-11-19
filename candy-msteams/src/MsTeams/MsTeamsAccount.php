@@ -17,7 +17,7 @@ use CandyCode\Bundles\MsTeams\Support\TextSafety;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
 use React\Promise\PromiseInterface;
-use SugarCraft\Code\Lang;
+use CandyCode\Bundles\MsTeams\Lang;
 
 /**
  * One Teams account's face: webhook activities in, serviceUrl REST out
@@ -717,9 +717,10 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
             unset($this->revealedGroups[\array_key_first($this->revealedGroups)]);
         }
         $this->revealedGroups[$conversationId] = true;
-        // Delivered literal English pending the host-keyspace ruling (the
-        // msteams-09/-10/-14 family posture); rides raw REST like the
-        // pairing notice, NOT safety->outbound — nothing secret in it.
+        // Bare English, not yet in the msteams catalog: O4 moved the catalog into
+        // the plugin, so this text moves there too (see candy-msteams/README.md
+        // "Language"). Rides raw REST like the pairing notice, NOT
+        // safety->outbound — nothing secret in it.
         $text = "This conversation is not enabled for this bot yet. To allow it, add a row under groups.rows with this conversation id:\n\n"
             . "`" . $conversationId . "`\n\nThen mention the bot again.";
         $this->rest->sendActivity($serviceUrl, $conversationId, [

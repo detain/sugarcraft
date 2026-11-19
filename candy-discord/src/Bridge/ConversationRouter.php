@@ -14,7 +14,7 @@ use CandyCode\Bundles\Discord\Support\QueueGate;
 use CandyCode\Bundles\Discord\Support\SessionMap;
 use CandyCode\Bundles\Discord\Support\TextSafety;
 use React\EventLoop\LoopInterface;
-use SugarCraft\Code\Lang;
+use CandyCode\Bundles\Discord\Lang;
 use React\Promise\PromiseInterface;
 
 /**

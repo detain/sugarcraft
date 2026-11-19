@@ -15,7 +15,7 @@ use CandyCode\Bundles\MsTeams\Support\QueueGate;
 use CandyCode\Bundles\MsTeams\Support\SessionMap;
 use CandyCode\Bundles\MsTeams\Support\TextSafety;
 use React\EventLoop\LoopInterface;
-use SugarCraft\Code\Lang;
+use CandyCode\Bundles\MsTeams\Lang;
 use React\Promise\PromiseInterface;
 
 /**

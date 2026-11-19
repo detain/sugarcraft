@@ -26,12 +26,12 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
   cross-conversation answers are refused and logged, and the pending request
   is untouched. An empty approver roster is a degraded posture (once/deny in
   the ask's own conversation; `always` refused) — it is never a silent bypass.
-- **[pattern:bundle:host-vendor-bootstrap]** `tests/bootstrap.php` may hop to
-  `../candy-code/vendor/autoload.php` because the repo runs tests outside the
-  marketplace path; the *runtime* `src/autoload.php` must know only its own
-  subtree. CI installs the host vendor first for the bundle cells
-  (`.github/workflows/ci.yml`, "Install host vendor (channel bundle tests)").
-  Do not add a relative hop to the runtime autoload.
+- **[pattern:bundle:host-vendor-bootstrap]** `tests/bootstrap.php` loads only
+  the bundle's own `vendor/autoload.php` (the plugin libraries, sugar-plugins'
+  Lang included, come from that tree, PL-1c-ii). No host candy-code vendor hop
+  and no candy-code install step in the bundle CI cells. The *runtime*
+  `src/autoload.php` must know only its own subtree. Do not add a relative hop
+  to `../candy-code/` in either autoload.
 - **[pattern:bundle:intent-degrade-is-one-way]** Without the Message Content
   intent (or on a gateway 4013/4014 disallowed-intents close) the bundle
   degrades to mention-only handling for the process lifetime; it does not
