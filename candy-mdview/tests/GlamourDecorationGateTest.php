@@ -242,6 +242,40 @@ final class GlamourDecorationGateTest extends TestCase
         self::assertSame('', $markdownTheme->paragraphPrefix);
     }
 
+    /** @return iterable<string, array{mixed}> */
+    public static function nonStringAffixProvider(): iterable
+    {
+        yield 'int' => [5];
+        yield 'float' => [1.5];
+        yield 'bool true' => [true];
+        yield 'bool false' => [false];
+        yield 'null' => [null];
+        yield 'list holding an OSC title-set' => [["\x1b]0;title\x07"]];
+        yield 'map holding raw SGR' => [['payload' => "\x1b[31m"]];
+    }
+
+    /**
+     * Coercion is the whole rule for a non-string affix: it is never a refusal
+     * and never names a slot, even when the nested payload would be refused as
+     * a string. The refusal law (`glamour.decoration_unsafe`) applies only to
+     * string affixes.
+     */
+    #[DataProvider('nonStringAffixProvider')]
+    public function testNonStringAffixCoercesWithoutRefusal(mixed $value): void
+    {
+        $decoded = [
+            'document'  => ['block_prefix' => $value, 'block_suffix' => $value],
+            'paragraph' => ['block_prefix' => $value, 'block_suffix' => $value],
+        ];
+
+        $admitted = GlamourDecorationGate::admit($decoded);
+
+        self::assertSame('', $admitted['document']['block_prefix']);
+        self::assertSame('', $admitted['document']['block_suffix']);
+        self::assertSame('', $admitted['paragraph']['block_prefix']);
+        self::assertSame('', $admitted['paragraph']['block_suffix']);
+    }
+
     /** @return iterable<string, array{string,string}> slot-key => [json, expected message] */
     public static function unsafeDecorationProvider(): iterable
     {
