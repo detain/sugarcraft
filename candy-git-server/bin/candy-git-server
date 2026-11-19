@@ -904,8 +904,9 @@ function cmdUserAdd(array $args): int
 
     $username = $args[0];
     // A dash-shaped first word ('--help', '-h', '-x') is a mistyped flag, never
-    // an account name: refuse it as a usage error before anything is written,
-    // the same way repo create refuses a dash-prefixed argument.
+    // an account name: refuse it as a usage error before anything is written.
+    // Wider than repo create, which only refuses '--'-prefixed words, so a
+    // single-dash word is a data path there.
     if (\str_starts_with($username, '-')) {
         return error(Lang::t('cli.usage_user_add') . "\n");
     }
