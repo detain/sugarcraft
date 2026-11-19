@@ -106,7 +106,7 @@ foreach (SideBySideFormat::rows($diff) as $row) {
     <p style="margin-top: 12px;">With the default options the hunk bodies and grouping match candy-code's <code>BuildsUnifiedDiff</code> byte for byte. The header lines follow GNU, so the two can differ there.</p>
 
     <h3 style="margin-top: 40px;">Styling and markers</h3>
-    <p>The engine never colors anything. Color should never carry a change alone, so every row arrives with two non-color channels. The first is a <code>LineKind</code> with its column-0 marker: a space, <code>-</code> or <code>+</code>. The second is, for scanned patches, a <code>ScanRowKind</code> that separates hunk headers, annotations and out-of-hunk prose from content. A viewer that tints rows should keep the sign column as well, because a red-versus-green difference alone fails WCAG 1.4.1. The candy-code-web <code>DiffView</code> renders a visible <code>+</code> and <code>-</code> column from the row kind, beside its background tint.</p>
+    <p>The engine never colors anything. Color should never carry a change alone, so every row arrives with two non-color channels. The first is a <code>LineKind</code> with its column-0 marker: a space, <code>-</code> or <code>+</code>. The second is, for scanned patches, a <code>ScanRowKind</code> that separates hunk headers, annotations and out-of-hunk prose from content. A viewer that tints rows should keep the sign column as well, because a red-versus-green difference alone fails WCAG 1.4.1. The candy-code-web <code>DiffView</code> renders a visible sign column from the row kind, beside its background tint: <code>+</code> for additions and <code>−</code> (U+2212, not an ASCII hyphen) for deletions.</p>
 
     <h3 style="margin-top: 40px;">Examples</h3>
     <p>Each example runs from a checkout after <code>composer install</code>.</p>
@@ -170,7 +170,7 @@ vendor/bin/phpunit</code></pre>
     <h3 style="margin-top: 40px;">Related</h3>
     <ul>
       <li><strong>candy-code</strong> is the consumer whose edit tools report changes through this engine.</li>
-      <li><strong>candy-code-web</strong> renders the same rows in a web <code>DiffView</code> with a sign column.</li>
+      <li><strong>candy-code-web</strong> does not depend on this package. Its <code>src-web/lib/diff.ts</code> re-implements the <code>SideBySideFormat</code> pairing rule in TypeScript and draws its own sign column, so a change to the pairing or sign rules here must be ported there by hand.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
