@@ -161,25 +161,52 @@
 
     <nav class="doc-toc" aria-label="On this page">
         <ul class="doc-toc-list">
-            <li class="toc-h3"><a href="#install">Install</a></li>
-            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
-            <li class="toc-h3"><a href="#rendering-modes">Rendering modes</a></li>
-            <li class="toc-h3"><a href="#keyboard-controls">Keyboard controls</a></li>
-            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
-            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
-            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h2"><a href="#install">Install</a></li>
+            <li class="toc-h2"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h2"><a href="#concepts">Concepts</a></li>
+            <li class="toc-h2"><a href="#tasks">Tasks</a></li>
+            <li class="toc-h3"><a href="#play-a-file-with-a-chosen-mode">Play a file with a chosen mode</a></li>
+            <li class="toc-h3"><a href="#loop-playback-and-attach-subtitles">Loop playback and attach subtitles</a></li>
+            <li class="toc-h3"><a href="#play-a-signed-remote-stream">Play a signed remote stream</a></li>
+            <li class="toc-h3"><a href="#embed-the-player-in-your-own-program">Embed the player in your own program</a></li>
+            <li class="toc-h3"><a href="#decode-frames-without-a-terminal">Decode frames without a terminal</a></li>
+            <li class="toc-h2"><a href="#styling-and-rendering-modes">Styling and rendering modes</a></li>
+            <li class="toc-h3"><a href="#luminance-ramp">Luminance ramp</a></li>
+            <li class="toc-h2"><a href="#keys-and-keyboard-controls">Keys and keyboard controls</a></li>
+            <li class="toc-h2"><a href="#api-reference">API reference</a></li>
             <li class="toc-h2"><a href="#demos">Demos.</a></li>
             <li class="toc-h3"><a href="#play">Play</a></li>
+            <li class="toc-h2"><a href="#configuration">Configuration</a></li>
+            <li class="toc-h3"><a href="#reel-options">Reel options</a></li>
+            <li class="toc-h3"><a href="#environment-variables">Environment variables</a></li>
+            <li class="toc-h2"><a href="#remote-sources-and-security">Remote sources and security</a></li>
+            <li class="toc-h2"><a href="#subtitles-and-accessibility">Subtitles and accessibility</a></li>
+            <li class="toc-h2"><a href="#examples">Examples</a></li>
+            <li class="toc-h2"><a href="#testing">Testing</a></li>
+            <li class="toc-h2"><a href="#troubleshooting-and-faq">Troubleshooting and FAQ</a></li>
+            <li class="toc-h3"><a href="#an-mp4-avi-or-webm-file-does-not-play">An mp4, avi or webm file does not play</a></li>
+            <li class="toc-h3"><a href="#a-gif-or-animated-webp-fails-to-load">A GIF or animated WebP fails to load</a></li>
+            <li class="toc-h3"><a href="#there-is-no-sound">There is no sound</a></li>
+            <li class="toc-h3"><a href="#video-from-a-file-is-refused-on-windows">Video from a file is refused on Windows</a></li>
+            <li class="toc-h3"><a href="#a-remote-url-is-refused">A remote URL is refused</a></li>
+            <li class="toc-h3"><a href="#the-picture-is-not-what-i-expected-in-halfblock-mode">The picture is not what I expected in halfblock mode</a></li>
+            <li class="toc-h3"><a href="#playback-starts-paused">Playback starts paused</a></li>
+            <li class="toc-h2"><a href="#architecture">Architecture</a></li>
+            <li class="toc-h2"><a href="#known-limitations">Known limitations</a></li>
+            <li class="toc-h2"><a href="#upstream-mapping">Upstream mapping</a></li>
+            <li class="toc-h2"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
         </ul>
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">Terminal video player — plays <code>mp4</code>, <code>gif</code>, <code>avi</code>, <code>webm</code>, animated <code>webp</code> on the fly, rendering each frame as ASCII, ANSI 256-color, truecolor half-/quarter-blocks, or via modern graphics protocols (sixel / kitty / iTerm2), with WebVTT subtitle overlays.</p>
+<p class="lede" style="margin-top: 28px;">Terminal video player. It plays <code>mp4</code>, <code>gif</code>, <code>avi</code>, <code>webm</code> and animated <code>webp</code> on the fly, rendering each frame as ASCII, ANSI 256-color, truecolor half- or quarter-blocks, or through a graphics protocol (sixel, kitty or iTerm2), with WebVTT subtitle overlays. It builds on prior art in terminal video-to-text tools, including <a href="https://github.com/maxcurzi/tplay">tplay</a> (see Upstream mapping), and runs on the SugarCraft TEA runtime.</p>
 
-    <h3 id="install" style="margin-top: 32px;">Install</h3>
+    <h2 id="install" style="margin-top: 40px;">Install</h2>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-video</code></pre>
+    <p style="color: var(--ink-2);">Requires PHP 8.3+. GIF and animated WebP play in-process through <code>ext-gd</code>, with no ffmpeg needed. <code>mp4</code>, <code>avi</code> and <code>webm</code> need the <code>ffmpeg</code> and <code>ffprobe</code> binaries on <code>$PATH</code>. Those are a runtime toolchain, not a Composer package. Audio needs <code>ffplay</code> or <code>mpv</code>, and it is optional. Video decode through ffmpeg is refused on Windows, while GIF playback still works there.</p>
 
-    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
+    <h2 id="quickstart" style="margin-top: 40px;">Quickstart</h2>
     <pre class="code"><code class="language-shell">php examples/play.php video.mp4           # play a video
 php examples/play.php                    # synthetic test pattern (no file needed)
 SUGAR_VIDEO_COLS=120 SUGAR_VIDEO_ROWS=40 php examples/play.php   # seed the size; the terminal's own size message overrides it (live resize always wins)</code></pre>
@@ -188,7 +215,54 @@ use SugarCraft\Video\Player;
 $player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);   // mp4/avi/webm decode through ffmpeg
 (new \SugarCraft\Core\Program($player))-&gt;run();</code></pre>
 
-    <h3 id="rendering-modes" style="margin-top: 32px;">Rendering modes</h3>
+    <h2 id="concepts" style="margin-top: 40px;">Concepts</h2>
+    <p>Playback is a pipeline with four stages. A decoder turns the source into <code>RgbFrame</code> values. A renderer turns each frame into terminal output for the chosen mode. The <code>Player</code> is a TEA model that advances on ticks and returns its view. The <code>Reel</code> is the front door: you open a source, configure it with <code>with*()</code> methods, then call <code>play()</code>, or <code>toPlayer()</code> to get a paused <code>Player</code> you can embed.</p>
+    <p>The player starts paused. Nothing moves until you press <kbd>Space</kbd>, which is the reduced-motion default described under Accessibility. Timing comes from a monotonic clock, so an NTP step or a laptop resume does not fast-forward playback.</p>
+
+    <h2 id="tasks" style="margin-top: 40px;">Tasks</h2>
+    <h3 id="play-a-file-with-a-chosen-mode" style="margin-top: 24px;">Play a file with a chosen mode</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Video\Reel;
+use SugarCraft\Video\Render\Mode;
+
+Reel::open('clip.mp4')
+    -&gt;withMode(Mode::HalfBlock)
+    -&gt;withSize(100, 30)
+    -&gt;withFps(24.0)          // null (the default) means auto-detect
+    -&gt;play();</code></pre>
+
+    <h3 id="loop-playback-and-attach-subtitles" style="margin-top: 24px;">Loop playback and attach subtitles</h3>
+    <pre class="code"><code class="language-php">Reel::open('clip.mp4')
+    -&gt;withLoop(true)
+    -&gt;withSubtitles('clip.vtt')   // WebVTT, or lenient SRT
+    -&gt;play();</code></pre>
+
+    <h3 id="play-a-signed-remote-stream" style="margin-top: 24px;">Play a signed remote stream</h3>
+    <pre class="code"><code class="language-php">Reel::openUrl(
+    'https://cdn.example.com/clip.mp4',
+    ['Authorization' =&gt; 'Bearer ' . $token],   // forwarded to ffmpeg and to the audio companion
+    ['cdn.example.com'],                          // host allowlist, the SSRF guard
+)-&gt;play();</code></pre>
+    <p>Credentials in the URL are redacted from every log line and error. A bare URL without an allowlist logs a warning and allows any host, so pin the allowlist for anything you do not control.</p>
+
+    <h3 id="embed-the-player-in-your-own-program" style="margin-top: 24px;">Embed the player in your own program</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Video\Reel;
+
+$player = Reel::open('clip.mp4')-&gt;withSize(80, 24)-&gt;toPlayer();   // paused, first frame ready
+// $player is a TEA model: feed it ticks through your own Program loop and render view().</code></pre>
+
+    <h3 id="decode-frames-without-a-terminal" style="margin-top: 24px;">Decode frames without a terminal</h3>
+    <p>The decoders run without any terminal, so they can be tested and used in batch code. <code>examples/decode-frames.php</code> generates a synthetic animation and reports each decoded frame.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Video\Decode\GifDecoder;
+use SugarCraft\Video\Render\Mode;
+
+$decoder = new GifDecoder();
+$decoder-&gt;open('animation.gif', 40, 12, 10.0, Mode::HalfBlock);
+while (($frame = $decoder-&gt;next()) !== null) {
+    echo $frame-&gt;w, 'x', $frame-&gt;h, "\n";   // RgbFrame: packed RGB bytes plus dimensions
+}
+$decoder-&gt;close();</code></pre>
+
+    <h2 id="styling-and-rendering-modes" style="margin-top: 40px;">Styling and rendering modes</h2>
     <table class="api-table">
     <caption>Rendering modes and the terminals they require.</caption>
     <thead>
@@ -206,8 +280,12 @@ $player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);   // mp4/avi/webm de
     <tr><td>auto</td><td>Resolve the terminal from its environment (lookup table, no protocol negotiation), pick best available (the default)</td><td>&#x2014;</td></tr>
     </tbody>
     </table>
+    <p><code>RendererFactory::supportedModes()</code> lists the modes the current host can render, and <code>RendererFactory::supports(Mode)</code> answers for one mode. <code>auto</code> chooses from that list. <code>truecolor</code> is an explicit choice, and auto never selects it.</p>
+    <h3 id="luminance-ramp" style="margin-top: 24px;">Luminance ramp</h3>
+    <p>The <code>ascii</code> and <code>ansi256</code> modes map brightness onto a character ramp. <code>withRamp()</code> selects <code>minimal</code>, <code>standard</code> or <code>dense</code>. <code>LumaRamp::compute()</code> derives BT.601 luma from RGB, and <code>LumaRamp::char()</code> maps a 0–255 value to a character.</p>
+    <pre class="code"><code class="language-php">Reel::open('clip.mp4')-&gt;withMode(Mode::Ascii)-&gt;withRamp('dense')-&gt;play();</code></pre>
 
-    <h3 id="keyboard-controls" style="margin-top: 32px;">Keyboard controls</h3>
+    <h2 id="keys-and-keyboard-controls" style="margin-top: 40px;">Keys and keyboard controls</h2>
     <table class="api-table">
     <caption>Keyboard controls for the bundled player program.</caption>
     <thead>
@@ -226,7 +304,7 @@ $player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);   // mp4/avi/webm de
     </table>
     <h4 style="margin-top: 24px;">Behavior (no keyboard shortcut)</h4>
     <table class="api-table">
-    <caption>Behavior without a keyboard shortcut — configured at open time.</caption>
+    <caption>Behavior without a keyboard shortcut, configured at open time.</caption>
     <thead>
     <tr><th scope="col">Setting</th><th scope="col">Behavior</th></tr>
     </thead>
@@ -238,42 +316,16 @@ $player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);   // mp4/avi/webm de
     </tbody>
     </table>
 
-    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>Multi-format decode</strong><span>ffmpeg for mp4/avi/webm, pure-PHP + ext-gd for GIF and animated WebP (a RIFF container walk with per-frame GD decode). No external deps beyond the ffmpeg binaries for the video containers.</span></div>
-      <div class="feature"><strong>8 rendering modes + auto</strong><span>ascii, ansi256, truecolor, half-block, quarter-block, sixel, kitty, iTerm2 &#8212; <code>Player::open()</code> and <code>Reel</code> default to resolving the terminal from its environment (a lookup table, no protocol negotiation) and picking the best available.</span></div>
-      <div class="feature"><strong>Auto terminal resize</strong><span>SIGWINCH handler re-scales video to fit the new terminal dimensions without restarting playback.</span></div>
-      <div class="feature"><strong>Seek + speed control</strong><span>Keyboard-driven seek (arrows, 0-9) and speed control ([ / ]) with frame-skip resync; ffmpeg input seeking (<code>-ss</code> before <code>-i</code>) for instant jumps on long streams.</span></div>
-      <div class="feature"><strong>WebVTT subtitles</strong><span><code>Reel::withSubtitles('clip.vtt')</code> parses WebVTT (lenient enough for most SRT files) and paints the active cue as one caption line under the frame in every mode.</span></div>
-      <div class="feature"><strong>Accessibility</strong><span>The caption line is the one real-text channel in every graphics mode &#8212; the text alternative for playback that image protocols render as silent pixels &#8212; with full keyboard control and nothing decided by a stray keystroke. Motion is never imposed: playback starts paused. The README Accessibility section carries the detail.</span></div>
-      <div class="feature"><strong>Reduced motion</strong><span>Nothing auto-plays: <code>Player::open()</code> returns a paused model already showing one real poster frame, and <code>Reel::play()</code> waits for <code>Space</code> before any motion. A <code>REDUCE_MOTION</code> host is honored because no motion is ever unsolicited — there is no auto-play to suppress.</span></div>
-      <div class="feature"><strong>Audio companion</strong><span>AudioPlayer shells out to ffplay or mpv as the audio output companion (the Player keeps the master clock); pausing terminates and re-spawns the companion so no silent zombie burns CPU, and degrades gracefully when no audio track is present.</span></div>
-      <div class="feature"><strong>Remote sources with headers</strong><span><code>Reel::openUrl()</code> forwards an SSRF guard (<code>allowedHosts</code>; a bare URL logs a warning and allows any host) and redacts URL credentials from every log and error; request headers ride onto ffmpeg for signed CDN URLs, and audio re-presents the same headers.</span></div>
-      <div class="feature"><strong>Loop playback</strong><span>Reel::new()-&gt;withLoop(true)-&gt;play() loops from end back to start automatically.</span></div>
-      <div class="feature"><strong>Delta repaint</strong><span>Only changed ROWS are re-rendered each frame unless the host opts into cell-granularity diffing (<code>cellDiffRenderer</code>), dramatically reducing output for static scenes.</span></div>
-      <div class="feature"><strong>SGR run-length coalescing</strong><span>On the text rungs the Player composes frames inline (frameToBuffer()) and the cell buffer's ANSI writer emits color SGR codes only on color transitions, collapsing runs on static-ish scenes; the factory-built Ascii/HalfBlock/QuarterBlock renderers themselves are not reached by the Player runtime.</span></div>
-    </div>
-
-    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
-    <ul>
-      <li><a href="https://github.com/sugarcraft/sugar-video">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-video/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-video/tree/master/examples">Runnable examples</a></li>
-      <li>Prior art: <a href="https://github.com/maxcurzi/tplay">maxcurzi/tplay</a>, <a href="https://github.com/seatedro/glyph">seatedro/glyph</a>, <a href="https://github.com/joelibaceta/video-to-ascii">joelibaceta/video-to-ascii</a></li>
-    </ul>
-
-    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
-
-    <h3 id="api" style="margin-top: 32px;">API</h3>
+    <h2 id="api-reference" style="margin-top: 40px;">API reference</h2>
 <table class="api-table">
-<caption>API surface — classes, constructors, and methods.</caption>
+<caption>API surface: classes, constructors, and methods.</caption>
 <thead>
 <tr><th scope="col">Class</th><th scope="col">Method</th><th scope="col">Description</th></tr>
 </thead>
 <tbody>
 <tr><td>Reel</td><td>::open(path)</td><td>Open a video file</td></tr>
 <tr><td>Reel</td><td>::openUrl(url, headers, allowedHosts)</td><td>Open a remote stream behind the SSRF guard</td></tr>
-<tr><td>Reel</td><td>::new()</td><td>Create an unbound reel — play() falls back to the synthetic test pattern, but toPlayer() refuses to embed one</td></tr>
+<tr><td>Reel</td><td>::new()</td><td>Create an unbound reel. play() falls back to the synthetic test pattern, but toPlayer() refuses to embed one</td></tr>
 <tr><td>Reel</td><td>withMode(Mode)</td><td>Set rendering mode</td></tr>
 <tr><td>Reel</td><td>withSize(cols, rows)</td><td>Set terminal cell dimensions</td></tr>
 <tr><td>Reel</td><td>withFps(?float)</td><td>FPS override (null = auto-detect)</td></tr>
@@ -284,7 +336,7 @@ $player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);   // mp4/avi/webm de
 <tr><td>Reel</td><td>withAllowedHosts(hosts)</td><td>Pin the remote host allowlist</td></tr>
 <tr><td>Reel</td><td>withCellPx(w, h)</td><td>Tell the player the terminal cell pixel size (graphics modes rasterize at cols&#183;w &#215; rows&#183;h)</td></tr>
 <tr><td>Reel</td><td>withAutoMode()</td><td>Switch to auto mode: the renderer ladder picks the best supported mode at open time</td></tr>
-<tr><td>Reel</td><td>toPlayer()</td><td>Build the Player (paused; source already opened &#8212; ffmpeg-routed sources spawn their ffmpeg child now, local GIF/animated-WebP decode in-process, the ffprobe child is transient)</td></tr>
+<tr><td>Reel</td><td>toPlayer()</td><td>Build the Player (paused; source already opened). ffmpeg-routed sources spawn their ffmpeg child now, local GIF and animated-WebP decode in-process, and the ffprobe child is transient</td></tr>
 <tr><td>Reel</td><td>play()</td><td>Run the player</td></tr>
 <tr><td>Player</td><td>::open(videoPath, cellsW, cellsH, ?fpsOverride, ?Mode, loop, ramp, cellPxW, cellPxH, subtitles, headers, frameBudgetMs, ?autoModeChooser)</td><td>Open a video source; a null <code>Mode</code> auto-detects terminal capability (the default)</td></tr>
 <tr><td>Player</td><td>::fromDecoder(decoder, cellsW, cellsH, fps, mode, &#x2026;)</td><td>Mount playback over any injected Decoder (server-transcoded streams, test doubles)</td></tr>
@@ -292,16 +344,21 @@ $player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);   // mp4/avi/webm de
 <tr><td>Player</td><td>::withSubtitles(WebVtt)</td><td>Attach a parsed subtitle track to the player</td></tr>
 <tr><td>Player</td><td>::seekToSeconds(sec)</td><td>Seek to a timeline position in seconds</td></tr>
 <tr><td>Player</td><td>::position() / ::duration()</td><td>Current playhead and total duration in seconds</td></tr>
-<tr><td>WebVtt</td><td>::parse(text)</td><td>Parse a WebVTT (lenient SRT) track into cues; bounded at MAX_CUES</td></tr>
-<tr><td>WebVtt</td><td>cueAt(seconds)</td><td>Find the active caption for a timeline position: binary search for the rightmost start, then a back-walk bounded by MAX_CUES to the containing cue</td></tr>
-<tr><td>Synthetic</td><td>::generate(path = DEFAULT_PATH, w = 120, h = 60, frames = 16, delayCs = 8)</td><td>Write a looping rainbow-gradient test animation as one valid GIF89a stream (one header and global palette, NETSCAPE2.0 loop, a GCE on every frame and a local palette on each frame after the first, one trailer), so decoders read every frame; a 1&#215;1 GIF stands in when ext-gd is absent. The path defaults to the public <code>DEFAULT_PATH</code> constant, and the returned path — not the argument — is the source of truth: a refused target (e.g. a planted symlink) yields a private stand-in path.</td></tr>
-<tr><td>AudioPlayer</td><td>::start() / ::stop()</td><td>Spawn and reap the audio child (ffplay/mpv) for the reel&#8217;s source</td></tr>
+<tr><td>GifDecoder</td><td>open(source, cellsW, cellsH, fps, mode, startSec, headers) / next() / close()</td><td>Pure-PHP GIF decoder. <code>next()</code> returns an <code>RgbFrame</code> or <code>null</code> at the end; <code>loopCount()</code> reads the NETSCAPE loop field</td></tr>
+<tr><td>AnimatedWebpDecoder</td><td>open(...) / next() / frameDelaysMs() / loopCount() / isAnimated(path)</td><td>Pure-PHP animated WebP decoder over a RIFF walk, with per-frame GD decode. <code>supports()</code> reports whether the host can decode WebP</td></tr>
+<tr><td>FfmpegDecoder</td><td>open(...) / next() / fps() / exitCode() / buildCommand(...)</td><td>Decodes through an ffmpeg child that pipes raw RGB frames. Refuses video on Windows with a guidance error</td></tr>
+<tr><td>VideoSource</td><td>::probe(path, hostRestricted) / ::unprobed(path) / ::fromFfprobeJson(path, json)</td><td>Source description from ffprobe output. <code>unprobed()</code> defers the probe; <code>fromFfprobeJson()</code> parses a captured probe without running ffprobe</td></tr>
+<tr><td>RendererFactory</td><td>supportedModes() / supports(Mode) / support(Mode, cols, rows) / diagnose()</td><td>Which render modes this host can produce, and the probe report behind the answer</td></tr>
+<tr><td>FfmpegCommandBuilder</td><td>scrubbedEnv() / networkReconnectFlags() / headerInputFlags(headers) / inputSeekFlag(startSec)</td><td>Builds the argv for ffmpeg and the audio companions.</td></tr>
+<tr><td>WebVtt</td><td>::parse(text) / cueAt(seconds)</td><td>Parse a WebVTT (lenient SRT) track into cues; bounded at MAX_CUES. <code>cueAt()</code> finds the active caption for a playhead position</td></tr>
+<tr><td>Synthetic</td><td>::generate(path = DEFAULT_PATH, w = 120, h = 60, frames = 16, delayCs = 8)</td><td>Write a looping rainbow-gradient test animation as one valid GIF89a stream. The returned path, not the argument, is the source of truth: a refused target yields a private stand-in path</td></tr>
+<tr><td>AudioPlayer</td><td>::start() / ::stop()</td><td>Spawn and reap the audio child (ffplay/mpv) for the reel's source</td></tr>
 <tr><td>AudioPlayer</td><td>::pause() / ::resume()</td><td>Signal the audio child to pause and resume</td></tr>
 <tr><td>AudioPlayer</td><td>::position() / ::hasStarted() / ::isPlaying()</td><td>Child uptime in seconds, spawn state, and live-playback state</td></tr>
-<tr><td>AudioPlayer</td><td>::mute() / ::unmute() / ::isMuted() / ::exitCode()</td><td>Mute toggle, mute state, and the child&#8217;s exit code once reaped</td></tr>
+<tr><td>AudioPlayer</td><td>::mute() / ::unmute() / ::isMuted() / ::exitCode()</td><td>Mute toggle, mute state, and the child's exit code once reaped</td></tr>
 <tr><td>HttpHeaders</td><td>::none() / ::parse(headers)</td><td>The empty header set, and validation of a name =&gt; value map (refusing list-shaped input and C0/DEL control bytes)</td></tr>
 <tr><td>HttpHeaders</td><td>::isEmpty() / ::pairs() / ::userAgent()</td><td>Emptiness, validated name/value pairs, and the User-Agent override</td></tr>
-<tr><td>HttpHeaders</td><td>::toFfmpegHeaderString() / ::toMpvHeaderFields()</td><td>Render the set into each player&#8217;s CLI spelling</td></tr>
+<tr><td>HttpHeaders</td><td>::toFfmpegHeaderString() / ::toMpvHeaderFields()</td><td>Render the set into each player's CLI spelling</td></tr>
 <tr><td>LumaRamp</td><td>::char(luma, ramp)</td><td>Map 0-255 luminance to character</td></tr>
 <tr><td>LumaRamp</td><td>::compute(r, g, b)</td><td>Compute BT.601 luma from RGB</td></tr>
 </tbody>
@@ -324,6 +381,142 @@ $player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);   // mp4/avi/webm de
         <p class="lede" style="margin-top: 24px;">The recorded demos animate at full terminal speed and loop automatically. Flashing content can affect photosensitive viewers (WCAG 2.3.1 / 2.3.3); the player ships no static-fallback toggle today, so treat these GIFs as motion warnings.</p>
     </div>
 </section>
+
+
+    <h2 id="configuration" style="margin-top: 40px;">Configuration</h2>
+    <h3 id="reel-options" style="margin-top: 24px;">Reel options</h3>
+    <table class="api-table">
+    <caption>Options set on a Reel before play() or toPlayer().</caption>
+    <thead>
+    <tr><th scope="col">Option</th><th scope="col">Type</th><th scope="col">Effect</th></tr>
+    </thead>
+    <tbody>
+    <tr><td><code>withMode()</code></td><td><code>Mode</code></td><td>Rendering mode. The default resolves the mode from the terminal environment (auto).</td></tr>
+    <tr><td><code>withSize()</code></td><td><code>int, int</code></td><td>Cell width and height. The terminal's own size message overrides it.</td></tr>
+    <tr><td><code>withFps()</code></td><td><code>?float</code></td><td>Frame rate override. <code>null</code> auto-detects it.</td></tr>
+    <tr><td><code>withLoop()</code></td><td><code>bool</code></td><td>Loop from end back to start.</td></tr>
+    <tr><td><code>withRamp()</code></td><td><code>string</code></td><td>Luminance ramp for ascii and ansi256: minimal, standard or dense.</td></tr>
+    <tr><td><code>withSubtitles()</code></td><td><code>string</code> (path)</td><td>WebVTT or lenient SRT caption track.</td></tr>
+    <tr><td><code>withHeaders()</code></td><td><code>array</code></td><td>Request headers for remote sources, validated by <code>HttpHeaders</code>.</td></tr>
+    <tr><td><code>withAllowedHosts()</code></td><td><code>array</code></td><td>Host allowlist for remote sources. Pin it in production.</td></tr>
+    <tr><td><code>withCellPx()</code></td><td><code>int, int</code></td><td>Terminal cell pixel size, used by the graphics modes.</td></tr>
+    <tr><td><code>withFrameBudget()</code></td><td><code>float</code> (ms)</td><td>Time spent on catch-up decoding per tick. <code>0.0</code> removes the budget. <code>Player::open()</code> arms <code>max(50 ms, 2 × frame interval)</code> when none is set.</td></tr>
+    <tr><td><code>withAudio()</code></td><td><code>bool</code></td><td>Starts the audio companion (ffplay or mpv) with the video.</td></tr>
+    </tbody>
+    </table>
+    <h3 id="environment-variables" style="margin-top: 24px;">Environment variables</h3>
+    <table class="api-table">
+    <caption>Environment variables read by sugar-video.</caption>
+    <thead>
+    <tr><th scope="col">Variable</th><th scope="col">Read by</th><th scope="col">Effect</th></tr>
+    </thead>
+    <tbody>
+    <tr><td><code>SUGAR_VIDEO_DEBUG</code></td><td><code>Player</code></td><td>When set to any value, enables the pane-geometry assertion, a development check that is off by default.</td></tr>
+    <tr><td><code>SUGAR_VIDEO_COLS</code>, <code>SUGAR_VIDEO_ROWS</code></td><td><code>examples/play.php</code></td><td>Seed the example's size, default 80 × 24, clamped to 10–200 × 5–80. The terminal's first size message overrides them.</td></tr>
+    </tbody>
+    </table>
+
+    <h2 id="remote-sources-and-security" style="margin-top: 40px;">Remote sources and security</h2>
+    <p>Remote playback goes through <code>Reel::openUrl()</code>, which applies an SSRF guard through <code>allowedHosts</code>. Request headers are validated by <code>HttpHeaders::parse()</code>, which refuses list-shaped input and control bytes. The same headers reach ffmpeg for the video input and the audio companion, in each player's own dialect. <code>FfmpegCommandBuilder::scrubbedEnv()</code> strips variables that the child processes should not inherit.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Video\Source\HttpHeaders;
+
+$headers = HttpHeaders::parse(['X-Session' =&gt; 'abc123']);
+$ffmpegArg = $headers-&gt;toFfmpegHeaderString();   // CLI spelling for ffmpeg
+$mpvArg    = $headers-&gt;toMpvHeaderFields();     // CLI spelling for mpv</code></pre>
+
+    <h2 id="subtitles-and-accessibility" style="margin-top: 40px;">Subtitles and accessibility</h2>
+    <p><code>Reel::withSubtitles('clip.vtt')</code> parses WebVTT, lenient enough for most SRT files, and paints the active cue as one caption line under the frame in every mode. <code>WebVtt::cueAt(seconds)</code> finds the active caption for a playhead position. The caption line is the one real-text channel in every graphics mode, so it is the text alternative for playback that image protocols draw as pixels.</p>
+    <p>Playback starts paused, and it never begins without a key press. Nothing moves unless the user asks for it, so there is no ambient motion for a reduced-motion setting to suppress. The README Accessibility section has the detail.</p>
+
+    <h2 id="examples" style="margin-top: 40px;">Examples</h2>
+    <ul>
+      <li><code>examples/play.php [path|synthetic] [mode]</code> is the full player. It accepts <code>--subs=FILE</code> and <code>--help</code>. It is interactive, so run it by hand.</li>
+      <li><code>examples/decode-frames.php [frames]</code> decodes a synthetic GIF with the pure-PHP decoder and prints each frame. It needs no terminal, exits 0 on success, and removes its temporary files.</li>
+    </ul>
+    <pre class="code"><code class="language-shell">php examples/play.php --help
+php examples/decode-frames.php 6</code></pre>
+
+    <h2 id="testing" style="margin-top: 40px;">Testing</h2>
+    <pre class="code"><code class="language-shell">cd sugar-video &amp;&amp; composer install &amp;&amp; vendor/bin/phpunit</code></pre>
+    <p>The suite is split across about 60 files under <code>tests/</code>. <code>ReadmeSnippetsTest</code> keeps the README's code samples in step with the API. Helpers under <code>tests/Concerns</code> hide or stub the ffmpeg and ffprobe binaries for the cases that need them absent or fake, so the decoder and probe paths run without a real toolchain.</p>
+
+    <h2 id="troubleshooting-and-faq" style="margin-top: 40px;">Troubleshooting and FAQ</h2>
+    <h3 id="an-mp4-avi-or-webm-file-does-not-play" style="margin-top: 24px;">An mp4, avi or webm file does not play</h3>
+    <p>Those formats decode through <code>ffmpeg</code> and <code>ffprobe</code>, and both must be on <code>$PATH</code>. Check with <code>ffmpeg -version</code> and <code>ffprobe -version</code>. <code>Probe::hasFFmpeg()</code> answers the same question from PHP.</p>
+    <h3 id="a-gif-or-animated-webp-fails-to-load" style="margin-top: 24px;">A GIF or animated WebP fails to load</h3>
+    <p>These decode in-process and need <code>ext-gd</code>. Check it with <code>php -m</code>. Animated WebP uses a RIFF walk that is pure PHP, plus GD for each frame.</p>
+    <h3 id="there-is-no-sound" style="margin-top: 24px;">There is no sound</h3>
+    <p>Audio needs <code>ffplay</code> or <code>mpv</code> on <code>$PATH</code>. Without either binary the audio companion cannot start, so playback is silent. A source with no audio track also plays silently.</p>
+    <h3 id="video-from-a-file-is-refused-on-windows" style="margin-top: 24px;">Video from a file is refused on Windows</h3>
+    <p><code>FfmpegDecoder::open()</code> refuses ffmpeg video on Windows with a guidance error, because the frame pump depends on <code>stream_select()</code>, which Windows does not support. GIF playback still works there.</p>
+    <h3 id="a-remote-url-is-refused" style="margin-top: 24px;">A remote URL is refused</h3>
+    <p>The host is not on the allowlist, or it resolves to a private or reserved address. Add the host to <code>withAllowedHosts()</code>.</p>
+    <h3 id="the-picture-is-not-what-i-expected-in-halfblock-mode" style="margin-top: 24px;">The picture is not what I expected in halfblock mode</h3>
+    <p>Each cell covers two source rows, so a GIF fills the terminal at its full height in halfblock mode. Text modes keep the GIF at its native pixel dimensions. Set <code>withSize()</code> to fit the pane.</p>
+    <h3 id="playback-starts-paused" style="margin-top: 24px;">Playback starts paused</h3>
+    <p>This is deliberate. Press <kbd>Space</kbd> to start. The player never moves on its own.</p>
+
+    <h2 id="architecture" style="margin-top: 40px;">Architecture</h2>
+    <pre class="code"><code class="language-text">video file (mp4/gif/avi/webm)
+        |
+        v
+  VideoSource.probe           ffprobe JSON for the source
+        |
+        v
+  DecoderFactory.new
+        |
+   +----+----------------------------+
+   |                                 |
+  GifDecoder (pure PHP, GD)     FfmpegDecoder (ffmpeg pipe)
+   |                                 |
+   +----+----------------------------+
+        |
+        v
+  RgbFrame (rgb24, pre-scaled to cell size)
+        |
+        v
+  FrameRenderer / RendererFactory   (Mosaic bridge for sixel, kitty, iterm2)
+        |
+        v
+  Player (TEA model: tick() then view())
+        |
+        v
+  Program (sugar-core: raw mode, alternate screen)</code></pre>
+    <ul>
+      <li><strong>Decode:</strong> <code>FfmpegDecoder</code> runs <code>ffmpeg</code> for raw RGB frames, pre-scaled to cell dimensions. <code>GifDecoder</code> and <code>AnimatedWebpDecoder</code> decode in-process. Local GIF and animated WebP sources decode in-process.</li>
+      <li><strong>Render:</strong> the text modes assemble their SGR cell grid with sugar-cellbuffer. The graphics modes delegate to sugar-image. Color mapping uses sugar-colorprofile.</li>
+      <li><strong>Pace:</strong> <code>Sync</code> aligns ticks, with no busy wait. Deltas accumulate on a monotonic base, and one tick charges at most <code>Player::MAX_TICK_DELTA_SEC</code> of content time.</li>
+      <li><strong>Audio:</strong> <code>AudioPlayer</code> runs <code>ffplay</code> or <code>mpv</code> as a companion. The player's own monotonic clock stays master, so audio may drift but never drives pacing.</li>
+    </ul>
+
+    <h2 id="known-limitations" style="margin-top: 40px;">Known limitations</h2>
+    <ul>
+      <li><strong>Repaint granularity is rows, not cells.</strong> The player returns the full frame from <code>view()</code> on every tick. The default renderer re-sends each changed row, so one dirty cell costs a row of output.</li>
+      <li><strong>Audio plays at 1.0× regardless of speed.</strong> The <code>[</code> and <code>]</code> keys change only the video pacing. A/V diverges at other speeds.</li>
+      <li><strong>Seeks are fast but keyframe-snapped.</strong> ffmpeg input seeking lands on the keyframe at or before the target, so the first frame can be a little less exact than output seeking.</li>
+      <li><strong>Sixel frames cost PHP time.</strong> The pure-PHP encoder spends more CPU per large frame than a native encoder would. No child process is spawned from the render path.</li>
+      <li><strong>Audio pause and seek are approximate.</strong> Pause ends the audio child and resume starts a new one from the banked position. The audio clock is quantized to the last pause boundary.</li>
+      <li><strong>Audio headers reach only two dialects.</strong> A per-request nonce, or a cookie that the video side obtained by redirect, will not reach the audio companion.</li>
+    </ul>
+
+<h2 id="upstream-mapping" style="margin-top: 40px;">Upstream mapping</h2>
+    <table class="api-table">
+    <tr><th>SugarCraft</th><th>Prior art</th><th>Notes</th></tr>
+    <tr><td>sugar-video (<code>Player</code>, <code>Reel</code>, the decoders)</td><td><a href="https://github.com/maxcurzi/tplay">maxcurzi/tplay</a>, <a href="https://github.com/seatedro/glyph">seatedro/glyph</a>, <a href="https://github.com/joelibaceta/video-to-ascii">joelibaceta/video-to-ascii</a></td><td>Listed in <a href="https://github.com/detain/sugarcraft/blob/master/docs/MATCHUPS.md">docs/MATCHUPS.md</a> as prior art. These are references, not ports. SugarCraft is developed as a native PHP project.</td></tr>
+    <tr><td>Graphics modes (sixel, kitty, iTerm2)</td><td>sugar-image</td><td>Delegated to the sibling library that owns the protocol encoders.</td></tr>
+    </table>
+
+    <h2 id="changelog-and-versioning" style="margin-top: 40px;">Changelog and versioning</h2>
+    <p>The package has no CHANGELOG file yet, and no sugar-video release tags exist. Consumers install the <code>dev-master</code> branch until a tagged release is cut. The monorepo <code>sugar-video/</code> commit history is the record of changes. The <a href="https://packagist.org/packages/sugarcraft/sugar-video">Packagist page</a> shows the current version.</p>
+
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-video">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-video/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-video/tree/master/examples">Runnable examples</a></li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 </main>
 
 <footer class="footer">

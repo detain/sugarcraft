@@ -1,9 +1,10 @@
-<p class="lede" style="margin-top: 28px;">Image-to-cell renderer for the terminal. PNG, JPEG, GIF (still and animated), APNG, WebP and BMP decoded via ext-gd plus pure-PHP animated-container decoders and rendered via the best available protocol: Sixel, Kitty graphics, iTerm2 inline images, the chafa CLI — or one of the Unicode text tiers: half-block, quarter-block, an ASCII character ramp, or chafa's coverage-class symbol engine.</p>
+<p class="lede" style="margin-top: 28px;">Image-to-cell renderer for the terminal. It decodes PNG, JPEG, GIF (still and animated), APNG, WebP and BMP, then renders through the best available tier: Sixel, Kitty graphics, iTerm2 inline images, the chafa CLI, or a Unicode text tier (half-block, quarter-block, an ASCII character ramp, or the symbol-map engine). It mirrors <a href="https://github.com/charmbracelet/x/tree/main/mosaic">charmbracelet/x/mosaic</a> (Go), and the symbol engine is a port of chafa's coverage-class symbol matching.</p>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <h2 style="margin-top: 40px;">Install</h2>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-image</code></pre>
+    <p style="color: var(--ink-2);">Requires PHP <code>^8.3</code>, <code>ext-gd</code>, <code>ext-mbstring</code> and <code>react/promise</code>, all declared in <code>composer.json</code>. Without GD every pure-PHP tier refuses with a readable message instead of an undefined-function error. The chafa CLI is never required: the chafa tier is opt-in and is the only external binary the library runs to produce image output.</p>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h2 style="margin-top: 40px;">Quickstart</h2>
     <pre class="code"><code class="language-php">use SugarCraft\Image\Mosaic;
 use SugarCraft\Image\ImageSource;
 
@@ -11,8 +12,41 @@ $mosaic = Mosaic::halfBlock();
 $image  = ImageSource::fromFile('examples/fixture-gradient.png');
 $ansi   = $mosaic->render($image, width: 40, height: 20);
 echo $ansi;</code></pre>
+    <p style="color: var(--ink-2);">The output is an ANSI byte string your program owns. Write it to stdout, to a socket, into a text frame, or into a file. Nothing is printed on your behalf.</p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h2 style="margin-top: 40px;">Concepts</h2>
+    <p>Every tier is one of two kinds. <strong>Graphic tiers</strong> (Sixel, Kitty, iTerm2) send the terminal's own image escape sequences, so the picture is pixels. <strong>Text tiers</strong> (half-block, quarter-block, ASCII ramp, symbol map) send glyphs with 24-bit or 256-color SGR, so they work in any Unicode terminal and survive a plain pipe. Use a graphic tier when the terminal supports it, and a text tier as the floor when it does not.</p>
+    <p><code>Mosaic::probe()</code> picks the tier from the environment and a DA1 capability query, and <code>Mosaic::auto()</code> runs the same ladder. Both are fail-soft: the result is always a usable tier. Force a tier when you know the terminal, or when a probe answer is not what you see on screen.</p>
+
+    <h2 style="margin-top: 40px;">Tasks</h2>
+    <h3 style="margin-top: 24px;">Pick a tier explicitly</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Image\Mosaic;
+
+$mosaic = Mosaic::probe();            // best tier for this terminal
+$mosaic = Mosaic::fromModeString('quarterblock');  // a named tier, or null if unknown</code></pre>
+
+    <h3 style="margin-top: 24px;">Choose a color depth for a text tier</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Image\Renderer\AsciiColorMode;
+use SugarCraft\Image\Symbol\CanvasMode;
+
+$sixteen = Mosaic::ascii(AsciiColorMode::Ansi16);    // 16-color character ramp
+$mono    = Mosaic::ascii();                           // monochrome ramp (the default)
+$symbols = Mosaic::symbols(CanvasMode::Ansi256);      // symbol map on a 256-color canvas</code></pre>
+    <p>Text tiers emit 24-bit or 256-color SGR with no palette negotiation. On a limited-color terminal, pick the canvas explicitly. <code>NO_COLOR</code> changes which graphic protocol is detected, but no renderer reads it to reduce the colors it emits.</p>
+
+    <h3 style="margin-top: 24px;">Place an image by id on Kitty</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Image\KittyOptions;
+
+// Store the image once, then reference it at many offsets.
+$store = KittyOptions::transmit(7)-&gt;withUseVirtual(true);
+$place = KittyOptions::place(7, x: 4, y: 2);</code></pre>
+    <p>The storing transmit carries the payload once, and each <code>place()</code> is a control-only frame that never resends it. Use <code>withCompression(1)</code> to zlib-compress the PNG payload before base64 encoding, which helps large images on slow links.</p>
+
+    <h3 style="margin-top: 24px;">Render from a remote URL safely</h3>
+    <p><code>ImageSource::fromUrl()</code> and <code>fromUrlAsync()</code> refuse any scheme outside the allowlist, re-check the scheme on every redirect hop, and refuse any host that resolves to a private, loopback, link-local or reserved address, including cloud metadata addresses. The security note in the README lists the residuals: the host check runs at guard time, not connect time.</p>
+
+    <h2 style="margin-top: 40px;">API reference</h2>
+    <h3 style="margin-top: 24px;">Mosaic</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Mosaic;
 use SugarCraft\Image\Renderer\AsciiColorMode;
@@ -46,40 +80,7 @@ $mosaic = Mosaic::builder()
 $ansi = $mosaic->render($image);          // 40×20 cells
 $ansi = $mosaic->render($image, 60);      // explicit width wins; height from aspect</code></pre>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>Sixel renderer</strong><span>xterm, foot, mlterm, contour support; mlterm and foot are recognized from <code>TERM</code> alone.</span></div>
-      <div class="feature"><strong>Kitty graphics protocol</strong><span>kitty, ghostty, wezterm support.</span></div>
-      <div class="feature"><strong>iTerm2 inline images</strong><span>OSC 1337 support for iTerm2 and mintty.</span></div>
-      <div class="feature"><strong>Unicode half-block</strong><span>Fallback for sighted readers on any Unicode-capable terminal using ▀ + 24-bit fg/bg, where the terminal honors cell geometry; the <code>auto()</code> floor of the fallback ladder is the symbol-map tier.</span></div>
-      <div class="feature"><strong>Unicode quarter-block</strong><span>Higher fidelity using ░▒▓█ 2×2 sub-pixel rendering, again where cell geometry is honored (an explicit choice — not an <code>auto()</code> rung).</span></div>
-      <div class="feature"><strong>ext-gd integration</strong><span>PNG, JPEG, static GIF via GD (imagecreatefrompng, imagecreatefromjpeg, imagecreatefromgif). <code>ImageSource::fromString()</code> also accepts anything <code>imagecreatefromstring()</code> decodes (WebP, BMP, …) with its real MIME in <code>format</code>; the Kitty/iTerm2 renderers re-encode any payload that is not PNG by signature. Animated GIF and APNG load via <code>ImageSource::fromAnimatedFile()</code>, which returns an <code>Animation</code> (frames + per-frame delays) to feed <code>AnimationDriver</code>. Pixel allocations are bounded before GD is asked for them.</span></div>
-      <div class="feature"><strong>Protocol detection</strong><span><code>Mosaic::probe()</code> checks environment variables and the DA1 capability query on every call; <code>Detect::cached()</code> memoizes the answer per-process.</span></div>
-      <div class="feature"><strong>Kitty virtual-image placement</strong><span>Store once with <code>KittyOptions::transmit(id)-&gt;withUseVirtual(true)</code> (<code>a=T,U=1</code> payload plus a trailing control-only <code>a=p</code> placement), then reference it at many offsets with <code>KittyOptions::place(id, x:, y:)</code> — a one-shot control-only <code>a=p</code> frame that never carries payload again.</span></div>
-      <div class="feature"><strong>Kitty zlib compression</strong><span>Compress the PNG payload with zlib before base64-encoding via <code>KittyOptions::withCompression(1)</code> — emitted as <code>f=100,o=z</code> (compression rides the spec's <code>o</code> key). Useful for large images on slow links.</span></div>
-      <div class="feature"><strong>Half-block transparency</strong><span>Transparent pixels (alpha=127) emit no SGR codes — terminal default background shows through. Enables overlay compositing on existing terminal content.</span></div>
-      <div class="feature"><strong>Sixel 256-color fallback</strong><span>Pass <code>maxColors</code> (1–256) to <code>SixelRenderer</code> constructor to limit palette size for terminals with limited truecolor support. It is a constructor knob, so it rides the builder: <code>Mosaic::builder()-&gt;withRenderer(new SixelRenderer(maxColors: 64))-&gt;build()</code>. <code>Mosaic::sixel(dither, intensity)</code> exposes the dither axis plus <code>intensity</code> (0.0–1.0 Ordered/Noise bias; null keeps the chafa default 1.0).</span></div>
-      <div class="feature"><strong>Symbol-map engine (chafa parity)</strong><span>Unicode braille/sextant/octant/block glyph cells chosen by Hamming-distance candidate search — pure inline SGR that reaches any Unicode terminal; glyph fidelity depends on the font's coverage (restrict the corpus via <code>symbols:</code>), making it the practical universal floor of the ladder. <code>Mosaic::symbols(canvas:, workFactor:, symbols:)</code> selects the color canvas, candidate budget, and chafa's <code>--symbols=</code> tag grammar over the 1,251-glyph effective corpus (1,260 parsed, nine AMBIGUOUS-tagged misc-narrow glyphs BAD-vetoed even by <code>all</code>); the default 676-glyph corpus is byte-frozen. A double-width wide-glyph engine carries the opt-in kana tier.</span></div>
-      <div class="feature"><strong>ASCII character ramp</strong><span><code>Mosaic::ascii()</code> maps one luminance sample per cell onto a character ramp; <code>AsciiColorMode::Ansi16 | Ansi256 | TrueColor</code> carries pixel colors on the characters themselves.</span></div>
-      <div class="feature"><strong>chafa CLI tier</strong><span><code>ChafaRenderer</code> shells out to the <code>chafa</code> command with option passthrough — output is bounded and the child is reaped on a TERM→KILL ladder. Binary discovery is gated (InfocmpBinary precedent): a fixed absolute roster or the explicit <code>SUGAR_IMAGE_CHAFA</code> override, never an implicit PATH search for the program that produces image output. Opt-in only; the pure-PHP tiers never shell out for pixel data. The only other spawns are the two tmux capability consults and the <code>stty</code> terminal-state round-trip: the tmux consults pass argv arrays with no shell between; the <code>stty</code> save and arm are constant strings and only the restore interpolates, <code>escapeshellarg</code>-quoted — reached only inside an existing session, and never feed rendered bytes.</span></div>
-      <div class="feature"><strong>Remote images</strong><span><code>ImageSource::fromUrl()</code> / <code>fromUrlAsync()</code> (ReactPHP) with a security floor: scheme allowlist re-checked every redirect hop, and any host resolving to a private/loopback/link-local/reserved address (including cloud metadata) is refused. Disclosed residuals (authority: the README Security note): the host check runs at guard time, not connect time — a TTL-0 DNS-rebinding TOCTOU is undefended, so proxy the fetch if you need a connect-time guarantee — and on the async path the byte ceiling bounds what the library accepts, not what the socket delivered, because react/stream buffers the body before the guard sees it.</span></div>
-      <div class="feature"><strong>Render caches</strong><span><code>DiskCache</code> stores finished bytes keyed by URL + size + protocol(+ mode detail) for cross-process redraws; <code>AdaptiveImage</code> is the in-session LRU; <code>ImageLayer</code> reserves marker blocks so images ride inside a text frame without wrecking layout.</span></div>
-      <div class="feature"><strong>tmux passthrough automation</strong><span>tmux panes swallow DCS/APC/OSC graphics unless <code>allow-passthrough</code> is on; <code>TmuxPassthrough</code> flips it pane-scoped for the render and restores (or unsets) it on retire — fail-soft, never a throw, opt-out via <code>Detect::setAutoPassthrough(false)</code>.</span></div>
-      <div class="feature"><strong>Decode budgets</strong><span>Decoding untrusted input is capped: 64 MiB read budget on the file, animated-file and URL routes (bytes already in hand are guarded by the format signature and the pixel budget instead of a length ceiling), a 50-megapixel per-decode ceiling re-checked on decoded dimensions, animated-GIF frame and cell budgets (a 256-frame slice plus per-frame and aggregate ceilings), and a bounded RIFF walk for WebP — every refusal cap pinned by tests.</span></div>
-      <div class="feature"><strong>Animation support</strong><span><code>Animation</code> (immutable frame sequence) + <code>AnimationDriver</code> (Model with tick-based frame timing). Use <code>KittyRenderer::renderFrame()</code> for stable per-frame ids that support targeted redraws.</span></div>
-    </div>
-
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
-    <ul>
-      <li><a href="https://github.com/sugarcraft/sugar-image">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-image/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-image/tree/master/examples">Runnable examples</a></li>
-      <li>Originally inspired by <a href="https://github.com/charmbracelet/x/tree/main/mosaic">charmbracelet/x mosaic</a> (Go); SugarCraft is developed as a native PHP project.</li>
-    </ul>
-
-    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
-
-    <h3 style="margin-top: 32px;">Key Classes</h3>
+    <h3 style="margin-top: 24px;">Key classes</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Mosaic</td><td>probe()</td><td>Auto-detect best terminal protocol</td></tr>
@@ -89,26 +90,174 @@ $ansi = $mosaic->render($image, 60);      // explicit width wins; height from as
 <tr><td>Mosaic</td><td>builder()</td><td>Create builder for fine-grained control</td></tr>
 <tr><td>Renderer</td><td>delete(imageId)</td><td>Remove a previously rendered image (Kitty=APC delete; iTerm2=OSC 1337 Pop; others=empty)</td></tr>
 <tr><td>KittyRenderer</td><td>renderWithOptions(image, width, height, KittyOptions)</td><td>Render with Kitty protocol options (virtual-image store <code>a=T,U=1</code> + control-only <code>a=p</code>; zlib <code>o=z</code>; raw-byte chunking)</td></tr>
-<tr><td>KittyOptions</td><td>transmit(id), place(id, x, y)</td><td>Factory: transmit (with or without storage) or place a previously stored image — <code>place()</code> emits a one-shot control-only <code>a=p</code> frame and never carries payload</td></tr>
+<tr><td>KittyOptions</td><td>transmit(id), place(id, x, y)</td><td>Factory: transmit (with or without storage) or place a previously stored image; <code>place()</code> emits a one-shot control-only <code>a=p</code> frame and never carries payload</td></tr>
 <tr><td>KittyOptions</td><td>withZIndex(z), withCompression(f), withUseVirtual(bool), withPlacementU(u)</td><td>Builder: z-index stacking, zlib compression (<code>o=z</code>), storing transmit (<code>a=T,U=1</code> + trailing <code>a=p</code>), under/over-text placement (U=1 default, U=0 over text)</td></tr>
 <tr><td>QuarterBlockRenderer</td><td>new</td><td>2×2 sub-pixel renderer via <code>Mosaic::builder()-&gt;withRenderer(new QuarterBlockRenderer())</code></td></tr>
-<tr><td>HalfBlockRenderer</td><td>new, supportsAlpha()</td><td>Unicode ▀ renderer with transparent-pixel handling (null alpha skips SGR codes, letting terminal default show through). <code>supportsAlpha()</code> returns <code>false</code> — transparency is rendered by omitting SGR, not blending.</td></tr>
-<tr><td>SixelRenderer</td><td>new(dither, maxColors, cellWidth, cellHeight, intensity), maxColors(), dither()</td><td>DEC sixel renderer with median-cut quantizer (up to 256 colors). Constructor accepts <code>maxColors</code> (1–256, default 256) to limit palette size for limited-truecolor terminals — it reaches the facade only through <code>Mosaic::builder()-&gt;withRenderer(new SixelRenderer(maxColors: 64))</code>. The constructor also takes <code>intensity</code> (0.0–1.0 Ordered/Noise bias; null keeps the chafa config default 1.0), which <code>Mosaic::sixel(dither, intensity)</code> threads through. Dither enum: <code>FloydSteinberg</code>, <code>Stucki</code>, <code>Atkinson</code>, <code>Ordered</code>, <code>Noise</code>, <code>None</code>.</td></tr>
-<tr><td>ImageSource</td><td>fromFile(path)</td><td>Load image from file</td></tr>
-<tr><td>ImageSource</td><td>fromGd(image, format)</td><td>Create from GD resource; throws when the image cannot be encoded</td></tr>
-<tr><td>ImageSource</td><td>fromString(bytes) / fromAnimatedFile(path)</td><td>Decode any GD-readable bytes / load animated GIF or APNG frames as an <code>Animation</code> (frames + per-frame delays); animated WebP is refused by name (use chafa or sugar-video's AnimatedWebpDecoder)</td></tr>
-<tr><td>ImageSource</td><td>fromUrl(url, headers) / fromUrlAsync(url)</td><td>Fetch remote images with scheme + private-address SSRF floor (sync / ReactPHP)</td></tr>
+<tr><td>HalfBlockRenderer</td><td>new, supportsAlpha()</td><td>Unicode ▀ renderer with transparent-pixel handling (null alpha skips SGR codes, letting terminal default show through). <code>supportsAlpha()</code> returns <code>false</code>: transparency is rendered by omitting SGR, not blending.</td></tr>
+<tr><td>SixelRenderer</td><td>new(dither, maxColors, cellWidth, cellHeight, intensity), maxColors(), dither()</td><td>DEC sixel renderer with median-cut quantizer (up to 256 colors). Constructor accepts <code>maxColors</code> (1–256, default 256) to limit palette size for limited-truecolor terminals. The constructor also takes <code>intensity</code> (0.0–1.0 Ordered/Noise bias; null keeps the chafa config default 1.0). Dither enum: <code>FloydSteinberg</code>, <code>Stucki</code>, <code>Atkinson</code>, <code>Ordered</code>, <code>Noise</code>, <code>None</code>.</td></tr>
+<tr><td>ChafaRenderer</td><td>__construct(...), available(), renderAsync()</td><td>Shells out to the chafa CLI with bounded output; the child is reaped on a TERM→KILL ladder. <code>available()</code> reports whether a binary resolved. Opt-in only.</td></tr>
+<tr><td>SymbolMapRenderer</td><td>withCanvasMode(), withWorkFactor(), withSymbolSelectors()</td><td>Symbol-map tier: picks glyph cells by Hamming-distance candidate search. <code>Mosaic::symbols()</code> builds one with its defaults.</td></tr>
+<tr><td>SymbolMap</td><td>coverageToBitmap() and the candidate search</td><td>The coverage-class engine behind the symbols tier: the glyph corpus and the search over it. The 676-glyph default corpus is byte-frozen.</td></tr>
+<tr><td>SymbolSetLatin</td><td>(glyph table)</td><td>The chafa Latin narrow set: 365 glyphs from U+00A1 to U+03F6, transcribed as 8×8 bitmaps.</td></tr>
+<tr><td>SymbolSetTables</td><td>(glyph tables)</td><td>The chafa narrow tables the symbol engine carries: ASCII, the Latin and Greek set, misc-narrow, and the legacy-computing block entries.</td></tr>
+<tr><td>Ditherer</td><td>indexRows(image, palette, offset, yOrigin), noiseMagnitude(intensity)</td><td>The shared dithering stage: error diffusion and bias texture. <code>indexRows()</code> walks RGB rows and yields palette indices, and the Sixel renderer uses it.</td></tr>
+<tr><td>ImageSource</td><td>fromFile(path), fromString(bytes), fromGd(image, format), fromRgb(bytes, w, h)</td><td>Load an image from a file, bytes, a GD resource or raw RGB(A) pixels. Decode budgets apply to every route.</td></tr>
+<tr><td>ImageSource</td><td>fromAnimatedFile(path)</td><td>Animated GIF or APNG frames as an <code>Animation</code> (frames + per-frame delays). Animated WebP is refused by name.</td></tr>
+<tr><td>ImageSource</td><td>fromUrl(url, headers) / fromUrlAsync(url)</td><td>Remote images with the scheme and private-address SSRF floor (synchronous, or ReactPHP)</td></tr>
+<tr><td>ImageSource</td><td>isPng(), aspectRatio(), crop(), resize()</td><td>Signature check, geometry, and pixel transforms on the decoded image</td></tr>
 <tr><td>DiskCache</td><td>get/put/getOrCompute, key()</td><td>On-disk render cache; atomic writes, hashed keys, bounded entries</td></tr>
 <tr><td>ImageLayer</td><td>place(bytes, w, h), placeTracked()</td><td>Reserve marker blocks carrying image bytes in a text frame (dedup by content hash)</td></tr>
-<tr><td>ImageSource</td><td>isPng()</td><td>Whether the payload carries the PNG signature</td></tr>
-<tr><td>Animation</td><td>fixed(frames, delayMs)</td><td>Factory: uniform-delay animation from list of ImageSource</td></tr>
-<tr><td>Animation</td><td>withFrame(index, frame, delayMs)</td><td>Return new Animation with one replaced frame (immutable)</td></tr>
-<tr><td>Animation</td><td>frameCount(), totalDurationMs()</td><td>Frame count and total duration in ms</td></tr>
-<tr><td>AnimationDriver</td><td>new(animation, renderer, cellWidth, cellHeight?, index?, paused?, imageId?)</td><td>Model that drives Animation onto a Renderer via tick-based frame timing</td></tr>
-<tr><td>AnimationDriver</td><td>withIndex(n), withPaused(bool), withImageId(id)</td><td>Fluent state changes (each returns new instance)</td></tr>
-<tr><td>FrameTickMsg</td><td>(internal)</td><td>Internal Msg dispatched by Cmd::tick() to advance frame index</td></tr>
-<tr><td>KittyRenderer</td><td>renderFrame(image, width, height, imageId)</td><td>Render single frame with stable id for targeted delete+redraw on Kitty terminals</td></tr>
+<tr><td>Animation</td><td>fixed(frames, delayMs), withFrame(index, frame, delayMs), frameCount(), totalDurationMs()</td><td>Immutable frame sequence: uniform-delay factory, one replaced frame, count, and total duration in ms</td></tr>
+<tr><td>AnimationDriver</td><td>new(animation, renderer, cellWidth, cellHeight?, index?, paused?, imageId?)</td><td>Model that drives an Animation onto a Renderer via tick-based frame timing; <code>withIndex()</code>, <code>withPaused()</code> and <code>withImageId()</code> return new instances</td></tr>
+<tr><td>KittyRenderer</td><td>renderFrame(image, width, height, imageId)</td><td>Render a single frame with a stable id for targeted delete and redraw on Kitty terminals</td></tr>
+<tr><td>Detect</td><td>cached(), fromEnv(), probe(), setAutoPassthrough(bool)</td><td>Capability detection: <code>cached()</code> memoizes the probe per process; <code>setAutoPassthrough(false)</code> opts out of tmux passthrough management</td></tr>
 </table>
+
+    <h3 style="margin-top: 24px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Sixel renderer</strong><span>xterm, foot, mlterm, contour support; mlterm and foot are recognized from <code>TERM</code> alone.</span></div>
+      <div class="feature"><strong>Kitty graphics protocol</strong><span>kitty, ghostty, wezterm support.</span></div>
+      <div class="feature"><strong>iTerm2 inline images</strong><span>OSC 1337 support for iTerm2 and mintty.</span></div>
+      <div class="feature"><strong>Unicode half-block</strong><span>Fallback for any Unicode-capable terminal using ▀ + 24-bit fg/bg, where the terminal honors cell geometry; the <code>auto()</code> floor of the fallback ladder is the symbol-map tier.</span></div>
+      <div class="feature"><strong>Unicode quarter-block</strong><span>Higher fidelity using ░▒▓█ 2×2 sub-pixel rendering, again where cell geometry is honored (an explicit choice, not an <code>auto()</code> rung).</span></div>
+      <div class="feature"><strong>ext-gd integration</strong><span>PNG, JPEG and static GIF via GD. <code>ImageSource::fromString()</code> also accepts anything <code>imagecreatefromstring()</code> decodes (WebP, BMP and others) with its real MIME in <code>format</code>; the Kitty and iTerm2 renderers re-encode any payload that is not PNG by signature. Pixel allocations are bounded before GD is asked for them.</span></div>
+      <div class="feature"><strong>Protocol detection</strong><span><code>Mosaic::probe()</code> checks environment variables and the DA1 capability query on every call; <code>Detect::cached()</code> memoizes the answer per process.</span></div>
+      <div class="feature"><strong>Kitty virtual-image placement</strong><span>Store once with <code>KittyOptions::transmit(id)-&gt;withUseVirtual(true)</code>, then reference it at many offsets with <code>KittyOptions::place(id, x:, y:)</code>.</span></div>
+      <div class="feature"><strong>Kitty zlib compression</strong><span>Compress the PNG payload with zlib before base64-encoding via <code>KittyOptions::withCompression(1)</code>, emitted as <code>f=100,o=z</code>. Useful for large images on slow links.</span></div>
+      <div class="feature"><strong>Half-block transparency</strong><span>Transparent pixels (alpha=127) emit no SGR codes, so the terminal default background shows through. This enables overlay compositing on existing terminal content.</span></div>
+      <div class="feature"><strong>Sixel 256-color fallback</strong><span>Pass <code>maxColors</code> (1–256) to the <code>SixelRenderer</code> constructor to limit palette size on terminals with limited truecolor support. It rides the builder: <code>Mosaic::builder()-&gt;withRenderer(new SixelRenderer(maxColors: 64))-&gt;build()</code>.</span></div>
+      <div class="feature"><strong>Symbol-map engine (chafa parity)</strong><span>Unicode braille, sextant, octant and block glyph cells chosen by Hamming-distance candidate search. Pure inline SGR that reaches any Unicode terminal. Glyph fidelity depends on the font's coverage, so restrict the corpus with <code>symbols:</code> when needed. <code>Mosaic::symbols(canvas:, workFactor:, symbols:)</code> selects the color canvas, candidate budget and chafa's <code>--symbols=</code> tag grammar.</span></div>
+      <div class="feature"><strong>ASCII character ramp</strong><span><code>Mosaic::ascii()</code> maps one luminance sample per cell onto a character ramp. <code>AsciiColorMode::Ansi16 | Ansi256 | TrueColor</code> carries pixel colors on the characters themselves.</span></div>
+      <div class="feature"><strong>chafa CLI tier</strong><span><code>ChafaRenderer</code> shells out to the <code>chafa</code> command with option passthrough. Output is bounded and the child is reaped on a TERM→KILL ladder. Binary discovery is gated (see Configuration). Opt-in only; the pure-PHP tiers never shell out for pixel data.</span></div>
+      <div class="feature"><strong>Remote images</strong><span><code>ImageSource::fromUrl()</code> and <code>fromUrlAsync()</code> (ReactPHP) with a security floor: scheme allowlist re-checked every redirect hop, and any host resolving to a private, loopback, link-local or reserved address (including cloud metadata) is refused.</span></div>
+      <div class="feature"><strong>Render caches</strong><span><code>DiskCache</code> stores finished bytes keyed by URL, size and protocol (plus the mode detail) for cross-process redraws. <code>AdaptiveImage</code> is the in-session LRU. <code>ImageLayer</code> reserves marker blocks so images ride inside a text frame without wrecking layout.</span></div>
+      <div class="feature"><strong>tmux passthrough automation</strong><span>tmux panes swallow DCS, APC and OSC graphics unless <code>allow-passthrough</code> is on. <code>TmuxPassthrough</code> turns it on for the pane during the render and restores it (or unsets it) on retire. It is fail-soft and never throws.</span></div>
+      <div class="feature"><strong>Decode budgets</strong><span>Decoding untrusted input is capped. The limits are listed under Configuration, and each refusal is pinned by a test.</span></div>
+      <div class="feature"><strong>Animation support</strong><span><code>Animation</code> (immutable frame sequence) and <code>AnimationDriver</code> (a Model with tick-based frame timing). Use <code>KittyRenderer::renderFrame()</code> for stable per-frame ids that support targeted redraws.</span></div>
+    </div>
+
+    <h2 style="margin-top: 40px;">Configuration</h2>
+    <h3 style="margin-top: 24px;">Environment variables</h3>
+    <table class="api-table">
+    <caption>Environment variables that sugar-image reads.</caption>
+    <thead>
+    <tr><th scope="col">Variable</th><th scope="col">Effect</th></tr>
+    </thead>
+    <tbody>
+    <tr><td><code>SUGAR_IMAGE_CHAFA</code></td><td>Operator override for the chafa binary. An absolute path must be an executable file, and a broken absolute override is refused rather than replaced. A bare name authorizes a PATH lookup for that one value only.</td></tr>
+    <tr><td><code>SUGAR_IMAGE_TMUX</code></td><td>Binary override for the tmux consults. Same absolute-path gate as chafa.</td></tr>
+    <tr><td><code>SUGAR_IMAGE_STTY</code></td><td>Binary override for the terminal-state round trip. Same absolute-path gate.</td></tr>
+    <tr><td><code>SUGAR_IMAGE_TMUX_PASSTHROUGH_TTL</code></td><td>Seconds between re-checks of tmux <code>allow-passthrough</code>. Default 30. <code>0</code> re-verifies before every frame. A negative or unparsable value falls back to the default.</td></tr>
+    <tr><td>Identity variables (<code>TERM</code>, <code>TERM_PROGRAM</code>, <code>TERM_PROGRAM_VERSION</code>, <code>LC_TERMINAL</code>, <code>TERMINAL_NAME</code>, <code>TMUX</code>, <code>KITTY_WINDOW_ID</code>, <code>KITTY_PID</code>, <code>XTERM_VERSION</code>, <code>KONSOLE_VERSION</code>, <code>VTE_VERSION</code>, <code>MLTERM</code>, <code>GHOSTTY_BIN_DIR</code>, <code>WEZTERM_EXECUTABLE</code>, <code>ComSpec</code>)</td><td>Probe inputs for <code>Mosaic::probe()</code>. The table-driven identity stage reads exactly these fifteen names. The live DA1 round trip on the TTY decides what the table cannot.</td></tr>
+    <tr><td><code>NO_COLOR</code>, <code>CLICOLOR</code></td><td>Consulted only by the terminfo sixel-detection ladder. They can change which protocol is detected, never which colors are emitted.</td></tr>
+    </tbody>
+    </table>
+
+    <h3 style="margin-top: 24px;">Decode budgets</h3>
+    <table class="api-table">
+    <caption>Budgets that bound decoding of untrusted input.</caption>
+    <thead>
+    <tr><th scope="col">Budget</th><th scope="col">Value</th><th scope="col">What it stops</th></tr>
+    </thead>
+    <tbody>
+    <tr><td><code>ImageSource::MAX_BYTES</code></td><td>64 MiB</td><td>The file, animated-file, URL and <code>fromString()</code> reads. Oversized payloads are refused before GD sees them.</td></tr>
+    <tr><td><code>ImageSource::MAX_PIXELS</code></td><td>50,000,000 px</td><td>The per-decode pixel budget. <code>withMaxPixels()</code> tunes it per source.</td></tr>
+    <tr><td><code>DecodedImageCache::BYTE_BUDGET</code></td><td>32 MiB, eight slots at most</td><td>The process-wide decode LRU. A handle larger than the budget is never kept.</td></tr>
+    <tr><td><code>Animation::MAX_FRAMES</code></td><td>10,000 frames</td><td>The frame-list length. <code>new Animation(...)</code> and <code>withFrame()</code> refuse a longer sequence.</td></tr>
+    </tbody>
+    </table>
+
+    <h3 style="margin-top: 24px;">Chafa binary discovery</h3>
+    <p>The chafa tier is the one place sugar-image executes an external program to produce image output. The binary is chosen through a strict gate, and a bare <code>chafa</code> argv[0] is never spawned, so a rogue <code>chafa</code> earlier on PATH never runs. The order is: the <code>SUGAR_IMAGE_CHAFA</code> override, then a fixed roster of absolute candidates (<code>/usr/bin/chafa</code>, <code>/usr/local/bin/chafa</code>, <code>/opt/homebrew/bin/chafa</code>), each checked for being a file and executable. When nothing resolves, <code>ChafaRenderer::available()</code> returns <code>false</code> and <code>render()</code> throws a <code>chafa.not_found</code> failure. The gate is POSIX-shaped, so the chafa tier does not run on Windows.</p>
+
+    <h2 style="margin-top: 40px;">Styling and color depth</h2>
+    <p>sugar-image does not ship a theme. Its styling choices are the color depth and the dither mode. The depth is set by the text-tier factory (<code>AsciiColorMode</code> for the ramp, <code>CanvasMode</code> for the symbol map). The dither mode is set on the Sixel renderer, and <code>Mosaic::withDither()</code> changes it on a built Mosaic.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Image\Dither;
+use SugarCraft\Image\Mosaic;
+
+$sixel = Mosaic::sixel(Dither::Ordered, intensity: 0.6);
+$sixel = $sixel->withDither(Dither::FloydSteinberg);</code></pre>
+    <p><code>Mosaic::sixel(dither, intensity)</code> exposes the dither axis. <code>intensity</code> (0.0–1.0) biases the Ordered and Noise dithers, and <code>null</code> keeps the chafa default of 1.0.</p>
+
+    <h2 style="margin-top: 40px;">Examples</h2>
+    <ul>
+      <li><code>examples/inline-image.php &lt;image-file&gt; [width-in-cells]</code> (default width 80) prints one image on the terminal's best tier. It is the shortest read of the detection path. Its exit codes are listed under Troubleshooting.</li>
+      <li><code>examples/text-tiers.php [width-in-cells]</code> (default 24) renders the committed fixture through the half-block, quarter-block, ASCII (mono and ansi16) and symbol-map tiers, one labeled block each. It needs no graphics protocol and no chafa binary, so its output can be captured or piped.</li>
+      <li><code>examples/fixture-gradient.png</code> is a committed image, so the quickstart and both scripts run against the checkout without a separate file.</li>
+    </ul>
+
+    <pre class="code"><code class="language-shell">php examples/text-tiers.php 16 | head -n 5
+php examples/inline-image.php examples/fixture-gradient.png 40</code></pre>
+
+    <h2 style="margin-top: 40px;">Testing</h2>
+    <pre class="code"><code class="language-shell">cd sugar-image &amp;&amp; composer install &amp;&amp; vendor/bin/phpunit</code></pre>
+    <p>The suite bootstraps from <code>tests/bootstrap.php</code> and covers the renderers, the decode budgets and the tmux passthrough. The main caps (<code>MAX_BYTES</code>, <code>MAX_PIXELS</code> and <code>Animation::MAX_FRAMES</code>) are pinned by boundary tests, so a change that loosens one fails the suite. The README Limits section lists the few caps that are not pinned.</p>
+
+    <h2 style="margin-top: 40px;">Troubleshooting and FAQ</h2>
+    <h3 style="margin-top: 24px;">Exit codes from <code>inline-image.php</code></h3>
+    <table class="api-table">
+    <caption>Exit codes the example script returns.</caption>
+    <thead>
+    <tr><th scope="col">Exit</th><th scope="col">Meaning</th></tr>
+    </thead>
+    <tbody>
+    <tr><td>0</td><td>The image rendered and its bytes were written to stdout.</td></tr>
+    <tr><td>1</td><td>Usage: no image path given, a width that is not a positive integer of cells, or no file at the given path.</td></tr>
+    <tr><td>2</td><td>ext-gd is not loaded. This check runs before argument parsing.</td></tr>
+    <tr><td>3</td><td>The path exists but is not a readable regular file, the bytes did not load as a supported image, or the render refused at the requested size (for example, the canvas ceiling guard).</td></tr>
+    </tbody>
+    </table>
+
+    <h3 style="margin-top: 24px;">The image appears as escape-sequence noise</h3>
+    <p>The probe chose a graphic tier, but the terminal does not render it. Force a text tier with <code>Mosaic::halfBlock()</code> or <code>Mosaic::symbols()</code>, and report the terminal to the probe tables if it should have been detected.</p>
+
+    <h3 style="margin-top: 24px;">Graphics vanish inside tmux</h3>
+    <p>tmux swallows graphics escapes unless <code>allow-passthrough</code> is on for the pane. Leave <code>TmuxPassthrough</code> in its default auto mode, which turns the option on during the render and restores it afterwards. If you manage tmux yourself, set <code>SUGAR_IMAGE_TMUX_PASSTHROUGH_TTL=0</code> to re-check on every frame, or call <code>Detect::setAutoPassthrough(false)</code>.</p>
+
+    <h3 style="margin-top: 24px;">A render refuses with a message about GD</h3>
+    <p>Without <code>ext-gd</code>, every pure-PHP tier refuses with a readable message. Install the extension and check it with <code>php -m</code>.</p>
+
+    <h3 style="margin-top: 24px;">An animated WebP is refused</h3>
+    <p><code>ImageSource::fromAnimatedFile()</code> refuses animated WebP by name. Use chafa for it, or sugar-video's <code>AnimatedWebpDecoder</code>, which decodes animated WebP for playback.</p>
+
+    <h3 style="margin-top: 24px;">The chafa tier does not run</h3>
+    <p>The chafa binary is found only through the discovery gate. Set <code>SUGAR_IMAGE_CHAFA</code> to an absolute path of an executable file. A broken absolute override is refused on purpose, so the library never falls back silently to a different program. Check <code>ChafaRenderer::available()</code> to see whether a binary resolved.</p>
+
+    <h2 style="margin-top: 40px;">Upstream mapping</h2>
+    <table class="api-table">
+    <tr><th>SugarCraft</th><th>Upstream</th><th>Notes</th></tr>
+    <tr><td><code>Mosaic</code> facade, Kitty, Sixel, iTerm2 and half-block tiers</td><td><a href="https://github.com/charmbracelet/x/tree/main/mosaic">charmbracelet/x/mosaic</a></td><td>Listed in <a href="https://github.com/detain/sugarcraft/blob/master/docs/MATCHUPS.md">docs/MATCHUPS.md</a>. The <code>Picker</code> role matches the ratatui-image facade listed at line 55 of the same MATCHUPS file.</td></tr>
+    <tr><td><code>Symbol</code> namespace (symbol map, canvas modes, corpus)</td><td>chafa's coverage-class symbol engine</td><td>Ported for parity. The default 676-glyph corpus is frozen byte for byte.</td></tr>
+    </table>
+    <p>SugarCraft is developed as a native PHP project. The upstream is a reference, not a source to transliterate.</p>
+
+    <h2 style="margin-top: 40px;">Architecture</h2>
+    <pre class="code"><code class="language-text">SugarCraft\Image
+├── Mosaic / MosaicBuilder     # facade: probe, auto, builder, render
+├── ImageSource                # bytes, metadata and decode budgets
+├── Animation / AnimationDriver# frame sequences and their Model
+├── Detect / TermDb / Capability  # capability detection and quirks tables
+├── DiskCache / AdaptiveImage  # render caches (on disk; in-session LRU)
+├── ImageLayer                 # marker blocks that ride inside a text frame
+├── Renderer/                  # Sixel, Kitty, iTerm2, half-block, quarter-block,
+│                              # ASCII, symbol map, chafa
+├── Symbol/                    # symbol map, tables, canvas modes, corpus
+├── Dither/                    # Ditherer and the Dither enum
+├── Passthrough/               # tmux passthrough packetizer and decorators
+└── Support/                   # binary gates (chafa, tmux, stty) and GD probe</code></pre>
+    <p>The renderers share one interface, so a Mosaic is a renderer plus a sizing policy. Graphic renderers emit protocol bytes, and text renderers emit glyphs. Nothing writes to a terminal on your behalf. The caller owns the output stream, which is what makes the same render usable over ssh, inside tmux or down a CI pipe.</p>
+
+    <h2 style="margin-top: 40px;">Changelog and versioning</h2>
+    <p>The package has no CHANGELOG file yet, and no sugar-image release tags exist. Consumers install the <code>dev-master</code> branch until a tagged release is cut. The monorepo <code>sugar-image/</code> commit history is the record of changes. The <a href="https://packagist.org/packages/sugarcraft/sugar-image">Packagist page</a> shows the current version.</p>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-image">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-image/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-image/tree/master/examples">Runnable examples</a></li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
   </div>
 </section>
 

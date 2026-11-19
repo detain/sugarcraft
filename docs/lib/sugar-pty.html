@@ -154,26 +154,47 @@
 
     <nav class="doc-toc" aria-label="On this page">
         <ul class="doc-toc-list">
-            <li class="toc-h3"><a href="#install">Install</a></li>
-            <li class="toc-h3"><a href="#open-spawn-drain">Open + spawn + drain</a></li>
+            <li class="toc-h2"><a href="#install">Install</a></li>
+            <li class="toc-h2"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#open-spawn-and-drain">Open, spawn and drain</a></li>
             <li class="toc-h3"><a href="#resize-forwarding">Resize forwarding</a></li>
-            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h2"><a href="#concepts">Concepts</a></li>
+            <li class="toc-h2"><a href="#tasks">Tasks</a></li>
             <li class="toc-h3"><a href="#use-it-for">Use it for</a></li>
+            <li class="toc-h3"><a href="#script-a-session-with-expect">Script a session with Expect</a></li>
             <li class="toc-h3"><a href="#controlling-terminal-ctrl-c-job-control">Controlling terminal (Ctrl+C, job control)</a></li>
-            <li class="toc-h3"><a href="#known-limitations">Known limitations</a></li>
+            <li class="toc-h2"><a href="#api">API</a></li>
+            <li class="toc-h2"><a href="#configuration">Configuration</a></li>
+            <li class="toc-h2"><a href="#keys-and-mouse-events">Keys and mouse events</a></li>
+            <li class="toc-h2"><a href="#styling-and-sgr-state">Styling and SGR state</a></li>
+            <li class="toc-h2"><a href="#examples">Examples</a></li>
+            <li class="toc-h2"><a href="#testing">Testing</a></li>
+            <li class="toc-h2"><a href="#troubleshooting-and-faq">Troubleshooting and FAQ</a></li>
+            <li class="toc-h3"><a href="#ptyexception-failed-to-load-libc">PtyException: Failed to load libc</a></li>
+            <li class="toc-h3"><a href="#ctrl-c-reaches-the-child-as-a-byte-not-as-sigint">Ctrl+C reaches the child as a byte, not as SIGINT</a></li>
+            <li class="toc-h3"><a href="#the-final-output-of-a-fast-child-is-missing">The final output of a fast child is missing</a></li>
+            <li class="toc-h3"><a href="#the-window-size-reads-as-0-0-on-macos">The window size reads as 0×0 on macOS</a></li>
+            <li class="toc-h3"><a href="#stream-helpers-throw-on-windows">Stream helpers throw on Windows</a></li>
+            <li class="toc-h2"><a href="#upstream-mapping">Upstream mapping</a></li>
+            <li class="toc-h2"><a href="#architecture">Architecture</a></li>
+            <li class="toc-h3"><a href="#backend-selection">Backend selection</a></li>
+            <li class="toc-h3"><a href="#termios-backends">Termios backends</a></li>
+            <li class="toc-h3"><a href="#platform-behavior-openpty-or-the-posix-quartet">Platform behavior: openpty or the POSIX quartet</a></li>
+            <li class="toc-h2"><a href="#known-limitations">Known limitations</a></li>
+            <li class="toc-h2"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
             <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
-            <li class="toc-h3"><a href="#api">API</a></li>
         </ul>
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">Open a master/slave PTY pair, spawn a child process with its stdin/stdout/stderr wired to the slave, and pump bytes / forward resizes between the host terminal and the child. Wraps the libc PTY syscalls (<code>posix_openpt</code>, <code>grantpt</code>, <code>unlockpt</code>, <code>ptsname_r</code>, <code>ioctl(TIOCSWINSZ)</code>) via ext-ffi — no shelling out to <code>/usr/bin/script</code>, no C extension to compile (where FFI cannot answer, fallbacks exist only for termios (<code>stty(1)</code>), macOS size reads (<code>stty(1)</code>), and exit detection (<code>proc_get_status</code> polling) — with <code>ffi.enable=0</code> the core open/read/write/kill path has no fallback and throws).</p>
+<p class="lede" style="margin-top: 28px;">Open a master/slave PTY pair, spawn a child process with its stdin, stdout and stderr wired to the slave, and pump bytes and forward resizes between the host terminal and the child. The POSIX path wraps the libc PTY syscalls (<code>posix_openpt</code>, <code>grantpt</code>, <code>unlockpt</code>, <code>ptsname_r</code>, <code>ioctl(TIOCSWINSZ)</code>) through ext-ffi: no shelling out to <code>/usr/bin/script</code> and no C extension to compile. It mirrors <a href="https://github.com/charmbracelet/x/tree/main/xpty">charmbracelet/x/xpty</a> (Go). Fallbacks exist only for termios (<code>stty(1)</code>), macOS size reads (<code>stty(1)</code>) and exit detection (<code>proc_get_status</code> polling). With <code>ffi.enable=0</code> the core open, read, write and kill path has no fallback and throws.</p>
 
-    <h3 id="install" style="margin-top: 32px;">Install</h3>
+    <h2 id="install" style="margin-top: 40px;">Install</h2>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-pty</code></pre>
-    <p style="color: var(--ink-2);">Requires PHP 8.3+ with <code>ext-ffi</code>. <code>ext-pcntl</code> is optional — the lib polls <code>waitpid()</code> when pcntl is absent and SignalForwarder degrades to a no-op. <code>ext-posix</code> is optional too — <code>kill()</code> signals through <code>Libc::kill()</code>, which uses <code>posix_kill()</code> when it is loaded and libc <code>kill(2)</code> over FFI otherwise.</p>
+    <p style="color: var(--ink-2);">Requires PHP 8.3+ with <code>ext-ffi</code>. <code>ext-pcntl</code> is optional: the lib polls <code>waitpid()</code> when pcntl is absent, and <code>SignalForwarder</code> degrades to a no-op. <code>ext-posix</code> is optional too: <code>Libc::kill()</code> uses <code>posix_kill()</code> when it is loaded and libc <code>kill(2)</code> over FFI otherwise. Windows support needs PHP 8.4+ and the ConPTY backend (see Architecture).</p>
 
-    <h3 id="open-spawn-drain" style="margin-top: 32px;">Open + spawn + drain</h3>
+    <h2 id="quickstart" style="margin-top: 40px;">Quickstart</h2>
+    <h3 id="open-spawn-and-drain" style="margin-top: 24px;">Open, spawn and drain</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Pty\PtySystemFactory;
 
 $system = PtySystemFactory::new();
@@ -192,9 +213,9 @@ while (($chunk = $master-&gt;read(4096)) !== '') {  // '' = confirmed EOF
 }
 $exit = $child-&gt;wait();
 $master-&gt;close();</code></pre>
-    <p style="color: var(--ink-2);">Drain until EOF instead of polling <code>exited()</code> first — a fast child's final bytes can sit in the master buffer before the reap, and an <code>exited()</code>-first loop drops them. <code>PosixPump::run()</code> implements this loop (with callbacks) if you prefer not to hand-roll it.</p>
+    <p style="color: var(--ink-2);">Drain until EOF instead of polling <code>exited()</code> first. A fast child's final bytes can sit in the master buffer before the reap, and an <code>exited()</code>-first loop drops them. <code>PosixPump::run()</code> implements this loop with callbacks if you prefer not to hand-roll it.</p>
 
-    <h3 id="resize-forwarding" style="margin-top: 32px;">Resize forwarding</h3>
+    <h3 id="resize-forwarding" style="margin-top: 24px;">Resize forwarding</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Pty\SignalForwarder;
 use SugarCraft\Core\Util\Tty;
 
@@ -213,31 +234,33 @@ SignalForwarder::attachSigwinchToFd(
     fn (int $cols, int $rows) =&gt; null,  // optional post-resize callback
 );</code></pre>
 
-    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>Pty::open(cols = 80, rows = 24)</strong> <em>(deprecated facade — prefer <code>PtySystemFactory</code>)</em><span>Allocates a master/slave pair by delegating to <code>PosixPtySystem::open()</code>, so the facade shares the canonical path exactly. On macOS: <code>openpty(3)</code> first (single call), falls back to <code>posix_openpt</code> + <code>grantpt</code> + <code>unlockpt</code> + <code>ptsname_r</code> on -1. On Linux: the quartet directly (openpty lives in libutil.so.1 on most distros). The master fd is <code>FD_CLOEXEC</code> (children never inherit it, so closing it delivers the hangup) and the requested winsize is applied at open best-effort — a refused ioctl surfaces as 0×0 until the next resize rather than failing the open. Failures close the master fd before throwing — callers never get a half-open Pty.</span></div>
-      <div class="feature"><strong>spawn(cmd, env, cols, rows, controllingTerminal?)</strong><span>Wires the slave path to <code>proc_open</code>'s <code>[0,1,2]</code> descriptor slots. TIOCSWINSZ is applied before the child starts (throwing, with no child, on failure) and re-asserted best-effort after it, because macOS zeroes the winsize when the child's slave descriptors open. Pass <code>controllingTerminal: true</code> to route through <code>bin/pty-shim.php</code> for Ctrl+C → SIGINT delivery (requires ext-pcntl). Returns a <code>Child</code> with <code>pid()</code> + idempotent <code>wait()</code> + non-blocking <code>exited()</code>.</span></div>
-      <div class="feature"><strong>read / write / setBlocking</strong> <em>(setBlocking is facade-only — the <code>Contract\MasterPty</code> has no such member; contract users hold the same lever through <code>stream_set_blocking($master-&gt;stream(), $blocking)</code>)</em><span><code>read($len, $timeout = 0.05)</code> returns <code>null</code> on timeout, <code>''</code> on confirmed EOF, bytes otherwise; pass <code>null</code> for a mode-governed blocking read. Non-blocking + <code>stream_select</code> with EINTR retry. <code>write</code> returns bytes actually written.</span></div>
-      <div class="feature"><strong>resize() / size()</strong><span>TIOCSWINSZ on the master fd; <code>size()</code> reads back via TIOCGWINSZ on Linux — on macOS both the set and read directions fall back to <code>stty(1)</code> through a dup&rsquo;d fd alias (a CLOEXEC master is invisible under <code>/dev/fd</code> there). Platform-aware constants for Linux + macOS.</span></div>
-      <div class="feature"><strong>PtySystemFactory::new()</strong><span>Platform-resolving entry point to the <code>PtySystem</code> contract (<code>open(cols, rows)</code> → pair with <code>master()</code> / <code>slave()</code>). <code>$pair-&gt;slave()-&gt;spawn()</code> applies an explicit <code>$cols</code>/<code>$rows</code> on every spawn (creack/pty <code>StartWithSize()</code>); omit both to keep the size the pair was opened or last resized with. The parent's slave handle is opened <code>O_CLOEXEC</code>, so the child holds the slave only at fds 0-2. <code>PtySystemFactory::default()</code> remains as a deprecated alias.</span></div>
-      <div class="feature"><strong>SignalForwarder</strong><span>Wires host SIGWINCH → <code>Pty::resize()</code> via a caller-supplied size provider, plus optional SIGCHLD reaper. Defaults <code>pcntl_async_signals(true)</code>; falls back cleanly when pcntl is missing.</span></div>
-      <div class="feature"><strong>waitpid fast-path</strong><span><code>Child::exited()</code> and <code>Child::wait()</code> use a <code>waitpid(pid, &status, WNOHANG)</code> FFI call as the first exit probe — sub-ms detection instead of the 10 ms <code>proc_get_status</code> poll. If FFI is unavailable, falls back to <code>proc_get_status</code> transparently. Signal-terminated exit codes follow the Unix convention: <code>128 + signal_number</code>.</span></div>
-      <div class="feature"><strong>ControllingTerminal::claim()</strong><span>Static method: <code>setsid()</code> + <code>ioctl(fd, TIOCSCTTY, 0)</code> to claim a fd as the session's controlling terminal. Used by the <code>controllingTerminal: true</code> shim path; callable directly from FFI-heavy code that needs the same effect without the PHP shim overhead. Throws <code>PtyException</code> on failure.</span></div>
-      <div class="feature"><strong>PosixPump + PumpOptions</strong><span>Byte pump with <code>onIdle</code> (idle tick), <code>onSigwinch</code> (polled size-diff observer on idle ticks — not a signal hook; never fires while the size is 0×0), <code>onChildExit</code> (child exit), and <code>recorder</code> (session tap) callbacks. Wire via <code>PumpOptions::withOnIdle()</code> / <code>withOnSigwinch()</code> / <code>withOnChildExit()</code> / <code>withRecorder()</code>. Back-pressure: when the master accepts only part of a stdin chunk, the pump parks the remainder, stops reading stdin and waits for the master to drain it — input is never reordered or grown without bound, and VEOF is sent only behind the last data byte.</span></div>
-      <div class="feature"><strong>SUGARCRAFT_LIBC override</strong><span>Defaults to <code>libc.so.6</code> on Linux, <code>/usr/lib/libSystem.B.dylib</code> on macOS. Override via env var for musl, Alpine, or custom sysroots.</span></div>
-      <div class="feature"><strong>SUGARCRAFT_PTY_BACKEND</strong><span>Selects the PTY backend. Recognized values: <code>posix-ffi</code> (default on POSIX; selecting it on Windows silently resolves to <code>conpty</code> — POSIX FFI is not offered there, so you get ConPTY semantics), <code>conpty</code> (auto-resolved on Windows, throws on POSIX), <code>sidecar</code> and <code>pecl</code> (reserved — selecting them throws <code>UnsupportedPlatformException</code> in this release), <code>auto</code> (platform-resolving, same as unset). Unrecognised values throw <code>InvalidArgumentException</code>. See the <a href="https://github.com/sugarcraft/sugar-pty/blob/master/README.md#backend-selection">full backend selection table</a> in the README.</span></div>
-    </div>
+    <h2 id="concepts" style="margin-top: 40px;">Concepts</h2>
+    <p>A PTY is a pair of file descriptors. The <em>master</em> is the end the host holds: bytes written to it arrive as keystrokes on the child, and bytes the child prints come back out of it. The <em>slave</em> is the end the child sees as its terminal, so the child's stdin, stdout and stderr all point at it. Cooked mode (the default line discipline) echoes input and rewrites <code>\n</code> to <code>\r\n</code>, which is why a needle that contains a bare newline can fail to match. The <a href="https://github.com/sugarcraft/sugar-pty/blob/master/docs/CONCEPTS.md">concepts guide</a> covers master versus slave, termios modes, the controlling terminal and SIGWINCH in more depth.</p>
+    <p>The library keeps bytes opaque. The pump moves them without interpreting them. Interpretation is opt-in: <code>Expect</code> matches needles, <code>PtyInputDecoder</code> turns master bytes into key and mouse events, and <code>AnsiOutputParser</code> tracks SGR state.</p>
 
-    <h3 id="use-it-for" style="margin-top: 40px;">Use it for</h3>
+    <h2 id="tasks" style="margin-top: 40px;">Tasks</h2>
+    <h3 id="use-it-for" style="margin-top: 24px;">Use it for</h3>
     <ul>
-      <li><strong>In-process SSH session hosting</strong> — drives <a href="sugar-ssh-server.html">SugarSshServer</a> away from depending on host sshd; spawn the user's shell directly inside the SSH server process with full PTY control.</li>
-      <li><strong>Recorded TUI sessions</strong> — pair with <a href="candy-vcr.html">CandyVcr</a> to capture both the input bytes (typed into the master) and the rendered output (read back from the master).</li>
-      <li><strong>Test harnesses for ANSI-emitting CLIs</strong> — spawn the binary under test in a controlled PTY, pump fixture input, assert on the captured output via <a href="sugar-vterm.html">SugarVterm</a>'s cell-grid.</li>
-      <li><strong>VHS-style demo recorders</strong> — run a script in a PTY, capture the byte stream + winsize, replay later.</li>
+      <li><strong>In-process SSH session hosting.</strong> Drives <a href="sugar-ssh-server.html">SugarSshServer</a> without depending on host sshd: spawn the user's shell inside the SSH server process with full PTY control.</li>
+      <li><strong>Recorded TUI sessions.</strong> Pair with <a href="candy-vcr.html">CandyVcr</a> to capture the input bytes typed into the master and the rendered output read back from it.</li>
+      <li><strong>Test harnesses for ANSI-emitting CLIs.</strong> Spawn the binary under test in a controlled PTY, pump fixture input, and assert on the captured output through <a href="sugar-vterm.html">SugarVterm</a>'s cell grid.</li>
+      <li><strong>Demo recorders.</strong> Run a script in a PTY, capture the byte stream and winsize, and replay it later.</li>
     </ul>
 
-    <h3 id="controlling-terminal-ctrl-c-job-control" style="margin-top: 40px;">Controlling terminal (Ctrl+C, job control)</h3>
-    <p>Pass <code>controllingTerminal: true</code> to <code>spawn()</code> when you need <code>Ctrl+C</code> typed at the master to deliver <code>SIGINT</code> to the child — required for interactive shells (<code>bash -i</code>), editors (<code>vim</code>, <code>less</code>), and anything else that uses tty-driven job control.</p>
+    <h3 id="script-a-session-with-expect" style="margin-top: 24px;">Script a session with Expect</h3>
+    <p><code>Expect::on()</code> wraps a master with bounded waits. Every wait takes a timeout and throws <code>ExpectTimeoutException</code> or <code>ExpectEofException</code> rather than blocking forever. The shipped <code>examples/expect-login.php</code> runs this end to end.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Pty\Expect;
+
+$token  = 'ping-' . uniqid('', true);
+$child  = $pair-&gt;slave()-&gt;spawn(['/bin/cat']);
+$expect = Expect::on($pair-&gt;master());
+
+$expect-&gt;send($token . "\r");
+$seen = $expect-&gt;expectAny([$token], 2.0);   // throws ExpectTimeoutException after 2 s
+echo strlen((string) $seen-&gt;before), " bytes before the match\n";</code></pre>
+
+    <h3 id="controlling-terminal-ctrl-c-job-control" style="margin-top: 24px;">Controlling terminal (Ctrl+C, job control)</h3>
+    <p>Pass <code>controllingTerminal: true</code> to <code>spawn()</code> when <code>Ctrl+C</code> typed at the master must deliver <code>SIGINT</code> to the child. This is required for interactive shells (<code>bash -i</code>), editors (<code>vim</code>, <code>less</code>) and anything else that uses tty-driven job control.</p>
     <pre class="code"><code class="language-php">$system = PtySystemFactory::new();
 $pair   = $system-&gt;open();
 $child  = $pair-&gt;slave()-&gt;spawn(
@@ -246,58 +269,137 @@ $child  = $pair-&gt;slave()-&gt;spawn(
     controllingTerminal: true,    // claim slave as the child's ctty
 );
 $pair-&gt;master()-&gt;write("\x03");  // Ctrl+C → SIGINT to the child</code></pre>
-    <p>Routes the spawn through <code>bin/pty-shim.php</code>, which does <code>setsid()</code> + <code>ioctl(0, TIOCSCTTY, 0)</code> + <code>pcntl_exec()</code> between <code>proc_open</code> and the actual cmd. Requires <code>ext-pcntl</code>. Costs single-digit-to-low-double-digit milliseconds of shim startup per spawn (an unmeasured estimate — treat as order-of-magnitude) — opt-in because non-interactive spawns don't benefit.</p>
+    <p>The spawn routes through <code>bin/pty-shim.php</code>, which does <code>setsid()</code>, <code>ioctl(0, TIOCSCTTY, 0)</code> and <code>pcntl_exec()</code> between <code>proc_open</code> and the real command. It requires <code>ext-pcntl</code>. Each spawn pays a shim startup cost. The cost is opt-in because non-interactive spawns do not benefit from it.</p>
 
-    <h3 id="known-limitations" style="margin-top: 40px;">Known limitations</h3>
-    <ul>
-      <li><strong>Windows ConPTY caveats.</strong> The <code>Windows\ConPtySystem</code> backend needs Windows 10 1809+ and PHP 8.4+ with ext-ffi; the pseudo console is not a PTY — no controlling terminal, every signal collapses to one job terminate, and <code>stream()</code>/<code>fd()</code> throw, so the pumps stay POSIX-only (poll <code>read($len, $timeout)</code> instead).</li>
-      <li><strong><code>ffi.enable=0</code> silently disables FFI.</strong> Many distributions ship PHP with <code>ffi.enable=0</code> in <code>php.ini</code>; FFI then refuses to load libc and sugar-pty throws <code>PtyException: Failed to load libc</code> (or, where a fallback exists, transparently uses it: stty Termios, stty macOS size reads, <code>proc_get_status</code> polling). Set <code>ffi.enable=1</code> (<code>PHP_INI_SYSTEM</code> — <code>ini_set()</code> cannot change it at runtime); PHP 8.3 accepts only <code>0</code>, <code>1</code>, <code>preload</code>, and an unrecognised string such as <code>peer</code> casts to <code>0</code>. Verify what your PHP actually answered: <code>php -r 'try { FFI::cdef("int getpid(void);"); echo "FFI cdef OK\n"; } catch (Throwable $e) { echo get_class($e), ": ", $e-&gt;getMessage(), "\n"; }'</code></li>
-    </ul>
-
-    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
-    <ul>
-      <li><a href="https://github.com/sugarcraft/sugar-pty">Source on GitHub</a> (split repo; monorepo home: <a href="https://github.com/detain/sugarcraft">detain/sugarcraft</a>, <code>sugar-pty/</code>)</li>
-      <li><a href="https://github.com/sugarcraft/sugar-pty/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-pty/tree/master/examples">Runnable examples</a></li>
-      <li>Originally inspired by <a href="https://github.com/charmbracelet/x/tree/main/xpty">charmbracelet/x/xpty</a> (Go); SugarCraft is developed as a native PHP project.</li>
-    </ul>
-
-    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
-
-    <h3 id="api" style="margin-top: 32px;">API</h3>
+    <h2 id="api" style="margin-top: 40px;">API</h2>
+    <p>The table below lists the public classes a caller normally reaches. <code>Pty</code> is a deprecated facade kept for compatibility, and <code>PtySystemFactory</code> is the entry point to use. The contract types under <code>SugarCraft\Pty\Contract</code> carry no logic.</p>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Pty <em>(deprecated facade; removed v2.0)</em></td><td>open(cols = 80, rows = 24)</td><td>Allocate master/slave PTY pair (FD_CLOEXEC master, winsize applied at open)</td></tr>
 <tr><td>Pty <em>(deprecated facade; removed v2.0)</em></td><td>spawn(cmd, env, cols = null, rows = null, controllingTerminal = false)</td><td>(facade) Spawn child with PTY; explicit geometry applied before the spawn and re-asserted after it, null keeps the pair's current size</td></tr>
 <tr><td>Pty <em>(deprecated facade; removed v2.0)</em></td><td>read(len, timeout = 0.05)</td><td>Read bytes from PTY; null timeout = mode-governed blocking</td></tr>
 <tr><td>Pty <em>(deprecated facade; removed v2.0)</em></td><td>write(data)</td><td>Write bytes to PTY</td></tr>
-<tr><td>Pty <em>(deprecated facade; removed v2.0)</em></td><td>resize(cols, rows)</td><td>Resize terminal window</td></tr>
-<tr><td>Pty <em>(deprecated facade; removed v2.0)</em></td><td>size()</td><td>Get current terminal size</td></tr>
+<tr><td>Pty <em>(deprecated facade; removed v2.0)</em></td><td>resize(cols, rows) / size()</td><td>Resize the terminal window, and read its size back</td></tr>
 <tr><td>Pty <em>(deprecated facade; removed v2.0)</em></td><td>close()</td><td>Idempotent; always close(2)s the master fd and throws PtyException if that close (or the stream wrapper's fclose) fails</td></tr>
 <tr><td>PtySystemFactory</td><td>new()</td><td>Build the platform PtySystem, honoring SUGARCRAFT_PTY_BACKEND (default() is a deprecated alias)</td></tr>
+<tr><td>PosixPtySystem / PosixPtyPair</td><td>open(cols, rows) / master() / slave()</td><td>POSIX implementation of the PtySystem contract; the pair hands out the master and slave ends</td></tr>
+<tr><td>PosixMasterPty</td><td>read(), write(), resize(), size(), stream()</td><td>POSIX implementation of the MasterPty contract; <code>Pty</code> delegates to the same path</td></tr>
 <tr><td>PosixSlavePty</td><td>spawn(cmd, env, cols = null, rows = null, controllingTerminal = false)</td><td>Spawn on a pair from PtySystem::open(); explicit geometry applied on every spawn, null keeps the pair's current size</td></tr>
-<tr><td>Libc</td><td>kill(pid, signal)</td><td>posix_kill() when ext-posix is loaded, libc kill(2) over FFI otherwise</td></tr>
+<tr><td>Kernel32ConPty</td><td>(FFI binding)</td><td>FFI binding of the ConPtyApi surface to <code>kernel32.dll</code>, used by the Windows ConPTY backend</td></tr>
+<tr><td>Libc</td><td>lib(), kill(pid, signal)</td><td>Lazy FFI handle to the C library; <code>kill()</code> uses <code>posix_kill()</code> when ext-posix is loaded, libc <code>kill(2)</code> over FFI otherwise</td></tr>
+<tr><td>SizeIoctl</td><td>requestsFor(family), pack(rows, cols), unpack(ws), setSizeViaLibc(), getSizeViaLibc()</td><td>Per-platform TIOCSWINSZ and TIOCGWINSZ request numbers and the <code>winsize</code> struct marshalling</td></tr>
 <tr><td>TermiosFactory</td><td>fallbackCount()</td><td>How many times the FFI termios backend fell back to stty (each fallback is also logged)</td></tr>
 <tr><td>SignalForwarder</td><td>attachSigwinch(pty, provider)</td><td>Forward SIGWINCH to PTY resize</td></tr>
 <tr><td>SignalForwarder</td><td>attachSigwinchToFd(fd, provider, onResize?)</td><td>Forward SIGWINCH to raw /dev/tty fd via TIOCSWINSZ</td></tr>
-<tr><td>PosixPump</td><td>run(master, stdin, stdout, child?, opts?)</td><td>Run byte pump with optional PumpOptions callbacks</td></tr>
-<tr><td>PumpOptions</td><td>withOnIdle(fn)</td><td>Register idle-tick callback (fires every stream_select timeout)</td></tr>
-<tr><td>PumpOptions</td><td>withOnSigwinch(fn(cols, rows))</td><td>Register resize observer — fires when the pump <em>polls</em> a size change on an idle tick (not a signal hook; silent for 0×0 sessions; <code>MultiPump</code> never delivers it)</td></tr>
-<tr><td>PumpOptions</td><td>withOnChildExit(fn(code))</td><td>Register child-exit callback</td></tr>
-<tr><td>PumpOptions</td><td>withRecorder(recorder)</td><td>Attach session recorder (tee stdin/master bytes)</td></tr>
-<tr><td>PumpOptions</td><td>sshDefault()</td><td>Identity preset — returns the stock defaults (the values InProcessTransport previously hardcoded — it now consumes the preset); kept for call-site intent</td></tr>
-<tr><td>Child</td><td>pid()</td><td>Child process ID — the contract type <code>Contract\Child</code> declares only the method; the <code>public readonly int $pid</code> property exists on the concrete <code>PosixChild</code>/<code>Child</code> classes but fatals behind a contract type</td></tr>
-<tr><td>Child</td><td>exited(), wait()</td><td>Check/await child exit (wait() probes via WNOHANG first; signal deaths surface as 128+signo)</td></tr>
-<tr><td>Child</td><td>kill(signal)</td><td>Signal the child; no-op once reaped, PtyException when the kill(2) itself fails</td></tr>
 <tr><td>ControllingTerminal</td><td>claim(fd)</td><td>Claim a fd as controlling terminal via setsid() + ioctl(TIOCSCTTY)</td></tr>
-<tr><td>Expect</td><td>on(master) / send() / expectAny() / expectPattern() / expectEof()</td><td>Bounded scripted automation over a master: needles, regex, stall-protected sends</td></tr>
-<tr><td>PtyPool</td><td>acquire(cols, rows) / release(pair) / drain()</td><td>Concurrency ceiling on live pairs (in-flight slots are weak — abandoned pairs free their slot)</td></tr>
-<tr><td>PtyInputDecoder</td><td>readEvents(timeout) / readEventsBlocking(timeout?) / isEof() / remainder() / reset()</td><td>Master bytes → key/mouse events via sugar-input's EscapeDecoder; empty readEvents() is ambiguous — <code>isEof()</code> is the only end-of-stream signal</td></tr>
-<tr><td>AnsiOutputParser + SgrHandler</td><td>forMaster(master) / readChunk(timeout) / readChunkWithTransitions(timeout) / state() / reset()</td><td>Verbatim byte reads with optimistic SGR state tracking (OSC not tracked); SgrHandler adds drainTransitions() / reset() on a 1024-entry drop-oldest ring</td></tr>
-<tr><td>PosixProcess</td><td>wait() / kill() / exitCode() / stdoutBytes()</td><td>Plain proc_open child with pipe capture (no PTY)</td></tr>
-<tr><td>ReactPump</td><td>start() / stop()</td><td>The byte pump driven by the ReactPHP event loop instead of a blocking select</td></tr>
-<tr><td>MultiPump</td><td>add(master, stdoutSink, child?, opts?) / tick() / runAsync()</td><td>Multiplex many sessions on one loop (sync tick delivers keepalive; callbacks ride PosixPump/ReactPump)</td></tr>
+<tr><td>Child</td><td>pid(), exited(), wait(), kill(signal)</td><td>Child process ID; non-blocking exit probe; idempotent await (signal deaths surface as 128+signo); signal the child (no-op once reaped)</td></tr>
+<tr><td>PosixPump</td><td>run(master, stdin, stdout, child?, opts?)</td><td>Byte pump with optional PumpOptions callbacks (blocking <code>stream_select</code> loop)</td></tr>
+<tr><td>ReactPump</td><td>start() / stop() / isRunning()</td><td>The byte pump driven by the ReactPHP event loop instead of a blocking select</td></tr>
+<tr><td>MultiPump</td><td>add(master, stdoutSink, child?, opts?) / tick() / run() / runAsync() / remove(id)</td><td>Multiplex many sessions on one loop; <code>tick()</code> delivers one keepalive pass, and the callbacks ride PosixPump or ReactPump</td></tr>
+<tr><td>PumpOptions</td><td>withOnIdle(fn), withOnSigwinch(fn(cols, rows)), withOnChildExit(fn(code)), withRecorder(recorder)</td><td>Pump callbacks and session recorder. <code>onSigwinch</code> is a polled size-diff observer on idle ticks, not a signal hook, and <code>MultiPump</code> never delivers it</td></tr>
+<tr><td>PtyPool</td><td>acquire(cols, rows) / release(pair) / drain()</td><td>Concurrency ceiling on live pairs; abandoned pairs free their slot</td></tr>
+<tr><td>Expect</td><td>on(master) / send() / sendLine() / expect() / expectAny() / expectPattern() / expectEof()</td><td>Bounded scripted automation over a master: needles, regex, stall-protected sends</td></tr>
+<tr><td>PtyInputDecoder</td><td>readEvents(timeout) / readEventsBlocking(timeout?) / isEof() / remainder() / reset()</td><td>Master bytes to key and mouse events via sugar-input's EscapeDecoder; an empty <code>readEvents()</code> is ambiguous, so <code>isEof()</code> is the only end-of-stream signal</td></tr>
+<tr><td>AnsiOutputParser + SgrHandler</td><td>forMaster(master) / readChunk(timeout) / readChunkWithTransitions(timeout) / state() / drainTransitions() / reset()</td><td>Verbatim byte reads with optimistic SGR state tracking (OSC not tracked); <code>SgrHandler</code> keeps up to 1024 transitions in a drop-oldest ring</td></tr>
+<tr><td>PosixProcess</td><td>spawn() / wait() / kill() / stdoutBytes() / stderrBytes()</td><td>Plain proc_open child with pipe capture (no PTY)</td></tr>
 </table>
+
+    <h2 id="configuration" style="margin-top: 40px;">Configuration</h2>
+    <p>The library reads a small set of environment variables. <code>tests/EnvRosterTest.php</code> scans <code>src/</code>, <code>bin/</code> and <code>tests/</code>, and fails when a variable is read without a row in the README environment table, or a row names a variable nothing reads.</p>
+    <table class="api-table">
+    <caption>Environment variables read by sugar-pty.</caption>
+    <thead>
+    <tr><th scope="col">Variable</th><th scope="col">Read by</th><th scope="col">Effect</th></tr>
+    </thead>
+    <tbody>
+    <tr><td><code>SUGARCRAFT_PTY_BACKEND</code></td><td><code>PtySystemFactory::new()</code></td><td>Backend to build: unset or <code>auto</code> (platform default), <code>posix-ffi</code> (hard pin, POSIX only), <code>conpty</code> (Windows only), <code>sidecar</code> and <code>pecl</code> (reserved, throw <code>UnsupportedPlatformException</code> in this release). Unrecognized values throw <code>InvalidArgumentException</code>.</td></tr>
+    <tr><td><code>SUGARCRAFT_LIBC</code></td><td><code>Libc</code></td><td>Path to the C library to bind FFI against, instead of the per-platform default (<code>libc.so.6</code> on Linux, <code>/usr/lib/libSystem.B.dylib</code> on macOS). Use it for musl, Alpine or custom sysroots.</td></tr>
+    <tr><td><code>SUGARCRAFT_TERMIOS</code></td><td><code>TermiosFactory</code></td><td><code>stty</code> forces the subprocess termios backend instead of the FFI one. Any other value keeps the default.</td></tr>
+    <tr><td><code>SUGAR_PTY_HANG_BUDGET</code></td><td><code>tests/Support/HangWatchdog</code></td><td>Test suite only. Seconds a single test may run before the watchdog turns a wedged test into a named failure. The built-in budget is 90 s.</td></tr>
+    <tr><td><code>SUGAR_PTY_DEBUG_ARGV</code></td><td><code>Argv</code></td><td>Opt-in debug output. When set (non-empty and not <code>0</code>), spawn-failure messages show the full command line. It is off by default because argv often carries secrets.</td></tr>
+    <tr><td><code>SUGAR_PTY_SHIM_AUTOLOAD</code></td><td><code>Spawn::proc</code>, <code>bin/pty-shim.php</code></td><td>Autoloader hand-off for <code>controllingTerminal: true</code> children: the shim requires this path before it claims the controlling terminal. Set by <code>Spawn</code>; a missing file makes the shim exit with an error.</td></tr>
+    </tbody>
+    </table>
+
+    <h2 id="keys-and-mouse-events" style="margin-top: 40px;">Keys and mouse events</h2>
+    <p><code>PtyInputDecoder</code> reads the master and decodes key and mouse events with the same escape decoder sugar-input uses. Call <code>readEvents()</code> from a tick loop, or <code>readEventsBlocking()</code> when the loop has nothing else to do. An empty result does not mean end of stream, so check <code>isEof()</code> to detect a closed master. <code>remainder()</code> returns bytes of an escape sequence that has not finished yet.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Pty\Input\PtyInputDecoder;
+
+$decoder = new PtyInputDecoder($pair-&gt;master());
+while (!$decoder-&gt;isEof()) {
+    foreach ($decoder-&gt;readEvents(0.05) as $event) {
+        // key and mouse events decoded from the master
+    }
+}</code></pre>
+
+    <h2 id="styling-and-sgr-state" style="margin-top: 40px;">Styling and SGR state</h2>
+    <p><code>AnsiOutputParser</code> reads the master and returns the child's output verbatim, while tracking the SGR state (bold, color and the rest) the child has set. Use it to inspect styling without consuming the bytes. <code>SgrHandler</code> records each style transition, and <code>drainTransitions()</code> returns them. Because the tracking is optimistic, OSC sequences are not tracked. The parser never rewrites output, so color decisions stay with the child.</p>
+
+    <h2 id="examples" style="margin-top: 40px;">Examples</h2>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-pty/blob/master/examples/spawn-bash.php"><code>examples/spawn-bash.php</code></a>: the simplest end-to-end slice, from <code>PtySystemFactory::new()</code> through spawn, drain and reap. Start here. It is interactive, so it is run by hand.</li>
+      <li><a href="https://github.com/sugarcraft/sugar-pty/blob/master/examples/pump-output.php"><code>examples/pump-output.php</code></a>: a long-running counter that shows a non-blocking read with a timeout and line-by-line pumping.</li>
+      <li><a href="https://github.com/sugarcraft/sugar-pty/blob/master/examples/resize-forwarding.php"><code>examples/resize-forwarding.php</code></a>: wires <code>SignalForwarder</code> to deliver host SIGWINCH into the child's PTY, and shows <code>tput cols</code> changing mid-stream.</li>
+      <li><a href="https://github.com/sugarcraft/sugar-pty/blob/master/examples/multi-pump.php"><code>examples/multi-pump.php</code></a>: multiplexes several PTY sessions through one <code>MultiPump</code> tick loop, with a prefix per session.</li>
+      <li><a href="https://github.com/sugarcraft/sugar-pty/blob/master/examples/expect-login.php"><code>examples/expect-login.php</code></a>: an <code>Expect</code> round trip. It sends a token, waits for it to come back inside a bounded timeout, then tears the child down.</li>
+    </ul>
+
+    <h2 id="testing" style="margin-top: 40px;">Testing</h2>
+    <pre class="code"><code class="language-shell">cd sugar-pty &amp;&amp; composer install &amp;&amp; vendor/bin/phpunit</code></pre>
+    <p>The suite bootstraps from <code>tests/bootstrap.php</code>. That file pins the shared ReactPHP clock with <code>LoopPin::pinStableClock()</code> first, then installs <code>HangWatchdog</code>. The watchdog runs in a separate process and kills a stalled runner with a forensic dump, because the pump loops carry no deadline of their own. <code>SharedLoopResidue</code> fails a test that leaves a timer or stream armed on the shared loop.</p>
+
+    <h2 id="troubleshooting-and-faq" style="margin-top: 40px;">Troubleshooting and FAQ</h2>
+    <h3 id="ptyexception-failed-to-load-libc" style="margin-top: 24px;"><code>PtyException: Failed to load libc</code></h3>
+    <p>Many distributions ship PHP with <code>ffi.enable=0</code>. Set <code>ffi.enable=1</code> in <code>php.ini</code>, because <code>ini_set()</code> cannot change it at runtime. Check what PHP actually answered with <code>php -r 'try { FFI::cdef("int getpid(void);"); echo "FFI cdef OK\n"; } catch (Throwable $e) { echo get_class($e), ": ", $e-&gt;getMessage(), "\n"; }'</code>. An unrecognized string such as <code>peer</code> casts to <code>0</code>, so only <code>0</code>, <code>1</code> and <code>preload</code> are meaningful.</p>
+    <h3 id="ctrl-c-reaches-the-child-as-a-byte-not-as-sigint" style="margin-top: 24px;">Ctrl+C reaches the child as a byte, not as SIGINT</h3>
+    <p>Without <code>controllingTerminal: true</code> the slave is not the child's controlling terminal, so the <code>\x03</code> written to the master is delivered as input rather than as a signal. Spawn with <code>controllingTerminal: true</code>, and make sure <code>ext-pcntl</code> is loaded.</p>
+    <h3 id="the-final-output-of-a-fast-child-is-missing" style="margin-top: 24px;">The final output of a fast child is missing</h3>
+    <p>The loop checked <code>exited()</code> before draining the master. Drain until <code>read()</code> returns <code>''</code> (confirmed EOF), then call <code>wait()</code>.</p>
+    <h3 id="the-window-size-reads-as-0-0-on-macos" style="margin-top: 24px;">The window size reads as 0×0 on macOS</h3>
+    <p>macOS zeroes the winsize when the child's slave descriptors open, so <code>spawn()</code> re-asserts the size after the child starts, on a best-effort basis. Pass explicit <code>cols</code> and <code>rows</code> to <code>spawn()</code> so the requested geometry is applied on every spawn.</p>
+    <h3 id="stream-helpers-throw-on-windows" style="margin-top: 24px;">Stream helpers throw on Windows</h3>
+    <p>The ConPTY backend is not a POSIX PTY. <code>stream()</code> and <code>fd()</code> throw there, so use the polled <code>read($len, $timeout)</code> instead of the stream-based pumps.</p>
+
+    <h2 id="upstream-mapping" style="margin-top: 40px;">Upstream mapping</h2>
+    <table class="api-table">
+    <tr><th>SugarCraft</th><th>Upstream</th><th>Notes</th></tr>
+    <tr><td>sugar-pty (<code>sugar-pty/</code>)</td><td><a href="https://github.com/charmbracelet/x/tree/main/xpty">charmbracelet/x/xpty</a></td><td>Listed in <a href="https://github.com/detain/sugarcraft/blob/master/docs/MATCHUPS.md">docs/MATCHUPS.md</a>. SugarCraft is developed as a native PHP project, not a transliteration of the Go package.</td></tr>
+    <tr><td><code>PtySystem</code>, <code>PtyPair</code>, <code>MasterPty</code>, <code>SlavePty</code></td><td>portable-pty and creack/pty</td><td>The contract interfaces follow the shapes of the Rust and Go PTY libraries. The README has the full comparison.</td></tr>
+    </table>
+
+    <h2 id="architecture" style="margin-top: 40px;">Architecture</h2>
+    <p>The source is organized by family. <code>src/Contract/</code> holds the interfaces. <code>src/Posix/</code> holds the Linux and macOS implementation, and <code>src/Windows/</code> the ConPTY one. <code>src/Input/</code> and <code>src/Output/</code> hold the opt-in readers, and <code>src/Concerns/</code> holds the shared libc access. Everything else is a top-level factory, facade, pump-options or support class.</p>
+    <h3 id="backend-selection" style="margin-top: 24px;">Backend selection</h3>
+    <table class="api-table">
+    <tr><th>Value</th><th>Behavior</th></tr>
+    <tr><td><em>(unset)</em> / <code>auto</code></td><td>Platform default: <code>posix-ffi</code> on POSIX, <code>conpty</code> on Windows</td></tr>
+    <tr><td><code>posix-ffi</code></td><td><code>PosixPtySystem</code>, FFI into libc <code>posix_openpt</code> and friends. Selecting it on Windows throws <code>UnsupportedPlatformException</code>.</td></tr>
+    <tr><td><code>conpty</code></td><td><code>Windows\ConPtySystem</code>, FFI into the kernel32 pseudo-console APIs (Windows 10 1809+, PHP 8.4+) through <code>Kernel32ConPty</code>. On other hosts it throws.</td></tr>
+    <tr><td><code>sidecar</code>, <code>pecl</code></td><td>Not implemented in this release. Both throw <code>UnsupportedPlatformException</code>.</td></tr>
+    </table>
+    <h3 id="termios-backends" style="margin-top: 24px;">Termios backends</h3>
+    <p><code>TermiosFactory</code> picks between <code>PosixTermios</code>, which uses FFI <code>tcgetattr</code>, <code>tcsetattr</code> and <code>cfmakeraw</code>, and <code>SttyTermios</code>, which shells out to <code>stty(1)</code>. <code>SUGARCRAFT_TERMIOS=stty</code> forces the second. Otherwise FFI is tried first, and any failure is logged before falling back.</p>
+    <h3 id="platform-behavior-openpty-or-the-posix-quartet" style="margin-top: 24px;">Platform behavior: openpty or the POSIX quartet</h3>
+    <p>On macOS, <code>PosixPtySystem</code> tries <code>openpty(3)</code> first and falls back to <code>posix_openpt</code>, <code>grantpt</code>, <code>unlockpt</code> and <code>ptsname_r</code>. On Linux it uses the quartet directly, because <code>openpty</code> lives in <code>libutil.so.1</code>. Callers never need to pick: <code>$system-&gt;open()</code> hides the difference.</p>
+
+    <h2 id="known-limitations" style="margin-top: 40px;">Known limitations</h2>
+    <ul>
+      <li><strong>Windows ConPTY caveats.</strong> The <code>Windows\ConPtySystem</code> backend needs Windows 10 1809+ and PHP 8.4+ with ext-ffi. The pseudo console is not a PTY: there is no controlling terminal, every signal collapses to one job terminate, and <code>stream()</code> and <code>fd()</code> throw. Poll <code>read($len, $timeout)</code> instead.</li>
+      <li><strong><code>ffi.enable=0</code> disables FFI.</strong> Without FFI, sugar-pty throws <code>PtyException: Failed to load libc</code>. Where a fallback exists (stty termios, stty macOS size reads, <code>proc_get_status</code> polling) it is used transparently. See the troubleshooting entry above.</li>
+      <li><strong>BSD and Solaris are best-effort.</strong> The FreeBSD constants are value-correct from public headers but CI never exercises them, so treat that leg as field-tested only. Other unmapped families throw at the constant lookup rather than guessing Linux numbers.</li>
+    </ul>
+
+    <h2 id="changelog-and-versioning" style="margin-top: 40px;">Changelog and versioning</h2>
+    <p>The package has no CHANGELOG file yet, and no sugar-pty release tags exist. Consumers install the <code>dev-master</code> branch until a tagged release is cut. The commit history of the monorepo <code>sugar-pty/</code> path is the record of changes; the split repository carries the same commits. The <a href="https://packagist.org/packages/sugarcraft/sugar-pty">Packagist page</a> shows the current version.</p>
+
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-pty">Source on GitHub</a> (split repo; monorepo home: <a href="https://github.com/detain/sugarcraft">detain/sugarcraft</a>, <code>sugar-pty/</code>)</li>
+      <li><a href="https://github.com/sugarcraft/sugar-pty/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-pty/tree/master/examples">Runnable examples</a></li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
     </div>
   </div>
 </section>
