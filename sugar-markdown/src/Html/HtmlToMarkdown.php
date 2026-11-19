@@ -42,8 +42,10 @@ use DOMText;
  * `iframe`, `noscript`, `template`, `noembed` and `noframes` subtrees are
  * dropped whole: their text is never
  * rendered, not even as inert markup, so a "ignore all previous
- * instructions" payload inside a `<script>` element never reaches the model at
- * all. The drop covers element content only: an `img` source that is a
+ * instructions" payload inside a `<script>` element is absent from the converted
+ * Markdown. A null return (a body that renders nothing, see above) hands the raw
+ * bytes to the caller, script text included, so the drop does not protect that
+ * path. The drop covers element content only: an `img` source that is a
  * `data:image/` URI is kept as written ({@see safeHref()}), so markup inside an
  * SVG data URI reaches the output verbatim, and the model reads it as text.
  * So are elements the page hides from its own view: one carrying the `hidden`
