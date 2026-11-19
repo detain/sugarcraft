@@ -1,0 +1,49 @@
+{
+    "name": "sugarcraft/sugar-plugin-installer",
+    "description": "Composer installer for SugarCraft plugin packages (type sugar-plugin): stages each package to the user or project bundle directory that the root project's extra selects, and never runs plugin code.",
+    "type": "composer-plugin",
+    "license": "MIT",
+    "keywords": [
+        "tui",
+        "plugin",
+        "composer",
+        "installer",
+        "sugarcraft"
+    ],
+    "homepage": "https://github.com/sugarcraft/sugar-plugin-installer",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/sugar-plugin-installer/issues",
+        "source": "https://github.com/sugarcraft/sugar-plugin-installer",
+        "docs": "https://sugarcraft.github.io/lib/sugar-plugin-installer.html"
+    },
+    "require": {
+        "php": "^8.3",
+        "composer-plugin-api": "^2.0"
+    },
+    "require-dev": {
+        "composer/composer": "^2.7",
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\PluginInstaller\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\PluginInstaller\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "class": "SugarCraft\\PluginInstaller\\Plugin"
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
