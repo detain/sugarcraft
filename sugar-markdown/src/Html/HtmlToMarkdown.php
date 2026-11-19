@@ -21,16 +21,14 @@ use DOMText;
  * (the document can never reach out) and WITHOUT `LIBXML_NOENT` (entity
  * references stay text — nothing is substituted, so there is no external
  * entity path at all), and diagnostics are suppressed so a garbage document
- * cannot spray warnings into the runner's error stream. An oversized body is
- * converted from its first {@see MAX_PARSE_BYTES} only, and the output closes
- * with a note saying so: a refusal here would hand the caller the raw bytes,
- * and the raw bytes are exactly what the drop rule exists to keep from the
- * model. ext-dom absent still returns null, and the caller hands the raw body
- * to the model with a one-line note rather than pretending a conversion
- * happened. A body the parser refuses, or one that renders nothing (only
- * dropped subtrees such as a lone `<script>`), returns a one-line note
- * instead: a null there would send the raw body, dropped text and all, to the
- * model.
+ * cannot spray warnings into the runner's error stream. Every failure returns
+ * null, and the caller then hands the raw body to the model rather than
+ * pretending a conversion happened: a body over {@see MAX_PARSE_BYTES} is
+ * refused before parsing, ext-dom absent is refused, a body the parser refuses
+ * is refused, and a body that renders nothing (only dropped subtrees such as a
+ * lone `<script>`) is refused. A null therefore sends the raw bytes on, dropped
+ * text included; that is the fallback contract WebFetch pins, and a caller that
+ * must never show raw bytes should not take the fallback.
  *
  * Markup kept: headings 1-6, paragraphs, inline emphasis, links with
  * relative hrefs resolved against the final fetch URL through
@@ -74,17 +72,11 @@ use DOMText;
 final class HtmlToMarkdown
 {
     /**
-     * Largest body handed to the parser. A longer body is cut to this many
-     * bytes before parsing, so the parse cost stays bounded whatever a caller's
-     * own byte cap allows, and whatever sits past the cut is never converted.
+     * Largest body handed to the parser. A longer body is refused before
+     * parsing, so the parse cost stays bounded whatever a caller's own byte cap
+     * allows, and the caller's raw-bytes fallback applies.
      */
     public const MAX_PARSE_BYTES = 512 * 1024;
-
-    /** The line returned for a parsed body that has no renderable text. */
-    private const EMPTY_NOTE = '*(The page has no readable text.)*';
-
-    /** The line returned for a body the HTML parser refuses outright. */
-    private const UNREADABLE_NOTE = '*(The page could not be read as HTML.)*';
 
     /**
      * Elements dropped whole, text included. `template`, `noembed` and
@@ -145,11 +137,11 @@ final class HtmlToMarkdown
      *                        not a bare charset name is ignored, never
      *                        interpolated
      *
-     * @return ?string Markdown ending in one newline; a one-line note when the
-     *                 body is refused by the parser or holds nothing
-     *                 renderable; or null only for empty input and when ext-dom
-     *                 is absent, where the caller should fall back to the raw
-     *                 bytes. The output is Markdown source, not
+     * @return ?string Markdown ending in one newline, or null when the body
+     *                 could not be converted and the caller should fall back
+     *                 to the raw bytes: empty or oversized input, ext-dom
+     *                 absent, a body the parser refuses, or a body that
+     *                 renders nothing. The output is Markdown source, not
      *                 display text: brackets and backslashes from the page
      *                 text are backslash-escaped in it (see escapeText()), so
      *                 a raw consumer sees the escapes; render it, or unescape
@@ -157,7 +149,7 @@ final class HtmlToMarkdown
      */
     public static function convert(string $html, string $baseUrl, ?string $charset = null): ?string
     {
-        if ($html === '') {
+        if ($html === '' || strlen($html) > self::MAX_PARSE_BYTES) {
             return null;
         }
         if (!class_exists(DOMDocument::class)) {
@@ -169,14 +161,9 @@ final class HtmlToMarkdown
         // encoding it was never told; undeclared BOMs are common in the wild.
         if (str_starts_with($html, "\xEF\xBB\xBF")) {
             $html = substr($html, 3);
-        }
-
-        // Past the cap the cut body is what gets converted. An unclosed
-        // <script> at the cut runs to the end of the parsed text and is
-        // dropped whole, so nothing past the cut can surface either way.
-        $truncated = strlen($html) > self::MAX_PARSE_BYTES;
-        if ($truncated) {
-            $html = self::utf8Prefix(substr($html, 0, self::MAX_PARSE_BYTES));
+            if ($html === '') {
+                return null;
+            }
         }
 
         // Without any declaration the HTML parser reads bytes as its
@@ -200,7 +187,7 @@ final class HtmlToMarkdown
             libxml_use_internal_errors($previous);
         }
         if ($loaded === false) {
-            return self::UNREADABLE_NOTE . "\n";
+            return null;
         }
 
         // Start inside <body>: libxml's standard HTML parsing puts fragments
@@ -208,40 +195,12 @@ final class HtmlToMarkdown
         // metadata (the <title>, inline <style> text) stays out of the page.
         $root = $document->getElementsByTagName('body')->item(0) ?? $document->documentElement;
         if ($root === null) {
-            return self::UNREADABLE_NOTE . "\n";
+            return null;
         }
 
-        $blocks = self::renderBlocks($root, $baseUrl);
+        $markdown = trim(implode("\n\n", self::renderBlocks($root, $baseUrl)));
 
-        $markdown = trim(implode("\n\n", $blocks));
-        // A parsed body that renders nothing gets the note, not null: the caller
-        // falls back to the raw bytes on null, and those bytes may be the very
-        // script text the drop rule removed.
-        if (!$truncated) {
-            return ($markdown === '' ? self::EMPTY_NOTE : $markdown) . "\n";
-        }
-
-        // A truncated body that renders nothing still returns the note: a null
-        // here would send the caller the raw bytes of the part it refused.
-        $note = '*(The page is larger than the ' . intdiv(self::MAX_PARSE_BYTES, 1024)
-            . ' KiB conversion limit; only its first part is shown.)*';
-
-        return ($markdown === '' ? $note : $markdown . "\n\n" . $note) . "\n";
-    }
-
-    /**
-     * The longest prefix of $bytes that is valid UTF-8 once the trailing
-     * partial sequence is dropped. A cut through a multibyte character would
-     * otherwise make libxml reject the whole fragment. At most three bytes can
-     * be dangling, since a UTF-8 sequence is at most four bytes long.
-     */
-    private static function utf8Prefix(string $bytes): string
-    {
-        for ($i = 0; $i < 3 && preg_match('//u', $bytes) !== 1; $i++) {
-            $bytes = substr($bytes, 0, -1);
-        }
-
-        return $bytes;
+        return $markdown === '' ? null : $markdown . "\n";
     }
 
     /**

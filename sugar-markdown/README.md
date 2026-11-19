@@ -546,14 +546,12 @@ any element the page hides itself: one with the `hidden` attribute or an inline
 text a page hides only through its CSS still reaches the model; that is an
 accepted gap. Resolves links against `$baseUrl` with
 `Html\UrlReference::resolve($base, $reference)`, an RFC 3986 resolver. A non-block element that holds
-paragraphs (`details`, `center`, a `span` around blocks) keeps their breaks. A body
-the parser refuses, or one holding no renderable text (a lone `script`, say),
-returns a one-line note rather than `null`, so the dropped text never reaches
-the caller's raw-body fallback. The converter returns `null` only for empty
-input and when `ext-dom` is absent; then the caller can fall back to the raw
-body. Inputs over 512 KiB are cut to their first 512 KiB before
-parsing, and the output closes with a note saying so, so the drop rule still
-covers everything that is converted.
+paragraphs (`details`, `center`, a `span` around blocks) keeps their breaks. The converter returns
+`null` when the caller should fall back to the raw body: for empty input, when
+`ext-dom` is absent, for a body over 512 KiB (refused before parsing), for a body
+the parser refuses, and for a body holding no renderable text (a lone `script`,
+say). The raw bytes that follow a `null` include the text the drop rule removed;
+that is the fallback contract `candy-code`'s WebFetch pins.
 
 ## Renderer options
 
