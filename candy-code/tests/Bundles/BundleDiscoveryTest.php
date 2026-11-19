@@ -147,6 +147,25 @@ final class BundleDiscoveryTest extends TestCase
         self::assertStringNotContainsString('could not be read or parsed', $discovery->warnings()[0], 'a refused link is not a parse failure');
     }
 
+    public function testARefusedPluginPathBundleIsNotReadAsAContainerOfItsChildren(): void
+    {
+        $refused = $this->tempDir . '/dev/refused-plugin';
+        $leak = $this->tempDir . '/dotfiles/refused-plugin.json';
+        mkdir(dirname($leak), 0777, true);
+        file_put_contents($leak, json_encode(['name' => 'refused']));
+        mkdir($refused . '/.claude-plugin', 0777, true);
+        symlink($leak, $refused . '/.claude-plugin/plugin.json');
+        $this->writeBundleRoot($refused . '/sub', ['name' => 'nested']);
+
+        $discovery = new BundleDiscovery($this->tempDir . '/project', [$refused]);
+        $bundles = $discovery->discover();
+
+        self::assertSame([], $bundles, 'a refused bundle root is skipped whole, so its child manifest is never read as a bundle');
+        self::assertCount(1, $discovery->warnings(), 'the refused root is named once, not once per child');
+        self::assertStringContainsString('.claude-plugin/plugin.json', $discovery->warnings()[0], 'the warning names the refused link');
+        self::assertStringNotContainsString('nested', $discovery->warnings()[0], 'the skipped child is never mentioned');
+    }
+
     public function testAnInBundleSymlinkedManifestStillLoads(): void
     {
         $root = $this->home . '/' . Bundle::INSTALLED_RELATIVE_PATH . '/shared-manifest';
