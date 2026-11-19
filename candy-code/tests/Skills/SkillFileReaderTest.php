@@ -275,6 +275,27 @@ final class SkillFileReaderTest extends TestCase
         $this->assertSame("  \r\n", $after);
     }
 
+    /**
+     * The closer's `---` starts at byte 65,534, so only `--` lies inside the
+     * window and the last dash and line break are the tail. The closer guard
+     * judges the tail, so the parse must read it too: name and description
+     * must survive rather than the frontmatter silently dropping.
+     */
+    public function testAClosingFenceStraddlingTheWindowEdgeKeepsItsFrontmatter(): void
+    {
+        $dir = $this->tempDir . '/straddle';
+        mkdir($dir, 0777, true);
+        $pre = "---\nname: probe-skill\ndescription: from frontmatter\n";
+        $pad = str_repeat('#', SkillFileReader::MAX_FRONTMATTER_BYTES - 3 - strlen($pre)) . "\n";
+        file_put_contents($dir . '/SKILL.md', $pre . $pad . "---\nBody.\n");
+        $this->assertSame('-', substr(file_get_contents($dir . '/SKILL.md'), SkillFileReader::MAX_FRONTMATTER_BYTES, 1));
+
+        $manifest = (new SkillLoader(reportSkips: false))->loadSkillManifest($dir);
+
+        $this->assertSame('straddle', $manifest['name']);
+        $this->assertSame('from frontmatter', $manifest['description']);
+    }
+
     public function testHeadHandsBackTheByteJustPastTheWindow(): void
     {
         $path = $this->tempDir . '/after.md';
