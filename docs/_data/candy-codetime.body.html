@@ -182,7 +182,7 @@ CANDY_CODETIME_THEME=gruvbox candy-codetime</code></pre>
     <h2 style="margin-top: 40px;">Examples</h2>
     <p>The <code>examples/</code> directory holds two PHP programs and one shell script. The PHP programs load the Composer autoloader, so run them from a checkout after <code>composer install</code>.</p>
     <ul>
-      <li><code>examples/dashboard.php</code> seeds a throwaway data directory with a pretend week of beats and opens the dashboard. It refuses with exit 1 unless both stdin and stdout are terminals. This is the program behind the demo GIF below.</li>
+      <li><code>examples/dashboard.php</code> seeds a demo data directory at a fixed path under the system temp directory, which other local users can also reach, with a pretend week of beats and opens the dashboard. It refuses with exit 1 unless both stdin and stdout are terminals. This is the program behind the demo GIF below.</li>
       <li><code>examples/headless-report.php</code> seeds two days of beats into a temporary directory, reads them back with <code>Store::loadRange()</code>, folds them with <code>Stats::compute()</code> and prints the totals. It needs no terminal and is the library version of <code>summary</code>.</li>
       <li><code>examples/plugin-heartbeat.example.sh</code> is a POSIX shell hook of about 35 lines. It sends one heartbeat per save through <code>push --</code>, falling back to a locked append. It is a worked example, not a shipped plugin.</li>
     </ul>

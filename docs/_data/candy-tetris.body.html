@@ -190,7 +190,7 @@ gravity (frames per row):
     <tr><td><code>XDG_CONFIG_HOME</code>, <code>HOME</code></td><td>The base for <code>keys.json</code> and <code>scores.json</code>. With neither resolvable, nothing persists, and the game plays as if no record existed.</td></tr>
     <tr><td><code>LC_ALL</code>, <code>LC_MESSAGES</code>, <code>LANG</code></td><td>The interface locale, read in that order. An empty value, <code>C</code> or <code>POSIX</code> does not count, and an unknown value falls back to English.</td></tr>
     <tr><td><code>NO_COLOR</code>, <code>CLICOLOR=0</code></td><td>Turn the colour off.</td></tr>
-    <tr><td><code>CLICOLOR_FORCE=1</code>, <code>FORCE_COLOR</code></td><td>Vouch for the terminal, and skip the no-terminal refusal. Escapes are then painted into a redirect as if a terminal were there.</td></tr>
+    <tr><td><code>CLICOLOR_FORCE=1</code>, <code>FORCE_COLOR</code></td><td>Vouch for the terminal's colour support, and let stdout be redirected. Escapes are then painted into a redirect as if a terminal were there. Stdin must still be a terminal, so a redirected stdin still refuses the launch.</td></tr>
     <tr><td><code>TERM</code></td><td>Set to <code>dumb</code> to refuse the launch.</td></tr>
     </table>
 
