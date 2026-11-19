@@ -88,7 +88,7 @@ $final = $program-&gt;run(); // blocks until the loop stops, then returns the la
     <p>The fluent builder carries the same options and checks their types, and it rejects a <code>framerate</code> of zero or less and an <code>escapeDelay</code> that is negative or not finite: <code>ProgramOptions::builder()-&gt;withUseAltScreen(true)-&gt;build()</code>.</p>
 
     <h3 style="margin-top: 24px;">Schedule recurring work with subscriptions</h3>
-    <p>Return a <code>Subscriptions</code> set from <code>subscriptions()</code>. After each <code>update()</code> the runtime compares it with the live set: new ids start, dropped ids are canceled, and an id whose params or producer change is re-armed. <code>withTick()</code> fires every N seconds, <code>withKey()</code> polls at an interval (0.1 seconds by default), <code>withSignal()</code> handles a POSIX signal, and <code>withCustom()</code> takes an app-defined kind with params. The clock below keeps a one-second timer running while the model is alive:</p>
+    <p>Return a <code>Subscriptions</code> set from <code>subscriptions()</code>. After each <code>update()</code> the runtime compares it with the live set: new ids start, dropped ids are canceled, and an id whose params or producer change is re-armed. <code>withTick()</code> fires every N seconds, <code>withKey()</code> polls at an interval (0.1 seconds by default), <code>withSignal()</code> handles a POSIX signal, and <code>withCustom(string $id, array $params, Closure $produce)</code> registers a <code>Kind::Custom</code> subscription keyed by its id. The clock below keeps a one-second timer running while the model is alive:</p>
     <pre class="code"><code class="language-php">use SugarCraft\Core\{Cmd, KeyType, Model, Msg, Program, Subscriptions};
 use SugarCraft\Core\Msg\KeyMsg;
 
@@ -96,6 +96,10 @@ final class Second implements Msg {}
 
 final class Clock implements Model
 {
+    // One stable producer: a new closure on every subscriptions() call would
+    // look like a new subscription and restart the timer on every update.
+    private static ?\Closure $second = null;
+
     public function __construct(public readonly int $seconds = 0) {}
 
     public function init(): ?\Closure { return null; }
@@ -104,7 +108,8 @@ final class Clock implements Model
     // returns it and is canceled when a later call omits it.
     public function subscriptions(): ?Subscriptions
     {
-        return (new Subscriptions())-&gt;withTick('clock', 1.0, static fn (): Msg =&gt; new Second());
+        self::$second ??= static fn (): Msg =&gt; new Second();
+        return (new Subscriptions())-&gt;withTick('clock', 1.0, self::$second);
     }
 
     public function update(Msg $msg): array
@@ -128,7 +133,7 @@ final class Clock implements Model
     <p>For a single delayed Msg, return <code>Cmd::tick(float $seconds, \Closure $produce)</code>. <code>Cmd::cancellableTick()</code> returns a <code>TickHandle</code> whose <code>cancel()</code> stops the timer before it fires.</p>
 
     <h3 style="margin-top: 24px;">Run CPU-bound work off the loop</h3>
-    <p><code>WorkerPool</code> runs tasks in child processes, four at a time by default. A task is a global function name or a class callable such as <code>[Thumbnailer::class, 'render']</code>. A <code>Closure</code> cannot cross the process boundary, so dispatching one returns an already-rejected promise. <code>Cmd\WorkerCmd::run()</code> turns each outcome into exactly one message: a <code>WorkerResultMsg</code> on success or an <code>ExceptionMsg</code> on failure.</p>
+    <p><code>WorkerPool</code> runs tasks in child processes, four at a time by default. A task must be a serializable callable, such as the static method array <code>[Thumbnailer::class, 'render']</code> or an invokable object. A string, which names a global function, is refused with an <code>InvalidArgumentException</code> when dispatched. A <code>Closure</code> cannot cross the process boundary, so dispatching one returns an already-rejected promise. <code>Cmd\WorkerCmd::run()</code> turns each outcome into exactly one message: a <code>SugarCraft\Core\Msg\WorkerResultMsg</code> on success or a <code>SugarCraft\Core\Msg\ExceptionMsg</code> on failure.</p>
     <pre class="code"><code class="language-php">use SugarCraft\Core\Cmd\WorkerCmd;
 use SugarCraft\Core\WorkerPool;
 
@@ -254,7 +259,7 @@ echo ColorProfile::detect()-&gt;name, "\n";</code></pre>
         <tr><td><code>Panes</code>, <code>Pane</code>, <code>Rect</code></td><td>Split-region bookkeeping for several viewports</td><td><code>Pane::view()</code> clips content to the rectangle's rows and columns</td></tr>
         <tr><td><code>View</code></td><td>A frame with declarative extras</td><td><code>body</code>, <code>cursor</code>, <code>windowTitle</code>, <code>progressBar</code>, and a foreground color override</td></tr>
         <tr><td><code>RevisionCapable</code></td><td>Optional view-memoization hook</td><td><code>revision(): int|string|null</code>, used to skip an unchanged view</td></tr>
-        <tr><td><code>WorkerPool</code>, <code>Cmd\WorkerCmd</code>, <code>WorkerResultMsg</code></td><td>Bounded pool of child processes for CPU-bound tasks</td><td><code>WorkerPool(LoopInterface, int $concurrency = 4, int $maxOutstandingJobs = 1024)</code> · <code>dispatch(callable|string): PromiseInterface</code> · <code>WorkerCmd::run(WorkerPool, callable|string): \Closure</code></td></tr>
+        <tr><td><code>WorkerPool</code>, <code>Cmd\WorkerCmd</code>, <code>Msg\WorkerResultMsg</code></td><td>Bounded pool of child processes for CPU-bound tasks</td><td><code>WorkerPool(LoopInterface, int $concurrency = 4, int $maxOutstandingJobs = 1024)</code> · <code>dispatch(callable|string): PromiseInterface</code> (a string throws <code>InvalidArgumentException</code>; a <code>Closure</code> rejects the promise) · <code>WorkerCmd::run(WorkerPool, callable|string): \Closure</code></td></tr>
         <tr><td><code>Recorder</code></td><td>Interface that captures a session</td><td><code>recordResize()</code> · <code>recordInputBytes()</code> · <code>recordOutput()</code> · <code>recordQuit()</code> · <code>close()</code></td></tr>
         <tr><td><code>Progress</code>, <code>ProgressBarState</code></td><td>Taskbar or window progress (OSC 9;4)</td><td><code>ProgressBarState</code> cases: <code>Remove</code>, <code>Normal</code>, <code>Error</code>, <code>Indeterminate</code>, <code>Warning</code></td></tr>
         <tr><td><code>Cursor</code>, <code>CursorShape</code></td><td>Cursor position and shape for a View</td><td><code>CursorShape</code> cases: <code>Block</code>, <code>Underline</code>, <code>Bar</code></td></tr>
