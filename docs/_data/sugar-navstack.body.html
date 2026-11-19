@@ -84,7 +84,7 @@ echo $bc->render($stack);</code></pre>
 $shell = Shell::new();
 $shell = $shell->withDirectory('/home/user/projects/sugarcraft/src');
 echo $shell->renderBreadcrumb();</code></pre>
-    <p><code>Shell</code> never watches the filesystem. The host detects a directory change and calls <code>withDirectory()</code>. <code>pushDirectory()</code> still works as a deprecated forwarder. Every <code>with*()</code> returns a new <code>Shell</code>. All of them except <code>withBreadcrumb()</code> give the derived shell its own copy of the breadcrumb renderer. <code>withBreadcrumb()</code> keeps the instance you pass, so later changes to that renderer show through.</p>
+    <p><code>Shell</code> never watches the filesystem. The host detects a directory change and calls <code>withDirectory()</code>, which appends the path's segments to the current trail rather than replacing it. To start a fresh trail at a new location, build it from <code>Shell::new()</code>, as in <code>Shell::new()-&gt;withDirectory($path)</code>. <code>pushDirectory()</code> still works as a deprecated forwarder. Every <code>with*()</code> returns a new <code>Shell</code>. All of them except <code>withBreadcrumb()</code> give the derived shell its own copy of the breadcrumb renderer. <code>withBreadcrumb()</code> keeps the instance you pass, so later changes to that renderer show through.</p>
 
     <h2 style="margin-top: 40px;">API reference</h2>
     <h3 style="margin-top: 24px;">NavStack</h3>
@@ -115,7 +115,7 @@ echo $shell->renderBreadcrumb();</code></pre>
 <tr><td><code>setZonePrefix(string)</code></td><td>Rename the <code>crumb-</code> zone id prefix, so merged dispatch tables stay unambiguous</td></tr>
 <tr><td><code>withScanner(?Scanner)</code> / <code>scanner(): ?Scanner</code></td><td>Attach a sugar-mouse scanner for click zones / read it back</td></tr>
 <tr><td><code>scan(string $rendered, int $viewportWidth, int $row = 1): self</code></td><td>Record zones for a rendered row. The viewport width is required, and zones clamp to it</td></tr>
-<tr><td><code>hit(int $col, int $row): ?Zone</code> / <code>hitItem(NavStack $stack, int $col, int $row): ?NavigationItem</code></td><td>Raw zone lookup / the clicked stack item, or <code>null</code> on a miss</td></tr>
+<tr><td><code>hit(int $col, int $row): ?Zone</code> / <code>hitItem(NavStack $stack, int $col, int $row): ?NavigationItem</code></td><td>Raw zone lookup / the clicked stack item, or <code>null</code> on a miss. Throws <code>LogicException</code> when the stack is not the generation the breadcrumb rendered</td></tr>
 <tr><td><code>visibleIndices(): array</code></td><td>Stack indices that survived the last render's truncation</td></tr>
 <tr><td><code>elisionSpan(): ?array</code></td><td><code>[start, end, row]</code> of the painted <code>…</code> marker, or <code>null</code></td></tr>
 </table>
@@ -164,7 +164,7 @@ vendor/bin/phpunit</code></pre>
 
     <h2 style="margin-top: 40px;">Troubleshooting</h2>
     <h3 style="margin-top: 24px;">A click lands on the wrong crumb after the bar narrows</h3>
-    <p>Hit-testing must use the same stack that was rendered. Zone ids are positions in the rendered stack, so after <code>filtered()</code> they are positions in the filtered stack. Pass that exact stack to <code>hitItem()</code>, and re-scan after every render.</p>
+    <p>Hit-testing must use the same stack that was rendered. Zone ids are positions in the rendered stack, so after <code>filtered()</code> they are positions in the filtered stack. Pass that exact stack to <code>hitItem()</code>, and re-scan after every render. If the stack was pushed, popped, or otherwise mutated after the last render, <code>hitItem()</code> throws <code>LogicException</code> instead of returning <code>null</code>. Re-render and re-scan the stack before dispatching a click.</p>
 
     <h3 style="margin-top: 24px;">Stray control characters appear in the terminal</h3>
     <p>The painted row still carries zone sentinels. Strip the output with <code>Scan::strip()</code> before writing it, and keep the unstripped string only for <code>scan()</code>.</p>
